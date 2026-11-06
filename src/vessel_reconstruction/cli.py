@@ -2,12 +2,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 
 def main(argv=None) -> int:
+    argv=list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0]=='agent':
+        from .agent_cli import main as agent_main
+        return agent_main(argv[1:])
     parser = argparse.ArgumentParser(prog="vessel-reconstruct", description="Reconstruct evidenced hull envelopes from calibrated drawing views.")
     sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("agent", help="Run, resume, verify or review a persistent bounded CAD task.", add_help=False)
     p = sub.add_parser("reconstruct", help="Read drawing pixels and export a measured hull envelope.")
     p.add_argument("spec", type=Path)
     p.add_argument("--out", required=True, type=Path)

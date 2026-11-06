@@ -1,0 +1,652 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MarinaFrame archival drawing annotation v1",
+  "description": "Provenance-preserving annotations. JSON schema validates structure; promotion to gold additionally requires two distinct qualified human identities and adjudication under docs/AGENT_DATA.md. Coordinates are in the exact hashed asset, never implicitly rescaled.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "annotation_id",
+    "revision",
+    "previous_revision_sha256",
+    "created_utc",
+    "source_item_id",
+    "source_family",
+    "vessel_id",
+    "asset",
+    "annotator",
+    "split",
+    "gold_truth",
+    "features",
+    "reviews",
+    "disagreements",
+    "source_limitations"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "marinaframe-annotation-1"
+    },
+    "annotation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "previous_revision_sha256": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "created_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_item_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_family": {
+      "type": "string",
+      "minLength": 1
+    },
+    "vessel_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "sha256",
+        "width_px",
+        "height_px",
+        "coordinate_convention"
+      ],
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "width_px": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height_px": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "coordinate_convention": {
+          "const": "x_right_y_down_origin_top_left; bbox=[left,top,right,bottom] half-open"
+        }
+      }
+    },
+    "annotator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "role"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "enum": [
+            "assistant",
+            "human_annotator",
+            "human_engineer",
+            "independent_adjudicator"
+          ]
+        }
+      }
+    },
+    "split": {
+      "enum": [
+        "development",
+        "validation",
+        "sealed_final"
+      ]
+    },
+    "gold_truth": {
+      "type": "boolean"
+    },
+    "features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "observation",
+          "review_status",
+          "value",
+          "geometry",
+          "evidence",
+          "uncertainty",
+          "alternatives"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "kind": {
+            "enum": [
+              "panel",
+              "station",
+              "centreline",
+              "datum",
+              "scale_anchor",
+              "contour",
+              "occlusion",
+              "dimension",
+              "revision_mark",
+              "unsupported_geometry",
+              "unknown",
+              "source_note"
+            ]
+          },
+          "observation": {
+            "enum": [
+              "observed",
+              "inferred",
+              "unknown"
+            ]
+          },
+          "review_status": {
+            "enum": [
+              "provisional",
+              "accepted",
+              "rejected",
+              "disputed"
+            ]
+          },
+          "value": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "geometry": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "bbox_px": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  },
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  },
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  },
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  }
+                ],
+                "items": false,
+                "minItems": 4,
+                "maxItems": 4
+              },
+              "polyline_px": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1000000
+                    }
+                  ],
+                  "items": false,
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "minItems": 2,
+                "maxItems": 4096
+              },
+              "point_px": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  },
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  }
+                ],
+                "items": false,
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "tolerance_px": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000000
+              }
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "asset_file",
+                "asset_sha256",
+                "inspection_id",
+                "description"
+              ],
+              "properties": {
+                "asset_file": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "asset_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "inspection_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "bbox_px": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1000000
+                    }
+                  ],
+                  "items": false,
+                  "minItems": 4,
+                  "maxItems": 4
+                },
+                "source_url": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "description": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 8192
+                }
+              }
+            },
+            "minItems": 1,
+            "maxItems": 64
+          },
+          "uncertainty": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8192
+          },
+          "derivation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8192
+          },
+          "alternatives": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "reason",
+                "geometry",
+                "selected"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "geometry": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "bbox_px": {
+                      "type": "array",
+                      "prefixItems": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1000000
+                        }
+                      ],
+                      "items": false,
+                      "minItems": 4,
+                      "maxItems": 4
+                    },
+                    "polyline_px": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "prefixItems": [
+                          {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1000000
+                          },
+                          {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1000000
+                          }
+                        ],
+                        "items": false,
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 2,
+                      "maxItems": 4096
+                    },
+                    "point_px": {
+                      "type": "array",
+                      "prefixItems": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1000000
+                        }
+                      ],
+                      "items": false,
+                      "minItems": 2,
+                      "maxItems": 2
+                    },
+                    "tolerance_px": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1000000
+                    }
+                  }
+                },
+                "selected": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "observation": {
+                  "const": "unknown"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "value": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "observation": {
+                  "const": "inferred"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "derivation"
+              ]
+            }
+          }
+        ]
+      },
+      "maxItems": 4096
+    },
+    "reviews": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reviewer_id",
+          "reviewer_role",
+          "reviewed_utc",
+          "decision",
+          "features",
+          "notes"
+        ],
+        "properties": {
+          "reviewer_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reviewer_role": {
+            "enum": [
+              "assistant",
+              "human_annotator",
+              "human_engineer",
+              "independent_adjudicator"
+            ]
+          },
+          "reviewed_utc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decision": {
+            "enum": [
+              "accept",
+              "reject",
+              "request_changes",
+              "disagree"
+            ]
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "notes": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "maxItems": 1024
+    },
+    "disagreements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "feature_ids",
+          "status",
+          "positions"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "feature_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "enum": [
+              "open",
+              "adjudicated"
+            ]
+          },
+          "positions": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "object"
+            }
+          },
+          "adjudication": {
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "source_limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "gold_truth": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "annotator": {
+            "properties": {
+              "role": {
+                "enum": [
+                  "human_engineer",
+                  "independent_adjudicator"
+                ]
+              }
+            }
+          },
+          "reviews": {
+            "minItems": 2,
+            "items": {
+              "properties": {
+                "reviewer_role": {
+                  "enum": [
+                    "human_engineer",
+                    "independent_adjudicator"
+                  ]
+                },
+                "decision": {
+                  "const": "accept"
+                }
+              }
+            }
+          },
+          "features": {
+            "items": {
+              "properties": {
+                "review_status": {
+                  "const": "accepted"
+                }
+              }
+            }
+          },
+          "disagreements": {
+            "items": {
+              "properties": {
+                "status": {
+                  "const": "adjudicated"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
