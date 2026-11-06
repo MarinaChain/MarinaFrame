@@ -4,7 +4,25 @@ A working local system that reads **calibrated 2D hull-section drawings**, measu
 
 The supported task is precise: a person identifies the section panels, longitudinal stations, pixel scale, datum and vertical extent. The software measures the section shapes and constructs the envelope. It does not yet infer all those facts from an arbitrary shipyard drawing set.
 
-This implementation uses deterministic computer vision and the CadQuery/OpenCascade geometry kernel. It does not require an LLM service, Blender, API credentials or a GPU. The experimental offset-table adapter uses an existing Tesseract OCR model. **No new neural model was trained.**
+MarinaFrame 0.3 adds a **persistent domain-specific agent harness** around that engine. A policy or pretrained DeepSeek model can inspect source images, select inspected contour candidates, build provisional CAD, render the exported STEP and request independent checks. The controller owns budgets, cancellation, state, provenance and review boundaries. It never executes model-generated code. The deterministic pipeline remains available without credentials or a GPU; Blender is not required. **No new model was trained.**
+
+## Agent harness quick start
+
+Use Linux / Python 3.12 and the locked installation below. A small source-only example is generated with:
+
+```bash
+python examples/make_agent_example.py --out data/examples/agent
+vessel-reconstruct agent run data/examples/agent/spec.json \
+  --out /tmp/marinaframe-agent-task --policy deterministic
+vessel-reconstruct agent verify /tmp/marinaframe-agent-task
+vessel-reconstruct agent review /tmp/marinaframe-agent-task --out agent-review.html
+```
+
+The review file shows source overlays, contour choices, reimported STEP views and the full decision history. It downloads a typed selection decision that can be applied with `agent step`; the next `agent resume` regenerates and validates the candidate. Every output still requires human semantic review. A recorded assistant intervention is not expert approval.
+
+See [the measured results and remaining limitations](docs/AGENT_RESULTS.md), [the harness contract and runnable workflows](docs/AGENT_HARNESS.md), [provider setup and exact replay](docs/agent-provider.md), [authentic data and annotation](docs/AGENT_DATA.md), and [the publication investigation](docs/AGENT_PUBLICATION_INVESTIGATION.md). Evidence from actual experiments is separate from mock tests. The live development trajectory inspected pixels, selected contours and requested CAD, then correctly abstained after a publication integrity failure. A further live experiment was stopped by automatic approval review; it is not presented as a successful live CAD completion.
+
+Active run directories in this managed execution environment must be outside its synchronized workspace. The bounded investigation reproduced delayed restoration of deleted transaction files in workspace runs. Executing under `/tmp`, then importing only completed verified artifacts, preserved the existing checks. This is an environment-specific mitigation, not proof that an external synchronizer has been repaired.
 
 ## Repository scope
 
@@ -26,7 +44,7 @@ bundle. No third-party datasets or pretrained weights are redistributed here.
 
 ## Install and run
 
-Version 0.2 supports the exercised Linux x86_64 / Python 3.12 profile, using CadQuery 2.7.0. The reference patch version is Python 3.12.14. macOS (including M5) and Windows are not yet validated; the bounded worker and atomic publication profile require Linux.
+Version 0.3 supports the exercised Linux x86_64 / Python 3.12 profile, using CadQuery 2.7.0. The reference patch version is Python 3.12.14. macOS (including M5) and Windows are not yet validated; the bounded worker and atomic publication profile require Linux.
 
 ```bash
 python3.12 -m venv .venv
