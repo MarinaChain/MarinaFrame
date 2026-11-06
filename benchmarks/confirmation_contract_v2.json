@@ -1,0 +1,96 @@
+{
+  "schema_version": "1.0",
+  "frozen_before_evaluation": true,
+  "freeze_date_utc": "2026-11-06",
+  "purpose": "Predeclared procedural plus externally authored geometry test; no evaluation inputs used to fit the parser",
+  "development_seeds": [
+    17,
+    23,
+    41
+  ],
+  "development_family": "development_wigley",
+  "heldout_families": {
+    "holdout_multichine": [
+      241001,
+      241009,
+      241013,
+      241027,
+      241031,
+      241037,
+      241043,
+      241049,
+      241061,
+      241067
+    ],
+    "holdout_roundflare": [
+      271003,
+      271009,
+      271013,
+      271027,
+      271043,
+      271049,
+      271063,
+      271067,
+      271079,
+      271097
+    ]
+  },
+  "render_styles": [
+    "drafting",
+    "degraded"
+  ],
+  "drawn_stations_per_synthetic_hull": 25,
+  "drawn_ordinates_per_section": 129,
+  "target_volume_reference": "Dense independent numerical integration: 801 stations x 1025 elevations",
+  "external_source_sha256": "a3d1e9d82ff5aec16525f39e1708af4bd71960c56e9584d494554633e60dc8ad",
+  "external_source": "mathLab DTMB5415 IGES, commit afad0f04a2ce5ee03f37dcefbe697a5281bc0168, MIT",
+  "external_inference": "generated raster sections from external CAD; not an independently authored scanned drawing",
+  "negatives": [
+    "missing_scale",
+    "missing_curve",
+    "negative_scale",
+    "insufficient_sections"
+  ],
+  "gates": {
+    "clean": {
+      "minimum_pass_fraction": 0.9,
+      "maximum_relative_volume_error": 0.03,
+      "maximum_rms_section_error_over_beam": 0.01
+    },
+    "degraded": {
+      "minimum_pass_fraction": 0.8,
+      "maximum_relative_volume_error": 0.05,
+      "maximum_rms_section_error_over_beam": 0.02
+    },
+    "negative": {
+      "minimum_correct_block_fraction": 1.0
+    },
+    "external": {
+      "minimum_valid_cad_cases": 1,
+      "maximum_relative_volume_error": 0.05,
+      "maximum_rms_section_error_over_beam": 0.02
+    }
+  },
+  "data_boundary": "Inference subprocess gets spec/image only; evaluation reads physically separate labels after reconstruction",
+  "assistance": [
+    "station identity and longitudinal position",
+    "single-contour viewport",
+    "pixel scale and origin",
+    "vertical extent",
+    "symmetry",
+    "terminal closure"
+  ],
+  "reporting": "All attempted cases, exceptions, abstentions, timing, errors and baseline outputs must remain in the report. No gate adjustment after scoring.",
+  "suite_name": "confirmation_v2_fresh_procedural_seeds",
+  "original_contract_sha256": "5ae287e96af3b4fc1b9ce398da85434f011addc7db6c565537568b79c46eae05",
+  "predeclared_utc": "2026-11-06T14:42:17.210204+00:00",
+  "negative_geometry_seed": 241001,
+  "negative_render_seed": 771919,
+  "external_render_seed": 739391,
+  "confirmation_scope": {
+    "reason": "Initial v1 failures exposed a light drafting-grid contrast issue; root will independently correct parser on separate fixtures. This new suite is declared before confirmation scoring.",
+    "fresh_geometry": "Twenty new procedural random seeds, same two families and same original rendering distributions/gates. These test within-generator generalization, not a new real drawing distribution.",
+    "reused_external": "DTMB geometry and historical archive are reused; these are regression repeats, not newly unseen external geometry. The external degraded raster receives a newly predeclared noise seed.",
+    "prior_runs": "Original v1 immutable inputs and all outcomes remain preserved. No v1 successes/failures are erased or replaced."
+  }
+}

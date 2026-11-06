@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Vessel Workbench · Drawing to geometry</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Vessel Workbench home">
+      <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+      <span>VESSEL <strong>WORKBENCH</strong></span>
+    </a>
+    <span class="build-label"><span aria-hidden="true"></span> Local research build</span>
+    <button class="button primary" id="new-reconstruction" type="button">New reconstruction <span aria-hidden="true">↗</span></button>
+  </header>
+
+  <main>
+    <section class="heading-row" aria-labelledby="page-title">
+      <div>
+        <p class="eyebrow">DRAWINGS → GEOMETRY → EVIDENCE</p>
+        <h1 id="page-title">Inspect the reconstruction.</h1>
+        <p class="subtitle">Trace each section to its drawing. Keep every assumption visible.</p>
+      </div>
+      <div class="run-control">
+        <label for="run-select">Reconstruction</label>
+        <div class="run-select-row"><select id="run-select"><option>Loading runs…</option></select><button class="button icon" id="refresh-runs" type="button" aria-label="Refresh reconstructions" title="Refresh reconstructions">↻</button></div>
+      </div>
+    </section>
+
+    <div id="notification" role="status" aria-live="polite" hidden></div>
+
+    <section class="metrics-strip" aria-label="Model measurements">
+      <div><span class="metric-label">Hull envelope volume</span><strong id="metric-volume">—</strong><span class="metric-note">CAD measurement · m³</span></div>
+      <div><span class="metric-label">Length × beam × depth</span><strong id="metric-dimensions">—</strong><span class="metric-note">Model extents · m</span></div>
+      <div><span class="metric-label">Reconstructed sections</span><strong id="metric-sections">—</strong><span class="metric-note" id="metric-quality">Source regions remain inspectable</span></div>
+      <div><span class="metric-label">Engineering review</span><strong class="review-metric" id="metric-review">Unreviewed</strong><span class="metric-note">No automatic engineering approval</span></div>
+    </section>
+
+    <div class="workspace">
+      <aside class="inventory panel" aria-labelledby="inventory-title">
+        <div class="panel-heading"><h2 id="inventory-title">Model inventory</h2><span class="small-label" id="part-count">—</span></div>
+        <div id="part-list" class="part-list"></div>
+        <div class="section-heading"><h3>Source sections</h3><span id="section-count" class="small-label">—</span></div>
+        <div id="section-list" class="section-list" aria-label="Select a source section"></div>
+        <div class="inventory-footnote"><span class="dot amber" aria-hidden="true"></span><span>A closed envelope does not establish wall thickness or internal structure.</span></div>
+      </aside>
+
+      <section class="model-panel panel" aria-labelledby="model-title">
+        <div class="model-heading"><div><span class="eyebrow">3D INSPECTION</span><h2 id="model-title">Hull envelope</h2></div><span id="status-badge" class="badge">Waiting for a run</span></div>
+        <div class="viewport" id="viewport">
+          <canvas id="model-canvas" aria-label="Interactive reconstructed 3D hull. Drag to rotate, scroll to zoom, select a source section in the inventory." role="img"></canvas>
+          <div class="view-label" id="view-label">Perspective</div>
+          <div id="viewport-empty" class="viewport-empty"><span class="empty-orbits" aria-hidden="true"></span><h3>No reconstruction selected</h3><p>Choose a saved run or reconstruct a drawing.</p></div>
+          <div class="model-legend"><span><i class="dot teal"></i> Reconstructed surface</span><span><i class="line-swatch"></i> Selected section</span></div>
+          <div class="viewport-help" id="viewport-help">Drag to orbit · Scroll to zoom</div>
+          <div class="axis-key" aria-hidden="true"><span>X · length</span><span>Y · beam</span><span>Z · height</span></div>
+        </div>
+        <div class="viewport-toolbar">
+          <div class="view-buttons" aria-label="Camera view">
+            <button class="button compact active" data-view="perspective" aria-pressed="true" type="button">Perspective</button>
+            <button class="button compact" data-view="profile" aria-pressed="false" type="button">Profile</button>
+            <button class="button compact" data-view="plan" aria-pressed="false" type="button">Plan</button>
+            <button class="button compact" data-view="body" aria-pressed="false" type="button">Body</button>
+          </div>
+          <div class="display-buttons"><label><input type="checkbox" id="show-sections" checked> Sections</label><button class="button compact" id="fit-model" type="button">Fit view</button></div>
+        </div>
+      </section>
+
+      <aside class="evidence panel" aria-labelledby="evidence-title">
+        <div class="panel-heading"><h2 id="evidence-title">Drawing evidence</h2><span class="evidence-icon" aria-hidden="true">↗</span></div>
+        <select id="evidence-source-select" class="evidence-source-select" aria-label="Evidence source document" hidden></select>
+        <div class="selected-section-heading"><span class="eyebrow" id="evidence-section-id">SOURCE DOCUMENT</span><strong id="evidence-position">Select a section</strong></div>
+        <div class="source-controls"><button class="text-button active" id="crop-source" type="button" aria-pressed="true">Selected region</button><button class="text-button" id="full-source" type="button" aria-pressed="false">Full sheet</button></div>
+        <div class="source-image-container" id="source-image-container"><canvas id="source-canvas" aria-label="Original drawing and highlighted evidence region" role="img"></canvas><span id="source-placeholder">The source drawing will appear here.</span></div>
+        <div id="table-observations" class="table-observations" hidden><h3>Observed offsets</h3><table><thead><tr><th>z · m</th><th>Recognized text</th><th>y · m</th></tr></thead><tbody id="table-observation-rows"></tbody></table><p>Text uses feet–inches–eighths. Select a cell to inspect its source.</p></div>
+        <dl class="evidence-details">
+          <div><dt id="evidence-coverage-label">Curve coverage</dt><dd id="evidence-coverage">—</dd></div>
+          <div><dt id="evidence-confidence-label">Quality score</dt><dd id="evidence-confidence">—</dd></div>
+          <div><dt id="evidence-calibration-label">Pixel calibration</dt><dd id="evidence-calibration">—</dd></div>
+          <div><dt>Source fingerprint</dt><dd id="evidence-hash">—</dd></div>
+        </dl>
+        <p class="score-explanation">Quality is a heuristic, not a probability of correctness. Regions and scale are supplied by the operator.</p>
+        <div id="section-warnings" class="section-warnings"></div>
+        <a id="source-download" class="button full-width" href="#" download hidden>Open original drawing <span aria-hidden="true">↗</span></a>
+      </aside>
+    </div>
+
+    <section class="review-row">
+      <div class="review-panel panel">
+        <div class="panel-heading"><h2>Open questions & assumptions</h2><span class="small-label" id="issue-count">—</span></div>
+        <div id="issue-list" class="issue-list"><p class="muted">Load a reconstruction to inspect its evidence boundaries.</p></div>
+      </div>
+      <div class="exports-panel panel">
+        <div class="panel-heading"><h2>Geometry & reproducibility</h2></div>
+        <dl class="export-metrics">
+          <div><dt>CAD validity</dt><dd id="cad-valid">—</dd></div>
+          <div><dt>STEP round-trip error</dt><dd id="step-error">—</dd></div>
+          <div><dt>Reconstruction time</dt><dd id="run-time">—</dd></div>
+        </dl>
+        <div class="download-row"><a class="button" id="download-step" href="#" download hidden>Download STEP (mm) ↓</a><a class="button" id="download-stl" href="#" download hidden>STL (mm) ↓</a><a class="button" id="download-result" href="#" download hidden>Evidence JSON ↓</a></div>
+        <p class="muted small">STEP retains engineering geometry. CAD exports use millimetres; measurements above use metres. All exports remain research proposals until reviewed by a qualified engineer.</p>
+      </div>
+    </section>
+    <footer class="page-footer"><span>VESSEL WORKBENCH</span><span>Source-linked reconstruction · Explicit uncertainty · Human review</span></footer>
+  </main>
+
+  <dialog id="upload-dialog">
+    <form id="upload-form">
+      <div class="dialog-heading"><div><p class="eyebrow">NEW RECONSTRUCTION</p><h2>Start with a drawing.</h2></div><button id="close-dialog" class="button icon" type="button" aria-label="Close upload dialog">×</button></div>
+      <p class="dialog-intro">Upload a section drawing and its calibration specification. The system extracts curves from the image and builds a CAD envelope.</p>
+      <label class="file-field" for="drawing-file"><span class="field-title">1. Drawing image</span><span class="file-field-hint">PNG, JPG or TIFF · up to 20 MiB</span><input id="drawing-file" type="file" accept="image/png,image/jpeg,image/tiff,image/bmp,image/webp" required></label>
+      <div class="calibration-mode" aria-label="Calibration method"><button type="button" class="button compact active" id="mode-json" aria-pressed="true">Upload calibration JSON</button><button type="button" class="button compact" id="mode-editor" aria-pressed="false">Calibrate on the drawing</button></div>
+      <label class="file-field" id="spec-file-field" for="spec-file"><span class="field-title">2. View & scale specification</span><span class="file-field-hint">JSON · section positions, image regions and pixel calibration</span><input id="spec-file" type="file" accept="application/json,.json" required></label>
+      <label class="file-field" id="reference-file-field" for="reference-file" hidden><span class="field-title">3. Supporting station-reference document</span><span class="file-field-hint">Required by this specification · image or PDF · up to 12 MiB</span><input id="reference-file" type="file" accept="image/png,image/jpeg,image/tiff,image/bmp,image/webp,application/pdf,.pdf"></label>
+      <div id="calibration-editor" hidden>
+        <div class="editor-heading"><div><strong>Define the observed section views</strong><p>Draw a region, click the centreline/baseline intersection, then set the scale.</p></div><span id="editor-section-count">0 sections</span></div>
+        <div class="editor-toolbar"><div class="editor-tools" aria-label="Drawing calibration tool"><button class="button compact active" type="button" data-calibration-tool="region" aria-pressed="true">Region</button><button class="button compact" type="button" data-calibration-tool="origin" aria-pressed="false">Origin</button><button class="button compact" type="button" data-calibration-tool="scale" aria-pressed="false">Measure scale</button><button class="button compact" type="button" data-calibration-tool="pan" aria-pressed="false">Pan</button></div><div class="editor-zoom"><label for="calibration-zoom">Zoom</label><input id="calibration-zoom" type="range" min="1" max="8" step="0.1" value="1"><button class="button compact" id="calibration-fit" type="button">Fit</button></div></div>
+        <div class="calibration-viewport" id="calibration-viewport"><canvas id="calibration-canvas" aria-label="Drawing calibration editor. Use the Region tool to drag a rectangle, Origin to mark the centreline and baseline, and Measure scale to mark a known distance." role="img"></canvas><span id="calibration-placeholder">Choose a drawing image above to start.</span></div>
+        <div class="calibration-readout"><span id="calibration-region-readout">Region: not selected</span><span id="calibration-origin-readout">Origin: not selected</span></div>
+        <div class="calibration-fields">
+          <label>Section identifier<input id="calibration-id" type="text" value="section-01" maxlength="60"></label>
+          <label>Station x · metres<input id="calibration-x" type="number" step="any" value="0"></label>
+          <label>Bottom z · metres<input id="calibration-zmin" type="number" step="any" value="0"></label>
+          <label>Top z · metres<input id="calibration-zmax" type="number" step="any" placeholder="e.g. 4.5"></label>
+          <label>Scale · pixels/metre<input id="calibration-ppm" type="number" min="0.001" step="any" placeholder="Enter or measure"></label>
+          <label>Measured distance · metres<input id="calibration-reference" type="number" min="0.001" step="any" value="1"><small>Used by the Measure scale tool</small></label>
+        </div>
+        <div class="calibration-actions"><span id="calibration-feedback" role="status" aria-live="polite">At least three views are required.</span><button class="button compact" id="calibration-new" type="button">Clear selection</button><button class="button compact primary" id="calibration-add" type="button">Add section</button></div>
+        <div id="calibration-section-list" class="calibration-section-list" aria-label="Calibrated sections"></div>
+        <div class="calibration-final"><label>Vessel / drawing name<input id="calibration-vessel" type="text" value="Uploaded vessel" maxlength="140"></label><label class="symmetry-check"><input id="calibration-symmetry" type="checkbox"> I explicitly assume port/starboard symmetry. It will remain flagged for review.</label><button class="text-button" id="calibration-download" type="button">Save calibration JSON ↓</button></div>
+      </div>
+      <p class="upload-note">The default parser expects one half-section contour per region. Symmetry and end closure remain explicit assumptions. Missing evidence blocks the model.</p>
+      <div id="upload-status" role="status" aria-live="polite" hidden></div>
+      <div class="dialog-actions"><button class="button" id="cancel-upload" type="button">Cancel</button><button class="button primary" id="submit-upload" type="submit">Reconstruct drawing <span aria-hidden="true">→</span></button></div>
+    </form>
+  </dialog>
+</body>
+</html>
