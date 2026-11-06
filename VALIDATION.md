@@ -1,3 +1,12 @@
+# Current continuation versus historical validation
+
+The 0.2 implementation and observed test results are reported in
+[docs/HARDENING_RESULTS.md](docs/HARDENING_RESULTS.md). The material below remains
+the original research record and is not silently re-scored or relabelled. New
+semantic abstentions, dependency changes and geometry stress-test results have
+separate evidence. No successful real archival reconstruction or expert approval
+has been established.
+
 > Source-only repository note: this document records the original research bundle. Large data, model weights, exports and frozen evidence referenced below are not included here. CI does not reproduce historical benchmark scores.
 
 # Vessel Reconstruction Foundation — validation report

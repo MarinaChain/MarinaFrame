@@ -1,0 +1,17 @@
+[
+  {
+    "package": "vtk", "version": "9.3.1", "id": "PYSEC-2025-224", "review_by": "2026-12-07",
+    "reason": "VTK GLTF loader is not reachable through supported PNG/JPEG/TIFF/BMP/WebP/PDF inputs. OCP7.8.1.1.post1 requires exactly vtk9.3.1; forcing a mismatched binary is not safe. The vulnerable package remains installed. This scoped engineering assessment is not a vulnerability fix or owner security waiver.",
+    "regression": "tests/test_dependency_scope.py"
+  },
+  {
+    "package": "vtk", "version": "9.3.1", "id": "PYSEC-2025-225", "review_by": "2026-12-07",
+    "reason": "VTK GLTF loader is not reachable through supported source inputs. The binary dependency is retained pending a separately validated OCP/kernel migration; do not expose GLTF import.",
+    "regression": "tests/test_dependency_scope.py"
+  },
+  {
+    "package": "vtk", "version": "9.3.1", "id": "PYSEC-2025-226", "review_by": "2026-12-07",
+    "reason": "VTK GLTF loader is not reachable through supported source inputs. The binary dependency is retained pending a separately validated OCP/kernel migration; do not expose GLTF import.",
+    "regression": "tests/test_dependency_scope.py"
+  }
+]

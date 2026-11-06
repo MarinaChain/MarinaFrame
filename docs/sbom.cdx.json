@@ -1,0 +1,1055 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-11-06T16:40:57.592068+00:00"
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "aiohappyeyeballs",
+      "version": "2.7.1",
+      "purl": "pkg:pypi/aiohappyeyeballs@2.7.1",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "9243213661e29250eb41368e5daa826fc017156c3b8a11440826b2e3ed376472"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "PSF-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "aiohttp",
+      "version": "3.14.4",
+      "purl": "pkg:pypi/aiohttp@3.14.4",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c5e93ab6e6330dce40f5b43996f1fc5f2543296d263a5e4b59ff09e73870b7d8"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 AND MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "aiosignal",
+      "version": "1.4.0",
+      "purl": "pkg:pypi/aiosignal@1.4.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "053243f8b92b990551949e63930a839ff0cf0b0ebbe0597b0f3fb19e1a0fe82e"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache 2.0"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "attrs",
+      "version": "26.1.0",
+      "purl": "pkg:pypi/attrs@26.1.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "build",
+      "version": "1.3.0",
+      "purl": "pkg:pypi/build@1.3.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "7145f0b5061ba90a1500d60bd1b13ca0a8a4cebdd0cc16ed8adf1c0e739f43b4"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "cadquery",
+      "version": "2.7.0",
+      "purl": "pkg:pypi/cadquery@2.7.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "13bdffe3a1c9a7b29d86d43313021173b1620f45223929d2631cf8d4c5dbe2c0"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache Public License 2.0"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "cadquery-ocp",
+      "version": "7.8.1.1.post1",
+      "purl": "pkg:pypi/cadquery-ocp@7.8.1.1.post1",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "4882074e86722208153579baaee246be4fb10bda22dc20d101c4151f364207b9"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Not declared"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "casadi",
+      "version": "3.7.2",
+      "purl": "pkg:pypi/casadi@3.7.2",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "cde616930fa1440ad66f1850670399423edd37354eed9b12e74b3817b98d1187"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "GNU Lesser General Public License v3 or later (LGPLv3+)"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "contourpy",
+      "version": "1.3.3",
+      "purl": "pkg:pypi/contourpy@1.3.3",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "4d00e655fcef08aba35ec9610536bfe90267d7ab5ba944f7032549c55a146da1"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD 3-Clause License\n         \n         Copyright (c) 2021-2025, ContourPy Developers.\n         All rights reserved.\n         \n         Redistribution and use in source and binary forms, with or without\n         modification, are permitted provided that the following conditions are met:\n         \n         1. Redistributions of source code must retain the above copyright notice, this\n            list of conditions and the following disclaimer.\n         \n         2. Redistributions in binary form "
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "cycler",
+      "version": "0.12.1",
+      "purl": "pkg:pypi/cycler@0.12.1",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "85cef7cff222d8644161529808465972e51340599459b8ac3ccbac5a854e0d30"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Copyright (c) 2015, matplotlib project\n        All rights reserved.\n        \n        Redistribution and use in source and binary forms, with or without\n        modification, are permitted provided that the following conditions are met:\n        \n        * Redistributions of source code must retain the above copyright notice, this\n          list of conditions and the following disclaimer.\n        \n        * Redistributions in binary form must reproduce the above copyright notice,\n          this li"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "ezdxf",
+      "version": "1.4.4",
+      "purl": "pkg:pypi/ezdxf@1.4.4",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "44af248af0860fe8b1a39ca40e1cd2fa8ac37b22142b14b20c6a0caf1b50f932"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Not declared"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "fonttools",
+      "version": "4.61.1",
+      "purl": "pkg:pypi/fonttools@4.61.1",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "10d88e55330e092940584774ee5e8a6971b01fc2f4d3466a1d6c158230880796"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "frozenlist",
+      "version": "1.8.0",
+      "purl": "pkg:pypi/frozenlist@1.8.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "494a5952b1c597ba44e0e78113a7266e656b9794eec897b19ead706bd7074383"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "idna",
+      "version": "3.19",
+      "purl": "pkg:pypi/idna@3.19",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "815e7be7a7806d54abb586dc943addc79e8b2ee16915059658cbeff4b1b43bf4"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-3-Clause"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "iniconfig",
+      "version": "2.3.1",
+      "purl": "pkg:pypi/iniconfig@2.3.1",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "9121e2c1fdb355232495be3194c8dfe87ccc2d5dee45947b78e68f499790d7a7"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "kiwisolver",
+      "version": "1.4.9",
+      "purl": "pkg:pypi/kiwisolver@1.4.9",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "f6008a4919fdbc0b0097089f67a1eb55d950ed7e90ce2cc3e640abadd2757a04"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "=========================\n         The Kiwi licensing terms\n        =========================\n        Kiwi is licensed under the terms of the Modified BSD License (also known as\n        New or Revised BSD), as follows:\n        \n        Copyright (c) 2013-2025, Nucleic Development Team\n        \n        All rights reserved.\n        \n        Redistribution and use in source and binary forms, with or without\n        modification, are permitted provided that the following conditions are met:\n        "
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "matplotlib",
+      "version": "3.10.8",
+      "purl": "pkg:pypi/matplotlib@3.10.8",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "3ab4aabc72de4ff77b3ec33a6d78a68227bf1123465887f9905ba79184a1cc04"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "License agreement for matplotlib versions 1.3.0 and later\n         =========================================================\n         \n         1. This LICENSE AGREEMENT is between the Matplotlib Development Team\n         (\"MDT\"), and the Individual or Organization (\"Licensee\") accessing and\n         otherwise using matplotlib software in source or binary form and its\n         associated documentation.\n         \n         2. Subject to the terms and conditions of this License Agreement, MDT\n     "
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "more-itertools",
+      "version": "11.1.0",
+      "purl": "pkg:pypi/more-itertools@11.1.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "4b65538ae22f6fed0ce4874efd317463a7489796a0939fa66824dd542125a192"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "msgpack",
+      "version": "1.2.3",
+      "purl": "pkg:pypi/msgpack@1.2.3",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ede33b2892ceb976283e009ad12fa1834cfdf1f9c43ee9c97849fc588d00a618"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "multidict",
+      "version": "6.9.1",
+      "purl": "pkg:pypi/multidict@6.9.1",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "976fd7689d69ec78d67d31d38d396d8adb562f7e8368279f76aed4aa451fa06d"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache License 2.0"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "multimethod",
+      "version": "1.12",
+      "purl": "pkg:pypi/multimethod@1.12",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "fd0c473c43558908d97cc06e4d68e8f69202f167db46f7b4e4058893e7dbdf60"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Copyright 2022 Aric Coady\n        \n           Licensed under the Apache License, Version 2.0 (the \"License\");\n           you may not use this file except in compliance with the License.\n           You may obtain a copy of the License at\n        \n             http://www.apache.org/licenses/LICENSE-2.0\n        \n           Unless required by applicable law or agreed to in writing, software\n           distributed under the License is distributed on an \"AS IS\" BASIS,\n           WITHOUT WARRANTIES OR "
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "nlopt",
+      "version": "2.11.0",
+      "purl": "pkg:pypi/nlopt@2.11.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "b7ea0d34cb00ed71fb032ff24a1b5599a61ca0101984c3fdfd954eca569e8ad2"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "numpy",
+      "version": "2.3.5",
+      "purl": "pkg:pypi/numpy@2.3.5",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "0d8163f43acde9a73c2a33605353a4f1bc4798745a8b1d73183b28e5b435ae28"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Copyright (c) 2005-2025, NumPy Developers.\n         All rights reserved.\n         \n         Redistribution and use in source and binary forms, with or without\n         modification, are permitted provided that the following conditions are\n         met:\n         \n             * Redistributions of source code must retain the above copyright\n                notice, this list of conditions and the following disclaimer.\n         \n             * Redistributions in binary form must reproduce the above\n"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "opencv-python-headless",
+      "version": "4.14.0.94",
+      "purl": "pkg:pypi/opencv-python-headless@4.14.0.94",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "211e581f5a4670acbbe08fff36a35e9946039d2eea28b80394632d036d1be527"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache 2.0"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "packaging",
+      "version": "26.3",
+      "purl": "pkg:pypi/packaging@26.3",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0 OR BSD-2-Clause"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "path",
+      "version": "17.1.1",
+      "purl": "pkg:pypi/path@17.1.1",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ec7e136df29172e5030dd07e037d55f676bdb29d15bfa09b80da29d07d3b9303"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "pillow",
+      "version": "13.0.0",
+      "purl": "pkg:pypi/pillow@13.0.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "42d63be3af4f9b951b199b0a9d23365d37ab14687e6d77b74940432c8515c4ca"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT-CMU"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "pip",
+      "version": "26.2.2",
+      "purl": "pkg:pypi/pip@26.2.2",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "pluggy",
+      "version": "1.7.0",
+      "purl": "pkg:pypi/pluggy@1.7.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "7dd7b0d8832ba3cb632c306926ded123429211b83641b35dc5c41ad2d34f9bec"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "propcache",
+      "version": "0.5.2",
+      "purl": "pkg:pypi/propcache@0.5.2",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "6f328175a2cde1f0ff2c4ed8ce968b9dcfb55f3a7153f39e2957ed994da13476"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "Pygments",
+      "version": "2.21.0",
+      "purl": "pkg:pypi/pygments@2.21.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-2-Clause"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "PyMuPDF",
+      "version": "1.26.7",
+      "purl": "pkg:pypi/pymupdf@1.26.7",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "69dfc78f206a96e5b3ac22741263ebab945fdf51f0dbe7c5757c3511b23d9d72"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Dual Licensed - GNU AFFERO GPL 3.0 or Artifex Commercial License"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "pyparsing",
+      "version": "3.3.2",
+      "purl": "pkg:pypi/pyparsing@3.3.2",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "850ba148bd908d7e2411587e247a1e4f0327839c40e2e5e6d05a007ecc69911d"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "pyproject_hooks",
+      "version": "1.3.3",
+      "purl": "pkg:pypi/pyproject-hooks@1.3.3",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "5fc53fdac9f7bd63fbcdc868fb5f90b4784d78a53a3d3388cd738b807441a20b"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "pytest",
+      "version": "9.2.0",
+      "purl": "pkg:pypi/pytest@9.2.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "07acdcf88ec174f907dc01af70bf52d49b014bbab03faeeade31c96b18c2e588"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "python-dateutil",
+      "version": "3.0.0",
+      "purl": "pkg:pypi/python-dateutil@3.0.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "3c79630202e4152c6add678446984236efe4f57e84d8e892aab0637bab82e9fd"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Dual License"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "PyYAML",
+      "version": "6.0.3",
+      "purl": "pkg:pypi/pyyaml@6.0.3",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ba1cc08a7ccde2d2ec775841541641e4548226580ab850948cbfda66a1befcdc"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "runtype",
+      "version": "0.5.3",
+      "purl": "pkg:pypi/runtype@0.5.3",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ea8cc6828217ebfda5c159dce969e832efd865a09d6ad1fc993f5bf5e1a627ee"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "scipy",
+      "version": "1.17.0",
+      "purl": "pkg:pypi/scipy@1.17.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "9eeb9b5f5997f75507814ed9d298ab23f62cf79f5a3ef90031b1ee2506abdb5b"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Copyright (c) 2001-2002 Enthought, Inc. 2003, SciPy Developers.\n         All rights reserved.\n         \n         Redistribution and use in source and binary forms, with or without\n         modification, are permitted provided that the following conditions\n         are met:\n         \n         1. Redistributions of source code must retain the above copyright\n            notice, this list of conditions and the following disclaimer.\n         \n         2. Redistributions in binary form must reproduce"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "setuptools",
+      "version": "84.2.1",
+      "purl": "pkg:pypi/setuptools@84.2.1",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ca140b45d5325a9478f880e351484f62fef15f336462e449ca0c03c873d589c2"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "six",
+      "version": "1.17.0",
+      "purl": "pkg:pypi/six@1.17.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "trame",
+      "version": "3.13.2",
+      "purl": "pkg:pypi/trame@3.13.2",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "23e87a65a6ea9241ce1060e9cd01426e48b3b8b72cd9f3cb974fc398649280b6"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache License 2.0"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "trame-client",
+      "version": "3.13.6",
+      "purl": "pkg:pypi/trame-client@3.13.6",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "b4acf325d037a3d118c00a89ebbb32418dea9064844cc23e45c9deddea0628a4"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "trame-common",
+      "version": "1.2.7",
+      "purl": "pkg:pypi/trame-common@1.2.7",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "14d50c651505c41f9144261b67bc0c7b3524bf72893d56ad544e255cfa1c1ba1"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Not declared"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "trame-components",
+      "version": "2.5.0",
+      "purl": "pkg:pypi/trame-components@2.5.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "897a6c0ebcc72d95a461bde28d2c2e37c4bc4922013ad07df3a65e64d4884672"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache License 2.0"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "trame-server",
+      "version": "3.14.0",
+      "purl": "pkg:pypi/trame-server@3.14.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "3519e99fdb962d0ecf29f0e8f969c84280ba0ef71d2cafe84a97e8b31d8052bd"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache License 2.0"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "trame-vtk",
+      "version": "2.11.16",
+      "purl": "pkg:pypi/trame-vtk@2.11.16",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2b5eadaf152d1cc59604f1a5e7cabab933a79bb4f889cf15eecec8db0cc8721d"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD License"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "trame-vuetify",
+      "version": "3.2.5",
+      "purl": "pkg:pypi/trame-vuetify@3.2.5",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "533470daa6f4d233f2eeb7434a312062bc30fb1b2d8cb341a5d9934ff7880303"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "trimesh",
+      "version": "4.12.2",
+      "purl": "pkg:pypi/trimesh@4.12.2",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "b5b5afa63c5272345f2858f7676bc8c217dc8a89f4fadf6193fe10a81b5ff2aa"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "The MIT License (MIT)\n        \n        Copyright (c) 2023 Michael Dawson-Haggerty\n        \n        Permission is hereby granted, free of charge, to any person obtaining a copy\n        of this software and associated documentation files (the \"Software\"), to deal\n        in the Software without restriction, including without limitation the rights\n        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\n        copies of the Software, and to permit persons to whom the Softw"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "typing_extensions",
+      "version": "4.16.0",
+      "purl": "pkg:pypi/typing-extensions@4.16.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "PSF-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "tzdata",
+      "version": "2026.5",
+      "purl": "pkg:pypi/tzdata@2026.5",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "b683bd1b6659ddcd810ff02ad09ba821d4bf1065072805063eb35c49617905ac"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "vtk",
+      "version": "9.3.1",
+      "purl": "pkg:pypi/vtk@9.3.1",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "f728bb61f43fce850d622ced3b3d51b3116f767685ca4e4e0076f624e2d2307d"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "wheel",
+      "version": "0.48.0",
+      "purl": "pkg:pypi/wheel@0.48.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "3217dcc807155e45db462d7ef2431f5ddda0d7273b700d05a67b271ceb1287ab"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "wslink",
+      "version": "2.5.7",
+      "purl": "pkg:pypi/wslink@2.5.7",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "47d729f654d1ee0bb42b6f05b068c48d5fdacd3216e827c1e80ea09eca0fe287"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Not declared"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "yarl",
+      "version": "1.25.1",
+      "purl": "pkg:pypi/yarl@1.25.1",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "c6f117789d22dce188e5754e8bc65b7e6ebf8cb73963b9fa761f672a5883769d"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0"
+          }
+        }
+      ]
+    }
+  ]
+}

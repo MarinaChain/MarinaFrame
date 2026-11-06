@@ -26,12 +26,13 @@ bundle. No third-party datasets or pretrained weights are redistributed here.
 
 ## Install and run
 
-Tested on Linux with Python 3.12.14 and CadQuery 2.7.0. Python 3.11–3.13 is declared by the package; other platforms and Python versions have not been exercised in this release.
+Version 0.2 supports the exercised Linux x86_64 / Python 3.12 profile, using CadQuery 2.7.0. The reference patch version is Python 3.12.14. macOS (including M5) and Windows are not yet validated; the bounded worker and atomic publication profile require Linux.
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e '.[test,documents]'
+python -m pip install --require-hashes -r requirements-linux-py312.lock
+python -m pip install --no-build-isolation --no-deps -e .
 
 python examples/make_development_example.py
 python -m vessel_reconstruction reconstruct \
@@ -42,9 +43,9 @@ python -m vessel_reconstruction verify artifacts/my-development-run
 python -m vessel_reconstruction serve --artifacts artifacts --port 8765
 ```
 
-Open **http://127.0.0.1:8765**. The server binds to localhost by default. Installation downloads Python dependencies; ordinary reconstruction and inspection then work offline. The optional OCR experiment additionally requires the system `tesseract` executable and the recorded language model.
+Open the **one-time login URL printed by the server**, including its `#session=...` fragment. It exchanges for a local HttpOnly session cookie and is removed from the address bar. Plain localhost API access is unauthenticated until that exchange. Remote binding is refused. Installation downloads Python dependencies; ordinary reconstruction and inspection then work offline. The optional OCR experiment additionally requires the system `tesseract` executable and the recorded language model.
 
-Each reconstruction uses a new output directory. Existing runs are not overwritten. Exit code `0` means geometry was built and still requires review; exit code `2` means the run was blocked. A blocked run still contains evidence and gap explanations, but publishes no CAD model.
+Each reconstruction uses a new output directory. Existing runs are not overwritten. Exit code `0` means a bounded worker published verified geometry that still requires review. Exit code `2` means a blocked, failed, cancelled, interrupted, timed-out or resource-limited outcome; the CLI prints the actual state. Storage failure can prevent a terminal file, in which case private staging is retained for recovery. Existing runs are never replaced.
 
 ### Using your own drawing
 
@@ -65,12 +66,12 @@ PDF pages can be rendered by the CLI adapter with the `documents` extra. Pixel c
 
 | Component | Behavior |
 |---|---|
-| Curve reader | Separates ink contrast tiers, filters fragments and traces a continuous section through source pixels; records coverage, stroke width and ambiguity diagnostics. |
-| Geometry builder | Resamples measured half-sections, mirrors the declared symmetry and connects corresponding boundaries with ruled CAD faces; adds explicit envelope closures. |
+| Curve reader | Tracks measured source pixels while retaining plausible alternatives across contrast bands; unresolved identity blocks extraction. Explicit pixel corridors select evidence without inventing a curve. |
+| Geometry builder | Preserves significant knots under a default 1 mm half-breadth approximation bound, establishes shared correspondence across elevation domains, mirrors declared symmetry and builds bounded ruled CAD faces. |
 | CAD validation | Requires one valid positive-volume solid; exports STEP and STL, reloads STEP and verifies volume and dimensions. |
-| Evidence pipeline | Copies original source bytes, hashes sources/specifications/outputs, saves the exact inference Python source, and associates each section with its image region and calibration. |
+| Evidence pipeline | Atomically publishes a complete schema 2 run; the manifest covers result metrics, input/replay specs, observations, CAD sections, source copies, implementation and exports. Verification also recomputes identity and geometry consistency. |
 | Review model | Successful geometry remains `review_required`; blocking gaps suppress published geometry. Named local review entries never establish authenticated engineering approval. |
-| Workbench | Orbit/zoom, section selection, drawing overlays, supporting sources, uncertainty and gaps, CAD downloads, calibration editor and new reconstruction. WebGL has a software fallback. |
+| Workbench | Authenticated loopback session, bounded durable SQLite queue, cancellable isolated workers, source/candidate overlays, CAD deviation, separate local review state and integrity-gated downloads. WebGL has a software fallback. |
 | Data and evaluation | Procedural drawing generation, independent dense numerical references, an externally authored CAD reference, isolated image/spec inference subprocesses, frozen manifests, baseline comparison and complete case reports. |
 | Experimental table OCR | Reads feet/inches/eighths from declared image cells using two Tesseract configurations; disagreement, malformed tokens or insufficient confidence block required cells. |
 
@@ -109,9 +110,9 @@ Both numerical error gates must be met for a reconstruction case to pass. Missin
 
 ## Outputs and review
 
-A successful run contains `result.json`, `input_spec.json`, `replay_spec.json`, the exact source files, `extracted_sections.json`, `cad_sections.json`, `mesh.json`, `model.step`, `model.stl`, and `implementation_source/`. The result records source regions, calibration, assumptions, gap messages, metrics, environment versions and content hashes.
+A successful schema 2 run contains `manifest.json`, immutable `result.json`, `input_spec.json`, `replay_spec.json`, the exact source files, `extracted_sections.json`, `cad_sections.json`, `mesh.json`, `model.step`, `model.stl`, and `implementation_source/`. The result records source regions, calibration, assumptions, gap messages, metrics, environment versions and content hashes.
 
-Create a portable view of any real run:
+Create a portable view of a verified schema 2 run:
 
 ```bash
 python -m vessel_reconstruction snapshot artifacts/my-development-run \
@@ -127,7 +128,7 @@ python -m vessel_reconstruction review artifacts/my-development-run \
   --expected-run-id RUN_ID_FROM_RESULT_JSON
 ```
 
-Reviews are locally hash chained. Names are not authenticated and no decision sets `engineering_approved` to true. Content hashes detect changes relative to a local manifest; they are not an external signature.
+Review events live separately in `review_history.json`; `review_state.json` is a derived cache. Reviews do not edit the inference record and are locally hash chained. Names are not authenticated and no decision sets `engineering_approved` to true. Content hashes detect changes relative to a local manifest; they are not an external signature.
 
 ## Important limits established by testing
 
@@ -148,6 +149,30 @@ The project is publicly viewable research software, with all rights reserved und
 GitHub Actions runs the complete test suite on Linux / Python 3.12, checks the
 package build and CLI entry point, and runs a generated-development reconstruction
 and export verification. It does not replay the historical benchmark.
-Dependencies are resolved from the supported package ranges;
-`requirements-lock.txt` preserves the original bundle environment as a reference,
-not the CI dependency lock. Tesseract OCR and DejaVu fonts are installed in CI.
+The main job installs exact wheel hashes from `requirements-linux-py312.lock`;
+`requirements-lock.txt` remains the original reference. Dependency-range updates
+run separately on manual dispatch. Actions are commit-pinned and permissions read-only.
+A fresh wheel environment, bounded secret-pattern scan and OSV check are included.
+Three VTK GLTF advisories remain explicitly scoped and time-limited; this is not
+a claim that every installed dependency is vulnerability-free. Tesseract OCR and DejaVu fonts are installed in CI.
+
+## Hardening continuation (0.2)
+
+See [current validation and dispositions](docs/HARDENING_RESULTS.md),
+[local operation and backup](docs/OPERATIONS.md),
+[optional model experiments](docs/OPTIONAL_MODELS.md), and
+[dependencies and unresolved licensing decisions](docs/DEPENDENCIES_AND_RIGHTS.md).
+The repository license and public visibility are unchanged. No application is deployed.
+
+Schema 1 research runs are recognized as legacy and do not pass the stronger
+schema 2 verifier. Preserve them, then reconstruct into a new directory; see
+`CONTRACT.md` for migration. The new contour policy intentionally abstains on
+some light-grid fixtures previously accepted automatically. An explicit
+`contour_selection` in image coordinates can resolve identity, with the original
+source and excluded alternatives retained. Download the replay specification,
+make a documented correction and submit a new run; never edit a sealed result.
+
+The optional OpenCode Go adapter remains outside reconstruction. A read-only
+metadata request used the supplied credential; no live generation or paid call
+was made. The frozen mock harness and unchanged Tesseract baseline are executable
+offline. Provider overflow/budget permission is still needed for live comparison.

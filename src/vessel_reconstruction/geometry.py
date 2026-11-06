@@ -6,44 +6,178 @@ to preserve conventional CAD units; mesh.json is explicitly in metres.
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 import numpy as np
 import cadquery as cq
+from OCP.BRepMesh import BRepMesh_IncrementalMesh
+
+from .errors import GeometryError
 
 
-class GeometryError(ValueError):
-    pass
-
-
-CAD_CONSTRUCTION_METHOD = "explicit_correspondence_ruled_panels_v2"
+CAD_CONSTRUCTION_METHOD = "bounded_source_knots_ruled_panels_v3"
+DEFAULT_MAX_DEVIATION_M = 0.001
+MAX_COMMON_KNOTS = 513
+MAX_ESTIMATED_FACES = 20_000
+MAX_SECTION_POINTS = 1025
+MAX_SECTIONS = 300
 # OpenCascade stores this model in millimetres. This is only an equality
 # tolerance for duplicate closure vertices; no positive breadth is invented.
 _VERTEX_TOLERANCE_MM = 1e-7
 
 
-def normalize_sections(sections: list[dict], samples: int = 33) -> list[dict]:
-    normalized = []
-    for sec in sorted(sections, key=lambda s: s["x_m"]):
-        points = np.asarray(sec["points_yz_m"], dtype=float)
-        if points.ndim != 2 or points.shape[1] != 2 or len(points) < 5 or not np.isfinite(points).all():
-            raise GeometryError(f"Invalid measured section: {sec['id']}")
-        points = points[np.argsort(points[:, 1])]
-        zz, idx = np.unique(points[:, 1], return_index=True)
-        yy = points[idx, 0]
-        if len(zz) < 5 or zz[-1] <= zz[0] or np.min(yy) < -1e-8:
-            raise GeometryError(f"Section {sec['id']} is not a supported starboard half-section.")
-        if np.max(yy) < 1e-5:
-            raise GeometryError(f"Section {sec['id']} degenerates to a line; a point-ended loft requires an explicit supported end treatment.")
-        z = np.linspace(zz[0], zz[-1], samples)
-        y = np.interp(z, zz, yy)
-        # Keep a single half-section contour, preserving flat bottoms when drawn.
-        normalized.append({**sec, "cad_points_yz_m": np.column_stack([y, z]).tolist()})
-    if len(normalized) < 3:
-        raise GeometryError("At least three measured sections are required.")
-    xs = np.array([s["x_m"] for s in normalized])
-    if np.min(np.diff(xs)) <= 0:
+def _bounded_knots(t: np.ndarray, y: np.ndarray, tolerance_m: float) -> np.ndarray:
+    """Simplify a piecewise linear ordinate function with a vertical error bound.
+
+    The difference of two piecewise linear functions has its absolute maximum
+    at a knot of either function. Testing every source knot therefore bounds
+    the *entire* observed curve, including features narrower than a sample grid.
+    Zero/positive transitions are mandatory knots because topology is not an
+    approximation tolerance. No positive minimum breadth is inserted.
+    """
+    mandatory = {0, len(t) - 1}
+    for index in np.flatnonzero((y[:-1] == 0) != (y[1:] == 0)):
+        mandatory.update((int(index), int(index + 1)))
+    selected = set(mandatory)
+    ordered = sorted(mandatory)
+    pending = list(zip(ordered[:-1], ordered[1:]))
+    while pending:
+        first, last = pending.pop()
+        if last <= first + 1:
+            continue
+        local_t = t[first + 1:last]
+        predicted = y[first] + (y[last] - y[first]) * (local_t - t[first]) / (t[last] - t[first])
+        errors = np.abs(y[first + 1:last] - predicted)
+        offset = int(np.argmax(errors))
+        if errors[offset] > tolerance_m:
+            index = first + 1 + offset
+            selected.add(index)
+            pending.extend(((first, index), (index, last)))
+    return np.asarray(sorted(selected), dtype=int)
+
+
+def normalize_sections(
+    sections: list[dict], samples: int | None = None, *,
+    max_deviation_m: float = DEFAULT_MAX_DEVIATION_M,
+) -> list[dict]:
+    """Create bounded, explicit correspondence without dropping narrow features.
+
+    All sections share a union of normalized-height source knots. Different
+    elevation domains consequently correspond by their declared height
+    fraction. ``samples`` is retained as an optional *minimum* density; it is
+    never a cap on retained source detail. The default 1 mm bound is a CAD
+    approximation bound relative to the observed polyline, not source accuracy.
+    Excessive correspondence/face complexity is rejected before native CAD.
+    """
+    if not isinstance(sections, list) or not 3 <= len(sections) <= MAX_SECTIONS:
+        raise GeometryError(f"At least three measured sections are required; the limit is {MAX_SECTIONS}.")
+    if (isinstance(max_deviation_m, bool) or not isinstance(max_deviation_m, (int, float))
+            or not math.isfinite(max_deviation_m) or not 0 <= max_deviation_m <= 0.01):
+        raise GeometryError("max_deviation_m must be a finite number between 0 and 0.01 metres.")
+    if samples is not None and (isinstance(samples, bool) or not isinstance(samples, int)
+                                or not 2 <= samples <= MAX_COMMON_KNOTS):
+        raise GeometryError(f"Optional minimum samples must be an integer from 2 to {MAX_COMMON_KNOTS}.")
+    try:
+        xs = [s["x_m"] for s in sections]
+        if any(isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(x)
+               or abs(x) > 1e7 for x in xs):
+            raise GeometryError("Invalid measured station coordinate.")
+        ordered_sections = sorted(sections, key=lambda s: s["x_m"])
+    except (KeyError, TypeError) as exc:
+        raise GeometryError("Invalid measured section metadata.") from exc
+    if np.min(np.diff([s["x_m"] for s in ordered_sections])) <= 0:
         raise GeometryError("Section station coordinates are not strictly increasing.")
+    prepared = []
+    all_knots = [np.linspace(0, 1, samples)] if samples is not None else []
+    for sec in ordered_sections:
+        section_id = sec.get("id", "unnamed")
+        try:
+            points = np.asarray(sec["points_yz_m"], dtype=float)
+        except (KeyError, TypeError, ValueError, OverflowError) as exc:
+            raise GeometryError(f"Invalid measured section: {section_id}") from exc
+        if (points.ndim != 2 or points.shape[1] != 2 or not 5 <= len(points) <= MAX_SECTION_POINTS
+                or not np.isfinite(points).all() or np.max(np.abs(points)) > 1e7):
+            raise GeometryError(f"Invalid measured section: {section_id}; require 5..{MAX_SECTION_POINTS} finite bounded points.")
+        points = points[np.argsort(points[:, 1], kind="stable")]
+        zz, yy = points[:, 1], points[:, 0]
+        if np.any(np.diff(zz) <= 0):
+            raise GeometryError(f"Section {section_id} requires unique increasing elevations; duplicate ordinates are ambiguous.")
+        if zz[-1] <= zz[0] or np.min(yy) < 0:
+            raise GeometryError(f"Section {section_id} is not a supported starboard half-section.")
+        if np.max(yy) < 1e-5:
+            raise GeometryError(f"Section {section_id} degenerates to a line; a point-ended loft requires an explicit supported end treatment.")
+        positive = np.flatnonzero(yy > 0)
+        if np.any(yy[positive[0]:positive[-1] + 1] == 0):
+            raise GeometryError(f"Section {section_id} contains an unsupported interior centreline pinch.")
+        t = (zz - zz[0]) / (zz[-1] - zz[0])
+        selected = _bounded_knots(t, yy, max_deviation_m)
+        all_knots.append(t[selected])
+        prepared.append((sec, zz, yy, t, selected))
+    raw_knots = np.sort(np.concatenate(all_knots))
+    # Fractional-height grids derived from different bases have roundoff-sized
+    # differences. Coalesce those only; verify the final bound afterwards.
+    common = [float(raw_knots[0])]
+    for value in raw_knots[1:]:
+        if value - common[-1] > 1e-12:
+            common.append(float(value))
+    common[0], common[-1] = 0.0, 1.0
+    if len(common) > MAX_COMMON_KNOTS:
+        raise GeometryError(f"CAD complexity limit: {len(common)} common knots exceeds {MAX_COMMON_KNOTS}; split the job or review source complexity.")
+    estimated_faces = 2 * (len(prepared) - 1) * len(common) + 2
+    if estimated_faces > MAX_ESTIMATED_FACES:
+        raise GeometryError(f"CAD complexity limit: {estimated_faces} estimated faces exceeds {MAX_ESTIMATED_FACES}; split the job.")
+    common_t = np.asarray(common)
+    normalized = []
+    for sec, zz, yy, t, selected in prepared:
+        z = zz[0] + common_t * (zz[-1] - zz[0])
+        y = np.interp(common_t, t[selected], yy[selected])
+        check_t = np.unique(np.concatenate((t, common_t)))
+        differences = np.interp(check_t, common_t, y) - np.interp(check_t, t, yy)
+        maximum = float(np.max(np.abs(differences)))
+        if maximum > max_deviation_m + 1e-10:
+            raise GeometryError(f"Section {sec['id']} cannot meet the declared CAD approximation bound after knot correspondence.")
+        if np.any(np.diff(z) <= 0):
+            raise GeometryError(f"Section {sec['id']} has unresolvable elevation spacing at the declared coordinate scale.")
+        # Integral of the square of a linear error over each interval is exact.
+        rms = math.sqrt(float(np.sum(np.diff(check_t) *
+                                     (differences[:-1] ** 2 + differences[:-1] * differences[1:] + differences[1:] ** 2) / 3)))
+        source_area = float(2 * np.trapezoid(yy, zz))
+        cad_area = float(2 * np.trapezoid(y, z))
+        diagnostics = {
+            "method": "vertical_error_bounded_source_knots_v1",
+            "correspondence": "shared_normalized_height_source_knot_union",
+            "maximum_allowed_half_breadth_deviation_m": float(max_deviation_m),
+            "maximum_half_breadth_deviation_m": maximum,
+            "height_weighted_rms_deviation_m": rms,
+            "source_point_count": len(yy), "retained_source_knots": len(selected),
+            "common_knot_count": len(common), "estimated_face_count": estimated_faces,
+            "source_section_area_m2": source_area, "cad_section_area_m2": cad_area,
+            "section_area_error_m2": cad_area - source_area,
+            "section_beam_error_m": float(2 * (np.max(y) - np.max(yy))),
+            "uncertainty_scope": "CAD approximation of measured polyline only; excludes contour identity, calibration, interpolation between stations, and source accuracy",
+        }
+        normalized.append({**sec, "cad_points_yz_m": np.column_stack([y, z]).tolist(),
+                           "cad_approximation": diagnostics})
     return normalized
+
+
+def approximation_summary(sections: list[dict]) -> dict:
+    """Expose the declared and measured approximation bounds in run metrics."""
+    records = [s["cad_approximation"] for s in sections]
+    return {
+        "method": "vertical_error_bounded_source_knots_v1",
+        "correspondence": "shared_normalized_height_source_knot_union",
+        "maximum_allowed_half_breadth_deviation_m": max(r["maximum_allowed_half_breadth_deviation_m"] for r in records),
+        "maximum_half_breadth_deviation_m": max(r["maximum_half_breadth_deviation_m"] for r in records),
+        "maximum_height_weighted_rms_deviation_m": max(r["height_weighted_rms_deviation_m"] for r in records),
+        "maximum_section_area_error_m2": max(abs(r["section_area_error_m2"]) for r in records),
+        "maximum_section_beam_error_m": max(abs(r["section_beam_error_m"]) for r in records),
+        "common_knot_count": records[0]["common_knot_count"],
+        "estimated_face_count": records[0]["estimated_face_count"],
+        "limits": {"common_knots": MAX_COMMON_KNOTS, "estimated_faces": MAX_ESTIMATED_FACES,
+                   "sections": MAX_SECTIONS, "source_points_per_section": MAX_SECTION_POINTS},
+        "uncertainty_scope": records[0]["uncertainty_scope"],
+    }
 
 
 def _vector(point: np.ndarray) -> cq.Vector:
@@ -80,7 +214,8 @@ def _terminal_cap(half: np.ndarray, section_id: str) -> cq.Face:
     return face
 
 
-def build_hull(sections: list[dict], samples: int = 33) -> tuple[cq.Shape, list[dict]]:
+def build_hull(sections: list[dict], samples: int | None = None, *,
+               max_deviation_m: float = DEFAULT_MAX_DEVIATION_M) -> tuple[cq.Shape, list[dict]]:
     """Build an explicitly matched ruled BRep from normalized observations.
 
     Each half-section has the same sampling indices. Corresponding straight
@@ -89,10 +224,11 @@ def build_hull(sections: list[dict], samples: int = 33) -> tuple[cq.Shape, list[
     and terminal caps close the envelope. A zero-width keel may therefore meet
     a measured flat bottom without a closed-wire loft guessing edge matches.
 
-    Beyond the existing ``samples``-point linear resampling, this introduces
-    no curve fitting, smoothing, minimum breadth or coordinate adjustment.
+    Source polyline approximation has an explicit maximum ordinate error.
+    Correspondence retains narrow source features and zero-width transitions;
+    no hull-family fit or minimum breadth is introduced.
     """
-    sections = normalize_sections(sections, samples=samples)
+    sections = normalize_sections(sections, samples=samples, max_deviation_m=max_deviation_m)
     profiles = [np.column_stack([
         np.full(len(section["cad_points_yz_m"]), section["x_m"]),
         section["cad_points_yz_m"],
@@ -148,6 +284,10 @@ def metrics_for(shape: cq.Shape) -> dict:
 def export_geometry(shape: cq.Shape, out: Path, *, export_cad: bool = True) -> tuple[dict, dict]:
     metrics = metrics_for(shape)
     tolerance_mm = max(0.5, metrics["beam_m"] * 1000 / 800)
+    # CadQuery's convenience mesh/STL functions default to relative deflection.
+    # Our number is in millimetres: premesh explicitly with absolute deflection
+    # and one native meshing thread, then read that triangulation for mesh.json.
+    BRepMesh_IncrementalMesh(shape.wrapped, tolerance_mm, False, 0.15, False)
     vertices, faces = shape.tessellate(tolerance_mm, 0.15)
     mesh = {
         "units": "m",
@@ -159,7 +299,8 @@ def export_geometry(shape: cq.Shape, out: Path, *, export_cad: bool = True) -> t
     exports = {"mesh": "mesh.json", "mesh_units": "m"}
     if export_cad:
         shape.exportStep(str(out / "model.step"), write_pcurves=False)
-        shape.exportStl(str(out / "model.stl"), tolerance=tolerance_mm, angularTolerance=0.15)
+        shape.exportStl(str(out / "model.stl"), tolerance=tolerance_mm, angularTolerance=0.15,
+                        relative=False, parallel=False)
         reread = cq.importers.importStep(str(out / "model.step")).val()
         if not reread.isValid() or len(reread.Solids()) != 1:
             raise GeometryError("The exported STEP file failed independent reload validation.")
@@ -173,4 +314,6 @@ def export_geometry(shape: cq.Shape, out: Path, *, export_cad: bool = True) -> t
         exports.update({"step": "model.step", "step_units": "mm", "stl": "model.stl", "stl_units": "mm"})
     metrics["mesh_vertices"] = len(vertices)
     metrics["mesh_faces"] = len(faces)
+    metrics["mesh_deflection_mm"] = float(tolerance_mm)
+    metrics["mesh_deflection_mode"] = "absolute"
     return exports, metrics
