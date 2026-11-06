@@ -38,13 +38,38 @@ def make_fixture(tmp_path, *, width=1, noise=0, grid=True, faint=False, second=F
 
 
 @pytest.mark.parametrize("width,noise", [(1, 0), (3, 0), (1, 4), (3, 4)])
-def test_dark_primary_curve_survives_lighter_grid(tmp_path, width, noise):
+def test_original_lighter_grid_fixture_requires_explicit_identity(tmp_path, width, noise):
+    # Preserve the original pixels. A pale straight stroke may be a grid line
+    # or the hull; contrast alone is insufficient to make that distinction.
+    # The old automatic acceptance was intentional behaviour, now withdrawn.
     spec = make_fixture(tmp_path, width=width, noise=noise)
+    result = extract_sections(spec, tmp_path)
+    assert result["sections"] == []
+    assert any(g["kind"] == "ambiguous_curve" for g in result["gaps"])
+    diagnostic = result["diagnostics"]["sections"]["grid-fixture"]
+    assert diagnostic["unresolved_candidate_count"] > 0
+    assert diagnostic["candidate_evidence"]
+
+
+@pytest.mark.parametrize("width,noise", [(1, 0), (3, 0), (1, 4), (3, 4)])
+def test_same_grid_pixels_are_measured_after_explicit_source_selection(tmp_path, width, noise):
+    spec = make_fixture(tmp_path, width=width, noise=noise)
+    # Fixed, reviewable clicks in drawing pixels. They select a narrow band,
+    # not a replacement contour: inference still measures the raster stroke.
+    spec["sections"][0]["contour_selection"] = {
+        "anchors_px": [[52, 305], [70, 250], [92, 195], [119, 140], [150, 85], [184, 30]],
+        "half_width_px": 4,
+    }
     result = extract_sections(spec, tmp_path)
     assert not result["gaps"], result
     points = np.asarray(result["sections"][0]["points_yz_m"])
     expected = 0.5 + 0.28 * points[:, 1] + 0.04 * points[:, 1] ** 2
     assert np.sqrt(np.mean((points[:, 0] - expected) ** 2)) < 0.025
+    diagnostic = result["diagnostics"]["sections"]["grid-fixture"]
+    assert diagnostic["identity_status"] == "explicit_supplied_pixel_selection"
+    assert diagnostic["competing_candidate_count"] > 0
+    assert not diagnostic["unresolved_candidate_count"]
+    assert all(c["status"] == "excluded_by_explicit_pixel_selection" for c in diagnostic["candidate_evidence"])
 
 
 def test_uniformly_faint_contour_is_preserved(tmp_path):

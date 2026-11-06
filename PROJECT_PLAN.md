@@ -1,5 +1,17 @@
 # Vessel Reconstruction Foundation
 
+## Current continuation: 7 November 2026
+
+The original scope and gates below remain historical. The 0.2 continuation
+implemented typed/resource boundaries, transactional evidence, durable bounded
+workers, local authentication, explicit contour alternatives and error-bounded
+CAD correspondence. See [actual results and dispositions](docs/HARDENING_RESULTS.md)
+for the tested revision, complete test counts, negative results and readiness.
+The old numerical benchmark's completion gates are not currently met without
+new selection assistance. No authentic archival reconstruction or engineering
+approval has been established. The next validation priority is permitted real
+drawings with expert contour/calibration labels and measured correction effort.
+
 ## Scope and evaluation contract, fixed before evaluation
 Build a reproducible local system for section-based vessel hull reconstruction from actual 2D drawing pixels, with a geometry kernel, source provenance, visible uncertainty, and replayable evaluation. Add structural primitives only where explicitly specified by drawing evidence. This is a foundation, not arbitrary full-vessel certified reconstruction.
 

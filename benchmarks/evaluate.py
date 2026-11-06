@@ -204,9 +204,13 @@ def _run_inference(spec_path: Path, output_path: Path, *, export_cad: bool, time
             receipt = {'return_code':completed.returncode,'wall_seconds':time.perf_counter()-started,
                        'input_files':[str(p.relative_to(isolated)) for p in isolated.rglob('*') if p.is_file()],
                        'input_spec_sha256':sha256(isolated/'spec.json'),'input_image_sha256':sha256(isolated/local_source)}
-            output_path.mkdir(parents=True,exist_ok=True)
-            (output_path/'inference_stdout.txt').write_text(completed.stdout)
-            (output_path/'inference_stderr.txt').write_text(completed.stderr)
+            # Execution receipts are evaluator evidence, never additions to a
+            # sealed immutable inference directory (schema2 covers every file).
+            logs = output_path.parent / 'execution_logs' / output_path.name
+            logs.mkdir(parents=True, exist_ok=True)
+            (logs/'inference_stdout.txt').write_text(completed.stdout)
+            (logs/'inference_stderr.txt').write_text(completed.stderr)
+            receipt['execution_logs'] = str(logs)
             if (output_path/'result.json').exists():
                 receipt['result'] = json.loads((output_path/'result.json').read_text())
             else:

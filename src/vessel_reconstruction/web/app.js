@@ -4,7 +4,9 @@
 // No demonstration hull, fabricated metric or automatic approval is inserted.
 const $ = (id) => document.getElementById(id);
 const SNAPSHOT = window.__VESSEL_SNAPSHOT__ || null;
-const state = {runs: [], result: null, runId: null, section: null, image: null, crop: true, loading: 0, sourceId: null, selectedCell: null, imageRequest: 0};
+let csrfToken = '';
+let activeJobId = null;
+const state = {runs: [], result: null, runId: null, section: null, image: null, crop: true, loading: 0, sourceId: null, selectedCell: null, imageRequest: 0, inspectionSections: [], localReview: null};
 const number = (value, digits = 2) => typeof value === 'number' && Number.isFinite(value)
   ? value.toLocaleString(undefined, {maximumFractionDigits: digits}) : '—';
 const percent = (value, digits = 1) => typeof value === 'number' && Number.isFinite(value) ? `${number(value * 100, digits)}%` : '—';
@@ -22,7 +24,10 @@ function notify(message, error = false) {
 async function jsonFetch(url, options) {
   if (SNAPSHOT && url === '/api/runs') return {runs: [{id:'snapshot',name:SNAPSHOT.vessel_id,status:SNAPSHOT.status,has_mesh:!!SNAPSHOT.assets['mesh.json']}]};
   if (!url) throw new Error('This artifact is not included in the portable snapshot');
-  const response = await fetch(url, options);
+  const settings = {...(options || {})};
+  settings.headers = {...(settings.headers || {})};
+  if (settings.method && !['GET', 'HEAD'].includes(settings.method)) settings.headers['X-MarinaFrame-CSRF'] = csrfToken;
+  const response = await fetch(url, {...settings, credentials: 'same-origin'});
   let value;
   try { value = await response.json(); } catch (_) { throw new Error(`Unable to read response (${response.status})`); }
   if (!response.ok) throw new Error(value.error || `Request failed (${response.status})`);
@@ -226,11 +231,21 @@ async function refreshRuns(preferredId = null) {
 
 async function loadRun(id) {
   const load=++state.loading;notify('');state.runId=id;state.image=null;
+  viewer.setModel(null,[]);$('viewport-empty').hidden=false;
+  $('viewport-empty').querySelector('h3').textContent='Loading verified reconstruction';
+  $('viewport-empty').querySelector('p').textContent='Loading the model and its source evidence…';
   try{
     const result=await jsonFetch(assetUrl('result.json'));if(load!==state.loading)return;
     state.result=result;state.section=null;state.selectedCell=null;
+    let replay={};try{replay=await jsonFetch(assetUrl('replay_spec.json'));}catch(_){/* Observations remain inspectable without optional replay UI. */}
+    if(load!==state.loading)return;
+    const observed=new Map((result.sections||[]).map(section=>[section.id,section]));
+    state.inspectionSections=Array.isArray(replay?.sections)?replay.sections.filter(section=>section&&typeof section.id==='string').map(section=>observed.get(section.id)||{id:section.id,x_m:section.x_m,unresolved:true,evidence:{roi_px:section.roi_px,calibration:section.calibration,contour_selection:section.contour_selection,source_id:result.sources?.[0]?.id},warnings:[]}):(result.sections||[]);
+    try{state.localReview=SNAPSHOT?SNAPSHOT.review_state:await jsonFetch(`/api/review/${encodeURIComponent(id)}`);}catch(_){state.localReview={state:'unavailable'};}
+    if(load!==state.loading)return;
     renderSummary(result);renderInventory(result);renderIssues(result);
     const exports=result.exports||{};setDownload('download-step',exports.step);setDownload('download-stl',exports.stl);setDownload('download-result','result.json');
+    setDownload('download-replay','replay_spec.json');
     const sources=result.sources||[],sourceSelect=$('evidence-source-select');sourceSelect.replaceChildren();sourceSelect.hidden=sources.length<2;
     for(const source of sources){const option=document.createElement('option');option.value=source.id;option.textContent=titleCase(source.role||source.id);sourceSelect.append(option);}
     loadSource(sources[0]?.id);
@@ -240,7 +255,7 @@ async function loadRun(id) {
     viewer.setModel(mesh,result.sections||[]);
     const empty=$('viewport-empty');empty.hidden=!!mesh;
     if(!mesh){empty.querySelector('h3').textContent=result.status==='blocked'?'Reconstruction blocked':'No 3D geometry available';empty.querySelector('p').textContent=result.status==='blocked'?'Missing or inconsistent evidence must be resolved before a solid can be built.':'Inspect the source evidence and open questions below.';}
-    const sections=result.sections||[];if(sections.length)selectSection(sections[Math.floor(sections.length/2)].id);else renderEvidence(null);
+    const sections=state.inspectionSections;if(sections.length)selectSection(sections[Math.floor(sections.length/2)].id);else renderEvidence(null);
   }catch(error){notify(`Unable to open reconstruction: ${error.message}`,true);}
 }
 
@@ -254,9 +269,12 @@ function renderSummary(result){
   setText('metric-dimensions',[m.length_m,m.beam_m,m.depth_m].every(Number.isFinite)?`${number(m.length_m)} × ${number(m.beam_m)} × ${number(m.depth_m)}`:'—');
   const sections=result.sections||[];setText('metric-sections',sections.length);
   const scores=sections.map(s=>s.confidence).filter(Number.isFinite);setText('metric-quality',scores.length?`Mean heuristic quality ${percent(scores.reduce((a,b)=>a+b,0)/scores.length)}`:'No section quality observations');
-  setText('metric-review',result.status==='blocked'?'Blocked':'Review required');
+  setText('metric-review',result.status==='review_required'?'Review required':titleCase(result.status));
   setText('model-title',result.vessel_id||'Hull envelope');
-  const badge=$('status-badge');badge.textContent=result.status==='blocked'?'Evidence incomplete':'Engineer review required';badge.classList.toggle('blocked',result.status==='blocked');
+  const badge=$('status-badge');badge.textContent=result.status==='review_required'?'Engineer review required':titleCase(result.status);badge.classList.toggle('blocked',result.status!=='review_required');
+  setText('local-review-state',`Local review: ${titleCase(state.localReview?.state||'unreviewed')}. Reviewer identity is unverified; engineering approval remains absent.`);
+  const approximation=m.geometry_approximation;
+  setText('cad-deviation',Number.isFinite(approximation?.maximum_half_breadth_deviation_m)?`${number(approximation.maximum_half_breadth_deviation_m*1000,3)} mm / ${number(approximation.maximum_allowed_half_breadth_deviation_m*1000,3)} mm limit`:'Not measured');
   setText('cad-valid',m.cad_valid===true?'Valid solid':m.cad_valid===false?'Invalid':'Not generated');
   setText('step-error',Number.isFinite(m.step_roundtrip_relative_error)?percent(m.step_roundtrip_relative_error,5):'Not measured');
   setText('run-time',Number.isFinite(result.timing_seconds)?`${number(result.timing_seconds,2)} s`:'—');
@@ -265,11 +283,11 @@ function renderInventory(result){
   const parts=result.parts||[];setText('part-count',`${parts.length} part${parts.length===1?'':'s'}`);const partList=$('part-list');partList.replaceChildren();
   for(const part of parts){const row=document.createElement('button');row.className='part-item';row.type='button';const icon=document.createElement('span');icon.className='part-icon';icon.textContent='◇';const content=document.createElement('span');const name=document.createElement('span');name.className='part-name';name.textContent=part.name||part.id;const kind=document.createElement('span');kind.className='part-kind';kind.textContent=titleCase(part.kind||'reconstructed geometry');content.append(name,kind);row.append(icon,content);row.addEventListener('click',()=>viewer.fit());partList.append(row);}
   if(!parts.length){const p=document.createElement('p');p.className='muted small';p.style.padding='8px';p.textContent='No geometry accepted for reconstruction.';partList.append(p);}
-  const sections=result.sections||[];setText('section-count',sections.length);const list=$('section-list');list.replaceChildren();
+  const sections=state.inspectionSections;setText('section-count',sections.length);const list=$('section-list');list.replaceChildren();
   for(const section of sections){const button=document.createElement('button');button.className='section-button';button.type='button';button.dataset.section=section.id;button.setAttribute('aria-pressed','false');const dot=document.createElement('span');dot.className='section-dot';dot.setAttribute('aria-hidden','true');const name=document.createElement('span');name.textContent=section.id;const position=document.createElement('small');position.textContent=`${number(section.x_m)} m`;button.append(dot,name,position);button.addEventListener('click',()=>selectSection(section.id));list.append(button);}
 }
 function selectSection(id){
-  const section=(state.result?.sections||[]).find(item=>item.id===id);if(!section)return;state.section=section;state.selectedCell=null;if(section.evidence?.source_id&&state.sourceId!==section.evidence.source_id)loadSource(section.evidence.source_id);viewer.select(id);
+  const section=state.inspectionSections.find(item=>item.id===id);if(!section)return;state.section=section;state.selectedCell=null;if(section.evidence?.source_id&&state.sourceId!==section.evidence.source_id)loadSource(section.evidence.source_id);viewer.select(id);
   document.querySelectorAll('[data-section]').forEach(button=>{const active=button.dataset.section===id;button.classList.toggle('selected',active);button.setAttribute('aria-pressed',String(active));if(active){const list=$('section-list'),a=button.getBoundingClientRect(),b=list.getBoundingClientRect();if(a.top<b.top)list.scrollTop-=b.top-a.top;else if(a.bottom>b.bottom)list.scrollTop+=a.bottom-b.bottom;}});renderEvidence(section);
 }
 function renderEvidence(section){
@@ -279,6 +297,8 @@ function renderEvidence(section){
   setText('evidence-calibration',Number.isFinite(calibration.pixels_per_metre)?`${number(calibration.pixels_per_metre)} px/m`:section?.evidence?.table_value_units?'Table units declared':'Not available');
   const source=currentSource();setText('evidence-hash',source?.sha256?`${source.sha256.slice(0,16)}…`:'—');$('evidence-hash').title=source?.sha256||'';
   const warnings=$('section-warnings');warnings.replaceChildren();const messages=section?.warnings||[];if(messages.length){const detail=document.createElement('details');detail.className='extraction-notes';const summary=document.createElement('summary');summary.textContent=`${messages.length} extraction notes`;detail.append(summary);for(const warning of messages){const p=document.createElement('p');p.textContent=typeof warning==='string'?warning:warning.message||JSON.stringify(warning);detail.append(p);}warnings.append(detail);}renderTableObservations(section);drawSource();
+  const diagnostic=state.result?.diagnostics?.sections?.[section?.id];
+  if(diagnostic){const p=document.createElement('p');p.className='small';p.textContent=`Contour identity: ${titleCase(diagnostic.identity_status||diagnostic.status)}. ${section?.unresolved?'This station has no accepted observations. ':''}Orange numbered dots mark competing source samples; dashed blue marks an explicit selection corridor. Neither overlay is an accepted hull.`;warnings.prepend(p);}
 }
 function drawSource(){
   const canvas=$('source-canvas'),container=$('source-image-container'),ctx=canvas.getContext('2d'),rect=container.getBoundingClientRect(),ratio=Math.min(devicePixelRatio||1,2);
@@ -293,6 +313,13 @@ function drawSource(){
   // Overlay recovered points using the declared global pixel calibration.
   const calibration=state.section?.evidence?.calibration;
   if(primary&&state.crop&&calibration&&state.section?.points_yz_m){const ppm=calibration.pixels_per_metre;if(Number.isFinite(ppm)){ctx.beginPath();state.section.points_yz_m.forEach(([y,z],i)=>{const px=(calibration.centerline_px+y*ppm)*sx,py=(calibration.baseline_px-z*ppm)*sy;const x=dx+(px-sourceRect[0])*scale,yy=dy+(py-sourceRect[1])*scale;i?ctx.lineTo(x,yy):ctx.moveTo(x,yy);});ctx.strokeStyle='#16867bc4';ctx.lineWidth=1.5;ctx.stroke();}}
+  if(primary&&state.section){
+    const project=([x,y])=>[dx+(x*sx-sourceRect[0])*scale,dy+(y*sy-sourceRect[1])*scale];
+    const diagnostic=state.result?.diagnostics?.sections?.[state.section.id];
+    (diagnostic?.candidate_evidence||[]).forEach((candidate,index)=>{ctx.fillStyle='#ad5109';ctx.font='bold 11px sans-serif';(candidate.source_points_px||[]).forEach((point,i)=>{const [x,y]=project(point);ctx.beginPath();ctx.arc(x,y,1.5,0,Math.PI*2);ctx.fill();if(i===0)ctx.fillText(`C${index+1}`,x+4,y+11);});});
+    const selection=state.section.evidence?.contour_selection;
+    if(selection?.anchors_px?.length){ctx.strokeStyle='#275fa8';ctx.lineWidth=1.5;ctx.setLineDash([5,4]);for(const sign of [-1,1]){ctx.beginPath();selection.anchors_px.forEach(([x,y],i)=>{const p=project([x+sign*selection.half_width_px,y]);i?ctx.lineTo(...p):ctx.moveTo(...p);});ctx.stroke();}ctx.setLineDash([]);}
+  }
 }
 function renderTableObservations(section){
   const cells=section?.evidence?.cell_evidence||section?.evidence?.cells||[],panel=$('table-observations'),rows=$('table-observation-rows');panel.hidden=!cells.length;rows.replaceChildren();setText('evidence-coverage-label',cells.length?'Observation coverage':'Curve coverage');setText('evidence-confidence-label',cells.length?'OCR confidence score':'Quality score');setText('evidence-calibration-label',cells.length?'Measurement notation':'Pixel calibration');
@@ -319,24 +346,37 @@ for(const [id,crop] of [['crop-source',true],['full-source',false]])$(id).addEve
 
 const dialog=$('upload-dialog');
 $('new-reconstruction').addEventListener('click',()=>{ $('upload-status').hidden=true;dialog.showModal(); });
-$('close-dialog').addEventListener('click',()=>dialog.close());$('cancel-upload').addEventListener('click',()=>dialog.close());
+$('close-dialog').addEventListener('click',()=>dialog.close());
+$('cancel-upload').addEventListener('click',async()=>{
+  if(!activeJobId){dialog.close();return;}
+  try{await jsonFetch(`/api/jobs/${activeJobId}/cancel`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});uploadStatus('Cancellation requested. Waiting for the isolated worker to stop…');}
+  catch(error){uploadStatus(error.message,true);}
+});
 function uploadStatus(message,error=false){const element=$('upload-status');element.hidden=false;element.classList.toggle('error',error);element.textContent=message;}
-function fileToBase64(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(new Error('Drawing could not be read'));reader.readAsDataURL(file);});}
+async function sourceDescriptor(file){const digest=await crypto.subtle.digest('SHA-256',await file.arrayBuffer());return {bytes:file.size,sha256:Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join('')};}
 async function pollJob(id){
-  const job=await jsonFetch(`/api/jobs/${encodeURIComponent(id)}`);
-  if(job.state==='complete'){uploadStatus(job.result_status==='blocked'?'Evidence gaps detected. Opening the blocked run for inspection.':'Reconstruction complete. Opening the evidence workbench.');await refreshRuns(job.run_id);dialog.close();notify(job.result_status==='blocked'?'Reconstruction was blocked by incomplete or inconsistent evidence. Inspect the open questions below.':'Drawing reconstructed. The model is ready for engineering review.',job.result_status==='blocked');return;}
-  if(job.state==='failed')throw new Error(job.error||'Reconstruction failed');
-  uploadStatus(job.state==='queued'?'Queued for reconstruction…':'Extracting curves, reconstructing CAD and checking the exported geometry…');
-  await new Promise(resolve=>setTimeout(resolve,700));return pollJob(id);
+  for(;;){
+    const job=await jsonFetch(`/api/jobs/${encodeURIComponent(id)}`);
+    if(['succeeded','blocked'].includes(job.state)){uploadStatus(job.state==='blocked'?'Evidence gaps detected. Opening the blocked run for inspection.':'Reconstruction complete. Opening the evidence workbench.');await refreshRuns(job.run_id);dialog.close();notify(job.state==='blocked'?'Reconstruction was blocked by incomplete or inconsistent evidence. Inspect the open questions below.':'Drawing reconstructed. Engineering review remains required.',job.state==='blocked');return;}
+    if(['failed','cancelled','timed_out','resource_limited','interrupted'].includes(job.state))throw new Error(`${titleCase(job.state)}: ${titleCase(job.error_code || 'The job did not publish a successful model')}. You can correct the input and submit a new job.`);
+    uploadStatus(job.state==='queued'?'Queued for reconstruction…':'Extracting curves, reconstructing CAD and checking evidence within the local worker budget…');
+    await new Promise(resolve=>setTimeout(resolve,700));
+  }
 }
 $('upload-form').addEventListener('submit',async event=>{
   event.preventDefault();const drawing=$('drawing-file').files[0],specFile=$('spec-file').files[0];if(!drawing||(!calibration.active&&!specFile))return;
   const submit=$('submit-upload');submit.disabled=true;
-  try{if(drawing.size>20*1024*1024)throw new Error('Please use a drawing smaller than 20 MiB');if(specFile&&specFile.size>2*1024*1024)throw new Error('Specification must be smaller than 2 MiB');
+  try{
+    if(drawing.size>20*1024*1024)throw new Error('Please use a drawing smaller than 20 MiB');if(specFile&&specFile.size>2*1024*1024)throw new Error('Specification must be smaller than 2 MiB');
     const spec=calibration.active?calibration.spec():JSON.parse(await specFile.text());if(!Array.isArray(spec.sections)||!spec.sections.length)throw new Error('The specification must contain section regions and calibration');
-    uploadStatus('Uploading drawing and declared calibration…');const data={spec,image_base64:await fileToBase64(drawing)};if(spec.station_reference){const reference=$('reference-file').files[0];if(!reference)throw new Error('Upload the supporting station-reference document required by this specification.');if(reference.size>12*1024*1024)throw new Error('The supporting reference must be smaller than 12 MiB.');data.station_reference_base64=await fileToBase64(reference);}
-    const job=await jsonFetch('/api/reconstruct',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});await pollJob(job.id);
-  }catch(error){uploadStatus(error.message,true);}finally{submit.disabled=false;}
+    const files={primary:drawing};
+    if(spec.station_reference){const reference=$('reference-file').files[0];if(!reference)throw new Error('Upload the supporting station-reference document required by this specification.');if(reference.size>12*1024*1024)throw new Error('The supporting reference must be smaller than 12 MiB.');files.reference=reference;}
+    uploadStatus('Checking source hashes and reserving local queue capacity…');
+    const sources={};for(const [role,file] of Object.entries(files))sources[role]=await sourceDescriptor(file);
+    const job=await jsonFetch('/api/uploads',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':crypto.randomUUID()},body:JSON.stringify({spec,sources})});activeJobId=job.id;$('cancel-upload').textContent='Cancel job';
+    for(const [role,file] of Object.entries(files)){uploadStatus(`Uploading ${role==='primary'?'drawing':'station reference'}…`);await jsonFetch(`/api/jobs/${job.id}/sources/${role}`,{method:'PUT',headers:{'Content-Type':'application/octet-stream'},body:file});}
+    await jsonFetch(`/api/jobs/${job.id}/submit`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});await pollJob(job.id);
+  }catch(error){uploadStatus(error.message,true);}finally{submit.disabled=false;activeJobId=null;$('cancel-upload').textContent='Cancel';}
 });
 
 
@@ -456,4 +496,11 @@ async function updateReferenceField(){
 $('spec-file').addEventListener('change',updateReferenceField);
 const calibration = new CalibrationEditor();
 if(SNAPSHOT){document.querySelector('.brand').href=location.href;document.querySelector('.build-label').textContent='Portable research snapshot';$('new-reconstruction').disabled=true;$('new-reconstruction').title='Run the local application to reconstruct a new drawing.';$('refresh-runs').hidden=true;}
-refreshRuns();
+async function initializeSession(){
+  if(SNAPSHOT){await refreshRuns();return;}
+  const token=new URLSearchParams(location.hash.slice(1)).get('session');
+  if(token){history.replaceState(null,'',location.pathname+location.search);const response=await jsonFetch('/api/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});csrfToken=response.csrf;}
+  else csrfToken=(await jsonFetch('/api/session')).csrf;
+  await refreshRuns();
+}
+initializeSession().catch(error=>{notify(error.message,true);$('new-reconstruction').disabled=true;});

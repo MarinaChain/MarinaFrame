@@ -1,13 +1,23 @@
-"""Input validation, with explicit units and no hidden geometry targets."""
+"""Bounded, typed drawing specifications; no hidden geometry targets."""
 from __future__ import annotations
 
+import json
 import math
+import re
 from pathlib import Path
 
-# Bound local physical coordinates before they reach the geometric kernel.
-# This is deliberately far above any vessel size; it is a numeric/resource
-# boundary, not an assumption about the shape being reconstructed.
 MAX_LOCAL_METRES = 10_000_000.0
+MAX_SPEC_BYTES = 2 * 1024 * 1024
+MAX_SECTIONS = 300
+MAX_CELLS_PER_SECTION = 256
+MAX_TOTAL_CELLS = 4096
+MAX_PIXEL_COORDINATE = 1_000_000
+SHA256 = re.compile(r"^[0-9a-f]{64}$")
+FORBIDDEN = {"points", "points_yz_m", "offsets", "ground_truth", "reference_mesh", "hull_parameters"}
+
+
+class BoundedJSONError(ValueError):
+    """Invalid or resource-excessive JSON, safe to report as a structured gap."""
 
 
 def gap(kind: str, message: str, section_id: str | None = None, severity: str = "blocking") -> dict:
@@ -26,52 +36,164 @@ def finite(value) -> bool:
         return False
 
 
+def loads_bounded_json(raw: bytes | str, *, max_bytes=MAX_SPEC_BYTES, max_depth=32,
+                       max_nodes=150_000, max_string=65_536):
+    """Reject duplicate keys, nonfinite numbers and excessive trees before use."""
+    if isinstance(raw, str):
+        raw = raw.encode("utf-8")
+    if not isinstance(raw, bytes) or len(raw) > max_bytes:
+        raise BoundedJSONError("JSON exceeds the byte limit.")
+
+    def pairs(items):
+        result = {}
+        for key, value in items:
+            if key in result:
+                raise BoundedJSONError("Duplicate JSON object key.")
+            result[key] = value
+        return result
+
+    def number(token):
+        value = float(token)
+        if not math.isfinite(value):
+            raise BoundedJSONError("Nonfinite or overflowing JSON number.")
+        return value
+
+    def integer(token):
+        if len(token.lstrip("-")) > 64:
+            raise BoundedJSONError("JSON integer exceeds the numeric bound.")
+        return int(token)
+
+    def reject_constant(_token):
+        raise BoundedJSONError("Nonfinite JSON constant.")
+
+    try:
+        value = json.loads(raw.decode("utf-8"), object_pairs_hook=pairs,
+                           parse_float=number, parse_int=integer, parse_constant=reject_constant)
+    except (UnicodeError, RecursionError, json.JSONDecodeError, ValueError) as exc:
+        if isinstance(exc, BoundedJSONError):
+            raise
+        raise BoundedJSONError("Malformed or excessively nested JSON.") from exc
+    stack, count = [(value, 0)], 0
+    while stack:
+        item, depth = stack.pop()
+        count += 1
+        if count > max_nodes or depth > max_depth:
+            raise BoundedJSONError("JSON tree exceeds the depth or item limit.")
+        if isinstance(item, str) and len(item) > max_string:
+            raise BoundedJSONError("JSON string exceeds the length limit.")
+        if isinstance(item, dict):
+            for key, child in item.items():
+                if len(key) > 256:
+                    raise BoundedJSONError("JSON key exceeds the length limit.")
+                stack.append((child, depth + 1))
+        elif isinstance(item, list):
+            stack.extend((child, depth + 1) for child in item)
+    return value
+
+
+def load_bounded_json(path: Path, **limits):
+    limit = limits.get("max_bytes", MAX_SPEC_BYTES)
+    with Path(path).open("rb") as handle:
+        raw = handle.read(limit + 1)
+    return loads_bounded_json(raw, **limits)
+
+
+def _text(value, maximum=8192, *, optional=False):
+    return (optional and value is None) or (isinstance(value, str) and bool(value.strip()) and len(value) <= maximum and "\x00" not in value)
+
+
+def _rectangle(value):
+    return (isinstance(value, list) and len(value) == 4 and all(finite(v) for v in value)
+            and min(value) >= 0 and max(value) <= MAX_PIXEL_COORDINATE
+            and value[2] > value[0] and value[3] > value[1])
+
+
 def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
+    """Every JSON type yields validation gaps, never a metadata type exception."""
     errors = []
     if not isinstance(spec, dict):
         return [gap("invalid_spec", "A JSON object is required.")]
+
+    def unknown(obj, allowed, label, sid=None):
+        extras = sorted(set(obj) - allowed)
+        if extras:
+            errors.append(gap("unexpected_field", f"Unsupported {label} field(s): {', '.join(extras[:8])}.", sid))
+
+    unknown(spec, {"schema_version", "vessel_id", "input_mode", "units", "source", "station_reference",
+                   "symmetry", "symmetry_evidence", "end_closure", "sections", "constraints", "components",
+                   "table_value_units", "table_surface", "scope_note", "historical_date"}, "specification")
+    if FORBIDDEN.intersection(spec):
+        errors.append(gap("geometry_in_input", "Drawing input must not contain target geometry or evaluation answers."))
     if spec.get("schema_version") != "1.0":
         errors.append(gap("schema_version", "schema_version must be 1.0."))
     mode = spec.get("input_mode", "calibrated_section_curves")
-    if mode not in {"calibrated_section_curves", "offset_table_ocr"}:
+    if not isinstance(mode, str) or mode not in ("calibrated_section_curves", "offset_table_ocr"):
         errors.append(gap("unsupported_input_mode", "Choose calibrated_section_curves or offset_table_ocr."))
     if mode == "offset_table_ocr" and spec.get("table_value_units") != "feet_inches_eighths":
         errors.append(gap("table_units_unresolved", "Declare table_value_units='feet_inches_eighths' for this OCR adapter."))
+    for name in ("vessel_id", "table_surface", "scope_note", "historical_date"):
+        if name in spec and not _text(spec[name], 256 if name == "vessel_id" else 8192):
+            errors.append(gap("invalid_metadata", f"{name} must be a bounded nonempty string."))
     if spec.get("units") != "m":
         errors.append(gap("missing_units", "Declare units='m'; pixels are not physical dimensions."))
     if spec.get("symmetry") != "port_starboard":
         errors.append(gap("symmetry_unresolved", "This parser requires an explicit port_starboard symmetry assumption."))
-    if not spec.get("symmetry_evidence"):
-        errors.append(gap("symmetry_evidence_missing", "Record evidence for symmetry or explicitly declare it an assumption."))
+    if not _text(spec.get("symmetry_evidence")):
+        errors.append(gap("symmetry_evidence_missing", "Record bounded text describing symmetry evidence or its explicit assumption."))
     if spec.get("end_closure") != "flat_at_terminal_stations":
-        errors.append(gap("end_closure_unresolved", "Declare flat_at_terminal_stations; the pipeline does not invent a bow/stern beyond observed stations."))
-    source = spec.get("source", {})
-    source_name = source.get("file") if isinstance(source, dict) else None
-    if not isinstance(source_name, str) or not source_name:
-        errors.append(gap("source_missing", "source.file must identify an input drawing."))
-    else:
-        source_path = (base_dir / source_name).resolve()
-        if not source_path.is_file():
-            errors.append(gap("source_missing", "The declared input drawing does not exist."))
+        errors.append(gap("end_closure_unresolved", "Declare flat_at_terminal_stations; no unsupported bow/stern is invented."))
+    for name in ("source", "station_reference"):
+        if name == "station_reference" and name not in spec:
+            continue
+        source = spec.get(name)
+        kind = "source_missing" if name == "source" else "station_reference_missing"
+        if not isinstance(source, dict):
+            errors.append(gap(kind, f"{name} must be an object identifying an input drawing."))
+            continue
+        unknown(source, {"file", "sha256", "url", "license", "page_index", "render_dpi", "roi_px",
+                         "description", "original_scan_sha256", "upload_original_sha256", "transformation"}, name)
+        filename = source.get("file")
+        if not _text(filename, 4096):
+            errors.append(gap(kind, f"{name}.file must be a bounded nonempty path."))
+        else:
+            try:
+                if not (base_dir / filename).is_file():
+                    errors.append(gap(kind, f"The declared {name} file does not exist."))
+            except (OSError, ValueError):
+                errors.append(gap(kind, f"The declared {name} path is not readable."))
+        for field in ("sha256", "original_scan_sha256", "upload_original_sha256"):
+            if field in source and (not isinstance(source[field], str) or not SHA256.fullmatch(source[field])):
+                errors.append(gap("invalid_source_hash", f"{name}.{field} must be a lowercase SHA-256 digest."))
+        for field in ("url", "license", "description", "transformation"):
+            if field in source and not _text(source[field], optional=field in ("url", "license")):
+                errors.append(gap("invalid_source_metadata", f"{name}.{field} must be bounded text."))
+        if "page_index" in source and (type(source["page_index"]) is not int or not 0 <= source["page_index"] <= 9999):
+            errors.append(gap("invalid_page_index", f"{name}.page_index must be an integer in [0, 9999]."))
+        if "render_dpi" in source and (not finite(source["render_dpi"]) or not 1 <= source["render_dpi"] <= 600):
+            errors.append(gap("invalid_render_dpi", f"{name}.render_dpi must be finite and within [1, 600]."))
+        if "roi_px" in source and not _rectangle(source["roi_px"]):
+            errors.append(gap("invalid_source_region", f"{name}.roi_px must be a bounded positive pixel rectangle."))
     sections = spec.get("sections")
     if not isinstance(sections, list) or len(sections) < 3:
         errors.append(gap("insufficient_sections", "At least three calibrated sections are required."))
-        return errors
-    if len(sections) > 300:
-        errors.append(gap("input_limit", "Maximum 300 section views per run."))
-        return errors
-    ids, stations = set(), set()
+        sections = []
+    elif len(sections) > MAX_SECTIONS:
+        errors.append(gap("input_limit", f"Maximum {MAX_SECTIONS} section views per run."))
+        sections = []
+    ids, stations, total_cells = set(), set(), 0
     for i, sec in enumerate(sections):
         if not isinstance(sec, dict):
             errors.append(gap("invalid_section", f"Section {i} is not an object."))
             continue
-        sid = str(sec.get("id", i))
-        if sid in ids:
+        sid = sec.get("id") if _text(sec.get("id"), 128) else f"section-{i}"
+        if not _text(sec.get("id"), 128):
+            errors.append(gap("invalid_section_identity", "Section id must be nonempty bounded text.", sid))
+        elif sid in ids:
             errors.append(gap("duplicate_identity", "Section identifiers must be unique.", sid))
         ids.add(sid)
-        # Ground truth and offsets have no legal route through this input schema.
-        forbidden = {"points", "points_yz_m", "offsets", "ground_truth", "reference_mesh", "hull_parameters"}
-        if forbidden.intersection(sec) or forbidden.intersection(spec):
+        unknown(sec, {"id", "x_m", "roi_px", "calibration", "z_min_m", "z_max_m", "evidence", "sample_count",
+                      "cells", "contour_selection"}, "section", sid)
+        if FORBIDDEN.intersection(sec):
             errors.append(gap("geometry_in_input", "Drawing input must not contain target geometry or evaluation answers.", sid))
         x = sec.get("x_m")
         if not finite(x):
@@ -83,71 +205,92 @@ def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
         else:
             stations.add(float(x))
         roi = sec.get("roi_px")
-        if not isinstance(roi, list) or len(roi) != 4 or not all(finite(v) for v in roi):
-            errors.append(gap("missing_view_region", "Declare the drawing view region in pixels.", sid))
-        elif roi[2] <= roi[0] or roi[3] <= roi[1] or min(roi) < 0:
-            errors.append(gap("invalid_view_region", "The view region must have positive area and nonnegative coordinates.", sid))
+        if not _rectangle(roi):
+            errors.append(gap("invalid_view_region", "Declare a bounded positive drawing view region in pixels.", sid))
+        if not _text(sec.get("evidence")):
+            errors.append(gap("calibration_evidence_missing", "Describe the source of the view or table location and scale.", sid))
+        if "sample_count" in sec and (type(sec["sample_count"]) is not int or not 17 <= sec["sample_count"] <= 513):
+            errors.append(gap("invalid_sample_count", "sample_count must be an integer in [17, 513].", sid))
+        if "contour_selection" in sec:
+            selection = sec["contour_selection"]
+            if not isinstance(selection, dict):
+                errors.append(gap("invalid_contour_selection", "contour_selection must be an explicit pixel corridor object.", sid))
+            else:
+                unknown(selection, {"anchors_px", "half_width_px"}, "contour selection", sid)
+                anchors, half_width = selection.get("anchors_px"), selection.get("half_width_px")
+                okay = (isinstance(anchors, list) and 2 <= len(anchors) <= 64 and finite(half_width)
+                        and 0 < half_width <= 128 and _rectangle(roi))
+                if okay:
+                    okay = half_width <= roi[2] - roi[0]
+                    ys = set()
+                    for point in anchors:
+                        if not (isinstance(point, list) and len(point) == 2 and all(finite(v) for v in point)
+                                and roi[0] <= point[0] <= roi[2] and roi[1] <= point[1] <= roi[3]
+                                and point[1] not in ys):
+                            okay = False
+                            break
+                        ys.add(point[1])
+                if not okay:
+                    errors.append(gap("invalid_contour_selection", "Selection requires 2..64 finite ROI anchors at distinct rows and half_width_px in (0,128].", sid))
         if mode == "offset_table_ocr":
             cells = sec.get("cells")
-            if not isinstance(cells, list) or len(cells) < 5:
-                errors.append(gap("insufficient_table_rows", "At least five source measurement cells per station are required.", sid))
+            if not isinstance(cells, list) or not 5 <= len(cells) <= MAX_CELLS_PER_SECTION:
+                errors.append(gap("insufficient_table_rows", f"Declare 5..{MAX_CELLS_PER_SECTION} source measurement cells per station.", sid))
             else:
+                total_cells += len(cells)
                 zs = set()
                 for cell in cells:
                     if not isinstance(cell, dict):
                         errors.append(gap("invalid_table_cell", "A cell must declare its source ROI and measured elevation.", sid))
                         continue
+                    unknown(cell, {"z_m", "roi_px"}, "table cell", sid)
                     z = cell.get("z_m")
                     if not finite(z) or abs(z) > MAX_LOCAL_METRES or z in zs:
-                        errors.append(gap("invalid_table_elevation", "Cell elevations must be finite, within the local coordinate limit, and unique per station.", sid))
+                        errors.append(gap("invalid_table_elevation", "Cell elevations must be finite, bounded and unique per station.", sid))
                     else:
                         zs.add(z)
-                    cr = cell.get("roi_px")
-                    if not isinstance(cr, list) or len(cr) != 4 or not all(finite(v) for v in cr) or cr[2] <= cr[0] or cr[3] <= cr[1] or min(cr) < 0:
-                        errors.append(gap("invalid_cell_region", "Each cell requires a valid source-pixel rectangle.", sid))
+                    if not _rectangle(cell.get("roi_px")):
+                        errors.append(gap("invalid_cell_region", "Each cell requires a bounded source-pixel rectangle.", sid))
                     if any(k in cell for k in ("value", "y_m", "half_breadth_m", "ground_truth")):
-                        errors.append(gap("geometry_in_input", "Numeric half-breadths must be read from source pixels, not supplied as hidden answers.", sid))
-            if not sec.get("evidence"):
-                errors.append(gap("calibration_evidence_missing", "Describe how the station and table-cell regions were identified.", sid))
+                        errors.append(gap("geometry_in_input", "Numeric half-breadths must be read from source pixels.", sid))
             continue
-        cal = sec.get("calibration", {})
+        if "cells" in sec:
+            errors.append(gap("unexpected_field", "cells are supported only for offset_table_ocr.", sid))
+        cal = sec.get("calibration")
         if not isinstance(cal, dict):
+            errors.append(gap("invalid_calibration", "calibration must be an object.", sid))
             cal = {}
-        if not finite(cal.get("pixels_per_metre")) or cal.get("pixels_per_metre", 0) <= 0:
-            errors.append(gap("missing_scale", "A positive pixels_per_metre calibration is required; scale will not be guessed.", sid))
-        elif isinstance(roi, list) and len(roi) == 4 and all(finite(v) for v in roi):
-            ppm = cal["pixels_per_metre"]
-            # Compare before dividing so tiny scales cannot overflow.
+        unknown(cal, {"pixels_per_metre", "centerline_px", "baseline_px"}, "calibration", sid)
+        ppm = cal.get("pixels_per_metre")
+        if not finite(ppm) or ppm <= 0 or ppm > 1_000_000_000:
+            errors.append(gap("missing_scale", "A bounded positive pixels_per_metre calibration is required.", sid))
+        elif _rectangle(roi):
             extent_px = max(abs(roi[2] - roi[0]), abs(roi[3] - roi[1]))
             center = cal.get("centerline_px")
             if finite(center):
                 extent_px = max(extent_px, abs(roi[0] - center), abs(roi[2] - center))
             if not finite(extent_px) or ppm < extent_px / MAX_LOCAL_METRES:
-                errors.append(gap("physical_extent_out_of_range", "Calibration implies an extent beyond 10,000,000 m; use a local vessel datum and a physical scale.", sid))
+                errors.append(gap("physical_extent_out_of_range", "Calibration implies an extent beyond 10,000,000 m.", sid))
         for name in ("centerline_px", "baseline_px"):
             if not finite(cal.get(name)):
-                errors.append(gap("missing_datum", f"Calibration requires {name}.", sid))
+                errors.append(gap("missing_datum", f"Calibration requires finite {name}.", sid))
         zlo, zhi = sec.get("z_min_m"), sec.get("z_max_m")
         if not finite(zlo) or not finite(zhi) or zhi <= zlo:
             errors.append(gap("vertical_range_unresolved", "Declare a finite measured vertical interval z_min_m < z_max_m.", sid))
         elif max(abs(zlo), abs(zhi)) > MAX_LOCAL_METRES:
-            errors.append(gap("vertical_range_out_of_range", "Use local elevations within +/-10,000,000 m before CAD construction.", sid))
-        if not sec.get("evidence"):
-            errors.append(gap("calibration_evidence_missing", "Describe the source of the view location and scale.", sid))
+            errors.append(gap("vertical_range_out_of_range", "Use local elevations within +/-10,000,000 m before CAD.", sid))
+    if total_cells > MAX_TOTAL_CELLS:
+        errors.append(gap("input_limit", f"Maximum {MAX_TOTAL_CELLS} measurement cells per run."))
     constraints = spec.get("constraints", {})
     if not isinstance(constraints, dict):
         errors.append(gap("invalid_constraints", "constraints must be an object."))
     else:
+        unknown(constraints, {"length_m", "beam_m", "depth_m", "relative_tolerance"}, "constraint")
         for name, value in constraints.items():
-            if name in {"length_m", "beam_m", "depth_m"} and (not finite(value) or value <= 0):
-                errors.append(gap("invalid_constraint", f"{name} must be positive and finite."))
+            if name in ("length_m", "beam_m", "depth_m") and (not finite(value) or not 0 < value <= 2 * MAX_LOCAL_METRES):
+                errors.append(gap("invalid_constraint", f"{name} must be positive, finite and bounded."))
             if name == "relative_tolerance" and (not finite(value) or not 0 < value <= 0.2):
-                errors.append(gap("invalid_constraint_tolerance", "relative_tolerance must be a finite number in (0, 0.2], not a boolean or numeric string."))
-    if spec.get("components"):
-        errors.append(gap("unsupported_components", "This version reconstructs the hull envelope only. Internal components require separate evidenced geometry."))
-    reference = spec.get("station_reference")
-    if reference is not None:
-        if not isinstance(reference, dict) or not isinstance(reference.get("file"), str) or not (base_dir / reference.get("file", "")).is_file():
-            errors.append(gap("station_reference_missing", "The declared station coordinate reference file does not exist."))
+                errors.append(gap("invalid_constraint_tolerance", "relative_tolerance must be a finite number in (0, 0.2]."))
+    if "components" in spec and (not isinstance(spec["components"], list) or spec["components"]):
+        errors.append(gap("unsupported_components", "This version reconstructs the hull envelope only; components must be an empty list."))
     return errors
-
