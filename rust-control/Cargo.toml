@@ -6,6 +6,10 @@ rust-version = "1.99"
 license-file = "../LICENSE"
 description = "Typed persistent local control plane for evidence-bound hull reconstruction"
 
+[lib]
+name = "marinaframe_control"
+path = "src/lib.rs"
+
 [[bin]]
 name = "marinaframe"
 path = "src/main.rs"

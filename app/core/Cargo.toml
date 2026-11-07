@@ -1,0 +1,16 @@
+[package]
+name = "marinaframe-app-core"
+version = "0.5.0"
+edition = "2021"
+rust-version = "1.99"
+license-file = "../../LICENSE"
+description = "Transport-independent backend of the MarinaFrame desktop app: task views, artifact guard, settings, notices and controller actions"
+
+[dependencies]
+marinaframe-control = { path = "../../rust-control" }
+base64 = "=0.22.1"
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = { version = "=1.0.145", features = ["float_roundtrip"] }
+
+[dev-dependencies]
+tempfile = "=3.23.0"

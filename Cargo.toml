@@ -1,5 +1,5 @@
 [workspace]
-members = ["rust-control"]
+members = ["rust-control", "app/core", "app/src-tauri"]
 resolver = "2"
 
 [profile.release]
