@@ -280,7 +280,17 @@ button, input { font: inherit; color: inherit; }
   background: var(--bg);
   border-right: 1px solid var(--line);
 }
-.sidebar .titlebar { padding-left: var(--traffic-light-inset); }
+.sidebar .titlebar {
+  display: flex;
+  align-items: center;
+  padding-left: var(--traffic-light-inset);
+}
+/* The brand mark sits beside the window buttons. Clicks pass through so the bar still drags the window. */
+.brand-mark {
+  height: 20px;
+  width: auto;
+  pointer-events: none;
+}
 
 .sidebar-head {
   display: flex;
