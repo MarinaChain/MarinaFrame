@@ -147,6 +147,7 @@ fn development_checkout() -> Option<PathBuf> {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let resolver = app.path();
             let repo_root = development_checkout();

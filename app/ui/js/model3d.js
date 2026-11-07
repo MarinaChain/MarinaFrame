@@ -36,6 +36,15 @@ function themeColours() {
   };
 }
 
+/** Scale a mesh in place so its x extent is `lengthM` metres (STL files carry no unit). */
+function scaleToMetres(geometry, lengthM) {
+  geometry.computeBoundingBox();
+  const extent = geometry.boundingBox.max.x - geometry.boundingBox.min.x;
+  if (!(lengthM > 0) || !(extent > 0)) return;
+  const factor = lengthM / extent;
+  if (Math.abs(factor - 1) > 1e-6) geometry.scale(factor, factor, factor);
+}
+
 export function createModelView({ host }) {
   const empty = el('div', { class: 'pane-empty' });
   host.append(empty);
@@ -218,8 +227,10 @@ export function createModelView({ host }) {
     /**
      * Show a model. `buffer` is the STL as an ArrayBuffer, or null for the empty state.
      * `stations` is [{ id, x_m }]. The camera is kept when `keepCamera` is true.
+     * `lengthM` is the model length in metres. The CAD export writes STL in millimetres,
+     * so the mesh is scaled to make its x extent equal `lengthM`.
      */
-    setModel(buffer, stations, { keepCamera = false, emptyTitle, emptyText } = {}) {
+    setModel(buffer, stations, { keepCamera = false, lengthM = null, emptyTitle, emptyText } = {}) {
       clearModel();
       if (!buffer) {
         showEmpty(emptyTitle || 'No 3D model yet', emptyText || 'The model appears here after the run builds it.');
@@ -229,6 +240,7 @@ export function createModelView({ host }) {
       empty.hidden = true;
       renderer.domElement.hidden = false;
       const geometry = new STLLoader().parse(buffer);
+      scaleToMetres(geometry, lengthM);
       geometry.computeVertexNormals();
       hull = new THREE.Mesh(geometry, hullMaterial);
       content.add(hull);

@@ -39,19 +39,22 @@ pub fn map_status(controller_status: &str) -> Status {
     }
 }
 
-fn spec_name(state: &Value, folder: &Path) -> String {
-    let spec = Path::new(state["config"]["source_spec"].as_str().unwrap_or(""));
-    let stem = spec.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-    let name = if stem == "spec" || stem.is_empty() {
-        spec.parent()
-            .and_then(|p| p.file_name())
-            .and_then(|s| s.to_str())
-    } else {
-        Some(stem)
-    };
-    name.or_else(|| folder.file_name().and_then(|s| s.to_str()))
-        .unwrap_or("run")
-        .to_string()
+/// Longest run name shown; a longer vessel_id is not a usable label.
+const MAX_NAME_CHARS: usize = 80;
+
+/// Run name: the vessel_id of the captured spec when present, else the task folder name.
+fn run_name(folder: &Path) -> String {
+    let vessel_id = files::read_captured_spec(folder)
+        .and_then(|spec| spec["vessel_id"].as_str().map(|v| v.trim().to_string()))
+        .filter(|v| !v.is_empty() && v.chars().count() <= MAX_NAME_CHARS);
+    vessel_id
+        .or_else(|| {
+            folder
+                .file_name()
+                .and_then(|s| s.to_str())
+                .map(String::from)
+        })
+        .unwrap_or_else(|| "run".into())
 }
 
 fn summarize(task: &Path, state: &Value, domain: Option<&Value>) -> TaskSummary {
@@ -65,7 +68,7 @@ fn summarize(task: &Path, state: &Value, domain: Option<&Value>) -> TaskSummary 
         .unwrap_or(0);
     TaskSummary {
         task: task.to_string_lossy().into_owned(),
-        name: spec_name(state, task),
+        name: run_name(task),
         status: map_status(state["status"].as_str().unwrap_or("")),
         policy: state["config"]["policy"]
             .as_str()

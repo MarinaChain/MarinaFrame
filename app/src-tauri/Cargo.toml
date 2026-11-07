@@ -14,3 +14,4 @@ marinaframe-app-core = { path = "../core" }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = { version = "=1.0.145", features = ["float_roundtrip"] }
 tauri = { version = "=2.12.5", features = [] }
+tauri-plugin-dialog = "=2.8.4"

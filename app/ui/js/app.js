@@ -646,7 +646,7 @@ async function renderModel() {
   try {
     const buffer = await cachedArtifact('stl', state.task, m.stl_path);
     if (state.modelKey !== key) return;
-    model.setModel(buffer, stations, { keepCamera: sameTask });
+    model.setModel(buffer, stations, { keepCamera: sameTask, lengthM: m.length_m });
     model.setSelected(state.sectionId);
   } catch (error) {
     model.setModel(null, [], { emptyTitle: 'Model file missing', emptyText: error.message });
@@ -946,3 +946,4 @@ async function start() {
 }
 
 start();
+
