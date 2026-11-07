@@ -1,11 +1,191 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MarinaFrame</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="color-scheme" content="light dark">
+  <!-- For the web build, add: <meta name="marinaframe-backend" content="http"> -->
+  <title>MarinaFrame</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="js/app.js"></script>
 </head>
 <body>
-<p>MarinaFrame. The interface replaces this placeholder.</p>
+  <svg class="icon-sprite" aria-hidden="true">
+    <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" /></symbol>
+    <symbol id="i-gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2" /><path d="M8 1.8v1.7M8 12.5v1.7M1.8 8h1.7M12.5 8h1.7M3.6 3.6l1.2 1.2M11.2 11.2l1.2 1.2M3.6 12.4l1.2-1.2M11.2 4.8l1.2-1.2" /></symbol>
+    <symbol id="i-close" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" /></symbol>
+    <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" /><path d="M8 7.2V11M8 5v.2" /></symbol>
+    <symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 2.2l6 10.8H2z" /><path d="M8 6.5v3M8 11v.2" /></symbol>
+    <symbol id="i-fit" viewBox="0 0 16 16"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" /></symbol>
+    <symbol id="i-zoom-in" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" /><path d="M10.4 10.4L14 14M5 7h4M7 5v4" /></symbol>
+    <symbol id="i-zoom-out" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" /><path d="M10.4 10.4L14 14M5 7h4" /></symbol>
+    <symbol id="i-reset" viewBox="0 0 16 16"><path d="M3 8a5 5 0 1 0 1.5-3.6" /><path d="M3 2.5v2.8h2.8" /></symbol>
+    <symbol id="i-drawing" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1" /><path d="M5 11c2.5 0 5-2 6-6" /></symbol>
+    <symbol id="i-split" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1" /><path d="M8 2.5v11" /></symbol>
+    <symbol id="i-cube" viewBox="0 0 16 16"><path d="M8 1.8l5.5 3v6.4L8 14.2l-5.5-3V4.8z" /><path d="M2.5 4.8L8 7.8l5.5-3M8 7.8v6.4" /></symbol>
+    <symbol id="i-chevron" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4" /></symbol>
+    <symbol id="i-folder" viewBox="0 0 16 16"><path d="M2 4.5h4l1.5 1.5H14v6.5H2z" /></symbol>
+  </svg>
+
+  <div class="app" id="app">
+    <aside class="sidebar" aria-label="Library">
+      <div class="titlebar" data-tauri-drag-region></div>
+      <div class="sidebar-head">
+        <h2 class="sidebar-title">Runs</h2>
+        <button class="btn btn-ghost btn-icon" id="new-run" type="button" title="New run (⌘N)" aria-label="New run">
+          <svg class="icon"><use href="#i-plus" /></svg>
+        </button>
+      </div>
+      <ul class="task-list" id="task-list" role="listbox" aria-label="Runs" tabindex="0"></ul>
+      <details class="datasets" id="datasets">
+        <summary><svg class="icon chevron"><use href="#i-chevron" /></svg>Datasets</summary>
+        <ul class="dataset-list" id="dataset-list"></ul>
+      </details>
+      <div class="sidebar-foot">
+        <button class="btn btn-ghost" id="open-settings" type="button" title="Settings (⌘,)">
+          <svg class="icon"><use href="#i-gear" /></svg>Settings
+        </button>
+      </div>
+    </aside>
+
+    <main class="workspace" id="workspace">
+      <header class="toolbar" data-tauri-drag-region>
+        <div class="toolbar-title" data-tauri-drag-region>
+          <h1 id="task-name">MarinaFrame</h1>
+          <span class="badge" id="task-badge" hidden></span>
+        </div>
+        <div class="toolbar-actions">
+          <div class="segmented" role="radiogroup" aria-label="Layout" id="view-switch">
+            <button type="button" role="radio" data-view="drawing" title="Drawing (⌘1)" aria-label="Drawing only"><svg class="icon"><use href="#i-drawing" /></svg></button>
+            <button type="button" role="radio" data-view="split" title="Drawing and model (⌘2)" aria-label="Drawing and model"><svg class="icon"><use href="#i-split" /></svg></button>
+            <button type="button" role="radio" data-view="model" title="Model (⌘3)" aria-label="Model only"><svg class="icon"><use href="#i-cube" /></svg></button>
+          </div>
+          <button class="btn" id="resume-task" type="button" hidden>Resume</button>
+          <button class="btn btn-danger-quiet" id="cancel-task" type="button" hidden>Stop run</button>
+        </div>
+      </header>
+
+      <div class="notices" id="notices" aria-live="polite"></div>
+
+      <div class="stage" id="stage" data-view="split">
+        <section class="pane pane-drawing" aria-label="Drawing">
+          <div class="pane-head">
+            <span class="pane-title">Drawing</span>
+            <span class="pane-meta" id="drawing-meta"></span>
+            <div class="pane-tools">
+              <button class="btn btn-ghost btn-icon" id="zoom-out" type="button" title="Zoom out (−)" aria-label="Zoom out"><svg class="icon"><use href="#i-zoom-out" /></svg></button>
+              <span class="zoom-readout" id="zoom-readout" aria-live="off">100%</span>
+              <button class="btn btn-ghost btn-icon" id="zoom-in" type="button" title="Zoom in (+)" aria-label="Zoom in"><svg class="icon"><use href="#i-zoom-in" /></svg></button>
+              <button class="btn btn-ghost btn-icon" id="zoom-fit" type="button" title="Fit page (0)" aria-label="Fit page"><svg class="icon"><use href="#i-fit" /></svg></button>
+            </div>
+          </div>
+          <div class="drawing-host" id="drawing-host" tabindex="0" aria-label="Drawing. Drag to pan, scroll to zoom."></div>
+          <div class="tooltip" id="drawing-tooltip" role="tooltip" hidden></div>
+        </section>
+
+        <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" aria-label="Resize drawing and model" tabindex="0"></div>
+
+        <section class="pane pane-model" aria-label="3D model">
+          <div class="pane-head">
+            <span class="pane-title">3D model</span>
+            <span class="pane-meta" id="model-meta"></span>
+            <div class="pane-tools">
+              <button class="btn btn-ghost btn-icon" id="model-reset" type="button" title="Reset view (R)" aria-label="Reset view"><svg class="icon"><use href="#i-reset" /></svg></button>
+            </div>
+          </div>
+          <div class="model-host" id="model-host" tabindex="0" aria-label="3D model. Drag to rotate, scroll to zoom."></div>
+        </section>
+      </div>
+
+      <div class="strip" id="strip" role="listbox" aria-label="Sections" aria-orientation="horizontal" tabindex="0"></div>
+    </main>
+
+    <aside class="inspector" aria-label="Inspector">
+      <header class="titlebar inspector-head" id="selection-head" data-tauri-drag-region></header>
+      <section class="selection" id="selection" aria-live="polite"></section>
+      <div class="tabs" role="tablist" aria-label="Run details" id="tabs">
+        <button role="tab" type="button" id="tab-timeline" aria-controls="panel-timeline" data-tab="timeline">Timeline</button>
+        <button role="tab" type="button" id="tab-checks" aria-controls="panel-checks" data-tab="checks">Checks</button>
+        <button role="tab" type="button" id="tab-model" aria-controls="panel-model" data-tab="model">Model calls</button>
+        <button role="tab" type="button" id="tab-evidence" aria-controls="panel-evidence" data-tab="evidence">Evidence</button>
+      </div>
+      <div class="tab-panels">
+        <div role="tabpanel" class="tab-panel" id="panel-timeline" aria-labelledby="tab-timeline" tabindex="0"></div>
+        <div role="tabpanel" class="tab-panel" id="panel-checks" aria-labelledby="tab-checks" tabindex="0" hidden></div>
+        <div role="tabpanel" class="tab-panel" id="panel-model" aria-labelledby="tab-model" tabindex="0" hidden></div>
+        <div role="tabpanel" class="tab-panel" id="panel-evidence" aria-labelledby="tab-evidence" tabindex="0" hidden></div>
+      </div>
+    </aside>
+
+    <footer class="statusbar" id="statusbar">
+      <span class="badge badge-plain" id="status-badge"></span>
+      <span class="status-item" id="status-policy"></span>
+      <span class="status-item" id="status-revision"></span>
+      <span class="status-item" id="status-updated"></span>
+      <span class="status-spacer"></span>
+      <span class="status-progress" id="status-progress" role="status" aria-live="polite"></span>
+      <span class="status-item status-mode" id="status-mode"></span>
+    </footer>
+  </div>
+
+  <dialog class="sheet" id="settings-sheet" aria-labelledby="settings-title">
+    <form method="dialog" class="sheet-body" id="settings-form">
+      <h2 id="settings-title">Settings</h2>
+      <label class="field">
+        <span class="field-label">Runs folder</span>
+        <input type="text" name="runs_folder" spellcheck="false" autocomplete="off" required>
+      </label>
+      <label class="field">
+        <span class="field-label">Worker Python</span>
+        <input type="text" name="worker_python" spellcheck="false" autocomplete="off" required>
+      </label>
+      <fieldset class="field">
+        <legend class="field-label">Appearance</legend>
+        <div class="segmented segmented-text" role="radiogroup">
+          <label><input type="radio" name="theme" value="system"><span>System</span></label>
+          <label><input type="radio" name="theme" value="light"><span>Light</span></label>
+          <label><input type="radio" name="theme" value="dark"><span>Dark</span></label>
+        </div>
+      </fieldset>
+      <div class="field field-row">
+        <div>
+          <span class="field-label">Notices</span>
+          <p class="field-help" id="notices-reset-status">Dismissed notices stay hidden.</p>
+        </div>
+        <button class="btn" type="button" id="reset-notices">Show dismissed notices again</button>
+      </div>
+      <p class="form-error" id="settings-error" role="alert" hidden></p>
+      <div class="sheet-actions">
+        <button class="btn" type="button" id="settings-cancel">Cancel</button>
+        <button class="btn btn-primary" type="submit" id="settings-save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="sheet" id="newrun-sheet" aria-labelledby="newrun-title">
+    <form method="dialog" class="sheet-body" id="newrun-form">
+      <h2 id="newrun-title">New run</h2>
+      <label class="field">
+        <span class="field-label">Run spec file</span>
+        <span class="input-with-button">
+          <input type="text" name="spec_path" spellcheck="false" autocomplete="off" placeholder="/path/to/spec.json" required>
+          <button class="btn" type="button" id="pick-spec">Choose…</button>
+        </span>
+      </label>
+      <p class="field-help">The run uses the deterministic policy. It does not call the model.</p>
+      <p class="form-error" id="newrun-error" role="alert" hidden></p>
+      <div class="sheet-actions">
+        <button class="btn" type="button" id="newrun-cancel">Cancel</button>
+        <button class="btn btn-primary" type="submit" id="newrun-start">Start run</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="alert" hidden>
+    <span id="toast-text"></span>
+    <button class="btn btn-ghost btn-icon" type="button" id="toast-close" aria-label="Close message"><svg class="icon"><use href="#i-close" /></svg></button>
+  </div>
 </body>
 </html>
