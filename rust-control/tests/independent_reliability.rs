@@ -212,13 +212,25 @@ fn await_not_running(meta: &Value, duration: Duration) -> bool {
 
 #[test]
 fn reliability_cancellation_terminates_term_resistant_process_group() {
+    // worker::run first waits up to 120 s for the per-user, machine-wide
+    // native admission lock (worker.rs `admission`), which other MarinaFrame
+    // runs on this machine may hold. Only then does it spawn the fixture, and
+    // fixture startup (Python plus two `ps` calls on macOS) is slow under load.
+    // Neither is what this test measures, so the readiness wait covers both.
+    const ADMISSION_DEADLINE_SECONDS: u64 = 120;
+    const READY_DEADLINE_SECONDS: u64 = ADMISSION_DEADLINE_SECONDS + 60;
     let dir = tempfile::tempdir().unwrap();
-    let settings = fixture(dir.path(), "cancel");
+    let mut settings = fixture(dir.path(), "cancel");
+    // The worker timeout stays above the startup wait, so the only way this
+    // run can stop is the cancellation request.
+    settings.limits.worker_wall_seconds = 120;
     let root = dir.path().to_path_buf();
     let canceller = std::thread::spawn(move || {
-        let child = wait_json(&root.join("descendant.json"), 5);
+        // descendant.json is the readiness signal: the bridge ignores TERM
+        // before it forks, and the descendant writes this file after the fork.
+        let child = wait_json(&root.join("descendant.json"), READY_DEADLINE_SECONDS);
         std::fs::write(root.join("cancel.request"), b"controlled cancellation\n").unwrap();
-        child
+        (child, Instant::now())
     });
     let outcome = worker::run(
         dir.path(),
@@ -228,19 +240,29 @@ fn reliability_cancellation_terminates_term_resistant_process_group() {
         Path::new("unused"),
     )
     .unwrap();
-    let child = canceller.join().unwrap();
+    let returned = Instant::now();
+    let (child, cancel_requested) = canceller.join().unwrap();
     let parent = wait_json(&dir.path().join("bridge.json"), 1);
-    let stopped = await_not_running(&child, Duration::from_secs(1));
+    // A TERM-resistant descendant that survived would sleep for 30 s, so this
+    // bound still tells a killed process from a surviving one.
+    let stopped = await_not_running(&child, Duration::from_secs(5));
+    // Cancellation latency: request written -> worker::run returned. This is
+    // the 2 s TERM grace plus SIGKILL; fixture startup time is excluded.
+    let cancel_to_return = returned.duration_since(cancel_requested).as_secs_f64();
     record(
         "cancellation-process-group",
         json!({"outcome":outcome,"bridge":parent,
-        "descendant":child,"descendant_stopped":stopped,"engineering_approved":false}),
+        "descendant":child,"descendant_stopped":stopped,
+        "cancel_to_return_seconds":cancel_to_return,"engineering_approved":false}),
     );
     kill_owned_group(&child);
     assert!(matches!(outcome.state, worker::ProcessState::Cancelled));
     assert!(stopped, "TERM-resistant descendant survived cancellation");
     assert!(!running(&parent));
-    assert!(outcome.wall_seconds < 5.0);
+    assert!(
+        cancel_to_return < 5.0,
+        "cancellation took {cancel_to_return} s after the request"
+    );
 }
 
 #[test]
