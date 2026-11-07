@@ -340,3 +340,35 @@ Code frozen at the commit that adds this section. Cases not used to tune round 2
 
 Metric: `metric_dev5415.json` (model scale; draft 0.248 m). One run per case; every run is
 recorded. Series 60 / Wigley and DSYHS were not run in this round (time); they stay open.
+
+### 7.7 Held-out results (frozen commit `0e43324`, clean tree)
+
+Runner `work/holdout/run_all.sh` (not tracked); one run per case, all three listed. Values in
+model-scale metres.
+
+| Case | Read | Station hb RMS median / max | Section area error mean / max | Between-station RMS / max | Volume error full / in range | Waterplane full / in range |
+|---|---:|---:|---:|---:|---:|---:|
+| H1 synthetic, region mode | **21 of 21** (round 1: 20) | 0.02 mm / 1.2 mm | 0.15 % / 2.9 % (st00, area 3e-5 m²) | 12.8 / 125 mm | +0.38 % / +0.38 % | +0.63 % / +0.70 % |
+| H2 MARIN lines, single-curve (round 1 reader) | 13 of 15 | 1.85 mm / 14.1 mm | 0.55 % / 0.94 % | 5.5 / 36.4 mm | −3.25 % / +1.20 % | −5.35 % / +0.65 % |
+| H2 MARIN lines, region mode | 13 of 15 | 1.83 mm / 14.1 mm | 0.48 % / 1.05 % | 5.4 / 36.7 mm | −3.13 % / +1.32 % | −5.29 % / +0.71 % |
+
+Model SHA-256 (first 16): H1 `9d60e9144d38d2cb`, H2 single `9389fc3f43a85dbc`, H2 regions
+`614ba639d3dad9ec`. In H1 the forward-perpendicular station (two curves) and the sonar-dome
+stations with height reversals are read; the station curves lie on the truth within the 1 mm CAD
+bound (`station_comparison.png` inspected). In H2, region mode reproduces the round 1 reader
+within 0.1–0.2 percentage points (it evaluates every source point at the knots instead of
+interpolating each station from its own kept knots); the two `ambiguous_curve` refusals are
+identity, not shape. Region mode therefore adds the multi-region stations without a loss on
+single-valued drawings. H1 and H2 have no twin skeg, so the twin-skeg accuracy is shown only on
+Gunnerus (development, 7.4).
+
+### 7.8 Open items
+
+1. Frames 6 and 16: the curve is split at the skeg junction into several chains; an identity
+   rule that picks all pieces (junction following) is needed.
+2. Gunnerus content differences stay: aft deck at 4.1 m, thruster tunnel (frames 52–54), transom
+   step and notch (frames −2 … 1).
+3. Raster: the two proposals in 7.5 (owner of `agent_tools.py`).
+4. Product path: `build_region_hull` is not yet wired into `pipeline.py` / the validation
+   contract (not owned here); the raster reader still gives one curve per section.
+5. Held-out twin-skeg case (for example a render of a twin-skeg CAD hull) and Series 60 / DSYHS.
