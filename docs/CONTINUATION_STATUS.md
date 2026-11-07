@@ -322,3 +322,15 @@ Usage: 874 requests, 2.80 M prompt tokens, list cost $0.541.
   unused families is not possible. Decision (PM): use a new fixed-seed partition, exclude every
   cluster with a previously rendered hull, and call it "hull-disjoint (v2)", not family-disjoint.
   Target: 288 drawings (36 hulls x 2 layouts x 4 levels). Generation job 20261108-045443-36168.
+
+## sysser45 fix and W13 merged (2026-11-08, 844c842, test-full passed)
+
+- sysser45 (Sol): mixed ruler/hull traces are refused before deterministic builds. The silent
+  wrong build `sysser45-L1` now abstains. Factory development: 0 newly wrong builds, 0 new correct
+  builds, the 4 correct controls unchanged. Details: docs/GEOMETRY_ACCURACY_V05.md section 9.
+  Raw fingerprints (5.6 MB) are in work/archived-runs/sysser45/, not in git.
+- W13 ship CAD language (Sol): `ship-cad/v1` JSON with six operations; every dimension refers to
+  a host measurement. CAD runs in a deny-default macOS sandbox (fails closed elsewhere). Gunnerus:
+  hull built as a draft (-0.9% volume at 2.5 m draft, 0.82 m breadth RMS, profile check failed by
+  3.8 m); deck, deckhouse, bulwark and store not built (ambiguous outlines). docs/SHIP_CAD_LANGUAGE.md.
+- W15 plan-view corridors started (Sol job 20261108-050559-48031, worktree w15-plan-corridors).
