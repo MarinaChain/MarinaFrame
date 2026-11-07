@@ -209,3 +209,18 @@ session (`manifest-loc.tsv` in each folder). Now held: Wapama 22 of 22, C.A. Tha
    choice is made. Monitor: no spec possible. Kept: H5 (ruler tone texture is not a stroke) and
    H6 (rejected trace reasons disclosed). Open for the Rust owner: H7 (the sole-candidate
    fallback ignores non-grid competitors). Next: expert station labels and positions.
+
+## Paused 2026-11-07 (usage limit) — resume here
+
+Merged on `continue/v0.5`: macOS port, key rotation, OCR removal, Rust finalization guards,
+legacy retirement, vision table reading, validation matrix, audit-identity pin, geometry and
+line-identity passes, W3 structure, W4 rules, W1 Gunnerus benchmark, desktop app (Tauri) with
+fixes, final Slipway logo, quick/full test tiers. HAER: Wapama 22/22, C.A. Thayer 37/38.
+
+Stopped mid-work (partial work may exist in their worktrees under `.claude/worktrees/`):
+- W8 draft mode (best-effort result, `draft_not_verified` status enforced in Rust) — branch `worktree-agent-a92eeed358588c336`.
+- W9 Gunnerus gap fixes (multi-outline sections, midbody frame identity, side-line extent, raster limit) — branch `worktree-agent-aa8c1c2990156d231`.
+- W2 benchmark factory (rendered drawings from Ship-D/SIMMAN/Series 60/DSYHS, sealed splits) — branch `worktree-agent-a5f2ca62d61c39481`.
+To resume: inspect each branch (`git log a2608e1..<branch>`), keep sound commits, and restart each
+workstream from its brief in this session's history or from docs/STRATEGY_2026Q4.md section 4.
+Next after W8: W10 draft highlighting in the app. Run `make test-full` before each merge.
