@@ -29,3 +29,9 @@
 - **Trigger:** W13 file/network tests first passed on Python import-path denial; socket construction was also mistaken for a network operation.
 - **Rule:** Use isolated Python for direct OS probes, require the expected forbidden-operation failure, and mutation-check the exact file or network permission. Test bind/connect, not only socket construction.
 - **Why:** An earlier permission error can hide a missing guard; Seatbelt permits socket construction without permitting network use.
+
+### Count plan crossings before combining scan columns
+- **Date:** 2026-11-08
+- **Trigger:** W15 review found that taking the darkest pixel across a three-column strip merged two diagonal waterline crossings into one run and accepted an anchor on white station-column pixels.
+- **Rule:** Count ink runs separately in each scan column. Refuse any competing crossing, and measure the accepted anchor on the actual station column. Test diagonal competitors as well as separated horizontal strokes.
+- **Why:** A union of neighbouring pixels loses stroke multiplicity; apparent strip continuity does not establish unique station-column evidence.

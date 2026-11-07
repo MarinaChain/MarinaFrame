@@ -116,6 +116,32 @@ def cmd_prepare(config: dict, base: Path, out: Path) -> None:
                          "evidence": ("Assistant-read, provisional: station position from the drawing's frame grid; "
                                       "ROI is the whole half body plan on this side; centreline, baseline and scale "
                                       "read from drawn grid lines. " + station.get("evidence", ""))})
+    if config.get("plan_corridors") is not None:
+        from vessel_reconstruction.plan_corridors import derive_contour_selection
+
+        declared = config["plan_corridors"]
+        # Both views are rendered from the very same source PDF and page.
+        plan = render_clip(base / config["pdf"], config["page_index"], declared["clip_pt"], config["dpi"])
+        records = []
+        for section in sections:
+            waterlines = declared["waterlines_by_section"].get(section["id"], [])
+            if not waterlines:
+                records.append({"section_id": section["id"], "anchors": [],
+                                "contour_selection": None, "reason": "no_declared_waterlines",
+                                "engineering_approved": False})
+                continue
+            record = derive_contour_selection(plan, section, declared["setup"], waterlines,
+                                              half_width_px=declared["half_width_px"])
+            records.append(record)
+            if record["contour_selection"] is not None:
+                section["contour_selection"] = record["contour_selection"]
+                section["evidence"] += (" Contour selection is declared evidence from the plan view of the "
+                                        "same drawing, never truth; see plan_corridors.json. "
+                                        "Identity and calibration remain provisional.")
+        report = {"source_sha256": hashlib.sha256((base / config["pdf"]).read_bytes()).hexdigest(),
+                  "page_index": config["page_index"], "plan_clip_pt": declared["clip_pt"],
+                  "dpi": config["dpi"], "engineering_approved": False, "sections": records}
+        (out / "plan_corridors.json").write_text(json.dumps(report, indent=2) + "\n")
     spec = {"schema_version": "1.0", "vessel_id": config["vessel_id"], "units": "m",
             "source": {"file": "drawing.png", "sha256": digest, "license": config["license"],
                        "description": config["description"],
