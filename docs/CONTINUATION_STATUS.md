@@ -350,3 +350,9 @@ Usage: 874 requests, 2.80 M prompt tokens, list cost $0.541.
   hulls.json and selection.json are byte-identical; `sealed_v2 --verify` passes against the frozen
   manifests. Data now in the main checkout's work/factory-sealed-v2/. No case had run. Head-to-head
   resumed as job 20261108-052534-56428. Lesson recorded in ~/tasks/lessons.md.
+- Head-to-head driver stopped after 65 abstain cases when its router session ended (the
+  process was not detached). Resumed with `scripts/resume_h2h_sealed_v2.py` in the h2h worktree,
+  started with nohup from the main checkout (log: work/h2h-sealed-v2/resume.log). The 2 cases in
+  progress are counted as failed (`interrupted_by_harness_stop`), never retried. The LLM arm now
+  passes `--model-review true`, as the pre-registered protocol requires (W12 veto); no LLM case
+  had run before this. Recorded in work/h2h-sealed-v2/campaign.json under `resumes`.
