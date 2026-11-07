@@ -191,6 +191,7 @@ def test_precancelled_action_does_not_start_worker(tmp_path):
     assert not (tools.root / "inspections").exists()
 
 
+@pytest.mark.cad
 def test_actual_provisional_build_step_views_and_source_cut_validation(tmp_path):
     path, spec = drawing(tmp_path / "input")
     spec["constraints"] = {"beam_m": 2.5, "relative_tolerance": .03}

@@ -426,6 +426,7 @@ fn assert_not_review_ready(fixture: &Fixture) {
 // ------------------------------------------------------ controls (baseline)
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn control_real_passing_evidence_is_accepted_and_failing_is_not_ready() {
     let _serial = serial();
     let pass = passing();
@@ -450,6 +451,7 @@ fn control_real_passing_evidence_is_accepted_and_failing_is_not_ready() {
 // ------------------------------------------- artifacts changed on disk
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn artifact_changes_on_disk_after_validation_are_rejected() {
     let _serial = serial();
     let pass = passing();
@@ -678,6 +680,7 @@ fn replace_each(cases: &mut Cases, base: &Validated, table: Vec<(&str, Change, &
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn envelope_types_and_contract_identities_are_exact() {
     let _serial = serial();
     let mut cases = Cases::default();
@@ -922,6 +925,7 @@ fn envelope_types_and_contract_identities_are_exact() {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn stale_generation_revision_and_binding_mismatches_are_rejected() {
     let _serial = serial();
     let mut cases = Cases::default();
@@ -1208,6 +1212,7 @@ fn apply(audit: &mut Value, edit: &Edit) {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn consistently_forged_audit_content_is_rejected_by_type_and_semantics() {
     let _serial = serial();
     let pass = passing();
@@ -1457,6 +1462,7 @@ fn consistently_forged_audit_content_is_rejected_by_type_and_semantics() {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn audit_receipt_and_resource_contract_is_exact() {
     let _serial = serial();
     let pass = passing();
@@ -1547,6 +1553,7 @@ fn swap_first_two(list: &mut Value, kind: &str) {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn section_comparison_images_must_follow_the_sampling_order() {
     let _serial = serial();
     let kind = "step_section_cut_comparison";
@@ -1564,6 +1571,7 @@ fn section_comparison_images_must_follow_the_sampling_order() {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn failed_geometry_cannot_be_promoted_by_envelope_contract_or_cache_forgery() {
     let _serial = serial();
     let fail = failing();
@@ -1640,6 +1648,7 @@ fn reopened(source: &Validated, mode: Value) -> Fixture {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn real_passing_candidate_reaches_review_on_valid_cached_evidence_without_a_new_audit() {
     let _serial = serial();
     let pass = passing();
@@ -1678,6 +1687,7 @@ fn real_passing_candidate_reaches_review_on_valid_cached_evidence_without_a_new_
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn real_failing_geometry_stays_failed_cached_and_after_restart() {
     let _serial = serial();
     let fail = failing();
@@ -1724,6 +1734,7 @@ fn interrupted_audit() -> Value {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn interrupted_audit_is_not_cached_and_cannot_finish() {
     let _serial = serial();
     let mut fixture = fixture(false, interrupted_audit());
@@ -1750,6 +1761,7 @@ fn interrupted_audit_is_not_cached_and_cannot_finish() {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn interrupted_audit_then_a_real_audit_can_still_pass() {
     let _serial = serial();
     let mut fixture = fixture(false, interrupted_audit());
@@ -1765,6 +1777,7 @@ fn interrupted_audit_then_a_real_audit_can_still_pass() {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn cancellation_before_finish_prevents_review_ready() {
     let _serial = serial();
     let mut fixture = reopened(passing(), json!({}));
@@ -1793,6 +1806,7 @@ fn select(fixture: &mut Fixture, candidate: &str) {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn selection_a_b_a_makes_the_old_validation_stale() {
     let _serial = serial();
     let pass = passing();
@@ -1834,6 +1848,7 @@ fn selection_a_b_a_makes_the_old_validation_stale() {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn stale_or_foreign_review_requests_are_refused() {
     let _serial = serial();
     let mut fixture = reopened(passing(), json!({}));

@@ -86,7 +86,13 @@ metric definitions), W6 (after W0 merges), W7 (needs founder input).
 
 Engineering rules for every stream: no widened gates after seeing results; sealed holdouts
 split by vessel/design family; no reference answers in inference; `engineering_approved=false`
-everywhere; existing tests, Clippy and the deterministic smoke stay green; one owner per file.
+everywhere; one owner per file.
+
+Test tiers (`Makefile`): agents run `make test-quick` (format, Clippy, unit tests, secret scan;
+real-CAD tests skipped; about 1.5 min) before each commit and report it. The CEO runs
+`make test-full` (adds the real-CAD Rust tests marked `#[ignore = "real CAD ..."]`, the pytest
+`cad` marker and the deterministic smoke run) once before each merge. New tests that build or
+audit real CAD must carry those marks. Run only one full tier on the machine at a time.
 
 ## 5. Targets for the next 90 days
 

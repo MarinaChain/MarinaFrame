@@ -32,6 +32,7 @@ fn wait_until_idle(backend: &Backend, task: &str) -> TaskView {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn run_read_choose_and_dismiss() {
     let Ok(python) = std::env::var("MARINAFRAME_TEST_PYTHON") else {
         eprintln!("MARINAFRAME_TEST_PYTHON not set; skipping");

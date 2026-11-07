@@ -225,6 +225,7 @@ fn assert_refused(outcome: util::Result<bool>, code: &str) {
 // ------------------------------------------------------------------ tests
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn unchanged_identity_is_pinned_at_initialize_and_finalizes() {
     let _serial = serial();
     let mut fixture = fixture(false);
@@ -248,6 +249,7 @@ fn unchanged_identity_is_pinned_at_initialize_and_finalizes() {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn consistent_but_different_audit_identity_cannot_reach_review() {
     let _serial = serial();
     let mut fixture = fixture(false);
@@ -263,6 +265,7 @@ fn consistent_but_different_audit_identity_cannot_reach_review() {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn consistent_different_identity_fails_the_finalization_predicate_itself() {
     let _serial = serial();
     // The receipt check is skipped here: the validated evidence is honest and only
@@ -288,6 +291,7 @@ fn consistent_different_identity_fails_the_finalization_predicate_itself() {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn result_identity_alone_changing_is_refused() {
     let _serial = serial();
     // The contract is honest; only the identity the worker reports in its result differs.
@@ -301,6 +305,7 @@ fn result_identity_alone_changing_is_refused() {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn dropping_the_identity_after_the_pin_is_refused() {
     let _serial = serial();
     let mut fixture = fixture(false);
@@ -313,6 +318,7 @@ fn dropping_the_identity_after_the_pin_is_refused() {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn changed_worker_implementation_mid_task_is_refused() {
     let _serial = serial();
     let mut fixture = fixture(false);
@@ -331,6 +337,7 @@ fn changed_worker_implementation_mid_task_is_refused() {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn task_without_a_pin_fails_closed_at_finalization() {
     let _serial = serial();
     // The initialize worker reported no audit identity, as an old worker would. Later
@@ -350,6 +357,7 @@ fn task_without_a_pin_fails_closed_at_finalization() {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn old_state_without_the_field_reads_and_serializes_unchanged() {
     let state = controller::new_state(Config {
         worker_python: "/not/executed".into(),

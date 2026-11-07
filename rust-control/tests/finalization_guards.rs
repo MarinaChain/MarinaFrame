@@ -253,6 +253,7 @@ fn with_plan(plan: Option<Plan>) {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn failed_audit_stays_failed_when_cached_and_finished() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     with_plan(None);
@@ -270,6 +271,7 @@ fn failed_audit_stays_failed_when_cached_and_finished() {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn restart_finalization_does_not_promote_failed_cache() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     with_plan(None);
@@ -291,6 +293,7 @@ fn restart_finalization_does_not_promote_failed_cache() {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn permissive_envelope_cannot_override_failed_contract() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     with_plan(None);
@@ -349,16 +352,19 @@ fn selection_is_excluded_inside_finalization(point: &'static str) {
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn selection_is_excluded_after_the_passing_predicate() {
     selection_is_excluded_inside_finalization("after_predicate");
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn selection_is_excluded_until_the_review_ready_commit() {
     selection_is_excluded_inside_finalization("before_commit");
 }
 
 #[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn cancellation_after_passing_predicate_prevents_review_ready_commit() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     with_plan(None);
