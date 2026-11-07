@@ -375,10 +375,14 @@ pub fn verify_domain_identity(root: &Path, description: &Value) -> Result<()> {
         }
     }
     let manifest = util::hash_json(&json!({"spec_sha256":input_hash,"sources":sources}))?;
-    let generation = format!(
-        "generation-{}",
-        &util::hash_json(&json!({"source":input_hash,"selected":d["selected"]}))?[..24]
-    );
+    let mut identity = json!({"source":input_hash,"selected":d["selected"]});
+    // Open draft guesses are part of the generation identity, so a draft
+    // generation never equals the generation a person later confirms.
+    if let Some(guessed) = crate::validation::guessed_choices(&d)? {
+        identity["guessed"] = guessed;
+    }
+    let generation = format!("generation-{}", &util::hash_json(&identity)?[..24]);
+    crate::validation::check_guess_contract(&d, description)?;
     let revision = format!("r{:04}", d["revision"].as_u64().ok_or("revision_type")?);
     if description["source_manifest_sha256"] != manifest
         || description["generation_id"] != generation
@@ -440,6 +444,7 @@ mod tests {
             authorization_basis: String::new(),
             model: GO_MODEL.into(),
             binary_sha256: "a".repeat(64),
+            on_ambiguity: OnAmbiguity::Abstain,
         })
     }
     #[test]

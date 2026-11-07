@@ -357,6 +357,7 @@ pub fn read_table(crops_dir: &Path, out: &Path, basis: &str) -> Result<Value> {
         authorization_basis: basis.into(),
         model: GO_MODEL.into(),
         binary_sha256: util::file_hash(&std::env::current_exe().map_err(|_| "binary_path")?)?,
+        on_ambiguity: OnAmbiguity::Abstain,
     };
     let mut run = Run {
         out,

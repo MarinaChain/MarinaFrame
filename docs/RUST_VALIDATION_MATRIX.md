@@ -85,3 +85,25 @@ Rows before: of 18 sub-rows, 7 had a full Rust test (1, 4c, 4e, 5b, 5c, 5d, 5f) 
   hash itself (it includes installed dependency versions). An operator-supplied expected hash is a possible
   extension. The offline `check-validation` command takes an optional `--audit-pin`; without it, it checks
   everything except the pin and reports `audit_implementation_pinned: false`.
+
+## Draft guards (best-effort drafts, 2026-11-07)
+
+With `on_ambiguity = draft` (app default; CLI `--on-ambiguity draft`), an ambiguous or unreadable
+section gives a draft instead of an abstention. Each choice is an open guess in `domain/state.json`
+`guesses` (`src/vessel_reconstruction/draft.py`). Rust enforces, independently of Python:
+
+| Check | Where | Error code |
+|---|---|---|
+| Finish with open guesses stops at `draft_not_verified`, no validation call | `controller::execute_decision` | `open_guesses_block_review` |
+| Open guesses, a draft candidate or a draft run record are never review-ready (finish and `Store::verify`) | `validation::ready`, `ready_legacy_unpinned` (`refuse_draft`, first check) | `draft_guesses_open`, `draft_candidate_not_verifiable`, `draft_build_not_verifiable` |
+| Every guess is typed and agrees with the inspected catalog; the description lists exactly the checkpoint guesses | `store::verify_domain_identity` (every receipt and `Store::verify`) | `draft_guess_contract`, `draft_guess_not_in_catalog`, `draft_guess_description_mismatch` |
+| Open guesses are part of the generation id | `store::verify_domain_identity` | `domain_identity_or_review_boundary` |
+| Only an operator resolves a guess | `controller::validate_selection` | `guess_requires_operator_confirmation` |
+| A draft task is terminal for `resume` | `controller::resume` | `terminal_task_requires_explicit_source_backed_intervention` |
+
+Tests: `DG` = `rust-control/tests/draft_guards.rs` (8 real-CAD tests: deterministic draft and abstain
+control, finish repeated and after restart, permissive envelope, forged review status, edited and
+removed guesses, worker-forged guess, policy confirmation, operator resolution then the normal path
+to `awaiting_human_review`) and unit tests in `validation.rs`, `controller.rs`, `types.rs`.
+Mutation check (2026-11-07): removing each row's check (9 mutations, including the generation
+binding and the draft stop) fails at least one `DG` test.

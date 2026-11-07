@@ -26,7 +26,7 @@ from .validation_contract import implementation_identity as audit_implementation
 
 PROTOCOL = "marinaframe.worker.v1"
 OPERATIONS = {"initialize", "observe", "inspect_source", "select_contours",
-              "build_provisional", "render_candidate", "validate_candidate"}
+              "build_provisional", "build_draft", "render_candidate", "validate_candidate"}
 
 
 def implementation_identity():

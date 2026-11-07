@@ -185,6 +185,7 @@ fn prepare_template() -> tempfile::TempDir {
         authorization_basis: "Controlled finalization-guard fixture; no transfer".into(),
         model: GO_MODEL.into(),
         binary_sha256: util::file_hash(&std::env::current_exe().unwrap()).unwrap(),
+        on_ambiguity: OnAmbiguity::Abstain,
     };
     let task = directory.path().join("task");
     let mut store = store::Store::create(&task, controller::new_state(config)).unwrap();

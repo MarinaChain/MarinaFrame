@@ -110,7 +110,8 @@ watched task's event count grows (poll every 500 ms or file watch).
 ```text
 TaskSummary { task: string (absolute path), name: string (vessel_id of the captured spec, else the task folder name), status: Status,
               policy: "deterministic"|"live", updated_ms: number, sections: number }
-Status = "running" | "needs_review" | "declined" | "failed" | "cancelled" | "paused" | "blocked"
+Status = "running" | "needs_review" | "draft" | "declined" | "failed" | "cancelled" | "paused" | "blocked"
+                                 // "draft" = controller status draft_not_verified
 TaskView {
   summary: TaskSummary,
   revision: string|null,
@@ -121,12 +122,25 @@ TaskView {
   checks: CheckView[],
   provider: ProviderCallView[],
   notices: NoticeView[],         // already filtered: dismissed ones removed
+  draft: DraftView | null,       // set while the current build is a draft (see "Drafts")
   evidence: object               // raw hashes and contract, shown only in Evidence tab
 }
 SectionView { id: string, x_m: number, roi_px: [x0,y0,x1,y1],
-              state: "chosen"|"declined"|"not_read",
-              reason: string,                       // plain language
+              state: "chosen"|"guessed"|"declined"|"not_read",
+              reason: string,                       // plain language; for "guessed" the guess reason
+              guess: GuessView | null,              // set when state is "guessed"
               candidates: CandidateView[] }
+GuessView { id: string,                             // guess_id
+            kind: "best_candidate"|"bridged_gap"|"dropped_end",
+            x_range_m: [number, number] | null,      // bridged or dropped region
+            chosen_candidate_id: string | null,      // null when a station was spanned
+            alternatives: string[],                  // other candidate ids a person can pick
+            score: number | null,                    // 0..1 source support of the chosen line
+            reason: string }                         // e.g. "5 lines found; took the best-supported one (score 0.93)."
+DraftView { status: "draft_not_verified",
+            guesses: GuessView[],                    // open; each blocks review
+            resolved: (GuessView & { resolution: "confirmed"|"replaced",
+                                     resolved_candidate_id: string })[] }
 CandidateView { id: string, label: string,          // plain language, e.g. "Outer line"
                 chosen: boolean, selectable: boolean, why: string,
                 polyline_px: [number, number][] }    // in source-page pixels
@@ -140,6 +154,29 @@ EventView { sequence: number, time_ms: number, text: string,  // plain language
 NoticeView { id: string, tone: "info"|"warning", text: string }
 Settings { runs_folder: string, worker_python: string, theme: "system"|"light"|"dark" }
 ```
+
+## Drafts (best-effort result)
+
+Decision (founder, 2026-11-07): where the source is ambiguous, a run started from the app
+builds a draft instead of declining (controller `on_ambiguity: draft`; the CLI default stays
+`abstain`, flag `--on-ambiguity draft|abstain`). The verified path is unchanged.
+
+- Controller status `draft_not_verified` (app Status `"draft"`, badge "Draft"). A draft never
+  becomes "Needs review" while a guess is open; the controller refuses it at finish and in
+  `verify`. `engineering_approved` stays false.
+- Data sources for the backend: open guesses are `domain.open_guesses` in `state.json` (the
+  same list as `domain/state.json` `guesses`), resolved ones are `domain.resolved_guesses`; the
+  ledger event `draft_built` lists the guesses of each draft. A section is `"guessed"` when it
+  has an open guess. A `bridged_gap` or `dropped_end` section has no line in the draft.
+- The draft build's files are `model-draft.step` and `model-draft.stl` (not `model.stl`);
+  `current_candidate.draft` is true and the run's `result.json` has a `draft` object with the
+  guesses. `model.stl_path` must use the run's `exports.stl` name.
+- To make a draft verified, a person confirms or replaces each guess with `choose_line` (an
+  operator `select_contours`). Confirming keeps the guessed candidate; replacing picks another.
+  Then `resume_task` runs the normal build, render, validate and finish. A `bridged_gap` or
+  `dropped_end` guess has no line to pick: it stays open, and that task stays a draft.
+- UI text examples: "Draft: 2 guesses to check", "Guessed: took the best-supported of 5 lines",
+  "No readable line at x=4 m; spanned 2 to 6 m".
 
 ## Mock data
 

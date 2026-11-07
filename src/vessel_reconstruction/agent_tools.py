@@ -19,6 +19,7 @@ import stat
 import sys
 from uuid import uuid4
 
+from .draft import DRAFT_STATUS, guessed_choices, make_guesses
 from .isolation import DEFAULT_LIMITS, run_isolated, supervise_process
 from .provenance import digest_file, digest_object, safe_relative_file, write_json
 from .schema import MAX_SPEC_BYTES, load_bounded_json, loads_bounded_json, validate_spec
@@ -133,9 +134,19 @@ class DomainTools:
         return f"r{revision:04d}"
 
     @property
+    def open_guesses(self) -> list[dict]:
+        """Open draft guesses. Absent in tasks created before drafts existed."""
+        return self.state.get("guesses") or []
+
+    @property
     def generation_id(self):
-        return "generation-" + digest_object({"source": self.state["input_spec_sha256"],
-                                              "selected": self.state["selected"]})[:24]
+        identity = {"source": self.state["input_spec_sha256"], "selected": self.state["selected"]}
+        # Open guesses are part of the identity, so a draft generation never
+        # equals the generation that a person later confirms. Without guesses
+        # the identity (and every older task) is unchanged.
+        if self.open_guesses:
+            identity["guessed"] = guessed_choices(self.open_guesses)
+        return "generation-" + digest_object(identity)[:24]
 
     def _save(self):
         write_json(self.state_path, self.state)
@@ -170,6 +181,8 @@ class DomainTools:
                 "last_valid_candidate": copy.deepcopy(self.state["last_valid_candidate"]),
                 "validation": copy.deepcopy(self.state["validation"]),
                 "rendered_views": list(self.state["rendered_views"]),
+                "open_guesses": copy.deepcopy(self.open_guesses),
+                "resolved_guesses": copy.deepcopy(self.state.get("resolved_guesses", [])),
                 "input_errors": self.state["input_errors"][:32], **SEMANTIC_FLAGS}
 
     def catalog(self) -> list[dict]:
@@ -185,6 +198,7 @@ class DomainTools:
                                 "required": ["section_id", "candidate_id"], "additionalProperties": False}}},
                         ["selections"]),
             _definition("build_provisional", "Run the unchanged, fail-closed drawing/CAD engine in an isolated worker using the current explicit candidate selections. Keep the last valid candidate if this attempt fails."),
+            _definition("build_draft", "Build a best-effort draft after full inspection: take the best-scoring line where a section is ambiguous and span unreadable stations. Each such choice is recorded as an open guess. A draft is never verified and cannot be finished for review until a person resolves every guess."),
             _definition("render_candidate", "Reimport a verified exported STEP file and render a named physical view. Output identifies the revision and whether it is an older preserved candidate.",
                         {"view": {"type": "string", "enum": list(VIEWS)}}, ["view"]),
             _definition("validate_candidate", "Verify the current immutable run and independently reimport STEP. Report source-to-CAD section checks and remaining semantic review obligations; never grant engineering approval."),
@@ -194,7 +208,7 @@ class DomainTools:
         if not isinstance(arguments, dict) or len(json.dumps(arguments, allow_nan=False)) > 65536:
             raise ToolInputError("Tool arguments must be a bounded JSON object.")
         expected = {"inspect_source": {"section_ids"}, "select_contours": {"selections"},
-                    "build_provisional": set(), "render_candidate": {"view"},
+                    "build_provisional": set(), "build_draft": set(), "render_candidate": {"view"},
                     "validate_candidate": set()}
         if name not in expected:
             raise ToolInputError("Unknown domain operation.")
@@ -339,8 +353,21 @@ class DomainTools:
         selected = dict(self.state["selected"])
         for item in selections:
             selected[item["section_id"]] = item["candidate_id"]
-        changed = selected != self.state["selected"]
+        # Selecting a guessed section resolves its guess: the same candidate
+        # confirms it, another candidate replaces it. The Rust controller lets
+        # only an operator select a guessed section.
+        chosen = {item["section_id"]: item["candidate_id"] for item in selections}
+        resolved = [g for g in self.open_guesses if g["section_id"] in chosen]
+        changed = selected != self.state["selected"] or bool(resolved)
         if changed:
+            if resolved:
+                history = self.state.setdefault("resolved_guesses", [])
+                for guess in resolved:
+                    candidate = chosen[guess["section_id"]]
+                    history.append({**guess, "status": "resolved", "resolved_candidate_id": candidate,
+                                    "resolution": ("confirmed" if candidate == guess["chosen_candidate_id"]
+                                                   else "replaced")})
+                self.state["guesses"] = [g for g in self.open_guesses if g["section_id"] not in chosen]
             self.state.update(selected=selected, revision=self.state["revision"] + 1,
                               validation=None, rendered_views=[])
             self._write_revision()
@@ -355,21 +382,38 @@ class DomainTools:
         directory = self.root / "revisions" / self.revision_id
         directory.mkdir(parents=True, exist_ok=True)
         spec = copy.deepcopy(self.spec)
+        spec.pop("draft", None)  # Only the open guesses below make a revision a draft.
         for role in self.state["sources"]:
             spec[role]["file"] = os.path.relpath(self.root / "input" / self.state["sources"][role]["file"], directory)
+        guesses = {g["section_id"]: g for g in self.open_guesses}
+        kept = []
         for section in spec["sections"]:
+            guess = guesses.get(section["id"])
             cid = self.state["selected"].get(section["id"])
+            if guess is not None:
+                cid = guess["chosen_candidate_id"]
+                if cid is None:
+                    continue  # Unreadable station: the draft loft spans it.
+            kept.append(section)
             if cid is None:
                 continue
             candidate = next(c for c in self.state["catalog"][section["id"]]["candidates"] if c["candidate_id"] == cid)
             section["contour_selection"] = copy.deepcopy(candidate["contour_selection"])
             prior = section.get("evidence", "Caller-supplied calibration.")
-            section["evidence"] = (prior[:7000] + " Provisional source-bound agent/policy selection " + cid +
-                                    "; excluded strokes retained; human semantic review required.")
+            if guess is not None:
+                section["evidence"] = (prior[:7000] + " Draft guess " + guess["guess_id"] + " took " + cid +
+                                        "; not verified; a person must confirm or replace it.")
+            else:
+                section["evidence"] = (prior[:7000] + " Provisional source-bound agent/policy selection " + cid +
+                                        "; excluded strokes retained; human semantic review required.")
+        spec["sections"] = kept
+        selection = {"revision_id": self.revision_id, "generation_id": self.generation_id,
+                     "selected": self.state["selected"], "source_sha256": self.state["sources"], **SEMANTIC_FLAGS}
+        if self.open_guesses:
+            spec["draft"] = {"status": DRAFT_STATUS, "guesses": copy.deepcopy(self.open_guesses)}
+            selection["guesses"] = copy.deepcopy(self.open_guesses)
         write_json(directory / "spec.json", spec)
-        write_json(directory / "selection.json", {"revision_id": self.revision_id,
-                   "generation_id": self.generation_id, "selected": self.state["selected"],
-                   "source_sha256": self.state["sources"], **SEMANTIC_FLAGS})
+        write_json(directory / "selection.json", selection)
         return directory / "spec.json"
 
     def _build_provisional(self):
@@ -386,6 +430,8 @@ class DomainTools:
         candidate = {"id": self.generation_id, "generation_id": self.generation_id,
                      "revision_id": self.revision_id, "path": out.relative_to(self.task_dir).as_posix(),
                      "status": "review_required" if valid else outcome["state"], "valid": valid,
+                     # A draft build carries open guesses; it is never validated.
+                     "draft": bool(self.open_guesses),
                      "run_id": result.get("run_id") if result else None,
                      "gaps": result.get("gaps", [])[:64] if result else [{"kind": outcome.get("error_code", outcome["state"])}],
                      "metrics": result.get("metrics", {}) if result else {}, **SEMANTIC_FLAGS}
@@ -405,7 +451,28 @@ class DomainTools:
                                  resources=outcome.get("resources", {}), changed=True,
                                  last_valid_preserved=self.state["last_valid_candidate"] is not None)
 
-    def _verified_candidate(self, *, allow_previous=False):
+    def _build_draft(self):
+        """Best-effort build: guess where the source is ambiguous, then build.
+
+        The new guesses replace older open guesses (a person can resolve some in
+        between). Without an unselected section this is an ordinary build with
+        no guess.
+        """
+        sections = [s for s in self.spec.get("sections", []) if isinstance(s, dict)]
+        if not sections or any(s["id"] not in self.state["catalog"] for s in sections):
+            return self._observation(False, "blocked", error_code="draft_requires_complete_inspection",
+                                     message="Inspect every section before a draft is built.")
+        guesses = make_guesses(sections, self.state["selected"], self.state["catalog"])
+        if guesses != self.open_guesses:
+            self.state.update(guesses=guesses, revision=self.state["revision"] + 1,
+                              validation=None, rendered_views=[])
+            self._save()
+        observation = self._build_provisional()
+        observation["draft"] = ({"status": DRAFT_STATUS, "guesses": copy.deepcopy(guesses)}
+                                if guesses else None)
+        return observation
+
+    def _verified_candidate(self, *, allow_previous=False, allow_draft=False):
         from .run_record import verify_run
         candidate = next((b for b in reversed(self.state["builds"]) if b["generation_id"] == self.generation_id
                           and b["revision_id"] == self.revision_id), None)
@@ -414,6 +481,8 @@ class DomainTools:
                 candidate = self.state["last_valid_candidate"]
             if not candidate or candidate.get("valid") is not True:
                 raise ToolInputError("No valid provisional STEP exists for this revision; build or revise the source selections.")
+        if candidate.get("draft") is True and not allow_draft:
+            raise ToolInputError("A draft is not verified and cannot be validated; a person must confirm or replace each guess first.")
         path = safe_relative_file(self.task_dir, candidate["path"] + "/result.json").parent
         verification = verify_run(path)
         if verification.get("valid") is not True:
@@ -421,7 +490,7 @@ class DomainTools:
         return candidate, path
 
     def _render_candidate(self, view):
-        candidate, run = self._verified_candidate(allow_previous=True)
+        candidate, run = self._verified_candidate(allow_previous=True, allow_draft=True)
         out = self.root / "renders" / uuid4().hex
         outcome, result = self._worker("render", {"run_dir": str(run), "view": view}, out, native=True)
         if result is None:

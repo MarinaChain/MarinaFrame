@@ -1,0 +1,154 @@
+"""Best-effort drafts: guess records, draft-tagged exports, deterministic guesses."""
+from __future__ import annotations
+
+import copy
+import json
+import shutil
+
+import numpy as np
+import pytest
+
+from draft_fixture import draft_drawing
+from vessel_reconstruction.agent_tools import DomainTools
+from vessel_reconstruction.draft import DRAFT_STATUS, check_draft, make_guesses
+from vessel_reconstruction.run_record import seal_run, verify_run
+from vessel_reconstruction.schema import validate_spec
+
+
+def _candidate(cid, *, rows=1.0, support=1.0, contrast=0.9, competing=0):
+    return {"candidate_id": cid, "selectable": True, "non_grid_competing_components": competing,
+            "source_support": {"observed_row_fraction": rows, "long_component_support_fraction": support,
+                               "mean_trace_contrast": contrast}}
+
+
+SECTIONS = [{"id": f"s{i}", "x_m": float(x)} for i, x in enumerate((0, 1, 17.5, 20, 30))]
+
+
+def test_guesses_take_the_best_line_and_bridge_or_drop_unreadable_stations():
+    catalog = {"s0": {"candidates": []},
+               "s1": {"candidates": [_candidate("faint", contrast=.2), _candidate("outer", contrast=.95)]},
+               "s2": {"candidates": [_candidate("only", competing=3)]},
+               "s3": {"candidates": []},
+               "s4": {"candidates": [_candidate("selected")]}}
+    guesses = make_guesses(SECTIONS, {"s4": "selected"}, catalog)
+    by_section = {g["section_id"]: g for g in guesses}
+    assert [g["section_id"] for g in guesses] == ["s0", "s1", "s2", "s3"]
+    assert all(check_draft({"status": DRAFT_STATUS, "guesses": [g]}) for g in guesses)
+    best = by_section["s1"]
+    assert best["kind"] == "best_candidate" and best["chosen_candidate_id"] == "outer"
+    assert best["alternatives"] == ["faint"] and best["score"] == .95
+    assert best["reason"] == "2 lines found; took the best-supported one (score 0.95)."
+    assert by_section["s2"]["reason"].startswith("One line found, but 3 other strokes compete")
+    bridge = by_section["s3"]
+    assert bridge["kind"] == "bridged_gap" and bridge["x_range_m"] == [17.5, 30.0]
+    assert bridge["reason"] == "No readable line at x=20 m; smoothed across x=17.5 to 30 m."
+    end = by_section["s0"]
+    assert end["kind"] == "dropped_end" and end["x_range_m"] == [0.0, 1.0]
+    assert end["chosen_candidate_id"] is None and end["score"] is None
+    assert "the draft stops at x=1 m" in end["reason"]
+    # Identical inputs give identical guesses and identifiers.
+    assert make_guesses(SECTIONS, {"s4": "selected"}, copy.deepcopy(catalog)) == guesses
+
+
+@pytest.mark.parametrize("change", [
+    lambda d: d.update(status="verified"),
+    lambda d: d.update(guesses=[]),
+    lambda d: d.update(extra=True),
+    lambda d: d["guesses"][0].update(status="resolved"),
+    lambda d: d["guesses"][0].update(kind="certain"),
+    lambda d: d["guesses"][0].update(score=1.5),
+    lambda d: d["guesses"][0].update(reason=""),
+    lambda d: d["guesses"][0].pop("alternatives"),
+    lambda d: d["guesses"][1].update(x_range_m=[25.0, 30.0]),
+    lambda d: d["guesses"][1].update(chosen_candidate_id="c"),
+    lambda d: d["guesses"].append(copy.deepcopy(d["guesses"][0])),
+])
+def test_draft_record_shape_is_strict(change):
+    catalog = {"s1": {"candidates": [_candidate("a"), _candidate("b")]}, "s3": {"candidates": []}}
+    draft = {"status": DRAFT_STATUS,
+             "guesses": make_guesses(SECTIONS, {"s0": "x", "s2": "y", "s4": "z"}, catalog)}
+    assert check_draft(draft)
+    change(draft)
+    assert not check_draft(draft)
+
+
+def test_schema_accepts_only_a_well_formed_draft(tmp_path):
+    path, spec = draft_drawing(tmp_path)
+    catalog = {"s0": {"candidates": [_candidate("a"), _candidate("b")]}}
+    spec["draft"] = {"status": DRAFT_STATUS,
+                     "guesses": make_guesses(spec["sections"], {"s1": "x", "s2": "y"}, catalog)}
+    assert validate_spec(spec, path.parent) == []
+    spec["draft"]["status"] = "verified"
+    assert [g["kind"] for g in validate_spec(spec, path.parent)] == ["invalid_draft"]
+
+
+def test_deterministic_guesses_on_an_ambiguous_drawing(tmp_path):
+    """Two independent tasks on one ambiguous drawing make the same guesses."""
+    path, _ = draft_drawing(tmp_path / "input", count=4, blank=("s2",))
+    results = []
+    for name in ("first", "second"):
+        tools = DomainTools(tmp_path / name, path)
+        observed = tools.execute("inspect_source", {})
+        assert observed["ok"], observed
+        unique = [{"section_id": s["section_id"], "candidate_id": s["grid_evidence"]["unique_non_grid_candidate_id"]}
+                  for s in observed["sections"] if s["grid_evidence"].get("unique_non_grid_candidate_id")]
+        assert sorted(u["section_id"] for u in unique) == ["s1", "s3"]
+        assert tools.execute("select_contours", {"selections": unique})["ok"]
+        results.append((make_guesses(tools.spec["sections"], tools.state["selected"], tools.state["catalog"]),
+                        tools))
+    (guesses, tools), (again, _) = results
+    assert guesses == again
+    assert [(g["section_id"], g["kind"]) for g in guesses] == [("s0", "best_candidate"), ("s2", "bridged_gap")]
+    chosen = next(c for c in tools.state["catalog"]["s0"]["candidates"]
+                  if c["candidate_id"] == guesses[0]["chosen_candidate_id"])
+    # The dark hull stroke (slanted, x 50..94 px from the left edge), not a faint vertical line.
+    anchors = np.asarray(chosen["contour_selection"]["anchors_px"])
+    assert anchors[:, 0].min() < 60 < 90 < anchors[:, 0].max()
+    assert guesses[1]["x_range_m"] == [2.0, 6.0]
+
+
+@pytest.mark.cad
+def test_draft_build_records_guesses_and_tags_exports(tmp_path):
+    path, _ = draft_drawing(tmp_path / "input", count=4, blank=("s2",))
+    tools = DomainTools(tmp_path / "task", path)
+    observed = tools.execute("inspect_source", {})
+    unique = [{"section_id": s["section_id"], "candidate_id": s["grid_evidence"]["unique_non_grid_candidate_id"]}
+              for s in observed["sections"] if s["grid_evidence"].get("unique_non_grid_candidate_id")]
+    tools.execute("select_contours", {"selections": unique})
+    verified_generation = tools.generation_id
+    built = tools.execute("build_draft", {})
+    assert built["ok"], built
+    guesses = built["draft"]["guesses"]
+    assert [g["section_id"] for g in guesses] == ["s0", "s2"]
+    assert tools.generation_id != verified_generation  # open guesses are part of the identity
+    candidate = built["candidate"]
+    assert candidate["draft"] is True and not candidate["engineering_approved"]
+    run = tmp_path / "task" / candidate["path"]
+    assert verify_run(run)["valid"]
+    record = json.loads((run / "result.json").read_text())
+    assert record["draft"] == {"status": DRAFT_STATUS, "guesses": guesses}
+    assert record["exports"]["step"] == "model-draft.step" and record["exports"]["stl"] == "model-draft.stl"
+    assert (run / "model-draft.step").is_file() and not (run / "model.step").exists()
+    assert "draft_sha256" in record["identity"]
+    # The unreadable station is left out; the loft spans x = 2 .. 6 m.
+    assert [s["id"] for s in record["sections"]] == ["s0", "s1", "s3"]
+    revision = tools.root / "revisions" / tools.revision_id
+    assert json.loads((revision / "selection.json").read_text())["guesses"] == guesses
+    # A draft cannot be validated.
+    refused = tools.execute("validate_candidate", {})
+    assert not refused["ok"] and "draft" in refused["message"]
+    # A record that hides its draft origin does not verify, even when resealed.
+    forged = tmp_path / "forged"
+    shutil.copytree(run, forged)
+    result = json.loads((forged / "result.json").read_text())
+    del result["draft"]
+    (forged / "manifest.json").unlink()
+    seal_run(forged, result)
+    assert not verify_run(forged)["valid"]
+    # A person confirms the guessed line: that guess is resolved, the bridge stays open.
+    tools.execute("select_contours", {"selections": [
+        {"section_id": "s0", "candidate_id": guesses[0]["chosen_candidate_id"]}]})
+    assert [g["section_id"] for g in tools.open_guesses] == ["s2"]
+    history = tools.state["resolved_guesses"]
+    assert history[0]["resolution"] == "confirmed" and history[0]["status"] == "resolved"
+    assert tools.describe()["open_guesses"] == tools.open_guesses

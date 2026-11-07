@@ -4,7 +4,9 @@
 use crate::error::{AppError, AppResult};
 use marinaframe_control::controller::{self, Intervention};
 use marinaframe_control::store::Store;
-use marinaframe_control::types::{Config, Decision, OperationalLimits, Policy, GO_MODEL};
+use marinaframe_control::types::{
+    Config, Decision, OnAmbiguity, OperationalLimits, Policy, GO_MODEL,
+};
 use marinaframe_control::util;
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
@@ -135,6 +137,9 @@ pub fn start_run(
         authorization_basis: String::new(),
         model: GO_MODEL.into(),
         binary_sha256: util::file_hash(&std::env::current_exe().map_err(|_| "binary_path")?)?,
+        // The app builds a best-effort draft instead of declining (founder
+        // decision 2026-11-07); a draft is never review-ready.
+        on_ambiguity: OnAmbiguity::Draft,
     };
     let stem = source
         .file_stem()
