@@ -1,0 +1,48 @@
+{
+  "scope": "Gunnerus development-only; no complete-vessel truth",
+  "requested_components": 6,
+  "drawing_sections_measured": 70,
+  "drawing_sections_refused": [
+    "fr6",
+    "fr16"
+  ],
+  "components": [
+    {
+      "id": "hull",
+      "operation": "hull",
+      "measurement_status": "measured_draft",
+      "reason": "Component identity needs human review"
+    },
+    {
+      "id": "main_deck",
+      "operation": "deck",
+      "measurement_status": "draft_guess",
+      "reason": "deck_outline: Expected one closed outline; found 103; deck_height: Expected two horizontal levels; found 25"
+    },
+    {
+      "id": "deckhouse",
+      "operation": "deckhouse",
+      "measurement_status": "draft_guess",
+      "reason": "house_outline: Expected one closed outline; found 20; house_height: Expected two horizontal levels; found 36"
+    },
+    {
+      "id": "bulwark",
+      "operation": "bulwark",
+      "measurement_status": "draft_guess",
+      "reason": "bulwark_outline: Expected one closed outline; found 4; bulwark_height: Expected two horizontal levels; found 30; bulwark_thickness: Expected two horizontal levels; found 14"
+    },
+    {
+      "id": "forepeak_store",
+      "operation": "deckhouse",
+      "measurement_status": "draft_guess",
+      "reason": "store_outline: Expected one closed outline; found 5; store_height: Expected two horizontal levels; found 28"
+    },
+    {
+      "id": "deck_opening",
+      "operation": "opening",
+      "measurement_status": "draft_guess",
+      "reason": "hatch_height: Expected two horizontal levels; found 13"
+    }
+  ],
+  "engineering_approved": false
+}

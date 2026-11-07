@@ -17,3 +17,9 @@
 - **Trigger:** W14 combined half-breadth and grid-scale questions in one request. The breadth question supplied the scale that the scale question was meant to measure.
 - **Rule:** Ask independent scale questions in separate requests without supplied scale. Exclude contaminated answers, retain their usage, and keep planned case denominators fixed when a driver fails. State which crop, axes and scale are caller-supplied.
 - **Why:** A model can copy supplied calibration without reading the grid; returned-only denominators also hide missing measurements.
+
+### Reach the forbidden operation in sandbox tests
+- **Date:** 2026-11-08
+- **Trigger:** W13 file/network tests first passed on Python import-path denial; socket construction was also mistaken for a network operation.
+- **Rule:** Use isolated Python for direct OS probes, require the expected forbidden-operation failure, and mutation-check the exact file or network permission. Test bind/connect, not only socket construction.
+- **Why:** An earlier permission error can hide a missing guard; Seatbelt permits socket construction without permitting network use.

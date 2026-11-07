@@ -1,0 +1,58 @@
+{
+  "truth_scope": "hull_only",
+  "hull": {
+    "component": "hull",
+    "cad_valid": true,
+    "solid_count": 17,
+    "built": true,
+    "volume_m3": 1978.7663452081574,
+    "presence": "built",
+    "truth_status": "available",
+    "bbox_max_error_m": 0.9644811794024974,
+    "volume_error_relative": 0.5194631496300582
+  },
+  "unbuilt": [
+    "main_deck",
+    "deckhouse",
+    "bulwark",
+    "forepeak_store",
+    "deck_opening"
+  ],
+  "missing": [
+    "separate_skeg"
+  ],
+  "upperworks_bbox_error_m": null,
+  "upperworks_volume_error_relative": null,
+  "engineering_approved": false,
+  "worker": {
+    "state": "exited",
+    "exit_code": 0,
+    "elapsed_seconds": 419.9465,
+    "limits": {
+      "wall_seconds": 600,
+      "cpu_seconds": 480,
+      "memory_bytes": 4294967296,
+      "file_bytes": 536870912,
+      "output_bytes": 1610612736,
+      "open_files": 64,
+      "termination_grace_seconds": 0.5
+    },
+    "sandbox": "macos-seatbelt-deny-default"
+  },
+  "cross_view": {
+    "status": "blocked",
+    "missing": [
+      "plan",
+      "body"
+    ],
+    "maximum_distance_m": {
+      "profile": 3.8374448280935316
+    },
+    "cut_points": {
+      "profile": 16135,
+      "plan": 16262,
+      "body": 4749
+    },
+    "reviewer_veto": false
+  }
+}
