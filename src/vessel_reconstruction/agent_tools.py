@@ -666,10 +666,14 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
             variants.append(("retained_alternative_source_continuity", eligible & corridor))
         traced_variants = []
         endpoint_variants = []
+        # Every interpretation that does not enter the catalog is disclosed
+        # with its reason, so an empty catalog explains itself.
+        rejected = entry["rejected_trace_hypotheses"] = []
         for hypothesis, candidate_mask in variants:
             try:
                 rows, xs, quality = _trace(candidate_mask, ink, centre)
-            except DrawingError:
+            except DrawingError as exc:
+                rejected.append({"hypothesis": hypothesis, "reason": exc.kind})
                 continue
             traced_variants.append((hypothesis, rows, xs, quality, None, None))
             endpoint = _source_endpoint_hypothesis(mask, ink, rows, xs, centre,
@@ -697,11 +701,18 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
         for hypothesis, rows, xs, quality, endpoint_evidence, parent_dense in traced_variants + endpoint_variants:
             coverage = len(rows) / len(mask)
             max_gap = quality["max_missing_run_px"]
+            outcome = {"hypothesis": hypothesis, "observed_row_fraction": round(coverage, 5),
+                       "max_missing_run_px": max_gap,
+                       "maximum_step_px_per_row": round(quality["maximum_step_px_per_row"], 4)}
             if coverage < .9 or max_gap > max(3, math.ceil(len(mask) * .025)):
+                rejected.append({**outcome, "reason": "insufficient_row_coverage"})
                 continue
             absolute_rows, absolute_xs = rows + top, xs + left
             anchors = _adaptive_anchors(absolute_rows, absolute_xs, py_top, py_bottom)
             if anchors is None:
+                # Typically a trace that jumps between strokes (grid, lettering,
+                # another station); it cannot be a bounded selection corridor.
+                rejected.append({**outcome, "reason": "not_representable_as_bounded_corridor"})
                 continue
             # Deduplicate numerical variants, retaining generation provenance.
             dense = np.interp(np.arange(len(mask)), rows, xs)
