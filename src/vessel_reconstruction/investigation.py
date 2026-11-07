@@ -43,7 +43,6 @@ SNAPPED_HALF_WIDTH_PX = 2.75
 # Two traces closer than this (source px) on most shared rows are the same ink.
 SAME_INK_DISTANCE_PX = 2.0
 SAME_INK_ROW_SHARE = 0.8
-MAX_MODEL_CANDIDATES_PER_SECTION = 8
 # Sheet setup: a detected grid spacing must match the claimed scale within this
 # relative error, and a claimed datum line must lie this close to detected ink.
 GRID_SCALE_TOLERANCE = 0.02

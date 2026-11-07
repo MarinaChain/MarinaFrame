@@ -4,6 +4,7 @@ import json
 from PIL import Image
 
 from benchmarks.investigation.arms import summarize
+from benchmarks.investigation.report import collect
 
 
 def test_summary_keeps_a_run_that_failed_before_domain_initialization(tmp_path):
@@ -23,3 +24,11 @@ def test_summary_keeps_a_run_that_failed_before_domain_initialization(tmp_path):
     assert result["sections_without_line"] == 1
     assert result["prompt_tokens"] == 0
     assert result["domain_state_missing"] is True
+    case = tmp_path / "collection" / "case"
+    case.mkdir(parents=True)
+    inputs.rename(case / "input")
+    run.rename(case / "v2-llm")
+    rows = collect(case.parent)
+    assert len(rows) == 1
+    assert rows[0]["case_id"] == "case" and rows[0]["exit"] == 2
+    assert rows[0]["provider_receipts"] == []

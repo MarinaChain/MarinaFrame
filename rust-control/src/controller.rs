@@ -520,16 +520,16 @@ fn investigation_observation(store: &Store) -> Result<Value> {
     });
     // Keep the latest tagged strokes of each panel across later label views.
     // Otherwise the model sees pixels but loses the candidate ids to assign.
-    let mut panels = BTreeMap::new();
+    let mut panels = vec![];
+    let mut seen_panels = std::collections::BTreeSet::new();
     for event in store.events.iter().rev() {
         let result = &event.payload["response"]["result"];
         if result["status"] == "strokes_enumerated" {
             let key = util::hash_json(&result["panel_section_ids"])?;
-            panels.entry(key).or_insert_with(|| {
-                json!({
-                "panel_section_ids":result["panel_section_ids"],
-                "strokes":result["strokes"], "view":result["view"]})
-            });
+            if seen_panels.insert(key) {
+                panels.push(json!({"panel_section_ids":result["panel_section_ids"],
+                    "strokes":result["strokes"], "view":result["view"]}));
+            }
         }
     }
     let candidate = &d["current_candidate"];
@@ -552,7 +552,7 @@ fn investigation_observation(store: &Store) -> Result<Value> {
         "sheet_setup_ids":d["sheet_setup_ids"],"rendered_views":d["rendered_views"],
         "current_draft":if candidate.is_null(){Value::Null}else{json!({"valid":candidate["valid"],"draft":candidate["draft"],"status":candidate["status"]})},
         "last_observation":store.state.last_observation,"recent_history_newest_first":history,
-        "retained_stroke_panels":panels.values().collect::<Vec<_>>(),
+        "retained_stroke_panels":panels,"omitted_stroke_panel_ids":[],
         "current_policy":"live_investigation","engineering_approved":false,
         "source_truth":"source evidence and deployment-available checks only; no evaluator references"});
     // Images are attached separately. Their artifact inventories can be large;
@@ -561,6 +561,22 @@ fn investigation_observation(store: &Store) -> Result<Value> {
         last.remove("artifacts");
     }
     let limit = store.state.config.limits.max_observation_bytes;
+    while util::json_bytes(&value)?.len() > limit
+        && !value["retained_stroke_panels"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    {
+        let removed = value["retained_stroke_panels"]
+            .as_array_mut()
+            .unwrap()
+            .pop()
+            .unwrap();
+        value["omitted_stroke_panel_ids"]
+            .as_array_mut()
+            .unwrap()
+            .push(removed["panel_section_ids"].clone());
+    }
     if util::json_bytes(&value)?.len() > limit {
         // A large inspection result keeps its section and candidate ids only.
         let last = &store.state.last_observation;
@@ -2284,6 +2300,36 @@ mod tests {
             observed["retained_stroke_panels"][0]["strokes"][0]["candidate_id"],
             "trace-1"
         );
+    }
+    #[test]
+    fn old_panel_memory_cannot_exhaust_the_observation_budget() {
+        let (_tmp, mut store) = fixture();
+        store.state.config.on_ambiguity = OnAmbiguity::Draft;
+        for i in 0..30 {
+            store
+                .append(
+                    "worker_result",
+                    json!({"response":{"result":{
+                "status":"strokes_enumerated","panel_section_ids":[format!("s{i}")],
+                "strokes":[{"tag":1,"candidate_id":format!("trace-{i}"),"detail":"x".repeat(4000)}],
+                "view":{"view_id":format!("view-{i}")}}}}),
+                )
+                .unwrap();
+        }
+        store.state.last_observation = json!({"ok":true,"status":"viewed"});
+        let observed = investigation_observation(&store).unwrap();
+        assert!(
+            util::json_bytes(&observed).unwrap().len()
+                <= store.state.config.limits.max_observation_bytes
+        );
+        assert_eq!(
+            observed["retained_stroke_panels"][0]["view"]["view_id"],
+            "view-29"
+        );
+        assert!(!observed["omitted_stroke_panel_ids"]
+            .as_array()
+            .unwrap()
+            .is_empty());
     }
     #[test]
     fn large_enumeration_preserves_tags_and_view_mapping() {

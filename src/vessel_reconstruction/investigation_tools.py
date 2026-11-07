@@ -313,12 +313,6 @@ class InvestigationTools:
                          and c.get("z_range_m") == candidate["z_range_m"]), None)
         new = existing is None
         if new:
-            drawn = [c for c in entry["candidates"] if c.get("model_traced") and "enumerate_strokes" not in c["generated_by"]]
-            if len(drawn) >= inv.MAX_MODEL_CANDIDATES_PER_SECTION:
-                return self._refused(inv.VerificationError(
-                    "corridor_candidate_limit",
-                    f"This section already has {inv.MAX_MODEL_CANDIDATES_PER_SECTION} traced candidates; assign or "
-                    "compare existing ones."), section_id=section_id)
             entry["candidates"].append(candidate)
         else:
             candidate = existing

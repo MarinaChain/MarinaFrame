@@ -181,6 +181,14 @@ def test_enumeration_keeps_new_tags_assignable_after_many_calls(tmp_path, monkey
         assert {s["candidate_id"] for s in result["strokes"]} <= ids
 
 
+def test_tracing_has_no_aggregate_candidate_cap(tmp_path, monkeypatch):
+    domain = _domain(tmp_path, shared_panel_drawing(tmp_path / "src"))
+    view = _view(domain, [0, 0, 260, 240])
+    monkeypatch.setattr(inv, "MAX_MODEL_CANDIDATES_PER_SECTION", 0, raising=False)
+    traced = _trace(domain, view, "a", [(60 + .3 * (210 - y), y) for y in (25, 215)], 12)
+    assert traced["ok"], traced
+
+
 def test_a_short_fragment_or_unknown_view_is_refused(tmp_path):
     spec, _ = draft_drawing(tmp_path / "src")
     domain = _domain(tmp_path, spec)
