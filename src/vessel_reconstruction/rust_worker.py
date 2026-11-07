@@ -22,6 +22,7 @@ from .agent_tools import DomainTools, _artifact, _model_observation_image
 from .provenance import digest_file, digest_object, write_json
 from .resources import peak_rss_kib
 from .schema import loads_bounded_json
+from .validation_contract import implementation_identity as audit_implementation_identity
 
 PROTOCOL = "marinaframe.worker.v1"
 OPERATIONS = {"initialize", "observe", "inspect_source", "select_contours",
@@ -87,6 +88,9 @@ def execute(request, task_root, source_spec, cancel):
                   "tools": domain.catalog()}
     else:
         result = domain.execute(request["operation"], request["arguments"])
+    # The controller pins this value from the initialize receipt and later
+    # requires every validation contract to carry the pinned value.
+    result["audit_implementation_sha256"] = audit_implementation_identity()
     if domain.state.get("validation") is not None:
         result["validation_context"] = domain.validation_context()
     if request["operation"] == "validate_candidate" and isinstance(result.get("validation"), dict):

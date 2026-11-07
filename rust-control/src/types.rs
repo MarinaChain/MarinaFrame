@@ -266,6 +266,11 @@ pub struct State {
     pub source_manifest_sha256: Option<String>,
     pub domain_checkpoint_sha256: Option<String>,
     pub worker_implementation_sha256: Option<String>,
+    /// Audit implementation identity pinned from the initialize receipt. Absent in
+    /// tasks created before the pin existed (not serialized when absent, so the
+    /// hashes of old ledger events stay valid); such tasks cannot finalize.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audit_implementation_sha256: Option<String>,
     pub generation_id: Option<String>,
     pub revision_id: Option<String>,
     pub pending: Option<Pending>,
@@ -293,6 +298,7 @@ impl State {
             &self.source_manifest_sha256,
             &self.domain_checkpoint_sha256,
             &self.worker_implementation_sha256,
+            &self.audit_implementation_sha256,
         ]
         .into_iter()
         .flatten()

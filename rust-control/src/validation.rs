@@ -788,13 +788,39 @@ pub fn assess(
     Ok(c)
 }
 
+/// Finalization predicate. `audit_pin` is the audit implementation identity the
+/// controller pinned from the initialize receipt; the contract must carry exactly
+/// that value. Without a pin nothing finalizes (fail closed).
 pub fn ready(
     root: &Path,
     observation: &Value,
     domain: &Value,
     context: &Value,
+    audit_pin: Option<&str>,
 ) -> Result<Contract> {
     let c = assess(root, observation, domain, context)?;
+    let pin = audit_pin.ok_or("audit_implementation_unpinned")?;
+    require(
+        c.binding.audit_implementation_sha256 == pin,
+        "audit_implementation_mismatch",
+    )?;
+    review_outcome(observation, c)
+}
+
+/// Re-check a task that was finalized before the audit pin existed. It applies
+/// every `ready` check except the pin, which such a task never recorded. Only
+/// `Store::verify` and the offline `check-validation` diagnostic may call it;
+/// the controller finish path must call `ready`.
+pub fn ready_legacy_unpinned(
+    root: &Path,
+    observation: &Value,
+    domain: &Value,
+    context: &Value,
+) -> Result<Contract> {
+    review_outcome(observation, assess(root, observation, domain, context)?)
+}
+
+fn review_outcome(observation: &Value, c: Contract) -> Result<Contract> {
     require(
         observation["ok"] == true
             && observation["status"] == "validated_review_required"

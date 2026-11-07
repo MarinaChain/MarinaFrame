@@ -27,7 +27,7 @@ Test files:
 | 4a | Exact Boolean and numeric types | `VU::incomplete_unknown_boolean_and_contradictory_contracts_fail` (contract only) | `VM::envelope_types_and_contract_identities_are_exact` (39), `VM::consistently_forged_audit_content_is_rejected_by_type_and_semantics` (43), `VM::audit_receipt_and_resource_contract_is_exact` (9) | `test_native_check_requires_exact_boolean`, `test_authoritative_artifact_cannot_use_numeric_boolean_equivalents` |
 | 4b | Null and missing fields | `VU` (missing contract keys) | the three tests above (null, missing and unknown fields at every level) | `test_missing_contract_fields_are_not_inherited_from_cache`, `test_native_contradictory_or_incomplete_audit_is_rejected` |
 | 4c | Nonfinite data | `ST::duplicate_nonfinite_and_nested_duplicates_rejected`, `ST::finite_float_event_bytes_survive_disk_parse_roundtrip` | no new test: JSON cannot hold NaN or Infinity, and `util::parse` already rejects the tokens; null, string and negative values are in the tables above | `test_strict_contract_rejects_invalid_serialization_or_semantics` |
-| 4d | Unknown schemas; mismatched contract, implementation and tolerance identities | `VU` (schema version, units, tolerance) | `VM::envelope_types_and_contract_identities_are_exact` (schema, audit contract version, both tolerances, units, review flags); audit implementation identity: see gaps | `test_validation_contract_schema.py` (3 tests) |
+| 4d | Unknown schemas; mismatched contract, implementation and tolerance identities | `VU` (schema version, units, tolerance) | `VM::envelope_types_and_contract_identities_are_exact` (schema, audit contract version, both tolerances, units, review flags); audit implementation identity is pinned by the controller: `AI::unchanged_identity_is_pinned_at_initialize_and_finalizes`, `AI::consistent_but_different_audit_identity_cannot_reach_review`, `AI::consistent_different_identity_fails_the_finalization_predicate_itself`, `AI::result_identity_alone_changing_is_refused`, `AI::dropping_the_identity_after_the_pin_is_refused`, `AI::changed_worker_implementation_mid_task_is_refused`, `AI::task_without_a_pin_fails_closed_at_finalization`, `AI::old_state_without_the_field_reads_and_serializes_unchanged` (`AI` = `rust-control/tests/audit_identity.rs`) | `test_validation_contract_schema.py` (3 tests) |
 | 4e | Envelope inconsistent with nested evidence | `FG::permissive_envelope_cannot_override_failed_contract` | `VM::failed_geometry_cannot_be_promoted_by_envelope_contract_or_cache_forgery` (envelope, contract, cached evidence and a consistently rewritten audit, all on a real failing run) | `test_cached_metadata_cannot_contradict_authoritative_json_even_if_envelope_passes` |
 | 5a | Interrupted audit | none | `VM::interrupted_audit_is_not_cached_and_cannot_finish`, `VM::interrupted_audit_then_a_real_audit_can_still_pass` | `test_interrupted_or_failed_audit_cannot_be_a_cached_pass` |
 | 5b | Interrupted provider call | `RL::reliability_unknown_provider_outcome_acknowledgement_survives_restart_without_repeat`, `RR::missing_receipt_stays_unknown_and_requires_explicit_acknowledgement` | not changed | none |
@@ -38,8 +38,8 @@ Test files:
 | 6 | Real geometry-backed failing fixture and real passing fixture | none (every Rust fixture injected the audit) | `VM::control_real_passing_evidence_is_accepted_and_failing_is_not_ready` and every `VM` test: real STEP, real native audit | none |
 
 Rows before: of 18 sub-rows, 7 had a full Rust test (1, 4c, 4e, 5b, 5c, 5d, 5f) and 4 a partial one
-(2, 4a, 4b, 4d). After: 16 are fully covered; 3d (stale render) and 4d (audit implementation identity)
-keep a gap, listed below.
+(2, 4a, 4b, 4d). After: 17 are fully covered; 3d (stale render) keeps a gap, listed below.
+4d (audit implementation identity) is closed by the controller pin (see "Audit identity pin").
 
 ## Fixtures
 
@@ -64,10 +64,24 @@ keep a gap, listed below.
 - Stale render observations: `controller::apply_worker` checks `render_candidate_mismatch` and
   `render_step_identity`. No Rust test renders. Only `test_render_marks_same_generation_older_revision_stale`
   covers it (Python).
-- `audit_implementation_sha256` is checked for format and for equality with the context that the worker
-  returns. Rust has no independent source for the audit implementation hash, so a worker that reports a
-  different, well-formed value consistently is accepted. Closing this needs a pinned value from the
-  controller, which is a design change and is not made here.
 - The controller check `cancelled_before_finalization` is shadowed by earlier cancellation checks in
   `worker::run` and `apply_worker`. Removing it alone does not fail any test.
 - `resume --expected-*` (stale request check in `main.rs`) has no Rust test; `controller::intervene` has one.
+
+## Audit identity pin
+
+- The Python worker adds `audit_implementation_sha256` to every `result`. The controller records the value
+  from the `initialize` receipt in `State.audit_implementation_sha256`. The worker does not choose the value
+  later: every later receipt must repeat it (`audit_implementation_changed`, `audit_implementation_missing`),
+  and `validation::ready` requires the validation contract to carry it (`audit_implementation_mismatch`).
+- Old tasks: the field is optional and is not serialized when absent, so old ledger hashes stay valid. A task
+  without a pin never receives one later (a later worker value would be the worker's own choice). It cannot
+  finalize: `validation::ready` returns `audit_implementation_unpinned`. `Store::verify` of an old task that
+  is already awaiting review still passes through `validation::ready_legacy_unpinned`, which applies every
+  check except the pin.
+- Trust root: the pin comes from the worker environment at `initialize`, not from a controller-computed
+  hash. It stops a worker or audit implementation that changes, or reports a different identity, after
+  initialization. It does not stop a worker that is wrong from the first receipt. Rust cannot compute the
+  hash itself (it includes installed dependency versions). An operator-supplied expected hash is a possible
+  extension. The offline `check-validation` command takes an optional `--audit-pin`; without it, it checks
+  everything except the pin and reports `audit_implementation_pinned: false`.

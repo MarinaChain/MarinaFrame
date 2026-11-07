@@ -95,11 +95,18 @@ fn execute() -> Result<serde_json::Value> {
             util::read_json(Path::new(&take(&mut args, "observation")?), 2 * 1024 * 1024)?;
         let domain = util::read_json(Path::new(&take(&mut args, "domain")?), 2 * 1024 * 1024)?;
         let context = util::read_json(Path::new(&take(&mut args, "context")?), 2 * 1024 * 1024)?;
+        let audit_pin = args.remove("audit-pin");
         no_extra(&args)?;
         let contract = validation::assess(&task, &observation, &domain, &context)?;
+        // Without --audit-pin this offline diagnostic cannot know the controller's
+        // pin; it then reports readiness for every check except the pin.
+        let ready = match &audit_pin {
+            Some(pin) => validation::ready(&task, &observation, &domain, &context, Some(pin)),
+            None => validation::ready_legacy_unpinned(&task, &observation, &domain, &context),
+        };
         return Ok(
             json!({"well_formed_current_audit":true,"outcome":contract.outcome,
-            "ready_for_human_review":validation::ready(&task,&observation,&domain,&context).is_ok(),"engineering_approved":false}),
+            "ready_for_human_review":ready.is_ok(),"audit_implementation_pinned":audit_pin.is_some(),"engineering_approved":false}),
         );
     }
     if command == "cancel" {

@@ -117,10 +117,9 @@ rows in `docs/RUST_VALIDATION_MATRIX.md`, with a real passing build and a real f
 only, and the unmodified audit fails it). Each guarded check was mutated once to prove the tests
 fail without it.
 
+**Audit identity (closed 2026-11-07):** the controller pins `audit_implementation_sha256` from the initialize receipt and `validation::ready` requires it. Tasks without a pin cannot finalize. Trust root: the worker at initialize.
+
 **Open gaps (not fixed):**
-- `audit_implementation_sha256` is checked for format and for equality with the worker's own
-  context only. A worker that reports a different well-formed value consistently is accepted.
-  Closing it needs a controller-pinned value (a design change).
 - No Rust test for stale render observations.
 - Removing `cancelled_before_finalization` alone fails no test: earlier cancellation checks shadow it.
 - The controller takes `domain/lock` twice in a row; a process forked by another thread in
@@ -136,6 +135,6 @@ fail without it.
    counts, then (only with provider-transfer permission) an authentic table.
 3. Keep data-pipeline and benchmark tests while roadmap steps 5–6 (licensed data, new evaluation)
    use them.
-4. Decide whether to pin the audit implementation identity in the controller (gap above).
+4. Optional: let the operator supply an expected audit identity (the controller pin is recorded from the initialize receipt; see `docs/RUST_VALIDATION_MATRIX.md`, "Audit identity pin").
 5. Then continue `handoff/MarinaFrame_Claude_Code_Handoff.md`, "Next work in order", from step 3
    (semantic/local geometry accuracy).

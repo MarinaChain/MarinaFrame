@@ -231,6 +231,8 @@ struct Validated {
     observation: Value,
     domain: Value,
     context: Value,
+    /// The audit identity the controller pinned at initialization.
+    audit_pin: Option<String>,
 }
 
 impl Validated {
@@ -245,6 +247,7 @@ fn validated_from(failing_fixture: bool) -> Validated {
     let observation = fixture.observation();
     let domain = fixture.store.state.domain.clone();
     let context = observation["validation_context"].clone();
+    let audit_pin = fixture.store.state.audit_implementation_sha256.clone();
     let Fixture { directory, store } = fixture;
     drop(store);
     Validated {
@@ -252,6 +255,7 @@ fn validated_from(failing_fixture: bool) -> Validated {
         observation,
         domain,
         context,
+        audit_pin,
     }
 }
 
@@ -271,6 +275,7 @@ struct Copy {
     observation: Value,
     domain: Value,
     context: Value,
+    audit_pin: Option<String>,
 }
 
 impl Copy {
@@ -280,13 +285,20 @@ impl Copy {
             observation: source.observation.clone(),
             domain: source.domain.clone(),
             context: source.context.clone(),
+            audit_pin: source.audit_pin.clone(),
         }
     }
     fn root(&self) -> PathBuf {
         self.directory.path().join("task")
     }
     fn ready(&self) -> util::Result<validation::Contract> {
-        validation::ready(&self.root(), &self.observation, &self.domain, &self.context)
+        validation::ready(
+            &self.root(),
+            &self.observation,
+            &self.domain,
+            &self.context,
+            self.audit_pin.as_deref(),
+        )
     }
     /// Relative path of the evidence file of this kind.
     fn evidence(&self, kind: &str) -> String {
@@ -654,7 +666,13 @@ fn replace_each(cases: &mut Cases, base: &Validated, table: Vec<(&str, Change, &
         let mut domain = base.domain.clone();
         let mut context = base.context.clone();
         change(&mut observation, &mut domain, &mut context);
-        let outcome = validation::ready(&base.root(), &observation, &domain, &context);
+        let outcome = validation::ready(
+            &base.root(),
+            &observation,
+            &domain,
+            &context,
+            base.audit_pin.as_deref(),
+        );
         cases.expect_error(label, outcome, code);
     }
 }
@@ -1801,7 +1819,13 @@ fn selection_a_b_a_makes_the_old_validation_stale() {
     );
     // The earlier evidence names the earlier revision: Rust must call it stale
     // even though the selected content equals the earlier selected content.
-    let stale = validation::ready(&fixture.task(), old, &after, &pass.context);
+    let stale = validation::ready(
+        &fixture.task(),
+        old,
+        &after,
+        &pass.context,
+        pass.audit_pin.as_deref(),
+    );
     assert_eq!(stale.unwrap_err(), "stale_validation");
     // The real finish path must not reach review without a new build and audit.
     finish(&mut fixture);

@@ -43,6 +43,7 @@ pub fn new_state(config: Config) -> State {
         source_manifest_sha256: None,
         domain_checkpoint_sha256: None,
         worker_implementation_sha256: None,
+        audit_implementation_sha256: None,
         generation_id: None,
         revision_id: None,
         pending: None,
@@ -171,6 +172,31 @@ pub fn call_worker(store: &mut Store, operation: &str, arguments: Value) -> Resu
         Ok(false)
     }
 }
+/// The controller, not the worker, decides which audit implementation is
+/// acceptable: the identity from the initialize receipt becomes the task's pin
+/// and every later receipt must repeat it. A task without a pin (created before
+/// the pin existed, or initialized by a worker that reports none) gets no pin
+/// later and cannot finalize; see `validation::ready`.
+fn reconcile_audit_identity(
+    pinned: Option<&str>,
+    operation: &str,
+    result: &Value,
+) -> Result<Option<String>> {
+    let reported = match result.get("audit_implementation_sha256") {
+        None if pinned.is_some() => return Err("audit_implementation_missing".into()),
+        None => return Ok(None),
+        Some(value) => value
+            .as_str()
+            .filter(|hash| util::valid_hash(hash))
+            .ok_or("audit_implementation_format")?,
+    };
+    match pinned {
+        Some(pin) if pin == reported => Ok(Some(pin.into())),
+        Some(_) => Err("audit_implementation_changed".into()),
+        None if operation == "initialize" => Ok(Some(reported.into())),
+        None => Ok(None),
+    }
+}
 fn apply_worker(
     store: &mut Store,
     pending: &Pending,
@@ -220,6 +246,11 @@ fn apply_worker(
     {
         return Err("worker_result_review_contract".into());
     }
+    let audit_pin = reconcile_audit_identity(
+        store.state.audit_implementation_sha256.as_deref(),
+        &pending.operation,
+        &result,
+    )?;
     let checkpoint = util::file_hash(&util::safe_file(&store.path, "domain/state.json")?)?;
     if response.domain_checkpoint_sha256.as_deref() != Some(&checkpoint) {
         return Err("worker_checkpoint_not_current".into());
@@ -262,6 +293,7 @@ fn apply_worker(
     }
     store.state.domain_checkpoint_sha256 = Some(checkpoint);
     store.state.worker_implementation_sha256 = Some(response.implementation_sha256.clone());
+    store.state.audit_implementation_sha256 = audit_pin;
     store.state.source_manifest_sha256 =
         domain["source_manifest_sha256"].as_str().map(String::from);
     store.state.generation_id = domain["generation_id"].as_str().map(String::from);
@@ -962,6 +994,7 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
             &store.state.last_observation,
             &store.state.domain,
             &store.state.last_observation["validation_context"],
+            store.state.audit_implementation_sha256.as_deref(),
         ) {
             Ok(contract) => {
                 finalization_point(&store.path, "after_predicate");

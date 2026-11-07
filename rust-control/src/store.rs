@@ -236,12 +236,24 @@ impl Store {
             if self.state.pending.is_some() {
                 return Err("review_ready_with_pending_operation".into());
             }
-            crate::validation::ready(
-                &self.path,
-                &self.state.last_observation,
-                &self.state.domain,
-                &self.state.last_observation["validation_context"],
-            )?;
+            let context = &self.state.last_observation["validation_context"];
+            match self.state.audit_implementation_sha256.as_deref() {
+                Some(pin) => crate::validation::ready(
+                    &self.path,
+                    &self.state.last_observation,
+                    &self.state.domain,
+                    context,
+                    Some(pin),
+                ),
+                // Finalized before the pin existed (new tasks cannot finalize
+                // without one): readable, but not re-bound to a pinned identity.
+                None => crate::validation::ready_legacy_unpinned(
+                    &self.path,
+                    &self.state.last_observation,
+                    &self.state.domain,
+                    context,
+                ),
+            }?;
         }
         Ok(
             json!({"valid":domain_ok,"pending_domain_requires_reconciliation":!domain_ok,"schema_version":self.state.schema_version,
