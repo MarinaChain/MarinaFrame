@@ -167,7 +167,11 @@ class InvestigationTools:
             traced = inv.corridor_trace(image, section, self.spec["source"]["file"], details, view, path_px,
                                         half_width_px)
         except inv.VerificationError as exc:
-            return self._refused(exc, section_id=section_id)
+            # Show the model where its corridor lies on the sheet, so it can
+            # move the corridor onto the curve it means.
+            view_artifact = self._corridor_view(image, view, path_px, half_width_px, source_sha, section_id)
+            self._save()
+            return self._refused(exc, section_id=section_id, view=view_artifact[0], artifacts=[view_artifact[1]])
         entry = self.state["catalog"][section_id]
         cid = inv.model_candidate_id(source_sha, section_id, traced["contour_selection"], traced["z_range_m"])
         candidate = {"candidate_id": cid, "hypothesis": "model_corridor_trace", "generated_by": ["trace_corridor"],
@@ -221,6 +225,23 @@ class InvestigationTools:
                                  vertical_range_from_ink=traced["vertical_range_from_ink"], view=record,
                                  artifacts=[artifact],
                                  note="Red: traced ink. Blue: your corridor. The line is a candidate, not an identity.")
+
+    def _corridor_view(self, image, view, path_px, half_width_px, source_sha, section_id):
+        """A view of a refused corridor (blue edges) over the sheet ink."""
+        path = [inv.view_to_source(view, p) for p in path_px]
+        half_width = float(half_width_px) / min(view["view_px_per_source_px"])
+        xs, ys = [p[0] for p in path], [p[1] for p in path]
+        region = inv.clip_region([int(min(xs) - half_width - 120), int(min(ys) - 40),
+                                  int(max(xs) + half_width + 120), int(max(ys) + 40)],
+                                 image.shape[1], image.shape[0])
+
+        def overlay(draw, to_view):
+            ordered = sorted(path, key=lambda p: p[1])
+            for sign in (-1, 1):
+                draw.line([to_view(x + sign * half_width, y) for x, y in ordered], fill=(40, 90, 220), width=2)
+
+        payload, meta = inv.render_view(image, region, inv.MAX_VIEW_SIDE_PX, overlay=overlay)
+        return self._store_view(payload, meta, "refused_corridor", source_sha, section_id=section_id)
 
     # ------------------------------------------------------------ assign
     def _assign_station(self, section_id, candidate_id, label_view_id, label_text, reason, comparison_id=None):

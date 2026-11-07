@@ -177,11 +177,21 @@ def corridor_trace(image: np.ndarray, section: dict, source_file: str, details: 
     corridor = (np.abs(np.arange(mask.shape[1])[None, :] - centres[:, None]) <= half_width) & inside[:, None]
     eligible, _ = _eligible_trace_mask(mask, corridor, ink)
     centre_local = float(section["calibration"]["centerline_px"]) - left
+    # Trace only the rows that the corridor spans, so a curve that ends
+    # inside the calibrated range is traced on its own height.
+    first_row, last_row = int(np.flatnonzero(inside)[0]), int(np.flatnonzero(inside)[-1])
+    ink_rows = int(eligible[first_row:last_row + 1].any(axis=1).sum())
+    corridor_rows = last_row - first_row + 1
+    diagnosis = {"corridor_rows": corridor_rows, "corridor_rows_with_ink": ink_rows,
+                 "half_width_source_px": round(half_width, 2)}
     try:
-        rows, xs, quality = _trace(eligible, ink, centre_local)
+        rows, xs, quality = _trace(eligible[first_row:last_row + 1], ink[first_row:last_row + 1], centre_local)
     except DrawingError as exc:
-        raise VerificationError("no_ink_in_corridor",
-                                f"No supported ink line in the corridor ({exc.kind}).") from None
+        raise VerificationError(
+            "no_ink_in_corridor",
+            f"No supported ink line in the corridor ({exc.kind}): ink on {ink_rows} of {corridor_rows} corridor "
+            "rows. Look at the attached image of your corridor and move it onto the curve.", diagnosis) from None
+    rows = rows + first_row
     first, last = int(rows[0]), int(rows[-1])
     span = last - first + 1
     gaps = np.diff(rows) - 1
@@ -191,7 +201,7 @@ def corridor_trace(image: np.ndarray, section: dict, source_file: str, details: 
                "max_missing_run_px": max_gap,
                "long_component_support_fraction": round(quality["long_component_support_fraction"], 4),
                "mean_trace_contrast": round(quality["mean_trace_contrast"], 4),
-               "maximum_step_px_per_row": round(quality["maximum_step_px_per_row"], 4)}
+               "maximum_step_px_per_row": round(quality["maximum_step_px_per_row"], 4), **diagnosis}
     if (coverage < MIN_ROW_COVERAGE or max_gap > max(3, math.ceil(span * GAP_FRACTION))
             or quality["long_component_support_fraction"] < MIN_LONG_COMPONENT_SUPPORT):
         raise VerificationError("insufficient_ink_support",

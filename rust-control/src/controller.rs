@@ -2143,6 +2143,51 @@ mod tests {
         }
     }
     #[test]
+    fn a_model_can_assign_only_snapped_ink() {
+        let (_tmp, mut store) = fixture();
+        store.state.config.on_ambiguity = OnAmbiguity::Draft;
+        store.state.domain = json!({"sections":[{"id":"s0"}]});
+        let snapped = json!({"candidate_id":"c","selectable":true,"source_support":{"observed_row_fraction":0.97},
+            "contour_selection":{"anchors_px":[[1.0,0.0],[2.0,9.0]],"half_width_px":2.75}});
+        let assign = Operation::AssignStation(AssignStation {
+            section_id: "s0".into(),
+            candidate_id: "c".into(),
+            label_view_id: "view-1".into(),
+            label_text: "0".into(),
+            reason: "Label 0.".into(),
+            comparison_id: None,
+        });
+        let write = |candidate: &Value| {
+            util::atomic_json(
+                &store.path.join("domain/state.json"),
+                &json!({"selected":{},"catalog":{"s0":{"candidates":[candidate]}}}),
+                true,
+            )
+            .unwrap()
+        };
+        write(&snapped);
+        assert!(validate_selection(&store, &assign, "live_model").is_ok());
+        let mut unsnapped: Vec<Value> = vec![];
+        for (key, value) in [
+            ("selectable", json!(false)),
+            ("source_support", json!({"observed_row_fraction":0.6})),
+            ("contour_selection", Value::Null),
+            ("model_traced", json!(true)),
+        ] {
+            let mut candidate = snapped.clone();
+            candidate[key] = value;
+            unsnapped.push(candidate);
+        }
+        for candidate in unsnapped {
+            write(&candidate);
+            assert_eq!(
+                validate_selection(&store, &assign, "live_model").unwrap_err(),
+                "unsnapped_or_unknown_candidate",
+                "{candidate}"
+            );
+        }
+    }
+    #[test]
     fn refusals_are_counted_until_an_accepted_action() {
         let (_tmp, mut store) = fixture();
         for _ in 0..3 {
