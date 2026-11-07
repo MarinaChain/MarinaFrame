@@ -210,3 +210,184 @@ question for the validation owner.
 - Deterministic smoke (`examples/make_agent_example.py` → `marinaframe run --policy deterministic`
   → `verify`): `awaiting_human_review`, `valid: true`, `engineering_approved: false`.
 - `scripts/scan_secrets.py`: 0 findings.
+
+## 8. Authentic line identity and abstention (second pass, 2026-11-07)
+
+Base: `333f371`. Same method as sections 2–5: one hypothesis at a time, inspect the pixels, keep
+or revert. **These sheets have no reviewed truth.** The coding assistant read every calibration
+value below from visible marks. All values are **provisional** (not gold, not reviewed). The
+results are line-identity and abstention evidence only. No accuracy figure is claimed. No image,
+crop or derivative is committed. No image was sent to any provider.
+
+### 8.1 Inputs
+
+The full sheets exceed the source policy (16 Mpx, 128 MB decoded). HAER TIFFs are 1-bit 400 dpi
+(139–239 Mpx). ALMA TIFFs are RGB 300 dpi (78 Mpx). The person-supplied input is therefore the
+whole sheet, box-averaged by an integer factor (Pillow `Image.reduce`), in greyscale. All
+coordinates below are derivative pixels (= full-sheet pixels / factor).
+
+| Sheet (source SHA-256 prefix) | Content | Derivative (factor, size, SHA-256 prefix) |
+|---|---|---|
+| Balclutha CA-54 s48 (`4e6344f077c9`) | Structural section at frame 108, metre bar | ×4, 2408×3609, `33e6e612b115` |
+| Balclutha CA-54 s7 (`32f09c60a39d`) | Body plan (stations 0–20 overlaid), hull measurement table | ×4, 2408×3611, `1f6c4c5cd172` |
+| Wapama CA-67 s5 (`5c774e860309`) | As-is body plans, stations 0–5 and 5–10, port and starboard | ×4, 3400×4400, `7f0defdb91ac` |
+| Monitor NH50954 (`a7238e16043c`) | General plan: inboard profile, deck plan, two small inboard sections | none (no spec possible) |
+| ALMA sheet 4 (`2365ec63c8fc`) | Cross sections A-A, B-B, C-C (structural), scale bars | ×3, 3592×2419, `1847e066d39d` |
+| ALMA lines (`b7423f85d547`) | Body plan (labelled "half breadth view"), profile, plan, offsets table | ×3, 3584×2422, `d8e52523abd3` |
+
+Monitor: the scale note under "GENERAL PLAN" cannot be read at 1200×431 px. The two transverse
+views are inboard sections about 55 px high and full of machinery. **No provisional spec was
+made.** This sheet is not a lines or section drawing in the supported sense. ALMA sheets 1–3 and
+the cover were not processed (sail plan, deck/outboard and hold/inboard profiles: no section
+panels).
+
+### 8.2 Provisional specs (assistant-read; `x_m` is a station ordinal, not metres)
+
+| Section | ROI px | Centreline px | Datum px | px/m | z range m | Where each value comes from |
+|---|---|---:|---:|---:|---|---|
+| s48 `frame-108` | 1195,860,2070,2605 | 1204.75 | 2601 | 163.0 | 0–10.6196 | metre bar 0 m @389, 10 m @2019; mid of keel sides 1198/1211.5; **datum = keel bottom ink, no baseline is drawn** |
+| s48 `frame-108-lower` | 1195,1940,2070,2605 | 1204.75 | 2601 | 163.0 | 0–4.0 | same; panel below the hatched orlop deck |
+| s7 `forebody-half-st11-20` | 1200,650,1975,1725 | 1206 | 1714.4 | 122.87 | 0–8.5344 | waterline grid, base row 1714.4 to 32 ft row 516 (metre bar gives 122.75); centre line between keel-box sides |
+| s7 `forebody-band-16-28ft` | same | 1206 | 1714.4 | 122.87 | 4.8768–8.5344 | same |
+| Wapama `port-half-st0-5` / `-st5-10` | 1690,1300,2720,2172 / 1690,2800,2720,3672 | 1699.5 | 2162.5 / 3662.5 | 164.04 | 0–5.1816 | 2 ft grid = 100 px (metre bar 164.0); BASE rows; the right half is the **port** side |
+| Wapama `port-side-band-st0-5` / `-st5-10` | same | 1699.5 | same | 164.04 | 2.7432–5.1816 | 9 ft WL to 17 ft WL |
+| ALMA `midship-AA-to-deck` / `-to-rail` | 1250,1510,2160,1960 / 1250,1405,2160,1960 | 1258.5 | 1951.6 | 246.7 | 0–1.7491 / 0–2.1751 | A-A scale bar 0 ft @1417.6, 15 ft @2545.6; "C of vessel" line; line labelled BASE LINE |
+| ALMA `body-right-half` | 1945,580,2560,840 | 1955.5 | 833 | 164.2 | 0.1218–1.4799 | plan-view station spacing 4→12 = 40 ft over 2002 px, **assumed** equal in the body plan; datum = unlabelled line under the body plan |
+
+Gaps recorded, not invented: station positions in metres (all sheets except the ALMA plan view);
+the Balclutha s48 baseline; the s7 aft half (drawn left of the centreline: MarinaFrame traces only
+the right side, and no mirrored derivative was made); Wapama port/starboard distortion (the sheet
+says that the sides differ). One source-internal check (ALMA): the section bottom is 20 px =
+4.8 in above the assumed baseline. The offsets table, as transcribed by the assistant, gives chine
+height 0-5-0 amidships. This supports the datum reading only. It is not reviewed truth.
+
+### 8.3 Results
+
+Deterministic policy = Rust `controller.rs`: the grid-unique ID, else the only selectable
+candidate, else abstain. Instrument: `inspect_source_worker` plus `extract_sections`, no CAD.
+Every section has the same result before and after the kept changes, except the s7 abstention
+reason (H5).
+
+| Section | Baseline engine | Competing sustained strokes | Catalog candidates | Lattice | Deterministic | Visible hull line, and what confuses the trace |
+|---|---|---:|---:|---|---|---|
+| s48 `frame-108` | abstain `resource_limit` | – | 0 | no | abstain | Outer shell from keel to deck edge. One row has 89 runs: deck-plank hatching, berths, bins, lettering, ceiling and frame lines parallel to the shell, the drawn waterline. |
+| s48 `frame-108-lower` | abstain `ambiguous_curve` | 4 | 0 | no | abstain | The trace follows the outer shell for most rows. It leaves the shell at the bilge-stringer bracket and at the "Sister Keelson" and "Floor" leaders that touch the shell, so it cannot be a corridor. Inner shell, frame and ceiling lines are the competitors. |
+| s7 `forebody-half-st11-20` | abstain; before `resource_limit`, after **`ambiguous_curve`** | 5 | 0 | no | abstain | Ten forebody stations overlaid; the ROI isolates none. The trace hops between stations 11½–15, buttock verticals, station numerals and waterline crossings. |
+| s7 `forebody-band-16-28ft` | abstain `ambiguous_curve` | 11 | 0 | no | abstain | As above; the trace follows the numerals "15", "14", "13", "12½". |
+| Wapama `port-half-st0-5` | abstain `ambiguous_curve` | 2 | 0 | no | abstain | The trace follows the outermost stations (4/5) to the bilge. Then it leaves the floor for a 2 ft grid line, "DIAGONAL B/C" lettering and the 12'-6⅜" dimension text. |
+| Wapama `port-half-st5-10` | abstain `ambiguous_curve` | 1 (one linked component across the panel) | 0 | no | abstain | Same pattern: outer stations 5/6/7 at the side, then lettering and diagonals. |
+| Wapama `port-side-band-st5-10` | abstain `ambiguous_curve` | 2 | 2 | no | abstain | Stations 5, 6 and 7 run 3–5 px apart at the side. Candidate 1 follows the outermost strand. Candidate 2 changes to an inner strand and back (14 px/row step). The panel does not show which station either one is. |
+| Wapama `port-side-band-st0-5` | abstain `ambiguous_curve` | 1 | 2 | **yes** | abstain | Outer stations at the side; both candidates have a non-grid competitor. |
+| ALMA `midship-AA-to-deck`, `-to-rail` | abstain `resource_limit` | – | 0 | no | abstain | Outer side planking and flat bottom planking. Wood-grain hatching in every timber, dimensions, lettering, rub rails, frames and ceiling. |
+| ALMA `body-right-half` | abstain `ambiguous_curve` | 2 | 3 | no | abstain | Two overlaid end sections on one flat bottom: a vertical slab side and a raked side. Candidate 1 = vertical side, candidate 3 = raked side, candidate 2 jumps between them. The stem/centreboard rectangle next to the centreline is a further competitor. |
+
+Counts over 14 authentic sections, before → after: chosen-and-plausible **0 → 0**; abstained
+**14 → 14**; chosen-but-visibly-wrong **0 → 0**. Every abstention is on a panel that is
+ambiguous in the pixels (overlaid stations, or a structural section with several lines parallel
+to the shell). The Wapama 2 ft grid is mostly not detected as a lattice, because the 3 ft base
+interval and the keel box make it irregular. This changes no choice here: the station curves are
+non-grid competitors.
+
+The catalog was empty on 9 of 14 sections. Before H6 the inspection gave no reason for this.
+
+Images opened and inspected (SHA-256 prefix; work directory only): overlays s48 `52b968c8b19bb720`,
+s48-lower `24849f0f6a0b9833`, s7 `8fe676de48c99011`, s7-band `b72d920f93f6f0a9`, Wapama
+`2426b8fced4746e0` / `e6bb44790944c58b` / `68dd5db6003c6d37`, ALMA A-A `8db3cba3025f1adc`,
+ALMA body `be2aa56c1e924f1f`; trace debug views `8b75067d5f2512dc` (s48-lower), `052c3b1139776a2a`
+and `906e9f9bbd52b4f8` (s7), `6cebc462a3d07402` and `e5c2dd0c3dce25de` (Wapama); candidate zooms
+`64607256ce15b901` (Wapama side band), `46d2607501fc5ef0` (ALMA body); waterline texture
+`081936b8206603a0`.
+
+### 8.4 Hypotheses
+
+**H5 — Contrast islands inside a scanned 1-bit ruler are tone texture, not strokes (code, kept).**
+Pixels (s7, row 1413, x 1490–1680, 7×): the 8 ft waterline has a dark core row and a pale aliased
+fringe with dark specks. `_contrasting_subruns` kept each speck as a separate observation. That
+row had 65 trace runs, and the panel was refused as `resource_limit` ("select a smaller panel"),
+not on its strokes.
+
+- First form (H5a, **reverted**): retain a contrast island only when ink outside every broad run
+  touches it in the row above or below. Falsification test: the procedural fingerprint (8.5).
+  Result: 12 sections of 4 degraded roundflare drawings changed their candidate catalogs, and
+  `holdout_roundflare-271067-degraded` `frame-17` changed its deterministic choice. Against the
+  drawn polyline (evaluator only) the new choice was worse: maximum horizontal error 20.00 →
+  27.48 px at the boundary row. Pixels (10× crop x 660–760, rows 1405–1438; images
+  `76274aadf0542027` before, `1e42a5728124652a` after): the dark stroke runs along a two-row
+  ruler before it climbs away. The lower island touches only the upper ruler row, so H5a removed
+  real stroke ink.
+- Second form (H5b, **kept**): support starts at ink outside every broad run and grows, row by
+  row, through accepted islands in adjacent rows. A stroke that crosses, leaves or runs along a
+  ruler stays connected; tone specks in an aliased line edge are never reached. Result: frame-17
+  is identical to `333f371` again (same candidates, same choice, same 20.00 px). s7 now abstains
+  as `ambiguous_curve` with 5 sustained competitors (124 and 221 unsupported islands in its two
+  panels). All other authentic results are unchanged. s48 is still over the run budget because
+  of hatching.
+
+Tests: `tests/test_source_ruler_texture.py` (4 synthetic tests). The 3 texture tests fail on
+`333f371`; the thick-ruler test fails on H5a.
+
+**H6 — An empty catalog must state why (disclosure only, kept).** Pixels (Wapama, s7, s48-lower,
+ALMA A-A): every rejected trace hops between strokes. Change (`agent_tools.py`): each traced
+interpretation that does not enter the catalog is listed in `rejected_trace_hypotheses`, with its
+reason (`not_representable_as_bounded_corridor`, `insufficient_row_coverage`, or the trace
+refusal kind), row coverage and maximum step. Candidates, IDs and the choice do not change. Test:
+`tests/test_inspection_rejections.py` (synthetic hopping strokes).
+
+**H7 — The sole-candidate fallback can choose a contested trace (finding, no change).** The Rust
+deterministic policy selects the only selectable candidate, also when that candidate has non-grid
+competitors and the baseline engine abstained as `ambiguous_curve`. On these sheets no section
+had exactly one candidate (0, 2 or 3), so the fallback did not fire. A panel that admits one
+smooth trace among overlaid curves would be chosen. The fix belongs in `rust-control` (outside
+this task): for example, require `non_grid_competing_components == 0` for the fallback. Python
+cannot prevent it without making candidates unselectable for explicit human selection, which
+would be wrong.
+
+**H8 — Raise the 64-run row budget for structural sections (rejected, no code).** s48 and ALMA
+A-A still refuse because of hatching. A larger budget would only reach `ambiguous_curve` on the
+same panels (s48-lower already shows 4 competitors). It widens a resource bound for no identity
+gain.
+
+### 8.5 Procedural regression
+
+Instrument (work directory, not committed): for each drawing, `extract_sections`, then
+`inspect_source_worker`, then the Rust-equivalent deterministic choice, then `extract_sections`
+with the chosen candidate's contour selection. The fingerprint records, per section, the catalog
+candidate IDs, the choice, the gap kind and a SHA-256 of the measured points. Set: 45 drawings
+(roundflare 271003…271097 and multichine 241001…241067, each `drafting` and `degraded`;
+`development_wigley` 17/23/41 `clean` and 17/41 `degraded`; a superset of the 38 in section 1)
+plus the agent example and its ambiguous variant. The drawings are generated as
+`benchmarks/make_suite.py` does (`vessel_id` = case name); the known-47 drawing has SHA-256
+`04a2c841…`, as in section 1.
+
+| Class | Sections | Chosen and measured (`333f371`) | After H5b + H6 |
+|---|---:|---:|---:|
+| clean | 75 | 75 | identical |
+| drafting | 500 | 500 | identical |
+| degraded | 550 | 189 | identical |
+| agent example / ambiguous | 3 / 3 | 3 / 0 | identical |
+
+Result: **0 of 1,131 sections differ** in candidates, choice, gap or measured points of the chosen
+candidate. H5a (reverted) changed 12 degraded sections and 1 choice (see H5 above). The
+earlier native measurements in sections 3–5 therefore still apply unchanged.
+
+### 8.6 What a human expert must supply next
+
+- For each body plan: which drawn curve is which station (one contour selection per station), and
+  the station positions in metres (Balclutha sheet 3; Wapama sheets 2–4 and 10).
+- For structural sections: which line is the hull line to measure (shell outer, shell inner or
+  frame line), and the datum (Balclutha s48 has no baseline).
+- Review of every provisional value in 8.2, in particular the ALMA body-plan scale assumption.
+- Reviewed transcriptions of the Balclutha and ALMA offsets tables. These could then serve as an
+  independent check of a selected station curve.
+- A decision on H7 by the Rust owner.
+
+### 8.7 Verification (final code)
+
+- Python: `pytest -q` 520 passed (includes 5 new tests in `tests/test_source_ruler_texture.py`
+  and `tests/test_inspection_rejections.py`).
+- Rust: `MARINAFRAME_TEST_PYTHON=… cargo test --locked --workspace --no-fail-fast` 188 passed,
+  1 ignored. No Python source was edited while it ran.
+- Deterministic smoke (`examples/make_agent_example.py` → `marinaframe run --policy deterministic`
+  → `verify`): `awaiting_human_review`, `valid: true`, `engineering_approved: false`.
+- Procedural fingerprint: 0 of 1,131 sections differ (8.5).
+- `scripts/scan_secrets.py`: 0 findings. `git status` shows no drawing or derivative.

@@ -321,6 +321,13 @@ def _contrasting_subruns(ink_row: np.ndarray, first: int, last: int) -> tuple[li
     return [(a + first, b + first) for a, b in _runs(values > threshold)], threshold
 
 
+def _adjacent_localized_ink(localized: np.ndarray, row: int, first: int, last: int) -> bool:
+    """True when ink outside broad runs touches [first, last) in the row above or below."""
+    left, right = max(0, first - 1), min(localized.shape[1], last + 1)
+    neighbours = [r for r in (row - 1, row + 1) if 0 <= r < localized.shape[0]]
+    return any(bool(localized[r, left:right].any()) for r in neighbours)
+
+
 def _eligible_trace_mask(mask: np.ndarray, selection: np.ndarray | None,
                          ink: np.ndarray | None = None) -> tuple[np.ndarray, dict]:
     """Reject broad source rulers before clipping to a selection corridor.
@@ -330,32 +337,49 @@ def _eligible_trace_mask(mask: np.ndarray, selection: np.ndarray | None,
     observation. In particular it can invent breadth below a zero-width keel.
     Horizontal-run classification must therefore use the original panel mask.
     When source contrast separates a shorter stroke from a broad ruler, retain
-    that observed subset before clipping. Sustained alternatives still come
+    that observed subset before clipping, but only when it continues into an
+    adjacent row outside the ruler. Sustained alternatives still come
     from the unmodified source mask and require explicit identity resolution.
     """
     eligible = mask.copy()
     broad_limit = max(12, round(mask.shape[1] * .16))
-    runs_removed = 0
-    rows_removed = set()
+    broad_runs = [(row, first, last) for row in range(mask.shape[0])
+                  for first, last in _runs(mask[row]) if last - first > broad_limit]
+    for row, first, last in broad_runs:
+        eligible[row, first:last] = False
+    runs_removed = len(broad_runs)
+    rows_removed = {row for row, _, _ in broad_runs}
+    islands = []
+    for row, first, last in (broad_runs if ink is not None else []):
+        subruns, threshold = _contrasting_subruns(ink[row], first, last)
+        # A nearly full-width high-contrast ruler is not a
+        # localized observation merely because its edges vary.
+        islands.extend((row, a, b, threshold) for a, b in subruns if b - a < .72 * mask.shape[1])
+    # A stroke that crosses, leaves or runs along a ruler is connected, row by
+    # row, to ink outside the ruler. Support starts at ink outside every broad
+    # run and grows through accepted islands in adjacent rows. An island never
+    # reached is tone variation inside the ruler itself (for example the
+    # aliased edge of a scanned 1-bit line), not a separate observation.
+    support = eligible.copy()
+    pending = islands
+    accepted = []
+    while pending:
+        reached = [_adjacent_localized_ink(support, row, a, b) for row, a, b, _ in pending]
+        if not any(reached):
+            break
+        for island, supported in zip(pending, reached):
+            if supported:
+                row, a, b, _ = island
+                support[row, a:b] = mask[row, a:b]
+                accepted.append(island)
+        pending = [island for island, supported in zip(pending, reached) if not supported]
+    unsupported_count = len(pending)
     retained_runs = []
-    retained_count = 0
-    for row in range(mask.shape[0]):
-        for first, last in _runs(mask[row]):
-            if last - first > broad_limit:
-                eligible[row, first:last] = False
-                runs_removed += 1
-                rows_removed.add(row)
-                if ink is not None:
-                    subruns, threshold = _contrasting_subruns(ink[row], first, last)
-                    for a, b in subruns:
-                        # A nearly full-width high-contrast ruler is not a
-                        # localized observation merely because its edges vary.
-                        if b - a < .72 * mask.shape[1]:
-                            eligible[row, a:b] = mask[row, a:b]
-                            retained_count += 1
-                            if len(retained_runs) < 1025:
-                                retained_runs.append({"row": row, "span": [a, b],
-                                                      "ink_threshold": threshold})
+    retained_count = len(accepted)
+    for row, a, b, threshold in sorted(accepted, key=lambda island: island[:3]):
+        eligible[row, a:b] = mask[row, a:b]
+        if len(retained_runs) < 1025:
+            retained_runs.append({"row": row, "span": [a, b], "ink_threshold": threshold})
     if selection is not None:
         eligible &= selection
     return eligible, {"horizontal_source_runs_excluded_before_selection": runs_removed,
@@ -363,6 +387,7 @@ def _eligible_trace_mask(mask: np.ndarray, selection: np.ndarray | None,
                       "retained_contrast_subruns": retained_runs,
                       "retained_contrast_subrun_count": retained_count,
                       "retained_contrast_subrun_details_omitted": retained_count > len(retained_runs),
+                      "unsupported_contrast_subrun_count": unsupported_count,
                       "selection_trace_policy": "Broad horizontal strokes are classified in the original panel; only contrast-separated source ink may be retained before corridor clipping. Contrast does not certify contour identity."}
 
 

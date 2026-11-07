@@ -181,3 +181,9 @@ Everything except MiDShip totals about 2 GB, inside the 5 GB working target.
    reverted; two rejected by falsification. No documented failing gate passes. Next: obtain the
    sealed final-12 tangency generator/reference (in the 552 MB 0.4 evidence archive), then
    continue with step 4 (natural live correction).
+6. Authentic line identity, second pass done: `docs/GEOMETRY_ACCURACY_V05.md` section 8.
+   Balclutha s48/s7, Wapama s5 and ALMA sheet 4 and lines: 14 sections with provisional,
+   assistant-read specs; all 14 abstain (correctly; overlaid or multi-line panels); no
+   choice is made. Monitor: no spec possible. Kept: H5 (ruler tone texture is not a stroke) and
+   H6 (rejected trace reasons disclosed). Open for the Rust owner: H7 (the sole-candidate
+   fallback ignores non-grid competitors). Next: expert station labels and positions.
