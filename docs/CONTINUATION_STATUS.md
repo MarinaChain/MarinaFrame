@@ -109,6 +109,25 @@ check fails the cancellation test. The controller has a `cfg(test)`-only hook
 Rust is stricter than the Python predicate: `validation::ready` re-verifies the immutable run
 manifest, so the old fabricated-build fixture cannot pass it.
 
+## Rust validation matrix (done)
+
+`rust-control/tests/validation_matrix.rs` (15 tests, about 150 s) covers 16 of the 18 matrix
+rows in `docs/RUST_VALIDATION_MATRIX.md`, with a real passing build and a real failing build
+(`tests/rust_matrix_worker.py`; the failing build raises the CAD bound in its build subprocess
+only, and the unmodified audit fails it). Each guarded check was mutated once to prove the tests
+fail without it.
+
+**Open gaps (not fixed):**
+- `audit_implementation_sha256` is checked for format and for equality with the worker's own
+  context only. A worker that reports a different well-formed value consistently is accepted.
+  Closing it needs a controller-pinned value (a design change).
+- No Rust test for stale render observations.
+- Removing `cancelled_before_finalization` alone fails no test: earlier cancellation checks shadow it.
+- The controller takes `domain/lock` twice in a row; a process forked by another thread in
+  between can fail the second take (`domain_operation_in_progress`). The Rust tests run serially;
+  single-process production use cannot hit it.
+- The Linux x86_64 rerun of this branch was stopped by the user's choice; GitHub CI covers Linux.
+
 ## Next steps (resume here)
 
 1. **Retire the legacy path** (done): removed `agent_harness`, `agent_cli`, `agent_review`, `agent_provider`, `server`, `jobs`, `review`, `web/`, their tests and the CI/installed-smoke steps. The CLI keeps `reconstruct` and `verify`. The 0.3 probe is recorded in `docs/HISTORICAL_VALIDATION_PROBE.md`.
@@ -117,4 +136,6 @@ manifest, so the old fabricated-build fixture cannot pass it.
    counts, then (only with provider-transfer permission) an authentic table.
 3. Keep data-pipeline and benchmark tests while roadmap steps 5–6 (licensed data, new evaluation)
    use them.
-4. Then continue `handoff/MarinaFrame_Claude_Code_Handoff.md`, "Next work in order", from step 2.
+4. Decide whether to pin the audit implementation identity in the controller (gap above).
+5. Then continue `handoff/MarinaFrame_Claude_Code_Handoff.md`, "Next work in order", from step 3
+   (semantic/local geometry accuracy).
