@@ -3,6 +3,7 @@
 const STATUS_LABELS = {
   running: 'Running',
   needs_review: 'Needs review',
+  draft: 'Draft',
   declined: 'Declined',
   failed: 'Failed',
   cancelled: 'Cancelled',
@@ -10,7 +11,7 @@ const STATUS_LABELS = {
   blocked: 'Blocked',
 };
 
-const SECTION_STATE_LABELS = { chosen: 'Line chosen', declined: 'Declined', not_read: 'Not read' };
+const SECTION_STATE_LABELS = { chosen: 'Line chosen', guessed: 'Guessed', declined: 'Declined', not_read: 'Not read' };
 const CHECK_LABELS = { pass: 'Pass', fail: 'Fail', not_run: 'Not run' };
 const CALL_STATE_LABELS = { completed: 'Answered', failed: 'Failed', not_sent: 'Not sent', unknown: 'Result unknown' };
 

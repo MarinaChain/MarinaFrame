@@ -398,6 +398,81 @@ def pilot_task():
     return view, events, pending
 
 
+def draft_banner(open_count, stuck_count):
+    """Same text rules as the backend (app/core/src/view.rs, draft_notice)."""
+    pickable = open_count - stuck_count
+    noun = "guess" if open_count == 1 else "guesses"
+    if stuck_count == 0:
+        text = f"Draft: {open_count} {noun} to check. Confirm each guessed line or pick another. The app then rebuilds and checks the model."
+    elif pickable == 0:
+        text = f"Draft: {open_count} {noun} to check. No line could be read there, so there is nothing to pick and this run stays a draft."
+    else:
+        def has(n):
+            return "has" if n == 1 else "have"
+        text = (f"Draft: {open_count} {noun} to check. {pickable} {has(pickable)} a line to confirm or change. "
+                f"{stuck_count} {has(stuck_count)} no readable line, so this run stays a draft.")
+    return {"id": f"draft-guesses:{open_count}", "tone": "warning", "text": text}
+
+
+def draft_task():
+    """A draft: the 4 m section is a guessed line, the 12 m section has no readable line."""
+    (x4, box4), (x12, box12), (x20, box20) = STATIONS
+    guess4 = {
+        "id": "guess-4m",
+        "kind": "best_candidate",
+        "x_range_m": None,
+        "chosen_candidate_id": "st4-outer",
+        "alternatives": ["st4-inner"],
+        "score": 0.62,
+        "reason": "2 lines found; took the best-supported one (score 0.62).",
+    }
+    guess12 = {
+        "id": "guess-12m",
+        "kind": "bridged_gap",
+        "x_range_m": [4.0, 20.0],
+        "chosen_candidate_id": None,
+        "alternatives": [],
+        "score": None,
+        "reason": "No readable line at x=12 m; smoothed across x=4 to 20 m.",
+    }
+    cands4 = candidates(box4, x4, "outer")
+    cands4[1]["why"] = "A thin line inside the heavy one. It is nearly as well supported."
+    sections = [
+        {
+            "id": "st4", "x_m": x4, "roi_px": list(box4), "state": "guessed",
+            "reason": guess4["reason"], "guess": guess4, "candidates": cands4,
+        },
+        {
+            "id": "st12", "x_m": x12, "roi_px": list(box12), "state": "guessed",
+            "reason": guess12["reason"], "guess": guess12, "candidates": [],
+        },
+        {
+            "id": "st20", "x_m": x20, "roi_px": list(box20), "state": "chosen",
+            "reason": "Picked the outer line. It is the heavy line and matches the hull edge.",
+            "guess": None, "candidates": candidates(box20, x20, "outer"),
+        },
+    ]
+    view = {
+        "summary": summary("2026-11-07-survey-launch", "Survey launch, body plan", "draft", "deterministic", 5, 3),
+        "revision": "r2",
+        "source_page": PAGE,
+        "sections": sections,
+        "model": MODEL,
+        "checks": [{"name": "Checked against the drawing", "value": "Not run yet", "limit": None, "result": "not_run"}],
+        "provider": [],
+        "notices": [APPROVAL_NOTICE, draft_banner(2, 1)],
+        "draft": {"status": "draft_not_verified", "guesses": [guess4, guess12], "resolved": []},
+        "evidence": evidence("r2"),
+    }
+    events = [
+        event(1, 9, "Run created", "other"),
+        event(2, 8, "Read 3 sections", "read"),
+        event(3, 7, "Picked lines on section st20", "choose"),
+        event(4, 6, "Built a draft: 2 sections guessed", "build"),
+    ]
+    return view, events
+
+
 def cancelled_task():
     view = {
         "summary": summary("2026-11-05-workboat", "Workboat, profile only", "cancelled", "deterministic", 60 * 46, 0),
@@ -427,7 +502,13 @@ def main() -> None:
     ferry, ferry_events = ferry_task()
     pilot, pilot_events, pilot_pending = pilot_task()
     workboat, workboat_events = cancelled_task()
-    views = [pilot, tug, ferry, workboat]
+    draft, draft_events = draft_task()
+    views = [pilot, draft, tug, ferry, workboat]
+    # Every section and view carries the draft fields of docs/APP_SPEC.md.
+    for view in views:
+        view.setdefault("draft", None)
+        for section in view["sections"]:
+            section.setdefault("guess", None)
 
     fixtures = {
         "tasks": [v["summary"] for v in views],
@@ -437,6 +518,7 @@ def main() -> None:
             ferry["summary"]["task"]: ferry_events,
             pilot["summary"]["task"]: pilot_events,
             workboat["summary"]["task"]: workboat_events,
+            draft["summary"]["task"]: draft_events,
         },
         "playback": {"task": pilot["summary"]["task"], "events": pilot_pending, "finished_view": tug["summary"]["task"]},
         "settings": {
