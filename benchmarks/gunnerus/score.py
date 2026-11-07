@@ -103,7 +103,9 @@ def score(truth_dir: Path, model_path: Path | None, stations: list[dict], metric
         for name, (low, high) in bands.items():
             start = (bottom if bottom is not None else metric["z_min_m"]) if low == "truth_bottom" else low
             mask = _band(z, start, high)
-            entry[f"half_breadth_{name}"] = half_breadth_errors(truth_hb[mask], recon_hb[mask], z[mask])
+            # The truth hull can start above a band (bow top); the band is then empty.
+            entry[f"half_breadth_{name}"] = (half_breadth_errors(truth_hb[mask], recon_hb[mask], z[mask])
+                                             if mask.any() else None)
         below = z <= draft
         t_area = float(np.trapezoid(truth_table.width[index][below], z[below]))
         r_area = float(np.trapezoid(station_recon.width[k][below], z[below]))
@@ -125,6 +127,8 @@ def score(truth_dir: Path, model_path: Path | None, stations: list[dict], metric
         bottom = _bottom(truth_table.half_breadth[index], z)
         start = (bottom if bottom is not None else metric["z_min_m"]) if low == "truth_bottom" else low
         mask = _band(z, start, high)
+        if not mask.any():
+            continue
         error = dense.half_breadth[k][mask] - truth_table.half_breadth[index][mask]
         dense_errors.append((x, float(np.sqrt(np.mean(error ** 2))), float(np.max(np.abs(error)))))
     result["between_station_half_breadth_main"] = {
@@ -154,7 +158,7 @@ def score(truth_dir: Path, model_path: Path | None, stations: list[dict], metric
 
     summary = {}
     for name in bands:
-        values = [s[f"half_breadth_{name}"] for s in result["stations"]]
+        values = [s[f"half_breadth_{name}"] for s in result["stations"] if s[f"half_breadth_{name}"] is not None]
         if values:
             summary[f"half_breadth_{name}"] = {
                 "stations": len(values),
