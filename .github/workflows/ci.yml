@@ -30,7 +30,12 @@ jobs:
       - name: Install system tools
         run: sudo apt-get update && sudo apt-get install -y tesseract-ocr fonts-dejavu-core libgl1 libglu1-mesa
       - name: Install exact hash-checked wheels
-        run: python -m pip install --require-hashes -r requirements-linux-py312.lock
+        run: python -m pip install --require-hashes -r requirements-linux-py312.lock -r requirements-data-linux-py312.lock
+      - name: Build and test the pinned Rust controller
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal
+          cargo build --locked --workspace
+          cargo test --locked --workspace
       - name: Install source for subprocess tests without changing locked dependencies
         run: python -m pip install --no-build-isolation --no-deps -e .
       - name: Dependency consistency and source pattern scan
@@ -47,8 +52,12 @@ jobs:
           artifacts/wheel-env/bin/python -m pip install --require-hashes -r requirements-linux-py312.lock
           artifacts/wheel-env/bin/python -m pip install --no-deps dist/*.whl
           artifacts/wheel-env/bin/python scripts/smoke_installed.py --out artifacts/installed-smoke
+          artifacts/wheel-env/bin/python scripts/smoke_agent_installed.py --repo "$GITHUB_WORKSPACE" --out /tmp/marinaframe-installed-agent
+          artifacts/wheel-env/bin/python scripts/smoke_rust_installed.py --controller target/debug/marinaframe --out /tmp/marinaframe-installed-rust
       - name: Check pinned versions against current OSV data
-        run: python scripts/audit_dependencies.py --out artifacts/dependency-audit.json
+        run: |
+          python scripts/audit_dependencies.py --out artifacts/dependency-audit.json
+          python scripts/audit_dependencies.py --lock requirements-data-linux-py312.lock --out artifacts/data-dependency-audit.json
   dependency-updates:
     name: Explicit dependency update probe
     if: github.event_name == 'workflow_dispatch'
@@ -64,6 +73,6 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y tesseract-ocr fonts-dejavu-core libgl1 libglu1-mesa
       - name: Exercise supported ranges separately from the reproducible environment
         run: |
-          python -m pip install '.[test,documents]'
+          python -m pip install '.[test,documents,data]'
           python -m pip check
           python -m pytest -q

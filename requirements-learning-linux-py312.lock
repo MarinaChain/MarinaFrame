@@ -1,0 +1,4 @@
+# Optional CPU learning environment, Linux x86_64 / CPython 3.12.
+# Install separately; historical Run1/Run2 used Pillow 12.3.0 (see DATA_LEARNING_V04).
+numpy==2.3.5 --hash=sha256:0d8163f43acde9a73c2a33605353a4f1bc4798745a8b1d73183b28e5b435ae28
+pillow==13.0.0 --hash=sha256:42d63be3af4f9b951b199b0a9d23365d37ab14687e6d77b74940432c8515c4ca

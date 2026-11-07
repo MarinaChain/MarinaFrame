@@ -30,7 +30,9 @@ class Domain:
     def execute(self,name,args):
         self.calls.append((name,args))
         if args and name!='select_contours':return {'ok':False,'error_code':'unexpected_arguments'}
-        if name=='validate_candidate':return {'ok':self.valid,'engineering_approved':False}
+        if name=='validate_candidate':return {'ok':self.valid,'engineering_approved':False,
+            'validation':{'geometry_checks_passed':self.valid,'immutable_run_verified':True,
+                          'engineering_approved':False,'human_semantic_review_required':True}}
         return {'ok':True,'status':'observed','engineering_approved':False}
 
 
@@ -64,8 +66,11 @@ def test_final_model_approval_cannot_override_failed_geometry(tmp_path):
 
 
 def test_even_valid_geometry_never_grants_engineering_approval(tmp_path):
-    domain=Domain();domain.valid=True
-    state,_,_=run(tmp_path,[decision('finish',{'outcome':'candidate_ready_for_review','summary':'Review'})],domain=domain)
+    from validation_fixture import ControlledValidationDomain
+    with TaskStore(tmp_path/'task',create=True) as store:
+        domain=ControlledValidationDomain(store.path,maximum=0.0005)
+        state=Harness(store,domain,ScriptedPolicy([decision('finish',{
+            'outcome':'candidate_ready_for_review','summary':'Review'})])).run()
     assert state['status']=='awaiting_human_review' and not state['engineering_approved']
 
 

@@ -21,7 +21,7 @@ def main():
     cli=[sys.executable,'-I','-m','vessel_reconstruction','agent']
     run('installed-module',[sys.executable,'-I','-c',
         'import vessel_reconstruction as v; from vessel_reconstruction import agent_cli,agent_harness,agent_provider,agent_review,agent_tools; '
-        'assert v.__version__=="0.3.0"; assert "site-packages" in v.__file__; print(v.__version__,v.__file__)'])
+        'assert v.__version__=="0.4.0"; assert "site-packages" in v.__file__; print(v.__version__,v.__file__)'])
     run('generate-source',[sys.executable,'-I',repo/'examples/make_agent_example.py','--out',out/'input'])
     state=json.loads(run('agent-run',cli+['run',out/'input/spec.json','--out',out/'task','--policy','deterministic']))
     assert state['status']=='awaiting_human_review' and state['builds']==1 and state['operator_actions']==0

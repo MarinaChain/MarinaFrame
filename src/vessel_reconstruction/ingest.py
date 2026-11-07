@@ -305,29 +305,142 @@ def _selection_mask(section: dict, shape: tuple[int, int], origin: tuple[int, in
                       "meaning": "Explicit caller-supplied source-pixel corridor; geometry is still measured from retained image ink"}
 
 
-def _eligible_trace_mask(mask: np.ndarray, selection: np.ndarray | None) -> tuple[np.ndarray, dict]:
+def _contrasting_subruns(ink_row: np.ndarray, first: int, last: int) -> tuple[list[tuple[int, int]], float | None]:
+    """Retain observed contrast islands inside a broad horizontal source run.
+
+    A pale ruler can share a row with a darker curved stroke. Deleting the
+    complete connected run loses that stroke; clipping the ruler to an input
+    corridor invents it. This separation happens on the original source run,
+    before any corridor. It is a photometric hypothesis, not contour identity.
+    Uniform broad ink supplies no such separation and remains excluded.
+    """
+    values = np.rint(np.clip(ink_row[first:last], 0, 255)).astype(np.uint8)
+    if not len(values) or int(values.max()) - int(values.min()) < 24:
+        return [], None
+    threshold = max(float(values.min()) + 12., _otsu(values))
+    return [(a + first, b + first) for a, b in _runs(values > threshold)], threshold
+
+
+def _eligible_trace_mask(mask: np.ndarray, selection: np.ndarray | None,
+                         ink: np.ndarray | None = None) -> tuple[np.ndarray, dict]:
     """Reject broad source rulers before clipping to a selection corridor.
 
     Clipping a full-width baseline to a narrow corridor otherwise manufactures
     a short apparent stroke whose centre is the corridor centre, not an image
     observation. In particular it can invent breadth below a zero-width keel.
     Horizontal-run classification must therefore use the original panel mask.
+    When source contrast separates a shorter stroke from a broad ruler, retain
+    that observed subset before clipping. Sustained alternatives still come
+    from the unmodified source mask and require explicit identity resolution.
     """
     eligible = mask.copy()
     broad_limit = max(12, round(mask.shape[1] * .16))
     runs_removed = 0
     rows_removed = set()
+    retained_runs = []
+    retained_count = 0
     for row in range(mask.shape[0]):
         for first, last in _runs(mask[row]):
             if last - first > broad_limit:
                 eligible[row, first:last] = False
                 runs_removed += 1
                 rows_removed.add(row)
+                if ink is not None:
+                    subruns, threshold = _contrasting_subruns(ink[row], first, last)
+                    for a, b in subruns:
+                        # A nearly full-width high-contrast ruler is not a
+                        # localized observation merely because its edges vary.
+                        if b - a < .72 * mask.shape[1]:
+                            eligible[row, a:b] = mask[row, a:b]
+                            retained_count += 1
+                            if len(retained_runs) < 1025:
+                                retained_runs.append({"row": row, "span": [a, b],
+                                                      "ink_threshold": threshold})
     if selection is not None:
         eligible &= selection
     return eligible, {"horizontal_source_runs_excluded_before_selection": runs_removed,
                       "horizontal_source_rows_with_exclusions": len(rows_removed),
-                      "selection_trace_policy": "Broad horizontal strokes are identified in the original panel; corridor clipping does not turn rulers into observations"}
+                      "retained_contrast_subruns": retained_runs,
+                      "retained_contrast_subrun_count": retained_count,
+                      "retained_contrast_subrun_details_omitted": retained_count > len(retained_runs),
+                      "selection_trace_policy": "Broad horizontal strokes are classified in the original panel; only contrast-separated source ink may be retained before corridor clipping. Contrast does not certify contour identity."}
+
+
+def _source_endpoint_hypothesis(mask: np.ndarray, ink: np.ndarray, rows: np.ndarray,
+                                xs: np.ndarray, centre_local: float, stroke_width: float) -> dict | None:
+    """Offer a source-supported lower-endpoint interpretation for review.
+
+    Row centroids are poor endpoint locations for a nearly horizontal curve.
+    An alternative may use the calibrated centreline contact only if actual
+    connected ink reaches it and the adjacent trace approaches it. A uniform
+    broad ruler, disconnected mark or straight horizontal-bottom/vertical-side
+    corner does not meet this contract. The original trace is never replaced
+    here; the domain catalog exposes both hypotheses as separate candidate IDs.
+    """
+    h, w = mask.shape
+    if h < 16 or len(rows) < 6:
+        return None
+    boundary = h - 1
+    if boundary - rows[-1] > 3:
+        return None
+    old_endpoint = float(np.interp(boundary, rows, xs))
+    if old_endpoint - centre_local < max(3., 1.5 * stroke_width):
+        return None
+    nearby = (rows >= boundary - 7) & (rows < boundary)
+    near_rows, near_xs = rows[nearby], xs[nearby]
+    if len(near_rows) < 3 or np.ptp(near_xs) < max(3., 2 * stroke_width):
+        return None  # A flat-bottom corner is not a single-valued curve endpoint.
+    if float(np.mean(np.diff(near_xs) <= max(1., stroke_width))) < .75:
+        return None
+    centre_pixel = int(round(centre_local))
+    if not 0 <= centre_pixel < w or abs(centre_pixel - centre_local) > .51:
+        return None
+    broad_limit = max(12, round(w * .16))
+    contacts = []
+    for a, b in _runs(mask[boundary]):
+        if b - a > broad_limit:
+            runs, threshold = _contrasting_subruns(ink[boundary], a, b)
+        else:
+            runs, threshold = [(a, b)], None
+        for first, last in runs:
+            if (first <= centre_pixel < last and first >= centre_pixel - 1
+                    and max(6., 3 * stroke_width) <= last - first < .72 * w):
+                contacts.append((first, last, threshold))
+    if len(contacts) != 1:
+        return None
+    first, last, threshold = contacts[0]
+    # For an already isolated run, use only ink at the contact's contrast.
+    # The witness must connect to the neighboring trace through actual pixels.
+    if threshold is None:
+        threshold = max(0., float(np.min(ink[boundary, first:last])) - 1.)
+    start_row = max(0, boundary - 8)
+    local = mask[start_row:] & (ink[start_row:] > threshold)
+    labels, _ = ndimage.label(local, structure=np.ones((3, 3), dtype=int))
+    contact = int(labels[boundary - start_row, centre_pixel])
+    if not contact:
+        return None
+    witnesses = []
+    for row, x in zip(near_rows, near_xs):
+        rr, cc = int(row) - start_row, int(round(x))
+        if rr >= 0 and np.any(labels[rr, max(0, cc - 2):min(w, cc + 3)] == contact):
+            witnesses.append([float(x), float(row)])
+    if len(witnesses) < 2:
+        return None
+    new_rows, new_xs = rows.copy(), xs.copy()
+    if rows[-1] == boundary:
+        new_xs[-1] = centre_local
+    else:
+        new_rows = np.append(new_rows, float(boundary))
+        new_xs = np.append(new_xs, centre_local)
+    return {"rows": new_rows, "xs": new_xs,
+            "evidence": {"version": "source_endpoint_contact_v1", "boundary": "lower",
+                "contact_local_px": [float(centre_local), float(boundary)],
+                "source_run_local_px": [first, last - 1],
+                "ink_threshold": float(threshold), "connected_trace_witnesses_local_px": witnesses,
+                "original_row_centroid_local_px": [old_endpoint, float(boundary)],
+                "interpretation": "Connected source ink reaches the calibrated centreline; a row centroid may mislocalize the stroke endpoint.",
+                "uncertainty": "A source-supported endpoint hypothesis, not subpixel truth or proof of material-boundary semantics; retain the original centroid alternative.",
+                "human_semantic_review_required": True, "engineering_approved": False}}
 
 
 def _candidate_evidence(mask: np.ndarray, ink: np.ndarray, rows: np.ndarray, xs: np.ndarray,
@@ -408,6 +521,61 @@ def _candidate_evidence(mask: np.ndarray, ink: np.ndarray, rows: np.ndarray, xs:
             "proposed_trace_sampling": "at most 257 evenly indexed observed rows, for review only"}
 
 
+def _bounded_source_samples(rows: np.ndarray, xs: np.ndarray, *, baseline: float,
+                            trace_top: int, ppm: float, z_min: float, z_max: float,
+                            minimum_samples: int, centre_local: float) -> tuple[np.ndarray, np.ndarray, dict]:
+    """Retain source-row features with a declared ordinate error bound.
+
+    Uniform output heights alone can miss a narrow observed chine before CAD
+    ever sees it. Treat that grid as a minimum density and insert source knots
+    until the complete observed piecewise-linear trace is within 0.25 pixel.
+    This bounds resampling loss only, not image or semantic accuracy. The
+    original 1025-point resource limit remains a refusal, never a smoothing cap.
+    """
+    tolerance_px = .25
+    source_z = (baseline - (rows[::-1] + trace_top)) / ppm
+    source_x = xs[::-1]
+    uniform = np.linspace(z_min, z_max, minimum_samples)
+    interior = source_z[(source_z > z_min) & (source_z < z_max)]
+    knots = np.unique(np.concatenate((uniform, interior)))
+    values = np.interp(knots, source_z, source_x)
+    mandatory = set(np.searchsorted(knots, uniform).tolist())
+    # These are source ordinate transitions, not invented minimum breadths.
+    # Keep every exact source zero/positive transition if present.
+    for index in np.flatnonzero((values[:-1] <= centre_local) != (values[1:] <= centre_local)):
+        mandatory.update((int(index), int(index + 1)))
+    selected = set(mandatory)
+    if len(selected) > 1025:
+        raise DrawingError("resource_limit", "Preserving source zero-width transitions exceeds 1025 output points; split the calibrated view or review its complexity.")
+    ordered = sorted(mandatory)
+    pending = list(zip(ordered[:-1], ordered[1:]))
+    while pending:
+        first, last = pending.pop()
+        if last <= first + 1:
+            continue
+        prediction = values[first] + (values[last] - values[first]) * (
+            (knots[first + 1:last] - knots[first]) / (knots[last] - knots[first]))
+        errors = np.abs(values[first + 1:last] - prediction)
+        offset = int(np.argmax(errors))
+        if errors[offset] > tolerance_px:
+            middle = first + 1 + offset
+            selected.add(middle)
+            if len(selected) > 1025:
+                raise DrawingError("resource_limit", "Preserving the observed source trace within 0.25 pixel exceeds 1025 output points; split the calibrated view or review its complexity.")
+            pending.extend(((first, middle), (middle, last)))
+    indices = np.asarray(sorted(selected), dtype=int)
+    maximum = float(np.max(np.abs(np.interp(knots, knots[indices], values[indices]) - values)))
+    if maximum > tolerance_px + 1e-9:
+        raise DrawingError("invalid_curve", "Source resampling could not satisfy its declared pixel error bound.")
+    return knots[indices], values[indices], {
+        "method": "bounded_observed_row_knots_v1", "minimum_requested_samples": minimum_samples,
+        "output_point_count": len(indices), "observed_row_count": len(rows),
+        "maximum_allowed_ordinate_deviation_px": tolerance_px,
+        "maximum_ordinate_deviation_px": maximum,
+        "point_limit": 1025,
+        "scope": "Interpolation loss relative to the measured row-centroid trace only; excludes endpoint identity, source raster error, calibration, gaps, and semantics."}
+
+
 def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, input_details: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     section_id = str(section.get("id", "unnamed"))
     x_m = _finite_number(section.get("x_m"), "x_m")
@@ -455,7 +623,7 @@ def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, i
         raise DrawingError("missing_curve", "The selected panel contains no sufficiently supported curve ink.", diagnostic)
     if diagnostic["raw_ink_fraction"] > .45:
         raise DrawingError("ambiguous_curve", "The panel is too densely marked to identify a single contour reliably.", diagnostic)
-    eligible_mask, eligibility_diagnostic = _eligible_trace_mask(mask, selection)
+    eligible_mask, eligibility_diagnostic = _eligible_trace_mask(mask, selection, ink)
     diagnostic.update(eligibility_diagnostic)
     try:
         rows, xs, trace_diag = _trace(eligible_mask, ink, centre - trace_left)
@@ -478,9 +646,10 @@ def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, i
     sample_count = section.get("sample_count", 129)
     if not isinstance(sample_count, int) or isinstance(sample_count, bool) or not 65 <= sample_count <= 1025:
         raise DrawingError("invalid_view", "sample_count must be an integer between 65 and 1025.")
-    z_values = np.linspace(z_min, z_max, sample_count)
-    sampled_rows = baseline - z_values * ppm - trace_top
-    pixel_x = np.interp(sampled_rows, rows, xs) + trace_left
+    z_values, measured_x, sampling = _bounded_source_samples(rows, xs, baseline=baseline,
+        trace_top=trace_top, ppm=ppm, z_min=z_min, z_max=z_max, minimum_samples=sample_count,
+        centre_local=centre - trace_left)
+    pixel_x = measured_x + trace_left
     y_values = (pixel_x - centre) / ppm
     if float(y_values.min()) < -0.51 / ppm:
         raise DrawingError("invalid_curve", "Measured contour crosses the declared starboard half-section boundary.")
@@ -489,7 +658,7 @@ def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, i
                 "Confidence is a heuristic image quality score, not a correctness probability or engineering approval."]
     if diagnostic["interpolated_row_count"]:
         warnings.append(f"Interpolated {diagnostic['interpolated_row_count']} unsupported rows across short gaps; longest gap {diagnostic['max_missing_run_px']} pixels.")
-    warnings.append("Output samples interpolate the observed stroke centre; no hull-family shape prior or reference geometry is used.")
+    warnings.append("Output samples retain the observed row trace within 0.25 pixel interpolation loss; sample_count is a minimum density. No hull-family shape prior or reference geometry is used.")
     if selection_record is not None:
         warnings.append("Contour identity is constrained by an explicit caller-supplied source-pixel selection; excluded candidate strokes remain in diagnostics.")
     else:
@@ -498,7 +667,8 @@ def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, i
     confidence = float(np.clip(coverage * (.65 + .2 * contrast + .15 * diagnostic["long_component_support_fraction"]) * (1 - .25 * diagnostic["alternative_contour_span_fraction"]), 0, 1))
     diagnostic["measurement_uncertainty_m"] = float(max(.75, diagnostic["median_stroke_width_px"] / 2) / ppm)
     diagnostic["coverage"] = coverage
-    diagnostic["sample_count"] = sample_count
+    diagnostic["sample_count"] = len(z_values)
+    diagnostic["source_sampling"] = sampling
     diagnostic["identity_status"] = "explicit_supplied_pixel_selection" if selection_record is not None else "single_detected_candidate_in_declared_view"
     result = {"id": section_id, "x_m": x_m,
               "points_yz_m": [[float(y), float(z)] for y, z in zip(y_values, z_values)],
@@ -511,6 +681,7 @@ def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, i
                            "competing_candidate_count": diagnostic["competing_candidate_count"],
                            "pixel_trace_bounds": [trace_left, trace_top, right, trace_bottom + 1],
                            "measurement_uncertainty_m": diagnostic["measurement_uncertainty_m"],
+                           "source_sampling": sampling,
                            "uncertainty_basis": "Half detected stroke width or 0.75 pixel; excludes calibration error, scan distortion, and as-built uncertainty"},
               "warnings": warnings}
     return result, diagnostic
