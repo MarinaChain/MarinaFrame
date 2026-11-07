@@ -356,3 +356,17 @@ Usage: 874 requests, 2.80 M prompt tokens, list cost $0.541.
   progress are counted as failed (`interrupted_by_harness_stop`), never retried. The LLM arm now
   passes `--model-review true`, as the pre-registered protocol requires (W12 veto); no LLM case
   had run before this. Recorded in work/h2h-sealed-v2/campaign.json under `resumes`.
+
+## W15 plan-view corridors merged (2026-11-08, da6a1fe)
+
+Opt-in adapter `plan_corridors.py`: derives contour corridors from plan-view waterline crossings
+of the same drawing. Synthetic overlaid body plan: picks the right station; refuses ambiguous,
+missing or clipped crossings. **Gunnerus: no improvement.** All 792 anchor attempts were refused
+(648 competing crossings, 144 missing endpoint-waterline identity); still 0 unique candidates and
+no build in abstain and draft. The 4 factory controls are unchanged; 0 newly wrong builds.
+test-full passed on the branch; quick tier passed after merge (709). Raw data: work/w15/.
+
+Next idea (W16, after the head-to-head): let DeepSeek identify which waterline each plan-view
+crossing belongs to (the model chooses WHAT), and let the W15 adapter measure. Do not start it
+while the head-to-head LLM arm runs: it shares the provider keys, and a rate-limit failure in the
+campaign counts as a failure.
