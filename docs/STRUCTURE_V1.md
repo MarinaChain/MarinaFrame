@@ -202,7 +202,71 @@ millimetres, and absolute error in mm. No target changed.
 
 ## 6. Results on the sealed split
 
-(Filled in after the single frozen run.)
+One run, code commit `700cac3dbca9a63c554a406cada657d82bf0f3ca`, `src/` clean, 2026-11-07.
+26 designs, 8,311 true members. Command:
+`python -m vessel_reconstruction.structure.midship_eval --root work/sources/midship --split test --confirm-sealed-run --out work/w3/sealed_vector.json`
+(and `--mode raster` for the secondary run). The JSON reports stay in `work/` (git-ignored).
+
+**Vector (primary)**
+
+| Group | Designs | Detection P | R | F1 | Typed macro F1 | Host accuracy |
+|---|---:|---:|---:|---:|---:|---:|
+| All | 26 | 1.0000 | 0.9972 | **0.9986** | **0.9728** | 0.9896 (4,108 / 4,151) |
+| Random | 9 | 1.0000 | 0.9976 | 0.9988 | 0.9722 | 0.9903 |
+| Repaired | 9 | 1.0000 | 0.9954 | 0.9977 | 0.9701 | 0.9893 |
+| SGLD | 8 | 1.0000 | 0.9989 | 0.9994 | 0.9752 | 0.9893 |
+| Tanker | 8 | 1.0000 | 0.9980 | 0.9990 | 0.9994 | 1.0000 |
+| Container | 9 | 1.0000 | 0.9954 | 0.9977 | 0.9343 | 0.9712 |
+| Bulk carrier | 9 | 1.0000 | 0.9983 | 0.9992 | 0.9988 | 0.9987 |
+
+Typed F1 per label (all): bottom shell 1.000 (26/26), side shell 1.000, shell strake 0.980
+(25/26), deck 0.942 (49 of 52 predicted and true), longitudinal bulkhead 0.955 (P 0.914),
+hopper plate 0.896 (R 0.833), girder 0.988 (P 0.976), stiffener web 0.998, flange 0.996.
+Per design: F1 from 0.989 (Repaired 5156) to 1.000 (10 designs); no false positive in any design.
+
+| Placement and scantlings (matched pairs) | n | Median | 95th pct | Max |
+|---|---:|---:|---:|---:|
+| Centre error, ship mm | 8,288 | 4.4 | 18.5 | 23.3 |
+| Largest edge error, ship mm | 8,288 | 4.0 | 18.3 | 22.7 |
+| Web height error, mm | 4,151 | 0.10 | 0.42 | 0.93 |
+| Flange width error, mm | 3,939 | 0.04 | 0.07 | 177 |
+| Origin error, centreline / baseline, mm | 26 | 6.6 / 2.4 | 13.3 / 4.2 | 15.4 / 5.8 |
+
+| Thickness | Matched | Covered | Exact (primary) | Equals truth cut to mm | Max error |
+|---|---:|---:|---:|---:|---:|
+| Plate (plate table) | 197 | 195 | **0.892** | 0.959 | 21 mm |
+| Web and girder (stiffener table) | 4,151 | 4,139 | **0.823** | 0.993 | 17 mm |
+
+Abstentions: 23 strokes not explained (0.28 % of section strokes; 23 true members are
+missed), 12 webs on a deck with no printed deck rows, 1 plate with no `Upper Hopper` row.
+
+**Targets** (section 3): detection F1 >= 0.95 **met** (0.9986); typed macro F1 >= 0.85 **met**
+(0.9728); median centre error <= 50 mm **met** (4.4 mm); plate thickness exact >= 0.95
+**missed** (0.892). The miss has two causes: the sheet prints thickness cut to whole
+millimetres while the BOM holds fractions (cut-to-mm agreement is 0.959), and wrong plate names
+in container designs give wrong rows (errors up to 21 mm).
+
+**Raster fallback (secondary, 200 dpi, words from the PDF text layer)**: P 0.974, R 0.653,
+F1 0.782, typed macro F1 0.559, host accuracy 0.923, median centre error 4.9 mm (max 886 mm),
+web height error median 2.0 mm. Bottom shell 0/26 and shell strake 0/26 are matched; 1,436
+strokes are abstained.
+
+**Failure modes seen** (inspected after the run on Repaired 5156; no code changed):
+
+1. Container steps when no main-deck strip is drawn above them (5156, 6018, SGLD 71): the
+   step deck is the highest horizontal plate, so it is named main deck and the step side is
+   named inner side shell; their stiffeners get host Deck / Inner_Side_Shell instead of
+   Hopper_Pannel (39 of the 43 host errors) and the plates take the wrong thickness row.
+2. Container-step stiffeners printed with H about 2.47 m (5156) are longer than the plate
+   length bound, so some become plates or are lost (7 webs and flanges missed in 5156).
+3. Shell strake in 5156 is not matched (1 of 26).
+4. A flange that ends on a plate is read as a web or girder, or the reverse (16 confusions); one flange
+   per design on a bulkhead-line deck girder is often missed.
+5. Flange width 177 mm off: a T flange cut by the centreline is drawn half width.
+6. Origin: the inferred centreline lies about 0.08 drawing mm right of the generator's origin
+   in every design (systematic), so centre errors grow with smaller drawing scales.
+7. Raster: the bilge arc and the flat bottom become two strokes; a strake drawn on the side
+   shell merges with it; short flanges below the opening kernel are lost.
 
 ## 7. More MiDShip data
 
@@ -222,4 +286,13 @@ the total is about 3.5 GB, inside the 10 GB tranche limit.
 
 ## 8. Resume point
 
-Section 5 onward is open until the frozen run is recorded.
+The sealed split of this sample is now spent: it must not be used again to tune or to claim
+held-out numbers. Next steps, in order:
+
+1. Fix failure modes 1, 2 and 4 on development designs only (container steps: name the step
+   deck by its stiffener row heights; plate length bound per host).
+2. Acquire tranche A of section 7 and draw a new sealed split from it before any new code.
+3. v2: transverse structure from views 1 and 2 (web frame, floor, brackets, bulkhead stiffeners).
+4. Optional: write members as OCX for W4 rule checks.
+
+Check that the results reproduce: `git checkout 700cac3` and run the command in section 6.
