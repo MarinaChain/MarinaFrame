@@ -243,3 +243,18 @@ any acquired drawing (HAER, ALMA, Gunnerus, MiDShip, Ship-D renders, SIMMAN/DSYH
 the DeepSeek provider through the Rust provider worker is authorized for development and
 evaluation. Receipts must still record every image sent (hash, size, crop box). This does not
 change redistribution: no drawing or derivative is committed or published.
+
+## Benchmark factory result (W2, 2026-11-07) — key finding
+
+1,080 rendered body-plan drawings (Ship-D, SIMMAN, Series 60, Wigley, DSYHS; 4 degradation levels;
+separate-panel and overlaid layouts), deterministic abstain policy at `64a434d`: **12 built**,
+1,041 abstained, 27 failed. Built cases are nearly all clean, separate-panel drawings and are
+accurate (sealed: 6/6 correct, station RMS median 34 mm = 0.32 % of half-beam, in-range volume
+1.05 %). One validation build silently followed a wrong stroke (27 % volume error). All 216
+overlaid body plans abstained; degradation levels 2–3 built nothing.
+Meaning: the deterministic reader is accurate when it reads, but it reads almost nothing on
+realistic drawings. Line identity on crowded/degraded sheets is the main product gap; W11 (LLM
+line identity) and draft mode target it. The factory sealed split is used up: generate a fresh
+sealed split (new Ship-D clusters and held-back named hulls) before the next final comparison.
+Investigate the silent wrong build (`sysser45-L1`) as a priority: a confident wrong answer is
+worse than an abstention.
