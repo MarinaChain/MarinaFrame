@@ -74,4 +74,4 @@ engine refuse ink that the corridor tracer accepted) and the no-progress counter
 
 ## 6. Evaluation
 
-RESULTS_PLACEHOLDER
+See `docs/LLM_LINE_IDENTITY.md` for the completed continuation design, verification evidence and three-arm development evaluation. This note is the historical pre-continuation design; current test counts and limitations are in that report.
