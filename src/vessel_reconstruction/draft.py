@@ -9,14 +9,18 @@ or image code, so the schema, the run record and the domain can share it.
 """
 from __future__ import annotations
 
+import json
 import math
 
 from .provenance import digest_object
 
 DRAFT_STATUS = "draft_not_verified"
-GUESS_KINDS = ("best_candidate", "bridged_gap", "dropped_end")
+GUESS_KINDS = ("best_candidate", "bridged_gap", "dropped_end", "model_choice")
 GUESS_FIELDS = {"guess_id", "section_id", "kind", "x_m", "x_range_m", "chosen_candidate_id",
                 "alternatives", "score", "reason", "status"}
+# A model choice also carries the deterministic verifier's evidence.
+MODEL_CHOICE_FIELDS = GUESS_FIELDS | {"verifier_evidence"}
+MAX_EVIDENCE_BYTES = 4096
 MAX_GUESSES = 300
 MAX_REASON_CHARS = 512
 # Exported CAD file names of a draft build. The tag is in the file name, so a
@@ -46,21 +50,44 @@ def _metres(value):
     return f"{value:g}"
 
 
-def make_guesses(sections: list[dict], selected: dict, catalog: dict) -> list[dict]:
+def model_choice_guess(section: dict, candidates: list[dict], choice: dict) -> dict:
+    """The open guess of a verified model choice: the model's reason and the verifier's evidence."""
+    chosen = next(c for c in candidates if c["candidate_id"] == choice["candidate_id"])
+    return {"guess_id": _guess_id(section["id"], "model_choice", chosen["candidate_id"]),
+            "section_id": section["id"], "kind": "model_choice", "x_m": section["x_m"], "x_range_m": None,
+            "chosen_candidate_id": chosen["candidate_id"],
+            "alternatives": [c["candidate_id"] for c in candidates if c["candidate_id"] != chosen["candidate_id"]],
+            "score": candidate_score(chosen), "reason": choice["reason"][:MAX_REASON_CHARS],
+            "status": "open", "verifier_evidence": choice["verifier_evidence"]}
+
+
+def make_guesses(sections: list[dict], selected: dict, catalog: dict,
+                 model_choices: dict | None = None) -> list[dict]:
     """One open guess for every section that has no person- or policy-selected line.
 
-    ``sections`` are the declared spec sections. Sections with a selectable
+    ``sections`` are the declared spec sections. A section with a verified
+    model choice keeps that choice. Other sections with a selectable
     candidate get the best-scoring one. Unreadable sections are left out of the
     draft; the loft spans them (bridged_gap) or the draft ends before them
     (dropped_end).
     """
     guesses, read_x = [], [s["x_m"] for s in sections if s["id"] in selected]
     unread = []
+    model_choices = model_choices or {}
     for section in sections:
         sid = section["id"]
         if sid in selected:
             continue
         candidates = [c for c in catalog.get(sid, {}).get("candidates", []) if c.get("selectable") is True]
+        choice = model_choices.get(sid)
+        if choice is not None and any(c["candidate_id"] == choice["candidate_id"] for c in candidates):
+            guesses.append(model_choice_guess(section, candidates, choice))
+            read_x.append(section["x_m"])
+            continue
+        # A traced line enters a draft only through a station claim: the
+        # best-score guess never takes one (a panel's traced strokes are
+        # candidates of every section that shares the panel).
+        candidates = [c for c in candidates if not c.get("model_traced")]
         if not candidates:
             unread.append(section)
             continue
@@ -117,7 +144,14 @@ def _finite(value):
 
 def check_guess(guess) -> bool:
     """Shape and type of one open guess record (no catalog cross-check)."""
-    if type(guess) is not dict or set(guess) != GUESS_FIELDS or guess["status"] != "open":
+    if type(guess) is not dict or guess.get("status") != "open":
+        return False
+    if guess.get("kind") == "model_choice":
+        evidence = guess.get("verifier_evidence")
+        if (set(guess) != MODEL_CHOICE_FIELDS or type(evidence) is not dict or evidence.get("passed") is not True
+                or len(json.dumps(evidence)) > MAX_EVIDENCE_BYTES):
+            return False
+    elif set(guess) != GUESS_FIELDS:
         return False
     if guess["kind"] not in GUESS_KINDS or type(guess["section_id"]) is not str or not guess["section_id"]:
         return False
@@ -134,7 +168,7 @@ def check_guess(guess) -> bool:
     if x_range is not None and (type(x_range) is not list or len(x_range) != 2
                                 or not all(_finite(v) for v in x_range) or x_range[0] > x_range[1]):
         return False
-    if guess["kind"] == "best_candidate":
+    if guess["kind"] in ("best_candidate", "model_choice"):
         return (type(guess["chosen_candidate_id"]) is str and _finite(guess["score"])
                 and 0 <= guess["score"] <= 1 and x_range is None
                 and guess["chosen_candidate_id"] not in alternatives)

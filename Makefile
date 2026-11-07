@@ -10,7 +10,7 @@ CARGO ?= cargo
 export MARINAFRAME_TEST_PYTHON ?= $(PY)
 export PATH := $(dir $(PY)):$(PATH)
 
-CAD_RUST_TESTS = --test finalization_guards --test validation_matrix --test audit_identity --test draft_guards --test region_pipeline
+CAD_RUST_TESTS = --test finalization_guards --test validation_matrix --test audit_identity --test draft_guards --test region_pipeline --test investigation_guards
 
 .PHONY: test-quick test-full lint rust-quick python-quick rust-cad python-cad smoke secrets
 
@@ -41,7 +41,7 @@ smoke:
 	@set -e; run=$$(mktemp -d /tmp/marinaframe-run.XXXXXX); \
 	$(PY) examples/make_agent_example.py --out $$run/input >/dev/null; \
 	target/release/marinaframe run --task $$run/task --source $$run/input/spec.json \
-	  --worker-python $(PY) --policy deterministic | grep -q '"status":"awaiting_human_review"'; \
+	  --worker-python $(PY) --worker-source $(CURDIR)/src --policy deterministic | grep -q '"status":"awaiting_human_review"'; \
 	target/release/marinaframe verify --task $$run/task | grep -q '"valid":true'; \
 	echo "smoke: awaiting_human_review, valid ($$run)"
 

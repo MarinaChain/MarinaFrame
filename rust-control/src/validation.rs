@@ -975,7 +975,29 @@ fn check_piece_reports(report: &Value, counts: &[usize]) -> Result<()> {
 // guess in the domain checkpoint (`guesses`). Rust checks every guess against
 // the inspected catalog and refuses review readiness while any guess is open.
 
-const GUESS_KINDS: [&str; 3] = ["best_candidate", "bridged_gap", "dropped_end"];
+const GUESS_KINDS: [&str; 4] = [
+    "best_candidate",
+    "bridged_gap",
+    "dropped_end",
+    "model_choice",
+];
+/// Largest verifier evidence of one model choice (JSON bytes).
+const MAX_VERIFIER_EVIDENCE_BYTES: usize = 4096;
+/// Row coverage that the engine requires of a traced line.
+const MIN_ROW_COVERAGE: f64 = 0.9;
+
+/// A candidate traced from source ink: selectable, with the engine's row
+/// coverage and a corridor, and (for a line the model traced) a passed
+/// engine re-read in that corridor. Only such a candidate can be a model
+/// choice; a model never supplies a line.
+pub fn snapped_candidate(candidate: &Value) -> bool {
+    candidate["selectable"] == true
+        && candidate["source_support"]["observed_row_fraction"]
+            .as_f64()
+            .is_some_and(|f| f >= MIN_ROW_COVERAGE)
+        && candidate["contour_selection"].is_object()
+        && (candidate["model_traced"] != true || candidate["snap"]["passed"] == true)
+}
 const GUESS_FIELDS: [&str; 10] = [
     "guess_id",
     "section_id",
@@ -1024,7 +1046,24 @@ pub fn guessed_choices(checkpoint: &Value) -> Result<Option<Value>> {
 }
 
 fn guess_shape(guess: &Value, selected: &serde_json::Map<String, Value>) -> Result<()> {
-    exact_keys(guess, &GUESS_FIELDS).map_err(|_| "draft_guess_contract")?;
+    if guess["kind"] == "model_choice" {
+        // A model choice also carries the verifier's evidence, which must say
+        // that the deterministic checks passed.
+        let mut fields = GUESS_FIELDS.to_vec();
+        fields.push("verifier_evidence");
+        exact_keys(guess, &fields).map_err(|_| "draft_guess_contract")?;
+        let evidence = &guess["verifier_evidence"];
+        require(
+            evidence.is_object()
+                && evidence["passed"] == true
+                && evidence["verifier"].is_string()
+                && evidence["identity_certified"] == false
+                && util::json_bytes(evidence).is_ok_and(|b| b.len() <= MAX_VERIFIER_EVIDENCE_BYTES),
+            "draft_guess_contract",
+        )?;
+    } else {
+        exact_keys(guess, &GUESS_FIELDS).map_err(|_| "draft_guess_contract")?;
+    }
     let section = guess["section_id"]
         .as_str()
         .filter(|s| util::valid_section_id(s))
@@ -1059,7 +1098,7 @@ fn guess_shape(guess: &Value, selected: &serde_json::Map<String, Value>) -> Resu
     )?;
     let x = x.unwrap_or_default();
     let shape_ok = match guess["kind"].as_str() {
-        Some("best_candidate") => {
+        Some("best_candidate" | "model_choice") => {
             guess["chosen_candidate_id"].is_string()
                 && guess["score"]
                     .as_f64()
@@ -1130,10 +1169,35 @@ pub fn check_guess_contract(checkpoint: &Value, description: &Value) -> Result<u
                         .iter()
                         .all(|a| a != chosen && a.as_str().is_some_and(|a| inspected.contains(a)))
             }
-            // A section with a selectable line cannot be declared unreadable.
-            None => selectable.is_empty(),
+            // A section with a selectable inspected line cannot be declared
+            // unreadable. Traced lines enter a draft only as model choices.
+            None => candidates
+                .iter()
+                .all(|c| c["selectable"] != true || c["model_traced"] == true),
         };
         require(consistent, "draft_guess_not_in_catalog")?;
+        if guess["kind"] == "best_candidate" {
+            // A traced line is never a best-score guess; only a station claim
+            // (model_choice) can carry it into a draft.
+            let chosen = candidates
+                .iter()
+                .find(|c| c["candidate_id"] == guess["chosen_candidate_id"]);
+            require(
+                chosen.is_some_and(|c| c["model_traced"] != true),
+                "draft_guess_not_in_catalog",
+            )?;
+        }
+        if guess["kind"] == "model_choice" {
+            // The model's choice must be ink the engine re-read, never a line
+            // the model wrote.
+            let chosen = candidates
+                .iter()
+                .find(|c| c["candidate_id"] == guess["chosen_candidate_id"]);
+            require(
+                chosen.is_some_and(snapped_candidate),
+                "draft_guess_not_snapped_to_ink",
+            )?;
+        }
     }
     Ok(guesses.len())
 }
@@ -1445,6 +1509,94 @@ mod tests {
         assert_eq!(
             check_guess_contract(&checkpoint, &edited).unwrap_err(),
             "draft_guess_description_mismatch"
+        );
+    }
+
+    /// The s0 guess of `draft_checkpoint` as a model choice of a traced line.
+    fn model_choice_checkpoint() -> Value {
+        let mut checkpoint = draft_checkpoint();
+        checkpoint["catalog"]["s0"]["candidates"]
+            .as_array_mut()
+            .unwrap()
+            .push(
+                json!({"candidate_id":"trace-s0","selectable":true,"model_traced":true,
+                "source_support":{"observed_row_fraction":0.97},
+                "contour_selection":{"anchors_px":[[10.0,0.0],[12.0,100.0]],"half_width_px":2.75},
+                "snap":{"verifier":"engine_reread_in_tight_corridor_v1","passed":true}}),
+            );
+        let guess = &mut checkpoint["guesses"][0];
+        guess["kind"] = json!("model_choice");
+        guess["chosen_candidate_id"] = json!("trace-s0");
+        guess["alternatives"] = json!(["c-outer", "c-inner"]);
+        guess["reason"] = json!("Label 0 is written at the end of this curve.");
+        guess["verifier_evidence"] = json!({"verifier":"station_assignment_v1","passed":true,
+            "checks":["candidate_traced_from_ink_and_selectable"],"identity_certified":false});
+        checkpoint
+    }
+
+    #[test]
+    fn a_model_choice_must_be_snapped_ink_with_passed_evidence() {
+        let checkpoint = model_choice_checkpoint();
+        assert_eq!(
+            check_guess_contract(&checkpoint, &described(&checkpoint)).unwrap(),
+            2
+        );
+        let unsnapped: [fn(&mut Value); 4] = [
+            |c| c["catalog"]["s0"]["candidates"][2]["snap"]["passed"] = json!(false),
+            |c| {
+                c["catalog"]["s0"]["candidates"][2]["source_support"]["observed_row_fraction"] =
+                    json!(0.5)
+            },
+            |c| {
+                c["catalog"]["s0"]["candidates"][2]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("contour_selection");
+            },
+            |c| c["catalog"]["s0"]["candidates"][2]["snap"] = json!(null),
+        ];
+        for forge in unsnapped {
+            let mut checkpoint = model_choice_checkpoint();
+            forge(&mut checkpoint);
+            assert_eq!(
+                check_guess_contract(&checkpoint, &described(&checkpoint)).unwrap_err(),
+                "draft_guess_not_snapped_to_ink"
+            );
+        }
+        let bad_evidence: [fn(&mut Value); 6] = [
+            |g| g["verifier_evidence"]["passed"] = json!(false),
+            |g| g["verifier_evidence"]["identity_certified"] = json!(true),
+            |g| {
+                g.as_object_mut().unwrap().remove("verifier_evidence");
+            },
+            |g| g["verifier_evidence"] = json!("passed"),
+            |g| g["verifier_evidence"]["padding"] = json!("x".repeat(5000)),
+            |g| g["engineering_approved"] = json!(true),
+        ];
+        for forge in bad_evidence {
+            let mut checkpoint = model_choice_checkpoint();
+            forge(&mut checkpoint["guesses"][0]);
+            assert_eq!(
+                check_guess_contract(&checkpoint, &described(&checkpoint)).unwrap_err(),
+                "draft_guess_contract"
+            );
+        }
+        // A traced line is never a best-score guess.
+        let mut checkpoint = model_choice_checkpoint();
+        let guess = checkpoint["guesses"][0].as_object_mut().unwrap();
+        guess.remove("verifier_evidence");
+        guess.insert("kind".into(), json!("best_candidate"));
+        assert_eq!(
+            check_guess_contract(&checkpoint, &described(&checkpoint)).unwrap_err(),
+            "draft_guess_not_in_catalog"
+        );
+        // Verifier evidence belongs to model choices only.
+        let mut checkpoint = draft_checkpoint();
+        checkpoint["guesses"][0]["verifier_evidence"] =
+            json!({"verifier":"x","passed":true,"identity_certified":false});
+        assert_eq!(
+            check_guess_contract(&checkpoint, &described(&checkpoint)).unwrap_err(),
+            "draft_guess_contract"
         );
     }
 }

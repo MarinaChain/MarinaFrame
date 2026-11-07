@@ -1,0 +1,68 @@
+[
+  {
+    "guard": "assignment_snap",
+    "test": "a_model_can_assign_only_snapped_ink",
+    "caught": true,
+    "exit": 101
+  },
+  {
+    "guard": "receipt_body",
+    "test": "edited_or_unbacked_investigation_receipts_are_refused",
+    "caught": true,
+    "exit": 101
+  },
+  {
+    "guard": "receipt_images",
+    "test": "investigation_receipts_bind_images_and_observation_on_recovery",
+    "caught": true,
+    "exit": 101
+  },
+  {
+    "guard": "receipt_mode",
+    "test": "a_decision_receipt_of_another_mode_is_refused",
+    "caught": true,
+    "exit": 101
+  },
+  {
+    "guard": "worker_review",
+    "test": "forged_worker_review_claims_are_not_adopted",
+    "caught": true,
+    "exit": 101
+  },
+  {
+    "guard": "worker_review_required",
+    "test": "forged_worker_review_claims_are_not_adopted",
+    "caught": true,
+    "exit": 101
+  },
+  {
+    "guard": "self_confirm",
+    "test": "model_cannot_confirm_its_own_guess_but_a_person_can",
+    "caught": true,
+    "exit": 101
+  },
+  {
+    "guard": "model_trace_selection",
+    "test": "model_cannot_select_an_unsnapped_or_self_traced_line",
+    "caught": true,
+    "exit": 101
+  },
+  {
+    "guard": "guess_snap",
+    "test": "a_model_choice_must_be_snapped_ink_with_passed_evidence",
+    "caught": true,
+    "exit": 101
+  },
+  {
+    "guard": "guess_evidence",
+    "test": "a_model_choice_must_be_snapped_ink_with_passed_evidence",
+    "caught": true,
+    "exit": 101
+  },
+  {
+    "guard": "open_guess_review",
+    "test": "model_cannot_set_review_status_change_gates_or_run_code",
+    "caught": true,
+    "exit": 101
+  }
+]

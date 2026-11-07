@@ -162,6 +162,8 @@ fn receipt_request_image_and_state_substitutions_are_rejected() {
                 revision_id: Some(receipt.revision_id.clone()),
                 step_sha256: Some("f".repeat(64)),
                 pixels_attached: true,
+                crop_box_px: None,
+                pixel_size: None,
             }),
             "completed_http_error" => receipt.http_status = Some(503),
             "response_hash_missing" => receipt.response_sha256 = None,

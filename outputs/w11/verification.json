@@ -1,0 +1,21 @@
+{
+  "quick_python_passed": 624,
+  "quick_python_cad_deselected": 10,
+  "full_python_cad_passed": 10,
+  "full_exit": 0,
+  "full_log": "work/w11/checks/full.log",
+  "smoke": "awaiting_human_review, valid; explicit worktree worker source",
+  "mutation_guards_caught": 11,
+  "authentic_image_transmissions": 372,
+  "authentic_image_metadata_complete": true,
+  "authentic_source_crop_boxes_complete": true,
+  "authentic_source_image_transmissions": 367,
+  "authentic_cad_image_transmissions": 5,
+  "final_rows": 138,
+  "factory_rows": 120,
+  "authentic_rows": 18,
+  "all_source_crop_boxes_complete": true,
+  "all_image_identity_complete": true,
+  "primary_image_transmissions": 1362,
+  "primary_source_image_transmissions": 1357
+}

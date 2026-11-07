@@ -1,0 +1,15 @@
+{
+  "method": "Assistant opened overlay PNGs and detailed crops. Conservative hull-side identity counts; not expert labels or geometric truth.",
+  "source_images_committed": false,
+  "authentic": {
+    "abstain": {"recorded_lines": 0, "visibly_hull_like": 0},
+    "draft": {"recorded_lines": 4, "visibly_hull_like": 3, "limits": "Three ALMA lines height bands repeat the same outer curve. They are not three independently identified stations. ALMA cross-section pick is a keel/detail line."},
+    "llm": {"recorded_lines": 20, "confirmed_complete_identity": 0, "limits": "Grid, construction-line and curve-to-grid switches dominate. Partial hull fragments are not complete identities."}
+  },
+  "factory": {
+    "abstain": {"recorded_lines": 0, "confirmed_hull_side_identity": 0},
+    "draft": {"recorded_lines": 138, "confirmed_hull_side_identity": 45, "limits": "Page-scale visual test is weaker than geometry. Repeated inner curves in overlay panels remain wrong or uncertain, with at most two possible correct identities per sheet; not counted as confirmed."},
+    "llm": {"recorded_lines": 34, "confirmed_hull_side_identity": 25, "cases": {"dtmb5415-L0": 8, "shipd-1-00617-L0": 9, "shipd-1-01103-L0": 8}, "limits": "28 of 34 lines are automatic harness selections, not model discoveries. Nine Ship-D 00045 lines contain lower grid extensions and are not counted as complete."}
+  },
+  "supplemental_retry": {"case_id": "shipd-1-00045-L2", "recorded_lines": 7, "confirmed_complete_identity": 0, "limits": "Partial hull sides and grid extensions; no valid CAD model."}
+}
