@@ -6,3 +6,9 @@ resolver = "2"
 overflow-checks = true
 strip = "debuginfo"
 lto = "thin"
+
+# The controller hashes its own executable (binary_sha256). Unoptimised SHA-256
+# takes several seconds on a 65 MB debug test binary, which exceeded the
+# readiness waits in the reliability tests. Optimise only the hash crate.
+[profile.dev.package.sha2]
+opt-level = 3
