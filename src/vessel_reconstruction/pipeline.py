@@ -12,9 +12,12 @@ from pathlib import Path
 from .errors import GeometryError
 from .provenance import digest_file, digest_object, snapshot_implementation, environment_record, write_json
 from .resources import DEFAULT_POLICY, ResourceLimitError, source_extension, validate_sources
-from .run_record import SCHEMA_VERSION, seal_run, verify_run
-from .schema import MAX_SPEC_BYTES, gap, loads_bounded_json, validate_spec
+from .run_record import SCHEMA_VERSION, TABLE_READING_FILE, seal_run, verify_run
+from .schema import MAX_SPEC_BYTES, TABLE_VISION_MODE, gap, loads_bounded_json, validate_spec
 from .transaction import RunPublicationError, RunTransaction, quarantine_interrupted
+
+# Byte budget of the read-table record captured into a table run.
+MAX_TABLE_READING_BYTES = 8 * 1024 * 1024
 
 
 # Lazy wrappers keep verification and invalid-input rejection free of native CAD
@@ -113,6 +116,38 @@ def _copy_source(source_path: Path, stage: Path, role: str) -> tuple[str, str]:
     return name, digest_file(destination)
 
 
+def _capture_table_reading(input_spec: dict, replay_spec: dict, base_dir: Path, stage: Path, result: dict):
+    """Copy the read-table record into the run and bind it by hash.
+
+    The record holds every provider receipt; the run identity includes its
+    hash, so a different reading is a different run.
+    """
+    settings = input_spec.get("table_reading")
+    if not isinstance(settings, dict) or not isinstance(settings.get("file"), str):
+        result["gaps"].append(gap("table_reading_missing", "Run table_vision prepare and marinaframe read-table, then declare table_reading.file."))
+        return
+    try:
+        descriptor = os.open(base_dir / settings["file"], os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
+        with os.fdopen(descriptor, "rb") as stream:
+            if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                raise ValueError("The table reading record must be an ordinary file.")
+            raw = stream.read(MAX_TABLE_READING_BYTES + 1)
+        if len(raw) > MAX_TABLE_READING_BYTES:
+            raise ValueError("The table reading record exceeds its byte budget.")
+        with (stage / TABLE_READING_FILE).open("xb") as target:
+            target.write(raw)
+            target.flush()
+            os.fsync(target.fileno())
+    except (OSError, ValueError):
+        result["gaps"].append(gap("table_reading_missing", "The table reading record could not be captured."))
+        return
+    digest = hashlib.sha256(raw).hexdigest()
+    if settings.get("sha256") is not None and settings["sha256"] != digest:
+        result["gaps"].append(gap("table_reading_hash_mismatch", "Captured table reading bytes differ from their declared hash."))
+    replay_spec["table_reading"] = {**settings, "file": TABLE_READING_FILE, "sha256": digest}
+    result["provenance"]["table_reading"] = {"file": TABLE_READING_FILE, "sha256": digest}
+
+
 def _discard_geometry(stage: Path, result: dict):
     result.update(exports={}, parts=[], metrics={}, normalized_sections=[])
     for name in ("mesh.json", "model.step", "model.stl", "cad_sections.json"):
@@ -190,7 +225,7 @@ def reconstruct(spec_path: str | Path, output_dir: str | Path, *, export_cad: bo
             if isinstance(input_spec.get("vessel_id"), str) and input_spec["vessel_id"].strip():
                 result["vessel_id"] = input_spec["vessel_id"][:256]
             mode = input_spec.get("input_mode", "calibrated_section_curves")
-            result["input_mode"] = mode if isinstance(mode, str) and mode == "calibrated_section_curves" else None
+            result["input_mode"] = mode if isinstance(mode, str) and mode in ("calibrated_section_curves", TABLE_VISION_MODE) else None
         else:
             if not result["gaps"]:
                 result["gaps"].append(gap("invalid_spec", "The drawing specification must be a JSON object."))
@@ -232,6 +267,8 @@ def reconstruct(spec_path: str | Path, output_dir: str | Path, *, export_cad: bo
                     source.update(roi_px=settings.get("roi_px"), description=settings.get("description"))
                 result["sources"].append(source)
                 replay_spec[role]["file"], replay_spec[role]["sha256"] = name, source_hash
+            if result["input_mode"] == TABLE_VISION_MODE:
+                _capture_table_reading(input_spec, replay_spec, spec_path.parent, stage, result)
             result["assumptions"] = [
                 {"id": "symmetry", "status": "review_required", "description": input_spec.get("symmetry_evidence") if isinstance(input_spec.get("symmetry_evidence"), str) else "Symmetry unresolved."},
                 {"id": "station_interpolation", "status": "review_required", "description": "Ruled interpolation between observed sections; intervening geometry is a modeling assumption."},
@@ -250,8 +287,15 @@ def reconstruct(spec_path: str | Path, output_dir: str | Path, *, export_cad: bo
                 _make_source_preview(source, stage, replay_spec)
             phase = "section_extraction"
             transaction.checkpoint(phase)
-            from .ingest import extract_sections
-            extracted = extract_sections(replay_spec, stage)
+            if result["input_mode"] == TABLE_VISION_MODE:
+                from .table_vision import extract_table_sections
+                extracted = extract_table_sections(replay_spec, stage)
+                assistance = ("Explicit station, waterline and cell regions; half-breadths are vision-model "
+                              "transcriptions of the cell crops, parsed by a strict notation parser.")
+            else:
+                from .ingest import extract_sections
+                extracted = extract_sections(replay_spec, stage)
+                assistance = "Explicit station/pixel regions and dimensional calibration; half-breadths measured from the source pixels."
             result["sections"] = extracted.get("sections", [])
             result["gaps"].extend(extracted.get("gaps", []))
             result["diagnostics"] = extracted.get("diagnostics", {})
@@ -262,7 +306,7 @@ def reconstruct(spec_path: str | Path, output_dir: str | Path, *, export_cad: bo
                     result["gaps"].append(gap("unresolved_required_section", "A required drawing view did not yield a supported contour; missing evidence is not interpolated.", required["id"]))
             for section in result["sections"]:
                 section.setdefault("evidence", {}).update(source_id="source-1", source_sha256=result["sources"][0]["sha256"],
-                    assistance="Explicit station/pixel regions and dimensional calibration; half-breadths measured from the source pixels.")
+                    assistance=assistance)
                 if len(result["sources"]) > 1:
                     section["evidence"]["station_source_id"] = "source-2"
             extracted["sections"] = result["sections"]

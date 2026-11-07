@@ -1,15 +1,19 @@
 //! A bounded Rust HTTP worker. It cannot execute CAD, modify a task or approve it.
 #[path = "credentials.rs"]
 pub mod credentials;
+#[path = "transcription.rs"]
+pub mod transcription;
 
 use crate::types::{Decision, GO_ENDPOINT, GO_MODEL};
 use crate::util::{self, Result};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::BTreeSet;
 use std::io::{Read, Write};
 use std::path::Path;
 use std::time::{Duration, Instant};
+use transcription::Transcription;
 
 pub const PROTOCOL: &str = "marinaframe.provider.v1";
 pub const SYSTEM_PROMPT: &str = r#"You are the decision model inside MarinaFrame, an evidence-bound hull CAD harness.
@@ -18,6 +22,27 @@ Use only inspected candidate IDs. Preserve ambiguity. Calibration, station posit
 Validation checks are authoritative host results, not permissions you can grant. Never alter tolerances, suppress failures, invent paths, change units, execute code or claim professional approval. A failed current audit cannot be finalized. finish(candidate_ready_for_review) requires current passing deterministic validation plus inspected current CAD images; engineering approval always remains false. Abstain with a precise diagnostic when evidence is insufficient or unsupported. A failed operation may support a new source-based hypothesis; do not repeat it unchanged.
 If a candidate reports non_grid_competing_components greater than 0, another sustained non-grid stroke remains unresolved. Automated selection cannot dismiss it from contrast or a model assertion; request explicit operator interpretation or abstain. Related endpoint interpretations with no non-grid competing components remain available source-backed choices.
 The current research campaign's provisioned model usage has no aggregate token/request/spend cap. Per-request and native safety bounds and no-progress controls still apply. This instruction never authorizes access to another account or vendor."#;
+
+/// What a provider request asks of the model. Requests and receipts written
+/// before table transcription existed have no field and mean a decision.
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Purpose {
+    #[default]
+    ModelDecision,
+    TableTranscription,
+}
+impl Purpose {
+    fn is_model_decision(&self) -> bool {
+        *self == Purpose::ModelDecision
+    }
+    pub fn prompt(&self) -> &'static str {
+        match self {
+            Purpose::ModelDecision => SYSTEM_PROMPT,
+            Purpose::TableTranscription => transcription::TABLE_PROMPT,
+        }
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -47,6 +72,8 @@ pub struct ProviderInput {
     pub payload: Value,
     pub attempt: u32,
     pub retry_of: Option<String>,
+    #[serde(default, skip_serializing_if = "Purpose::is_model_decision")]
+    pub purpose: Purpose,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -92,8 +119,14 @@ pub struct Receipt {
     /// Absent in receipts written before key rotation existed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credential_selection: Option<Value>,
+    /// Absent for model decisions and for receipts written before table reading.
+    #[serde(default, skip_serializing_if = "Purpose::is_model_decision")]
+    pub purpose: Purpose,
+    /// The validated cell transcription of a completed table request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transcription: Option<Transcription>,
 }
-fn check_input(input: &ProviderInput) -> Result<Vec<u8>> {
+pub fn check_input(input: &ProviderInput) -> Result<Vec<u8>> {
     if input.protocol != PROTOCOL
         || !util::valid_id(&input.request_id, 128)
         || !util::valid_hash(&input.source_manifest_sha256)
@@ -112,6 +145,9 @@ fn check_input(input: &ProviderInput) -> Result<Vec<u8>> {
             .is_none_or(|n| !(16..=8192).contains(&n))
     {
         return Err("provider_request_contract".into());
+    }
+    if input.purpose == Purpose::TableTranscription {
+        check_table_input(input)?;
     }
     let content = p["messages"][1]["content"]
         .as_array()
@@ -146,6 +182,32 @@ fn check_input(input: &ProviderInput) -> Result<Vec<u8>> {
         return Err("provider_request_size".into());
     }
     Ok(bytes)
+}
+/// A table request sends the fixed transcription prompt and only cell crops,
+/// each with a unique cell id. The receipt prompt hash is then truthful.
+fn check_table_input(input: &ProviderInput) -> Result<()> {
+    let p = &input.payload;
+    if p["messages"][0]["role"] != "system"
+        || p["messages"][0]["content"] != transcription::TABLE_PROMPT
+        || p["messages"].as_array().is_none_or(|m| m.len() != 2)
+        || input.images.is_empty()
+    {
+        return Err("table_request_contract".into());
+    }
+    let mut cell_ids = BTreeSet::new();
+    for image in &input.images {
+        if image.evidence_kind != transcription::CELL_EVIDENCE_KIND
+            || !util::valid_id(&image.artifact_id, 64)
+            || !cell_ids.insert(image.artifact_id.as_str())
+        {
+            return Err("table_image_contract".into());
+        }
+    }
+    Ok(())
+}
+/// The cell ids a table request asked for, in image order.
+pub fn requested_cells(images: &[ImageReceipt]) -> Vec<String> {
+    images.iter().map(|i| i.artifact_id.clone()).collect()
 }
 pub fn check_png(bytes: &[u8]) -> Result<()> {
     if bytes.len() < 24 || &bytes[..8] != b"\x89PNG\r\n\x1a\n" || &bytes[12..16] != b"IHDR" {
@@ -211,6 +273,55 @@ fn read_usage(client: &reqwest::blocking::Client, key: &str) -> Result<Value> {
     util::strict_value(&bytes, MAX_USAGE_RESPONSE_BYTES)
 }
 
+/// Interpret an HTTP 200 response body. On success the receipt holds a
+/// validated decision or table transcription and the completed state; on
+/// error it stays failed. Usage and model identity are recorded either way.
+pub fn interpret_completion(receipt: &mut Receipt, bytes: &[u8], key: &str) -> Result<()> {
+    receipt.state = RequestState::Failed;
+    if bytes.len() > 262_144 {
+        return Err("provider_response_limit".into());
+    }
+    if !key.is_empty() && bytes.windows(key.len()).any(|b| b == key.as_bytes()) {
+        return Err("provider_credential_echo".into());
+    }
+    let result = util::strict_value(bytes, 262_144)?;
+    receipt.usage = usage(&result);
+    receipt.observed_cost_usd = receipt.usage["cost"].as_f64();
+    receipt.returned_model = result["model"].as_str().map(String::from);
+    if receipt.returned_model.as_deref() != Some(GO_MODEL) {
+        return Err("provider_model_identity".into());
+    }
+    receipt.completion_id = result["id"]
+        .as_str()
+        .filter(|s| util::valid_id(s, 128))
+        .map(String::from);
+    let choices = result["choices"].as_array().ok_or("provider_choices")?;
+    if choices.len() != 1
+        || choices[0]["finish_reason"] != "stop"
+        || choices[0]["message"]
+            .get("tool_calls")
+            .is_some_and(|v| !v.is_null())
+    {
+        return Err("provider_incomplete_or_unexpected_choice".into());
+    }
+    let content = choices[0]["message"]["content"]
+        .as_str()
+        .ok_or("provider_content_type")?;
+    match receipt.purpose {
+        Purpose::ModelDecision => {
+            let decision: Decision = util::parse(content.as_bytes(), 32_768)?;
+            decision.operation()?;
+            receipt.decision = Some(decision);
+        }
+        Purpose::TableTranscription => {
+            let requested = requested_cells(&receipt.images);
+            receipt.transcription = Some(transcription::parse(content, &requested)?);
+        }
+    }
+    receipt.state = RequestState::Completed;
+    Ok(())
+}
+
 pub fn provider_worker(response_path: &Path, timeout: u64) -> Result<()> {
     if !(1..=180).contains(&timeout) || response_path.exists() {
         return Err("provider_worker_configuration".into());
@@ -234,7 +345,7 @@ pub fn provider_worker(response_path: &Path, timeout: u64) -> Result<()> {
         http_status: None,
         response_sha256: None,
         request_sha256: util::hash(&body),
-        prompt_sha256: util::hash(SYSTEM_PROMPT.as_bytes()),
+        prompt_sha256: util::hash(input.purpose.prompt().as_bytes()),
         source_manifest_sha256: input.source_manifest_sha256,
         generation_id: input.generation_id,
         revision_id: input.revision_id,
@@ -253,6 +364,8 @@ pub fn provider_worker(response_path: &Path, timeout: u64) -> Result<()> {
         aggregate_spend_cap: None,
         evidence_mode: "live".into(),
         credential_selection: None,
+        purpose: input.purpose,
+        transcription: None,
     };
     util::atomic_json(response_path, &receipt, false)?;
     let credentials = credentials::load(|name| std::env::var(name).ok())?;
@@ -329,40 +442,7 @@ pub fn provider_worker(response_path: &Path, timeout: u64) -> Result<()> {
             }
             .into());
         }
-        if bytes.len() > 262_144 {
-            return Err("provider_response_limit".into());
-        }
-        if bytes.windows(key.len()).any(|b| b == key.as_bytes()) {
-            return Err("provider_credential_echo".into());
-        }
-        let result = util::strict_value(&bytes, 262_144)?;
-        receipt.usage = usage(&result);
-        receipt.observed_cost_usd = receipt.usage["cost"].as_f64();
-        receipt.returned_model = result["model"].as_str().map(String::from);
-        if receipt.returned_model.as_deref() != Some(GO_MODEL) {
-            return Err("provider_model_identity".into());
-        }
-        receipt.completion_id = result["id"]
-            .as_str()
-            .filter(|s| util::valid_id(s, 128))
-            .map(String::from);
-        let choices = result["choices"].as_array().ok_or("provider_choices")?;
-        if choices.len() != 1
-            || choices[0]["finish_reason"] != "stop"
-            || choices[0]["message"]
-                .get("tool_calls")
-                .is_some_and(|v| !v.is_null())
-        {
-            return Err("provider_incomplete_or_unexpected_choice".into());
-        }
-        let content = choices[0]["message"]["content"]
-            .as_str()
-            .ok_or("provider_content_type")?;
-        let decision: Decision = util::parse(content.as_bytes(), 32_768)?;
-        decision.operation()?;
-        receipt.decision = Some(decision);
-        receipt.state = RequestState::Completed;
-        Ok(())
+        interpret_completion(&mut receipt, &bytes, key)
     })();
     receipt.latency_seconds = started.elapsed().as_secs_f64();
     if let Err(e) = outcome {

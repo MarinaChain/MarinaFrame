@@ -17,7 +17,8 @@ This file is the resume point. It does not depend on chat history.
 
 1. **Native macOS port** (2026-11-07), not a Linux container. Host: macOS arm64.
 2. **Rotate three OpenCode Go keys by usage limits** (2026-11-07). See "Key rotation".
-3. **Drop Tesseract OCR**; DeepSeek vision replaces it (not yet implemented).
+3. **Drop Tesseract OCR**; DeepSeek vision replaces it (first slice done: `offset_table_vision`,
+   see `docs/VISION_TABLE_READING.md`).
 4. **Cut unnecessary Python tests** after the port. See "Next steps".
 
 ## macOS port
@@ -71,8 +72,18 @@ OCR resource budget, the OCR benchmarks (`proposal_experiment`, `archived_table_
 `prepare_archived_table`), their tests, `TESSDATA_PREFIX` from both worker environments and
 `tesseract-ocr` from CI. New specs with `input_mode: offset_table_ocr` are rejected
 (`unsupported_input_mode`). `run_record.py` still reads the value so archived OCR runs verify.
-Table reading by the DeepSeek vision model is **not implemented yet**. Homebrew Tesseract can be
-removed with `brew uninstall tesseract`.
+Homebrew Tesseract can be removed with `brew uninstall tesseract`.
+
+## Vision table reading, first slice (done)
+
+New input mode `offset_table_vision` (not the old OCR semantics). Python
+`table_vision prepare` writes hash-bound cell crops; the Rust command `marinaframe read-table`
+sends them through the provider worker (`purpose: table_transcription` on the existing
+`ProviderInput`/`Receipt`); the batch pipeline binds receipts to recomputed crops, parses strict
+feet-inches-eighths tokens and blocks on any doubt. The reading record is captured in the run
+and verified. Live check on a synthetic 20-cell table: 6 requests, all completed, 20/20 exact
+tokens, reported cost 0.0 USD (Go). Design, limits and out-of-scope items:
+`docs/VISION_TABLE_READING.md`. Not wired into the live controller loop.
 
 ## Finalization guards ported to Rust (done)
 
@@ -104,7 +115,8 @@ manifest, so the old fabricated-build fixture cannot pass it.
    `server`, `jobs`, `review`, `web/` with their tests (~100 tests). Its finalization is no longer
    guarded by Python tests. `benchmarks/reproduce_validation_cache.py` (historical 0.3 probe)
    uses the Harness; keep the probe's historical output when it goes.
-2. Implement table reading with the DeepSeek vision model, replacing the removed OCR path.
+2. Table reading: first slice done. Next: a degraded/scanned synthetic table set with abstention
+   counts, then (only with provider-transfer permission) an authentic table.
 3. Keep data-pipeline and benchmark tests while roadmap steps 5–6 (licensed data, new evaluation)
    use them.
 4. Then continue `handoff/MarinaFrame_Claude_Code_Handoff.md`, "Next work in order", from step 2.
