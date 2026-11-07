@@ -14,4 +14,4 @@
 
 ## Resume point
 
-Start at step 1. Existing frozen manifests must remain unchanged. No reader output or sealed score may be inspected. Final report: files changed, commits, counts, sizes, seed, manifest hash and checks (under 250 words).
+Steps 1–4 complete. Generator frozen at `ad2e2b6`; generated 288 drawings and 36 complete truth tables. Selected clusters: 122, 88, 31, 176, 120, 221, 217, 182, 212. Manifest hash: `856a37fad69439cd9fc83a75382699d5988323c0aa68ed9b1eaf66fcfdef81d3`. Read samples checked all four levels. No pipeline/scorer or reader-output inspection. Original frozen manifests unchanged. First quick run passed (617 Python tests, Rust checks, secret scan). Step 5 checks complete: final quick checks passed (617 Python tests; Rust fmt/clippy/tests; secret scan). `cargo clean` removed 2.8 GiB; 39 GiB remain. Ready for manifest/documentation commit and final report under 250 words.
