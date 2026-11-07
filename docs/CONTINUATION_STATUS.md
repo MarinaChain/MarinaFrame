@@ -137,5 +137,7 @@ fail without it.
 3. Keep data-pipeline and benchmark tests while roadmap steps 5–6 (licensed data, new evaluation)
    use them.
 4. Decide whether to pin the audit implementation identity in the controller (gap above).
-5. Then continue `handoff/MarinaFrame_Claude_Code_Handoff.md`, "Next work in order", from step 3
-   (semantic/local geometry accuracy).
+5. Step 3 (semantic/local geometry accuracy), first pass done: `docs/GEOMETRY_ACCURACY_V05.md`.
+   One narrow source change kept (boundary ordinate bounded by touching boundary-row ink); one
+   reverted; two rejected by falsification. No documented failing gate passes. Next: obtain the
+   sealed final-12 tangency generator/reference, then continue with step 4.
