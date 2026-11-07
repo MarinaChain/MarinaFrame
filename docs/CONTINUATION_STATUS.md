@@ -101,7 +101,7 @@ manifest, so the old fabricated-build fixture cannot pass it.
 ## Next steps (resume here)
 
 1. **Retire the legacy path** (done): removed `agent_harness`, `agent_cli`, `agent_review`, `agent_provider`, `server`, `jobs`, `review`, `web/`, their tests and the CI/installed-smoke steps. The CLI keeps `reconstruct` and `verify`. The 0.3 probe is recorded in `docs/HISTORICAL_VALIDATION_PROBE.md`.
-   Open: `benchmarks/live_harness_pilot.py`, `reaudit_preserved_native_run.py` and `v04_control_parity.py` (Python arm) still import removed modules; they are marked historical.
+   The three benchmarks that used the Harness (`live_harness_pilot.py`, `reaudit_preserved_native_run.py`, `v04_control_parity.py`) were deleted; they are in Git history at `19afbeb`.
 2. Implement table reading with the DeepSeek vision model, replacing the removed OCR path.
 3. Keep data-pipeline and benchmark tests while roadmap steps 5–6 (licensed data, new evaluation)
    use them.
