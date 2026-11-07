@@ -1,0 +1,28 @@
+{
+  "centreline_x_px": {
+    "before": {
+      "n": 45,
+      "median": 257.07517657425547,
+      "p90": 611.5936854746037
+    },
+    "after": {
+      "n": 45,
+      "median": 40.94,
+      "p90": 110.7274372385417
+    },
+    "pairing": "same case and reading-order panel index; separate only"
+  },
+  "baseline_y_px": {
+    "before": {
+      "n": 16,
+      "median": 714.1953470971447,
+      "p90": 1468.037596621422
+    },
+    "after": {
+      "n": 16,
+      "median": 183.0895999999998,
+      "p90": 290.18915086424727
+    },
+    "pairing": "same case and reading-order panel index; separate only"
+  }
+}

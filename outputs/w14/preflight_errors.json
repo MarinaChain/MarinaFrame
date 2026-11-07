@@ -1,0 +1,121 @@
+[
+  {
+    "path": "work/w14/calibration-v3/4096x240-normalized_1-0/driver_error.json",
+    "error": {
+      "returncode": 2,
+      "stderr": "{\"engineering_approved\":false,\"error_code\":\"image_dimension_limit\",\"ok\":false}\n"
+    }
+  },
+  {
+    "path": "work/w14/calibration-v3/4096x240-normalized_1-1/driver_error.json",
+    "error": {
+      "returncode": 2,
+      "stderr": "{\"engineering_approved\":false,\"error_code\":\"image_dimension_limit\",\"ok\":false}\n"
+    }
+  },
+  {
+    "path": "work/w14/calibration-v3/4096x240-normalized_1000-1/driver_error.json",
+    "error": {
+      "returncode": 2,
+      "stderr": "{\"engineering_approved\":false,\"error_code\":\"image_dimension_limit\",\"ok\":false}\n"
+    }
+  },
+  {
+    "path": "work/w14/calibration-v3/4096x240-normalized_1000-0/driver_error.json",
+    "error": {
+      "returncode": 2,
+      "stderr": "{\"engineering_approved\":false,\"error_code\":\"image_dimension_limit\",\"ok\":false}\n"
+    }
+  },
+  {
+    "path": "work/w14/calibration-v3/4096x240-explicit_pixels-0/driver_error.json",
+    "error": {
+      "returncode": 2,
+      "stderr": "{\"engineering_approved\":false,\"error_code\":\"image_dimension_limit\",\"ok\":false}\n"
+    }
+  },
+  {
+    "path": "work/w14/calibration-v3/4096x240-explicit_pixels-1/driver_error.json",
+    "error": {
+      "returncode": 2,
+      "stderr": "{\"engineering_approved\":false,\"error_code\":\"image_dimension_limit\",\"ok\":false}\n"
+    }
+  },
+  {
+    "path": "work/w14/calibration-v3/4096x240-implicit_pixels-1/driver_error.json",
+    "error": {
+      "returncode": 2,
+      "stderr": "{\"engineering_approved\":false,\"error_code\":\"image_dimension_limit\",\"ok\":false}\n"
+    }
+  },
+  {
+    "path": "work/w14/calibration-v3/4096x240-implicit_pixels-0/driver_error.json",
+    "error": {
+      "returncode": 2,
+      "stderr": "{\"engineering_approved\":false,\"error_code\":\"image_dimension_limit\",\"ok\":false}\n"
+    }
+  },
+  {
+    "path": "work/w14/calibration/4096x240-normalized_1-0/driver_error.json",
+    "error": {
+      "returncode": 2,
+      "stderr": "{\"engineering_approved\":false,\"error_code\":\"image_dimension_limit\",\"ok\":false}\n"
+    }
+  },
+  {
+    "path": "work/w14/calibration/4096x240-normalized_1-1/driver_error.json",
+    "error": {
+      "returncode": 2,
+      "stderr": "{\"engineering_approved\":false,\"error_code\":\"image_dimension_limit\",\"ok\":false}\n"
+    }
+  },
+  {
+    "path": "work/w14/calibration/4096x240-normalized_1000-1/driver_error.json",
+    "error": {
+      "returncode": 2,
+      "stderr": "{\"engineering_approved\":false,\"error_code\":\"image_dimension_limit\",\"ok\":false}\n"
+    }
+  },
+  {
+    "path": "work/w14/calibration/4096x240-normalized_1000-0/driver_error.json",
+    "error": {
+      "returncode": 2,
+      "stderr": "{\"engineering_approved\":false,\"error_code\":\"image_dimension_limit\",\"ok\":false}\n"
+    }
+  },
+  {
+    "path": "work/w14/calibration/4096x240-explicit_pixels-0/driver_error.json",
+    "error": {
+      "returncode": 2,
+      "stderr": "{\"engineering_approved\":false,\"error_code\":\"image_dimension_limit\",\"ok\":false}\n"
+    }
+  },
+  {
+    "path": "work/w14/calibration/4096x240-explicit_pixels-1/driver_error.json",
+    "error": {
+      "returncode": 2,
+      "stderr": "{\"engineering_approved\":false,\"error_code\":\"image_dimension_limit\",\"ok\":false}\n"
+    }
+  },
+  {
+    "path": "work/w14/calibration/4096x240-implicit_pixels-1/driver_error.json",
+    "error": {
+      "returncode": 2,
+      "stderr": "{\"engineering_approved\":false,\"error_code\":\"image_dimension_limit\",\"ok\":false}\n"
+    }
+  },
+  {
+    "path": "work/w14/calibration/4096x240-implicit_pixels-0/driver_error.json",
+    "error": {
+      "returncode": 2,
+      "stderr": "{\"engineering_approved\":false,\"error_code\":\"image_dimension_limit\",\"ok\":false}\n"
+    }
+  },
+  {
+    "path": "work/w14/diagnostic/4096/driver_error.json",
+    "error": {
+      "returncode": 2,
+      "stderr": "{\"engineering_approved\":false,\"error_code\":\"image_dimension_limit\",\"ok\":false}\n"
+    }
+  }
+]

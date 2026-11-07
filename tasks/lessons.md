@@ -11,3 +11,9 @@
 - **Trigger:** W12 CAD finalization tests failed with `worker_implementation_changed` while another step edited or mutated `llm_setup.py`.
 - **Rule:** Finish Python edits and restore mutations before starting a task or CAD integration test. Do not edit any Python module until that task ends. Re-run on stable source; do not weaken the implementation identity check.
 - **Why:** `provenance.implementation_identity` hashes every Python module in the worker package, including modules outside the tested operation.
+
+### Separate supplied calibration from independent model measurements
+- **Date:** 2026-11-08
+- **Trigger:** W14 combined half-breadth and grid-scale questions in one request. The breadth question supplied the scale that the scale question was meant to measure.
+- **Rule:** Ask independent scale questions in separate requests without supplied scale. Exclude contaminated answers, retain their usage, and keep planned case denominators fixed when a driver fails. State which crop, axes and scale are caller-supplied.
+- **Why:** A model can copy supplied calibration without reading the grid; returned-only denominators also hide missing measurements.

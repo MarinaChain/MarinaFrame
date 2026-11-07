@@ -214,7 +214,7 @@ def check_setup(image: Image.Image, overview: dict, panels: dict) -> dict:
 
 
 def prepare_request(source: Path, out: Path, view="sheet_overview", box=None, feedback=None):
-    """Write one bounded ruled image. Rulers show original source coordinates."""
+    """Write a bounded image with an explicit normalized-to-source transform."""
     out.mkdir(parents=True, exist_ok=False)
     with Image.open(source) as opened:
         original = opened.convert("RGB")
@@ -244,13 +244,50 @@ def prepare_request(source: Path, out: Path, view="sheet_overview", box=None, fe
     manifest = {"schema_version": "marinaframe.vision_request.v1", "purpose": "sheet_setup",
                 "source_sha256": digest(source), "engineering_approved": False,
                 "context": {"source_size_px": list(original.size), "crop_box_px": box,
-                            "rulers": "Red margin numbers are ORIGINAL sheet pixel coordinates.",
+                            "rulers": "Red margin numbers are source references, NOT response coordinates.",
+                            "coordinate_frame": "normalized_attachment_1000",
+                            "coordinate_transform": {"image_size_px": list(canvas.size),
+                                "content_size_px": list(crop.size), "margin_px": RULER_MARGIN,
+                                "crop_box_px": box},
                             "feedback": feedback or []},
                 "images": [{"image_id": "setup", "file": "image.png", "sha256": digest(path),
                             "bytes": path.stat().st_size, "width": canvas.width, "height": canvas.height,
                             "view": view, "crop_box_px": box}]}
     write_json(out / "request.json", manifest)
     return manifest
+
+
+def source_coordinates(reply: dict, manifest: dict) -> dict:
+    """Map normalized attachment coordinates; retain raw readings separately.
+
+    Use actual rounded dimensions on each axis, not the nominal resize ratio.
+    Normalized edges are defined against width/height (not width-1/height-1).
+    """
+    from copy import deepcopy
+    result = deepcopy(reply)
+    transform = manifest["context"]["coordinate_transform"]
+    width, height = transform["image_size_px"]
+    content_width, content_height = transform["content_size_px"]
+    left, top, right, bottom = transform["crop_box_px"]
+    margin = transform["margin_px"]
+
+    def coordinate(value, axis):
+        size, content, start, end = ((width, content_width, left, right) if axis == 0
+                                     else (height, content_height, top, bottom))
+        if not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= 1000:
+            raise ValueError("Setup coordinate outside normalized attachment")
+        return (value * size / 1000 - margin) * (end - start) / content + start
+
+    for panel in result.get("panels", []):
+        panel["box_px"] = [coordinate(v, i % 2) for i, v in enumerate(panel["box_px"])]
+    for item in result.get("stations", []) + result.get("scale_marks", []):
+        for key, axis in [("x_px", 0), ("y_px", 1), ("x2_px", 0), ("y2_px", 1)]:
+            if key in item:
+                item[key] = coordinate(item[key], axis)
+    for key, axis in [("centreline_x_px", 0), ("baseline_y_px", 1)]:
+        if "value" in result.get(key, {}):
+            result[key]["value"] = coordinate(result[key]["value"], axis)
+    return result
 
 
 class Progress:
@@ -296,8 +333,8 @@ def run_setup(source: Path, out: Path, binary: Path, basis: str):
 
     def ask(view, box=None):
         nonlocal round_index
-        name = f"request-{len(records):04d}"
-        prepare_request(source, out / name, view, box, feedback)
+        name = f"request-{len(list(out.glob('request-*'))):04d}"
+        manifest = prepare_request(source, out / name, view, box, feedback)
         answer = out / f"reading-{len(records):04d}"
         completed = subprocess.run([str(binary), "vision-request", "--request", str(out / name),
                                     "--out", str(answer), "--provider-transfer-basis", basis],
@@ -309,7 +346,13 @@ def run_setup(source: Path, out: Path, binary: Path, basis: str):
         write_json(out / "readings.json", records)
         if record.get("reply") is None:
             return None
-        return next(iter(record["reply"].values()))
+        try:
+            return source_coordinates(next(iter(record["reply"].values())), manifest)
+        except ValueError as error:
+            write_json(answer / "coordinate_rejection.json", {"error": str(error),
+                "coordinate_frame": manifest["context"]["coordinate_frame"],
+                "engineering_approved": False})
+            return None
 
     while True:
         overview = ask("sheet_overview")
