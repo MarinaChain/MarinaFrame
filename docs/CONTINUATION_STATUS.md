@@ -127,6 +127,23 @@ fail without it.
   single-process production use cannot hit it.
 - The Linux x86_64 rerun of this branch was stopped by the user's choice; GitHub CI covers Linux.
 
+## Source acquisition, 2026-11-07
+
+Downloaded with the user's approval into `work/sources/` (git-ignored; not committed, not
+packaged). Every file matched the private inventory's byte size and SHA-256 exactly.
+
+| Item | Vessel | Format, pixels | Bytes | Rights (inventory) |
+|---|---|---|---:|---|
+| `balclutha_ca54_s48` (Section at Frame 108) | Balclutha 1886 | TIFF, 9632 × 14434 | 1,201,246 | US public domain (NPS HAER) |
+| `balclutha_ca54_s7` (Body plan, hull measurement table) | Balclutha 1886 | TIFF, 9632 × 14442 | 1,337,872 | US public domain (NPS HAER) |
+| `monitor_nh50954` (General plan) | USS Monitor 1862 | JPEG, 1200 × 431 | 153,224 | US public domain, expired |
+| `wapama_ca67_s5` (As-is lines, body plans) | Wapama 1915 | TIFF, 13600 × 17600 | 748,682 | US public domain (NPS HAER) |
+
+Use: line identity and abstention work only. These sheets carry no reviewed whole-hull truth,
+so they support no accuracy claim. Sending them to the DeepSeek provider is a separate
+decision (inventory: `provider_inference: not_transmitted_by_data_worker`); none was sent.
+Full-size TIFFs decode to several hundred MB in memory each.
+
 ## Next steps (resume here)
 
 1. **Retire the legacy path** (done): removed `agent_harness`, `agent_cli`, `agent_review`, `agent_provider`, `server`, `jobs`, `review`, `web/`, their tests and the CI/installed-smoke steps. The CLI keeps `reconstruct` and `verify`. The 0.3 probe is recorded in `docs/HISTORICAL_VALIDATION_PROBE.md`.
