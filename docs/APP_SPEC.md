@@ -30,6 +30,23 @@ out, how it was checked, and what the model (DeepSeek) saw and answered.
 - Actions that mutate a task run on a background thread through the controller, which takes
   its own lock. One action per task at a time.
 
+## Desktop and web from one code base
+
+The UI and the backend logic must also run later as a web app with a thin extra layer:
+
+- UI: every backend call and event subscription goes through one adapter module
+  (`invoke(command, args)`, `onTaskChanged(handler)`, file picking). It selects Tauri, HTTP
+  (`POST /api/<command>`, Server-Sent Events at `/api/events`) or mocks. No other UI file touches
+  `window.__TAURI__` or fetches backend data.
+- Backend: view building, path guards, task listing, settings, notices and actions live in a
+  transport-independent Rust module with plain functions. Tauri commands are thin wrappers.
+  A later HTTP server (for example axum) wraps the same functions.
+
+Work a web deployment adds beyond that layer (not in v1): accounts and access control, per-user
+task storage, uploads instead of local file paths, a job queue for CAD workers on Linux servers,
+provider keys held on the server, and a rights check before any licensed drawing is shown to
+another user.
+
 ## Screens
 
 1. **Library (left sidebar).** Tasks found under the configured runs folder, newest first:
