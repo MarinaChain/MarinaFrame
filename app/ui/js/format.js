@@ -1,0 +1,90 @@
+// Plain-language labels and number formats. All user-facing wording for states lives here.
+
+const STATUS_LABELS = {
+  running: 'Running',
+  needs_review: 'Needs review',
+  declined: 'Declined',
+  failed: 'Failed',
+  cancelled: 'Cancelled',
+  paused: 'Paused',
+  blocked: 'Blocked',
+};
+
+const SECTION_STATE_LABELS = { chosen: 'Line chosen', declined: 'Declined', not_read: 'Not read' };
+const CHECK_LABELS = { pass: 'Pass', fail: 'Fail', not_run: 'Not run' };
+const CALL_STATE_LABELS = { completed: 'Answered', failed: 'Failed', not_sent: 'Not sent', unknown: 'Result unknown' };
+
+export const statusLabel = (status) => STATUS_LABELS[status] || status;
+export const sectionStateLabel = (state) => SECTION_STATE_LABELS[state] || state;
+export const checkLabel = (result) => CHECK_LABELS[result] || result;
+export const callStateLabel = (state) => CALL_STATE_LABELS[state] || state;
+
+export function plural(count, noun) {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+export function decimal(value, digits) {
+  return value.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+export function metres(value, digits = 1) {
+  return `${decimal(value, digits)} m`;
+}
+
+export function integer(value) {
+  return value.toLocaleString();
+}
+
+export function usd(value) {
+  // Model calls cost fractions of a cent; show enough digits to tell them apart.
+  const digits = value > 0 && value < 0.1 ? 4 : 2;
+  return `$${value.toFixed(digits)}`;
+}
+
+export function bytes(value) {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let size = value;
+  let unit = 0;
+  while (size >= 1000 && unit < units.length - 1) {
+    size /= 1000;
+    unit += 1;
+  }
+  return `${size >= 10 || unit === 0 ? Math.round(size) : size.toFixed(1)} ${units[unit]}`;
+}
+
+export function clock(ms) {
+  return new Date(ms).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+}
+
+export function fullTime(ms) {
+  return new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function sameDay(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+/** Compact time for the run list: "Now", "12 min", "09:14", "Yesterday", "5 Nov". */
+export function shortTime(ms) {
+  const now = new Date();
+  const then = new Date(ms);
+  const minutes = Math.round((now - then) / 60_000);
+  if (minutes < 1) return 'Now';
+  if (minutes < 60) return `${minutes} min`;
+  if (sameDay(now, then)) return clock(ms);
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (sameDay(yesterday, then)) return 'Yesterday';
+  return then.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
+/** Time for sentences: "just now", "12 min ago", "today at 09:14", "on 5 Nov at 16:40". */
+export function relativeTime(ms) {
+  const now = new Date();
+  const then = new Date(ms);
+  const minutes = Math.round((now - then) / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  if (sameDay(now, then)) return `today at ${clock(ms)}`;
+  return `on ${then.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} at ${clock(ms)}`;
+}
