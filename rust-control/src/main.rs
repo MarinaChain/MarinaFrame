@@ -1,12 +1,6 @@
-mod controller;
-mod provider;
-mod store;
-mod table_reading;
-mod types;
-mod util;
-mod validation;
-mod worker;
-
+use marinaframe_control::{
+    controller, provider, store, table_reading, types, util, validation, worker,
+};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

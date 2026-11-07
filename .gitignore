@@ -17,3 +17,7 @@ data/generated/
 data/external/
 data/public_scan/
 data/examples/
+
+# Tauri app
+app/src-tauri/gen/
+app/src-tauri/target/
