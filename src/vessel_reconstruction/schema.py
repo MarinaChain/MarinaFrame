@@ -9,7 +9,6 @@ from pathlib import Path
 MAX_LOCAL_METRES = 10_000_000.0
 MAX_SPEC_BYTES = 2 * 1024 * 1024
 MAX_SECTIONS = 300
-MAX_CELLS_PER_SECTION = 256
 MAX_TOTAL_CELLS = 4096
 MAX_PIXEL_COORDINATE = 1_000_000
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -127,10 +126,10 @@ def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
     if spec.get("schema_version") != "1.0":
         errors.append(gap("schema_version", "schema_version must be 1.0."))
     mode = spec.get("input_mode", "calibrated_section_curves")
-    if not isinstance(mode, str) or mode not in ("calibrated_section_curves", "offset_table_ocr"):
-        errors.append(gap("unsupported_input_mode", "Choose calibrated_section_curves or offset_table_ocr."))
-    if mode == "offset_table_ocr" and spec.get("table_value_units") != "feet_inches_eighths":
-        errors.append(gap("table_units_unresolved", "Declare table_value_units='feet_inches_eighths' for this OCR adapter."))
+    # Offset-table OCR (Tesseract) was removed; table reading by the vision
+    # model is not implemented yet. Archived OCR runs still verify (run_record).
+    if not isinstance(mode, str) or mode != "calibrated_section_curves":
+        errors.append(gap("unsupported_input_mode", "Only calibrated_section_curves is supported."))
     for name in ("vessel_id", "table_surface", "scope_note", "historical_date"):
         if name in spec and not _text(spec[name], 256 if name == "vessel_id" else 8192):
             errors.append(gap("invalid_metadata", f"{name} must be a bounded nonempty string."))
@@ -232,30 +231,8 @@ def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
                         ys.add(point[1])
                 if not okay:
                     errors.append(gap("invalid_contour_selection", "Selection requires 2..64 finite ROI anchors at distinct rows and half_width_px in (0,128].", sid))
-        if mode == "offset_table_ocr":
-            cells = sec.get("cells")
-            if not isinstance(cells, list) or not 5 <= len(cells) <= MAX_CELLS_PER_SECTION:
-                errors.append(gap("insufficient_table_rows", f"Declare 5..{MAX_CELLS_PER_SECTION} source measurement cells per station.", sid))
-            else:
-                total_cells += len(cells)
-                zs = set()
-                for cell in cells:
-                    if not isinstance(cell, dict):
-                        errors.append(gap("invalid_table_cell", "A cell must declare its source ROI and measured elevation.", sid))
-                        continue
-                    unknown(cell, {"z_m", "roi_px"}, "table cell", sid)
-                    z = cell.get("z_m")
-                    if not finite(z) or abs(z) > MAX_LOCAL_METRES or z in zs:
-                        errors.append(gap("invalid_table_elevation", "Cell elevations must be finite, bounded and unique per station.", sid))
-                    else:
-                        zs.add(z)
-                    if not _rectangle(cell.get("roi_px")):
-                        errors.append(gap("invalid_cell_region", "Each cell requires a bounded source-pixel rectangle.", sid))
-                    if any(k in cell for k in ("value", "y_m", "half_breadth_m", "ground_truth")):
-                        errors.append(gap("geometry_in_input", "Numeric half-breadths must be read from source pixels.", sid))
-            continue
         if "cells" in sec:
-            errors.append(gap("unexpected_field", "cells are supported only for offset_table_ocr.", sid))
+            errors.append(gap("unexpected_field", "Table cells are not supported.", sid))
         cal = sec.get("calibration")
         if not isinstance(cal, dict):
             errors.append(gap("invalid_calibration", "calibration must be an object.", sid))

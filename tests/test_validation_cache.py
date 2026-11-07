@@ -5,16 +5,10 @@ import json
 import pytest
 
 from benchmarks.reproduce_validation_cache import probe
-from vessel_reconstruction.agent_harness import Harness, ScriptedPolicy, TaskStore
 from vessel_reconstruction.provenance import write_json
 from vessel_reconstruction.validation_contract import (ValidationContractError, ready_for_review,
                                                        validate_contract_shape, verify_validation)
 from validation_fixture import ControlledValidationDomain
-
-
-FINISH = {"tool": "finish", "arguments": {"outcome": "candidate_ready_for_review", "summary": "Review this candidate."},
-          "reason": "Controlled finalization regression."}
-VALIDATE = {"tool": "validate_candidate", "arguments": {}, "reason": "Run deterministic validation."}
 
 
 def test_incomplete_legacy_probe_cannot_reach_review_ready(tmp_path):
@@ -24,7 +18,7 @@ def test_incomplete_legacy_probe_cannot_reach_review_ready(tmp_path):
     assert result["engineering_approved"] is False
 
 
-def test_complete_failed_audit_stays_failed_when_cached_and_finished(tmp_path):
+def test_complete_failed_audit_stays_failed_when_cached(tmp_path):
     domain = ControlledValidationDomain(tmp_path / "direct")
     first = domain.execute("validate_candidate", {})
     second = domain.execute("validate_candidate", {})
@@ -36,11 +30,8 @@ def test_complete_failed_audit_stays_failed_when_cached_and_finished(tmp_path):
     assert first["validation"]["contract"]["checks"] == {
         "worker_execution": "succeeded", "artifact_integrity": "passed",
         "cad_validity": "passed", "trace_fidelity": "failed"}
-    with TaskStore(tmp_path / "controller", create=True) as store:
-        domain = ControlledValidationDomain(store.path)
-        state = Harness(store, domain, ScriptedPolicy([VALIDATE, FINISH])).run()
-    assert domain.audit_calls == 1 and state["status"] == "blocked"
-    assert state["engineering_approved"] is False
+    # Finishing on the cached failure is guarded in Rust:
+    # rust-control/tests/finalization_guards.rs.
 
 
 def test_fresh_and_cached_pass_have_identical_authoritative_semantics(tmp_path):
@@ -62,18 +53,6 @@ def test_restart_retains_cached_pass_or_failure_without_a_new_audit(tmp_path, pa
     second = reopened.execute("validate_candidate", {})
     assert first["ok"] is second["ok"] is passed
     assert reopened.audit_calls == 0 and first["validation"] == second["validation"]
-
-
-def test_restart_finalization_does_not_promote_failed_cache(tmp_path):
-    with TaskStore(tmp_path / "task", create=True) as store:
-        domain = ControlledValidationDomain(store.path)
-        result = Harness(store, domain, ScriptedPolicy([VALIDATE])).run()
-        assert result["status"] == "provider_failed"
-    with TaskStore(tmp_path / "task") as store:
-        domain = ControlledValidationDomain(store.path, maximum=0.0)
-        state = Harness(store, domain, ScriptedPolicy([FINISH])).run()
-    assert state["status"] == "blocked" and domain.audit_calls == 0
-    assert state["engineering_approved"] is False
 
 
 @pytest.mark.parametrize("field", ["geometry_checks_passed", "immutable_run_verified"])
@@ -203,19 +182,6 @@ def test_prior_current_candidate_cannot_satisfy_a_different_binding(tmp_path, wh
         verify_validation(observed["validation"], context, domain.task_dir)
 
 
-def test_permissive_envelope_cannot_override_failed_contract(tmp_path):
-    with TaskStore(tmp_path / "task", create=True) as store:
-        domain = ControlledValidationDomain(store.path)
-        domain.execute("validate_candidate", {})
-        execute = domain.execute
-        def permissive(name, arguments):
-            observed = execute(name, arguments)
-            return observed | {"ok": True, "status": "validated_review_required"}
-        domain.execute = permissive
-        state = Harness(store, domain, ScriptedPolicy([FINISH])).run()
-    assert state["status"] == "blocked" and state["engineering_approved"] is False
-
-
 @pytest.mark.parametrize("state", ["cancelled", "timeout", "interrupted", "failed"])
 def test_interrupted_or_failed_audit_cannot_be_a_cached_pass(tmp_path, state):
     domain = ControlledValidationDomain(tmp_path / "task", outcome={"state": state, "elapsed_seconds": 0.0})
@@ -319,69 +285,6 @@ def test_render_marks_same_generation_older_revision_stale(tmp_path, monkeypatch
     assert rendered["ok"] and rendered["stale_candidate"] is True
     assert rendered["rendered_generation_id"] == domain.generation_id
     assert domain.state["rendered_views"] == []
-
-
-def _install_race_candidate(domain):
-    sid = domain.spec["sections"][0]["id"]
-    domain.state["catalog"][sid] = {"section_id": sid, "grid_evidence": {}, "candidates": [{
-        "candidate_id": "race-choice", "selectable": True, "hypothesis": "Controlled race source choice",
-        "contour_selection": {"anchors_px": [[100, 30], [100, 210]], "half_width_px": 3}}]}
-    domain._save()
-    return {"selections": [{"section_id": sid, "candidate_id": "race-choice"}]}
-
-
-@pytest.mark.parametrize("boundary", ["predicate", "event_commit"])
-def test_finalization_guard_excludes_allowed_selection_through_event_commit(tmp_path, monkeypatch, boundary):
-    from vessel_reconstruction import validation_contract
-    attempted = []
-    with TaskStore(tmp_path / "task", create=True) as store:
-        domain = ControlledValidationDomain(store.path, maximum=0.0005)
-        arguments = _install_race_candidate(domain)
-        assert domain.execute("validate_candidate", {})["ok"] is True
-        generation, revision = domain.generation_id, domain.revision_id
-        def attempt():
-            other = ControlledValidationDomain(store.path, maximum=0.0005)
-            attempted.append(other.execute("select_contours", arguments))
-        if boundary == "predicate":
-            predicate = validation_contract.ready_for_review
-            def check(*args):
-                attempt()
-                return predicate(*args)
-            monkeypatch.setattr(validation_contract, "ready_for_review", check)
-        else:
-            append = store.append
-            def commit(kind, payload, state):
-                if kind == "terminated" and state["status"] == "awaiting_human_review":
-                    attempt()
-                return append(kind, payload, state)
-            monkeypatch.setattr(store, "append", commit)
-        result = Harness(store, domain, ScriptedPolicy([FINISH])).run()
-    assert len(attempted) == 1 and attempted[0]["ok"] is False
-    assert attempted[0]["error_code"] == "invalid_tool_arguments"
-    reopened = ControlledValidationDomain(domain.task_dir, maximum=0.0005)
-    assert (reopened.generation_id, reopened.revision_id) == (generation, revision)
-    assert result["status"] == "awaiting_human_review" and result["engineering_approved"] is False
-
-
-@pytest.mark.parametrize("deadline", [False, True])
-def test_cancellation_during_final_predicate_cannot_commit_review_ready(tmp_path, monkeypatch, deadline):
-    import threading
-    from vessel_reconstruction import validation_contract
-    event = threading.Event()
-    with TaskStore(tmp_path / "task", create=True) as store:
-        domain = ControlledValidationDomain(store.path, maximum=0.0005)
-        harness = Harness(store, domain, ScriptedPolicy([FINISH]), cancel_event=event)
-        predicate = validation_contract.ready_for_review
-        def cancel_after_assessment(*args):
-            passed = predicate(*args)
-            assert passed is True
-            harness._deadline_triggered = deadline
-            event.set()
-            return passed
-        monkeypatch.setattr(validation_contract, "ready_for_review", cancel_after_assessment)
-        state = harness.run()
-    assert state["status"] == ("budget_exhausted" if deadline else "cancelled")
-    assert state["engineering_approved"] is False
 
 
 @pytest.mark.parametrize("invalid", [False, True, 0.0, -1, 100_000_000, "0", None])

@@ -25,7 +25,7 @@ This file is the resume point. It does not depend on chat history.
 Python packages are installed at the exact versions of the Linux hash locks, without hashes
 (`work/macos-constraints.txt` is generated from `requirements-linux-py312.lock` and
 `requirements-data-linux-py312.lock`). `pip check` is clean. Tesseract 5.5.4 from Homebrew was
-installed only to prove the current OCR code before it is removed.
+installed only to prove the OCR code before its removal; it is no longer used.
 
 | Change | Linux behaviour | macOS behaviour |
 |---|---|---|
@@ -64,17 +64,47 @@ installed only to prove the current OCR code before it is removed.
 
 See the commit message of the port commit for the final run. Logs: `work/*-3.log` (not tracked).
 
+## Tesseract OCR removed (done)
+
+Removed `table_ingest.py`, `model_proposals.py`, the `offset_table_ocr` pipeline branch, the
+OCR resource budget, the OCR benchmarks (`proposal_experiment`, `archived_table_experiment`,
+`prepare_archived_table`), their tests, `TESSDATA_PREFIX` from both worker environments and
+`tesseract-ocr` from CI. New specs with `input_mode: offset_table_ocr` are rejected
+(`unsupported_input_mode`). `run_record.py` still reads the value so archived OCR runs verify.
+Table reading by the DeepSeek vision model is **not implemented yet**. Homebrew Tesseract can be
+removed with `brew uninstall tesseract`.
+
+## Finalization guards ported to Rust (done)
+
+`rust-control/tests/finalization_guards.rs` drives the real Rust finish path over the real
+worker protocol. `tests/rust_controlled_worker.py` runs real `DomainTools` (inspection,
+selection, native build, STEP export); only the native audit result is injected. One prepared
+task is built once per run and copied per test (about 70 s for the file).
+
+| Ported Python Harness test | Rust test |
+|---|---|
+| cached failed audit, then finish | `failed_audit_stays_failed_when_cached_and_finished` |
+| restart, then finish on cached failure | `restart_finalization_does_not_promote_failed_cache` |
+| permissive envelope over failed contract | `permissive_envelope_cannot_override_failed_contract` |
+| selection race at predicate / event commit (2 files) | `selection_is_excluded_after_the_passing_predicate`, `..._until_the_review_ready_commit` |
+| cancellation after passing predicate (2 files) | `cancellation_after_passing_predicate_prevents_review_ready_commit` |
+| elapsed deadline after predicate (2 files) | not ported: the Rust controller has no task wall-clock deadline |
+
+Mutation check (2026-11-07): accepting any well-formed audit at finish fails the 3 failure-path
+tests; removing the domain guard fails both race tests; removing the pre-commit cancellation
+check fails the cancellation test. The controller has a `cfg(test)`-only hook
+(`FINALIZATION_HOOK`) for these interleavings; release builds contain none.
+
+Rust is stricter than the Python predicate: `validation::ready` re-verifies the immutable run
+manifest, so the old fabricated-build fixture cannot pass it.
+
 ## Next steps (resume here)
 
-1. **Test cut, phase 1 (no code removal needed):** remove OCR tests with the OCR path
-   (`test_table_ingest`, `test_table_pipeline`, `test_model_proposals`, `table_ingest.py`,
-   `model_proposals.py`, the `offset_table_ocr` branch in `pipeline.py`) and historical experiment
-   tests (`test_proposal_experiment`, `test_pixel_corridor_proposals`).
-2. **Port the finalization guards to Rust first**: 5 Harness tests in `test_validation_cache` and 4
-   in `test_validation_finalize_independent` are the only guards for the 0.3 cached-failure
-   finalization defect on the Harness side.
-3. **Then retire the legacy path**: `agent_harness`, `agent_cli`, `agent_review`, `agent_provider`,
-   `server`, `jobs`, `review`, `web/` with their tests (~100 tests).
-4. Keep data-pipeline and benchmark tests while roadmap steps 5–6 (licensed data, new evaluation)
+1. **Retire the legacy path**: `agent_harness`, `agent_cli`, `agent_review`, `agent_provider`,
+   `server`, `jobs`, `review`, `web/` with their tests (~100 tests). Its finalization is no longer
+   guarded by Python tests. `benchmarks/reproduce_validation_cache.py` (historical 0.3 probe)
+   uses the Harness; keep the probe's historical output when it goes.
+2. Implement table reading with the DeepSeek vision model, replacing the removed OCR path.
+3. Keep data-pipeline and benchmark tests while roadmap steps 5–6 (licensed data, new evaluation)
    use them.
-5. Then continue `handoff/MarinaFrame_Claude_Code_Handoff.md`, "Next work in order", from step 2.
+4. Then continue `handoff/MarinaFrame_Claude_Code_Handoff.md`, "Next work in order", from step 2.

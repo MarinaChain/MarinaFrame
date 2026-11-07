@@ -181,7 +181,7 @@ pub fn run(
             .arg("--response")
             .arg(&response);
         c.env_clear();
-        for key in ["PATH", "LANG", "LC_ALL", "TZ", "TESSDATA_PREFIX"] {
+        for key in ["PATH", "LANG", "LC_ALL", "TZ"] {
             if let Ok(v) = std::env::var(key) {
                 c.env(key, v);
             }

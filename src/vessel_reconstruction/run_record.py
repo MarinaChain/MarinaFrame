@@ -166,6 +166,7 @@ def _check_record(root: Path, result: dict, manifest: dict):
     _require(type(result["requested_exports"]) is bool and finite(result["timing_seconds"]) and result["timing_seconds"] >= 0, "Invalid request or timing metadata.")
     for field in ("vessel_id", "method"):
         _require(isinstance(result[field], str) and 0 < len(result[field]) <= 8192, "Invalid record text metadata.")
+    # offset_table_ocr stays readable so archived OCR runs still verify.
     _require(result["input_mode"] in (None, "calibrated_section_curves", "offset_table_ocr"), "Invalid input mode metadata.")
     for field in ("sources", "parts", "sections", "normalized_sections", "gaps", "assumptions"):
         _require(isinstance(result[field], list), f"Invalid {field} record.")

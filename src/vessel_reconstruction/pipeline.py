@@ -190,7 +190,7 @@ def reconstruct(spec_path: str | Path, output_dir: str | Path, *, export_cad: bo
             if isinstance(input_spec.get("vessel_id"), str) and input_spec["vessel_id"].strip():
                 result["vessel_id"] = input_spec["vessel_id"][:256]
             mode = input_spec.get("input_mode", "calibrated_section_curves")
-            result["input_mode"] = mode if isinstance(mode, str) and mode in ("calibrated_section_curves", "offset_table_ocr") else None
+            result["input_mode"] = mode if isinstance(mode, str) and mode == "calibrated_section_curves" else None
         else:
             if not result["gaps"]:
                 result["gaps"].append(gap("invalid_spec", "The drawing specification must be a JSON object."))
@@ -250,12 +250,8 @@ def reconstruct(spec_path: str | Path, output_dir: str | Path, *, export_cad: bo
                 _make_source_preview(source, stage, replay_spec)
             phase = "section_extraction"
             transaction.checkpoint(phase)
-            if result["input_mode"] == "offset_table_ocr":
-                from .table_ingest import extract_table_sections
-                extracted = extract_table_sections(replay_spec, stage)
-            else:
-                from .ingest import extract_sections
-                extracted = extract_sections(replay_spec, stage)
+            from .ingest import extract_sections
+            extracted = extract_sections(replay_spec, stage)
             result["sections"] = extracted.get("sections", [])
             result["gaps"].extend(extracted.get("gaps", []))
             result["diagnostics"] = extracted.get("diagnostics", {})

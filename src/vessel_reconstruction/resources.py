@@ -218,24 +218,8 @@ def validate_sources(spec: dict, base_dir: Path, policy: SourcePolicy = DEFAULT_
         if 'roi_px' in section:
             left, top, right, bottom = _roi(section['roi_px'], width, height)
             rows += bottom - top
-        if spec.get('input_mode') == 'offset_table_ocr':
-            entries = section.get('cells', [])
-            if not isinstance(entries, list):
-                _reject('Table cells must be a list.', 'invalid_region')
-            cells += len(entries)
-            if cells > policy.table_cells:
-                _reject('Table cell count exceeds the configured whole-job budget.')
-            for cell in entries:
-                if not isinstance(cell, dict):
-                    _reject('Each table cell must be an object.', 'invalid_region')
-                left, top, right, bottom = _roi(cell.get('roi_px'), width, height)
-                factor = max(1, math.ceil(120 / (bottom - top)))
-                expanded = ((right - left) * factor + 36) * ((bottom - top) * factor + 36)
-                if expanded > policy.cell_pixels:
-                    _reject('An enlarged OCR crop exceeds the per-cell pixel budget.')
-                cell_pixels += expanded
     if rows > policy.trace_rows or cell_pixels > policy.aggregate_cell_pixels:
-        _reject('Combined trace/OCR work exceeds the whole-job budget.')
+        _reject('Combined trace work exceeds the whole-job budget.')
     records['work'] = {'trace_rows': rows, 'table_cells': cells, 'expanded_cell_pixels': cell_pixels}
     records['policy'] = asdict(policy)
     return records

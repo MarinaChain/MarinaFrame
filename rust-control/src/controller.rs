@@ -9,6 +9,29 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+/// Test-only hook into finalization. It runs at "after_predicate" (current
+/// contract passed, domain guard held) and "before_commit" (review-ready state
+/// set, not yet committed). Tests use it for the interleavings that the Python
+/// tests reached by monkeypatching. Release builds contain no hook.
+#[cfg(test)]
+pub type FinalizationHook = fn(&std::path::Path, &str);
+
+#[cfg(test)]
+#[allow(dead_code)]
+pub static FINALIZATION_HOOK: std::sync::Mutex<Option<FinalizationHook>> =
+    std::sync::Mutex::new(None);
+
+#[cfg(test)]
+fn finalization_point(task: &std::path::Path, point: &str) {
+    let hook = *FINALIZATION_HOOK.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(hook) = hook {
+        hook(task, point);
+    }
+}
+
+#[cfg(not(test))]
+fn finalization_point(_task: &std::path::Path, _point: &str) {}
+
 pub fn new_state(config: Config) -> State {
     State {
         schema_version: CONTROL_VERSION.into(),
@@ -936,6 +959,7 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
             &store.state.last_observation["validation_context"],
         ) {
             Ok(contract) => {
+                finalization_point(&store.path, "after_predicate");
                 if store.state.config.policy == Policy::Live
                     && !live_visual_coverage(store, &contract.binding.step_sha256)
                 {
@@ -945,6 +969,7 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
                 }
                 store.state.status = Status::AwaitingHumanReview;
                 store.state.termination_reason = Some(finish.summary);
+                finalization_point(&store.path, "before_commit");
                 if worker::cancelled(&store.path) {
                     stop(
                         store,
