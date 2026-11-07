@@ -93,7 +93,7 @@ Errors return `{ "code": string, "message": string }` with plain-language `messa
 | `list_tasks` | `{}` | `TaskSummary[]` |
 | `get_task` | `{ task: string }` | `TaskView` |
 | `get_events` | `{ task, after_sequence: number }` | `EventView[]` (only newer) |
-| `read_artifact` | `{ task, path }` | `{ mime, base64 }` (path must be inside the task; images and STL only) |
+| `read_artifact` | `{ task, path }` | `{ mime, base64 }` (`path` is relative to the task folder, with `/` separators, never absolute, and must stay inside it; images and STL only; the STL is in the unit of the CAD export, so the UI scales it to `length_m`) |
 | `start_run` | `{ spec_path: string }` | `{ task: string }` |
 | `cancel_task` | `{ task }` | `{ ok: true }` |
 | `resume_task` | `{ task }` | `{ ok: true }` |
@@ -108,7 +108,7 @@ watched task's event count grows (poll every 500 ms or file watch).
 ### Types
 
 ```text
-TaskSummary { task: string (absolute path), name: string, status: Status,
+TaskSummary { task: string (absolute path), name: string (vessel_id of the captured spec, else the task folder name), status: Status,
               policy: "deterministic"|"live", updated_ms: number, sections: number }
 Status = "running" | "needs_review" | "declined" | "failed" | "cancelled" | "paused" | "blocked"
 TaskView {

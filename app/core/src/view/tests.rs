@@ -22,7 +22,7 @@ fn fixture(status: &str) -> tempfile::TempDir {
         candidate("c1","grid_supported_contour_hypothesis",90.0),
         candidate("c2","retained_alternative_source_continuity",110.0)]}}});
     fs::write(task.join("domain/state.json"), domain.to_string()).unwrap();
-    let spec = json!({"sections":[
+    let spec = json!({"vessel_id":"ship","sections":[
         {"id":"s0","x_m":0.0,"roi_px":[10,20,195,220]},{"id":"s1","x_m":2.0,"roi_px":[210,20,395,220]}]});
     fs::write(task.join("domain/input/spec.json"), spec.to_string()).unwrap();
     tmp
@@ -51,6 +51,16 @@ fn declined_task_shows_sections_candidates_and_plain_reasons() {
     assert_eq!(view.checks.len(), 1);
     assert_eq!(view.checks[0].result, CheckResult::NotRun);
     assert_eq!(view.evidence["engineering_approved"], false);
+}
+
+#[test]
+fn run_name_falls_back_to_the_task_folder_name() {
+    let tmp = fixture("blocked");
+    let task = tmp.path().join("task");
+    fs::write(task.join("domain/input/spec.json"), r#"{"sections":[]}"#).unwrap();
+    assert_eq!(run_name(&task), "task");
+    fs::write(task.join("domain/input/spec.json"), r#"{"vessel_id":"  "}"#).unwrap();
+    assert_eq!(run_name(&task), "task");
 }
 
 #[test]
