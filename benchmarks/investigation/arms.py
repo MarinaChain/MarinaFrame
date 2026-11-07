@@ -170,7 +170,8 @@ def summarize(run: Path, input_dir: Path, truth: Path | None, metric: Path | Non
     record = json.loads((run / "arm_record.json").read_text())
     stdout = (run / "controller_stdout.json").read_text().strip()
     status = json.loads(stdout) if stdout.startswith("{") else {"status": "cli_error"}
-    state = json.loads((task / "domain" / "state.json").read_text())
+    state_file = task / "domain" / "state.json"
+    state = json.loads(state_file.read_text()) if state_file.exists() else {"selected": {}, "catalog": {}}
     spec = json.loads((input_dir / "spec.json").read_text())
     events = _events(task)
     counters = events[-1]["state_after"]["counters"] if events else {}
@@ -208,24 +209,27 @@ def summarize(run: Path, input_dir: Path, truth: Path | None, metric: Path | Non
         chosen[sid] = {"kind": kind, "candidate_id": cid, "hypothesis": candidate.get("hypothesis"),
                        "anchors_px": anchors}
     image.save(run / "overlay.png")
-    summary = {"arm": record["arm"], "status": status.get("status"),
+    summary = {"arm": record["arm"], "exit": record["exit"], "status": status.get("status"),
+               "domain_state_missing": not state_file.exists(),
+               "sections_without_line": len(spec["sections"]) - len(lines),
                "termination_reason": status.get("termination_reason"),
                "sections": len(spec["sections"]), "sections_with_line": len(lines),
                "selected": len(state["selected"]), "guess_kinds": kinds,
                "requests": {k: counters.get(k) for k in ("requests_intended", "requests_completed",
                                                           "requests_failed", "requests_unknown",
                                                           "requests_not_sent")},
-               "prompt_tokens": counters.get("prompt_tokens"), "completion_tokens": counters.get("completion_tokens"),
-               "observed_cost_usd": counters.get("observed_cost_usd"),
-               "requests_without_cost": counters.get("requests_without_cost"),
+               "prompt_tokens": counters.get("prompt_tokens", 0), "completion_tokens": counters.get("completion_tokens", 0),
+               "observed_cost_usd": counters.get("observed_cost_usd", 0),
+               "requests_without_cost": counters.get("requests_without_cost", 0),
                "model_tools": tools, "refusals": refused, "wall_seconds": record["wall_seconds"],
                "views_sent": len(state.get("views", [])), "commit": record["commit"], "lines": chosen}
     candidate = status.get("current_candidate") or {}
-    if truth is not None and candidate.get("path"):
+    if truth is not None:
         sys.path.insert(0, str(ROOT))
         from benchmarks.gunnerus import score
-        run_dir = task / candidate["path"]
-        model = next((run_dir / n for n in ("model-draft.step", "model.step") if (run_dir / n).exists()), None)
+        run_dir = task / candidate["path"] if candidate.get("path") else None
+        model = (next((run_dir / n for n in ("model-draft.step", "model.step") if (run_dir / n).exists()), None)
+                 if run_dir is not None else None)
         stations = [{"id": s["id"], "x_m": s["x_m"], "status": "read" if s["id"] in lines else "not_read"}
                     for s in spec["sections"]]
         result = score.score(truth, model, stations, json.loads(metric.read_text()), run / "score")

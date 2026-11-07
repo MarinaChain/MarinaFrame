@@ -715,7 +715,7 @@ def _write_section_evidence(image, section: dict, entry: dict, out: Path, source
     write_json(out / (basename + ".json"), entry)
     artifacts.extend([
         {"file": basename + ".png", "kind": "source_candidate_overlay", "section_id": sid,
-         "source_sha256": source_sha, "coordinate_system": "original source pixels; crop shown with identical orientation and scale"},
+         "crop_box_px": list(section["roi_px"]), "source_sha256": source_sha, "coordinate_system": "original source pixels; crop shown with identical orientation and scale"},
         {"file": basename + ".json", "kind": "source_candidate_evidence", "section_id": sid,
          "source_sha256": source_sha}])
 
@@ -794,7 +794,7 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
     page.thumbnail((3000, 3000))
     page.save(out / "source-page.png")
     artifacts.append({"file": "source-page.png", "kind": "source_page", "source_sha256": source_sha,
-                      "display_note": "Source page with declared ROI boundaries; display derivative only."})
+                      "crop_box_px": [0, 0, image.shape[1], image.shape[0]], "display_note": "Source page with declared ROI boundaries; display derivative only."})
     for section in spec["sections"]:
         sid = section["id"]
         if sid not in section_ids:
@@ -977,7 +977,7 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
             derivative = _model_observation_image(out / artifact["file"])
             model_artifacts.append({**derivative, "kind": "model_observation",
                                     "section_id": artifact.get("section_id"), "source_sha256": source_sha,
-                                    "evidence_kind": artifact["kind"]})
+                                    "evidence_kind": artifact["kind"], "crop_box_px": artifact["crop_box_px"]})
     return {"sections": sections, "artifacts": artifacts + model_artifacts, "source_sha256": source_sha,
             "implementation_files_sha256": implementation, "implementation_sha256": digest_object(implementation)}
 

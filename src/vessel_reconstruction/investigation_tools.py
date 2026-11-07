@@ -131,7 +131,6 @@ def traced_candidate(traced: dict, source_sha: str, section_id: str, tool: str) 
 # Distinct colours of enumerated strokes; tags repeat the colour.
 STROKE_COLOURS = [(230, 25, 75), (60, 140, 60), (0, 90, 220), (245, 130, 48), (145, 30, 180), (0, 150, 150),
                   (200, 30, 200), (120, 100, 0), (128, 0, 0), (0, 0, 128), (170, 110, 40), (90, 90, 90)]
-MAX_ENUMERATED_PER_SECTION = 48
 
 
 class InvestigationTools:
@@ -258,9 +257,7 @@ class InvestigationTools:
             candidate = traced_candidate(traced, source_sha, "panel", "enumerate_strokes")
             for member in panel:
                 candidates = self.state["catalog"][member["id"]]["candidates"]
-                enumerated = sum("enumerate_strokes" in c["generated_by"] for c in candidates)
-                if enumerated < MAX_ENUMERATED_PER_SECTION and not any(
-                        c["candidate_id"] == candidate["candidate_id"] for c in candidates):
+                if not any(c["candidate_id"] == candidate["candidate_id"] for c in candidates):
                     candidates.append(copy.deepcopy(candidate))
             rows, xs = traced["trace_rows_px"], traced["trace_xs_px"]
             tags.append({"tag": index, "candidate_id": candidate["candidate_id"],

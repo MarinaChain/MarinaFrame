@@ -182,14 +182,15 @@ def window_foreground(image: np.ndarray, section: dict):
     """
     from .ingest import _eligible_trace_mask, _foreground
     window = _trace_window(section, image.shape)
-    key = (id(image), window)
-    if key not in _FOREGROUND_CACHE:
+    # Keep the image alive and compare identity, not its recyclable object id.
+    if (_FOREGROUND_CACHE.get("image") is not image
+            or _FOREGROUND_CACHE.get("window") != window):
         left, top, right, bottom = window
         mask, ink, _ = _foreground(image[top:bottom + 1, left:right])
         eligible, _ = _eligible_trace_mask(mask, None, ink)
         _FOREGROUND_CACHE.clear()
-        _FOREGROUND_CACHE[key] = (mask, ink, eligible)
-    return _FOREGROUND_CACHE[key]
+        _FOREGROUND_CACHE.update(image=image, window=window, masks=(mask, ink, eligible))
+    return _FOREGROUND_CACHE["masks"]
 
 
 # Stroke enumeration: scanlines at these shares of the calibrated height, and

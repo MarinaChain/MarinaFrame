@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import json
 
+import numpy as np
 from PIL import Image, ImageDraw
 
 from draft_fixture import draft_drawing
@@ -66,6 +67,8 @@ def shared_panel_drawing(directory):
 def test_view_is_bounded_and_records_its_mapping(tmp_path):
     spec, _ = draft_drawing(tmp_path / "src")
     domain = _domain(tmp_path, spec)
+    sent = [a for a in domain.state["inspection_artifacts"] if a.get("model_eligible")]
+    assert sent and all(a.get("crop_box_px") for a in sent)
     view = _view(domain, [0, 0, 200, 230])
     assert view["crop_box_px"] == [0, 0, 200, 230]
     assert view["view_px_per_source_px"] == [4.0, 4.0]  # small regions are enlarged at most 4x
@@ -148,6 +151,34 @@ def test_enumerated_strokes_are_tagged_shared_by_the_panel_and_never_best_guesse
     # ... and never a best-score guess.
     guesses = make_guesses(domain.spec["sections"], domain.state["selected"], domain.state["catalog"], {})
     assert all(g["chosen_candidate_id"] not in new for g in guesses)
+
+
+def test_foreground_cache_does_not_reuse_a_released_image_id(tmp_path, monkeypatch):
+    spec = json.loads(shared_panel_drawing(tmp_path / "src").read_text())
+    section = spec["sections"][0]
+    image = np.asarray(Image.open(tmp_path / "src" / "drawing.png").convert("RGB"))
+    # NumPy allocations can reuse an object's id after a tool call releases it.
+    monkeypatch.setattr(inv, "id", lambda _: 1, raising=False)
+    inv._FOREGROUND_CACHE.clear()
+    assert inv.window_foreground(image, section)[0].any()
+    blank = np.full_like(image, 255)
+    assert not inv.window_foreground(blank, section)[0].any()
+
+
+def test_enumeration_keeps_new_tags_assignable_after_many_calls(tmp_path, monkeypatch):
+    domain = _domain(tmp_path, shared_panel_drawing(tmp_path / "src"))
+    for entry in domain.state["catalog"].values():
+        entry["candidates"] = []
+    domain._save()
+    # Simulate a panel whose previous calls filled the old aggregate catalog cap.
+    monkeypatch.setattr("vessel_reconstruction.investigation_tools.MAX_ENUMERATED_PER_SECTION", 0,
+                        raising=False)
+    result = domain.execute("enumerate_strokes", {"section_id": "a"})
+    assert result["ok"], result
+    assert len(result["strokes"]) == 2
+    for sid in ("a", "b", "c"):
+        ids = {c["candidate_id"] for c in domain.state["catalog"][sid]["candidates"]}
+        assert {s["candidate_id"] for s in result["strokes"]} <= ids
 
 
 def test_a_short_fragment_or_unknown_view_is_refused(tmp_path):

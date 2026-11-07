@@ -336,6 +336,32 @@ fn model_cannot_set_review_status_change_gates_or_run_code() {
 }
 
 #[test]
+fn forged_worker_review_claims_are_not_adopted() {
+    let _serial = serial();
+    for mode in [
+        json!({"forge_review":true}),
+        json!({"forge_review_required":true}),
+    ] {
+        let (_directory, mut store) = prepared(mode);
+        let generation = store.state.generation_id.clone();
+        let domain = store.state.domain.clone();
+        assert_eq!(
+            model(
+                &mut store,
+                "view_region",
+                json!({"region_px":[0,0,200,230]})
+            )
+            .unwrap_err(),
+            "worker_result_review_contract"
+        );
+        assert_eq!(store.state.domain, domain);
+        assert_eq!(store.state.generation_id, generation);
+        assert!(!store.state.engineering_approved);
+        assert_ne!(store.state.status, Status::AwaitingHumanReview);
+    }
+}
+
+#[test]
 fn model_cannot_confirm_its_own_guess_but_a_person_can() {
     let _serial = serial();
     let (_directory, mut store) = prepared(json!({}));
@@ -360,6 +386,29 @@ fn model_cannot_confirm_its_own_guess_but_a_person_can() {
             "guess_requires_operator_confirmation"
         );
     }
+    // Restart does not let the model replace a guess with a selected alternative.
+    let task = store.path.clone();
+    drop(store);
+    let mut store = store::Store::open(&task).unwrap();
+    let alternative = catalog_candidates(&store, "s0")
+        .into_iter()
+        .find(|c| c["candidate_id"] != traced.as_str() && c["selectable"] == true)
+        .unwrap()["candidate_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(
+        model(
+            &mut store,
+            "select_contours",
+            json!({"selections":[{"section_id":"s0","candidate_id":alternative}]})
+        )
+        .unwrap_err(),
+        "guess_requires_operator_confirmation"
+    );
+    let checkpoint = validation::domain_checkpoint(&store.path).unwrap();
+    assert_eq!(checkpoint["guesses"][0]["chosen_candidate_id"], traced);
+    assert_eq!(checkpoint["guesses"][0]["status"], "open");
     // The model may revise its own guess (it stays a guess) ...
     assert!(model(
         &mut store,
@@ -472,7 +521,7 @@ fn investigation_tools_exist_only_in_draft_mode() {
 }
 
 #[test]
-#[ignore = "real CAD: builds the draft STEP"]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn submitting_an_investigated_draft_stops_at_draft_not_verified() {
     let _serial = serial();
     let (_directory, mut store) = prepared(json!({}));

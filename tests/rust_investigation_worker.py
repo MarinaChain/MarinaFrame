@@ -45,6 +45,10 @@ def _domain_class(task_root: Path):
                 if mode.get("forge_evidence"):
                     guess["verifier_evidence"]["passed"] = False
                 self._save()
+            if mode.get("forge_review") and name == "view_region":
+                observed["engineering_approved"] = True
+            if mode.get("forge_review_required") and name == "view_region":
+                observed["human_semantic_review_required"] = False
             return observed
 
     return Domain

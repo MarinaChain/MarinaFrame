@@ -518,6 +518,20 @@ fn investigation_observation(store: &Store) -> Result<Value> {
             })
             .collect::<Vec<_>>()
     });
+    // Keep the latest tagged strokes of each panel across later label views.
+    // Otherwise the model sees pixels but loses the candidate ids to assign.
+    let mut panels = BTreeMap::new();
+    for event in store.events.iter().rev() {
+        let result = &event.payload["response"]["result"];
+        if result["status"] == "strokes_enumerated" {
+            let key = util::hash_json(&result["panel_section_ids"])?;
+            panels.entry(key).or_insert_with(|| {
+                json!({
+                "panel_section_ids":result["panel_section_ids"],
+                "strokes":result["strokes"], "view":result["view"]})
+            });
+        }
+    }
     let candidate = &d["current_candidate"];
     let history = store
         .events
@@ -538,8 +552,14 @@ fn investigation_observation(store: &Store) -> Result<Value> {
         "sheet_setup_ids":d["sheet_setup_ids"],"rendered_views":d["rendered_views"],
         "current_draft":if candidate.is_null(){Value::Null}else{json!({"valid":candidate["valid"],"draft":candidate["draft"],"status":candidate["status"]})},
         "last_observation":store.state.last_observation,"recent_history_newest_first":history,
+        "retained_stroke_panels":panels.values().collect::<Vec<_>>(),
         "current_policy":"live_investigation","engineering_approved":false,
         "source_truth":"source evidence and deployment-available checks only; no evaluator references"});
+    // Images are attached separately. Their artifact inventories can be large;
+    // omit them before reducing tool evidence such as tags and view mappings.
+    if let Some(last) = value["last_observation"].as_object_mut() {
+        last.remove("artifacts");
+    }
     let limit = store.state.config.limits.max_observation_bytes;
     if util::json_bytes(&value)?.len() > limit {
         // A large inspection result keeps its section and candidate ids only.
@@ -2117,6 +2137,61 @@ mod tests {
         );
     }
     #[test]
+    fn investigation_receipts_bind_images_and_observation_on_recovery() {
+        let forgeries: [fn(&mut Receipt); 6] = [
+            |r| r.images[0].sha256 = "d".repeat(64),
+            |r| r.images[0].crop_box_px = Some([0, 0, 40, 30]),
+            |r| r.images[0].pixel_size = Some([40, 30]),
+            |r| r.observation_sha256 = "d".repeat(64),
+            |r| r.generation_id = "generation-forged".into(),
+            |r| r.revision_id = "r0002".into(),
+        ];
+        for reconciled in [false, true] {
+            for forge in forgeries {
+                let (_tmp, mut store, pending, mut receipt, body) = investigation_receipt_fixture();
+                let image = ImageReceipt {
+                    artifact_id: "view-1".into(),
+                    path: "domain/views/view.png".into(),
+                    sha256: "e".repeat(64),
+                    bytes: 100,
+                    mime_type: "image/png".into(),
+                    evidence_kind: "region_view".into(),
+                    view: None,
+                    generation_id: None,
+                    revision_id: None,
+                    step_sha256: None,
+                    pixels_attached: true,
+                    crop_box_px: Some([0, 0, 400, 300]),
+                    pixel_size: Some([400, 300]),
+                };
+                let path = store.path.join(&pending.request_path);
+                let mut input: ProviderInput =
+                    serde_json::from_value(util::read_json(&path, 2 * 1024 * 1024).unwrap())
+                        .unwrap();
+                input.images = vec![image.clone()];
+                util::atomic_json(&path, &input, true).unwrap();
+                receipt.images = vec![image];
+                forge(&mut receipt);
+                util::atomic_json(&store.path.join(&pending.response_path), &receipt, false)
+                    .unwrap();
+                std::fs::write(
+                    store.path.join(provider::body_path(&pending.response_path)),
+                    body,
+                )
+                .unwrap();
+                assert!(apply_provider(
+                    &mut store,
+                    &pending,
+                    json!({"state":"exited"}),
+                    reconciled
+                )
+                .is_err());
+                assert!(store.state.staged_decision.is_none());
+                assert_eq!(store.state.counters.requests_completed, 0);
+            }
+        }
+    }
+    #[test]
     fn investigation_tools_require_draft_mode_and_are_bounded() {
         let (_tmp, store) = fixture();
         let view = Operation::ViewRegion(ViewRegion {
@@ -2190,6 +2265,40 @@ mod tests {
                 "{candidate}"
             );
         }
+    }
+    #[test]
+    fn enumeration_tags_survive_a_later_label_view() {
+        let (_tmp, mut store) = fixture();
+        store.state.config.on_ambiguity = OnAmbiguity::Draft;
+        store
+            .append(
+                "worker_result",
+                json!({"operation":"enumerate_strokes","response":{"result":{
+            "ok":true,"status":"strokes_enumerated","panel_section_ids":["s0","s1"],
+            "strokes":[{"tag":1,"candidate_id":"trace-1"}],"view":{"view_id":"view-1"}}}}),
+            )
+            .unwrap();
+        store.state.last_observation = json!({"ok":true,"status":"viewed"});
+        let observed = investigation_observation(&store).unwrap();
+        assert_eq!(
+            observed["retained_stroke_panels"][0]["strokes"][0]["candidate_id"],
+            "trace-1"
+        );
+    }
+    #[test]
+    fn large_enumeration_preserves_tags_and_view_mapping() {
+        let (_tmp, mut store) = fixture();
+        store.state.config.on_ambiguity = OnAmbiguity::Draft;
+        store.state.last_observation = json!({"ok":true,"status":"strokes_enumerated",
+            "section_id":"s0", "strokes":[{"tag":1,"candidate_id":"trace-1"}],
+            "view":{"view_id":"view-1","crop_box_px":[0,0,400,300],"view_px_per_source_px":[1,1]},
+            "artifacts":[{"id":"image-1","padding":"x".repeat(100_000)}]});
+        let observed = investigation_observation(&store).unwrap();
+        assert_eq!(
+            observed["last_observation"]["strokes"][0]["candidate_id"],
+            "trace-1"
+        );
+        assert_eq!(observed["last_observation"]["view"]["view_id"], "view-1");
     }
     #[test]
     fn refusals_are_counted_until_an_accepted_action() {
