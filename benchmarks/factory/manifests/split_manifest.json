@@ -1,0 +1,83 @@
+{
+ "frozen_utc": "2026-11-07T12:05:44Z",
+ "generator_commit": {
+  "commit": "a2608e197df18d6bac7d40c9e4f78f53c76946c2",
+  "dirty": false
+ },
+ "seed": 20261107,
+ "cases_file": "cases.jsonl",
+ "cases_sha256": "3130a03396d7a3f05a8bffadde532c14fc52c3a6b9f0aba653042f588126d42a",
+ "hulls_sha256": "a21bbb46af7557a3af2b8733a00fb5531453cf3bb42009e8f556ca3974c42ea2",
+ "splits": {
+  "development": {
+   "cases": 528,
+   "hulls": 132,
+   "families": [
+    "dtmb5415",
+    "series60",
+    "shipd-c00",
+    "shipd-c02",
+    "shipd-c03",
+    "shipd-c06",
+    "shipd-c08",
+    "shipd-c09",
+    "shipd-c10",
+    "shipd-c16",
+    "shipd-c18",
+    "shipd-c19",
+    "shipd-c20",
+    "shipd-c21",
+    "shipd-c22",
+    "shipd-c23",
+    "shipd-c26",
+    "shipd-c27",
+    "shipd-c28",
+    "shipd-c29",
+    "shipd-c30",
+    "shipd-c32",
+    "shipd-c34",
+    "shipd-c36",
+    "shipd-c37",
+    "shipd-c38",
+    "shipd-c41",
+    "shipd-c43",
+    "wigley"
+   ]
+  },
+  "test": {
+   "cases": 192,
+   "hulls": 48,
+   "families": [
+    "kcs",
+    "kvlcc1",
+    "kvlcc2",
+    "shipd-c01",
+    "shipd-c05",
+    "shipd-c07",
+    "shipd-c11",
+    "shipd-c25",
+    "shipd-c33",
+    "shipd-c35",
+    "shipd-c39",
+    "shipd-c40"
+   ]
+  },
+  "validation": {
+   "cases": 360,
+   "hulls": 90,
+   "families": [
+    "dsyhs",
+    "shipd-c04",
+    "shipd-c12",
+    "shipd-c13",
+    "shipd-c14",
+    "shipd-c15",
+    "shipd-c17",
+    "shipd-c24",
+    "shipd-c31",
+    "shipd-c42"
+   ]
+  }
+ },
+ "rule": "A family is never split across development, validation and test; scoring has not started when this file is written."
+}
