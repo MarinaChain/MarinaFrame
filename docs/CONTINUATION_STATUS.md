@@ -167,6 +167,26 @@ The user states commercial-use licences are secured for all five. Provider trans
 
 Everything except MiDShip totals about 2 GB, inside the 5 GB working target.
 
+## Dataset acquisition, round 2, 2026-11-07
+
+Downloaded with the user's approval into `work/sources/` (git-ignored; not committed, not sent to
+any provider). Each folder has a `manifest.tsv` with bytes and SHA-256. Commercial-use licences
+are confirmed by the user for these datasets; HAER sheets are additionally public domain.
+
+| Folder | Content | On disk | Verification |
+|---|---|---:|---|
+| `gunnerus/` | shiplab/gunnerus at `8cd4683`: 15 production drawings (DWG/DXF/PDF), metadata, Rhino 3DM 415 MB, STEP 763 MB | 2.6 GB (LFS objects stored twice: cache + checkout) | LFS SHA-256 of both models matches the pointers |
+| `shipd/` | Ship-D Dataverse files (249) + `code/` (GitHub, not executed) | 343 MB | 249/249 size and MD5 match |
+| `simman/simman2008/` | Hull IGES: KCS (SVA), KVLCC1, KVLCC2, DTMB 5415 (two versions, one as DXF lines drawings) | 2.4 MB | No published hashes; SHA-256 recorded; no unsafe zip paths |
+| `simman/dtmb5415_mathlab/` | 7 pinned DTMB 5415 reference files (MIT) | 0.3 MB | 7/7 match the inventory |
+| `midship/` | 36 designs: 12 per subset, 4 per ship type; 12 with full 3D (`selection.md`) | 192 MB | 378/378 match HF size + SHA-1 or LFS SHA-256 |
+| `haer/wapama/` | HAER CA-67: 21 of 22 sheets (sheet 8 not on Commons) | 36 MB | Commons size + SHA-1 |
+| `haer/ca_thayer/` | HAER CA-61: 12 of 38 sheets (1, 5–14, 37); no lines plan or offset table on Commons | 12 MB | Commons size + SHA-1 |
+
+Total under `work/sources/`: about 3.9 GB, inside the 5 GB working target; 26 GB free.
+Missing from Commons: Wapama sheet 8 and 26 C.A. Thayer sheets (loc.gov refuses automated
+download with HTTP 403; not worked around).
+
 ## Next steps (resume here)
 
 1. **Retire the legacy path** (done): removed `agent_harness`, `agent_cli`, `agent_review`, `agent_provider`, `server`, `jobs`, `review`, `web/`, their tests and the CI/installed-smoke steps. The CLI keeps `reconstruct` and `verify`. The 0.3 probe is recorded in `docs/HISTORICAL_VALIDATION_PROBE.md`.
