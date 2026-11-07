@@ -144,6 +144,29 @@ so they support no accuracy claim. Sending them to the DeepSeek provider is a se
 decision (inventory: `provider_inference: not_transmitted_by_data_worker`); none was sent.
 Full-size TIFFs decode to several hundred MB in memory each.
 
+## ALMA originals acquired, 2026-11-07
+
+All six ALMA (1891) NPS Gallery originals downloaded to `work/sources/alma/` (736 MB,
+git-ignored). Each matched the inventory byte size and SHA-256. Rights: local processing,
+training and testing authorized; provider transfer and redistribution unresolved, so they are
+not sent to any provider and not committed. Most useful: "Lines drawing and offsets" and
+"Cross sections; sheet4".
+
+## Candidate datasets: size estimates, 2026-11-07
+
+The user states commercial-use licences are secured for all five. Provider transfer
+(sending images to DeepSeek) is still decided per item. Not downloaded yet.
+
+| Dataset | Size | Basis | Notes |
+|---|---:|---|---|
+| MiDShip (12,753 cargo-hold structures) | 430 GB | Hugging Face card total | About 34 MB per design; three subsets (6,020 random, 496 SGLD, 6,237 repaired) stored in batches. Does not fit the 31 GB free; needs a subset or an external disk. |
+| R/V Gunnerus | about 1.4 GB | GitHub tree 316 MB + Rhino 396 MB + STEP 728 MB (Git LFS) | 15 production drawings (DWG/DXF/PDF), lines plan, 3D model. STEP import needs several GB of RAM. |
+| HAER Wapama (22 sheets) + C.A. Thayer (38 sheets) | about 0.05–0.1 GB | Commons copies of HAER sheets are 0.7–1.3 MB each | loc.gov returned HTTP 403 to automated requests; use Wikimedia Commons copies as before. Rights checked per sheet. |
+| Ship-D (30,000 hulls) | 0.32 GB | Harvard Dataverse file sum | Parameters and measures only. Meshes regenerate from the 45 parameters with the published code; rendered views about 0.3 GB per 1,000 hulls. |
+| SIMMAN hulls (KCS, KVLCC2, DTMB 5415) | under 0.05 GB | IGES files of a few MB; inventoried DTMB 5415 files total 0.33 MB | Known IGES surface defects need repair. |
+
+Everything except MiDShip totals about 2 GB, inside the 5 GB working target.
+
 ## Next steps (resume here)
 
 1. **Retire the legacy path** (done): removed `agent_harness`, `agent_cli`, `agent_review`, `agent_provider`, `server`, `jobs`, `review`, `web/`, their tests and the CI/installed-smoke steps. The CLI keeps `reconstruct` and `verify`. The 0.3 probe is recorded in `docs/HISTORICAL_VALIDATION_PROBE.md`.
