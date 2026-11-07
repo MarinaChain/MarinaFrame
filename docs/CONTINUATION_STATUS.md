@@ -308,3 +308,17 @@ half-breadth about 1.1 m median vs 0.02 m for the deterministic tracer; no answe
 body plans. Conclusion for deepseek-v4.1-flash: the model chooses WHAT and roughly WHERE;
 deterministic code measures HOW MUCH. W13 (ship CAD language) follows this split.
 Usage: 874 requests, 2.80 M prompt tokens, list cost $0.541.
+
+## CI fix, MiDShip tranche 2, sealed split decision (2026-11-08)
+
+- PR #4 Linux CI: the parent-death reliability test timed out because the controller hashes its
+  own executable, and unoptimised SHA-256 on the 65 MB debug test binary took longer than the 5 s
+  readiness wait. Fix: `[profile.dev.package.sha2] opt-level = 3` (ee7f924). Reproduced and
+  verified in a Linux container (53 passed).
+- MiDShip tranche 2 is complete: 3.03 GB, 13,590 files, every file hash-checked. Held now:
+  1,536 designs (Random 519, Repaired 521, SGLD 496, all 496 SGLD no-3D packages), plus 30
+  full-3D designs. Data only, in work/sources/midship; selection notes in its selection.md.
+- Sealed split v2: all 44 Ship-D families already occur in the frozen splits, so a split with
+  unused families is not possible. Decision (PM): use a new fixed-seed partition, exclude every
+  cluster with a previously rendered hull, and call it "hull-disjoint (v2)", not family-disjoint.
+  Target: 288 drawings (36 hulls x 2 layouts x 4 levels). Generation job 20261108-045443-36168.
