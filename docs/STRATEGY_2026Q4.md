@@ -132,3 +132,25 @@ and the fallback.
   no widened gates; every model call and image is receipted.
 - Later: a self-hosted vision model for confidential customers, measured against DeepSeek on
   the same sealed split.
+
+## 8. Overnight roadmap (2026-11-08)
+
+Model use: router jobs do the building (`router-task --model sol` for hard work, `--model glm-flash`
+for small bounded tasks). Claude models (Opus/Sonnet/Haiku) are available but used sparingly:
+the CEO session reviews, runs `make test-full` and merges; no Claude build agents unless needed.
+
+In order; each step merges only after `make test-full` passes:
+1. Collect and merge W11 (LLM line identity) and W12 (LLM sheet setup + veto reviewer), both on Sol;
+   and the GLM timeline wording fix.
+2. Fresh sealed factory split (new Ship-D clusters, held-back named hulls, all layouts and
+   degradation levels), generated and frozen before any scoring (Sol).
+3. Head-to-head on the fresh sealed split: deterministic abstain vs deterministic draft vs
+   LLM-first (W11 + W12). Report builds, correct/attempted, silent wrong builds, guesses, model
+   usage and cost. This decides whether LLM-first becomes the app default.
+4. Fix the root cause of the silent wrong build (`sysser45-L1`) from W12's finding (Sol).
+5. Plan-view contour corridors for crowded body plans (W9 task 4) (Sol).
+6. If step 3 justifies it: make live LLM + draft the app default and show model calls clearly
+   in the app (Sol, small UI parts on GLM Flash).
+
+Needs the founder (not done overnight): design-partner outreach pack, MiDShip 3.5 GB tranche,
+expert-labelling budget, HAER C.A. Thayer sheet 19, any push or PR.
