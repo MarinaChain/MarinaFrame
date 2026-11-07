@@ -9,6 +9,8 @@ import argparse
 import json
 from pathlib import Path
 
+from vessel_reconstruction.ship_cad_worker import read_worker_json
+
 
 def component_score(component, truth):
     result = {'presence':'built' if component.get('built') else 'missing',
@@ -24,10 +26,9 @@ def component_score(component, truth):
 def run(args):
     latest = json.loads((args.run/'latest.json').read_text())
     task = Path(latest['task'])
-    report_path = task/'output/provenance.json'
-    if report_path.exists():
-        report = json.loads(report_path.read_text())
-    else:
+    # The sandboxed worker writes only below task/work (ship_cad_worker.run).
+    report = read_worker_json(task/'work', Path('output/provenance.json'))
+    if report is None:
         program = json.loads(Path(latest['program']).read_text())
         report = {'components':[{**c,'built':False,'reason':'Isolated worker did not complete'}
                                  for c in program['components']],

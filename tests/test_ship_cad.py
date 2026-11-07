@@ -259,3 +259,46 @@ def test_sandbox_profile_denies_network_and_external_files(tmp_path):
     assert '(allow network' not in profile
     assert '(subpath "/")' not in profile
     assert str(tmp_path) in profile
+
+
+@pytest.mark.cad
+def test_sandbox_worker_cannot_write_host_files_or_exec_other_programs(tmp_path):
+    import subprocess
+    import sys
+    if sys.platform != 'darwin':
+        pytest.skip('Seatbelt integration requires macOS')
+    from vessel_reconstruction.ship_cad_worker import sandbox_profile, runtime_paths
+    task = tmp_path/'task'
+    (task/'work').mkdir(parents=True)
+    profile = task/'profile.sb'
+    profile.write_text(sandbox_profile(task, runtime_paths()))
+    def probe(script):
+        return subprocess.run(['/usr/bin/sandbox-exec', '-f', str(profile), sys.executable, '-I', '-c', script],
+                              capture_output=True, text=True)
+    allowed = probe(f'import pathlib; pathlib.Path({str(task/"work"/"ok.txt")!r}).write_text("x")')
+    assert allowed.returncode == 0, allowed.stderr
+    receipt = probe(f'import pathlib; pathlib.Path({str(task/"worker-receipt.json")!r}).write_text("x")')
+    assert receipt.returncode != 0 and 'PermissionError' in receipt.stderr
+    other = probe('import subprocess; subprocess.run(["/bin/echo", "x"])')
+    assert other.returncode != 0 and 'PermissionError' in other.stderr
+
+
+def test_worker_result_reader_refuses_symlinks(tmp_path):
+    from vessel_reconstruction.ship_cad_worker import read_worker_json
+    work = tmp_path/'work'
+    (work/'output').mkdir(parents=True)
+    outside = tmp_path/'outside.json'
+    outside.write_text('{"forged": true}')
+    (work/'output'/'provenance.json').symlink_to(outside)
+    with pytest.raises(OSError):
+        read_worker_json(work, Path('output/provenance.json'))
+    (work/'output'/'provenance.json').unlink()
+    (work/'output').rmdir()
+    (work/'output').symlink_to(tmp_path)
+    with pytest.raises(OSError):
+        read_worker_json(work, Path('output/provenance.json'))
+    (work/'output').unlink()
+    assert read_worker_json(work, Path('output/provenance.json')) is None
+    (work/'output').mkdir()
+    (work/'output'/'provenance.json').write_text('{"ok": true}')
+    assert read_worker_json(work, Path('output/provenance.json')) == {'ok': True}
