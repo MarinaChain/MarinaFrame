@@ -521,6 +521,50 @@ def _candidate_evidence(mask: np.ndarray, ink: np.ndarray, rows: np.ndarray, xs:
             "proposed_trace_sampling": "at most 257 evenly indexed observed rows, for review only"}
 
 
+def _run_containing(mask_row: np.ndarray, x: float) -> tuple[int, int] | None:
+    """Return the half-open source run that contains the observed position."""
+    column = int(round(x))
+    for start, stop in _runs(mask_row):
+        if start <= column < stop:
+            return start, stop
+    return None
+
+
+def _lower_boundary_run_end(source_mask: np.ndarray, rows: np.ndarray,
+                            xs: np.ndarray) -> tuple[float, dict] | None:
+    """Bound an unobserved lower-boundary ordinate by touching source ink.
+
+    When the lowest calibrated row has no trace observation, sampling holds the
+    lowest observed centroid constant down to the boundary. If a source run on
+    the boundary row touches the run of that lowest observation, the stroke
+    continues on the boundary row and that position has no ink. The boundary
+    ordinate is then the touching end of the boundary run: the nearest position
+    that the boundary-row ink supports. This keeps the centroid interpretation;
+    it does not claim centreline contact (see _source_endpoint_hypothesis).
+    """
+    boundary = source_mask.shape[0] - 1
+    if not len(rows) or rows[-1] != boundary - 1:
+        return None
+    observed = _run_containing(source_mask[boundary - 1], xs[-1])
+    if observed is None:
+        return None
+    observed_first, observed_last = observed[0], observed[1] - 1
+    touching = []
+    for first, stop in _runs(source_mask[boundary]):
+        last = stop - 1
+        if abs(observed_first - last) <= 1 and last < observed_last:
+            touching.append(float(last))  # Stroke descends inward to the boundary.
+        elif abs(first - observed_last) <= 1 and first > observed_first:
+            touching.append(float(first))  # Stroke descends outward to the boundary.
+    if len(touching) != 1:
+        return None
+    return touching[0], {"method": "touching_boundary_run_end_v1",
+                         "boundary_row_local_px": boundary,
+                         "boundary_ordinate_local_px": touching[0],
+                         "lowest_centroid_local_px": float(xs[-1]),
+                         "scope": "The unobserved boundary ordinate is bounded by the end of connected boundary-row ink; not centreline contact and not subpixel truth."}
+
+
 def _bounded_source_samples(rows: np.ndarray, xs: np.ndarray, *, baseline: float,
                             trace_top: int, ppm: float, z_min: float, z_max: float,
                             minimum_samples: int, centre_local: float) -> tuple[np.ndarray, np.ndarray, dict]:
@@ -646,6 +690,14 @@ def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, i
     sample_count = section.get("sample_count", 129)
     if not isinstance(sample_count, int) or isinstance(sample_count, bool) or not 65 <= sample_count <= 1025:
         raise DrawingError("invalid_view", "sample_count must be an integer between 65 and 1025.")
+    # Boundary ink is classified in the unclipped source: a selection corridor
+    # must not hide the boundary-row run or create one.
+    unclipped_mask, _ = _eligible_trace_mask(mask, None, ink)
+    boundary_end = _lower_boundary_run_end(unclipped_mask, rows, xs)
+    diagnostic["lower_boundary_run_end"] = boundary_end[1] if boundary_end else None
+    if boundary_end is not None:
+        rows = np.append(rows, float(mask.shape[0] - 1))
+        xs = np.append(xs, boundary_end[0])
     z_values, measured_x, sampling = _bounded_source_samples(rows, xs, baseline=baseline,
         trace_top=trace_top, ppm=ppm, z_min=z_min, z_max=z_max, minimum_samples=sample_count,
         centre_local=centre - trace_left)
