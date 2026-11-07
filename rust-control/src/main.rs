@@ -1,6 +1,7 @@
 mod controller;
 mod provider;
 mod store;
+mod table_reading;
 mod types;
 mod util;
 mod validation;
@@ -56,7 +57,8 @@ fn execute() -> Result<serde_json::Value> {
         "run":"--task DIR --source SPEC --worker-python PYTHON [--worker-source SRC] [--policy deterministic|live] [--provider-transfer-basis TEXT] [--steps N]",
         "resume":"--task DIR [--continue-after-unknown true] [--clear-cancel true] [--steps N]",
         "step":"--task DIR --intervention JSON --actor human_operator|assistant_operator --note TEXT",
-        "status":"--task DIR","verify":"--task DIR","cancel":"--task DIR","recover-checkpoint":"--task DIR"},
+        "status":"--task DIR","verify":"--task DIR","cancel":"--task DIR","recover-checkpoint":"--task DIR",
+        "read-table":"--crops DIR --out NEW_DIR --provider-transfer-basis TEXT (live offset-table cell transcription; see docs/VISION_TABLE_READING.md)"},
         "automated_engineering_approval":false,"live_campaign_aggregate_caps":null}),
         );
     }
@@ -79,6 +81,13 @@ fn execute() -> Result<serde_json::Value> {
         no_extra(&args)?;
         provider::provider_worker(&path, timeout)?;
         return Ok(json!({"provider_worker":"finished"}));
+    }
+    if command == "read-table" {
+        let crops = util::absolute(Path::new(&take(&mut args, "crops")?))?;
+        let out = util::absolute(Path::new(&take(&mut args, "out")?))?;
+        let basis = take(&mut args, "provider-transfer-basis")?;
+        no_extra(&args)?;
+        return table_reading::read_table(&crops, &out, &basis);
     }
     let task = PathBuf::from(take(&mut args, "task")?);
     if command == "check-validation" {

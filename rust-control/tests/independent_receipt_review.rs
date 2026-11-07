@@ -63,6 +63,7 @@ fn provider_fixture() -> (tempfile::TempDir, store::Store, Pending, Receipt) {
         payload: json!({"model": GO_MODEL, "messages": [{"role":"system", "content":provider::SYSTEM_PROMPT}], "fixture":"not transmitted"}),
         attempt: 1,
         retry_of: None,
+        purpose: Default::default(),
     };
     util::atomic_json(&store.path.join(&pending.request_path), &input, false).unwrap();
     store.state.pending = Some(pending.clone());
@@ -103,6 +104,8 @@ fn provider_fixture() -> (tempfile::TempDir, store::Store, Pending, Receipt) {
         aggregate_spend_cap: None,
         evidence_mode: "live".into(),
         credential_selection: None,
+        purpose: Default::default(),
+        transcription: None,
     };
     (directory, store, pending, receipt)
 }

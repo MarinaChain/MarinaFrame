@@ -10,6 +10,11 @@ MAX_LOCAL_METRES = 10_000_000.0
 MAX_SPEC_BYTES = 2 * 1024 * 1024
 MAX_SECTIONS = 300
 MAX_TOTAL_CELLS = 4096
+MIN_CELLS_PER_SECTION = 5
+MAX_CELLS_PER_SECTION = 256
+TABLE_VISION_MODE = "offset_table_vision"
+# Answers that must come from source pixels, never from the specification.
+VALUE_FIELDS = {"value", "value_m", "y_m", "half_breadth_m", "token", "text", "expected_text", "parsed_value_m"}
 MAX_PIXEL_COORDINATE = 1_000_000
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 FORBIDDEN = {"points", "points_yz_m", "offsets", "ground_truth", "reference_mesh", "hull_parameters"}
@@ -107,6 +112,35 @@ def _rectangle(value):
             and value[2] > value[0] and value[3] > value[1])
 
 
+def _check_table_cells(sec: dict, roi, sid: str, errors: list) -> int:
+    """Check the human-declared cells of one table station; return the cell count."""
+    cells = sec.get("cells")
+    if not isinstance(cells, list) or not MIN_CELLS_PER_SECTION <= len(cells) <= MAX_CELLS_PER_SECTION:
+        errors.append(gap("insufficient_table_rows", f"Declare {MIN_CELLS_PER_SECTION}..{MAX_CELLS_PER_SECTION} source measurement cells per station.", sid))
+        return 0
+    elevations = set()
+    for cell in cells:
+        if not isinstance(cell, dict):
+            errors.append(gap("invalid_table_cell", "A cell must declare its source region and measured elevation.", sid))
+            continue
+        if VALUE_FIELDS.intersection(cell) or FORBIDDEN.intersection(cell):
+            errors.append(gap("geometry_in_input", "Half-breadths or transcriptions must be read from source pixels, not supplied.", sid))
+        extras = sorted(set(cell) - {"z_m", "roi_px"} - VALUE_FIELDS - FORBIDDEN)
+        if extras:
+            errors.append(gap("unexpected_field", f"Unsupported table cell field(s): {', '.join(extras[:8])}.", sid))
+        z = cell.get("z_m")
+        if not finite(z) or abs(z) > MAX_LOCAL_METRES or z in elevations:
+            errors.append(gap("invalid_table_elevation", "Cell elevations must be finite, bounded and unique per station.", sid))
+        else:
+            elevations.add(z)
+        box = cell.get("roi_px")
+        if not _rectangle(box) or not all(float(v).is_integer() for v in box):
+            errors.append(gap("invalid_cell_region", "Each cell requires a bounded integer source-pixel rectangle.", sid))
+        elif _rectangle(roi) and not (roi[0] <= box[0] and roi[1] <= box[1] and box[2] <= roi[2] and box[3] <= roi[3]):
+            errors.append(gap("invalid_cell_region", "A cell region falls outside its declared station column.", sid))
+    return len(cells)
+
+
 def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
     """Every JSON type yields validation gaps, never a metadata type exception."""
     errors = []
@@ -120,16 +154,34 @@ def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
 
     unknown(spec, {"schema_version", "vessel_id", "input_mode", "units", "source", "station_reference",
                    "symmetry", "symmetry_evidence", "end_closure", "sections", "constraints", "components",
-                   "table_value_units", "table_surface", "scope_note", "historical_date"}, "specification")
+                   "table_value_units", "table_surface", "scope_note", "historical_date", "table_reading"}, "specification")
     if FORBIDDEN.intersection(spec):
         errors.append(gap("geometry_in_input", "Drawing input must not contain target geometry or evaluation answers."))
     if spec.get("schema_version") != "1.0":
         errors.append(gap("schema_version", "schema_version must be 1.0."))
     mode = spec.get("input_mode", "calibrated_section_curves")
-    # Offset-table OCR (Tesseract) was removed; table reading by the vision
-    # model is not implemented yet. Archived OCR runs still verify (run_record).
-    if not isinstance(mode, str) or mode != "calibrated_section_curves":
-        errors.append(gap("unsupported_input_mode", "Only calibrated_section_curves is supported."))
+    # Tesseract offset_table_ocr was removed and stays rejected; archived OCR
+    # runs still verify (run_record). offset_table_vision is its replacement
+    # with different semantics: model transcriptions bound to cell crops.
+    table_mode = mode == TABLE_VISION_MODE
+    if not isinstance(mode, str) or mode not in ("calibrated_section_curves", TABLE_VISION_MODE):
+        errors.append(gap("unsupported_input_mode", f"Choose calibrated_section_curves or {TABLE_VISION_MODE}."))
+    if table_mode and spec.get("table_value_units") != "feet_inches_eighths":
+        errors.append(gap("table_units_unresolved", "Declare table_value_units='feet_inches_eighths'; units are not guessed."))
+    if "table_reading" in spec:
+        reading = spec["table_reading"]
+        if not table_mode:
+            errors.append(gap("unexpected_field", f"table_reading is supported only for {TABLE_VISION_MODE}."))
+        elif not isinstance(reading, dict) or set(reading) - {"file", "sha256"} or not _text(reading.get("file"), 4096):
+            errors.append(gap("invalid_table_reading", "table_reading must be {file, optional sha256} naming the read-table record."))
+        else:
+            if "sha256" in reading and (not isinstance(reading["sha256"], str) or not SHA256.fullmatch(reading["sha256"])):
+                errors.append(gap("invalid_table_reading", "table_reading.sha256 must be a lowercase SHA-256 digest."))
+            try:
+                if not (base_dir / reading["file"]).is_file():
+                    errors.append(gap("table_reading_missing", "The declared table_reading file does not exist."))
+            except (OSError, ValueError):
+                errors.append(gap("table_reading_missing", "The declared table_reading path is not readable."))
     for name in ("vessel_id", "table_surface", "scope_note", "historical_date"):
         if name in spec and not _text(spec[name], 256 if name == "vessel_id" else 8192):
             errors.append(gap("invalid_metadata", f"{name} must be a bounded nonempty string."))
@@ -190,8 +242,11 @@ def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
         elif sid in ids:
             errors.append(gap("duplicate_identity", "Section identifiers must be unique.", sid))
         ids.add(sid)
-        unknown(sec, {"id", "x_m", "roi_px", "calibration", "z_min_m", "z_max_m", "evidence", "sample_count",
-                      "cells", "contour_selection"}, "section", sid)
+        if table_mode:
+            unknown(sec, {"id", "x_m", "roi_px", "evidence", "cells"}, "table station", sid)
+        else:
+            unknown(sec, {"id", "x_m", "roi_px", "calibration", "z_min_m", "z_max_m", "evidence", "sample_count",
+                          "cells", "contour_selection"}, "section", sid)
         if FORBIDDEN.intersection(sec):
             errors.append(gap("geometry_in_input", "Drawing input must not contain target geometry or evaluation answers.", sid))
         x = sec.get("x_m")
@@ -208,6 +263,9 @@ def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
             errors.append(gap("invalid_view_region", "Declare a bounded positive drawing view region in pixels.", sid))
         if not _text(sec.get("evidence")):
             errors.append(gap("calibration_evidence_missing", "Describe the source of the view or table location and scale.", sid))
+        if table_mode:
+            total_cells += _check_table_cells(sec, roi, sid, errors)
+            continue
         if "sample_count" in sec and (type(sec["sample_count"]) is not int or not 17 <= sec["sample_count"] <= 513):
             errors.append(gap("invalid_sample_count", "sample_count must be an integer in [17, 513].", sid))
         if "contour_selection" in sec:
@@ -232,7 +290,7 @@ def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
                 if not okay:
                     errors.append(gap("invalid_contour_selection", "Selection requires 2..64 finite ROI anchors at distinct rows and half_width_px in (0,128].", sid))
         if "cells" in sec:
-            errors.append(gap("unexpected_field", "Table cells are not supported.", sid))
+            errors.append(gap("unexpected_field", f"Table cells are supported only for {TABLE_VISION_MODE}.", sid))
         cal = sec.get("calibration")
         if not isinstance(cal, dict):
             errors.append(gap("invalid_calibration", "calibration must be an object.", sid))

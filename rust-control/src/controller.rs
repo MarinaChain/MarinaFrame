@@ -499,6 +499,10 @@ fn apply_provider(
         || receipt.endpoint != GO_ENDPOINT
         || receipt.requested_model != GO_MODEL
         || receipt.evidence_mode != "live"
+        // The controller loop accepts only decision receipts; a table
+        // transcription receipt can never stage a decision here.
+        || receipt.purpose != provider::Purpose::ModelDecision
+        || receipt.transcription.is_some()
         || receipt.source_manifest_sha256
             != store.state.source_manifest_sha256.as_deref().unwrap_or("")
         || receipt.generation_id != store.state.generation_id.as_deref().unwrap_or("")
@@ -652,6 +656,7 @@ fn live_decision(store: &mut Store) -> Result<bool> {
             payload: payload.clone(),
             attempt,
             retry_of: retry_of.clone(),
+            purpose: provider::Purpose::ModelDecision,
         };
         util::atomic_json(&store.path.join(&pending.request_path), &input, false)?;
         store.state.pending = Some(pending.clone());

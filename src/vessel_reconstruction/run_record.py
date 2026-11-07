@@ -23,6 +23,8 @@ MAX_RECORD_BYTES = 64 * 1024 * 1024
 MAX_ARTIFACT_BYTES = 256 * 1024 * 1024
 MAX_RUN_BYTES = 1024 * 1024 * 1024
 REQUIRED_FILES = {"result.json", "input_spec.json", "replay_spec.json"}
+# The read-table record (provider receipts) of an offset_table_vision run.
+TABLE_READING_FILE = "table_reading.json"
 LIMITATION = ("Content hashes and derived checks detect changes against this local manifest. "
               "An actor who can rewrite all evidence and the manifest can replace the record; "
               "this is not a digital signature, engineering approval, or independent source authentication.")
@@ -51,13 +53,18 @@ def _inventory(root: Path) -> set[str]:
 
 def identity_for(result: dict) -> dict:
     provenance = result["provenance"]
-    return {"scheme": "input-sources-implementation-request-v2",
-            "input_spec_sha256": provenance["input_spec_sha256"],
-            "submitted_spec_sha256": provenance.get("submitted_spec_sha256"),
-            "sources": [{"id": source["id"], "sha256": source["sha256"]} for source in result["sources"]],
-            "implementation_sha256": provenance.get("implementation_sha256"),
-            "requested_exports": result["requested_exports"],
-            "recovery_identity": provenance.get("recovery_identity")}
+    identity = {"scheme": "input-sources-implementation-request-v2",
+                "input_spec_sha256": provenance["input_spec_sha256"],
+                "submitted_spec_sha256": provenance.get("submitted_spec_sha256"),
+                "sources": [{"id": source["id"], "sha256": source["sha256"]} for source in result["sources"]],
+                "implementation_sha256": provenance.get("implementation_sha256"),
+                "requested_exports": result["requested_exports"],
+                "recovery_identity": provenance.get("recovery_identity")}
+    # Present only for table-vision runs, so older run identities are unchanged.
+    reading = provenance.get("table_reading")
+    if isinstance(reading, dict):
+        identity["table_reading_sha256"] = reading.get("sha256")
+    return identity
 
 
 def seal_run(root: Path, result: dict, *, writer=write_json) -> dict:
@@ -167,7 +174,7 @@ def _check_record(root: Path, result: dict, manifest: dict):
     for field in ("vessel_id", "method"):
         _require(isinstance(result[field], str) and 0 < len(result[field]) <= 8192, "Invalid record text metadata.")
     # offset_table_ocr stays readable so archived OCR runs still verify.
-    _require(result["input_mode"] in (None, "calibrated_section_curves", "offset_table_ocr"), "Invalid input mode metadata.")
+    _require(result["input_mode"] in (None, "calibrated_section_curves", "offset_table_ocr", "offset_table_vision"), "Invalid input mode metadata.")
     for field in ("sources", "parts", "sections", "normalized_sections", "gaps", "assumptions"):
         _require(isinstance(result[field], list), f"Invalid {field} record.")
     for field in ("metrics", "exports", "provenance"):
@@ -228,6 +235,15 @@ def _check_record(root: Path, result: dict, manifest: dict):
         expected_files.add(source["file"])
         if "preview_file" in source:
             expected_files.add(source["preview_file"])
+    reading = provenance.get("table_reading")
+    if reading is not None:
+        _require(isinstance(reading, dict) and set(reading) == {"file", "sha256"} and reading["file"] == TABLE_READING_FILE
+                 and reading["file"] in declared and reading["sha256"] == manifest["files"][TABLE_READING_FILE]["sha256"]
+                 and result["input_mode"] == "offset_table_vision", "Table reading evidence declaration mismatch.")
+        _require(isinstance(replay, dict) and isinstance(replay.get("table_reading"), dict)
+                 and replay["table_reading"].get("file") == reading["file"]
+                 and replay["table_reading"].get("sha256") == reading["sha256"], "Replay table reading binding is inconsistent.")
+        expected_files.add(TABLE_READING_FILE)
     if result["sections"] or provenance.get("extraction_complete"):
         expected_files.add("extracted_sections.json")
     if status == "review_required":
@@ -241,6 +257,9 @@ def _check_record(root: Path, result: dict, manifest: dict):
             field = "source" if source["id"] == "source-1" else "station_reference"
             _require(isinstance(input_spec.get(field), dict), "Input source is not an object.")
             expected_replay[field] = {**input_spec[field], "file": source["file"], "sha256": source["sha256"]}
+        if reading is not None:
+            _require(isinstance(input_spec.get("table_reading"), dict), "Input table reading is not an object.")
+            expected_replay["table_reading"] = {**input_spec["table_reading"], **reading}
         _require(expected_replay == replay, "Replay metadata differs from the submitted inference specification.")
     else:
         _require(replay is None and not result["sources"], "Rejected input cannot contain unexplained replay evidence.")

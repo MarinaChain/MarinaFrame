@@ -506,6 +506,7 @@ fn reliability_unknown_provider_outcome_acknowledgement_survives_restart_without
         payload: json!({"fixture":"never transmitted","model":GO_MODEL}),
         attempt: 1,
         retry_of: None,
+        purpose: Default::default(),
     };
     util::atomic_json(&store.path.join(&intent.request_path), &input, false).unwrap();
     store.state.pending = Some(intent.clone());
@@ -542,6 +543,8 @@ fn reliability_unknown_provider_outcome_acknowledgement_survives_restart_without
         aggregate_spend_cap: None,
         evidence_mode: "live".into(),
         credential_selection: None,
+        purpose: Default::default(),
+        transcription: None,
     };
     util::atomic_json(&store.path.join(&intent.response_path), &receipt, false).unwrap();
     controller::resume(&mut store, false, false, Some(0)).unwrap();
