@@ -148,4 +148,91 @@ the deterministic raster path does not resolve contour identity on lines-plan bo
 
 ## 6. Gunnerus runs
 
-Frozen commit: to be recorded below, with each run.
+Frozen commit: **`399e071`** (metrics, configuration rules and both paths). Every run is listed.
+Runs 2–4 of the vector path follow code fixes made **after** a failure that produced no geometry
+and no score, so no Gunnerus truth comparison was seen before any fix. Outputs are in
+`work/gunnerus/runs/` (not tracked). Truth sections SHA-256 `2aeb1253…cb090` in every run.
+
+### 6.1 Run ledger
+
+| Run | Path | Commit | Outcome | Record SHA-256 |
+|---|---|---|---|---|
+| V1 | vector | `399e071` | **blocked**: 31 of 59 stations read; `build_hull` refused, 1983 common knots > 513 at the 1 mm bound | `3c4458fb…` |
+| R1 | raster | `399e071` | **abstained**: controller `inspection_worker_failed`, worker state `resource_limited` (48 s) on the first batch of 12 sections; 10 partial inspection records, each with 0 selectable candidates and 8 retained competitors; no model | `6d911e77…` |
+| V2 | vector | `640ab57` (fix: try CAD bounds 1, 2, 5, 10 mm) | **blocked**: 617 knots > 513 even at 10 mm | `bae78724…` |
+| V3 | vector | `96c9fb8` (fix: split the loft into station groups that fit, as the build error advises) | **failed in scoring**: model built (5 groups, all at 1 mm); the scorer raised on an empty height band at frame 59; no score written | `ee44aa7e…` |
+| V4 | vector | `1cc64ed` (fix: an empty band is recorded as null) | **scored** | `c92d96d4…` |
+
+The raster path was not run again: no fix touched it. Its single run stands.
+
+### 6.2 Vector path result (V4)
+
+Stations: 59 requested, **31 read**, 28 refused: 23 `multi_valued_section` (frames −1, 0, 1,
+3–5, 7–20: twin-skeg loops; frames 45, 46, 53: height reverses on the picked curve, cause not yet inspected),
+1 `incomplete_curve` (frame 6, split at a skeg junction), 4 `multiple_pieces` (frames 55–58,
+bulb and bow drawn apart). 14 frames (21–27, A–G) were not identified. Read stations: −2, 2,
+H, I, J, 28–44, 47–52, 54, 59, 60. The loft spans x = −1.0 … 35.0 m in 5 groups at the 1 mm
+CAD bound (largest CAD deviation 0.999 mm). Model SHA-256 `745189351a17…`, score SHA-256
+`16bff4a7e61b…`, comparison plot SHA-256 `47d48793fe79…`.
+
+| Metric | Value |
+|---|---|
+| Station half-breadth, main band (to 4.287 m), 30 stations: RMS of station RMS / median station RMS / max | 0.403 m / **0.024 m** / 4.80 m |
+| Same, below draft (to 2.50 m): RMS / median / max | 0.232 m / **0.033 m** / 2.20 m |
+| Section area below 2.50 m, 29 stations: mean / max relative error | 3.0 % / 24.4 % |
+| Between-station half-breadth, 143 cuts every 0.25 m: RMS / max (at x) | 1.357 m / 4.80 m (x = 15.3 m) |
+| Volume below T = 2.50 m: truth / reconstruction | 486.3 m³ / 402.1 m³ |
+| Volume error, full / within range | **−17.3 %** / −17.3 % |
+| Waterplane area at 2.50 m: truth / reconstruction | 279.4 m² / 276.8 m² |
+| Waterplane error, full / within range | **−0.92 %** / −0.66 % |
+
+Per-station main-band RMS (mm): H 63, I 70, J 69, 28 72, 29 48, 30 31, 31–40 19–25, 41–43 30–35,
+44 21, 47–51 13–18, 52 358, 54 279, −2 1585, 2 1458. Frames 59 and 60 have no truth below
+4.287 m (frame 60, x = 35.0 m, lies forward of the STEP hull).
+
+### 6.3 What the comparison plots and overlays show
+
+- **Forward body and midbody (frames H–51, x 17.5–30.5 m):** the read station curves lie on the
+  truth sections. Station RMS 13–72 mm; section area errors −0.7 % … +1.9 %. The station maximum
+  (110–260 mm) sits 0.08–0.42 m above the baseline, just above the keel, where the bottom line is nearly horizontal.
+  There a small height difference gives a large half-breadth difference, so this maximum is
+  mostly a bottom-height offset of a few centimetres, not a breadth error.
+- **Frames 52 and 54:** the truth has a horizontal slot at z ≈ 1.9–2.1 m (most likely the bow
+  thruster tunnel). The lines plan has no tunnel. This gives the 1.1–1.4 m maxima.
+- **Aft frames −2 and 2:** the truth hull ends at about z = 4.1 m (aft deck) and has a step at
+  z = 2.0 m. The reconstruction follows the side line up to 7.59 m, as declared in section 4.
+  The side-line rule came from the forward body and is wrong aft. This gives the 4.8 m maxima.
+- **Skeg region (x ≈ 1 … 17.5 m):** no station is read between frame 2 and frame H, so the
+  loft is one ruled span of 16.5 m across the twin skegs and the run of the hull. This is the
+  main cause of the −17.3 % volume error and of the 4.8 m between-station maximum at x = 15.3 m.
+- **Raster:** `calibration_check.png` (SHA-256 `a73b59d0…`) shows the declared centreline,
+  baseline, 4.8 m side line and 2.5 m draft line on the drawn grid in both composite panels.
+  The overlay of retained candidates is empty, because the failed inspection wrote no candidate
+  traces. The body plan holds 30–40 overlaid station curves per side plus a black BT/WL grid.
+
+### 6.4 Biggest error sources (measured, in order of effect on volume)
+
+1. Stations not read: twin-skeg sections are not single-valued in height, and 14 midbody frames
+   have no identity anchor. The 16.5 m loft gap dominates the volume error.
+2. Drawing and truth differ in content: bow thruster tunnel, aft deck height, forward end
+   (frame 60 at 35.0 m vs STEP end 34.55 m), plating offset (+13 mm half-breadth).
+3. A declared assumption (side line to the top) that holds forward and fails aft.
+4. Raster: the deterministic pipeline does not resolve contour identity in an overlaid body plan
+   with a black grid (also in development), and on this sheet its inspection hit a resource limit.
+
+### 6.5 Limits of these figures
+
+One ship, one drawing, assistant-read identity rules. The good forward figures hold only where a
+station was read; they are not a whole-hull accuracy. Volumes are moulded envelopes, with a
+truth uncertainty of about 0.12 %. Nothing here is engineering approval.
+
+### 6.6 Next steps
+
+1. Represent multi-valued sections (skeg, bulb as separate closed regions) or abstain per region,
+   so the aft body can be read instead of lofted over.
+2. Anchor midbody frame identity with the profile and half-breadth views (cross-view matching).
+3. Read the side-line extent per station from the drawing instead of one declared top.
+4. Raster: supply per-station contour corridors (operator or assisted), and investigate the
+   inspection resource limit on large overlaid sheets (owner: pipeline/Rust streams).
+5. Use the transverse construction-section drawings (one section per panel) as raster input
+   that matches the supported input.
