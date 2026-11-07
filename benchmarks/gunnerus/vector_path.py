@@ -32,6 +32,13 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+# build_hull approximates each section within a vertical bound and shares one
+# knot set across all sections, capped at 513 knots. Many real sections exceed
+# that cap at the 1 mm default, so the smallest bound that fits is used, up to
+# the 10 mm maximum that build_hull accepts. The bound used is recorded.
+CAD_DEVIATION_LADDER_M = (0.001, 0.002, 0.005, 0.010)
+
+
 def run(config_path: Path, out: Path) -> dict:
     config = json.loads(config_path.read_text())
     dxf_path = (config_path.parent / config["dxf"]).resolve()
@@ -68,7 +75,20 @@ def run(config_path: Path, out: Path) -> dict:
         from OCP.BinTools import BinTools
         from vessel_reconstruction.geometry import build_hull, metrics_for
 
-        shape, normalized = build_hull(read["sections"])
+        shape = normalized = None
+        attempts = []
+        for bound in CAD_DEVIATION_LADDER_M:
+            try:
+                shape, normalized = build_hull(read["sections"], max_deviation_m=bound)
+                attempts.append({"max_deviation_m": bound, "result": "built"})
+                break
+            except GeometryError as exc:
+                attempts.append({"max_deviation_m": bound, "result": str(exc)})
+                if "complexity limit" not in str(exc):
+                    raise
+        summary["cad_bound_attempts"] = attempts
+        if shape is None:
+            raise GeometryError(attempts[-1]["result"])
         BinTools.Write_s(shape.wrapped, str(out / "model.brep"))
         summary.update(status="built", metrics=metrics_for(shape),
                        model_sha256=_sha256(out / "model.brep"),
