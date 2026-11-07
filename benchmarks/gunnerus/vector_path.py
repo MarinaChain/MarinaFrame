@@ -33,10 +33,59 @@ def _sha256(path: Path) -> str:
 
 
 # build_hull approximates each section within a vertical bound and shares one
-# knot set across all sections, capped at 513 knots. Many real sections exceed
-# that cap at the 1 mm default, so the smallest bound that fits is used, up to
-# the 10 mm maximum that build_hull accepts. The bound used is recorded.
+# knot set across all its sections, capped at 513 knots. Many real sections
+# exceed that cap, so (as its error message advises) the job is split into
+# consecutive groups that share their boundary station. Each group is as long
+# as fits at the 1 mm default bound; a pair of stations that does not fit even
+# alone uses the smallest larger bound that fits, up to the 10 mm maximum.
 CAD_DEVIATION_LADDER_M = (0.001, 0.002, 0.005, 0.010)
+
+
+def _fits(group: list[dict], bound: float) -> bool:
+    from vessel_reconstruction.geometry import normalize_sections
+
+    try:
+        normalize_sections(group, max_deviation_m=bound)
+        return True
+    except GeometryError as exc:
+        if "complexity limit" in str(exc):
+            return False
+        raise
+
+
+def plan_groups(sections: list[dict]) -> list[tuple[list[dict], float]]:
+    """Consecutive groups of at least three stations, sharing end stations.
+
+    build_hull needs three or more sections, so groups are cut at indices
+    0 = c0 < c1 < ... < ck = n-1 with every gap >= 2. Each group is grown as long
+    as it fits at its bound; if the stations left after a cut would be fewer
+    than two, the cut moves back by one.
+    """
+    n = len(sections)
+    if n < 3:
+        raise GeometryError("At least three read stations are required.")
+    groups, start = [], 0
+    while start < n - 1:
+        end = min(start + 2, n - 1)
+        if end - start < 2:  # cannot happen when every cut leaves >= 2 gaps
+            raise GeometryError("Group planning left fewer than three stations.")
+        bound = next((b for b in CAD_DEVIATION_LADDER_M if _fits(sections[start:end + 1], b)), None)
+        if bound is None:
+            raise GeometryError(f"Stations {sections[start]['id']}-{sections[end]['id']} exceed the knot limit at 10 mm.")
+        while end + 1 < n and _fits(sections[start:end + 2], bound):
+            end += 1
+        if 0 < n - 1 - end < 2:
+            if end - start > 2:
+                end -= 1  # leave at least two gaps for the final group
+            else:
+                # Three stations, one left over: take it in at the smallest bound that fits.
+                end = n - 1
+                bound = next((b for b in CAD_DEVIATION_LADDER_M if _fits(sections[start:end + 1], b)), None)
+                if bound is None:
+                    raise GeometryError("The last four stations exceed the knot limit at 10 mm.")
+        groups.append((sections[start:end + 1], bound))
+        start = end
+    return groups
 
 
 def run(config_path: Path, out: Path) -> dict:
@@ -73,27 +122,24 @@ def run(config_path: Path, out: Path) -> dict:
                "status": "blocked", "build_error": None}
     try:
         from OCP.BinTools import BinTools
-        from vessel_reconstruction.geometry import build_hull, metrics_for
+        from OCP.BRep import BRep_Builder
+        from OCP.TopoDS import TopoDS_Compound
+        from vessel_reconstruction.geometry import build_hull
 
-        shape = normalized = None
-        attempts = []
-        for bound in CAD_DEVIATION_LADDER_M:
-            try:
-                shape, normalized = build_hull(read["sections"], max_deviation_m=bound)
-                attempts.append({"max_deviation_m": bound, "result": "built"})
-                break
-            except GeometryError as exc:
-                attempts.append({"max_deviation_m": bound, "result": str(exc)})
-                if "complexity limit" not in str(exc):
-                    raise
-        summary["cad_bound_attempts"] = attempts
-        if shape is None:
-            raise GeometryError(attempts[-1]["result"])
-        BinTools.Write_s(shape.wrapped, str(out / "model.brep"))
-        summary.update(status="built", metrics=metrics_for(shape),
-                       model_sha256=_sha256(out / "model.brep"),
-                       x_range_m=[float(min(s["x_m"] for s in normalized)), float(max(s["x_m"] for s in normalized))],
-                       max_cad_deviation_m=float(max(s["cad_approximation"]["maximum_half_breadth_deviation_m"] for s in normalized)))
+        groups = plan_groups(sorted(read["sections"], key=lambda s: s["x_m"]))
+        summary["groups"] = [{"stations": [s["id"] for s in g], "max_deviation_m": bound} for g, bound in groups]
+        compound = TopoDS_Compound()
+        builder = BRep_Builder()
+        builder.MakeCompound(compound)
+        deviations = []
+        for group, bound in groups:
+            shape, normalized = build_hull(group, max_deviation_m=bound)
+            builder.Add(compound, shape.wrapped)
+            deviations.extend(s["cad_approximation"]["maximum_half_breadth_deviation_m"] for s in normalized)
+        BinTools.Write_s(compound, str(out / "model.brep"))
+        summary.update(status="built", model_sha256=_sha256(out / "model.brep"),
+                       x_range_m=[float(groups[0][0][0]["x_m"]), float(groups[-1][0][-1]["x_m"])],
+                       max_cad_deviation_m=float(max(deviations)))
     except GeometryError as exc:
         summary["build_error"] = str(exc)
     summary["seconds"] = time.perf_counter() - started
