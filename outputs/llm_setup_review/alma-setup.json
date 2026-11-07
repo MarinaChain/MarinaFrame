@@ -1,0 +1,398 @@
+{
+  "source": {
+    "source": "/Users/jonathanjie/Documents/workspace/MarinaFrame/work/sources/alma/89ca23f7-e894-4e7c-9084-06ac9f94381a.tif",
+    "sha256": "2365ec63c8fcd880c82fdb4d94ba6796f7bd87691c1fb5c0351b6ca3edfe4945",
+    "raster_sha256": "e1d51b5c748ef32c7bccfc6282e3d67a4dce08be9152d47a3af8792874c504c1"
+  },
+  "checks": {
+    "schema_version": "marinaframe.setup_checks.v1",
+    "engineering_approved": false,
+    "panels": {
+      "P1": {
+        "box_px": {
+          "value": [
+            160.0,
+            200.0,
+            600.0,
+            300.0
+          ],
+          "model_proposed": true,
+          "checked": false,
+          "evidence": "Border of SECTION C-C panel, above its title 'SECTION C-C'."
+        },
+        "centreline_x_px": {
+          "value": null,
+          "model_proposed": true,
+          "checked": false,
+          "evidence": {
+            "missing": "no vertical centreline drawn in the panel; the crop shows only blank blue field with margin rulers"
+          },
+          "line_support": 0.0
+        },
+        "baseline_y_px": {
+          "value": null,
+          "model_proposed": true,
+          "checked": false,
+          "evidence": {
+            "missing": "no horizontal baseline or keel line drawn in the panel; only the margin ruler tick at row 200 is visible"
+          },
+          "line_support": 0.0
+        },
+        "pixels_per_metre": {
+          "value": null,
+          "model_proposed": true,
+          "checked": false,
+          "evidence": [],
+          "independent_scales": []
+        }
+      },
+      "P2": {
+        "box_px": {
+          "value": [
+            160.0,
+            360.0,
+            600.0,
+            460.0
+          ],
+          "model_proposed": true,
+          "checked": true,
+          "evidence": "Border of SECTION B-B panel, above its title 'SECTION B-B'."
+        },
+        "centreline_x_px": {
+          "value": 196.0,
+          "model_proposed": true,
+          "checked": true,
+          "evidence": {
+            "evidence": "Vertical dark ink line at sheet column 196, aligned under the 200 ruler tick; no other vertical line in the panel.",
+            "value": 196.0
+          },
+          "line_support": 1.0
+        },
+        "baseline_y_px": {
+          "value": null,
+          "model_proposed": true,
+          "checked": false,
+          "evidence": {
+            "missing": "no horizontal baseline or keel line is drawn in this panel crop"
+          },
+          "line_support": 0.0
+        },
+        "pixels_per_metre": {
+          "value": null,
+          "model_proposed": true,
+          "checked": false,
+          "evidence": [],
+          "independent_scales": []
+        }
+      },
+      "P3": {
+        "box_px": {
+          "value": [
+            70.0,
+            520.0,
+            800.0,
+            850.0
+          ],
+          "model_proposed": true,
+          "checked": true,
+          "evidence": "Border of MIDSHIP SECTION A-A panel, above its title 'MIDSHIP SECTION A-A'."
+        },
+        "centreline_x_px": {
+          "value": 160.0,
+          "model_proposed": true,
+          "checked": false,
+          "evidence": {
+            "evidence": "Vertical dark line running the full height of the panel at ruler column 160.",
+            "value": 160.0
+          },
+          "line_support": 0.0
+        },
+        "baseline_y_px": {
+          "value": null,
+          "model_proposed": true,
+          "checked": false,
+          "evidence": {
+            "missing": "no horizontal keel/baseline line is drawn in this panel crop"
+          },
+          "line_support": 0.0
+        },
+        "pixels_per_metre": {
+          "value": null,
+          "model_proposed": true,
+          "checked": false,
+          "evidence": [],
+          "independent_scales": []
+        }
+      }
+    },
+    "values": {
+      "layout": {
+        "value": "separate_panels",
+        "model_proposed": true,
+        "checked": true,
+        "evidence": {
+          "evidence": "Three framed sections stacked: SECTION C-C, SECTION B-B, MIDSHIP SECTION A-A, each in its own border.",
+          "value": "separate_panels"
+        },
+        "check": "bounded model evidence; semantic truth needs human review"
+      },
+      "units": {
+        "value": "ft",
+        "model_proposed": true,
+        "checked": true,
+        "evidence": {
+          "evidence": "Scale notes read 'SCALE OF FEET FOR SECTIONS B-B, C-C' and 'SCALE OF FEET FOR SECTION A-A'.",
+          "value": "ft"
+        },
+        "check": "bounded model evidence; semantic truth needs human review"
+      },
+      "symmetry": {
+        "value": "port_starboard",
+        "model_proposed": true,
+        "checked": true,
+        "evidence": {
+          "evidence": "Sections labelled PORT and STBD, e.g. 'PORT' and 'STBD' under SECTION C-C.",
+          "value": "port_starboard"
+        },
+        "check": "bounded model evidence; semantic truth needs human review"
+      },
+      "vertical_datum": {
+        "value": "baseline",
+        "model_proposed": true,
+        "checked": true,
+        "evidence": {
+          "evidence": "Note 'BASELINE' printed at the bottom of MIDSHIP SECTION A-A.",
+          "value": "baseline"
+        },
+        "check": "bounded model evidence; semantic truth needs human review"
+      },
+      "stations": {
+        "value": [
+          {
+            "evidence": "Printed 'C' at left end of SECTION C-C section line.",
+            "label": "C",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal station number on this sheet"
+            },
+            "x_px": 300.0,
+            "y_px": 215.0
+          },
+          {
+            "evidence": "Printed 'B' at left end of SECTION B-B section line.",
+            "label": "B",
+            "panel_id": "P2",
+            "position": {
+              "missing": "no printed longitudinal station number on this sheet"
+            },
+            "x_px": 300.0,
+            "y_px": 375.0
+          },
+          {
+            "evidence": "Printed 'A' at left end of MIDSHIP SECTION A-A section line.",
+            "label": "A",
+            "panel_id": "P3",
+            "position": {
+              "missing": "no printed longitudinal station number on this sheet"
+            },
+            "x_px": 300.0,
+            "y_px": 535.0
+          }
+        ],
+        "model_proposed": true,
+        "checked": false,
+        "evidence": null,
+        "check": "printed-label evidence and strict order; no OCR truth claim"
+      }
+    },
+    "failures": [
+      {
+        "kind": "station_position_missing",
+        "field": "stations[0]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[1]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[2]"
+      },
+      {
+        "kind": "panel_no_ink",
+        "field": "P1"
+      },
+      {
+        "kind": "centreline_not_on_ink",
+        "field": "P1"
+      },
+      {
+        "kind": "baseline_not_on_ink",
+        "field": "P1"
+      },
+      {
+        "kind": "scale_independent_marks_missing",
+        "field": "P1"
+      },
+      {
+        "kind": "baseline_not_on_ink",
+        "field": "P2"
+      },
+      {
+        "kind": "scale_independent_marks_missing",
+        "field": "P2"
+      },
+      {
+        "kind": "centreline_not_on_ink",
+        "field": "P3"
+      },
+      {
+        "kind": "baseline_not_on_ink",
+        "field": "P3"
+      },
+      {
+        "kind": "scale_independent_marks_missing",
+        "field": "P3"
+      }
+    ],
+    "scale_relative_tolerance": 0.05,
+    "consistent": false,
+    "spec_ready": false,
+    "spec_blockers": [
+      "Source license, elevation intervals and closure assumptions require explicit input.",
+      "Semantic text evidence is model-proposed, not independently transcribed."
+    ],
+    "stop_reason": "no_progress",
+    "source_sha256": "e1d51b5c748ef32c7bccfc6282e3d67a4dce08be9152d47a3af8792874c504c1",
+    "usage": {
+      "requests_failed": 0,
+      "observed_cost_usd": 0.0,
+      "requests_unknown": 0,
+      "requests_without_cost": 0,
+      "requests_not_sent": 0,
+      "prompt_tokens": 8215,
+      "requests_completed": 8,
+      "requests_intended": 8,
+      "completion_tokens": 1908
+    }
+  },
+  "proposal": {
+    "source_sha256": "e1d51b5c748ef32c7bccfc6282e3d67a4dce08be9152d47a3af8792874c504c1",
+    "overview": {
+      "layout": {
+        "evidence": "Three framed sections stacked: SECTION C-C, SECTION B-B, MIDSHIP SECTION A-A, each in its own border.",
+        "value": "separate_panels"
+      },
+      "panels": [
+        {
+          "box_px": [
+            160.0,
+            200.0,
+            600.0,
+            300.0
+          ],
+          "evidence": "Border of SECTION C-C panel, above its title 'SECTION C-C'.",
+          "panel_id": "P1"
+        },
+        {
+          "box_px": [
+            160.0,
+            360.0,
+            600.0,
+            460.0
+          ],
+          "evidence": "Border of SECTION B-B panel, above its title 'SECTION B-B'.",
+          "panel_id": "P2"
+        },
+        {
+          "box_px": [
+            70.0,
+            520.0,
+            800.0,
+            850.0
+          ],
+          "evidence": "Border of MIDSHIP SECTION A-A panel, above its title 'MIDSHIP SECTION A-A'.",
+          "panel_id": "P3"
+        }
+      ],
+      "stations": [
+        {
+          "evidence": "Printed 'C' at left end of SECTION C-C section line.",
+          "label": "C",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal station number on this sheet"
+          },
+          "x_px": 300.0,
+          "y_px": 215.0
+        },
+        {
+          "evidence": "Printed 'B' at left end of SECTION B-B section line.",
+          "label": "B",
+          "panel_id": "P2",
+          "position": {
+            "missing": "no printed longitudinal station number on this sheet"
+          },
+          "x_px": 300.0,
+          "y_px": 375.0
+        },
+        {
+          "evidence": "Printed 'A' at left end of MIDSHIP SECTION A-A section line.",
+          "label": "A",
+          "panel_id": "P3",
+          "position": {
+            "missing": "no printed longitudinal station number on this sheet"
+          },
+          "x_px": 300.0,
+          "y_px": 535.0
+        }
+      ],
+      "symmetry": {
+        "evidence": "Sections labelled PORT and STBD, e.g. 'PORT' and 'STBD' under SECTION C-C.",
+        "value": "port_starboard"
+      },
+      "units": {
+        "evidence": "Scale notes read 'SCALE OF FEET FOR SECTIONS B-B, C-C' and 'SCALE OF FEET FOR SECTION A-A'.",
+        "value": "ft"
+      },
+      "vertical_datum": {
+        "evidence": "Note 'BASELINE' printed at the bottom of MIDSHIP SECTION A-A.",
+        "value": "baseline"
+      }
+    },
+    "panels": {
+      "P1": {
+        "baseline_y_px": {
+          "missing": "no horizontal baseline or keel line drawn in the panel; only the margin ruler tick at row 200 is visible"
+        },
+        "centreline_x_px": {
+          "missing": "no vertical centreline drawn in the panel; the crop shows only blank blue field with margin rulers"
+        },
+        "panel_id": "P1",
+        "scale_marks": []
+      },
+      "P2": {
+        "baseline_y_px": {
+          "missing": "no horizontal baseline or keel line is drawn in this panel crop"
+        },
+        "centreline_x_px": {
+          "evidence": "Vertical dark ink line at sheet column 196, aligned under the 200 ruler tick; no other vertical line in the panel.",
+          "value": 196.0
+        },
+        "panel_id": "P2",
+        "scale_marks": []
+      },
+      "P3": {
+        "baseline_y_px": {
+          "missing": "no horizontal keel/baseline line is drawn in this panel crop"
+        },
+        "centreline_x_px": {
+          "evidence": "Vertical dark line running the full height of the panel at ruler column 160.",
+          "value": 160.0
+        },
+        "panel_id": "P3",
+        "scale_marks": []
+      }
+    }
+  }
+}

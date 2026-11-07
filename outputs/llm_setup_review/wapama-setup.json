@@ -1,0 +1,570 @@
+{
+  "source": {
+    "source": "/Users/jonathanjie/Documents/workspace/MarinaFrame/work/sources/haer/wapama/wapama_s09_corrected_lines_body_plan_stations.tif",
+    "sha256": "be2d4a7546bbc91473ae656fdd143d2baebc51c01b6ba7c27148d16374f28e16",
+    "raster_sha256": "08639ed20fbe6e6cb765360dbc3aa7565c9e878de02e0025e806330ed6fecc15"
+  },
+  "checks": {
+    "schema_version": "marinaframe.setup_checks.v1",
+    "engineering_approved": false,
+    "panels": {
+      "P1": {
+        "box_px": {
+          "value": [
+            90.0,
+            120.0,
+            750.0,
+            470.0
+          ],
+          "model_proposed": true,
+          "checked": true,
+          "evidence": "Upper framed area bounded by border lines, titled 'HALF-BREADTH PLAN', containing station row 3 to 0 and buttock lines."
+        },
+        "centreline_x_px": {
+          "value": 90.0,
+          "model_proposed": true,
+          "checked": false,
+          "evidence": {
+            "evidence": "Thick vertical ink line runs down the left side of the panel at column 90, the panel's vertical reference line.",
+            "value": 90.0
+          },
+          "line_support": 0.0
+        },
+        "baseline_y_px": {
+          "value": 270.0,
+          "model_proposed": true,
+          "checked": false,
+          "evidence": {
+            "evidence": "Thick horizontal ink line runs across the top of the panel at row 270, the panel's horizontal reference line.",
+            "value": 270.0
+          },
+          "line_support": 0.0
+        },
+        "pixels_per_metre": {
+          "value": null,
+          "model_proposed": true,
+          "checked": false,
+          "evidence": [],
+          "independent_scales": []
+        }
+      },
+      "P2": {
+        "box_px": {
+          "value": [
+            90.0,
+            480.0,
+            750.0,
+            760.0
+          ],
+          "model_proposed": true,
+          "checked": true,
+          "evidence": "Lower framed area titled 'STARBOARD PROFILE' with station row 3 to 0 and buttock curves."
+        },
+        "centreline_x_px": {
+          "value": 185.0,
+          "model_proposed": true,
+          "checked": false,
+          "evidence": {
+            "evidence": "Vertical double line at x\u2248185, the only vertical ink in the panel; red ruler 200 tick sits just right of it.",
+            "value": 185.0
+          },
+          "line_support": 0.0
+        },
+        "baseline_y_px": {
+          "value": null,
+          "model_proposed": true,
+          "checked": false,
+          "evidence": {
+            "missing": "no horizontal baseline or keel line is drawn in this panel; only the vertical double line and the printed word CORREC HAL appear"
+          },
+          "line_support": 0.0
+        },
+        "pixels_per_metre": {
+          "value": null,
+          "model_proposed": true,
+          "checked": false,
+          "evidence": [],
+          "independent_scales": []
+        }
+      }
+    },
+    "values": {
+      "layout": {
+        "value": "separate_panels",
+        "model_proposed": true,
+        "checked": true,
+        "evidence": {
+          "evidence": "Two framed plotting areas stacked vertically: 'HALF-BREADTH PLAN' above and 'STARBOARD PROFILE' below, each with its own station row.",
+          "value": "separate_panels"
+        },
+        "check": "bounded model evidence; semantic truth needs human review"
+      },
+      "units": {
+        "value": "ft",
+        "model_proposed": true,
+        "checked": true,
+        "evidence": {
+          "evidence": "Scale bar labeled 'Feet' with 170-230 divisions and '216'-7\"' length note.",
+          "value": "ft"
+        },
+        "check": "bounded model evidence; semantic truth needs human review"
+      },
+      "symmetry": {
+        "value": "port_starboard",
+        "model_proposed": true,
+        "checked": true,
+        "evidence": {
+          "evidence": "Title 'HALF-BREADTH PLAN' and note 'Starboard Rabbit' indicate one half drawn per station.",
+          "value": "port_starboard"
+        },
+        "check": "bounded model evidence; semantic truth needs human review"
+      },
+      "vertical_datum": {
+        "value": "baseline",
+        "model_proposed": true,
+        "checked": true,
+        "evidence": {
+          "evidence": "'BASE' printed at bottom right of STARBOARD PROFILE with waterline labels above it.",
+          "value": "baseline"
+        },
+        "check": "bounded model evidence; semantic truth needs human review"
+      },
+      "stations": {
+        "value": [
+          {
+            "evidence": "Printed '3' at left end of upper station row, above vertical station line.",
+            "label": "3",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position at this station label"
+            },
+            "x_px": 115.0,
+            "y_px": 180.0
+          },
+          {
+            "evidence": "Printed '2' in upper station row.",
+            "label": "2",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position at this station label"
+            },
+            "x_px": 290.0,
+            "y_px": 180.0
+          },
+          {
+            "evidence": "Printed '1 1/2' in upper station row.",
+            "label": "1 1/2",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position at this station label"
+            },
+            "x_px": 370.0,
+            "y_px": 180.0
+          },
+          {
+            "evidence": "Printed '1' in upper station row.",
+            "label": "1",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position at this station label"
+            },
+            "x_px": 450.0,
+            "y_px": 180.0
+          },
+          {
+            "evidence": "Printed '0 1/2' in upper station row.",
+            "label": "0 1/2",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position at this station label"
+            },
+            "x_px": 525.0,
+            "y_px": 180.0
+          },
+          {
+            "evidence": "Printed '0' at right end of upper station row.",
+            "label": "0",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position at this station label"
+            },
+            "x_px": 640.0,
+            "y_px": 180.0
+          },
+          {
+            "evidence": "Printed '3' at left end of lower station row.",
+            "label": "3",
+            "panel_id": "P2",
+            "position": {
+              "missing": "no printed longitudinal position at this station label"
+            },
+            "x_px": 115.0,
+            "y_px": 740.0
+          },
+          {
+            "evidence": "Printed '2' in lower station row.",
+            "label": "2",
+            "panel_id": "P2",
+            "position": {
+              "missing": "no printed longitudinal position at this station label"
+            },
+            "x_px": 290.0,
+            "y_px": 740.0
+          },
+          {
+            "evidence": "Printed '1 1/2' in lower station row.",
+            "label": "1 1/2",
+            "panel_id": "P2",
+            "position": {
+              "missing": "no printed longitudinal position at this station label"
+            },
+            "x_px": 370.0,
+            "y_px": 740.0
+          },
+          {
+            "evidence": "Printed '1' in lower station row.",
+            "label": "1",
+            "panel_id": "P2",
+            "position": {
+              "missing": "no printed longitudinal position at this station label"
+            },
+            "x_px": 450.0,
+            "y_px": 740.0
+          },
+          {
+            "evidence": "Printed '0 1/2' in lower station row.",
+            "label": "0 1/2",
+            "panel_id": "P2",
+            "position": {
+              "missing": "no printed longitudinal position at this station label"
+            },
+            "x_px": 525.0,
+            "y_px": 740.0
+          },
+          {
+            "evidence": "Printed '0' at right end of lower station row.",
+            "label": "0",
+            "panel_id": "P2",
+            "position": {
+              "missing": "no printed longitudinal position at this station label"
+            },
+            "x_px": 640.0,
+            "y_px": 740.0
+          }
+        ],
+        "model_proposed": true,
+        "checked": false,
+        "evidence": null,
+        "check": "printed-label evidence and strict order; no OCR truth claim"
+      }
+    },
+    "failures": [
+      {
+        "kind": "station_position_missing",
+        "field": "stations[0]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[1]"
+      },
+      {
+        "kind": "station_label_order",
+        "field": "stations[1]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[2]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[3]"
+      },
+      {
+        "kind": "station_label_order",
+        "field": "stations[3]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[4]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[5]"
+      },
+      {
+        "kind": "station_label_order",
+        "field": "stations[5]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[6]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[7]"
+      },
+      {
+        "kind": "station_label_order",
+        "field": "stations[7]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[8]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[9]"
+      },
+      {
+        "kind": "station_label_order",
+        "field": "stations[9]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[10]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[11]"
+      },
+      {
+        "kind": "station_label_order",
+        "field": "stations[11]"
+      },
+      {
+        "kind": "centreline_not_on_ink",
+        "field": "P1"
+      },
+      {
+        "kind": "baseline_not_on_ink",
+        "field": "P1"
+      },
+      {
+        "kind": "scale_independent_marks_missing",
+        "field": "P1"
+      },
+      {
+        "kind": "centreline_not_on_ink",
+        "field": "P2"
+      },
+      {
+        "kind": "baseline_not_on_ink",
+        "field": "P2"
+      },
+      {
+        "kind": "scale_independent_marks_missing",
+        "field": "P2"
+      }
+    ],
+    "scale_relative_tolerance": 0.05,
+    "consistent": false,
+    "spec_ready": false,
+    "spec_blockers": [
+      "Source license, elevation intervals and closure assumptions require explicit input.",
+      "Semantic text evidence is model-proposed, not independently transcribed."
+    ],
+    "stop_reason": "no_progress",
+    "source_sha256": "08639ed20fbe6e6cb765360dbc3aa7565c9e878de02e0025e806330ed6fecc15",
+    "usage": {
+      "requests_failed": 0,
+      "observed_cost_usd": 0.0,
+      "requests_unknown": 0,
+      "requests_without_cost": 0,
+      "requests_not_sent": 0,
+      "prompt_tokens": 6156,
+      "requests_completed": 6,
+      "requests_intended": 6,
+      "completion_tokens": 2192
+    }
+  },
+  "proposal": {
+    "source_sha256": "08639ed20fbe6e6cb765360dbc3aa7565c9e878de02e0025e806330ed6fecc15",
+    "overview": {
+      "layout": {
+        "evidence": "Two framed plotting areas stacked vertically: 'HALF-BREADTH PLAN' above and 'STARBOARD PROFILE' below, each with its own station row.",
+        "value": "separate_panels"
+      },
+      "panels": [
+        {
+          "box_px": [
+            90.0,
+            120.0,
+            750.0,
+            470.0
+          ],
+          "evidence": "Upper framed area bounded by border lines, titled 'HALF-BREADTH PLAN', containing station row 3 to 0 and buttock lines.",
+          "panel_id": "P1"
+        },
+        {
+          "box_px": [
+            90.0,
+            480.0,
+            750.0,
+            760.0
+          ],
+          "evidence": "Lower framed area titled 'STARBOARD PROFILE' with station row 3 to 0 and buttock curves.",
+          "panel_id": "P2"
+        }
+      ],
+      "stations": [
+        {
+          "evidence": "Printed '3' at left end of upper station row, above vertical station line.",
+          "label": "3",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position at this station label"
+          },
+          "x_px": 115.0,
+          "y_px": 180.0
+        },
+        {
+          "evidence": "Printed '2' in upper station row.",
+          "label": "2",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position at this station label"
+          },
+          "x_px": 290.0,
+          "y_px": 180.0
+        },
+        {
+          "evidence": "Printed '1 1/2' in upper station row.",
+          "label": "1 1/2",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position at this station label"
+          },
+          "x_px": 370.0,
+          "y_px": 180.0
+        },
+        {
+          "evidence": "Printed '1' in upper station row.",
+          "label": "1",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position at this station label"
+          },
+          "x_px": 450.0,
+          "y_px": 180.0
+        },
+        {
+          "evidence": "Printed '0 1/2' in upper station row.",
+          "label": "0 1/2",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position at this station label"
+          },
+          "x_px": 525.0,
+          "y_px": 180.0
+        },
+        {
+          "evidence": "Printed '0' at right end of upper station row.",
+          "label": "0",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position at this station label"
+          },
+          "x_px": 640.0,
+          "y_px": 180.0
+        },
+        {
+          "evidence": "Printed '3' at left end of lower station row.",
+          "label": "3",
+          "panel_id": "P2",
+          "position": {
+            "missing": "no printed longitudinal position at this station label"
+          },
+          "x_px": 115.0,
+          "y_px": 740.0
+        },
+        {
+          "evidence": "Printed '2' in lower station row.",
+          "label": "2",
+          "panel_id": "P2",
+          "position": {
+            "missing": "no printed longitudinal position at this station label"
+          },
+          "x_px": 290.0,
+          "y_px": 740.0
+        },
+        {
+          "evidence": "Printed '1 1/2' in lower station row.",
+          "label": "1 1/2",
+          "panel_id": "P2",
+          "position": {
+            "missing": "no printed longitudinal position at this station label"
+          },
+          "x_px": 370.0,
+          "y_px": 740.0
+        },
+        {
+          "evidence": "Printed '1' in lower station row.",
+          "label": "1",
+          "panel_id": "P2",
+          "position": {
+            "missing": "no printed longitudinal position at this station label"
+          },
+          "x_px": 450.0,
+          "y_px": 740.0
+        },
+        {
+          "evidence": "Printed '0 1/2' in lower station row.",
+          "label": "0 1/2",
+          "panel_id": "P2",
+          "position": {
+            "missing": "no printed longitudinal position at this station label"
+          },
+          "x_px": 525.0,
+          "y_px": 740.0
+        },
+        {
+          "evidence": "Printed '0' at right end of lower station row.",
+          "label": "0",
+          "panel_id": "P2",
+          "position": {
+            "missing": "no printed longitudinal position at this station label"
+          },
+          "x_px": 640.0,
+          "y_px": 740.0
+        }
+      ],
+      "symmetry": {
+        "evidence": "Title 'HALF-BREADTH PLAN' and note 'Starboard Rabbit' indicate one half drawn per station.",
+        "value": "port_starboard"
+      },
+      "units": {
+        "evidence": "Scale bar labeled 'Feet' with 170-230 divisions and '216'-7\"' length note.",
+        "value": "ft"
+      },
+      "vertical_datum": {
+        "evidence": "'BASE' printed at bottom right of STARBOARD PROFILE with waterline labels above it.",
+        "value": "baseline"
+      }
+    },
+    "panels": {
+      "P1": {
+        "baseline_y_px": {
+          "evidence": "Thick horizontal ink line runs across the top of the panel at row 270, the panel's horizontal reference line.",
+          "value": 270.0
+        },
+        "centreline_x_px": {
+          "evidence": "Thick vertical ink line runs down the left side of the panel at column 90, the panel's vertical reference line.",
+          "value": 90.0
+        },
+        "panel_id": "P1",
+        "scale_marks": []
+      },
+      "P2": {
+        "baseline_y_px": {
+          "missing": "no horizontal baseline or keel line is drawn in this panel; only the vertical double line and the printed word CORREC HAL appear"
+        },
+        "centreline_x_px": {
+          "evidence": "Vertical double line at x\u2248185, the only vertical ink in the panel; red ruler 200 tick sits just right of it.",
+          "value": 185.0
+        },
+        "panel_id": "P2",
+        "scale_marks": []
+      }
+    }
+  }
+}

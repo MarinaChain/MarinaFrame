@@ -3,6 +3,8 @@
 pub mod credentials;
 #[path = "transcription.rs"]
 pub mod transcription;
+#[path = "vision.rs"]
+pub mod vision;
 
 use crate::types::{Decision, GO_ENDPOINT, GO_MODEL};
 use crate::util::{self, Result};
@@ -42,6 +44,10 @@ pub enum Purpose {
     TableTranscription,
     /// A decision of the live model in draft mode with investigation tools.
     Investigation,
+    /// A proposal of the setup of a drawing sheet (see `vision`).
+    SheetSetup,
+    /// A review of a finished build that can only veto (see `vision`).
+    BuildReview,
 }
 impl Purpose {
     fn is_model_decision(&self) -> bool {
@@ -52,6 +58,8 @@ impl Purpose {
             Purpose::ModelDecision => SYSTEM_PROMPT,
             Purpose::TableTranscription => transcription::TABLE_PROMPT,
             Purpose::Investigation => INVESTIGATION_PROMPT,
+            Purpose::SheetSetup => vision::SETUP_PROMPT,
+            Purpose::BuildReview => vision::REVIEW_PROMPT,
         }
     }
     /// Decision purposes return a tool call; table reading returns cells.
@@ -185,6 +193,9 @@ pub struct Receipt {
     /// The validated cell transcription of a completed table request.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transcription: Option<Transcription>,
+    /// The validated reply of a completed sheet-setup or build-review request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vision: Option<vision::VisionReply>,
 }
 pub fn check_input(input: &ProviderInput) -> Result<Vec<u8>> {
     if input.protocol != PROTOCOL
@@ -206,8 +217,10 @@ pub fn check_input(input: &ProviderInput) -> Result<Vec<u8>> {
     {
         return Err("provider_request_contract".into());
     }
-    if input.purpose == Purpose::TableTranscription {
-        check_table_input(input)?;
+    match input.purpose {
+        Purpose::ModelDecision | Purpose::Investigation => (),
+        Purpose::TableTranscription => check_table_input(input)?,
+        Purpose::SheetSetup | Purpose::BuildReview => vision::check_input(input)?,
     }
     let content = p["messages"][1]["content"]
         .as_array()
@@ -390,6 +403,13 @@ pub fn interpret_completion(receipt: &mut Receipt, bytes: &[u8], key: &str) -> R
             let requested = requested_cells(&receipt.images);
             receipt.transcription = Some(transcription::parse(content, &requested)?);
         }
+        Purpose::SheetSetup | Purpose::BuildReview => {
+            receipt.vision = Some(vision::parse_reply(
+                receipt.purpose,
+                content,
+                &receipt.images,
+            )?);
+        }
     }
     receipt.state = RequestState::Completed;
     Ok(())
@@ -439,6 +459,7 @@ pub fn provider_worker(response_path: &Path, timeout: u64) -> Result<()> {
         credential_selection: None,
         purpose: input.purpose,
         transcription: None,
+        vision: None,
     };
     util::atomic_json(response_path, &receipt, false)?;
     let credentials = credentials::load(|name| std::env::var(name).ok())?;

@@ -1,0 +1,37 @@
+[
+  {
+    "guard": "finalization_hook",
+    "detected": true,
+    "test_failed": true,
+    "output": "\nrunning 1 test\ntest retained_model_veto_blocks_finalization_without_a_new_call ... FAILED\n\nfailures:\n\n---- retained_model_veto_blocks_finalization_without_a_new_call stdout ----\n\nthread 'retained_model_veto_blocks_finalization_without_a_new_call' (26501911) panicked at rust-control/tests/finalization_guards.rs:245:5:\nassertion `left == right` failed\n  left: 1\n right: 0\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    retained_model_veto_blocks_finalization_without_a_new_call\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 50.06s\n\n",
+    "stderr": "   Compiling marinaframe-control v0.4.0 (/Users/jonathanjie/Documents/workspace/MarinaFrame/.claude/worktrees/agent-ae484e20dcd335033/rust-control)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.33s\n     Running tests/finalization_guards.rs (target/debug/deps/finalization_guards-ca8cd95cc3454d14)\nerror: test failed, to rerun pass `-p marinaframe-control --test finalization_guards`\n"
+  },
+  {
+    "guard": "same_step_binding",
+    "detected": true,
+    "test_failed": true,
+    "output": "\nrunning 1 test\ntest another_step_model_veto_does_not_change_finalization ... FAILED\n\nfailures:\n\n---- another_step_model_veto_does_not_change_finalization stdout ----\n\nthread 'another_step_model_veto_does_not_change_finalization' (26505451) panicked at rust-control/tests/finalization_guards.rs:298:5:\nassertion `left == right` failed\n  left: ValidationFailed\n right: AwaitingHumanReview\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    another_step_model_veto_does_not_change_finalization\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 96.66s\n\n",
+    "stderr": "   Compiling marinaframe-control v0.4.0 (/Users/jonathanjie/Documents/workspace/MarinaFrame/.claude/worktrees/agent-ae484e20dcd335033/rust-control)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.13s\n     Running tests/finalization_guards.rs (target/debug/deps/finalization_guards-ca8cd95cc3454d14)\nerror: test failed, to rerun pass `-p marinaframe-control --test finalization_guards`\n"
+  },
+  {
+    "guard": "completed_receipt",
+    "detected": true,
+    "test_failed": true,
+    "output": "\nrunning 1 test\ntest controller::model_review::tests::only_does_not_follow_on_a_sent_image_is_a_finding ... FAILED\n\nfailures:\n\n---- controller::model_review::tests::only_does_not_follow_on_a_sent_image_is_a_finding stdout ----\n\nthread 'controller::model_review::tests::only_does_not_follow_on_a_sent_image_is_a_finding' (26512374) panicked at rust-control/src/model_review.rs:451:9:\nassertion failed: findings(&images, &[failed_with_reply]).is_empty()\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    controller::model_review::tests::only_does_not_follow_on_a_sent_image_is_a_finding\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s\n\n",
+    "stderr": "   Compiling marinaframe-control v0.4.0 (/Users/jonathanjie/Documents/workspace/MarinaFrame/.claude/worktrees/agent-ae484e20dcd335033/rust-control)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.79s\n     Running unittests src/lib.rs (target/debug/deps/marinaframe_control-05e56af37466be9d)\nerror: test failed, to rerun pass `-p marinaframe-control --lib`\n"
+  },
+  {
+    "guard": "image_binding",
+    "detected": true,
+    "test_failed": true,
+    "output": "\nrunning 1 test\ntest controller::model_review::tests::only_does_not_follow_on_a_sent_image_is_a_finding ... FAILED\n\nfailures:\n\n---- controller::model_review::tests::only_does_not_follow_on_a_sent_image_is_a_finding stdout ----\n\nthread 'controller::model_review::tests::only_does_not_follow_on_a_sent_image_is_a_finding' (26512879) panicked at rust-control/src/model_review.rs:447:9:\nassertion failed: findings(&images, &[unsent]).is_empty()\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    controller::model_review::tests::only_does_not_follow_on_a_sent_image_is_a_finding\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s\n\n",
+    "stderr": "   Compiling marinaframe-control v0.4.0 (/Users/jonathanjie/Documents/workspace/MarinaFrame/.claude/worktrees/agent-ae484e20dcd335033/rust-control)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.92s\n     Running unittests src/lib.rs (target/debug/deps/marinaframe_control-05e56af37466be9d)\nerror: test failed, to rerun pass `-p marinaframe-control --lib`\n"
+  },
+  {
+    "guard": "veto_verdict",
+    "detected": true,
+    "test_failed": true,
+    "output": "\nrunning 1 test\ntest controller::model_review::tests::only_does_not_follow_on_a_sent_image_is_a_finding ... FAILED\n\nfailures:\n\n---- controller::model_review::tests::only_does_not_follow_on_a_sent_image_is_a_finding stdout ----\n\nthread 'controller::model_review::tests::only_does_not_follow_on_a_sent_image_is_a_finding' (26513190) panicked at rust-control/src/model_review.rs:436:9:\nassertion failed: findings(&images, &[none]).is_empty()\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    controller::model_review::tests::only_does_not_follow_on_a_sent_image_is_a_finding\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s\n\n",
+    "stderr": "   Compiling marinaframe-control v0.4.0 (/Users/jonathanjie/Documents/workspace/MarinaFrame/.claude/worktrees/agent-ae484e20dcd335033/rust-control)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.89s\n     Running unittests src/lib.rs (target/debug/deps/marinaframe_control-05e56af37466be9d)\nerror: test failed, to rerun pass `-p marinaframe-control --lib`\n"
+  }
+]

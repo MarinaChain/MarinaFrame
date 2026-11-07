@@ -1,0 +1,510 @@
+{
+  "step_sha256": "1f3cb1e3f3130ee2b8b17bf482dca82805cf6c4764e8b5d7ac20366997cc8c82",
+  "records": [
+    {
+      "authorization_basis": "User authorized acquired drawings for W12 development evaluation",
+      "endpoint": "https://opencode.ai/inference/go/openai/v1/chat/completions",
+      "engineering_approved": false,
+      "evidence_mode": "live",
+      "finished_ms": 1794073420300,
+      "prompt_sha256": "86288e7612141c7abece7bb126c24f2e342c7c114ed4ef886588637e108fef08",
+      "purpose": "build_review",
+      "receipts": [
+        {
+          "aggregate_request_cap": null,
+          "aggregate_spend_cap": null,
+          "aggregate_token_cap": null,
+          "attempt": 1,
+          "completion_id": "gw-e9af2eb7498-c4815a",
+          "credential_selection": {
+            "candidates": [
+              {
+                "highest_usage_percent": 55.0,
+                "slot": 1
+              },
+              {
+                "slot": 2,
+                "unavailable": "usage_exhausted_or_unverified"
+              },
+              {
+                "slot": 3,
+                "unavailable": "usage_exhausted_or_unverified"
+              }
+            ],
+            "policy": "lowest_go_usage",
+            "slot": 1
+          },
+          "decision": null,
+          "endpoint": "https://opencode.ai/inference/go/openai/v1/chat/completions",
+          "error_code": null,
+          "evidence_mode": "live",
+          "generation_id": "vision_request",
+          "http_status": 200,
+          "images": [
+            {
+              "artifact_id": "s000",
+              "bytes": 13939,
+              "evidence_kind": "build_review_overlay",
+              "generation_id": null,
+              "mime_type": "image/png",
+              "path": "station-000.png",
+              "pixels_attached": true,
+              "revision_id": null,
+              "sha256": "cf0c4e801ce38431ae75ce0fc55dba0b2103953ff81ea3e89f1a627f18bcbcff",
+              "step_sha256": null,
+              "view": "station:s000"
+            },
+            {
+              "artifact_id": "s001",
+              "bytes": 14587,
+              "evidence_kind": "build_review_overlay",
+              "generation_id": null,
+              "mime_type": "image/png",
+              "path": "station-001.png",
+              "pixels_attached": true,
+              "revision_id": null,
+              "sha256": "1454b6da322e429a6eb37e475aaabf1126ca3e1293b069c13cad6a664a9bdcce",
+              "step_sha256": null,
+              "view": "station:s001"
+            },
+            {
+              "artifact_id": "s002",
+              "bytes": 15156,
+              "evidence_kind": "build_review_overlay",
+              "generation_id": null,
+              "mime_type": "image/png",
+              "path": "station-002.png",
+              "pixels_attached": true,
+              "revision_id": null,
+              "sha256": "a884d365e77d481cfd4810b101846627b3e106218e0b698b7b1281d611f2390e",
+              "step_sha256": null,
+              "view": "station:s002"
+            }
+          ],
+          "latency_seconds": 3.727924667,
+          "observation_sha256": "24dc1267d8b8cead274200888352ae64f8f21d6ed7bf1efaa02aa38067eb61a7",
+          "observed_cost_usd": 0.0,
+          "prompt_sha256": "86288e7612141c7abece7bb126c24f2e342c7c114ed4ef886588637e108fef08",
+          "protocol": "marinaframe.provider.v1",
+          "provider_request_id": null,
+          "purpose": "build_review",
+          "request_id": "vision-1794073415571-46916-0-79f9046bbc3c",
+          "request_sha256": "a1e6c2bfccb6ec8261a614d1073c07410922b540de39d7e8ffdf1987bfedd9aa",
+          "requested_model": "deepseek-v4.1-flash",
+          "response_sha256": "dcf0f22c793aff6849ba80dc00ab6c0845a3022cd277ba79454bc8e511d0dbad",
+          "retry_after_seconds": null,
+          "retry_of": null,
+          "returned_model": "deepseek-v4.1-flash",
+          "revision_id": "4a5efaf1d225eafe6d5f5680b22c30cde9be67fbb2ada6b15c2f5250f625653d",
+          "source_manifest_sha256": "360a9ca14ddc2aabd6f30cfe3cfe8551792b2410f78fae3ebcd9bef4a7ecb59f",
+          "state": "completed",
+          "usage": {
+            "allowance": 0.00022923,
+            "billing_source": "go",
+            "completion_tokens": 144,
+            "cost": 0.0,
+            "list_cost": 0.00038205,
+            "prompt_tokens": 1971,
+            "total_tokens": 2115
+          },
+          "vision": {
+            "build_review": {
+              "stations": [
+                {
+                  "reason": "Magenta cut traces the black station-1 hull curve from baseline to top, matching its bend at VL3-VL5 with only pixel-level offset.",
+                  "station_id": "s000",
+                  "verdict": "follows"
+                },
+                {
+                  "reason": "Magenta line lies on the black station-2 section over its full height, following the same curvature and the near-vertical top at VL5-VL6.",
+                  "station_id": "s001",
+                  "verdict": "follows"
+                },
+                {
+                  "reason": "Magenta cut coincides with the black station-3 hull line from bottom to top, including the S-bend around VL3-VL5.",
+                  "station_id": "s002",
+                  "verdict": "follows"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "reply": {
+        "build_review": {
+          "stations": [
+            {
+              "reason": "Magenta cut traces the black station-1 hull curve from baseline to top, matching its bend at VL3-VL5 with only pixel-level offset.",
+              "station_id": "s000",
+              "verdict": "follows"
+            },
+            {
+              "reason": "Magenta line lies on the black station-2 section over its full height, following the same curvature and the near-vertical top at VL5-VL6.",
+              "station_id": "s001",
+              "verdict": "follows"
+            },
+            {
+              "reason": "Magenta cut coincides with the black station-3 hull line from bottom to top, including the S-bend around VL3-VL5.",
+              "station_id": "s002",
+              "verdict": "follows"
+            }
+          ]
+        }
+      },
+      "request_manifest_sha256": "360a9ca14ddc2aabd6f30cfe3cfe8551792b2410f78fae3ebcd9bef4a7ecb59f",
+      "requested_model": "deepseek-v4.1-flash",
+      "schema_version": "marinaframe.vision_reading.v1",
+      "source_sha256": "4a5efaf1d225eafe6d5f5680b22c30cde9be67fbb2ada6b15c2f5250f625653d",
+      "started_ms": 1794073415571,
+      "stop_reason": null,
+      "usage": {
+        "completion_tokens": 144,
+        "observed_cost_usd": 0.0,
+        "prompt_tokens": 1971,
+        "requests_completed": 1,
+        "requests_failed": 0,
+        "requests_intended": 1,
+        "requests_not_sent": 0,
+        "requests_unknown": 0,
+        "requests_without_cost": 0
+      }
+    },
+    {
+      "authorization_basis": "User authorized acquired drawings for W12 development evaluation",
+      "endpoint": "https://opencode.ai/inference/go/openai/v1/chat/completions",
+      "engineering_approved": false,
+      "evidence_mode": "live",
+      "finished_ms": 1794073424467,
+      "prompt_sha256": "86288e7612141c7abece7bb126c24f2e342c7c114ed4ef886588637e108fef08",
+      "purpose": "build_review",
+      "receipts": [
+        {
+          "aggregate_request_cap": null,
+          "aggregate_spend_cap": null,
+          "aggregate_token_cap": null,
+          "attempt": 1,
+          "completion_id": "gw-f0b3575f9cc-c8af70",
+          "credential_selection": {
+            "candidates": [
+              {
+                "highest_usage_percent": 55.0,
+                "slot": 1
+              },
+              {
+                "slot": 2,
+                "unavailable": "usage_exhausted_or_unverified"
+              },
+              {
+                "slot": 3,
+                "unavailable": "usage_exhausted_or_unverified"
+              }
+            ],
+            "policy": "lowest_go_usage",
+            "slot": 1
+          },
+          "decision": null,
+          "endpoint": "https://opencode.ai/inference/go/openai/v1/chat/completions",
+          "error_code": null,
+          "evidence_mode": "live",
+          "generation_id": "vision_request",
+          "http_status": 200,
+          "images": [
+            {
+              "artifact_id": "s003",
+              "bytes": 15745,
+              "evidence_kind": "build_review_overlay",
+              "generation_id": null,
+              "mime_type": "image/png",
+              "path": "station-003.png",
+              "pixels_attached": true,
+              "revision_id": null,
+              "sha256": "797fc693928a0d60cf998e164ff9421979a771408b33cdaabd83b433c5493ca0",
+              "step_sha256": null,
+              "view": "station:s003"
+            },
+            {
+              "artifact_id": "s004",
+              "bytes": 15500,
+              "evidence_kind": "build_review_overlay",
+              "generation_id": null,
+              "mime_type": "image/png",
+              "path": "station-004.png",
+              "pixels_attached": true,
+              "revision_id": null,
+              "sha256": "45af24b3e0e5f1998e4398e4ef2e05066acb235267c170f4ef2bc977df34b422",
+              "step_sha256": null,
+              "view": "station:s004"
+            },
+            {
+              "artifact_id": "s005",
+              "bytes": 15750,
+              "evidence_kind": "build_review_overlay",
+              "generation_id": null,
+              "mime_type": "image/png",
+              "path": "station-005.png",
+              "pixels_attached": true,
+              "revision_id": null,
+              "sha256": "b9b7b714f41f68eb1f7bccf404c7d20da432b73a9eba6763358bfed78f98bd8e",
+              "step_sha256": null,
+              "view": "station:s005"
+            }
+          ],
+          "latency_seconds": 3.165356333,
+          "observation_sha256": "85d872b8f2d7c77b9c447ae5aaba7c85d323e4976fa8b1a32b3a44eb8b7c5973",
+          "observed_cost_usd": 0.0,
+          "prompt_sha256": "86288e7612141c7abece7bb126c24f2e342c7c114ed4ef886588637e108fef08",
+          "protocol": "marinaframe.provider.v1",
+          "provider_request_id": null,
+          "purpose": "build_review",
+          "request_id": "vision-1794073420326-46973-0-3881fcd2c087",
+          "request_sha256": "cbc76eeeb1f4762bb278c1c4bdccf865d08940abcdc17a4083ef64d749665491",
+          "requested_model": "deepseek-v4.1-flash",
+          "response_sha256": "d1a55599a5ffc023f987dbced97f08fcf87949aed3ec02e183bbc623b6551cd5",
+          "retry_after_seconds": null,
+          "retry_of": null,
+          "returned_model": "deepseek-v4.1-flash",
+          "revision_id": "4a5efaf1d225eafe6d5f5680b22c30cde9be67fbb2ada6b15c2f5250f625653d",
+          "source_manifest_sha256": "24176ff71e7a2a08cfd274810834db147848a4150c10f6a5b85e02d0c958b3d6",
+          "state": "completed",
+          "usage": {
+            "allowance": 0.00021987,
+            "billing_source": "go",
+            "completion_tokens": 118,
+            "cost": 0.0,
+            "list_cost": 0.00036645,
+            "prompt_tokens": 1971,
+            "total_tokens": 2089
+          },
+          "vision": {
+            "build_review": {
+              "stations": [
+                {
+                  "reason": "Magenta cut traces the black station 4 hull curve from baseline to top, matching its curvature and endpoints.",
+                  "station_id": "s003",
+                  "verdict": "follows"
+                },
+                {
+                  "reason": "Magenta cut lies on the black station 5 section line over its full length, including the upper flare.",
+                  "station_id": "s004",
+                  "verdict": "follows"
+                },
+                {
+                  "reason": "Magenta cut coincides with the black station 6 hull line from the baseline up to the top of the curve.",
+                  "station_id": "s005",
+                  "verdict": "follows"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "reply": {
+        "build_review": {
+          "stations": [
+            {
+              "reason": "Magenta cut traces the black station 4 hull curve from baseline to top, matching its curvature and endpoints.",
+              "station_id": "s003",
+              "verdict": "follows"
+            },
+            {
+              "reason": "Magenta cut lies on the black station 5 section line over its full length, including the upper flare.",
+              "station_id": "s004",
+              "verdict": "follows"
+            },
+            {
+              "reason": "Magenta cut coincides with the black station 6 hull line from the baseline up to the top of the curve.",
+              "station_id": "s005",
+              "verdict": "follows"
+            }
+          ]
+        }
+      },
+      "request_manifest_sha256": "24176ff71e7a2a08cfd274810834db147848a4150c10f6a5b85e02d0c958b3d6",
+      "requested_model": "deepseek-v4.1-flash",
+      "schema_version": "marinaframe.vision_reading.v1",
+      "source_sha256": "4a5efaf1d225eafe6d5f5680b22c30cde9be67fbb2ada6b15c2f5250f625653d",
+      "started_ms": 1794073420326,
+      "stop_reason": null,
+      "usage": {
+        "completion_tokens": 118,
+        "observed_cost_usd": 0.0,
+        "prompt_tokens": 1971,
+        "requests_completed": 1,
+        "requests_failed": 0,
+        "requests_intended": 1,
+        "requests_not_sent": 0,
+        "requests_unknown": 0,
+        "requests_without_cost": 0
+      }
+    },
+    {
+      "authorization_basis": "User authorized acquired drawings for W12 development evaluation",
+      "endpoint": "https://opencode.ai/inference/go/openai/v1/chat/completions",
+      "engineering_approved": false,
+      "evidence_mode": "live",
+      "finished_ms": 1794073428451,
+      "prompt_sha256": "86288e7612141c7abece7bb126c24f2e342c7c114ed4ef886588637e108fef08",
+      "purpose": "build_review",
+      "receipts": [
+        {
+          "aggregate_request_cap": null,
+          "aggregate_spend_cap": null,
+          "aggregate_token_cap": null,
+          "attempt": 1,
+          "completion_id": "gw-e9af2eb7498-c483bf",
+          "credential_selection": {
+            "candidates": [
+              {
+                "highest_usage_percent": 55.0,
+                "slot": 1
+              },
+              {
+                "slot": 2,
+                "unavailable": "usage_exhausted_or_unverified"
+              },
+              {
+                "slot": 3,
+                "unavailable": "usage_exhausted_or_unverified"
+              }
+            ],
+            "policy": "lowest_go_usage",
+            "slot": 1
+          },
+          "decision": null,
+          "endpoint": "https://opencode.ai/inference/go/openai/v1/chat/completions",
+          "error_code": null,
+          "evidence_mode": "live",
+          "generation_id": "vision_request",
+          "http_status": 200,
+          "images": [
+            {
+              "artifact_id": "s006",
+              "bytes": 15118,
+              "evidence_kind": "build_review_overlay",
+              "generation_id": null,
+              "mime_type": "image/png",
+              "path": "station-006.png",
+              "pixels_attached": true,
+              "revision_id": null,
+              "sha256": "608ddc275da13fcfa0742691f487e14766b11d0bdd858bcd55149b55418a168c",
+              "step_sha256": null,
+              "view": "station:s006"
+            },
+            {
+              "artifact_id": "s007",
+              "bytes": 14638,
+              "evidence_kind": "build_review_overlay",
+              "generation_id": null,
+              "mime_type": "image/png",
+              "path": "station-007.png",
+              "pixels_attached": true,
+              "revision_id": null,
+              "sha256": "1a29bb419bdbf24f9d6fccd1108c6637f3bae039583219609347079b3167ff49",
+              "step_sha256": null,
+              "view": "station:s007"
+            },
+            {
+              "artifact_id": "s008",
+              "bytes": 13978,
+              "evidence_kind": "build_review_overlay",
+              "generation_id": null,
+              "mime_type": "image/png",
+              "path": "station-008.png",
+              "pixels_attached": true,
+              "revision_id": null,
+              "sha256": "94f506ba9c6ea16dcca7778569cd3be9111dbc9f0ef75d759f0daae80a398bef",
+              "step_sha256": null,
+              "view": "station:s008"
+            }
+          ],
+          "latency_seconds": 2.984004042,
+          "observation_sha256": "5179c04b1a7f1cb0ee16922fbd212fbbfbce00e5d3efe8ca9bbd070f7f3648d4",
+          "observed_cost_usd": 0.0,
+          "prompt_sha256": "86288e7612141c7abece7bb126c24f2e342c7c114ed4ef886588637e108fef08",
+          "protocol": "marinaframe.provider.v1",
+          "provider_request_id": null,
+          "purpose": "build_review",
+          "request_id": "vision-1794073424494-47000-0-3a715fd31855",
+          "request_sha256": "6c84936f93d0a551136bd3b6ef7e704f7afb21f32932320c0e346fb5ab2f693b",
+          "requested_model": "deepseek-v4.1-flash",
+          "response_sha256": "fa6df2ac57946433f6cfe9e39f81b8b5d0b229e3a857d786bf9a3772e1f8ba6f",
+          "retry_after_seconds": null,
+          "retry_of": null,
+          "returned_model": "deepseek-v4.1-flash",
+          "revision_id": "4a5efaf1d225eafe6d5f5680b22c30cde9be67fbb2ada6b15c2f5250f625653d",
+          "source_manifest_sha256": "6ed228181ab19e0c7336901297a3c5561df47207313930ca4d2046947697f884",
+          "state": "completed",
+          "usage": {
+            "allowance": 0.00022311,
+            "billing_source": "go",
+            "completion_tokens": 127,
+            "cost": 0.0,
+            "list_cost": 0.00037185,
+            "prompt_tokens": 1971,
+            "total_tokens": 2098
+          },
+          "vision": {
+            "build_review": {
+              "stations": [
+                {
+                  "reason": "Magenta cut traces the drawn station 7 hull curve from baseline to top, matching its curvature and position throughout.",
+                  "station_id": "s006",
+                  "verdict": "follows"
+                },
+                {
+                  "reason": "Magenta cut lies on the drawn station 8 hull line over its full length, including the upper flare near VL5-VL6.",
+                  "station_id": "s007",
+                  "verdict": "follows"
+                },
+                {
+                  "reason": "Magenta cut follows the drawn station 9 hull curve from the baseline up to the top, with only minor pixel offsets.",
+                  "station_id": "s008",
+                  "verdict": "follows"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "reply": {
+        "build_review": {
+          "stations": [
+            {
+              "reason": "Magenta cut traces the drawn station 7 hull curve from baseline to top, matching its curvature and position throughout.",
+              "station_id": "s006",
+              "verdict": "follows"
+            },
+            {
+              "reason": "Magenta cut lies on the drawn station 8 hull line over its full length, including the upper flare near VL5-VL6.",
+              "station_id": "s007",
+              "verdict": "follows"
+            },
+            {
+              "reason": "Magenta cut follows the drawn station 9 hull curve from the baseline up to the top, with only minor pixel offsets.",
+              "station_id": "s008",
+              "verdict": "follows"
+            }
+          ]
+        }
+      },
+      "request_manifest_sha256": "6ed228181ab19e0c7336901297a3c5561df47207313930ca4d2046947697f884",
+      "requested_model": "deepseek-v4.1-flash",
+      "schema_version": "marinaframe.vision_reading.v1",
+      "source_sha256": "4a5efaf1d225eafe6d5f5680b22c30cde9be67fbb2ada6b15c2f5250f625653d",
+      "started_ms": 1794073424494,
+      "stop_reason": null,
+      "usage": {
+        "completion_tokens": 127,
+        "observed_cost_usd": 0.0,
+        "prompt_tokens": 1971,
+        "requests_completed": 1,
+        "requests_failed": 0,
+        "requests_intended": 1,
+        "requests_not_sent": 0,
+        "requests_unknown": 0,
+        "requests_without_cost": 0
+      }
+    }
+  ],
+  "engineering_approved": false
+}

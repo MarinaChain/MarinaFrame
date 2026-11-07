@@ -1,0 +1,566 @@
+{
+  "source": {
+    "source": "/Users/jonathanjie/Documents/workspace/MarinaFrame/work/sources/balclutha_ca54_s7.tif",
+    "sha256": "32f09c60a39d5a7f91148eb26148ebb58feea3d0a510e5a9a9da7767c60326a8",
+    "raster_sha256": "5938135e0996dbae8060b641ca7927c0ca2034676c93423d9f6197e5444c57c5"
+  },
+  "checks": {
+    "schema_version": "marinaframe.setup_checks.v1",
+    "engineering_approved": false,
+    "panels": {
+      "P1": {
+        "box_px": {
+          "value": [
+            100.0,
+            100.0,
+            680.0,
+            340.0
+          ],
+          "model_proposed": true,
+          "checked": true,
+          "evidence": "Framed body plan grid bounded by the border around 'BODY PLAN' and the buttock-line scale at bottom."
+        },
+        "centreline_x_px": {
+          "value": null,
+          "model_proposed": true,
+          "checked": false,
+          "evidence": {
+            "missing": "no vertical centreline is drawn in this panel; the only vertical ink is the left border line near x=140"
+          },
+          "line_support": 0.0
+        },
+        "baseline_y_px": {
+          "value": null,
+          "model_proposed": true,
+          "checked": false,
+          "evidence": {
+            "missing": "no horizontal baseline or keel line is drawn in this panel"
+          },
+          "line_support": 0.0
+        },
+        "pixels_per_metre": {
+          "value": null,
+          "model_proposed": true,
+          "checked": false,
+          "evidence": [],
+          "independent_scales": []
+        }
+      }
+    },
+    "values": {
+      "layout": {
+        "value": "overlaid_body_plan",
+        "model_proposed": true,
+        "checked": true,
+        "evidence": {
+          "evidence": "Title 'BODY PLAN' with one grid; many station curves (0-20) share a single centreline at the bottom of the grid.",
+          "value": "overlaid_body_plan"
+        },
+        "check": "bounded model evidence; semantic truth needs human review"
+      },
+      "units": {
+        "value": "ft",
+        "model_proposed": true,
+        "checked": true,
+        "evidence": {
+          "evidence": "Scale bar labeled 'Scale in feet' beneath the body plan grid.",
+          "value": "ft"
+        },
+        "check": "bounded model evidence; semantic truth needs human review"
+      },
+      "symmetry": {
+        "value": "port_starboard",
+        "model_proposed": true,
+        "checked": true,
+        "evidence": {
+          "evidence": "Buttock lines printed 20 18 16 ... 2 4 6 ... 20 on both sides of centreline at bottom of grid.",
+          "value": "port_starboard"
+        },
+        "check": "bounded model evidence; semantic truth needs human review"
+      },
+      "vertical_datum": {
+        "value": "baseline",
+        "model_proposed": true,
+        "checked": true,
+        "evidence": {
+          "evidence": "'BASE 0' W.L.' printed at the bottom waterline of the body plan grid.",
+          "value": "baseline"
+        },
+        "check": "bounded model evidence; semantic truth needs human review"
+      },
+      "stations": {
+        "value": [
+          {
+            "evidence": "Printed '0' at left end of buttock line scale under grid.",
+            "label": "0",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position on sheet"
+            },
+            "x_px": 190.0,
+            "y_px": 300.0
+          },
+          {
+            "evidence": "Printed '1' in buttock line scale row.",
+            "label": "1",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position on sheet"
+            },
+            "x_px": 205.0,
+            "y_px": 300.0
+          },
+          {
+            "evidence": "Printed '2' in buttock line scale row.",
+            "label": "2",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position on sheet"
+            },
+            "x_px": 220.0,
+            "y_px": 300.0
+          },
+          {
+            "evidence": "Printed '3' in buttock line scale row.",
+            "label": "3",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position on sheet"
+            },
+            "x_px": 235.0,
+            "y_px": 300.0
+          },
+          {
+            "evidence": "Printed '4' in buttock line scale row.",
+            "label": "4",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position on sheet"
+            },
+            "x_px": 250.0,
+            "y_px": 300.0
+          },
+          {
+            "evidence": "Printed '5' in buttock line scale row.",
+            "label": "5",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position on sheet"
+            },
+            "x_px": 265.0,
+            "y_px": 300.0
+          },
+          {
+            "evidence": "Printed '6' in buttock line scale row.",
+            "label": "6",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position on sheet"
+            },
+            "x_px": 280.0,
+            "y_px": 300.0
+          },
+          {
+            "evidence": "Printed '7' in buttock line scale row.",
+            "label": "7",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position on sheet"
+            },
+            "x_px": 295.0,
+            "y_px": 300.0
+          },
+          {
+            "evidence": "Printed '8' in buttock line scale row.",
+            "label": "8",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position on sheet"
+            },
+            "x_px": 310.0,
+            "y_px": 300.0
+          },
+          {
+            "evidence": "Printed '9' in buttock line scale row.",
+            "label": "9",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position on sheet"
+            },
+            "x_px": 325.0,
+            "y_px": 300.0
+          },
+          {
+            "evidence": "Printed '10' in buttock line scale row.",
+            "label": "10",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position on sheet"
+            },
+            "x_px": 340.0,
+            "y_px": 300.0
+          },
+          {
+            "evidence": "Printed '12' in buttock line scale row.",
+            "label": "12",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position on sheet"
+            },
+            "x_px": 370.0,
+            "y_px": 300.0
+          },
+          {
+            "evidence": "Printed '14' in buttock line scale row.",
+            "label": "14",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position on sheet"
+            },
+            "x_px": 400.0,
+            "y_px": 300.0
+          },
+          {
+            "evidence": "Printed '16' in buttock line scale row.",
+            "label": "16",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position on sheet"
+            },
+            "x_px": 430.0,
+            "y_px": 300.0
+          },
+          {
+            "evidence": "Printed '18' in buttock line scale row.",
+            "label": "18",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position on sheet"
+            },
+            "x_px": 460.0,
+            "y_px": 300.0
+          },
+          {
+            "evidence": "Printed '20' at right end of buttock line scale.",
+            "label": "20",
+            "panel_id": "P1",
+            "position": {
+              "missing": "no printed longitudinal position on sheet"
+            },
+            "x_px": 490.0,
+            "y_px": 300.0
+          }
+        ],
+        "model_proposed": true,
+        "checked": false,
+        "evidence": null,
+        "check": "printed-label evidence and strict order; no OCR truth claim"
+      }
+    },
+    "failures": [
+      {
+        "kind": "station_position_missing",
+        "field": "stations[0]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[1]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[2]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[3]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[4]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[5]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[6]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[7]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[8]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[9]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[10]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[11]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[12]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[13]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[14]"
+      },
+      {
+        "kind": "station_position_missing",
+        "field": "stations[15]"
+      },
+      {
+        "kind": "centreline_not_on_ink",
+        "field": "P1"
+      },
+      {
+        "kind": "baseline_not_on_ink",
+        "field": "P1"
+      },
+      {
+        "kind": "scale_independent_marks_missing",
+        "field": "P1"
+      }
+    ],
+    "scale_relative_tolerance": 0.05,
+    "consistent": false,
+    "spec_ready": false,
+    "spec_blockers": [
+      "Source license, elevation intervals and closure assumptions require explicit input.",
+      "Semantic text evidence is model-proposed, not independently transcribed."
+    ],
+    "stop_reason": "no_progress",
+    "source_sha256": "5938135e0996dbae8060b641ca7927c0ca2034676c93423d9f6197e5444c57c5",
+    "usage": {
+      "requests_failed": 1,
+      "observed_cost_usd": 0.0,
+      "requests_unknown": 0,
+      "requests_without_cost": 0,
+      "requests_not_sent": 0,
+      "prompt_tokens": 6428,
+      "requests_completed": 5,
+      "requests_intended": 6,
+      "completion_tokens": 2922
+    }
+  },
+  "proposal": {
+    "source_sha256": "5938135e0996dbae8060b641ca7927c0ca2034676c93423d9f6197e5444c57c5",
+    "overview": {
+      "layout": {
+        "evidence": "Title 'BODY PLAN' with one grid; many station curves (0-20) share a single centreline at the bottom of the grid.",
+        "value": "overlaid_body_plan"
+      },
+      "panels": [
+        {
+          "box_px": [
+            100.0,
+            100.0,
+            680.0,
+            340.0
+          ],
+          "evidence": "Framed body plan grid bounded by the border around 'BODY PLAN' and the buttock-line scale at bottom.",
+          "panel_id": "P1"
+        }
+      ],
+      "stations": [
+        {
+          "evidence": "Printed '0' at left end of buttock line scale under grid.",
+          "label": "0",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position on sheet"
+          },
+          "x_px": 190.0,
+          "y_px": 300.0
+        },
+        {
+          "evidence": "Printed '1' in buttock line scale row.",
+          "label": "1",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position on sheet"
+          },
+          "x_px": 205.0,
+          "y_px": 300.0
+        },
+        {
+          "evidence": "Printed '2' in buttock line scale row.",
+          "label": "2",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position on sheet"
+          },
+          "x_px": 220.0,
+          "y_px": 300.0
+        },
+        {
+          "evidence": "Printed '3' in buttock line scale row.",
+          "label": "3",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position on sheet"
+          },
+          "x_px": 235.0,
+          "y_px": 300.0
+        },
+        {
+          "evidence": "Printed '4' in buttock line scale row.",
+          "label": "4",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position on sheet"
+          },
+          "x_px": 250.0,
+          "y_px": 300.0
+        },
+        {
+          "evidence": "Printed '5' in buttock line scale row.",
+          "label": "5",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position on sheet"
+          },
+          "x_px": 265.0,
+          "y_px": 300.0
+        },
+        {
+          "evidence": "Printed '6' in buttock line scale row.",
+          "label": "6",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position on sheet"
+          },
+          "x_px": 280.0,
+          "y_px": 300.0
+        },
+        {
+          "evidence": "Printed '7' in buttock line scale row.",
+          "label": "7",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position on sheet"
+          },
+          "x_px": 295.0,
+          "y_px": 300.0
+        },
+        {
+          "evidence": "Printed '8' in buttock line scale row.",
+          "label": "8",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position on sheet"
+          },
+          "x_px": 310.0,
+          "y_px": 300.0
+        },
+        {
+          "evidence": "Printed '9' in buttock line scale row.",
+          "label": "9",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position on sheet"
+          },
+          "x_px": 325.0,
+          "y_px": 300.0
+        },
+        {
+          "evidence": "Printed '10' in buttock line scale row.",
+          "label": "10",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position on sheet"
+          },
+          "x_px": 340.0,
+          "y_px": 300.0
+        },
+        {
+          "evidence": "Printed '12' in buttock line scale row.",
+          "label": "12",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position on sheet"
+          },
+          "x_px": 370.0,
+          "y_px": 300.0
+        },
+        {
+          "evidence": "Printed '14' in buttock line scale row.",
+          "label": "14",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position on sheet"
+          },
+          "x_px": 400.0,
+          "y_px": 300.0
+        },
+        {
+          "evidence": "Printed '16' in buttock line scale row.",
+          "label": "16",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position on sheet"
+          },
+          "x_px": 430.0,
+          "y_px": 300.0
+        },
+        {
+          "evidence": "Printed '18' in buttock line scale row.",
+          "label": "18",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position on sheet"
+          },
+          "x_px": 460.0,
+          "y_px": 300.0
+        },
+        {
+          "evidence": "Printed '20' at right end of buttock line scale.",
+          "label": "20",
+          "panel_id": "P1",
+          "position": {
+            "missing": "no printed longitudinal position on sheet"
+          },
+          "x_px": 490.0,
+          "y_px": 300.0
+        }
+      ],
+      "symmetry": {
+        "evidence": "Buttock lines printed 20 18 16 ... 2 4 6 ... 20 on both sides of centreline at bottom of grid.",
+        "value": "port_starboard"
+      },
+      "units": {
+        "evidence": "Scale bar labeled 'Scale in feet' beneath the body plan grid.",
+        "value": "ft"
+      },
+      "vertical_datum": {
+        "evidence": "'BASE 0' W.L.' printed at the bottom waterline of the body plan grid.",
+        "value": "baseline"
+      }
+    },
+    "panels": {
+      "P1": {
+        "baseline_y_px": {
+          "missing": "no horizontal baseline or keel line is drawn in this panel"
+        },
+        "centreline_x_px": {
+          "missing": "no vertical centreline is drawn in this panel; the only vertical ink is the left border line near x=140"
+        },
+        "panel_id": "P1",
+        "scale_marks": []
+      }
+    }
+  }
+}

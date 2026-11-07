@@ -1,0 +1,55 @@
+{
+  "per_value_counts": {
+    "panel_count_exact_separate": 22,
+    "station_labels_exact_cases": 22,
+    "units_missing_cases": 32,
+    "symmetry_port_starboard_cases": 32,
+    "datum_baseline_cases": 32,
+    "panel_box_corner_median_absolute_error_px": 370.5,
+    "panel_box_corner_p90_absolute_error_px": 916.5999999999999
+  },
+  "development_cases": 40,
+  "case_errors": 0,
+  "layout_correct": 22,
+  "station_positions_missing": 245,
+  "specs_ready": 0,
+  "metrics_separate_only": {
+    "centreline_x_px": {
+      "proposed": 141,
+      "total_panels": 198,
+      "checked": 0,
+      "median_error": 209.42092491436472,
+      "p90_error": 578.9520008660102,
+      "checked_median_error": null
+    },
+    "baseline_y_px": {
+      "proposed": 84,
+      "total_panels": 198,
+      "checked": 4,
+      "median_error": 471.5865978643278,
+      "p90_error": 1203.2079520827617,
+      "checked_median_error": 245.74273411959064
+    },
+    "pixels_per_metre": {
+      "proposed": 0,
+      "total_panels": 198,
+      "checked": 0,
+      "median_error": null,
+      "p90_error": null,
+      "checked_median_error": null
+    }
+  },
+  "usage": {
+    "requests": 646,
+    "states": {
+      "completed": 543,
+      "failed": 103
+    },
+    "prompt_tokens": 693285,
+    "completion_tokens": 194311,
+    "observed_cost_usd": 0.0,
+    "list_cost_usd": 0.22041000000000002,
+    "missing_cost": 0,
+    "images": 664
+  }
+}

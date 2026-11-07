@@ -4,6 +4,8 @@ MarinaFrame is a **domain harness for reconstructing provisional 3D hull envelop
 
 The supported input is specific. A person supplies section panels, longitudinal station positions, scale, datum, elevation intervals, symmetry and closure assumptions. MarinaFrame measures the curves and constructs the corresponding envelope. It does not infer a complete vessel from an arbitrary collection of shipyard drawings. Blender is not required, and model-generated code is never executed.
 
+W12 adds an experimental [LLM setup and veto-review path](docs/LLM_SETUP_AND_REVIEW.md). It proposes setup values with evidence and checks them before use. Missing values stay missing. The development evaluation did not produce complete automatic setups, so the supported-input requirements above still apply. An optional `--model-review true` can add a blocking finding after a build; it cannot approve it.
+
 **Every candidate has `engineering_approved=false`.** Passing checks means the recorded numerical, provenance and CAD conditions passed for the selected source evidence. It does not establish that the selected line is the intended hull, or that the result is suitable for fabrication or navigation.
 
 ## What changed from published 0.3

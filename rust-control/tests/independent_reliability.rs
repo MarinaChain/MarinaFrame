@@ -568,6 +568,7 @@ fn reliability_unknown_provider_outcome_acknowledgement_survives_restart_without
         credential_selection: None,
         purpose: Default::default(),
         transcription: None,
+        vision: None,
     };
     util::atomic_json(&store.path.join(&intent.response_path), &receipt, false).unwrap();
     controller::resume(&mut store, false, false, Some(0)).unwrap();
