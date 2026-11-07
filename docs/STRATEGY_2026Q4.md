@@ -111,3 +111,24 @@ audit real CAD must carry those marks. Run only one full tier on the machine at 
 - Which MarinaChain relationship to approach first for a design partner, and who sends it.
 - Whether to download the next MiDShip tranche (about 12 GB).
 - Whether any DeepSeek transfer of licensed drawings is allowed (today: none).
+
+## 7. Update 2026-11-08: LLM-first reading (founder decision)
+
+Evidence: the benchmark factory (docs/BENCHMARK_FACTORY.md) shows the deterministic reader is
+accurate when it reads (sealed 6/6 correct) but reads almost nothing on realistic drawings
+(12 builds of 1,080; all overlaid body plans and all moderate/heavy scans declined), plus one
+silent wrong build. The founder: "we should lean even more on LLM".
+
+Direction: the vision LLM becomes the primary reader; deterministic code becomes the verifier
+and the fallback.
+- W11 (running): LLM line identity with wide investigative autonomy; picks snapped to ink and
+  verified; unconfirmed picks are draft guesses.
+- W12 (new): LLM sheet setup (proposes panels, scale, datum, station positions; deterministic
+  cross-checks against scale bar, grid, dimensions and views) and an LLM veto reviewer (compares
+  drawing and rendered STEP sections after a build; can block, never approve).
+- Default policy in the app becomes live (LLM) with draft on ambiguity, once W11 and W12 pass on
+  a fresh sealed factory split.
+- Unchanged: the Rust controller alone decides review readiness; engineering_approved=false;
+  no widened gates; every model call and image is receipted.
+- Later: a self-hosted vision model for confidential customers, measured against DeepSeek on
+  the same sealed split.
