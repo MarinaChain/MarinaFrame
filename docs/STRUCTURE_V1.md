@@ -152,7 +152,53 @@ run happens once, after the code commit is recorded below.
 
 ## 5. Implementation
 
-(Filled in after building.)
+Package `src/vessel_reconstruction/structure/` (deterministic; no model provider; PyMuPDF,
+OpenCV, SciPy, CadQuery):
+
+| Module | Purpose |
+|---|---|
+| `vector.py` | PDF paths to strokes (polylines in drawing mm, z up); text-layer words |
+| `raster.py` | Fallback: pixels to strokes (horizontal, vertical and residual ink components); no OCR |
+| `tables.py` | Printed scale, plate table and stiffener table; exact patterns only |
+| `section.py` | Rules: separate section from furniture; plates, webs, flanges; names, hosts, scantlings, placement |
+| `solid.py` | CadQuery STEP slice of members with a printed thickness (slice length given by the caller) |
+| `midship_eval.py` | Ground truth loader, matching, metrics, sealed-split guard (`--confirm-sealed-run`, clean `src/`) |
+| `__main__.py` | `python -m vessel_reconstruction.structure SHEET.pdf --out members.json [--step slice.step]` |
+
+Rules, in order (constants are named and explained in `section.py`):
+
+1. Strokes join into connected components; a component that holds a text word or reaches the
+   sheet edge is furniture (frame, tables, title block). The rest is the section.
+2. Plates: strokes longer than 1.2 x the tallest printed ordinary stiffener web that carry two or
+   more strokes at interior points; long strokes on a plate line (shell strake); long strokes
+   between plates whose length is not a printed girder height; long free strokes on a plate
+   without a flange (deck strips at hatch openings).
+3. Names: bottom shell = longest run on the baseline; side shell = longest vertical at the
+   outermost breadth, other plates on that line = shell strakes; decks = horizontal plates at the
+   highest level (main deck) and at the lowest level in the lower 35 % of the depth (inner
+   bottom); other horizontal plates and vertical plates that meet them at a corner = container
+   step (hopper panel); other verticals = longitudinal bulkheads (the outermost line is the
+   inner side shell when both rows are printed); inclined = hopper plates; a vertical piece on a
+   bulkhead line with a printed girder height = girder.
+4. Webs stand on a plate with one end (girder or stiffener by the nearest printed height for the
+   host); strokes between two plates with a girder height are girders; flanges touch a web's free
+   end. At a plate crossing a web belongs to the deck, shell or bulkhead before the hopper. A
+   horizontal web on the bilge arc is a side shell stiffener.
+5. Origin: centreline = leftmost section point, baseline = lowest. Ship mm = drawing mm / scale.
+   Plate thickness from the plate table row for the plate name; web and flange thickness from
+   the stiffener table row; web height and flange width from the drawn length.
+
+**Development result** (10 designs, vector, last run before freezing): detection F1 0.9998
+(2,817 of 2,818; one hopper stiffener abstained), typed macro F1 0.99996, host accuracy
+1.000 (1,408), median centre error 3.2 mm (max 9.2 mm), plate thickness exact 0.915 (all six
+misses are BOM thicknesses with a fraction, for example 16.85 mm printed as `16 mm`), web
+thickness exact 0.797 (same cause). Raster fallback at 200 dpi on development: F1 0.847;
+the bottom shell is never matched because the bilge arc and the flat bottom become two strokes.
+
+**Metric note added after the development run and before the sealed run.** The sheets print
+thickness cut to whole millimetres. The pre-registered exact-match rate (nearest integer) stays
+the primary number. Two diagnostics are added: agreement with the truth cut to whole
+millimetres, and absolute error in mm. No target changed.
 
 ## 6. Results on the sealed split
 
@@ -160,7 +206,19 @@ run happens once, after the code commit is recorded below.
 
 ## 7. More MiDShip data
 
-(Filled in at the end.)
+v1 needs, per design, the view-3 PDF, `*_Slice_Elements.csv` and the BOM. That is the
+"without 3D" package of `selection.md`: about 1.3 MB (Random), 1.7 MB (Repaired) and 1.6 MB
+(SGLD) per design. 3D files are not needed for the v1 truth.
+
+| Tranche | Designs | Approximate size | What it raises |
+|---|---:|---:|---|
+| A. Design-level failure rate | 1,000 without 3D: 400 Random, 400 Repaired, 200 SGLD, stratified by ship type and BOM size, lineage-grouped | about 1.5 GB | With 26 test designs, one bad design moves the rate by 4 %. With about 300 clean test designs the 95 % upper bound on the share of designs with any typed error is below 1 % (rule of three). |
+| B. All SGLD | the other 484 SGLD designs without 3D | about 0.8 GB | SGLD is a separate generator; 8 test designs are too few |
+| C. Large and complex designs | 200 without 3D from the top BOM-size decile (the sample excluded `.3dm` above 25 MB) | about 0.3 GB | Crowded double bottoms, several bulkheads, the cases where contacts become ambiguous |
+| D. 3D cross-check | 30 designs with full 3D (10 per subset) | about 0.9 GB (Random 20.5, Repaired 47.2, SGLD 18.3 MB each) | Confirms that slice boxes equal the solid model at the section position |
+
+A + B + C is about 2.6 GB and also carries views 1 and 2 for a transverse-structure v2. With D
+the total is about 3.5 GB, inside the 10 GB tranche limit.
 
 ## 8. Resume point
 
