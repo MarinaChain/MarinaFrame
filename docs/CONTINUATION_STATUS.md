@@ -295,3 +295,16 @@ worse than an abstention.
   the branch history before merging (kept locally in work/archived-runs/w12-restricted/).
 - Hypothesis under test (W14): the large setup errors and "upper-left" placements may be a
   coordinate-frame bug in the harness (normalized or downscaled coordinates), not a model limit.
+
+## W14 localisation merged (2026-11-08)
+
+docs/LLM_LOCALISATION.md. A harness coordinate-frame bug was real: read as source pixels,
+DeepSeek's setup answers were off by 938.6 px median; through the actual attachment transform
+they were off by 20.2 px. The harness now requests 0–1000 normalized attachment coordinates and
+converts them. Setup errors fell (panel components 370.5 → 71.4 px median; centreline 209.4 →
+40.5 px; baseline 471.6 → 171.4 px), but fewer proposals passed (32 → 15 of 40) and no complete
+spec passed. Localisation on factory drawings (crop mode): points about 45–51 px median;
+half-breadth about 1.1 m median vs 0.02 m for the deterministic tracer; no answers on overlaid
+body plans. Conclusion for deepseek-v4.1-flash: the model chooses WHAT and roughly WHERE;
+deterministic code measures HOW MUCH. W13 (ship CAD language) follows this split.
+Usage: 874 requests, 2.80 M prompt tokens, list cost $0.541.
