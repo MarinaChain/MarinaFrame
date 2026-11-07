@@ -76,7 +76,7 @@ fn timeline_uses_plain_text_skips_noise_and_returns_only_newer_events() {
         vec![
             (1, "Run created", EventKind::Other),
             (3, "Read the next sections", EventKind::Read),
-            (4, "You picked a line on section s0", EventKind::Choose),
+            (4, "You picked lines", EventKind::Choose),
             (5, "Rendered the body view of the model", EventKind::Render),
             (6, "Declined: two lines fit", EventKind::Finish),
         ]
@@ -128,10 +128,58 @@ fn draft_timeline_says_how_many_sections_were_guessed_and_what_you_confirmed() {
         vec![
             "Built a draft: 3 sections guessed",
             "You confirmed the line for 4.0 m; You picked another line for 0.0 m",
-            "You picked a line on section s2",
+            "You picked the line at 4.0 m",
         ]
     );
     // Reading only the newer events gives the same lines.
     assert_eq!(get_events(task, 2).len(), 2);
     assert_eq!(get_events(task, 2)[0].text, texts[1]);
+}
+
+#[test]
+fn timeline_picks_and_reads_show_station_positions_not_section_ids() {
+    let tmp = tempfile::tempdir().unwrap();
+    let task = tmp.path();
+    std::fs::create_dir_all(task.join("domain/input")).unwrap();
+    std::fs::create_dir(task.join("events")).unwrap();
+    let sections: Vec<_> = (0..12)
+        .map(|i| json!({"id":format!("s{i}"),"x_m":i as f64 * 2.0}))
+        .collect();
+    std::fs::write(
+        task.join("domain/input/spec.json"),
+        json!({"sections":sections}).to_string(),
+    )
+    .unwrap();
+    let pick = |ids: &[&str]| {
+        json!({"actor":"human_operator","decision":{"tool":"select_contours","arguments":{"selections":
+            ids.iter().map(|id| json!({"section_id":id,"candidate_id":"c"})).collect::<Vec<_>>()
+        },"reason":"r"}})
+    };
+    write(task, 1, "decision", pick(&["s1"]), "running");
+    write(task, 2, "decision", pick(&["s0", "s1", "s2"]), "running");
+    let many: Vec<String> = (0..12).map(|i| format!("s{i}")).collect();
+    let many: Vec<&str> = many.iter().map(String::as_str).collect();
+    write(task, 3, "decision", pick(&many), "running");
+    write(
+        task,
+        4,
+        "decision",
+        json!({"actor":"deterministic_policy","decision":{"tool":"inspect_source",
+            "arguments":{"section_ids":["s0","s1","s2"]},"reason":"r"}}),
+        "running",
+    );
+    let texts: Vec<String> = get_events(task, 0).into_iter().map(|e| e.text).collect();
+    assert_eq!(
+        texts,
+        vec![
+            "You picked the line at 2.0 m",
+            "You picked lines at 0.0 m, 2.0 m and 4.0 m",
+            "You picked lines at 12 stations",
+            "Read the sections at 0.0 m, 2.0 m and 4.0 m",
+        ]
+    );
+    // No raw section id reaches the timeline.
+    assert!(texts
+        .iter()
+        .all(|t| !(0..12).any(|i| t.contains(&format!("s{i}")))));
 }

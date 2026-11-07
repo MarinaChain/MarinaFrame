@@ -37,11 +37,9 @@ impl Context {
         }
     }
 
-    fn place(&self, section_id: &str) -> String {
-        match self.x_m.get(section_id) {
-            Some(x) => format!("{x:.1} m"),
-            None => format!("section {section_id}"),
-        }
+    /// "2.0 m" when the spec says where the section sits, None when not.
+    fn station(&self, section_id: &str) -> Option<String> {
+        self.x_m.get(section_id).map(|x| format!("{x:.1} m"))
     }
 
     /// Update the open guesses after an event.
@@ -121,7 +119,9 @@ fn describe_guess_resolution(arguments: &Value, context: &Context) -> Option<Str
         let Some(guessed) = context.guessed.get(section) else {
             continue;
         };
-        let place = context.place(section);
+        let Some(place) = context.station(section) else {
+            continue;
+        };
         if guessed.as_deref() == pick["candidate_id"].as_str() {
             confirmed.push(place);
         } else {
@@ -144,19 +144,24 @@ fn describe_guess_resolution(arguments: &Value, context: &Context) -> Option<Str
     (!parts.is_empty()).then(|| parts.join("; "))
 }
 
-fn section_phrase(ids: Option<&Vec<Value>>, none: &str) -> String {
-    match ids {
-        Some(ids) if ids.len() == 1 => format!("section {}", ids[0].as_str().unwrap_or("?")),
-        Some(ids) if !ids.is_empty() && ids.len() <= 3 => format!(
-            "sections {}",
-            ids.iter()
-                .filter_map(Value::as_str)
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        Some(ids) if !ids.is_empty() => format!("{} sections", ids.len()),
-        _ => none.to_string(),
-    }
+/// Station clause for the given sections: "at 2.0 m" for one, "at 0.0 m
+/// and 2.0 m" for a few, "at 12 stations" for more. None when no section
+/// has a position in the spec.
+fn station_clause(context: &Context, ids: Option<&Vec<Value>>) -> Option<(usize, String)> {
+    let stations: Vec<String> = ids
+        .into_iter()
+        .flatten()
+        .filter_map(|id| id.as_str().and_then(|s| context.station(s)))
+        .collect();
+    let count = stations.len();
+    let clause = match stations.as_slice() {
+        [one] => format!("at {one}"),
+        [a, b] => format!("at {a} and {b}"),
+        [a, b, c] => format!("at {a}, {b} and {c}"),
+        list if list.len() > 3 => format!("at {} stations", list.len()),
+        _ => return None,
+    };
+    Some((count, clause))
 }
 
 fn describe_decision(payload: &Value, context: &Context) -> Option<(String, EventKind)> {
@@ -169,10 +174,11 @@ fn describe_decision(payload: &Value, context: &Context) -> Option<(String, Even
     let you = |plain: &str, personal: &str| if by_person { personal } else { plain }.to_string();
     match decision["tool"].as_str()? {
         "inspect_source" => Some((
-            format!(
-                "Read {}",
-                section_phrase(arguments["section_ids"].as_array(), "the next sections")
-            ),
+            match station_clause(context, arguments["section_ids"].as_array()) {
+                Some((1, clause)) => format!("Read the section {clause}"),
+                Some((_, clause)) => format!("Read the sections {clause}"),
+                None => "Read the next sections".into(),
+            },
             EventKind::Read,
         )),
         "select_contours" => {
@@ -180,20 +186,18 @@ fn describe_decision(payload: &Value, context: &Context) -> Option<(String, Even
             let ids: Vec<Value> = picks
                 .map(|p| p.iter().map(|s| s["section_id"].clone()).collect())
                 .unwrap_or_default();
-            let place = section_phrase(Some(&ids), "the sections");
+            let place = match station_clause(context, Some(&ids)) {
+                Some((1, clause)) => format!("the line {clause}"),
+                Some((_, clause)) => format!("lines {clause}"),
+                None => "lines".to_string(),
+            };
             if by_person {
                 if let Some(text) = describe_guess_resolution(arguments, context) {
                     return Some((text, EventKind::Choose));
                 }
             }
-            Some((
-                if by_person {
-                    format!("You picked a line on {place}")
-                } else {
-                    format!("Picked lines on {place}")
-                },
-                EventKind::Choose,
-            ))
+            let verb = if by_person { "You picked" } else { "Picked" };
+            Some((format!("{verb} {place}"), EventKind::Choose))
         }
         "build_provisional" => Some((
             you("Built 3D model", "You rebuilt the 3D model"),
