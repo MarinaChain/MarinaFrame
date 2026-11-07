@@ -28,6 +28,24 @@ pub enum Status {
     Cancelled,
     ProviderFailed,
     NoProgress,
+    /// A best-effort draft exists with at least one open guess. It is never
+    /// review-ready: finalization and `Store::verify` refuse open guesses.
+    DraftNotVerified,
+}
+/// What a policy does when the source has no unique supported interpretation.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OnAmbiguity {
+    /// Decline (abstain). Tasks created before drafts existed read as this.
+    #[default]
+    Abstain,
+    /// Build a draft that records each ambiguous choice as an open guess.
+    Draft,
+}
+impl OnAmbiguity {
+    fn is_abstain(&self) -> bool {
+        *self == Self::Abstain
+    }
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -82,6 +100,7 @@ pub enum Operation {
     InspectSource(Inspect),
     SelectContours(Select),
     BuildProvisional(Empty),
+    BuildDraft(Empty),
     RenderCandidate(Render),
     ValidateCandidate(Empty),
     Finish(Finish),
@@ -92,6 +111,7 @@ impl Operation {
             Self::InspectSource(_) => "inspect_source",
             Self::SelectContours(_) => "select_contours",
             Self::BuildProvisional(_) => "build_provisional",
+            Self::BuildDraft(_) => "build_draft",
             Self::RenderCandidate(_) => "render_candidate",
             Self::ValidateCandidate(_) => "validate_candidate",
             Self::Finish(_) => "finish",
@@ -225,6 +245,10 @@ pub struct Config {
     pub authorization_basis: String,
     pub model: String,
     pub binary_sha256: String,
+    /// Not serialized when `abstain`, so the hashes of older ledger events and
+    /// their configurations stay unchanged.
+    #[serde(default, skip_serializing_if = "OnAmbiguity::is_abstain")]
+    pub on_ambiguity: OnAmbiguity,
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -401,5 +425,25 @@ mod tests {
         let mut bad = l;
         bad.request_wall_seconds = 0;
         assert!(bad.validate().is_err());
+    }
+    #[test]
+    fn ambiguity_policy_keeps_old_configurations_unchanged() {
+        let old = json!({"worker_python":"/p","worker_source":null,"source_spec":"/s","policy":"deterministic",
+            "limits":OperationalLimits::default(),"provider_transfer_authorized":false,"authorization_basis":"",
+            "model":GO_MODEL,"binary_sha256":"a".repeat(64)});
+        let config: Config = serde_json::from_value(old.clone()).unwrap();
+        assert_eq!(config.on_ambiguity, OnAmbiguity::Abstain);
+        // Re-serialized byte for byte, so old ledger hashes still verify.
+        assert_eq!(serde_json::to_value(&config).unwrap(), old);
+        let mut draft = config;
+        draft.on_ambiguity = OnAmbiguity::Draft;
+        assert_eq!(
+            serde_json::to_value(&draft).unwrap()["on_ambiguity"],
+            "draft"
+        );
+        assert_eq!(
+            serde_json::to_value(Status::DraftNotVerified).unwrap(),
+            "draft_not_verified"
+        );
     }
 }

@@ -117,7 +117,7 @@ pub fn call_worker(store: &mut Store, operation: &str, arguments: Value) -> Resu
     if !["initialize", "observe"].contains(&operation) {
         store.state.counters.operations += 1;
     }
-    if operation == "build_provisional" {
+    if ["build_provisional", "build_draft"].contains(&operation) {
         store.state.counters.builds += 1;
     }
     store.append("worker_intent",json!({"operation":operation,"request":store::artifact(&store.path,&pending.request_path,"worker_request")?}))?;
@@ -277,10 +277,16 @@ fn apply_worker(
             {
                 return Err("render_candidate_mismatch".into());
             }
+            // A draft build tags its export name (run_record.py).
+            let step_name = if candidate["draft"] == true {
+                "model-draft.step"
+            } else {
+                "model.step"
+            };
             let step = util::safe_file(
                 &store.path,
                 &format!(
-                    "{}/model.step",
+                    "{}/{step_name}",
                     candidate["path"].as_str().ok_or("render_candidate_path")?
                 ),
             )?;
@@ -421,8 +427,17 @@ fn collect_images(store: &Store) -> Result<Vec<(ImageReceipt, String)>> {
     }
     Ok(images)
 }
-pub fn tool_catalog() -> Value {
+/// The live model's tools. `build_draft` is offered only when the task's
+/// ambiguity policy is `draft`.
+pub fn tool_catalog(on_ambiguity: &OnAmbiguity) -> Value {
     let empty = json!({"type":"object","properties":{},"additionalProperties":false});
+    let mut tools = base_tool_catalog(&empty);
+    if *on_ambiguity == OnAmbiguity::Draft {
+        tools.as_array_mut().unwrap().insert(3, json!({"name":"build_draft","description":"After every section is inspected: build a best-effort draft that takes the best-scoring line where a section is ambiguous and spans unreadable stations. Each choice is an open guess; a draft is never verified and only a person can resolve its guesses.","parameters":empty}));
+    }
+    tools
+}
+fn base_tool_catalog(empty: &Value) -> Value {
     json!([
         {"name":"inspect_source","description":"Inspect source regions and preserved candidate alternatives; section_ids optional, at most12 sections per observation.","parameters":{"type":"object","properties":{"section_ids":{"type":"array","items":{"type":"string"}}},"additionalProperties":false}},
         {"name":"select_contours","description":"Choose already inspected candidate IDs; retains alternatives and invalidates previous validation and renders.","parameters":{"type":"object","properties":{"selections":{"type":"array","items":{"type":"object","properties":{"section_id":{"type":"string"},"candidate_id":{"type":"string"}},"required":["section_id","candidate_id"],"additionalProperties":false}}},"required":["selections"],"additionalProperties":false}},
@@ -646,7 +661,7 @@ fn live_decision(store: &mut Store) -> Result<bool> {
     let observation = model_observation(store)?;
     let images = collect_images(store)?;
     let metas = images.iter().map(|x| x.0.clone()).collect::<Vec<_>>();
-    let prompt = json!({"observation":observation,"tools":tool_catalog(),"images":metas});
+    let prompt = json!({"observation":observation,"tools":tool_catalog(&store.state.config.on_ambiguity),"images":metas});
     let mut content = vec![
         json!({"type":"text","text":String::from_utf8(util::json_bytes(&prompt)?).map_err(|_|"prompt_encoding")?}),
     ];
@@ -782,6 +797,9 @@ pub fn deterministic_decision(store: &Store) -> Result<Decision> {
         .filter(|s| s["selected_candidate_id"].is_string())
         .filter_map(|s| s["id"].as_str())
         .collect::<std::collections::BTreeSet<_>>();
+    if store.state.config.on_ambiguity == OnAmbiguity::Draft {
+        return deterministic_draft_mode(store, sections, &selected);
+    }
     let inspected = last["sections"]
         .as_array()
         .or(d["inspected_sections"].as_array());
@@ -842,6 +860,121 @@ pub fn deterministic_decision(store: &Store) -> Result<Decision> {
             "Inspect the remaining unselected sections.",
         ));
     }
+    deterministic_build_to_finish(store)
+}
+
+/// The unique supported candidate of one inspected section, if any: the grid
+/// grammar's unique proposal or the only selectable candidate. With `strict`,
+/// the candidate must also have no non-grid competitor, which is what
+/// `validate_selection` requires from a policy.
+fn unique_choice(section: &Value, strict: bool) -> Option<&str> {
+    let selectable = section["candidates"]
+        .as_array()?
+        .iter()
+        .filter(|c| c["selectable"] == true)
+        .collect::<Vec<_>>();
+    let chosen = section["grid_evidence"]["unique_non_grid_candidate_id"]
+        .as_str()
+        .or_else(|| match selectable.as_slice() {
+            [only] => only["candidate_id"].as_str(),
+            _ => None,
+        })?;
+    if strict {
+        let candidate = selectable.iter().find(|c| c["candidate_id"] == chosen)?;
+        if candidate["non_grid_competing_components"].as_u64() != Some(0) {
+            return None;
+        }
+    }
+    Some(chosen)
+}
+
+/// Deterministic policy with `--on-ambiguity draft`. Unique supported lines are
+/// selected exactly as in abstain mode. A section without one is not a reason
+/// to stop: after full inspection, the policy asks for a draft, which records
+/// each remaining choice as an open guess. Sections with an open guess are left
+/// to a person. Once every section is selected, the ordinary verified path runs.
+fn deterministic_draft_mode(
+    store: &Store,
+    sections: &[Value],
+    selected: &std::collections::BTreeSet<&str>,
+) -> Result<Decision> {
+    let d = &store.state.domain;
+    let guessed = d["open_guesses"]
+        .as_array()
+        .map(|guesses| {
+            guesses
+                .iter()
+                .filter_map(|g| g["section_id"].as_str())
+                .collect::<std::collections::BTreeSet<_>>()
+        })
+        .unwrap_or_default();
+    let catalog_ready = d["catalog_ready"] == true;
+    // After full inspection, read every section from the checkpoint catalog:
+    // the domain description lists at most 12 inspected sections.
+    let checkpoint = if catalog_ready {
+        Some(validation::domain_checkpoint(&store.path)?)
+    } else {
+        None
+    };
+    let inspected: Vec<&Value> = match &checkpoint {
+        Some(checkpoint) => sections
+            .iter()
+            .filter_map(|s| s["id"].as_str())
+            .filter_map(|id| checkpoint["catalog"].get(id))
+            .collect(),
+        None => store.state.last_observation["sections"]
+            .as_array()
+            .or(d["inspected_sections"].as_array())
+            .map(|items| items.iter().collect())
+            .unwrap_or_default(),
+    };
+    let mut selections = vec![];
+    for section in inspected {
+        let id = section["section_id"]
+            .as_str()
+            .ok_or("inspected_section_identity")?;
+        if selected.contains(id) || guessed.contains(id) {
+            continue;
+        }
+        if let Some(chosen) = unique_choice(section, true) {
+            selections.push(json!({"section_id":id,"candidate_id":chosen}));
+        }
+    }
+    if !selections.is_empty() {
+        return Ok(decision(
+            "select_contours",
+            json!({"selections":selections}),
+            "Unique source-grammar hypothesis; semantic identity remains unapproved.",
+        ));
+    }
+    if !catalog_ready {
+        return Ok(decision(
+            "inspect_source",
+            json!({}),
+            "Inspect the next source regions and retain alternatives.",
+        ));
+    }
+    if selected.len() < sections.len() {
+        return Ok(decision(
+            "build_draft",
+            json!({}),
+            "Some sections have no unique supported line; build a draft that records each choice as an open guess.",
+        ));
+    }
+    deterministic_build_to_finish(store)
+}
+
+/// The verified path after every section is selected: build, render, validate,
+/// finish. It is the same for both ambiguity policies.
+fn deterministic_build_to_finish(store: &Store) -> Result<Decision> {
+    let d = &store.state.domain;
+    let abstain = |reason: &str| {
+        decision(
+            "finish",
+            json!({"outcome":"abstain","summary":reason}),
+            "Deterministic source-grammar comparison; no model inference.",
+        )
+    };
     if d["current_candidate"].is_null() {
         return Ok(decision(
             "build_provisional",
@@ -881,9 +1014,19 @@ fn validate_selection(store: &Store, operation: &Operation, actor: &str) -> Resu
         &util::safe_file(&store.path, "domain/state.json")?,
         32 * 1024 * 1024,
     )?;
+    let policy = ["live_model", "deterministic_policy"].contains(&actor);
     match operation {
         Operation::SelectContours(x) => {
             for choice in &x.selections {
+                // Selecting a guessed section resolves its guess. Only a
+                // person may confirm or replace a guess, never a policy.
+                if policy
+                    && validation::open_guesses(&checkpoint)?
+                        .iter()
+                        .any(|g| g["section_id"] == choice.section_id.as_str())
+                {
+                    return Err("guess_requires_operator_confirmation".into());
+                }
                 let candidates = checkpoint["catalog"][&choice.section_id]["candidates"]
                     .as_array()
                     .ok_or("uninspected_section")?;
@@ -897,9 +1040,7 @@ fn validate_selection(store: &Store, operation: &Operation, actor: &str) -> Resu
                     .iter()
                     .find(|c| c["candidate_id"] == choice.candidate_id)
                     .ok_or("candidate_missing")?;
-                if ["live_model", "deterministic_policy"].contains(&actor)
-                    && candidate["non_grid_competing_components"].as_u64() != Some(0)
-                {
+                if policy && candidate["non_grid_competing_components"].as_u64() != Some(0) {
                     return Err("source_ambiguity_requires_explicit_operator_selection".into());
                 }
             }
@@ -920,6 +1061,51 @@ fn validate_selection(store: &Store, operation: &Operation, actor: &str) -> Resu
         _ => (),
     }
     Ok(())
+}
+/// With `--on-ambiguity draft`, a live-model abstention after full inspection
+/// becomes a draft, the same as the deterministic policy. An abstention before
+/// full inspection, or after a build exists, stays an abstention.
+fn live_abstention_becomes_draft(store: &Store, actor: &str) -> bool {
+    let d = &store.state.domain;
+    actor == "live_model"
+        && store.state.config.on_ambiguity == OnAmbiguity::Draft
+        && d["catalog_ready"] == true
+        && d["current_candidate"].is_null()
+        && d["input_errors"].as_array().is_none_or(Vec::is_empty)
+}
+
+/// Build a best-effort draft. When it has open guesses, the task stops at
+/// `draft_not_verified`; a person resolves each guess with an operator
+/// `select_contours`, and then the ordinary verified path runs.
+fn build_draft(store: &mut Store) -> Result<bool> {
+    if store.state.config.on_ambiguity != OnAmbiguity::Draft {
+        return Err("draft_mode_disabled".into());
+    }
+    if !call_worker(store, "build_draft", json!({}))? {
+        return Ok(false);
+    }
+    let checkpoint = validation::domain_checkpoint(&store.path)?;
+    let guesses = validation::open_guesses(&checkpoint)?.to_vec();
+    let candidate = store.state.domain["current_candidate"].clone();
+    if store.state.last_observation["ok"] != true || guesses.is_empty() {
+        // A failed draft build is handled like any failed build; without
+        // guesses the build is an ordinary candidate on the verified path.
+        return Ok(true);
+    }
+    if candidate["draft"] != true || candidate["valid"] != true {
+        return Err("draft_candidate_contract".into());
+    }
+    store.append(
+        "draft_built",
+        json!({"status":"draft_not_verified","guesses":guesses,"candidate":candidate,
+            "verified":false,"engineering_approved":false}),
+    )?;
+    stop(
+        store,
+        Status::DraftNotVerified,
+        "draft_built_with_open_guesses",
+    )?;
+    Ok(false)
 }
 fn live_visual_coverage(store: &Store, step_hash: &str) -> bool {
     let mut views = std::collections::BTreeSet::new();
@@ -974,10 +1160,26 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
         "decision",
         json!({"decision":choice,"actor":actor,"live_inference":actor=="live_model"}),
     )?;
+    if let Operation::BuildDraft(_) = operation {
+        return build_draft(store);
+    }
     if let Operation::Finish(finish) = operation {
         store.state.staged_decision = None;
         if finish.outcome == FinishOutcome::Abstain {
+            if live_abstention_becomes_draft(store, actor) {
+                store.append(
+                    "abstention_replaced_by_draft",
+                    json!({"actor":actor,"summary":finish.summary,"policy":"on_ambiguity_draft"}),
+                )?;
+                return build_draft(store);
+            }
             stop(store, Status::Abstained, &finish.summary)?;
+            return Ok(false);
+        }
+        // Open guesses make the task a draft: it is never validated or
+        // finalized for review. `validation::ready` refuses it independently.
+        if !validation::open_guesses(&validation::domain_checkpoint(&store.path)?)?.is_empty() {
+            stop(store, Status::DraftNotVerified, "open_guesses_block_review")?;
             return Ok(false);
         }
         if !call_worker(store, "validate_candidate", json!({}))? {
@@ -1174,6 +1376,7 @@ pub fn resume(
         store.state.status,
         Status::AwaitingHumanReview
             | Status::Abstained
+            | Status::DraftNotVerified
             | Status::ValidationFailed
             | Status::Blocked
             | Status::NoProgress
@@ -1250,6 +1453,7 @@ mod tests {
             authorization_basis: "protocol fixture".into(),
             model: GO_MODEL.into(),
             binary_sha256: "a".repeat(64),
+            on_ambiguity: OnAmbiguity::Abstain,
         };
         let store = Store::create(&tmp.path().join("task"), new_state(config)).unwrap();
         (tmp, store)
@@ -1271,6 +1475,50 @@ mod tests {
         assert!(validate_selection(&store, &operation, "deterministic_policy").is_err());
         assert!(validate_selection(&store, &operation, "assistant_operator").is_ok());
         assert!(validate_selection(&store, &operation, "human_operator").is_ok());
+    }
+    #[test]
+    fn only_an_operator_can_resolve_an_open_guess() {
+        let (_tmp, store) = fixture();
+        let operation = Operation::SelectContours(Select {
+            selections: vec![Selection {
+                section_id: "s0".into(),
+                candidate_id: "contour-test".into(),
+            }],
+        });
+        util::atomic_json(
+            &store.path.join("domain/state.json"),
+            &json!({"catalog":{"s0":{"candidates":[{"candidate_id":"contour-test","selectable":true,"non_grid_competing_components":0}]}},
+                "guesses":[{"section_id":"s0","chosen_candidate_id":"contour-test"}]}),
+            false,
+        )
+        .unwrap();
+        for policy in ["live_model", "deterministic_policy"] {
+            assert_eq!(
+                validate_selection(&store, &operation, policy).unwrap_err(),
+                "guess_requires_operator_confirmation"
+            );
+        }
+        for operator in ["human_operator", "assistant_operator"] {
+            assert!(validate_selection(&store, &operation, operator).is_ok());
+        }
+    }
+    #[test]
+    fn draft_tool_is_offered_only_in_draft_mode() {
+        let names = |catalog: Value| {
+            catalog
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|t| t["name"].as_str().unwrap().to_string())
+                .collect::<Vec<_>>()
+        };
+        assert!(!names(tool_catalog(&OnAmbiguity::Abstain)).contains(&"build_draft".into()));
+        assert!(names(tool_catalog(&OnAmbiguity::Draft)).contains(&"build_draft".into()));
+    }
+    #[test]
+    fn abstain_mode_refuses_a_draft_build() {
+        let (_tmp, mut store) = fixture();
+        assert_eq!(build_draft(&mut store).unwrap_err(), "draft_mode_disabled");
     }
     #[test]
     fn source_witnesses_survive_later_build_observations() {

@@ -9,6 +9,7 @@ import stat
 import time
 from pathlib import Path
 
+from .draft import DRAFT_EXPORT_NAMES, check_draft
 from .errors import GeometryError
 from .provenance import digest_file, digest_object, snapshot_implementation, environment_record, write_json
 from .resources import DEFAULT_POLICY, ResourceLimitError, source_extension, validate_sources
@@ -150,7 +151,7 @@ def _capture_table_reading(input_spec: dict, replay_spec: dict, base_dir: Path, 
 
 def _discard_geometry(stage: Path, result: dict):
     result.update(exports={}, parts=[], metrics={}, normalized_sections=[])
-    for name in ("mesh.json", "model.step", "model.stl", "cad_sections.json"):
+    for name in ("mesh.json", "model.step", "model.stl", "cad_sections.json", *DRAFT_EXPORT_NAMES.values()):
         (stage / name).unlink(missing_ok=True)
     # Observations are evidence, but cannot be asserted when their required
     # artifact was not successfully written.
@@ -158,6 +159,14 @@ def _discard_geometry(stage: Path, result: dict):
         result["sections"] = []
         result["provenance"].pop("extracted_geometry_sha256", None)
         result["provenance"].pop("extraction_complete", None)
+
+
+def _tag_draft_exports(stage: Path, exports: dict):
+    """Rename the CAD exports of a draft, so each file name says "draft"."""
+    for key, name in DRAFT_EXPORT_NAMES.items():
+        if key in exports:
+            os.replace(stage / exports[key], stage / name)
+            exports[key] = name
 
 
 def _publish(transaction, result, input_spec, replay_spec, started):
@@ -224,6 +233,10 @@ def reconstruct(spec_path: str | Path, output_dir: str | Path, *, export_cad: bo
             replay_spec = copy.deepcopy(input_spec)
             if isinstance(input_spec.get("vessel_id"), str) and input_spec["vessel_id"].strip():
                 result["vessel_id"] = input_spec["vessel_id"][:256]
+            if check_draft(input_spec.get("draft")):
+                # A best-effort draft: the record lists its open guesses and
+                # its CAD exports carry the draft tag in their file names.
+                result["draft"] = copy.deepcopy(input_spec["draft"])
             mode = input_spec.get("input_mode", "calibrated_section_curves")
             result["input_mode"] = mode if isinstance(mode, str) and mode in ("calibrated_section_curves", TABLE_VISION_MODE) else None
         else:
@@ -327,6 +340,8 @@ def reconstruct(spec_path: str | Path, output_dir: str | Path, *, export_cad: bo
                     phase = "geometry_export_and_reload"
                     transaction.checkpoint(phase)
                     exports, metrics = export_geometry(shape, stage, export_cad=export_cad)
+                    if "draft" in result:
+                        _tag_draft_exports(stage, exports)
                     from .geometry import approximation_summary
                     metrics.update(section_count=len(normalized), minimum_observation_coverage=min(s.get("coverage", 0) for s in result["sections"]),
                                    geometry_approximation=approximation_summary(normalized))

@@ -13,6 +13,7 @@ import re
 from bisect import bisect_right
 from pathlib import Path
 
+from .draft import DRAFT_EXPORT_NAMES, check_draft
 from .provenance import digest_file, digest_object, safe_relative_file, snapshot_hash, sync_file, write_json
 from .schema import finite, load_bounded_json, SHA256
 
@@ -64,7 +65,17 @@ def identity_for(result: dict) -> dict:
     reading = provenance.get("table_reading")
     if isinstance(reading, dict):
         identity["table_reading_sha256"] = reading.get("sha256")
+    # Present only for draft runs: the guesses are part of the run identity.
+    if "draft" in result:
+        identity["draft_sha256"] = digest_object(result["draft"])
     return identity
+
+
+def _cad_names(result: dict) -> tuple[str, str]:
+    """STEP and STL file names: a draft run tags both names."""
+    if "draft" in result:
+        return DRAFT_EXPORT_NAMES["step"], DRAFT_EXPORT_NAMES["stl"]
+    return "model.step", "model.stl"
 
 
 def seal_run(root: Path, result: dict, *, writer=write_json) -> dict:
@@ -164,7 +175,7 @@ def _check_record(root: Path, result: dict, manifest: dict):
     required = {"schema_version", "record_kind", "run_id", "identity", "vessel_id", "status", "method",
                 "input_mode", "review", "sources", "parts", "sections", "normalized_sections", "gaps",
                 "assumptions", "metrics", "exports", "provenance", "timing_seconds", "terminal", "requested_exports"}
-    _require(isinstance(result, dict) and required <= set(result) <= required | {"diagnostics"}, "Incomplete or unsupported inference record schema.")
+    _require(isinstance(result, dict) and required <= set(result) <= required | {"diagnostics", "draft"}, "Incomplete or unsupported inference record schema.")
     _require(result["schema_version"] == SCHEMA_VERSION and result["record_kind"] == "immutable_inference_record", "Unsupported inference record.")
     status = result["status"]
     _require(isinstance(status, str) and status in TERMINAL_STATES, "Nonterminal or unknown run state.")
@@ -246,10 +257,16 @@ def _check_record(root: Path, result: dict, manifest: dict):
         expected_files.add(TABLE_READING_FILE)
     if result["sections"] or provenance.get("extraction_complete"):
         expected_files.add("extracted_sections.json")
+    # A draft spec makes a draft record: the same guesses, no more and no less.
+    spec_draft = input_spec.get("draft") if isinstance(input_spec, dict) else None
+    if "draft" in result or check_draft(spec_draft):
+        _require(check_draft(result.get("draft")) and result.get("draft") == spec_draft,
+                 "Draft record does not list exactly the guesses of its draft specification.")
+    step_name, stl_name = _cad_names(result)
     if status == "review_required":
         expected_files.update(("mesh.json", "cad_sections.json", "extracted_sections.json"))
         if result["requested_exports"]:
-            expected_files.update(("model.step", "model.stl"))
+            expected_files.update((step_name, stl_name))
     _require(declared == expected_files, "Immutable artifacts are not fully explained by the record's evidence and terminal state.")
     if isinstance(input_spec, dict) and isinstance(replay, dict):
         expected_replay = dict(input_spec)
@@ -286,19 +303,20 @@ def _check_record(root: Path, result: dict, manifest: dict):
     exports = result["exports"]
     if status != "review_required":
         _require(not exports and not result["parts"] and not result["metrics"] and not result["normalized_sections"], "A non-success state exposes geometry or authoritative geometry metrics.")
-        _require(not {"mesh.json", "model.step", "model.stl", "cad_sections.json"}.intersection(declared), "A non-success run retains published geometry.")
+        _require(not {"mesh.json", "model.step", "model.stl", "cad_sections.json", *DRAFT_EXPORT_NAMES.values()}.intersection(declared),
+                 "A non-success run retains published geometry.")
         return
     _require(isinstance(input_spec, dict) and isinstance(replay, dict) and "source-1" in source_ids, "Successful run lacks input evidence.")
     _require(set(input_sections) == ids and len(ids) >= 3, "Required stations are missing from a successful run.")
     expected_exports = {"mesh": "mesh.json", "mesh_units": "m"}
     if result["requested_exports"]:
-        expected_exports.update(step="model.step", step_units="mm", stl="model.stl", stl_units="mm")
+        expected_exports.update(step=step_name, step_units="mm", stl=stl_name, stl_units="mm")
     _require(exports == expected_exports, "Export status, request, filenames or units are inconsistent.")
     _require({"mesh.json", "cad_sections.json", "extracted_sections.json"} <= declared, "Required successful geometry evidence is missing.")
     if result["requested_exports"]:
-        _require({"model.step", "model.stl"} <= declared, "Requested CAD exports are missing.")
+        _require({step_name, stl_name} <= declared, "Requested CAD exports are missing.")
     else:
-        _require(not {"model.step", "model.stl"}.intersection(declared), "Unrequested CAD exports present.")
+        _require(not {step_name, stl_name}.intersection(declared), "Unrequested CAD exports present.")
     normalized = result["normalized_sections"]
     _require(_read(root, "cad_sections.json") == normalized and len(normalized) == len(sections), "Normalized CAD sections disagree with the record.")
     original = {section["id"]: section for section in sections}

@@ -159,6 +159,7 @@ fn build_template(omit_identity: bool) -> tempfile::TempDir {
         authorization_basis: "Audit identity fixture; no transfer".into(),
         model: GO_MODEL.into(),
         binary_sha256: util::file_hash(&std::env::current_exe().unwrap()).unwrap(),
+        on_ambiguity: OnAmbiguity::Abstain,
     };
     let task = directory.path().join("task");
     let mut store = store::Store::create(&task, controller::new_state(config)).unwrap();
@@ -369,6 +370,7 @@ fn old_state_without_the_field_reads_and_serializes_unchanged() {
         authorization_basis: String::new(),
         model: GO_MODEL.into(),
         binary_sha256: "a".repeat(64),
+        on_ambiguity: OnAmbiguity::Abstain,
     });
     let encoded = serde_json::to_value(&state).unwrap();
     assert!(

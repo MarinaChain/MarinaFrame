@@ -48,7 +48,7 @@ fn execute() -> Result<serde_json::Value> {
     if command == "help" || command == "--help" {
         return Ok(
             json!({"program":"MarinaFrame 0.4.0 Rust authoritative controller","commands":{
-        "run":"--task DIR --source SPEC --worker-python PYTHON [--worker-source SRC] [--policy deterministic|live] [--provider-transfer-basis TEXT] [--steps N]",
+        "run":"--task DIR --source SPEC --worker-python PYTHON [--worker-source SRC] [--policy deterministic|live] [--on-ambiguity abstain|draft] [--provider-transfer-basis TEXT] [--steps N]",
         "resume":"--task DIR [--continue-after-unknown true] [--clear-cancel true] [--steps N]",
         "step":"--task DIR --intervention JSON --actor human_operator|assistant_operator --note TEXT",
         "status":"--task DIR","verify":"--task DIR","cancel":"--task DIR","recover-checkpoint":"--task DIR",
@@ -139,6 +139,13 @@ fn execute() -> Result<serde_json::Value> {
             Some("live") => Policy::Live,
             _ => return Err("unknown_policy".into()),
         };
+        // The CLI keeps `abstain` as its default, so scripted and frozen
+        // benchmark runs behave as before; the desktop app starts `draft` runs.
+        let on_ambiguity = match args.remove("on-ambiguity").as_deref() {
+            None | Some("abstain") => OnAmbiguity::Abstain,
+            Some("draft") => OnAmbiguity::Draft,
+            _ => return Err("unknown_on_ambiguity".into()),
+        };
         let basis = args.remove("provider-transfer-basis").unwrap_or_default();
         if basis.chars().count() > 1024 {
             return Err("authorization_basis_limit".into());
@@ -158,6 +165,7 @@ fn execute() -> Result<serde_json::Value> {
             authorization_basis: basis,
             model: GO_MODEL.into(),
             binary_sha256: util::file_hash(&std::env::current_exe().map_err(|_| "binary_path")?)?,
+            on_ambiguity,
         };
         let mut store = store::Store::create(&task, controller::new_state(config))?;
         if controller::initialize(&mut store)? {

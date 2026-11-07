@@ -154,7 +154,14 @@ def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
 
     unknown(spec, {"schema_version", "vessel_id", "input_mode", "units", "source", "station_reference",
                    "symmetry", "symmetry_evidence", "end_closure", "sections", "constraints", "components",
-                   "table_value_units", "table_surface", "scope_note", "historical_date", "table_reading"}, "specification")
+                   "table_value_units", "table_surface", "scope_note", "historical_date", "table_reading",
+                   "draft"}, "specification")
+    if "draft" in spec:
+        # A draft revision spec lists its open guesses; see draft.py. Its
+        # sections are the read ones only, so the guess list must be exact.
+        from .draft import check_draft
+        if not check_draft(spec["draft"]):
+            errors.append(gap("invalid_draft", "draft must be {status: draft_not_verified, guesses: [open guess records]}."))
     if FORBIDDEN.intersection(spec):
         errors.append(gap("geometry_in_input", "Drawing input must not contain target geometry or evaluation answers."))
     if spec.get("schema_version") != "1.0":

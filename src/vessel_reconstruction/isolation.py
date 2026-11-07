@@ -393,7 +393,8 @@ def run_isolated(spec_path: str | Path, output_dir: str | Path, *, export_cad: b
                 quarantine = output.parent / f'.{output.name}.resource-exceeded-{uuid4().hex}'
                 try:
                     output.rename(quarantine)
-                    for name in ('model.step', 'model.stl', 'mesh.json', 'cad_sections.json', 'result.json', 'manifest.json'):
+                    for name in ('model.step', 'model.stl', 'model-draft.step', 'model-draft.stl',
+                                 'mesh.json', 'cad_sections.json', 'result.json', 'manifest.json'):
                         (quarantine / name).unlink(missing_ok=True)
                     outcome['quarantine'] = quarantine.name
                 except OSError:

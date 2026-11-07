@@ -788,9 +788,204 @@ pub fn assess(
     Ok(c)
 }
 
+// ------------------------------------------------------------ draft guesses
+//
+// A draft build takes the best-scoring candidate where a section is ambiguous
+// and spans stations that have no readable line. Each such choice is an open
+// guess in the domain checkpoint (`guesses`). Rust checks every guess against
+// the inspected catalog and refuses review readiness while any guess is open.
+
+const GUESS_KINDS: [&str; 3] = ["best_candidate", "bridged_gap", "dropped_end"];
+const GUESS_FIELDS: [&str; 10] = [
+    "guess_id",
+    "section_id",
+    "kind",
+    "x_m",
+    "x_range_m",
+    "chosen_candidate_id",
+    "alternatives",
+    "score",
+    "reason",
+    "status",
+];
+const MAX_GUESSES: usize = 300;
+const MAX_GUESS_REASON_CHARS: usize = 512;
+
+/// The domain checkpoint (`domain/state.json`).
+pub fn domain_checkpoint(root: &Path) -> Result<Value> {
+    util::read_json(
+        &util::safe_file(root, "domain/state.json")?,
+        32 * 1024 * 1024,
+    )
+}
+
+/// Open guesses of a domain checkpoint. Tasks from before drafts have none.
+pub fn open_guesses(checkpoint: &Value) -> Result<&[Value]> {
+    match checkpoint.get("guesses") {
+        None | Some(Value::Null) => Ok(&[]),
+        Some(Value::Array(guesses)) if guesses.len() <= MAX_GUESSES => Ok(guesses),
+        _ => Err("draft_guess_contract".into()),
+    }
+}
+
+/// Identity part of the open guesses (section id -> chosen candidate id or
+/// null). The domain generation id includes it while any guess is open.
+pub fn guessed_choices(checkpoint: &Value) -> Result<Option<Value>> {
+    let guesses = open_guesses(checkpoint)?;
+    if guesses.is_empty() {
+        return Ok(None);
+    }
+    let mut choices = serde_json::Map::new();
+    for guess in guesses {
+        let section = guess["section_id"].as_str().ok_or("draft_guess_contract")?;
+        choices.insert(section.into(), guess["chosen_candidate_id"].clone());
+    }
+    Ok(Some(Value::Object(choices)))
+}
+
+fn guess_shape(guess: &Value, selected: &serde_json::Map<String, Value>) -> Result<()> {
+    exact_keys(guess, &GUESS_FIELDS).map_err(|_| "draft_guess_contract")?;
+    let section = guess["section_id"]
+        .as_str()
+        .filter(|s| util::valid_section_id(s))
+        .ok_or("draft_guess_contract")?;
+    let reason_chars = guess["reason"].as_str().map_or(0, |r| r.chars().count());
+    let x = guess["x_m"].as_f64().filter(|x| x.is_finite());
+    let range = match &guess["x_range_m"] {
+        Value::Null => None,
+        Value::Array(pair) if pair.len() == 2 => {
+            let low = pair[0].as_f64().filter(|v| v.is_finite());
+            let high = pair[1].as_f64().filter(|v| v.is_finite());
+            match (low, high) {
+                (Some(low), Some(high)) if low <= high => Some((low, high)),
+                _ => return Err("draft_guess_contract".into()),
+            }
+        }
+        _ => return Err("draft_guess_contract".into()),
+    };
+    require(
+        guess["status"] == "open"
+            && GUESS_KINDS.iter().any(|k| guess["kind"] == *k)
+            && guess["guess_id"]
+                .as_str()
+                .is_some_and(|id| id.starts_with("guess-") && util::valid_id(id, 64))
+            && x.is_some()
+            && (1..=MAX_GUESS_REASON_CHARS).contains(&reason_chars)
+            && guess["alternatives"]
+                .as_array()
+                .is_some_and(|a| a.iter().all(Value::is_string))
+            && !selected.contains_key(section),
+        "draft_guess_contract",
+    )?;
+    let x = x.unwrap_or_default();
+    let shape_ok = match guess["kind"].as_str() {
+        Some("best_candidate") => {
+            guess["chosen_candidate_id"].is_string()
+                && guess["score"]
+                    .as_f64()
+                    .is_some_and(|s| (0.0..=1.0).contains(&s))
+                && range.is_none()
+        }
+        Some(kind) => {
+            let no_choice = guess["chosen_candidate_id"].is_null()
+                && guess["score"].is_null()
+                && guess["alternatives"].as_array().is_some_and(Vec::is_empty);
+            let range_ok = match (kind, range) {
+                ("bridged_gap", Some((low, high))) => low < x && x < high,
+                ("dropped_end", None) => true,
+                ("dropped_end", Some((low, high))) => low <= x && x <= high,
+                _ => false,
+            };
+            no_choice && range_ok
+        }
+        None => false,
+    };
+    require(shape_ok, "draft_guess_contract")
+}
+
+/// Check the open guesses of a domain checkpoint against its own inspected
+/// catalog and against the worker's domain description. Returns the number of
+/// open guesses. A guess cannot name a candidate that was not inspected, hide
+/// a readable line behind a "bridged" claim, or share a section with a
+/// selection; the description must list exactly the checkpoint's guesses.
+pub fn check_guess_contract(checkpoint: &Value, description: &Value) -> Result<usize> {
+    let guesses = open_guesses(checkpoint)?;
+    let described: &[Value] = match description.get("open_guesses") {
+        None | Some(Value::Null) => &[],
+        Some(Value::Array(list)) => list,
+        _ => return Err("draft_guess_description_mismatch".into()),
+    };
+    require(described == guesses, "draft_guess_description_mismatch")?;
+    let empty = serde_json::Map::new();
+    let selected = match checkpoint.get("selected") {
+        None if guesses.is_empty() => &empty,
+        value => value
+            .and_then(Value::as_object)
+            .ok_or("draft_guess_contract")?,
+    };
+    let mut sections = BTreeSet::new();
+    for guess in guesses {
+        guess_shape(guess, selected)?;
+        let section = guess["section_id"].as_str().unwrap_or_default();
+        require(sections.insert(section), "draft_guess_contract")?;
+        let candidates = checkpoint["catalog"][section]["candidates"]
+            .as_array()
+            .ok_or("draft_guess_not_in_catalog")?;
+        let inspected = candidates
+            .iter()
+            .filter_map(|c| c["candidate_id"].as_str())
+            .collect::<BTreeSet<_>>();
+        let selectable = candidates
+            .iter()
+            .filter(|c| c["selectable"] == true)
+            .filter_map(|c| c["candidate_id"].as_str())
+            .collect::<BTreeSet<_>>();
+        let alternatives = guess["alternatives"]
+            .as_array()
+            .ok_or("draft_guess_contract")?;
+        let consistent = match guess["chosen_candidate_id"].as_str() {
+            Some(chosen) => {
+                selectable.contains(chosen)
+                    && alternatives
+                        .iter()
+                        .all(|a| a != chosen && a.as_str().is_some_and(|a| inspected.contains(a)))
+            }
+            // A section with a selectable line cannot be declared unreadable.
+            None => selectable.is_empty(),
+        };
+        require(consistent, "draft_guess_not_in_catalog")?;
+    }
+    Ok(guesses.len())
+}
+
+/// A draft is never review-ready. This runs before every other readiness
+/// check, so its refusal does not depend on any later check.
+fn refuse_draft(root: &Path, domain: &Value) -> Result<()> {
+    require(
+        open_guesses(&domain_checkpoint(root)?)?.is_empty(),
+        "draft_guesses_open",
+    )?;
+    let candidate = &domain["current_candidate"];
+    require(
+        candidate.get("draft").is_none_or(|draft| *draft == false),
+        "draft_candidate_not_verifiable",
+    )?;
+    // A missing or unreadable run record is not judged here: `assess` refuses
+    // it with its own code after the manifest check.
+    let record = candidate["path"]
+        .as_str()
+        .and_then(|run| util::safe_file(root, &format!("{run}/result.json")).ok())
+        .and_then(|path| util::read_json(&path, 32 * 1024 * 1024).ok());
+    if let Some(result) = record {
+        require(result.get("draft").is_none(), "draft_build_not_verifiable")?;
+    }
+    Ok(())
+}
+
 /// Finalization predicate. `audit_pin` is the audit implementation identity the
 /// controller pinned from the initialize receipt; the contract must carry exactly
-/// that value. Without a pin nothing finalizes (fail closed).
+/// that value. Without a pin nothing finalizes (fail closed). A draft (open
+/// guesses, a draft candidate or a draft run record) never passes.
 pub fn ready(
     root: &Path,
     observation: &Value,
@@ -798,6 +993,7 @@ pub fn ready(
     context: &Value,
     audit_pin: Option<&str>,
 ) -> Result<Contract> {
+    refuse_draft(root, domain)?;
     let c = assess(root, observation, domain, context)?;
     let pin = audit_pin.ok_or("audit_implementation_unpinned")?;
     require(
@@ -817,6 +1013,7 @@ pub fn ready_legacy_unpinned(
     domain: &Value,
     context: &Value,
 ) -> Result<Contract> {
+    refuse_draft(root, domain)?;
     review_outcome(observation, assess(root, observation, domain, context)?)
 }
 
@@ -893,5 +1090,181 @@ mod tests {
         let mut x = original;
         x["extra"] = true.into();
         assert!(serde_json::from_value::<Contract>(x).is_err());
+    }
+
+    /// A consistent draft checkpoint: s0 has two lines (one guessed), s1 is
+    /// selected, s2 has no readable line (bridged between s1 and s3).
+    fn draft_checkpoint() -> Value {
+        json!({
+            "selected": {"s1": "c-s1", "s3": "c-s3"},
+            "catalog": {
+                "s0": {"candidates": [
+                    {"candidate_id": "c-outer", "selectable": true},
+                    {"candidate_id": "c-inner", "selectable": true}]},
+                "s1": {"candidates": [{"candidate_id": "c-s1", "selectable": true}]},
+                "s2": {"candidates": []},
+                "s3": {"candidates": [{"candidate_id": "c-s3", "selectable": true}]}},
+            "guesses": [
+                {"guess_id": "guess-0123456789abcdef0123", "section_id": "s0", "kind": "best_candidate",
+                 "x_m": 0.0, "x_range_m": null, "chosen_candidate_id": "c-outer",
+                 "alternatives": ["c-inner"], "score": 0.93,
+                 "reason": "2 lines found; took the best-supported one (score 0.93).", "status": "open"},
+                {"guess_id": "guess-fedcba9876543210fedc", "section_id": "s2", "kind": "bridged_gap",
+                 "x_m": 4.0, "x_range_m": [2.0, 6.0], "chosen_candidate_id": null,
+                 "alternatives": [], "score": null,
+                 "reason": "No readable line at x=4 m; smoothed across x=2 to 6 m.", "status": "open"}]
+        })
+    }
+
+    fn described(checkpoint: &Value) -> Value {
+        json!({"open_guesses": checkpoint["guesses"]})
+    }
+
+    #[test]
+    fn guess_contract_accepts_a_consistent_draft_and_old_tasks() {
+        let checkpoint = draft_checkpoint();
+        assert_eq!(
+            check_guess_contract(&checkpoint, &described(&checkpoint)),
+            Ok(2)
+        );
+        assert_eq!(
+            guessed_choices(&checkpoint).unwrap(),
+            Some(json!({"s0": "c-outer", "s2": null}))
+        );
+        // A task from before drafts: no guesses, no description field.
+        let old = json!({"selected": {}, "catalog": {}});
+        assert_eq!(check_guess_contract(&old, &json!({})), Ok(0));
+        assert_eq!(guessed_choices(&old).unwrap(), None);
+    }
+
+    #[test]
+    fn forged_or_edited_guess_lists_are_rejected() {
+        type Forgery = (&'static str, fn(&mut Value), &'static str);
+        let forgeries: [Forgery; 16] = [
+            (
+                "unknown chosen candidate",
+                |c| c["guesses"][0]["chosen_candidate_id"] = json!("c-forged"),
+                "draft_guess_not_in_catalog",
+            ),
+            (
+                "unknown alternative",
+                |c| c["guesses"][0]["alternatives"] = json!(["c-forged"]),
+                "draft_guess_not_in_catalog",
+            ),
+            (
+                "readable line hidden as bridge",
+                |c| {
+                    c["catalog"]["s2"]["candidates"] =
+                        json!([{"candidate_id": "c-s2", "selectable": true}])
+                },
+                "draft_guess_not_in_catalog",
+            ),
+            (
+                "uninspected section",
+                |c| {
+                    c["catalog"].as_object_mut().unwrap().remove("s2");
+                },
+                "draft_guess_not_in_catalog",
+            ),
+            (
+                "guessed and selected",
+                |c| c["selected"]["s0"] = json!("c-outer"),
+                "draft_guess_contract",
+            ),
+            (
+                "duplicate section",
+                |c| {
+                    let g = c["guesses"][0].clone();
+                    c["guesses"].as_array_mut().unwrap().push(g);
+                },
+                "draft_guess_contract",
+            ),
+            (
+                "unknown kind",
+                |c| c["guesses"][0]["kind"] = json!("verified"),
+                "draft_guess_contract",
+            ),
+            (
+                "resolved status",
+                |c| c["guesses"][0]["status"] = json!("resolved"),
+                "draft_guess_contract",
+            ),
+            (
+                "score above one",
+                |c| c["guesses"][0]["score"] = json!(1.5),
+                "draft_guess_contract",
+            ),
+            (
+                "score as text",
+                |c| c["guesses"][0]["score"] = json!("0.9"),
+                "draft_guess_contract",
+            ),
+            (
+                "bridge outside its range",
+                |c| c["guesses"][1]["x_range_m"] = json!([5.0, 6.0]),
+                "draft_guess_contract",
+            ),
+            (
+                "bridge with a choice",
+                |c| c["guesses"][1]["chosen_candidate_id"] = json!("c-s1"),
+                "draft_guess_contract",
+            ),
+            (
+                "empty reason",
+                |c| c["guesses"][0]["reason"] = json!(""),
+                "draft_guess_contract",
+            ),
+            (
+                "missing field",
+                |c| {
+                    c["guesses"][0].as_object_mut().unwrap().remove("reason");
+                },
+                "draft_guess_contract",
+            ),
+            (
+                "extra field",
+                |c| c["guesses"][0]["verified"] = json!(true),
+                "draft_guess_contract",
+            ),
+            (
+                "guess list not a list",
+                |c| c["guesses"] = json!({"s0": "c-outer"}),
+                "draft_guess_contract",
+            ),
+        ];
+        for (name, forge, code) in forgeries {
+            let mut checkpoint = draft_checkpoint();
+            forge(&mut checkpoint);
+            // The description mirrors the forged checkpoint, so only the
+            // contract itself can reject the forgery.
+            let description = described(&checkpoint);
+            assert_eq!(
+                check_guess_contract(&checkpoint, &description).unwrap_err(),
+                code,
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn description_must_list_exactly_the_checkpoint_guesses() {
+        let checkpoint = draft_checkpoint();
+        for description in [
+            json!({}),
+            json!({"open_guesses": []}),
+            json!({"open_guesses": [checkpoint["guesses"][0]]}),
+            json!({"open_guesses": "none"}),
+        ] {
+            assert_eq!(
+                check_guess_contract(&checkpoint, &description).unwrap_err(),
+                "draft_guess_description_mismatch"
+            );
+        }
+        let mut edited = described(&checkpoint);
+        edited["open_guesses"][0]["reason"] = json!("Confirmed by a person.");
+        assert_eq!(
+            check_guess_contract(&checkpoint, &edited).unwrap_err(),
+            "draft_guess_description_mismatch"
+        );
     }
 }
