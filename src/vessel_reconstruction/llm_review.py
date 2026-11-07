@@ -110,6 +110,8 @@ def station_image(source, section: dict, edges, top_z_m: float):
 
 
 def render(run: Path, out: Path) -> dict:
+    if out.is_symlink() or (out.exists() and (not out.is_dir() or any(out.iterdir()))):
+        raise ValueError("Review output must be an empty directory.")
     from PIL import Image
     from .agent_render_worker import _cut_edges, _reimport
     from .provenance import digest_file, safe_relative_file, write_json
@@ -119,7 +121,7 @@ def render(run: Path, out: Path) -> dict:
     source_path = safe_relative_file(run, source_entry["file"])
     if digest_file(source_path) != source_entry["sha256"]:
         raise ValueError("Captured source changed.")
-    out.mkdir(parents=True, exist_ok=False)
+    out.mkdir(parents=True, exist_ok=True)
     with Image.open(source_path) as opened:
         source = opened.convert("RGB")
     images = []

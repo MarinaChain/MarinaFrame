@@ -838,6 +838,8 @@ pub struct ReadingRecord {
     pub evidence_mode: String,
     pub engineering_approved: bool,
     pub request_manifest_sha256: String,
+    /// Crop geometry kept with the hash-bound image receipts.
+    pub request_images: Vec<RequestImage>,
     pub source_sha256: String,
     pub endpoint: String,
     pub requested_model: String,
@@ -880,6 +882,7 @@ pub fn vision_request(request_dir: &Path, out: &Path, basis: &str) -> Result<Val
         evidence_mode: "live".into(),
         engineering_approved: false,
         request_manifest_sha256: manifest_sha256,
+        request_images: manifest.images.clone(),
         source_sha256: manifest.source_sha256.clone(),
         endpoint: GO_ENDPOINT.into(),
         requested_model: GO_MODEL.into(),

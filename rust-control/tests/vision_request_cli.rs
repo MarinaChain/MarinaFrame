@@ -25,8 +25,10 @@ fn request(dir: &Path, purpose: &str, views: &[&str], approved: bool) {
     for (i, view) in views.iter().enumerate() {
         let name = format!("image-{i}.png");
         std::fs::write(dir.join(&name), PNG).unwrap();
-        images.push(json!({"image_id":format!("s{i:03}"),"file":name,"sha256":sha256(PNG),
-            "bytes":PNG.len(),"width":2,"height":2,"view":view,"crop_box_px":[0,0,2,2]}));
+        images.push(
+            json!({"image_id":format!("s{i:03}"),"file":name,"sha256":sha256(PNG),
+            "bytes":PNG.len(),"width":2,"height":2,"view":view,"crop_box_px":[0,0,2,2]}),
+        );
     }
     let manifest = json!({"schema_version":"marinaframe.vision_request.v1","purpose":purpose,
         "source_sha256":"a".repeat(64),"engineering_approved":approved,
@@ -59,7 +61,12 @@ fn without_a_key_the_review_request_is_receipted_as_not_sent() {
     let root = tempfile::tempdir().unwrap();
     let dir = root.path().join("request");
     let out = root.path().join("out");
-    request(&dir, "build_review", &["station:s000", "station:s001"], false);
+    request(
+        &dir,
+        "build_review",
+        &["station:s000", "station:s001"],
+        false,
+    );
     let output = vision_request(&dir, &out);
     assert!(
         output.status.success(),
@@ -70,6 +77,11 @@ fn without_a_key_the_review_request_is_receipted_as_not_sent() {
         serde_json::from_slice(&std::fs::read(out.join("vision_reading.json")).unwrap()).unwrap();
     assert_eq!(record["engineering_approved"], false);
     assert_eq!(record["purpose"], "build_review");
+    assert_eq!(
+        record["request_images"][0]["crop_box_px"],
+        json!([0, 0, 2, 2])
+    );
+    assert_eq!(record["request_images"][0]["sha256"], sha256(PNG));
     assert!(record["reply"].is_null());
     assert_eq!(record["usage"]["requests_intended"], 1);
     assert_eq!(record["usage"]["requests_not_sent"], 1);
@@ -94,12 +106,20 @@ fn request_manifests_cannot_claim_approval_or_change_purpose() {
         ("decision", "model_decision", vec!["station:s000"], false),
         ("table", "table_transcription", vec!["station:s000"], false),
         // A setup request has exactly one image.
-        ("two", "sheet_setup", vec!["sheet_overview", "panel:P1"], false),
+        (
+            "two",
+            "sheet_setup",
+            vec!["sheet_overview", "panel:P1"],
+            false,
+        ),
     ] {
         let dir = root.path().join(name);
         request(&dir, purpose, &views, approved);
         let output = vision_request(&dir, &root.path().join(format!("{name}-out")));
         assert!(!output.status.success(), "{name} was accepted");
-        assert!(!root.path().join(format!("{name}-out/vision_reading.json")).exists());
+        assert!(!root
+            .path()
+            .join(format!("{name}-out/vision_reading.json"))
+            .exists());
     }
 }

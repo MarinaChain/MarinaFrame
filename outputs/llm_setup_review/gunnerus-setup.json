@@ -1,0 +1,95 @@
+{
+  "source": {
+    "source": "/Users/jonathanjie/Documents/workspace/MarinaFrame/work/sources/gunnerus/polarkonsult/Lines Plan Rev0.pdf",
+    "sha256": "c4ec405ff866bbec40cdc15a86a1165f255d583af4e0c592767d5f6d65cd7ae3",
+    "raster_sha256": "b81fa616ff412c42716f235bf7f2f2428ecdd80e7cd99f62086b8113f3bc82e4"
+  },
+  "checks": {
+    "failures": [
+      {
+        "kind": "provider_no_reply",
+        "field": "overview"
+      }
+    ],
+    "spec_ready": false,
+    "engineering_approved": false,
+    "source_sha256": "b81fa616ff412c42716f235bf7f2f2428ecdd80e7cd99f62086b8113f3bc82e4",
+    "usage": {
+      "requests_failed": 1,
+      "observed_cost_usd": 0.0,
+      "requests_unknown": 0,
+      "requests_without_cost": 0,
+      "requests_not_sent": 0,
+      "prompt_tokens": 3811,
+      "requests_completed": 3,
+      "requests_intended": 4,
+      "completion_tokens": 541
+    }
+  },
+  "proposal": {
+    "source_sha256": "b81fa616ff412c42716f235bf7f2f2428ecdd80e7cd99f62086b8113f3bc82e4",
+    "overview": {
+      "layout": {
+        "evidence": "Two framed plotting areas stacked vertically: upper profile/body plan with grid and station lines, lower plan view with its own frame and station numbers.",
+        "value": "separate_panels"
+      },
+      "panels": [
+        {
+          "box_px": [
+            60.0,
+            260.0,
+            1010.0,
+            470.0
+          ],
+          "evidence": "Upper framed plotting area bounded by border lines, containing profile and body plan grid with station numbers along bottom.",
+          "panel_id": "P1"
+        },
+        {
+          "box_px": [
+            60.0,
+            430.0,
+            1010.0,
+            510.0
+          ],
+          "evidence": "Lower framed plotting area with plan view curves and station numbers along its bottom edge.",
+          "panel_id": "P2"
+        }
+      ],
+      "stations": [],
+      "symmetry": {
+        "evidence": "Body plan at right of upper panel shows half-sections mirrored about a vertical centreline.",
+        "value": "port_starboard"
+      },
+      "units": {
+        "evidence": "MAIN PARTICULARS table lists dimensions with unit column marked 'm'.",
+        "value": "m"
+      },
+      "vertical_datum": {
+        "evidence": "Profile view shows hull outline with baseline at bottom and heights measured upward from it.",
+        "value": "baseline"
+      }
+    },
+    "panels": {
+      "P1": {
+        "baseline_y_px": {
+          "missing": "no horizontal baseline or keel line is visible in this crop"
+        },
+        "centreline_x_px": {
+          "missing": "no vertical centreline is visible in this crop"
+        },
+        "panel_id": "P1",
+        "scale_marks": []
+      },
+      "P2": {
+        "baseline_y_px": {
+          "missing": "no horizontal baseline or keel line is visible in this crop"
+        },
+        "centreline_x_px": {
+          "missing": "no vertical centreline is visible in this crop"
+        },
+        "panel_id": "P2",
+        "scale_marks": []
+      }
+    }
+  }
+}

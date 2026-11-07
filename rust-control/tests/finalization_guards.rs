@@ -255,6 +255,53 @@ fn with_plan(plan: Option<Plan>) {
 
 #[test]
 #[ignore = "real CAD (slow): run with make test-full"]
+fn retained_model_veto_blocks_finalization_without_a_new_call() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    with_plan(None);
+    let mut fixture = fixture(json!({"maximum": PASSING_MAXIMUM_M}));
+    validate(&mut fixture);
+    let run = fixture.store.state.domain["current_candidate"]["path"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let step = util::file_hash(&fixture.task().join(run).join("model.step")).unwrap();
+    fixture.store.append(controller::model_review::VETO_EVENT,
+        json!({"step_sha256":step,"findings":[{"kind":"model_review_veto","section_id":"s1","reason":"grid stroke"}],
+               "blocking":true,"engineering_approved":false})).unwrap();
+    finish(&mut fixture);
+    assert_not_review_ready(&fixture);
+    assert_eq!(fixture.store.state.status, Status::ValidationFailed);
+    assert_eq!(
+        fixture.store.state.termination_reason.as_deref(),
+        Some("model_review_veto")
+    );
+    assert_eq!(fixture.events("model_review_veto_retained"), 1);
+    assert_eq!(fixture.events("model_review"), 0);
+}
+
+#[test]
+#[ignore = "real CAD (slow): run with make test-full"]
+fn another_step_model_veto_does_not_change_finalization() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    with_plan(None);
+    let mut fixture = fixture(json!({"maximum": PASSING_MAXIMUM_M}));
+    validate(&mut fixture);
+    fixture
+        .store
+        .append(
+            controller::model_review::VETO_EVENT,
+            json!({"step_sha256":"f".repeat(64),"findings":[{"kind":"model_review_veto"}],
+               "blocking":true,"engineering_approved":false}),
+        )
+        .unwrap();
+    finish(&mut fixture);
+    assert_eq!(fixture.store.state.status, Status::AwaitingHumanReview);
+    assert_eq!(fixture.events("model_review_veto_retained"), 0);
+    assert_eq!(fixture.events("model_review"), 0);
+}
+
+#[test]
+#[ignore = "real CAD (slow): run with make test-full"]
 fn failed_audit_stays_failed_when_cached_and_finished() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     with_plan(None);

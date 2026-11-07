@@ -41,7 +41,7 @@ smoke:
 	@set -e; run=$$(mktemp -d /tmp/marinaframe-run.XXXXXX); \
 	$(PY) examples/make_agent_example.py --out $$run/input >/dev/null; \
 	target/release/marinaframe run --task $$run/task --source $$run/input/spec.json \
-	  --worker-python $(PY) --policy deterministic | grep -q '"status":"awaiting_human_review"'; \
+	  --worker-python $(PY) --worker-source $(CURDIR)/src --policy deterministic | grep -q '"status":"awaiting_human_review"'; \
 	target/release/marinaframe verify --task $$run/task | grep -q '"valid":true'; \
 	echo "smoke: awaiting_human_review, valid ($$run)"
 

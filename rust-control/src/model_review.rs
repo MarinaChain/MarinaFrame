@@ -95,6 +95,11 @@ fn recorded_veto(store: &Store, step_sha256: &str) -> Option<Value> {
 pub fn findings(images: &[ReviewImage], receipts: &[provider::Receipt]) -> Vec<Finding> {
     let mut found = vec![];
     for receipt in receipts {
+        if receipt.state != provider::RequestState::Completed
+            || receipt.purpose != Purpose::BuildReview
+        {
+            continue;
+        }
         let Some(VisionReply::BuildReview(ReviewReply { stations })) = &receipt.vision else {
             continue;
         };
@@ -237,6 +242,7 @@ fn review(store: &Store, step_sha256: &str, relative: &str) -> Result<(Review, V
         return Ok((result, json!([])));
     }
     let (manifest, bytes) = load_images(&images_dir, step_sha256)?;
+    let mut consecutive_failures = 0;
     for (chunk, data) in manifest
         .images
         .chunks(STATIONS_PER_REQUEST)
@@ -272,8 +278,15 @@ fn review(store: &Store, step_sha256: &str, relative: &str) -> Result<(Review, V
         let sent = vision::send(&store.path, &prefix, config, &template, &mut result.usage)?;
         if let Some(VisionReply::BuildReview(reply)) = &sent.reply {
             verdicts.extend(reply.stations.iter().cloned());
+            consecutive_failures = 0;
+        } else {
+            consecutive_failures += 1;
         }
         receipts.extend(sent.receipts);
+        if consecutive_failures >= 2 {
+            result.stop_reason = Some("review_no_progress".into());
+            break;
+        }
         if let Some(reason) = sent.stop {
             result.stop_reason = Some(reason);
             break;
@@ -432,6 +445,10 @@ mod tests {
         // A verdict about an image that was not in that request is not evidence.
         let unsent = receipt(&[("s001", Verdict::DoesNotFollow)], &[&a]);
         assert!(findings(&images, &[unsent]).is_empty());
+        // A failed receipt must not contribute even if it contains a forged verdict.
+        let mut failed_with_reply = veto.clone();
+        failed_with_reply.state = RequestState::Failed;
+        assert!(findings(&images, &[failed_with_reply]).is_empty());
         // A failed request carries no verdict.
         let mut failed = veto;
         failed.vision = None;
