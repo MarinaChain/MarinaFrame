@@ -334,3 +334,13 @@ Usage: 874 requests, 2.80 M prompt tokens, list cost $0.541.
   hull built as a draft (-0.9% volume at 2.5 m draft, 0.82 m breadth RMS, profile check failed by
   3.8 m); deck, deckhouse, bulwark and store not built (ambiguous outlines). docs/SHIP_CAD_LANGUAGE.md.
 - W15 plan-view corridors started (Sol job 20261108-050559-48031, worktree w15-plan-corridors).
+
+## Sealed split v2 merged; head-to-head started (2026-11-08)
+
+- Security review fixes for the W13 sandbox: narrower Seatbelt profile, worker writes only
+  `task/work`, results read with O_NOFOLLOW and O_NONBLOCK (3e2e123, 10a2eb2).
+- Sealed split hull-disjoint (v2) merged (7c2d4f6): 288 drawings, 36 Ship-D hulls, seed
+  20261108, manifest SHA-256 856a37fa…. Inputs and truth are in work/factory-sealed-v2/ (ignored).
+- Head-to-head protocol and decision rule pre-registered in
+  docs/plans/2026-11-08-h2h-sealed-v2.md (d9d8609) before any v2 result. Run: Sol job
+  20261108-051711-53879, worktree h2h-sealed-v2. After it, the v2 split is spent for model selection.
