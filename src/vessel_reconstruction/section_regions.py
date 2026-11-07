@@ -84,6 +84,30 @@ def _snap_heights(rings: list[np.ndarray]) -> list[np.ndarray]:
     return snapped
 
 
+def piece_ring(outer, inner=None, *, section_id: str = "section") -> np.ndarray:
+    """Close one traced piece of a station into a ring of the starboard half-plane.
+
+    ``outer`` and ``inner`` are (y, z) samples with increasing z. Without an
+    inner curve the piece is closed horizontally to the centreline at its
+    lowest and highest sample and along the centreline (the usual hull
+    half-section). With an inner curve the material lies between the inner and
+    the outer curve; the ring is the outer curve upward and the inner curve
+    downward. No breadth or shape is added.
+    """
+    outer = np.asarray(outer, dtype=float)
+    if inner is None:
+        ring = [[0.0, outer[0, 1]]] if outer[0, 0] > 0 else []
+        ring.extend(outer.tolist())
+        if outer[-1, 0] > 0:
+            ring.append([0.0, outer[-1, 1]])
+        return np.asarray(ring, dtype=float)
+    inner = np.asarray(inner, dtype=float)
+    heights = np.union1d(outer[:, 1], inner[:, 1])
+    if np.any(np.interp(heights, inner[:, 1], inner[:, 0]) > np.interp(heights, outer[:, 1], outer[:, 0])):
+        raise GeometryError(f"Section {section_id}: the inner curve of a piece lies outside its outer curve.")
+    return np.vstack([outer, inner[::-1]])
+
+
 def ring_area(ring: np.ndarray) -> float:
     """Absolute shoelace area of one closed ring in the (y, z) half-plane."""
     y, z = ring[:, 0], ring[:, 1]

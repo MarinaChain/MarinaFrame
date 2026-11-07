@@ -427,7 +427,8 @@ class DomainTools:
             if cid is None:
                 continue
             candidate = next(c for c in self.state["catalog"][section["id"]]["candidates"] if c["candidate_id"] == cid)
-            section["contour_selection"] = copy.deepcopy(candidate["contour_selection"])
+            if not candidate.get("declared_pieces"):
+                section["contour_selection"] = copy.deepcopy(candidate["contour_selection"])
             prior = section.get("evidence", "Caller-supplied calibration.")
             if guess is not None:
                 section["evidence"] = (prior[:7000] + " Draft guess " + guess["guess_id"] + " took " + cid +
@@ -691,6 +692,68 @@ def estimated_inspection_cpu_seconds(section: dict) -> float:
     return INSPECTION_CPU_SECONDS_PER_MEGAPIXEL * (right - left) * (bottom - top) / 1e6
 
 
+def _write_section_evidence(image, section: dict, entry: dict, out: Path, source_sha: str, artifacts: list):
+    """Write the candidate overlay and evidence record of one inspected section."""
+    sid = section["id"]
+    basename = "section-" + digest_object(sid)[:12]
+    _source_overlay(image, section, entry, out / (basename + ".png"))
+    write_json(out / (basename + ".json"), entry)
+    artifacts.extend([
+        {"file": basename + ".png", "kind": "source_candidate_overlay", "section_id": sid,
+         "source_sha256": source_sha, "coordinate_system": "original source pixels; crop shown with identical orientation and scale"},
+        {"file": basename + ".json", "kind": "source_candidate_evidence", "section_id": sid,
+         "source_sha256": source_sha}])
+
+
+def _declared_pieces_entry(image, section: dict, source_file: str, details: dict, source_sha: str,
+                           implementation_sha: str) -> dict:
+    """Inspection record of a multi-piece section: one candidate, the declared pieces.
+
+    The pieces (corridors and height intervals) are caller evidence of which
+    drawn curves form the station. The worker reads them with the engine's
+    piece reader; it does not search for other contours. If the reader
+    refuses a piece, the section has no candidate and its gap is recorded.
+    """
+    from .ingest import DrawingError, extract_pieces
+    entry = {"section_id": section["id"], "source_sha256": source_sha, "x_m": section["x_m"],
+             "implementation_sha256": implementation_sha,
+             "roi_px": section["roi_px"], "calibration": section["calibration"],
+             "candidates": [], "baseline_gaps": [], "retained_diagnostics": {},
+             "retained_competing_count": 0, "rejected_trace_hypotheses": [],
+             "semantic_identity": "unresolved_human_review_required", **SEMANTIC_FLAGS}
+    entry["grid_evidence"] = {"lattice_detected": False, "unique_non_grid_candidate_id": None,
+                              "non_grid_competing_components": None,
+                              "interpretation": "Declared piece corridors; no grid grammar is applied."}
+    try:
+        result, diagnostic = extract_pieces(image, section, source_file, details)
+    except DrawingError as exc:
+        entry["baseline_gaps"] = [{"kind": exc.kind, "message": str(exc), "section_id": section["id"]}]
+        entry["retained_diagnostics"] = exc.diagnostics
+        return entry
+    entry["retained_diagnostics"] = diagnostic
+    traces = [trace for piece in diagnostic["pieces"] for trace in (piece["outer"], piece.get("inner")) if trace]
+    calibration = section["calibration"]
+    ppm, centre, baseline = calibration["pixels_per_metre"], calibration["centerline_px"], calibration["baseline_px"]
+    source_points = [[float(centre + y * ppm), float(baseline - z * ppm)]
+                     for piece in result["pieces"] for key in ("points_yz_m", "inner_points_yz_m")
+                     for y, z in piece.get(key, [])]
+    cid = "pieces-" + digest_object({"source": source_sha, "section": section})[:20]
+    entry["candidates"].append({
+        "candidate_id": cid, "hypothesis": "declared_piece_corridors", "generated_by": ["declared_piece_corridors"],
+        "selectable": True, "declared_pieces": True,
+        "source_support": {"observed_row_fraction": round(min(t["coverage"] for t in traces), 5),
+                           "max_missing_run_px": max(t["max_missing_run_px"] for t in traces),
+                           "maximum_step_px_per_row": round(max(t["maximum_step_px_per_row"] for t in traces), 4),
+                           "long_component_support_fraction": round(min(t["long_component_support_fraction"] for t in traces), 5),
+                           "mean_trace_contrast": round(min(t["mean_trace_contrast"] for t in traces), 5)},
+        "grid_supported_hypothesis": False, "non_grid_competing_components": 0,
+        "piece_count": len(result["pieces"]), "region_kinds": result["evidence"]["region_kinds"],
+        "source_points_px": source_points, "identity_certified": False})
+    entry["grid_evidence"]["unique_non_grid_candidate_id"] = cid
+    entry["grid_evidence"]["non_grid_competing_components"] = 0
+    return entry
+
+
 def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) -> dict:
     """Private worker operation. No labels/reference geometry are opened."""
     import numpy as np
@@ -720,6 +783,12 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
     for section in spec["sections"]:
         sid = section["id"]
         if sid not in section_ids:
+            continue
+        if "pieces" in section:
+            entry = _declared_pieces_entry(image, section, spec["source"]["file"], details, source_sha,
+                                           digest_object(implementation))
+            _write_section_evidence(image, section, entry, out, source_sha, artifacts)
+            sections.append(entry)
             continue
         diagnostic, gaps = {}, []
         try:
@@ -884,14 +953,7 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
             grid["non_grid_competing_components"] = 0
         else:
             grid["non_grid_competing_components"] = min((c["non_grid_competing_components"] for c in entry["candidates"]), default=None)
-        basename = "section-" + digest_object(sid)[:12]
-        _source_overlay(image, section, entry, out / (basename + ".png"))
-        write_json(out / (basename + ".json"), entry)
-        artifacts.extend([
-            {"file": basename + ".png", "kind": "source_candidate_overlay", "section_id": sid,
-             "source_sha256": source_sha, "coordinate_system": "original source pixels; crop shown with identical orientation and scale"},
-            {"file": basename + ".json", "kind": "source_candidate_evidence", "section_id": sid,
-             "source_sha256": source_sha}])
+        _write_section_evidence(image, section, entry, out, source_sha, artifacts)
         sections.append(entry)
     model_artifacts = []
     for artifact in artifacts:
