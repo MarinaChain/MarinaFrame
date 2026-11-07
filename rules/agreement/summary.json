@@ -1,0 +1,1348 @@
+{
+ "rule_set": "abs-mvr-part3-midship-v1",
+ "rule_file_sha256": "b9243d33a11bc2ab62536fab4336e91cf5b670150c0687937a76fac82a873985",
+ "agreement_convention": "pass when value >= threshold; the spacing constraint is stored negated",
+ "subsets": {
+  "Random": {
+   "candidate_rows": 6050,
+   "retained_designs": 6020
+  },
+  "Repaired": {
+   "candidate_rows": 6254,
+   "retained_designs": 6237
+  },
+  "SGLD": {
+   "candidate_rows": 500,
+   "retained_designs": 496
+  }
+ },
+ "population_rule_side": {
+  "description": "Required values rebuilt from parameter rows; member values read from the MiDShip value table.",
+  "per_rule": {
+   "Double_Bottom_Height": {
+    "n": 12753,
+    "not_applicable": 0,
+    "threshold_match": 12753,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 12753,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.921195,
+    "confusion": {
+     "both_pass": 11748,
+     "both_fail": 1005,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Bottom_Floor_Thickness": {
+    "n": 12753,
+    "not_applicable": 0,
+    "threshold_match": 12753,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 12753,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.867325,
+    "confusion": {
+     "both_pass": 11061,
+     "both_fail": 1692,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Bottom_Girder_Thickness": {
+    "n": 12753,
+    "not_applicable": 0,
+    "threshold_match": 12753,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 12753,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.592018,
+    "confusion": {
+     "both_pass": 7550,
+     "both_fail": 5203,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Bottom_Floor_Spacing": {
+    "n": 12753,
+    "not_applicable": 0,
+    "threshold_match": 12753,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 12753,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.873834,
+    "confusion": {
+     "both_pass": 11144,
+     "both_fail": 1609,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Inner_Bottom_Deck_Thickness": {
+    "n": 12753,
+    "not_applicable": 0,
+    "threshold_match": 12753,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 12753,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.569827,
+    "confusion": {
+     "both_pass": 7267,
+     "both_fail": 5486,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Hopper_Plate_Thickness": {
+    "n": 8371,
+    "not_applicable": 0,
+    "threshold_match": 8371,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 8371,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.58631,
+    "confusion": {
+     "both_pass": 4908,
+     "both_fail": 3463,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Bottom_Stiffener_SM": {
+    "n": 12753,
+    "not_applicable": 0,
+    "threshold_match": 12753,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 12753,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.629813,
+    "confusion": {
+     "both_pass": 8032,
+     "both_fail": 4721,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Bottom_Transverse_Stiffener_SM": {
+    "n": 12753,
+    "not_applicable": 0,
+    "threshold_match": 12753,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 12753,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.568494,
+    "confusion": {
+     "both_pass": 7250,
+     "both_fail": 5503,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Hopper_Stiffener_SM": {
+    "n": 8371,
+    "not_applicable": 0,
+    "threshold_match": 8371,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 8371,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.510931,
+    "confusion": {
+     "both_pass": 4277,
+     "both_fail": 4094,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Side_Frame_SM": {
+    "n": 12753,
+    "not_applicable": 0,
+    "threshold_match": 12753,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 12753,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.576962,
+    "confusion": {
+     "both_pass": 7358,
+     "both_fail": 5395,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Webframe_SM": {
+    "n": 12753,
+    "not_applicable": 0,
+    "threshold_match": 12753,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 12753,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.670117,
+    "confusion": {
+     "both_pass": 8546,
+     "both_fail": 4207,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Webframe_Depth": {
+    "n": 12753,
+    "not_applicable": 0,
+    "threshold_match": 12753,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 12753,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.717243,
+    "confusion": {
+     "both_pass": 9147,
+     "both_fail": 3606,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Webframe_Thickness": {
+    "n": 12753,
+    "not_applicable": 0,
+    "threshold_match": 12753,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 12753,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.881048,
+    "confusion": {
+     "both_pass": 11236,
+     "both_fail": 1517,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Side_Stringer_SM": {
+    "n": 12753,
+    "not_applicable": 0,
+    "threshold_match": 12753,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 12753,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.650278,
+    "confusion": {
+     "both_pass": 8293,
+     "both_fail": 4460,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Side_Stringer_Depth": {
+    "n": 12753,
+    "not_applicable": 0,
+    "threshold_match": 12753,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 12753,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.588019,
+    "confusion": {
+     "both_pass": 7499,
+     "both_fail": 5254,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Bulkhead_Thickness": {
+    "n": 12753,
+    "not_applicable": 0,
+    "threshold_match": 9418,
+    "threshold_match_rate": 0.738493,
+    "pass_agreement": 12100,
+    "pass_agreement_rate": 0.948796,
+    "ms_pass_rate": 0.656473,
+    "confusion": {
+     "both_pass": 7719,
+     "both_fail": 4381,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 653
+    },
+    "causes": {
+     "evaluator_float_uniqueness": 3335
+    }
+   },
+   "Trans_Bulkhead_Horizontal_Stiffener_SM": {
+    "n": 12753,
+    "not_applicable": 0,
+    "threshold_match": 8147,
+    "threshold_match_rate": 0.63883,
+    "pass_agreement": 11800,
+    "pass_agreement_rate": 0.925272,
+    "ms_pass_rate": 0.799733,
+    "confusion": {
+     "both_pass": 9246,
+     "both_fail": 2554,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 953
+    },
+    "causes": {
+     "evaluator_float_uniqueness": 4606
+    }
+   },
+   "Trans_Bulkhead_Vertical_Stiffener_SM": {
+    "n": 12753,
+    "not_applicable": 0,
+    "threshold_match": 8147,
+    "threshold_match_rate": 0.63883,
+    "pass_agreement": 12254,
+    "pass_agreement_rate": 0.960872,
+    "ms_pass_rate": 0.869207,
+    "confusion": {
+     "both_pass": 10586,
+     "both_fail": 1668,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 499
+    },
+    "causes": {
+     "evaluator_float_uniqueness": 4606
+    }
+   },
+   "Deck_Trans_Stiff_SM": {
+    "n": 8834,
+    "not_applicable": 3919,
+    "threshold_match": 5175,
+    "threshold_match_rate": 0.585805,
+    "pass_agreement": 7968,
+    "pass_agreement_rate": 0.90197,
+    "ms_pass_rate": 0.863256,
+    "confusion": {
+     "both_pass": 6760,
+     "both_fail": 1208,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 866
+    },
+    "causes": {
+     "evaluator_float_uniqueness": 3659
+    }
+   },
+   "Deck_Thickness": {
+    "n": 12753,
+    "not_applicable": 0,
+    "threshold_match": 12638,
+    "threshold_match_rate": 0.990983,
+    "pass_agreement": 12746,
+    "pass_agreement_rate": 0.999451,
+    "ms_pass_rate": 0.603466,
+    "confusion": {
+     "both_pass": 7689,
+     "both_fail": 5057,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 7
+    },
+    "causes": {
+     "evaluator_float_uniqueness": 115
+    }
+   },
+   "Deck_Beam_SM": {
+    "n": 8834,
+    "not_applicable": 3919,
+    "threshold_match": 5175,
+    "threshold_match_rate": 0.585805,
+    "pass_agreement": 8695,
+    "pass_agreement_rate": 0.984265,
+    "ms_pass_rate": 0.979058,
+    "confusion": {
+     "both_pass": 8510,
+     "both_fail": 185,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 139
+    },
+    "causes": {
+     "evaluator_float_uniqueness": 3659
+    }
+   },
+   "Deck_Beam_Depth": {
+    "n": 8834,
+    "not_applicable": 3919,
+    "threshold_match": 5175,
+    "threshold_match_rate": 0.585805,
+    "pass_agreement": 8680,
+    "pass_agreement_rate": 0.982567,
+    "ms_pass_rate": 0.978266,
+    "confusion": {
+     "both_pass": 8488,
+     "both_fail": 192,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 154
+    },
+    "causes": {
+     "evaluator_float_uniqueness": 3659
+    }
+   },
+   "Deck_Beam_Thickness": {
+    "n": 8834,
+    "not_applicable": 3919,
+    "threshold_match": 8834,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 8834,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.841295,
+    "confusion": {
+     "both_pass": 7432,
+     "both_fail": 1402,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Side_Shell_Thickness": {
+    "n": 12753,
+    "not_applicable": 0,
+    "threshold_match": 12753,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 12753,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.709402,
+    "confusion": {
+     "both_pass": 9047,
+     "both_fail": 3706,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Bottom_Shell_Thickness": {
+    "n": 12753,
+    "not_applicable": 0,
+    "threshold_match": 12753,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 12753,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.694425,
+    "confusion": {
+     "both_pass": 8856,
+     "both_fail": 3897,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   }
+  }
+ },
+ "bom_sample_independent": {
+  "designs": [
+   "Random:1253",
+   "Random:1571",
+   "Random:2787",
+   "Random:2870",
+   "Random:3498",
+   "Random:4270",
+   "Random:4660",
+   "Random:5088",
+   "Random:5597",
+   "Random:5718",
+   "Random:5942",
+   "Random:6018",
+   "Repaired:1332",
+   "Repaired:1383",
+   "Repaired:1698",
+   "Repaired:2082",
+   "Repaired:2176",
+   "Repaired:2203",
+   "Repaired:2313",
+   "Repaired:2564",
+   "Repaired:3460",
+   "Repaired:3835",
+   "Repaired:5156",
+   "Repaired:5643",
+   "SGLD:17",
+   "SGLD:37",
+   "SGLD:71",
+   "SGLD:118",
+   "SGLD:205",
+   "SGLD:215",
+   "SGLD:257",
+   "SGLD:308",
+   "SGLD:379",
+   "SGLD:381",
+   "SGLD:429",
+   "SGLD:473"
+  ],
+  "description": "Required and member values both computed from the bill of materials.",
+  "robust_spacing": {
+   "Double_Bottom_Height": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.861111,
+    "confusion": {
+     "both_pass": 31,
+     "both_fail": 5,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Bottom_Floor_Thickness": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.944444,
+    "confusion": {
+     "both_pass": 34,
+     "both_fail": 2,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Bottom_Girder_Thickness": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.75,
+    "confusion": {
+     "both_pass": 27,
+     "both_fail": 9,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Bottom_Floor_Spacing": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.944444,
+    "confusion": {
+     "both_pass": 34,
+     "both_fail": 2,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Inner_Bottom_Deck_Thickness": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.75,
+    "confusion": {
+     "both_pass": 27,
+     "both_fail": 9,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Bottom_Stiffener_SM": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.833333,
+    "confusion": {
+     "both_pass": 30,
+     "both_fail": 6,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Bottom_Transverse_Stiffener_SM": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.694444,
+    "confusion": {
+     "both_pass": 25,
+     "both_fail": 11,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Side_Frame_SM": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.722222,
+    "confusion": {
+     "both_pass": 26,
+     "both_fail": 10,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Webframe_SM": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.833333,
+    "confusion": {
+     "both_pass": 30,
+     "both_fail": 6,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Webframe_Depth": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.888889,
+    "confusion": {
+     "both_pass": 32,
+     "both_fail": 4,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Webframe_Thickness": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.888889,
+    "confusion": {
+     "both_pass": 32,
+     "both_fail": 4,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Side_Stringer_SM": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.805556,
+    "confusion": {
+     "both_pass": 29,
+     "both_fail": 7,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Side_Stringer_Depth": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.666667,
+    "confusion": {
+     "both_pass": 24,
+     "both_fail": 12,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Bulkhead_Thickness": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 26,
+    "threshold_match_rate": 0.722222,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.888889,
+    "confusion": {
+     "both_pass": 32,
+     "both_fail": 4,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {
+     "evaluator_float_uniqueness": 10
+    }
+   },
+   "Trans_Bulkhead_Horizontal_Stiffener_SM": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 22,
+    "threshold_match_rate": 0.611111,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.972222,
+    "confusion": {
+     "both_pass": 35,
+     "both_fail": 1,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {
+     "evaluator_float_uniqueness": 14
+    }
+   },
+   "Trans_Bulkhead_Vertical_Stiffener_SM": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 22,
+    "threshold_match_rate": 0.611111,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.944444,
+    "confusion": {
+     "both_pass": 34,
+     "both_fail": 2,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {
+     "evaluator_float_uniqueness": 14
+    }
+   },
+   "Deck_Trans_Stiff_SM": {
+    "n": 24,
+    "not_applicable": 12,
+    "threshold_match": 17,
+    "threshold_match_rate": 0.708333,
+    "pass_agreement": 24,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.916667,
+    "confusion": {
+     "both_pass": 22,
+     "both_fail": 2,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {
+     "evaluator_float_uniqueness": 7
+    }
+   },
+   "Deck_Thickness": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.722222,
+    "confusion": {
+     "both_pass": 26,
+     "both_fail": 10,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Deck_Beam_SM": {
+    "n": 24,
+    "not_applicable": 12,
+    "threshold_match": 17,
+    "threshold_match_rate": 0.708333,
+    "pass_agreement": 24,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 1.0,
+    "confusion": {
+     "both_pass": 24,
+     "both_fail": 0,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {
+     "evaluator_float_uniqueness": 7
+    }
+   },
+   "Deck_Beam_Depth": {
+    "n": 24,
+    "not_applicable": 12,
+    "threshold_match": 17,
+    "threshold_match_rate": 0.708333,
+    "pass_agreement": 24,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 1.0,
+    "confusion": {
+     "both_pass": 24,
+     "both_fail": 0,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {
+     "evaluator_float_uniqueness": 7
+    }
+   },
+   "Deck_Beam_Thickness": {
+    "n": 24,
+    "not_applicable": 12,
+    "threshold_match": 24,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 24,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.833333,
+    "confusion": {
+     "both_pass": 20,
+     "both_fail": 4,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Side_Shell_Thickness": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.861111,
+    "confusion": {
+     "both_pass": 31,
+     "both_fail": 5,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Bottom_Shell_Thickness": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.833333,
+    "confusion": {
+     "both_pass": 30,
+     "both_fail": 6,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Hopper_Plate_Thickness": {
+    "n": 24,
+    "not_applicable": 0,
+    "threshold_match": 24,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 24,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.666667,
+    "confusion": {
+     "both_pass": 16,
+     "both_fail": 8,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Hopper_Stiffener_SM": {
+    "n": 24,
+    "not_applicable": 0,
+    "threshold_match": 24,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 21,
+    "pass_agreement_rate": 0.875,
+    "ms_pass_rate": 0.708333,
+    "confusion": {
+     "both_pass": 17,
+     "both_fail": 4,
+     "mine_pass_ms_fail": 3,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {
+     "evaluator_member_value_artifact": 3
+    }
+   }
+  },
+  "evaluator_replica_spacing": {
+   "Double_Bottom_Height": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.861111,
+    "confusion": {
+     "both_pass": 31,
+     "both_fail": 5,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Bottom_Floor_Thickness": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.944444,
+    "confusion": {
+     "both_pass": 34,
+     "both_fail": 2,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Bottom_Girder_Thickness": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.75,
+    "confusion": {
+     "both_pass": 27,
+     "both_fail": 9,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Bottom_Floor_Spacing": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.944444,
+    "confusion": {
+     "both_pass": 34,
+     "both_fail": 2,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Inner_Bottom_Deck_Thickness": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.75,
+    "confusion": {
+     "both_pass": 27,
+     "both_fail": 9,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Bottom_Stiffener_SM": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.833333,
+    "confusion": {
+     "both_pass": 30,
+     "both_fail": 6,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Bottom_Transverse_Stiffener_SM": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.694444,
+    "confusion": {
+     "both_pass": 25,
+     "both_fail": 11,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Side_Frame_SM": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.722222,
+    "confusion": {
+     "both_pass": 26,
+     "both_fail": 10,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Webframe_SM": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.833333,
+    "confusion": {
+     "both_pass": 30,
+     "both_fail": 6,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Webframe_Depth": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.888889,
+    "confusion": {
+     "both_pass": 32,
+     "both_fail": 4,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Webframe_Thickness": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.888889,
+    "confusion": {
+     "both_pass": 32,
+     "both_fail": 4,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Side_Stringer_SM": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.805556,
+    "confusion": {
+     "both_pass": 29,
+     "both_fail": 7,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Side_Stringer_Depth": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.666667,
+    "confusion": {
+     "both_pass": 24,
+     "both_fail": 12,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Bulkhead_Thickness": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.888889,
+    "confusion": {
+     "both_pass": 32,
+     "both_fail": 4,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Trans_Bulkhead_Horizontal_Stiffener_SM": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.972222,
+    "confusion": {
+     "both_pass": 35,
+     "both_fail": 1,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Trans_Bulkhead_Vertical_Stiffener_SM": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.944444,
+    "confusion": {
+     "both_pass": 34,
+     "both_fail": 2,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Deck_Trans_Stiff_SM": {
+    "n": 24,
+    "not_applicable": 12,
+    "threshold_match": 24,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 24,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.916667,
+    "confusion": {
+     "both_pass": 22,
+     "both_fail": 2,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Deck_Thickness": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.722222,
+    "confusion": {
+     "both_pass": 26,
+     "both_fail": 10,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Deck_Beam_SM": {
+    "n": 24,
+    "not_applicable": 12,
+    "threshold_match": 24,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 24,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 1.0,
+    "confusion": {
+     "both_pass": 24,
+     "both_fail": 0,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Deck_Beam_Depth": {
+    "n": 24,
+    "not_applicable": 12,
+    "threshold_match": 24,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 24,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 1.0,
+    "confusion": {
+     "both_pass": 24,
+     "both_fail": 0,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Deck_Beam_Thickness": {
+    "n": 24,
+    "not_applicable": 12,
+    "threshold_match": 24,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 24,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.833333,
+    "confusion": {
+     "both_pass": 20,
+     "both_fail": 4,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Side_Shell_Thickness": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.861111,
+    "confusion": {
+     "both_pass": 31,
+     "both_fail": 5,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Bottom_Shell_Thickness": {
+    "n": 36,
+    "not_applicable": 0,
+    "threshold_match": 36,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 36,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.833333,
+    "confusion": {
+     "both_pass": 30,
+     "both_fail": 6,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Hopper_Plate_Thickness": {
+    "n": 24,
+    "not_applicable": 0,
+    "threshold_match": 24,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 24,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.666667,
+    "confusion": {
+     "both_pass": 16,
+     "both_fail": 8,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   },
+   "Hopper_Stiffener_SM": {
+    "n": 24,
+    "not_applicable": 0,
+    "threshold_match": 24,
+    "threshold_match_rate": 1.0,
+    "pass_agreement": 24,
+    "pass_agreement_rate": 1.0,
+    "ms_pass_rate": 0.708333,
+    "confusion": {
+     "both_pass": 17,
+     "both_fail": 7,
+     "mine_pass_ms_fail": 0,
+     "mine_fail_ms_pass": 0
+    },
+    "causes": {}
+   }
+  }
+ },
+ "strict_text_option": {
+  "Bottom_Girder_Thickness": {
+   "designs_where_required_value_changes": 12753,
+   "of": 12753,
+   "strict_pass_agreement_rate": 0.735356,
+   "strict_confusion": {
+    "both_pass": 4175,
+    "both_fail": 5203,
+    "mine_pass_ms_fail": 0,
+    "mine_fail_ms_pass": 3375
+   }
+  },
+  "Bottom_Shell_Thickness": {
+   "designs_where_required_value_changes": 12750,
+   "of": 12753,
+   "strict_pass_agreement_rate": 0.775817,
+   "strict_confusion": {
+    "both_pass": 8558,
+    "both_fail": 1336,
+    "mine_pass_ms_fail": 2561,
+    "mine_fail_ms_pass": 298
+   }
+  },
+  "Bulkhead_Thickness": {
+   "designs_where_required_value_changes": 241,
+   "of": 12753,
+   "strict_pass_agreement_rate": 0.948796,
+   "strict_confusion": {
+    "both_pass": 7719,
+    "both_fail": 4381,
+    "mine_pass_ms_fail": 0,
+    "mine_fail_ms_pass": 653
+   }
+  },
+  "Double_Bottom_Height": {
+   "designs_where_required_value_changes": 837,
+   "of": 12753,
+   "strict_pass_agreement_rate": 1.0,
+   "strict_confusion": {
+    "both_pass": 11748,
+    "both_fail": 1005,
+    "mine_pass_ms_fail": 0,
+    "mine_fail_ms_pass": 0
+   }
+  }
+ },
+ "hatch_bit_evidence_non_container": {
+  "hatch_bit_0:matches": 4367,
+  "hatch_bit_1:collapsed": 3659,
+  "hatch_bit_1:matches": 808
+ }
+}

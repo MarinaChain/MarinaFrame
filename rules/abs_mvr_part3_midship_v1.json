@@ -1,0 +1,2049 @@
+{
+ "schema_version": "1",
+ "rule_set": {
+  "id": "abs-mvr-part3-midship-v1",
+  "title": "ABS MVR Part 3 hull scantling checks used by MiDShip",
+  "profile": "midship_v1",
+  "scope": "Cargo-hold scantling checks for 25 MiDShip constraints. Not a full class approval."
+ },
+ "sources": {
+  "abs_mvr_part3_jul23": {
+   "title": "Rules for Building and Classing Marine Vessels, Part 3: Hull Construction and Equipment",
+   "publisher": "American Bureau of Shipping (ABS)",
+   "edition": "July 2023",
+   "url": "https://ww2.eagle.org/content/dam/eagle/rules-and-guides/archives/other/1-rules-building-classing-marine-vessels-2023/1-mvr-part-3-jul23.pdf",
+   "page_numbering": "printed page numbers of the ABS PDF (PDF page minus 4)",
+   "note": "MiDShip states it follows the July 2024 edition. The July 2023 edition is the nearest public PDF found. Paragraph numbers can differ between editions."
+  },
+  "midship_evaluator": {
+   "title": "MiDShip Parametric_Structure_Eval.py (constraint evaluator)",
+   "publisher": "MiDShip authors (GPL-3.0)",
+   "edition": "GitHub main, retrieved 2026-11-07",
+   "url": "https://github.com/noahbagz/MiDShip_Dataset/blob/main/tools/Parametric_Structure_Eval.py",
+   "note": "Used to find which paragraphs and design-basis choices MiDShip applies. Not a rule source."
+  }
+ },
+ "rules": [
+  {
+   "id": "ABS-3-2-4-DBH",
+   "midship_column": "Double_Bottom_Height",
+   "title": "Minimum double bottom depth",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-4/3.1.1(c)",
+     "page": 93
+    },
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-4/1.1.i",
+     "page": 92
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "cargo hold",
+    "member": "double bottom"
+   },
+   "inputs": [
+    {
+     "name": "beam",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Molded breadth B (twice the side shell offset)."
+    },
+    {
+     "name": "draft",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Scantling draft. MiDShip takes 0.6667 D."
+    },
+    {
+     "name": "db_height_mm",
+     "unit": "mm",
+     "role": "provided",
+     "description": "Actual double bottom height."
+    }
+   ],
+   "assumptions": [],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "mm",
+    "provided_input": "db_height_mm",
+    "formula": "max(32 B + 190 sqrt(d), min(B/20, 2000 mm), 760 mm)"
+   },
+   "check": "db_height",
+   "status": "encoded",
+   "status_reason": "MiDShip applies the B/20 and 0.76 m limits of 1.1.i to non-tankers only; the strict option applies them to all types."
+  },
+  {
+   "id": "ABS-3-2-4-FLOORT",
+   "midship_column": "Bottom_Floor_Thickness",
+   "title": "Minimum solid floor thickness",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-4/5.1",
+     "page": 94
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "cargo hold",
+    "member": "bottom floor"
+   },
+   "inputs": [
+    {
+     "name": "floor_t_mm",
+     "unit": "mm",
+     "role": "provided",
+     "description": "Actual floor thickness."
+    }
+   ],
+   "assumptions": [
+    {
+     "name": "scantling_length_m",
+     "value": 250.0,
+     "unit": "m",
+     "basis": "MiDShip design basis: the evaluator fixes L = 250 m. Not a rule value."
+    },
+    {
+     "name": "floor_c_mm",
+     "value": 1.5,
+     "unit": "mm",
+     "basis": "3-2-4/5.1: c = 1.5 mm when bottom shell and inner bottom are longitudinally framed."
+    }
+   ],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "mm",
+    "provided_input": "floor_t_mm",
+    "formula": "0.036 L + 4.7 + c mm"
+   },
+   "check": "floor_thickness",
+   "status": "encoded",
+   "status_reason": "The 14 mm cap for floors on every frame needs a buckling proof and is not applied."
+  },
+  {
+   "id": "ABS-3-2-4-GIRDT",
+   "midship_column": "Bottom_Girder_Thickness",
+   "title": "Minimum bottom girder thickness",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-4/5.1",
+     "page": 94
+    },
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-4/3.1.1(a)",
+     "page": 93
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "cargo hold",
+    "member": "bottom girder"
+   },
+   "inputs": [
+    {
+     "name": "girder_t_mm",
+     "unit": "mm",
+     "role": "provided",
+     "description": "Actual bottom girder thickness."
+    }
+   ],
+   "assumptions": [
+    {
+     "name": "scantling_length_m",
+     "value": 250.0,
+     "unit": "m",
+     "basis": "MiDShip design basis: the evaluator fixes L = 250 m. Not a rule value."
+    },
+    {
+     "name": "floor_c_mm",
+     "value": 1.5,
+     "unit": "mm",
+     "basis": "3-2-4/5.1: c = 1.5 mm when bottom shell and inner bottom are longitudinally framed."
+    }
+   ],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "mm",
+    "provided_input": "girder_t_mm",
+    "formula": "0.036 L + 4.7 + c mm; strict: max with 0.056 L + 5.5"
+   },
+   "check": "girder_thickness",
+   "status": "partial",
+   "status_reason": "MiDShip applies the floor equation to every girder. The text gives 0.056 L + 5.5 for the center girder (3-2-4/3.1.1(a)) and c = 0 for side girders. The data does not say which girder is the center girder."
+  },
+  {
+   "id": "ABS-3-2-4-FLOORS",
+   "midship_column": "Bottom_Floor_Spacing",
+   "title": "Maximum floor spacing",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-4/5.1",
+     "page": 94
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "cargo hold",
+    "member": "bottom floor"
+   },
+   "inputs": [
+    {
+     "name": "floor_spacing_m",
+     "unit": "m",
+     "role": "provided",
+     "description": "Actual floor spacing."
+    }
+   ],
+   "assumptions": [],
+   "criterion": {
+    "kind": "max",
+    "required_unit": "m",
+    "provided_input": "floor_spacing_m",
+    "formula": "spacing <= 3.66 m"
+   },
+   "check": "floor_spacing",
+   "status": "encoded",
+   "status_reason": "MiDShip stores the value with its sign reversed so that value >= threshold. This is handled in the MiDShip adapter."
+  },
+  {
+   "id": "ABS-3-2-4-IBT",
+   "midship_column": "Inner_Bottom_Deck_Thickness",
+   "title": "Inner bottom plating thickness",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-3/5.1",
+     "page": 84
+    },
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-4/9.5",
+     "page": 98
+    },
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-10/3.1",
+     "page": 181
+    },
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-3/5.17",
+     "page": 85
+    },
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-4/9.1",
+     "page": 97
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "cargo hold",
+    "member": "inner bottom plating"
+   },
+   "inputs": [
+    {
+     "name": "sp_frame",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Transverse frame spacing."
+    },
+    {
+     "name": "sp_bottom_stringer",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Bottom longitudinal stiffener spacing."
+    },
+    {
+     "name": "sp_webframe",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Web frame / floor / deck beam spacing."
+    },
+    {
+     "name": "sp_bottom_girder",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Bottom girder spacing."
+    },
+    {
+     "name": "h_cargo",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Cargo space height: top deck height minus inner bottom height."
+    },
+    {
+     "name": "depth",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Molded depth D, height of the top deck above the baseline."
+    },
+    {
+     "name": "db_height",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Double bottom height (inner bottom height above the baseline)."
+    },
+    {
+     "name": "ib_t_mm",
+     "unit": "mm",
+     "role": "provided",
+     "description": "Actual inner bottom thickness."
+    }
+   ],
+   "assumptions": [
+    {
+     "name": "scantling_length_m",
+     "value": 250.0,
+     "unit": "m",
+     "basis": "MiDShip design basis: the evaluator fixes L = 250 m. Not a rule value."
+    },
+    {
+     "name": "Q",
+     "value": 1.0,
+     "unit": "dimensionless",
+     "basis": "3-2-1/5.3: Q reduces requirements only for higher-strength steel; 1.0 for mild steel."
+    },
+    {
+     "name": "q",
+     "value": 1.0,
+     "unit": "dimensionless",
+     "basis": "3-2-10/3.1: q = 235/Y, equal to 1.0 for Y = 235 N/mm2 mild steel."
+    },
+    {
+     "name": "k_panel",
+     "value": 1.0,
+     "unit": "dimensionless",
+     "basis": "3-2-10/3.1: k = 1.0 for aspect ratio above 2; the upper bound of k for all ratios."
+    },
+    {
+     "name": "deep_tank_depth_fraction",
+     "value": 0.667,
+     "unit": "dimensionless",
+     "basis": "3-2-10/3.1: head to two-thirds of the distance to the bulkhead deck."
+    },
+    {
+     "name": "overflow_margin_m",
+     "value": 1.3,
+     "unit": "m",
+     "basis": "3-2-7/3.1 Table 2 column (e), L of 122 m and above: 1.30 m."
+    },
+    {
+     "name": "wheel_k",
+     "value": 8.05,
+     "unit": "dimensionless",
+     "basis": "3-2-3/5.17: k = 8.05 in SI units."
+    },
+    {
+     "name": "wheel_K",
+     "value": 0.2,
+     "unit": "dimensionless",
+     "basis": "MiDShip assumption from the upper range of 3-2-3/5 Figure 2. The text gives K as a polynomial of imprint ratios a/s and b/s, and no imprint is in the design data."
+    },
+    {
+     "name": "wheel_C",
+     "value": 1.5,
+     "unit": "dimensionless",
+     "basis": "3-2-3/5.17: C = 1.5 for vehicles stowed at sea."
+    },
+    {
+     "name": "wheel_mass_kg",
+     "value": 13800.0,
+     "unit": "kg",
+     "basis": "MiDShip design basis: a 13.8 t excavator. Not a rule value."
+    }
+   ],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "mm",
+    "provided_input": "ib_t_mm",
+    "formula": "max(s sqrt(h)/254 + 1.5, grab equation, deep tank equation, wheel loading)"
+   },
+   "check": "inner_bottom_thickness",
+   "status": "partial",
+   "status_reason": "Wheel loading uses an assumed K. 3-2-4/9.1 and 3-2-1/17 are not encoded. MiDShip cites 3-2-4/9.2, which is not in the July 2023 text. The 6.5 mm and s/150 + 2.5 minimums of 3-2-10/3.1 are only in the strict option."
+  },
+  {
+   "id": "ABS-3-2-4-HOPT",
+   "midship_column": "Hopper_Plate_Thickness",
+   "title": "Hopper plating thickness",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-4/9.5",
+     "page": 98
+    },
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-10/3.1",
+     "page": 181
+    },
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-3/5.1",
+     "page": 84
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "cargo hold",
+    "member": "hopper plating"
+   },
+   "inputs": [
+    {
+     "name": "sp_frame",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Transverse frame spacing."
+    },
+    {
+     "name": "sp_bottom_stringer",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Bottom longitudinal stiffener spacing."
+    },
+    {
+     "name": "sp_webframe",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Web frame / floor / deck beam spacing."
+    },
+    {
+     "name": "sp_bottom_girder",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Bottom girder spacing."
+    },
+    {
+     "name": "h_cargo",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Cargo space height: top deck height minus inner bottom height."
+    },
+    {
+     "name": "depth",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Molded depth D, height of the top deck above the baseline."
+    },
+    {
+     "name": "db_height",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Double bottom height (inner bottom height above the baseline)."
+    },
+    {
+     "name": "hopper_t_mm",
+     "unit": "mm",
+     "role": "provided",
+     "description": "Actual hopper plate thickness; 0 when no hopper."
+    }
+   ],
+   "assumptions": [
+    {
+     "name": "scantling_length_m",
+     "value": 250.0,
+     "unit": "m",
+     "basis": "MiDShip design basis: the evaluator fixes L = 250 m. Not a rule value."
+    },
+    {
+     "name": "Q",
+     "value": 1.0,
+     "unit": "dimensionless",
+     "basis": "3-2-1/5.3: Q reduces requirements only for higher-strength steel; 1.0 for mild steel."
+    },
+    {
+     "name": "q",
+     "value": 1.0,
+     "unit": "dimensionless",
+     "basis": "3-2-10/3.1: q = 235/Y, equal to 1.0 for Y = 235 N/mm2 mild steel."
+    },
+    {
+     "name": "k_panel",
+     "value": 1.0,
+     "unit": "dimensionless",
+     "basis": "3-2-10/3.1: k = 1.0 for aspect ratio above 2; the upper bound of k for all ratios."
+    },
+    {
+     "name": "deep_tank_depth_fraction",
+     "value": 0.667,
+     "unit": "dimensionless",
+     "basis": "3-2-10/3.1: head to two-thirds of the distance to the bulkhead deck."
+    },
+    {
+     "name": "overflow_margin_m",
+     "value": 1.3,
+     "unit": "m",
+     "basis": "3-2-7/3.1 Table 2 column (e), L of 122 m and above: 1.30 m."
+    },
+    {
+     "name": "wheel_k",
+     "value": 8.05,
+     "unit": "dimensionless",
+     "basis": "3-2-3/5.17: k = 8.05 in SI units."
+    },
+    {
+     "name": "wheel_K",
+     "value": 0.2,
+     "unit": "dimensionless",
+     "basis": "MiDShip assumption from the upper range of 3-2-3/5 Figure 2. The text gives K as a polynomial of imprint ratios a/s and b/s, and no imprint is in the design data."
+    },
+    {
+     "name": "wheel_C",
+     "value": 1.5,
+     "unit": "dimensionless",
+     "basis": "3-2-3/5.17: C = 1.5 for vehicles stowed at sea."
+    },
+    {
+     "name": "wheel_mass_kg",
+     "value": 13800.0,
+     "unit": "kg",
+     "basis": "MiDShip design basis: a 13.8 t excavator. Not a rule value."
+    }
+   ],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "mm",
+    "provided_input": "hopper_t_mm",
+    "formula": "same as inner bottom plating"
+   },
+   "check": "hopper_plate_thickness",
+   "status": "partial",
+   "status_reason": "MiDShip gives hopper plating the inner bottom requirement. 3-2-4/9.5 extends the grab requirement to lower wing tank plating within 1.5 m of the inner bottom; the other options are applied by analogy."
+  },
+  {
+   "id": "ABS-3-2-4-BSTIFF",
+   "midship_column": "Bottom_Stiffener_SM",
+   "title": "Bottom longitudinal section modulus",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-4/7.3",
+     "page": 95
+    },
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-10/3.3",
+     "page": 182
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "cargo hold",
+    "member": "bottom longitudinal"
+   },
+   "inputs": [
+    {
+     "name": "sp_frame",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Transverse frame spacing."
+    },
+    {
+     "name": "sp_bottom_stringer",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Bottom longitudinal stiffener spacing."
+    },
+    {
+     "name": "sp_webframe",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Web frame / floor / deck beam spacing."
+    },
+    {
+     "name": "sp_bottom_girder",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Bottom girder spacing."
+    },
+    {
+     "name": "depth",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Molded depth D, height of the top deck above the baseline."
+    },
+    {
+     "name": "db_height",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Double bottom height (inner bottom height above the baseline)."
+    },
+    {
+     "name": "sm_cm3",
+     "unit": "cm3",
+     "role": "provided",
+     "description": "Actual stiffener section modulus with attached plate."
+    }
+   ],
+   "assumptions": [
+    {
+     "name": "c_bottom",
+     "value": 1.0,
+     "unit": "dimensionless",
+     "basis": "3-2-4/7.3 (no struts) and 3-2-10/3.3 (supported by girders): c = 1.0, the highest value."
+    },
+    {
+     "name": "deep_tank_depth_fraction",
+     "value": 0.667,
+     "unit": "dimensionless",
+     "basis": "3-2-10/3.1: head to two-thirds of the distance to the bulkhead deck."
+    },
+    {
+     "name": "overflow_margin_m",
+     "value": 1.3,
+     "unit": "m",
+     "basis": "3-2-7/3.1 Table 2 column (e), L of 122 m and above: 1.30 m."
+    }
+   ],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "cm3",
+    "provided_input": "sm_cm3",
+    "formula": "7.8 c h s l^2"
+   },
+   "check": "bottom_stiffener_sm",
+   "status": "partial",
+   "status_reason": "The span l is taken as the larger of web frame and bottom girder spacing. Struts (c = 0.5) are not considered."
+  },
+  {
+   "id": "ABS-3-2-4-BTRANS",
+   "midship_column": "Bottom_Transverse_Stiffener_SM",
+   "title": "Bottom frame section modulus",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-4/7.3",
+     "page": 95
+    },
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-10/3.3",
+     "page": 182
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "cargo hold",
+    "member": "bottom transverse frame"
+   },
+   "inputs": [
+    {
+     "name": "sp_frame",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Transverse frame spacing."
+    },
+    {
+     "name": "sp_bottom_stringer",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Bottom longitudinal stiffener spacing."
+    },
+    {
+     "name": "sp_webframe",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Web frame / floor / deck beam spacing."
+    },
+    {
+     "name": "sp_bottom_girder",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Bottom girder spacing."
+    },
+    {
+     "name": "depth",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Molded depth D, height of the top deck above the baseline."
+    },
+    {
+     "name": "db_height",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Double bottom height (inner bottom height above the baseline)."
+    },
+    {
+     "name": "sm_cm3",
+     "unit": "cm3",
+     "role": "provided",
+     "description": "Actual frame section modulus with attached plate."
+    }
+   ],
+   "assumptions": [
+    {
+     "name": "c_bottom",
+     "value": 1.0,
+     "unit": "dimensionless",
+     "basis": "3-2-4/7.3 (no struts) and 3-2-10/3.3 (supported by girders): c = 1.0, the highest value."
+    },
+    {
+     "name": "deep_tank_depth_fraction",
+     "value": 0.667,
+     "unit": "dimensionless",
+     "basis": "3-2-10/3.1: head to two-thirds of the distance to the bulkhead deck."
+    },
+    {
+     "name": "overflow_margin_m",
+     "value": 1.3,
+     "unit": "m",
+     "basis": "3-2-7/3.1 Table 2 column (e), L of 122 m and above: 1.30 m."
+    }
+   ],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "cm3",
+    "provided_input": "sm_cm3",
+    "formula": "7.8 c h s l^2"
+   },
+   "check": "bottom_transverse_sm",
+   "status": "partial",
+   "status_reason": "Same assumptions as the bottom longitudinal."
+  },
+  {
+   "id": "ABS-3-2-4-HSTIFF",
+   "midship_column": "Hopper_Stiffener_SM",
+   "title": "Hopper stiffener section modulus",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-4/7.3",
+     "page": 95
+    },
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-10/3.3",
+     "page": 182
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "cargo hold",
+    "member": "hopper stiffener"
+   },
+   "inputs": [
+    {
+     "name": "sp_frame",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Transverse frame spacing."
+    },
+    {
+     "name": "sp_bottom_stringer",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Bottom longitudinal stiffener spacing."
+    },
+    {
+     "name": "sp_webframe",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Web frame / floor / deck beam spacing."
+    },
+    {
+     "name": "sp_bottom_girder",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Bottom girder spacing."
+    },
+    {
+     "name": "depth",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Molded depth D, height of the top deck above the baseline."
+    },
+    {
+     "name": "db_height",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Double bottom height (inner bottom height above the baseline)."
+    },
+    {
+     "name": "sm_cm3",
+     "unit": "cm3",
+     "role": "provided",
+     "description": "Actual hopper stiffener section modulus; 0 when no hopper."
+    }
+   ],
+   "assumptions": [
+    {
+     "name": "c_bottom",
+     "value": 1.0,
+     "unit": "dimensionless",
+     "basis": "3-2-4/7.3 (no struts) and 3-2-10/3.3 (supported by girders): c = 1.0, the highest value."
+    },
+    {
+     "name": "deep_tank_depth_fraction",
+     "value": 0.667,
+     "unit": "dimensionless",
+     "basis": "3-2-10/3.1: head to two-thirds of the distance to the bulkhead deck."
+    },
+    {
+     "name": "overflow_margin_m",
+     "value": 1.3,
+     "unit": "m",
+     "basis": "3-2-7/3.1 Table 2 column (e), L of 122 m and above: 1.30 m."
+    }
+   ],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "cm3",
+    "provided_input": "sm_cm3",
+    "formula": "7.8 c h s l^2"
+   },
+   "check": "hopper_stiffener_sm",
+   "status": "partial",
+   "status_reason": "The bottom frame equation is applied to sloping hopper stiffeners by analogy."
+  },
+  {
+   "id": "ABS-3-2-5-SFRAME",
+   "midship_column": "Side_Frame_SM",
+   "title": "Side transverse frame section modulus",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-5/3.1.1",
+     "page": 116
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "cargo hold, below lowest deck",
+    "member": "side frame"
+   },
+   "inputs": [
+    {
+     "name": "sp_frame",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Transverse frame spacing."
+    },
+    {
+     "name": "l_frame",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Side frame span: depth minus double bottom, floor bracket and deck bracket heights."
+    },
+    {
+     "name": "draft",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Scantling draft. MiDShip takes 0.6667 D."
+    },
+    {
+     "name": "h_cargo",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Cargo space height: top deck height minus inner bottom height."
+    },
+    {
+     "name": "sp_bottom_girder",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Bottom girder spacing."
+    },
+    {
+     "name": "sm_cm3",
+     "unit": "cm3",
+     "role": "provided",
+     "description": "Actual frame section modulus with attached plate."
+    }
+   ],
+   "assumptions": [
+    {
+     "name": "Q",
+     "value": 1.0,
+     "unit": "dimensionless",
+     "basis": "3-2-1/5.3: Q reduces requirements only for higher-strength steel; 1.0 for mild steel."
+    }
+   ],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "cm3",
+    "provided_input": "sm_cm3",
+    "formula": "s l^2 (h + b h1/30)(7 + 45/l^3)"
+   },
+   "check": "side_frame_sm",
+   "status": "partial",
+   "status_reason": "The distance b to the first deck support is taken as the bottom girder spacing, and h1 as the cargo space height. Both are proxies."
+  },
+  {
+   "id": "ABS-3-2-6-WEBSM",
+   "midship_column": "Webframe_SM",
+   "title": "Hold web frame section modulus",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-6/3.1.2",
+     "page": 129
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "cargo hold",
+    "member": "web frame"
+   },
+   "inputs": [
+    {
+     "name": "sp_webframe",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Web frame / floor / deck beam spacing."
+    },
+    {
+     "name": "h_cargo",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Cargo space height: top deck height minus inner bottom height."
+    },
+    {
+     "name": "db_height",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Double bottom height (inner bottom height above the baseline)."
+    },
+    {
+     "name": "draft",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Scantling draft. MiDShip takes 0.6667 D."
+    },
+    {
+     "name": "webframe_depth",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Web frame web depth."
+    },
+    {
+     "name": "sm_cm3",
+     "unit": "cm3",
+     "role": "provided",
+     "description": "Actual web frame section modulus with attached plate."
+    }
+   ],
+   "assumptions": [
+    {
+     "name": "c_webframe",
+     "value": 1.5,
+     "unit": "dimensionless",
+     "basis": "3-2-6/3.1.2: c = 1.5."
+    },
+    {
+     "name": "h_deck_m",
+     "value": 3.66,
+     "unit": "m",
+     "basis": "3-2-3/5.1 and 3-2-7/3.1: h = 3.66 m for an exposed deck carrying cargo at up to 25.66 kN/m2."
+    },
+    {
+     "name": "K_deck_support",
+     "value": 1.0,
+     "unit": "dimensionless",
+     "basis": "3-2-6/3.1.2: K = 1.0 with a deck transverse at each web frame."
+    },
+    {
+     "name": "Q",
+     "value": 1.0,
+     "unit": "dimensionless",
+     "basis": "3-2-1/5.3: Q reduces requirements only for higher-strength steel; 1.0 for mild steel."
+    }
+   ],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "cm3",
+    "provided_input": "sm_cm3",
+    "formula": "4.74 c s l^2 (h + b h1/45K)"
+   },
+   "check": "webframe_sm",
+   "status": "partial",
+   "status_reason": "The distance b is taken as the web depth and h1 as 3.66 m. Both are proxies."
+  },
+  {
+   "id": "ABS-3-2-6-WEBD",
+   "midship_column": "Webframe_Depth",
+   "title": "Web frame minimum depth",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-6/3.5.2",
+     "page": 130
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "cargo hold",
+    "member": "web frame"
+   },
+   "inputs": [
+    {
+     "name": "h_cargo",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Cargo space height: top deck height minus inner bottom height."
+    },
+    {
+     "name": "depth_mm",
+     "unit": "mm",
+     "role": "provided",
+     "description": "Actual web depth."
+    }
+   ],
+   "assumptions": [],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "mm",
+    "provided_input": "depth_mm",
+    "formula": "0.125 l"
+   },
+   "check": "webframe_depth",
+   "status": "encoded",
+   "status_reason": "The span l is the cargo space height."
+  },
+  {
+   "id": "ABS-3-2-6-WEBT",
+   "midship_column": "Webframe_Thickness",
+   "title": "Web frame minimum thickness",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-6/3.5.2",
+     "page": 130
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "cargo hold",
+    "member": "web frame"
+   },
+   "inputs": [
+    {
+     "name": "webframe_depth",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Web frame web depth."
+    },
+    {
+     "name": "web_t_mm",
+     "unit": "mm",
+     "role": "provided",
+     "description": "Actual web thickness."
+    }
+   ],
+   "assumptions": [],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "mm",
+    "provided_input": "web_t_mm",
+    "formula": "min(depth/100 + 3.5, 14) mm"
+   },
+   "check": "webframe_thickness",
+   "status": "encoded",
+   "status_reason": ""
+  },
+  {
+   "id": "ABS-3-2-6-STRSM",
+   "midship_column": "Side_Stringer_SM",
+   "title": "Side stringer section modulus",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-6/5.1",
+     "page": 132
+    },
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-10/3.3",
+     "page": 182
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "cargo hold",
+    "member": "side stringer"
+   },
+   "inputs": [
+    {
+     "name": "sp_webframe",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Web frame / floor / deck beam spacing."
+    },
+    {
+     "name": "sp_frame",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Transverse frame spacing."
+    },
+    {
+     "name": "sp_side_stringer",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Side shell longitudinal stiffener spacing."
+    },
+    {
+     "name": "depth",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Molded depth D, height of the top deck above the baseline."
+    },
+    {
+     "name": "db_height",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Double bottom height (inner bottom height above the baseline)."
+    },
+    {
+     "name": "sm_cm3",
+     "unit": "cm3",
+     "role": "provided",
+     "description": "Actual stringer section modulus with attached plate."
+    }
+   ],
+   "assumptions": [
+    {
+     "name": "c_stringer",
+     "value": 1.5,
+     "unit": "dimensionless",
+     "basis": "3-2-6/5.1: c = 1.50."
+    },
+    {
+     "name": "Q",
+     "value": 1.0,
+     "unit": "dimensionless",
+     "basis": "3-2-1/5.3: Q reduces requirements only for higher-strength steel; 1.0 for mild steel."
+    },
+    {
+     "name": "c_bottom",
+     "value": 1.0,
+     "unit": "dimensionless",
+     "basis": "3-2-4/7.3 (no struts) and 3-2-10/3.3 (supported by girders): c = 1.0, the highest value."
+    },
+    {
+     "name": "deep_tank_depth_fraction",
+     "value": 0.667,
+     "unit": "dimensionless",
+     "basis": "3-2-10/3.1: head to two-thirds of the distance to the bulkhead deck."
+    },
+    {
+     "name": "overflow_margin_m",
+     "value": 1.3,
+     "unit": "m",
+     "basis": "3-2-7/3.1 Table 2 column (e), L of 122 m and above: 1.30 m."
+    }
+   ],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "cm3",
+    "provided_input": "sm_cm3",
+    "formula": "max(4.74 c h s l^2, 7.8 c h s l^2)"
+   },
+   "check": "side_stringer_sm",
+   "status": "partial",
+   "status_reason": "The supported breadth s is taken as the stringer spacing, and h as two-thirds of the depth."
+  },
+  {
+   "id": "ABS-3-2-6-STRD",
+   "midship_column": "Side_Stringer_Depth",
+   "title": "Side stringer minimum depth",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-6/5.3",
+     "page": 132
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "cargo hold",
+    "member": "side stringer"
+   },
+   "inputs": [
+    {
+     "name": "sp_webframe",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Web frame / floor / deck beam spacing."
+    },
+    {
+     "name": "depth_mm",
+     "unit": "mm",
+     "role": "provided",
+     "description": "Actual stringer depth."
+    }
+   ],
+   "assumptions": [],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "mm",
+    "provided_input": "depth_mm",
+    "formula": "0.125 l"
+   },
+   "check": "side_stringer_depth",
+   "status": "encoded",
+   "status_reason": "The span l is the web frame spacing."
+  },
+  {
+   "id": "ABS-3-2-9-BHDT",
+   "midship_column": "Bulkhead_Thickness",
+   "title": "Transverse bulkhead plating thickness",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-9/5.1",
+     "page": 162
+    },
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-10/3.1",
+     "page": 181
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "transverse bulkhead",
+    "member": "bulkhead plate"
+   },
+   "inputs": [
+    {
+     "name": "sp_bhd_horizontal",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Transverse bulkhead horizontal stiffener spacing."
+    },
+    {
+     "name": "sp_bhd_vertical",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Transverse bulkhead vertical stiffener spacing."
+    },
+    {
+     "name": "depth",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Molded depth D, height of the top deck above the baseline."
+    },
+    {
+     "name": "db_height",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Double bottom height (inner bottom height above the baseline)."
+    },
+    {
+     "name": "bhd_t_mm",
+     "unit": "mm",
+     "role": "provided",
+     "description": "Actual bulkhead thickness."
+    }
+   ],
+   "assumptions": [
+    {
+     "name": "bhd_c",
+     "value": 254.0,
+     "unit": "dimensionless",
+     "basis": "3-2-9/5.1: c = 254 for a collision bulkhead, the lower divisor and so the higher thickness."
+    },
+    {
+     "name": "k_panel",
+     "value": 1.0,
+     "unit": "dimensionless",
+     "basis": "3-2-10/3.1: k = 1.0 for aspect ratio above 2; the upper bound of k for all ratios."
+    },
+    {
+     "name": "q",
+     "value": 1.0,
+     "unit": "dimensionless",
+     "basis": "3-2-10/3.1: q = 235/Y, equal to 1.0 for Y = 235 N/mm2 mild steel."
+    },
+    {
+     "name": "deep_tank_depth_fraction",
+     "value": 0.667,
+     "unit": "dimensionless",
+     "basis": "3-2-10/3.1: head to two-thirds of the distance to the bulkhead deck."
+    },
+    {
+     "name": "overflow_margin_m",
+     "value": 1.3,
+     "unit": "m",
+     "basis": "3-2-7/3.1 Table 2 column (e), L of 122 m and above: 1.30 m."
+    }
+   ],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "mm",
+    "provided_input": "bhd_t_mm",
+    "formula": "max(s sqrt(h)/254 + 1.5, 6, s/200 + 2.5; deep tank equation)"
+   },
+   "check": "bulkhead_thickness",
+   "status": "encoded",
+   "status_reason": "Collision bulkhead constant c = 254 is used for every bulkhead, which is the more demanding choice."
+  },
+  {
+   "id": "ABS-3-2-9-BHDH",
+   "midship_column": "Trans_Bulkhead_Horizontal_Stiffener_SM",
+   "title": "Bulkhead horizontal stiffener section modulus",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-9/5.3",
+     "page": 163
+    },
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-10/3.3",
+     "page": 182
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "transverse bulkhead",
+    "member": "bulkhead stiffener"
+   },
+   "inputs": [
+    {
+     "name": "sp_bhd_horizontal",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Transverse bulkhead horizontal stiffener spacing."
+    },
+    {
+     "name": "sp_bhd_vertical",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Transverse bulkhead vertical stiffener spacing."
+    },
+    {
+     "name": "depth",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Molded depth D, height of the top deck above the baseline."
+    },
+    {
+     "name": "db_height",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Double bottom height (inner bottom height above the baseline)."
+    },
+    {
+     "name": "sm_cm3",
+     "unit": "cm3",
+     "role": "provided",
+     "description": "Actual stiffener section modulus with attached plate."
+    }
+   ],
+   "assumptions": [
+    {
+     "name": "k_collision",
+     "value": 1.25,
+     "unit": "dimensionless",
+     "basis": "3-2-9/5.3: k = 1.25 for collision bulkhead stiffeners."
+    },
+    {
+     "name": "c_bulkhead",
+     "value": 0.6,
+     "unit": "dimensionless",
+     "basis": "3-2-9/5.3: c = 0.60 for stiffeners without end attachments. MiDShip also uses it for 3-2-10/3.3, where the text gives up to 1.00."
+    },
+    {
+     "name": "deep_tank_depth_fraction",
+     "value": 0.667,
+     "unit": "dimensionless",
+     "basis": "3-2-10/3.1: head to two-thirds of the distance to the bulkhead deck."
+    },
+    {
+     "name": "overflow_margin_m",
+     "value": 1.3,
+     "unit": "m",
+     "basis": "3-2-7/3.1 Table 2 column (e), L of 122 m and above: 1.30 m."
+    }
+   ],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "cm3",
+    "provided_input": "sm_cm3",
+    "formula": "7.8 k c h s l^2"
+   },
+   "check": "bulkhead_horizontal_sm",
+   "status": "partial",
+   "status_reason": "c = 0.6 is also used for 3-2-10/3.3, where the text allows up to 1.00. The span is a stiffener spacing, not the supported length."
+  },
+  {
+   "id": "ABS-3-2-9-BHDV",
+   "midship_column": "Trans_Bulkhead_Vertical_Stiffener_SM",
+   "title": "Bulkhead vertical stiffener section modulus",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-9/5.3",
+     "page": 163
+    },
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-10/3.3",
+     "page": 182
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "transverse bulkhead",
+    "member": "bulkhead stiffener"
+   },
+   "inputs": [
+    {
+     "name": "sp_bhd_horizontal",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Transverse bulkhead horizontal stiffener spacing."
+    },
+    {
+     "name": "sp_bhd_vertical",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Transverse bulkhead vertical stiffener spacing."
+    },
+    {
+     "name": "depth",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Molded depth D, height of the top deck above the baseline."
+    },
+    {
+     "name": "db_height",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Double bottom height (inner bottom height above the baseline)."
+    },
+    {
+     "name": "sm_cm3",
+     "unit": "cm3",
+     "role": "provided",
+     "description": "Actual stiffener section modulus with attached plate."
+    }
+   ],
+   "assumptions": [
+    {
+     "name": "k_collision",
+     "value": 1.25,
+     "unit": "dimensionless",
+     "basis": "3-2-9/5.3: k = 1.25 for collision bulkhead stiffeners."
+    },
+    {
+     "name": "c_bulkhead",
+     "value": 0.6,
+     "unit": "dimensionless",
+     "basis": "3-2-9/5.3: c = 0.60 for stiffeners without end attachments. MiDShip also uses it for 3-2-10/3.3, where the text gives up to 1.00."
+    },
+    {
+     "name": "deep_tank_depth_fraction",
+     "value": 0.667,
+     "unit": "dimensionless",
+     "basis": "3-2-10/3.1: head to two-thirds of the distance to the bulkhead deck."
+    },
+    {
+     "name": "overflow_margin_m",
+     "value": 1.3,
+     "unit": "m",
+     "basis": "3-2-7/3.1 Table 2 column (e), L of 122 m and above: 1.30 m."
+    }
+   ],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "cm3",
+    "provided_input": "sm_cm3",
+    "formula": "7.8 k c h s l^2"
+   },
+   "check": "bulkhead_vertical_sm",
+   "status": "partial",
+   "status_reason": "MiDShip gives vertical stiffeners the requirement of horizontal stiffeners."
+  },
+  {
+   "id": "ABS-3-2-7-DTSM",
+   "midship_column": "Deck_Trans_Stiff_SM",
+   "title": "Deck transverse stiffener section modulus",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-7/3.1",
+     "page": 136
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "deck",
+    "member": "deck transverse stiffener"
+   },
+   "inputs": [
+    {
+     "name": "sp_webframe",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Web frame / floor / deck beam spacing."
+    },
+    {
+     "name": "sp_deck_girder",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Deck longitudinal girder spacing; 0 when no deck girder is fitted."
+    },
+    {
+     "name": "sm_cm3",
+     "unit": "cm3",
+     "role": "provided",
+     "description": "Actual stiffener section modulus with attached plate; 0 when no deck girder."
+    }
+   ],
+   "assumptions": [
+    {
+     "name": "c_deck_beam",
+     "value": 0.585,
+     "unit": "dimensionless",
+     "basis": "3-2-7/3.1: c2 = 0.585 for beams between longitudinal deck girders."
+    },
+    {
+     "name": "h_deck_m",
+     "value": 3.66,
+     "unit": "m",
+     "basis": "3-2-3/5.1 and 3-2-7/3.1: h = 3.66 m for an exposed deck carrying cargo at up to 25.66 kN/m2."
+    }
+   ],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "cm3",
+    "provided_input": "sm_cm3",
+    "formula": "7.8 c h s l^2"
+   },
+   "check": "deck_trans_stiffener_sm",
+   "status": "partial",
+   "status_reason": "The requirement is 0 when the design has no deck girders."
+  },
+  {
+   "id": "ABS-3-2-3-DECKT",
+   "midship_column": "Deck_Thickness",
+   "title": "Deck plating thickness",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-3/5.1",
+     "page": 84
+    },
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-4/9.5",
+     "page": 98
+    },
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-3/5.17",
+     "page": 85
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "deck",
+    "member": "deck plating"
+   },
+   "inputs": [
+    {
+     "name": "sp_frame",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Transverse frame spacing."
+    },
+    {
+     "name": "sp_deck_stringer",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Deck longitudinal stiffener spacing; 0 when none."
+    },
+    {
+     "name": "sp_webframe",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Web frame / floor / deck beam spacing."
+    },
+    {
+     "name": "sp_bottom_girder",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Bottom girder spacing."
+    },
+    {
+     "name": "deck_t_mm",
+     "unit": "mm",
+     "role": "provided",
+     "description": "Actual deck thickness."
+    }
+   ],
+   "assumptions": [
+    {
+     "name": "h_deck_m",
+     "value": 3.66,
+     "unit": "m",
+     "basis": "3-2-3/5.1 and 3-2-7/3.1: h = 3.66 m for an exposed deck carrying cargo at up to 25.66 kN/m2."
+    },
+    {
+     "name": "scantling_length_m",
+     "value": 250.0,
+     "unit": "m",
+     "basis": "MiDShip design basis: the evaluator fixes L = 250 m. Not a rule value."
+    },
+    {
+     "name": "Q",
+     "value": 1.0,
+     "unit": "dimensionless",
+     "basis": "3-2-1/5.3: Q reduces requirements only for higher-strength steel; 1.0 for mild steel."
+    },
+    {
+     "name": "wheel_k",
+     "value": 8.05,
+     "unit": "dimensionless",
+     "basis": "3-2-3/5.17: k = 8.05 in SI units."
+    },
+    {
+     "name": "wheel_K",
+     "value": 0.2,
+     "unit": "dimensionless",
+     "basis": "MiDShip assumption from the upper range of 3-2-3/5 Figure 2. The text gives K as a polynomial of imprint ratios a/s and b/s, and no imprint is in the design data."
+    },
+    {
+     "name": "wheel_C",
+     "value": 1.5,
+     "unit": "dimensionless",
+     "basis": "3-2-3/5.17: C = 1.5 for vehicles stowed at sea."
+    },
+    {
+     "name": "wheel_mass_kg",
+     "value": 13800.0,
+     "unit": "kg",
+     "basis": "MiDShip design basis: a 13.8 t excavator. Not a rule value."
+    }
+   ],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "mm",
+    "provided_input": "deck_t_mm",
+    "formula": "max(s sqrt(3.66)/254 + 1.5, grab equation, wheel loading, 5.0)"
+   },
+   "check": "deck_thickness",
+   "status": "partial",
+   "status_reason": "The strength-deck equations of 3-2-3/5 Table 2 and the hull girder link of 3-2-1 are not encoded. Wheel loading uses an assumed K."
+  },
+  {
+   "id": "ABS-3-2-8-DBSM",
+   "midship_column": "Deck_Beam_SM",
+   "title": "Deck girder / beam section modulus",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-8/5.3",
+     "page": 151
+    },
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-8/5.13",
+     "page": 153
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "deck",
+    "member": "deck beam"
+   },
+   "inputs": [
+    {
+     "name": "sp_deck_girder",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Deck longitudinal girder spacing; 0 when no deck girder is fitted."
+    },
+    {
+     "name": "sp_webframe",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Web frame / floor / deck beam spacing."
+    },
+    {
+     "name": "sm_cm3",
+     "unit": "cm3",
+     "role": "provided",
+     "description": "Actual beam section modulus with attached plate; 0 when no deck girder."
+    }
+   ],
+   "assumptions": [
+    {
+     "name": "c_deck_girder",
+     "value": 1.5,
+     "unit": "dimensionless",
+     "basis": "3-2-8/5.13: c = 1.5 for girders and transverses in tanks."
+    },
+    {
+     "name": "h_deck_m",
+     "value": 3.66,
+     "unit": "m",
+     "basis": "3-2-3/5.1 and 3-2-7/3.1: h = 3.66 m for an exposed deck carrying cargo at up to 25.66 kN/m2."
+    }
+   ],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "cm3",
+    "provided_input": "sm_cm3",
+    "formula": "4.74 c b h l^2"
+   },
+   "check": "deck_beam_sm",
+   "status": "partial",
+   "status_reason": "The supported breadth b is the web frame spacing and the span l is the girder spacing. The requirement is 0 when the design has no deck girders."
+  },
+  {
+   "id": "ABS-3-2-8-DBD",
+   "midship_column": "Deck_Beam_Depth",
+   "title": "Deck girder minimum depth",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-8/5.13",
+     "page": 153
+    },
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-8/5.7",
+     "page": 151
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "deck",
+    "member": "deck beam"
+   },
+   "inputs": [
+    {
+     "name": "sp_deck_girder",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Deck longitudinal girder spacing; 0 when no deck girder is fitted."
+    },
+    {
+     "name": "depth_mm",
+     "unit": "mm",
+     "role": "provided",
+     "description": "Actual beam depth; 0 when none."
+    }
+   ],
+   "assumptions": [],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "mm",
+    "provided_input": "depth_mm",
+    "formula": "0.0833 l"
+   },
+   "check": "deck_beam_depth",
+   "status": "encoded",
+   "status_reason": "0.0833 l applies in tanks (5.13). 5.7 gives 0.0583 l elsewhere."
+  },
+  {
+   "id": "ABS-3-2-8-DBT",
+   "midship_column": "Deck_Beam_Thickness",
+   "title": "Deck girder minimum thickness",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-8/5.7",
+     "page": 152
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "deck",
+    "member": "deck beam"
+   },
+   "inputs": [
+    {
+     "name": "deck_beam_depth",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Deck transverse beam web depth; 0 when none."
+    },
+    {
+     "name": "beam_t_mm",
+     "unit": "mm",
+     "role": "provided",
+     "description": "Actual beam web thickness; 0 when none."
+    }
+   ],
+   "assumptions": [
+    {
+     "name": "deck_beam_min_mm",
+     "value": 15.0,
+     "unit": "mm",
+     "basis": "3-2-8/5.7: 15 mm for face area of 193.5 cm2 or more, the highest tabulated value."
+    }
+   ],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "mm",
+    "provided_input": "beam_t_mm",
+    "formula": "max(depth/100 + 4, 15) mm"
+   },
+   "check": "deck_beam_thickness",
+   "status": "partial",
+   "status_reason": "The 15 mm option assumes a face area of 193.5 cm2 or more; the design data gives the face area, which is not used."
+  },
+  {
+   "id": "ABS-3-2-2-SSHELL",
+   "midship_column": "Side_Shell_Thickness",
+   "title": "Side shell plating thickness amidships",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-2/3.9.3",
+     "page": 69
+    },
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-2/5.1",
+     "page": 74
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "midship 0.4L",
+    "member": "side shell"
+   },
+   "inputs": [
+    {
+     "name": "sp_frame",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Transverse frame spacing."
+    },
+    {
+     "name": "sp_side_stringer",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Side shell longitudinal stiffener spacing."
+    },
+    {
+     "name": "depth",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Molded depth D, height of the top deck above the baseline."
+    },
+    {
+     "name": "draft",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Scantling draft. MiDShip takes 0.6667 D."
+    },
+    {
+     "name": "shell_t_mm",
+     "unit": "mm",
+     "role": "provided",
+     "description": "Actual side shell thickness."
+    }
+   ],
+   "assumptions": [
+    {
+     "name": "scantling_length_m",
+     "value": 250.0,
+     "unit": "m",
+     "basis": "MiDShip design basis: the evaluator fixes L = 250 m. Not a rule value."
+    }
+   ],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "mm",
+    "provided_input": "shell_t_mm",
+    "formula": "max((s/645) sqrt((L-15.2) d/D) + 2.5, 0.035(L+29) + 0.009 s, same with s = 610 mm)"
+   },
+   "check": "side_shell_thickness",
+   "status": "encoded",
+   "status_reason": "Valid for 90 m <= L <= 305 m. L = 250 m is a MiDShip design basis."
+  },
+  {
+   "id": "ABS-3-2-2-BSHELL",
+   "midship_column": "Bottom_Shell_Thickness",
+   "title": "Bottom shell plating thickness amidships",
+   "citations": [
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-2/3.15.1",
+     "page": 71
+    },
+    {
+     "source": "abs_mvr_part3_jul23",
+     "ref": "3-2-2/3.15.2",
+     "page": 73
+    }
+   ],
+   "applicability": {
+    "ship_types": [
+     "tanker",
+     "container_ship",
+     "bulk_carrier"
+    ],
+    "region": "midship 0.4L",
+    "member": "bottom shell"
+   },
+   "inputs": [
+    {
+     "name": "sp_frame",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Transverse frame spacing."
+    },
+    {
+     "name": "sp_side_stringer",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Side shell longitudinal stiffener spacing."
+    },
+    {
+     "name": "sp_bottom_stringer",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Bottom longitudinal stiffener spacing."
+    },
+    {
+     "name": "depth",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Molded depth D, height of the top deck above the baseline."
+    },
+    {
+     "name": "draft",
+     "unit": "m",
+     "role": "geometry",
+     "description": "Scantling draft. MiDShip takes 0.6667 D."
+    },
+    {
+     "name": "shell_t_mm",
+     "unit": "mm",
+     "role": "provided",
+     "description": "Actual bottom shell thickness."
+    }
+   ],
+   "assumptions": [
+    {
+     "name": "scantling_length_m",
+     "value": 250.0,
+     "unit": "m",
+     "basis": "MiDShip design basis: the evaluator fixes L = 250 m. Not a rule value."
+    },
+    {
+     "name": "bottom_shell_floor_mm",
+     "value": 8.5,
+     "unit": "mm",
+     "basis": "MiDShip value. No 8.5 mm bottom-shell minimum was found in 3-2-2/3.15 of the July 2023 text."
+    }
+   ],
+   "criterion": {
+    "kind": "min",
+    "required_unit": "mm",
+    "provided_input": "shell_t_mm",
+    "formula": "max((s/508) sqrt((L-62.5) d/D) + 2.5, s (L-18.3)/(42 L + 1070), 8.5)"
+   },
+   "check": "bottom_shell_thickness",
+   "status": "partial",
+   "status_reason": "MiDShip reuses the side shell spacing. The text uses the bottom longitudinal spacing; the strict option does that. The 8.5 mm floor has no match in the July 2023 text."
+  }
+ ]
+}
