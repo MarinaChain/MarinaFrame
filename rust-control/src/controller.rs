@@ -2037,6 +2037,7 @@ mod tests {
             "usage":{"prompt_tokens":30,"completion_tokens":5,"total_tokens":35,"cost":0.0,"opencode":{"billing_source":"go"}}}))
         .unwrap();
         let mut receipt = Receipt {
+            vision: None,
             protocol: provider::PROTOCOL.into(),
             request_id: pending.id.clone(),
             state: RequestState::NotSent,

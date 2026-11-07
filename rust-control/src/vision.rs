@@ -916,6 +916,8 @@ mod tests {
 
     fn image(id: &str, view: &str, kind: &str) -> ImageReceipt {
         ImageReceipt {
+            crop_box_px: None,
+            pixel_size: None,
             artifact_id: id.into(),
             path: format!("{id}.png"),
             sha256: "a".repeat(64),

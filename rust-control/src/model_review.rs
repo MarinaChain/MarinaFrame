@@ -399,6 +399,8 @@ mod tests {
         receipt.images = shas
             .iter()
             .map(|sha| ImageReceipt {
+                crop_box_px: None,
+                pixel_size: None,
                 artifact_id: "x".into(),
                 path: "x.png".into(),
                 sha256: (*sha).into(),
