@@ -136,6 +136,15 @@ pub struct TraceCorridor {
     pub path_px: Vec<[f64; 2]>,
     pub half_width_px: f64,
 }
+/// Ask the harness to trace every ink stroke of a section's panel (at
+/// scanlines, or at one height) and show them with numbered tags.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EnumerateStrokes {
+    pub section_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height_m: Option<f64>,
+}
 /// A point on a curve in a view's pixels; the harness follows the ink stroke
 /// through it and traces and verifies it like a corridor.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -211,6 +220,7 @@ pub enum Operation {
     ReadRegion(ReadRegion),
     TraceCorridor(TraceCorridor),
     TraceFromPoint(TraceFromPoint),
+    EnumerateStrokes(EnumerateStrokes),
     AssignStation(AssignStation),
     ProposeSheetSetup(ProposeSheetSetup),
     CompareViews(CompareViews),
@@ -240,6 +250,7 @@ impl Operation {
             Self::ReadRegion(_) => "read_region",
             Self::TraceCorridor(_) => "trace_corridor",
             Self::TraceFromPoint(_) => "trace_from_point",
+            Self::EnumerateStrokes(_) => "enumerate_strokes",
             Self::AssignStation(_) => "assign_station",
             Self::ProposeSheetSetup(_) => "propose_sheet_setup",
             Self::CompareViews(_) => "compare_views",
@@ -255,6 +266,7 @@ impl Operation {
                 | Self::ReadRegion(_)
                 | Self::TraceCorridor(_)
                 | Self::TraceFromPoint(_)
+                | Self::EnumerateStrokes(_)
                 | Self::AssignStation(_)
                 | Self::ProposeSheetSetup(_)
                 | Self::CompareViews(_)
@@ -266,6 +278,7 @@ impl Operation {
         match self {
             Self::TraceCorridor(x) => Some(&x.section_id),
             Self::TraceFromPoint(x) => Some(&x.section_id),
+            Self::EnumerateStrokes(x) => Some(&x.section_id),
             Self::AssignStation(x) => Some(&x.section_id),
             Self::CompareViews(x) => Some(&x.section_id),
             _ => None,
@@ -287,6 +300,10 @@ impl Operation {
                         .iter()
                         .all(|p| p.iter().all(|v| finite_in(*v, 0., 4096.)))
                     && finite_in(x.half_width_px, 1., 64.)
+            }
+            Self::EnumerateStrokes(x) => {
+                util::valid_section_id(&x.section_id)
+                    && x.height_m.is_none_or(|h| finite_in(h, -100., 1000.))
             }
             Self::TraceFromPoint(x) => {
                 util::valid_section_id(&x.section_id)

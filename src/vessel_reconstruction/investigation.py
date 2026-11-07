@@ -168,6 +168,90 @@ SEED_SEARCH_PX = 8.0
 SEED_MAX_GAP_ROWS = 6
 SEED_CORRIDOR_HALF_WIDTH_PX = 4.0
 SEED_PATH_STEP_ROWS = 12
+SEED_HISTORY_ROWS = 24
+
+
+_FOREGROUND_CACHE: dict = {}
+
+
+def window_foreground(image: np.ndarray, section: dict):
+    """Ink mask, ink strength and the broad-ruler-free mask of a section's trace window.
+
+    Cached for the current worker process (one image), so enumerating many
+    strokes of one panel computes the photometric masks once.
+    """
+    from .ingest import _eligible_trace_mask, _foreground
+    window = _trace_window(section, image.shape)
+    key = (id(image), window)
+    if key not in _FOREGROUND_CACHE:
+        left, top, right, bottom = window
+        mask, ink, _ = _foreground(image[top:bottom + 1, left:right])
+        eligible, _ = _eligible_trace_mask(mask, None, ink)
+        _FOREGROUND_CACHE.clear()
+        _FOREGROUND_CACHE[key] = (mask, ink, eligible)
+    return _FOREGROUND_CACHE[key]
+
+
+# Stroke enumeration: scanlines at these shares of the calibrated height, and
+# the most strokes that one call traces and shows.
+ENUMERATION_SCANLINES = (0.25, 0.5, 0.75)
+MAX_ENUMERATED_STROKES = 30
+MAX_ENUMERATION_SEEDS = 60
+
+
+def enumerate_strokes(image: np.ndarray, section: dict, source_file: str, details: dict,
+                      height_m: float | None, known: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Every verified ink stroke that crosses the section's scanlines.
+
+    Seeds are the ink runs on each scanline right of the centreline; each is
+    followed, traced and verified as a corridor (``trace_from_point``). A stroke
+    with the same ink as an earlier one, or as a ``known`` candidate, is not
+    repeated. Returns (strokes, refusals). The harness finds the ink; the model
+    only says which stroke is which station.
+    """
+    from .ingest import _runs
+    left, top, right, bottom = _trace_window(section, image.shape)
+    eligible = window_foreground(image, section)[2]
+    calibration = section["calibration"]
+    ppm, baseline, centre = (float(calibration[k]) for k in ("pixels_per_metre", "baseline_px", "centerline_px"))
+    low, high = float(section["z_min_m"]), float(section["z_max_m"])
+    heights = [height_m] if height_m is not None else [low + share * (high - low) for share in ENUMERATION_SCANLINES]
+    seeds = []
+    for z in heights:
+        row = int(round(baseline - z * ppm)) - top
+        if 0 <= row < eligible.shape[0]:
+            seeds += [((a + b - 1) / 2 + left, row + top) for a, b in _runs(eligible[row])
+                      if (a + b - 1) / 2 + left > centre + 3]
+    strokes, refusals = [], []
+    for seed in seeds[:MAX_ENUMERATION_SEEDS]:
+        if len(strokes) >= MAX_ENUMERATED_STROKES:
+            break
+        if any(_point_on(seed, s) for s in strokes):
+            continue
+        try:
+            followed = follow_stroke(image, section, seed)
+            if len(followed) < 33:
+                raise VerificationError("stroke_too_short", "Short stroke.")
+            sample = followed[::SEED_PATH_STEP_ROWS]
+            if sample[-1][0] != followed[-1][0]:
+                sample = np.vstack([sample, followed[-1]])
+            traced = trace_in_source_corridor(image, section, source_file, details, sample[:, ::-1].astype(float),
+                                              SEED_CORRIDOR_HALF_WIDTH_PX)
+        except VerificationError as exc:
+            refusals.append({"seed_px": [round(seed[0], 1), seed[1]], "reason": exc.code})
+            continue
+        probe = {"contour_selection": traced["contour_selection"]}
+        if any(same_ink(probe, other) for other in [*strokes, *known]):
+            continue
+        strokes.append({**traced, "seed_px": [round(seed[0], 1), seed[1]]})
+    return strokes, refusals
+
+
+def _point_on(seed, stroke) -> bool:
+    """True when a seed lies on an already traced stroke (2 px)."""
+    rows, xs = stroke["trace_rows_px"], stroke["trace_xs_px"]
+    row = int(seed[1]) - rows[0]
+    return 0 <= row < len(xs) and abs(xs[row] - seed[0]) <= SAME_INK_DISTANCE_PX
 
 
 def follow_stroke(image: np.ndarray, section: dict, seed_source) -> np.ndarray:
@@ -179,10 +263,9 @@ def follow_stroke(image: np.ndarray, section: dict, seed_source) -> np.ndarray:
     is at the seed. The result is only a corridor: the line itself is traced
     and verified by ``trace_in_source_corridor``.
     """
-    from .ingest import _eligible_trace_mask, _foreground, _runs
+    from .ingest import _runs
     left, top, right, bottom = _trace_window(section, image.shape)
-    mask, ink, _ = _foreground(image[top:bottom + 1, left:right])
-    eligible, _ = _eligible_trace_mask(mask, None, ink)
+    eligible = window_foreground(image, section)[2]
     seed_x, seed_row = float(seed_source[0]) - left, int(round(float(seed_source[1]) - top))
     if not 0 <= seed_row < eligible.shape[0]:
         raise VerificationError("point_outside_section", "The point is outside the section's calibrated height range.")
@@ -207,12 +290,16 @@ def follow_stroke(image: np.ndarray, section: dict, seed_source) -> np.ndarray:
         row, gap = start[0], 0
         while 0 <= row + step < eligible.shape[0] and gap <= SEED_MAX_GAP_ROWS:
             row += step
-            recent = history[-10:]
-            slope = 0.0
-            if len(recent) >= 3:
-                slope = float(np.polyfit([r for r, _ in recent], [x for _, x in recent], 1)[0])
-            predicted = history[-1][1] + slope * (row - history[-1][0])
-            tolerance = 2.5 + 1.2 * abs(slope)
+            # A quadratic fit of the last rows predicts the stroke through a
+            # crossing; a straight line that crosses it bends away from it.
+            recent = history[-SEED_HISTORY_ROWS:]
+            slope, predicted = 0.0, history[-1][1]
+            if len(recent) >= 6:
+                rows_fit = np.array([r for r, _ in recent], dtype=float)
+                fit = np.polyfit(rows_fit - row, [x for _, x in recent], 2 if len(recent) >= 12 else 1)
+                predicted = float(fit[-1])
+                slope = float(fit[-2])
+            tolerance = 2.0 + 0.5 * abs(slope)
             near = [c for c in centres(row) if abs(c - predicted) <= tolerance]
             if near:
                 history.append((row, min(near, key=lambda c: abs(c - predicted))))
@@ -248,8 +335,7 @@ def trace_in_source_corridor(image: np.ndarray, section: dict, source_file: str,
     left, top, right, bottom = _trace_window(section, image.shape)
     if bottom - top < 32 or right - left < 8:
         raise VerificationError("section_window_too_small", "The section has too few calibrated pixels to trace.")
-    crop = image[top:bottom + 1, left:right]
-    mask, ink, _ = _foreground(crop)
+    mask, ink, _ = window_foreground(image, section)
     rows_local = np.arange(mask.shape[0]) + top
     inside = (rows_local >= path[0, 1]) & (rows_local <= path[-1, 1])
     if inside.sum() < 33:

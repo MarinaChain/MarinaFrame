@@ -1169,10 +1169,24 @@ pub fn check_guess_contract(checkpoint: &Value, description: &Value) -> Result<u
                         .iter()
                         .all(|a| a != chosen && a.as_str().is_some_and(|a| inspected.contains(a)))
             }
-            // A section with a selectable line cannot be declared unreadable.
-            None => selectable.is_empty(),
+            // A section with a selectable inspected line cannot be declared
+            // unreadable. Traced lines enter a draft only as model choices.
+            None => candidates
+                .iter()
+                .all(|c| c["selectable"] != true || c["model_traced"] == true),
         };
         require(consistent, "draft_guess_not_in_catalog")?;
+        if guess["kind"] == "best_candidate" {
+            // A traced line is never a best-score guess; only a station claim
+            // (model_choice) can carry it into a draft.
+            let chosen = candidates
+                .iter()
+                .find(|c| c["candidate_id"] == guess["chosen_candidate_id"]);
+            require(
+                chosen.is_some_and(|c| c["model_traced"] != true),
+                "draft_guess_not_in_catalog",
+            )?;
+        }
         if guess["kind"] == "model_choice" {
             // The model's choice must be ink the engine re-read, never a line
             // the model wrote.
@@ -1567,6 +1581,15 @@ mod tests {
                 "draft_guess_contract"
             );
         }
+        // A traced line is never a best-score guess.
+        let mut checkpoint = model_choice_checkpoint();
+        let guess = checkpoint["guesses"][0].as_object_mut().unwrap();
+        guess.remove("verifier_evidence");
+        guess.insert("kind".into(), json!("best_candidate"));
+        assert_eq!(
+            check_guess_contract(&checkpoint, &described(&checkpoint)).unwrap_err(),
+            "draft_guess_not_in_catalog"
+        );
         // Verifier evidence belongs to model choices only.
         let mut checkpoint = draft_checkpoint();
         checkpoint["guesses"][0]["verifier_evidence"] =

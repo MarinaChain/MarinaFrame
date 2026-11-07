@@ -10,6 +10,7 @@ revise it; nothing here selects a line, sets a review state or changes a gate.
 from __future__ import annotations
 
 import copy
+import json
 import math
 from uuid import uuid4
 
@@ -23,6 +24,7 @@ INVESTIGATION_ARGUMENTS = {
     "read_region": {"region_px", "subject"},
     "trace_corridor": {"section_id", "view_id", "path_px", "half_width_px"},
     "trace_from_point": {"section_id", "view_id", "point_px"},
+    "enumerate_strokes": {"section_id", "height_m"},
     "assign_station": {"section_id", "candidate_id", "label_view_id", "label_text", "reason", "comparison_id"},
     "propose_sheet_setup": {"view", "region_px", "pixels_per_metre", "grid_spacing_m", "centreline_px",
                             "baseline_px", "x_origin_px", "x_direction", "evidence_view_id", "scale_claim",
@@ -34,6 +36,7 @@ REQUIRED = {
     "read_region": {"region_px", "subject"},
     "trace_corridor": {"section_id", "view_id", "path_px", "half_width_px"},
     "trace_from_point": {"section_id", "view_id", "point_px"},
+    "enumerate_strokes": {"section_id"},
     "assign_station": {"section_id", "candidate_id", "label_view_id", "label_text", "reason"},
     "propose_sheet_setup": {"view", "region_px", "pixels_per_metre", "grid_spacing_m", "evidence_view_id",
                             "scale_claim", "reason"},
@@ -87,6 +90,8 @@ def check_investigation_arguments(name: str, arguments: dict, spec: dict) -> Non
         ok &= (type(path) is list and 2 <= len(path) <= 24
                and all(type(p) is list and len(p) == 2 and all(_number(v, 0, 4096) for v in p) for p in path)
                and _number(a["half_width_px"], 1, 64))
+    if name == "enumerate_strokes" and a.get("height_m") is not None:
+        ok &= _number(a["height_m"], -100, 1000)
     if name == "trace_from_point":
         point = a["point_px"]
         ok &= type(point) is list and len(point) == 2 and all(_number(v, 0, 4096) for v in point)
@@ -103,6 +108,30 @@ def check_investigation_arguments(name: str, arguments: dict, spec: dict) -> Non
         ok &= type(heights) is list and 1 <= len(heights) <= 12 and all(_number(h, -100, 1000) for h in heights)
     if not ok:
         raise ToolArgumentError("Investigation arguments are outside their bounds or name unknown sections.")
+
+
+def traced_candidate(traced: dict, source_sha: str, section_id: str, tool: str) -> dict:
+    """Catalog entry of a verified traced line (see investigation.trace_in_source_corridor)."""
+    cid = inv.model_candidate_id(source_sha, section_id, traced["contour_selection"], traced["z_range_m"])
+    support = traced["support"]
+    return {"candidate_id": cid, "hypothesis": "model_" + tool, "generated_by": [tool],
+            "selectable": True, "model_traced": True,
+            "source_support": {"observed_row_fraction": support["row_coverage"],
+                               "max_missing_run_px": support["max_missing_run_px"],
+                               "maximum_step_px_per_row": support["maximum_step_px_per_row"],
+                               "long_component_support_fraction": support["long_component_support_fraction"],
+                               "mean_trace_contrast": support["mean_trace_contrast"]},
+            "snap": {"verifier": "engine_reread_in_tight_corridor_v1", "passed": True,
+                     "vertical_range_from_ink": traced["vertical_range_from_ink"]},
+            "grid_supported_hypothesis": False, "non_grid_competing_components": None,
+            "contour_selection": traced["contour_selection"], "z_range_m": traced["z_range_m"],
+            "identity_certified": False}
+
+
+# Distinct colours of enumerated strokes; tags repeat the colour.
+STROKE_COLOURS = [(230, 25, 75), (60, 140, 60), (0, 90, 220), (245, 130, 48), (145, 30, 180), (0, 150, 150),
+                  (200, 30, 200), (120, 100, 0), (128, 0, 0), (0, 0, 128), (170, 110, 40), (90, 90, 90)]
+MAX_ENUMERATED_PER_SECTION = 48
 
 
 class InvestigationTools:
@@ -209,27 +238,86 @@ class InvestigationTools:
             return self._refused(exc, section_id=section_id, view=record, artifacts=[artifact])
         return self._record_trace(section_id, traced, image, source_sha, "trace_from_point")
 
+    def _enumerate_strokes(self, section_id, height_m=None):
+        """Trace every ink stroke of the section's panel and show them with numbered tags."""
+        if section_id not in self.state["catalog"]:
+            return self._refused(inv.VerificationError("section_not_inspected",
+                                                       "Inspect the section before tracing in it."))
+        section = next(s for s in self.spec["sections"] if s["id"] == section_id)
+        panel_key = (tuple(section["roi_px"]), json.dumps(section["calibration"], sort_keys=True),
+                     section["z_min_m"], section["z_max_m"])
+        panel = [s for s in self.spec["sections"]
+                 if (tuple(s["roi_px"]), json.dumps(s["calibration"], sort_keys=True), s["z_min_m"], s["z_max_m"])
+                 == panel_key and s["id"] in self.state["catalog"]]
+        known = [c for c in self.state["catalog"][section_id]["candidates"] if "contour_selection" in c]
+        image, details, source_sha = self._source()
+        strokes, refusals = inv.enumerate_strokes(image, section, self.spec["source"]["file"], details,
+                                                  height_m, known)
+        tags = []
+        for index, traced in enumerate(strokes, 1):
+            candidate = traced_candidate(traced, source_sha, "panel", "enumerate_strokes")
+            for member in panel:
+                candidates = self.state["catalog"][member["id"]]["candidates"]
+                enumerated = sum("enumerate_strokes" in c["generated_by"] for c in candidates)
+                if enumerated < MAX_ENUMERATED_PER_SECTION and not any(
+                        c["candidate_id"] == candidate["candidate_id"] for c in candidates):
+                    candidates.append(copy.deepcopy(candidate))
+            rows, xs = traced["trace_rows_px"], traced["trace_xs_px"]
+            tags.append({"tag": index, "candidate_id": candidate["candidate_id"],
+                         "top_end_px": [round(xs[0], 1), rows[0]], "bottom_end_px": [round(xs[-1], 1), rows[1]],
+                         "z_range_m": traced["z_range_m"]})
+        # Already known lines of this section are shown too, so every tag on
+        # the picture names a candidate the model can assign.
+        for candidate in known:
+            trace = inv.dense_trace(candidate)
+            if trace is not None and len(tags) < inv.MAX_ENUMERATED_STROKES + 16:
+                tags.append({"tag": len(tags) + 1, "candidate_id": candidate["candidate_id"],
+                             "top_end_px": [round(float(trace[1][0]), 1), int(trace[0][0])],
+                             "bottom_end_px": [round(float(trace[1][-1]), 1), int(trace[0][-1])],
+                             "z_range_m": candidate.get("z_range_m"), "known_candidate": True})
+        traces = {t["candidate_id"]: inv.dense_trace(next(c for c in self.state["catalog"][section_id]["candidates"]
+                                                          if c["candidate_id"] == t["candidate_id"]))
+                  for t in tags}
+        from .fonts import dejavu_sans
+        roi = section["roi_px"]
+        region = inv.clip_region(roi, image.shape[1], image.shape[0])
+
+        def overlay(draw, to_view):
+            try:
+                font = dejavu_sans(16)
+            except OSError:
+                font = None
+            for tag in tags:
+                rows, xs = traces[tag["candidate_id"]]
+                colour = STROKE_COLOURS[(tag["tag"] - 1) % len(STROKE_COLOURS)]
+                draw.line([to_view(x, y) for x, y in zip(xs[::3], rows[::3])], fill=colour, width=2)
+                for share in (0.0, 0.5):
+                    i = int(share * (len(rows) - 1))
+                    x, y = to_view(xs[i], rows[i])
+                    text = str(tag["tag"])
+                    draw.rectangle([x + 3, y - 1, x + 6 + 10 * len(text), y + 18], fill=(255, 255, 255), outline=colour)
+                    draw.text((x + 5, y), text, fill=colour, font=font)
+
+        payload, meta = inv.render_view(image, region, inv.MAX_VIEW_SIDE_PX, overlay=overlay)
+        record, artifact = self._store_view(payload, meta, "enumerated_strokes", source_sha, section_id=section_id)
+        self._save()
+        return self._observation(True, "strokes_enumerated", section_id=section_id,
+                                 panel_section_ids=[s["id"] for s in panel], strokes=tags,
+                                 refused_seeds=len(refusals), view=record, artifacts=[artifact],
+                                 note="Each tag number is drawn twice on its stroke (top end and middle) in the "
+                                      "stroke's colour. Find the stroke that carries a station label and assign its "
+                                      "candidate_id to that station. Every stroke is real ink; none is an identity.")
+
     def _record_trace(self, section_id, traced, image, source_sha, tool):
         """Add a verified traced line to the section's catalog and show it to the model."""
         entry = self.state["catalog"][section_id]
-        cid = inv.model_candidate_id(source_sha, section_id, traced["contour_selection"], traced["z_range_m"])
-        candidate = {"candidate_id": cid, "hypothesis": "model_" + tool, "generated_by": [tool],
-                     "selectable": True, "model_traced": True,
-                     "source_support": {"observed_row_fraction": traced["support"]["row_coverage"],
-                                        "max_missing_run_px": traced["support"]["max_missing_run_px"],
-                                        "maximum_step_px_per_row": traced["support"]["maximum_step_px_per_row"],
-                                        "long_component_support_fraction": traced["support"]["long_component_support_fraction"],
-                                        "mean_trace_contrast": traced["support"]["mean_trace_contrast"]},
-                     "snap": {"verifier": "engine_reread_in_tight_corridor_v1", "passed": True,
-                              "vertical_range_from_ink": traced["vertical_range_from_ink"]},
-                     "grid_supported_hypothesis": False, "non_grid_competing_components": None,
-                     "contour_selection": traced["contour_selection"], "z_range_m": traced["z_range_m"],
-                     "identity_certified": False}
+        candidate = traced_candidate(traced, source_sha, section_id, tool)
         existing = next((c for c in entry["candidates"] if inv.same_ink(c, candidate)
                          and c.get("z_range_m") == candidate["z_range_m"]), None)
         new = existing is None
         if new:
-            if sum(bool(c.get("model_traced")) for c in entry["candidates"]) >= inv.MAX_MODEL_CANDIDATES_PER_SECTION:
+            drawn = [c for c in entry["candidates"] if c.get("model_traced") and "enumerate_strokes" not in c["generated_by"]]
+            if len(drawn) >= inv.MAX_MODEL_CANDIDATES_PER_SECTION:
                 return self._refused(inv.VerificationError(
                     "corridor_candidate_limit",
                     f"This section already has {inv.MAX_MODEL_CANDIDATES_PER_SECTION} traced candidates; assign or "

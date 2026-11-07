@@ -79,13 +79,17 @@ def make_guesses(sections: list[dict], selected: dict, catalog: dict,
         if sid in selected:
             continue
         candidates = [c for c in catalog.get(sid, {}).get("candidates", []) if c.get("selectable") is True]
-        if not candidates:
-            unread.append(section)
-            continue
         choice = model_choices.get(sid)
         if choice is not None and any(c["candidate_id"] == choice["candidate_id"] for c in candidates):
             guesses.append(model_choice_guess(section, candidates, choice))
             read_x.append(section["x_m"])
+            continue
+        # A traced line enters a draft only through a station claim: the
+        # best-score guess never takes one (a panel's traced strokes are
+        # candidates of every section that shares the panel).
+        candidates = [c for c in candidates if not c.get("model_traced")]
+        if not candidates:
+            unread.append(section)
             continue
         ranked = sorted(candidates, key=lambda c: (-candidate_score(c),
                                                    not c.get("grid_supported_hypothesis", False),

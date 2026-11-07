@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import time
@@ -33,6 +34,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCES = ROOT.parents[2] / "work" / "sources" if (ROOT.parents[2] / "work" / "sources").is_dir() else ROOT / "work" / "sources"
+# A frozen copy of src (W11_WORKER_SOURCE) lets runs continue while the tree changes;
+# the worker identity check refuses a source that changes during a task.
+WORKER_SOURCE = Path(os.environ.get("W11_WORKER_SOURCE", str(ROOT / "src")))
 BASIS = ("Founder decision 2026-11-07 in chat: any acquired drawing may be sent to DeepSeek "
          "(docs/CONTINUATION_STATUS.md, Provider transfer decision); development and evaluation only.")
 
@@ -135,7 +139,7 @@ def run_arm(arm: str, input_dir: Path, out: Path, controller: Path, python: str)
     policy, ambiguity = {"abstain": ("deterministic", "abstain"), "draft": ("deterministic", "draft"),
                          "llm": ("live", "draft")}[arm]
     command = [str(controller), "run", "--task", str(out / "task"), "--source", str(input_dir / "spec.json"),
-               "--worker-python", python, "--worker-source", str(ROOT / "src"),
+               "--worker-python", python, "--worker-source", str(WORKER_SOURCE),
                "--policy", policy, "--on-ambiguity", ambiguity]
     if arm == "llm":
         command += ["--provider-transfer-basis", BASIS]

@@ -121,6 +121,35 @@ def test_a_clicked_point_is_followed_along_its_own_stroke(tmp_path):
     assert blank["view"]["kind"] == "refused_point"
 
 
+def test_enumerated_strokes_are_tagged_shared_by_the_panel_and_never_best_guesses(tmp_path):
+    domain = _domain(tmp_path, shared_panel_drawing(tmp_path / "src"))
+    enumerated = domain.execute("enumerate_strokes", {"section_id": "a"})
+    assert enumerated["ok"], enumerated
+    assert enumerated["panel_section_ids"] == ["a", "b", "c"]
+    # Both curves carry a tag: inspected lines keep their own ids, other strokes are traced.
+    tags = enumerated["strokes"]
+    assert len(tags) >= 2 and [s["tag"] for s in tags] == list(range(1, len(tags) + 1))
+    catalog_a = {c["candidate_id"] for c in domain.state["catalog"]["a"]["candidates"]}
+    assert {s["candidate_id"] for s in tags} <= catalog_a
+    assert enumerated["view"]["kind"] == "enumerated_strokes"
+    # A stroke traced here is shared by every section of the panel ...
+    view = _view(domain, [0, 0, 260, 240])
+    _trace(domain, view, "a", [(60 + .3 * (210 - y), y) for y in (25, 215)], 12)
+    domain.state["catalog"]["a"]["candidates"] = [c for c in domain.state["catalog"]["a"]["candidates"]
+                                                  if not c.get("model_traced")]
+    for sid in ("a", "b", "c"):
+        domain.state["catalog"][sid]["candidates"] = []
+    domain._save()
+    again = domain.execute("enumerate_strokes", {"section_id": "a"})
+    new = [s["candidate_id"] for s in again["strokes"] if not s.get("known_candidate")]
+    assert len(new) == 2
+    for sid in ("b", "c"):
+        assert set(new) <= {c["candidate_id"] for c in domain.state["catalog"][sid]["candidates"]}
+    # ... and never a best-score guess.
+    guesses = make_guesses(domain.spec["sections"], domain.state["selected"], domain.state["catalog"], {})
+    assert all(g["chosen_candidate_id"] not in new for g in guesses)
+
+
 def test_a_short_fragment_or_unknown_view_is_refused(tmp_path):
     spec, _ = draft_drawing(tmp_path / "src")
     domain = _domain(tmp_path, spec)
