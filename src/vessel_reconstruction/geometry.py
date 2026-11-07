@@ -12,6 +12,7 @@ import numpy as np
 import cadquery as cq
 from OCP.BRepMesh import BRepMesh_IncrementalMesh
 
+from . import section_regions
 from .errors import GeometryError
 
 
@@ -267,6 +268,239 @@ def build_hull(sections: list[dict], samples: int | None = None, *,
     if not solid.isValid() or len(solid.Solids()) != 1 or solid.Volume() <= 0:
         raise GeometryError("The reconstructed envelope is not a valid positive-volume CAD solid.")
     return solid, sections
+
+
+# Multi-region stations ------------------------------------------------------------
+#
+# build_hull above needs one half-breadth per height. build_region_hull accepts
+# stations whose cross-section has several regions (section_regions.py), for
+# example twin skegs below a tunnel roof or a bulb drawn apart from the bow.
+# Each region is lofted only to the matching region on the neighbouring
+# station; a region without a match ends with a flat closure at its station.
+# The result is a compound of closed solids that meet on shared faces.
+
+REGION_LOFT_METHOD = "matched_region_ruled_lofts_v1"
+# Relative agreement required between the kernel volume of each lofted solid
+# and the exact prismatoid volume of its polygons (a loft between polygons
+# whose vertices move on straight lines has a cross-section area quadratic in
+# x, so Simpson's rule is exact). Larger differences mean a malformed solid.
+_REGION_VOLUME_AUDIT_TOLERANCE = 1e-6
+
+
+def _shoelace(yz: np.ndarray) -> float:
+    y, z = yz[:, 0], yz[:, 1]
+    return 0.5 * abs(float(np.dot(y, np.roll(z, -1)) - np.dot(z, np.roll(y, -1))))
+
+
+def _region_side_polygons(kind: str, outer: np.ndarray, inner: np.ndarray | None) -> list[np.ndarray]:
+    """Closed (y, z) station polygons of one region: one, or one per side."""
+    if kind == section_regions.CENTRELINE:
+        mirrored = outer[::-1] * [-1, 1]
+        return [np.vstack([outer, mirrored])]
+    starboard = np.vstack([outer, inner[::-1]])
+    return [starboard, starboard * [-1, 1]]
+
+
+def _panel_faces(left: np.ndarray, right: np.ndarray) -> list[cq.Face]:
+    """Faces between corresponding edges of two closed station polygons (mm)."""
+    faces = []
+    count = len(left)
+    for j in range(count):
+        a, b = left[j], left[(j + 1) % count]
+        d, c = right[j], right[(j + 1) % count]
+        left_is_point = np.linalg.norm(a - b) <= _VERTEX_TOLERANCE_MM
+        right_is_point = np.linalg.norm(c - d) <= _VERTEX_TOLERANCE_MM
+        if left_is_point and right_is_point:
+            continue
+        if left_is_point or right_is_point:
+            triangle = _planar_face(np.array([a, b, c, d]))
+            if triangle is not None:
+                faces.append(triangle)
+            continue
+        faces.append(cq.Face.makeRuledSurface(cq.Edge.makeLine(_vector(a), _vector(b)),
+                                              cq.Edge.makeLine(_vector(d), _vector(c))))
+    return faces
+
+
+def _closed_solid(faces: list[cq.Face], label: str) -> cq.Solid:
+    try:
+        shell = cq.Shell.makeShell(faces)
+        if shell.ShapeType() != "Shell" or not shell.Closed() or not shell.isValid():
+            raise GeometryError(f"Region loft {label} does not form one valid closed shell.")
+        solid = cq.Solid.makeSolid(shell)
+        if solid.Volume() < 0:
+            solid = cq.Solid(solid.wrapped.Reversed())
+    except GeometryError:
+        raise
+    except Exception as exc:
+        raise GeometryError(f"The CAD kernel could not build region loft {label}: {type(exc).__name__}") from exc
+    if not solid.isValid() or solid.Volume() <= 0:
+        raise GeometryError(f"Region loft {label} is not a valid positive-volume solid.")
+    return solid
+
+
+def _prepare_region(rows: np.ndarray, kind: str, tolerance_m: float) -> dict:
+    t = section_regions.normalized_height(rows)
+    prepared = {"rows": rows, "t": t, "kind": kind,
+                "outer_knots": section_regions.boundary_knots(t, rows[:, 2], tolerance_m)}
+    if kind == section_regions.OFFSET:
+        prepared["inner_knots"] = section_regions.boundary_knots(t, rows[:, 1], tolerance_m)
+    return prepared
+
+
+def _run_knots(members: list[dict]) -> tuple[list, list | None]:
+    outer = section_regions.merge_knots([m["outer_knots"] for m in members])
+    inner = None
+    if members[0]["kind"] == section_regions.OFFSET:
+        inner = section_regions.merge_knots([m["inner_knots"] for m in members])
+    return outer, inner
+
+
+def _knot_count(knots: list | None) -> int:
+    return 0 if knots is None else sum(count for _, count in knots)
+
+
+def _fits(members: list[dict]) -> bool:
+    outer, inner = _run_knots(members)
+    sides = 1 if members[0]["kind"] == section_regions.CENTRELINE else 2
+    vertices = 2 * _knot_count(outer) if sides == 1 else _knot_count(outer) + _knot_count(inner)
+    faces = sides * vertices * (len(members) - 1) + 2 * sides
+    return max(_knot_count(outer), _knot_count(inner)) <= MAX_COMMON_KNOTS and faces <= MAX_ESTIMATED_FACES
+
+
+def _station_polygons(member: dict, outer_knots: list, inner_knots: list | None) -> tuple[list[np.ndarray], float]:
+    """Polygons of one region at one station on the run's knots, and their deviation."""
+    rows, t = member["rows"], member["t"]
+    z0, z1 = rows[0, 0], rows[-1, 0]
+
+    def boundary(column: int, knots: list) -> tuple[np.ndarray, float]:
+        values = section_regions.evaluate_boundary(t, rows[:, column], knots)
+        knot_t = np.repeat([value for value, _ in knots], [count for _, count in knots])
+        error = section_regions.deviation(t, rows[:, column], knots, values)
+        return np.column_stack([values, z0 + knot_t * (z1 - z0)]), error
+
+    outer, outer_error = boundary(2, outer_knots)
+    inner, inner_error = (None, 0.0) if inner_knots is None else boundary(1, inner_knots)
+    return _region_side_polygons(member["kind"], outer, inner), max(outer_error, inner_error)
+
+
+def build_region_hull(sections: list[dict], *, max_deviation_m: float = DEFAULT_MAX_DEVIATION_M,
+                      min_overlap: float = section_regions.MIN_MATCH_OVERLAP) -> tuple[cq.Shape, dict]:
+    """Loft multi-region stations; return a compound of solids and an audit report.
+
+    ``sections`` are ``{"id", "x_m", "regions": [{"kind", "rows_m"}]}`` records
+    (see section_regions.decompose_outline); a legacy ``points_yz_m`` record is
+    one centreline region. Regions are matched one-to-one between neighbouring
+    stations (section_regions.match_regions). Each matched run is lofted with
+    ruled faces between corresponding polygon edges; correspondence is by
+    normalized height inside the region, with source knots kept within
+    ``max_deviation_m``. A run longer than the knot or face limit is split at a
+    shared station. A region that matches no neighbour cannot be lofted; it is
+    listed in ``unlofted_regions`` with its area, never silently dropped.
+
+    Every solid passes an exact volume audit (Simpson's rule on its station
+    polygons). The report gives station areas, runs and the volume.
+    """
+    if (isinstance(max_deviation_m, bool) or not isinstance(max_deviation_m, (int, float))
+            or not math.isfinite(max_deviation_m) or not 0 <= max_deviation_m <= 0.01):
+        raise GeometryError("max_deviation_m must be a finite number between 0 and 0.01 metres.")
+    if not isinstance(sections, list) or not 2 <= len(sections) <= MAX_SECTIONS:
+        raise GeometryError(f"At least two stations are required; the limit is {MAX_SECTIONS}.")
+    try:
+        ordered = sorted(sections, key=lambda s: s["x_m"])
+        xs = [float(s["x_m"]) for s in ordered]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise GeometryError("Invalid station metadata.") from exc
+    if not all(math.isfinite(x) and abs(x) <= 1e7 for x in xs) or np.min(np.diff(xs)) <= 0:
+        raise GeometryError("Station coordinates must be finite and strictly increasing.")
+    stations = [{"id": str(s.get("id", "unnamed")), "x_m": x, "regions": section_regions.section_regions(s)}
+                for s, x in zip(ordered, xs)]
+    links = [{i: j for i, j, _ in section_regions.match_regions(a["regions"], b["regions"], min_overlap=min_overlap)}
+             for a, b in zip(stations, stations[1:])]
+    runs, visited = [], set()
+    for s, station in enumerate(stations):
+        for r in range(len(station["regions"])):
+            if (s, r) in visited:
+                continue
+            path = [(s, r)]
+            while path[-1][0] < len(stations) - 1 and path[-1][1] in links[path[-1][0]]:
+                path.append((path[-1][0] + 1, links[path[-1][0]][path[-1][1]]))
+            visited.update(path)
+            runs.append(path)
+    unlofted = [{"station": stations[s]["id"], "x_m": stations[s]["x_m"], "region": r,
+                 "kind": stations[s]["regions"][r]["kind"],
+                 "half_area_m2": section_regions.region_area(stations[s]["regions"][r]["rows_m"])}
+                for path in runs if len(path) == 1 for s, r in path]
+    solids, run_reports, deviations = [], [], []
+    for path in (p for p in runs if len(p) >= 2):
+        kind = stations[path[0][0]]["regions"][path[0][1]]["kind"]
+        members = [_prepare_region(stations[s]["regions"][r]["rows_m"], kind, max_deviation_m) for s, r in path]
+        start, pieces = 0, []
+        while start < len(path) - 1:
+            end = start + 1
+            if not _fits(members[start:end + 1]):
+                raise GeometryError(f"CAD complexity limit: region {path[start]} between stations "
+                                    f"{stations[path[start][0]]['id']} and {stations[path[end][0]]['id']} exceeds "
+                                    f"{MAX_COMMON_KNOTS} knots or {MAX_ESTIMATED_FACES} faces; use a larger bound.")
+            while end + 1 < len(path) and _fits(members[start:end + 2]):
+                end += 1
+            pieces.append((start, end))
+            start = end
+        run_volume, run_simpson = 0.0, 0.0
+        for first, last in pieces:
+            outer_knots, inner_knots = _run_knots(members[first:last + 1])
+            station_polygons = []
+            for index in range(first, last + 1):
+                polygons, error = _station_polygons(members[index], outer_knots, inner_knots)
+                deviations.append(error)
+                station_polygons.append(polygons)
+            label = f"{kind}:{stations[path[first][0]]['id']}-{stations[path[last][0]]['id']}"
+            for side in range(len(station_polygons[0])):
+                rings = [station_polygons[k][side] for k in range(len(station_polygons))]
+                xs_run = [stations[path[index][0]]["x_m"] for index in range(first, last + 1)]
+                profiles = [np.column_stack([np.full(len(ring), x), ring]) * 1000 for ring, x in zip(rings, xs_run)]
+                faces = [face for left, right in zip(profiles, profiles[1:]) for face in _panel_faces(left, right)]
+                for cap in (profiles[0], profiles[-1]):
+                    cap_face = _planar_face(cap)
+                    if cap_face is None:
+                        raise GeometryError(f"Region loft {label} has a terminal station without area.")
+                    faces.append(cap_face)
+                solid = _closed_solid(faces, label)
+                simpson = sum((x1 - x0) / 6 * (_shoelace(a) + 4 * _shoelace((a + b) / 2) + _shoelace(b))
+                              for a, b, x0, x1 in zip(rings, rings[1:], xs_run, xs_run[1:]))
+                volume = solid.Volume() / 1e9
+                if abs(volume - simpson) > _REGION_VOLUME_AUDIT_TOLERANCE * max(simpson, 1e-12):
+                    raise GeometryError(f"Region loft {label} failed the volume audit: kernel {volume:.9f} m3, "
+                                        f"polygon prismatoid {simpson:.9f} m3.")
+                solids.append(solid)
+                run_volume += volume
+                run_simpson += simpson
+        run_reports.append({"kind": kind, "stations": [stations[s]["id"] for s, _ in path],
+                            "regions": [r for _, r in path],
+                            "pieces": [[stations[path[a][0]]["id"], stations[path[b][0]]["id"]] for a, b in pieces],
+                            "volume_m3": run_volume, "prismatoid_volume_m3": run_simpson})
+    if not solids:
+        raise GeometryError("No region matches a region on a neighbouring station; nothing can be lofted.")
+    compound = cq.Compound.makeCompound(solids)
+    station_reports = [{"id": st["id"], "x_m": st["x_m"],
+                        "regions": [{"kind": reg["kind"], "z_range_m": [float(reg["rows_m"][0, 0]), float(reg["rows_m"][-1, 0])],
+                                     "half_area_m2": section_regions.region_area(reg["rows_m"])}
+                                    for reg in st["regions"]],
+                        "section_area_m2": 2 * section_regions.total_area(st["regions"])}
+                       for st in stations]
+    report = {
+        "method": REGION_LOFT_METHOD, "decomposition": section_regions.DECOMPOSITION_METHOD,
+        "maximum_allowed_half_breadth_deviation_m": float(max_deviation_m),
+        "maximum_half_breadth_deviation_m": float(max(deviations)),
+        "min_match_overlap": float(min_overlap),
+        "stations": station_reports, "runs": run_reports, "unlofted_regions": unlofted,
+        "solid_count": len(solids), "volume_m3": float(sum(r["volume_m3"] for r in run_reports)),
+        "volume_audit": "each solid's kernel volume equals its polygon prismatoid volume within "
+                        f"{_REGION_VOLUME_AUDIT_TOLERANCE:g} relative",
+        "uncertainty_scope": "CAD approximation and region matching of measured outlines only; excludes contour "
+                             "identity, calibration, interpolation between stations, and source accuracy",
+    }
+    return compound, report
 
 
 def metrics_for(shape: cq.Shape) -> dict:

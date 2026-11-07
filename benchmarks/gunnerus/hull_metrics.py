@@ -192,6 +192,52 @@ def tabulate(polylines_by_x: list[list[np.ndarray]], x_m, z_m) -> SectionTable:
     return SectionTable(x_m, z_m, np.array(half), np.array(width), np.array(odd))
 
 
+def _intervals(values: np.ndarray) -> np.ndarray:
+    if len(values) % 2:
+        values = values[:-1]
+    return np.column_stack([values[0::2], values[1::2]])
+
+
+def tabulate_union(cut_sets_by_x: list[list[list[np.ndarray]]], x_m, z_m) -> SectionTable:
+    """Like ``tabulate``, for the union of several cuts at each station.
+
+    A reconstruction made of solids that end on a station plane (one solid
+    per region, closed by a flat face there) has a different cut just aft and
+    just forward of that plane. The section of the closed solid at the plane
+    is the union of both cuts: occupied intervals are merged per height, and
+    the outer half-breadth is the larger one.
+    """
+    x_m, z_m = np.asarray(x_m, float), np.asarray(z_m, float)
+    half, width, odd = [], [], []
+    for cut_sets in cut_sets_by_x:
+        outer = np.zeros(len(z_m))
+        per_cut = []
+        odd_count = 0
+        for polylines in cut_sets:
+            outer = np.maximum(outer, outer_half_breadth(polylines, z_m))
+            values = crossings(_mirror_if_half(polylines), z_m)
+            odd_count += sum(len(v) % 2 for v in values)
+            per_cut.append(values)
+        total = np.zeros(len(z_m))
+        for index in range(len(z_m)):
+            merged = np.vstack([_intervals(cut[index]) for cut in per_cut] or [np.zeros((0, 2))])
+            if not len(merged):
+                continue
+            merged = merged[np.argsort(merged[:, 0])]
+            start, end = merged[0]
+            for low, high in merged[1:]:
+                if low > end:
+                    total[index] += end - start
+                    start, end = low, high
+                else:
+                    end = max(end, high)
+            total[index] += end - start
+        half.append(outer)
+        width.append(total)
+        odd.append(odd_count)
+    return SectionTable(x_m, z_m, np.array(half), np.array(width), np.array(odd))
+
+
 def area_below(table: SectionTable, draft_m: float) -> np.ndarray:
     """Section area below ``draft_m`` for every station (trapezoid in z)."""
     z = table.z_m

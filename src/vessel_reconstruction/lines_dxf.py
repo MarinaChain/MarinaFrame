@@ -80,9 +80,14 @@ class StationRequest:
     """One station to read. ``side`` is +1 when drawn right of the centreline.
 
     ``pick_xy`` is a drawing point on the station curve. ``extra_picks`` are
-    further points that the drawing shows on the same station; if any of them
-    resolves to a different curve, the station is drawn in several pieces and
-    the reader abstains.
+    further points that the drawing shows on the same station. In the
+    single-curve mode, a pick that resolves to a different curve means the
+    station is drawn in several pieces and the reader abstains; in the region
+    mode every picked curve is one piece of the station outline.
+
+    ``top_z_m`` is where this station ends, read from the drawing (for example
+    the profile outline at the station). A curve that ends on the side line
+    follows it up to this height; without it, up to ``SideLine.top_z_m``.
     """
 
     id: str
@@ -91,6 +96,8 @@ class StationRequest:
     pick_xy: tuple[float, float] | None = None
     extra_picks: tuple[tuple[float, float], ...] = ()
     evidence: str = ""
+    top_z_m: float | None = None
+    top_evidence: str = ""
 
 
 @dataclass(frozen=True)
@@ -286,45 +293,239 @@ def pick_chain(chains: list[np.ndarray], pick_xy: tuple[float, float], *, tolera
     return best
 
 
-def apply_side_line(section: np.ndarray, side_line: SideLine | None) -> tuple[np.ndarray, bool]:
-    """Follow the side line to its top, or abstain if the curve stops elsewhere."""
+def _station_top(side_line: SideLine, top_z_m: float | None) -> float:
+    if top_z_m is None:
+        return side_line.top_z_m
+    if not isinstance(top_z_m, (int, float)) or not math.isfinite(top_z_m):
+        raise LinesDxfError("invalid_station", "top_z_m must be a finite height.")
+    return float(top_z_m)
+
+
+def apply_side_line(section: np.ndarray, side_line: SideLine | None,
+                    top_z_m: float | None = None) -> tuple[np.ndarray, bool]:
+    """Follow the side line to the station top, or abstain if the curve stops elsewhere.
+
+    The station top is ``top_z_m`` when the drawing gives one for this
+    station, otherwise the side line's declared top.
+    """
     if side_line is None:
         return section, False
+    top = _station_top(side_line, top_z_m)
     last_y, last_z = section[-1]
     on_side = abs(last_y - side_line.y_m) <= side_line.tolerance_m
-    at_top = last_z >= side_line.top_z_m - side_line.tolerance_m
+    at_top = last_z >= top - side_line.tolerance_m
     if on_side and not at_top:
-        return np.vstack([section, [[last_y, side_line.top_z_m]]]), True
+        return np.vstack([section, [[last_y, top]]]), True
     if side_line.require_end and not (on_side or at_top):
         raise LinesDxfError("incomplete_curve", "The station curve stops before the side line or the declared top; it may be one piece of a split station.")
     return section, False
 
 
+def outline_ring(piece_yz: np.ndarray, *, side_line: SideLine | None, top_z_m: float | None,
+                 centreline_closure_m: float) -> tuple[np.ndarray, dict]:
+    """Close one station piece into a ring of the starboard half-plane.
+
+    The piece is ordered from its lower end. Its upper end must be on the
+    centreline (within ``centreline_closure_m``), on the side line (which is
+    followed up to the station top), or at the station top; it is then closed
+    horizontally to the centreline. The lower end is closed horizontally to the
+    centreline (a flat bottom, as ``build_hull`` closes a keel off the
+    centreline). The centreline closes the ring. A piece that ends anywhere
+    else is incomplete and the station is refused.
+    """
+    points = np.asarray(piece_yz, dtype=float)
+    if points[-1, 1] < points[0, 1]:
+        points = points[::-1]
+    if np.all(points[0] == points[-1]):
+        return points[:-1], {"top_closure": "closed_piece", "side_line_followed": False}
+    top_y, top_z = points[-1]
+    ring = list(points)
+    followed = False
+    if top_y <= centreline_closure_m:
+        closure = "centreline"
+    elif side_line is None or not side_line.require_end:
+        closure = "free_end"
+    else:
+        top = _station_top(side_line, top_z_m)
+        on_side = abs(top_y - side_line.y_m) <= side_line.tolerance_m
+        if on_side and top_z < top - side_line.tolerance_m:
+            ring.append(np.array([top_y, top]))
+            top_z, closure, followed = top, "side_line", True
+        elif top_z >= top - side_line.tolerance_m:
+            closure = "station_top"
+        else:
+            raise LinesDxfError("incomplete_curve", "A station piece stops before the centreline, the side line or the "
+                                "station top; it may be one piece of a split station.")
+    if top_y > 0 or followed:
+        ring.append(np.array([0.0, top_z]))
+    if points[0, 0] > 0:
+        ring.append(np.array([0.0, points[0, 1]]))
+    return np.vstack(ring), {"top_closure": closure, "side_line_followed": followed,
+                             "bottom_end_yz_m": points[0].tolist(), "top_end_yz_m": points[-1].tolist()}
+
+
+def _picked_chains(request: StationRequest, chains: list[np.ndarray], tolerance: float) -> list[int]:
+    if request.pick_xy is None:
+        raise LinesDxfError("missing_identity", "Each station needs a pick point on its curve.")
+    picked = []
+    for point in (request.pick_xy, *request.extra_picks):
+        index = pick_chain(chains, point, tolerance=tolerance)
+        if index not in picked:
+            picked.append(index)
+    return picked
+
+
+def _read_region_station(request: StationRequest, chains: list[np.ndarray], view: BodyPlanView, *,
+                         pick_tolerance: float, side_line: SideLine | None, centreline_closure_m: float) -> dict:
+    """One station as closed outline rings and their one-interval-per-height regions."""
+    from .errors import GeometryError
+    from .section_regions import decompose_outline
+
+    rings, pieces = [], []
+    for index in _picked_chains(request, chains, pick_tolerance):
+        half = to_half_section_m(chains[index], view, request.side)
+        if half[:, 0].min() < -centreline_closure_m:
+            raise LinesDxfError("crosses_centreline", "A station piece crosses the centreline to the other side.")
+        half[:, 0] = np.maximum(half[:, 0], 0.0)
+        ring, closure = outline_ring(half, side_line=side_line, top_z_m=request.top_z_m,
+                                     centreline_closure_m=centreline_closure_m)
+        rings.append(ring)
+        pieces.append({"chain_points": len(half), **closure})
+    try:
+        regions = decompose_outline([ring.tolist() for ring in rings], section_id=request.id)
+    except GeometryError as exc:
+        raise LinesDxfError("invalid_outline", str(exc)) from exc
+    return {"id": request.id, "x_m": float(request.x_m),
+            "regions": [{"kind": r["kind"], "rows_m": r["rows_m"]} for r in regions],
+            "outline_rings_yz_m": [ring.tolist() for ring in rings],
+            "evidence": {"input_form": "dxf_vector_body_plan", "reading": "outline_regions", "side": request.side,
+                         "pick_xy": list(request.pick_xy), "extra_picks": [list(p) for p in request.extra_picks],
+                         "pieces": pieces, "region_count": len(regions),
+                         "region_kinds": [r["kind"] for r in regions],
+                         "side_line_followed": any(p["side_line_followed"] for p in pieces),
+                         "top_z_m": request.top_z_m, "top_evidence": request.top_evidence,
+                         "centreline_closure_m": centreline_closure_m, "note": request.evidence}}
+
+
 def read_stations(path: str | Path, view: BodyPlanView, stations: list[StationRequest], *,
-                  pick_tolerance: float = 5.0, side_line: SideLine | None = None) -> dict:
-    """Read the requested stations; return sections plus per-station abstentions."""
+                  pick_tolerance: float = 5.0, side_line: SideLine | None = None,
+                  regions: bool = False, centreline_closure_m: float = 0.002) -> dict:
+    """Read the requested stations; return sections plus per-station abstentions.
+
+    With ``regions=False`` (default) each station must be one curve with one
+    half-breadth per height (``points_yz_m``, accepted by ``build_hull``).
+    With ``regions=True`` each station may have several pieces (all picks) and
+    any number of material intervals per height; it is returned as closed
+    outline rings and regions for ``geometry.build_region_hull``.
+    """
     import ezdxf
 
+    if not math.isfinite(centreline_closure_m) or not 0 <= centreline_closure_m <= 1.0:
+        raise LinesDxfError("invalid_view", "centreline_closure_m must be a finite length from 0 to 1 m.")
     doc = ezdxf.readfile(str(path))
     chains = chain_fragments(read_view_curves(doc, view), view.join_tolerance)
     sections, abstentions = [], []
     for request in stations:
         try:
-            if request.pick_xy is None:
-                raise LinesDxfError("missing_identity", "Each station needs a pick point on its curve.")
-            index = pick_chain(chains, request.pick_xy, tolerance=pick_tolerance)
-            for extra in request.extra_picks:
-                if pick_chain(chains, extra, tolerance=pick_tolerance) != index:
-                    raise LinesDxfError("multiple_pieces", "The station is drawn as separate pieces; one half-section curve is required.")
-            half = single_valued_section(to_half_section_m(chains[index], view, request.side))
-            half, extended = apply_side_line(half, side_line)
+            if regions:
+                sections.append(_read_region_station(request, chains, view, pick_tolerance=pick_tolerance,
+                                                     side_line=side_line, centreline_closure_m=centreline_closure_m))
+                continue
+            picked = _picked_chains(request, chains, pick_tolerance)
+            if len(picked) > 1:
+                raise LinesDxfError("multiple_pieces", "The station is drawn as separate pieces; one half-section curve is required.")
+            half = single_valued_section(to_half_section_m(chains[picked[0]], view, request.side))
+            half, extended = apply_side_line(half, side_line, request.top_z_m)
             half = resample_by_arc_length(half)
             sections.append({"id": request.id, "x_m": float(request.x_m),
                              "points_yz_m": half.tolist(),
                              "evidence": {"input_form": "dxf_vector_body_plan", "side": request.side,
                                           "pick_xy": list(request.pick_xy), "side_line_followed": extended,
+                                          "top_z_m": request.top_z_m, "top_evidence": request.top_evidence,
                                           "note": request.evidence}})
         except LinesDxfError as exc:
             abstentions.append({"id": request.id, "x_m": float(request.x_m), "kind": exc.kind, "message": str(exc)})
     return {"sections": sections, "abstentions": abstentions, "chain_count": len(chains),
-            "method": "dxf_body_plan_chains_v1"}
+            "method": "dxf_body_plan_outline_regions_v1" if regions else "dxf_body_plan_chains_v1"}
+
+
+# Cross-view station identity ------------------------------------------------------
+#
+# A body-plan curve without a label can be identified by another view of the
+# same drawing: the half-breadth plan gives, for each drawn waterline, the
+# half-breadth along the ship. A station curve must show the same
+# half-breadths at the waterline heights as the plan shows at its frame.
+
+
+def _level_crossings(points: np.ndarray, axis: int, level: float) -> np.ndarray:
+    """Values of the other coordinate where a polyline crosses ``axis == level``."""
+    a, b = points[:-1], points[1:]
+    low, high = np.minimum(a[:, axis], b[:, axis]), np.maximum(a[:, axis], b[:, axis])
+    hit = (low <= level) & (level <= high) & (a[:, axis] != b[:, axis])
+    t = (level - a[hit, axis]) / (b[hit, axis] - a[hit, axis])
+    other = 1 - axis
+    return a[hit, other] + t * (b[hit, other] - a[hit, other])
+
+
+def outer_half_breadth_at(curve_yz: np.ndarray, z_m: float) -> float:
+    """Largest half-breadth where a station curve (y, z metres) crosses height z; NaN if none."""
+    values = _level_crossings(np.asarray(curve_yz, dtype=float), 1, z_m)
+    return float(values.max()) if len(values) else math.nan
+
+
+def plan_half_breadth_at(chains_xy: list[np.ndarray], x_drawing: float, centreline_y: float,
+                         units_per_metre: float) -> float:
+    """Largest half-breadth of plan-view waterline chains at drawing abscissa x; NaN if none."""
+    values = [float(v) for chain in chains_xy
+              for v in _level_crossings(np.asarray(chain, dtype=float), 0, x_drawing)]
+    return (max(values) - centreline_y) / units_per_metre if values else math.nan
+
+
+def cross_view_identity(curves: dict[str, np.ndarray], references: dict[str, dict[float, float]], *,
+                        accept_rms_m: float = 0.05, ambiguity_ratio: float = 2.0,
+                        min_heights: int = 3) -> tuple[dict[str, str], list[dict]]:
+    """Match unlabelled station curves to frames by half-breadths at waterline heights.
+
+    ``curves`` maps a curve key to its half-section (y, z metres).
+    ``references`` maps a frame name to {waterline height: plan half-breadth}.
+    A curve takes its best frame only when (1) at least ``min_heights``
+    heights are compared, (2) the RMS difference is at most ``accept_rms_m``,
+    (3) the second-best frame is at least ``ambiguity_ratio`` times worse, and
+    (4) no other curve takes the same frame. Otherwise the curve is refused.
+    The ledger records the best comparisons and the decision for each curve.
+    """
+    ledger, best = [], {}
+    for key, curve in curves.items():
+        scores = []
+        for frame, table in references.items():
+            pairs = [(outer_half_breadth_at(curve, z), hb) for z, hb in table.items()]
+            pairs = [(c, r) for c, r in pairs if math.isfinite(c) and math.isfinite(r)]
+            if len(pairs) >= min_heights:
+                difference = np.array([c - r for c, r in pairs])
+                scores.append((float(np.sqrt(np.mean(difference ** 2))), frame, len(pairs)))
+        scores.sort()
+        entry = {"curve": key,
+                 "candidates": [{"frame": f, "rms_m": round(s, 5), "heights": n} for s, f, n in scores[:3]]}
+        if not scores:
+            entry["decision"] = "refused: too few comparable heights"
+        elif scores[0][0] > accept_rms_m:
+            entry["decision"] = f"refused: best RMS {scores[0][0]:.3f} m exceeds {accept_rms_m} m"
+        elif len(scores) > 1 and scores[1][0] < ambiguity_ratio * scores[0][0]:
+            entry["decision"] = f"refused: second frame within a factor {ambiguity_ratio}"
+        else:
+            best[key] = scores[0][1]
+            entry["decision"] = f"frame {scores[0][1]}"
+        ledger.append(entry)
+    claimed: dict[str, list[str]] = {}
+    for key, frame in best.items():
+        claimed.setdefault(frame, []).append(key)
+    assigned = {}
+    for entry in ledger:
+        frame = best.get(entry["curve"])
+        if frame is None:
+            continue
+        if len(claimed[frame]) > 1:
+            entry["decision"] = f"refused: frame {frame} is also best for {sorted(claimed[frame])}"
+        else:
+            assigned[entry["curve"]] = frame
+    return assigned, ledger

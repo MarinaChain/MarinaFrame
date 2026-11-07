@@ -88,6 +88,35 @@ def plan_groups(sections: list[dict]) -> list[tuple[list[dict], float]]:
     return groups
 
 
+def _build_regions(sections: list[dict], out: Path) -> dict:
+    """Region mode: one build_region_hull call over every read station.
+
+    It splits long runs itself; the first CAD bound on the ladder at which
+    every run fits is used.
+    """
+    from OCP.BinTools import BinTools
+    from vessel_reconstruction.geometry import build_region_hull
+
+    error = None
+    for bound in CAD_DEVIATION_LADDER_M:
+        try:
+            shape, report = build_region_hull(sections, max_deviation_m=bound)
+        except GeometryError as exc:
+            error = str(exc)
+            if "complexity limit" in error:
+                continue
+            break
+        BinTools.Write_s(shape.wrapped, str(out / "model.brep"))
+        (out / "region_report.json").write_text(json.dumps(report, indent=1) + "\n")
+        xs = [s["x_m"] for s in sections]
+        return {"status": "built", "build_error": None, "model_sha256": _sha256(out / "model.brep"),
+                "x_range_m": [float(min(xs)), float(max(xs))], "max_cad_deviation_m": report["maximum_half_breadth_deviation_m"],
+                "cad_bound_m": bound, "solid_count": report["solid_count"], "volume_m3": report["volume_m3"],
+                "region_runs": len(report["runs"]), "unlofted_regions": report["unlofted_regions"],
+                "region_counts": {s["id"]: len(s["regions"]) for s in report["stations"]}}
+    return {"status": "blocked", "build_error": error}
+
+
 def run(config_path: Path, out: Path) -> dict:
     config = json.loads(config_path.read_text())
     dxf_path = (config_path.parent / config["dxf"]).resolve()
@@ -103,9 +132,12 @@ def run(config_path: Path, out: Path) -> dict:
         fields["extra_picks"] = tuple(tuple(p) for p in fields.get("extra_picks", ()))
         requests.append(lines_dxf.StationRequest(**fields))
     side_line = lines_dxf.SideLine(**config["side_line"]) if config.get("side_line") else None
+    use_regions = bool(config.get("regions", False))
     started = time.perf_counter()
     read = lines_dxf.read_stations(dxf_path, view, requests,
-                                   pick_tolerance=config.get("pick_tolerance", 5.0), side_line=side_line)
+                                   pick_tolerance=config.get("pick_tolerance", 5.0), side_line=side_line,
+                                   regions=use_regions,
+                                   centreline_closure_m=config.get("centreline_closure_m", 0.002))
     extended = [s["id"] for s in read["sections"] if s["evidence"]["side_line_followed"]]
     out.mkdir(parents=True, exist_ok=False)
     (out / "sections.json").write_text(json.dumps(read["sections"]) + "\n")
@@ -120,6 +152,11 @@ def run(config_path: Path, out: Path) -> dict:
                "abstention_kinds": sorted({a["kind"] for a in read["abstentions"]}),
                "side_line_extended": extended, "chain_count": read["chain_count"],
                "status": "blocked", "build_error": None}
+    if use_regions:
+        summary.update(_build_regions(read["sections"], out))
+        summary["seconds"] = time.perf_counter() - started
+        (out / "vector_run.json").write_text(json.dumps(summary, indent=2) + "\n")
+        return summary
     try:
         from OCP.BinTools import BinTools
         from OCP.BRep import BRep_Builder

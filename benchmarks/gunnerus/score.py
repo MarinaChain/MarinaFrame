@@ -19,7 +19,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .hull_metrics import (area_below, cut_mesh, half_breadth_errors, mesh_triangles, mesh_volume,
+from .hull_metrics import (area_below, cut_mesh, half_breadth_errors, mesh_triangles, mesh_volume, tabulate_union,
                            tabulate, width_at)
 from .truth_cache import load_sections, read_brep
 
@@ -53,7 +53,12 @@ def _integrate(x: np.ndarray, values: np.ndarray) -> float:
     return float(np.trapezoid(values, x)) if len(x) >= 2 else 0.0
 
 
-def score(truth_dir: Path, model_path: Path | None, stations: list[dict], metric: dict, out: Path) -> dict:
+def score(truth_dir: Path, model_path: Path | None, stations: list[dict], metric: dict, out: Path, *,
+          union_cuts: bool = True) -> dict:
+    """Score one model. ``union_cuts`` (round 2 default) measures each
+    reconstruction cut as the union of cuts 0.1 um aft and forward of the
+    plane, so a region solid that ends on a station plane is counted there.
+    ``union_cuts=False`` reproduces the round 1 scorer (one cut 0.1 um forward)."""
     x_truth, truth_cuts = load_sections(truth_dir / "truth_sections.npz")
     hydro = json.loads((truth_dir / "truth_hydrostatics.json").read_text())
     z = np.round(np.arange(metric["z_min_m"], metric["z_max_m"] + 1e-9, metric["z_step_m"]), 6)
@@ -62,7 +67,7 @@ def score(truth_dir: Path, model_path: Path | None, stations: list[dict], metric
     truth_table = tabulate(truth_cuts, x_truth, z)
     truth_area = area_below(truth_table, draft)
     truth_waterline = width_at(truth_table, draft)
-    result = {"metric": metric, "truth_sections_sha256": hydro["sections_sha256"],
+    result = {"metric": metric, "truth_sections_sha256": hydro["sections_sha256"], "union_cuts": union_cuts,
               "stations_read": [s["id"] for s in stations if s.get("status") == "read"],
               "stations_not_read": [s for s in stations if s.get("status") != "read"],
               "truth_volume_below_draft_m3": _integrate(x_truth, truth_area),
@@ -82,7 +87,11 @@ def score(truth_dir: Path, model_path: Path | None, stations: list[dict], metric
 
     def recon_table(xs: list[float]):
         inward = [min(max(x, x_lo + STATION_CUT_OFFSET_M), x_hi - STATION_CUT_OFFSET_M) for x in xs]
-        return tabulate([cut_mesh(triangles, x, bounds) for x in inward], inward, z)
+        if not union_cuts:
+            return tabulate([cut_mesh(triangles, x, bounds) for x in inward], inward, z)
+        # cut_mesh moves its plane +0.1 um; these two cuts lie 0.1 um aft and forward of x.
+        return tabulate_union([[cut_mesh(triangles, x - 2.0e-7, bounds), cut_mesh(triangles, x, bounds)]
+                               for x in inward], inward, z)
 
     def truth_index(x: float) -> int:
         index = int(np.argmin(np.abs(x_truth - x)))

@@ -25,8 +25,24 @@ Station identity rules (vector path, body plan on layer 03_Lines_Frames1):
    junctions) that leave the centreline are ordered by keel height, highest
    (aftmost) first;
    labels #0, #5, #10, #15 and #20 must match the count. Frames 21-27 and
-   A-G are not identified: their keel heights converge and the drawing gives
-   no label to anchor them.
+   A-G are not identified by this rule: their keel heights converge and the
+   drawing gives no label to anchor them.
+
+Round 2 rules (``vector_config(round2=True)``, the default; ``round2=False``
+reproduces the round 1 configuration):
+
+5. Midbody (aft pieces after frame 20): each curve is compared with the
+   half-breadth plan. At every labelled waterline up to WL 1800 the curve's
+   outer half-breadth must equal the plan waterline's half-breadth at the
+   frame (lines_dxf.cross_view_identity: RMS <= 0.05 m, second-best frame at
+   least 2x worse, one curve per frame). Curves that fail are not used; a
+   frame with no matching curve is not read.
+6. Station top: each station ends at the upper crossing of the centreline
+   profile outline (the closed curve on the buttock layer) when that is below
+   the drawn top of the station curves (WL 7586.5). A curve that ends on the
+   side line follows it to this height.
+7. Stations are read as outline regions (multi-region sections), so twin-skeg
+   and bulb stations are no longer refused.
 """
 from __future__ import annotations
 
@@ -47,6 +63,17 @@ TOP_Y = 32708.0             # upper end of every full station curve
 VIEW_BOUNDS = (53500.0, 24400.0, 63400.0, 32800.0)
 LAYER = "03_Lines_Frames1"
 ENDPOINT_TOLERANCE = 1.0
+# Round 2 (docs/BENCHMARK_GUNNERUS.md section 7). The profile and the plan share
+# the body plan's drawing x: the transom is at X = 14343.7 in both, and the
+# profile grid tick of frame 0 is at X = 15343.7.
+PROFILE_FRAME0_X = 15343.7
+PLAN_FRAME0_X = 15343.7
+BASELINE_PROFILE_Y = BASELINE_Y       # the profile keel line sits on the same BASELINE
+PLAN_BOUNDS = (12000.0, 16400.0, 52000.0, 22000.0)
+PLAN_CENTRELINE_Y = 16646.0           # plan CL; the 4.8 m side line is at 21446
+# Stem and bulb pieces end on the drawn stem bar, 50 mm off the centreline; an
+# end within 0.1 m of the centreline is closed horizontally to it.
+CENTRELINE_CLOSURE_M = 0.1
 
 
 def frame_positions(doc) -> dict[str, float]:
@@ -123,7 +150,7 @@ def labelled_chain(label: tuple[np.ndarray, float], chains: list[np.ndarray], al
     return min(below, key=lambda k: _distance_to_polyline(point, chains[k]))
 
 
-def vector_config(dxf: Path) -> tuple[dict, list[dict]]:
+def vector_config(dxf: Path, round2: bool = True) -> tuple[dict, list[dict]]:
     import ezdxf
 
     doc = ezdxf.readfile(str(dxf))
@@ -213,14 +240,93 @@ def vector_config(dxf: Path) -> tuple[dict, list[dict]]:
         x = round(0.5 * frame, 4)
         stations.append({"id": f"fr{frame}", "x_m": x, "side": -1, "pick_xy": distinctive_point(k, chains),
                          "evidence": "aft ordering rule anchored on #0/#5/#10/#15/#20"})
+    side_top = (TOP_Y - BASELINE_Y) / 1000.0
+    if round2:
+        # Rule 5: midbody frames by cross-view half-breadths (plan waterlines).
+        midbody = full_aft[resolved + 21:]
+        known = {s["id"] for s in stations}
+        wanted = [name for name in [*(str(n) for n in range(21, 28)), *"ABCDEFG"] if f"fr{name}" not in known]
+        references = plan_waterline_references(doc, {name: frames[name] if name in frames else 0.5 * int(name)
+                                                      for name in wanted})
+        curves = {str(k): lines_dxf.to_half_section_m(chains[k], view, -1) for k in midbody}
+        assigned, cross_ledger = lines_dxf.cross_view_identity(curves, references)
+        ledger.append({"rule": "midbody cross-view", "waterline_heights_m": sorted({z for t in references.values() for z in t}),
+                       "curves": cross_ledger, "frames_without_curve": sorted(set(wanted) - set(assigned.values()))})
+        for key, name in assigned.items():
+            x = frames[name] if name in frames else round(0.5 * int(name), 4)
+            best = next(e for e in cross_ledger if e["curve"] == key)["candidates"][:2]
+            stations.append({"id": f"fr{name}", "x_m": x, "side": -1, "pick_xy": distinctive_point(int(key), chains),
+                             "evidence": f"cross-view rule: plan waterline half-breadths, best {best}"})
+        # Rule 6: each station ends at the top of the centreline profile outline.
+        outline = profile_outline(doc)
+        for station in stations:
+            top = profile_top(outline, station["x_m"])
+            if top is not None and top < side_top:
+                station["top_z_m"] = round(top, 4)
+                station["top_evidence"] = "upper crossing of the centreline profile outline (03_Lines_Buttocks) at the station"
     stations.sort(key=lambda s: s["x_m"])
     config = {"dxf": str(dxf), "view": {**view.__dict__, "bounds": list(view.bounds), "layers": list(view.layers)},
-              "side_line": {"y_m": (SIDE_X[1] - CENTRELINE_X) / 1000.0, "top_z_m": (TOP_Y - BASELINE_Y) / 1000.0,
+              "side_line": {"y_m": (SIDE_X[1] - CENTRELINE_X) / 1000.0, "top_z_m": side_top,
                             "tolerance_m": 0.002, "require_end": True},
               "stations": stations, "pick_tolerance": 5.0,
               "provenance": "Assistant-read from Lines Plan Rev0.dxf by make_gunnerus_configs.py rules; provisional.",
               "frames_from_profile_grid": frames}
+    if round2:
+        config.update(regions=True, centreline_closure_m=CENTRELINE_CLOSURE_M)
     return config, ledger
+
+
+def plan_waterline_references(doc, frame_x: dict[str, float]) -> dict[str, dict[float, float]]:
+    """Plan-view half-breadth of each labelled waterline at each frame: {frame: {z_m: hb_m}}.
+
+    A waterline chain takes the WL label nearest to it if that label is within
+    120 drawing units and at least twice as near as the next label. Only
+    waterlines up to WL 1800 are used: above it the midbody is wall sided and
+    every frame has the same half-breadth.
+    """
+    view = lines_dxf.BodyPlanView(centreline_x=PLAN_BOUNDS[0], baseline_y=PLAN_BOUNDS[1], units_per_metre=1000.0,
+                                  bounds=PLAN_BOUNDS, layers=("03_Lines_Waterlines",))
+    chains = lines_dxf.chain_fragments(lines_dxf.read_view_curves(doc, view), ENDPOINT_TOLERANCE)
+    labels = []
+    for e in doc.modelspace():
+        if e.dxftype() == "TEXT" and re.fullmatch(r"WL\s+\d+", e.dxf.text.strip()):
+            point = np.array([e.dxf.insert.x, e.dxf.insert.y])
+            if PLAN_BOUNDS[0] < point[0] < PLAN_BOUNDS[2] and PLAN_BOUNDS[1] < point[1] < PLAN_BOUNDS[3]:
+                labels.append((int(e.dxf.text.split()[-1]), point))
+    by_height: dict[int, list[np.ndarray]] = {}
+    for chain in chains:
+        nearest = sorted((_distance_to_polyline(point, chain), height) for height, point in labels)
+        if nearest[0][0] < 120 and (len(nearest) < 2 or nearest[1][0] > 2 * nearest[0][0]):
+            by_height.setdefault(nearest[0][1], []).append(chain)
+    references = {}
+    for name, x in frame_x.items():
+        table = {}
+        for height, wl_chains in by_height.items():
+            if height <= 1800:
+                value = lines_dxf.plan_half_breadth_at(wl_chains, PLAN_FRAME0_X + 1000.0 * x, PLAN_CENTRELINE_Y, 1000.0)
+                if np.isfinite(value):
+                    table[height / 1000.0] = value
+        references[name] = table
+    return references
+
+
+def profile_outline(doc) -> np.ndarray:
+    """The centreline profile outline: the longest closed curve on the buttock layer in the profile view."""
+    best = None
+    for e in doc.modelspace():
+        if e.dxf.layer == "03_Lines_Buttocks" and e.dxftype() in lines_dxf.SUPPORTED_ENTITIES:
+            points = lines_dxf._entity_points(e, 1.0)
+            if points is not None and np.allclose(points[0], points[-1]) and (best is None or len(points) > len(best)):
+                best = points
+    if best is None:
+        raise SystemExit("No closed centreline profile outline found; stop.")
+    return best
+
+
+def profile_top(outline: np.ndarray, x_m: float) -> float | None:
+    """Highest point of the profile outline at a station, as height above the baseline."""
+    values = lines_dxf._level_crossings(outline, 0, PROFILE_FRAME0_X + 1000.0 * x_m)
+    return (float(values.max()) - BASELINE_PROFILE_Y) / 1000.0 if len(values) else None
 
 
 def raster_config(pdf: Path, stations: list[dict]) -> dict:
