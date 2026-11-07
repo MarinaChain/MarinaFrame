@@ -184,8 +184,10 @@ are confirmed by the user for these datasets; HAER sheets are additionally publi
 | `haer/ca_thayer/` | HAER CA-61: 12 of 38 sheets (1, 5–14, 37); no lines plan or offset table on Commons | 12 MB | Commons size + SHA-1 |
 
 Total under `work/sources/`: about 3.9 GB, inside the 5 GB working target; 26 GB free.
-Missing from Commons: Wapama sheet 8 and 26 C.A. Thayer sheets (loc.gov refuses automated
-download with HTTP 403; not worked around).
+Missing from Commons: Wapama sheet 8 and 26 C.A. Thayer sheets. Later on 2026-11-07 the user
+completed the loc.gov Cloudflare check in Arc, and the sheets were fetched through that browser
+session (`manifest-loc.tsv` in each folder). Now held: Wapama 22 of 22, C.A. Thayer 37 of 38
+(sheet 19 did not download).
 
 ## Next steps (resume here)
 
