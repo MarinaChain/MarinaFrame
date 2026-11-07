@@ -275,3 +275,23 @@ worse than an abstention.
 - The founder expects DeepSeek to extract numbers from pixels well. To be measured before
   deciding how freely the model may set numbers: DeepSeek localisation accuracy vs factory truth
   and vs the deterministic tracer (after W12's vision-request command merges).
+
+## W11 + W12 merged (2026-11-08, GPT Sol via router-task)
+
+- W11 LLM line identity (docs/LLM_LINE_IDENTITY.md): investigation tools with ink-snapped
+  verification; 11/11 guard mutations caught. Three arms on 360 factory development sections:
+  abstain 0 lines; deterministic draft 138 (45 visibly hull-side); LLM live 34 (25 hull-side,
+  36 no-progress stops). Authentic sheets: live 20/105 lines, no complete station identity.
+  Gunnerus: no model in any arm. LLM did not improve the geometry gate.
+- W12 LLM setup + veto (docs/LLM_SETUP_AND_REVIEW.md): setup not usable yet (layout 22/40,
+  centreline median 209 px, baseline 472 px, panel corners 370 px, 0 publishable specs). Veto
+  reviewer: on the silent wrong build 4 true vetoes, 3 misses; 0 false vetoes on 18 correct
+  stations. Root cause of `sysser45-L1`: global z=0 requirements reach below local hull
+  bottoms; traces fill those rows with buttock-grid strokes, then switch to the hull line.
+  Proposed fix: source-supported local endpoints and whole-stroke identity checks.
+- Usage (list cost; reported charge $0): W11 488 requests, 3.78 M prompt tokens, $0.544;
+  W12 646 calls, 0.69 M prompt tokens, $0.220.
+- Three W12 overlays of restricted or unclear-licence drawings (ALMA, Gunnerus) were removed from
+  the branch history before merging (kept locally in work/archived-runs/w12-restricted/).
+- Hypothesis under test (W14): the large setup errors and "upper-left" placements may be a
+  coordinate-frame bug in the harness (normalized or downscaled coordinates), not a model limit.
