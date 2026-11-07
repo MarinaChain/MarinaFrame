@@ -16,7 +16,6 @@ from PIL import Image, ImageDraw
 from vessel_reconstruction import pipeline
 from vessel_reconstruction.pipeline import reconstruct, recover_interrupted_run, verify_run
 from vessel_reconstruction.provenance import digest_file
-from vessel_reconstruction.review import record_review, review_state
 from vessel_reconstruction.schema import loads_bounded_json, validate_spec
 from vessel_reconstruction.transaction import RunPublicationError, RunTransaction
 
@@ -426,17 +425,6 @@ def test_implementation_replay_uses_bytecode_flag_to_preserve_original_evidence(
                                env=environment, capture_output=True, text=True, timeout=15)
     assert completed.returncode == 0, completed.stderr
     assert not list((root / "implementation_source").rglob("__pycache__"))
-    assert verify_run(root)["valid"]
-
-
-def test_review_events_do_not_mutate_inference_or_manifest(good_run, tmp_path):
-    root = cloned_run(good_run, tmp_path)
-    result = json.loads((root / "result.json").read_text())
-    before = {name: digest_file(root / name) for name in ("result.json", "manifest.json")}
-    event = record_review(root, decision="accept_geometry", reviewer="Local tester", notes="Controlled geometry reviewed only.", expected_run_id=result["run_id"])
-    assert event["engineering_approved"] is False
-    assert before == {name: digest_file(root / name) for name in before}
-    assert review_state(root)["state"] == "accept_geometry"
     assert verify_run(root)["valid"]
 
 

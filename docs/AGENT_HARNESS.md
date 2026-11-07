@@ -1,5 +1,7 @@
 # MarinaFrame 0.3: a model inside a bounded CAD workflow
 
+> **Historical (0.5):** the Python Harness, `vessel-reconstruct agent ...`, `agent_review` and `agent_provider` described here were removed. Rust (`rust-control/`) is the control plane; see `docs/RUST_CONTROL_PLANE.md`. Results below stay as recorded.
+
 ## Scope
 
 The harness coordinates a pretrained decision model and a deterministic reconstruction engine. It accepts **calibrated section drawings**, with declared panels, longitudinal stations, units, symmetry, datum, scale and vertical extents. It does not infer those facts from an arbitrary drawing set. Its output is a provisional hull envelope, not a fabrication model, approved ship design or certified displacement calculation.

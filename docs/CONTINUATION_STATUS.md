@@ -58,7 +58,7 @@ installed only to prove the OCR code before its removal; it is no longer used.
   `~/.config/marinaframe/opencode-go-keys.txt` (mode 600). It prints no key.
 - Live check 2026-11-07 (usage GETs only): slot 1 usable (max 46 %, weekly); slots 2 and 3 at
   monthly 100 % (`rate-limited`).
-- The Python `agent_provider.py` (legacy harness only) still uses one key.
+- The Python `agent_provider.py` was removed in 0.5; only the Rust provider worker remains.
 
 ## Verification matrix (macOS arm64, Python 3.12, Rust 1.99.1)
 
@@ -100,10 +100,8 @@ manifest, so the old fabricated-build fixture cannot pass it.
 
 ## Next steps (resume here)
 
-1. **Retire the legacy path**: `agent_harness`, `agent_cli`, `agent_review`, `agent_provider`,
-   `server`, `jobs`, `review`, `web/` with their tests (~100 tests). Its finalization is no longer
-   guarded by Python tests. `benchmarks/reproduce_validation_cache.py` (historical 0.3 probe)
-   uses the Harness; keep the probe's historical output when it goes.
+1. **Retire the legacy path** (done): removed `agent_harness`, `agent_cli`, `agent_review`, `agent_provider`, `server`, `jobs`, `review`, `web/`, their tests and the CI/installed-smoke steps. The CLI keeps `reconstruct` and `verify`. The 0.3 probe is recorded in `docs/HISTORICAL_VALIDATION_PROBE.md`.
+   Open: `benchmarks/live_harness_pilot.py`, `reaudit_preserved_native_run.py` and `v04_control_parity.py` (Python arm) still import removed modules; they are marked historical.
 2. Implement table reading with the DeepSeek vision model, replacing the removed OCR path.
 3. Keep data-pipeline and benchmark tests while roadmap steps 5–6 (licensed data, new evaluation)
    use them.

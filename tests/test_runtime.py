@@ -1,7 +1,5 @@
 """Controlled process/queue faults; all fixtures have small host budgets."""
 from dataclasses import asdict, replace
-import hashlib
-import io
 import json
 import os
 from pathlib import Path
@@ -11,32 +9,11 @@ import sys
 import threading
 import time
 
-import pytest
-from PIL import Image
-
 from vessel_reconstruction.isolation import WorkerLimits, _proc_path, kill_process_tree, process_identity, safe_worker_environment, supervise_process
-from vessel_reconstruction.jobs import AdmissionError, JobQueue
 from vessel_reconstruction.resources import native_resource_profile
 
 
 LIMITS = WorkerLimits(wall_seconds=3, cpu_seconds=2, memory_bytes=256*1024**2, file_bytes=1024**2, output_bytes=1024**2, termination_grace_seconds=0.05)
-
-
-def image_bytes():
-    buffer = io.BytesIO(); Image.new('RGB',(8,8),'white').save(buffer, format='PNG'); return buffer.getvalue()
-
-
-def reserve(queue, key=None):
-    raw = image_bytes()
-    descriptor = {'primary': {'bytes': len(raw), 'sha256': hashlib.sha256(raw).hexdigest()}}
-    job, created = queue.reserve({'source': {}, 'vessel_id': 'runtime-fixture'}, descriptor, idempotency_key=key)
-    return job, raw
-
-
-def upload(queue, job, raw):
-    part, descriptor = queue.begin_source(job['id'], 'primary', len(raw)); part.write_bytes(raw)
-    queue.finish_source(job['id'], 'primary', part, hashlib.sha256(raw).hexdigest())
-    return queue.submit(job['id'])
 
 
 def stopped(pid):
@@ -126,121 +103,11 @@ def test_actual_cpu_address_space_and_file_limits(tmp_path):
     assert result['state'] == 'resource_limited' and result['exit_code'] == -signal.SIGXCPU
 
 
-def test_queue_saturation_idempotency_and_cancel_before_work(tmp_path):
-    queue = JobQueue(tmp_path/'artifacts', limits=LIMITS, max_pending=1, min_free_bytes=0, start_worker=False)
-    try:
-        job, raw = reserve(queue, 'idempotent-key-1')
-        duplicate, again = reserve(queue, 'idempotent-key-1')
-        assert duplicate['id'] == job['id']
-        with pytest.raises(AdmissionError, match='full'):
-            reserve(queue)
-        descriptors = {'primary': {'bytes': 2, 'sha256': 'a'*64}}
-        with pytest.raises(AdmissionError) as conflict:
-            queue.reserve({'source': {}}, descriptors, idempotency_key='idempotent-key-1')
-        assert conflict.value.status == 409
-        queued = upload(queue, job, raw); assert queued['state'] == 'queued'
-        assert queue.cancel(job['id'])['state'] == 'cancelled'
-        assert not (queue.runs/job['id']).exists()
-        reserve(queue)
-    finally:
-        queue.close()
-
-
-def test_disk_admission_rejects_before_input_spool(tmp_path):
-    queue = JobQueue(tmp_path/'artifacts', limits=LIMITS, max_disk_bytes=1, min_free_bytes=0, start_worker=False)
-    try:
-        with pytest.raises(AdmissionError) as caught: reserve(queue)
-        assert caught.value.status == 507
-        assert list(queue.inputs.iterdir()) == []
-    finally: queue.close()
-
-
-def test_queue_survives_restart_and_marks_abandoned_work(tmp_path):
-    root = tmp_path/'artifacts'
-    queue = JobQueue(root, limits=LIMITS, min_free_bytes=0, start_worker=False)
-    running, raw = reserve(queue); upload(queue, running, raw)
-    waiting, raw = reserve(queue); upload(queue, waiting, raw)
-    partial, raw = reserve(queue)
-    with queue.lock:
-        job = queue._get(running['id']); job['state'] = 'running'; queue._save(job)
-    queue.close()
-    queue = JobQueue(root, limits=LIMITS, min_free_bytes=0, start_worker=False)
-    try:
-        assert queue.get(running['id'])['state'] == 'interrupted'
-        assert queue.get(partial['id'])['state'] == 'interrupted'
-        assert queue.get(waiting['id'])['state'] == 'queued'
-        assert queue._source_integrity(queue.get(waiting['id'], internal=True))
-        (queue.inputs/waiting['id']/'drawing.png').write_bytes(b'changed')
-        assert not queue._source_integrity(queue.get(waiting['id'], internal=True))
-    finally: queue.close()
-
-
-def test_receiving_expiry_input_retention_and_backup_restore(tmp_path):
-    root = tmp_path/'artifacts'
-    queue = JobQueue(root, limits=LIMITS, min_free_bytes=0, receiving_seconds=0.01, input_retention_seconds=0, start_worker=False)
-    job, raw = reserve(queue)
-    time.sleep(0.02); queue.maintain()
-    assert queue.get(job['id'])['state'] == 'interrupted'
-    assert not (queue.inputs/job['id']).exists()
-    queued, raw = reserve(queue); upload(queue, queued, raw)
-    (queue.runs/'retained.txt').write_text('backup evidence')
-    backup = queue.backup(tmp_path/'backup'); queue.close()
-    restored = JobQueue(backup, limits=LIMITS, min_free_bytes=0, start_worker=False)
-    try:
-        assert restored.get(queued['id'])['state'] == 'queued'
-        assert restored._source_integrity(restored.get(queued['id'], internal=True))
-        assert (restored.runs/'retained.txt').read_text() == 'backup evidence'
-    finally: restored.close()
-
-
-def test_single_controller_and_corrupted_state_fail_closed(tmp_path):
-    root = tmp_path/'artifacts'
-    queue = JobQueue(root, limits=LIMITS, min_free_bytes=0, start_worker=False)
-    try:
-        with pytest.raises(RuntimeError, match='already owns'):
-            JobQueue(root, limits=LIMITS, start_worker=False)
-    finally: queue.close()
-    (root/'.workbench'/'jobs.sqlite3').write_bytes(b'not sqlite')
-    with pytest.raises(Exception): JobQueue(root, limits=LIMITS, start_worker=False)
-
-
 def test_quick_exit_still_checks_aggregate_output_budget(tmp_path):
     out=tmp_path/'run';out.mkdir()
     code=f"from pathlib import Path; Path({str(out/'file.bin')!r}).write_bytes(b'x'*2048)"
     result=supervise_process([sys.executable,'-c',code],limits=replace(LIMITS,output_bytes=1024),output_dir=out)
     assert result['state']=='resource_limited'
-
-
-def test_queued_spec_cannot_change_independently_of_descriptor(tmp_path):
-    queue=JobQueue(tmp_path/'artifacts',limits=LIMITS,min_free_bytes=0,start_worker=False)
-    try:
-        job,raw=reserve(queue);upload(queue,job,raw)
-        internal=queue.get(job['id'],internal=True)
-        assert queue._source_integrity(internal)
-        spec=queue.inputs/job['id']/'spec.json'
-        value=json.loads(spec.read_text());value['vessel_id']='changed-after-admission';spec.write_text(json.dumps(value))
-        assert not queue._source_integrity(internal)
-    finally:queue.close()
-
-
-def test_idle_maintenance_expires_upload_without_new_admission(tmp_path):
-    queue=JobQueue(tmp_path/'artifacts',limits=LIMITS,min_free_bytes=0,receiving_seconds=.05,input_retention_seconds=0)
-    try:
-        job,raw=reserve(queue)
-        deadline=time.monotonic()+2
-        while queue.get(job['id'])['state']=='receiving' and time.monotonic()<deadline:time.sleep(.05)
-        assert queue.get(job['id'])['state']=='interrupted'
-        assert not (queue.inputs/job['id']).exists()
-    finally:queue.close()
-
-
-def test_readiness_reflects_storage_admission_not_only_free_disk(tmp_path):
-    queue=JobQueue(tmp_path/'artifacts',limits=LIMITS,max_disk_bytes=1024,min_free_bytes=0)
-    try:
-        health=queue.health()
-        assert health['live'] and health['worker_alive'] and not health['ready']
-        assert health['admission_blocker']=='disk_budget'
-    finally:queue.close()
 
 
 def test_real_isolated_blocked_job_and_worker_telemetry(tmp_path):
@@ -254,21 +121,6 @@ def test_real_isolated_blocked_job_and_worker_telemetry(tmp_path):
     assert outcome['exit_code']==0
 
 
-def test_real_queue_job_reaches_durable_blocked_state(tmp_path):
-    queue=JobQueue(tmp_path/'artifacts',min_free_bytes=0)
-    try:
-        job,raw=reserve(queue);upload(queue,job,raw)
-        deadline=time.monotonic()+5
-        while queue.get(job['id'])['state'] in {'queued','running'} and time.monotonic()<deadline:time.sleep(.05)
-        final=queue.get(job['id'])
-        assert final['state']=='blocked' and final['result_status']=='blocked'
-        assert final['resources']['peak_rss_kib']>0
-    finally:queue.close()
-    restored=JobQueue(tmp_path/'artifacts',min_free_bytes=0,start_worker=False)
-    try: assert restored.get(job['id'])['state']=='blocked'
-    finally:restored.close()
-
-
 def test_output_quota_uses_literal_transaction_basename(tmp_path):
     from vessel_reconstruction.isolation import _output_bytes
     unrelated=tmp_path/('.run-a.staging-'+'a'*32);unrelated.mkdir();(unrelated/'file.bin').write_bytes(b'x'*2048)
@@ -276,13 +128,3 @@ def test_output_quota_uses_literal_transaction_basename(tmp_path):
     assert _output_bytes(requested,1024)==0
     own=tmp_path/('.run-[ab].staging-'+'b'*32);own.mkdir();(own/'file.bin').write_bytes(b'x'*10)
     assert _output_bytes(requested,1024)==10
-
-
-def test_backup_does_not_follow_symlink_to_external_data(tmp_path):
-    root=tmp_path/'artifacts';queue=JobQueue(root,limits=LIMITS,min_free_bytes=0,start_worker=False)
-    outside=tmp_path/'outside';outside.mkdir();(outside/'private.txt').write_text('outside artifact root')
-    (root/'external').symlink_to(outside,target_is_directory=True)
-    try:
-        with pytest.raises(ValueError,match='symbolic links'):queue.backup(tmp_path/'backup')
-        assert not (tmp_path/'backup').exists()
-    finally:queue.close()

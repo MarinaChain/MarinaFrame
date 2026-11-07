@@ -2,6 +2,8 @@
 
 # Reconstruction benchmark
 
+> **Historical scripts (0.5):** `live_harness_pilot.py`, `reaudit_preserved_native_run.py` and the Python arm of `v04_control_parity.py` import the removed `agent_harness`/`agent_provider` modules. They are kept as records and run only against a pre-0.5 checkout (commit `19afbeb` or earlier). The 0.3 validation probe was removed; see `docs/HISTORICAL_VALIDATION_PROBE.md`.
+
 This benchmark tests a specific assisted workflow: an operator identifies one starboard section per panel, supplies its station position, scale, origin, vertical extent, symmetry and terminal closure, and the parser reconstructs the section from raster pixels. It does not test automatic interpretation of arbitrary ship drawings. The implementation uses computer vision and a CAD kernel; this suite neither trains nor evaluates an LLM.
 
 ## Frozen test design

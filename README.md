@@ -117,17 +117,11 @@ Input/JSON geometry uses **metres**. OpenCascade, STEP and STL coordinates use *
 
 The result is an enclosed, interpolated hull envelope over supplied stations and height domains. Terminal, upper and nonzero-width lower closures are mathematical assumptions. Envelope volume is not certified displacement. Thickness, structure, compartments, equipment, stability, current vessel condition and fabrication readiness are outside the demonstrated scope.
 
-## Explicit Python fallback
+## Python command line
 
-The repaired Python engine and harness remain separately runnable. Rust never falls back silently:
+The legacy Python controller (`agent_harness`, `agent_cli`, `agent_review`, `agent_provider`), the local workbench server, its job queue and the Python review log were removed in 0.5. Rust is the only control plane. `vessel-reconstruct` keeps two commands that use only the pipeline: `reconstruct SPEC --out DIR` (isolated deterministic engine run) and `verify RUN`.
 
-```bash
-vessel-reconstruct agent run "$MARINAFRAME_RUN_ROOT/input/spec.json" \
-  --out "$MARINAFRAME_RUN_ROOT/python-task" --policy deterministic
-vessel-reconstruct agent verify "$MARINAFRAME_RUN_ROOT/python-task"
-```
-
-Default policies have different view schedules, so raw product-arm latency is not a language-only comparison. The performance study aligns source selections, CAD operations and view counts explicitly. Native CAD remains the geometry implementation; no general Rust CAD speedup is claimed.
+The 0.4 control-plane comparison used default policies with different view schedules, so raw product-arm latency is not a language-only comparison. The performance study aligns source selections, CAD operations and view counts explicitly. Native CAD remains the geometry implementation; no general Rust CAD speedup is claimed.
 
 ## Verification and dependencies
 

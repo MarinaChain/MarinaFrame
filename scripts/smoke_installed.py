@@ -1,6 +1,5 @@
 """Exercise the installed wheel, with isolated Python imports outside the source tree."""
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -28,10 +27,9 @@ def main():
                 raise RuntimeError(f'{name} failed: see its retained log')
             return result.stdout
         run('import', [sys.executable, '-I', '-c',
-            'import vessel_reconstruction as v; from importlib.resources import files; '
+            'import vessel_reconstruction as v; '
             'print(v.__version__,v.__file__); '
-            'assert "site-packages" in v.__file__; '
-            'assert all((files(v)/"web"/n).is_file() for n in ("index.html","app.js","style.css"))'])
+            'assert "site-packages" in v.__file__'])
         run('pip-check', [sys.executable, '-I', '-m', 'pip', 'check'])
         run('help', [sys.executable, '-I', '-m', 'vessel_reconstruction', '--help'])
         run('example', [sys.executable, str(repo/'examples/make_development_example.py')])
@@ -39,14 +37,6 @@ def main():
         run_dir = out/'run'
         run('reconstruct', cli + ['reconstruct', str(repo/'data/examples/development/spec.json'), '--out', str(run_dir)])
         run('verify', cli + ['verify', str(run_dir)])
-        result_file = run_dir/'result.json'
-        before = hashlib.sha256(result_file.read_bytes()).hexdigest()
-        identifier = json.loads(result_file.read_text())['run_id']
-        run('review', cli + ['review', str(run_dir), '--decision', 'needs_information', '--reviewer', 'Installed-wheel test',
-            '--notes', 'Synthetic development run; no engineering signoff.', '--expected-run-id', identifier])
-        assert hashlib.sha256(result_file.read_bytes()).hexdigest() == before
-        run('verify-after-review', cli + ['verify', str(run_dir)])
-        run('snapshot', cli + ['snapshot', str(run_dir), '--out', str(out/'snapshot.html')])
     (out/'commands.json').write_text(json.dumps(rows, indent=2))
     print(json.dumps({'checks': len(rows), 'all_passed': True, 'output': str(out)}, indent=2))
 

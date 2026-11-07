@@ -1,5 +1,7 @@
 # MarinaFrame 0.3 — implementation and evaluation report
 
+> **Historical (0.5):** the Python Harness, `vessel-reconstruct agent ...`, `agent_review` and `agent_provider` described here were removed. Rust (`rust-control/`) is the control plane; see `docs/RUST_CONTROL_PLANE.md`. Results below stay as recorded.
+
 **7 November 2026, Asia/Singapore**
 
 **Evaluation freeze:** `0ba5a49efd1a54bc62bbe5ff44ce219e70c705cb`

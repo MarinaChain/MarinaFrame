@@ -4,18 +4,10 @@ import json
 
 import pytest
 
-from benchmarks.reproduce_validation_cache import probe
 from vessel_reconstruction.provenance import write_json
 from vessel_reconstruction.validation_contract import (ValidationContractError, ready_for_review,
                                                        validate_contract_shape, verify_validation)
 from validation_fixture import ControlledValidationDomain
-
-
-def test_incomplete_legacy_probe_cannot_reach_review_ready(tmp_path):
-    result = probe(tmp_path / "original-controlled-cache")
-    assert result["first_ok"] is result["second_ok"] is False
-    assert result["final_controller_status"] == "blocked"
-    assert result["engineering_approved"] is False
 
 
 def test_complete_failed_audit_stays_failed_when_cached(tmp_path):
