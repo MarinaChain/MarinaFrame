@@ -233,7 +233,10 @@ def summarize(run: Path, input_dir: Path, truth: Path | None, metric: Path | Non
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["prepare-gunnerus", "prepare-sheet", "run", "summarize"])
+    parser.add_argument("command", choices=["prepare-gunnerus", "prepare-sheet", "run", "batch", "summarize"])
+    parser.add_argument("--root", type=Path, help="batch: folder with one <sheet>/input per sheet")
+    parser.add_argument("--sheets", help="batch: comma-separated sheet folders")
+    parser.add_argument("--arms", help="batch: comma-separated arms, run in order per sheet")
     parser.add_argument("--sheet", choices=sorted(SHEETS))
     parser.add_argument("--derivatives", type=Path)
     parser.add_argument("--input", type=Path)
@@ -251,6 +254,13 @@ def main() -> None:
         result = prepare_sheet(args.sheet, args.derivatives, args.out)
     elif args.command == "run":
         result = run_arm(args.arm, args.input, args.out, args.controller, args.python)
+    elif args.command == "batch":
+        result = {}
+        for sheet in args.sheets.split(","):
+            for arm in args.arms.split(","):
+                result[f"{sheet}/{arm}"] = run_arm(arm, args.root / sheet / "input", args.root / sheet / arm,
+                                                   args.controller, args.python)
+                print(json.dumps({f"{sheet}/{arm}": result[f"{sheet}/{arm}"]}), flush=True)
     else:
         result = summarize(args.run, args.input, args.truth, args.metric)
         result = {k: v for k, v in result.items() if k != "lines"}
