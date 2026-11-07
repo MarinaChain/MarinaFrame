@@ -102,6 +102,7 @@ fn provider_fixture() -> (tempfile::TempDir, store::Store, Pending, Receipt) {
         aggregate_token_cap: None,
         aggregate_spend_cap: None,
         evidence_mode: "live".into(),
+        credential_selection: None,
     };
     (directory, store, pending, receipt)
 }

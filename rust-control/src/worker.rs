@@ -236,18 +236,31 @@ pub fn run(
             if libc::setsid() < 0 {
                 return Err(std::io::Error::last_os_error());
             }
+            // Linux stops the worker when the controller dies. macOS has no
+            // parent-death signal: an orphaned worker there is bounded only by
+            // its RLIMIT_CPU limit (see docs/CONTINUATION_STATUS.md).
+            #[cfg(target_os = "linux")]
             if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) < 0 {
                 return Err(std::io::Error::last_os_error());
             }
             if libc::getppid() != parent {
                 return Err(std::io::Error::other("parent changed"));
             }
-            for (which, soft, hard) in [
-                (libc::RLIMIT_AS, memory, memory),
+            // On macOS RLIMIT_AS is an alias of RLIMIT_RSS: the kernel rejects
+            // lowering it and does not enforce RSS limits. The worker memory
+            // limit is therefore Linux-only (see docs/CONTINUATION_STATUS.md).
+            #[cfg(target_os = "linux")]
+            let memory_limit = Some((libc::RLIMIT_AS, memory, memory));
+            #[cfg(not(target_os = "linux"))]
+            let memory_limit = {
+                let _ = memory;
+                None
+            };
+            for (which, soft, hard) in memory_limit.into_iter().chain([
                 (libc::RLIMIT_CPU, cpu, cpu + 1),
                 (libc::RLIMIT_FSIZE, 256 * 1024 * 1024, 256 * 1024 * 1024),
                 (libc::RLIMIT_NOFILE, 128, 128),
-            ] {
+            ]) {
                 let lim = libc::rlimit {
                     rlim_cur: soft as libc::rlim_t,
                     rlim_max: hard as libc::rlim_t,

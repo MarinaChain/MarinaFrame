@@ -12,6 +12,8 @@ from pathlib import Path
 import resource
 import time
 
+from .resources import native_resource_profile, peak_rss_kib
+
 
 def _reimport(run: Path):
     from .provenance import digest_file, safe_relative_file
@@ -45,6 +47,7 @@ def _reimport(run: Path):
 def render_step(run: Path, view: str, out: Path):
     import numpy as np
     from PIL import Image, ImageDraw, ImageFont
+    from .fonts import dejavu_sans
     from OCP.BRepMesh import BRepMesh_IncrementalMesh
     shape, record, audit = _reimport(run)
     if view not in {"body", "plan", "profile", "oblique"}:
@@ -77,8 +80,8 @@ def render_step(run: Path, view: str, out: Path):
     canvas = Image.new("RGB", (1200, 820), "#f4f7fa")
     draw = ImageDraw.Draw(canvas)
     try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
-        small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 15)
+        font = dejavu_sans(18)
+        small = dejavu_sans(15)
     except OSError:
         font = small = ImageFont.load_default()
     draw.text((28, 20), "PROVISIONAL HULL | " + view.upper() + " | ACTUAL STEP REIMPORT", fill="#17344a", font=font)
@@ -110,6 +113,7 @@ def audit_step(run: Path, out: Path):
     import cadquery as cq
     import numpy as np
     from PIL import Image, ImageDraw, ImageFont
+    from .fonts import dejavu_sans
     from .provenance import write_json
     shape, record, audit = _reimport(run)
     source_sections = record["sections"]
@@ -148,7 +152,7 @@ def audit_step(run: Path, out: Path):
         width, height = 950, 750
         canvas = Image.new("RGB", (width, height), "white"); draw = ImageDraw.Draw(canvas)
         try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
+            font = dejavu_sans(16)
         except OSError:
             font = ImageFont.load_default()
         draw.text((24, 18), f"{section['id']} | observed source centre vs ACTUAL STEP CUT at x={x:.6g} m", fill="#17344a", font=font)
@@ -206,8 +210,8 @@ def main():
         usage = resource.getrusage(resource.RUSAGE_SELF)
         result["resources"] = {"wall_seconds": round(time.monotonic() - started, 4),
                                "cpu_seconds": round(usage.ru_utime + usage.ru_stime, 4),
-                               "peak_rss_kib": usage.ru_maxrss,
-                               "resource_profile": "linux_rlimit_process_group_v1"}
+                               "peak_rss_kib": peak_rss_kib(usage.ru_maxrss),
+                               "resource_profile": native_resource_profile()}
         write_json(args.out / "observation.json", result)
         return 0
     except BaseException as exc:

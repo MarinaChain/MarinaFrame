@@ -1,4 +1,7 @@
 //! A bounded Rust HTTP worker. It cannot execute CAD, modify a task or approve it.
+#[path = "credentials.rs"]
+pub mod credentials;
+
 use crate::types::{Decision, GO_ENDPOINT, GO_MODEL};
 use crate::util::{self, Result};
 use base64::{engine::general_purpose::STANDARD, Engine};
@@ -85,6 +88,10 @@ pub struct Receipt {
     pub aggregate_token_cap: Option<u64>,
     pub aggregate_spend_cap: Option<f64>,
     pub evidence_mode: String,
+    /// Which OpenCode Go account slot was used and why; never holds a key.
+    /// Absent in receipts written before key rotation existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential_selection: Option<Value>,
 }
 fn check_input(input: &ProviderInput) -> Result<Vec<u8>> {
     if input.protocol != PROTOCOL
@@ -176,6 +183,34 @@ fn usage(body: &Value) -> Value {
     }
     Value::Object(out)
 }
+const USER_AGENT: &str = "MarinaFrame/0.4 Rust control plane";
+const MAX_USAGE_RESPONSE_BYTES: usize = 65_536;
+
+/// Read one account's Go usage meters. This GET makes no generation request.
+fn read_usage(client: &reqwest::blocking::Client, key: &str) -> Result<Value> {
+    let response = client
+        .get(credentials::USAGE_ENDPOINT)
+        .bearer_auth(key)
+        .header("Accept", "application/json")
+        .header("User-Agent", USER_AGENT)
+        .send()
+        .map_err(|_| "provider_usage_transport")?;
+    if response.status().as_u16() != 200 {
+        return Err("provider_usage_http_failure".into());
+    }
+    let mut bytes = vec![];
+    response
+        .take(MAX_USAGE_RESPONSE_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "provider_usage_read")?;
+    if bytes.len() > MAX_USAGE_RESPONSE_BYTES
+        || bytes.windows(key.len()).any(|b| b == key.as_bytes())
+    {
+        return Err("provider_usage_rejected".into());
+    }
+    util::strict_value(&bytes, MAX_USAGE_RESPONSE_BYTES)
+}
+
 pub fn provider_worker(response_path: &Path, timeout: u64) -> Result<()> {
     if !(1..=180).contains(&timeout) || response_path.exists() {
         return Err("provider_worker_configuration".into());
@@ -217,14 +252,13 @@ pub fn provider_worker(response_path: &Path, timeout: u64) -> Result<()> {
         aggregate_token_cap: None,
         aggregate_spend_cap: None,
         evidence_mode: "live".into(),
+        credential_selection: None,
     };
     util::atomic_json(response_path, &receipt, false)?;
-    let key = std::env::var("OPENCODE_API_KEY").map_err(|_| "provider_credential_unavailable")?;
-    if key.is_empty()
-        || key.len() > 512
-        || !key.is_ascii()
-        || key.contains(['\r', '\n'])
-        || body.windows(key.len()).any(|b| b == key.as_bytes())
+    let credentials = credentials::load(|name| std::env::var(name).ok())?;
+    if credentials
+        .iter()
+        .any(|c| body.windows(c.key.len()).any(|b| b == c.key.as_bytes()))
     {
         return Err("provider_credential_or_input_rejected".into());
     }
@@ -234,16 +268,29 @@ pub fn provider_worker(response_path: &Path, timeout: u64) -> Result<()> {
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|_| "provider_client_configuration")?;
+    // Usage reads happen before any generation is sent, so a failure here
+    // leaves the receipt in the not-sent state.
+    let (chosen, selection) =
+        match credentials::select(&credentials, |c| read_usage(&client, &c.key)) {
+            Ok(choice) => choice,
+            Err(code) => {
+                receipt.error_code = Some(code.clone());
+                util::atomic_json(response_path, &receipt, true)?;
+                return Err(code);
+            }
+        };
+    let key = &credentials[chosen].key;
+    receipt.credential_selection = Some(selection);
     receipt.state = RequestState::TransmissionOrCompletionUnknown;
     util::atomic_json(response_path, &receipt, true)?;
     let started = Instant::now();
     let outcome = (|| -> Result<()> {
         let response = client
             .post(GO_ENDPOINT)
-            .bearer_auth(&key)
+            .bearer_auth(key)
             .header("Content-Type", "application/json")
             .header("Accept", "application/json")
-            .header("User-Agent", "MarinaFrame/0.4 Rust control plane")
+            .header("User-Agent", USER_AGENT)
             .header("x-opencode-session", format!("mf-{}", receipt.request_id))
             .body(body)
             .send()
@@ -254,7 +301,7 @@ pub fn provider_worker(response_path: &Path, timeout: u64) -> Result<()> {
             .headers()
             .get("x-request-id")
             .and_then(|v| v.to_str().ok())
-            .filter(|v| util::valid_id(v, 128) && !v.contains(&key))
+            .filter(|v| util::valid_id(v, 128) && !v.contains(key.as_str()))
             .map(String::from);
         let retry_after_present = response.headers().contains_key("retry-after");
         receipt.retry_after_seconds = response

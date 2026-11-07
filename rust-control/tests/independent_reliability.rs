@@ -20,7 +20,7 @@ mod worker;
 use serde_json::{json, Value};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::time::{Duration, Instant};
 use types::*;
 
@@ -71,9 +71,15 @@ import ctypes,json,os,pathlib,signal,subprocess,sys,threading,time
 root=pathlib.Path.cwd()
 mode=(root/'fixture-mode').read_text()
 def meta(label):
-    proc=pathlib.Path('/proc')/os.readlink('/proc/self')
-    fields=(proc/'stat').read_text().rsplit(')',1)[1].split()
-    value={'pid':os.getpid(),'pgid':os.getpgrp(),'proc_path':str(proc),'start_ticks':int(fields[19])}
+    value={'pid':os.getpid(),'pgid':os.getpgrp()}
+    if sys.platform=='linux':
+        proc=pathlib.Path('/proc')/os.readlink('/proc/self')
+        fields=(proc/'stat').read_text().rsplit(')',1)[1].split()
+        value.update(proc_path=str(proc),start_ticks=int(fields[19]))
+    else:
+        # macOS has no procfs: ps start time is the PID-reuse identity.
+        value['start_time']=subprocess.run(['/bin/ps','-o','lstart=','-p',str(os.getpid())],
+            capture_output=True,text=True,env={'LC_ALL':'C'}).stdout.strip()
     (root/(label+'.json')).write_text(json.dumps(value))
     return value
 if mode=='parent-death':
@@ -100,16 +106,23 @@ if mode=='normal-exit': sys.exit(0)
 time.sleep(30)
 "#;
 
-const NATIVE_FIXTURE: &str = r#"import ctypes,json,os,pathlib,signal,time
+const NATIVE_FIXTURE: &str = r#"import ctypes,json,os,pathlib,signal,subprocess,sys,time
 root=pathlib.Path.cwd()
 parent=os.getppid()
-if ctypes.CDLL(None).prctl(1,signal.SIGKILL,0,0,0)!=0 or os.getppid()!=parent:
+linux=sys.platform=='linux'
+if linux and ctypes.CDLL(None).prctl(1,signal.SIGKILL,0,0,0)!=0 or os.getppid()!=parent:
     raise SystemExit('parent-death fixture admission failed')
 def meta(label):
-    proc=pathlib.Path('/proc')/os.readlink('/proc/self')
-    fields=(proc/'stat').read_text().rsplit(')',1)[1].split()
-    (root/(label+'.json')).write_text(json.dumps({'pid':os.getpid(),'pgid':os.getpgrp(),
-        'proc_path':str(proc),'start_ticks':int(fields[19])}))
+    identity={'pid':os.getpid(),'pgid':os.getpgrp()}
+    if linux:
+        proc=pathlib.Path('/proc')/os.readlink('/proc/self')
+        fields=(proc/'stat').read_text().rsplit(')',1)[1].split()
+        identity.update(proc_path=str(proc),start_ticks=int(fields[19]))
+    else:
+        # macOS has no procfs: ps start time is the PID-reuse identity.
+        identity['start_time']=subprocess.run(['/bin/ps','-o','lstart=','-p',str(os.getpid())],
+            capture_output=True,text=True,env={'LC_ALL':'C'}).stdout.strip()
+    (root/(label+'.json')).write_text(json.dumps(identity))
 signal.signal(signal.SIGTERM,signal.SIG_IGN)
 meta('native')
 if os.fork()==0:
@@ -146,6 +159,25 @@ fn wait_json(path: &Path, seconds: u64) -> Value {
     }
 }
 
+#[cfg(not(target_os = "linux"))]
+fn running(meta: &Value) -> bool {
+    // Same identity rule as Linux: same start time and not a zombie.
+    let pid = meta["pid"].as_i64().unwrap().to_string();
+    let Ok(output) = Command::new("/bin/ps")
+        .args(["-o", "stat=", "-o", "lstart=", "-p", &pid])
+        .env("LC_ALL", "C")
+        .output()
+    else {
+        return false;
+    };
+    let line = String::from_utf8_lossy(&output.stdout);
+    let Some((state, start)) = line.trim().split_once(char::is_whitespace) else {
+        return false;
+    };
+    Some(start.trim()) == meta["start_time"].as_str() && !state.starts_with('Z')
+}
+
+#[cfg(target_os = "linux")]
 fn running(meta: &Value) -> bool {
     let path = PathBuf::from(meta["proc_path"].as_str().unwrap()).join("stat");
     let Ok(raw) = std::fs::read_to_string(path) else {
@@ -249,6 +281,9 @@ fn subprocess_supervisor_entry() {
     .unwrap();
 }
 
+// PR_SET_PDEATHSIG exists only on Linux. macOS has no equivalent, so this
+// guarantee is not provided there (see docs/CONTINUATION_STATUS.md).
+#[cfg(target_os = "linux")]
 #[test]
 fn reliability_parent_sigkill_delivers_pdeathsig_and_cleans_nested_group() {
     let dir = tempfile::tempdir().unwrap();
@@ -261,8 +296,8 @@ fn reliability_parent_sigkill_delivers_pdeathsig_and_cleans_nested_group() {
             "--nocapture",
         ])
         .env("MARINAFRAME_RELIABILITY_CHILD_ROOT", dir.path())
-        .stdout(Stdio::from(log.try_clone().unwrap()))
-        .stderr(Stdio::from(log))
+        .stdout(std::process::Stdio::from(log.try_clone().unwrap()))
+        .stderr(std::process::Stdio::from(log))
         .spawn()
         .unwrap();
     let child = wait_json(&dir.path().join("descendant.json"), 5);
@@ -506,6 +541,7 @@ fn reliability_unknown_provider_outcome_acknowledgement_survives_restart_without
         aggregate_token_cap: None,
         aggregate_spend_cap: None,
         evidence_mode: "live".into(),
+        credential_selection: None,
     };
     util::atomic_json(&store.path.join(&intent.response_path), &receipt, false).unwrap();
     controller::resume(&mut store, false, false, Some(0)).unwrap();

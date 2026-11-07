@@ -1,12 +1,13 @@
 """Exclusive local run staging and same-filesystem atomic publication (POSIX)."""
 from __future__ import annotations
 
-import fcntl
 import ctypes
 import errno
+import fcntl
 import os
-import stat
 import re
+import stat
+import sys
 import uuid
 from pathlib import Path
 
@@ -16,6 +17,38 @@ from .schema import load_bounded_json
 
 class RunPublicationError(RuntimeError):
     """The run could not be durably published; no successful result is returned."""
+
+
+# Atomic no-replace rename. A check followed by an ordinary rename could
+# overwrite a concurrently created empty target, so only these kernel
+# primitives are accepted.
+_AT_FDCWD_LINUX = -100
+_RENAME_NOREPLACE_LINUX = 1  # renameat2 flag, <linux/fs.h>
+_RENAME_EXCL_DARWIN = 0x4  # renamex_np flag, <stdio.h>
+
+
+def rename_no_replace(source: Path, target: Path) -> None:
+    """Rename source to target; fail with FileExistsError if target exists."""
+    library = ctypes.CDLL(None, use_errno=True)
+    if sys.platform == "linux":
+        operation = getattr(library, "renameat2", None)
+        if operation is None:
+            raise RunPublicationError("Atomic no-replace publication requires Linux renameat2 support.")
+        operation.argtypes = (ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint)
+        arguments = (_AT_FDCWD_LINUX, os.fsencode(source), _AT_FDCWD_LINUX, os.fsencode(target),
+                     _RENAME_NOREPLACE_LINUX)
+    elif sys.platform == "darwin":
+        operation = library.renamex_np
+        operation.argtypes = (ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint)
+        arguments = (os.fsencode(source), os.fsencode(target), _RENAME_EXCL_DARWIN)
+    else:
+        raise RunPublicationError(f"Atomic no-replace publication is not supported on {sys.platform}.")
+    operation.restype = ctypes.c_int
+    if operation(*arguments) != 0:
+        code = ctypes.get_errno()
+        if code == errno.EEXIST:
+            raise FileExistsError("The final run path appeared before atomic publication.")
+        raise OSError(code, "Atomic no-replace run publication failed.")
 
 
 class RunTransaction:
@@ -69,19 +102,7 @@ class RunTransaction:
         # excludes all cooperating writers for this final destination.
         (self.stage / "transaction.json").unlink(missing_ok=True)
         sync_directory(self.stage)
-        # Linux renameat2 supplies atomic NOREPLACE. A check followed by ordinary
-        # rename could otherwise overwrite a concurrently created empty target.
-        library = ctypes.CDLL(None, use_errno=True)
-        operation = getattr(library, "renameat2", None)
-        if operation is None:
-            raise RunPublicationError("Atomic no-replace publication requires Linux renameat2 support.")
-        operation.argtypes = (ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint)
-        operation.restype = ctypes.c_int
-        if operation(-100, os.fsencode(self.stage), -100, os.fsencode(self.out), 1) != 0:
-            code = ctypes.get_errno()
-            if code == errno.EEXIST:
-                raise FileExistsError("The final run path appeared before atomic publication.")
-            raise OSError(code, "Atomic no-replace run publication failed.")
+        rename_no_replace(self.stage, self.out)
         self.published = True
         sync_directory(self.out.parent)
         self.durable = True

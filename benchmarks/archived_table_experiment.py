@@ -11,7 +11,8 @@ import os
 from pathlib import Path
 import time
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
+from vessel_reconstruction.fonts import dejavu_sans
 from vessel_reconstruction.table_ingest import _read_cell, MIN_OCR_CONFIDENCE
 from vessel_reconstruction.provenance import digest_file, write_json, environment_record
 
@@ -30,8 +31,8 @@ def cell_layout() -> list[dict]:
 
 def make_contact_sheets(source:Path,results:list[dict],out:Path) -> list[str]:
     """Display every attempted source cell, including failures, for review."""
-    font=ImageFont.truetype('DejaVuSans.ttf',16)
-    small=ImageFont.truetype('DejaVuSans.ttf',13)
+    font=dejavu_sans(16)
+    small=dejavu_sans(13)
     files=[]
     with Image.open(source) as image:
         for page,stations in enumerate((range(1,7),range(7,13),range(13,19),range(19,20)),1):

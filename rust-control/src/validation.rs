@@ -8,6 +8,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
+/// Native worker resource profiles; the macOS profile has no address-space
+/// limit and no parent-death signal (docs/CONTINUATION_STATUS.md).
+const KNOWN_RESOURCE_PROFILES: [&str; 2] = [
+    "linux_rlimit_process_group_v1",
+    "darwin_rlimit_process_group_v1",
+];
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Check {
@@ -607,7 +614,9 @@ pub fn assess(
     nonnegative(&receipt["resources"]["cpu_seconds"])?;
     integer(&receipt["resources"]["peak_rss_kib"], 1, 1 << 40)?;
     require(
-        receipt["resources"]["resource_profile"] == "linux_rlimit_process_group_v1"
+        KNOWN_RESOURCE_PROFILES
+            .iter()
+            .any(|profile| receipt["resources"]["resource_profile"] == *profile)
             && receipt["artifacts"] == Value::Array(expected_worker_artifacts),
         "audit_worker_resource_or_inventory_contract",
     )?;

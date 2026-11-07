@@ -599,7 +599,8 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
     image, details = _read_image(spec["source"], spec_path.parent)
     source_sha = digest_file(spec_path.parent / spec["source"]["file"])
     implementation = {name: digest_file(Path(__file__).with_name(name)) for name in
-                      ("agent_tools.py", "agent_render_worker.py", "ingest.py", "resources.py", "schema.py")}
+                      ("agent_tools.py", "agent_render_worker.py", "ingest.py", "resources.py", "schema.py",
+                       "fonts.py")}
     out.mkdir(parents=True, exist_ok=False)
     artifacts, sections = [], []
     page = Image.fromarray(image).convert("RGB")
@@ -822,6 +823,7 @@ def _model_observation_image(source: Path) -> dict:
 
 def _source_overlay(image, section, entry, target):
     from PIL import Image, ImageDraw, ImageFont
+    from .fonts import dejavu_sans
     roi = section["roi_px"]
     crop = Image.fromarray(image).crop(roi).convert("RGB")
     scale = min(3, 1300 / max(crop.size))
@@ -830,7 +832,7 @@ def _source_overlay(image, section, entry, target):
     canvas.paste(crop, (24, 75)); canvas.paste(crop, (48 + crop.width, 75))
     draw = ImageDraw.Draw(canvas)
     try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14)
+        font = dejavu_sans(14)
     except OSError:
         font = ImageFont.load_default()
     draw.text((24, 12), entry["section_id"] + " | SOURCE HYPOTHESES — HUMAN REVIEW REQUIRED", fill="#183348", font=font)

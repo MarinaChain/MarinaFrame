@@ -18,6 +18,8 @@ import time
 
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
+from vessel_reconstruction.fonts import dejavu_sans_path
+
 from vessel_reconstruction.model_proposals import EvidenceCrop, OpenCodeGoAdapter, ProposalError, strict_json, validate_proposal
 from vessel_reconstruction.table_ingest import _read_cell, parse_feet_inches_eighths
 
@@ -46,7 +48,7 @@ def freeze(directory: Path):
     if directory.exists():
         raise FileExistsError('Frozen dataset output must be new')
     directory.mkdir(parents=True)
-    fontpath = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+    fontpath = str(dejavu_sans_path())
     labels, mocks, entries = {}, {}, []
     for identifier, text, target, mock in CASES:
         im = Image.new('RGB', (420, 100), 'white')

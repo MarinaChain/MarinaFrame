@@ -14,6 +14,7 @@ from pathlib import Path
 import re
 
 from .provenance import canonical_json, digest_file, digest_object, safe_relative_file
+from .resources import KNOWN_RESOURCE_PROFILES
 from .schema import load_bounded_json
 
 
@@ -117,7 +118,7 @@ def validate_reference(reference, task_dir=None):
 
 def implementation_identity():
     names = ("agent_render_worker.py", "validation_contract.py", "run_record.py", "geometry.py",
-             "schema.py", "provenance.py", "resources.py")
+             "schema.py", "provenance.py", "resources.py", "fonts.py")
     versions = {}
     for name in ("cadquery", "cadquery-ocp", "numpy"):
         try:
@@ -387,7 +388,7 @@ def verify_validation(validation, context, task_dir):
     number(resources["wall_seconds"], "Native wall time")
     number(resources["cpu_seconds"], "Native CPU time")
     integer(resources["peak_rss_kib"], "Native peak RSS", 1, 2**40)
-    require(resources["resource_profile"] == "linux_rlimit_process_group_v1", "Unknown native resource profile")
+    require(resources["resource_profile"] in KNOWN_RESOURCE_PROFILES, "Unknown native resource profile")
     require(canonical_json(receipt["validation"]) == canonical_json(raw),
             "Worker receipt contradicts authoritative audit")
     require(type(receipt["artifacts"]) is list and len(receipt["artifacts"]) == len(validation["artifacts"]) - 1,

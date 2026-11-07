@@ -8,20 +8,19 @@ Rust supervisor and retained native supervisors; this is not an OS sandbox.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import os
-from pathlib import Path
 import resource
-import signal
 import shutil
+import signal
 import sys
 import threading
 import time
 from importlib import metadata
+from pathlib import Path
 
 from .agent_tools import DomainTools, _artifact, _model_observation_image
 from .provenance import digest_file, digest_object, write_json
+from .resources import peak_rss_kib
 from .schema import loads_bounded_json
 
 PROTOCOL = "marinaframe.worker.v1"
@@ -65,6 +64,9 @@ def execute(request, task_root, source_spec, cancel):
     task_root = Path(task_root).absolute()
     if task_root.is_symlink() or not task_root.is_dir():
         raise ValueError("Task root must be an existing ordinary directory")
+    # A parent directory may be a symlink (macOS /tmp -> /private/tmp).
+    # DomainTools resolves its paths, so artifact paths must use the same form.
+    task_root = task_root.resolve()
     implementation = implementation_identity()
     expected = request["expected_worker_sha256"]
     if expected is not None and expected != implementation:
@@ -149,8 +151,8 @@ def main(argv=None):
         "wall_seconds": time.monotonic() - started,
         "worker_cpu_seconds": usage.ru_utime + usage.ru_stime,
         "children_cpu_seconds": children.ru_utime + children.ru_stime,
-        "worker_peak_rss_kib": usage.ru_maxrss,
-        "children_peak_rss_kib": children.ru_maxrss,
+        "worker_peak_rss_kib": peak_rss_kib(usage.ru_maxrss),
+        "children_peak_rss_kib": peak_rss_kib(children.ru_maxrss),
         "rss_interpretation": "separate process maxima; not summed process-tree peak"}
     args.response.parent.mkdir(parents=True, exist_ok=True)
     if args.response.exists() or args.response.is_symlink():

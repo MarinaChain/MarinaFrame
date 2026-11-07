@@ -2,7 +2,9 @@
 from pathlib import Path
 import json, math
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
+
+from vessel_reconstruction.fonts import dejavu_sans
 
 root = Path(__file__).resolve().parents[1]
 out = root / 'data/examples/development'
@@ -11,7 +13,7 @@ panel_w, panel_h, cols, rows = 360, 330, 7, 3
 ppm, depth = 56.0, 4.5
 im = Image.new('RGB', (cols*panel_w, rows*panel_h), 'white')
 draw = ImageDraw.Draw(im)
-font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',14)
+font = dejavu_sans(14)
 spec = {'schema_version':'1.0','vessel_id':'Development hull — calibrated section sheet','source':{'file':'drawing.png','license':'Generated development fixture; not held-out evaluation'},'units':'m','symmetry':'port_starboard','symmetry_evidence':'Explicit symmetric example design; mirroring requires review','end_closure':'flat_at_terminal_stations','sections':[],'components':[]}
 for i,x in enumerate(np.linspace(0,60,21)):
  col,row=i%cols,i//cols

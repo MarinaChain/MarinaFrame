@@ -160,6 +160,9 @@ def _declared_assets(result: dict) -> set[str]:
     return files
 
 
+# Margin that lets the request deadline timer act before a read timeout.
+DEADLINE_TIMER_PRECEDENCE_SECONDS = 0.5
+
 class WorkbenchServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
@@ -334,7 +337,10 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             seconds = self.deadline - time.monotonic()
             if seconds <= 0:
                 raise TimeoutError('Request deadline exceeded')
-            self.connection.settimeout(seconds)
+            # The deadline timer shuts the connection down without a reply. The
+            # read timeout is slightly later so the timer always acts first;
+            # otherwise the order is a race that differs between kernels.
+            self.connection.settimeout(seconds + DEADLINE_TIMER_PRECEDENCE_SECONDS)
             chunk = self.rfile.read(min(64 * 1024, remaining))
             if not chunk:
                 raise ValueError('Request body ended before Content-Length')

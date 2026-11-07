@@ -16,6 +16,7 @@ from PIL import Image
 
 from vessel_reconstruction.isolation import WorkerLimits, _proc_path, kill_process_tree, process_identity, safe_worker_environment, supervise_process
 from vessel_reconstruction.jobs import AdmissionError, JobQueue
+from vessel_reconstruction.resources import native_resource_profile
 
 
 LIMITS = WorkerLimits(wall_seconds=3, cpu_seconds=2, memory_bytes=256*1024**2, file_bytes=1024**2, output_bytes=1024**2, termination_grace_seconds=0.05)
@@ -111,7 +112,10 @@ def test_actual_cpu_address_space_and_file_limits(tmp_path):
     # Each probe applies the same worker bootstrap before the bounded operation.
     prefix = f"import os,json,resource; from vessel_reconstruction.worker import apply_limits; apply_limits(json.loads({json.dumps(asdict(LIMITS))!r}), os.getppid()); "
     memory = prefix + "\ntry:\n x=bytearray(512*1024**2)\nexcept MemoryError:\n raise SystemExit(0)\nraise SystemExit(3)"
-    assert supervise_process([sys.executable,'-c',memory], limits=LIMITS)['exit_code'] == 0
+    # macOS cannot lower RLIMIT_AS (an alias of the unenforced RLIMIT_RSS), so the
+    # memory limit is enforced on Linux only; see docs/CONTINUATION_STATUS.md.
+    if sys.platform == 'linux':
+        assert supervise_process([sys.executable,'-c',memory], limits=LIMITS)['exit_code'] == 0
     target = tmp_path/'bounded.bin'
     file_probe = prefix + f"\ntry:\n open({str(target)!r},'wb').write(b'x'*(2*1024**2))\nexcept OSError:\n raise SystemExit(0)\nraise SystemExit(3)"
     assert supervise_process([sys.executable,'-c',file_probe], limits=LIMITS)['exit_code'] in (0, -signal.SIGXFSZ)
@@ -246,7 +250,7 @@ def test_real_isolated_blocked_job_and_worker_telemetry(tmp_path):
     assert outcome['state']=='blocked' and outcome['result']['status']=='blocked'
     assert outcome['result']['review']['engineering_approved'] is False
     assert outcome['resources']['peak_rss_kib']>0 and outcome['resources']['cpu_seconds']>0
-    assert outcome['resources']['resource_profile']=='linux_rlimit_process_group_v1'
+    assert outcome['resources']['resource_profile']==native_resource_profile()
     assert outcome['exit_code']==0
 
 

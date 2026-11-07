@@ -9,8 +9,25 @@ from dataclasses import asdict, dataclass
 import math
 from pathlib import Path
 import stat
+import sys
 import warnings
 from typing import Any
+
+
+# Native worker resource profiles. The macOS profile has no address-space limit
+# and no parent-death signal (see docs/CONTINUATION_STATUS.md).
+LINUX_RESOURCE_PROFILE = "linux_rlimit_process_group_v1"
+DARWIN_RESOURCE_PROFILE = "darwin_rlimit_process_group_v1"
+KNOWN_RESOURCE_PROFILES = frozenset({LINUX_RESOURCE_PROFILE, DARWIN_RESOURCE_PROFILE})
+
+
+def native_resource_profile() -> str:
+    return DARWIN_RESOURCE_PROFILE if sys.platform == "darwin" else LINUX_RESOURCE_PROFILE
+
+
+def peak_rss_kib(ru_maxrss: int) -> int:
+    """getrusage reports ru_maxrss in KiB on Linux and in bytes on macOS."""
+    return -(-ru_maxrss // 1024) if sys.platform == "darwin" else ru_maxrss
 
 
 class ResourceLimitError(ValueError):

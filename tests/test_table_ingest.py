@@ -2,8 +2,9 @@ from pathlib import Path
 import math
 
 import pytest
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
+from vessel_reconstruction.fonts import dejavu_sans
 from vessel_reconstruction.table_ingest import extract_table_sections, parse_feet_inches_eighths
 
 
@@ -23,7 +24,7 @@ def test_ambiguous_notation_never_gets_repaired(bad):
 def table_fixture(path:Path):
     image=Image.new('L',(300,400),255)
     draw=ImageDraw.Draw(image)
-    font=ImageFont.truetype('DejaVuSans.ttf',34)
+    font=dejavu_sans(34)
     cells=[]
     tokens=['1-0-0','2-3-4','3-6-0','4-8-2','5-10-6']
     for i,text in enumerate(tokens):

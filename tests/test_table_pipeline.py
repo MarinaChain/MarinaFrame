@@ -3,9 +3,10 @@ import json
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 import pytest
 
+from vessel_reconstruction.fonts import dejavu_sans
 from vessel_reconstruction.pipeline import reconstruct, verify_run
 from vessel_reconstruction.table_ingest import parse_feet_inches_eighths
 
@@ -13,7 +14,7 @@ from vessel_reconstruction.table_ingest import parse_feet_inches_eighths
 def fixture(directory:Path):
     tokens=['1-0-0','2-3-4','3-6-0','4-8-2','5-10-6']
     image=Image.new('L',(900,400),255);draw=ImageDraw.Draw(image)
-    font=ImageFont.truetype('DejaVuSans.ttf',34)
+    font=dejavu_sans(34)
     sections=[]
     for station in range(3):
         cells=[]

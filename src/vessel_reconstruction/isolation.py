@@ -1,7 +1,8 @@
-"""Linux local worker lifecycle. Resource limits are not a hostile-code sandbox."""
+"""Linux/macOS local worker lifecycle. Resource limits are not a hostile-code sandbox."""
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import ctypes
 import json
 import math
 import os
@@ -77,8 +78,59 @@ def _proc_path(pid: int) -> Path | None:
     return None
 
 
+def _darwin_process_identity(pid: int) -> dict | None:
+    """macOS has no procfs. ps reports the group and start time, zombies included.
+
+    The start time has one-second resolution; it serves the same PID-reuse
+    check as the Linux start_ticks value, compared only on the same host.
+    """
+    try:
+        result = subprocess.run(['/bin/ps', '-o', 'pgid=', '-o', 'lstart=', '-p', str(pid)],
+                                capture_output=True, text=True, env={'LC_ALL': 'C'}, timeout=5)
+        pgid_text, start_text = result.stdout.strip().split(None, 1)
+        started = time.mktime(time.strptime(start_text.strip(), '%a %b %d %H:%M:%S %Y'))
+        return {'pid': pid, 'pgid': int(pgid_text), 'start_ticks': int(started)}
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
+def _darwin_group_has_live_member(pgid: int) -> bool:
+    """Report whether any non-zombie process is in the group (fails safe to True)."""
+    try:
+        result = subprocess.run(['/bin/ps', '-A', '-o', 'pgid=', '-o', 'stat='],
+                                capture_output=True, text=True, env={'LC_ALL': 'C'}, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return True
+    if result.returncode != 0:
+        return True
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        if len(fields) == 2 and fields[0] == str(pgid) and not fields[1].startswith('Z'):
+            return True
+    return False
+
+
+def _darwin_group_member_has_token(pgid: int, token: str) -> bool:
+    """macOS form of the Linux environ scan: ps -E shows a same-user process's
+    environment. Require our uid, the expected group and the exact marker."""
+    marker = 'MARINAFRAME_JOB_TOKEN=' + token
+    try:
+        result = subprocess.run(['/bin/ps', '-A', '-E', '-ww', '-o', 'uid=', '-o', 'pgid=', '-o', 'command='],
+                                capture_output=True, text=True, env={'LC_ALL': 'C'}, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    for line in result.stdout.splitlines():
+        fields = line.split(None, 2)
+        if (len(fields) == 3 and fields[0] == str(os.getuid()) and fields[1] == str(pgid)
+                and marker in fields[2].split()):
+            return True
+    return False
+
+
 def process_identity(pid: int) -> dict | None:
-    """Linux process birth identity prevents signalling a reused PID after restart."""
+    """Process birth identity prevents signalling a reused PID after restart."""
+    if sys.platform == 'darwin':
+        return _darwin_process_identity(pid)
     try:
         directory = _proc_path(pid)
         if directory is None:
@@ -101,7 +153,9 @@ def kill_process_tree(identity: dict | None, grace_seconds: float = 0.5) -> bool
     owned = current == expected
     if current is not None and not owned:
         return False
-    if not owned and identity.get('token'):
+    if not owned and identity.get('token') and sys.platform == 'darwin':
+        owned = _darwin_group_member_has_token(identity['pgid'], identity['token'])
+    if not owned and identity.get('token') and sys.platform == 'linux':
         # On abrupt controller exit PDEATHSIG kills the worker, but an OCR
         # descendant can remain. Prove group ownership using a random inherited
         # marker plus uid/pgid before signalling that group. Never print environ.
@@ -138,11 +192,39 @@ def kill_process_tree(identity: dict | None, grace_seconds: float = 0.5) -> bool
             os.killpg(identity['pgid'], sig)
         except ProcessLookupError:
             return True
+        except PermissionError:
+            # macOS returns EPERM when the group holds only an unreaped zombie
+            # leader. The group is already proven ours, so treat it as gone
+            # only when no live member remains.
+            if sys.platform == 'darwin' and not _darwin_group_has_live_member(identity['pgid']):
+                return True
+            raise
         if sig == signal.SIGTERM:
             deadline = time.monotonic() + min(2.0, grace_seconds)
             while time.monotonic() < deadline:
                 time.sleep(0.02)
     return True
+
+
+# <sys/wait.h> values on macOS, where Python does not expose os.waitid.
+_P_PID_DARWIN = 1
+_WNOHANG_DARWIN = 0x1
+_WEXITED_DARWIN = 0x4
+_WNOWAIT_DARWIN = 0x20
+_SIGINFO_PID_OFFSET_DARWIN = 12  # after si_signo, si_errno and si_code (int each)
+
+
+def child_has_exited(pid: int) -> bool:
+    """Report whether a child exited without reaping it (its zombie keeps the PID)."""
+    if hasattr(os, 'waitid'):
+        return os.waitid(os.P_PID, pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is not None
+    libc = ctypes.CDLL(None, use_errno=True)
+    info = ctypes.create_string_buffer(128)  # siginfo_t is 104 bytes on macOS
+    flags = _WEXITED_DARWIN | _WNOHANG_DARWIN | _WNOWAIT_DARWIN
+    if libc.waitid(_P_PID_DARWIN, ctypes.c_uint(pid), info, flags) != 0:
+        raise OSError(ctypes.get_errno(), 'waitid failed')
+    offset = _SIGINFO_PID_OFFSET_DARWIN
+    return int.from_bytes(info.raw[offset:offset + 4], sys.byteorder, signed=True) != 0
 
 
 def _tree_bytes(root: Path, *, stop_after: int) -> int:
@@ -213,8 +295,7 @@ def supervise_process(command: list[str], *, limits: WorkerLimits = DEFAULT_LIMI
         while True:
             # Do not reap before killing the process group: OCR descendants may
             # outlive an exited worker and the leader's zombie retains identity.
-            exited = os.waitid(os.P_PID, process.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
-            if exited is not None:
+            if child_has_exited(process.pid):
                 break
             if cancel_event is not None and cancel_event.is_set():
                 state = 'cancelled'; break
@@ -257,8 +338,8 @@ def run_isolated(spec_path: str | Path, output_dir: str | Path, *, export_cad: b
     cancelled, interrupted. A published result remains review_required/blocked.
     Existing output directories are never overwritten.
     """
-    if sys.platform != 'linux':
-        raise RuntimeError('The isolated local worker profile currently supports Linux only.')
+    if sys.platform not in ('linux', 'darwin'):
+        raise RuntimeError('The isolated local worker profile supports Linux and macOS only.')
     limits.validate()
     spec, output = Path(spec_path).resolve(), Path(output_dir).resolve()
     if output.exists():
