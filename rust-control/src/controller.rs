@@ -318,44 +318,50 @@ fn apply_worker(
 }
 
 type BoundImage = (u64, Value, Option<String>, Option<String>, Option<String>);
+fn visit(
+    v: &Value,
+    seq: u64,
+    g: &Option<String>,
+    r: &Option<String>,
+    step: &Option<String>,
+    out: &mut BTreeMap<String, BoundImage>,
+) {
+    match v {
+        Value::Object(o) => {
+            if v["model_eligible"] == true && v["mime_type"] == "image/png" {
+                if let Some(id) = v["id"].as_str() {
+                    out.insert(
+                        id.into(),
+                        (
+                            seq,
+                            v.clone(),
+                            v["generation_id"].as_str().map(String::from).or(g.clone()),
+                            v["revision_id"].as_str().map(String::from).or(r.clone()),
+                            v["step_sha256"].as_str().map(String::from).or(step.clone()),
+                        ),
+                    );
+                }
+            }
+            for value in o.values() {
+                visit(value, seq, g, r, step, out);
+            }
+        }
+        Value::Array(a) => {
+            for value in a {
+                visit(value, seq, g, r, step, out);
+            }
+        }
+        _ => (),
+    }
+}
+/// The live model investigates in draft mode: it has the investigation tools,
+/// its own prompt, and accepted claims become open guesses.
+fn investigation_mode(store: &Store) -> bool {
+    store.state.config.policy == Policy::Live
+        && store.state.config.on_ambiguity == OnAmbiguity::Draft
+}
 fn collect_images(store: &Store) -> Result<Vec<(ImageReceipt, String)>> {
     let mut found = BTreeMap::<String, BoundImage>::new();
-    fn visit(
-        v: &Value,
-        seq: u64,
-        g: &Option<String>,
-        r: &Option<String>,
-        step: &Option<String>,
-        out: &mut BTreeMap<String, BoundImage>,
-    ) {
-        match v {
-            Value::Object(o) => {
-                if v["model_eligible"] == true && v["mime_type"] == "image/png" {
-                    if let Some(id) = v["id"].as_str() {
-                        out.insert(
-                            id.into(),
-                            (
-                                seq,
-                                v.clone(),
-                                v["generation_id"].as_str().map(String::from).or(g.clone()),
-                                v["revision_id"].as_str().map(String::from).or(r.clone()),
-                                v["step_sha256"].as_str().map(String::from).or(step.clone()),
-                            ),
-                        );
-                    }
-                }
-                for value in o.values() {
-                    visit(value, seq, g, r, step, out);
-                }
-            }
-            Value::Array(a) => {
-                for value in a {
-                    visit(value, seq, g, r, step, out);
-                }
-            }
-            _ => (),
-        }
-    }
     for e in &store.events {
         let o = &e.payload["response"]["result"];
         let g = o["rendered_generation_id"].as_str().map(String::from);
@@ -370,10 +376,23 @@ fn collect_images(store: &Store) -> Result<Vec<(ImageReceipt, String)>> {
         a.get("view").is_none()
             || (g == &store.state.generation_id && r == &store.state.revision_id)
     });
-    values.sort_by_key(|(seq, a, _, _, _)| (!a.get("view").is_some(), std::cmp::Reverse(*seq)));
+    let investigating = investigation_mode(store);
+    if investigating {
+        // The model asked for these pixels: the newest views come first.
+        values.sort_by_key(|(seq, _, _, _, _)| std::cmp::Reverse(*seq));
+    } else {
+        values.sort_by_key(|(seq, a, _, _, _)| (!a.get("view").is_some(), std::cmp::Reverse(*seq)));
+    }
     // Preserve at least one source observation beside current CAD observations.
     let mut chosen = vec![];
-    if let Some(source) = values
+    if investigating {
+        chosen.extend(
+            values
+                .iter()
+                .take(store.state.config.limits.max_images_per_request)
+                .cloned(),
+        );
+    } else if let Some(source) = values
         .iter()
         .filter(|(_, a, _, _, _)| a.get("view").is_none())
         .min_by_key(|(seq, a, _, _, _)| {
@@ -422,6 +441,14 @@ fn collect_images(store: &Store) -> Result<Vec<(ImageReceipt, String)>> {
             revision_id: r,
             step_sha256: step,
             pixels_attached: true,
+            // Investigation receipts record the sheet region and the pixel
+            // size of every image sent.
+            crop_box_px: if investigating {
+                serde_json::from_value(a["crop_box_px"].clone()).ok()
+            } else {
+                None
+            },
+            pixel_size: investigating.then(|| provider::png_size(&bytes)),
         };
         images.push((meta, STANDARD.encode(bytes)));
     }
@@ -434,8 +461,27 @@ pub fn tool_catalog(on_ambiguity: &OnAmbiguity) -> Value {
     let mut tools = base_tool_catalog(&empty);
     if *on_ambiguity == OnAmbiguity::Draft {
         tools.as_array_mut().unwrap().insert(3, json!({"name":"build_draft","description":"After every section is inspected: build a best-effort draft that takes the best-scoring line where a section is ambiguous and spans unreadable stations. Each choice is an open guess; a draft is never verified and only a person can resolve its guesses.","parameters":empty}));
+        tools
+            .as_array_mut()
+            .unwrap()
+            .extend(investigation_catalog());
     }
     tools
+}
+/// Investigation tools of the live model (draft mode only). Each one is
+/// executed by the harness; every claim is checked by deterministic code.
+fn investigation_catalog() -> Vec<Value> {
+    let region = json!({"type":"array","items":{"type":"integer","minimum":0},"minItems":4,"maxItems":4,"description":"[left, top, right, bottom] in sheet pixels"});
+    let id = json!({"type":"string","maxLength":64});
+    vec![
+        json!({"name":"view_region","description":"Return the pixels of any sheet region at any zoom (up to 1024 px per side, 4x enlargement). Start with the whole sheet, then zoom.","parameters":{"type":"object","properties":{"region_px":region,"max_side_px":{"type":"integer","minimum":256,"maximum":1024}},"required":["region_px"],"additionalProperties":false}}),
+        json!({"name":"read_region","description":"Return the pixels of a region to read station labels, a scale bar, dimensions or the title block. What you read is your claim.","parameters":{"type":"object","properties":{"region_px":region,"subject":{"enum":["labels","scale_bar","dimensions","title_block"]}},"required":["region_px","subject"],"additionalProperties":false}}),
+        json!({"name":"trace_corridor","description":"Draw a corridor on a view (2-24 points in that view's pixels, top to bottom, and a half width in view pixels) around one curve of a section. The host traces the real ink in it and re-reads it with the engine; it returns a candidate id with support scores, or refuses when no ink supports one continuous line.","parameters":{"type":"object","properties":{"section_id":id,"view_id":id,"path_px":{"type":"array","items":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2},"minItems":2,"maxItems":24},"half_width_px":{"type":"number","minimum":1,"maximum":64}},"required":["section_id","view_id","path_px","half_width_px"],"additionalProperties":false}}),
+        json!({"name":"assign_station","description":"Claim that a traced candidate is this section's station line, with the label you read and the view where you read it. Checked by the host; if accepted it is an open model_choice guess for a person to confirm.","parameters":{"type":"object","properties":{"section_id":id,"candidate_id":id,"label_view_id":id,"label_text":{"type":"string","maxLength":64},"reason":{"type":"string","maxLength":300},"comparison_id":id},"required":["section_id","candidate_id","label_view_id","label_text","reason"],"additionalProperties":false}}),
+        json!({"name":"propose_sheet_setup","description":"Propose the scale and datum lines of one view (body, plan or profile). The host checks them against the drawn grid and the declared calibration. Accepted setups serve compare_views; the build keeps the declared calibration.","parameters":{"type":"object","properties":{"view":{"enum":["body","plan","profile"]},"region_px":region,"pixels_per_metre":{"type":"number"},"grid_spacing_m":{"type":"number"},"centreline_px":{"type":"number"},"baseline_px":{"type":"number"},"x_origin_px":{"type":"number"},"x_direction":{"enum":[1,-1]},"evidence_view_id":id,"scale_claim":{"type":"string","maxLength":128},"reason":{"type":"string","maxLength":300}},"required":["view","region_px","pixels_per_metre","grid_spacing_m","evidence_view_id","scale_claim","reason"],"additionalProperties":false}}),
+        json!({"name":"compare_views","description":"Compare a candidate's body-plan half-breadths at given heights with ink on the plan-view station line of an accepted plan setup.","parameters":{"type":"object","properties":{"section_id":id,"candidate_id":id,"setup_id":id,"heights_m":{"type":"array","items":{"type":"number"},"minItems":1,"maxItems":12}},"required":["section_id","candidate_id","setup_id","heights_m"],"additionalProperties":false}}),
+        json!({"name":"ask_person","description":"Stop and ask a person a question when the evidence is insufficient.","parameters":{"type":"object","properties":{"question":{"type":"string","maxLength":512}},"required":["question"],"additionalProperties":false}}),
+    ]
 }
 fn base_tool_catalog(empty: &Value) -> Value {
     json!([
@@ -447,7 +493,73 @@ fn base_tool_catalog(empty: &Value) -> Value {
         {"name":"finish","description":"Abstain or request human review after current passing validation and visual inspection; never engineering approval.","parameters":{"type":"object","properties":{"outcome":{"enum":["candidate_ready_for_review","abstain"]},"summary":{"type":"string","maxLength":512}},"required":["outcome","summary"],"additionalProperties":false}}
     ])
 }
+/// The investigating model's observation: a compact task state (one line per
+/// section), the last tool result and the recent history. Full evidence stays
+/// in the task; the model asks for more with the tools.
+fn investigation_observation(store: &Store) -> Result<Value> {
+    let d = &store.state.domain;
+    let guesses = d["open_guesses"]
+        .as_array()
+        .map(|g| {
+            g.iter()
+                .filter_map(|g| Some((g["section_id"].as_str()?, g)))
+                .collect::<BTreeMap<_, _>>()
+        })
+        .unwrap_or_default();
+    let sections = d["sections"].as_array().map(|s| {
+        s.iter()
+            .map(|s| {
+                let guess = s["id"].as_str().and_then(|id| guesses.get(id));
+                json!({"id":s["id"],"x_m":s["x_m"],"panel_roi_px":s["roi_px"],"inspected":s["inspected"],
+                    "selected_candidate_id":s["selected_candidate_id"],
+                    "guess":guess.map(|g| json!({"kind":g["kind"],"chosen_candidate_id":g["chosen_candidate_id"]}))})
+            })
+            .collect::<Vec<_>>()
+    });
+    let candidate = &d["current_candidate"];
+    let history = store
+        .events
+        .iter()
+        .rev()
+        .filter(|e| {
+            ["decision", "operation_rejected", "model_output_rejected"].contains(&e.kind.as_str())
+        })
+        .take(12)
+        .map(|e| {
+            json!({"kind":e.kind,"tool":e.payload["decision"]["tool"],
+                "arguments":e.payload["decision"]["arguments"],"reason":e.payload["reason"]})
+        })
+        .collect::<Vec<_>>();
+    let mut value = json!({"task_id":store.state.task_id,
+        "sections":sections,"catalog_ready":d["catalog_ready"],"selected_count":d["selected_count"],
+        "open_guess_count":guesses.len(),"model_choice_section_ids":d["model_choice_section_ids"],
+        "sheet_setup_ids":d["sheet_setup_ids"],"rendered_views":d["rendered_views"],
+        "current_draft":if candidate.is_null(){Value::Null}else{json!({"valid":candidate["valid"],"draft":candidate["draft"],"status":candidate["status"]})},
+        "last_observation":store.state.last_observation,"recent_history_newest_first":history,
+        "current_policy":"live_investigation","engineering_approved":false,
+        "source_truth":"source evidence and deployment-available checks only; no evaluator references"});
+    let limit = store.state.config.limits.max_observation_bytes;
+    if util::json_bytes(&value)?.len() > limit {
+        // A large inspection result keeps its section and candidate ids only.
+        let last = &store.state.last_observation;
+        let reduced = last["sections"].as_array().map(|sections| {
+            sections
+                .iter()
+                .map(|s| json!({"section_id":s["section_id"],"candidates":s["candidates"].as_array().map(|c| c.iter().map(|c| json!({"candidate_id":c["candidate_id"],"hypothesis":c["hypothesis"],"selectable":c["selectable"],"non_grid_competing_components":c["non_grid_competing_components"]})).collect::<Vec<_>>())}))
+                .collect::<Vec<_>>()
+        });
+        value["last_observation"] = json!({"ok":last["ok"],"status":last["status"],"error_code":last["error_code"],
+            "message":last["message"],"sections":reduced,"truncated_for_size":true});
+    }
+    if util::json_bytes(&value)?.len() > limit {
+        return Err("observation_size_limit".into());
+    }
+    Ok(value)
+}
 fn model_observation(store: &Store) -> Result<Value> {
+    if investigation_mode(store) {
+        return investigation_observation(store);
+    }
     let history=store.events.iter().rev().filter(|e|["decision","worker_result","worker_reconciled","operator_intervention"].contains(&e.kind.as_str())).take(10).map(|e|json!({"sequence":e.sequence,"kind":e.kind,"decision":e.payload.get("decision"),"operation":e.payload.get("operation"),"status":e.payload["response"]["result"]["status"],"error_code":e.payload["response"]["result"]["error_code"]})).collect::<Vec<_>>();
     let previous_failure=store.events.iter().rev().find(|e|["provider_result","provider_reconciled"].contains(&e.kind.as_str())&&e.payload["receipt"]["state"]=="failed")
         .map(|e|json!({"request_id":e.payload["receipt"]["request_id"],"error_code":e.payload["receipt"]["error_code"],"automatic_retry":false}));
@@ -493,6 +605,14 @@ fn model_observation(store: &Store) -> Result<Value> {
     Ok(value)
 }
 
+/// The decision purpose of this task: investigation in live draft mode.
+fn decision_purpose(store: &Store) -> provider::Purpose {
+    if investigation_mode(store) {
+        provider::Purpose::Investigation
+    } else {
+        provider::Purpose::ModelDecision
+    }
+}
 fn apply_provider(
     store: &mut Store,
     pending: &Pending,
@@ -546,9 +666,10 @@ fn apply_provider(
         || receipt.endpoint != GO_ENDPOINT
         || receipt.requested_model != GO_MODEL
         || receipt.evidence_mode != "live"
-        // The controller loop accepts only decision receipts; a table
-        // transcription receipt can never stage a decision here.
-        || receipt.purpose != provider::Purpose::ModelDecision
+        // The controller loop accepts only decision receipts of the task's
+        // mode; a table transcription receipt can never stage a decision here.
+        || receipt.purpose != decision_purpose(store)
+        || input.purpose != receipt.purpose
         || receipt.transcription.is_some()
         || receipt.source_manifest_sha256
             != store.state.source_manifest_sha256.as_deref().unwrap_or("")
@@ -558,7 +679,7 @@ fn apply_provider(
         return Err("provider_receipt_identity".into());
     }
     if receipt.request_sha256 != util::hash_json(&input.payload)?
-        || receipt.prompt_sha256 != util::hash(provider::SYSTEM_PROMPT.as_bytes())
+        || receipt.prompt_sha256 != util::hash(receipt.purpose.prompt().as_bytes())
         || receipt.observation_sha256 != input.observation_sha256
         || util::hash_json(&receipt.images)? != util::hash_json(&input.images)?
         || receipt.attempt != input.attempt
@@ -606,6 +727,18 @@ fn apply_provider(
     }
     if receipt.observed_cost_usd != receipt.usage.get("cost").and_then(Value::as_f64) {
         return Err("provider_cost_receipt_contradiction".into());
+    }
+    // An investigation decision must be derivable from the raw response body
+    // that the provider worker stored: an edited decision, model or usage in
+    // the receipt is refused.
+    if receipt.purpose == provider::Purpose::Investigation && receipt.http_status == Some(200) {
+        let body = util::read_bounded(
+            &util::safe_file(&store.path, &provider::body_path(&pending.response_path))
+                .map_err(|_| "provider_receipt_body_missing")?,
+            262_144,
+        )
+        .map_err(|_| "provider_receipt_body_missing")?;
+        provider::verify_receipt_body(&receipt, &body)?;
     }
     if let (Some(p), Some(c), Some(t)) = (
         receipt.usage["prompt_tokens"].as_u64(),
@@ -668,8 +801,9 @@ fn live_decision(store: &mut Store) -> Result<bool> {
     for (_, pixels) in images {
         content.push(json!({"type":"image_url","image_url":{"url":format!("data:image/png;base64,{pixels}"),"detail":"original"}}));
     }
+    let purpose = decision_purpose(store);
     let payload = json!({"model":GO_MODEL,"max_tokens":store.state.config.limits.max_output_tokens_per_request,"stream":false,"thinking":{"type":"disabled"},"temperature":0,
-        "response_format":{"type":"json_object"},"messages":[{"role":"system","content":provider::SYSTEM_PROMPT},{"role":"user","content":content}]});
+        "response_format":{"type":"json_object"},"messages":[{"role":"system","content":purpose.prompt()},{"role":"user","content":content}]});
     let mut retry_of = None;
     for attempt in 1..=3 {
         budget_admission(store)?;
@@ -703,7 +837,7 @@ fn live_decision(store: &mut Store) -> Result<bool> {
             payload: payload.clone(),
             attempt,
             retry_of: retry_of.clone(),
-            purpose: provider::Purpose::ModelDecision,
+            purpose,
         };
         util::atomic_json(&store.path.join(&pending.request_path), &input, false)?;
         store.state.pending = Some(pending.clone());
@@ -725,6 +859,22 @@ fn live_decision(store: &mut Store) -> Result<bool> {
         }
         if receipt.state == RequestState::TransmissionOrCompletionUnknown {
             return Ok(false);
+        }
+        if purpose == provider::Purpose::Investigation && model_output_refused(&receipt) {
+            // The model answered, but not with one valid tool call. The reason
+            // goes back to it as an observation; repeated refusals stop.
+            store.state.last_observation = json!({"ok":false,"status":"rejected",
+                "error_code":receipt.error_code,"message":"Your reply was not one valid tool call within the argument bounds. Reply with one JSON object: tool, arguments, reason.",
+                "engineering_approved":false,"human_semantic_review_required":true});
+            store.append(
+                "model_output_rejected",
+                json!({"request_id":id,"reason":receipt.error_code}),
+            )?;
+            if consecutive_refusals(store) > refusal_limit(store) {
+                stop(store, Status::NoProgress, "repeated_refused_model_output")?;
+                return Ok(false);
+            }
+            return Ok(true);
         }
         let retryable = receipt.state == RequestState::Failed
             && matches!(receipt.http_status, Some(429 | 502 | 503 | 504))
@@ -761,6 +911,118 @@ fn live_decision(store: &mut Store) -> Result<bool> {
     Ok(false)
 }
 
+/// A completed HTTP exchange whose content was not one valid tool call (bad
+/// JSON, unknown tool, arguments out of bounds). Transport, identity and
+/// credential failures are not model output and still stop the task.
+fn model_output_refused(receipt: &Receipt) -> bool {
+    receipt.state == RequestState::Failed
+        && receipt.http_status == Some(200)
+        && receipt.returned_model.as_deref() == Some(GO_MODEL)
+        && !matches!(
+            receipt.error_code.as_deref(),
+            None | Some(
+                "provider_credential_echo"
+                    | "provider_model_identity"
+                    | "provider_response_limit"
+                    | "provider_incomplete_or_unexpected_choice"
+            )
+        )
+}
+/// Refused proposals and refused outputs since the model's last accepted action.
+fn consecutive_refusals(store: &Store) -> u64 {
+    let mut count = 0;
+    for event in store.events.iter().rev() {
+        match event.kind.as_str() {
+            "operation_rejected" | "model_output_rejected" => count += 1,
+            // Provider bookkeeping between refusals is not an accepted action.
+            "provider_intent" | "provider_result" | "provider_reconciled" | "provider_backoff" => {}
+            _ => break,
+        }
+    }
+    count
+}
+/// Consecutive refusals allowed before a no-progress stop.
+fn refusal_limit(store: &Store) -> u64 {
+    2 * store.state.config.limits.max_repeated_action
+}
+/// Model decisions allowed without progress. Progress is a change of the
+/// generation (an assignment or a selection) or a build. This is a
+/// no-progress stop, not an aggregate cap: any number of decisions is allowed
+/// while the model makes progress.
+const NO_PROGRESS_DECISIONS: usize = 40;
+fn decisions_without_progress(store: &Store) -> usize {
+    let mut count = 0;
+    let generation = &store.state.generation_id;
+    for event in store.events.iter().rev() {
+        if event.kind == "decision" && event.payload["actor"] == "live_model" {
+            let tool = event.payload["decision"]["tool"]
+                .as_str()
+                .unwrap_or_default();
+            if ["build_draft", "build_provisional"].contains(&tool) {
+                break;
+            }
+            count += 1;
+        }
+        if event.kind == "worker_result"
+            && event.payload["response"]["domain"]["generation_id"].as_str()
+                != generation.as_deref()
+        {
+            break;
+        }
+    }
+    count
+}
+/// Rejections that return to the live model as observations. Other errors
+/// (integrity, identity, storage) still stop the task.
+const PROPOSAL_REFUSALS: [&str; 13] = [
+    "guess_requires_operator_confirmation",
+    "unknown_or_unsupported_candidate",
+    "source_ambiguity_requires_explicit_operator_selection",
+    "model_traced_candidate_requires_person",
+    "unsnapped_or_unknown_candidate",
+    "section_already_selected",
+    "unknown_section_id",
+    "uninspected_section",
+    "candidate_missing",
+    "investigation_requires_draft_mode",
+    "draft_mode_disabled",
+    "investigation_argument_bounds",
+    "operation_contract",
+];
+/// What the model can do instead of a refused proposal. Guidance only: the
+/// refusal itself does not change.
+fn refusal_hint(code: &str) -> &'static str {
+    match code {
+        "source_ambiguity_requires_explicit_operator_selection"
+        | "model_traced_candidate_requires_person"
+        | "guess_requires_operator_confirmation" => {
+            "A model cannot select this line. Make a view of the section (view_region or read_region), then call assign_station with this candidate_id, that view_id as label_view_id, the label you read and your reason. It becomes an open guess for a person."
+        }
+        "unsnapped_or_unknown_candidate" | "unknown_or_unsupported_candidate" | "candidate_missing" => {
+            "Use a candidate id returned by inspect_source or trace_corridor for this section. To get a new one, draw a corridor around the curve on a view with trace_corridor."
+        }
+        "section_already_selected" => {
+            "This section already has a selected line; work on another section."
+        }
+        _ => "Revise the arguments within the tool bounds, or choose another tool.",
+    }
+}
+/// Harness preparation of a live investigation: the deterministic inspection
+/// of every section and the unique source-supported selections, exactly as
+/// the deterministic draft policy makes them. No model call is spent on it.
+fn investigation_preparation(store: &Store) -> Result<Option<Decision>> {
+    if !investigation_mode(store) || store.state.last_observation["ok"] == false {
+        return Ok(None);
+    }
+    let d = &store.state.domain;
+    if d["input_errors"].as_array().is_some_and(|a| !a.is_empty()) {
+        return Ok(None);
+    }
+    let prepared = deterministic_decision(store)?;
+    Ok(["inspect_source", "select_contours"]
+        .contains(&prepared.tool.as_str())
+        .then_some(prepared))
+}
 fn decision(tool: &str, arguments: Value, reason: &str) -> Decision {
     Decision {
         tool: tool.into(),
@@ -1026,7 +1288,20 @@ fn deterministic_build_to_finish(store: &Store) -> Result<Decision> {
     ))
 }
 
+fn known_section(store: &Store, section_id: &str) -> Result<()> {
+    let sections = store.state.domain["sections"]
+        .as_array()
+        .ok_or("domain_sections_missing")?;
+    if sections.iter().any(|s| s["id"] == section_id) {
+        Ok(())
+    } else {
+        Err("unknown_section_id".into())
+    }
+}
 fn validate_selection(store: &Store, operation: &Operation, actor: &str) -> Result<()> {
+    if operation.is_investigation() && store.state.config.on_ambiguity != OnAmbiguity::Draft {
+        return Err("investigation_requires_draft_mode".into());
+    }
     let checkpoint = util::read_json(
         &util::safe_file(&store.path, "domain/state.json")?,
         32 * 1024 * 1024,
@@ -1057,11 +1332,35 @@ fn validate_selection(store: &Store, operation: &Operation, actor: &str) -> Resu
                     .iter()
                     .find(|c| c["candidate_id"] == choice.candidate_id)
                     .ok_or("candidate_missing")?;
+                // A line the model traced is the model's choice: it enters
+                // only as an open guess (assign_station), never as a policy
+                // selection on the verified path.
+                if policy && candidate["model_traced"] == true {
+                    return Err("model_traced_candidate_requires_person".into());
+                }
                 if policy && candidate["non_grid_competing_components"].as_u64() != Some(0) {
                     return Err("source_ambiguity_requires_explicit_operator_selection".into());
                 }
             }
         }
+        Operation::AssignStation(x) => {
+            known_section(store, &x.section_id)?;
+            if checkpoint["selected"].get(&x.section_id).is_some() {
+                return Err("section_already_selected".into());
+            }
+            let candidate = checkpoint["catalog"][&x.section_id]["candidates"]
+                .as_array()
+                .and_then(|c| {
+                    c.iter()
+                        .find(|c| c["candidate_id"] == x.candidate_id.as_str())
+                })
+                .ok_or("unsnapped_or_unknown_candidate")?;
+            if !validation::snapped_candidate(candidate) {
+                return Err("unsnapped_or_unknown_candidate".into());
+            }
+        }
+        Operation::TraceCorridor(x) => known_section(store, &x.section_id)?,
+        Operation::CompareViews(x) => known_section(store, &x.section_id)?,
         Operation::InspectSource(x) => {
             if let Some(ids) = &x.section_ids {
                 let sections = store.state.domain["sections"]
@@ -1093,8 +1392,10 @@ fn live_abstention_becomes_draft(store: &Store, actor: &str) -> bool {
 
 /// Build a best-effort draft. When it has open guesses, the task stops at
 /// `draft_not_verified`; a person resolves each guess with an operator
-/// `select_contours`, and then the ordinary verified path runs.
-fn build_draft(store: &mut Store) -> Result<bool> {
+/// `select_contours`, and then the ordinary verified path runs. An
+/// investigating model's own rebuild (`stop_when_built` false) does not stop:
+/// the model inspects the draft and revises it, and its submission stops.
+fn build_draft(store: &mut Store, stop_when_built: bool) -> Result<bool> {
     if store.state.config.on_ambiguity != OnAmbiguity::Draft {
         return Err("draft_mode_disabled".into());
     }
@@ -1117,6 +1418,9 @@ fn build_draft(store: &mut Store) -> Result<bool> {
         json!({"status":"draft_not_verified","guesses":guesses,"candidate":candidate,
             "verified":false,"engineering_approved":false}),
     )?;
+    if !stop_when_built {
+        return Ok(true);
+    }
     stop(
         store,
         Status::DraftNotVerified,
@@ -1178,7 +1482,32 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
         json!({"decision":choice,"actor":actor,"live_inference":actor=="live_model"}),
     )?;
     if let Operation::BuildDraft(_) = operation {
-        return build_draft(store);
+        let investigating = actor == "live_model" && investigation_mode(store);
+        return build_draft(store, !investigating);
+    }
+    if let Operation::AskPerson(ask) = &operation {
+        store.state.staged_decision = None;
+        store.append(
+            "person_requested",
+            json!({"actor":actor,"question":ask.question,"engineering_approved":false}),
+        )?;
+        stop(store, Status::Paused, "model_asked_person")?;
+        return Ok(false);
+    }
+    if let Operation::Finish(finish) = &operation {
+        // The investigating model submits its draft: when its latest choices
+        // are not built yet, the harness builds the draft first. With open
+        // guesses that build stops at draft_not_verified.
+        if actor == "live_model"
+            && investigation_mode(store)
+            && finish.outcome == FinishOutcome::CandidateReadyForReview
+            && store.state.domain["current_candidate"].is_null()
+            && store.state.domain["catalog_ready"] == true
+        {
+            store.state.staged_decision = None;
+            store.append("submission_builds_draft", json!({"actor":actor}))?;
+            return build_draft(store, true);
+        }
     }
     if let Operation::Finish(finish) = operation {
         store.state.staged_decision = None;
@@ -1188,7 +1517,7 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
                     "abstention_replaced_by_draft",
                     json!({"actor":actor,"summary":finish.summary,"policy":"on_ambiguity_draft"}),
                 )?;
-                return build_draft(store);
+                return build_draft(store, true);
             }
             stop(store, Status::Abstained, &finish.summary)?;
             return Ok(false);
@@ -1284,6 +1613,11 @@ pub fn run_loop(store: &mut Store, max_steps: Option<u64>) -> Result<()> {
             return stop(store, Status::Paused, "requested_step_boundary");
         }
         store.verify(false)?;
+        let mut actor = if store.state.config.policy == Policy::Live {
+            "live_model"
+        } else {
+            "deterministic_policy"
+        };
         if store.state.staged_decision.is_none() {
             match store.state.config.policy {
                 Policy::Deterministic => {
@@ -1295,8 +1629,32 @@ pub fn run_loop(store: &mut Store, max_steps: Option<u64>) -> Result<()> {
                     )?;
                 }
                 Policy::Live => {
-                    if !live_decision(store)? {
-                        return Ok(());
+                    if let Some(prepared) = investigation_preparation(store)? {
+                        store.state.staged_decision = Some(prepared);
+                        store.state.counters.policy_decisions += 1;
+                        store.append(
+                            "harness_preparation_staged",
+                            json!({"live_inference":false}),
+                        )?;
+                        actor = "deterministic_policy";
+                    } else {
+                        if investigation_mode(store)
+                            && decisions_without_progress(store) >= NO_PROGRESS_DECISIONS
+                        {
+                            return stop(
+                                store,
+                                Status::NoProgress,
+                                "investigation_without_progress",
+                            );
+                        }
+                        if !live_decision(store)? {
+                            return Ok(());
+                        }
+                        if store.state.staged_decision.is_none() {
+                            // A refused model output became an observation.
+                            steps += 1;
+                            continue;
+                        }
                     }
                 }
             }
@@ -1309,14 +1667,28 @@ pub fn run_loop(store: &mut Store, max_steps: Option<u64>) -> Result<()> {
         if worker::cancelled(&store.path) {
             return stop(store, Status::Cancelled, "cancelled_after_model_receipt");
         }
-        let actor = if store.state.config.policy == Policy::Live {
-            "live_model"
-        } else {
-            "deterministic_policy"
-        };
-        match execute_decision(store, choice, actor) {
+        match execute_decision(store, choice.clone(), actor) {
             Ok(true) => (),
             Ok(false) => return Ok(()),
+            Err(reason)
+                if actor == "live_model"
+                    && investigation_mode(store)
+                    && PROPOSAL_REFUSALS.contains(&reason.as_str()) =>
+            {
+                // A refused model proposal is an observation for the model,
+                // not a stop; repeated refusals end in a no-progress stop.
+                store.state.staged_decision = None;
+                store.state.last_observation = json!({"ok":false,"status":"proposal_refused","error_code":reason,
+                    "refused_decision":choice,"what_you_can_do":refusal_hint(&reason),
+                    "engineering_approved":false,"human_semantic_review_required":true});
+                store.append(
+                    "operation_rejected",
+                    json!({"reason":reason,"actor":actor,"decision":choice}),
+                )?;
+                if consecutive_refusals(store) > refusal_limit(store) {
+                    return stop(store, Status::NoProgress, "repeated_refused_proposals");
+                }
+            }
             Err(reason) => {
                 store.state.staged_decision = None;
                 store.state.last_observation = json!({"ok":false,"status":"rejected","error_code":reason,"engineering_approved":false,"human_semantic_review_required":true});
@@ -1556,7 +1928,10 @@ mod tests {
     #[test]
     fn abstain_mode_refuses_a_draft_build() {
         let (_tmp, mut store) = fixture();
-        assert_eq!(build_draft(&mut store).unwrap_err(), "draft_mode_disabled");
+        assert_eq!(
+            build_draft(&mut store, true).unwrap_err(),
+            "draft_mode_disabled"
+        );
     }
     #[test]
     fn source_witnesses_survive_later_build_observations() {
@@ -1572,5 +1947,213 @@ mod tests {
         let observation = model_observation(&store).unwrap();
         assert_eq!(observation["retained_source_observations"][0], source);
         assert!(observation.get("reference_geometry").is_none());
+    }
+
+    // ------------------------------------------- investigation receipts
+
+    /// A live draft-mode task with one pending investigation request, its
+    /// honest response body on disk and the honest receipt for it.
+    fn investigation_receipt_fixture() -> (tempfile::TempDir, Store, Pending, Receipt, Vec<u8>) {
+        let (tmp, mut store) = fixture();
+        store.state.config.on_ambiguity = OnAmbiguity::Draft;
+        store.state.source_manifest_sha256 = Some("a".repeat(64));
+        store.state.generation_id = Some(format!("generation-{}", "b".repeat(24)));
+        store.state.revision_id = Some("r0001".into());
+        let pending = Pending {
+            kind: "provider".into(),
+            id: "request-investigation".into(),
+            operation: "model_decision".into(),
+            response_path: "receipts/request-investigation.json".into(),
+            request_path: "requests/request-investigation.json".into(),
+            domain_before: None,
+            started_ms: util::now_ms(),
+        };
+        let input = ProviderInput {
+            protocol: provider::PROTOCOL.into(),
+            request_id: pending.id.clone(),
+            source_manifest_sha256: "a".repeat(64),
+            generation_id: store.state.generation_id.clone().unwrap(),
+            revision_id: "r0001".into(),
+            observation_sha256: "c".repeat(64),
+            images: vec![],
+            payload: json!({"model":GO_MODEL,"messages":[{"role":"system","content":provider::INVESTIGATION_PROMPT}]}),
+            attempt: 1,
+            retry_of: None,
+            purpose: provider::Purpose::Investigation,
+        };
+        util::atomic_json(&store.path.join(&pending.request_path), &input, false).unwrap();
+        let decision = json!({"tool":"view_region","arguments":{"region_px":[0,0,400,300]},"reason":"Look at the body plan."});
+        let body = util::json_bytes(&json!({"id":"completion-1","model":GO_MODEL,
+            "choices":[{"finish_reason":"stop","message":{"content":decision.to_string()}}],
+            "usage":{"prompt_tokens":30,"completion_tokens":5,"total_tokens":35,"cost":0.0,"opencode":{"billing_source":"go"}}}))
+        .unwrap();
+        let mut receipt = Receipt {
+            protocol: provider::PROTOCOL.into(),
+            request_id: pending.id.clone(),
+            state: RequestState::NotSent,
+            endpoint: GO_ENDPOINT.into(),
+            requested_model: GO_MODEL.into(),
+            returned_model: None,
+            completion_id: None,
+            provider_request_id: None,
+            http_status: Some(200),
+            response_sha256: Some(util::hash(&body)),
+            request_sha256: util::hash_json(&input.payload).unwrap(),
+            prompt_sha256: util::hash(provider::INVESTIGATION_PROMPT.as_bytes()),
+            source_manifest_sha256: input.source_manifest_sha256.clone(),
+            generation_id: input.generation_id.clone(),
+            revision_id: input.revision_id.clone(),
+            observation_sha256: input.observation_sha256.clone(),
+            images: vec![],
+            usage: json!({}),
+            observed_cost_usd: None,
+            latency_seconds: 0.5,
+            decision: None,
+            error_code: None,
+            attempt: 1,
+            retry_of: None,
+            retry_after_seconds: None,
+            aggregate_request_cap: None,
+            aggregate_token_cap: None,
+            aggregate_spend_cap: None,
+            evidence_mode: "live".into(),
+            credential_selection: None,
+            purpose: provider::Purpose::Investigation,
+            transcription: None,
+        };
+        provider::interpret_completion(&mut receipt, &body, "").unwrap();
+        store.state.pending = Some(pending.clone());
+        (tmp, store, pending, receipt, body)
+    }
+    fn apply_forged(
+        store: &mut Store,
+        pending: &Pending,
+        receipt: &Receipt,
+        body: Option<&[u8]>,
+    ) -> Result<Option<Receipt>> {
+        util::atomic_json(&store.path.join(&pending.response_path), receipt, true).unwrap();
+        let body_file = store.path.join(provider::body_path(&pending.response_path));
+        match body {
+            Some(bytes) => std::fs::write(&body_file, bytes).unwrap(),
+            None => {
+                let _ = std::fs::remove_file(&body_file);
+            }
+        }
+        apply_provider(store, pending, json!({"state":"exited"}), false)
+    }
+    #[test]
+    fn honest_investigation_receipt_stages_its_decision() {
+        let (_tmp, mut store, pending, receipt, body) = investigation_receipt_fixture();
+        let applied = apply_forged(&mut store, &pending, &receipt, Some(&body)).unwrap();
+        assert_eq!(applied.unwrap().state, RequestState::Completed);
+        assert_eq!(store.state.staged_decision.unwrap().tool, "view_region");
+        assert_eq!(store.state.counters.prompt_tokens, 30);
+    }
+    /// Edits a receipt or its body; returns false to remove the body file.
+    type ReceiptForgery = fn(&mut Receipt, &mut Vec<u8>) -> bool;
+    #[test]
+    fn edited_or_unbacked_investigation_receipts_are_refused() {
+        let cases: [(&str, ReceiptForgery); 6] = [
+            ("decision edited in the receipt", |r, _| {
+                r.decision.as_mut().unwrap().tool = "finish".into();
+                r.decision.as_mut().unwrap().arguments =
+                    json!({"outcome":"candidate_ready_for_review","summary":"Approved."});
+                true
+            }),
+            ("arguments edited in the receipt", |r, _| {
+                r.decision.as_mut().unwrap().arguments = json!({"region_px":[0,0,10,10]});
+                true
+            }),
+            ("usage edited in the receipt", |r, _| {
+                r.usage = json!({"prompt_tokens":3,"completion_tokens":5,"total_tokens":8,"cost":0.0,"billing_source":"go"});
+                true
+            }),
+            ("body edited on disk", |_, b| {
+                let text = String::from_utf8(b.clone()).unwrap().replace("400", "900");
+                *b = text.into_bytes();
+                true
+            }),
+            ("body missing", |_, _| false),
+            ("completion id edited", |r, _| {
+                r.completion_id = Some("completion-2".into());
+                true
+            }),
+        ];
+        for (name, forge) in cases {
+            let (_tmp, mut store, pending, mut receipt, mut body) = investigation_receipt_fixture();
+            let keep_body = forge(&mut receipt, &mut body);
+            let error = apply_forged(
+                &mut store,
+                &pending,
+                &receipt,
+                keep_body.then_some(&body[..]),
+            )
+            .unwrap_err();
+            assert!(
+                [
+                    "provider_receipt_body_mismatch",
+                    "provider_receipt_body_missing"
+                ]
+                .contains(&error.as_str()),
+                "{name}: {error}"
+            );
+            assert!(store.state.staged_decision.is_none(), "{name}");
+        }
+    }
+    #[test]
+    fn a_decision_receipt_of_another_mode_is_refused() {
+        // A receipt made with the ordinary decision prompt cannot stage a
+        // decision in an investigation task, and the reverse.
+        let (_tmp, mut store, pending, mut receipt, body) = investigation_receipt_fixture();
+        receipt.purpose = provider::Purpose::ModelDecision;
+        receipt.prompt_sha256 = util::hash(provider::SYSTEM_PROMPT.as_bytes());
+        assert_eq!(
+            apply_forged(&mut store, &pending, &receipt, Some(&body)).unwrap_err(),
+            "provider_receipt_identity"
+        );
+    }
+    #[test]
+    fn investigation_tools_require_draft_mode_and_are_bounded() {
+        let (_tmp, store) = fixture();
+        let view = Operation::ViewRegion(ViewRegion {
+            region_px: [0, 0, 10, 10],
+            max_side_px: None,
+        });
+        assert_eq!(
+            validate_selection(&store, &view, "live_model").unwrap_err(),
+            "investigation_requires_draft_mode"
+        );
+        let names = |catalog: Value| {
+            catalog
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|t| t["name"].as_str().unwrap().to_string())
+                .collect::<Vec<_>>()
+        };
+        let draft = names(tool_catalog(&OnAmbiguity::Draft));
+        for tool in [
+            "view_region",
+            "trace_corridor",
+            "assign_station",
+            "ask_person",
+        ] {
+            assert!(draft.contains(&tool.to_string()));
+            assert!(!names(tool_catalog(&OnAmbiguity::Abstain)).contains(&tool.to_string()));
+        }
+    }
+    #[test]
+    fn refusals_are_counted_until_an_accepted_action() {
+        let (_tmp, mut store) = fixture();
+        for _ in 0..3 {
+            store.append("provider_intent", json!({})).unwrap();
+            store
+                .append("operation_rejected", json!({"reason":"x"}))
+                .unwrap();
+        }
+        assert_eq!(consecutive_refusals(&store), 3);
+        store.append("worker_result", json!({})).unwrap();
+        assert_eq!(consecutive_refusals(&store), 0);
+        assert_eq!(refusal_limit(&store), 6);
     }
 }

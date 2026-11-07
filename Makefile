@@ -10,7 +10,7 @@ CARGO ?= cargo
 export MARINAFRAME_TEST_PYTHON ?= $(PY)
 export PATH := $(dir $(PY)):$(PATH)
 
-CAD_RUST_TESTS = --test finalization_guards --test validation_matrix --test audit_identity --test draft_guards --test region_pipeline
+CAD_RUST_TESTS = --test finalization_guards --test validation_matrix --test audit_identity --test draft_guards --test region_pipeline --test investigation_guards
 
 .PHONY: test-quick test-full lint rust-quick python-quick rust-cad python-cad smoke secrets
 

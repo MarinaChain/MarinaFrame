@@ -94,6 +94,100 @@ pub struct Finish {
     pub summary: String,
 }
 
+// ------------------------------------------------ model investigation tools
+//
+// The live model may look at any region at any zoom, trace inside a corridor
+// that it draws on a view, claim station identities and sheet setups, and ask
+// a person. Every argument is bounded here; the harness executes the tool and
+// checks every claim. No argument is a line, a path, code, a gate or a review
+// state: a traced line comes only from source ink.
+
+/// Pixel rectangle [left, top, right, bottom] on the captured sheet.
+pub type RegionPx = [u32; 4];
+pub const MAX_SHEET_PX: u32 = 1_000_000;
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ViewRegion {
+    pub region_px: RegionPx,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_side_px: Option<u32>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReadSubject {
+    Labels,
+    ScaleBar,
+    Dimensions,
+    TitleBlock,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReadRegion {
+    pub region_px: RegionPx,
+    pub subject: ReadSubject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TraceCorridor {
+    pub section_id: String,
+    /// The view on which the corridor is drawn; points are in its pixels.
+    pub view_id: String,
+    pub path_px: Vec<[f64; 2]>,
+    pub half_width_px: f64,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AssignStation {
+    pub section_id: String,
+    pub candidate_id: String,
+    pub label_view_id: String,
+    /// What the model reads on the label view: a claim, not a fact.
+    pub label_text: String,
+    pub reason: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comparison_id: Option<String>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SheetView {
+    Body,
+    Plan,
+    Profile,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProposeSheetSetup {
+    pub view: SheetView,
+    pub region_px: RegionPx,
+    pub pixels_per_metre: f64,
+    pub grid_spacing_m: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub centreline_px: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub baseline_px: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub x_origin_px: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub x_direction: Option<i8>,
+    pub evidence_view_id: String,
+    pub scale_claim: String,
+    pub reason: String,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CompareViews {
+    pub section_id: String,
+    pub candidate_id: String,
+    pub setup_id: String,
+    pub heights_m: Vec<f64>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AskPerson {
+    pub question: String,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "tool", content = "arguments", rename_all = "snake_case")]
 pub enum Operation {
@@ -104,6 +198,23 @@ pub enum Operation {
     RenderCandidate(Render),
     ValidateCandidate(Empty),
     Finish(Finish),
+    ViewRegion(ViewRegion),
+    ReadRegion(ReadRegion),
+    TraceCorridor(TraceCorridor),
+    AssignStation(AssignStation),
+    ProposeSheetSetup(ProposeSheetSetup),
+    CompareViews(CompareViews),
+    AskPerson(AskPerson),
+}
+fn bounded_text(text: &str, chars: usize) -> bool {
+    let count = text.chars().count();
+    (1..=chars).contains(&count) && text.len() <= 4 * chars && !text.chars().any(char::is_control)
+}
+fn finite_in(value: f64, low: f64, high: f64) -> bool {
+    value.is_finite() && (low..=high).contains(&value)
+}
+fn valid_region(region: &RegionPx) -> bool {
+    region.iter().all(|v| *v <= MAX_SHEET_PX) && region[2] > region[0] && region[3] > region[1]
 }
 impl Operation {
     pub fn name(&self) -> &'static str {
@@ -115,6 +226,90 @@ impl Operation {
             Self::RenderCandidate(_) => "render_candidate",
             Self::ValidateCandidate(_) => "validate_candidate",
             Self::Finish(_) => "finish",
+            Self::ViewRegion(_) => "view_region",
+            Self::ReadRegion(_) => "read_region",
+            Self::TraceCorridor(_) => "trace_corridor",
+            Self::AssignStation(_) => "assign_station",
+            Self::ProposeSheetSetup(_) => "propose_sheet_setup",
+            Self::CompareViews(_) => "compare_views",
+            Self::AskPerson(_) => "ask_person",
+        }
+    }
+    /// The model investigation tools. They exist only in draft mode, where an
+    /// accepted model claim is an open guess that a person must confirm.
+    pub fn is_investigation(&self) -> bool {
+        matches!(
+            self,
+            Self::ViewRegion(_)
+                | Self::ReadRegion(_)
+                | Self::TraceCorridor(_)
+                | Self::AssignStation(_)
+                | Self::ProposeSheetSetup(_)
+                | Self::CompareViews(_)
+                | Self::AskPerson(_)
+        )
+    }
+    /// The section a tool acts on, if any.
+    pub fn section_id(&self) -> Option<&str> {
+        match self {
+            Self::TraceCorridor(x) => Some(&x.section_id),
+            Self::AssignStation(x) => Some(&x.section_id),
+            Self::CompareViews(x) => Some(&x.section_id),
+            _ => None,
+        }
+    }
+    fn validate_investigation(&self) -> Result<()> {
+        let id = |s: &str| util::valid_id(s, 64);
+        let ok = match self {
+            Self::ViewRegion(x) => {
+                valid_region(&x.region_px)
+                    && x.max_side_px.is_none_or(|n| (256..=1024).contains(&n))
+            }
+            Self::ReadRegion(x) => valid_region(&x.region_px),
+            Self::TraceCorridor(x) => {
+                util::valid_section_id(&x.section_id)
+                    && id(&x.view_id)
+                    && (2..=24).contains(&x.path_px.len())
+                    && x.path_px
+                        .iter()
+                        .all(|p| p.iter().all(|v| finite_in(*v, 0., 4096.)))
+                    && finite_in(x.half_width_px, 1., 64.)
+            }
+            Self::AssignStation(x) => {
+                util::valid_section_id(&x.section_id)
+                    && id(&x.candidate_id)
+                    && id(&x.label_view_id)
+                    && bounded_text(&x.label_text, 64)
+                    && bounded_text(&x.reason, 300)
+                    && x.comparison_id.as_deref().is_none_or(id)
+            }
+            Self::ProposeSheetSetup(x) => {
+                valid_region(&x.region_px)
+                    && finite_in(x.pixels_per_metre, 1e-3, 1e5)
+                    && finite_in(x.grid_spacing_m, 1e-3, 100.)
+                    && [x.centreline_px, x.baseline_px, x.x_origin_px]
+                        .iter()
+                        .flatten()
+                        .all(|v| finite_in(*v, 0., MAX_SHEET_PX as f64))
+                    && x.x_direction.is_none_or(|d| d == 1 || d == -1)
+                    && id(&x.evidence_view_id)
+                    && bounded_text(&x.scale_claim, 128)
+                    && bounded_text(&x.reason, 300)
+            }
+            Self::CompareViews(x) => {
+                util::valid_section_id(&x.section_id)
+                    && id(&x.candidate_id)
+                    && id(&x.setup_id)
+                    && (1..=12).contains(&x.heights_m.len())
+                    && x.heights_m.iter().all(|h| finite_in(*h, -100., 1000.))
+            }
+            Self::AskPerson(x) => bounded_text(&x.question, 512),
+            _ => true,
+        };
+        if ok {
+            Ok(())
+        } else {
+            Err("investigation_argument_bounds".into())
         }
     }
     pub fn args(&self) -> Value {
@@ -153,7 +348,7 @@ impl Operation {
             }
             _ => (),
         }
-        Ok(())
+        self.validate_investigation()
     }
 }
 

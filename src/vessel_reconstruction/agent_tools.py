@@ -19,7 +19,9 @@ import stat
 import sys
 from uuid import uuid4
 
-from .draft import DRAFT_STATUS, guessed_choices, make_guesses
+from .draft import DRAFT_STATUS, guessed_choices, make_guesses, model_choice_guess
+from .investigation_tools import (INVESTIGATION_ARGUMENTS, InvestigationTools, ToolArgumentError,
+                                  check_investigation_arguments)
 from .isolation import DEFAULT_LIMITS, run_isolated, supervise_process
 from .provenance import digest_file, digest_object, safe_relative_file, write_json
 from .schema import MAX_SPEC_BYTES, load_bounded_json, loads_bounded_json, validate_spec
@@ -66,7 +68,7 @@ def _artifact(path: Path, task_dir: Path, *, kind: str, **extra) -> dict:
             "path": relative, "kind": kind, "bytes": path.stat().st_size, **extra}
 
 
-class DomainTools:
+class DomainTools(InvestigationTools):
     """One persistent, source-bound tool domain owned by the harness controller.
 
     ``task_dir`` and ``spec_path`` are trusted application inputs, never tool
@@ -163,7 +165,7 @@ class DomainTools:
         write_json(self.state_path, self.state)
 
     def describe(self) -> dict:
-        sections = [{"id": s.get("id"), "x_m": s.get("x_m"),
+        sections = [{"id": s.get("id"), "x_m": s.get("x_m"), "roi_px": s.get("roi_px"),
                      "selected_candidate_id": self.state["selected"].get(s.get("id")),
                      "inspected": s.get("id") in self.state["catalog"]}
                     for s in self.spec.get("sections", []) if isinstance(s, dict)]
@@ -194,6 +196,9 @@ class DomainTools:
                 "rendered_views": list(self.state["rendered_views"]),
                 "open_guesses": copy.deepcopy(self.open_guesses),
                 "resolved_guesses": copy.deepcopy(self.state.get("resolved_guesses", [])),
+                "model_choice_section_ids": sorted(self.state.get("model_choices", {})),
+                "sheet_setup_ids": sorted(self.state.get("sheet_setups", {})),
+                "view_count": len(self.state.get("views", [])),
                 "input_errors": self.state["input_errors"][:32], **SEMANTIC_FLAGS}
 
     def catalog(self) -> list[dict]:
@@ -220,11 +225,16 @@ class DomainTools:
             raise ToolInputError("Tool arguments must be a bounded JSON object.")
         expected = {"inspect_source": {"section_ids"}, "select_contours": {"selections"},
                     "build_provisional": set(), "build_draft": set(), "render_candidate": {"view"},
-                    "validate_candidate": set()}
+                    "validate_candidate": set(), **INVESTIGATION_ARGUMENTS}
         if name not in expected:
             raise ToolInputError("Unknown domain operation.")
         if set(arguments) - expected[name]:
             raise ToolInputError("Unsupported tool argument; paths, code, and geometry are not accepted.")
+        if name in INVESTIGATION_ARGUMENTS:
+            try:
+                check_investigation_arguments(name, arguments, self.spec)
+            except ToolArgumentError as exc:
+                raise ToolInputError(str(exc)) from None
         if name == "inspect_source" and "section_ids" in arguments:
             ids = arguments["section_ids"]
             known = {s.get("id") for s in self.spec.get("sections", []) if isinstance(s, dict)}
@@ -429,6 +439,10 @@ class DomainTools:
             candidate = next(c for c in self.state["catalog"][section["id"]]["candidates"] if c["candidate_id"] == cid)
             if not candidate.get("declared_pieces"):
                 section["contour_selection"] = copy.deepcopy(candidate["contour_selection"])
+            if candidate.get("z_range_m") is not None:
+                # A corridor trace that ends inside the calibrated range is
+                # read only where its ink is (investigation.corridor_trace).
+                section["z_min_m"], section["z_max_m"] = candidate["z_range_m"]
             prior = section.get("evidence", "Caller-supplied calibration.")
             if guess is not None:
                 section["evidence"] = (prior[:7000] + " Draft guess " + guess["guess_id"] + " took " + cid +
@@ -492,7 +506,8 @@ class DomainTools:
         if not sections or any(s["id"] not in self.state["catalog"] for s in sections):
             return self._observation(False, "blocked", error_code="draft_requires_complete_inspection",
                                      message="Inspect every section before a draft is built.")
-        guesses = make_guesses(sections, self.state["selected"], self.state["catalog"])
+        guesses = make_guesses(sections, self.state["selected"], self.state["catalog"],
+                               self.state.get("model_choices"))
         if guesses != self.open_guesses:
             self.state.update(guesses=guesses, revision=self.state["revision"] + 1,
                               validation=None, rendered_views=[])

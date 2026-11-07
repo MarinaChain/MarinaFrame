@@ -163,6 +163,8 @@ pub fn batch_payload(
             revision_id: None,
             step_sha256: None,
             pixels_attached: true,
+            crop_box_px: None,
+            pixel_size: None,
         });
     }
     let payload = json!({"model":GO_MODEL,"max_tokens":MAX_OUTPUT_TOKENS,"stream":false,"thinking":{"type":"disabled"},"temperature":0,
