@@ -1,0 +1,111 @@
+{
+  "shipd-2-06136-L1": {
+    "case_id": "shipd-2-06136-L1",
+    "split": "development",
+    "level": 1,
+    "layout": "separate",
+    "hull_id": "shipd-2-06136",
+    "family": "shipd-c28",
+    "run": "new-final",
+    "code": {
+      "commit": "ea2300eea73466b48efbadc5091c995a700554be",
+      "dirty": true
+    },
+    "controller_sha256": "f16efb56ca5c69fa76cc32b4831c093bc23626cbaf077055431081dd933bc17c",
+    "exit_code": 0,
+    "seconds": 30.89,
+    "controller_status": "blocked",
+    "termination_reason": "source_ambiguity_requires_explicit_operator_selection",
+    "outcome": "failed",
+    "failure_kind": "blocked",
+    "inspection": {
+      "s01": {
+        "candidates": [
+          "retained_alternative_source_continuity"
+        ],
+        "selectable": 1,
+        "retained_competing": 6,
+        "unique_non_grid": false
+      },
+      "s05": {
+        "candidates": [
+          "all_contrast_continuity",
+          "grid_supported_contour_hypothesis",
+          "retained_alternative_source_continuity"
+        ],
+        "selectable": 3,
+        "retained_competing": 5,
+        "unique_non_grid": true
+      },
+      "s07": {
+        "candidates": [
+          "grid_supported_contour_hypothesis",
+          "high_contrast_continuity_hypothesis",
+          "source_endpoint_contact_hypothesis",
+          "source_endpoint_contact_hypothesis"
+        ],
+        "selectable": 4,
+        "retained_competing": 6,
+        "unique_non_grid": true
+      },
+      "s06": {
+        "candidates": [
+          "all_contrast_continuity",
+          "grid_supported_contour_hypothesis",
+          "retained_alternative_source_continuity"
+        ],
+        "selectable": 3,
+        "retained_competing": 5,
+        "unique_non_grid": true
+      },
+      "s04": {
+        "candidates": [
+          "grid_supported_contour_hypothesis",
+          "high_contrast_continuity_hypothesis",
+          "source_endpoint_contact_hypothesis",
+          "source_endpoint_contact_hypothesis"
+        ],
+        "selectable": 4,
+        "retained_competing": 6,
+        "unique_non_grid": true
+      },
+      "s09": {
+        "candidates": [
+          "all_contrast_continuity",
+          "grid_supported_contour_hypothesis",
+          "retained_alternative_source_continuity"
+        ],
+        "selectable": 3,
+        "retained_competing": 6,
+        "unique_non_grid": true
+      },
+      "s08": {
+        "candidates": [
+          "all_contrast_continuity",
+          "grid_supported_contour_hypothesis"
+        ],
+        "selectable": 2,
+        "retained_competing": 5,
+        "unique_non_grid": true
+      },
+      "s03": {
+        "candidates": [
+          "all_contrast_continuity",
+          "grid_supported_contour_hypothesis"
+        ],
+        "selectable": 2,
+        "retained_competing": 7,
+        "unique_non_grid": true
+      },
+      "s02": {
+        "candidates": [
+          "retained_alternative_source_continuity"
+        ],
+        "selectable": 1,
+        "retained_competing": 6,
+        "unique_non_grid": false
+      }
+    },
+    "stderr_tail": ""
+  }
+}

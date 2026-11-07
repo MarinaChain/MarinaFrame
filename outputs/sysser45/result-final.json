@@ -1,0 +1,110 @@
+{
+  "case_id": "sysser45-L1",
+  "split": "validation",
+  "level": 1,
+  "layout": "separate",
+  "hull_id": "sysser45",
+  "family": "dsyhs",
+  "run": "final-h11",
+  "code": {
+    "commit": "ea2300eea73466b48efbadc5091c995a700554be",
+    "dirty": true
+  },
+  "controller_sha256": "f16efb56ca5c69fa76cc32b4831c093bc23626cbaf077055431081dd933bc17c",
+  "exit_code": 0,
+  "seconds": 18.68,
+  "controller_status": "abstained",
+  "termination_reason": "The source has multiple or no supported contour interpretations. An explicit source-backed selection is required.",
+  "outcome": "abstained",
+  "failure_kind": null,
+  "inspection": {
+    "s01": {
+      "candidates": [
+        "retained_alternative_source_continuity",
+        "retained_alternative_source_continuity"
+      ],
+      "selectable": 2,
+      "retained_competing": 8,
+      "unique_non_grid": false
+    },
+    "s05": {
+      "candidates": [
+        "all_contrast_continuity",
+        "grid_supported_contour_hypothesis",
+        "source_endpoint_contact_hypothesis",
+        "source_endpoint_contact_hypothesis"
+      ],
+      "selectable": 4,
+      "retained_competing": 7,
+      "unique_non_grid": true
+    },
+    "s07": {
+      "candidates": [
+        "grid_supported_contour_hypothesis",
+        "retained_alternative_source_continuity"
+      ],
+      "selectable": 2,
+      "retained_competing": 6,
+      "unique_non_grid": true
+    },
+    "s06": {
+      "candidates": [
+        "all_contrast_continuity",
+        "grid_supported_contour_hypothesis",
+        "source_endpoint_contact_hypothesis",
+        "source_endpoint_contact_hypothesis"
+      ],
+      "selectable": 4,
+      "retained_competing": 7,
+      "unique_non_grid": true
+    },
+    "s04": {
+      "candidates": [
+        "grid_supported_contour_hypothesis",
+        "retained_alternative_source_continuity"
+      ],
+      "selectable": 2,
+      "retained_competing": 7,
+      "unique_non_grid": true
+    },
+    "s09": {
+      "candidates": [
+        "retained_alternative_source_continuity",
+        "retained_alternative_source_continuity",
+        "retained_alternative_source_continuity"
+      ],
+      "selectable": 3,
+      "retained_competing": 6,
+      "unique_non_grid": false
+    },
+    "s08": {
+      "candidates": [
+        "grid_supported_contour_hypothesis",
+        "retained_alternative_source_continuity",
+        "retained_alternative_source_continuity"
+      ],
+      "selectable": 3,
+      "retained_competing": 6,
+      "unique_non_grid": true
+    },
+    "s03": {
+      "candidates": [
+        "grid_supported_contour_hypothesis",
+        "retained_alternative_source_continuity"
+      ],
+      "selectable": 2,
+      "retained_competing": 8,
+      "unique_non_grid": true
+    },
+    "s02": {
+      "candidates": [
+        "retained_alternative_source_continuity",
+        "retained_alternative_source_continuity"
+      ],
+      "selectable": 2,
+      "retained_competing": 8,
+      "unique_non_grid": false
+    }
+  },
+  "stderr_tail": ""
+}

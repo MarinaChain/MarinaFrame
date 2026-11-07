@@ -22,6 +22,7 @@ from uuid import uuid4
 from .draft import DRAFT_STATUS, guessed_choices, make_guesses, model_choice_guess
 from .investigation_tools import (INVESTIGATION_ARGUMENTS, InvestigationTools, ToolArgumentError,
                                   check_investigation_arguments)
+from .ingest import _grid_evidence
 from .isolation import DEFAULT_LIMITS, run_isolated, supervise_process
 from .provenance import digest_file, digest_object, safe_relative_file, write_json
 from .schema import MAX_SPEC_BYTES, load_bounded_json, loads_bounded_json, validate_spec
@@ -659,48 +660,6 @@ def _adaptive_anchors(rows, xs, py_top, py_bottom):
     return [[float(all_xs[i]), float(all_rows[i])] for i in sorted(set(selected))]
 
 
-def _grid_evidence(mask, origin):
-    """Conservative repeated orthogonal lattice detection, not ink identity.
-
-    At least three near-equally spaced long lines on EACH axis are required.
-    A lone/double faint contour is never classified as a grid by darkness.
-    This helper only labels evidence and proposes a selection; it does not
-    change the baseline engine's mask, ambiguity gate, or drawing bytes.
-    """
-    import numpy as np
-    from .ingest import _runs
-    h, w = mask.shape
-    horizontal = []
-    for r in range(h):
-        runs = _runs(mask[r])
-        if any(b - a >= .72 * w for a, b in runs):
-            horizontal.append(r)
-    def groups(values):
-        if not values:
-            return []
-        array = np.asarray(values)
-        return [float(np.median(g)) for g in np.split(array, np.flatnonzero(np.diff(array) > 2) + 1)
-                if len(g) <= 8]
-    ys = groups(horizontal)
-    vertical = []
-    if len(ys) >= 3:
-        low, high = int(ys[0]), int(ys[-1]) + 1
-        vertical = np.flatnonzero(np.mean(mask[low:high], axis=0) >= .82).tolist()
-    xs = groups(vertical)
-    def regular(values):
-        if not 3 <= len(values) <= 32:
-            return False
-        delta = np.diff(values)
-        return bool(np.median(delta) >= 8 and np.max(np.abs(delta - np.median(delta))) <= max(2, .12 * np.median(delta)))
-    found = regular(xs) and regular(ys)
-    return {"method": "repeated_orthogonal_lattice_v1", "lattice_detected": found,
-            "vertical_lines_px": [round(v + origin[0], 3) for v in xs] if found else [],
-            "horizontal_lines_px": [round(v + origin[1], 3) for v in ys] if found else [],
-            "minimum_lines_per_axis": 3, "unique_non_grid_candidate_id": None,
-            "non_grid_competing_components": None,
-            "interpretation": "Geometric grid hypothesis only; overlap with a true contour cannot be semantically certified."}
-
-
 def estimated_inspection_cpu_seconds(section: dict) -> float:
     """Estimated worker CPU seconds to inspect one section, from its ROI area."""
     left, top, right, bottom = section["roi_px"]
@@ -774,7 +733,7 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
     import numpy as np
     from PIL import Image, ImageDraw
     from .ingest import (DrawingError, _candidate_evidence, _eligible_trace_mask, _extract_one,
-                         _foreground, _read_image, _source_endpoint_hypothesis, _trace)
+                         _foreground, _read_image, _source_endpoint_hypothesis, _stroke_identity, _trace)
     from .resources import validate_sources
     spec = load_bounded_json(spec_path)
     validate_sources(spec, spec_path.parent)
@@ -862,6 +821,11 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
                 rows, xs, quality = _trace(candidate_mask, ink, centre)
             except DrawingError as exc:
                 rejected.append({"hypothesis": hypothesis, "reason": exc.kind})
+                continue
+            identity = _stroke_identity(mask, ink, rows, xs, (left, top), grid)
+            if identity["ruler_continuations"]:
+                rejected.append({"hypothesis": hypothesis, "reason": "stroke_identity_unresolved",
+                                 "stroke_identity": identity})
                 continue
             traced_variants.append((hypothesis, rows, xs, quality, None, None))
             endpoint = _source_endpoint_hypothesis(mask, ink, rows, xs, centre,
