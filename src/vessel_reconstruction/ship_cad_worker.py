@@ -83,7 +83,10 @@ def read_worker_json(root: Path, relative: Path) -> dict | None:
             os.close(directory)
             directory = inner
         try:
-            handle = os.open(relative.parts[-1], os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory)
+            # O_NONBLOCK: a planted FIFO must not block the open. It has no
+            # effect on reads of the regular file required below.
+            handle = os.open(relative.parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                             dir_fd=directory)
         except FileNotFoundError:
             return None
     finally:

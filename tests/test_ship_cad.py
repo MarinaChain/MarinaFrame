@@ -302,3 +302,13 @@ def test_worker_result_reader_refuses_symlinks(tmp_path):
     (work/'output').mkdir()
     (work/'output'/'provenance.json').write_text('{"ok": true}')
     assert read_worker_json(work, Path('output/provenance.json')) == {'ok': True}
+
+
+def test_worker_result_reader_refuses_a_fifo_without_blocking(tmp_path):
+    import os
+    from vessel_reconstruction.ship_cad_worker import read_worker_json
+    work = tmp_path/'work'
+    (work/'output').mkdir(parents=True)
+    os.mkfifo(work/'output'/'provenance.json')
+    with pytest.raises(ValueError, match='not a regular file'):
+        read_worker_json(work, Path('output/provenance.json'))
