@@ -234,9 +234,17 @@ export function createDrawingView({ host, tooltip, readout, onSelectSection, onH
 
   // ---------------------------------------------------------------- tooltip
 
-  function showTooltip(candidate, clientX, clientY) {
+  /** True for the line a draft guessed in this section. */
+  function isGuessedLine(section, candidate) {
+    return section.state === 'guessed' && candidate.chosen;
+  }
+
+  function showTooltip(candidate, section, clientX, clientY) {
+    const guessed = isGuessedLine(section, candidate);
+    const tag = guessed ? 'Guessed' : candidate.chosen ? 'In use' : candidate.selectable ? 'Alternative' : 'Not usable';
     tooltip.replaceChildren(
-      el('strong', {}, candidate.label, el('span', { class: candidate.chosen ? 'tip-tag' : 'tip-tag muted' }, candidate.chosen ? 'In use' : candidate.selectable ? 'Alternative' : 'Not usable')),
+      el('strong', {}, candidate.label, el('span', { class: candidate.chosen && !guessed ? 'tip-tag' : 'tip-tag muted' }, tag)),
+      guessed ? el('div', {}, section.reason) : null,
       el('div', {}, candidate.why),
     );
     tooltip.hidden = false;
@@ -274,12 +282,14 @@ export function createDrawingView({ host, tooltip, readout, onSelectSection, onH
         'data-section': section.id,
         'data-state': section.state,
       });
-      region.append(svg('title', {}, `Section at ${section.x_m.toFixed(1)} m`));
+      const label = `Section at ${section.x_m.toFixed(1)} m`;
+      region.append(svg('title', {}, section.state === 'guessed' ? `${label}. ${section.reason}` : label));
       regionLayer.append(region);
 
       if (!selected) {
         const chosen = section.candidates.find((c) => c.chosen);
-        if (chosen) lineLayer.append(svg('polyline', { class: 'cand cand-overview', points: pointsAttr(chosen.polyline_px) }));
+        const guessed = chosen && isGuessedLine(section, chosen);
+        if (chosen) lineLayer.append(svg('polyline', { class: `cand cand-overview${guessed ? ' cand-guess' : ''}`, points: pointsAttr(chosen.polyline_px) }));
       }
     }
 
@@ -290,7 +300,7 @@ export function createDrawingView({ host, tooltip, readout, onSelectSection, onH
     for (const candidate of ordered) {
       const points = pointsAttr(candidate.polyline_px);
       const line = svg('polyline', {
-        class: `cand ${candidate.chosen ? 'cand-chosen' : 'cand-other'}${candidate.id === hotCandidateId ? ' hot' : ''}`,
+        class: `cand ${candidate.chosen ? 'cand-chosen' : 'cand-other'}${isGuessedLine(section, candidate) ? ' cand-guess' : ''}${candidate.id === hotCandidateId ? ' hot' : ''}`,
         points,
         'data-candidate': candidate.id,
       });
@@ -298,10 +308,10 @@ export function createDrawingView({ host, tooltip, readout, onSelectSection, onH
       hit.addEventListener('pointerenter', (event) => {
         setHot(candidate.id);
         onHoverCandidate(candidate.id);
-        showTooltip(candidate, event.clientX, event.clientY);
+        showTooltip(candidate, section, event.clientX, event.clientY);
       });
       hit.addEventListener('pointermove', (event) => {
-        if (!pan?.moved) showTooltip(candidate, event.clientX, event.clientY);
+        if (!pan?.moved) showTooltip(candidate, section, event.clientX, event.clientY);
       });
       hit.addEventListener('pointerleave', () => {
         setHot(null);

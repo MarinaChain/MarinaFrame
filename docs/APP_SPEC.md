@@ -175,6 +175,13 @@ builds a draft instead of declining (controller `on_ambiguity: draft`; the CLI d
   operator `select_contours`). Confirming keeps the guessed candidate; replacing picks another.
   Then `resume_task` runs the normal build, render, validate and finish. A `bridged_gap` or
   `dropped_end` guess has no line to pick: it stays open, and that task stays a draft.
+- Draft banner: a notice with id `draft-guesses:<open count>` (warning tone, dismissible; a new
+  count is a new id, so it returns). It says how many guesses remain and what to do next. The
+  "Draft" badge stays while the status is draft. Timeline lines: "Built a draft: 3 sections
+  guessed", "You confirmed the line for 4.0 m", "You picked another line for 4.0 m".
+- UI marks: guessed lines and tiles are dashed amber; guessed x ranges (a bridged gap, a dropped
+  end, or the span around a guessed line) are shaded amber on the 3D model. A guessed section
+  offers "Confirm this line" (the guessed line) and "Use another line" (each alternative).
 - UI text examples: "Draft: 2 guesses to check", "Guessed: took the best-supported of 5 lines",
   "No readable line at x=4 m; spanned 2 to 6 m".
 

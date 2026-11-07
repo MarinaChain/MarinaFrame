@@ -260,16 +260,47 @@ function mockTransport() {
       const section = view.sections.find((s) => s.id === section_id);
       const candidate = section?.candidates.find((c) => c.id === candidate_id);
       if (!candidate?.selectable) throw new BackendError('not_selectable', 'This line cannot be used for the hull.');
+      const guess = section.guess;
       for (const c of section.candidates) c.chosen = c.id === candidate_id;
       section.state = 'chosen';
+      section.guess = null;
       section.reason = `You picked the ${candidate.label.toLowerCase()}.`;
+      let text = `Section at ${section.x_m.toFixed(1)} m: you picked the ${candidate.label.toLowerCase()}. Rebuilt and checked again`;
+      if (guess) {
+        text = guess.chosen_candidate_id === candidate_id
+          ? `You confirmed the line for ${section.x_m.toFixed(1)} m`
+          : `You picked another line for ${section.x_m.toFixed(1)} m`;
+        const draft = view.draft;
+        draft.resolved.push({
+          ...guess,
+          resolution: guess.chosen_candidate_id === candidate_id ? 'confirmed' : 'replaced',
+          resolved_candidate_id: candidate_id,
+        });
+        draft.guesses = draft.guesses.filter((g) => g.id !== guess.id);
+        view.notices = view.notices.filter((n) => !n.id.startsWith('draft-guesses:'));
+        if (draft.guesses.length) {
+          // Same text rules as the backend banner.
+          const open = draft.guesses.length;
+          const stuck = draft.guesses.filter((g) => g.kind !== 'best_candidate').length;
+          const noun = open === 1 ? 'guess' : 'guesses';
+          const text2 = stuck === 0
+            ? `Draft: ${open} ${noun} to check. Confirm each guessed line or pick another. The app then rebuilds and checks the model.`
+            : `Draft: ${open} ${noun} to check. No line could be read there, so there is nothing to pick and this run stays a draft.`;
+          // The mock only ever leaves guesses that have no line (stuck === open).
+          view.notices.push({ id: `draft-guesses:${open}`, tone: 'warning', text: text2 });
+        } else {
+          view.draft = null;
+          view.summary.status = 'needs_review';
+          Object.assign(data.tasks.find((t) => t.task === task), view.summary);
+        }
+      }
       if (!view.sections.some((s) => s.state === 'declined') && view.summary.status === 'declined') {
         view.summary.status = 'needs_review';
         Object.assign(data.tasks.find((t) => t.task === task), view.summary);
       }
       const events = data.events[task];
       const sequence = events[events.length - 1].sequence + 1;
-      events.push({ sequence, time_ms: Date.now(), text: `Section at ${section.x_m.toFixed(1)} m: you picked the ${candidate.label.toLowerCase()}. Rebuilt and checked again`, kind: 'choose' });
+      events.push({ sequence, time_ms: Date.now(), text, kind: 'choose' });
       view.summary.updated_ms = Date.now();
       emit(task, sequence);
       return { ok: true };

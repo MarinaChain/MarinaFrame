@@ -222,8 +222,8 @@ async function loadTask({ fresh = false } = {}) {
 const loadTaskSoon = debounce(() => loadTask(), REFRESH_DEBOUNCE_MS);
 
 function defaultSection(view) {
-  const declined = view.sections.find((s) => s.state === 'declined');
-  return (declined || view.sections[0])?.id || null;
+  const needsAttention = view.sections.find((s) => s.state === 'declined' || s.state === 'guessed');
+  return (needsAttention || view.sections[0])?.id || null;
 }
 
 function renderTask({ fresh = false } = {}) {
@@ -386,7 +386,7 @@ function renderSelection() {
     return;
   }
 
-  const tone = { chosen: 'accent', declined: 'warn' }[section.state];
+  const tone = { chosen: 'accent', declined: 'warn', guessed: 'draft' }[section.state];
   fill(head,
     el('h2', {}, `Section at ${fmt.metres(section.x_m)}`),
     el('span', { class: 'badge', dataset: tone ? { tone } : {} }, fmt.sectionStateLabel(section.state)),
@@ -400,16 +400,19 @@ function renderSelection() {
         stroke: candidate.chosen ? 'var(--ink-chosen)' : 'var(--ink-candidate)',
         'stroke-width': candidate.chosen ? 3 : 1.5,
       }));
+    const guessedSection = section.state === 'guessed';
+    const guessedLine = guessedSection && candidate.chosen;
     let trailing = null;
-    if (candidate.chosen) trailing = el('span', { class: 'cand-tag' }, 'In use');
+    // In a guessed section, the guessed line is confirmed and any other line replaces it.
+    let action = null;
+    if (guessedLine) {
+      trailing = el('span', { class: 'cand-tag guess' }, 'Guessed');
+      action = chooseButton(section, candidate, 'Confirm this line', canChoose, true);
+    } else if (candidate.chosen) trailing = el('span', { class: 'cand-tag' }, 'In use');
     else if (candidate.selectable) {
-      trailing = el('button', {
-        class: 'btn btn-small',
-        type: 'button',
-        disabled: !canChoose,
-        title: isRunning() ? 'Available when the run stops' : null,
-        onclick: () => chooseLine(section, candidate),
-      }, 'Use this line');
+      const label = guessedSection ? 'Use another line' : 'Use this line';
+      if (guessedSection) action = chooseButton(section, candidate, label, canChoose, false);
+      else trailing = chooseButton(section, candidate, label, canChoose, false);
     }
     return el('div', {
       class: 'cand-row',
@@ -419,7 +422,8 @@ function renderSelection() {
       onfocusin: () => drawing.highlightCandidate(candidate.id),
       onfocusout: () => drawing.highlightCandidate(null),
     }, swatch, el('span', { class: 'cand-label' }, candidate.label), trailing || el('span'),
-    el('span', { class: 'cand-why' }, candidate.why));
+    el('span', { class: 'cand-why' }, candidate.why),
+    action ? el('div', { class: 'cand-actions' }, action) : null);
   });
 
   fill(body,
@@ -428,9 +432,21 @@ function renderSelection() {
   );
 }
 
+function chooseButton(section, candidate, label, canChoose, primary) {
+  return el('button', {
+    class: primary ? 'btn btn-small btn-primary' : 'btn btn-small',
+    type: 'button',
+    disabled: !canChoose,
+    title: isRunning() ? 'Available when the run stops' : null,
+    onclick: () => chooseLine(section, candidate),
+  }, label);
+}
+
 async function chooseLine(section, candidate) {
   const task = state.task;
-  const done = await runAction(`Using the ${candidate.label.toLowerCase()} at ${fmt.metres(section.x_m)}, then rebuilding…`, () =>
+  const confirming = section.state === 'guessed' && candidate.chosen;
+  const verb = confirming ? 'Confirming' : 'Using';
+  const done = await runAction(`${verb} the ${candidate.label.toLowerCase()} at ${fmt.metres(section.x_m)}, then rebuilding…`, () =>
     invoke('choose_line', { task, section_id: section.id, candidate_id: candidate.id }));
   if (done && task === state.task) {
     await loadTask();
@@ -616,6 +632,28 @@ async function renderDrawing({ fresh = false } = {}) {
   if (fresh) drawing.fitSections();
 }
 
+/**
+ * x ranges (metres) the draft guessed. A bridged gap or a dropped end has its own range.
+ * A guessed line covers the part of the hull nearer to its station than to any other.
+ */
+function guessedXRanges(sections, lengthM) {
+  const stations = sections.map((s) => s.x_m).sort((a, b) => a - b);
+  const ranges = [];
+  for (const section of sections) {
+    const guess = section.guess;
+    if (!guess) continue;
+    if (guess.x_range_m) {
+      ranges.push(guess.x_range_m);
+      continue;
+    }
+    const at = stations.indexOf(section.x_m);
+    const before = at > 0 ? (stations[at - 1] + section.x_m) / 2 : Math.max(0, section.x_m - 0.25);
+    const after = at < stations.length - 1 ? (stations[at + 1] + section.x_m) / 2 : Math.min(lengthM, section.x_m + 0.25);
+    ranges.push([before, after]);
+  }
+  return ranges;
+}
+
 async function renderModel() {
   const view = state.view;
   const meta = $('model-meta');
@@ -636,7 +674,8 @@ async function renderModel() {
     m.volume_m3 !== null ? `${fmt.decimal(m.volume_m3, 1)} m³` : null,
   ].filter(Boolean).join(' · ');
   const stations = view.sections.map((s) => ({ id: s.id, x_m: s.x_m }));
-  const key = `${state.task}|${view.revision}|${m.stl_path}|${stations.map((s) => s.x_m).join(',')}`;
+  const guessedRanges = guessedXRanges(view.sections, m.length_m);
+  const key = `${state.task}|${view.revision}|${m.stl_path}|${stations.map((s) => s.x_m).join(',')}|${JSON.stringify(guessedRanges)}`;
   if (key === state.modelKey) {
     model.setSelected(state.sectionId);
     return;
@@ -646,7 +685,7 @@ async function renderModel() {
   try {
     const buffer = await cachedArtifact('stl', state.task, m.stl_path);
     if (state.modelKey !== key) return;
-    model.setModel(buffer, stations, { keepCamera: sameTask, lengthM: m.length_m });
+    model.setModel(buffer, stations, { keepCamera: sameTask, lengthM: m.length_m, guessedRanges });
     model.setSelected(state.sectionId);
   } catch (error) {
     model.setModel(null, [], { emptyTitle: 'Model file missing', emptyText: error.message });

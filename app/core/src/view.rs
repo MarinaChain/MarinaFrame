@@ -31,6 +31,7 @@ pub fn map_status(controller_status: &str) -> Status {
     match controller_status {
         "ready" | "running" => Status::Running,
         "awaiting_human_review" => Status::NeedsReview,
+        "draft_not_verified" => Status::Draft,
         "abstained" => Status::Declined,
         "validation_failed" | "provider_failed" => Status::Failed,
         "cancelled" => Status::Cancelled,
@@ -103,7 +104,9 @@ pub fn get_task(task: &Path, context: &ViewContext) -> Result<TaskView, String> 
     let state = files::read_state(task).ok_or("task_missing")?;
     let domain = files::read_domain(task);
     let summary = summarize(task, &state, domain.as_ref());
-    let sections = section_views(task, domain.as_ref(), summary.status);
+    let open = open_guesses(&state, domain.as_ref());
+    let draft = draft_view(&state, domain.as_ref(), summary.status, &open);
+    let sections = section_views(task, domain.as_ref(), summary.status, &open);
     let validation = current_validation(&state, domain.as_ref());
     let current_build = current_build(&state, domain.as_ref());
     Ok(TaskView {
@@ -112,8 +115,9 @@ pub fn get_task(task: &Path, context: &ViewContext) -> Result<TaskView, String> 
         model: current_build.and_then(|build| model_view(task, build)),
         checks: check_views(validation),
         provider: crate::provider_view::provider_calls(task),
-        notices: notices(&summary, &state, context),
+        notices: notices(&summary, &state, context, draft.as_ref()),
         evidence: evidence(&state, validation, task),
+        draft,
         sections,
         summary,
     })
@@ -136,9 +140,159 @@ fn current_build<'a>(state: &'a Value, domain: Option<&'a Value>) -> Option<&'a 
     last_valid.or_else(|| Some(&state["domain"]["last_valid_candidate"]).filter(|v| v.is_object()))
 }
 
+/// Largest build record read for its export names.
+const MAX_BUILD_RECORD_BYTES: usize = 8 * 1024 * 1024;
+/// STL name of a verified build. A draft build names its file in `exports.stl`.
+const VERIFIED_STL_NAME: &str = "model.stl";
+
+/// STL file name from the build's `result.json` (`exports.stl`). Only a plain
+/// file name is used; anything else falls back to the verified name.
+fn stl_file_name(task: &Path, folder: &str) -> String {
+    let record = format!("{folder}/result.json");
+    let name = crate::artifact::guard_inside_task(task, &record)
+        .ok()
+        .and_then(|file| util::read_bounded(&file, MAX_BUILD_RECORD_BYTES).ok())
+        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+        .and_then(|result| result["exports"]["stl"].as_str().map(String::from));
+    match name {
+        Some(name) if !name.is_empty() && name != ".." && !name.contains(['/', '\\']) => name,
+        _ => VERIFIED_STL_NAME.into(),
+    }
+}
+
+// ---- drafts ----
+
+/// An open guess and the section it belongs to.
+struct SectionGuess {
+    section_id: String,
+    view: GuessView,
+}
+
+fn parse_guess(value: &Value) -> Option<SectionGuess> {
+    let kind = match value["kind"].as_str()? {
+        "best_candidate" => GuessKind::BestCandidate,
+        "bridged_gap" => GuessKind::BridgedGap,
+        "dropped_end" => GuessKind::DroppedEnd,
+        _ => return None,
+    };
+    let x_range_m = value["x_range_m"]
+        .as_array()
+        .and_then(|r| Some([r.first()?.as_f64()?, r.get(1)?.as_f64()?]));
+    Some(SectionGuess {
+        section_id: value["section_id"].as_str()?.into(),
+        view: GuessView {
+            id: value["guess_id"].as_str()?.into(),
+            kind,
+            x_range_m,
+            chosen_candidate_id: value["chosen_candidate_id"].as_str().map(String::from),
+            alternatives: value["alternatives"]
+                .as_array()
+                .map(|list| {
+                    list.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            score: value["score"].as_f64(),
+            reason: value["reason"].as_str().unwrap_or("").into(),
+        },
+    })
+}
+
+/// Open guesses: the controller state's list, else the domain checkpoint's.
+fn open_guesses(state: &Value, domain: Option<&Value>) -> Vec<SectionGuess> {
+    let list = state["domain"]["open_guesses"]
+        .as_array()
+        .or_else(|| domain.and_then(|d| d["guesses"].as_array()));
+    list.map(|list| list.iter().filter_map(parse_guess).collect())
+        .unwrap_or_default()
+}
+
+fn resolved_guesses(state: &Value, domain: Option<&Value>) -> Vec<ResolvedGuessView> {
+    let list = state["domain"]["resolved_guesses"]
+        .as_array()
+        .or_else(|| domain.and_then(|d| d["resolved_guesses"].as_array()));
+    list.map(|list| {
+        list.iter()
+            .filter_map(|value| {
+                let guess = parse_guess(value)?.view;
+                let resolution = match value["resolution"].as_str()? {
+                    "confirmed" => Resolution::Confirmed,
+                    "replaced" => Resolution::Replaced,
+                    _ => return None,
+                };
+                Some(ResolvedGuessView {
+                    guess,
+                    resolution,
+                    resolved_candidate_id: value["resolved_candidate_id"].as_str()?.into(),
+                })
+            })
+            .collect()
+    })
+    .unwrap_or_default()
+}
+
+fn draft_view(
+    state: &Value,
+    domain: Option<&Value>,
+    status: Status,
+    open: &[SectionGuess],
+) -> Option<DraftView> {
+    if status != Status::Draft {
+        return None;
+    }
+    Some(DraftView {
+        status: "draft_not_verified".into(),
+        guesses: open.iter().map(|g| g.view.clone()).collect(),
+        resolved: resolved_guesses(state, domain),
+    })
+}
+
+/// Banner for a draft: how many guesses remain and what to do next.
+fn draft_notice(draft: &DraftView) -> NoticeView {
+    let open = draft.guesses.len();
+    let pickable = draft
+        .guesses
+        .iter()
+        .filter(|g| g.kind == GuessKind::BestCandidate)
+        .count();
+    let stuck = open - pickable;
+    let text = if open == 0 {
+        "Draft: not verified. The app cannot confirm this model.".to_string()
+    } else if stuck == 0 {
+        format!(
+            "Draft: {} to check. Confirm each guessed line or pick another. The app then rebuilds and checks the model.",
+            plural(open, "guess", "guesses")
+        )
+    } else if pickable == 0 {
+        format!(
+            "Draft: {} to check. No line could be read there, so there is nothing to pick and this run stays a draft.",
+            plural(open, "guess", "guesses")
+        )
+    } else {
+        let has = |n: usize| if n == 1 { "has" } else { "have" };
+        format!(
+            "Draft: {} to check. {pickable} {} a line to confirm or change. {stuck} {} no readable line, so this run stays a draft.",
+            plural(open, "guess", "guesses"),
+            has(pickable),
+            has(stuck)
+        )
+    };
+    NoticeView {
+        // The count is in the id, so the banner returns when the count changes.
+        id: format!("draft-guesses:{open}"),
+        tone: Tone::Warning,
+        text,
+    }
+}
+
+fn plural(count: usize, one: &str, many: &str) -> String {
+    format!("{count} {}", if count == 1 { one } else { many })
+}
+
 fn model_view(task: &Path, build: &Value) -> Option<ModelView> {
     let folder = build["path"].as_str()?;
-    let stl_path = format!("{folder}/model.stl");
+    let stl_path = format!("{folder}/{}", stl_file_name(task, folder));
     // Only offer a model whose file is a regular file inside the task.
     crate::artifact::guard_artifact_path(task, &stl_path).ok()?;
     let metrics = &build["metrics"];
@@ -333,7 +487,12 @@ fn roi(value: &Value) -> [i64; 4] {
     [get(0), get(1), get(2), get(3)]
 }
 
-fn section_views(task: &Path, domain: Option<&Value>, status: Status) -> Vec<SectionView> {
+fn section_views(
+    task: &Path,
+    domain: Option<&Value>,
+    status: Status,
+    open: &[SectionGuess],
+) -> Vec<SectionView> {
     let spec = files::read_captured_spec(task);
     let declared: Vec<Value> = spec
         .as_ref()
@@ -349,6 +508,7 @@ fn section_views(task: &Path, domain: Option<&Value>, status: Status) -> Vec<Sec
                     roi_px: roi(&s["roi_px"]),
                     state: SectionState::NotRead,
                     reason: "Not read yet.".into(),
+                    guess: None,
                     candidates: vec![],
                 })
             })
@@ -385,10 +545,20 @@ fn section_views(task: &Path, domain: Option<&Value>, status: Status) -> Vec<Sec
     entries
         .into_iter()
         .map(|(id, x_m, roi_px)| {
-            let chosen_id = domain["selected"][&id].as_str();
+            let guess = open
+                .iter()
+                .find(|g| g.section_id == id)
+                .map(|g| g.view.clone());
+            // A guessed line is in the draft but not confirmed. It is marked chosen
+            // so the drawing shows it; the section state says it is a guess.
+            let chosen_id = guess
+                .as_ref()
+                .and_then(|g| g.chosen_candidate_id.as_deref())
+                .or_else(|| domain["selected"][&id].as_str());
             let candidates = candidate_views(task, domain, &id, chosen_id);
-            let (section_state, reason) = if let Some(chosen) = candidates.iter().find(|c| c.chosen)
-            {
+            let (section_state, reason) = if let Some(guess) = &guess {
+                (SectionState::Guessed, guess.reason.clone())
+            } else if let Some(chosen) = candidates.iter().find(|c| c.chosen) {
                 (
                     SectionState::Chosen,
                     format!("Picked the {}.", chosen.label.to_lowercase()),
@@ -406,6 +576,7 @@ fn section_views(task: &Path, domain: Option<&Value>, status: Status) -> Vec<Sec
                 roi_px,
                 state: section_state,
                 reason,
+                guess,
                 candidates,
             }
         })
@@ -493,12 +664,20 @@ fn check_views(validation: Option<&Value>) -> Vec<CheckView> {
 
 // ---- notices and evidence ----
 
-fn notices(summary: &TaskSummary, state: &Value, context: &ViewContext) -> Vec<NoticeView> {
+fn notices(
+    summary: &TaskSummary,
+    state: &Value,
+    context: &ViewContext,
+    draft: Option<&DraftView>,
+) -> Vec<NoticeView> {
     let mut all = vec![NoticeView {
         id: ENGINEERING_NOTICE_ID.into(),
         tone: Tone::Info,
         text: "Engineering approval is never automatic. A person has to review a model before anyone relies on it.".into(),
     }];
+    if let Some(draft) = draft {
+        all.push(draft_notice(draft));
+    }
     if matches!(summary.status, Status::Failed | Status::Blocked) {
         if let Some(reason) = state["termination_reason"].as_str() {
             all.push(NoticeView {

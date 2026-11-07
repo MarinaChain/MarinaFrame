@@ -5,27 +5,143 @@
 use crate::files;
 use crate::types::{EventKind, EventView};
 use serde_json::Value;
+use std::collections::HashMap;
 use std::path::Path;
 
 #[cfg(test)]
 mod tests;
 
+/// What earlier events and the spec tell a later event: which sections a draft
+/// guessed (with the guessed candidate) and where each section sits.
+#[derive(Default)]
+struct Context {
+    /// Section id -> candidate the draft guessed, while the guess is open.
+    guessed: HashMap<String, Option<String>>,
+    x_m: HashMap<String, f64>,
+}
+
+impl Context {
+    fn for_task(task: &Path) -> Self {
+        let x_m = files::read_captured_spec(task)
+            .and_then(|spec| {
+                spec["sections"].as_array().map(|list| {
+                    list.iter()
+                        .filter_map(|s| Some((s["id"].as_str()?.to_string(), s["x_m"].as_f64()?)))
+                        .collect()
+                })
+            })
+            .unwrap_or_default();
+        Context {
+            guessed: HashMap::new(),
+            x_m,
+        }
+    }
+
+    fn place(&self, section_id: &str) -> String {
+        match self.x_m.get(section_id) {
+            Some(x) => format!("{x:.1} m"),
+            None => format!("section {section_id}"),
+        }
+    }
+
+    /// Update the open guesses after an event.
+    fn observe(&mut self, event: &Value) {
+        let payload = &event["payload"];
+        match event["kind"].as_str() {
+            Some("draft_built") => {
+                self.guessed = payload["guesses"]
+                    .as_array()
+                    .map(|list| {
+                        list.iter()
+                            .filter_map(|g| {
+                                Some((
+                                    g["section_id"].as_str()?.to_string(),
+                                    g["chosen_candidate_id"].as_str().map(String::from),
+                                ))
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+            }
+            Some("decision") if payload["decision"]["tool"] == "select_contours" => {
+                for pick in payload["decision"]["arguments"]["selections"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                {
+                    if let Some(id) = pick["section_id"].as_str() {
+                        self.guessed.remove(id);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 /// Events with a sequence number above `after_sequence`.
 pub fn get_events(task: &Path, after_sequence: u64) -> Vec<EventView> {
-    files::event_files(task)
-        .into_iter()
-        .filter(|(sequence, _)| *sequence > after_sequence)
-        .filter_map(|(sequence, path)| {
-            let event = files::read_event(&path)?;
-            let (text, kind) = describe(&event)?;
-            Some(EventView {
-                sequence,
-                time_ms: event["time_ms"].as_u64().unwrap_or(0),
-                text,
-                kind,
-            })
-        })
-        .collect()
+    let listed = files::event_files(task);
+    if !listed
+        .iter()
+        .any(|(sequence, _)| *sequence > after_sequence)
+    {
+        return vec![];
+    }
+    // Earlier events are read too: a later line can depend on a draft's guesses.
+    let mut context = Context::for_task(task);
+    let mut views = vec![];
+    for (sequence, path) in listed {
+        let Some(event) = files::read_event(&path) else {
+            continue;
+        };
+        if sequence > after_sequence {
+            if let Some((text, kind)) = describe(&event, &context) {
+                views.push(EventView {
+                    sequence,
+                    time_ms: event["time_ms"].as_u64().unwrap_or(0),
+                    text,
+                    kind,
+                });
+            }
+        }
+        context.observe(&event);
+    }
+    views
+}
+
+/// "You confirmed the line for 4.0 m" when a person picks the guessed line of a
+/// draft; "You picked another line for 4.0 m" when they pick a different one.
+/// None when none of the sections was guessed.
+fn describe_guess_resolution(arguments: &Value, context: &Context) -> Option<String> {
+    let mut confirmed = vec![];
+    let mut replaced = vec![];
+    for pick in arguments["selections"].as_array()? {
+        let section = pick["section_id"].as_str()?;
+        let Some(guessed) = context.guessed.get(section) else {
+            continue;
+        };
+        let place = context.place(section);
+        if guessed.as_deref() == pick["candidate_id"].as_str() {
+            confirmed.push(place);
+        } else {
+            replaced.push(place);
+        }
+    }
+    let mut parts = vec![];
+    if !confirmed.is_empty() {
+        parts.push(format!(
+            "You confirmed the line for {}",
+            confirmed.join(", ")
+        ));
+    }
+    if !replaced.is_empty() {
+        parts.push(format!(
+            "You picked another line for {}",
+            replaced.join(", ")
+        ));
+    }
+    (!parts.is_empty()).then(|| parts.join("; "))
 }
 
 fn section_phrase(ids: Option<&Vec<Value>>, none: &str) -> String {
@@ -43,7 +159,7 @@ fn section_phrase(ids: Option<&Vec<Value>>, none: &str) -> String {
     }
 }
 
-fn describe_decision(payload: &Value) -> Option<(String, EventKind)> {
+fn describe_decision(payload: &Value, context: &Context) -> Option<(String, EventKind)> {
     let decision = &payload["decision"];
     let arguments = &decision["arguments"];
     let by_person = matches!(
@@ -65,6 +181,11 @@ fn describe_decision(payload: &Value) -> Option<(String, EventKind)> {
                 .map(|p| p.iter().map(|s| s["section_id"].clone()).collect())
                 .unwrap_or_default();
             let place = section_phrase(Some(&ids), "the sections");
+            if by_person {
+                if let Some(text) = describe_guess_resolution(arguments, context) {
+                    return Some((text, EventKind::Choose));
+                }
+            }
             Some((
                 if by_person {
                     format!("You picked a line on {place}")
@@ -99,12 +220,22 @@ fn describe_decision(payload: &Value) -> Option<(String, EventKind)> {
     }
 }
 
-fn describe(event: &Value) -> Option<(String, EventKind)> {
+fn describe(event: &Value, context: &Context) -> Option<(String, EventKind)> {
     let payload = &event["payload"];
     let status_after = event["state_after"]["status"].as_str().unwrap_or("");
     match event["kind"].as_str()? {
         "task_created" => Some(("Run created".into(), EventKind::Other)),
-        "decision" => describe_decision(payload),
+        "decision" => describe_decision(payload, context),
+        "draft_built" => {
+            let count = payload["guesses"].as_array().map_or(0, Vec::len);
+            Some((
+                format!(
+                    "Built a draft: {count} section{} guessed",
+                    if count == 1 { "" } else { "s" }
+                ),
+                EventKind::Build,
+            ))
+        }
         "worker_result" if payload["response"]["execution_state"] != "completed" => {
             Some(("A step did not finish".into(), EventKind::Other))
         }
@@ -123,7 +254,8 @@ fn describe(event: &Value) -> Option<(String, EventKind)> {
         "task_terminated" => match status_after {
             "cancelled" => Some(("Cancelled".into(), EventKind::Finish)),
             "paused" => Some(("Paused".into(), EventKind::Other)),
-            "abstained" | "awaiting_human_review" => None,
+            // The draft_built line already said so.
+            "abstained" | "awaiting_human_review" | "draft_not_verified" => None,
             _ => Some((
                 format!(
                     "Stopped: {}",

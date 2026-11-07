@@ -9,6 +9,10 @@ import { el, icon, prefersReducedMotion } from './dom.js';
 
 /** Extra size of a section plane around the hull, as a fraction of beam and depth. */
 const PLANE_MARGIN = 0.25;
+/** Space kept around the hull in the home view, as a fraction of the fitted size (10%). */
+const FRAME_MARGIN = 1.1;
+/** Size of a guessed-range band around the hull, as a fraction of the hull's beam and depth. */
+const GUESS_BAND_MARGIN = 0.04;
 /** Camera direction for the default view: from forward, starboard and above. */
 const HOME_DIRECTION = new THREE.Vector3(1.0, -1.25, 0.75).normalize();
 
@@ -33,6 +37,7 @@ function themeColours() {
     hull: read('--model-hull'),
     plane: read('--text-3'),
     accent: read('--accent'),
+    guess: read('--guess-ink'),
   };
 }
 
@@ -84,6 +89,7 @@ export function createModelView({ host }) {
   let grid = null;
   let gridBox = null;
   let planes = new Map();
+  let guessBands = [];
   let dims = null;
   let selectedId = null;
   let colours = themeColours();
@@ -124,6 +130,7 @@ export function createModelView({ host }) {
     scene.background = colours.background;
     hullMaterial.color = colours.hull;
     for (const [id, plane] of planes) styleSectionPlane(plane, id === selectedId);
+    for (const band of guessBands) styleGuessBand(band);
     if (grid) buildGrid();
     requestRender();
   }
@@ -137,8 +144,40 @@ export function createModelView({ host }) {
     edge.material.opacity = selected ? 1 : 0.55;
   }
 
+  function styleGuessBand(band) {
+    const [face, edge] = band.children;
+    face.material.color = colours.guess;
+    face.material.opacity = 0.28;
+    edge.material.color = colours.guess;
+    edge.material.opacity = 0.9;
+  }
+
+  /** A translucent amber box over a guessed x range, so gaps and guesses show on the hull. */
+  function buildGuessBand([x0, x1], box) {
+    const size = box.getSize(new THREE.Vector3());
+    const geometry = new THREE.BoxGeometry(
+      Math.max(x1 - x0, 0.02),
+      size.y * (1 + 2 * GUESS_BAND_MARGIN),
+      size.z * (1 + 2 * GUESS_BAND_MARGIN),
+    );
+    const face = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }));
+    const edge = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ transparent: true }));
+    const group = new THREE.Group();
+    group.add(face, edge);
+    const centre = box.getCenter(new THREE.Vector3());
+    group.position.set((x0 + x1) / 2, centre.y, centre.z);
+    return group;
+  }
+
   function clearModel() {
     content.clear();
+    for (const band of guessBands) {
+      for (const child of band.children) {
+        child.geometry.dispose();
+        child.material.dispose();
+      }
+    }
+    guessBands = [];
     if (hull) hull.geometry.dispose();
     for (const plane of planes.values()) {
       for (const child of plane.children) {
@@ -193,12 +232,16 @@ export function createModelView({ host }) {
   function resetView({ animate = false } = {}) {
     if (!hull) return;
     cameraAtHome = true;
+    // Frame the hull and the section planes around it, which reach past the hull
+    // across and up; the hull alone would leave them against the pane edge.
     const box = new THREE.Box3().setFromObject(hull);
+    const hullSize = box.getSize(new THREE.Vector3());
+    box.expandByVector(new THREE.Vector3(0, hullSize.y * PLANE_MARGIN, hullSize.z * PLANE_MARGIN));
     const sphere = box.getBoundingSphere(new THREE.Sphere());
     // Fit the bounding sphere inside the narrower of the vertical and horizontal fields of view.
     const halfVertical = THREE.MathUtils.degToRad(camera.fov / 2);
     const halfHorizontal = Math.atan(Math.tan(halfVertical) * camera.aspect);
-    const distance = sphere.radius / Math.sin(Math.min(halfVertical, halfHorizontal)) * 0.9;
+    const distance = sphere.radius / Math.sin(Math.min(halfVertical, halfHorizontal)) * FRAME_MARGIN;
     const target = sphere.center.clone();
     const position = target.clone().addScaledVector(HOME_DIRECTION, distance);
     if (!animate || prefersReducedMotion()) {
@@ -229,8 +272,9 @@ export function createModelView({ host }) {
      * `stations` is [{ id, x_m }]. The camera is kept when `keepCamera` is true.
      * `lengthM` is the model length in metres. The CAD export writes STL in millimetres,
      * so the mesh is scaled to make its x extent equal `lengthM`.
+     * `guessedRanges` is [[x0_m, x1_m]], the x ranges a draft guessed; each is shaded amber.
      */
-    setModel(buffer, stations, { keepCamera = false, lengthM = null, emptyTitle, emptyText } = {}) {
+    setModel(buffer, stations, { keepCamera = false, lengthM = null, guessedRanges = [], emptyTitle, emptyText } = {}) {
       clearModel();
       if (!buffer) {
         showEmpty(emptyTitle || 'No 3D model yet', emptyText || 'The model appears here after the run builds it.');
@@ -255,6 +299,11 @@ export function createModelView({ host }) {
         const plane = buildSectionPlane(station.x_m, box);
         planes.set(station.id, plane);
         content.add(plane);
+      }
+      for (const range of guessedRanges) {
+        const band = buildGuessBand(range, box);
+        guessBands.push(band);
+        content.add(band);
       }
       applyColours();
       resize();

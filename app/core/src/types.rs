@@ -7,6 +7,8 @@ use serde_json::Value;
 pub enum Status {
     Running,
     NeedsReview,
+    /// Controller status `draft_not_verified`: a best-effort build with open guesses.
+    Draft,
     Declined,
     Failed,
     Cancelled,
@@ -35,6 +37,8 @@ pub struct SourcePage {
 #[serde(rename_all = "snake_case")]
 pub enum SectionState {
     Chosen,
+    /// The draft guessed this section; a person has not confirmed it.
+    Guessed,
     Declined,
     NotRead,
 }
@@ -49,6 +53,49 @@ pub struct CandidateView {
     pub polyline_px: Vec<[f64; 2]>,
 }
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum GuessKind {
+    BestCandidate,
+    BridgedGap,
+    DroppedEnd,
+}
+
+/// One choice a draft made without a person. `id` is the guess_id.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct GuessView {
+    pub id: String,
+    pub kind: GuessKind,
+    pub x_range_m: Option<[f64; 2]>,
+    pub chosen_candidate_id: Option<String>,
+    pub alternatives: Vec<String>,
+    pub score: Option<f64>,
+    pub reason: String,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Resolution {
+    Confirmed,
+    Replaced,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct ResolvedGuessView {
+    #[serde(flatten)]
+    pub guess: GuessView,
+    pub resolution: Resolution,
+    pub resolved_candidate_id: String,
+}
+
+/// Present while the current build is a draft.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct DraftView {
+    pub status: String,
+    pub guesses: Vec<GuessView>,
+    pub resolved: Vec<ResolvedGuessView>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct SectionView {
     pub id: String,
@@ -56,6 +103,7 @@ pub struct SectionView {
     pub roi_px: [i64; 4],
     pub state: SectionState,
     pub reason: String,
+    pub guess: Option<GuessView>,
     pub candidates: Vec<CandidateView>,
 }
 
@@ -136,6 +184,7 @@ pub struct TaskView {
     pub checks: Vec<CheckView>,
     pub provider: Vec<ProviderCallView>,
     pub notices: Vec<NoticeView>,
+    pub draft: Option<DraftView>,
     pub evidence: Value,
 }
 
