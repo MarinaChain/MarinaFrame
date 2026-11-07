@@ -2,7 +2,8 @@
 
 ``vector``: Lines Plan Rev0.dxf -> make_gunnerus_configs -> vector_path -> score.
 ``raster``: Lines Plan Rev0.pdf -> raster_path prepare -> marinaframe run
-            (deterministic policy) -> score of any built model.step -> overlay.
+            (deterministic policy; --on-ambiguity abstain or draft) -> score of
+            any built model (a draft's STEP is model-draft.step) -> overlay.
 
 Outputs go to ``--out`` (must not exist; keep it under the git-ignored work/
 folder). The record ``run_record.json`` holds the commit, hashes and status.
@@ -57,18 +58,23 @@ def run_raster(args, out: Path) -> dict:
     completed = subprocess.run([str(args.controller), "run", "--task", str(task_root / "task"),
                                 "--source", str(task_root / "input" / "spec.json"),
                                 "--worker-python", sys.executable, "--worker-source", str(ROOT / "src"),
-                                "--policy", "deterministic"], capture_output=True, text=True)
+                                "--policy", "deterministic", "--on-ambiguity", args.on_ambiguity],
+                               capture_output=True, text=True)
     (out / "controller_stdout.json").write_text(completed.stdout)
     (out / "controller_stderr.txt").write_text(completed.stderr)
     status = json.loads(completed.stdout) if completed.stdout.strip().startswith("{") else {"status": "cli_error"}
     candidate = status.get("current_candidate") or {}
-    model = task_root / "task" / candidate["path"] / "model.step" if candidate.get("path") else None
+    model = None
+    if candidate.get("path"):
+        run_dir = task_root / "task" / candidate["path"]
+        model = next((run_dir / name for name in ("model.step", "model-draft.step") if (run_dir / name).exists()),
+                     run_dir / "model.step")
     overlay = raster_path.cmd_overlay(task_root / "input" / "drawing.png", task_root / "task", out / "overlay.png")
     (out / "overlay_candidates.json").write_text(json.dumps(overlay, indent=1) + "\n")
     stations = [{"id": s["id"], "x_m": s["x_m"], "status": "read" if model else "not_built"} for s in raster["stations"]]
     result = score.score(args.truth, model if model and model.exists() else None, stations,
                          json.loads(args.metric.read_text()), out / "score")
-    return {"controller_exit": completed.returncode, "controller_status": status.get("status"),
+    return {"on_ambiguity": args.on_ambiguity, "controller_exit": completed.returncode, "controller_status": status.get("status"),
             "termination_reason": status.get("termination_reason"),
             "drawing_sha256": _sha256(task_root / "input" / "drawing.png"),
             "model_step": str(model) if model else None, "score_status": result["status"],
@@ -85,6 +91,8 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--controller", type=Path, default=ROOT / "target/release/marinaframe")
     parser.add_argument("--task-root", type=Path, help="raster: fresh directory outside the synced workspace")
+    parser.add_argument("--on-ambiguity", choices=["abstain", "draft"], default="abstain",
+                        help="raster: controller policy for ambiguous or unreadable sections")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=False)
     record = {"path": args.path, **_git_commit(), "started": time.strftime("%Y-%m-%dT%H:%M:%S"),

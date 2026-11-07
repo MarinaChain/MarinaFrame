@@ -28,7 +28,18 @@ from .schema import MAX_SPEC_BYTES, load_bounded_json, loads_bounded_json, valid
 DOMAIN_VERSION = "source_bound_tools_v1"
 VIEWS = ("body", "plan", "profile", "oblique")
 MAX_CANDIDATES = 10
+# Most sections in one inspection call (and in one observation).
 INSPECTION_BATCH = 12
+# CPU limit of one non-native worker call (RLIMIT_CPU). It is not raised here.
+INSPECTION_CPU_SECONDS = 45
+# Estimated inspection CPU per megapixel of section ROI. Measured on the
+# Gunnerus composite body plan (docs/BENCHMARK_GUNNERUS.md 7.5): a 4.18 Mpx
+# whole-half-body-plan ROI needs 3.4-3.9 CPU s, and 12 such ROIs 50.4 CPU s
+# (1.0 s/Mpx). Tracing cost grows with the pixels and the overlaid ink in the ROI.
+INSPECTION_CPU_SECONDS_PER_MEGAPIXEL = 1.0
+# A batch is filled only up to this share of the CPU limit, so drawings denser
+# than the measured one still finish inside the unchanged limit.
+INSPECTION_BUDGET_SHARE = 0.5
 MAX_INSPECTION_BYTES = 24 * 1024 * 1024
 SEMANTIC_FLAGS = {"human_semantic_review_required": True, "engineering_approved": False,
                   "identity_certified": False}
@@ -275,7 +286,7 @@ class DomainTools:
         request_path = self.root / f"request-{uuid4().hex}.json"
         write_json(request_path, request)
         limits = replace(DEFAULT_LIMITS, wall_seconds=120 if native else 60,
-                         cpu_seconds=90 if native else 45, output_bytes=64 * 1024**2)
+                         cpu_seconds=90 if native else INSPECTION_CPU_SECONDS, output_bytes=64 * 1024**2)
         command = [sys.executable, "-m", "vessel_reconstruction.agent_render_worker",
                    "--operation", operation, "--request", str(request_path), "--out", str(out),
                    "--limits", json.dumps(asdict(limits)), "--parent", str(os.getpid())]
@@ -294,6 +305,24 @@ class DomainTools:
         finally:
             request_path.unlink(missing_ok=True)
 
+    def _inspection_batch(self, requested: list[str]) -> list[str]:
+        """The first requested sections whose estimated inspection CPU fits the budget.
+
+        Not-yet-inspected sections are costed by their ROI pixel count; cached
+        ones cost nothing. The first section is always taken, so a batch is
+        never empty; at most INSPECTION_BATCH sections are taken.
+        """
+        budget = INSPECTION_BUDGET_SHARE * INSPECTION_CPU_SECONDS
+        by_id = {s["id"]: s for s in self.spec["sections"]}
+        batch, estimate = [], 0.0
+        for sid in requested[:INSPECTION_BATCH]:
+            cost = 0.0 if sid in self.state["catalog"] else estimated_inspection_cpu_seconds(by_id[sid])
+            if batch and estimate + cost > budget:
+                break
+            batch.append(sid)
+            estimate += cost
+        return batch
+
     def _inspect_source(self, section_ids=None):
         if self.state["input_errors"]:
             return self._observation(False, "blocked", validation_errors=self.state["input_errors"][:32])
@@ -303,7 +332,7 @@ class DomainTools:
         requested = section_ids or [s["id"] for s in self.spec["sections"] if s["id"] not in self.state["catalog"]]
         if not requested:
             requested = [s["id"] for s in self.spec["sections"]]
-        ids = requested[:INSPECTION_BATCH]
+        ids = self._inspection_batch(requested)
         missing = [sid for sid in ids if sid not in self.state["catalog"]]
         resources = {}
         if missing:
@@ -337,7 +366,7 @@ class DomainTools:
         page_artifacts = [a for a in self.state["inspection_artifacts"] if
                           a["kind"] == "source_page" or a.get("evidence_kind") == "source_page"][-2:]
         observation = self._observation(True, "observed", sections=sections, resources=resources,
-            returned_section_ids=list(ids), remaining_requested_section_ids=requested[INSPECTION_BATCH:],
+            returned_section_ids=list(ids), remaining_requested_section_ids=requested[len(ids):],
             remaining_section_ids=[s["id"] for s in self.spec["sections"] if s["id"] not in self.state["catalog"]][:24],
             artifacts=[a for a in self.state["inspection_artifacts"] if a.get("section_id") in ids] + page_artifacts)
         # Native evidence remains complete; the model observation is bounded.
@@ -654,6 +683,12 @@ def _grid_evidence(mask, origin):
             "minimum_lines_per_axis": 3, "unique_non_grid_candidate_id": None,
             "non_grid_competing_components": None,
             "interpretation": "Geometric grid hypothesis only; overlap with a true contour cannot be semantically certified."}
+
+
+def estimated_inspection_cpu_seconds(section: dict) -> float:
+    """Estimated worker CPU seconds to inspect one section, from its ROI area."""
+    left, top, right, bottom = section["roi_px"]
+    return INSPECTION_CPU_SECONDS_PER_MEGAPIXEL * (right - left) * (bottom - top) / 1e6
 
 
 def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) -> dict:
