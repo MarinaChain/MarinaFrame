@@ -391,3 +391,74 @@ earlier native measurements in sections 3–5 therefore still apply unchanged.
   → `verify`): `awaiting_human_review`, `valid: true`, `engineering_approved: false`.
 - Procedural fingerprint: 0 of 1,131 sections differ (8.5).
 - `scripts/scan_secrets.py`: 0 findings. `git status` shows no drawing or derivative.
+
+## 9. Silent wrong factory build: local endpoints and whole-stroke refusal (2026-11-08)
+
+Base: `ea2300e`, branch `fix-sysser45`. Development use of validation `sysser45-L1` was explicitly authorized. The sealed test is not opened. All CAD and validation gates are unchanged. No reference geometry enters inference. Detailed machine records are under `outputs/sysser45/`; generated drawings, native tasks and the copied controller are under `work/`.
+
+### 9.1 Reproduction and images
+
+Regenerated `sysser45-L1` from the frozen source archive and manifest. Drawing SHA-256 is `8716bc87b7d15bec27482db2c43beba24dbac973e99af2abfaa4d63665aa2c1b`, exactly frozen. Baseline controller: `awaiting_human_review`, valid CAD, 9 sections, STEP SHA-256 `2920e72b78d74f422893392ac9170d046a895e91deeb7c0e5d8a9a59943137ee`. Independent factory scorer: **448.9215459 mm station RMS**, **+27.4467632% in-range volume error**. This reproduces the silent wrong build.
+
+Opened the before PNGs for stations 2 and 9. Station 2's accepted coloured paths run down B8 below the dark hull stroke, then join the hull near the waterline crossing. Station 9's paths run down B6 and turn onto the hull. Opened the corresponding after PNGs: those accepted coloured paths are absent; the source rulers and dark hull are unchanged. The empty catalog is a refusal, not a corrected reconstruction.
+
+### 9.2 H9 — Refuse any sustained overlap with a detected vertical ruler (**rejected form**)
+
+Claim: a sustained ruler segment cannot establish whole-stroke hull identity. Shared source check in extraction and candidate generation uses the original, unclipped panel. The existing repeated orthogonal lattice detector is moved to `ingest.py`, with its old import available from `agent_tools.py`. It does not use a hull prior.
+
+Results: `sysser45-L1` **built wrong → abstained**, with `stroke_identity_unresolved`; stations 1, 2 and 9 have zero candidates. A first after replay was interrupted by a source edit and reported `worker_boundary_valueerror`; it is retained as an invalidated attempt. The unchanged-source repeat abstained in 11.5 s. Do not count the interrupted run as abstention evidence.
+
+Falsification: a complete dark hull side drawn over a pale ruler is rejected too (one synthetic assertion failure). Procedural 47-case replay: 21 previously complete drawing reads become incomplete; 60 previously chosen sections lose a choice. Premature refusal also removed competing-stroke diagnostics, causing 135 formerly unchosen sections to acquire a choice and changing one retained trace. This is unsafe as a selection-side effect. **Reject this form**, retain its records as `procedural-h9.json` and `factory-h9-partial.json` (59 development cases only; not a full factory result). Native development controls: Ship-D 01410 and 01040 and Wigley still build; Ship-D 05051 abstains. RMS/volume: 30.8201 mm/−0.3769%, 31.5757 mm/−0.8978%; Wigley score recorded separately. No gate changed.
+
+### 9.3 H10 — Ruler-tone continuation, with competing evidence retained (**in progress**)
+
+Narrower claim: a trace gains unsupported coverage when it follows a sustained vertical lattice segment at the ruler's tone. A distinct dark hull stroke can coincide with the lattice without that evidence of continuation. Use the median tone of repeated source rulers, not the overlapped ruler alone; 24 ink levels is the existing contrast-separation floor. Contrast can refute a ruler-continuation hypothesis, but never certifies engineering identity. Keep competing evidence before the refusal so rejected paths cannot erase alternatives.
+
+A first tone probe used each ruler's own median: the complete dark side dominated that median and the synthetic control still failed (1 failure, 11 passes). Use the median across repeated rulers instead: focused suite **12 passed**. This is one source-tone hypothesis with a failed instrument form, not a change to any CAD gate.
+
+Local endpoints remain source/caller-supported height ranges. The synthetic local-bottom control ends at z=1.2 m, not z=0, and measures only the drawn hull. The frozen input is not edited and no true bottom is supplied to inference. Where pixels cannot establish the endpoint, abstain rather than fabricate a shorter hull or append a ruler. This is not a general whole-stroke identity certificate.
+
+H10 frozen native replay: `sysser45-L1` **abstained** in 18.84 s, with `stroke_identity_unresolved` retained in inspection. No STEP is built. The three zero-candidate stations remain 1, 2 and 9. Final overlays for stations 2 and 9 were opened again: no accepted continuation is drawn on B8/B6 below the hull.
+
+The four formerly correct factory development controls were rebuilt and independently scored at unchanged gates (H9 native runs remain applicable where measured geometry is unchanged; H10 restores the refused 05051 control):
+
+| Case | Station RMS, mm | In-range volume error | Outcome |
+|---|---:|---:|---|
+| `shipd-1-01410-L0` | 30.8201 | −0.3769% | correct |
+| `shipd-2-01040-L0` | 31.5757 | −0.8978% | correct |
+| `shipd-2-05051-L0` | 34.4416 | −0.8079% | correct |
+| `wigley-L0` | 7.5068 | −1.3286% | correct |
+
+Procedural replay complete: **47 cases, 1,131 sections**. Baseline reproduces section 8.5 exactly: clean 75/75 chosen, drafting 500/500, degraded 189/550, agent 3/3, ambiguous agent 0/3. H10 loses **0** old choices and changes **0** measured traces among the 767 old choices. It adds 143 choices on degraded sections, but **0** newly complete drawings: all 24 complete reads remain the same 24. Thus there is **0 newly wrong complete procedural build** by unchanged source geometry, not a claim that the 143 partial reads are correct. Catalogs change on 993 sections; those changes are disclosed in the comparison. No full native procedural rebuild is claimed.
+
+Full development frozen drawing/spec/parameter hashes: **528 cases, zero mismatches**. Source fingerprints are still running. A newly complete source case, `shipd-1-00045-L0`, was sent through the controller and abstained at `source_or_geometry_operation_failed`; a source choice alone is not a correct build.
+
+Verification so far: first H9 `make test-quick` passed (656 Python tests, 10 CAD deselected, Rust/format/Clippy/secret scan). First H10 quick failed an existing process-supervisor test: `reliability_normal_worker_exit_cleans_surviving_descendant`, fixture did not publish `descendant.json` at 122.45 s. W13 reported concurrent native-admission contention. No guard was changed. The one final full tier began only after `pgrep -fl 'make test-full'` found no run and W13 reported its native tests idle; its quick sub-tier passed (657 Python tests). Full real-CAD checks are in progress. `refresh-codesight` generated local index data but failed managed bootstrap with `ModuleNotFoundError: render_bootstrap`; no other checkout was changed.
+
+### 9.4 H11 — Refuse mixed ruler/hull paths, retain complete ruler alternatives (**final candidate**)
+
+H10 was not kept as the final form. The real-CAD tests exposed a contract regression: `test_actual_provisional_build_step_views_and_source_cut_validation` expected an explicit complete grid alternative, but H10 removed it (1 failed, 9 passed in the Python CAD tier). The app's isolated real-task retry also failed at its `alternative` assertion. This is not a CAD gate failure and is not ignored.
+
+Narrow correction: refuse the path only when it contains both a sustained ruler-tone segment and at least the sustained-span floor of observed points off that ruler. A complete ruler stays a disclosed hypothesis for explicit operator review; it does not become a grid-supported hull. This follows the actual root cause (switching strokes), rather than banning every ruler observation. The existing dimensional/CAD gate still rejects an incorrect explicitly selected ruler.
+
+Final `sysser45-L1` controller replay **abstains** with no STEP. Mixed paths are recorded as `stroke_identity_unresolved`; complete ruler alternatives stay visible. Stations 1 and 2 each retain two complete ruler hypotheses, station 9 retains three, and none gets a unique non-grid choice. Opened the final station-2 overlay: one vertical B8 ruler and another grid-following path remain for review; the coloured ruler-to-dark-hull hybrid is absent. Do not mistake those explicit ruler alternatives for accepted hull lines.
+
+Final targeted Python CAD regression: **1 passed** (20 deselected). Final `make test-quick`: **PASS**, 657 Python tests, 10 CAD deselected, Rust, format, Clippy and secret scan passed. Final full tier was run once only: quick tier passed and all **44 Rust controller CAD tests passed**, but app `run_read_choose_and_dismiss` failed at `Running != NeedsReview` (37.83 s). No second full tier was run. Its isolated H10 retry then exposed the removed-alternative defect above. Final isolated app and complete Python CAD tiers are running; smoke remains to run separately.
+
+The first two hypotheses' source records remain under named H9/H10 files. H11 development and procedural fingerprints are running from final source. Baseline factory generation had an initial missing source-root error, then was resumed from the same frozen package. One interrupted after probe left a temporary inspection folder; the collided case is labelled `FileExistsError` in that attempt, not counted as source abstention. The final runner uses unique scratch directories. No tolerance was changed.
+
+### 9.5 Final evidence and retention decision
+
+**H11 kept.** Full factory source replay: **528 before / 528 after**, 4,752 requested sections; 151 inspection-complexity errors in each arm, with identical case IDs and error text. They are not new abstentions or correct builds. All 528 regenerated drawing/spec/parameter hashes match the frozen manifest. Source selection is a diagnostic upper bound (grid-unique or sole selectable); the controller additionally refuses non-grid competitors. A complete source read is therefore not a build.
+
+Complete source reads: **42 → 42**. One loses completeness, `shipd-2-04963-L1`; one gains it, `shipd-2-06136-L1`. The latter was run natively and is **blocked** at `source_ambiguity_requires_explicit_operator_selection`, not built. A second complete source case with changed measurements, `shipd-1-08196-L1`, was run natively and is blocked for the same reason. No changed complete geometry enters CAD. The other two measurement changes are in incomplete cases (`shipd-2-04963-L1/s09`, `shipd-2-05829-L2/s09`). Full per-section changes: **60 lost choices, 27 gained choices, 4 changed measured traces, 130 changed catalogs**. Every changed ID is listed in `factory-comparison.json`. **Factory development abstain → correct build: 0. Newly wrong builds: 0.** This is not a rerun of all 528 native tasks: it is a full source replay, native checks of changed complete geometry and new opportunities, plus all four historically correct native controls.
+
+The final four correct controls were rebuilt again on H11 (**4 built, 0 abstained, 0 failed**, 532.6 s), then their fresh STEPs independently reimported and scored. Every score in the table above is unchanged and inside the fixed factory gate. Results: `correct-controls.json` and `score-final-*.json`.
+
+Final procedural replay: **47 cases / 1,131 sections**. Candidate IDs, choices, selected-point hashes and gap kinds are unchanged on **all 1,131 sections**. All 24 complete reads stay complete. **0 newly wrong builds** follows from unchanged measured geometry; no full native procedural rebuild is claimed. The H10 partial-choice gains are absent in H11.
+
+Final verification: `make test-quick` **PASS** (657 Python tests, 10 CAD deselected, Rust/format/Clippy/secrets). Deterministic synthetic tests **5 passed**, including shortened hull plus grid, corridor masking, explicit local endpoints, full curve crossings, and dark complete stroke on a pale ruler. They use no CAD and need no `cad` marker. Python real-CAD tier **10 passed** after the final correction. App real-task isolated rerun **1 passed** (110.61 s). Worktree-source smoke **awaiting_human_review**, verifier **valid**. The one full-tier invocation remains recorded as failed at the app test before H11; its 44 controller CAD tests passed. No test or gate was weakened, and full tier was not run twice.
+
+Limits: only detected repeated orthogonal lattices are checked. Short or undetected switches can still escape this refusal test; it is not a whole-stroke semantic certificate. No automatic local endpoint is invented from truth. Source-supported local ranges work; unsupported continuations now abstain. All candidates remain `engineering_approved=false`.
+
+Final cleanup: compact inspection evidence and replay/comparison scripts are retained in `outputs/sysser45/`; full trace coordinates remain in `work/`. Local generated index moved to `work/codesight-generated/` (not committed). `cargo clean` completed after all native consumers ended: **17,328 files / 4.6 GiB removed**. Final source is stable; no push is authorized.

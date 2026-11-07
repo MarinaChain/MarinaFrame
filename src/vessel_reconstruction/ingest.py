@@ -267,6 +267,97 @@ def _trace(mask: np.ndarray, ink: np.ndarray, centre_local: float) -> tuple[np.n
     return row_array, x, diagnostics
 
 
+def _grid_evidence(mask, origin):
+    """Detect a repeated orthogonal lattice, never engineering stroke identity."""
+    h, w = mask.shape
+    horizontal = [row for row in range(h)
+                  if any(b - a >= .72 * w for a, b in _runs(mask[row]))]
+
+    def groups(values):
+        if not len(values):
+            return []
+        array = np.asarray(values)
+        return [float(np.median(group)) for group in
+                np.split(array, np.flatnonzero(np.diff(array) > 2) + 1)
+                if len(group) <= 8]
+
+    ys = groups(horizontal)
+    vertical = []
+    if len(ys) >= 3:
+        low, high = int(ys[0]), int(ys[-1]) + 1
+        vertical = np.flatnonzero(np.mean(mask[low:high], axis=0) >= .82)
+    xs = groups(vertical)
+
+    def regular(values):
+        if not 3 <= len(values) <= 32:
+            return False
+        delta = np.diff(values)
+        return bool(np.median(delta) >= 8 and
+                    np.max(np.abs(delta - np.median(delta))) <= max(2, .12 * np.median(delta)))
+
+    found = regular(xs) and regular(ys)
+    return {"method": "repeated_orthogonal_lattice_v1", "lattice_detected": found,
+            "vertical_lines_px": [round(v + origin[0], 3) for v in xs] if found else [],
+            "horizontal_lines_px": [round(v + origin[1], 3) for v in ys] if found else [],
+            "minimum_lines_per_axis": 3, "unique_non_grid_candidate_id": None,
+            "non_grid_competing_components": None,
+            "interpretation": "Geometric grid hypothesis only; overlap with a true contour cannot be semantically certified."}
+
+
+def _stroke_identity(mask: np.ndarray, ink: np.ndarray, rows: np.ndarray,
+                     xs: np.ndarray, origin: tuple[int, int], grid: dict | None = None) -> dict:
+    """Refuse sustained ruler coverage; a later departure cannot certify it.
+
+    Use the original panel, not corridor-clipped pixels. A true hull side can
+    coincide with a ruler too: that is unresolved identity, not permission to
+    invent a local endpoint or to keep the ruler as hull below that endpoint.
+    Short crossings stay eligible. This is a refusal test, not a certificate.
+    """
+    if grid is None:
+        grid = _grid_evidence(mask, origin)
+    # Same sustained-span floor as the existing competing-stroke evidence.
+    minimum_span = max(16, int(math.ceil(.15 * mask.shape[0])))
+    continuations = []
+    source_rows = rows.astype(int)
+    source_columns = np.clip(np.rint(xs).astype(int), 0, mask.shape[1] - 1)
+    observed_ink = ink[source_rows, source_columns]
+    ruler_tones = []
+    for line in grid["vertical_lines_px"]:
+        column = int(round(line - origin[0]))
+        ruler_ink = ink[:, max(0, column - 1):min(mask.shape[1], column + 2)]
+        ruler_tones.append(float(np.median(np.max(ruler_ink, axis=1))))
+    # The repeated lattice supplies its median tone. One dark hull side on a
+    # ruler must not redefine the tone of the entire grid. The 24-level contrast
+    # separation matches _contrasting_subruns; it is not a semantic label.
+    ruler_tone = float(np.median(ruler_tones)) if ruler_tones else 0.
+    for line in grid["vertical_lines_px"]:
+        distance = np.abs(xs + origin[0] - line)
+        # A complete ruler is still a disclosed selectable hypothesis for an
+        # explicit operator. Refuse the mixed path: sustained ruler coverage
+        # plus departure onto another stroke, not a ruler alone.
+        if np.count_nonzero(distance > 3) < minimum_span:
+            continue
+        on_line = (distance <= 3) & (observed_ink <= ruler_tone + 24)
+        indices = np.flatnonzero(on_line)
+        if not len(indices):
+            continue
+        # Broad horizontal rulers can remove a few rows. Those source gaps
+        # must not split one sustained vertical continuation into crossings.
+        gap_limit = max(3, int(math.ceil(.025 * mask.shape[0]))) + 1
+        for group in np.split(indices, np.flatnonzero(np.diff(rows[indices]) > gap_limit) + 1):
+            first, last = int(group[0]), int(group[-1])
+            span = float(rows[last] - rows[first] + 1)
+            if span >= minimum_span and len(group) / span >= .9:
+                continuations.append({"vertical_line_px": line,
+                    "row_range_px": [float(rows[first] + origin[1]), float(rows[last] + origin[1])],
+                    "observed_row_count": len(group), "span_px": span})
+    return {"method": "whole_trace_ruler_identity_v1", "source_before_selection": True,
+            "minimum_sustained_span_px": minimum_span,
+            "ruler_continuations": continuations,
+            "status": "unresolved" if continuations else "no_sustained_ruler_continuation_detected",
+            "scope": "Sustained ruler overlap cannot establish a single hull stroke. Supply source-supported local endpoints or a separate view; absence of this overlap does not certify semantic identity."}
+
+
 def _selection_mask(section: dict, shape: tuple[int, int], origin: tuple[int, int]) -> tuple[np.ndarray | None, dict | None]:
     selection = section.get("contour_selection")
     if selection is None:
@@ -702,6 +793,10 @@ def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, i
     diagnostic.update(trace_diag)
     diagnostic.update(_candidate_evidence(mask, ink, rows, xs, centre - trace_left,
                                           (trace_left, trace_top), diagnostic["median_stroke_width_px"], selection))
+    identity = _stroke_identity(mask, ink, rows, xs, (trace_left, trace_top))
+    diagnostic["stroke_identity"] = identity
+    if identity["ruler_continuations"]:
+        raise DrawingError("stroke_identity_unresolved", "The trace follows a sustained grid or buttock ruler. The calibrated range may extend beyond the local hull stroke; supply source-supported local endpoints or a separate view. A corridor cannot establish whole-stroke identity.", diagnostic)
     coverage = len(rows) / mask.shape[0]
     allowed_gap = max(3, int(math.ceil(mask.shape[0] * .025)))
     if diagnostic["max_missing_run_px"] > allowed_gap:
