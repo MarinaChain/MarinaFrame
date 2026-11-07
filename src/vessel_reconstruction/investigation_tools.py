@@ -22,6 +22,7 @@ INVESTIGATION_ARGUMENTS = {
     "view_region": {"region_px", "max_side_px"},
     "read_region": {"region_px", "subject"},
     "trace_corridor": {"section_id", "view_id", "path_px", "half_width_px"},
+    "trace_from_point": {"section_id", "view_id", "point_px"},
     "assign_station": {"section_id", "candidate_id", "label_view_id", "label_text", "reason", "comparison_id"},
     "propose_sheet_setup": {"view", "region_px", "pixels_per_metre", "grid_spacing_m", "centreline_px",
                             "baseline_px", "x_origin_px", "x_direction", "evidence_view_id", "scale_claim",
@@ -32,6 +33,7 @@ REQUIRED = {
     "view_region": {"region_px"},
     "read_region": {"region_px", "subject"},
     "trace_corridor": {"section_id", "view_id", "path_px", "half_width_px"},
+    "trace_from_point": {"section_id", "view_id", "point_px"},
     "assign_station": {"section_id", "candidate_id", "label_view_id", "label_text", "reason"},
     "propose_sheet_setup": {"view", "region_px", "pixels_per_metre", "grid_spacing_m", "evidence_view_id",
                             "scale_claim", "reason"},
@@ -85,6 +87,9 @@ def check_investigation_arguments(name: str, arguments: dict, spec: dict) -> Non
         ok &= (type(path) is list and 2 <= len(path) <= 24
                and all(type(p) is list and len(p) == 2 and all(_number(v, 0, 4096) for v in p) for p in path)
                and _number(a["half_width_px"], 1, 64))
+    if name == "trace_from_point":
+        point = a["point_px"]
+        ok &= type(point) is list and len(point) == 2 and all(_number(v, 0, 4096) for v in point)
     if name == "assign_station":
         ok &= _text(a["label_text"], 64) and _text(a["reason"], 300)
     if name == "propose_sheet_setup":
@@ -172,9 +177,43 @@ class InvestigationTools:
             view_artifact = self._corridor_view(image, view, path_px, half_width_px, source_sha, section_id)
             self._save()
             return self._refused(exc, section_id=section_id, view=view_artifact[0], artifacts=[view_artifact[1]])
+        return self._record_trace(section_id, traced, image, source_sha, "trace_corridor")
+
+    def _trace_from_point(self, section_id, view_id, point_px):
+        view = self._view(view_id)
+        if view is None:
+            return self._refused(inv.VerificationError("unknown_view", "Name a view from this task."))
+        width, height = view["pixel_size"]
+        if not (0 <= point_px[0] <= width and 0 <= point_px[1] <= height):
+            return self._refused(inv.VerificationError("point_outside_view",
+                                                       f"The point must lie inside the {width} x {height} view."))
+        if section_id not in self.state["catalog"]:
+            return self._refused(inv.VerificationError("section_not_inspected",
+                                                       "Inspect the section before tracing in it."))
+        section = next(s for s in self.spec["sections"] if s["id"] == section_id)
+        image, details, source_sha = self._source()
+        try:
+            traced = inv.trace_from_point(image, section, self.spec["source"]["file"], details, view, point_px)
+        except inv.VerificationError as exc:
+            x, y = inv.view_to_source(view, point_px)
+            region = inv.clip_region([int(x) - 150, int(y) - 150, int(x) + 150, int(y) + 150],
+                                     image.shape[1], image.shape[0])
+
+            def overlay(draw, to_view):
+                cx, cy = to_view(x, y)
+                draw.ellipse([cx - 8, cy - 8, cx + 8, cy + 8], outline=(40, 90, 220), width=2)
+
+            payload, meta = inv.render_view(image, region, 600, overlay=overlay)
+            record, artifact = self._store_view(payload, meta, "refused_point", source_sha, section_id=section_id)
+            self._save()
+            return self._refused(exc, section_id=section_id, view=record, artifacts=[artifact])
+        return self._record_trace(section_id, traced, image, source_sha, "trace_from_point")
+
+    def _record_trace(self, section_id, traced, image, source_sha, tool):
+        """Add a verified traced line to the section's catalog and show it to the model."""
         entry = self.state["catalog"][section_id]
         cid = inv.model_candidate_id(source_sha, section_id, traced["contour_selection"], traced["z_range_m"])
-        candidate = {"candidate_id": cid, "hypothesis": "model_corridor_trace", "generated_by": ["trace_corridor"],
+        candidate = {"candidate_id": cid, "hypothesis": "model_" + tool, "generated_by": [tool],
                      "selectable": True, "model_traced": True,
                      "source_support": {"observed_row_fraction": traced["support"]["row_coverage"],
                                         "max_missing_run_px": traced["support"]["max_missing_run_px"],

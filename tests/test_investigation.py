@@ -100,6 +100,27 @@ def test_trace_is_snapped_to_ink_and_refused_without_ink(tmp_path):
     assert again["candidate_id"] == traced["candidate_id"] and again["new_candidate"] is False
 
 
+def test_a_clicked_point_is_followed_along_its_own_stroke(tmp_path):
+    domain = _domain(tmp_path, shared_panel_drawing(tmp_path / "src"))
+    view = _view(domain, [0, 0, 260, 240])
+    scale = view["view_px_per_source_px"][0]
+
+    def click(x, y):
+        return domain.execute("trace_from_point", {"section_id": "a", "view_id": view["view_id"],
+                                                   "point_px": [x * scale, y * scale]})
+
+    # The second curve, clicked 2 px beside its ink: the first curve is not taken.
+    traced = click(130 + .3 * (210 - 120) + 2, 120)
+    assert traced["ok"], traced
+    candidate = next(c for c in domain.state["catalog"]["a"]["candidates"]
+                     if c["candidate_id"] == traced["candidate_id"])
+    assert candidate["generated_by"] == ["trace_from_point"] and candidate["snap"]["passed"] is True
+    assert all(abs(x - (130 + .3 * (210 - y))) <= 1.5 for x, y in candidate["contour_selection"]["anchors_px"])
+    blank = click(240, 60)
+    assert blank["ok"] is False and blank["error_code"] == "no_ink_at_point"
+    assert blank["view"]["kind"] == "refused_point"
+
+
 def test_a_short_fragment_or_unknown_view_is_refused(tmp_path):
     spec, _ = draft_drawing(tmp_path / "src")
     domain = _domain(tmp_path, spec)

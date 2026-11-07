@@ -28,7 +28,7 @@ PROTOCOL = "marinaframe.worker.v1"
 OPERATIONS = {"initialize", "observe", "inspect_source", "select_contours",
               "build_provisional", "build_draft", "render_candidate", "validate_candidate",
               # Model investigation tools (investigation_tools.py).
-              "view_region", "read_region", "trace_corridor", "assign_station",
+              "view_region", "read_region", "trace_corridor", "trace_from_point", "assign_station",
               "propose_sheet_setup", "compare_views"}
 
 

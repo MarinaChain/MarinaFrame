@@ -136,6 +136,15 @@ pub struct TraceCorridor {
     pub path_px: Vec<[f64; 2]>,
     pub half_width_px: f64,
 }
+/// A point on a curve in a view's pixels; the harness follows the ink stroke
+/// through it and traces and verifies it like a corridor.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TraceFromPoint {
+    pub section_id: String,
+    pub view_id: String,
+    pub point_px: [f64; 2],
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AssignStation {
@@ -201,6 +210,7 @@ pub enum Operation {
     ViewRegion(ViewRegion),
     ReadRegion(ReadRegion),
     TraceCorridor(TraceCorridor),
+    TraceFromPoint(TraceFromPoint),
     AssignStation(AssignStation),
     ProposeSheetSetup(ProposeSheetSetup),
     CompareViews(CompareViews),
@@ -229,6 +239,7 @@ impl Operation {
             Self::ViewRegion(_) => "view_region",
             Self::ReadRegion(_) => "read_region",
             Self::TraceCorridor(_) => "trace_corridor",
+            Self::TraceFromPoint(_) => "trace_from_point",
             Self::AssignStation(_) => "assign_station",
             Self::ProposeSheetSetup(_) => "propose_sheet_setup",
             Self::CompareViews(_) => "compare_views",
@@ -243,6 +254,7 @@ impl Operation {
             Self::ViewRegion(_)
                 | Self::ReadRegion(_)
                 | Self::TraceCorridor(_)
+                | Self::TraceFromPoint(_)
                 | Self::AssignStation(_)
                 | Self::ProposeSheetSetup(_)
                 | Self::CompareViews(_)
@@ -253,6 +265,7 @@ impl Operation {
     pub fn section_id(&self) -> Option<&str> {
         match self {
             Self::TraceCorridor(x) => Some(&x.section_id),
+            Self::TraceFromPoint(x) => Some(&x.section_id),
             Self::AssignStation(x) => Some(&x.section_id),
             Self::CompareViews(x) => Some(&x.section_id),
             _ => None,
@@ -274,6 +287,11 @@ impl Operation {
                         .iter()
                         .all(|p| p.iter().all(|v| finite_in(*v, 0., 4096.)))
                     && finite_in(x.half_width_px, 1., 64.)
+            }
+            Self::TraceFromPoint(x) => {
+                util::valid_section_id(&x.section_id)
+                    && id(&x.view_id)
+                    && x.point_px.iter().all(|v| finite_in(*v, 0., 4096.))
             }
             Self::AssignStation(x) => {
                 util::valid_section_id(&x.section_id)

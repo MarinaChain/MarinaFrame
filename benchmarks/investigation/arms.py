@@ -233,7 +233,7 @@ def summarize(run: Path, input_dir: Path, truth: Path | None, metric: Path | Non
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["prepare-gunnerus", "prepare-sheet", "run", "batch", "summarize"])
+    parser.add_argument("command", choices=["prepare-gunnerus", "prepare-sheet", "run", "batch", "summarize", "summarize-all"])
     parser.add_argument("--root", type=Path, help="batch: folder with one <sheet>/input per sheet")
     parser.add_argument("--sheets", help="batch: comma-separated sheet folders")
     parser.add_argument("--arms", help="batch: comma-separated arms, run in order per sheet")
@@ -261,6 +261,18 @@ def main() -> None:
                 result[f"{sheet}/{arm}"] = run_arm(arm, args.root / sheet / "input", args.root / sheet / arm,
                                                    args.controller, args.python)
                 print(json.dumps({f"{sheet}/{arm}": result[f"{sheet}/{arm}"]}), flush=True)
+    elif args.command == "summarize-all":
+        result = {}
+        for sheet in args.sheets.split(","):
+            for arm in args.arms.split(","):
+                run = args.root / sheet / arm
+                if not (run / "arm_record.json").exists():
+                    continue
+                summary = summarize(run, args.root / sheet / "input", args.truth, args.metric)
+                result[f"{sheet}/{arm}"] = {k: summary.get(k) for k in (
+                    "status", "termination_reason", "sections", "sections_with_line", "selected", "guess_kinds",
+                    "requests", "prompt_tokens", "completion_tokens", "observed_cost_usd", "model_tools",
+                    "refusals", "wall_seconds", "views_sent", "score_status")}
     else:
         result = summarize(args.run, args.input, args.truth, args.metric)
         result = {k: v for k, v in result.items() if k != "lines"}

@@ -156,13 +156,95 @@ def corridor_trace(image: np.ndarray, section: dict, source_file: str, details: 
     Returns the snapped candidate (corridor, vertical range, support scores and
     the dense trace). Raises VerificationError when no ink supports a line.
     """
+    path = np.asarray([view_to_source(view, p) for p in path_view_px], dtype=float)
+    half_width = float(half_width_view_px) / min(view["view_px_per_source_px"])
+    return trace_in_source_corridor(image, section, source_file, details, path, half_width)
+
+
+# Following a stroke from a point: how far (source px) the first ink may be from
+# the point, how many rows without ink end the stroke, and the corridor that is
+# then traced and verified like a model-drawn one.
+SEED_SEARCH_PX = 8.0
+SEED_MAX_GAP_ROWS = 6
+SEED_CORRIDOR_HALF_WIDTH_PX = 4.0
+SEED_PATH_STEP_ROWS = 12
+
+
+def follow_stroke(image: np.ndarray, section: dict, seed_source) -> np.ndarray:
+    """Follow the ink stroke through a seed point, row by row, up and down.
+
+    At each row the run centre nearest to the position predicted from the
+    recent slope continues the stroke; a crossing line or a short gap keeps
+    the prediction. Returns (row, column) source points, or raises when no ink
+    is at the seed. The result is only a corridor: the line itself is traced
+    and verified by ``trace_in_source_corridor``.
+    """
+    from .ingest import _eligible_trace_mask, _foreground, _runs
+    left, top, right, bottom = _trace_window(section, image.shape)
+    mask, ink, _ = _foreground(image[top:bottom + 1, left:right])
+    eligible, _ = _eligible_trace_mask(mask, None, ink)
+    seed_x, seed_row = float(seed_source[0]) - left, int(round(float(seed_source[1]) - top))
+    if not 0 <= seed_row < eligible.shape[0]:
+        raise VerificationError("point_outside_section", "The point is outside the section's calibrated height range.")
+
+    def centres(row):
+        return [(a + b - 1) / 2 for a, b in _runs(eligible[row])]
+
+    start = None
+    for offset in (0, -1, 1, -2, 2, -3, 3):
+        row = seed_row + offset
+        if 0 <= row < eligible.shape[0]:
+            near = [c for c in centres(row) if abs(c - seed_x) <= SEED_SEARCH_PX]
+            if near:
+                start = (row, min(near, key=lambda c: abs(c - seed_x)))
+                break
+    if start is None:
+        raise VerificationError("no_ink_at_point",
+                                f"No ink within {SEED_SEARCH_PX:g} source px of the point; click on the curve itself.")
+    points = {start[0]: start[1]}
+    for step in (-1, 1):
+        history = [start]
+        row, gap = start[0], 0
+        while 0 <= row + step < eligible.shape[0] and gap <= SEED_MAX_GAP_ROWS:
+            row += step
+            recent = history[-10:]
+            slope = 0.0
+            if len(recent) >= 3:
+                slope = float(np.polyfit([r for r, _ in recent], [x for _, x in recent], 1)[0])
+            predicted = history[-1][1] + slope * (row - history[-1][0])
+            tolerance = 2.5 + 1.2 * abs(slope)
+            near = [c for c in centres(row) if abs(c - predicted) <= tolerance]
+            if near:
+                history.append((row, min(near, key=lambda c: abs(c - predicted))))
+                points[row] = history[-1][1]
+                gap = 0
+            else:
+                gap += 1
+    rows = np.array(sorted(points))
+    return np.column_stack([rows + top, np.array([points[r] for r in rows]) + left])
+
+
+def trace_from_point(image: np.ndarray, section: dict, source_file: str, details: dict,
+                     view: dict, point_view_px) -> dict:
+    """Follow the stroke under a point the model chose, then trace and verify it as a corridor."""
+    followed = follow_stroke(image, section, view_to_source(view, point_view_px))
+    if len(followed) < 33:
+        raise VerificationError("stroke_too_short", f"The stroke at the point is followed for only {len(followed)} rows.")
+    sample = followed[::SEED_PATH_STEP_ROWS]
+    if sample[-1][0] != followed[-1][0]:
+        sample = np.vstack([sample, followed[-1]])
+    path = sample[:, ::-1].astype(float)  # (column, row) points
+    return trace_in_source_corridor(image, section, source_file, details, path, SEED_CORRIDOR_HALF_WIDTH_PX)
+
+
+def trace_in_source_corridor(image: np.ndarray, section: dict, source_file: str, details: dict,
+                             path: np.ndarray, half_width: float) -> dict:
+    """Trace and verify the ink inside a corridor given in source pixels (see corridor_trace)."""
     from .agent_tools import _adaptive_anchors
     from .ingest import DrawingError, _eligible_trace_mask, _extract_one, _foreground, _trace
-    path = np.asarray([view_to_source(view, p) for p in path_view_px], dtype=float)
     path = path[np.argsort(path[:, 1], kind="stable")]
     if np.any(np.diff(path[:, 1]) <= 0):
         raise VerificationError("corridor_path_invalid", "Corridor points must be at distinct heights.")
-    half_width = float(half_width_view_px) / min(view["view_px_per_source_px"])
     left, top, right, bottom = _trace_window(section, image.shape)
     if bottom - top < 32 or right - left < 8:
         raise VerificationError("section_window_too_small", "The section has too few calibrated pixels to trace.")
