@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vessel-reconstruction"
-version = "0.3.0"
+version = "0.4.0"
 description = "Evidence-linked reconstruction of vessel hull envelopes from calibrated section drawings"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -17,6 +17,7 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest>=8,<10", "trimesh>=4,<5"]
 documents = ["PyMuPDF>=1.26.7,<2", "ezdxf>=1.3,<2"]
+data = ["jsonschema==4.26.0"]
 
 [project.scripts]
 vessel-reconstruct = "vessel_reconstruction.cli:main"

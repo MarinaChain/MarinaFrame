@@ -1,0 +1,128 @@
+{
+  "schema_version": "marinaframe.validation.v1",
+  "binding": {
+    "generation_id": "generation-65e708434d32b4ceb3b9b337",
+    "revision_id": "r0000",
+    "run_id": "11111111111111111111",
+    "source_manifest_sha256": "80d543dd2c341303113d61b73366c7963c3722bfd79da86c4b54bdf845003d6e",
+    "input_spec_sha256": "53290dee4e2f5329256a5dd9386cb58e89e63765a9291a59d1eef771afaba85f",
+    "selection_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "revision_spec_sha256": "7209e9c74c73fa3e6dcf05d1f93ba90a959decccc628d17a7231259a08fa77bc",
+    "run_manifest_sha256": "a88f46fce222d23c44488a5bef51677a9333d6b3e348496b6db4c4c998e8e4bf",
+    "run_result_sha256": "71cc4b65aba0c32805f8f54aa508c5f502421b8d2c85bf93cc50ae65bd9ea6e6",
+    "step_sha256": "da6e3e7e385e2826c0793a3e92a7ab9140284182a6c90fb02d9989605b4e530f",
+    "audit_implementation_sha256": "25706fe4b5f0666db8d6b7ba46098dca8b9e7fd4194955145ce463eaf3d16fef"
+  },
+  "checks": {
+    "worker_execution": "succeeded",
+    "artifact_integrity": "passed",
+    "cad_validity": "passed",
+    "trace_fidelity": "failed"
+  },
+  "outcome": "failed",
+  "units": {
+    "input": "m",
+    "step": "mm",
+    "reported": "m"
+  },
+  "tolerances": {
+    "max_section_distance_m": 0.0011,
+    "max_relative_metric_error": 1e-06
+  },
+  "sampling": {
+    "policy": "first_two_middle_last_two_v1",
+    "section_ids": [
+      "s0",
+      "s1",
+      "s2"
+    ],
+    "total_section_count": 3
+  },
+  "measurements": {
+    "max_section_distance_m": 0.01,
+    "relative_metric_error": 0.0
+  },
+  "evidence": [
+    {
+      "kind": "captured_input_spec",
+      "path": "domain/input/spec.json",
+      "sha256": "53290dee4e2f5329256a5dd9386cb58e89e63765a9291a59d1eef771afaba85f",
+      "bytes": 1426
+    },
+    {
+      "kind": "submitted_input_spec",
+      "path": "domain/input/submitted_spec.json",
+      "sha256": "0c18d3d5a384b4d3584791f064bd02e572501af04c9e0bb14e2a81e365cc5187",
+      "bytes": 942
+    },
+    {
+      "kind": "revision_spec",
+      "path": "domain/revisions/r0000/spec.json",
+      "sha256": "7209e9c74c73fa3e6dcf05d1f93ba90a959decccc628d17a7231259a08fa77bc",
+      "bytes": 1438
+    },
+    {
+      "kind": "revision_selection",
+      "path": "domain/revisions/r0000/selection.json",
+      "sha256": "fb766d69facd1c19a1cc4f41c650fa464c0e42a7c40243d1ab2cd3089cd94c79",
+      "bytes": 370
+    },
+    {
+      "kind": "run_manifest",
+      "path": "domain/builds/controlled/manifest.json",
+      "sha256": "a88f46fce222d23c44488a5bef51677a9333d6b3e348496b6db4c4c998e8e4bf",
+      "bytes": 53
+    },
+    {
+      "kind": "run_result",
+      "path": "domain/builds/controlled/result.json",
+      "sha256": "71cc4b65aba0c32805f8f54aa508c5f502421b8d2c85bf93cc50ae65bd9ea6e6",
+      "bytes": 1476
+    },
+    {
+      "kind": "exported_step",
+      "path": "domain/builds/controlled/model.step",
+      "sha256": "da6e3e7e385e2826c0793a3e92a7ab9140284182a6c90fb02d9989605b4e530f",
+      "bytes": 47
+    },
+    {
+      "kind": "captured_source",
+      "path": "domain/input/source.png",
+      "sha256": "c7067df60b9f60d9c7581e1a37fb7189b09675cec580222ec02ca2843e8ded48",
+      "bytes": 2190
+    },
+    {
+      "kind": "step_section_cut_comparison",
+      "path": "domain/validation/fc13c7a06fc6415a8421cbacdffb3d4f/section-cut-000.png",
+      "sha256": "1b8e4e45730d6ea81edb5778ce2250c31b96e56757a1586c1e091c97f7cbe8e6",
+      "bytes": 41
+    },
+    {
+      "kind": "step_section_cut_comparison",
+      "path": "domain/validation/fc13c7a06fc6415a8421cbacdffb3d4f/section-cut-001.png",
+      "sha256": "2750ca6c1b131aa2c53ea933e0e23025196d09806f0803017900ec2fcc5c18c1",
+      "bytes": 41
+    },
+    {
+      "kind": "step_section_cut_comparison",
+      "path": "domain/validation/fc13c7a06fc6415a8421cbacdffb3d4f/section-cut-002.png",
+      "sha256": "7d38140aeed2cad777c482cb92cdaea26301b43c76fbc144e3a0b4fe4da36e98",
+      "bytes": 41
+    },
+    {
+      "kind": "step_reimport_validation",
+      "path": "domain/validation/fc13c7a06fc6415a8421cbacdffb3d4f/validation.json",
+      "sha256": "fb920a175e74954c8788e7b6cea189caf376d41f321002f0afc43ce6a9c3db72",
+      "bytes": 2154
+    },
+    {
+      "kind": "validation_worker_receipt",
+      "path": "domain/validation/fc13c7a06fc6415a8421cbacdffb3d4f/observation.json",
+      "sha256": "baf5b196f1759ee5bb63e3180f5732afb9a7ad0654fbbf4e2df69816d04398f3",
+      "bytes": 2940
+    }
+  ],
+  "audit_contract_version": "step_source_sections_v1",
+  "semantic_review": "required",
+  "engineering_approved": false
+}

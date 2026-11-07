@@ -1,0 +1,22 @@
+[package]
+name = "marinaframe-control"
+version = "0.4.0"
+edition = "2021"
+rust-version = "1.99"
+license-file = "../LICENSE"
+description = "Typed persistent local control plane for evidence-bound hull reconstruction"
+
+[[bin]]
+name = "marinaframe"
+path = "src/main.rs"
+
+[dependencies]
+base64 = "=0.22.1"
+libc = "=0.2.183"
+reqwest = { version = "=0.12.24", default-features = false, features = ["blocking", "json", "rustls-tls-native-roots"] }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = { version = "=1.0.145", features = ["float_roundtrip"] }
+sha2 = "=0.10.9"
+
+[dev-dependencies]
+tempfile = "=3.23.0"
