@@ -17,7 +17,10 @@ TABLE_VISION_MODE = "offset_table_vision"
 VALUE_FIELDS = {"value", "value_m", "y_m", "half_breadth_m", "token", "text", "expected_text", "parsed_value_m"}
 MAX_PIXEL_COORDINATE = 1_000_000
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
-FORBIDDEN = {"points", "points_yz_m", "offsets", "ground_truth", "reference_mesh", "hull_parameters"}
+# Measured geometry, including multi-region section records (regions,
+# outline rings; see section_regions.py), is an output of reading, never input.
+FORBIDDEN = {"points", "points_yz_m", "offsets", "ground_truth", "reference_mesh", "hull_parameters",
+             "regions", "rows_m", "outline_rings_yz_m"}
 
 
 class BoundedJSONError(ValueError):

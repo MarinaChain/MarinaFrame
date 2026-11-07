@@ -236,3 +236,107 @@ truth uncertainty of about 0.12 %. Nothing here is engineering approval.
    inspection resource limit on large overlaid sheets (owner: pipeline/Rust streams).
 5. Use the transverse construction-section drawings (one section per panel) as raster input
    that matches the supported input.
+
+## 7. Round 2 (W9): reading the hull gaps
+
+Date: 2026-11-07. Base `a2608e1`. **Gunnerus is now development data**: its truth was seen in
+round 1 and was inspected again during this work (section plots, aft deck height). All Gunnerus
+numbers in this section are DEVELOPMENT numbers, not a fair accuracy score. The fair score is in
+section 7.6, on held-out DTMB 5415 inputs, with the protocol fixed before the run.
+
+### 7.1 What changed
+
+| Task | Change | Files |
+|---|---|---|
+| Multi-outline sections | A station may have several pieces and several material intervals per height. Each piece is closed into a ring (centreline, side line to the station top, or the top); the rings are cut at every vertex height into *regions* with one interval `[y_in, y_out]` per height: `centreline` regions (the hull) and `offset` regions (one skeg per side). The decomposition is exact (region area = ring area, checked). Regions are matched one-to-one between neighbouring stations (same kind, mutual best intersection-over-union ≥ 0.2) and each matched run is lofted with ruled faces between corresponding polygon edges (normalized-height correspondence, 1 mm knot bound, as `build_hull`). A region without a match ends with a flat closure and, if it exists at one station only, is listed in `unlofted_regions` with its area. Every solid passes an exact volume audit (kernel volume = Simpson prismatoid volume of its station polygons within 1e-6). Output: a compound of solids that meet on shared faces. Single-curve reading and `build_hull` are unchanged (backward compatible); region mode is opt-in (`read_stations(regions=True)`, `geometry.build_region_hull`). `schema.py` rejects `regions`, `rows_m` and `outline_rings_yz_m` in a drawing spec (geometry is an output, never input). | `section_regions.py` (new), `geometry.py`, `lines_dxf.py`, `schema.py` |
+| Midbody identity | `lines_dxf.cross_view_identity`: an unlabelled body-plan curve takes a frame only if its outer half-breadths at the labelled plan waterlines (WL 250–1800) match the plan at that frame (RMS ≤ 0.05 m), the second-best frame is ≥ 2× worse, and no other curve claims the frame. Rule 5 in `make_gunnerus_configs.py`. | `lines_dxf.py`, `make_gunnerus_configs.py` |
+| Station top | `StationRequest.top_z_m`: a curve that ends on the side line follows it to the station's own top. Rule 6 reads that top from the drawing: the upper crossing of the centreline profile outline (the closed curve on the buttock layer) at the station. | `lines_dxf.py`, `make_gunnerus_configs.py` |
+| Scorer | A cut of the reconstruction is the union of cuts 0.1 µm aft and forward of the plane, so a region solid that ends on a station plane counts there. Re-scoring the round 1 V4 model with it reproduces V4 exactly (402.09 m³, −17.32 %, waterplane −0.92 %, station medians 0.024 / 0.033 m). | `score.py`, `hull_metrics.py` |
+
+Tests: `tests/test_section_regions.py` (twin rectangular skegs 80.000 m³ exact, twin circular
+skegs = polygon area × length, tapered skeg = prismatoid, bulb run with flat closure, ledge step,
+region at one station reported, legacy sections equal to `build_hull` within 1e-4, overlapping
+pieces refused); `tests/test_lines_dxf.py` (twin skeg and split bulb read in region mode, station
+top, open piece refused, cross-view assignment and ambiguity refusal); `tests/test_contract.py`
+(regions refused in a spec).
+
+### 7.2 Midbody identity evidence (rule 5)
+
+13 aft-side curves after frame 20 had no anchor (keel heights of two families interleave, so the
+round 1 ordering rule could not work). Cross-view result: 13 of 13 curves assigned, to frames
+21–27 and A–F; best RMS 3.4–16 mm, second-best frame 2.8–13× worse. Frame G (x = 17.0 m) has
+no curve in the body plan and is not read. Full ledger: `identity_ledger.json` of the run.
+
+### 7.3 Station top (rule 6): what the drawing shows
+
+The drawing has no deck line at the side. The centreline profile outline gives tops of 5.97 m
+(frame −2) rising to 7.59 m by frame 20; forward of that the station curves reach the drawn top.
+The truth hull ends at about 4.1 m from the transom to x ≈ 16 m (a deck that the lines plan does
+not draw). So rule 6 is the drawing's evidence, but it does not change the main-band maxima
+(band top 4.287 m): those 4.8 m maxima above 4.1 m remain, as a drawing-versus-truth content
+difference, like the bow thruster tunnel. Volume and waterplane below 2.5 m are not affected.
+
+### 7.4 Gunnerus development results (vector path)
+
+Same metric file, truth cache and scorer (union cuts) for every row.
+
+| Run | Stations read | Volume error (full) | Waterplane error | Between-station RMS / max | Station hb median RMS main / below draft (round 1 station set) |
+|---|---:|---:|---:|---:|---:|
+| Round 1 V4 (`1cc64ed`), re-scored | 31 of 59 | −17.32 % | −0.92 % | 1.357 / 4.80 m | 0.024 / 0.033 m |
+| Regions only (round 1 stations) | 57 of 59 | −3.30 % | −0.24 % | 0.887 / 4.80 m | 0.024 / 0.032 m |
+| Regions + midbody identity + station top | 70 of 72 | **−0.90 %** | **−0.24 %** | 0.832 / 4.80 m | 0.024 / 0.033 m |
+
+Last row: model SHA-256 `953843af611b…`, score `3745e8d53fe8…`, configuration `c158aab60976…`;
+17 solids, 6 region runs, CAD deviation ≤ 0.99 mm. Refused: frame 6 and frame 16 (`incomplete_curve`,
+the curve is split at the skeg junction into pieces that the identity rules do not pick).
+Unlofted regions: only slivers (largest 0.008 m², the skeg-tip notch at frame 3).
+
+Section area below 2.5 m at the skeg stations (frames 4–20): −0.4 … −3.0 %; midbody frames
+21–F: −0.7 … +0.2 %; bulb stations 55–58: −0.7 … +2.9 % (round 1: not read). Remaining large
+errors are content differences: frames −2…1 (truth bottom step at 2.0 m and a centre notch at the
+transom; −9 … −24 %) and frame 53 (+192 %, the truth's thruster tunnel). Over all 69 scored
+stations, the median main-band RMS is 0.279 m, because 36 aft and midbody stations now include
+the 4.1–4.287 m band where the truth has no hull. The below-draft maximum (2.9 m) is at the
+skeg bottoms: a 15 mm bottom-height difference at a flat skeg bottom (fr12: drawn −0.379 m,
+truth −0.395 m).
+
+Images inspected: `station_comparison.png` of both region runs (all skeg, midbody and bulb
+stations lie on the truth below 4.1 m; the aft tops follow the profile outline), Gunnerus body
+plan with picks, aft zoom, profile and plan views, truth sections at x = −1 … 17.5 m.
+
+### 7.5 Raster resource limit (investigation; nothing changed)
+
+Measured on the round 1 composite (drawing SHA-256 `2acd43a7…`, same as R1) by calling the
+inspection worker directly with large limits: one station 3.4–3.9 CPU s (0.63 GB peak RSS);
+three stations 8.2 CPU s; the first batch of 12 stations (`INSPECTION_BATCH = 12`, frames −2…9)
+**50.4 CPU s**, 0.68 GB. `AgentTools._worker` gives an inspection 45 CPU s (`RLIMIT_CPU`) and
+60 s wall. So R1's `resource_limited` was the CPU limit: every section ROI is the whole half body
+plan (≈1.8 Mpx with 30–40 overlaid curves) and 12 such sections need more than 45 CPU s.
+Memory (4 GiB) is not the limit.
+
+Proposal (needs a change in `agent_tools.py`, which this stream does not own; no budget is raised):
+
+1. Size each inspection batch by work, not by count: estimate CPU per section from its ROI pixel
+   count (here ≈ 4 s per full half body plan) and put sections into a batch only while the
+   estimate stays under half of the 45 s budget (here 5 sections). The budget and gates stay.
+2. Per-station contour corridors from declared evidence: the spec already accepts
+   `contour_selection` (anchors at distinct rows, half width ≤ 128 px). For a lines plan the
+   anchors can come from the half-breadth plan (station x and waterline heights give one point
+   per waterline, rule 5's data) — a narrow corridor per station cuts traced pixels and also
+   resolves which of the 30–40 overlaid curves is the station. This must be stated as declared
+   input evidence (it uses another view of the same drawing, not truth).
+
+### 7.6 Held-out evaluation protocol (fixed before the run)
+
+Code frozen at the commit that adds this section. Cases not used to tune round 2 code:
+
+- **H1, DTMB 5415 synthetic body plan**: `holdout_5415.py synthetic` cuts the FORCE/IIHR/INSEAN
+  5415 truth at the 21 stations and writes every cut curve as a piece of its station (round 1
+  skipped the FP station, which has two curves). Identity exact by construction. Read in
+  region mode. This measures reading, region decomposition, loft and scorer.
+- **H2, MARIN 5415 lines DXF** with the round 1 oracle identity configuration (15 stations), read
+  once in single-curve mode (round 1 reader) and once in region mode, to show whether region mode
+  changes results on a real drawing it was not tuned on.
+
+Metric: `metric_dev5415.json` (model scale; draft 0.248 m). One run per case; every run is
+recorded. Series 60 / Wigley and DSYHS were not run in this round (time); they stay open.

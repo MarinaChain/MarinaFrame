@@ -138,3 +138,78 @@ def test_read_sections_build_a_valid_hull(tmp_path):
 
     shape, normalized = build_hull(result["sections"])
     assert shape.isValid() and len(normalized) == 3
+
+
+def twin_skeg_curve(side: int = +1) -> np.ndarray:
+    """A station from the centreline over a skeg to the side line, in drawing units.
+
+    Half-plane (metres): tunnel roof at z = 1.0 from the centreline to y = 0.5,
+    skeg from y = 0.5 to 1.0 down to z = 0, hull bottom at z = 1.0 to the side
+    (y = 2.0), side line up to z = 2.0.
+    """
+    yz = np.array([[0.0, 1.0], [0.5, 1.0], [0.5, 0.0], [1.0, 0.0], [1.0, 1.0], [2.0, 1.0], [2.0, 2.0]])
+    return np.column_stack([CL + side * yz[:, 0] * 1000.0, BASE + yz[:, 1] * 1000.0])
+
+
+def test_region_mode_reads_twin_skeg_and_split_bulb(tmp_path):
+    from vessel_reconstruction import section_regions as sr
+
+    skeg = twin_skeg_curve()
+    bulb = np.array([[CL, BASE + 0.0], [CL + 600.0, BASE + 400.0], [CL, BASE + 800.0]])
+    bow = np.array([[CL, BASE + 1200.0], [CL + 1500.0, BASE + 3000.0]])
+    path = tmp_path / "bodyplan.dxf"
+    write_dxf(path, [skeg, bulb, bow])
+    requests = [StationRequest("skeg", 2.0, +1, pick_xy=tuple(skeg[3])),
+                StationRequest("bulb", 9.0, +1, pick_xy=tuple(bulb[1]), extra_picks=(tuple(bow.mean(axis=0)),))]
+    side = SideLine(y_m=2.0, top_z_m=3.0)
+    single = read_stations(path, view(), requests, side_line=side)
+    assert {a["kind"] for a in single["abstentions"]} == {"multi_valued_section", "multiple_pieces"}
+    result = read_stations(path, view(), requests, side_line=side, regions=True)
+    assert not result["abstentions"]
+    by_id = {s["id"]: s for s in result["sections"]}
+
+    def area(regions):
+        return sr.total_area([{"rows_m": np.array(r["rows_m"])} for r in regions])
+
+    skeg_regions = by_id["skeg"]["regions"]
+    assert sorted(r["kind"] for r in skeg_regions) == ["centreline", "offset"]
+    # Skeg 0.5 m x 1.0 m; hull 2.0 m wide from z = 1 m to the side-line top z = 3 m.
+    assert area(skeg_regions) == pytest.approx(0.5 + 4.0)
+    assert by_id["skeg"]["evidence"]["side_line_followed"] is True
+    bulb_regions = by_id["bulb"]["regions"]
+    assert [r["rows_m"][0][0] for r in bulb_regions] == pytest.approx([0.0, 1.2])
+    # Bulb triangle 0.6 x 0.8 / 2; bow trapezoid from z = 1.2 to 3.0, closed at the top.
+    assert area(bulb_regions) == pytest.approx(0.24 + 1.35)
+
+
+def test_region_mode_uses_the_station_top_and_refuses_open_pieces(tmp_path):
+    skeg = twin_skeg_curve()
+    stub = np.array([[CL, BASE + 500.0], [CL + 700.0, BASE + 600.0]])  # ends nowhere
+    path = tmp_path / "bodyplan.dxf"
+    write_dxf(path, [skeg, stub])
+    requests = [StationRequest("low-top", 1.0, +1, pick_xy=tuple(skeg[3]), top_z_m=2.5, top_evidence="profile"),
+                StationRequest("stub", 2.0, +1, pick_xy=tuple(stub.mean(axis=0)))]
+    result = read_stations(path, view(), requests, side_line=SideLine(y_m=2.0, top_z_m=3.0), regions=True)
+    assert [a["kind"] for a in result["abstentions"]] == ["incomplete_curve"]
+    section = result["sections"][0]
+    assert max(r["rows_m"][-1][0] for r in section["regions"]) == pytest.approx(2.5)
+    assert section["evidence"]["top_evidence"] == "profile"
+
+
+def test_cross_view_identity_assigns_and_refuses_ambiguity():
+    z = np.linspace(0, 2, 50)
+
+    def curve(width):
+        return np.column_stack([width * np.sqrt(z / 2), z])
+
+    heights = (0.5, 1.0, 1.5)
+    references = {name: {h: float(w * np.sqrt(h / 2)) for h in heights}
+                  for name, w in (("A", 1.0), ("B", 1.5), ("C", 2.0))}
+    assigned, ledger = lines_dxf.cross_view_identity({"k1": curve(1.01), "k2": curve(2.0), "k3": curve(1.75)},
+                                                     references)
+    assert assigned == {"k1": "A", "k2": "C"}
+    decisions = {entry["curve"]: entry["decision"] for entry in ledger}
+    assert decisions["k3"].startswith("refused")
+    # Two curves that both fit one frame best are both refused.
+    assigned, _ = lines_dxf.cross_view_identity({"k1": curve(1.0), "k2": curve(1.005)}, references)
+    assert assigned == {}
