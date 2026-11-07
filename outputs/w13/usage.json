@@ -1,0 +1,76 @@
+{
+  "calls": 13,
+  "states": {
+    "failed": 2,
+    "completed": 11
+  },
+  "prompt_tokens": 29546,
+  "completion_tokens": 11876,
+  "observed_cost_usd": 0,
+  "list_cost_usd": 0.0115575,
+  "images": 39,
+  "missing_usage": 0,
+  "model": "deepseek-v4.1-flash",
+  "arms": {
+    "gunnerus-01": {
+      "calls": 1,
+      "states": {
+        "failed": 1
+      },
+      "prompt_tokens": 1934,
+      "completion_tokens": 500,
+      "observed_cost_usd": 0,
+      "list_cost_usd": 0.0005901,
+      "images": 3,
+      "missing_usage": 0
+    },
+    "gunnerus-03": {
+      "calls": 8,
+      "states": {
+        "completed": 8
+      },
+      "prompt_tokens": 18818,
+      "completion_tokens": 8468,
+      "observed_cost_usd": 0,
+      "list_cost_usd": 0.0079035,
+      "images": 24,
+      "missing_usage": 0
+    },
+    "gunnerus-04": {
+      "calls": 2,
+      "states": {
+        "completed": 2
+      },
+      "prompt_tokens": 4536,
+      "completion_tokens": 1388,
+      "observed_cost_usd": 0,
+      "list_cost_usd": 0.0015132000000000001,
+      "images": 6,
+      "missing_usage": 0
+    },
+    "gunnerus-05": {
+      "calls": 1,
+      "states": {
+        "completed": 1
+      },
+      "prompt_tokens": 2182,
+      "completion_tokens": 800,
+      "observed_cost_usd": 0,
+      "list_cost_usd": 0.0008073,
+      "images": 3,
+      "missing_usage": 0
+    },
+    "gunnerus-02": {
+      "calls": 1,
+      "states": {
+        "failed": 1
+      },
+      "prompt_tokens": 2076,
+      "completion_tokens": 720,
+      "observed_cost_usd": 0,
+      "list_cost_usd": 0.0007434,
+      "images": 3,
+      "missing_usage": 0
+    }
+  }
+}

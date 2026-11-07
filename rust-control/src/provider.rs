@@ -50,6 +50,8 @@ pub enum Purpose {
     BuildReview,
     /// Development-only geometry localisation measurement; no task authority.
     Localisation,
+    /// Restricted ship program and drawing-region measurement proposals.
+    ShipCad,
 }
 impl Purpose {
     fn is_model_decision(&self) -> bool {
@@ -63,6 +65,7 @@ impl Purpose {
             Purpose::SheetSetup => vision::SETUP_PROMPT,
             Purpose::BuildReview => vision::REVIEW_PROMPT,
             Purpose::Localisation => vision::LOCALISATION_PROMPT,
+            Purpose::ShipCad => vision::SHIP_CAD_PROMPT,
         }
     }
     /// Decision purposes return a tool call; table reading returns cells.
@@ -223,7 +226,7 @@ pub fn check_input(input: &ProviderInput) -> Result<Vec<u8>> {
     match input.purpose {
         Purpose::ModelDecision | Purpose::Investigation => (),
         Purpose::TableTranscription => check_table_input(input)?,
-        Purpose::SheetSetup | Purpose::BuildReview | Purpose::Localisation => {
+        Purpose::SheetSetup | Purpose::BuildReview | Purpose::Localisation | Purpose::ShipCad => {
             vision::check_input(input)?
         }
     }
@@ -408,7 +411,7 @@ pub fn interpret_completion(receipt: &mut Receipt, bytes: &[u8], key: &str) -> R
             let requested = requested_cells(&receipt.images);
             receipt.transcription = Some(transcription::parse(content, &requested)?);
         }
-        Purpose::SheetSetup | Purpose::BuildReview | Purpose::Localisation => {
+        Purpose::SheetSetup | Purpose::BuildReview | Purpose::Localisation | Purpose::ShipCad => {
             receipt.vision = Some(vision::parse_reply(
                 receipt.purpose,
                 content,

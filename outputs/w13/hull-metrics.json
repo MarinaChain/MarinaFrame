@@ -1,0 +1,41 @@
+{
+  "summary": {
+    "half_breadth_main": {
+      "stations": 69,
+      "rms_of_station_rms_m": 0.822427234144321,
+      "median_station_rms_m": 0.2791323676133062,
+      "max_abs_m": 4.800069297836794
+    },
+    "half_breadth_below_draft": {
+      "stations": 69,
+      "rms_of_station_rms_m": 0.2759695496034964,
+      "median_station_rms_m": 0.051059133836391754,
+      "max_abs_m": 2.936951265517818
+    },
+    "section_area_below_draft_relative": {
+      "stations": 68,
+      "mean_abs": 0.05423399290723418,
+      "max_abs": 1.921778990916739
+    }
+  },
+  "hydrostatics_at_design_draft": {
+    "draft_m": 2.5,
+    "basis": "section integral, same x and z grids for truth and reconstruction",
+    "truth_volume_m3": 486.3365767985675,
+    "truth_volume_within_reconstruction_range_m3": 485.9973271868985,
+    "reconstruction_volume_m3": 481.9412754558815,
+    "volume_error_relative_full": -0.00903757099994235,
+    "volume_error_relative_within_range": -0.008345831353630349,
+    "truth_waterplane_m2": 279.37793168126353,
+    "truth_waterplane_within_reconstruction_range_m2": 278.65579070815215,
+    "reconstruction_waterplane_m2": 278.6975597423883,
+    "waterplane_error_relative_full": -0.002435310243657498,
+    "waterplane_error_relative_within_range": 0.00014989472901318714
+  },
+  "between_station_half_breadth_main": {
+    "stations": 143,
+    "rms_of_station_rms_m": 0.8324257533682857,
+    "max_abs_m": 4.800067009171336,
+    "x_at_max_m": 15.3
+  }
+}

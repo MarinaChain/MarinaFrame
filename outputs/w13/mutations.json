@@ -1,0 +1,28 @@
+[
+  {
+    "mutation": "unknown_fields",
+    "caught": true
+  },
+  {
+    "mutation": "literal_dimension",
+    "caught": true
+  },
+  {
+    "mutation": "missing_measurement",
+    "caught": true
+  },
+  {
+    "mutation": "wrong_view",
+    "caught": true
+  },
+  {
+    "mutation": "network",
+    "caught": true,
+    "mutant_returncode": 0
+  },
+  {
+    "mutation": "external_file",
+    "caught": true,
+    "mutant_returncode": 0
+  }
+]
