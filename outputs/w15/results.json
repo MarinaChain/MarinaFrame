@@ -1,0 +1,160 @@
+{
+  "engineering_approved": false,
+  "gunnerus": [
+    {
+      "arm": "before",
+      "mode": "abstain",
+      "requested": 72,
+      "inspected": 5,
+      "unique_candidate_sections": 0,
+      "status": "abstained",
+      "baseline_gaps": {
+        "ambiguous_curve": 5
+      },
+      "built": false,
+      "volume_error_pct": null,
+      "station_rms_m": null,
+      "score_status": "no_model",
+      "requests": 0,
+      "engineering_approved": false
+    },
+    {
+      "arm": "before",
+      "mode": "draft",
+      "requested": 72,
+      "inspected": 72,
+      "unique_candidate_sections": 0,
+      "status": "abstained",
+      "baseline_gaps": {
+        "resource_limit": 36,
+        "ambiguous_curve": 36
+      },
+      "built": false,
+      "volume_error_pct": null,
+      "station_rms_m": null,
+      "score_status": "no_model",
+      "requests": 0,
+      "engineering_approved": false
+    },
+    {
+      "arm": "after",
+      "mode": "abstain",
+      "requested": 72,
+      "inspected": 5,
+      "unique_candidate_sections": 0,
+      "status": "abstained",
+      "baseline_gaps": {
+        "ambiguous_curve": 5
+      },
+      "built": false,
+      "volume_error_pct": null,
+      "station_rms_m": null,
+      "score_status": "no_model",
+      "requests": 0,
+      "engineering_approved": false
+    },
+    {
+      "arm": "after",
+      "mode": "draft",
+      "requested": 72,
+      "inspected": 72,
+      "unique_candidate_sections": 0,
+      "status": "abstained",
+      "baseline_gaps": {
+        "resource_limit": 36,
+        "ambiguous_curve": 36
+      },
+      "built": false,
+      "volume_error_pct": null,
+      "station_rms_m": null,
+      "score_status": "no_model",
+      "requests": 0,
+      "engineering_approved": false
+    }
+  ],
+  "anchors": {
+    "sections": 72,
+    "corridors": 0,
+    "anchor_status": {
+      "refused": 792
+    },
+    "anchor_refusals": {
+      "missing_waterline_identity_evidence": 144,
+      "ambiguous_crossing": 648
+    },
+    "section_reasons": {
+      "insufficient_anchors": 72
+    },
+    "spec_semantically_unchanged": true,
+    "engineering_approved": false
+  },
+  "source_parity": {
+    "abstain": {
+      "before_sections": 5,
+      "after_sections": 5,
+      "identical_source_records": 5,
+      "changed_source_records": 0
+    },
+    "draft": {
+      "before_sections": 72,
+      "after_sections": 72,
+      "identical_source_records": 72,
+      "changed_source_records": 0
+    }
+  },
+  "factory_controls": [
+    {
+      "case_id": "shipd-1-01410-L0",
+      "before_built": true,
+      "after_built": true,
+      "before_station_rms_mm": 30.820061572755527,
+      "after_station_rms_mm": 30.820061572755527,
+      "before_volume_error_pct": -0.376904537648107,
+      "after_volume_error_pct": -0.376904537648107,
+      "before_correct": true,
+      "after_correct": true,
+      "scores_unchanged": true,
+      "engineering_approved": false
+    },
+    {
+      "case_id": "shipd-2-01040-L0",
+      "before_built": true,
+      "after_built": true,
+      "before_station_rms_mm": 31.575662049805594,
+      "after_station_rms_mm": 31.575662049805594,
+      "before_volume_error_pct": -0.8977879176883521,
+      "after_volume_error_pct": -0.8977879176883521,
+      "before_correct": true,
+      "after_correct": true,
+      "scores_unchanged": true,
+      "engineering_approved": false
+    },
+    {
+      "case_id": "shipd-2-05051-L0",
+      "before_built": true,
+      "after_built": true,
+      "before_station_rms_mm": 34.44163516770416,
+      "after_station_rms_mm": 34.44163516770416,
+      "before_volume_error_pct": -0.807899198900368,
+      "after_volume_error_pct": -0.807899198900368,
+      "before_correct": true,
+      "after_correct": true,
+      "scores_unchanged": true,
+      "engineering_approved": false
+    },
+    {
+      "case_id": "wigley-L0",
+      "before_built": true,
+      "after_built": true,
+      "before_station_rms_mm": 7.506758309379323,
+      "after_station_rms_mm": 7.506758309379323,
+      "before_volume_error_pct": -1.3286448591014384,
+      "after_volume_error_pct": -1.3286448591014384,
+      "before_correct": true,
+      "after_correct": true,
+      "scores_unchanged": true,
+      "engineering_approved": false
+    }
+  ],
+  "newly_wrong_builds": 0
+}

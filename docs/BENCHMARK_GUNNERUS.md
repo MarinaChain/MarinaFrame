@@ -400,3 +400,126 @@ other 36 are `ambiguous_curve` whose traced hypotheses jump between overlaid cur
 (`not_representable_as_bounded_corridor`). All 72 become `dropped_end` guesses, so the draft spec
 has no section. The CPU limit is no longer the cause; contour identity in an overlaid body plan is.
 Next: per-station corridors from the plan-view waterline anchors (7.5, proposal 2).
+
+## 9. Round 3 (W15): declared plan-waterline corridors
+
+Date: 2026-11-08. Gunnerus remains development data. This is a conservative
+input-evidence adapter, not autonomous waterline identity recognition. All
+outputs keep `engineering_approved=false`; Rust retains readiness authority.
+No CAD, validation, correctness gate or tolerance changes.
+
+`plan_corridors.derive_contour_selection` reads a station column in explicitly
+declared plan-waterline regions. The plan setup supplies scale, station origin,
+x direction, centreline and breadth direction. Each waterline supplies a height,
+region and drawing-identity evidence. Only one complete ink run in **each** of
+three adjacent columns can support an anchor; its ordinate is measured in the
+actual station column. Multiple, absent, clipped or unidentified crossings give
+no anchor and retain a refusal reason. A review regression caught the unsafe
+alternative: unioning the columns can merge two diagonal strokes into one run.
+
+Accepted anchors map through the existing section calibration to body pixels.
+They select a corridor only; the normal reader still measures source ink and
+keeps its ruler/coverage checks. No endpoint extrapolation is allowed. Anchors
+must span the complete existing calibrated range, have distinct rows and obey
+the existing 128-pixel half-width bound. A prior selection is never replaced.
+
+The raster preparer optionally accepts `plan_corridors` in its local config:
+`clip_pt`, `setup`, `waterlines_by_section` and `half_width_px`. Both views come
+from the same PDF page at the declared DPI. It writes the source-PDF hash,
+render mapping and every anchor outcome to `plan_corridors.json`, outside the
+strict geometry spec. Inputs without this option take the unchanged path.
+
+### Drawing evidence and limits
+
+The raster plan inspection could read labelled waterlines from 0.5 to 4.5 m,
+but could not establish isolated, uniquely identified crossing regions. Broad
+label-linked regions retain competing curves and the station grid rather than
+assigning heights by ink order. The inspected plan did not establish waterlines
+at 0 or 7.5 m, the endpoints of the current body range. The centreline is not a
+substitute for a missing waterline. No local height range or endpoint is invented.
+Calibration is provisional operator-read evidence, not independent metrology.
+The 72-station list is the existing drawing-derived W9b setup, not newly inferred
+by this adapter; no DXF shape or reference geometry enters the new anchor read.
+
+Across 72 stations, **792 attempted anchors were refused**: 648 for competing
+crossings and 144 for missing endpoint-waterline identity. **0 corridors** were
+emitted. Before/after specs are semantically identical. This does not establish
+that plan anchors cannot help; it establishes that unidentified plan ink and
+missing endpoints cannot safely produce them under the current contract.
+
+Raw drawings, crops, coordinates, frozen workers, executables and native task
+records are retained only under the main checkout's `work/w15/`. No such source
+data is committed. An initial archived-input probe used 59 stations and is kept
+as an excluded attempt; the comparison uses the frozen W9b **72-station** config.
+No provider request or DeepSeek call is used.
+
+### Native results and verification
+
+Native runs use an immutable controller built from `844c842` and separate frozen
+before/after Python sources. The existing raster drawing hash matches W9b.
+
+| Arm | Mode | Inspected / requested | Unique selectable sections | Built | Volume error | Station RMS |
+|---|---|---:|---:|---|---|---|
+| Before | abstain | 5 / 72 | 0 | no | not measurable | not measurable |
+| After | abstain | 5 / 72 | 0 | no | not measurable | not measurable |
+| Before | draft | 72 / 72 | 0 | no | not measurable | not measurable |
+| After | draft | 72 / 72 | 0 | no | not measurable | not measurable |
+
+All four runs end `abstained`. Both draft arms reproduce **36 resource-limit**
+and **36 ambiguous-curve** sections. Their draft candidate is invalid/blocked
+(`insufficient_sections`), with no STEP. A blocked candidate record is not a
+build. Abstain mode stops after its first five-section batch; uninspected
+sections are not claimed as measured. Gunnerus newly wrong builds: **0**, because
+neither arm builds. No truth data was needed for these `no_model` scores.
+All source inspection records match between arms (5/5 abstain, 72/72 draft),
+excluding only the intentionally changed worker implementation hash.
+
+The four authorized factory development inputs were regenerated from the
+published sources, outside inference. Their drawing, spec and parameter hashes
+all match the frozen development manifest (12/12 checks). Only the drawing/spec
+package enters each native controller task. Reference hulls are used only by
+input generation and the separate post-read scorer; they are never available
+as input evidence to the reader. No sealed evaluation case was run.
+
+All four controls build before and after (8 native builds), and independent
+STEP reimport scoring is exactly unchanged at the fixed factory gates:
+
+| Development control | Station RMS before / after, mm | In-range volume error before / after | Correct before / after |
+|---|---:|---:|---|
+| `shipd-1-01410-L0` | 30.8201 / 30.8201 | −0.3769% / −0.3769% | yes / yes |
+| `shipd-2-01040-L0` | 31.5757 / 31.5757 | −0.8978% / −0.8978% | yes / yes |
+| `shipd-2-05051-L0` | 34.4416 / 34.4416 | −0.8079% / −0.8079% | yes / yes |
+| `wigley-L0` | 7.5068 / 7.5068 | −1.3286% / −1.3286% | yes / yes |
+
+**0 newly wrong builds** in the requested Gunnerus/four-control comparison.
+This is not a full factory or held-out claim. Legacy worker modules are byte
+identical; the after worker adds only `plan_corridors.py`. The first aggregate
+scorer driver failed on Python multiprocessing bootstrap (missing main guard);
+that attempt is retained. The independent scorer was then invoked successfully
+without changing scorer code or gates.
+
+Verification: **26 focused tests passed**, including 21 new adapter tests and
+five existing mixed-stroke controls. Stable-source `make test-quick` **passed**:
+701 Python tests, 17 CAD deselected, Rust quick suites, formatting, Clippy and
+bounded secret scan. A separate Python real-CAD tier **passed 17 tests**.
+The initial quick tier failed one Rust test with `worker_implementation_changed`
+while the crossing correction changed Python source; it is retained as an
+invalidated attempt, not hidden. No worker source changed during the successful
+rerun. No `.codesight` index is present in this worktree, so no generated index
+was refreshed or committed.
+
+The single `make test-full` invocation **passed**, exit 0, after its preflight
+found no other full-tier run: 701 Python quick tests, **44 Rust controller CAD
+tests**, the app real-task test, **17 Python CAD tests**, and smoke
+`awaiting_human_review, valid`. The stock smoke target hard-codes `/tmp`; its
+completed folder was moved to main `work/w15/smoke-full/`. All W15 development
+runs and retained raw evidence are under main `work/w15/`, never this worktree's
+`work/`. No second full-tier invocation was made. After all consumers ended,
+`cargo clean` removed 4.8 GiB from the worktree target and 1.1 GiB from the
+W15 baseline target. No push was made.
+
+Open: source-supported waterline identity at station crossings, sufficient
+full-range anchors (or a separately designed partial-evidence contract), and
+local endpoints/pieces for this drawing. These are not solved by rank matching,
+truth offsets, extrapolated anchors, or wider gates. W15 demonstrates correct
+synthetic corridor selection and honest refusal, **not improved Gunnerus reads**.
