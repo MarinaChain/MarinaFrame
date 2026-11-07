@@ -224,3 +224,14 @@ Stopped mid-work (partial work may exist in their worktrees under `.claude/workt
 To resume: inspect each branch (`git log a2608e1..<branch>`), keep sound commits, and restart each
 workstream from its brief in this session's history or from docs/STRATEGY_2026Q4.md section 4.
 Next after W8: W10 draft highlighting in the app. Run `make test-full` before each merge.
+
+## Test stability under load (2026-11-07)
+
+`make test-full` on the merged W8+W9 code (`0bed930`) passed except one `draft_guards` test per run,
+a different one each time (`a_policy_cannot_confirm_its_own_guess`, then
+`worker_forged_guess_is_rejected_at_the_receipt`). Each passes when run alone. The machine load
+average was 29–33 on 10 cores (benchmark factory plus three agents building), so worker processes
+reached their wall/CPU limits and ended blocked for a different reason than the test expects.
+Not a logic failure in draft mode, but the worker limits are tight under contention. Follow-up:
+rerun `make test-full` on a quiet machine before any release; W9b is fixing the known flaky
+cancellation test; consider test-only timeouts that scale with load, never weaker checks.
