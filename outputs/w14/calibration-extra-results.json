@@ -1,0 +1,2522 @@
+[
+  {
+    "size": [
+      640,
+      1280
+    ],
+    "transmitted_size": [
+      640,
+      1280
+    ],
+    "mode": "explicit_pixels",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      4.123105625617661,
+      3.0,
+      11.661903789690601,
+      21.095023109728988,
+      22.02271554554524,
+      5.830951894845301
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        0.9989441363942585,
+        1.0248712803410625
+      ],
+      "offset": [
+        -2.998624570313169,
+        -6.271678818563624
+      ],
+      "rms_px": 4.788368389758226
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 110.0,
+          "y": 290.0
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 464.0,
+          "y": 230.0
+        },
+        {
+          "evidence": "upper-right endpoint of line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 260.0,
+          "y": 775.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 533.0,
+          "y": 965.0
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 135.0,
+          "y": 1040.0
+        },
+        {
+          "evidence": "upper-right endpoint of line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 400.0,
+          "y": 545.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        109,
+        294
+      ],
+      "B": [
+        461,
+        230
+      ],
+      "C": [
+        250,
+        781
+      ],
+      "D": [
+        531,
+        986
+      ],
+      "E": [
+        134,
+        1062
+      ],
+      "F": [
+        397,
+        550
+      ]
+    }
+  },
+  {
+    "size": [
+      640,
+      1280
+    ],
+    "transmitted_size": [
+      640,
+      1280
+    ],
+    "mode": "normalized_1",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      1.1516944039110344,
+      0.9303762679690596,
+      11.848442935677284,
+      10.69467157045974,
+      12.402322363170628,
+      5.592709540106679
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        643.4737415124479,
+        1299.8666232338376
+      ],
+      "offset": [
+        -3.67313352255538,
+        -4.416133672648479
+      ],
+      "rms_px": 3.733298616023408
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 0.172,
+          "y": 0.23
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 0.719,
+          "y": 0.18
+        },
+        {
+          "evidence": "dot at upper-right end of line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 0.406,
+          "y": 0.605
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 0.828,
+          "y": 0.762
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 0.209,
+          "y": 0.82
+        },
+        {
+          "evidence": "upper-right endpoint of line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 0.625,
+          "y": 0.426
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        109,
+        294
+      ],
+      "B": [
+        461,
+        230
+      ],
+      "C": [
+        250,
+        781
+      ],
+      "D": [
+        531,
+        986
+      ],
+      "E": [
+        134,
+        1062
+      ],
+      "F": [
+        397,
+        550
+      ]
+    }
+  },
+  {
+    "size": [
+      640,
+      1280
+    ],
+    "transmitted_size": [
+      640,
+      1280
+    ],
+    "mode": "normalized_1",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      3.6055512754639825,
+      0.9303762679690596,
+      14.34640024535778,
+      15.796961733194134,
+      12.402322363170628,
+      10.28715704167097
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        643.4737415124479,
+        1300.5401974514828
+      ],
+      "offset": [
+        -3.67313352255538,
+        -1.7209090219185612
+      ],
+      "rms_px": 4.218066056984123
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 0.172,
+          "y": 0.227
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 0.719,
+          "y": 0.18
+        },
+        {
+          "evidence": "dot at upper-right end of line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 0.406,
+          "y": 0.602
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 0.828,
+          "y": 0.758
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 0.209,
+          "y": 0.82
+        },
+        {
+          "evidence": "upper-right endpoint of line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 0.625,
+          "y": 0.422
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        109,
+        294
+      ],
+      "B": [
+        461,
+        230
+      ],
+      "C": [
+        250,
+        781
+      ],
+      "D": [
+        531,
+        986
+      ],
+      "E": [
+        134,
+        1062
+      ],
+      "F": [
+        397,
+        550
+      ]
+    }
+  },
+  {
+    "size": [
+      640,
+      1280
+    ],
+    "transmitted_size": [
+      640,
+      1280
+    ],
+    "mode": "explicit_pixels",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      5.0990195135927845,
+      3.0,
+      11.661903789690601,
+      20.09975124224178,
+      19.026297590440446,
+      5.830951894845301
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        0.9989441363942585,
+        1.0215993179222516
+      ],
+      "offset": [
+        -2.998624570313169,
+        -4.685695894137161
+      ],
+      "rms_px": 4.583230522708759
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 110.0,
+          "y": 289.0
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 464.0,
+          "y": 230.0
+        },
+        {
+          "evidence": "upper-right endpoint of line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 260.0,
+          "y": 775.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 533.0,
+          "y": 966.0
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 135.0,
+          "y": 1043.0
+        },
+        {
+          "evidence": "upper-right endpoint of line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 400.0,
+          "y": 545.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        109,
+        294
+      ],
+      "B": [
+        461,
+        230
+      ],
+      "C": [
+        250,
+        781
+      ],
+      "D": [
+        531,
+        986
+      ],
+      "E": [
+        134,
+        1062
+      ],
+      "F": [
+        397,
+        550
+      ]
+    }
+  },
+  {
+    "size": [
+      4096,
+      4096
+    ],
+    "transmitted_size": [
+      896,
+      896
+    ],
+    "mode": "explicit_pixels",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      22.133177607844868,
+      6.144518047887582,
+      8.687311883148967,
+      191.9900082434139,
+      29.38832198999757,
+      11.932634038721037
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        4.591495307911525,
+        4.739716080919811
+      ],
+      "offset": [
+        -15.55368313502564,
+        -39.646232225103226
+      ],
+      "rms_px": 61.31411665390642
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "small dot labeled A",
+          "id": "A",
+          "value": null,
+          "x": 157.0,
+          "y": 207.0
+        },
+        {
+          "evidence": "small dot labeled B",
+          "id": "B",
+          "value": null,
+          "x": 644.0,
+          "y": 162.0
+        },
+        {
+          "evidence": "small dot labeled C",
+          "id": "C",
+          "value": null,
+          "x": 348.0,
+          "y": 548.0
+        },
+        {
+          "evidence": "small dot labeled D",
+          "id": "D",
+          "value": null,
+          "x": 746.0,
+          "y": 648.0
+        },
+        {
+          "evidence": "small dot labeled E",
+          "id": "E",
+          "value": null,
+          "x": 191.0,
+          "y": 738.0
+        },
+        {
+          "evidence": "small dot labeled F",
+          "id": "F",
+          "value": null,
+          "x": 557.0,
+          "y": 383.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        696,
+        942
+      ],
+      "B": [
+        2949,
+        737
+      ],
+      "C": [
+        1597,
+        2499
+      ],
+      "D": [
+        3400,
+        3154
+      ],
+      "E": [
+        860,
+        3400
+      ],
+      "F": [
+        2540,
+        1761
+      ]
+    }
+  },
+  {
+    "size": [
+      2048,
+      2048
+    ],
+    "transmitted_size": [
+      896,
+      896
+    ],
+    "mode": "implicit_pixels",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      4.537822906933868,
+      2.0303814862215934,
+      16.444092047459044,
+      10.614775993291312,
+      5.150787536377098,
+      11.617193450806935
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        2.282084047216352,
+        2.275286742683512
+      ],
+      "offset": [
+        3.3531593034991904,
+        -1.2938759394959285
+      ],
+      "rms_px": 6.983094808565325
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 154.0,
+          "y": 207.0
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 646.0,
+          "y": 162.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 344.0,
+          "y": 551.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 746.0,
+          "y": 694.0
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 188.0,
+          "y": 746.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 552.0,
+          "y": 389.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        348,
+        471
+      ],
+      "B": [
+        1475,
+        369
+      ],
+      "C": [
+        799,
+        1249
+      ],
+      "D": [
+        1700,
+        1577
+      ],
+      "E": [
+        430,
+        1700
+      ],
+      "F": [
+        1270,
+        881
+      ]
+    }
+  },
+  {
+    "size": [
+      4096,
+      4096
+    ],
+    "transmitted_size": [
+      896,
+      896
+    ],
+    "mode": "explicit_pixels",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      17.6704526812185,
+      7.486041432328016,
+      13.119544541621792,
+      205.68591074147756,
+      200.18358920689553,
+      1.9846348556357425
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        4.583691101378363,
+        4.9386924807239705
+      ],
+      "offset": [
+        -9.06013608958558,
+        -92.50425567878942
+      ],
+      "rms_px": 56.97360879842736
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "small dot labeled A",
+          "id": "A",
+          "value": null,
+          "x": 156.0,
+          "y": 207.0
+        },
+        {
+          "evidence": "small dot labeled B",
+          "id": "B",
+          "value": null,
+          "x": 644.0,
+          "y": 160.0
+        },
+        {
+          "evidence": "small dot labeled C",
+          "id": "C",
+          "value": null,
+          "x": 347.0,
+          "y": 545.0
+        },
+        {
+          "evidence": "small dot labeled D",
+          "id": "D",
+          "value": null,
+          "x": 746.0,
+          "y": 645.0
+        },
+        {
+          "evidence": "small dot labeled E",
+          "id": "E",
+          "value": null,
+          "x": 190.0,
+          "y": 700.0
+        },
+        {
+          "evidence": "small dot labeled F",
+          "id": "F",
+          "value": null,
+          "x": 556.0,
+          "y": 385.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        696,
+        942
+      ],
+      "B": [
+        2949,
+        737
+      ],
+      "C": [
+        1597,
+        2499
+      ],
+      "D": [
+        3400,
+        3154
+      ],
+      "E": [
+        860,
+        3400
+      ],
+      "F": [
+        2540,
+        1761
+      ]
+    }
+  },
+  {
+    "size": [
+      2048,
+      2048
+    ],
+    "transmitted_size": [
+      896,
+      896
+    ],
+    "mode": "implicit_pixels",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      4.537822906933868,
+      2.0303814862215934,
+      16.444092047459044,
+      10.614775993291312,
+      5.150787536377098,
+      11.617193450806935
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        2.282084047216352,
+        2.275286742683512
+      ],
+      "offset": [
+        3.3531593034991904,
+        -1.2938759394959285
+      ],
+      "rms_px": 6.983094808565325
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 154.0,
+          "y": 207.0
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 646.0,
+          "y": 162.0
+        },
+        {
+          "evidence": "upper-right endpoint of line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 344.0,
+          "y": 551.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 746.0,
+          "y": 694.0
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 188.0,
+          "y": 746.0
+        },
+        {
+          "evidence": "upper-right endpoint of line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 552.0,
+          "y": 389.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        348,
+        471
+      ],
+      "B": [
+        1475,
+        369
+      ],
+      "C": [
+        799,
+        1249
+      ],
+      "D": [
+        1700,
+        1577
+      ],
+      "E": [
+        430,
+        1700
+      ],
+      "F": [
+        1270,
+        881
+      ]
+    }
+  },
+  {
+    "size": [
+      2048,
+      2048
+    ],
+    "transmitted_size": [
+      896,
+      896
+    ],
+    "mode": "explicit_pixels",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      7.857142857142856,
+      2.0303814862215934,
+      44.77654269268916,
+      82.71527263166483,
+      77.2618130456571,
+      12.352806836289965
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        2.2811995279940396,
+        2.4439530133373
+      ],
+      "offset": [
+        -4.6235247066993646,
+        -35.39463570841404
+      ],
+      "rms_px": 13.773979984360382
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 155.0,
+          "y": 204.0
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 646.0,
+          "y": 162.0
+        },
+        {
+          "evidence": "upper-right endpoint of line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 352.0,
+          "y": 527.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 748.0,
+          "y": 654.0
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 190.0,
+          "y": 710.0
+        },
+        {
+          "evidence": "upper-right endpoint of line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 561.0,
+          "y": 386.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        348,
+        471
+      ],
+      "B": [
+        1475,
+        369
+      ],
+      "C": [
+        799,
+        1249
+      ],
+      "D": [
+        1700,
+        1577
+      ],
+      "E": [
+        430,
+        1700
+      ],
+      "F": [
+        1270,
+        881
+      ]
+    }
+  },
+  {
+    "size": [
+      4096,
+      4096
+    ],
+    "transmitted_size": [
+      896,
+      896
+    ],
+    "mode": "implicit_pixels",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      72.12743823912488,
+      315.1052302365814,
+      243.70683291234,
+      434.69313595797576,
+      225.65351804056058,
+      360.9945728576163
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        4.0712913750057425,
+        4.298077723102522
+      ],
+      "offset": [
+        16.817066184692838,
+        14.074935567168565
+      ],
+      "rms_px": 57.38851373555074
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "dot labeled A",
+          "id": "A",
+          "value": null,
+          "x": 168.0,
+          "y": 207.0
+        },
+        {
+          "evidence": "dot labeled B",
+          "id": "B",
+          "value": null,
+          "x": 714.0,
+          "y": 163.0
+        },
+        {
+          "evidence": "dot labeled C",
+          "id": "C",
+          "value": null,
+          "x": 383.0,
+          "y": 588.0
+        },
+        {
+          "evidence": "dot labeled D",
+          "id": "D",
+          "value": null,
+          "x": 836.0,
+          "y": 713.0
+        },
+        {
+          "evidence": "dot labeled E",
+          "id": "E",
+          "value": null,
+          "x": 210.0,
+          "y": 788.0
+        },
+        {
+          "evidence": "dot labeled F",
+          "id": "F",
+          "value": null,
+          "x": 622.0,
+          "y": 428.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        696,
+        942
+      ],
+      "B": [
+        2949,
+        737
+      ],
+      "C": [
+        1597,
+        2499
+      ],
+      "D": [
+        3400,
+        3154
+      ],
+      "E": [
+        860,
+        3400
+      ],
+      "F": [
+        2540,
+        1761
+      ]
+    }
+  },
+  {
+    "size": [
+      2048,
+      2048
+    ],
+    "transmitted_size": [
+      896,
+      896
+    ],
+    "mode": "explicit_pixels",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      6.7385579514690015,
+      6.275966467568194,
+      3.7958086444533334,
+      11.80885174738994,
+      7.693092581620706,
+      10.082314279196499
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        2.278114056041831,
+        2.293933004627223
+      ],
+      "offset": [
+        -2.500374751808957,
+        -2.190528271281773
+      ],
+      "rms_px": 4.857935504939007
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot at A",
+          "id": "A",
+          "value": null,
+          "x": 155.0,
+          "y": 205.0
+        },
+        {
+          "evidence": "cross at B",
+          "id": "B",
+          "value": null,
+          "x": 648.0,
+          "y": 162.0
+        },
+        {
+          "evidence": "upper-right endpoint of line C",
+          "id": "C",
+          "value": null,
+          "x": 348.0,
+          "y": 547.0
+        },
+        {
+          "evidence": "black dot at D",
+          "id": "D",
+          "value": null,
+          "x": 748.0,
+          "y": 687.0
+        },
+        {
+          "evidence": "cross at E",
+          "id": "E",
+          "value": null,
+          "x": 191.0,
+          "y": 742.0
+        },
+        {
+          "evidence": "upper-right endpoint of line F",
+          "id": "F",
+          "value": null,
+          "x": 560.0,
+          "y": 386.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        348,
+        471
+      ],
+      "B": [
+        1475,
+        369
+      ],
+      "C": [
+        799,
+        1249
+      ],
+      "D": [
+        1700,
+        1577
+      ],
+      "E": [
+        430,
+        1700
+      ],
+      "F": [
+        1270,
+        881
+      ]
+    }
+  },
+  {
+    "size": [
+      4096,
+      4096
+    ],
+    "transmitted_size": [
+      896,
+      896
+    ],
+    "mode": "implicit_pixels",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      72.12743823912488,
+      315.1052302365814,
+      243.70683291234,
+      434.69313595797576,
+      225.65351804056058,
+      360.9945728576163
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        4.0712913750057425,
+        4.298077723102522
+      ],
+      "offset": [
+        16.817066184692838,
+        14.074935567168565
+      ],
+      "rms_px": 57.38851373555074
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "dot labeled A",
+          "id": "A",
+          "value": null,
+          "x": 168.0,
+          "y": 207.0
+        },
+        {
+          "evidence": "dot labeled B",
+          "id": "B",
+          "value": null,
+          "x": 714.0,
+          "y": 163.0
+        },
+        {
+          "evidence": "dot labeled C",
+          "id": "C",
+          "value": null,
+          "x": 383.0,
+          "y": 588.0
+        },
+        {
+          "evidence": "dot labeled D",
+          "id": "D",
+          "value": null,
+          "x": 836.0,
+          "y": 713.0
+        },
+        {
+          "evidence": "dot labeled E",
+          "id": "E",
+          "value": null,
+          "x": 210.0,
+          "y": 788.0
+        },
+        {
+          "evidence": "dot labeled F",
+          "id": "F",
+          "value": null,
+          "x": 622.0,
+          "y": 428.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        696,
+        942
+      ],
+      "B": [
+        2949,
+        737
+      ],
+      "C": [
+        1597,
+        2499
+      ],
+      "D": [
+        3400,
+        3154
+      ],
+      "E": [
+        860,
+        3400
+      ],
+      "F": [
+        2540,
+        1761
+      ]
+    }
+  },
+  {
+    "size": [
+      640,
+      1280
+    ],
+    "transmitted_size": [
+      640,
+      1280
+    ],
+    "mode": "implicit_pixels",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      62.00806399170998,
+      44.181444068749045,
+      171.29214809792072,
+      226.00884938426637,
+      242.00206610688264,
+      120.03749414245534
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        0.9979925109776139,
+        1.3099274127469112
+      ],
+      "offset": [
+        -2.8632913983998027,
+        -12.7599133208525
+      ],
+      "rms_px": 4.180285597228327
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 110.0,
+          "y": 232.0
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 465.0,
+          "y": 186.0
+        },
+        {
+          "evidence": "upper-right endpoint of line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 260.0,
+          "y": 610.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 533.0,
+          "y": 760.0
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 135.0,
+          "y": 820.0
+        },
+        {
+          "evidence": "upper-right endpoint of line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 400.0,
+          "y": 430.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        109,
+        294
+      ],
+      "B": [
+        461,
+        230
+      ],
+      "C": [
+        250,
+        781
+      ],
+      "D": [
+        531,
+        986
+      ],
+      "E": [
+        134,
+        1062
+      ],
+      "F": [
+        397,
+        550
+      ]
+    }
+  },
+  {
+    "size": [
+      640,
+      1280
+    ],
+    "transmitted_size": [
+      640,
+      1280
+    ],
+    "mode": "implicit_pixels",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      66.007575322837,
+      46.09772228646444,
+      169.29559947027565,
+      230.00869548780108,
+      242.0,
+      122.03687967167957
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        0.9977500013463373,
+        1.3057897080102405
+      ],
+      "offset": [
+        -2.453792093230999,
+        -8.488539309167834
+      ],
+      "rms_px": 6.256154831694083
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 110.0,
+          "y": 228.0
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 464.0,
+          "y": 184.0
+        },
+        {
+          "evidence": "upper-right endpoint of line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 260.0,
+          "y": 612.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 533.0,
+          "y": 756.0
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 134.0,
+          "y": 820.0
+        },
+        {
+          "evidence": "upper-right endpoint of line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 400.0,
+          "y": 428.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        109,
+        294
+      ],
+      "B": [
+        461,
+        230
+      ],
+      "C": [
+        250,
+        781
+      ],
+      "D": [
+        531,
+        986
+      ],
+      "E": [
+        134,
+        1062
+      ],
+      "F": [
+        397,
+        550
+      ]
+    }
+  },
+  {
+    "size": [
+      2048,
+      2048
+    ],
+    "transmitted_size": [
+      896,
+      896
+    ],
+    "mode": "normalized_1000",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      12.966381145099815,
+      17.13849094873871,
+      59.15782389506911,
+      90.71377791713896,
+      94.39199016865778,
+      39.46085047233517
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        2.0398741408461105,
+        2.1847824762369004
+      ],
+      "offset": [
+        0.38856839385415654,
+        -14.083269355755977
+      ],
+      "rms_px": 5.773010844666937
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot at A",
+          "id": "A",
+          "value": null,
+          "x": 172.0,
+          "y": 224.0
+        },
+        {
+          "evidence": "cross at B",
+          "id": "B",
+          "value": null,
+          "x": 722.0,
+          "y": 172.0
+        },
+        {
+          "evidence": "upper-right endpoint of line C",
+          "id": "C",
+          "value": null,
+          "x": 389.0,
+          "y": 581.0
+        },
+        {
+          "evidence": "black dot at D",
+          "id": "D",
+          "value": null,
+          "x": 835.0,
+          "y": 726.0
+        },
+        {
+          "evidence": "cross at E",
+          "id": "E",
+          "value": null,
+          "x": 211.0,
+          "y": 784.0
+        },
+        {
+          "evidence": "upper-right endpoint of line F",
+          "id": "F",
+          "value": null,
+          "x": 622.0,
+          "y": 411.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        348,
+        471
+      ],
+      "B": [
+        1475,
+        369
+      ],
+      "C": [
+        799,
+        1249
+      ],
+      "D": [
+        1700,
+        1577
+      ],
+      "E": [
+        430,
+        1700
+      ],
+      "F": [
+        1270,
+        881
+      ]
+    }
+  },
+  {
+    "size": [
+      2048,
+      2048
+    ],
+    "transmitted_size": [
+      896,
+      896
+    ],
+    "mode": "normalized_1000",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      12.966381145099815,
+      13.16579811481244,
+      55.0652325882676,
+      92.74937412187755,
+      96.41603318950634,
+      45.41663413332162
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        2.0397429703352983,
+        2.189711834450817
+      ],
+      "offset": [
+        1.4729539085902297,
+        -16.099197400670338
+      ],
+      "rms_px": 6.833547328180123
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot at A",
+          "id": "A",
+          "value": null,
+          "x": 172.0,
+          "y": 224.0
+        },
+        {
+          "evidence": "cross at B",
+          "id": "B",
+          "value": null,
+          "x": 722.0,
+          "y": 174.0
+        },
+        {
+          "evidence": "upper-right endpoint of line C",
+          "id": "C",
+          "value": null,
+          "x": 389.0,
+          "y": 583.0
+        },
+        {
+          "evidence": "black dot at D",
+          "id": "D",
+          "value": null,
+          "x": 835.0,
+          "y": 725.0
+        },
+        {
+          "evidence": "cross at E",
+          "id": "E",
+          "value": null,
+          "x": 210.0,
+          "y": 783.0
+        },
+        {
+          "evidence": "upper-right endpoint of line F",
+          "id": "F",
+          "value": null,
+          "x": 620.0,
+          "y": 408.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        348,
+        471
+      ],
+      "B": [
+        1475,
+        369
+      ],
+      "C": [
+        799,
+        1249
+      ],
+      "D": [
+        1700,
+        1577
+      ],
+      "E": [
+        430,
+        1700
+      ],
+      "F": [
+        1270,
+        881
+      ]
+    }
+  },
+  {
+    "size": [
+      4096,
+      4096
+    ],
+    "transmitted_size": [
+      896,
+      896
+    ],
+    "mode": "normalized_1",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      83.6840702642982,
+      33.04821786420563,
+      66.4298583469814,
+      209.94616971023797,
+      144.21822043001347,
+      61.26680223416275
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        4097.495533674388,
+        4489.8233471490075
+      ],
+      "offset": [
+        -8.284886645520253,
+        -133.56115515136855
+      ],
+      "rms_px": 41.719953209295696
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "small dot labeled A near upper-left",
+          "id": "A",
+          "value": null,
+          "x": 0.174,
+          "y": 0.25
+        },
+        {
+          "evidence": "small dot labeled B near upper-right",
+          "id": "B",
+          "value": null,
+          "x": 0.72,
+          "y": 0.188
+        },
+        {
+          "evidence": "small dot labeled C near center-left",
+          "id": "C",
+          "value": null,
+          "x": 0.388,
+          "y": 0.594
+        },
+        {
+          "evidence": "small dot labeled D near lower-right",
+          "id": "D",
+          "value": null,
+          "x": 0.835,
+          "y": 0.719
+        },
+        {
+          "evidence": "small dot labeled E near lower-left",
+          "id": "E",
+          "value": null,
+          "x": 0.213,
+          "y": 0.795
+        },
+        {
+          "evidence": "small dot labeled F near center-right",
+          "id": "F",
+          "value": null,
+          "x": 0.621,
+          "y": 0.415
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        696,
+        942
+      ],
+      "B": [
+        2949,
+        737
+      ],
+      "C": [
+        1597,
+        2499
+      ],
+      "D": [
+        3400,
+        3154
+      ],
+      "E": [
+        860,
+        3400
+      ],
+      "F": [
+        2540,
+        1761
+      ]
+    }
+  },
+  {
+    "size": [
+      640,
+      1280
+    ],
+    "transmitted_size": [
+      640,
+      1280
+    ],
+    "mode": "normalized_1000",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      2.204359317352745,
+      1.9971980372511857,
+      9.950678368834994,
+      10.673106389425703,
+      8.622946132268197,
+      3.6967012321798287
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        0.6410282173807115,
+        1.2947317750486955
+      ],
+      "offset": [
+        -3.2149487918650905,
+        -3.555335028765893
+      ],
+      "rms_px": 3.9887543952221916
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 171.0,
+          "y": 228.0
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 722.0,
+          "y": 181.0
+        },
+        {
+          "evidence": "dot at upper-right end of line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 406.0,
+          "y": 609.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 831.0,
+          "y": 762.0
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 211.0,
+          "y": 823.0
+        },
+        {
+          "evidence": "upper-right endpoint of line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 625.0,
+          "y": 428.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        109,
+        294
+      ],
+      "B": [
+        461,
+        230
+      ],
+      "C": [
+        250,
+        781
+      ],
+      "D": [
+        531,
+        986
+      ],
+      "E": [
+        134,
+        1062
+      ],
+      "F": [
+        397,
+        550
+      ]
+    }
+  },
+  {
+    "size": [
+      4096,
+      4096
+    ],
+    "transmitted_size": [
+      896,
+      896
+    ],
+    "mode": "normalized_1",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      83.6840702642982,
+      33.04821786420563,
+      66.4298583469814,
+      168.4417088490853,
+      156.46395664177726,
+      56.61809802527817
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        4099.244635733801,
+        4473.722870172839
+      ],
+      "offset": [
+        -10.511568220318093,
+        -132.3261540688881
+      ],
+      "rms_px": 30.2604226052244
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "small dot labeled A at left-center",
+          "id": "A",
+          "value": null,
+          "x": 0.174,
+          "y": 0.25
+        },
+        {
+          "evidence": "small dot labeled B at upper-right",
+          "id": "B",
+          "value": null,
+          "x": 0.72,
+          "y": 0.188
+        },
+        {
+          "evidence": "small dot labeled C near center",
+          "id": "C",
+          "value": null,
+          "x": 0.388,
+          "y": 0.594
+        },
+        {
+          "evidence": "small dot labeled D at right-lower",
+          "id": "D",
+          "value": null,
+          "x": 0.833,
+          "y": 0.729
+        },
+        {
+          "evidence": "small dot labeled E at lower-left",
+          "id": "E",
+          "value": null,
+          "x": 0.213,
+          "y": 0.792
+        },
+        {
+          "evidence": "small dot labeled F at center-right",
+          "id": "F",
+          "value": null,
+          "x": 0.625,
+          "y": 0.417
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        696,
+        942
+      ],
+      "B": [
+        2949,
+        737
+      ],
+      "C": [
+        1597,
+        2499
+      ],
+      "D": [
+        3400,
+        3154
+      ],
+      "E": [
+        860,
+        3400
+      ],
+      "F": [
+        2540,
+        1761
+      ]
+    }
+  },
+  {
+    "size": [
+      640,
+      1280
+    ],
+    "transmitted_size": [
+      640,
+      1280
+    ],
+    "mode": "normalized_1000",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      1.4539105887227224,
+      5.008006389772292,
+      14.159242917613962,
+      19.06435585064445,
+      17.035980746643304,
+      9.807533430990652
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        0.6407627369368036,
+        1.3147994187918641
+      ],
+      "offset": [
+        -3.3720561907147966,
+        -9.310174997050298
+      ],
+      "rms_px": 3.985268260056922
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labeled A",
+          "id": "A",
+          "value": null,
+          "x": 171.9,
+          "y": 230.5
+        },
+        {
+          "evidence": "cross labeled B",
+          "id": "B",
+          "value": null,
+          "x": 720.3,
+          "y": 183.6
+        },
+        {
+          "evidence": "upper-right endpoint of line labeled C",
+          "id": "C",
+          "value": null,
+          "x": 406.2,
+          "y": 602.3
+        },
+        {
+          "evidence": "black dot labeled D",
+          "id": "D",
+          "value": null,
+          "x": 832.8,
+          "y": 755.5
+        },
+        {
+          "evidence": "cross labeled E",
+          "id": "E",
+          "value": null,
+          "x": 210.9,
+          "y": 816.4
+        },
+        {
+          "evidence": "upper-right endpoint of line labeled F",
+          "id": "F",
+          "value": null,
+          "x": 626.6,
+          "y": 422.7
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        109,
+        294
+      ],
+      "B": [
+        461,
+        230
+      ],
+      "C": [
+        250,
+        781
+      ],
+      "D": [
+        531,
+        986
+      ],
+      "E": [
+        134,
+        1062
+      ],
+      "F": [
+        397,
+        550
+      ]
+    }
+  },
+  {
+    "size": [
+      4096,
+      4096
+    ],
+    "transmitted_size": [
+      896,
+      896
+    ],
+    "mode": "normalized_1000",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      82.44060979881215,
+      55.40872422281531,
+      111.0921750619729,
+      254.5394058294316,
+      156.1914624043195,
+      56.61809802527817
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        4.09640685882772,
+        4.457157678162393
+      ],
+      "offset": [
+        -5.701236637352385,
+        -84.7548245332834
+      ],
+      "rms_px": 63.10291152817638
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "dot labeled A near upper-left",
+          "id": "A",
+          "value": null,
+          "x": 172.0,
+          "y": 250.0
+        },
+        {
+          "evidence": "dot labeled B near upper-right",
+          "id": "B",
+          "value": null,
+          "x": 716.0,
+          "y": 167.0
+        },
+        {
+          "evidence": "dot labeled C near center-left",
+          "id": "C",
+          "value": null,
+          "x": 389.0,
+          "y": 583.0
+        },
+        {
+          "evidence": "dot labeled D near lower-right",
+          "id": "D",
+          "value": null,
+          "x": 834.0,
+          "y": 708.0
+        },
+        {
+          "evidence": "dot labeled E near lower-left",
+          "id": "E",
+          "value": null,
+          "x": 212.0,
+          "y": 792.0
+        },
+        {
+          "evidence": "dot labeled F near center-right",
+          "id": "F",
+          "value": null,
+          "x": 625.0,
+          "y": 417.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        696,
+        942
+      ],
+      "B": [
+        2949,
+        737
+      ],
+      "C": [
+        1597,
+        2499
+      ],
+      "D": [
+        3400,
+        3154
+      ],
+      "E": [
+        860,
+        3400
+      ],
+      "F": [
+        2540,
+        1761
+      ]
+    }
+  },
+  {
+    "size": [
+      2048,
+      2048
+    ],
+    "transmitted_size": [
+      896,
+      896
+    ],
+    "mode": "normalized_1",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      18.354352072464977,
+      13.874707924853771,
+      55.189760209662154,
+      96.82213598139637,
+      90.65020666275389,
+      43.280929380039936
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        2040.9226979058412,
+        2184.8449777545766
+      ],
+      "offset": [
+        -4.208992315834998,
+        -14.477598418419559
+      ],
+      "rms_px": 9.296162546395196
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot at A",
+          "id": "A",
+          "value": null,
+          "x": 0.174,
+          "y": 0.222
+        },
+        {
+          "evidence": "cross at B",
+          "id": "B",
+          "value": null,
+          "x": 0.723,
+          "y": 0.174
+        },
+        {
+          "evidence": "upper-right endpoint of line C",
+          "id": "C",
+          "value": null,
+          "x": 0.388,
+          "y": 0.583
+        },
+        {
+          "evidence": "black dot at D",
+          "id": "D",
+          "value": null,
+          "x": 0.835,
+          "y": 0.723
+        },
+        {
+          "evidence": "cross at E",
+          "id": "E",
+          "value": null,
+          "x": 0.214,
+          "y": 0.786
+        },
+        {
+          "evidence": "upper-right endpoint of line F",
+          "id": "F",
+          "value": null,
+          "x": 0.629,
+          "y": 0.411
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        348,
+        471
+      ],
+      "B": [
+        1475,
+        369
+      ],
+      "C": [
+        799,
+        1249
+      ],
+      "D": [
+        1700,
+        1577
+      ],
+      "E": [
+        430,
+        1700
+      ],
+      "F": [
+        1270,
+        881
+      ]
+    }
+  },
+  {
+    "size": [
+      4096,
+      4096
+    ],
+    "transmitted_size": [
+      896,
+      896
+    ],
+    "mode": "normalized_1000",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      82.44060979881215,
+      36.331636902292196,
+      66.07721931195361,
+      222.18051961411928,
+      164.6312798468139,
+      38.15062442477192
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        4.095667307300567,
+        4.454349738609641
+      ],
+      "offset": [
+        -6.703092756113109,
+        -103.43427174446371
+      ],
+      "rms_px": 55.06763083425977
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "small dot labeled A",
+          "id": "A",
+          "value": null,
+          "x": 172.0,
+          "y": 250.0
+        },
+        {
+          "evidence": "small dot labeled B",
+          "id": "B",
+          "value": null,
+          "x": 716.0,
+          "y": 172.0
+        },
+        {
+          "evidence": "small dot labeled C",
+          "id": "C",
+          "value": null,
+          "x": 389.0,
+          "y": 594.0
+        },
+        {
+          "evidence": "small dot labeled D",
+          "id": "D",
+          "value": null,
+          "x": 835.0,
+          "y": 716.0
+        },
+        {
+          "evidence": "small dot labeled E",
+          "id": "E",
+          "value": null,
+          "x": 213.0,
+          "y": 790.0
+        },
+        {
+          "evidence": "small dot labeled F",
+          "id": "F",
+          "value": null,
+          "x": 625.0,
+          "y": 422.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        696,
+        942
+      ],
+      "B": [
+        2949,
+        737
+      ],
+      "C": [
+        1597,
+        2499
+      ],
+      "D": [
+        3400,
+        3154
+      ],
+      "E": [
+        860,
+        3400
+      ],
+      "F": [
+        2540,
+        1761
+      ]
+    }
+  },
+  {
+    "size": [
+      2048,
+      2048
+    ],
+    "transmitted_size": [
+      896,
+      896
+    ],
+    "mode": "normalized_1",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      18.354352072464977,
+      14.834601713561435,
+      55.189760209662154,
+      94.78550471459234,
+      82.08003898634544,
+      39.71331262939424
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        2038.0113163996584,
+        2175.1864939144084
+      ],
+      "offset": [
+        0.2857618925684175,
+        -11.623596387907085
+      ],
+      "rms_px": 8.344439945175548
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot at A",
+          "id": "A",
+          "value": null,
+          "x": 0.174,
+          "y": 0.222
+        },
+        {
+          "evidence": "cross at B",
+          "id": "B",
+          "value": null,
+          "x": 0.724,
+          "y": 0.174
+        },
+        {
+          "evidence": "upper-right endpoint of line C",
+          "id": "C",
+          "value": null,
+          "x": 0.388,
+          "y": 0.583
+        },
+        {
+          "evidence": "black dot at D",
+          "id": "D",
+          "value": null,
+          "x": 0.835,
+          "y": 0.724
+        },
+        {
+          "evidence": "cross at E",
+          "id": "E",
+          "value": null,
+          "x": 0.21,
+          "y": 0.79
+        },
+        {
+          "evidence": "upper-right endpoint of line F",
+          "id": "F",
+          "value": null,
+          "x": 0.623,
+          "y": 0.411
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        348,
+        471
+      ],
+      "B": [
+        1475,
+        369
+      ],
+      "C": [
+        799,
+        1249
+      ],
+      "D": [
+        1700,
+        1577
+      ],
+      "E": [
+        430,
+        1700
+      ],
+      "F": [
+        1270,
+        881
+      ]
+    }
+  }
+]

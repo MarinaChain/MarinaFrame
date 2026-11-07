@@ -2070,6 +2070,7 @@ mod tests {
             credential_selection: None,
             purpose: provider::Purpose::Investigation,
             transcription: None,
+            vision: None,
         };
         provider::interpret_completion(&mut receipt, &body, "").unwrap();
         store.state.pending = Some(pending.clone());

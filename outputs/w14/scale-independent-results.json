@@ -1,0 +1,472 @@
+[
+  {
+    "case_id": "shipd-2-04723-L3",
+    "level": 3,
+    "layout": "overlay",
+    "answer": {
+      "evidence": "Printed grid numbers are not legible in the supplied image; no readable horizontal scale or stated units can be determined.",
+      "id": "S",
+      "value": null,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 25.627160170222687,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-1-00045-L3",
+    "level": 3,
+    "layout": "separate",
+    "answer": {
+      "evidence": "Printed grid numbers along the horizontal axis are too blurred to read reliably; no legible printed unit labels are visible, so pixels-per-drawing-unit cannot be determined.",
+      "id": "S",
+      "value": null,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 27.72865319213473,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-1-00045-L2",
+    "level": 2,
+    "layout": "separate",
+    "answer": {},
+    "truth_attachment_px_per_unit": 34.250762746564675,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-2-04723-L2",
+    "level": 2,
+    "layout": "overlay",
+    "answer": {
+      "evidence": "Printed grid numbers along the bottom (appearing as 0, 10, 20) are spaced about 200 px apart, but the drawing units are not stated; no metres can be inferred.",
+      "id": "S",
+      "value": null,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 33.5317017655362,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-1-00617-L1",
+    "level": 1,
+    "layout": "separate",
+    "answer": {
+      "evidence": "Horizontal grid numbers 10,20,30,40 are spaced about 125 px apart (10 at x\u2248190, 20 at x\u2248315, 30 at x\u2248440, 40 at x\u2248565), giving ~12.5 attachment px per printed unit; units are not stated.",
+      "id": "S",
+      "value": 12.5,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 10.152954249954663,
+    "relative_error": 0.23116875071665155
+  },
+  {
+    "case_id": "wigley-L1",
+    "level": 1,
+    "layout": "separate",
+    "answer": {
+      "evidence": "Horizontal axis has printed numbers 1, 2, 3, 4 at approximately x=180, 280, 380, 480 px, giving about 100 px per printed unit, but no unit is stated on the image.",
+      "id": "S",
+      "value": null,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 89.80993769462924,
+    "relative_error": null
+  },
+  {
+    "case_id": "series60-L3",
+    "level": 3,
+    "layout": "overlay",
+    "answer": {},
+    "truth_attachment_px_per_unit": 81.67769137138914,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-1-00617-L0",
+    "level": 0,
+    "layout": "separate",
+    "answer": {
+      "evidence": "Horizontal axis shows printed numbers 10, 20, 30, 40 with no stated units; grid line spacing is about 107 px per 10 printed units, but units are not stated so no pixels-per-unit value is reported.",
+      "id": "S",
+      "value": null,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 10.744241227866107,
+    "relative_error": null
+  },
+  {
+    "case_id": "series60-L2",
+    "level": 2,
+    "layout": "overlay",
+    "answer": {
+      "evidence": "Horizontal axis shows printed numbers 3, 4, 5, 6 but no unit label is visible; vertical grid line spacing is about 150 px per printed unit, but units are not stated.",
+      "id": "S",
+      "value": null,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 92.23149733116503,
+    "relative_error": null
+  },
+  {
+    "case_id": "wigley-L0",
+    "level": 0,
+    "layout": "separate",
+    "answer": {
+      "evidence": "Horizontal grid lines at x\u224895, 205, 315, 425, 535 px; printed x labels 1\u20134 beneath them, giving ~110 px per printed unit. No units are stated on the image.",
+      "id": "S",
+      "value": 110.0,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 99.19187130452102,
+    "relative_error": 0.10896183884159027
+  },
+  {
+    "case_id": "shipd-1-00679-L0",
+    "level": 0,
+    "layout": "overlay",
+    "answer": {
+      "evidence": "Horizontal axis shows printed numbers 2, 4, 6, 8 but no unit label is visible; grid spacing is about 68 px per printed unit, yet units are unstated so no pixels-per-unit value is reported.",
+      "id": "S",
+      "value": null,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 60.295089245600394,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-2-01040-L0",
+    "level": 0,
+    "layout": "separate",
+    "answer": {},
+    "truth_attachment_px_per_unit": 41.734889368605174,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-2-05051-L0",
+    "level": 0,
+    "layout": "separate",
+    "answer": {},
+    "truth_attachment_px_per_unit": 28.338279986142542,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-1-01410-L1",
+    "level": 1,
+    "layout": "separate",
+    "answer": {},
+    "truth_attachment_px_per_unit": 29.6685596948905,
+    "relative_error": null
+  },
+  {
+    "case_id": "dtmb5415-L1",
+    "level": 1,
+    "layout": "separate",
+    "answer": {
+      "evidence": "Horizontal axis shows printed numbers 2, 4, 6 but no unit label; vertical grid line spacing is about 72 px per 2 printed units, so approximately 36 px per printed unit, but units are not stated.",
+      "id": "S",
+      "value": null,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 46.159677244720676,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-2-05051-L1",
+    "level": 1,
+    "layout": "separate",
+    "answer": {
+      "evidence": "Vertical grid lines at x\u224893, 240, 386, 533 px; horizontal axis labels 5, 10, 15 align with x\u2248240, 386, 533, giving ~29.3 px per printed unit. Units are not stated on the image.",
+      "id": "S",
+      "value": 29.3,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 26.37308173278619,
+    "relative_error": 0.11098127616899456
+  },
+  {
+    "case_id": "shipd-2-01040-L1",
+    "level": 1,
+    "layout": "separate",
+    "answer": {
+      "evidence": "Horizontal axis has printed numbers 2, 4, 6, 8, 10 but no unit label; grid spacing is about 60 px per printed unit, yet units are not stated so no pixels-per-drawing-unit value is reported.",
+      "id": "S",
+      "value": null,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 37.962792892502826,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-1-00679-L1",
+    "level": 1,
+    "layout": "overlay",
+    "answer": {},
+    "truth_attachment_px_per_unit": 54.46168088119052,
+    "relative_error": null
+  },
+  {
+    "case_id": "dtmb5415-L0",
+    "level": 0,
+    "layout": "separate",
+    "answer": {
+      "evidence": "Horizontal axis is labeled 2, 4, 6 with no printed unit; grid lines are spaced about 100 px apart, but the drawing unit is not stated, so pixels per printed unit cannot be reported.",
+      "id": "S",
+      "value": null,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 50.43804256976397,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-1-01410-L0",
+    "level": 0,
+    "layout": "separate",
+    "answer": {
+      "evidence": "Horizontal grid labels 2.5, 5, 7.5, 10, 12.5 are spaced about 33.3 px apart (e.g., x\u2248170 to x\u2248203); printed units are not stated, so value is attachment pixels per printed horizontal grid unit.",
+      "id": "S",
+      "value": 33.3,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 31.937739579722596,
+    "relative_error": 0.042653626656230514
+  },
+  {
+    "case_id": "shipd-2-04723-L0",
+    "level": 0,
+    "layout": "overlay",
+    "answer": {},
+    "truth_attachment_px_per_unit": 38.64046057169255,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-1-00045-L0",
+    "level": 0,
+    "layout": "separate",
+    "answer": {},
+    "truth_attachment_px_per_unit": 45.440995063243896,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-1-00045-L1",
+    "level": 1,
+    "layout": "separate",
+    "answer": {
+      "evidence": "Horizontal grid lines at x\u2248180 (label 2) and x\u2248410 (label 6); spacing \u2248230 px over 4 printed units \u224857.5 px/unit. Units are not stated on the image.",
+      "id": "S",
+      "value": 57.5,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 43.78720376998049,
+    "relative_error": 0.3131690322600751
+  },
+  {
+    "case_id": "shipd-2-04723-L1",
+    "level": 1,
+    "layout": "overlay",
+    "answer": {
+      "evidence": "Horizontal axis shows printed numbers 5, 10, 15 but no unit label; grid spacing is about 100 px per 5 printed units, yet units are unstated so pixels per drawing unit cannot be reported.",
+      "id": "S",
+      "value": null,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 36.81776847073548,
+    "relative_error": null
+  },
+  {
+    "case_id": "wigley-L2",
+    "level": 2,
+    "layout": "separate",
+    "answer": {},
+    "truth_attachment_px_per_unit": 87.44326130196926,
+    "relative_error": null
+  },
+  {
+    "case_id": "series60-L0",
+    "level": 0,
+    "layout": "overlay",
+    "answer": {},
+    "truth_attachment_px_per_unit": 104.2269097571316,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-1-00617-L2",
+    "level": 2,
+    "layout": "separate",
+    "answer": {
+      "evidence": "Horizontal grid labels 10, 20, 30, 40 are spaced about 10.5 attachment pixels apart per printed unit; units are not stated.",
+      "id": "S",
+      "value": 10.5,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 10.121903353524289,
+    "relative_error": 0.037354303165132
+  },
+  {
+    "case_id": "series60-L1",
+    "level": 1,
+    "layout": "overlay",
+    "answer": {},
+    "truth_attachment_px_per_unit": 100.79451709751018,
+    "relative_error": null
+  },
+  {
+    "case_id": "wigley-L3",
+    "level": 3,
+    "layout": "separate",
+    "answer": {
+      "evidence": "Horizontal grid lines are visible, but the printed numbers along the left edge are too blurred to read reliably, and no drawing units are stated; scale cannot be determined without inventing values.",
+      "id": "S",
+      "value": null,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 77.51359395939645,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-1-00617-L3",
+    "level": 3,
+    "layout": "separate",
+    "answer": {},
+    "truth_attachment_px_per_unit": 7.69891871839632,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-1-01410-L2",
+    "level": 2,
+    "layout": "separate",
+    "answer": {},
+    "truth_attachment_px_per_unit": 25.589991562916094,
+    "relative_error": null
+  },
+  {
+    "case_id": "dtmb5415-L2",
+    "level": 2,
+    "layout": "separate",
+    "answer": {},
+    "truth_attachment_px_per_unit": 42.2974975183369,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-2-01040-L3",
+    "level": 3,
+    "layout": "separate",
+    "answer": {
+      "evidence": "Horizontal grid numbers (2,4,6,8,10) are visible, but no printed drawing unit is stated; scale in attachment pixels per printed unit cannot be determined without a stated unit.",
+      "id": "S",
+      "value": null,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 22.054241735688905,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-1-00679-L3",
+    "level": 3,
+    "layout": "overlay",
+    "answer": {
+      "evidence": "Grid lines are visible but printed numbers along the buttock grid are not legible, so the drawing unit and pixels-per-unit scale cannot be determined.",
+      "id": "S",
+      "value": null,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 42.745619621546226,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-2-05051-L3",
+    "level": 3,
+    "layout": "separate",
+    "answer": {},
+    "truth_attachment_px_per_unit": 16.58225771944471,
+    "relative_error": null
+  },
+  {
+    "case_id": "dtmb5415-L3",
+    "level": 3,
+    "layout": "separate",
+    "answer": {
+      "evidence": "Horizontal grid numbers are faint and illegible; no printed units or readable numeric labels are visible, so scale cannot be determined.",
+      "id": "S",
+      "value": null,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 25.462299479017236,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-1-01410-L3",
+    "level": 3,
+    "layout": "separate",
+    "answer": {
+      "evidence": "Horizontal grid numbers are faint and no printed unit is legible; cannot reliably read a scale value.",
+      "id": "S",
+      "value": null,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 20.13404642713472,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-2-05051-L2",
+    "level": 2,
+    "layout": "separate",
+    "answer": {
+      "evidence": "Horizontal axis labels 5, 10, 15 are visible, but no printed unit is stated; grid spacing is approximately 50 px per 5-unit interval, yet units cannot be confirmed.",
+      "id": "S",
+      "value": null,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 21.448658132264384,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-1-00679-L2",
+    "level": 2,
+    "layout": "overlay",
+    "answer": {
+      "evidence": "Printed numbers along the bottom axis are faint and partially legible; no unit label is visible, so pixels per printed drawing unit cannot be reliably determined.",
+      "id": "S",
+      "value": null,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 54.88026729599673,
+    "relative_error": null
+  },
+  {
+    "case_id": "shipd-2-01040-L2",
+    "level": 2,
+    "layout": "separate",
+    "answer": {
+      "evidence": "Horizontal axis shows printed numbers 2, 4, 6, 8, 10 at roughly 60 px spacing, but no unit label is visible; cannot determine attachment pixels per printed drawing unit without stated units.",
+      "id": "S",
+      "value": null,
+      "x": null,
+      "y": null
+    },
+    "truth_attachment_px_per_unit": 35.28595438648624,
+    "relative_error": null
+  }
+]

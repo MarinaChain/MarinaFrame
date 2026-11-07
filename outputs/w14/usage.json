@@ -1,0 +1,144 @@
+{
+  "groups": {
+    "calibration": {
+      "calls": 24,
+      "states": {
+        "failed": 14,
+        "completed": 10
+      },
+      "prompt_tokens": 7895,
+      "completion_tokens": 1738,
+      "observed_cost_usd": 0,
+      "list_cost_usd": 0.00214914,
+      "images": 24,
+      "missing_usage": 14
+    },
+    "calibration-v3": {
+      "calls": 24,
+      "states": {
+        "completed": 24
+      },
+      "prompt_tokens": 21036,
+      "completion_tokens": 3950,
+      "observed_cost_usd": 0,
+      "list_cost_usd": 0.00509263,
+      "images": 24,
+      "missing_usage": 0
+    },
+    "calibration-extra": {
+      "calls": 24,
+      "states": {
+        "completed": 24
+      },
+      "prompt_tokens": 21734,
+      "completion_tokens": 3848,
+      "observed_cost_usd": 0,
+      "list_cost_usd": 0.00503119,
+      "images": 24,
+      "missing_usage": 0
+    },
+    "diagnostic": {
+      "calls": 2,
+      "states": {
+        "failed": 2
+      },
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "observed_cost_usd": 0,
+      "list_cost_usd": 0,
+      "images": 2,
+      "missing_usage": 2
+    },
+    "ruler-probe": {
+      "calls": 6,
+      "states": {
+        "completed": 6
+      },
+      "prompt_tokens": 4995,
+      "completion_tokens": 841,
+      "observed_cost_usd": 0,
+      "list_cost_usd": 0.00125091,
+      "images": 6,
+      "missing_usage": 0
+    },
+    "setup-normalized": {
+      "calls": 328,
+      "states": {
+        "failed": 103,
+        "completed": 225
+      },
+      "prompt_tokens": 468572,
+      "completion_tokens": 147531,
+      "observed_cost_usd": 0,
+      "list_cost_usd": 0.15526428,
+      "images": 328,
+      "missing_usage": 0
+    },
+    "setup-rejected-reruns": {
+      "calls": 13,
+      "states": {
+        "failed": 4,
+        "completed": 9
+      },
+      "prompt_tokens": 17184,
+      "completion_tokens": 7412,
+      "observed_cost_usd": 0,
+      "list_cost_usd": 0.00620337,
+      "images": 13,
+      "missing_usage": 0
+    },
+    "drawing-localisation": {
+      "calls": 160,
+      "states": {
+        "completed": 157,
+        "failed": 3
+      },
+      "prompt_tokens": 147559,
+      "completion_tokens": 38169,
+      "observed_cost_usd": 0,
+      "list_cost_usd": 0.04493884,
+      "images": 160,
+      "missing_usage": 0
+    },
+    "scale-independent": {
+      "calls": 40,
+      "states": {
+        "completed": 25,
+        "failed": 15
+      },
+      "prompt_tokens": 21923,
+      "completion_tokens": 2903,
+      "observed_cost_usd": 0,
+      "list_cost_usd": 0.00502731,
+      "images": 40,
+      "missing_usage": 0
+    },
+    "w11": {
+      "calls": 253,
+      "states": {
+        "completed": 251,
+        "transmission_or_completion_unknown": 2
+      },
+      "prompt_tokens": 2084961,
+      "completion_tokens": 17053,
+      "observed_cost_usd": 0,
+      "list_cost_usd": 0.31627395,
+      "images": 948,
+      "missing_usage": 2
+    }
+  },
+  "total": {
+    "calls": 874,
+    "states": {
+      "completed": 731,
+      "failed": 141,
+      "transmission_or_completion_unknown": 2
+    },
+    "prompt_tokens": 2795859,
+    "completion_tokens": 223445,
+    "observed_cost_usd": 0,
+    "list_cost_usd": 0.54123162,
+    "images": 1569,
+    "missing_usage": 18
+  }
+}

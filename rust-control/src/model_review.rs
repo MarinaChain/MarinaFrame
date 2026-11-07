@@ -412,6 +412,8 @@ mod tests {
                 revision_id: None,
                 step_sha256: None,
                 pixels_attached: true,
+                crop_box_px: None,
+                pixel_size: None,
             })
             .collect();
         receipt.vision = Some(VisionReply::BuildReview(ReviewReply {

@@ -48,6 +48,8 @@ pub enum Purpose {
     SheetSetup,
     /// A review of a finished build that can only veto (see `vision`).
     BuildReview,
+    /// Development-only geometry localisation measurement; no task authority.
+    Localisation,
 }
 impl Purpose {
     fn is_model_decision(&self) -> bool {
@@ -60,6 +62,7 @@ impl Purpose {
             Purpose::Investigation => INVESTIGATION_PROMPT,
             Purpose::SheetSetup => vision::SETUP_PROMPT,
             Purpose::BuildReview => vision::REVIEW_PROMPT,
+            Purpose::Localisation => vision::LOCALISATION_PROMPT,
         }
     }
     /// Decision purposes return a tool call; table reading returns cells.
@@ -220,7 +223,9 @@ pub fn check_input(input: &ProviderInput) -> Result<Vec<u8>> {
     match input.purpose {
         Purpose::ModelDecision | Purpose::Investigation => (),
         Purpose::TableTranscription => check_table_input(input)?,
-        Purpose::SheetSetup | Purpose::BuildReview => vision::check_input(input)?,
+        Purpose::SheetSetup | Purpose::BuildReview | Purpose::Localisation => {
+            vision::check_input(input)?
+        }
     }
     let content = p["messages"][1]["content"]
         .as_array()
@@ -403,7 +408,7 @@ pub fn interpret_completion(receipt: &mut Receipt, bytes: &[u8], key: &str) -> R
             let requested = requested_cells(&receipt.images);
             receipt.transcription = Some(transcription::parse(content, &requested)?);
         }
-        Purpose::SheetSetup | Purpose::BuildReview => {
+        Purpose::SheetSetup | Purpose::BuildReview | Purpose::Localisation => {
             receipt.vision = Some(vision::parse_reply(
                 receipt.purpose,
                 content,
@@ -522,13 +527,9 @@ pub fn provider_worker(response_path: &Path, timeout: u64) -> Result<()> {
             .read_to_end(&mut bytes)
             .map_err(|_| "provider_response_read_unknown")?;
         receipt.response_sha256 = Some(util::hash(&bytes));
-        // Keep the raw body of a decision response (never one that echoes the
-        // key), so the controller can re-derive the decision from it.
-        if status == 200
-            && receipt.purpose.is_decision()
-            && bytes.len() <= 262_144
-            && !bytes.windows(key.len()).any(|b| b == key.as_bytes())
-        {
+        // Preserve bounded responses for all purposes, including HTTP failures.
+        // They are evidence, not instructions; never retain an echoed key.
+        if bytes.len() <= 262_144 && !bytes.windows(key.len()).any(|b| b == key.as_bytes()) {
             let body = response_path.with_extension("body");
             std::fs::write(&body, &bytes).map_err(|_| "provider_body_write")?;
         }

@@ -1,0 +1,2730 @@
+[
+  {
+    "size": [
+      2048,
+      480
+    ],
+    "mode": "normalized_1",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      11.95683971624609,
+      6.889988098683444,
+      37.619836469607364,
+      54.4895756636074,
+      54.19855880002718,
+      27.85677655436824
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        2048.4277696250288,
+        570.320918071327
+      ],
+      "offset": [
+        -6.549628386744397,
+        -8.818833372264397
+      ],
+      "rms_px": 2.6985198210606725
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 0.173,
+          "y": 0.208
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 0.722,
+          "y": 0.167
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 0.393,
+          "y": 0.533
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 0.833,
+          "y": 0.658
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 0.213,
+          "y": 0.717
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 0.625,
+          "y": 0.375
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        348,
+        110
+      ],
+      "B": [
+        1475,
+        86
+      ],
+      "C": [
+        799,
+        293
+      ],
+      "D": [
+        1700,
+        370
+      ],
+      "E": [
+        430,
+        398
+      ],
+      "F": [
+        1270,
+        206
+      ]
+    }
+  },
+  {
+    "size": [
+      2048,
+      480
+    ],
+    "mode": "normalized_1000",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      10.760056505427858,
+      6.889988098683456,
+      33.779658731254266,
+      50.849110120040464,
+      58.49208301984127,
+      27.85677655436824
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        2.045266108619584,
+        0.570868044803287
+      ],
+      "offset": [
+        -6.0130356218676235,
+        -10.202946604129322
+      ],
+      "rms_px": 3.8384146212002275
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 173.0,
+          "y": 211.0
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 722.0,
+          "y": 167.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 394.0,
+          "y": 542.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 835.0,
+          "y": 667.0
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 213.0,
+          "y": 708.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 625.0,
+          "y": 375.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        348,
+        110
+      ],
+      "B": [
+        1475,
+        86
+      ],
+      "C": [
+        799,
+        293
+      ],
+      "D": [
+        1700,
+        370
+      ],
+      "E": [
+        430,
+        398
+      ],
+      "F": [
+        1270,
+        206
+      ]
+    }
+  },
+  {
+    "size": [
+      2048,
+      480
+    ],
+    "mode": "normalized_1000",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      10.760056505427858,
+      12.208128439691283,
+      39.399695430294905,
+      56.438486726700944,
+      55.89547731256978,
+      27.85677655436824
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        2.0417734576333255,
+        0.5731235522435192
+      ],
+      "offset": [
+        -6.330603709284428,
+        -9.391756166261793
+      ],
+      "rms_px": 2.1511895631934417
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 173.0,
+          "y": 211.0
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 725.0,
+          "y": 164.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 395.0,
+          "y": 531.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 836.0,
+          "y": 656.0
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 214.0,
+          "y": 714.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 625.0,
+          "y": 375.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        348,
+        110
+      ],
+      "B": [
+        1475,
+        86
+      ],
+      "C": [
+        799,
+        293
+      ],
+      "D": [
+        1700,
+        370
+      ],
+      "E": [
+        430,
+        398
+      ],
+      "F": [
+        1270,
+        206
+      ]
+    }
+  },
+  {
+    "size": [
+      2048,
+      480
+    ],
+    "mode": "normalized_1",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      11.95683971624609,
+      6.889988098683444,
+      33.35943788495242,
+      50.19794673091716,
+      48.481177543454926,
+      27.85677655436824
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        2048.4277696250288,
+        557.5620930098542
+      ],
+      "offset": [
+        -6.549628386744397,
+        -5.954484335081462
+      ],
+      "rms_px": 3.260230581461218
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 0.173,
+          "y": 0.208
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 0.722,
+          "y": 0.167
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 0.393,
+          "y": 0.542
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 0.833,
+          "y": 0.667
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 0.213,
+          "y": 0.729
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 0.625,
+          "y": 0.375
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        348,
+        110
+      ],
+      "B": [
+        1475,
+        86
+      ],
+      "C": [
+        799,
+        293
+      ],
+      "D": [
+        1700,
+        370
+      ],
+      "E": [
+        430,
+        398
+      ],
+      "F": [
+        1270,
+        206
+      ]
+    }
+  },
+  {
+    "size": [
+      4096,
+      240
+    ],
+    "mode": "normalized_1",
+    "repeat": 0,
+    "marks_returned": 0,
+    "errors_px": [],
+    "fit": null,
+    "raw_reply": null,
+    "truth": {
+      "A": [
+        696,
+        55
+      ],
+      "B": [
+        2949,
+        43
+      ],
+      "C": [
+        1597,
+        146
+      ],
+      "D": [
+        3400,
+        185
+      ],
+      "E": [
+        860,
+        199
+      ],
+      "F": [
+        2540,
+        103
+      ]
+    }
+  },
+  {
+    "size": [
+      512,
+      512
+    ],
+    "mode": "normalized_1000",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      2.070331374442266,
+      0.8865573867494555,
+      6.940976300204476,
+      2.0584265835827247,
+      4.601168547227942,
+      6.401124901140429
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        0.5106148017992133,
+        0.5158305241888523
+      ],
+      "offset": [
+        -0.9884046879118548,
+        0.6179412456423463
+      ],
+      "rms_px": 3.1054963677967344
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 172.0,
+          "y": 227.0
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 719.0,
+          "y": 180.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 402.0,
+          "y": 602.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 832.0,
+          "y": 766.0
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 207.0,
+          "y": 822.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 629.0,
+          "y": 422.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        87,
+        118
+      ],
+      "B": [
+        369,
+        92
+      ],
+      "C": [
+        200,
+        312
+      ],
+      "D": [
+        425,
+        394
+      ],
+      "E": [
+        108,
+        425
+      ],
+      "F": [
+        317,
+        220
+      ]
+    }
+  },
+  {
+    "size": [
+      4096,
+      240
+    ],
+    "mode": "normalized_1",
+    "repeat": 1,
+    "marks_returned": 0,
+    "errors_px": [],
+    "fit": null,
+    "raw_reply": null,
+    "truth": {
+      "A": [
+        696,
+        55
+      ],
+      "B": [
+        2949,
+        43
+      ],
+      "C": [
+        1597,
+        146
+      ],
+      "D": [
+        3400,
+        185
+      ],
+      "E": [
+        860,
+        199
+      ],
+      "F": [
+        2540,
+        103
+      ]
+    }
+  },
+  {
+    "size": [
+      512,
+      512
+    ],
+    "mode": "normalized_1000",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      2.224709527106855,
+      1.9984102481722854,
+      7.07785603696485,
+      2.240450811778726,
+      2.2561072314940844,
+      4.989765910340886
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        0.5118000947450843,
+        0.5132499842104818
+      ],
+      "offset": [
+        -0.8994766319513707,
+        1.7025287846714405
+      ],
+      "rms_px": 3.023442211324267
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 171.9,
+          "y": 226.6
+        },
+        {
+          "evidence": "black cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 716.8,
+          "y": 179.7
+        },
+        {
+          "evidence": "dot at upper-right end of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 400.4,
+          "y": 599.6
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 832.0,
+          "y": 765.6
+        },
+        {
+          "evidence": "black cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 207.0,
+          "y": 828.1
+        },
+        {
+          "evidence": "dot at upper-right end of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 625.0,
+          "y": 421.9
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        87,
+        118
+      ],
+      "B": [
+        369,
+        92
+      ],
+      "C": [
+        200,
+        312
+      ],
+      "D": [
+        425,
+        394
+      ],
+      "E": [
+        108,
+        425
+      ],
+      "F": [
+        317,
+        220
+      ]
+    }
+  },
+  {
+    "size": [
+      512,
+      512
+    ],
+    "mode": "normalized_1",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      3.8209946349085544,
+      3.779735440477299,
+      7.693321779309653,
+      3.425317503531589,
+      4.000199995000269,
+      11.067285123281149
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        510.0475938656795,
+        510.5950266429841
+      ],
+      "offset": [
+        -1.4735589635113484,
+        4.018161634103137
+      ],
+      "rms_px": 4.734968978429739
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 0.175,
+          "y": 0.225
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 0.715,
+          "y": 0.175
+        },
+        {
+          "evidence": "dot at upper-right end of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 0.405,
+          "y": 0.605
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 0.835,
+          "y": 0.765
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 0.205,
+          "y": 0.825
+        },
+        {
+          "evidence": "dot at upper-right end of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 0.635,
+          "y": 0.415
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        87,
+        118
+      ],
+      "B": [
+        369,
+        92
+      ],
+      "C": [
+        200,
+        312
+      ],
+      "D": [
+        425,
+        394
+      ],
+      "E": [
+        108,
+        425
+      ],
+      "F": [
+        317,
+        220
+      ]
+    }
+  },
+  {
+    "size": [
+      512,
+      512
+    ],
+    "mode": "normalized_1",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      2.8002856997099395,
+      3.779735440477299,
+      6.788225099390872,
+      0.24331050121194112,
+      4.000199995000269,
+      7.450852300240564
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        510.6171640473247,
+        510.05948622511744
+      ],
+      "offset": [
+        -0.05343898993465803,
+        3.861774838545281
+      ],
+      "rms_px": 3.7510432572379138
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 0.17,
+          "y": 0.225
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 0.715,
+          "y": 0.175
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 0.4,
+          "y": 0.6
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 0.83,
+          "y": 0.77
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 0.205,
+          "y": 0.825
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 0.63,
+          "y": 0.42
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        87,
+        118
+      ],
+      "B": [
+        369,
+        92
+      ],
+      "C": [
+        200,
+        312
+      ],
+      "D": [
+        425,
+        394
+      ],
+      "E": [
+        108,
+        425
+      ],
+      "F": [
+        317,
+        220
+      ]
+    }
+  },
+  {
+    "size": [
+      1024,
+      768
+    ],
+    "mode": "normalized_1000",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      6.684309986827367,
+      2.340338437064154,
+      5.67542914676942,
+      19.70651384694914,
+      23.392210669365927,
+      6.639233690720636
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        1.024325772554359,
+        0.8006088886470352
+      ],
+      "offset": [
+        -2.8137763163553884,
+        -6.668472472713694
+      ],
+      "rms_px": 4.360036041204068
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 175.0,
+          "y": 225.0
+        },
+        {
+          "evidence": "black cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 722.0,
+          "y": 180.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 390.0,
+          "y": 602.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 832.0,
+          "y": 744.0
+        },
+        {
+          "evidence": "black cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 211.0,
+          "y": 799.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 625.0,
+          "y": 424.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        174,
+        177
+      ],
+      "B": [
+        737,
+        138
+      ],
+      "C": [
+        399,
+        468
+      ],
+      "D": [
+        850,
+        591
+      ],
+      "E": [
+        215,
+        637
+      ],
+      "F": [
+        635,
+        330
+      ]
+    }
+  },
+  {
+    "size": [
+      4096,
+      240
+    ],
+    "mode": "normalized_1000",
+    "repeat": 1,
+    "marks_returned": 0,
+    "errors_px": [],
+    "fit": null,
+    "raw_reply": null,
+    "truth": {
+      "A": [
+        696,
+        55
+      ],
+      "B": [
+        2949,
+        43
+      ],
+      "C": [
+        1597,
+        146
+      ],
+      "D": [
+        3400,
+        185
+      ],
+      "E": [
+        860,
+        199
+      ],
+      "F": [
+        2540,
+        103
+      ]
+    }
+  },
+  {
+    "size": [
+      4096,
+      240
+    ],
+    "mode": "normalized_1000",
+    "repeat": 0,
+    "marks_returned": 0,
+    "errors_px": [],
+    "fit": null,
+    "raw_reply": null,
+    "truth": {
+      "A": [
+        696,
+        55
+      ],
+      "B": [
+        2949,
+        43
+      ],
+      "C": [
+        1597,
+        146
+      ],
+      "D": [
+        3400,
+        185
+      ],
+      "E": [
+        860,
+        199
+      ],
+      "F": [
+        2540,
+        103
+      ]
+    }
+  },
+  {
+    "size": [
+      1024,
+      768
+    ],
+    "mode": "normalized_1000",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      6.230459373112073,
+      2.340338437064154,
+      5.67542914676942,
+      19.70651384694914,
+      24.926718837424225,
+      8.291786779699535
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        1.023583183333635,
+        0.8026427019495752
+      ],
+      "offset": [
+        -2.789245519593577,
+        -7.5427921493479095
+      ],
+      "rms_px": 4.759637470838869
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 175.0,
+          "y": 226.0
+        },
+        {
+          "evidence": "black cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 722.0,
+          "y": 180.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 390.0,
+          "y": 602.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 832.0,
+          "y": 744.0
+        },
+        {
+          "evidence": "black cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 211.0,
+          "y": 797.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 627.0,
+          "y": 424.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        174,
+        177
+      ],
+      "B": [
+        737,
+        138
+      ],
+      "C": [
+        399,
+        468
+      ],
+      "D": [
+        850,
+        591
+      ],
+      "E": [
+        215,
+        637
+      ],
+      "F": [
+        635,
+        330
+      ]
+    }
+  },
+  {
+    "size": [
+      512,
+      512
+    ],
+    "mode": "implicit_pixels",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      14.317821063276353,
+      48.05205510693585,
+      44.28317965096906,
+      67.17886572427373,
+      57.723478758647246,
+      41.773197148410844
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        1.1438050155572692,
+        1.1502055016764607
+      ],
+      "offset": [
+        -5.21232348482828,
+        -1.6967858816742027
+      ],
+      "rms_px": 4.645170128255971
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 84.0,
+          "y": 104.0
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 322.0,
+          "y": 82.0
+        },
+        {
+          "evidence": "dot at upper-right end of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 181.0,
+          "y": 272.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 377.0,
+          "y": 347.0
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 94.0,
+          "y": 369.0
+        },
+        {
+          "evidence": "dot at upper-right end of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 286.0,
+          "y": 192.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        87,
+        118
+      ],
+      "B": [
+        369,
+        92
+      ],
+      "C": [
+        200,
+        312
+      ],
+      "D": [
+        425,
+        394
+      ],
+      "E": [
+        108,
+        425
+      ],
+      "F": [
+        317,
+        220
+      ]
+    }
+  },
+  {
+    "size": [
+      512,
+      512
+    ],
+    "mode": "implicit_pixels",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      14.317821063276353,
+      45.70557952810576,
+      50.59644256269407,
+      64.66065264130884,
+      61.1310068623117,
+      48.83646178829912
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        1.1475468331846563,
+        1.171629213483146
+      ],
+      "offset": [
+        -9.875646743978507,
+        -2.278277153558053
+      ],
+      "rms_px": 6.108845098886564
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 84.0,
+          "y": 104.0
+        },
+        {
+          "evidence": "black cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 324.0,
+          "y": 84.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 184.0,
+          "y": 264.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 384.0,
+          "y": 344.0
+        },
+        {
+          "evidence": "black cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 104.0,
+          "y": 364.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 284.0,
+          "y": 184.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        87,
+        118
+      ],
+      "B": [
+        369,
+        92
+      ],
+      "C": [
+        200,
+        312
+      ],
+      "D": [
+        425,
+        394
+      ],
+      "E": [
+        108,
+        425
+      ],
+      "F": [
+        317,
+        220
+      ]
+    }
+  },
+  {
+    "size": [
+      4096,
+      240
+    ],
+    "mode": "explicit_pixels",
+    "repeat": 0,
+    "marks_returned": 0,
+    "errors_px": [],
+    "fit": null,
+    "raw_reply": null,
+    "truth": {
+      "A": [
+        696,
+        55
+      ],
+      "B": [
+        2949,
+        43
+      ],
+      "C": [
+        1597,
+        146
+      ],
+      "D": [
+        3400,
+        185
+      ],
+      "E": [
+        860,
+        199
+      ],
+      "F": [
+        2540,
+        103
+      ]
+    }
+  },
+  {
+    "size": [
+      1024,
+      768
+    ],
+    "mode": "explicit_pixels",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      2.23606797749979,
+      2.23606797749979,
+      3.1622776601683795,
+      11.0,
+      17.0,
+      7.0710678118654755
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        1.0005264660175701,
+        1.0261631526024297
+      ],
+      "offset": [
+        -1.0978825071622833,
+        -3.5379295484652302
+      ],
+      "rms_px": 3.634754136917079
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 175.0,
+          "y": 175.0
+        },
+        {
+          "evidence": "black cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 735.0,
+          "y": 137.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 400.0,
+          "y": 465.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 850.0,
+          "y": 580.0
+        },
+        {
+          "evidence": "black cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 215.0,
+          "y": 620.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 640.0,
+          "y": 325.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        174,
+        177
+      ],
+      "B": [
+        737,
+        138
+      ],
+      "C": [
+        399,
+        468
+      ],
+      "D": [
+        850,
+        591
+      ],
+      "E": [
+        215,
+        637
+      ],
+      "F": [
+        635,
+        330
+      ]
+    }
+  },
+  {
+    "size": [
+      2048,
+      480
+    ],
+    "mode": "implicit_pixels",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      5.0,
+      26.076809620810597,
+      10.816653826391969,
+      22.20360331117452,
+      1.4142135623730951,
+      16.0312195418814
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        1.0172353977243185,
+        1.0014055466821545
+      ],
+      "offset": [
+        -4.074534012224726,
+        1.993893809592989
+      ],
+      "rms_px": 3.510080916170613
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 344.0,
+          "y": 107.0
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 1449.0,
+          "y": 84.0
+        },
+        {
+          "evidence": "dot at upper-right end of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 790.0,
+          "y": 287.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 1678.0,
+          "y": 367.0
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 429.0,
+          "y": 397.0
+        },
+        {
+          "evidence": "dot at upper-right end of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 1254.0,
+          "y": 207.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        348,
+        110
+      ],
+      "B": [
+        1475,
+        86
+      ],
+      "C": [
+        799,
+        293
+      ],
+      "D": [
+        1700,
+        370
+      ],
+      "E": [
+        430,
+        398
+      ],
+      "F": [
+        1270,
+        206
+      ]
+    }
+  },
+  {
+    "size": [
+      1024,
+      768
+    ],
+    "mode": "explicit_pixels",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      2.23606797749979,
+      2.23606797749979,
+      5.0990195135927845,
+      11.0,
+      17.0,
+      7.0710678118654755
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        1.0005264660175701,
+        1.0270012340863606
+      ],
+      "offset": [
+        -1.0978825071622833,
+        -3.5171397331049343
+      ],
+      "rms_px": 3.1499067883153256
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 175.0,
+          "y": 175.0
+        },
+        {
+          "evidence": "black cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 735.0,
+          "y": 137.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 400.0,
+          "y": 463.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 850.0,
+          "y": 580.0
+        },
+        {
+          "evidence": "black cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 215.0,
+          "y": 620.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 640.0,
+          "y": 325.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        174,
+        177
+      ],
+      "B": [
+        737,
+        138
+      ],
+      "C": [
+        399,
+        468
+      ],
+      "D": [
+        850,
+        591
+      ],
+      "E": [
+        215,
+        637
+      ],
+      "F": [
+        635,
+        330
+      ]
+    }
+  },
+  {
+    "size": [
+      2048,
+      480
+    ],
+    "mode": "implicit_pixels",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      5.0,
+      26.076809620810597,
+      9.0,
+      22.02271554554524,
+      2.23606797749979,
+      16.492422502470642
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        1.0172353977243185,
+        0.9911021939198323
+      ],
+      "offset": [
+        -4.074534012224726,
+        2.169581715880753
+      ],
+      "rms_px": 3.5071988273860235
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 344.0,
+          "y": 107.0
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 1449.0,
+          "y": 84.0
+        },
+        {
+          "evidence": "dot at upper-right end of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 790.0,
+          "y": 293.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 1678.0,
+          "y": 369.0
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 429.0,
+          "y": 400.0
+        },
+        {
+          "evidence": "dot at upper-right end of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 1254.0,
+          "y": 210.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        348,
+        110
+      ],
+      "B": [
+        1475,
+        86
+      ],
+      "C": [
+        799,
+        293
+      ],
+      "D": [
+        1700,
+        370
+      ],
+      "E": [
+        430,
+        398
+      ],
+      "F": [
+        1270,
+        206
+      ]
+    }
+  },
+  {
+    "size": [
+      4096,
+      240
+    ],
+    "mode": "explicit_pixels",
+    "repeat": 1,
+    "marks_returned": 0,
+    "errors_px": [],
+    "fit": null,
+    "raw_reply": null,
+    "truth": {
+      "A": [
+        696,
+        55
+      ],
+      "B": [
+        2949,
+        43
+      ],
+      "C": [
+        1597,
+        146
+      ],
+      "D": [
+        3400,
+        185
+      ],
+      "E": [
+        860,
+        199
+      ],
+      "F": [
+        2540,
+        103
+      ]
+    }
+  },
+  {
+    "size": [
+      1024,
+      768
+    ],
+    "mode": "normalized_1",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      6.489992295835164,
+      2.0829056627701776,
+      10.550471458660086,
+      21.1650625323905,
+      23.392210669365927,
+      11.512100069057794
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        1025.0583692130142,
+        799.6601139834453
+      ],
+      "offset": [
+        -3.3454232322787907,
+        -3.9324928415081946
+      ],
+      "rms_px": 3.540387723574287
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 0.174,
+          "y": 0.224
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 0.72,
+          "y": 0.177
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 0.392,
+          "y": 0.596
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 0.831,
+          "y": 0.742
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 0.211,
+          "y": 0.799
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 0.628,
+          "y": 0.419
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        174,
+        177
+      ],
+      "B": [
+        737,
+        138
+      ],
+      "C": [
+        399,
+        468
+      ],
+      "D": [
+        850,
+        591
+      ],
+      "E": [
+        215,
+        637
+      ],
+      "F": [
+        635,
+        330
+      ]
+    }
+  },
+  {
+    "size": [
+      1024,
+      768
+    ],
+    "mode": "implicit_pixels",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      2.0,
+      4.123105625617661,
+      12.165525060596439,
+      23.021728866442675,
+      30.01666203960727,
+      4.47213595499958
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        1.0012984790938941,
+        1.0575173792269812
+      ],
+      "offset": [
+        0.3498948003237768,
+        -9.75115557767027
+      ],
+      "rms_px": 4.05940134143545
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 174.0,
+          "y": 175.0
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 733.0,
+          "y": 137.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 397.0,
+          "y": 456.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 849.0,
+          "y": 568.0
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 214.0,
+          "y": 607.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 637.0,
+          "y": 326.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        174,
+        177
+      ],
+      "B": [
+        737,
+        138
+      ],
+      "C": [
+        399,
+        468
+      ],
+      "D": [
+        850,
+        591
+      ],
+      "E": [
+        215,
+        637
+      ],
+      "F": [
+        635,
+        330
+      ]
+    }
+  },
+  {
+    "size": [
+      2048,
+      480
+    ],
+    "mode": "explicit_pixels",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      2.8284271247461903,
+      3.605551275463989,
+      33.015148038438355,
+      42.190046219457976,
+      42.42640687119285,
+      18.973665961010276
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        1.001225026953556,
+        1.1630071449463089
+      ],
+      "offset": [
+        -3.899452124262043,
+        -12.803576651485255
+      ],
+      "rms_px": 3.8726717035209224
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 350.0,
+          "y": 108.0
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 1472.0,
+          "y": 84.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 800.0,
+          "y": 260.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 1704.0,
+          "y": 328.0
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 436.0,
+          "y": 356.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 1276.0,
+          "y": 188.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        348,
+        110
+      ],
+      "B": [
+        1475,
+        86
+      ],
+      "C": [
+        799,
+        293
+      ],
+      "D": [
+        1700,
+        370
+      ],
+      "E": [
+        430,
+        398
+      ],
+      "F": [
+        1270,
+        206
+      ]
+    }
+  },
+  {
+    "size": [
+      4096,
+      240
+    ],
+    "mode": "implicit_pixels",
+    "repeat": 1,
+    "marks_returned": 0,
+    "errors_px": [],
+    "fit": null,
+    "raw_reply": null,
+    "truth": {
+      "A": [
+        696,
+        55
+      ],
+      "B": [
+        2949,
+        43
+      ],
+      "C": [
+        1597,
+        146
+      ],
+      "D": [
+        3400,
+        185
+      ],
+      "E": [
+        860,
+        199
+      ],
+      "F": [
+        2540,
+        103
+      ]
+    }
+  },
+  {
+    "size": [
+      1024,
+      768
+    ],
+    "mode": "normalized_1",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      4.95336976209124,
+      1.3259019571597157,
+      10.550471458660086,
+      21.1650625323905,
+      23.392210669365927,
+      13.03018280762018
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        1024.2827661769868,
+        802.2864985959967
+      ],
+      "offset": [
+        -3.304737058587758,
+        -5.761720390457648
+      ],
+      "rms_px": 3.9499849651939023
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 0.174,
+          "y": 0.227
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 0.72,
+          "y": 0.178
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 0.392,
+          "y": 0.596
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 0.831,
+          "y": 0.742
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 0.211,
+          "y": 0.799
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 0.63,
+          "y": 0.419
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        174,
+        177
+      ],
+      "B": [
+        737,
+        138
+      ],
+      "C": [
+        399,
+        468
+      ],
+      "D": [
+        850,
+        591
+      ],
+      "E": [
+        215,
+        637
+      ],
+      "F": [
+        635,
+        330
+      ]
+    }
+  },
+  {
+    "size": [
+      4096,
+      240
+    ],
+    "mode": "implicit_pixels",
+    "repeat": 0,
+    "marks_returned": 0,
+    "errors_px": [],
+    "fit": null,
+    "raw_reply": null,
+    "truth": {
+      "A": [
+        696,
+        55
+      ],
+      "B": [
+        2949,
+        43
+      ],
+      "C": [
+        1597,
+        146
+      ],
+      "D": [
+        3400,
+        185
+      ],
+      "E": [
+        860,
+        199
+      ],
+      "F": [
+        2540,
+        103
+      ]
+    }
+  },
+  {
+    "size": [
+      1024,
+      768
+    ],
+    "mode": "implicit_pixels",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      1.0,
+      4.123105625617661,
+      9.219544457292887,
+      18.027756377319946,
+      20.024984394500787,
+      7.211102550927978
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        0.999848807862667,
+        1.0403058613585965
+      ],
+      "offset": [
+        0.4091309915162811,
+        -6.536635131411238
+      ],
+      "rms_px": 3.696820702992001
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 174.0,
+          "y": 176.0
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 733.0,
+          "y": 137.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 397.0,
+          "y": 459.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 849.0,
+          "y": 573.0
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 214.0,
+          "y": 617.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 641.0,
+          "y": 326.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        174,
+        177
+      ],
+      "B": [
+        737,
+        138
+      ],
+      "C": [
+        399,
+        468
+      ],
+      "D": [
+        850,
+        591
+      ],
+      "E": [
+        215,
+        637
+      ],
+      "F": [
+        635,
+        330
+      ]
+    }
+  },
+  {
+    "size": [
+      2048,
+      480
+    ],
+    "mode": "explicit_pixels",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      7.280109889280518,
+      7.211102550927978,
+      40.01249804748511,
+      45.0111097397076,
+      46.04345773288535,
+      20.615528128088304
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        1.0015743762247695,
+        1.161979048498267
+      ],
+      "offset": [
+        -2.7486523765222057,
+        -7.735130666541465
+      ],
+      "rms_px": 4.192424014888169
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 350.0,
+          "y": 103.0
+        },
+        {
+          "evidence": "cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 1471.0,
+          "y": 80.0
+        },
+        {
+          "evidence": "dot at upper-right end of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 800.0,
+          "y": 253.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 1701.0,
+          "y": 325.0
+        },
+        {
+          "evidence": "cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 432.0,
+          "y": 352.0
+        },
+        {
+          "evidence": "dot at upper-right end of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 1275.0,
+          "y": 186.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        348,
+        110
+      ],
+      "B": [
+        1475,
+        86
+      ],
+      "C": [
+        799,
+        293
+      ],
+      "D": [
+        1700,
+        370
+      ],
+      "E": [
+        430,
+        398
+      ],
+      "F": [
+        1270,
+        206
+      ]
+    }
+  },
+  {
+    "size": [
+      512,
+      512
+    ],
+    "mode": "explicit_pixels",
+    "repeat": 0,
+    "marks_returned": 6,
+    "errors_px": [
+      2.23606797749979,
+      1.0,
+      5.656854249492381,
+      3.605551275463989,
+      1.0,
+      5.0
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        0.9974408017025403,
+        1.001866743251005
+      ],
+      "offset": [
+        -1.0200425635086536,
+        1.6850469079074775
+      ],
+      "rms_px": 2.2795682763638565
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 88.0,
+          "y": 116.0
+        },
+        {
+          "evidence": "black cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 368.0,
+          "y": 92.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 204.0,
+          "y": 308.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 428.0,
+          "y": 392.0
+        },
+        {
+          "evidence": "black cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 108.0,
+          "y": 424.0
+        },
+        {
+          "evidence": "upper-right endpoint of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 320.0,
+          "y": 216.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        87,
+        118
+      ],
+      "B": [
+        369,
+        92
+      ],
+      "C": [
+        200,
+        312
+      ],
+      "D": [
+        425,
+        394
+      ],
+      "E": [
+        108,
+        425
+      ],
+      "F": [
+        317,
+        220
+      ]
+    }
+  },
+  {
+    "size": [
+      512,
+      512
+    ],
+    "mode": "explicit_pixels",
+    "repeat": 1,
+    "marks_returned": 6,
+    "errors_px": [
+      2.23606797749979,
+      1.0,
+      7.280109889280518,
+      3.0,
+      1.0,
+      5.0
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        0.9987656801676383,
+        0.9947119370690174
+      ],
+      "offset": [
+        -1.854178029106969,
+        2.5362749657909704
+      ],
+      "rms_px": 3.0207788304284064
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labelled A",
+          "id": "A",
+          "value": null,
+          "x": 88.0,
+          "y": 116.0
+        },
+        {
+          "evidence": "black cross labelled B",
+          "id": "B",
+          "value": null,
+          "x": 368.0,
+          "y": 92.0
+        },
+        {
+          "evidence": "black dot at end of short line labelled C",
+          "id": "C",
+          "value": null,
+          "x": 207.0,
+          "y": 310.0
+        },
+        {
+          "evidence": "black dot labelled D",
+          "id": "D",
+          "value": null,
+          "x": 428.0,
+          "y": 394.0
+        },
+        {
+          "evidence": "black cross labelled E",
+          "id": "E",
+          "value": null,
+          "x": 108.0,
+          "y": 426.0
+        },
+        {
+          "evidence": "black dot at end of short line labelled F",
+          "id": "F",
+          "value": null,
+          "x": 320.0,
+          "y": 216.0
+        }
+      ]
+    },
+    "truth": {
+      "A": [
+        87,
+        118
+      ],
+      "B": [
+        369,
+        92
+      ],
+      "C": [
+        200,
+        312
+      ],
+      "D": [
+        425,
+        394
+      ],
+      "E": [
+        108,
+        425
+      ],
+      "F": [
+        317,
+        220
+      ]
+    }
+  }
+]
