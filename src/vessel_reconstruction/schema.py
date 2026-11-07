@@ -11,6 +11,8 @@ MAX_SPEC_BYTES = 2 * 1024 * 1024
 MAX_SECTIONS = 300
 MAX_TOTAL_CELLS = 4096
 MIN_CELLS_PER_SECTION = 5
+# Most drawn pieces (curves) one multi-region station may declare.
+MAX_PIECES = 8
 MAX_CELLS_PER_SECTION = 256
 TABLE_VISION_MODE = "offset_table_vision"
 # Answers that must come from source pixels, never from the specification.
@@ -144,6 +146,63 @@ def _check_table_cells(sec: dict, roi, sid: str, errors: list) -> int:
     return len(cells)
 
 
+def _check_selection(selection, roi, sid: str, errors: list, unknown, label="contour_selection") -> None:
+    """Check one explicit source-pixel corridor (anchors and half width) inside the ROI."""
+    if not isinstance(selection, dict):
+        errors.append(gap("invalid_contour_selection", f"{label} must be an explicit pixel corridor object.", sid))
+        return
+    unknown(selection, {"anchors_px", "half_width_px"}, "contour selection", sid)
+    anchors, half_width = selection.get("anchors_px"), selection.get("half_width_px")
+    okay = (isinstance(anchors, list) and 2 <= len(anchors) <= 64 and finite(half_width)
+            and 0 < half_width <= 128 and _rectangle(roi))
+    if okay:
+        okay = half_width <= roi[2] - roi[0]
+        ys = set()
+        for point in anchors:
+            if not (isinstance(point, list) and len(point) == 2 and all(finite(v) for v in point)
+                    and roi[0] <= point[0] <= roi[2] and roi[1] <= point[1] <= roi[3]
+                    and point[1] not in ys):
+                okay = False
+                break
+            ys.add(point[1])
+    if not okay:
+        errors.append(gap("invalid_contour_selection", "Selection requires 2..64 finite ROI anchors at distinct rows and half_width_px in (0,128].", sid))
+
+
+def _check_pieces(sec: dict, roi, sid: str, errors: list, unknown) -> None:
+    """Check the declared pieces of a multi-piece station (see ingest.extract_pieces).
+
+    Each piece is one drawn curve, traced in its own corridor over its own
+    height interval. A piece with ``inner_selection`` is an offset piece (for
+    example a skeg): its material lies between the inner and the outer curve.
+    Pieces are declared reading evidence (where to look), never geometry.
+    """
+    pieces = sec["pieces"]
+    if "contour_selection" in sec:
+        errors.append(gap("invalid_pieces", "Declare either one contour_selection or pieces, not both.", sid))
+    if not isinstance(pieces, list) or not 1 <= len(pieces) <= MAX_PIECES:
+        errors.append(gap("invalid_pieces", f"pieces must be a list of 1..{MAX_PIECES} piece objects.", sid))
+        return
+    zlo, zhi = sec.get("z_min_m"), sec.get("z_max_m")
+    for piece in pieces:
+        if not isinstance(piece, dict):
+            errors.append(gap("invalid_pieces", "Each piece must be an object.", sid))
+            continue
+        unknown(piece, {"z_min_m", "z_max_m", "contour_selection", "inner_selection"}, "piece", sid)
+        if FORBIDDEN.intersection(piece) or VALUE_FIELDS.intersection(piece):
+            errors.append(gap("geometry_in_input", "A piece declares where to read, never geometry.", sid))
+        low, high = piece.get("z_min_m"), piece.get("z_max_m")
+        if not (finite(low) and finite(high) and high > low and finite(zlo) and finite(zhi)
+                and zlo <= low and high <= zhi):
+            errors.append(gap("invalid_pieces", "Each piece needs z_min_m < z_max_m inside the section's vertical range.", sid))
+        if "contour_selection" not in piece:
+            errors.append(gap("invalid_pieces", "Each piece needs a contour_selection corridor.", sid))
+        else:
+            _check_selection(piece["contour_selection"], roi, sid, errors, unknown)
+        if "inner_selection" in piece:
+            _check_selection(piece["inner_selection"], roi, sid, errors, unknown, "inner_selection")
+
+
 def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
     """Every JSON type yields validation gaps, never a metadata type exception."""
     errors = []
@@ -256,7 +315,7 @@ def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
             unknown(sec, {"id", "x_m", "roi_px", "evidence", "cells"}, "table station", sid)
         else:
             unknown(sec, {"id", "x_m", "roi_px", "calibration", "z_min_m", "z_max_m", "evidence", "sample_count",
-                          "cells", "contour_selection"}, "section", sid)
+                          "cells", "contour_selection", "pieces"}, "section", sid)
         if FORBIDDEN.intersection(sec):
             errors.append(gap("geometry_in_input", "Drawing input must not contain target geometry or evaluation answers.", sid))
         x = sec.get("x_m")
@@ -279,26 +338,9 @@ def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
         if "sample_count" in sec and (type(sec["sample_count"]) is not int or not 17 <= sec["sample_count"] <= 513):
             errors.append(gap("invalid_sample_count", "sample_count must be an integer in [17, 513].", sid))
         if "contour_selection" in sec:
-            selection = sec["contour_selection"]
-            if not isinstance(selection, dict):
-                errors.append(gap("invalid_contour_selection", "contour_selection must be an explicit pixel corridor object.", sid))
-            else:
-                unknown(selection, {"anchors_px", "half_width_px"}, "contour selection", sid)
-                anchors, half_width = selection.get("anchors_px"), selection.get("half_width_px")
-                okay = (isinstance(anchors, list) and 2 <= len(anchors) <= 64 and finite(half_width)
-                        and 0 < half_width <= 128 and _rectangle(roi))
-                if okay:
-                    okay = half_width <= roi[2] - roi[0]
-                    ys = set()
-                    for point in anchors:
-                        if not (isinstance(point, list) and len(point) == 2 and all(finite(v) for v in point)
-                                and roi[0] <= point[0] <= roi[2] and roi[1] <= point[1] <= roi[3]
-                                and point[1] not in ys):
-                            okay = False
-                            break
-                        ys.add(point[1])
-                if not okay:
-                    errors.append(gap("invalid_contour_selection", "Selection requires 2..64 finite ROI anchors at distinct rows and half_width_px in (0,128].", sid))
+            _check_selection(sec["contour_selection"], roi, sid, errors, unknown)
+        if "pieces" in sec:
+            _check_pieces(sec, roi, sid, errors, unknown)
         if "cells" in sec:
             errors.append(gap("unexpected_field", f"Table cells are supported only for {TABLE_VISION_MODE}.", sid))
         cal = sec.get("calibration")

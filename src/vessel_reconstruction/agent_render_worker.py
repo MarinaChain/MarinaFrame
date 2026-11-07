@@ -14,6 +14,15 @@ import time
 
 from .resources import native_resource_profile, peak_rss_kib
 
+# A region run (geometry.build_region_hull) is a compound whose solids end on
+# station planes. Its audit cuts this far aft and forward of the station
+# (0.1 micrometre, in STEP millimetres) and joins both cuts, so a solid that
+# ends on the plane is cut too (as the benchmark scorer does).
+REGION_CUT_OFFSET_MM = 1e-4
+# Agreement required between each reimported solid volume and the engine's
+# solid volume; the same bound as the whole-model metric check.
+REGION_SOLID_VOLUME_TOLERANCE = 1e-6
+
 
 def _reimport(run: Path):
     from .provenance import digest_file, safe_relative_file
@@ -30,9 +39,11 @@ def _reimport(run: Path):
     bounds = shape.BoundingBox()
     metrics = {"length_m": bounds.xlen / 1000, "beam_m": bounds.ylen / 1000,
                "depth_m": bounds.zlen / 1000, "volume_m3": shape.Volume() / 1e9}
-    valid = shape.isValid() and len(shape.Solids()) == 1 and len(shape.Shells()) == 1 and shape.Shells()[0].Closed()
     extent_error = max(abs(metrics[k] - record["metrics"][k]) / max(abs(record["metrics"][k]), 1e-12)
                        for k in metrics)
+    if "region_loft" in record["metrics"]:
+        return shape, record, _region_audit(shape, record, path, metrics, extent_error)
+    valid = shape.isValid() and len(shape.Solids()) == 1 and len(shape.Shells()) == 1 and shape.Shells()[0].Closed()
     if not valid or extent_error > 1e-6:
         raise ValueError("Reimported STEP topology, units, or metrics conflict with the engine record.")
     audit = {"source": "independently_reimported_exported_STEP", "step_sha256": digest_file(path),
@@ -42,6 +53,61 @@ def _reimport(run: Path):
              "relative_metric_error": float(extent_error),
              "engineering_approved": False, "human_semantic_review_required": True}
     return shape, record, audit
+
+
+def _region_audit(shape, record: dict, path: Path, metrics: dict, extent_error: float) -> dict:
+    """Reimport audit of a region compound: every solid valid, closed and of the engine's volume.
+
+    The solid list is sorted by volume, because STEP does not keep an order
+    that the engine record could name; the engine's solid volumes are
+    compared as a sorted list.
+    """
+    from .provenance import digest_file
+    expected = record["metrics"]["solid_count"]
+    solids = []
+    for solid in shape.Solids():
+        shells = solid.Shells()
+        solids.append({"volume_m3": solid.Volume() / 1e9, "valid_shape": bool(solid.isValid()),
+                       "shell_count": len(shells), "closed_shell": len(shells) == 1 and bool(shells[0].Closed())})
+    solids.sort(key=lambda item: item["volume_m3"])
+    engine = sorted(record["metrics"]["region_loft"]["solid_volumes_m3"])
+    if len(solids) != expected or len(engine) != expected:
+        raise ValueError("Reimported STEP solid count conflicts with the engine record.")
+    volume_error = max(abs(item["volume_m3"] - volume) / max(volume, 1e-12) for item, volume in zip(solids, engine))
+    closed = all(item["closed_shell"] for item in solids)
+    valid = (shape.isValid() and closed and all(item["valid_shape"] and item["shell_count"] == 1 for item in solids)
+             and len(shape.Shells()) == expected)
+    if not valid or extent_error > 1e-6 or volume_error > REGION_SOLID_VOLUME_TOLERANCE:
+        raise ValueError("Reimported STEP topology, units, or metrics conflict with the engine record.")
+    return {"source": "independently_reimported_exported_STEP", "step_sha256": digest_file(path),
+            "step_units": "mm", "reported_units": "m", "valid_shape": bool(valid),
+            "solid_count": len(solids), "shell_count": len(shape.Shells()),
+            "closed_shell": closed, "metrics": metrics,
+            "relative_metric_error": float(extent_error),
+            "expected_solid_count": expected, "solids": solids,
+            "solid_volume_relative_error": float(volume_error),
+            "engineering_approved": False, "human_semantic_review_required": True}
+
+
+def _observed_samples(section: dict):
+    """All observed samples of a section and, for a multi-piece section, each piece's share."""
+    import numpy as np
+    if "points_yz_m" in section:
+        return np.asarray(section["points_yz_m"], dtype=float), []
+    pieces = [np.asarray(piece["points_yz_m"] + piece.get("inner_points_yz_m", []), dtype=float)
+              for piece in section["pieces"]]
+    return np.vstack(pieces), [len(piece) for piece in pieces]
+
+
+def _cut_edges(shape, x: float, regions: bool):
+    """Edges of the STEP section at station x; a region compound joins cuts on both sides."""
+    import cadquery as cq
+    offsets = (-REGION_CUT_OFFSET_MM, REGION_CUT_OFFSET_MM) if regions else (0.0,)
+    edges = []
+    for offset in offsets:
+        cut = cq.Workplane("YZ", origin=(x * 1000 + offset, 0, 0)).newObject([shape]).section().val()
+        edges.extend(cut.Edges())
+    return edges
 
 
 def render_step(run: Path, view: str, out: Path):
@@ -116,6 +182,7 @@ def audit_step(run: Path, out: Path):
     from .fonts import dejavu_sans
     from .provenance import write_json
     shape, record, audit = _reimport(run)
+    regions = "region_loft" in record["metrics"]
     source_sections = record["sections"]
     indices = sorted(set([0, min(1, len(source_sections) - 1), len(source_sections) // 2,
                           max(0, len(source_sections) - 2), len(source_sections) - 1]))
@@ -124,8 +191,7 @@ def audit_step(run: Path, out: Path):
     for index in indices:
         section = source_sections[index]
         x = float(section["x_m"])
-        cut = cq.Workplane("YZ", origin=(x * 1000, 0, 0)).newObject([shape]).section().val()
-        edges = cut.Edges()
+        edges = _cut_edges(shape, x, regions)
         if not edges or len(edges) > 8192:
             raise ValueError("A sampled STEP section is missing or exceeds the cut complexity limit.")
         segments = []
@@ -133,7 +199,7 @@ def audit_step(run: Path, out: Path):
             points, _ = edge.sample(2 if edge.geomType() == "LINE" else 16)
             yz = np.array([[p.y / 1000, p.z / 1000] for p in points])
             segments.extend(zip(yz[:-1], yz[1:]))
-        observed = np.asarray(section["points_yz_m"], dtype=float)
+        observed, piece_counts = _observed_samples(section)
         starts = np.array([s[0] for s in segments]); ends = np.array([s[1] for s in segments])
         vectors = ends - starts
         length2 = np.sum(vectors * vectors, axis=1)
@@ -148,6 +214,12 @@ def audit_step(run: Path, out: Path):
                   "max_m": float(np.max(distance)), "max_px": float(np.max(distance) * ppm),
                   "source_measurement_uncertainty_m": section["evidence"].get("measurement_uncertainty_m"),
                   "section_edges": len(edges)}
+        if regions:
+            # Trace fidelity of each piece, so one piece cannot hide behind another.
+            bounds = np.cumsum([0, *piece_counts])
+            report["pieces"] = [{"piece": index, "sample_count": int(count),
+                                 "max_m": float(np.max(distance[bounds[index]:bounds[index + 1]]))}
+                                for index, count in enumerate(piece_counts)]
         reports.append(report)
         width, height = 950, 750
         canvas = Image.new("RGB", (width, height), "white"); draw = ImageDraw.Draw(canvas)

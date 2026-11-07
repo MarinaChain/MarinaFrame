@@ -768,6 +768,31 @@ fn decision(tool: &str, arguments: Value, reason: &str) -> Decision {
         reason: reason.into(),
     }
 }
+/// Inspect the next uninspected sections, named explicitly.
+///
+/// The Python domain inspects a CPU-bounded prefix of the named sections, so a
+/// large drawing needs more calls than `max_repeated_action` allows for one
+/// identical action. Naming the sections makes each call that inspects new
+/// sections a different action; a call that inspects nothing new repeats the
+/// same names and still stops at the repeat limit.
+fn inspect_next(sections: &[Value]) -> Decision {
+    let ids = sections
+        .iter()
+        .filter(|s| s["inspected"] != true)
+        .filter_map(|s| s["id"].as_str())
+        .take(12)
+        .collect::<Vec<_>>();
+    let arguments = if ids.is_empty() {
+        json!({})
+    } else {
+        json!({"section_ids":ids})
+    };
+    decision(
+        "inspect_source",
+        arguments,
+        "Inspect the next source regions and retain alternatives.",
+    )
+}
 pub fn deterministic_decision(store: &Store) -> Result<Decision> {
     let d = &store.state.domain;
     let last = &store.state.last_observation;
@@ -841,11 +866,7 @@ pub fn deterministic_decision(store: &Store) -> Result<Decision> {
         ));
     }
     if d["catalog_ready"] != true {
-        return Ok(decision(
-            "inspect_source",
-            json!({}),
-            "Inspect the next source regions and retain alternatives.",
-        ));
+        return Ok(inspect_next(sections));
     }
     if selected.len() < sections.len() {
         let ids = sections
@@ -948,11 +969,7 @@ fn deterministic_draft_mode(
         ));
     }
     if !catalog_ready {
-        return Ok(decision(
-            "inspect_source",
-            json!({}),
-            "Inspect the next source regions and retain alternatives.",
-        ));
+        return Ok(inspect_next(sections));
     }
     if selected.len() < sections.len() {
         return Ok(decision(
@@ -1441,6 +1458,27 @@ pub fn summary(store: &Store) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn inspect_next_names_the_next_uninspected_sections() {
+        // 59 sections inspected 5 per call (Gunnerus) need 12 calls; each call
+        // names other sections, so it is not one action repeated 12 times.
+        let mut sections = (0..59)
+            .map(|i| json!({"id":format!("s{i}"),"inspected":false}))
+            .collect::<Vec<_>>();
+        let first = inspect_next(&sections);
+        assert_eq!(first.arguments["section_ids"][0], "s0");
+        assert_eq!(first.arguments["section_ids"].as_array().unwrap().len(), 12);
+        for section in sections.iter_mut().take(5) {
+            section["inspected"] = json!(true);
+        }
+        let second = inspect_next(&sections);
+        assert_eq!(second.arguments["section_ids"][0], "s5");
+        assert_ne!(first.arguments, second.arguments);
+        for section in sections.iter_mut() {
+            section["inspected"] = json!(true);
+        }
+        assert_eq!(inspect_next(&sections).arguments, json!({}));
+    }
     fn fixture() -> (tempfile::TempDir, Store) {
         let tmp = tempfile::tempdir().unwrap();
         let config = Config {

@@ -15,6 +15,51 @@ const KNOWN_RESOURCE_PROFILES: [&str; 2] = [
     "darwin_rlimit_process_group_v1",
 ];
 
+/// Audit contract of a single-solid run (`build_hull`).
+const AUDIT_CONTRACT_V1: &str = "step_source_sections_v1";
+/// Audit contract of a region run (`build_region_hull`, multi-piece stations):
+/// a compound of solids, a per-solid audit and per-piece trace fidelity. The
+/// tolerances and the sampling are those of v1.
+const AUDIT_CONTRACT_REGIONS_V2: &str = "step_source_regions_v2";
+const GEOMETRY_AUDIT_KEYS: [&str; 12] = [
+    "source",
+    "step_sha256",
+    "step_units",
+    "reported_units",
+    "valid_shape",
+    "solid_count",
+    "shell_count",
+    "closed_shell",
+    "metrics",
+    "relative_metric_error",
+    "engineering_approved",
+    "human_semantic_review_required",
+];
+const REGION_GEOMETRY_AUDIT_KEYS: [&str; 3] = [
+    "expected_solid_count",
+    "solids",
+    "solid_volume_relative_error",
+];
+const SECTION_REPORT_KEYS: [&str; 10] = [
+    "section_id",
+    "x_m",
+    "sample_count",
+    "distance_type",
+    "rms_m",
+    "p95_m",
+    "max_m",
+    "max_px",
+    "source_measurement_uncertainty_m",
+    "section_edges",
+];
+const CONTEXT_KEYS: [&str; 5] = [
+    "binding",
+    "evidence",
+    "sampling",
+    "section_info",
+    "engine_metrics",
+];
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Check {
@@ -97,7 +142,8 @@ pub struct Contract {
 impl Contract {
     pub fn check_shape(&self) -> Result<()> {
         if self.schema_version != "marinaframe.validation.v1"
-            || self.audit_contract_version != "step_source_sections_v1"
+            || ![AUDIT_CONTRACT_V1, AUDIT_CONTRACT_REGIONS_V2]
+                .contains(&self.audit_contract_version.as_str())
             || self.semantic_review != "required"
             || self.engineering_approved
             || self.units.input != "m"
@@ -347,16 +393,12 @@ pub fn assess(
     let c: Contract = serde_json::from_value(validation["contract"].clone())
         .map_err(|_| "validation_typed_schema")?;
     c.check_shape()?;
-    exact_keys(
-        context,
-        &[
-            "binding",
-            "evidence",
-            "sampling",
-            "section_info",
-            "engine_metrics",
-        ],
-    )?;
+    // A region run's context adds "regions"; it is checked against the run below.
+    let mut context_keys = CONTEXT_KEYS.to_vec();
+    if context.get("regions").is_some() {
+        context_keys.push("regions");
+    }
+    exact_keys(context, &context_keys)?;
     require(
         c.binding.generation_id == domain["generation_id"]
             && c.binding.revision_id == domain["revision_id"]
@@ -643,24 +685,23 @@ pub fn assess(
                 == "first two, middle, last two; bounded sample, not exhaustive",
         "audit_semantics_or_sampling_contract",
     )?;
-    let g = &audit["geometry_audit"];
-    exact_keys(
-        g,
-        &[
-            "source",
-            "step_sha256",
-            "step_units",
-            "reported_units",
-            "valid_shape",
-            "solid_count",
-            "shell_count",
-            "closed_shell",
-            "metrics",
-            "relative_metric_error",
-            "engineering_approved",
-            "human_semantic_review_required",
-        ],
+    let region_run = result["metrics"].get("region_loft").is_some();
+    require(
+        c.audit_contract_version
+            == if region_run {
+                AUDIT_CONTRACT_REGIONS_V2
+            } else {
+                AUDIT_CONTRACT_V1
+            }
+            && context.get("regions").is_some() == region_run,
+        "audit_contract_version_not_current_run",
     )?;
+    let g = &audit["geometry_audit"];
+    let mut geometry_keys = GEOMETRY_AUDIT_KEYS.to_vec();
+    if region_run {
+        geometry_keys.extend(REGION_GEOMETRY_AUDIT_KEYS);
+    }
+    exact_keys(g, &geometry_keys)?;
     require(
         g["source"] == "independently_reimported_exported_STEP"
             && g["step_sha256"] == c.binding.step_sha256
@@ -694,7 +735,11 @@ pub fn assess(
         .ok_or("closed_shell_not_boolean")?;
     let solids = integer(&g["solid_count"], 0, 20_000)?;
     let shells = integer(&g["shell_count"], 0, 20_000)?;
-    let cad_pass = valid && closed && solids == 1 && shells == 1 && relative <= 1e-6;
+    let cad_pass = if region_run {
+        region_cad_pass(g, &result, valid, closed, solids, shells, relative)?
+    } else {
+        valid && closed && solids == 1 && shells == 1 && relative <= 1e-6
+    };
     let all = result["sections"].as_array().ok_or("section_inventory")?;
     let n = all.len();
     require(
@@ -716,7 +761,29 @@ pub fn assess(
     for i in &indexes {
         let source = &all[*i];
         let id = source["id"].as_str().ok_or("section_id_type")?;
-        info.insert(id.to_string(),json!({"x_m":source["x_m"],"sample_count":source["points_yz_m"].as_array().ok_or("source_points")?.len(),"pixels_per_metre":source["evidence"]["calibration"]["pixels_per_metre"]}));
+        info.insert(id.to_string(),json!({"x_m":source["x_m"],"sample_count":observed_sample_count(source)?,"pixels_per_metre":source["evidence"]["calibration"]["pixels_per_metre"]}));
+    }
+    if region_run {
+        let mut pieces = serde_json::Map::new();
+        for i in &indexes {
+            let source = &all[*i];
+            let id = source["id"].as_str().ok_or("section_id_type")?;
+            pieces.insert(id.to_string(), json!(piece_sample_counts(source)?));
+        }
+        let mut volumes = result["metrics"]["region_loft"]["solid_volumes_m3"]
+            .as_array()
+            .ok_or("region_solid_volumes")?
+            .iter()
+            .map(finite)
+            .collect::<Result<Vec<_>>>()?;
+        volumes.sort_by(f64::total_cmp);
+        require(
+            context["regions"]
+                == json!({"audit_contract_version":AUDIT_CONTRACT_REGIONS_V2,
+                    "solid_count":result["metrics"]["solid_count"],
+                    "solid_volumes_m3":volumes,"piece_sample_counts":pieces}),
+            "context_regions_not_current_run",
+        )?;
     }
     require(
         context["section_info"] == Value::Object(info),
@@ -734,28 +801,20 @@ pub fn assess(
     let mut maximum = 0f64;
     for (s, i) in sections.iter().zip(indexes) {
         let source = &all[i];
-        exact_keys(
-            s,
-            &[
-                "section_id",
-                "x_m",
-                "sample_count",
-                "distance_type",
-                "rms_m",
-                "p95_m",
-                "max_m",
-                "max_px",
-                "source_measurement_uncertainty_m",
-                "section_edges",
-            ],
-        )?;
+        let mut section_keys = SECTION_REPORT_KEYS.to_vec();
+        if region_run {
+            section_keys.push("pieces");
+        }
+        exact_keys(s, &section_keys)?;
         require(
             s["section_id"] == source["id"]
                 && close(finite(&s["x_m"])?, finite(&source["x_m"])?)
-                && s["sample_count"].as_u64()
-                    == source["points_yz_m"].as_array().map(|a| a.len() as u64),
+                && s["sample_count"].as_u64() == Some(observed_sample_count(source)? as u64),
             "sampled_section_identity",
         )?;
+        if region_run {
+            check_piece_reports(s, &piece_sample_counts(source)?)?;
+        }
         require(s["distance_type"]=="observed source-centre samples to actual STEP section boundary; no reference truth used","unknown_distance_contract")?;
         integer(&s["sample_count"], 2, 1025)?;
         integer(&s["section_edges"], 1, 8192)?;
@@ -786,6 +845,127 @@ pub fn assess(
         "audit_conclusion_contradiction",
     )?;
     Ok(c)
+}
+
+/// All observed samples of a section: its curve, or every piece's curves.
+fn observed_sample_count(source: &Value) -> Result<usize> {
+    match source.get("points_yz_m") {
+        Some(points) => Ok(points.as_array().ok_or("source_points")?.len()),
+        None => Ok(piece_sample_counts(source)?.iter().sum()),
+    }
+}
+
+/// Observed samples per piece of a multi-piece section; empty for a single curve.
+fn piece_sample_counts(source: &Value) -> Result<Vec<usize>> {
+    let Some(pieces) = source.get("pieces") else {
+        return Ok(vec![]);
+    };
+    let mut counts = vec![];
+    for piece in pieces.as_array().ok_or("source_pieces")? {
+        let outer = piece["points_yz_m"]
+            .as_array()
+            .ok_or("source_piece_points")?
+            .len();
+        let inner = match piece.get("inner_points_yz_m") {
+            Some(points) => points.as_array().ok_or("source_piece_points")?.len(),
+            None => 0,
+        };
+        counts.push(outer + inner);
+    }
+    Ok(counts)
+}
+
+/// CAD validity of a region compound: the engine's solid count, each solid
+/// valid and closed with one shell, and each reimported solid volume equal to
+/// the engine's (sorted lists, relative 1e-6).
+fn region_cad_pass(
+    g: &Value,
+    result: &Value,
+    valid: bool,
+    closed: bool,
+    solids: u64,
+    shells: u64,
+    relative: f64,
+) -> Result<bool> {
+    let expected = integer(&g["expected_solid_count"], 1, 20_000)?;
+    require(
+        result["metrics"]["solid_count"].as_u64() == Some(expected),
+        "audit_expected_solids_not_current_run",
+    )?;
+    let items = g["solids"].as_array().ok_or("solid_audit_type")?;
+    require(items.len() as u64 == solids, "solid_audit_incomplete")?;
+    let mut measured = vec![];
+    let mut each_ok = true;
+    let mut all_closed = true;
+    for item in items {
+        exact_keys(
+            item,
+            &["volume_m3", "valid_shape", "shell_count", "closed_shell"],
+        )?;
+        measured.push(nonnegative(&item["volume_m3"])?);
+        let shell_count = integer(&item["shell_count"], 0, 20_000)?;
+        let item_valid = item["valid_shape"]
+            .as_bool()
+            .ok_or("solid_valid_not_boolean")?;
+        let item_closed = item["closed_shell"]
+            .as_bool()
+            .ok_or("solid_closed_not_boolean")?;
+        each_ok &= item_valid && shell_count == 1;
+        all_closed &= item_closed;
+    }
+    require(
+        measured.windows(2).all(|w| w[0] <= w[1]) && all_closed == closed,
+        "solid_audit_order_or_summary",
+    )?;
+    let mut engine = result["metrics"]["region_loft"]["solid_volumes_m3"]
+        .as_array()
+        .ok_or("region_solid_volumes")?
+        .iter()
+        .map(finite)
+        .collect::<Result<Vec<_>>>()?;
+    engine.sort_by(f64::total_cmp);
+    let reported = nonnegative(&g["solid_volume_relative_error"])?;
+    let same_count = engine.len() == measured.len();
+    if same_count {
+        let error = measured
+            .iter()
+            .zip(&engine)
+            .map(|(a, b)| (a - b).abs() / b.max(1e-12))
+            .fold(0f64, f64::max);
+        require(close(error, reported), "solid_volume_error_contradiction")?;
+    }
+    Ok(valid
+        && closed
+        && solids == expected
+        && shells == expected
+        && each_ok
+        && same_count
+        && reported <= 1e-6
+        && relative <= 1e-6)
+}
+
+/// Per-piece trace reports of one sampled section agree with its pieces and its maximum.
+fn check_piece_reports(report: &Value, counts: &[usize]) -> Result<()> {
+    let pieces = report["pieces"].as_array().ok_or("piece_reports_type")?;
+    require(pieces.len() == counts.len(), "piece_reports_incomplete")?;
+    let mut maximum = None::<f64>;
+    for (index, (piece, count)) in pieces.iter().zip(counts).enumerate() {
+        exact_keys(piece, &["piece", "sample_count", "max_m"])?;
+        require(
+            piece["piece"].as_u64() == Some(index as u64)
+                && integer(&piece["sample_count"], 1, 1025)? == *count as u64,
+            "piece_report_identity",
+        )?;
+        let m = nonnegative(&piece["max_m"])?;
+        maximum = Some(maximum.map_or(m, |v| v.max(m)));
+    }
+    if let Some(m) = maximum {
+        require(
+            close(m, nonnegative(&report["max_m"])?),
+            "piece_maxima_contradiction",
+        )?;
+    }
+    Ok(())
 }
 
 // ------------------------------------------------------------ draft guesses

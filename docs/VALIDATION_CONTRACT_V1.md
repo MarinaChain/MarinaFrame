@@ -68,7 +68,7 @@ incomplete coverage, unsupported tolerances and contradictory conclusions fail.
 | Field | Meaning |
 | --- | --- |
 | `schema_version` | Exactly `marinaframe.validation.v1` |
-| `audit_contract_version` | Exactly `step_source_sections_v1` |
+| `audit_contract_version` | `step_source_sections_v1` for a single-solid run; `step_source_regions_v2` for a region run (see below). The run record decides; the contract cannot choose |
 | `binding` | Current generation/revision/run identity and all required content digests |
 | `checks` | Separate worker, integrity, CAD-validity and trace-fidelity statuses |
 | `outcome` | `passed` only when both geometric checks pass; otherwise `failed` |
@@ -149,3 +149,27 @@ contract and report the original raw score as well.
 Local hashes and exclusive controller locks detect inconsistent records and
 ordinary concurrent/interrupted changes. They do not authenticate a professional
 or defeat an actor who controls the host and rewrites every file and hash.
+
+## Region runs (`step_source_regions_v2`, 2026-11-07)
+
+A section spec may declare `pieces` (1..8 drawn curves, each an explicit corridor and height
+interval; an `inner_selection` makes an offset piece such as a skeg). The reader closes each piece
+into a ring and decomposes the rings into regions (`section_regions.py`); `build_region_hull` lofts
+matched regions into a compound of closed solids. Such a run carries `metrics.region_loft`, and its
+audit uses `step_source_regions_v2`. Tolerances, units and sampling are the v1 values. Additions:
+
+- `geometry_audit` adds `expected_solid_count` (must equal the run's `metrics.solid_count`),
+  `solids` (each reimported solid: volume, validity, shell count, closed shell; sorted by volume) and
+  `solid_volume_relative_error` (sorted reimported volumes against the engine's
+  `region_loft.solid_volumes_m3`). CAD validity needs every solid valid and closed with one shell,
+  the engine's solid count, and both relative errors at most 1e-6.
+- Each sampled section adds `pieces` (per piece: index, sample count, maximum distance); the
+  section maximum must equal the largest piece maximum. The STEP cut joins cuts 0.1 um aft and
+  forward of the station, so a solid that ends on the station plane is included.
+- The validation context adds `regions` (contract version, engine solid count, sorted solid
+  volumes, per-piece sample counts of the sampled sections). Python and Rust recompute it from the
+  run record; a region run without it, or a v1 claim for a region run, is refused
+  (`audit_contract_version_not_current_run`, `context_regions_not_current_run`).
+
+Single-solid runs keep the v1 contract, the v1 context and the v1 observation identity
+(`run_record.observed_geometry`), so earlier receipts still verify.

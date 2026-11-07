@@ -372,3 +372,31 @@ Gunnerus (development, 7.4).
 4. Product path: `build_region_hull` is not yet wired into `pipeline.py` / the validation
    contract (not owned here); the raster reader still gives one curve per section.
 5. Held-out twin-skeg case (for example a render of a twin-skeg CAD hull) and Series 60 / DSYHS.
+
+## 8. Round 2b (W9b): raster batching and region wiring
+
+Date: 2026-11-07. Gunnerus is development data (section 7); these runs are not a fair score.
+
+**Changes.** (1) `agent_tools`: an inspection batch takes sections while the ROI-area CPU estimate
+(1.0 CPU s per megapixel, from 7.5) stays within half of the unchanged 45 CPU s limit; the
+whole-half-body-plan ROIs (4.18 Mpx) now inspect 5 per call. (2) The deterministic policy names the
+next uninspected sections in each `inspect_source` call (`controller::inspect_next`): with 5 per
+call, 72 sections need 15 calls, and the repeat limit (3 identical actions) stopped the first draft
+run after 15 sections (`no_progress`, run `raster-0a81809-draft`). (3) Open item 7.8-4 is done:
+section specs may declare `pieces`, and region runs go through `build_region_hull`, STEP export
+and the v2 audit (`docs/VALIDATION_CONTRACT_V1.md`, "Region runs"). The raster Gunnerus spec does
+not declare pieces, so (3) does not change these runs.
+
+**Raster runs at `3c05737`** (clean tree; outputs `work/w9b/raster-3c05737-*`, not tracked):
+
+| Mode | Outcome | Inspection | Model |
+|---|---|---|---|
+| abstain | `abstained`: "multiple or no supported contour interpretations" after the first batch (5 sections) | 5 sections, 1 worker call, no resource limit | none |
+| draft | `abstained`: the draft build is `blocked` (`insufficient_sections`) | all 72 sections in 15 worker calls, 3.8–12.1 CPU s each (limit 45) | none |
+
+In draft mode every section has 0 selectable candidates: 36 sections stop at the tracing candidate
+budget (`resource_limit`, "Contour candidate complexity exceeds the bounded tracing budget"), and the
+other 36 are `ambiguous_curve` whose traced hypotheses jump between overlaid curves
+(`not_representable_as_bounded_corridor`). All 72 become `dropped_end` guesses, so the draft spec
+has no section. The CPU limit is no longer the cause; contour identity in an overlaid body plan is.
+Next: per-station corridors from the plan-view waterline anchors (7.5, proposal 2).

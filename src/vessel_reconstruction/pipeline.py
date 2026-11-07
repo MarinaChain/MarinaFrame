@@ -13,7 +13,7 @@ from .draft import DRAFT_EXPORT_NAMES, check_draft
 from .errors import GeometryError
 from .provenance import digest_file, digest_object, snapshot_implementation, environment_record, write_json
 from .resources import DEFAULT_POLICY, ResourceLimitError, source_extension, validate_sources
-from .run_record import SCHEMA_VERSION, TABLE_READING_FILE, seal_run, verify_run
+from .run_record import SCHEMA_VERSION, TABLE_READING_FILE, observed_geometry, seal_run, verify_run
 from .schema import MAX_SPEC_BYTES, TABLE_VISION_MODE, gap, loads_bounded_json, validate_spec
 from .transaction import RunPublicationError, RunTransaction, quarantine_interrupted
 
@@ -25,6 +25,11 @@ MAX_TABLE_READING_BYTES = 8 * 1024 * 1024
 # imports. They remain public module seams for embedding and fault-injection tests.
 def build_hull(*args, **kwargs):
     from .geometry import build_hull as build
+    return build(*args, **kwargs)
+
+
+def build_region_hull(*args, **kwargs):
+    from .geometry import build_region_hull as build
     return build(*args, **kwargs)
 
 
@@ -81,6 +86,16 @@ def _new_record(vessel_id: str, export_cad: bool) -> dict:
                 "replay_spec_sha256": digest_object(None), "submitted_spec_sha256": None,
                 "implementation_sha256": None,
                 "implementation_snapshot": {"status": "unavailable", "files_sha256": {}}}}
+
+
+def has_regions(sections: list[dict]) -> bool:
+    """True when any observed section is a multi-piece (region) station."""
+    return any("regions" in section for section in sections)
+
+
+def region_summary(report: dict) -> dict:
+    """Run-level record of a region loft: runs, solids, volumes and bounds, without stations."""
+    return {key: value for key, value in report.items() if key != "stations"}
 
 
 def _has_block(result):
@@ -290,6 +305,10 @@ def reconstruct(spec_path: str | Path, output_dir: str | Path, *, export_cad: bo
                 {"id": "lower_closure", "status": "review_required", "description": "A nonzero lowest breadth closes with a flat segment; geometry below a cropped view is unknown."},
                 {"id": "condition", "status": "unverified", "description": "Supplied drawing evidence, not independently verified present-day vessel condition."},
             ]
+            declared = input_spec.get("sections") if isinstance(input_spec.get("sections"), list) else []
+            if any(isinstance(section, dict) and "pieces" in section for section in declared):
+                result["assumptions"].append({"id": "region_matching", "status": "review_required", "description":
+                    "Regions of multi-piece stations are lofted only to the best-overlapping region of the same kind on the neighbouring station; an unmatched region ends with a flat closure."})
         if not _has_block(result):
             phase = "resource_preflight"
             transaction.checkpoint(phase)
@@ -325,11 +344,20 @@ def reconstruct(spec_path: str | Path, output_dir: str | Path, *, export_cad: bo
             extracted["sections"] = result["sections"]
             write_json(stage / "extracted_sections.json", extracted)
             result["provenance"].update(extraction_complete=True, extracted_geometry_sha256=digest_object([
-                {key: section[key] for key in ("id", "x_m", "points_yz_m")} for section in result["sections"]]))
+                observed_geometry(section) for section in result["sections"]]))
             if not _has_block(result):
                 phase = "cad_construction"
                 transaction.checkpoint(phase)
-                shape, normalized = build_hull(result["sections"])
+                regions = has_regions(result["sections"])
+                if regions:
+                    # Multi-piece stations: one closed solid per matched region
+                    # run; the compound's solids meet on shared faces.
+                    shape, region_report = build_region_hull(result["sections"])
+                    stations = {station["id"]: station for station in region_report["stations"]}
+                    normalized = [{**section, "cad_station": stations[section["id"]]}
+                                  for section in sorted(result["sections"], key=lambda s: s["x_m"])]
+                else:
+                    shape, normalized = build_hull(result["sections"])
                 provisional = metrics_for(shape)
                 constraints = input_spec.get("constraints", {})
                 tolerance = constraints.get("relative_tolerance", .03)
@@ -339,12 +367,17 @@ def reconstruct(spec_path: str | Path, output_dir: str | Path, *, export_cad: bo
                 if not _has_block(result):
                     phase = "geometry_export_and_reload"
                     transaction.checkpoint(phase)
-                    exports, metrics = export_geometry(shape, stage, export_cad=export_cad)
+                    # A single-solid run calls the export seam exactly as before.
+                    region_export = {"expected_solids": region_report["solid_count"]} if regions else {}
+                    exports, metrics = export_geometry(shape, stage, export_cad=export_cad, **region_export)
                     if "draft" in result:
                         _tag_draft_exports(stage, exports)
                     from .geometry import approximation_summary
-                    metrics.update(section_count=len(normalized), minimum_observation_coverage=min(s.get("coverage", 0) for s in result["sections"]),
-                                   geometry_approximation=approximation_summary(normalized))
+                    metrics.update(section_count=len(normalized), minimum_observation_coverage=min(s.get("coverage", 0) for s in result["sections"]))
+                    if regions:
+                        metrics["region_loft"] = region_summary(region_report)
+                    else:
+                        metrics["geometry_approximation"] = approximation_summary(normalized)
                     phase = "required_cad_evidence"
                     transaction.checkpoint(phase)
                     write_json(stage / "cad_sections.json", normalized)

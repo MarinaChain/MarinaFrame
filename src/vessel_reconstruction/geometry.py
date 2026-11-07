@@ -495,6 +495,7 @@ def build_region_hull(sections: list[dict], *, max_deviation_m: float = DEFAULT_
         "min_match_overlap": float(min_overlap),
         "stations": station_reports, "runs": run_reports, "unlofted_regions": unlofted,
         "solid_count": len(solids), "volume_m3": float(sum(r["volume_m3"] for r in run_reports)),
+        "solid_volumes_m3": [float(solid.Volume() / 1e9) for solid in solids],
         "volume_audit": "each solid's kernel volume equals its polygon prismatoid volume within "
                         f"{_REGION_VOLUME_AUDIT_TOLERANCE:g} relative",
         "uncertainty_scope": "CAD approximation and region matching of measured outlines only; excludes contour "
@@ -515,7 +516,13 @@ def metrics_for(shape: cq.Shape) -> dict:
     }
 
 
-def export_geometry(shape: cq.Shape, out: Path, *, export_cad: bool = True) -> tuple[dict, dict]:
+def export_geometry(shape: cq.Shape, out: Path, *, export_cad: bool = True,
+                    expected_solids: int = 1) -> tuple[dict, dict]:
+    """Write mesh.json and, on request, STEP and STL; reload the STEP and compare.
+
+    ``expected_solids`` is 1 for ``build_hull`` and the solid count of a
+    ``build_region_hull`` compound; the reloaded STEP must hold exactly that many.
+    """
     metrics = metrics_for(shape)
     tolerance_mm = max(0.5, metrics["beam_m"] * 1000 / 800)
     # CadQuery's convenience mesh/STL functions default to relative deflection.
@@ -536,7 +543,7 @@ def export_geometry(shape: cq.Shape, out: Path, *, export_cad: bool = True) -> t
         shape.exportStl(str(out / "model.stl"), tolerance=tolerance_mm, angularTolerance=0.15,
                         relative=False, parallel=False)
         reread = cq.importers.importStep(str(out / "model.step")).val()
-        if not reread.isValid() or len(reread.Solids()) != 1:
+        if not reread.isValid() or len(reread.Solids()) != expected_solids:
             raise GeometryError("The exported STEP file failed independent reload validation.")
         reloaded = metrics_for(reread)
         rel = abs(reloaded["volume_m3"] - metrics["volume_m3"]) / metrics["volume_m3"]

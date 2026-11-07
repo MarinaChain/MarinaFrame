@@ -764,6 +764,99 @@ def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, i
     return result, diagnostic
 
 
+# A multi-piece station keeps all its observed samples within the per-section
+# sample bound of the run record and the audit contract.
+MAX_PIECE_SAMPLES = 1025
+PIECE_READING = "explicit_piece_corridors_to_outline_regions_v1"
+
+
+def _trace_piece(image, section, selection, low, high, source_file, input_details):
+    """Trace one curve of a piece in its own corridor and height interval."""
+    piece_view = {key: value for key, value in section.items() if key not in ("pieces", "contour_selection")}
+    piece_view.update(z_min_m=low, z_max_m=high, contour_selection=selection)
+    result, diagnostic = _extract_one(image, piece_view, source_file, input_details)
+    points = np.asarray(result["points_yz_m"], dtype=float)
+    return points[np.argsort(points[:, 1], kind="stable")], result, diagnostic
+
+
+def extract_pieces(image: np.ndarray, section: dict[str, Any], source_file: str,
+                   input_details: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Read a multi-piece station into outline rings and one-interval-per-height regions.
+
+    Each declared piece is traced with the same engine as a single section, in
+    its own explicit corridor and height interval; ``section_regions``
+    decomposes the closed rings into regions for ``geometry.build_region_hull``.
+    Overlapping pieces are refused, not merged.
+    """
+    from .errors import GeometryError
+    from .section_regions import decompose_outline, piece_ring
+
+    section_id = str(section.get("id", "unnamed"))
+    pieces = section.get("pieces")
+    if not isinstance(pieces, list) or not 1 <= len(pieces) <= 8:
+        raise DrawingError("invalid_pieces", "pieces must list 1..8 declared piece corridors.")
+    records, rings, diagnostics = [], [], []
+    for index, piece in enumerate(pieces):
+        try:
+            low, high = _finite_number(piece.get("z_min_m"), "z_min_m"), _finite_number(piece.get("z_max_m"), "z_max_m")
+            outer, outer_result, outer_diag = _trace_piece(image, section, piece.get("contour_selection"), low, high,
+                                                           source_file, input_details)
+            inner = inner_result = None
+            if "inner_selection" in piece:
+                inner, inner_result, inner_diag = _trace_piece(image, section, piece["inner_selection"], low, high,
+                                                               source_file, input_details)
+                diagnostics.append({"piece": index, "outer": outer_diag, "inner": inner_diag})
+            else:
+                diagnostics.append({"piece": index, "outer": outer_diag})
+            rings.append(piece_ring(outer, inner, section_id=section_id))
+        except (DrawingError, GeometryError, AttributeError) as exc:
+            if isinstance(exc, DrawingError):
+                kind = exc.kind
+            else:
+                kind = "invalid_outline" if isinstance(exc, GeometryError) else "invalid_pieces"
+            raise DrawingError(kind, f"Piece {index}: {exc}", {"pieces": diagnostics,
+                               **(exc.diagnostics if isinstance(exc, DrawingError) else {})}) from None
+        record = {"z_range_m": [low, high], "points_yz_m": outer.tolist(),
+                  "evidence": {"contour_selection": outer_result["evidence"]["contour_selection"],
+                               "measurement_uncertainty_m": outer_result["evidence"]["measurement_uncertainty_m"]}}
+        if inner is not None:
+            record["inner_points_yz_m"] = inner.tolist()
+            record["evidence"]["inner_selection"] = inner_result["evidence"]["contour_selection"]
+            record["evidence"]["measurement_uncertainty_m"] = max(record["evidence"]["measurement_uncertainty_m"],
+                                                                  inner_result["evidence"]["measurement_uncertainty_m"])
+        records.append((record, outer_result, inner_result))
+    samples = sum(len(r["points_yz_m"]) + len(r.get("inner_points_yz_m", [])) for r, _, _ in records)
+    if samples > MAX_PIECE_SAMPLES:
+        raise DrawingError("input_limit", f"The pieces give {samples} samples; at most {MAX_PIECE_SAMPLES} per station. Lower sample_count.")
+    try:
+        regions = decompose_outline([ring.tolist() for ring in rings], section_id=section_id)
+    except GeometryError as exc:
+        raise DrawingError("invalid_outline", str(exc), {"pieces": diagnostics}) from None
+    results = [result for _, outer_result, inner_result in records for result in (outer_result, inner_result) if result]
+    first = results[0]
+    uncertainty = max(r["evidence"]["measurement_uncertainty_m"] for r in results)
+    coverage = min(r["coverage"] for r in results)
+    result = {"id": section_id, "x_m": first["x_m"],
+              "pieces": [record for record, _, _ in records],
+              "outline_rings_yz_m": [ring.tolist() for ring in rings],
+              "regions": [{"kind": region["kind"], "rows_m": region["rows_m"]} for region in regions],
+              "confidence": min(r["confidence"] for r in results), "coverage": coverage,
+              "evidence": {"roi_px": list(section["roi_px"]), "calibration": dict(section["calibration"]),
+                           "source_file": source_file, "input_form": input_details["input_form"],
+                           "human_assistance": section.get("evidence", "Caller-supplied panel and coordinate calibration"),
+                           "reading": PIECE_READING, "piece_count": len(records),
+                           "region_count": len(regions), "region_kinds": [region["kind"] for region in regions],
+                           "identity_status": "explicit_supplied_piece_selections",
+                           "measurement_uncertainty_m": uncertainty,
+                           "uncertainty_basis": "Largest piece uncertainty: half detected stroke width or 0.75 pixel; excludes calibration error, scan distortion, and as-built uncertainty"},
+              "warnings": ["Each piece is traced in an explicit caller-supplied corridor and height interval; "
+                           "which drawn curves form the station is caller evidence, not proof of contour identity.",
+                           "A piece without an inner curve is closed horizontally to the centreline at its ends; "
+                           "an offset piece holds material only between its inner and outer curves."]}
+    return result, {"pieces": diagnostics, "coverage": coverage, "measurement_uncertainty_m": uncertainty,
+                    "identity_status": "explicit_supplied_piece_selections", "region_count": len(regions)}
+
+
 def extract_sections(spec: dict, base_dir: Path) -> dict:
     """Measure supported starboard half-sections and return structured gaps.
 
@@ -806,7 +899,8 @@ def extract_sections(spec: dict, base_dir: Path) -> dict:
             continue
         seen.add(section_id)
         try:
-            result, diagnostic = _extract_one(image, section, source["file"], input_details)
+            extract = extract_pieces if "pieces" in section else _extract_one
+            result, diagnostic = extract(image, section, source["file"], input_details)
             output["sections"].append(result)
             output["diagnostics"]["sections"][section_id] = diagnostic
         except DrawingError as exc:

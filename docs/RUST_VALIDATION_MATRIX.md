@@ -107,3 +107,20 @@ removed guesses, worker-forged guess, policy confirmation, operator resolution t
 to `awaiting_human_review`) and unit tests in `validation.rs`, `controller.rs`, `types.rs`.
 Mutation check (2026-11-07): removing each row's check (9 mutations, including the generation
 binding and the draft stop) fails at least one `DG` test.
+
+## Region runs (multi-piece stations, 2026-11-07)
+
+A region run (`metrics.region_loft`) must carry the `step_source_regions_v2` audit; Rust checks it
+independently of Python (`validation::assess`, `region_cad_pass`, `check_piece_reports`):
+
+| Check | Error code |
+|---|---|
+| Contract version and context `regions` agree with the run record (v2 only for a region run) | `audit_contract_version_not_current_run` |
+| Context `regions` equals the run's solid count, sorted solid volumes and sampled piece counts | `context_regions_not_current_run` |
+| Expected solid count equals the run's `metrics.solid_count` | `audit_expected_solids_not_current_run` |
+| Per-solid audit complete, sorted, summary consistent; volume error recomputed | `solid_audit_incomplete`, `solid_audit_order_or_summary`, `solid_volume_error_contradiction` |
+| Per-piece reports: index, sample count, maxima agree with the section | `piece_reports_incomplete`, `piece_report_identity`, `piece_maxima_contradiction` |
+
+Tests: `rust-control/tests/region_pipeline.rs` (4 real-CAD tests: a deterministic run of
+`tests/region_fixture.py` reaches `awaiting_human_review` through v2; a removed context `regions`, a
+changed solid volume and a v1 claim are refused).

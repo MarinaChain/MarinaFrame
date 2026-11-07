@@ -28,7 +28,18 @@ from .schema import MAX_SPEC_BYTES, load_bounded_json, loads_bounded_json, valid
 DOMAIN_VERSION = "source_bound_tools_v1"
 VIEWS = ("body", "plan", "profile", "oblique")
 MAX_CANDIDATES = 10
+# Most sections in one inspection call (and in one observation).
 INSPECTION_BATCH = 12
+# CPU limit of one non-native worker call (RLIMIT_CPU). It is not raised here.
+INSPECTION_CPU_SECONDS = 45
+# Estimated inspection CPU per megapixel of section ROI. Measured on the
+# Gunnerus composite body plan (docs/BENCHMARK_GUNNERUS.md 7.5): a 4.18 Mpx
+# whole-half-body-plan ROI needs 3.4-3.9 CPU s, and 12 such ROIs 50.4 CPU s
+# (1.0 s/Mpx). Tracing cost grows with the pixels and the overlaid ink in the ROI.
+INSPECTION_CPU_SECONDS_PER_MEGAPIXEL = 1.0
+# A batch is filled only up to this share of the CPU limit, so drawings denser
+# than the measured one still finish inside the unchanged limit.
+INSPECTION_BUDGET_SHARE = 0.5
 MAX_INSPECTION_BYTES = 24 * 1024 * 1024
 SEMANTIC_FLAGS = {"human_semantic_review_required": True, "engineering_approved": False,
                   "identity_certified": False}
@@ -275,7 +286,7 @@ class DomainTools:
         request_path = self.root / f"request-{uuid4().hex}.json"
         write_json(request_path, request)
         limits = replace(DEFAULT_LIMITS, wall_seconds=120 if native else 60,
-                         cpu_seconds=90 if native else 45, output_bytes=64 * 1024**2)
+                         cpu_seconds=90 if native else INSPECTION_CPU_SECONDS, output_bytes=64 * 1024**2)
         command = [sys.executable, "-m", "vessel_reconstruction.agent_render_worker",
                    "--operation", operation, "--request", str(request_path), "--out", str(out),
                    "--limits", json.dumps(asdict(limits)), "--parent", str(os.getpid())]
@@ -294,6 +305,24 @@ class DomainTools:
         finally:
             request_path.unlink(missing_ok=True)
 
+    def _inspection_batch(self, requested: list[str]) -> list[str]:
+        """The first requested sections whose estimated inspection CPU fits the budget.
+
+        Not-yet-inspected sections are costed by their ROI pixel count; cached
+        ones cost nothing. The first section is always taken, so a batch is
+        never empty; at most INSPECTION_BATCH sections are taken.
+        """
+        budget = INSPECTION_BUDGET_SHARE * INSPECTION_CPU_SECONDS
+        by_id = {s["id"]: s for s in self.spec["sections"]}
+        batch, estimate = [], 0.0
+        for sid in requested[:INSPECTION_BATCH]:
+            cost = 0.0 if sid in self.state["catalog"] else estimated_inspection_cpu_seconds(by_id[sid])
+            if batch and estimate + cost > budget:
+                break
+            batch.append(sid)
+            estimate += cost
+        return batch
+
     def _inspect_source(self, section_ids=None):
         if self.state["input_errors"]:
             return self._observation(False, "blocked", validation_errors=self.state["input_errors"][:32])
@@ -303,7 +332,7 @@ class DomainTools:
         requested = section_ids or [s["id"] for s in self.spec["sections"] if s["id"] not in self.state["catalog"]]
         if not requested:
             requested = [s["id"] for s in self.spec["sections"]]
-        ids = requested[:INSPECTION_BATCH]
+        ids = self._inspection_batch(requested)
         missing = [sid for sid in ids if sid not in self.state["catalog"]]
         resources = {}
         if missing:
@@ -337,7 +366,7 @@ class DomainTools:
         page_artifacts = [a for a in self.state["inspection_artifacts"] if
                           a["kind"] == "source_page" or a.get("evidence_kind") == "source_page"][-2:]
         observation = self._observation(True, "observed", sections=sections, resources=resources,
-            returned_section_ids=list(ids), remaining_requested_section_ids=requested[INSPECTION_BATCH:],
+            returned_section_ids=list(ids), remaining_requested_section_ids=requested[len(ids):],
             remaining_section_ids=[s["id"] for s in self.spec["sections"] if s["id"] not in self.state["catalog"]][:24],
             artifacts=[a for a in self.state["inspection_artifacts"] if a.get("section_id") in ids] + page_artifacts)
         # Native evidence remains complete; the model observation is bounded.
@@ -398,7 +427,8 @@ class DomainTools:
             if cid is None:
                 continue
             candidate = next(c for c in self.state["catalog"][section["id"]]["candidates"] if c["candidate_id"] == cid)
-            section["contour_selection"] = copy.deepcopy(candidate["contour_selection"])
+            if not candidate.get("declared_pieces"):
+                section["contour_selection"] = copy.deepcopy(candidate["contour_selection"])
             prior = section.get("evidence", "Caller-supplied calibration.")
             if guess is not None:
                 section["evidence"] = (prior[:7000] + " Draft guess " + guess["guess_id"] + " took " + cid +
@@ -656,6 +686,74 @@ def _grid_evidence(mask, origin):
             "interpretation": "Geometric grid hypothesis only; overlap with a true contour cannot be semantically certified."}
 
 
+def estimated_inspection_cpu_seconds(section: dict) -> float:
+    """Estimated worker CPU seconds to inspect one section, from its ROI area."""
+    left, top, right, bottom = section["roi_px"]
+    return INSPECTION_CPU_SECONDS_PER_MEGAPIXEL * (right - left) * (bottom - top) / 1e6
+
+
+def _write_section_evidence(image, section: dict, entry: dict, out: Path, source_sha: str, artifacts: list):
+    """Write the candidate overlay and evidence record of one inspected section."""
+    sid = section["id"]
+    basename = "section-" + digest_object(sid)[:12]
+    _source_overlay(image, section, entry, out / (basename + ".png"))
+    write_json(out / (basename + ".json"), entry)
+    artifacts.extend([
+        {"file": basename + ".png", "kind": "source_candidate_overlay", "section_id": sid,
+         "source_sha256": source_sha, "coordinate_system": "original source pixels; crop shown with identical orientation and scale"},
+        {"file": basename + ".json", "kind": "source_candidate_evidence", "section_id": sid,
+         "source_sha256": source_sha}])
+
+
+def _declared_pieces_entry(image, section: dict, source_file: str, details: dict, source_sha: str,
+                           implementation_sha: str) -> dict:
+    """Inspection record of a multi-piece section: one candidate, the declared pieces.
+
+    The pieces (corridors and height intervals) are caller evidence of which
+    drawn curves form the station. The worker reads them with the engine's
+    piece reader; it does not search for other contours. If the reader
+    refuses a piece, the section has no candidate and its gap is recorded.
+    """
+    from .ingest import DrawingError, extract_pieces
+    entry = {"section_id": section["id"], "source_sha256": source_sha, "x_m": section["x_m"],
+             "implementation_sha256": implementation_sha,
+             "roi_px": section["roi_px"], "calibration": section["calibration"],
+             "candidates": [], "baseline_gaps": [], "retained_diagnostics": {},
+             "retained_competing_count": 0, "rejected_trace_hypotheses": [],
+             "semantic_identity": "unresolved_human_review_required", **SEMANTIC_FLAGS}
+    entry["grid_evidence"] = {"lattice_detected": False, "unique_non_grid_candidate_id": None,
+                              "non_grid_competing_components": None,
+                              "interpretation": "Declared piece corridors; no grid grammar is applied."}
+    try:
+        result, diagnostic = extract_pieces(image, section, source_file, details)
+    except DrawingError as exc:
+        entry["baseline_gaps"] = [{"kind": exc.kind, "message": str(exc), "section_id": section["id"]}]
+        entry["retained_diagnostics"] = exc.diagnostics
+        return entry
+    entry["retained_diagnostics"] = diagnostic
+    traces = [trace for piece in diagnostic["pieces"] for trace in (piece["outer"], piece.get("inner")) if trace]
+    calibration = section["calibration"]
+    ppm, centre, baseline = calibration["pixels_per_metre"], calibration["centerline_px"], calibration["baseline_px"]
+    source_points = [[float(centre + y * ppm), float(baseline - z * ppm)]
+                     for piece in result["pieces"] for key in ("points_yz_m", "inner_points_yz_m")
+                     for y, z in piece.get(key, [])]
+    cid = "pieces-" + digest_object({"source": source_sha, "section": section})[:20]
+    entry["candidates"].append({
+        "candidate_id": cid, "hypothesis": "declared_piece_corridors", "generated_by": ["declared_piece_corridors"],
+        "selectable": True, "declared_pieces": True,
+        "source_support": {"observed_row_fraction": round(min(t["coverage"] for t in traces), 5),
+                           "max_missing_run_px": max(t["max_missing_run_px"] for t in traces),
+                           "maximum_step_px_per_row": round(max(t["maximum_step_px_per_row"] for t in traces), 4),
+                           "long_component_support_fraction": round(min(t["long_component_support_fraction"] for t in traces), 5),
+                           "mean_trace_contrast": round(min(t["mean_trace_contrast"] for t in traces), 5)},
+        "grid_supported_hypothesis": False, "non_grid_competing_components": 0,
+        "piece_count": len(result["pieces"]), "region_kinds": result["evidence"]["region_kinds"],
+        "source_points_px": source_points, "identity_certified": False})
+    entry["grid_evidence"]["unique_non_grid_candidate_id"] = cid
+    entry["grid_evidence"]["non_grid_competing_components"] = 0
+    return entry
+
+
 def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) -> dict:
     """Private worker operation. No labels/reference geometry are opened."""
     import numpy as np
@@ -685,6 +783,12 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
     for section in spec["sections"]:
         sid = section["id"]
         if sid not in section_ids:
+            continue
+        if "pieces" in section:
+            entry = _declared_pieces_entry(image, section, spec["source"]["file"], details, source_sha,
+                                           digest_object(implementation))
+            _write_section_evidence(image, section, entry, out, source_sha, artifacts)
+            sections.append(entry)
             continue
         diagnostic, gaps = {}, []
         try:
@@ -849,14 +953,7 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
             grid["non_grid_competing_components"] = 0
         else:
             grid["non_grid_competing_components"] = min((c["non_grid_competing_components"] for c in entry["candidates"]), default=None)
-        basename = "section-" + digest_object(sid)[:12]
-        _source_overlay(image, section, entry, out / (basename + ".png"))
-        write_json(out / (basename + ".json"), entry)
-        artifacts.extend([
-            {"file": basename + ".png", "kind": "source_candidate_overlay", "section_id": sid,
-             "source_sha256": source_sha, "coordinate_system": "original source pixels; crop shown with identical orientation and scale"},
-            {"file": basename + ".json", "kind": "source_candidate_evidence", "section_id": sid,
-             "source_sha256": source_sha}])
+        _write_section_evidence(image, section, entry, out, source_sha, artifacts)
         sections.append(entry)
     model_artifacts = []
     for artifact in artifacts:
