@@ -39,6 +39,9 @@ def _score_one(args) -> str:
         score = T.score_model(root / "sealed" / "truth" / f"{result['hull_id']}.npz", case_dir / "model.step", stations)
     except Exception as exc:  # recorded as a scoring failure
         score = {"status": "scoring_error", "error": f"{type(exc).__name__}: {exc}"}
+    if result["split"] == "hull-disjoint (v2)":
+        score["split"] = "hull-disjoint (v2)"
+        score["split_caveat"] = "Clusters can share broad families with the frozen splits; this is not family-disjoint."
     (case_dir / "score.json").write_text(json.dumps(score, indent=1) + "\n")
     return result["case_id"]
 
@@ -112,11 +115,13 @@ HEADER = ("| {k} | attempted | built | abstained | failed | correct / attempted 
 def cmd_table(root: Path, runs: list[str], out: Path | None) -> str:
     rows = load_rows(root, runs)
     text = []
-    for split in ("development", "validation", "test"):
+    for split in ("development", "validation", "test", "hull-disjoint (v2)"):
         part = [r for r in rows if r["split"] == split]
         if not part:
             continue
         text.append(f"\n### Split: {split} ({len(part)} cases, {len({r['hull_id'] for r in part})} hulls)\n")
+        if split == "hull-disjoint (v2)":
+            text.append("Clusters can share broad families with the frozen splits; this is not family-disjoint.\n")
         for title, key, labels in (("By degradation level", "level", LEVEL_NAMES), ("By layout", "layout", None)):
             text.append(f"\n{title}\n\n" + HEADER.format(k=key))
             values = sorted({r[key] for r in part})

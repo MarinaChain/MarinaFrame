@@ -114,8 +114,9 @@ def run_case(case: dict, run_dir: Path, inputs: Path, controller: Path, python: 
     return record
 
 
-def load_cases(split: str | None, only: list[str] | None, limit: int | None) -> list[dict]:
-    cases = [json.loads(line) for line in (MANIFEST_DIR / "cases.jsonl").read_text().splitlines()]
+def load_cases(split: str | None, only: list[str] | None, limit: int | None,
+               manifest_dir: Path = MANIFEST_DIR) -> list[dict]:
+    cases = [json.loads(line) for line in (manifest_dir / "cases.jsonl").read_text().splitlines()]
     if split:
         cases = [c for c in cases if c["split"] == split]
     if only:
@@ -126,6 +127,8 @@ def load_cases(split: str | None, only: list[str] | None, limit: int | None) -> 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
+    parser.add_argument("--manifest-dir", type=Path, default=MANIFEST_DIR,
+                        help="frozen case manifests (use sealed-v2 only at an approved frozen checkpoint)")
     parser.add_argument("--run", required=True, help="run name; one folder under runs/")
     parser.add_argument("--split")
     parser.add_argument("--cases", help="comma-separated case ids")
@@ -141,7 +144,7 @@ def main() -> None:
     run_dir = args.root / "runs" / args.run
     run_dir.mkdir(parents=True, exist_ok=True)
     task_root = Path("/tmp/mf_factory") / args.run
-    cases = load_cases(args.split, args.cases.split(",") if args.cases else None, args.limit)
+    cases = load_cases(args.split, args.cases.split(",") if args.cases else None, args.limit, args.manifest_dir)
     provenance = {"code": git_state(), "controller_sha256": _sha256(args.controller)}
     (run_dir / "run_info.json").write_text(json.dumps({"run": args.run, "started": time.strftime("%Y-%m-%dT%H:%M:%S"),
                                                        "cases": len(cases), "jobs": args.jobs, **provenance}, indent=1) + "\n")
