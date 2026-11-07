@@ -258,3 +258,20 @@ line identity) and draft mode target it. The factory sealed split is used up: ge
 sealed split (new Ship-D clusters and held-back named hulls) before the next final comparison.
 Investigate the silent wrong build (`sysser45-L1`) as a priority: a confident wrong answer is
 worse than an abstention.
+
+## Founder decisions, night of 2026-11-08
+
+- Push and pull requests: the CEO session may push, open, update and merge its own PRs and keep
+  branches tidy ("you have full reign"). Still asked first: force-push, rewriting published
+  history, deleting remote branches it did not create, repo settings/visibility, releases.
+- All project documents may go to the public repository; the founder will make it private later.
+- Auto-fix is on for PR #4.
+- MiDShip tranche 2 (about 3.5 GB) approved.
+- CAD direction ("mostly agree"): the vision LLM may write vessel models as programs in a
+  restricted ship language (not free Python), run in an isolated worker without network or file
+  access, with every number measured from the drawings and every result checked against all
+  views; unresolved parts are draft guesses. Supersedes the 0.4 rule "model-generated code is
+  never executed" for this restricted language only.
+- The founder expects DeepSeek to extract numbers from pixels well. To be measured before
+  deciding how freely the model may set numbers: DeepSeek localisation accuracy vs factory truth
+  and vs the deterministic tracer (after W12's vision-request command merges).
