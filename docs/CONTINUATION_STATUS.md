@@ -235,3 +235,11 @@ reached their wall/CPU limits and ended blocked for a different reason than the 
 Not a logic failure in draft mode, but the worker limits are tight under contention. Follow-up:
 rerun `make test-full` on a quiet machine before any release; W9b is fixing the known flaky
 cancellation test; consider test-only timeouts that scale with load, never weaker checks.
+
+## Provider transfer decision (2026-11-07)
+
+The founder, in chat: "yes you can send any of them to deepseek". Sending crops or pages of
+any acquired drawing (HAER, ALMA, Gunnerus, MiDShip, Ship-D renders, SIMMAN/DSYHS renders) to
+the DeepSeek provider through the Rust provider worker is authorized for development and
+evaluation. Receipts must still record every image sent (hash, size, crop box). This does not
+change redistribution: no drawing or derivative is committed or published.
