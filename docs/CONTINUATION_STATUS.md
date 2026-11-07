@@ -344,3 +344,9 @@ Usage: 874 requests, 2.80 M prompt tokens, list cost $0.541.
 - Head-to-head protocol and decision rule pre-registered in
   docs/plans/2026-11-08-h2h-sealed-v2.md (d9d8609) before any v2 result. Run: Sol job
   20261108-051711-53879, worktree h2h-sealed-v2. After it, the v2 split is spent for model selection.
+- Data loss and restore (2026-11-08): removing merged worktrees with `--force` deleted their
+  ignored `work/` folders: the sealed v2 inputs/truth, and the raw sysser45 and W13 trace evidence
+  (committed summaries remain). Sealed v2 was regenerated with the frozen generator: cases.jsonl,
+  hulls.json and selection.json are byte-identical; `sealed_v2 --verify` passes against the frozen
+  manifests. Data now in the main checkout's work/factory-sealed-v2/. No case had run. Head-to-head
+  resumed as job 20261108-052534-56428. Lesson recorded in ~/tasks/lessons.md.
