@@ -1,0 +1,43 @@
+{
+ "cases": 288,
+ "caveat": "Clusters can share broad families with the frozen splits; this is not family-disjoint.",
+ "clusters": 9,
+ "counts": {
+  "overlay": {
+   "0": 36,
+   "1": 36,
+   "2": 36,
+   "3": 36
+  },
+  "separate": {
+   "0": 36,
+   "1": 36,
+   "2": 36,
+   "3": 36
+  }
+ },
+ "files_sha256": {
+  "cases.jsonl": "b442e3e230519a8ac7bb909772dabe28dfa7d5edb75e970f9ff8ac5e028232be",
+  "hulls.json": "219b1db327fe8382fa5e9b4ae7ba35edc670adeab158ca4c51c08285a1297f20",
+  "selection.json": "3edb262447375b0ae4856ba3afa2c87163d7bc2029e842c84b0d8a2c35e5901f"
+ },
+ "generator_commit": {
+  "commit": "ad2e2b662e51d89003e08409c9786365581a9bde",
+  "dirty": false
+ },
+ "generator_sha256": {
+  "benchmarks/factory/generate.py": "e634b379f4873bc8bd68b3aaf4c6a3b9185d10735decdd184d3083bf3ad76315",
+  "benchmarks/factory/hulls.py": "ba7eea9af808f778d6f155961d19b455e90c664a012879b57c539a59de0554c6",
+  "benchmarks/factory/render.py": "3bc4ad3025800e25d26a7212ccafd4969b28c9f3295980d69cb532e224f18e80",
+  "benchmarks/factory/sealed_v2.py": "95a642dd67ace9538ba38ab1b5037367cb8401a28ebe8421372e19b7857caa99",
+  "benchmarks/factory/splits.py": "07f6dcc93353b52ac9d04b33c3f9c0341251efb10d8c07bb4a9b9a4e93211faf",
+  "benchmarks/factory/truth.py": "87a9a910e689542e32672e6bf29e6fd38a3a9471fb7fe5602dcb9a5273a06635",
+  "benchmarks/gunnerus/hull_metrics.py": "f259270988211e1cdb7d41b9a0983419ecc2a27aa604473eb82b0b0c7a6d0c36"
+ },
+ "hulls": 36,
+ "name": "hull-disjoint (v2)",
+ "root": "work/factory-sealed-v2",
+ "rule": "Score only at frozen checkpoints: deterministic abstain vs deterministic draft vs LLM-first; never during development.",
+ "scoring_started": false,
+ "seed": 20261108
+}

@@ -97,6 +97,16 @@ usable sections on all 9 stations). The diffusion-augmented sets were not used. 
 (listed in `hulls.json`). One deviation from the brief: the Delft series (59 hulls) is one family rather than 59, because its hulls are
 variations of parent forms.
 
+### Sealed split v2
+
+Replacement holdout: **hull-disjoint (v2)**, generated 2026-11-08. **Clusters can share broad families with the frozen splits; this is not family-disjoint.** All named families were already used, so only Ship-D is included.
+
+A new fixed-seed partition (**20261108**, 256 standardised-parameter k-means++ clusters) excludes every cluster containing a previously rendered hull, plus prior rejected candidates. Nine unoccupied clusters (122, 88, 31, 176, 120, 221, 217, 182, 212) supply four feasible hulls each. Each of the **36 hulls** has both layouts and all four degradation levels: **288 drawings**, 36 per layout/level cell (144 separate, 144 overlay; 72 per level).
+
+Frozen manifests, full selection parameters and protocol: `benchmarks/factory/manifests/sealed-v2/README.md`. `split_manifest.json` SHA-256: `856a37fad69439cd9fc83a75382699d5988323c0aa68ed9b1eaf66fcfdef81d3`. Drawings/specs are in ignored `work/factory-sealed-v2/inputs/` (350.9 MiB); truth is separate in `work/factory-sealed-v2/sealed/truth/` (13.5 MiB), never read by inference. The original loader, truth builder and renderer are unchanged.
+
+**Score only at frozen checkpoints**: deterministic abstain vs deterministic draft vs LLM-first; never during development. Generation was checked by hashes, spec validation, complete truth tables and Read-tool samples at all four levels. No pipeline or scorer was run on v2 and no reader output was inspected.
+
 ## 5. Protocol actually followed
 
 1. Metrics, generator and splits written; scorer checked on a box hull with a cadquery STEP (`tests/test_factory.py`, mark `cad`).
