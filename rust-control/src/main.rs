@@ -48,11 +48,12 @@ fn execute() -> Result<serde_json::Value> {
     if command == "help" || command == "--help" {
         return Ok(
             json!({"program":"MarinaFrame 0.4.0 Rust authoritative controller","commands":{
-        "run":"--task DIR --source SPEC --worker-python PYTHON [--worker-source SRC] [--policy deterministic|live] [--on-ambiguity abstain|draft] [--provider-transfer-basis TEXT] [--steps N]",
+        "run":"--task DIR --source SPEC --worker-python PYTHON [--worker-source SRC] [--policy deterministic|live] [--on-ambiguity abstain|draft] [--provider-transfer-basis TEXT] [--model-review true] [--steps N]",
         "resume":"--task DIR [--continue-after-unknown true] [--clear-cancel true] [--steps N]",
         "step":"--task DIR --intervention JSON --actor human_operator|assistant_operator --note TEXT",
         "status":"--task DIR","verify":"--task DIR","cancel":"--task DIR","recover-checkpoint":"--task DIR",
-        "read-table":"--crops DIR --out NEW_DIR --provider-transfer-basis TEXT (live offset-table cell transcription; see docs/VISION_TABLE_READING.md)"},
+        "read-table":"--crops DIR --out NEW_DIR --provider-transfer-basis TEXT (live offset-table cell transcription; see docs/VISION_TABLE_READING.md)",
+        "vision-request":"--request DIR --out NEW_DIR --provider-transfer-basis TEXT (one sheet_setup or build_review request; see docs/LLM_SETUP_AND_REVIEW.md)"},
         "automated_engineering_approval":false,"live_campaign_aggregate_caps":null}),
         );
     }
@@ -82,6 +83,13 @@ fn execute() -> Result<serde_json::Value> {
         let basis = take(&mut args, "provider-transfer-basis")?;
         no_extra(&args)?;
         return table_reading::read_table(&crops, &out, &basis);
+    }
+    if command == "vision-request" {
+        let request = util::absolute(Path::new(&take(&mut args, "request")?))?;
+        let out = util::absolute(Path::new(&take(&mut args, "out")?))?;
+        let basis = take(&mut args, "provider-transfer-basis")?;
+        no_extra(&args)?;
+        return provider::vision::vision_request(&request, &out, &basis);
     }
     let task = PathBuf::from(take(&mut args, "task")?);
     if command == "check-validation" {
@@ -153,6 +161,11 @@ fn execute() -> Result<serde_json::Value> {
         if policy == Policy::Live && basis.is_empty() {
             return Err("live_provider_transfer_basis_required".into());
         }
+        // The vision-model veto sends drawing crops, so it needs a transfer basis.
+        let model_review = boolean(&mut args, "model-review")?;
+        if model_review && basis.is_empty() {
+            return Err("model_review_requires_provider_transfer_basis".into());
+        }
         let count = steps(&mut args)?;
         no_extra(&args)?;
         let config = Config {
@@ -168,6 +181,12 @@ fn execute() -> Result<serde_json::Value> {
             on_ambiguity,
         };
         let mut store = store::Store::create(&task, controller::new_state(config))?;
+        if model_review {
+            store.append(
+                controller::model_review::REQUESTED_EVENT,
+                json!({"can_veto":true,"can_approve":false,"engineering_approved":false}),
+            )?;
+        }
         if controller::initialize(&mut store)? {
             controller::run_loop(&mut store, count)?;
         }

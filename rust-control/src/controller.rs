@@ -9,6 +9,9 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+#[path = "model_review.rs"]
+pub mod model_review;
+
 /// Test-only hook into finalization. It runs at "after_predicate" (current
 /// contract passed, domain guard held) and "before_commit" (review-ready state
 /// set, not yet committed). Tests use it for the interleavings that the Python
@@ -1223,6 +1226,12 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
                     store.state.last_observation = json!({"ok":false,"status":"rejected","error_code":"current_step_body_and_oblique_pixels_not_observed_by_model","engineering_approved":false,"human_semantic_review_required":true});
                     store.append("finalization_rejected",json!({"reason":"current_step_body_and_oblique_pixels_not_observed_by_model"}))?;
                     return Ok(true);
+                }
+                // The vision model can only add a blocking finding here; no veto changes nothing.
+                if let Some(veto) = model_review::veto(store, &contract.binding.step_sha256)? {
+                    store.state.last_observation = json!({"ok":false,"status":"rejected","error_code":"model_review_veto","model_review":veto,"engineering_approved":false,"human_semantic_review_required":true});
+                    stop(store, Status::ValidationFailed, "model_review_veto")?;
+                    return Ok(false);
                 }
                 store.state.status = Status::AwaitingHumanReview;
                 store.state.termination_reason = Some(finish.summary);

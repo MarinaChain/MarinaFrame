@@ -107,6 +107,7 @@ fn provider_fixture() -> (tempfile::TempDir, store::Store, Pending, Receipt) {
         credential_selection: None,
         purpose: Default::default(),
         transcription: None,
+        vision: None,
     };
     (directory, store, pending, receipt)
 }

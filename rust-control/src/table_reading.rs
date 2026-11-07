@@ -481,6 +481,7 @@ mod tests {
             credential_selection: None,
             purpose: Purpose::TableTranscription,
             transcription: None,
+            vision: None,
         }
     }
 
