@@ -176,6 +176,19 @@ result is the reference line, not an arm. With 3 repeats the result is a directi
 
 Code: `benchmarks/gunnerus/whole_vessel_ab.py`. Results: `docs/WHOLE_VESSEL_GUNNERUS.md`.
 
+#### 3.5.1 Round 2 (arms A2 and B2), fixed before running
+
+Round 1 did not test arm B fairly: every arm B reply spent the 16,000-token budget on hidden
+reasoning and returned no code. Round 2 changes only the request settings, the same for both arms:
+
+- thinking disabled in the request (`"thinking": {"type": "disabled"}`, `"stream": false`, as the
+  Rust provider sends for table and vision reading in `rust-control/src/vision.rs`);
+- `max_tokens` 32,000 (the shared cap); temperature 0.2 as before.
+
+Unchanged: inputs (the same evidence pack and prompts), model, at most 3 turns per repeat, 3
+repeats per arm in turn (A1, B1, A2, B2, A3, B3), scorer, metrics and decision rule of section 3.5.
+Round 1 results stay as they are; round 2 is reported beside them.
+
 ### 3.6 Effort, checks, resume
 
 Effort: 1-2 weeks (reader, executor change, scoring, Gunnerus run; then raster path and a
