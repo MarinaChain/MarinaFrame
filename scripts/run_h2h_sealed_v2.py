@@ -10,7 +10,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-MAIN = Path('/Users/jonathanjie/Documents/workspace/MarinaFrame')
+# The main checkout (not a worktree) holds the ignored campaign data in work/.
+MAIN = Path(subprocess.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'],
+                           cwd=Path(__file__).parent, check=True, capture_output=True, text=True).stdout.strip()).parent
 OUTPUT = MAIN / 'work/h2h-sealed-v2'
 SNAPSHOT = OUTPUT / 'snapshot'
 ACTIVE = Path('/tmp/marinaframe-h2h-sealed-v2')

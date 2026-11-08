@@ -4,12 +4,15 @@ from __future__ import annotations
 import argparse
 import fcntl
 import json
+import subprocess
 import os
 import sys
 import tempfile
 from pathlib import Path
 
-MAIN = Path('/Users/jonathanjie/Documents/workspace/MarinaFrame')
+# The main checkout (not a worktree) holds the ignored campaign data in work/.
+MAIN = Path(subprocess.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'],
+                           cwd=Path(__file__).parent, check=True, capture_output=True, text=True).stdout.strip()).parent
 ROOT = MAIN / 'work/h2h-sealed-v2'
 SNAPSHOT = ROOT / 'snapshot'
 sys.path.insert(0, str(SNAPSHOT))

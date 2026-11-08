@@ -4,13 +4,16 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import subprocess
 import statistics
 import sys
 from collections import Counter
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-MAIN = Path('/Users/jonathanjie/Documents/workspace/MarinaFrame')
+# The main checkout (not a worktree) holds the ignored campaign data in work/.
+MAIN = Path(subprocess.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'],
+                           cwd=Path(__file__).parent, check=True, capture_output=True, text=True).stdout.strip()).parent
 ROOT = MAIN / 'work/h2h-sealed-v2'
 sys.path.insert(0, str(ROOT / 'snapshot'))
 from benchmarks.factory import report  # noqa: E402
