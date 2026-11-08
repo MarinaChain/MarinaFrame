@@ -96,6 +96,8 @@ Errors return `{ "code": string, "message": string }` with plain-language `messa
 | `get_events` | `{ task, after_sequence: number }` | `EventView[]` (only newer) |
 | `read_artifact` | `{ task, path }` | `{ mime, base64 }` (`path` is relative to the task folder, with `/` separators, never absolute, and must stay inside it; images and STL only; the STL is in the unit of the CAD export, so the UI scales it to `length_m`) |
 | `start_run` | `{ spec_path: string }` | `{ task: string }` |
+| `prepare_intake` | `{ files: string[] }` | `IntakePreview` (see "Intake") |
+| `start_intake_run` | `{ preview: IntakePreview }` | `{ task: string }` (see "Intake") |
 | `cancel_task` | `{ task }` | `{ ok: true }` |
 | `resume_task` | `{ task }` | `{ ok: true }` |
 | `choose_line` | `{ task, section_id, candidate_id }` | `{ ok: true }` (operator intervention, then rebuild/validate via the controller) |
@@ -239,3 +241,48 @@ agent builds a real `TaskView` from a real task and checks it against the same s
   says so.
 - The controller runs each model request in a child process of its own executable
   (`provider-worker`); the desktop app handles that call in `main` before any window starts.
+
+
+## Intake (drop a drawing set, no spec file; M2)
+
+The person drops PDF, PNG, TIFF or JPEG files. The app writes the run spec itself.
+
+1. `prepare_intake { files }` runs `python -m vessel_reconstruction.intake prepare`. It renders
+   every PDF page (200 dpi, `ingest._read_image`), reads each raster frame and its dpi, runs the
+   sheet survey and proposes view regions per page with a label and a confidence. It never
+   refuses a page: a page without a recognised view gets one `other` region and the warning
+   `no_view_found`. A file that cannot be read is a set warning `unreadable_file`; the other
+   files continue. Files go to `<runs folder>/intake-sets/<intake_id>/` (no task state, so the
+   run list skips it).
+2. The UI shows the pages (thumbnails), lets the person change labels, skip pages and type
+   particulars, then calls `start_intake_run { preview }` with the edited preview.
+3. `start_intake_run` checks the edits (labels, regions inside their page, at least one page
+   kept), runs `intake write-spec` (copies the sources into `run-input-<ms>/sources/`, writes
+   `intake.json` and a sheet-only `spec.json`), starts the run with the current AI setting
+   (`actions::start_run`) and copies the inputs into the task's `intake/` folder.
+
+The spec is sheet-only: `sections: []` and `intake: {file, sha256}`. The spec page is the page
+with the most confident body plan. Typed LOA, beam and depth become `constraints`. Only a live
+draft run accepts a sheet-only spec: the model reads views, scale and stations in phase 1, then
+the domain materializes the sections (`materialize.py`; evidence `ai_inferred`, warnings for
+every fallback) before the first hull. Strict runs and runs without AI stop at once with
+`input:sheet_only_needs_live_draft`; the preview then carries the warning `ai_off`.
+
+```text
+IntakePreview { intake_id, pages: IntakePage[], warnings: IntakeWarning[], render_dpi,
+                particulars: Particulars, ai_active: bool }
+IntakePage    { page_id, file, file_name, kind: "pdf"|"raster", page_index, dpi: number|null,
+                dpi_source: "pdf_render"|"file_metadata"|"unknown", width_px, height_px,
+                thumbnail_png_base64, thumbnail_scale, regions: IntakeRegion[],
+                warnings: IntakeWarning[], skip: bool }
+IntakeRegion  { region_id, label: "body_plan"|"half_breadth"|"profile"|"title_block"|"other",
+                confidence: 0..1, region_px: [left, top, right, bottom], evidence }
+IntakeWarning { code, message, file? }   // low_dpi ("Scan 150 dpi: lines may be read less
+                                         // exactly."), dpi_unknown, small_image, no_view_found,
+                                         // unreadable_file, ai_off
+Particulars   { vessel_name, loa_m?, lpp_m?, beam_m?, depth_m?, draft_m?, scale? }
+```
+
+Errors: `intake_files` (0 or more than 32 files), `intake_file_type`, `intake_file_missing`,
+`intake_region`, `intake_no_pages`, `intake_unknown`, `intake_worker`, `intake_copy`,
+`worker_python_missing`.

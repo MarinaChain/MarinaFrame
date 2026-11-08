@@ -6,7 +6,7 @@ use crate::error::{AppError, AppResult};
 use crate::storage::{self, AppPaths};
 use crate::types::*;
 use crate::view::{self, ViewContext};
-use crate::{artifact, events, files, model_keys};
+use crate::{artifact, events, files, intake, model_keys};
 use marinaframe_control::util;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -81,6 +81,36 @@ impl Backend {
             spec_path,
             self.ai_status().active,
         )
+    }
+
+    fn intake_worker<'a>(&'a self, settings: &'a Settings) -> intake::Worker<'a> {
+        intake::Worker {
+            python: &settings.worker_python,
+            source: self.worker_source.as_deref(),
+        }
+    }
+
+    /// Read a dropped drawing set: pages, thumbnails, proposed view labels, warnings.
+    pub fn prepare_intake(&self, files: &[String]) -> AppResult<intake::IntakePreview> {
+        let settings = storage::get_settings(&self.paths);
+        intake::prepare_intake(
+            Path::new(&settings.runs_folder),
+            &self.intake_worker(&settings),
+            files,
+            self.ai_status().active,
+        )
+    }
+
+    /// Write the spec of an edited intake preview, start its run with the current
+    /// AI setting and copy the inputs into the task's `intake/` folder.
+    pub fn start_intake_run(&self, preview: &intake::IntakePreview) -> AppResult<String> {
+        let settings = storage::get_settings(&self.paths);
+        let runs = PathBuf::from(&settings.runs_folder);
+        let inputs = intake::write_run_inputs(&runs, &self.intake_worker(&settings), preview)?;
+        let spec = inputs.join("spec.json");
+        let task = self.start_run(&spec.to_string_lossy())?;
+        intake::copy_inputs_to_task(&inputs, Path::new(&task))?;
+        Ok(task)
     }
 
     /// Whether new runs use the AI, and why not when they do not.
