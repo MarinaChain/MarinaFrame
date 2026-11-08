@@ -57,6 +57,9 @@ INSPECTION_BUDGET_SHARE = 0.5
 MAX_INSPECTION_BYTES = 24 * 1024 * 1024
 SEMANTIC_FLAGS = {"human_semantic_review_required": True, "engineering_approved": False,
                   "identity_certified": False}
+MIRRORED_HALF_NOTE = ("The curve is drawn left of the centreline (afterbody of an overlay body plan). The "
+                      "panel's strokes are enumerated on the mirrored image; use enumerate_strokes or "
+                      "trace_from_point on this section, or propose_section.")
 # propose_section: the model writes a section's shape (section_authoring.py).
 PROPOSE_SECTION_ARGUMENTS = {"section_id", "form", "basis", "replaces", "offsets_m", "fullness", "shape",
                              "beam_m", "draft_m", "bilge_radius_m", "deadrise_deg"}
@@ -1215,7 +1218,8 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
     import numpy as np
     from PIL import Image, ImageDraw
     from .ingest import (COMPLEXITY_REDUCTION_WARNING, DrawingError, _candidate_evidence, _eligible_trace_mask, _extract_one,
-                         _foreground, _read_image, _source_endpoint_hypothesis, _stroke_identity, _trace)
+                         _foreground, _read_image, _source_endpoint_hypothesis, _stroke_identity, _trace,
+                         drawn_left_of_centreline)
     from .resources import validate_sources
     spec = load_bounded_json(spec_path)
     validate_sources(spec, spec_path.parent)
@@ -1247,6 +1251,17 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
             sections.append(entry)
             continue
         diagnostic, gaps = {}, []
+        if drawn_left_of_centreline(section):
+            # An afterbody curve drawn left of the centreline: its candidates come
+            # from the mirrored stroke tools (panel assignment, enumerate_strokes).
+            sections.append({"section_id": sid, "source_sha256": source_sha, "x_m": section["x_m"],
+                             "implementation_sha256": digest_object(implementation),
+                             "roi_px": section["roi_px"], "calibration": section["calibration"],
+                             "candidates": [], "baseline_gaps": [], "retained_diagnostics": {},
+                             "inspection_note": MIRRORED_HALF_NOTE,
+                             "grid_evidence": {"lattice_detected": False, "unique_non_grid_candidate_id": None},
+                             "semantic_identity": "unresolved_human_review_required", **SEMANTIC_FLAGS})
+            continue
         try:
             _, diagnostic = _extract_one(image, section, spec["source"]["file"], details)
         except DrawingError as exc:

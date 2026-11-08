@@ -93,7 +93,8 @@ def build_first_hull(tools):
             continue
         rows, xs = trace
         cal = section["calibration"]
-        points = [[(float(x) - cal["centerline_px"]) / cal["pixels_per_metre"],
+        # Half-breadth from the centreline on either half (an afterbody curve is drawn left of it).
+        points = [[abs(float(x) - cal["centerline_px"]) / cal["pixels_per_metre"],
                    (cal["baseline_px"] - float(y)) / cal["pixels_per_metre"]] for y, x in zip(rows, xs)]
         points.sort(key=lambda p: p[1])
         if section["id"] in measured:

@@ -135,6 +135,38 @@ def view_to_source(view: dict, point) -> tuple[float, float]:
     return left + float(point[0]) / sx, top + float(point[1]) / sy
 
 
+# --------------------------------------------------------- mirrored halves
+# A section drawn left of its centreline (ingest.drawn_left_of_centreline) is
+# traced on the image flipped left to right. The public trace functions below
+# flip on entry and return every pixel coordinate in the source frame.
+
+def _flipped(image: np.ndarray, section: dict) -> tuple[np.ndarray, dict]:
+    from .ingest import mirror_section
+    return np.ascontiguousarray(image[:, ::-1]), mirror_section(section, image.shape[1])
+
+
+def _mirror_stroke(stroke: dict, width: int) -> dict:
+    """A traced stroke's pixel fields reflected between the source and the flipped image."""
+    from .ingest import mirror_points
+    result = dict(stroke)
+    selection = stroke.get("contour_selection")
+    if isinstance(selection, dict):
+        result["contour_selection"] = {**selection, "anchors_px": mirror_points(selection["anchors_px"], width)}
+    if "trace_xs_px" in stroke:
+        result["trace_xs_px"] = [round(width - 1 - float(x), 2) for x in stroke["trace_xs_px"]]
+    if stroke.get("seed_px"):
+        result["seed_px"] = mirror_points([stroke["seed_px"]], width)[0]
+    corridor = stroke.get("corridor_source_px")
+    if isinstance(corridor, dict):
+        result["corridor_source_px"] = {**corridor, "path": mirror_points(corridor["path"], width)}
+    return result
+
+
+def _is_left(section: dict) -> bool:
+    from .ingest import drawn_left_of_centreline
+    return drawn_left_of_centreline(section)
+
+
 # --------------------------------------------------------- corridor trace
 
 def _trace_window(section: dict, image_shape) -> tuple[int, int, int, int]:
@@ -213,6 +245,13 @@ def enumerate_strokes(image: np.ndarray, section: dict, source_file: str, detail
     the model only says which stroke is which station.
     """
     from .ingest import _runs
+    if _is_left(section):
+        width = image.shape[1]
+        flipped, mirrored = _flipped(image, section)
+        strokes, refusals = enumerate_strokes(flipped, mirrored, source_file, details, height_m,
+                                              [_mirror_stroke(k, width) for k in known])
+        return ([_mirror_stroke(s, width) for s in strokes],
+                [_mirror_stroke(r, width) for r in refusals])
     left, top, right, bottom = _trace_window(section, image.shape)
     eligible = window_foreground(image, section)[2]
     calibration = section["calibration"]
@@ -267,6 +306,8 @@ GRID_RIDE_ROW_SHARE = 0.75
 
 def grid_columns(image: np.ndarray, section: dict) -> list[float]:
     """Source columns (centres) of the vertical grid lines that span the section's trace window."""
+    if _is_left(section):
+        return [image.shape[1] - 1 - column for column in grid_columns(*_flipped(image, section))]
     left = _trace_window(section, image.shape)[0]
     mask = window_foreground(image, section)[0]
     if mask.shape[0] == 0:
@@ -339,8 +380,10 @@ def describe_stroke(stroke: dict, section: dict, grid_columns_px=None) -> dict:
     low, high = float(section["z_min_m"]), float(section["z_max_m"])
     z_low, z_high = (float(v) for v in stroke["z_range_m"])
     coverage = float(np.clip((z_high - z_low) / (high - low), 0.0, 1.0))
-    # Half-breadth (px from the window) against height, bottom first.
-    half_breadth = xs[::-1]
+    # Half-breadth (px from the centreline) against height, bottom first.
+    centre = float(section["calibration"]["centerline_px"])
+    side = -1.0 if _is_left(section) else 1.0
+    half_breadth = side * (xs[::-1] - centre)
     heights = np.arange(len(half_breadth), dtype=float)
     steps = np.diff(half_breadth)
     breadth_range = max(float(np.ptp(half_breadth)), 1.0)
@@ -355,10 +398,8 @@ def describe_stroke(stroke: dict, section: dict, grid_columns_px=None) -> dict:
     directions = np.unwrap(np.arctan2(*np.diff(curve, axis=0).T[::-1]))
     turning = math.degrees(float(np.sum(np.abs(np.diff(directions)))))
     smooth = 1.0 / (1.0 + max(0.0, turning - HULL_TURN_DEG) / HULL_TURN_DEG)
-    centre = float(section["calibration"]["centerline_px"])
-    bottom_offset = float(half_breadth[0] - centre)
     keel = (z_low - low <= HULL_KEEL_SHARE * (high - low)
-            or bottom_offset <= HULL_KEEL_SHARE * max(float(half_breadth.max() - centre), 1.0))
+            or float(half_breadth[0]) <= HULL_KEEL_SHARE * max(float(half_breadth.max()), 1.0))
     keel_factor = 1.0 if keel else 0.6
     likeness = coverage * (0.7 + 0.3 * monotone) * smooth * keel_factor
     if kind == "straight_grid_line":
@@ -686,6 +727,10 @@ def _trace_best_path(image: np.ndarray, section: dict, source_file: str, details
     Both followers only propose corridors. When neither is verified, the row
     follower's refusal is raised (its codes predate the tracker).
     """
+    if _is_left(section):
+        width = image.shape[1]
+        seed = [width - 1 - float(seed_source[0]), float(seed_source[1])]
+        return _mirror_stroke(_trace_best_path(*_flipped(image, section), source_file, details, seed), width)
     traced, refusal = [], None
     followers = (("direction_tracking", follow_stroke_2d),
                  ("direction_tracking_thin", lambda *a: follow_stroke_2d(*a, width_scaled=False)),
@@ -807,6 +852,12 @@ def trace_in_source_corridor(image: np.ndarray, section: dict, source_file: str,
     """Trace and verify the ink inside a corridor given in source pixels (see corridor_trace)."""
     from .agent_tools import _adaptive_anchors
     from .ingest import COMPLEXITY_REDUCTION_WARNING, DrawingError, _eligible_trace_mask, _extract_one, _trace
+    if _is_left(section):
+        width = image.shape[1]
+        mirrored_path = np.column_stack([width - 1 - path[:, 0], path[:, 1]])
+        flipped, mirrored = _flipped(image, section)
+        return _mirror_stroke(trace_in_source_corridor(flipped, mirrored, source_file, details, mirrored_path,
+                                                       half_width), width)
     path = path[np.argsort(path[:, 1], kind="stable")]
     if np.any(np.diff(path[:, 1]) <= 0):
         raise VerificationError("corridor_path_invalid", "Corridor points must be at distinct heights.")
