@@ -119,7 +119,7 @@ export function createWelcome({ host, invoke, pickFile, pickFolder, canPickPaths
           el('button', { class: 'btn btn-large', type: 'button', disabled: checking, onclick: check }, icon('reset'), checking ? 'Checking…' : 'Check again'),
           el('span', { class: 'welcome-spacer' }),
           el('button', { class: 'btn btn-primary btn-large', type: 'button', disabled: !status, onclick: onDone }, startText)),
-        el('p', { class: 'welcome-note' }, 'Every result is a draft. A naval architect signs it off outside this app.'))));
+        el('p', { class: 'welcome-note' }, 'Every result is a draft. You can sign a draft off as a starting model; engineering approval happens outside this app.'))));
   }
 
   return {
