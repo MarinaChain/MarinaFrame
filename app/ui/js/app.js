@@ -851,7 +851,7 @@ function renderDraftSummary() {
   const view = state.view;
   const counts = view?.source_counts || [];
   const warnings = view?.warnings || [];
-  if (!counts.length && !warnings.length) {
+  if (!counts.length && !warnings.length && !view?.components?.length) {
     fill($('draft-summary'));
     return;
   }
@@ -863,9 +863,18 @@ function renderDraftSummary() {
     el('summary', { title: 'Warnings of the draft build. Click to show them.' }, chevron(),
       chip(fmt.plural(warnings.length, 'warning'), { tone: 'warn', dot: false, small: true })),
     el('ul', { class: 'selectable-text' }, ...warnings.map((w) => el('li', {}, w)))) : null;
+  // Whole-vessel parts: one button to the Parts tab with what still needs a look.
+  const parts = view?.components || [];
+  const partsOpen = parts.filter((p) => p.review !== 'accepted' && (p.status === 'draft_guess' || !p.built)).length;
+  const partsLink = parts.length ? el('button', {
+    class: 'btn btn-ghost btn-small parts-link',
+    type: 'button',
+    title: 'Open the Parts tab: hull, decks, deckhouses and appendages',
+    onclick: () => setVesselTab('parts'),
+  }, `${fmt.plural(parts.length, 'part')}`, partsOpen ? chip(`${partsOpen} to check`, { tone: 'draft', dot: false, small: true }) : null) : null;
   // One row: the source chips, then the warnings toggle; its list opens below the row.
   fill($('draft-summary'), el('div', { class: 'source-counts' },
-    chips.length ? el('span', { class: 'source-counts-title' }, 'Sources') : null, ...chips, warningList));
+    chips.length ? el('span', { class: 'source-counts-title' }, 'Sources') : null, ...chips, warningList, partsLink));
 }
 
 // ---------------------------------------------------------------- section strip

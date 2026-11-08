@@ -1787,6 +1787,7 @@ code { font-family: var(--font-mono); }
   border-bottom: 1px solid var(--line);
 }
 .source-counts-title { color: var(--text-3); font-weight: 600; margin-right: 2px; }
+.parts-link { margin-left: auto; gap: var(--space-xs); color: var(--brand); }
 .draft-warnings { min-width: 0; }
 .draft-warnings[open] { flex-basis: 100%; }
 .draft-warnings summary { display: flex; align-items: center; gap: var(--space-xs); cursor: pointer; list-style: none; color: var(--text-3); }
