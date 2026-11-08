@@ -121,3 +121,13 @@ M1, M2 and M5 can start in parallel; M3 needs M1's shell; M4 needs M3's overlay 
 Concept images are generated from lane C's prompts (corrected: no "Approved" chip; status bar
 "AI on · 3 keys" instead of "Local models ready"). Files go to `docs/design/images/` when exported;
 the chat links are recorded here.
+
+Generated (ChatGPT Images, Extra High, 2026-11-08, 1586 × 992):
+
+| Screen | Chat | Notes |
+|---|---|---|
+| Live run (Vellum) | https://chatgpt.com/c/6af096ae-607c-83ec-90b5-67d5ee82a736 | body plan with attention ring on St 12; hull forming with coloured section ribbons; Thinking list with an amber "Not kept" line; fit dial 0.86; revision ladder |
+| Home (Vellum) | https://chatgpt.com/c/6af096cf-29e4-83ec-8402-711c72c22db0 | "Needs you" row; vessel cards with drawing + hull thumbnails and status chips; drop-a-drawing-set tile; "AI on · 3 keys" |
+
+Not yet exported to `docs/design/images/`: the images are page-local blobs; the supported route is
+ChatGPT's Download image button (needs the founder's OK for downloads).
