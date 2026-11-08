@@ -192,3 +192,30 @@ def test_materialize_replaces_body_regions_that_miss_the_sheet(tmp_path):
     assert made["report"]["panel_source"] == "the intake's body regions"
     assert all(s["roi_px"][0] >= 1000 for s in made["sections"])
     assert any("do not match" in w for w in made["warnings"])
+
+
+def blurred_body_plan():
+    """A grey, blurred scan of a body plan: light grid, dash-dot centreline at x = 200, baseline at y = 260."""
+    from PIL import ImageFilter
+    image = Image.new("RGB", (400, 320), (235,) * 3)
+    draw = ImageDraw.Draw(image)
+    for x in range(80, 321, 40):
+        if x != 200:
+            draw.line([(x, 40), (x, 260)], fill=(205,) * 3, width=1)
+    for y in range(60, 261, 40):
+        draw.line([(60, y), (340, y)], fill=(205,) * 3, width=1)
+    for top in range(30, 270, 24):  # dash-dot: a long dash and a dot
+        draw.line([(200, top), (200, top + 14)], fill=(110,) * 3, width=1)
+        draw.line([(200, top + 18), (200, top + 19)], fill=(110,) * 3, width=1)
+    draw.line([(60, 260), (340, 260)], fill=(110,) * 3, width=2)
+    for offset in (50, 90, 125):
+        draw.line([(200, 258), (200 + offset, 200), (200 + offset + 8, 70)], fill="black", width=3)
+        draw.line([(200, 258), (200 - offset, 200), (200 - offset - 8, 70)], fill="black", width=3)
+    return np.asarray(image.filter(ImageFilter.GaussianBlur(1.5)))
+
+
+def test_grid_datums_find_a_dash_dot_centreline_on_a_blurred_scan():
+    from vessel_reconstruction.materialize import grid_datums
+    datums = grid_datums(blurred_body_plan(), [0, 0, 400, 320])
+    assert abs(datums["centreline_px"] - 200) <= 1.0
+    assert abs(datums["baseline_px"] - 260) <= 1.5

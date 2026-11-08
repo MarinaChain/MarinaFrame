@@ -56,6 +56,13 @@ DECLARED_SCALE_TOLERANCE = 0.01
 LONG_LINE_SHARE = 0.5
 # Ink is at least this many grey levels darker than the paper (98th percentile).
 INK_CONTRAST = 30
+# drawn_lines: a line pixel is this many grey levels darker than the paper
+# beside it, the paper being the lightest level within LINE_BACKGROUND_PX
+# across the line (wider than a blurred line, narrower than the grid spacing);
+# a band of marked lines wider than MAX_LINE_WIDTH_PX is not one line.
+LINE_CONTRAST = 12
+LINE_BACKGROUND_PX = 15
+MAX_LINE_WIDTH_PX = 8
 
 
 class VerificationError(ValueError):
@@ -1098,6 +1105,26 @@ def long_lines(gray: np.ndarray, axis: int) -> list[float]:
     if current:
         groups.append(current)
     return [float(np.mean(g)) for g in groups if len(g) <= 8]
+
+
+def drawn_lines(gray: np.ndarray, axis: int) -> list[float]:
+    """Centres of straight lines, solid or dashed, that cover LONG_LINE_SHARE of the region along ``axis``.
+
+    axis 0: horizontal lines (rows); axis 1: vertical lines (columns).
+    Unlike long_lines this reads local contrast, not a sheet-wide ink level, and
+    counts the inked share of the line, not its longest run: a light grid line
+    on a blurred scan and a dash-dot centreline are both found.
+    """
+    from scipy import ndimage
+    lines = gray if axis == 0 else gray.T
+    # Paper beside each line pixel: a line narrower than the window is closed away.
+    background = ndimage.grey_closing(lines, size=(LINE_BACKGROUND_PX, 1))
+    marked = (background - lines) >= LINE_CONTRAST
+    share = marked.mean(axis=1)
+    hits = np.flatnonzero(share >= LONG_LINE_SHARE)
+    groups = np.split(hits, np.flatnonzero(np.diff(hits) > 2) + 1) if len(hits) else []
+    # A wider band is a filled area or a run of text, not a drawn line.
+    return [float(np.average(g, weights=share[g])) for g in groups if 0 < len(g) <= MAX_LINE_WIDTH_PX]
 
 
 def grid_spacing(positions: list[float]) -> float | None:
