@@ -69,6 +69,15 @@ def test_sheet_only_sections_use_the_printed_scale_over_a_disagreeing_setup():
     scale, _ = read_scale(image, [{"pixels_per_metre": 18.9}], [], [], {"dimension_text": "SCALE 1 m = 19 px"},
                           [10, 10, 450, 160], [])
     assert scale == 18.9
+    # No scale read (1 px/m "provisional" on a "100 m grid"): the printed scale, not the grid.
+    scale, basis = read_scale(image, [{"pixels_per_metre": 1.0, "grid_spacing_m": 100.0}], [], [],
+                              {"dimension_text": "SCALE 1 m = 19.009 px"}, [10, 10, 450, 160], [])
+    assert scale == 19.009 and "printed" in basis
+
+
+def test_a_profile_setup_without_a_direction_reads_from_the_aft_end():
+    image, setup = profile_sheet()
+    assert abs(vd.checked_x_origin(image, {**setup, "x_origin_px": 10.0, "x_direction": None}) - X0) <= 1.5
 
 
 def test_model_station_positions_are_checked_against_the_profile_station_lines():

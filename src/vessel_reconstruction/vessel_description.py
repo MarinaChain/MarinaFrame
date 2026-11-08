@@ -444,7 +444,7 @@ def profile_outline_heights(image, setup, pixels_per_metre, stations):
         baseline = keel
     heights = {}
     for station in stations:
-        column = origin + setup.get("x_direction", 1) * station["x_m"] * pixels_per_metre - left
+        column = origin + (setup.get("x_direction") or 1) * station["x_m"] * pixels_per_metre - left
         columns = outline[:, max(0, int(round(column)) - DECK_COLUMN_PX):int(round(column)) + DECK_COLUMN_PX + 1]
         rows = np.flatnonzero(columns.any(axis=1))
         if not len(rows):
@@ -523,7 +523,7 @@ def checked_x_origin(image, setup):
     columns = np.flatnonzero(outline.any(axis=0))
     if not len(columns):
         return origin
-    aft = columns[0] if setup.get("x_direction", 1) >= 0 else columns[-1]
+    aft = columns[0] if (setup.get("x_direction") or 1) >= 0 else columns[-1]
     return float(aft + crop_left)
 
 

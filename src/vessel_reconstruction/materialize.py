@@ -212,6 +212,10 @@ def read_scale(image, setups, described, hints, description, body_region, warnin
         return printed, "the scale printed on the sheet (the model's setup disagreed)"
     if read:
         return float(np.median(read)), "the model's body-plan scale (setup)"
+    if printed:
+        # No scale read (shipd-1-08158-3v-L0 live: 1 px/m "provisional" on a
+        # "100 m grid"): the printed scale comes before any grid measurement.
+        return printed, "the scale printed on the sheet (no body-plan scale was read)"
     spacing_m = [float(s["grid_spacing_m"]) for s in setups if _finite(s.get("grid_spacing_m"))
                  and s["grid_spacing_m"] > 0 and s["grid_spacing_m"] != 1.0]
     grid = grid_datums(image, body_region)
