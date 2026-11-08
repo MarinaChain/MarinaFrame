@@ -34,6 +34,10 @@ const GROUPS = [
     ['M', 'Mark the part and say what to change'],
     ['N', 'Next part to review'],
   ]],
+  ['New vessel (pages)', [
+    ['[ ]', 'Previous or next page'],
+    ['S', 'Skip or keep the page shown'],
+  ]],
   ['Replay a run', [
     ['Space', 'Play or pause'],
     ['← →', 'Previous or next AI step'],

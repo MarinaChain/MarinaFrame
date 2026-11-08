@@ -162,7 +162,7 @@ Research basis: `docs/research/2026-11-09-uiux-research.md`. Screens and where t
 |---|---|---|
 | Welcome and setup check | AI key, CAD worker, runs folder; Choose... fixes a path; continue without AI | `js/welcome.js`, `get_setup_status` |
 | Home | Needs-you cards (body-plan thumb, what to do, Review); vessels; placeholders while loading; first start: one drop target, four steps, sample vessel | `js/app.js`, `start_sample_run` |
-| Intake | page tray, large page with non-overlapping view chips, labels above the page, particulars | `js/intake.js` |
+| Intake | page tray with a "Views found" summary (a missing view in amber), [ ] and ↑ ↓ between pages, S to skip, "3 of 12"; large page with non-overlapping view chips, labels above the page, particulars | `js/intake.js` |
 | Run | vessel tabs Run / Export / History; review counter and Next (N); decide bar Accept (A) / Other line (O) / Mark (M); ink distance in mm per tile; evidence card on hover; 3D section picking; section-area curve on Checks | `js/app.js`, `js/evidence.js`, `js/areas.js`, `js/model3d.js` |
 | Export | full page, draft stamp, open-issue line | `js/export.js` |
 | History | runs of the vessel; Changes per revision (fit, cause, section changes, not-kept edits) | `js/changes.js` |

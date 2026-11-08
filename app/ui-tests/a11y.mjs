@@ -58,6 +58,7 @@ const SCREENS = [
   { name: 'queue', path: '/#queue' },
   { name: 'settings', path: '/#settings' },
   { name: 'intake', path: '/#home', steps: { open: 'intake' } },
+  { name: 'intake (10 sheets)', path: '/?mockset=10#home', steps: { open: 'intake' } },
   { name: 'run (draft)', path: '/#home', steps: { vessel: 'Survey' } },
   { name: 'run (declined)', path: '/#home', steps: { vessel: 'Passenger' } },
   { name: 'checks', path: '/#home', steps: { vessel: 'Survey', tab: 'checks' } },

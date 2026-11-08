@@ -16,6 +16,8 @@ const VIEW_LABELS = [
   ['other', 'Other'],
 ];
 const LABEL_TEXT = Object.fromEntries(VIEW_LABELS);
+/** The three views a hull is built from. The set summary says which kept pages show each one. */
+const HULL_VIEWS = ['body_plan', 'half_breadth', 'profile'];
 
 /** Below this confidence a proposed label is drawn dashed: check it. */
 const UNSURE_BELOW = 0.5;
@@ -64,6 +66,7 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
   let token = 0;
   // Chip positions are in pixels, so they follow the page size.
   window.addEventListener('resize', () => requestAnimationFrame(placeChips));
+  document.addEventListener('keydown', onKey);
   /** The form values, kept as typed so a half-typed number is not lost on render. */
   let form = { vessel_name: '', scale: '', loa_m: '', beam_m: '', depth_m: '', draft_m: '' };
 
@@ -118,6 +121,53 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
     if (Number.isNaN(scale)) return null;
     result.scale = scale === null ? null : `1:${scale}`;
     return result;
+  }
+
+  // ---------------------------------------------------------------- pages
+
+  function selectPage(pageId, { focusTray = false } = {}) {
+    selectedPageId = pageId;
+    render();
+    if (focusTray) host.querySelector(`#tray-${CSS.escape(pageId)}`)?.focus();
+  }
+
+  /** Move to the previous (-1) or next (+1) page. Returns false at either end. */
+  function stepPage(delta, options) {
+    const pages = preview?.pages || [];
+    const index = pages.findIndex((p) => p.page_id === selectedPageId);
+    const next = pages[index + delta];
+    if (!next) return false;
+    selectPage(next.page_id, options);
+    return true;
+  }
+
+  function toggleSkip(page) {
+    page.skip = !page.skip;
+    render();
+  }
+
+  /**
+   * Intake keys: [ ] (and ↑ ↓ in the tray) go between pages, S skips or keeps the page shown.
+   * They act only while this view shows a set and no text field has focus.
+   */
+  function onKey(event) {
+    if (!preview || loading || starting || host.closest('[hidden]') || !host.isConnected) return;
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.target.closest?.('input, textarea, select, [contenteditable="true"], dialog')) return;
+    const inTray = Boolean(event.target.closest?.('.intake-tray'));
+    let handled = false;
+    if (event.key === '[' || (inTray && event.key === 'ArrowUp')) handled = stepPage(-1, { focusTray: inTray });
+    else if (event.key === ']' || (inTray && event.key === 'ArrowDown')) handled = stepPage(1, { focusTray: inTray });
+    else if (inTray && (event.key === 'Home' || event.key === 'End')) {
+      const pages = preview.pages;
+      selectPage(pages[event.key === 'Home' ? 0 : pages.length - 1].page_id, { focusTray: true });
+      handled = true;
+    }
+    else if (event.key === 's' || event.key === 'S') {
+      const page = preview.pages.find((p) => p.page_id === selectedPageId);
+      if (page) { toggleSkip(page); handled = true; }
+    }
+    if (handled) event.preventDefault();
   }
 
   function keptPages() {
@@ -304,7 +354,8 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
       'aria-pressed': String(page.skip),
       disabled: starting,
       title: page.skip ? 'Use this page again' : 'Leave this page out (for example a cover page)',
-      onclick: () => { page.skip = !page.skip; render(); },
+      'aria-keyshortcuts': 'S',
+      onclick: () => toggleSkip(page),
     }, page.skip ? 'Keep' : 'Skip');
   }
 
@@ -318,9 +369,12 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
     return el('button', {
       class: `intake-tray-item${page.skip ? ' skipped' : ''}`,
       type: 'button',
+      id: `tray-${page.page_id}`,
       'aria-pressed': String(selected),
+      // One tab stop for the tray; ↑ ↓ move inside it.
+      tabindex: selected ? '0' : '-1',
       title: `${page.file_name}${where ? `, ${where}` : ''}`,
-      onclick: () => { selectedPageId = page.page_id; render(); },
+      onclick: () => selectPage(page.page_id),
     },
       el('div', { class: 'intake-thumb', style: { 'aspect-ratio': `${page.width_px} / ${page.height_px}` } }, pageImage(page), regionFrame(page)),
       el('span', { class: 'intake-tray-line' },
@@ -331,13 +385,40 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
           : null));
   }
 
+  /**
+   * Which kept pages show each hull view. A missing view is a warning, not a stop:
+   * the AI still reads the set and says what it had to guess.
+   */
+  function setSummary() {
+    const kept = keptPages();
+    const rows = HULL_VIEWS.map((label) => {
+      const where = kept.filter((page) => page.regions.some((r) => r.label === label)).map((page) => page.page_id);
+      return el('li', { class: `intake-sum-row${where.length ? '' : ' missing'}` },
+        el('span', { class: 'intake-sum-view' }, LABEL_TEXT[label]),
+        where.length
+          ? el('button', {
+            class: 'intake-sum-pages', type: 'button', title: `Show ${where[0]}`,
+            onclick: () => selectPage(where[0], { focusTray: true }),
+          }, where.join(' '))
+          : el('span', { class: 'intake-sum-pages', title: 'No kept page shows this view. The AI will guess it from the other views.' }, 'None'));
+    });
+    const skipped = preview.pages.length - kept.length;
+    return el('section', { class: 'intake-sum', 'aria-label': 'Views in the kept pages' },
+      el('h2', { class: 'intake-sum-title' }, 'Views found',
+        skipped ? el('span', { class: 'intake-sum-skipped' }, `${skipped} skipped`) : null),
+      el('ul', {}, ...rows));
+  }
+
   /** The selected page, large, with its region labels and warnings. */
   function stage(page) {
     const where = pageWhere(page);
     const dpi = page.dpi ? `${Math.round(page.dpi)} dpi` : null;
+    const pages = preview.pages;
+    const position = pages.length > 1 ? `${pages.indexOf(page) + 1} of ${pages.length}` : null;
     return el('section', { class: `intake-stage${page.skip ? ' skipped' : ''}`, 'aria-label': `${page.file_name}${where ? `, ${where}` : ''}` },
       el('header', { class: 'intake-card-head' },
         el('span', { class: 'intake-page-id' }, page.page_id),
+        position ? el('span', { class: 'intake-position', title: 'Previous or next page: [ ]' }, position) : null,
         el('span', { class: 'intake-file', title: page.file }, page.file_name),
         where ? el('span', { class: 'intake-where' }, where) : null,
         dpi ? el('span', { class: 'intake-dpi' }, dpi) : null,
@@ -428,6 +509,8 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
       return;
     }
     const focusedId = document.activeElement && host.contains(document.activeElement) ? document.activeElement.id : null;
+    // A render rebuilds the tray: keep where it was scrolled to, then bring the shown page into view.
+    const trayScroll = host.querySelector('.intake-tray')?.scrollTop || 0;
     const setWarnings = (preview?.warnings || []).filter((w) => w.code !== AI_OFF_WARNING);
     const reason = preview ? blockedReason() : '';
     fill(host,
@@ -437,7 +520,12 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
       error ? el('p', { class: 'form-error intake-error', role: 'alert' }, error) : null,
       preview ? el('p', { class: 'intake-blocked', role: 'status', hidden: !reason || reason === 'ai' }, reason === 'ai' ? '' : reason) : null,
       loading ? el('div', { class: 'intake-body' }, loadingBody()) : body());
-    if (focusedId) host.querySelector(`#${CSS.escape(focusedId)}`)?.focus();
+    const tray = host.querySelector('.intake-tray');
+    if (tray) {
+      tray.scrollTop = trayScroll;
+      host.querySelector('.intake-tray-item[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest' });
+    }
+    if (focusedId) host.querySelector(`#${CSS.escape(focusedId)}`)?.focus({ preventScroll: true });
     requestAnimationFrame(placeChips);
   }
 
@@ -446,7 +534,9 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
     const selected = pages.find((p) => p.page_id === selectedPageId) || pages[0];
     // One page needs no tray: the stage takes its room.
     const tray = pages.length > 1
-      ? el('nav', { class: 'intake-tray', 'aria-label': 'Pages' }, ...pages.map(trayItem))
+      ? el('div', { class: 'intake-tray-wrap' },
+        setSummary(),
+        el('nav', { class: 'intake-tray', 'aria-label': 'Pages' }, ...pages.map(trayItem)))
       : null;
     return el('div', { class: `intake-body${tray ? ' has-tray' : ''}` }, tray, stage(selected), sidePanel());
   }
