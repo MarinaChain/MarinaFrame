@@ -94,7 +94,7 @@ function boxOfMarks(marks) {
   return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
 }
 
-export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStepsChanged, cardActions = () => null }) {
+export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStepsChanged, cardActions = () => null, placesIn = (text) => text }) {
   const layer = drawing.attentionLayer;
 
   let task = null;
@@ -148,9 +148,9 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
     if (step.kind === 'repeat_collapsed') {
       const original = bySequence(step.repeat_of);
       const base = original ? original.title : step.title.replace(/\s*\(\d+ times\)$/, '');
-      return `${base} again, ${step.count} times`;
+      return placesIn(`${base} again, ${step.count} times`);
     }
-    return step.title;
+    return placesIn(step.title);
   }
 
   function reset(nextTask) {
@@ -709,7 +709,7 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
         el('span', { class: 'thought-dot', 'aria-hidden': 'true' }),
         el('button', { class: 'thought-line', type: 'button', onclick: seekHere, title: step.text },
           el('span', { class: 'thought-line-title' }, stepTitle(step)),
-          step.tool?.text && step.kind !== 'repeat_collapsed' ? el('span', { class: 'thought-line-result' }, step.tool.text) : null,
+          step.tool?.text && step.kind !== 'repeat_collapsed' ? el('span', { class: 'thought-line-result' }, placesIn(step.tool.text)) : null,
           el('time', { class: 'thought-time' }, clockDuration(step.time_ms))));
     }
     const previousNotes = steps.slice(0, index).reverse().find((s) => s.notes)?.notes || null;
@@ -1003,6 +1003,14 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
     renderNarration,
     renderThinking,
     renderLadder,
+    /** Section places became known or changed: rebuild the step cards that name them. */
+    placesChanged() {
+      cards.clear();
+      if (!hasSteps()) return;
+      fill(nodes.thinking);
+      renderThinking();
+      renderNarration();
+    },
     /** The person panned or zoomed the drawing: stop moving the camera for them. */
     userMovedCamera() {
       if (!cameraFollow || !hasSteps()) return;

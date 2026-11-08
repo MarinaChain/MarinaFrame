@@ -1248,10 +1248,10 @@ fn decision_title(tool: &str, arguments: &Value, actor: Actor) -> String {
         "trace_corridor" => format!("Drew a corridor along {section}"),
         "assign_station" => match arguments["label_text"].as_str() {
             Some(label) => format!(
-                "Claimed a line is {section} (\"{}\")",
+                "Claimed a line is the section at {section} (\"{}\")",
                 plain_text(label, 64)
             ),
-            None => format!("Claimed a line is {section}"),
+            None => format!("Claimed a line is the section at {section}"),
         },
         "select_contours" => {
             let ids: Vec<&str> = arguments["selections"]

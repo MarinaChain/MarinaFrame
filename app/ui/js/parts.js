@@ -273,7 +273,7 @@ export function createParts({ host, review, showIn3d, signOff, onSelect = () => 
             el('td', {}, chip(SOURCE_WORD[a.source] || a.source, SOURCE_TONE[a.source] || '', a.basis || '')),
             el('td', { class: 'parts-basis' }, a.basis || '')))))
         : null,
-      guessed ? el('p', { class: 'parts-note' }, icon('warn'), `${guessed} ${guessed === 1 ? 'value is' : 'values are'} guessed. Check them before you use this part.`) : null);
+      guessed ? el('p', { class: 'parts-note' }, icon('warn'), `${guessed} ${guessed === 1 ? 'value is' : 'values are'} guessed. ${guessed === 1 ? 'Check it' : 'Check them'} before you use this part.`) : null);
   }
 
 

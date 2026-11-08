@@ -2,6 +2,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildChanges } from '../ui/js/changes.js';
+import { withPlaces } from '../ui/js/format.js';
+
+test('step texts name sections by place, not by id', () => {
+  const places = new Map([['st1', '1.0 m'], ['st12', '12.0 m']]);
+  assert.equal(withPlaces('Drew the section at st12', places), 'Drew the section at 12.0 m');
+  assert.equal(withPlaces('Read the candidate lines of st1 and st12', places), 'Read the candidate lines of 1.0 m and 12.0 m');
+  // Only whole ids: "st123" and "first1" are not sections.
+  assert.equal(withPlaces('st123 first1 st1-a', places), 'st123 first1 st1-a');
+  assert.equal(withPlaces('No sections here', new Map()), 'No sections here');
+});
 
 const box = { shape: 'box', tone: 'person', points_px: [[10, 20], [90, 80]] };
 

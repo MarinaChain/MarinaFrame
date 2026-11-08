@@ -130,6 +130,7 @@ const live = createLiveRun({
   drawing,
   model,
   isRunning: () => isRunning(),
+  placesIn: (text) => placesIn(text),
   nodes: {
     narration: $('narration'),
     thinking: $('panel-thinking'),
@@ -552,6 +553,12 @@ async function loadTask({ fresh = false } = {}) {
     if (!view.sections.some((s) => s.id === state.sectionId)) state.sectionId = defaultSection(view);
     renderTask({ fresh });
     live.statusChanged();
+    // Step cards name sections by place; when the places are known or change, draw them again.
+    const placesKey = view.sections.map((s) => `${s.id}@${s.x_m}`).join(',');
+    if (placesKey !== state.placesKey) {
+      state.placesKey = placesKey;
+      live.placesChanged();
+    }
     markTool.refresh();
   } catch (error) {
     if (token === state.loadToken) showError(error);
@@ -707,7 +714,7 @@ function changesSection(vessel) {
   const task = state.task;
   const body = el('div', { class: 'changes-body' }, el('p', { class: 'panel-empty' }, 'Reading the steps…'));
   invoke('get_live_steps', { task, after_sequence: 0 })
-    .then((live) => { if (task === state.task) fill(body, renderChanges(buildChanges(live.steps), { pageUrl: evidencePageUrl, placeOf: sectionPlace })); })
+    .then((live) => { if (task === state.task) fill(body, renderChanges(buildChanges(live.steps), { pageUrl: evidencePageUrl, placeOf: sectionPlace, placesIn })); })
     .catch(() => fill(body, el('p', { class: 'panel-empty' }, 'The steps of this run could not be read.')));
   const run = vessel ? `Run ${runNumber(vessel, task)}` : 'this run';
   return el('section', { class: 'changes', 'aria-labelledby': 'changes-title' },
@@ -913,6 +920,12 @@ function renderDraftSummary() {
 function sectionPlace(id) {
   const section = state.view?.sections.find((s) => s.id === id);
   return section ? fmt.metres(section.x_m) : id;
+}
+
+/** A step text with section ids shown as places ("st12" becomes "12.0 m"). */
+function placesIn(text) {
+  const places = new Map((state.view?.sections || []).map((s) => [s.id, fmt.metres(s.x_m)]));
+  return fmt.withPlaces(text, places);
 }
 
 function sectionShapePath(section) {

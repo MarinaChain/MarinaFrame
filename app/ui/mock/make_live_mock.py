@@ -232,7 +232,7 @@ def steps() -> list[dict]:
              "carries it before assigning.",
              attention_px=st4_view, tool=tool("read_region", 242, "ok", "Saw a 1024 x 738 px view"),
              repeat_of=19, count=3, model_ms=3410, cost_usd=0.00104),
-        step(28, 254.7, "assign", "model", "Claimed a line is st4 (\"ST 4\")",
+        step(28, 254.7, "assign", "model", "Claimed a line is the section at st4 (\"ST 4\")",
              "Assign the heavy outer curve (tag 1) to st4; the thin line inside it is the plating. Then build "
              "and render the draft.",
              targets=section_target("st4"), attention_px=st4_view,

@@ -585,7 +585,7 @@ fn real_ledger_gives_strokes_reads_clicks_and_corridors() {
     assert_eq!(assign.kind, StepKind::Assign);
     assert_eq!(
         assign.title,
-        "Claimed a line is s01 (\"BODY PLAN STATION 1\")"
+        "Claimed a line is the section at s01 (\"BODY PLAN STATION 1\")"
     );
     assert_eq!(assign.marks[0].tone, Tone::Accepted);
     assert_eq!(

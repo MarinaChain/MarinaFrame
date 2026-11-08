@@ -43,6 +43,19 @@ export function metres(value, digits = 1) {
   return `${decimal(value, digits)} m`;
 }
 
+/**
+ * Put the place of each section in place of its id in a step text: the backend titles name
+ * sections by id ("Drew the section at st12"), and the rest of the app names them by place
+ * ("12.0 m"). `places` maps id to place. Only whole ids are replaced, longest first.
+ */
+export function withPlaces(text, places) {
+  if (!text || !places?.size) return text;
+  const escape = (id) => id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const ids = [...places.keys()].sort((a, b) => b.length - a.length).map(escape);
+  const pattern = new RegExp(`(?<![\\w-])(${ids.join('|')})(?![\\w-])`, 'g');
+  return text.replace(pattern, (id) => places.get(id));
+}
+
 /** A small length given in metres, shown in whole millimetres (ink distances). */
 export function millimetres(valueM) {
   return `${Math.round(valueM * 1000).toLocaleString()} mm`;

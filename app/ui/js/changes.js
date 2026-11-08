@@ -194,7 +194,7 @@ function markEntry(entry, pageUrl, placeOf) {
 }
 
 /** The Changes list for the History tab. `pageUrl()` gives the drawing page image for mark thumbnails. */
-export function renderChanges(entries, { pageUrl = null, placeOf = (id) => id } = {}) {
+export function renderChanges(entries, { pageUrl = null, placeOf = (id) => id, placesIn = (text) => text } = {}) {
   if (!entries.length) {
     return el('p', { class: 'panel-empty' }, 'This run has no scored revisions yet.');
   }
@@ -204,14 +204,14 @@ export function renderChanges(entries, { pageUrl = null, placeOf = (id) => id } 
       return el('li', { class: 'change change-not-kept' },
         el('div', { class: 'change-head' },
           el('span', { class: 'change-rev change-rev-x' }, icon('close')),
-          el('strong', {}, entry.title)),
-        el('p', { class: 'change-cause' }, entry.text));
+          el('strong', {}, placesIn(entry.title))),
+        el('p', { class: 'change-cause' }, placesIn(entry.text)));
     }
     return el('li', { class: 'change' },
       el('div', { class: 'change-head' },
         el('span', { class: 'change-rev' }, revisionLabel(entry.id)),
         fitLine(entry)),
-      el('p', { class: 'change-cause' }, entry.cause),
+      el('p', { class: 'change-cause' }, placesIn(entry.cause)),
       entry.changes.length
         ? el('ul', { class: 'change-sections' }, ...entry.changes.map(sectionChange))
         : null);

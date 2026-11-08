@@ -5748,7 +5748,7 @@
      "time_ms": 254700,
      "kind": "assign",
      "actor": "model",
-     "title": "Claimed a line is st4 (\"ST 4\")",
+     "title": "Claimed a line is the section at st4 (\"ST 4\")",
      "text": "Assign the heavy outer curve (tag 1) to st4; the thin line inside it is the plating. Then build and render the draft.",
      "notes": null,
      "targets": [
