@@ -543,6 +543,7 @@ function mockTransport() {
         if (!snapshot.steps.some((step) => step.kind === 'build')) {
           view.sections = [];
           view.model = null;
+          view.components = null;
         }
       }
       const dismissed = new Set(readStored(MOCK_DISMISSED_KEY, []));

@@ -937,6 +937,13 @@ function renderStripHead() {
   const head = $('strip-head');
   head.hidden = !sections.length;
   if (!sections.length) return;
+  if (!open) {
+    // Nothing waits for a person: the count only, without a button that cannot act.
+    fill(head,
+      el('span', { class: 'strip-count' }, el('strong', {}, '0'), ` of ${sections.length}`),
+      el('span', { class: 'strip-count-label' }, 'to check'));
+    return;
+  }
   fill(head,
     el('span', { class: 'strip-count', dataset: { open: String(open > 0) } },
       el('strong', {}, String(open)), ` of ${sections.length}`),
