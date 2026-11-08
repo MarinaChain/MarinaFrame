@@ -192,7 +192,10 @@ def cap_at_profile_outline(sections: list[dict], anchors: list[Anchor], heights:
     decks = {sid: h["deck"] for sid, h in heights.items()}
     short = set(short_of_deck(anchors, decks))
     anchors = [a for a in anchors if a.id not in short]
-    cut_bottoms_at_keel(anchors, {sid: h["keel"] for sid, h in heights.items()})
+    # A keel read at the deck (an outline broken at that station) is no keel:
+    # a station section is never that shallow.
+    keels = {sid: h["keel"] for sid, h in heights.items() if h["keel"] < (1 - SHORT_TOP_SHARE) * h["deck"]}
+    cut_bottoms_at_keel(anchors, keels)
     sections = cap_tops_at_deck(sections, anchors, decks)
     extend_tops_to_deck(anchors, decks)
     return sections, anchors

@@ -616,8 +616,6 @@ def check_station_positions(image, setups, description, warnings, hints=None):
 # profile region by at least this IoU; otherwise the intake's region is (a
 # model reading in view-crop pixels, dtmb5415-3v-L1 live: [60, 40, 800, 170]).
 PROFILE_REGION_AGREEMENT = 0.5
-# A region lies inside another when no side is more than this many pixels outside it.
-REGION_INSIDE_PX = 4
 
 
 def _iou(first, second) -> float:
@@ -643,21 +641,17 @@ def profile_setup(setups, hints=None):
                     None)
     if proposed and _iou(profile["region_px"], proposed) < PROFILE_REGION_AGREEMENT:
         return {**profile, "region_px": list(proposed), "region_source": "intake proposal"}
-    if proposed and _inside(proposed, profile["region_px"]):
-        # The intake's rows are measured on the ink; the model's taller box adds
-        # only paper and labels (series60-3v-L1 live: 100 px above a 175 px
-        # profile), which would hide the station lines' full height. The
-        # model's columns are kept: an intake region can hold only part of a
-        # long view (shipd-1-09867-3v-L0: the fore half of the profile).
+    if proposed:
+        # The intake's rows are measured on the ink. A taller model box adds
+        # paper and labels that hide the station lines' full height
+        # (series60-3v-L1 live: 100 px above a 175 px profile); a shorter one
+        # cuts the keel off (another run: bottom 302 px over a keel at 303 px).
+        # Columns are the union: an intake region can hold only part of a long
+        # view (shipd-1-09867-3v-L0: the fore half of the profile).
         left, _, right, _ = profile["region_px"]
-        return {**profile, "region_px": [left, proposed[1], right, proposed[3]],
-                "region_source": "the model's columns, the intake's rows"}
+        return {**profile, "region_px": [min(left, proposed[0]), proposed[1], max(right, proposed[2]), proposed[3]],
+                "region_source": "the intake's rows"}
     return profile
-
-
-def _inside(inner, outer) -> bool:
-    return (inner[0] >= outer[0] - REGION_INSIDE_PX and inner[1] >= outer[1] - REGION_INSIDE_PX
-            and inner[2] <= outer[2] + REGION_INSIDE_PX and inner[3] <= outer[3] + REGION_INSIDE_PX)
 
 
 def station_outline_heights(image, setups, description, stations, hints=None):

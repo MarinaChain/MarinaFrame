@@ -128,16 +128,16 @@ def test_light_station_lines_are_found_on_a_blurred_grey_scan():
     assert len(measured) == 9 and max(abs(m - x) for m, x in zip(measured, range(10, 100, 10))) <= 0.5
 
 
-def test_the_intake_profile_region_inside_the_model_region_is_measured():
+def test_the_profile_is_measured_on_the_intake_rows_and_the_wider_columns():
     setup = {"view": "profile", "region_px": [60, 40, 2070, 320], "x_origin_px": 60.0}
     hints = [{"label": "profile", "region_px": [153, 132, 2064, 318]}]
     assert vd.profile_setup([setup], hints)["region_px"] == [60, 132, 2070, 318]
     # An intake region with only part of the view keeps the model's full width (shipd-1-09867-3v-L0).
     half = [{"label": "profile", "region_px": [500, 135, 2064, 318]}]
     assert vd.profile_setup([setup], half)["region_px"] == [60, 135, 2070, 318]
-    # A model region that does not hold the intake's is kept (the intake may have cut the view short).
-    other = {**setup, "region_px": [160, 120, 2070, 320]}
-    assert vd.profile_setup([other], hints)["region_px"] == [160, 120, 2070, 320]
+    # A model box that stops above the keel takes the intake's rows too (series60-3v-L1 live).
+    short = {**setup, "region_px": [151, 101, 2084, 302]}
+    assert vd.profile_setup([short], hints)["region_px"] == [151, 132, 2084, 318]
     # A profile setup without an x origin is still used; its origin is the region edge (unread).
     unread = {"view": "profile", "region_px": [60, 40, 2070, 320], "x_origin_px": None}
     assert vd.profile_setup([unread], hints)["x_origin_px"] == 60.0

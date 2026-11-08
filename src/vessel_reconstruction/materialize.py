@@ -266,7 +266,7 @@ def body_panels(image, state, hints, warnings) -> list[dict]:
         panels, source = [{"region_px": [0, 0, width, height], "view_id": None}], "the whole sheet"
     result = []
     for panel in panels:
-        region = _clip(panel["region_px"], width, height)
+        region = _with_intake_region(_clip(panel["region_px"], width, height), hint_regions)
         grid = grid_datums(image, region)
         datums = {}
         for field in ("centreline_px", "baseline_px"):
@@ -291,6 +291,20 @@ def body_panels(image, state, hints, warnings) -> list[dict]:
                        "pixels_per_metre": panel.get("pixels_per_metre"),
                        "grid_spacing_m": panel.get("grid_spacing_m"), **datums})
     return result
+
+
+def _with_intake_region(region: list[int], hint_regions: list) -> list[int]:
+    """A model body region grown to the intake body region it matches.
+
+    The intake's region is measured on the ink and its light marks; a model box
+    can stop short of the baseline (series60-3v-L1 live: bottom 302 px over a
+    baseline at 306 px, so a waterline 1 m up was taken as the baseline).
+    """
+    matching = [h for h in hint_regions if _iou(region, h) >= MIN_REGION_AGREEMENT]
+    if not matching:
+        return region
+    hint = max(matching, key=lambda h: _iou(region, h))
+    return [min(region[0], hint[0]), min(region[1], hint[1]), max(region[2], hint[2]), max(region[3], hint[3])]
 
 
 # ------------------------------------------------------------------ assignment

@@ -96,3 +96,15 @@
 - **Trigger:** I reported cost per case as a main result and wrote "keep it cheap" into briefs and designs. The founder said model cost is a tiny fraction of a naval architect's time; what matters is accuracy and how much ground the tool helps them cover.
 - **Rule:** Treat model cost as a minor constraint. Prefer the option that gives more correct drafts and more drawings covered (thinking on, more requests, more passes, stronger models, ensembles) when it measurably helps. Still report cost, but do not trade accuracy for it. Wasted runs that teach nothing are still waste (time, not money).
 - **Why:** The value is the naval architect's hours saved, which dwarfs API cost.
+
+### Read light lines against the paper beside them (MarinaFrame)
+- **Date:** 2026-11-09
+- **Trigger:** On blurred L1 sheets the dash-dot body-plan centreline and light grid and station lines were missed: the detectors used one sheet-wide ink level and one unbroken run, so the centreline fell back to a grid or hull line (series60-3v-L1: 119 px off) and three station lines vanished (shipd-1-08158-3v-L1).
+- **Rule:** Detect drawn lines by local contrast (`ndimage.grey_closing` across the line minus the pixel) and by inked share along the line, not by a global threshold or the longest run. Keep the old detector beside it where a dark line that ink widens must still be found (baseline). Check each detector change on every dev sheet L0-L3 against truth datums before a live run.
+- **Why:** Sheet-wide levels fail on grey, uneven, blurred scans; a dashed datum line has no long run.
+
+### Replay a live round before spending another (MarinaFrame)
+- **Date:** 2026-11-09
+- **Trigger:** A reader change helped one case and broke another (shipd-1-09867-3v-L0: the intake's half-width profile region, 3.4 -> 19 %); only a replay of all ten earlier live readings showed it.
+- **Rule:** After each reader change, replay the model's earlier phase-1 readings through `build_first_hull` (copy the task's `domain/input` and the reading state, re-run `_describe_vessel` on `model_description`, score the first-hull STEP) for every L0 and L1 dev case. Run live rounds only after the replay shows no regression.
+- **Why:** Live runs vary by 1-5 points from the model alone; replays isolate the code change.
