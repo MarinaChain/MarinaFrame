@@ -6,7 +6,7 @@ use crate::error::{AppError, AppResult};
 use crate::storage::{self, AppPaths};
 use crate::types::*;
 use crate::view::{self, ViewContext};
-use crate::{artifact, events, files};
+use crate::{artifact, events, files, model_keys};
 use marinaframe_control::util;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -79,7 +79,22 @@ impl Backend {
             &settings.worker_python,
             self.worker_source.as_deref(),
             spec_path,
+            self.ai_status().active,
         )
+    }
+
+    /// Whether new runs use the AI, and why not when they do not.
+    pub fn ai_status(&self) -> AiStatus {
+        let enabled = storage::get_settings(&self.paths).ai_drafting;
+        let key_source = model_keys::key_source();
+        AiStatus {
+            enabled,
+            key_found: key_source.is_some(),
+            active: enabled && key_source.is_some(),
+            key_file: model_keys::key_file()
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+        }
     }
 
     /// True while a background action runs on the task.
@@ -196,4 +211,27 @@ fn folder_bytes(path: &Path, depth: usize) -> u64 {
             _ => 0,
         })
         .sum()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ai_is_not_active_when_ai_drafting_is_off() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = AppPaths {
+            config_dir: tmp.path().join("config"),
+            data_dir: tmp.path().join("data"),
+            repo_root: None,
+        };
+        let backend = Backend::new(paths, None, None);
+        let mut settings = backend.get_settings();
+        settings.ai_drafting = false;
+        backend.set_settings(settings).unwrap();
+        let status = backend.ai_status();
+        assert!(!status.enabled);
+        assert!(!status.active);
+        assert!(status.key_file.ends_with("opencode-go-keys.txt"));
+    }
 }

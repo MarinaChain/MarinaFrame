@@ -1043,3 +1043,7 @@ button, input { font: inherit; color: inherit; }
 .activity-steps { margin: var(--space-xs) 0 0; padding-left: var(--space-lg); }
 .activity .chevron, .draft-warnings .chevron { width: 12px; height: 12px; transition: transform var(--dur-fast); }
 .activity[open] .chevron, .draft-warnings[open] .chevron { transform: rotate(90deg); }
+
+/* On/off switch for a boolean setting (for example AI drafting). */
+.toggle { display: inline-flex; align-items: center; gap: var(--space-sm, 6px); cursor: pointer; white-space: nowrap; }
+.toggle input { width: 1.1em; height: 1.1em; accent-color: var(--accent, currentColor); }

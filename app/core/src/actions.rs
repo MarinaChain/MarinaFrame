@@ -106,14 +106,21 @@ fn spawn_with_store(
     }
 }
 
-/// Start a deterministic run of `spec_path`. The task folder is created inside
-/// `runs_folder`. Runs that call the model are not started from the app.
+/// Why an AI run may send the drawing to the model. The person enabled AI
+/// drafting in Settings; the founder made AI drafting the default (2026-11-08).
+pub const AI_DRAFTING_BASIS: &str =
+    "AI drafting is enabled in MarinaFrame settings: the drawing goes to DeepSeek through OpenCode Go to build a draft.";
+
+/// Start a run of `spec_path` in draft mode. The task folder is created inside
+/// `runs_folder`. With `use_model` the AI reads the drawing and builds the draft
+/// (live policy); without it the deterministic draft runs.
 pub fn start_run(
     registry: &ActionRegistry,
     runs_folder: &Path,
     worker_python: &str,
     worker_source: Option<&Path>,
     spec_path: &str,
+    use_model: bool,
 ) -> AppResult<String> {
     let source = util::absolute(Path::new(spec_path))?;
     if !source.is_file() || source.is_symlink() {
@@ -131,10 +138,18 @@ pub fn start_run(
         worker_python: python.to_string_lossy().into_owned(),
         worker_source,
         source_spec: source.to_string_lossy().into_owned(),
-        policy: Policy::Deterministic,
+        policy: if use_model {
+            Policy::Live
+        } else {
+            Policy::Deterministic
+        },
         limits: OperationalLimits::default(),
-        provider_transfer_authorized: false,
-        authorization_basis: String::new(),
+        provider_transfer_authorized: use_model,
+        authorization_basis: if use_model {
+            AI_DRAFTING_BASIS.into()
+        } else {
+            String::new()
+        },
         model: GO_MODEL.into(),
         binary_sha256: util::file_hash(&std::env::current_exe().map_err(|_| "binary_path")?)?,
         // The app builds a best-effort draft instead of declining (founder

@@ -144,6 +144,13 @@
         <span class="field-label">Worker Python</span>
         <input type="text" name="worker_python" spellcheck="false" autocomplete="off" required>
       </label>
+      <div class="field field-row">
+        <div>
+          <span class="field-label">AI drafting</span>
+          <p class="field-help" id="ai-status">The AI reads the drawing and builds the draft.</p>
+        </div>
+        <label class="toggle"><input type="checkbox" name="ai_drafting"><span>On</span></label>
+      </div>
       <fieldset class="field">
         <legend class="field-label">Appearance</legend>
         <div class="segmented segmented-text" role="radiogroup">
@@ -177,7 +184,7 @@
           <button class="btn" type="button" id="pick-spec">Choose…</button>
         </span>
       </label>
-      <p class="field-help">The run uses the deterministic policy. It does not call the model.</p>
+      <p class="field-help" id="newrun-mode">The AI reads the drawing and builds a draft.</p>
       <p class="form-error" id="newrun-error" role="alert" hidden></p>
       <div class="sheet-actions">
         <button class="btn" type="button" id="newrun-cancel">Cancel</button>

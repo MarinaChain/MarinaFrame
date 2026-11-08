@@ -312,6 +312,12 @@ function mockTransport() {
       writeStored(MOCK_SETTINGS_KEY, settings);
       return { ...data.settings, ...settings };
     },
+    async get_ai_status(data) {
+      const settings = { ...data.settings, ...readStored(MOCK_SETTINGS_KEY, {}) };
+      const enabled = settings.ai_drafting !== false;
+      return { enabled, key_found: true, active: enabled,
+               key_file: '/Users/demo/.config/marinaframe/opencode-go-keys.txt' };
+    },
     async dismiss_notice(_data, { id }) {
       const dismissed = new Set(readStored(MOCK_DISMISSED_KEY, []));
       dismissed.add(id);

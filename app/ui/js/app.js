@@ -835,12 +835,33 @@ function applyTheme(theme) {
 }
 systemDark.addEventListener('change', () => model.refreshTheme());
 
-function openSettings() {
+/** One line on whether new runs use the AI, and what to do when they cannot. */
+function aiStatusText(status) {
+  if (!status) return 'The AI reads the drawing and builds the draft.';
+  if (!status.enabled) return 'Off: new runs use the deterministic draft and do not call the model.';
+  if (!status.key_found) {
+    return `No model key found, so new runs use the deterministic draft. Put your OpenCode Go key in ${status.key_file} (one key per line, chmod 600).`;
+  }
+  return 'On: the AI (DeepSeek through OpenCode Go) reads the drawing and builds the draft.';
+}
+
+async function refreshAiStatus() {
+  try {
+    state.aiStatus = await invoke('get_ai_status');
+  } catch {
+    state.aiStatus = null;
+  }
+  return state.aiStatus;
+}
+
+async function openSettings() {
   const form = $('settings-form');
-  const s = state.settings || { runs_folder: '', worker_python: '', theme: 'system' };
+  const s = state.settings || { runs_folder: '', worker_python: '', theme: 'system', ai_drafting: true };
   form.runs_folder.value = s.runs_folder;
   form.worker_python.value = s.worker_python;
   form.theme.value = s.theme;
+  form.ai_drafting.checked = s.ai_drafting !== false;
+  $('ai-status').textContent = aiStatusText(await refreshAiStatus());
   $('settings-error').hidden = true;
   $('notices-reset-status').textContent = 'Dismissed notices stay hidden.';
   $('reset-notices').disabled = false;
@@ -864,6 +885,7 @@ $('settings-form').addEventListener('submit', async (event) => {
     runs_folder: form.runs_folder.value.trim(),
     worker_python: form.worker_python.value.trim(),
     theme: form.theme.value,
+    ai_drafting: form.ai_drafting.checked,
   };
   $('settings-save').disabled = true;
   try {
@@ -896,9 +918,13 @@ $('reset-notices').addEventListener('click', async () => {
 
 // ---------------------------------------------------------------- new run
 
-function openNewRun() {
+async function openNewRun() {
   const form = $('newrun-form');
   form.spec_path.value = '';
+  const status = await refreshAiStatus();
+  $('newrun-mode').textContent = status && !status.active
+    ? `${aiStatusText(status)}`
+    : 'The AI reads the drawing and builds a draft. You review it before anything is approved.';
   $('newrun-error').hidden = true;
   $('pick-spec').hidden = !canPickSpecFile();
   $('newrun-sheet').showModal();

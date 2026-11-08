@@ -35,6 +35,7 @@ impl AppPaths {
                 .map(|p| p.to_string_lossy().into_owned())
                 .unwrap_or_default(),
             theme: Theme::System,
+            ai_drafting: true,
         }
     }
 }
@@ -153,5 +154,18 @@ mod tests {
             set_settings(&p, settings).unwrap_err().code,
             "worker_python_missing"
         );
+    }
+
+    #[test]
+    fn ai_drafting_is_on_by_default_also_for_an_older_settings_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = paths(&tmp);
+        assert!(get_settings(&p).ai_drafting);
+        // A settings file written before the field existed.
+        fs::create_dir_all(&p.config_dir).unwrap();
+        let older = serde_json::json!({"runs_folder": tmp.path().join("runs"),
+                                       "worker_python": "", "theme": "system"});
+        fs::write(p.config_dir.join(SETTINGS_FILE), older.to_string()).unwrap();
+        assert!(get_settings(&p).ai_drafting);
     }
 }
