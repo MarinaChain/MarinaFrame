@@ -246,7 +246,7 @@ agent builds a real `TaskView` from a real task and checks it against the same s
 - Keys: the environment (`OPENCODE_API_KEY`, `_2`, `_3`) or the key file
   `~/.config/marinaframe/opencode-go-keys.txt` (one key per line, mode 600; the same file as
   `scripts/load_opencode_keys.sh`). The app never shows or logs a key; `get_ai_status` returns only
-  `enabled`, `key_found`, `active` and the key file path.
+  `enabled`, `key_found`, `active`, the key file path and `key_count` (key slots a new run can use, 0 to 3; never the keys).
 - Without a key, or with AI drafting off, runs use the deterministic draft and the New run sheet
   says so.
 - The controller runs each model request in a child process of its own executable

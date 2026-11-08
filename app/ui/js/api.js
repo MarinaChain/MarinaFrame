@@ -716,7 +716,7 @@ function mockTransport() {
       const settings = { ...data.settings, ...readStored(MOCK_SETTINGS_KEY, {}) };
       const enabled = settings.ai_drafting !== false;
       const keyFound = !mockNoKey;
-      return { enabled, key_found: keyFound, active: enabled && keyFound,
+      return { enabled, key_found: keyFound, active: enabled && keyFound, key_count: keyFound ? 3 : 0,
                key_file: '/Users/demo/.config/marinaframe/opencode-go-keys.txt' };
     },
     /**

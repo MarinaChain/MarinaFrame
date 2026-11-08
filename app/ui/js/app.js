@@ -1667,7 +1667,8 @@ function aiStatusText(status) {
   if (!status.key_found) {
     return `No model key found, so new runs use the deterministic draft. Put your OpenCode Go key in ${status.key_file} (one key per line, chmod 600).`;
   }
-  return 'On: the AI (DeepSeek through OpenCode Go) reads the drawing and builds the draft.';
+  const keys = status.key_count > 1 ? ` ${status.key_count} model keys found.` : '';
+  return `On: the AI (DeepSeek through OpenCode Go) reads the drawing and builds the draft.${keys}`;
 }
 
 /** Show `text` in the chip `node` with a badge tone, and `title` as its tooltip. */

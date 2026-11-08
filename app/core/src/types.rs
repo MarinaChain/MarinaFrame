@@ -366,6 +366,9 @@ pub struct AiStatus {
     pub active: bool,
     /// Where the app looks for keys (never the keys themselves).
     pub key_file: String,
+    /// How many key slots a new run can use (0 to 3). Never the keys.
+    #[serde(default)]
+    pub key_count: usize,
 }
 
 /// One line of the setup check: is this part ready, and what to do when it is not.

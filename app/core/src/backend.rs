@@ -218,11 +218,12 @@ impl Backend {
     /// Whether new runs use the AI, and why not when they do not.
     pub fn ai_status(&self) -> AiStatus {
         let enabled = storage::get_settings(&self.paths).ai_drafting;
-        let key_source = model_keys::key_source();
+        let (key_source, keys) = model_keys::configured_keys();
         AiStatus {
             enabled,
             key_found: key_source.is_some(),
             active: enabled && key_source.is_some(),
+            key_count: keys.len(),
             key_file: model_keys::key_file()
                 .map(|p| p.to_string_lossy().into_owned())
                 .unwrap_or_default(),
