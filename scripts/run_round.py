@@ -27,6 +27,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
+# More concurrent cases mainly overlap model waits: the controller serializes native CAD work.
+MAX_JOBS = 6
 DIGEST = SCRIPTS / "round_digest.py"
 EARLY_STOP_AFTER = 2  # finished cases after which the digest may stop the round
 
@@ -158,13 +160,15 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--binary", required=True, type=Path, help="marinaframe controller")
     parser.add_argument("--worker-source", required=True, type=Path)
     parser.add_argument("--worker-python", required=True, type=Path)
-    parser.add_argument("--jobs", type=int, default=2, help="concurrent cases (1-2)")
+    parser.add_argument("--jobs", type=int, default=2,
+                        help=f"concurrent cases (1-{MAX_JOBS}); CAD work is still serialized by the "
+                             "controller's native admission lock, so more jobs mainly overlap model waits")
     parser.add_argument("--max-cases", type=int, default=4)
     parser.add_argument("--basis", help="provider transfer basis text (required for --policy live)")
     parser.add_argument("--no-early-stop", action="store_true")
     args, extra = parser.parse_known_args(argv)
-    if not 1 <= args.jobs <= 2:
-        sys.exit("--jobs must be 1 or 2 (small rounds only)")
+    if not 1 <= args.jobs <= MAX_JOBS:
+        sys.exit(f"--jobs must be 1 to {MAX_JOBS}")
     if extra and (len(extra) % 2 or any(not flag.startswith("--") for flag in extra[0::2])):
         sys.exit(f"extra options must be --option value pairs: {extra}")
     args.extra = extra
@@ -204,18 +208,23 @@ def main(argv: list[str] | None = None) -> int:
     (args.out / "round.json").write_text(json.dumps(meta, indent=2) + "\n")
     log.write(f"round of {len(cases)} case(s), jobs {args.jobs}, out {args.out}")
 
+    # The first EARLY_STOP_AFTER cases run first; if they fail the same way, the round stops.
+    # The rest then run in a pool: a new case starts as soon as any case ends.
     finished: list[Path] = []
-    for start in range(0, len(cases), args.jobs):
-        wave = cases[start: start + args.jobs]
-        with ThreadPoolExecutor(max_workers=len(wave)) as pool:
-            list(pool.map(lambda case: run_case(log, build_command(args, case), args.out / case), wave))
-        finished.extend(args.out / case for case in wave)
-        if not args.no_early_stop and EARLY_STOP_AFTER <= len(finished) < len(cases):
-            hint = early_stop_hint(finished)
-            if hint:
-                log.write(f"early stop: {hint}")
-                meta["early_stop_hint"] = hint
-                break
+
+    def run_all(batch: list[str]) -> None:
+        with ThreadPoolExecutor(max_workers=min(args.jobs, len(batch))) as pool:
+            list(pool.map(lambda case: run_case(log, build_command(args, case), args.out / case), batch))
+        finished.extend(args.out / case for case in batch)
+
+    first, rest = cases[:EARLY_STOP_AFTER], cases[EARLY_STOP_AFTER:]
+    run_all(first)
+    hint = None if args.no_early_stop or not rest else early_stop_hint(finished)
+    if hint:
+        log.write(f"early stop: {hint}")
+        meta["early_stop_hint"] = hint
+    elif rest:
+        run_all(rest)
     (args.out / "digest.md").write_text(run_digest(finished))
     meta["finished"] = [path.name for path in finished]
     (args.out / "round.json").write_text(json.dumps(meta, indent=2) + "\n")

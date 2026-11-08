@@ -150,8 +150,8 @@ def test_missing_case_spec_fails_before_any_run(tmp_path, monkeypatch):
     assert not out.exists()
 
 
-def test_jobs_above_two_refused(tmp_path, monkeypatch):
-    argv, _, _ = setup_round(tmp_path, monkeypatch, ["c1"], known_extra=("--jobs", "3"))
+def test_jobs_above_the_cap_refused(tmp_path, monkeypatch):
+    argv, _, _ = setup_round(tmp_path, monkeypatch, ["c1"], known_extra=("--jobs", str(run_round.MAX_JOBS + 1)))
     with pytest.raises(SystemExit, match="--jobs"):
         run_round.main(argv)
 
