@@ -130,6 +130,24 @@ def snap_level(levels: list[Level], z_hint: float, x_hint: float | None = None) 
     return min(candidates, key=lambda level: (abs(level.z_m - z_hint), -sum(b - a for a, b in level.intervals)))
 
 
+def transverse_walls(entities, view: View, x_range: list[float], min_length_m: float) -> list[dict]:
+    """Straight lines across the ship (constant x) in a plan view, at least min_length_m long.
+
+    A deckhouse end wall is such a line on the plan of the deck it stands on. Its roof can
+    reach further (an overhang over an open area), so the walls, not the roof, give the end.
+    """
+    walls = []
+    for entity in _view_entities(entities, view):
+        points = view.to_ship(entity['points'])
+        for a, b in zip(points[:-1], points[1:]):
+            length = abs(float(a[1] - b[1]))
+            if (abs(a[0] - b[0]) <= LEVEL_TOLERANCE_M and length >= min_length_m
+                    and x_range[0] - LEVEL_GAP_M <= a[0] <= x_range[1] + LEVEL_GAP_M):
+                walls.append({'x_m': round(float(a[0] + b[0]) / 2, 4), 'length_m': round(length, 4),
+                              'entity_id': entity['id']})
+    return sorted(walls, key=lambda wall: wall['x_m'])
+
+
 class PlanRaster:
     """Plan-view linework on a grid; the enclosed region is what the lines surround."""
 

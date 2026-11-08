@@ -52,6 +52,28 @@ Causes (from the drawing and the truth, after the run):
   the underside of the deck plating or at a different datum. This is a content difference, not
   a reading error.
 
+### 1.1 Development run 2: tier aft end from its end wall
+
+This change was made **after** the truth comparison above, so run 2 is a development result on a
+seen case, not a blind one. Rule: a deckhouse tier starts at its aftmost end wall on the plan of
+the deck it stands on: a heavy (`S0CO3`) line across the ship, at least 0.4 x the moulded breadth
+long, inside the roof extent (`ga_reader.transverse_walls`). Without such a wall the roof extent
+stays. Tier 1: wall at x = 15.5 m (6.80 m long) on the 1-deck plan; a 2.77 m line at 14.5 m is
+shorter than the limit. Tier 2: wall at 14.5 m, the same as its roof end.
+
+| Metric | Run 1 | Run 2 | Target | Met (run 2) |
+|---|---|---|---|---|
+| M1 aft deck level | +0.065 m (cov 0.955) | +0.065 m (cov 0.955) | abs <= 0.05 m | no |
+| M2 tier-1 footprint IoU | 0.796 | **0.940** | >= 0.90 | yes |
+| M3 tier-1 roof height | +0.065 m | +0.065 m | abs <= 0.10 m | yes |
+| M4 tier-1 volume | +29.1 % | **+9.4 %** (413.3 vs 377.9 m³) | abs <= 10 % | yes |
+| M5 tier-1 x ends (aft, fwd) | -3.20 m, +0.05 m | **0.00 m**, +0.05 m | abs <= 0.5 m | yes |
+| M7 built | 7 of 7 | 7 of 7 (11 traced, 5 guessed) | all | yes |
+
+The remaining volume error comes mostly from the +0.065 m roof offset (about 11 m³ over the 162 m² truth footprint)
+and the footprint outside the truth (IoU 0.94). M1 stays outside its target for the content
+reason above.
+
 ## 2. A/B: ship-cad JSON (arm A) vs CadQuery code (arm B)
 
 One run of the fixed protocol (section 3.5 of the plan), 2026-11-09, `deepseek-v4.1-flash` on
@@ -86,13 +108,45 @@ What the numbers show:
 - Prompt tokens were about 4,700 per first request with three images. The provider may not count
   image tokens, or may not pass the images to the model. This is not checked.
 
-Next A/B (needs a new fixed protocol before running): give arm B and arm A a larger reply budget
-(for example 48,000 tokens) or a lower reasoning effort, and give the model the overhang question
-directly (ask it to check each tier's aft end against the walls on the deck below).
+### 2.1 Round 2: thinking disabled, 32,000 tokens (protocol section 3.5.1)
+
+Same inputs, scorer and rule; request settings `thinking: disabled`, `max_tokens` 32,000, the
+same for both arms. 2026-11-09, 12 requests, all receipted. The run used the step 1 reading of
+commit `5bdbca0`, before the aft-end fix of section 1.1. It differs from round 1 only in the
+breadth of the unscored tier 2 and wheelhouse (±3.54 m against ±3.46 m, from an edge-band fix);
+the three images are byte-identical to round 1.
+
+| Repeat | Arm | Turns | Built (of 7) | Success | M2 IoU | M4 volume | Prompt / completion tokens | Wall time (s) |
+|---|---|---:|---:|---|---:|---:|---:|---:|
+| 1 | A JSON | 1 | 7 | yes | 0.796 | +29.1 % | 4,675 / 2,581 | 27 |
+| 1 | B code | 3 | 0 | no | - | - | 81,194 / 37,551 | 180 |
+| 2 | A JSON | 1 | 7 | yes | 0.796 | +29.1 % | 4,673 / 2,604 | 14 |
+| 2 | B code | 3 | 0 | no | - | - | 24,849 / 9,047 | 46 |
+| 3 | A JSON | 1 | 7 | yes | 0.796 | +29.1 % | 4,673 / 2,604 | 18 |
+| 3 | B code | 1 | 7 | yes | 0.796 | +29.1 % | 4,530 / 4,686 | 29 |
+
+M1 (+0.065 m, coverage 0.955), M3 (+0.065 m) and M5 (-3.20 m, +0.05 m) are the same in every
+successful repeat. Provider-reported cost: USD 0 (Go subscription billing).
+
+Decision by the fixed rule: **arm A (ship-cad JSON) wins, 3 repeat successes to 1.**
+
+- With thinking disabled both arms answer. Arm A then needs 1 turn, about 2,600 completion
+  tokens and 14-27 s per repeat: about 13 times fewer completion tokens than in round 1.
+- Arm B fails on the CadQuery API, not on geometry: `close().face()` (no such method),
+  `Face.offset2D`, a pending-wire error and a wrong OCP builder call. Errors fed back for 2 more
+  turns were not fixed in B1 and B2. B3 built all 7 in one turn.
+- Both arms again copy the code reading: every successful repeat has the scores of the
+  deterministic build. In this setup the model adds no accuracy; the accuracy gain of section 1.1
+  came from a code rule.
+
+Next model test (needs a new fixed protocol before running): keep thinking disabled and the
+JSON form; test whether the model adds accuracy over the code reading, for example on a case
+where the code reading is wrong or missing (the round 1 reading with the overhang, or a drawing
+without vector layers), and ask the model to check each tier's ends against its walls.
 
 ## 3. Resume point
 
-1. Fix the tier aft-end rule (walls on the deck below) and re-score as a development run.
+1. Done: tier aft-end rule (section 1.1).
 2. Appendages (rudder, skeg, thrusters) and openings in step 1.
 3. Model pass for drawings without vector layers (Balclutha, C.A. Thayer), using the arm that
    section 2 selects.
