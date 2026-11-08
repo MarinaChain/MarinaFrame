@@ -1,0 +1,205 @@
+{
+  "status": "rendered",
+  "section_count": 9,
+  "scored_count": 9,
+  "worst_section_id": "s07",
+  "worst_max_m": 0.0038035131311764275,
+  "worst_ink_fit_section_id": "s09",
+  "worst_ink_fit_rms_m": 0.3404271136563672,
+  "distance_type": "reference curve samples to the nearest built STEP cut segment, metres",
+  "ink_fit_type": "built cut points to the nearest source pixel darker than 128/255 in the section region, metres; closure lines excluded",
+  "cut_method": "plane slice of the render tessellation of the reimported STEP",
+  "cut_tolerance_m": 0.028664594015703333,
+  "display_only": true,
+  "scoreboard": [
+    {
+      "section_id": "s01",
+      "x_m": 10.0,
+      "label": "traced",
+      "reference": "built_trace",
+      "panel": 0,
+      "colour": "#1f77b4",
+      "status": "scored",
+      "sample_count": 183,
+      "max_m": 0.0036026981595428027,
+      "rms_m": 0.0009316411616351887,
+      "p95_m": 0.0024859691101308296,
+      "max_px": 0.2172250070545936,
+      "ink_fit": {
+        "sample_count": 3314,
+        "outside_region_count": 0,
+        "max_m": 0.0,
+        "rms_m": 0.0,
+        "near_fraction": 1.0
+      }
+    },
+    {
+      "section_id": "s02",
+      "x_m": 20.0,
+      "label": "traced",
+      "reference": "built_trace",
+      "panel": 0,
+      "colour": "#d62728",
+      "status": "scored",
+      "sample_count": 214,
+      "max_m": 0.003699673161105028,
+      "rms_m": 0.0009312853030736457,
+      "p95_m": 0.002586895557139552,
+      "max_px": 0.2230721234283802,
+      "ink_fit": {
+        "sample_count": 6673,
+        "outside_region_count": 0,
+        "max_m": 0.016585098596117724,
+        "rms_m": 0.0023936734094720967,
+        "near_fraction": 1.0
+      }
+    },
+    {
+      "section_id": "s03",
+      "x_m": 30.0,
+      "label": "traced",
+      "reference": "built_trace",
+      "panel": 0,
+      "colour": "#2ca02c",
+      "status": "scored",
+      "sample_count": 222,
+      "max_m": 0.003691343012777463,
+      "rms_m": 0.001329013579479517,
+      "p95_m": 0.003250792661843405,
+      "max_px": 0.2225698563915406,
+      "ink_fit": {
+        "sample_count": 6232,
+        "outside_region_count": 0,
+        "max_m": 0.3727037364968156,
+        "rms_m": 0.008818755204229761,
+        "near_fraction": 0.9996790757381258
+      }
+    },
+    {
+      "section_id": "s04",
+      "x_m": 40.0,
+      "label": "traced",
+      "reference": "built_trace",
+      "panel": 0,
+      "colour": "#9467bd",
+      "status": "scored",
+      "sample_count": 222,
+      "max_m": 0.00369146012407977,
+      "rms_m": 0.001329034503036201,
+      "p95_m": 0.0032507924925765158,
+      "max_px": 0.22257691762796486,
+      "ink_fit": {
+        "sample_count": 6310,
+        "outside_region_count": 0,
+        "max_m": 0.3727037364968156,
+        "rms_m": 0.008621157310044638,
+        "near_fraction": 0.9996830427892235
+      }
+    },
+    {
+      "section_id": "s05",
+      "x_m": 50.0,
+      "label": "ai_inferred",
+      "reference": "authored_curve",
+      "panel": 1,
+      "colour": "#1f77b4",
+      "status": "scored",
+      "sample_count": 65,
+      "max_m": 0.003547402456586372,
+      "rms_m": 0.0006572595301964183,
+      "p95_m": 0.0013566852732849585,
+      "max_px": 0.21389094770993738,
+      "ink_fit": {
+        "sample_count": 6742,
+        "outside_region_count": 0,
+        "max_m": 0.2952892853718433,
+        "rms_m": 0.07526859820147777,
+        "near_fraction": 0.6380895876594482
+      }
+    },
+    {
+      "section_id": "s06",
+      "x_m": 60.0,
+      "label": "traced",
+      "reference": "built_trace",
+      "panel": 1,
+      "colour": "#d62728",
+      "status": "scored",
+      "sample_count": 196,
+      "max_m": 0.0037724042834580934,
+      "rms_m": 0.0011538320550196239,
+      "p95_m": 0.0028798189337546406,
+      "max_px": 0.22745745294159098,
+      "ink_fit": {
+        "sample_count": 7045,
+        "outside_region_count": 0,
+        "max_m": 0.1854270393722778,
+        "rms_m": 0.0032648172956340816,
+        "near_fraction": 0.9994322214336409
+      }
+    },
+    {
+      "section_id": "s07",
+      "x_m": 70.0,
+      "label": "traced",
+      "reference": "built_trace",
+      "panel": 1,
+      "colour": "#2ca02c",
+      "status": "scored",
+      "sample_count": 234,
+      "max_m": 0.0038035131311764275,
+      "rms_m": 0.0011035338084073357,
+      "p95_m": 0.003085111630918115,
+      "max_px": 0.22933316369109571,
+      "ink_fit": {
+        "sample_count": 7480,
+        "outside_region_count": 0,
+        "max_m": 0.03317019719223545,
+        "rms_m": 0.002100670234690246,
+        "near_fraction": 1.0
+      }
+    },
+    {
+      "section_id": "s08",
+      "x_m": 80.0,
+      "label": "ai_inferred",
+      "reference": "authored_curve",
+      "panel": 1,
+      "colour": "#9467bd",
+      "status": "scored",
+      "sample_count": 65,
+      "max_m": 0.0033634371609824816,
+      "rms_m": 0.0005428238136032384,
+      "p95_m": 0.00037532568617298326,
+      "max_px": 0.20279874379340757,
+      "ink_fit": {
+        "sample_count": 7401,
+        "outside_region_count": 0,
+        "max_m": 0.18318840149976587,
+        "rms_m": 0.022629851582337213,
+        "near_fraction": 0.9379813538710985
+      }
+    },
+    {
+      "section_id": "s09",
+      "x_m": 90.0,
+      "label": "traced",
+      "reference": "built_trace",
+      "panel": 1,
+      "colour": "#ff7f0e",
+      "status": "scored",
+      "sample_count": 153,
+      "max_m": 0.003027966287506269,
+      "rms_m": 0.0005097222219340835,
+      "p95_m": 0.0009930006988373018,
+      "max_px": 0.1825714975378598,
+      "ink_fit": {
+        "sample_count": 4808,
+        "outside_region_count": 0,
+        "max_m": 0.6302337466524734,
+        "rms_m": 0.3404271136563672,
+        "near_fraction": 0.19945923460898501
+      }
+    }
+  ]
+}

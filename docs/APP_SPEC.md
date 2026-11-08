@@ -239,3 +239,55 @@ agent builds a real `TaskView` from a real task and checks it against the same s
   says so.
 - The controller runs each model request in a child process of its own executable
   (`provider-worker`); the desktop app handles that call in `main` before any window starts.
+
+## Exports
+
+Backend for milestone M5 (design plan section 7; review workflow sections 3, 5, 6 P0-6, P0-7,
+P0-9, P0-11). Package `src/vessel_reconstruction/exports/`. The Tauri command and `js/export.js`
+come later and call this package; it only reads the task folder.
+
+Command: `python -m vessel_reconstruction.exports --task DIR --revision rN --out DIR
+[--draft-m T] [--waterlines N] [--vessel NAME]`. It prints the manifest as JSON; exit code 2 (and
+`{"error": ...}` on stderr) when the revision has no valid build. Python: `export_draft(task,
+"r3", out)`.
+
+- Build used: the last `valid` entry of `domain/state.json` `builds` with `revision_id` rN
+  (`r3` and `r0003` are the same). Station overlays and ink fit come from the render whose
+  `observation.json` audits the same STEP bytes (SHA-256). Open guesses: the task's current
+  `guesses` when rN is the current revision, else the build's `draft.guesses`.
+- File names: `<vessel>_<rNNNN>_DRAFT_<part>`. Vessel: `--vessel`, else spec `vessel_name`, else
+  the build's `vessel_id`.
+- `_offsets.csv`: one row per station: `station, x_m, source_label, keel_z_m, top_z_m`, then
+  half-breadths (m, 3 decimals) at each waterline (`hb_at_z_<z>_m`). Read from the built section
+  curves (largest |y| where the curve meets the height). Waterlines: spec `waterlines_m` when
+  given, else 10 equal steps from the lowest keel to the highest top point. Empty cell: the
+  station does not reach that waterline (never written as 0). Leading `#` lines: stamp, vessel,
+  revision, run, units and datum.
+- `_hydrostatics.json` and `_hydrostatics.csv`: at the design waterline z = T above the baseline
+  (`--draft-m`, else spec `design_draft_m`, else 0.6 x depth marked "assumed"). Volume,
+  displacement (1.025 t/m3), LCB, VCB, KB, Awp, LCF, BMt, BMl, waterline length, largest breadth,
+  largest section area, wetted surface, Cb, Cp, Cm, Cwp (basis stated in the file). Method: the
+  exported STL (a tessellation of the STEP) clipped at T, divergence theorem, exact for the mesh;
+  the mesh volume is checked against the build volume (warning above 1 %). Without an STL: the
+  station curves by the trapezoid rule, with a warning. Not computed: `hydrostatics: null` with
+  `not_computed_reason`.
+- `_report.pdf` (matplotlib PDF backend; matplotlib is a locked dependency): page 1 summary
+  (vessel, revision, run, status and review state, particulars, hydrostatics, per-section source
+  in plain words and ink fit max/RMS/% B/2/near, open guesses, warnings; long lists continue on
+  page 2), then one page per station overlay image. Ink fit that was not rendered shows "not
+  checked". Footer on every page: "Draft — not for construction; engineering sign-off happens
+  outside MarinaFrame".
+- `_model.step` and `_model.stl`: copies of the build's files. STEP `FILE_DESCRIPTION` holds the
+  stamp "Draft hull model from MarinaFrame. Not approved for construction.", vessel, revision,
+  run and units; a binary STL has the stamp in its 80-byte header. The manifest keeps the SHA-256
+  of the original files (`source_sha256`). A missing file is listed in `not_built`.
+- `_manifest.json`: stamp, vessel, revision, run, build, `result_sha256`, review state, open
+  guess count, `engineering_approved: false`, and every file with role, bytes and SHA-256.
+- `_package.zip`: all files above plus the manifest, with fixed entry dates, so the same build
+  gives the same zip bytes.
+- Tests: `tests/test_exports.py` (synthetic box task, closed-form V prism, and a trimmed real
+  fixture `tests/fixtures/exports/shipd-1-00679-L0` without CAD files).
+- The benchmark hull metrics (`benchmarks/gunnerus/hull_metrics.py`, used by
+  `benchmarks/factory/truth.py`) are not moved: sealed benchmark manifests hash that file. The
+  export computes the same quantities (volume and waterplane area below T) with its own exact
+  mesh integrals.
