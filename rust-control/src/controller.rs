@@ -1538,6 +1538,47 @@ fn live_abstention_becomes_draft(store: &Store, actor: &str) -> bool {
         && d["input_errors"].as_array().is_none_or(Vec::is_empty)
 }
 
+fn ask_to_fill_missing_once(store: &mut Store) -> Result<bool> {
+    if store
+        .events
+        .iter()
+        .any(|e| e.kind == "missing_sections_hint")
+    {
+        return Ok(false);
+    }
+    let checkpoint = validation::domain_checkpoint(&store.path)?;
+    let missing = store.state.domain["sections"]
+        .as_array()
+        .map(|sections| {
+            sections
+                .iter()
+                .filter(|s| {
+                    let id = s["id"].as_str().unwrap_or("");
+                    !checkpoint["selected"][id].is_string()
+                        && !checkpoint["model_choices"][id]["candidate_id"].is_string()
+                        && !checkpoint["authored_sections"][id]["candidate_id"].is_string()
+                        && checkpoint["catalog"][id]["candidates"]
+                            .as_array()
+                            .is_none_or(|c| {
+                                !c.iter()
+                                    .any(|c| c["selectable"] == true && c["model_traced"] != true)
+                            })
+                })
+                .map(|s| s["id"].clone())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if missing.is_empty() {
+        return Ok(false);
+    }
+    store.state.staged_decision = None;
+    store.state.last_observation = json!({"ok":true,"status":"fill_missing_sections",
+        "missing_section_ids":missing,"message":"Before building, use propose_section to fill these missing sections. This is a one-time suggestion; build_draft again to keep the current gaps.",
+        "engineering_approved":false,"human_semantic_review_required":true});
+    store.append("missing_sections_hint", json!({"section_ids":missing}))?;
+    Ok(true)
+}
+
 /// Build a best-effort draft. When it has open guesses, the task stops at
 /// `draft_not_verified`; a person resolves each guess with an operator
 /// `select_contours`, and then the ordinary verified path runs. An
@@ -1626,6 +1667,10 @@ fn refuse_repeated_investigation(store: &mut Store, choice: &Decision) -> Result
             && event.payload["progress_key"] == progress
             && event.payload["decision"]["tool"] == choice.tool
             && event.payload["decision"]["arguments"] == choice.arguments
+            && !(choice.tool == "build_draft"
+                && store.events.iter().any(|hint| {
+                    hint.kind == "missing_sections_hint" && hint.sequence == event.sequence + 1
+                }))
     });
     let Some(earlier) = earlier else {
         return Ok(false);
@@ -1726,6 +1771,9 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
         return Ok(true);
     }
     if let Operation::BuildDraft(_) = operation {
+        if actor == "live_model" && ask_to_fill_missing_once(store)? {
+            return Ok(true);
+        }
         let investigating = actor == "live_model" && investigation_mode(store);
         return build_draft(store, !investigating);
     }
@@ -1961,6 +2009,18 @@ pub fn run_loop(store: &mut Store, max_steps: Option<u64>) -> Result<()> {
                 store.state.last_observation = json!({"ok":false,"status":"proposal_refused","error_code":reason,
                     "refused_decision":choice,"what_you_can_do":refusal_hint(&reason),
                     "engineering_approved":false,"human_semantic_review_required":true});
+                if [
+                    "unsnapped_or_unknown_candidate",
+                    "unknown_or_unsupported_candidate",
+                ]
+                .contains(&reason.as_str())
+                {
+                    let checkpoint = validation::domain_checkpoint(&store.path)?;
+                    let sid = choice.arguments["section_id"].as_str().unwrap_or("");
+                    store.state.last_observation["current_candidate_catalog"] = json!({"section_id":sid,
+                        "candidates":checkpoint["catalog"][sid]["candidates"].as_array().map(|candidates| candidates.iter().map(|c| json!({"candidate_id":c["candidate_id"],"hypothesis":c["hypothesis"],"selectable":c["selectable"]})).collect::<Vec<_>>()),
+                        "hint":"Use one of these current IDs, or propose_section to author the section."});
+                }
                 store.append(
                     "operation_rejected",
                     json!({"reason":reason,"actor":actor,"decision":choice}),
@@ -2169,6 +2229,32 @@ mod tests {
                 .operation()
                 .is_err()
         );
+    }
+    #[test]
+    fn missing_sections_prompt_is_once_only_and_allows_next_build() {
+        let (_tmp, mut store) = fixture();
+        store.state.domain["sections"] = json!([{"id":"s01"}]);
+        util::atomic_json(
+            &store.path.join("domain/state.json"),
+            &json!({"catalog":{"s01":{"candidates":[]}},"selected":{}}),
+            false,
+        )
+        .unwrap();
+        let choice = decision("build_draft", json!({}), "build");
+        let progress = util::hash_json(&json!({"generation":store.state.generation_id})).unwrap();
+        store
+            .append(
+                "decision",
+                json!({"decision":choice,"actor":"live_model","progress_key":progress}),
+            )
+            .unwrap();
+        assert!(ask_to_fill_missing_once(&mut store).unwrap());
+        assert_eq!(
+            store.state.last_observation["missing_section_ids"],
+            json!(["s01"])
+        );
+        assert!(!ask_to_fill_missing_once(&mut store).unwrap());
+        assert!(!refuse_repeated_investigation(&mut store, &choice).unwrap());
     }
     #[test]
     fn recorded_decision_reason_is_visible_in_investigation() {

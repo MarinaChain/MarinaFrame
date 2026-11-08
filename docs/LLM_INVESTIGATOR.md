@@ -144,6 +144,27 @@ Digest tool totals: propose_section **61**, enumerate_strokes 18, assign_station
 - `make test-full`: passed, Rust workspace/real-CAD/app checks, 747 quick Python tests, 21 Python CAD tests, smoke awaiting_human_review and verify valid. Log main `work/w17/w18b-full.log`.
 - No push or merge to main. Only the two requested inbound branch merges.
 
+## W18c: CAD/app integration and advisory accuracy feedback
+
+Merged `w18-cad-complexity` (86b4812) as `6b6b80f` and `app-llm-draft-view` (4b683e1) as `a74f216`. No conflicts. Stroke-discovery branch was not merged. Its ingest/enumeration/trace code paths were left unchanged; new Python hooks sit only at the tool result boundary.
+
+Accuracy feedback is advisory: nearly constant breadth (<0.1 m standard deviation), short coverage (<90% of declared calibrated span, not truth), station-like label hints, better candidate IDs with the unambiguous contour first, and trace_from_point/propose_section fragment completion suggestions. Assignments remain accepted under existing rules. Build results repeat section feedback. Unknown-candidate errors re-list current IDs. Controller asks once to fill truly missing sections; another build proceeds unchanged. No new refusal/gate or automatic candidate selection.
+
+### Single DTMB conversation round
+
+Actual exports: **3/4**, gate-correct **0/4**, three labelled wrong drafts, zero silent wrong. Statuses: three draft_not_verified, one no_progress. Total receipts **375**, list cost **USD 0.85235841**, no missing costs; prompt/completion tokens 5,445,468 / 113,459. Digest counts 335 investigation requests; other provider receipts explain the difference.
+
+- L0: valid draft preserved after deliberate cancellation. It made 211 decisions and eight builds while repeatedly re-authoring sections; cancelled to stop a non-converging task, not counted as successful convergence. First blocker: investigation_argument_bounds.
+- L1: valid draft preserved at repeated_refused_model_output; first blocker: fragmented corridor/insufficient_ink_support. 73 authoring calls and six builds.
+- L2: no STEP; repeated notes_limit output failures after five section assignments.
+- L3: valid draft built/rendered and submitted. First blocker fragmented corridor; later authored corrections completed the draft.
+
+Digest totals: propose_section 269, build_draft 17, enumerate_strokes 13, render_candidate 10, assign_station 10, inspect_source 8, trace_corridor 2, select_contours 1. Generic digest text calls all terminal drafts “failed”; export count is three. Full digest and scores: `outputs/w18/w18c-digest.md`, `outputs/w18/w18c-round1.json`. Draft construction now passes CAD complexity, but shape accuracy and excessive re-authoring remain blockers. L0 cancellation and all its costs are retained.
+
+Because the requested threshold is at least three actual drafts, one dev24 batch was launched on the unchanged frozen round runtime/source, two jobs maximum. It is running in main `work/w17/w18c-dev24.log`; do not duplicate or restart it. No sealed data evaluated.
+
+Verification: merge quick passed (757 Python); final feedback quick passed (759 Python); full suite passed Rust workspace/real-CAD/app tests, **759 quick Python**, **23 CAD Python**, smoke awaiting_human_review and valid. Main log `work/w17/w18c-full.log`.
+
 ## Verification and resume
 
 - History test failed before fix with actual null reason, then passed.

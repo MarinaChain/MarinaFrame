@@ -319,9 +319,37 @@ class DomainTools(InvestigationTools):
                 if self.cancel_event is not None and self.cancel_event.is_set():
                     return self._observation(False, "cancelled", error_code="cancelled")
                 method = getattr(self, "_" + tool_name)
-                return method(**arguments)
+                result = method(**arguments)
+                if tool_name in ("assign_station", "enumerate_strokes", "inspect_source", "trace_from_point", "trace_corridor"):
+                    from .accuracy_feedback import candidate_catalog, candidate_feedback
+                    by_id = {s["id"]: s for s in self.spec.get("sections", [])}
+                    sid = arguments.get("section_id")
+                    ids = [sid] if sid in by_id else result.get("returned_section_ids", [])
+                    result["candidate_guidance"] = [{"section_id": section_id,
+                        "candidates": candidate_catalog(by_id[section_id], self.state["catalog"].get(section_id, {}))}
+                        for section_id in ids[:12] if section_id in by_id]
+                    if tool_name == "assign_station" and sid in by_id:
+                        candidate = next((c for c in self.state["catalog"].get(sid, {}).get("candidates", [])
+                            if c["candidate_id"] == arguments.get("candidate_id")), {})
+                        result["accuracy_feedback"] = candidate_feedback(by_id[sid], candidate, arguments.get("label_text", ""))
+                if tool_name == "build_draft":
+                    from .accuracy_feedback import candidate_feedback
+                    chosen = {g["section_id"]: g["chosen_candidate_id"] for g in self.open_guesses}
+                    chosen.update(self.state["selected"])
+                    result["section_accuracy_feedback"] = [{"section_id": s["id"],
+                        **candidate_feedback(s, next((c for c in self.state["catalog"].get(s["id"], {}).get("candidates", [])
+                            if c["candidate_id"] == chosen.get(s["id"])), {}))}
+                        for s in self.spec["sections"] if chosen.get(s["id"])]
+                return result
         except ToolInputError as exc:
-            return self._observation(False, "rejected", error_code="invalid_tool_arguments", message=str(exc))
+            result = self._observation(False, "rejected", error_code="invalid_tool_arguments", message=str(exc))
+            if tool_name == "assign_station":
+                from .accuracy_feedback import candidate_catalog
+                sid = arguments.get("section_id")
+                section = next((s for s in self.spec["sections"] if s["id"] == sid), None)
+                if section:
+                    result["current_candidate_catalog"] = candidate_catalog(section, self.state["catalog"].get(sid, {}))
+            return result
         except (ValueError, OSError, TypeError, KeyError, RuntimeError) as exc:
             return self._observation(False, "blocked", error_code="domain_integrity_or_input_error",
                                      exception_type=type(exc).__name__)
