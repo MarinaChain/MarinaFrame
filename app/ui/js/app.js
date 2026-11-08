@@ -14,6 +14,7 @@ import { createIntake } from './intake.js';
 import { createWelcome } from './welcome.js';
 import { createPalette } from './palette.js';
 import { buildChanges, renderChanges } from './changes.js';
+import { createAreas } from './areas.js';
 import { createExport } from './export.js';
 import * as fmt from './format.js';
 
@@ -916,6 +917,7 @@ function selectSection(id, { focusDrawing = true } = {}) {
   renderSelection();
   drawing.setSections(state.view.sections, id, { focus: focusDrawing });
   model.setSelected(id);
+  areas.show(state.task, state.view, id);
 }
 
 function stepSection(delta) {
@@ -1153,6 +1155,15 @@ function appendEvents(events) {
   renderNarration();
 }
 
+// The section-area curve (js/areas.js) heads the Checks tab. A dot selects its station when
+// that station is one the run read (interpolated stations have no tile).
+const areas = createAreas({
+  invoke,
+  onSelect: (id) => {
+    if (state.view?.sections.some((s) => s.id === id)) selectSection(id);
+  },
+});
+
 function renderChecks() {
   const panel = $('panel-checks');
   const checks = state.view?.checks || [];
@@ -1160,8 +1171,9 @@ function renderChecks() {
     fill(panel);
     return;
   }
+  areas.show(state.task, state.view, state.sectionId);
   if (!checks.length) {
-    fill(panel, el('p', { class: 'panel-empty' }, isRunning() ? 'Checks run after the 3D model is built.' : 'No checks ran for this run.'));
+    fill(panel, areas.element, el('p', { class: 'panel-empty' }, isRunning() ? 'Checks run after the 3D model is built.' : 'No checks ran for this run.'));
     return;
   }
   const counts = { pass: 0, fail: 0, not_run: 0 };
@@ -1172,6 +1184,7 @@ function renderChecks() {
     counts.not_run && chip(`${counts.not_run} not run`, { small: true }),
   ].filter(Boolean);
   fill(panel,
+    areas.element,
     el('p', { class: 'check-summary chip-row' }, ...summary),
     el('ul', {}, ...checks.map((check) => el('li', { class: 'check' },
       el('span', { class: 'check-name' }, check.name),

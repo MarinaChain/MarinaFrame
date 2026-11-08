@@ -480,7 +480,8 @@ function mockTransport() {
     async get_hull_sections(data, { task, revision }) {
       requireTask(data, task);
       const builds = data.hull_sections?.[task] || {};
-      const found = builds[revision] || Object.values(builds).find((b) => b.path === revision);
+      // The task view names a revision "r3"; the builds use "r0003".
+      const found = builds[revision] || builds[mockRevision(revision)] || Object.values(builds).find((b) => b.path === revision);
       if (!found) throw new BackendError('revision_not_found', 'This build is not in the run folder.');
       return clone(found);
     },
