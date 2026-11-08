@@ -29,6 +29,10 @@ MAX_VIEW_PIXELS = 1_000_000
 MAX_VIEW_BYTES = 190_000
 # A view may enlarge a small region by at most this factor (nearest neighbour).
 MAX_ZOOM = 4.0
+# DeepSeek through OpenCode Go reads text from about this glyph height (view
+# pixels) up; it downscales images over 2048 px a side (docs/CONTINUATION_STATUS.md),
+# so views stay at MAX_VIEW_SIDE_PX and say how small sheet text may be.
+READABLE_TEXT_VIEW_PX = 16
 # Spacing of the coordinate ticks drawn on the edges of every view.
 TICK_SPACING_VIEW_PX = 100
 # Engine thresholds repeated for a corridor trace (ingest._extract_one).
@@ -124,9 +128,16 @@ def render_view(image: np.ndarray, region: list[int], max_side: int, *, overlay=
         if payload is not None:
             break
         scale *= 0.85
+    # The vision model reads text of READABLE_TEXT_VIEW_PX or more; smaller text needs a closer view.
+    readable = math.ceil(READABLE_TEXT_VIEW_PX / min(sx, sy))
     return payload, {"crop_box_px": region, "pixel_size": [size[0], size[1]],
                      "view_px_per_source_px": [sx, sy],
-                     "coordinates": "view pixels from the top-left corner; red ticks every 100 view px"}
+                     "coordinates": "view pixels from the top-left corner; red ticks every 100 view px; "
+                                    "sheet px = crop left/top + view px / view_px_per_source_px",
+                     "readable_text_min_sheet_px": readable,
+                     "text_note": (f"Text under {readable} sheet px tall is too small to read here; view a smaller "
+                                   "region to read it." if readable > READABLE_TEXT_VIEW_PX else
+                                   "Text of normal size is readable in this view.")}
 
 
 def view_to_source(view: dict, point) -> tuple[float, float]:

@@ -567,7 +567,7 @@ def profile_station_lines(image, setup, pixels_per_metre):
             for g in grid]
 
 
-def check_station_positions(image, setups, description, warnings):
+def check_station_positions(image, setups, description, warnings, hints=None):
     """Replace model station positions with the profile's station lines when they disagree.
 
     Same count: each station keeps its id and takes the measured x in order.
@@ -575,7 +575,7 @@ def check_station_positions(image, setups, description, warnings):
     Returns the (possibly new) station list; a warning names the change.
     """
     stations = description.get("stations") or []
-    profile = next((s for s in setups if s.get("view") == "profile" and s.get("x_origin_px") is not None), None)
+    profile = profile_setup(setups, hints)
     if profile is None:
         return stations
     profile = {**profile, "x_origin_px": checked_x_origin(image, profile)}
@@ -603,10 +603,37 @@ def check_station_positions(image, setups, description, warnings):
     return corrected
 
 
-def station_outline_heights(image, setups, description, stations):
-    """Deck and keel heights per station from the model's profile setup at its checked scale."""
-    profile = next((s for s in setups if s.get("view") == "profile"), None)
+# The model's profile region is used when it overlaps the intake's proposed
+# profile region by at least this IoU; otherwise the intake's region is (a
+# model reading in view-crop pixels, dtmb5415-3v-L1 live: [60, 40, 800, 170]).
+PROFILE_REGION_AGREEMENT = 0.5
+
+
+def _iou(first, second) -> float:
+    left, top = max(first[0], second[0]), max(first[1], second[1])
+    right, bottom = min(first[2], second[2]), min(first[3], second[3])
+    overlap = max(0, right - left) * max(0, bottom - top)
+    union = ((first[2] - first[0]) * (first[3] - first[1]) + (second[2] - second[0]) * (second[3] - second[1])
+             - overlap)
+    return overlap / union if union > 0 else 0.0
+
+
+def profile_setup(setups, hints=None):
+    """The model's profile setup, on the intake's profile region when the model's region disagrees, or None."""
+    profile = next((s for s in setups if s.get("view") == "profile" and s.get("x_origin_px") is not None), None)
     if profile is None:
+        return None
+    proposed = next((h["region_px"] for h in hints or [] if h.get("label") == "profile" and h.get("region_px")),
+                    None)
+    if proposed and _iou(profile["region_px"], proposed) < PROFILE_REGION_AGREEMENT:
+        return {**profile, "region_px": list(proposed), "region_source": "intake proposal"}
+    return profile
+
+
+def station_outline_heights(image, setups, description, stations, hints=None):
+    """Deck and keel heights per station from the model's profile setup at its checked scale."""
+    profile = profile_setup(setups, hints)
+    if profile is None or profile.get("baseline_px") is None:
         return {}
     scales = (description or {}).get("checked_scales") or {}
     scale = scales.get(profile.get("view_id", "profile"), profile["pixels_per_metre"])
@@ -648,15 +675,18 @@ def describe_table(table, description):
         table.trend["description"]["draft_hull_dimensions"] = hull
 
 
-def measure_description(image, spec, description, setups):
-    """Retain model readings, add measured values, and name every doubtful field."""
+def measure_description(image, spec, description, setups, hints=None):
+    """Retain model readings, add measured values, and name every doubtful field.
+
+    ``hints`` are the intake's proposed view regions (sheet-only intake).
+    """
     result, warnings = normalize_description(description)
     scales, scale_warnings = checked_scales(image, setups, result)
     result["checked_scales"] = scales
     warnings.extend(scale_warnings)
     if not spec.get("sections"):
         # A sheet-only reading: the stations come from the model, checked against the profile.
-        result["stations"] = check_station_positions(image, setups, result, warnings)
+        result["stations"] = check_station_positions(image, setups, result, warnings, hints)
     result.setdefault("units", spec.get("units", "m"))
     result.setdefault("frame", "x aft to forward from station datum; z up from baseline; metres")
     principal = result.setdefault("principal", {})

@@ -49,6 +49,12 @@ REQUIRED = {
     "compare_views": {"section_id", "candidate_id", "setup_id", "heights_m"},
 }
 READ_SUBJECTS = ("labels", "scale_bar", "dimensions", "title_block")
+# A described region overlapping no intake proposal of its kind by this IoU
+# may be in a view's pixels; mapped from one of the VIEW_FRAME_RECENT latest
+# views it must overlap a proposal by VIEW_FRAME_MATCH to be converted.
+VIEW_FRAME_MISMATCH = 0.3
+VIEW_FRAME_MATCH = 0.5
+VIEW_FRAME_RECENT = 6
 
 
 class ToolArgumentError(ValueError):
@@ -226,6 +232,57 @@ class InvestigationTools:
         self._save()
         return {"view": observed["view"], "artifacts": observed.get("artifacts", [])}
 
+    def _sheet_frame_region(self, region_px, kind):
+        """``region_px`` in sheet pixels; a region given in a downscaled view's pixels is converted.
+
+        A model that reads coordinates off the whole-sheet view (or a crop)
+        may give them in that view's pixels (dtmb5415-3v-L1 live: profile
+        [60, 40, 800, 170] on a 2441 px sheet). The region is converted when
+        it matches no intake proposal of its kind but, mapped from a recent
+        view, matches one. Returns (region, view_id or None).
+        """
+        from .vessel_description import _iou
+        labels = {"body": "body_plan", "body_fore": "body_plan", "body_aft": "body_plan", "plan": "half_breadth",
+                  "profile": "profile", "title_block": "title_block"}
+        proposals = [h["region_px"] for h in self.intake_hints() if h.get("label") == labels.get(kind)]
+        if not proposals or max(_iou(region_px, p) for p in proposals) >= VIEW_FRAME_MISMATCH:
+            return region_px, None
+        for view in reversed(self.state.get("views", [])[-VIEW_FRAME_RECENT:]):
+            width, height = view["pixel_size"]
+            if region_px[2] > width + 1 or region_px[3] > height + 1 or min(view["view_px_per_source_px"]) >= 0.95:
+                continue
+            converted = [*inv.view_to_source(view, region_px[:2]), *inv.view_to_source(view, region_px[2:])]
+            converted = [int(round(v)) for v in converted]
+            if max(_iou(converted, p) for p in proposals) >= VIEW_FRAME_MATCH:
+                return converted, view["view_id"]
+        return region_px, None
+
+    @staticmethod
+    def _setup_in_view_frame(setup, named, evidence):
+        """Convert a setup given in its evidence view's pixels to sheet pixels, in place; a note, or None.
+
+        It is in view pixels when its region misses the described view's
+        sheet region (IoU below VIEW_FRAME_MISMATCH) but fits in the view.
+        """
+        from .vessel_description import _iou
+        if not named or not evidence or min(evidence["view_px_per_source_px"]) >= 0.95:
+            return None
+        width, height = evidence["pixel_size"]
+        region = setup["region_px"]
+        if _iou(region, named["region_px"]) >= VIEW_FRAME_MISMATCH or region[2] > width + 1 or region[3] > height + 1:
+            return None
+        sx, sy = evidence["view_px_per_source_px"]
+        left, top = evidence["crop_box_px"][:2]
+        setup["region_px"] = list(named["region_px"])
+        # A body plan's centreline is a column; a plan's is a row.
+        centreline_axis = (top, sy) if setup["view"] == "plan" else (left, sx)
+        for field, (origin, scale) in (("centreline_px", centreline_axis), ("baseline_px", (top, sy)),
+                                       ("x_origin_px", (left, sx))):
+            if setup.get(field) is not None:
+                setup[field] = origin + float(setup[field]) / scale
+        return (f"Setup coordinates were pixels of view {evidence['view_id']}, not of the sheet; converted "
+                "to sheet pixels. Give sheet pixels (view px / view_px_per_source_px + crop origin).")
+
     def _describe_views(self, views):
         from .vessel_description import _region
         image, _, _ = self._source()
@@ -233,6 +290,12 @@ class InvestigationTools:
         records, warnings = [], []
         sheet_only = bool(self.state.get("sheet_only"))
         for view in views:
+            region_px, frame = self._sheet_frame_region(list(view["region_px"]), view.get("kind"))
+            if frame is not None:
+                warnings.append(warning(f"views.{view['view_id']}.region_px", view["region_px"], region_px,
+                    f"These were pixels of view {frame}, not of the sheet; converted to sheet pixels "
+                    "(view x / view_px_per_source_px + crop left). Give sheet pixels."))
+                view = {**view, "region_px": region_px}
             box = _region(view["region_px"], image.shape)
             if box[2] - box[0] < 8 or box[3] - box[1] < 8:
                 warnings.append(warning(f"views.{view['view_id']}.region_px", view["region_px"], box,
@@ -317,7 +380,7 @@ class InvestigationTools:
         from .vessel_description import measure_description
         image, _, _ = self._source()
         setups = list(self.state.get("sheet_setups", {}).values())
-        measured = measure_description(image, self.spec, description, setups)
+        measured = measure_description(image, self.spec, description, setups, self.intake_hints())
         measured["views"] = copy.deepcopy(self.state.get("described_views", []))
         self.state.update(vessel_description=measured, description_phase="complete", description_next_view=None)
         write_json(self.root / "vessel.json", {"description": measured})
@@ -629,6 +692,9 @@ class InvestigationTools:
         if self.state.get("description_phase") == "setups":
             named = next((v for v in self.state.get("described_views", [])
                           if v.get("evidence_view_id") == evidence_view_id), None)
+            frame_warning = self._setup_in_view_frame(setup, named, self._view(evidence_view_id))
+            if frame_warning:
+                reason = (reason + " " + frame_warning)[:512]
             setup.update(view_id=named["view_id"] if named else view, scale_claim=scale_claim)
             records = self._record_description_setup(image, named, setup, reason, evidence_view_id)
             crop = self._description_view()

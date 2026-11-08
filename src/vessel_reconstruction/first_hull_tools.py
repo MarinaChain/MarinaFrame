@@ -203,7 +203,7 @@ def build_first_hull(tools):
             z_max_m=section["z_max_m"], pixels_per_metre=cal["pixels_per_metre"], stroke_width_px=width))
     from .vessel_description import station_outline_heights
     outline = station_outline_heights(image, list(tools.state.get("sheet_setups", {}).values()), description,
-                                      sections)
+                                      sections, tools.intake_hints())
     sections, anchors = cap_at_profile_outline(sections, anchors, outline)
     built = {}
     retried_builds = []
