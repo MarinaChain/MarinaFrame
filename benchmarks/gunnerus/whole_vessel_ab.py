@@ -31,11 +31,18 @@ from pathlib import Path
 GO_MODEL = 'deepseek-v4.1-flash'
 GO_ENDPOINT = 'https://opencode.ai/inference/go/openai/v1/chat/completions'
 MAX_TURNS = 3
-MAX_TOKENS = 16_000
 TEMPERATURE = 0.2
+# Request settings per protocol round (plan sections 3.5 and 3.5.1). Round 1 left thinking at
+# the provider default; every arm B reply spent its budget on hidden reasoning.
+ROUNDS = {
+    '1': {'max_tokens': 16_000, 'thinking': None},
+    '2': {'max_tokens': 32_000, 'thinking': 'disabled'},
+}
 REPEATS = 3
 REQUEST_TIMEOUT_S = 600
 BUILD_TIMEOUT_S = 120
+# Environment variables that arm B code may see (CadQuery and OCP need none beyond these).
+BUILD_ENV_ALLOW = ('PATH', 'LANG', 'LC_ALL', 'LC_CTYPE')
 COMPONENTS = {
     'aft_deck': 'aft working deck plate (open deck aft of the superstructure, on the aft deck level)',
     'main_deck': '1-deck plate under the superstructure',
@@ -151,13 +158,21 @@ def first_prompt(arm: str, pack: dict, inputs: dict) -> list:
 
 # ---------------------------------------------------------------- provider client
 
-def call_model(messages: list, receipts: Path) -> tuple[str, dict]:
+def request_body(messages: list, settings: dict) -> dict:
+    """Chat request; thinking is set as the Rust provider sets it for vision reading."""
+    body = {'model': GO_MODEL, 'messages': messages, 'max_tokens': settings['max_tokens'],
+            'temperature': TEMPERATURE}
+    if settings['thinking'] is not None:
+        body.update(stream=False, thinking={'type': settings['thinking']})
+    return body
+
+
+def call_model(messages: list, receipts: Path, settings: dict) -> tuple[str, dict]:
     """One chat completion with a receipt. The key comes from the environment only."""
     key = os.environ.get('OPENCODE_API_KEY')
     if not key:
         raise RuntimeError('Load the keys first: source scripts/load_opencode_keys.sh')
-    body = json.dumps({'model': GO_MODEL, 'messages': messages, 'max_tokens': MAX_TOKENS,
-                       'temperature': TEMPERATURE}).encode()
+    body = json.dumps(request_body(messages, settings)).encode()
     request_id = uuid.uuid4().hex
     request = urllib.request.Request(GO_ENDPOINT, data=body, method='POST', headers={
         'Content-Type': 'application/json', 'Accept': 'application/json',
@@ -248,8 +263,9 @@ Path('execution.json').write_text(json.dumps({'exit_code': 0, 'result': {
 def build_arm_b(text: str, folder: Path) -> dict:
     (folder / 'model_program.py').write_text(extract_code(text))
     (folder / 'runner.py').write_text(RUNNER)
-    env = {k: v for k, v in os.environ.items() if not k.startswith('OPENCODE')}
-    env['PYTHONPATH'] = ''
+    # Model-written code gets no credentials: an empty environment plus an allow-list.
+    env = {key: os.environ[key] for key in BUILD_ENV_ALLOW if key in os.environ}
+    env.update(HOME=str(folder), TMPDIR=str(folder), PYTHONDONTWRITEBYTECODE='1')
     try:
         done = subprocess.run([sys.executable, '-I', 'runner.py'], cwd=folder, env=env, capture_output=True,
                               text=True, timeout=BUILD_TIMEOUT_S)
@@ -278,14 +294,14 @@ def feedback(execution: dict) -> tuple[str, int]:
     return '\n'.join(lines), len(built & set(COMPONENTS))
 
 
-def run_repeat(arm: str, pack: dict, inputs: dict, folder: Path) -> dict:
+def run_repeat(arm: str, pack: dict, inputs: dict, folder: Path, settings: dict) -> dict:
     messages = first_prompt(arm, pack, inputs)
-    record = {'arm': arm, 'turns': [], 'started': time.time()}
+    record = {'arm': arm, 'settings': settings, 'turns': [], 'started': time.time()}
     execution = {}
     for turn in range(1, MAX_TURNS + 1):
         turn_dir = folder / f'turn-{turn}'
         turn_dir.mkdir(parents=True)
-        text, receipt = call_model(messages, folder / 'receipts')
+        text, receipt = call_model(messages, folder / 'receipts', settings)
         (turn_dir / 'reply.txt').write_text(text)
         try:
             execution = build_arm_a(text, turn_dir) if arm == 'A' else build_arm_b(text, turn_dir)
@@ -324,7 +340,9 @@ def main() -> None:
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--truth-mesh', type=Path, required=True)
     parser.add_argument('--repeats', type=int, default=REPEATS)
+    parser.add_argument('--round', choices=sorted(ROUNDS), default='2', help='Protocol round (request settings).')
     args = parser.parse_args()
+    settings = ROUNDS[args.round]
     from benchmarks.gunnerus.whole_vessel import build_inputs
 
     out = args.out.resolve()
@@ -338,7 +356,7 @@ def main() -> None:
     for repeat in range(1, args.repeats + 1):
         for arm in ('A', 'B'):
             folder = out / f'{arm}{repeat}'
-            record = run_repeat(arm, pack, inputs, folder)
+            record = run_repeat(arm, pack, inputs, folder, settings)
             (folder / 'record.json').write_text(json.dumps(record, indent=2, default=str) + '\n')
             summary = summarise(folder, record, args.truth_mesh)
             (folder / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')

@@ -59,6 +59,11 @@ BULWARK_THICKNESS_M = 0.050
 TIER_INSET_M = 1.0
 # Printed labels sit just above their line; a label selects the nearest level below it.
 LABEL_SEARCH_M = 0.3
+# A deckhouse end wall is a heavy transverse line on the plan of the deck it stands on, at least
+# this fraction of the moulded breadth long (shorter lines are lockers, stairs and recesses).
+END_WALL_LAYERS = ['S0CO3']
+END_WALL_MIN_FRACTION = 0.4
+BREADTH_M = 9.60  # title block
 
 
 def label_heights(path: Path, view: View) -> dict:
@@ -158,13 +163,27 @@ def build_inputs(sources: Path) -> dict:
         components.append({'id': cid, 'op': op, 'source': {'view': 'plan', 'region': cid,
                                                            'method': 'enclosed_region'}, 'args': args})
 
+    aft_walls = {}
+
+    def walls_aft_end(region, deck_view, roof_range):
+        """Move the aft end of a tier from its roof end to its aftmost end wall, when one is drawn."""
+        view = VIEWS[deck_view]
+        wall_view = View(view.name, view.kind, view.bounds, view.origin, layers=END_WALL_LAYERS)
+        walls = ga_reader.transverse_walls(entities, wall_view, roof_range, END_WALL_MIN_FRACTION * BREADTH_M)
+        walls = [wall for wall in walls if wall['x_m'] < roof_range[1]]
+        aft_walls[region] = {'roof_range': roof_range, 'walls': walls[:3]}
+        if not walls:
+            return roof_range
+        return [max(roof_range[0], walls[0]['x_m']), roof_range[1]]
+
     # Hull-width box used only when a plan view gives nothing (B = 9.60 m in the title block).
-    half_beam = 4.8
+    half_beam = BREADTH_M / 2
     aft = extent('aft_deck', [-1.0, 14.5])
     main = extent('main_deck', [14.5, 32.7])
     # A roof covers the whole drawn level, across breaks (the A-deck line has a 0.8 m break).
-    tier1 = lv['a_deck'].get('x_range') or [12.3, 34.6]
-    tier2 = extent('tier2_roof', [14.5, 24.1])
+    # The tier starts at its aft end wall on the deck below, not at the roof end (overhang).
+    tier1 = walls_aft_end('house_t1', 'plan_1deck', lv['a_deck'].get('x_range') or [12.3, 34.6])
+    tier2 = walls_aft_end('house_t2', 'plan_adeck', extent('tier2_roof', [14.5, 24.1]))
     wheel = extent('wheelhouse_roof', [13.6, 21.3])
     rail = extent('fwd_rail_top', [27.5, 35.2])
 
@@ -216,7 +235,7 @@ def build_inputs(sources: Path) -> dict:
 
     program = {'schema': 'ship-cad/v1', 'components': components}
     return {'program': program, 'measurements': measurements, 'guesses': guesses, 'levels': lv,
-            'source': {'file': GA_FILE, 'sha256': sha},
+            'source': {'file': GA_FILE, 'sha256': sha}, 'tier_end_walls': aft_walls,
             'all_profile_levels': [{'z': level.z_m, 'intervals': level.intervals} for level in levels]}
 
 

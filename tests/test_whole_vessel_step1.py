@@ -1,6 +1,7 @@
 """Synthetic tests for whole-vessel step 1: labelled gap fills, GA reader, metrics, A/B parsing."""
 import numpy as np
 import pytest
+
 from vessel_reconstruction import ga_reader
 from vessel_reconstruction.ship_cad import resolve_program, validate_program
 
@@ -131,3 +132,35 @@ def test_ab_reply_parsing():
     assert 'def build' in extract_code('```python\ndef build():\n    return {}\n```')
     with pytest.raises(ValueError):
         extract_code('no code')
+
+
+def test_ab_round_two_disables_thinking_and_round_one_does_not():
+    from benchmarks.gunnerus.whole_vessel_ab import ROUNDS, request_body
+
+    second = request_body([], ROUNDS['2'])
+    assert second['thinking'] == {'type': 'disabled'} and second['max_tokens'] == 32_000
+    assert second['stream'] is False
+    assert 'thinking' not in request_body([], ROUNDS['1'])
+
+
+@pytest.mark.cad
+def test_arm_b_code_sees_no_credentials(tmp_path, monkeypatch):
+    from benchmarks.gunnerus.whole_vessel_ab import build_arm_b
+
+    monkeypatch.setenv('OPENCODE_API_KEY', 'secret-test-value')
+    monkeypatch.setenv('OTHER_TOKEN', 'secret-test-value')
+    code = ('```python\nimport os, cadquery as cq\n'
+            'def build():\n'
+            '    assert not any("secret" in v for v in os.environ.values())\n'
+            '    return {"aft_deck": cq.Workplane("XY").box(1, 1, 1).val()}\n```')
+    result = build_arm_b(code, tmp_path)
+    assert result['result']['components'][0]['built'] is True
+
+
+def test_transverse_walls_find_long_end_walls_only():
+    view = ga_reader.View('plan', 'plan', [-1000, -6000, 31000, 6000], [0, 0])
+    entities = [{'id': 'end', 'points': [[15500, -4800], [15500, 1900]]},
+                {'id': 'locker', 'points': [[14500, 2000], [14500, 4800]]},
+                {'id': 'side', 'points': [[15500, 4800], [30000, 4800]]}]
+    walls = ga_reader.transverse_walls(entities, view, [12.3, 34.6], min_length_m=3.84)
+    assert [(wall['x_m'], wall['entity_id']) for wall in walls] == [(15.5, 'end')]
