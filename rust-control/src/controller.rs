@@ -11,6 +11,8 @@ use std::time::{Duration, Instant};
 
 #[path = "model_review.rs"]
 pub mod model_review;
+#[path = "transcript.rs"]
+pub mod transcript;
 
 /// Test-only hook into finalization. It runs at "after_predicate" (current
 /// contract passed, domain guard held) and "before_commit" (review-ready state
@@ -394,7 +396,13 @@ fn collect_images(store: &Store) -> Result<Vec<(ImageReceipt, String)>> {
     let investigating = investigation_mode(store);
     if investigating {
         // The model asked for these pixels: the newest views come first.
-        values.sort_by_key(|(seq, _, _, _, _)| std::cmp::Reverse(*seq));
+        let recalled = store.state.last_observation["recalled_view_id"].as_str();
+        values.sort_by_key(|(seq, artifact, _, _, _)| {
+            (
+                recalled.is_none_or(|id| artifact["view_id"] != id),
+                std::cmp::Reverse(*seq),
+            )
+        });
     } else {
         values.sort_by_key(|(seq, a, _, _, _)| (!a.get("view").is_some(), std::cmp::Reverse(*seq)));
     }
@@ -489,6 +497,7 @@ fn investigation_catalog() -> Vec<Value> {
     let region = json!({"type":"array","items":{"type":"integer","minimum":0},"minItems":4,"maxItems":4,"description":"[left, top, right, bottom] in sheet pixels"});
     let id = json!({"type":"string","maxLength":64});
     vec![
+        json!({"name":"recall_view","description":"Reattach a previous task view by view_id without creating a new crop.","parameters":{"type":"object","properties":{"view_id":id},"required":["view_id"],"additionalProperties":false}}),
         json!({"name":"view_region","description":"Return the pixels of any sheet region at any zoom (up to 1024 px per side, 4x enlargement). Start with the whole sheet, then zoom.","parameters":{"type":"object","properties":{"region_px":region,"max_side_px":{"type":"integer","minimum":256,"maximum":1024}},"required":["region_px"],"additionalProperties":false}}),
         json!({"name":"read_region","description":"Return the pixels of a region to read station labels, a scale bar, dimensions or the title block. What you read is your claim.","parameters":{"type":"object","properties":{"region_px":region,"subject":{"enum":["labels","scale_bar","dimensions","title_block"]}},"required":["region_px","subject"],"additionalProperties":false}}),
         json!({"name":"trace_corridor","description":"Draw a corridor on a view (2-24 points in that view's pixels, top to bottom, and a half width in view pixels) around one curve of a section. The host traces the real ink in it and re-reads it with the engine; it returns a candidate id with support scores, or refuses when no ink supports one continuous line.","parameters":{"type":"object","properties":{"section_id":id,"view_id":id,"path_px":{"type":"array","items":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2},"minItems":2,"maxItems":24},"half_width_px":{"type":"number","minimum":1,"maximum":64}},"required":["section_id","view_id","path_px","half_width_px"],"additionalProperties":false}}),
@@ -882,8 +891,43 @@ fn live_decision(store: &mut Store) -> Result<bool> {
     } else {
         0.0
     };
+    let mut messages = vec![
+        json!({"role":"system","content":purpose.prompt()}),
+        json!({"role":"user","content":content.clone()}),
+    ];
+    let mut context = Value::Null;
+    if investigation_mode(store) && store.state.config.limits.investigation_conversation {
+        let mut current = prompt["observation"].clone();
+        if let Some(object) = current.as_object_mut() {
+            object.remove("recent_history_newest_first");
+            object.remove("your_notes_newest_first");
+        }
+        let transcript = transcript::build(
+            &store.events,
+            &store.state,
+            purpose.prompt(),
+            current,
+            tool_catalog(&store.state.config.on_ambiguity),
+            content,
+        )?;
+        context = json!({"format":1,"steps_total":transcript.steps_total,"steps_kept":transcript.steps_kept,"estimated_tokens":transcript.estimated_tokens});
+        if let Some(summary) = transcript.summary {
+            let previous = store
+                .events
+                .iter()
+                .rev()
+                .find(|e| e.kind == "context_compacted");
+            if previous.is_none_or(|e| e.payload["summary"] != summary) {
+                store.append(
+                    "context_compacted",
+                    json!({"summary":summary,"context":context}),
+                )?;
+            }
+        }
+        messages = transcript.messages;
+    }
     let payload = json!({"model":GO_MODEL,"max_tokens":store.state.config.limits.max_output_tokens_per_request,"stream":false,"thinking":{"type":thinking},"temperature":temperature,
-        "response_format":{"type":"json_object"},"messages":[{"role":"system","content":purpose.prompt()},{"role":"user","content":content}]});
+        "response_format":{"type":"json_object"},"messages":messages});
     let mut retry_of = None;
     for attempt in 1..=3 {
         budget_admission(store)?;
@@ -912,7 +956,19 @@ fn live_decision(store: &mut Store) -> Result<bool> {
                 .clone()
                 .ok_or("generation_binding")?,
             revision_id: store.state.revision_id.clone().ok_or("revision_binding")?,
-            observation_sha256: util::hash_json(&prompt)?,
+            observation_sha256: if context.is_null() {
+                util::hash_json(&prompt)?
+            } else {
+                let mut text_messages = payload["messages"].clone();
+                if let Some(content) = text_messages
+                    .as_array_mut()
+                    .and_then(|messages| messages.last_mut())
+                    .and_then(|last| last["content"].as_array_mut())
+                {
+                    content.retain(|part| part["type"] != "image_url");
+                }
+                util::hash_json(&json!({"messages":text_messages,"images":metas}))?
+            },
             images: metas.clone(),
             payload: payload.clone(),
             attempt,
@@ -922,7 +978,7 @@ fn live_decision(store: &mut Store) -> Result<bool> {
         util::atomic_json(&store.path.join(&pending.request_path), &input, false)?;
         store.state.pending = Some(pending.clone());
         store.state.counters.requests_intended += 1;
-        store.append("provider_intent",json!({"request_id":id,"request":store::artifact(&store.path,&pending.request_path,"provider_request")?,"source_manifest_sha256":input.source_manifest_sha256,"images":metas,"attempt":attempt,"retry_of":retry_of,"aggregate_caps":null}))?;
+        store.append("provider_intent",json!({"request_id":id,"request":store::artifact(&store.path,&pending.request_path,"provider_request")?,"source_manifest_sha256":input.source_manifest_sha256,"images":metas,"attempt":attempt,"retry_of":retry_of,"aggregate_caps":null,"context":context}))?;
         let outcome = worker::run(
             &store.path,
             &store.state.config,
@@ -1015,7 +1071,11 @@ fn consecutive_refusals(store: &Store) -> u64 {
         match event.kind.as_str() {
             "operation_rejected" | "model_output_rejected" => count += 1,
             // Provider bookkeeping between refusals is not an accepted action.
-            "provider_intent" | "provider_result" | "provider_reconciled" | "provider_backoff" => {}
+            "provider_intent"
+            | "provider_result"
+            | "provider_reconciled"
+            | "provider_backoff"
+            | "context_compacted" => {}
             _ => break,
         }
     }
@@ -1643,6 +1703,23 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
         "decision",
         json!({"decision":choice,"actor":actor,"live_inference":actor=="live_model","progress_key":progress_key}),
     )?;
+    if let Operation::RecallView(recall) = &operation {
+        let known = store
+            .events
+            .iter()
+            .any(|event| event.payload["response"]["result"]["view"]["view_id"] == recall.view_id);
+        store.state.staged_decision = None;
+        store.state.last_observation = if known {
+            json!({"ok":true,"status":"view_recalled","recalled_view_id":recall.view_id,"engineering_approved":false,"human_semantic_review_required":true})
+        } else {
+            json!({"ok":false,"status":"proposal_refused","error_code":"unknown_view","message":"Recall a view_id returned by this task.","engineering_approved":false,"human_semantic_review_required":true})
+        };
+        store.append(
+            "view_recalled",
+            json!({"view_id":recall.view_id,"known":known}),
+        )?;
+        return Ok(true);
+    }
     if let Operation::BuildDraft(_) = operation {
         let investigating = actor == "live_model" && investigation_mode(store);
         return build_draft(store, !investigating);
@@ -2043,6 +2120,27 @@ mod tests {
         assert_eq!(
             store.state.last_observation["status"],
             "repeated_action_refused"
+        );
+    }
+    #[test]
+    fn recall_view_contract_accepts_ids_and_refuses_paths() {
+        let (_tmp, mut store) = fixture();
+        store.state.config.on_ambiguity = OnAmbiguity::Draft;
+        store.state.config.binary_sha256 =
+            util::file_hash(&std::env::current_exe().unwrap()).unwrap();
+        store
+            .append(
+                "worker_result",
+                json!({"response":{"result":{"view":{"view_id":"view-existing"}}}}),
+            )
+            .unwrap();
+        // The typed operation bounds IDs before any execution.
+        let valid = decision("recall_view", json!({"view_id":"view-existing"}), "recall");
+        assert_eq!(valid.operation().unwrap().name(), "recall_view");
+        assert!(
+            decision("recall_view", json!({"view_id":"../path"}), "recall")
+                .operation()
+                .is_err()
         );
     }
     #[test]

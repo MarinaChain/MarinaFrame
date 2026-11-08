@@ -92,6 +92,8 @@ def run(arm, thinking, round_only=False):
                    str(MAIN / '.venv/bin/python'), '--worker-source', str(source), '--policy', 'live',
                    '--on-ambiguity', 'draft', '--model-review', 'true', '--provider-transfer-basis',
                    'Founder authorized acquired drawings to DeepSeek for development/evaluation (2026-11-07); W17 development comparison.']
+        if arm.startswith('w18'):
+            command.extend(['--context', 'conversation'])
         if thinking:
             command.extend(['--investigation-thinking', 'enabled'])
         write(directory / 'command.json', command)

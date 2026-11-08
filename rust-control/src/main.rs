@@ -48,7 +48,7 @@ fn execute() -> Result<serde_json::Value> {
     if command == "help" || command == "--help" {
         return Ok(
             json!({"program":"MarinaFrame 0.4.0 Rust authoritative controller","commands":{
-        "run":"--task DIR --source SPEC --worker-python PYTHON [--worker-source SRC] [--policy deterministic|live] [--on-ambiguity abstain|draft] [--provider-transfer-basis TEXT] [--model-review true] [--investigation-thinking disabled|enabled] [--investigation-temperature 0..2] [--steps N]",
+        "run":"--task DIR --source SPEC --worker-python PYTHON [--worker-source SRC] [--policy deterministic|live] [--on-ambiguity abstain|draft] [--provider-transfer-basis TEXT] [--model-review true] [--context stateless|conversation] [--max-context-tokens 8000..120000] [--investigation-thinking disabled|enabled] [--investigation-temperature 0..2] [--steps N]",
         "resume":"--task DIR [--continue-after-unknown true] [--clear-cancel true] [--steps N]",
         "step":"--task DIR --intervention JSON --actor human_operator|assistant_operator --note TEXT",
         "status":"--task DIR","verify":"--task DIR","cancel":"--task DIR","recover-checkpoint":"--task DIR",
@@ -166,7 +166,13 @@ fn execute() -> Result<serde_json::Value> {
         if model_review && basis.is_empty() {
             return Err("model_review_requires_provider_transfer_basis".into());
         }
+        let conversation = match args.remove("context").as_deref() {
+            None | Some("stateless") => false,
+            Some("conversation") => true,
+            _ => return Err("invalid_investigation_context".into()),
+        };
         let mut limits = OperationalLimits {
+            investigation_conversation: conversation,
             investigation_thinking: match args.remove("investigation-thinking").as_deref() {
                 None | Some("disabled") => false,
                 Some("enabled") => true,
@@ -178,6 +184,9 @@ fn execute() -> Result<serde_json::Value> {
             limits.investigation_temperature = value
                 .parse()
                 .map_err(|_| "invalid_investigation_temperature")?;
+        }
+        if let Some(value) = args.remove("max-context-tokens") {
+            limits.max_context_tokens = value.parse().map_err(|_| "invalid_context_budget")?;
         }
         limits.validate()?;
         let count = steps(&mut args)?;

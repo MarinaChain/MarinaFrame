@@ -205,6 +205,11 @@ pub struct CompareViews {
 pub struct AskPerson {
     pub question: String,
 }
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecallView {
+    pub view_id: String,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "tool", content = "arguments", rename_all = "snake_case")]
@@ -225,6 +230,7 @@ pub enum Operation {
     ProposeSheetSetup(ProposeSheetSetup),
     CompareViews(CompareViews),
     AskPerson(AskPerson),
+    RecallView(RecallView),
 }
 fn bounded_text(text: &str, chars: usize) -> bool {
     let count = text.chars().count();
@@ -255,6 +261,7 @@ impl Operation {
             Self::ProposeSheetSetup(_) => "propose_sheet_setup",
             Self::CompareViews(_) => "compare_views",
             Self::AskPerson(_) => "ask_person",
+            Self::RecallView(_) => "recall_view",
         }
     }
     /// The model investigation tools. They exist only in draft mode, where an
@@ -271,6 +278,7 @@ impl Operation {
                 | Self::ProposeSheetSetup(_)
                 | Self::CompareViews(_)
                 | Self::AskPerson(_)
+                | Self::RecallView(_)
         )
     }
     /// The section a tool acts on, if any.
@@ -339,6 +347,7 @@ impl Operation {
                     && x.heights_m.iter().all(|h| finite_in(*h, -100., 1000.))
             }
             Self::AskPerson(x) => bounded_text(&x.question, 512),
+            Self::RecallView(x) => id(&x.view_id),
             _ => true,
         };
         if ok {
@@ -431,11 +440,24 @@ pub struct OperationalLimits {
     pub max_repeated_action: u64,
     #[serde(default, skip_serializing_if = "is_false")]
     pub investigation_thinking: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub investigation_conversation: bool,
+    #[serde(
+        default = "default_context_tokens",
+        skip_serializing_if = "is_default_context_tokens"
+    )]
+    pub max_context_tokens: u64,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub investigation_temperature: f64,
     pub max_requests: Option<u64>,
     pub max_total_tokens: Option<u64>,
     pub max_spend_usd: Option<f64>,
+}
+fn default_context_tokens() -> u64 {
+    32_000
+}
+fn is_default_context_tokens(value: &u64) -> bool {
+    *value == default_context_tokens()
 }
 fn is_false(value: &bool) -> bool {
     !value
@@ -458,6 +480,8 @@ impl Default for OperationalLimits {
             max_image_bytes: 196_608,
             max_repeated_action: 3,
             investigation_thinking: false,
+            investigation_conversation: false,
+            max_context_tokens: default_context_tokens(),
             investigation_temperature: 0.0,
             max_requests: None,
             max_total_tokens: None,
@@ -477,6 +501,7 @@ impl OperationalLimits {
             || self.max_images_per_request > 6
             || !(1024..=1_048_576).contains(&self.max_image_bytes)
             || !(1..=8).contains(&self.max_repeated_action)
+            || !(8_000..=120_000).contains(&self.max_context_tokens)
             || !self.investigation_temperature.is_finite()
             || !(0.0..=2.0).contains(&self.investigation_temperature)
             || self.max_spend_usd.is_some_and(|x| !x.is_finite() || x < 0.)

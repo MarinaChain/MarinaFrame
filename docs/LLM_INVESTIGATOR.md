@@ -90,6 +90,16 @@ All costs were present in both rounds. Round 2 L0/L1 built, rendered and finishe
 
 Verification: draft repair/interpolation unit test passed; two real-CAD tests passed including draft STEP reimport/render and strict refusal. Quick tier passed with 713 tests. Full suite found an explicit-pause regression; fixed to preserve `Paused`. A later quick run was invalidated by an edit during pinned-worker tests (`worker_implementation_changed`); the stable-source rerun passed, no guard weakened. Final `make test-full` passed: Rust workspace and real-CAD guards, app real task, 713 quick Python tests, 19 Python CAD tests, and smoke (`awaiting_human_review`, valid). Log: main `work/w17/w17b-full-final.log`. Independent read-only diff review reported no confirmed correctness defects.
 
+## W18 native conversation prototype
+
+Implemented bounded assistant/host history from existing investigation receipts, an author-labelled folded record, model notes as unverified handoff, progress line, context estimate/budget, controller-only recall_view, and final-message-only image validation. Default stays stateless and thinking disabled. Patterns follow the imported W18 design/research: event projection and pair-preserving trimming, old tool-result reduction, bounded memory blocks. No framework dependency or additional provenance store.
+
+Full tests passed on this prototype. Four-case conversation round: 3 `draft_not_verified` statuses but only **2 actual STEP exports**, 1 no_progress, 0 gate-correct, 0 silent wrong, 2 labelled wrong drafts, 83 requests, USD 0.09883013 list cost. Prompt/completion tokens: 733,568 / 7,319. There were 25 compaction events; max actual prompt tokens / estimate was 0.890 (under 1). Rows: `outputs/w18/round1.json`, metrics: `outputs/w18/context-metrics.json`.
+
+Every trace was read. L0 and L2 built/rendered; L1 repeatedly hit CAD complexity (532, 528, then 667 knots against 513) and `finish` reported a draft status without an export. L3 repeated label reads and stopped. The three-export threshold was not met, so **no W18 24-case campaign is launched**. Conversation did not improve construction over W17b round 2; no default change is justified.
+
+W18 is not complete: the dedicated model compaction request in design section 4a is not implemented (handoff currently reuses labelled notes); recall/provider-history integration coverage needs strengthening; the model can still finish a failed draft with no STEP. Heavy unresolved-ID, covered-event hashes and payload replay machinery are deferred under section 0. See `docs/W18_PROGRESS.md`. Next blocker remains CAD complexity, followed by failed-build finish semantics and label-read loops. No held-out/v3 data was run or scored.
+
 ## Verification and resume
 
 - History test failed before fix with actual null reason, then passed.
