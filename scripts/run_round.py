@@ -7,6 +7,11 @@
         --worker-source src --worker-python .venv/bin/python \
         --policy live --on-ambiguity draft --context conversation
 
+With --sheet-only each case starts like a drawing dropped in the app: the case
+folder's drawings go through `vessel_reconstruction.intake prepare` and
+`write-spec` (app/core/src/intake.rs), and the controller runs on that
+sheet-only spec. Use the app's settings: --policy live --on-ambiguity draft.
+
 Runs at most a few cases with the controller, writes one log, a result.json per
 case and a digest from scripts/round_digest.py, and stops early when the first
 cases fail the same way. --out must be inside the main checkout's work/ folder
@@ -31,6 +36,8 @@ SCRIPTS = Path(__file__).resolve().parent
 MAX_JOBS = 6
 DIGEST = SCRIPTS / "round_digest.py"
 EARLY_STOP_AFTER = 2  # finished cases after which the digest may stop the round
+# Drawing files a sheet-only case reads (the app's accepted types, app/core/src/intake.rs).
+DRAWING_EXTENSIONS = (".pdf", ".png", ".tif", ".tiff", ".jpg", ".jpeg")
 
 
 def main_checkout() -> Path:
@@ -105,10 +112,56 @@ def controller_status(stdout: str) -> dict:
     return {}
 
 
-def run_case(log: RoundLog, command: list[str], case_dir: Path) -> None:
+def intake(args: argparse.Namespace, arguments: list[str]) -> dict:
+    """Run `python -m vessel_reconstruction.intake <arguments>` as the app does; its JSON answer.
+
+    The intake reader is local: it gets no provider key.
+    """
+    environment = {name: value for name, value in os.environ.items() if not name.startswith("OPENCODE_API_KEY")}
+    environment["PYTHONPATH"] = str(args.worker_source.resolve())
+    completed = subprocess.run([str(args.worker_python.absolute()), "-m", "vessel_reconstruction.intake", *arguments],
+                               capture_output=True, text=True, env=environment, check=False)
+    try:
+        answer = json.loads(completed.stdout)
+    except ValueError:
+        answer = {"message": completed.stderr[-500:]}
+    if completed.returncode != 0 or not isinstance(answer, dict):
+        message = answer.get("message", "") if isinstance(answer, dict) else ""
+        raise RuntimeError(f"intake {arguments[0]} failed: {message}"[:600])
+    return answer
+
+
+def sheet_only_spec(args: argparse.Namespace, case: str, case_dir: Path) -> Path:
+    """Prepare the case's drawings and write a sheet-only spec, as a drop in the app with no edits."""
+    drawings = sorted(path for path in (args.inputs / case).iterdir()
+                      if path.is_file() and path.suffix.lower() in DRAWING_EXTENSIONS)
+    if not drawings:
+        raise RuntimeError(f"no drawing file ({', '.join(DRAWING_EXTENSIONS)}) in {args.inputs / case}")
+    folder = case_dir / "intake"
+    preview = intake(args, ["prepare", "--out", str(folder / "prepare"), *map(str, drawings)])
+    # The app adds these two fields before the person starts the run (intake::prepare_intake).
+    preview.update(intake_id=f"intake-{case}", ai_active=True)
+    (folder / "preview.json").write_text(json.dumps(preview, indent=2) + "\n")
+    written = intake(args, ["write-spec", "--preview", str(folder / "preview.json"),
+                            "--out", str(folder / "run-input")])
+    return Path(written["spec_path"])
+
+
+def run_case(log: RoundLog, args: argparse.Namespace, case: str) -> None:
+    case_dir = args.out / case
     case_dir.mkdir(parents=True, exist_ok=False)
-    (case_dir / "command.json").write_text(json.dumps(command, indent=2) + "\n")
     started = time.perf_counter()
+    try:
+        source = sheet_only_spec(args, case, case_dir) if args.sheet_only else None
+    except (RuntimeError, OSError, KeyError) as exc:
+        (case_dir / "result.json").write_text(json.dumps({
+            "case": case, "exit_code": None, "controller_status": "intake_error",
+            "termination_reason": str(exc)[:600], "wall_seconds": round(time.perf_counter() - started, 1),
+        }, indent=2) + "\n")
+        log.write(f"{case}: intake_error ({str(exc)[:200]})")
+        return
+    command = build_command(args, case, source)
+    (case_dir / "command.json").write_text(json.dumps(command, indent=2) + "\n")
     # Stream to files like the earlier drivers, so a case folder is complete
     # evidence even if this script is interrupted (round_digest reads stdout.log).
     with (case_dir / "stdout.log").open("w") as stdout, (case_dir / "stderr.log").open("w") as stderr:
@@ -139,10 +192,12 @@ def early_stop_hint(case_dirs: list[Path]) -> str | None:
     return summary["early_stop_hint"]
 
 
-def build_command(args: argparse.Namespace, case: str) -> list[str]:
+def build_command(args: argparse.Namespace, case: str, source: Path | None = None) -> list[str]:
+    """The controller command of one case; ``source`` replaces the case's spec.json (sheet-only mode)."""
+    source = source or args.inputs / case / "spec.json"
     command = [str(args.binary.resolve()), "run",
                "--task", str(args.out.resolve() / case / "task"),
-               "--source", str(args.inputs.resolve() / case / "spec.json"),
+               "--source", str(source.resolve()),
                # absolute(), not resolve(): a venv python is a symlink to the base interpreter,
                # and resolving it would leave the venv (no CAD packages).
                "--worker-python", str(args.worker_python.absolute()),
@@ -166,6 +221,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--max-cases", type=int, default=4)
     parser.add_argument("--basis", help="provider transfer basis text (required for --policy live)")
     parser.add_argument("--no-early-stop", action="store_true")
+    parser.add_argument("--sheet-only", action="store_true",
+                        help="start each case from its drawing files through the app's intake, not its spec.json")
     args, extra = parser.parse_known_args(argv)
     if not 1 <= args.jobs <= MAX_JOBS:
         sys.exit(f"--jobs must be 1 to {MAX_JOBS}")
@@ -186,9 +243,13 @@ def main(argv: list[str] | None = None) -> int:
                        ("--worker-python", args.worker_python), ("--worker-source", args.worker_source)):
         if not path.exists():
             sys.exit(f"{name} does not exist: {path}")
-    missing = [case for case in cases if not (args.inputs / case / "spec.json").is_file()]
+    if args.sheet_only:
+        missing = [case for case in cases if not (args.inputs / case).is_dir()]
+    else:
+        missing = [case for case in cases if not (args.inputs / case / "spec.json").is_file()]
     if missing:
-        sys.exit(f"no spec.json under --inputs for: {', '.join(missing)}")
+        needed = "case folder" if args.sheet_only else "spec.json"
+        sys.exit(f"no {needed} under --inputs for: {', '.join(missing)}")
     options = dict(zip(args.extra[0::2], args.extra[1::2]))
     live = options.get("--policy") == "live"
     if live:
@@ -204,6 +265,7 @@ def main(argv: list[str] | None = None) -> int:
     admission_lock = (Path(os.environ.get("TMPDIR") or "/tmp")
                       / f"marinaframe-native-admission-{os.geteuid()}.lock").resolve()
     meta = {"started": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "cases": cases, "jobs": args.jobs,
+            "sheet_only": args.sheet_only,
             "native_admission_lock": str(admission_lock), "binary": str(args.binary)}
     (args.out / "round.json").write_text(json.dumps(meta, indent=2) + "\n")
     log.write(f"round of {len(cases)} case(s), jobs {args.jobs}, out {args.out}")
@@ -214,7 +276,7 @@ def main(argv: list[str] | None = None) -> int:
 
     def run_all(batch: list[str]) -> None:
         with ThreadPoolExecutor(max_workers=min(args.jobs, len(batch))) as pool:
-            list(pool.map(lambda case: run_case(log, build_command(args, case), args.out / case), batch))
+            list(pool.map(lambda case: run_case(log, args, case), batch))
         finished.extend(args.out / case for case in batch)
 
     first, rest = cases[:EARLY_STOP_AFTER], cases[EARLY_STOP_AFTER:]

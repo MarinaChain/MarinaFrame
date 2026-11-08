@@ -189,6 +189,33 @@ Unchanged: inputs (the same evidence pack and prompts), model, at most 3 turns p
 repeats per arm in turn (A1, B1, A2, B2, A3, B3), scorer, metrics and decision rule of section 3.5.
 Round 1 results stay as they are; round 2 is reported beside them.
 
+#### 3.5.2 Round 3: raster path, model value test (fixed before running)
+
+Question: on a drawing without vector layers, does the model add accuracy over the code reader?
+This is the product path for old drawings (Balclutha, HAER).
+
+- Input drawing: `GA Gunnerus Rev1.pdf`, rendered to one raster page at 150 dpi. No DXF content
+  reaches either reader. Crops: inboard profile, 1-deck plan, A-deck plan.
+- Host calibration (stands in for a person's calibration, not part of the test): page pixels to
+  ship metres per crop, found once by registering the PDF raster to the GA vector file (scale and
+  offset), with the residual recorded. The same calibration goes to both arms.
+- Arm R0, raster code only (deterministic, 1 run): levels from long horizontal ink runs in the
+  profile crop, snapped to the same level hints as the vector path; footprints from the region
+  that the ink encloses in the plan crops; tier aft ends from long transverse ink runs on the deck
+  below; labelled guesses where the raster gives nothing. No printed-label snapping (the PDF text
+  is outlines).
+- Arm R1, model (DeepSeek V4.1 Flash, arm A JSON form, thinking disabled, `max_tokens` 32,000,
+  temperature 0.2, at most 3 turns, 3 repeats): the three crops with calibration, the title block,
+  the R0 reading as text (guesses marked), the component list, and one added instruction: check
+  each tier's levels and both ends against the walls on the deck below, correct the code reading
+  where the image shows otherwise, and fill every gap.
+- Scorer, metrics M1 to M7 and truth: unchanged (section 3.4).
+
+Decision rule (fixed now): the model adds value if R1 builds the 3 scored components in all 3
+repeats **and** its median beats R0 on at least 3 of these 4: abs M1, M2, abs M3, abs M4.
+Otherwise the raster product path stays code-first, with the model as gap filler only. Report
+also turns, tokens, provider cost and wall time.
+
 ### 3.6 Effort, checks, resume
 
 Effort: 1-2 weeks (reader, executor change, scoring, Gunnerus run; then raster path and a

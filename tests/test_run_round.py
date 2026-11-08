@@ -171,6 +171,33 @@ def test_validate_out_locations(tmp_path):
     run_round.validate_out(main_root / "work" / "r2", main_root, worktrees)  # accepted
 
 
+def test_sheet_only_cases_start_from_the_drawing_through_the_app_intake(tmp_path, monkeypatch):
+    import sys
+    from PIL import Image, ImageDraw
+    argv, out, _ = setup_round(tmp_path, monkeypatch, ["c1", "empty"], known_extra=("--sheet-only", "--no-early-stop"),
+                               flags=LIVE_FLAGS, key="k-TESTSECRET-2")
+    image = Image.new("RGB", (400, 240), "white")
+    ImageDraw.Draw(image).line([(200, 220), (260, 120), (300, 30)], fill="black", width=3)
+    image.save(tmp_path / "inputs" / "c1" / "drawing.png")
+    # The real intake reader runs: the venv python and this checkout's source.
+    real = {"--worker-python": sys.executable, "--worker-source": str(Path(__file__).resolve().parents[1] / "src")}
+    argv = [real.get(argv[i - 1], value) if i else value for i, value in enumerate(argv)]
+    assert run_round.main(argv) == 0
+    command = read(out / "c1" / "command.json")
+    source = Path(command[command.index("--source") + 1])
+    assert source == (out / "c1" / "intake" / "run-input" / "spec.json").resolve()
+    spec = read(source)
+    assert spec["sections"] == [] and (source.parent / spec["source"]["file"]).is_file()
+    assert read(out / "c1" / "intake" / "preview.json")["ai_active"] is True
+    assert read(out / "c1" / "result.json")["controller_status"] == "completed"
+    # A case folder with no drawing is reported, and the round goes on.
+    assert read(out / "empty" / "result.json")["controller_status"] == "intake_error"
+    assert read(out / "round.json")["sheet_only"] is True
+    for path in out.rglob("*"):
+        if path.is_file() and path.suffix in (".json", ".log", ".md"):
+            assert "k-TESTSECRET-2" not in path.read_text()
+
+
 def test_extra_options_must_be_pairs(tmp_path, monkeypatch):
     argv, _, _ = setup_round(tmp_path, monkeypatch, ["c1"], flags=("--policy",))
     with pytest.raises(SystemExit, match="pairs"):

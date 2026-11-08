@@ -484,6 +484,9 @@ def measure_description(image, spec, description, setups):
         if values:
             measurements[name] = [{"view_id": "declared_body", "value": max(values)}]
     profile = None
+    # The plan's length is a second LOA reading: a profile/plan disagreement
+    # points at one view's scale (dimension_conflicts below).
+    plan_lengths = []
     for setup in setups:
         warnings.extend(copy.deepcopy(setup.get("warnings", [])))
         kind = setup.get("view", setup.get("kind"))
@@ -494,6 +497,15 @@ def measure_description(image, spec, description, setups):
                 value = 2 * max(abs(extent["top_px"] - setup["centreline_px"]),
                                 abs(extent["bottom_px"] - setup["centreline_px"])) / setup["pixels_per_metre"]
                 measurements.setdefault("beam", []).append({"view_id": setup.get("view_id", "plan"), "value": value})
+            if extent:
+                plan_lengths.append({"view_id": setup.get("view_id", "plan"),
+                                     "value": (extent["right_px"] - extent["left_px"]) / setup["pixels_per_metre"]})
+        if kind in ("body", "body_fore", "body_aft") and not body and setup.get("centreline_px") is not None:
+            # A sheet-only intake declares no sections yet: the body setup gives the body-plan beam.
+            extent = _extents(image, setup["region_px"], setup["pixels_per_metre"], setup["centreline_px"])
+            if "beam" in extent:
+                measurements.setdefault("beam", []).append({"view_id": setup.get("view_id", "body"),
+                                                            "value": extent["beam"]})
         if kind == "profile":
             profile = setup
             extent = _extents(image, setup["region_px"], setup["pixels_per_metre"], baseline=setup.get("baseline_px"))
@@ -502,6 +514,8 @@ def measure_description(image, spec, description, setups):
             if extent:
                 measurements["loa"] = [{"view_id": setup.get("view_id", "profile"),
                                          "value": (extent["right_px"] - extent["left_px"]) / setup["pixels_per_metre"]}]
+    if plan_lengths:
+        measurements["loa"] = measurements.get("loa", []) + plan_lengths
     for name in ("loa", "lpp", "beam", "depth", "draft"):
         value = _value(principal.get(name))
         if value is not None and value <= 0:
