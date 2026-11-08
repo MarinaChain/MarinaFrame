@@ -111,6 +111,42 @@ def test_description_feeds_station_positions_dimensions_and_table_grid():
     assert table.trend["description"]["principal"]["beam"]["value"] == 6.
 
 
+def test_unknown_principal_values_are_accepted_and_warned():
+    image, spec, setup = sheet()
+    claim = {"principal": {"beam": {"value": None, "source": "ai_inferred"},
+                           "loa": {"value": None, "source": "ai_inferred"}}}
+    assert vd.valid_description(claim)
+    result = vd.measure_description(image, spec, claim, [setup])
+    assert result["principal"]["beam"]["value"] is not None
+    assert result["principal"]["loa"]["value"] is None
+    assert "principal.loa" in {w["field"] for w in result["warnings"]}
+
+
+def test_doubtful_dimension_never_becomes_a_hard_build_constraint():
+    _, spec, _ = sheet()
+    result = vd.first_hull_spec(spec, {"principal": {"beam": {"value": 99., "source": "ai_inferred"}},
+                                     "warnings": [{"field": "principal.beam"}]})
+    assert "beam_m" not in result.get("constraints", {})
+
+
+def test_incomplete_description_warns_on_each_missing_design_field():
+    image, spec, setup = sheet()
+    result = vd.measure_description(image, spec, {}, [setup])
+    fields = {w["field"] for w in result["warnings"]}
+    assert {"ends.keel", "ends.stem", "ends.stern", "deck.sheer_z", "form.type"} <= fields
+
+
+def test_dark_partial_grid_does_not_set_hull_breadth():
+    image, spec, setup = sheet()
+    pil = Image.fromarray(image)
+    draw = ImageDraw.Draw(pil)
+    for y in range(40, 221, 20):
+        draw.line((40, y, 180, y), fill="black")
+    result = vd.measure_description(np.array(pil), spec, {"principal": {
+        "beam": {"value": 6., "source": "measured"}}}, [setup])
+    assert result["principal"]["beam"]["value"] == pytest.approx(6., abs=.2)
+
+
 def test_body_only_does_not_invent_profile_measurements():
     image, spec, setup = sheet()
     result = vd.measure_description(image, spec, {"ends": {"stern": {"type": "transom"}}}, [setup])

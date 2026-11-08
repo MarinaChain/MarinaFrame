@@ -495,6 +495,25 @@ pub fn tool_catalog(on_ambiguity: &OnAmbiguity) -> Value {
     }
     tools
 }
+fn phase_tool_catalog(store: &Store) -> Value {
+    let mut tools = tool_catalog(&store.state.config.on_ambiguity);
+    let next = match store.state.domain["description_phase"].as_str() {
+        Some("views") => Some("describe_views"),
+        Some("setups") => Some("propose_sheet_setup"),
+        Some("vessel") => Some("describe_vessel"),
+        _ => None,
+    };
+    if investigation_mode(store) {
+        if let Some(name) = next {
+            tools
+                .as_array_mut()
+                .unwrap()
+                .retain(|tool| tool["name"] == name);
+        }
+    }
+    tools
+}
+
 /// Investigation tools of the live model (draft mode only). Each one is
 /// executed by the harness; every claim is checked by deterministic code.
 fn investigation_catalog() -> Vec<Value> {
@@ -979,7 +998,8 @@ fn live_decision(store: &mut Store) -> Result<bool> {
     let observation = model_observation(store)?;
     let images = collect_images(store)?;
     let metas = images.iter().map(|x| x.0.clone()).collect::<Vec<_>>();
-    let prompt = json!({"observation":observation,"tools":tool_catalog(&store.state.config.on_ambiguity),"images":metas});
+    let prompt =
+        json!({"observation":observation,"tools":phase_tool_catalog(store),"images":metas});
     let mut content = vec![
         json!({"type":"text","text":String::from_utf8(util::json_bytes(&prompt)?).map_err(|_|"prompt_encoding")?}),
     ];
@@ -1014,7 +1034,7 @@ fn live_decision(store: &mut Store) -> Result<bool> {
             &store.state,
             purpose.prompt(),
             current,
-            tool_catalog(&store.state.config.on_ambiguity),
+            phase_tool_catalog(store),
             content,
         )?;
         context = json!({"format":1,"steps_total":transcript.steps_total,"steps_kept":transcript.steps_kept,"estimated_tokens":transcript.estimated_tokens});
@@ -2606,6 +2626,24 @@ mod tests {
                 "{name}"
             );
         }
+    }
+
+    #[test]
+    fn read_phase_catalog_does_not_distract_with_section_tools() {
+        let (_tmp, mut store) = fixture();
+        store.state.config.policy = Policy::Live;
+        store.state.config.on_ambiguity = OnAmbiguity::Draft;
+        store.state.domain = json!({"description_phase":"setups"});
+        let catalog = phase_tool_catalog(&store);
+        let names = catalog
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["name"].as_str().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(names, vec!["propose_sheet_setup"]);
+        store.state.domain["description_phase"] = json!("vessel");
+        assert_eq!(phase_tool_catalog(&store)[0]["name"], "describe_vessel");
     }
 
     #[test]

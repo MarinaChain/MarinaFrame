@@ -43,7 +43,7 @@ def check_case(task, reference, spec, views=None):
         # uses development metadata only; the product never sees this reference.
         from benchmarks.factory.render import _nice_step
         step = _nice_step(reference["depth_m"], 8)
-        expected_heights = [i * step for i in range(int(reference["depth_m"] / step) + 1)]
+        expected_heights = [i * step for i in range(1, int(reference["depth_m"] / step) + 1)]
     actual_heights = [w.get("z_m") for w in description.get("waterlines", [])]
     waterlines_right = len(actual_heights) == len(expected_heights) and all(
         close(a, b) if abs(b) > .001 else isinstance(a, (int, float)) and abs(a) <= .02
@@ -86,7 +86,12 @@ def main():
         views = json.loads(view_path.read_text()) if view_path.exists() else None
         checked = check_case(directory / "task", references[hull], spec, views)
         digest = digest_case(directory)
-        result.append({"case": case, **checked, "digest": digest})
+        receipts = [json.loads(p.read_text()) for p in (directory / "task/receipts").glob("request-*.json")]
+        costs = [r.get("usage", {}).get("list_cost") for r in receipts]
+        accounting = {"provider_requests": len(receipts),
+                      "known_list_cost_usd": sum(c for c in costs if isinstance(c, (int, float))),
+                      "receipts_without_list_cost": sum(not isinstance(c, (int, float)) for c in costs)}
+        result.append({"case": case, **checked, **accounting, "digest": digest})
     args.out.write_text(json.dumps(result, indent=2) + "\n")
 
 

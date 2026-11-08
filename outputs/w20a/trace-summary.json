@@ -1,0 +1,189 @@
+[
+  {
+    "case": "dtmb5415-L0",
+    "history": [
+      {
+        "tool": "describe_views",
+        "reason": "Survey shows nine body-plan half-sections in a 3x3 grid with consistent centrelines/baselines; naming them and the title/offset strips lets me set scale and station mapping before tracing."
+      },
+      {
+        "tool": "propose_sheet_setup",
+        "reason": "Set scale/datums for station 1 before tracing; grid 101 px = 2 m gives 50.4 px/m consistent with declared calibration."
+      },
+      {
+        "tool": "propose_sheet_setup",
+        "reason": "Set scale/datums for station 2 panel to confirm the same calibration as station 1 before tracing all nine sections."
+      },
+      {
+        "tool": "propose_sheet_setup",
+        "reason": "Confirm station 3 calibration matches stations 1-2 (50.44 px/m, 2 m grid) before tracing all nine sections."
+      },
+      {
+        "tool": "propose_sheet_setup",
+        "reason": "Confirm station 4 calibration matches stations 1-3 (50.44 px/m, 2 m grid) before tracing all nine sections."
+      },
+      {
+        "tool": "propose_sheet_setup",
+        "reason": "Confirm station 5 calibration matches stations 1-4 (50.44 px/m, 2 m grid) before tracing all nine sections."
+      },
+      {
+        "tool": "propose_sheet_setup",
+        "reason": "Confirm station 6 calibration matches stations 1-5 (50.44 px/m, 2 m grid) before tracing all nine sections."
+      },
+      {
+        "terminal": "requested_step_boundary"
+      }
+    ]
+  },
+  {
+    "case": "shipd-1-00683-L2",
+    "history": [
+      {
+        "tool": "describe_views",
+        "reason": "Survey shows two body-plan halves with 95 px station/waterline grid; naming them before scale and station mapping."
+      },
+      {
+        "tool": "propose_sheet_setup",
+        "reason": "Aft half grid: centreline x\u224840, baseline y\u2248813, 47.58 px/m, 2 m spacing."
+      },
+      {
+        "tool": "propose_sheet_setup",
+        "reason": "Confirm fore-half datums (centreline 568, baseline 813, 2 m grid) so s01-s04 map before proposing sections."
+      },
+      {
+        "tool": "describe_vessel",
+        "reason": "Record principal dimensions, station/waterline grid and form before authoring sections; beam measured from ink, LOA/draft inferred."
+      },
+      {
+        "terminal": "phase1_description_complete"
+      }
+    ]
+  },
+  {
+    "case": "shipd-1-00045-L2",
+    "history": [
+      {
+        "rejected": "operation_contract"
+      },
+      {
+        "rejected": "typed_contract_rejected"
+      },
+      {
+        "tool": "describe_views",
+        "reason": "Survey the nine station panels and title block before tracing or building CAD, per the description phase."
+      },
+      {
+        "tool": "propose_sheet_setup",
+        "reason": "Confirm the body-plan scale and datums from the nine-panel grid before tracing sections."
+      },
+      {
+        "rejected": "typed_contract_rejected"
+      },
+      {
+        "rejected": "operation_contract"
+      },
+      {
+        "tool": "describe_vessel",
+        "reason": "Record principal dimensions, nine station identities and form from the body plan before tracing sections; beam measured from ink, length/draft inferred and flagged."
+      },
+      {
+        "terminal": "phase1_description_complete"
+      }
+    ]
+  },
+  {
+    "case": "shipd-1-00679-L0",
+    "history": [
+      {
+        "tool": "describe_views",
+        "reason": "Survey shows two body-plan panels split at x\u2248640 with station curves; naming views and bounds before scale/datum work per instructions."
+      },
+      {
+        "tool": "propose_sheet_setup",
+        "reason": "Establish left body-plan scale/datum from declared calibration and visible 2 m grid before tracing stations."
+      },
+      {
+        "tool": "propose_sheet_setup",
+        "reason": "Establish right body-panel datum so stations 6 and 5 can be traced against the same declared calibration as the left panel."
+      },
+      {
+        "rejected": "operation_contract"
+      },
+      {
+        "rejected": "typed_contract_rejected"
+      },
+      {
+        "rejected": "typed_contract_rejected"
+      },
+      {
+        "rejected": "typed_contract_rejected"
+      },
+      {
+        "terminal": "requested_step_boundary"
+      }
+    ]
+  },
+  {
+    "case": "dtmb5415-3v-L0",
+    "history": [
+      {
+        "tool": "describe_views",
+        "reason": "Survey shows profile, half-breadth plan, body plan and title block; naming bounds in source pixels before scale/datum work."
+      },
+      {
+        "tool": "propose_sheet_setup",
+        "reason": "Profile grid: stations every 38 px (2 m), waterlines every 38 px; baseline at y\u2248398, origin at first station x\u2248170. Matches declared 19 px/m calibration."
+      },
+      {
+        "tool": "propose_sheet_setup",
+        "reason": "Calibrate the half-breadth plan against the same 19 px/m grid as the profile so station x-positions and half-breadths share one frame."
+      },
+      {
+        "tool": "propose_sheet_setup",
+        "reason": "Calibrate the body plan on its own centreline (x\u22482328) and the shared baseline y\u2248398 so section half-breadths and heights are read in the same 19 px/m frame as the profile and half-breadth plan."
+      },
+      {
+        "tool": "describe_vessel",
+        "reason": "Record principal dimensions from title block and station/waterline grid before CAD; body plan shows 9 stations with U/V sections."
+      },
+      {
+        "terminal": "requested_step_boundary"
+      }
+    ]
+  },
+  {
+    "case": "shipd-1-00679-3v-L0",
+    "history": [
+      {
+        "tool": "describe_views",
+        "reason": "Survey the sheet: profile, half-breadth plan, body plan and title block located in source pixels before scale/datum work."
+      },
+      {
+        "tool": "propose_sheet_setup",
+        "reason": "Profile baseline y\u2248428.5, station 1 x\u2248160, 19 px/m from title block; station spacing conflicts with LOA 23.21 m and must be reconciled before sections."
+      },
+      {
+        "tool": "propose_sheet_setup",
+        "reason": "Set up the half-breadth plan: CL at y\u2248510, station ticks 1-9 at x\u2248160-1900 consistent with profile, 19 px/m from title block."
+      },
+      {
+        "tool": "propose_sheet_setup",
+        "reason": "Set up the body plan datums (BL y\u2248428.5, CL x\u22482364, 1 m grid) so section traces can be read against waterlines before authoring sections."
+      },
+      {
+        "rejected": "typed_contract_rejected"
+      },
+      {
+        "tool": "describe_vessel",
+        "reason": "Record principal dimensions from title block, station/waterline/buttock identities and form from the three views before CAD. Station x values are ai_inferred because declared 10-90 m conflicts with LOA 23.21 m and must be remapped."
+      },
+      {
+        "tool": "describe_vessel",
+        "reason": "Record title-block principals, station/waterline/buttock identities and form; station x remapped to LOA 23.21 m because declared 10-90 m conflicts with the sheet."
+      },
+      {
+        "terminal": "requested_step_boundary"
+      }
+    ]
+  }
+]

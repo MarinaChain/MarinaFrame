@@ -41,4 +41,4 @@ R-body: dimensions within 2% in 4/4; station and waterline sets correct in at le
 
 ## Resume point
 
-Plan saved after reading design, lessons, investigator history and continuation status. Next: implement and run focused regression tests. Update this section with frozen runtime paths and detached run commands before starting evaluation.
+Implementation and review fixes are in this worktree. Final frozen runtime/source: main `work/w20a/round3-runtime/` and `round3-source/`. All six available cases ran detached via run_round.py with `--phase1-only true --steps 7`; every trace was inspected. Final arms: round3-body, round3-body-rest, round3-3view. Two R-body descriptions complete; other cases hit budget/argument-shape limits. Acceptance not met; do not expand or open sealed data. Quick tier passed 853 Python tests plus Rust/workspace checks. Full suite running with log main `work/w20a/test-full.log`. Next: finish full verification, write report with all attempt costs, commit remaining changes. Runtime receipts rather than digest request counters are authoritative for rejected requests.

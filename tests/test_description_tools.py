@@ -3,6 +3,18 @@ from draft_fixture import draft_drawing
 from vessel_reconstruction.agent_tools import DomainTools
 
 
+def test_tiny_named_view_expands_to_a_usable_crop_with_warning(tmp_path):
+    spec, _ = draft_drawing(tmp_path / "input")
+    task = tmp_path / "task"
+    task.mkdir()
+    tools = DomainTools(task, spec)
+    observed = tools.execute("describe_views", {"views": [
+        {"view_id": "body", "kind": "body", "region_px": [0, 0, 1, 1]}]})
+    assert observed["ok"], observed
+    assert observed["warnings"][0]["field"] == "views.body.region_px"
+    assert tools.describe()["description_next_view"]["view_id"]
+
+
 def test_description_phase_persists_and_setup_mismatch_is_advisory(tmp_path):
     spec, _ = draft_drawing(tmp_path / "input")
     task = tmp_path / "task"

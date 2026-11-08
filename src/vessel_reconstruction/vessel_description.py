@@ -44,7 +44,7 @@ def valid_description(description):
                 return False
     for record in description.get("principal", {}).values():
         value = _value(record)
-        if type(value) not in (int, float) or not math.isfinite(value):
+        if value is not None and (type(value) not in (int, float) or not math.isfinite(value)):
             return False
         if isinstance(record, dict) and record.get("source") not in (None, "spec", "title_block", "measured", "ai_inferred"):
             return False
@@ -92,7 +92,7 @@ def _ink(image, region):
         for coordinate in family["positions_px"]:
             index = int(round(coordinate - (top if horizontal else left)))
             line = gray[index, :] if horizontal else gray[:, index]
-            if np.mean(line < 110) < .9:
+            if np.mean(line < 110) < .5:
                 continue  # Light grid and partial hull edges are not dark rulers.
             if horizontal:
                 mask[max(0, index - 1):index + 2, :] = False
@@ -256,8 +256,11 @@ def first_hull_spec(spec, description):
             a < b for a, b in zip(proposed, proposed[1:])):
         for section, x in zip(result["sections"], proposed):
             section["x_m"] = x
+    doubtful = {w.get("field") for w in description.get("warnings", [])}
     for name, field in (("beam", "beam_m"), ("depth", "depth_m"), ("loa", "length_m")):
         value = _value(description.get("principal", {}).get(name))
+        if f"principal.{name}" in doubtful:
+            continue
         if isinstance(value, (int, float)) and math.isfinite(value) and value > 0:
             result.setdefault("constraints", {})[field] = value
     return result
@@ -335,8 +338,9 @@ def measure_description(image, spec, description, setups):
             if claimed is not None and _different(claimed, measured["value"]):
                 warnings.append(warning(f"principal.{name}", claimed, measured["value"],
                     f"Check {name} against {measured['view_id']} ink and dimension text; do not treat the claim as verified."))
-        if record.get("source") == "measured":
+        if record.get("source") == "measured" or claimed is None:
             record["value"] = values[0]["value"]
+            record["source"] = "measured"
         principal[name] = record
     # Draft is a design waterline, not the top of a section. Do not substitute depth.
     if "draft" in principal:
@@ -397,6 +401,17 @@ def measure_description(image, spec, description, setups):
                 warnings.append(warning(f"ends.{end}.{field}", value, [0, limit], "Place the end inside the calibrated profile outline; check the x datum."))
     if ends.get("bulb", {}).get("present") and profile is None:
         warnings.append(warning("ends.bulb.present", True, None, "No profile supports this bulb claim; keep it ai_inferred."))
+    for field, present in (("ends.keel", "keel" in ends or "keel_z" in ends or "rise_of_floor" in ends),
+                           ("ends.stem", bool(ends.get("stem"))), ("ends.stern", bool(ends.get("stern"))),
+                           ("ends.bulb", "bulb" in ends),
+                           ("deck.sheer_z", bool(result.get("deck", {}).get("sheer_z"))),
+                           ("form.type", bool(result.get("form", {}).get("type"))),
+                           ("waterlines", bool(waterlines)), ("buttocks", "buttocks" in result)):
+        if not present:
+            warnings.append(warning(field, None, None, "Read this field from the views or state an explicit ai_inferred estimate."))
+    for name in ("beam", "depth"):
+        if name not in principal:
+            warnings.append(warning(f"principal.{name}", None, None, "No usable ink extent; read the dimension or label an inference."))
     result.setdefault("buttocks", [])
     result.setdefault("deck", {"source": "ai_inferred"})
     result.setdefault("form", {"type": "displacement", "source": "ai_inferred"})

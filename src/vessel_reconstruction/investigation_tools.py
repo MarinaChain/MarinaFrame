@@ -221,11 +221,19 @@ class InvestigationTools:
     def _describe_views(self, views):
         from .vessel_description import _region
         image, _, _ = self._source()
-        self.state["described_views"] = [{**copy.deepcopy(v), "region_px": _region(v["region_px"], image.shape)}
-                                          for v in views]
+        from .vessel_description import warning
+        records, warnings = [], []
+        for view in views:
+            box = _region(view["region_px"], image.shape)
+            if box[2] - box[0] < 8 or box[3] - box[1] < 8:
+                warnings.append(warning(f"views.{view['view_id']}.region_px", view["region_px"], box,
+                                        "Region has too little sheet overlap; expanded to the sheet for a new reading."))
+                box = [0, 0, image.shape[1], image.shape[0]]
+            records.append({**copy.deepcopy(view), "region_px": box})
+        self.state["described_views"] = records
         self._save()
         crop = self._description_view()
-        return self._observation(True, "views_described", described_views=copy.deepcopy(self.state["described_views"]),
+        return self._observation(True, "views_described", warnings=warnings, described_views=copy.deepcopy(self.state["described_views"]),
                                  next_step="propose_sheet_setup for each geometry view, then describe_vessel.", **crop)
 
     def _describe_vessel(self, description):

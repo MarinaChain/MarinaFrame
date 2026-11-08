@@ -420,7 +420,7 @@ pub fn interpret_completion(receipt: &mut Receipt, bytes: &[u8], key: &str) -> R
         .ok_or("provider_content_type")?;
     match receipt.purpose {
         Purpose::ModelDecision | Purpose::Investigation => {
-            let mut decision: Decision = util::parse(content.as_bytes(), 32_768)?;
+            let mut decision = parse_decision_content(content)?;
             decision.normalize();
             decision.operation()?;
             receipt.decision = Some(decision);
@@ -582,9 +582,34 @@ pub fn provider_worker(response_path: &Path, timeout: u64) -> Result<()> {
     Ok(())
 }
 
+fn parse_decision_content(content: &str) -> Result<Decision> {
+    let mut value: Value = util::parse(content.as_bytes(), 32_768)?;
+    // Some providers echo response_format in the JSON object. It is transport
+    // metadata, not an operation; retain all other unknown-field checks.
+    if value["type"] == "json_object" {
+        value
+            .as_object_mut()
+            .ok_or("provider_content_type")?
+            .remove("type");
+    }
+    serde_json::from_value(value).map_err(|_| "typed_contract_rejected".into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn response_format_echo_is_not_an_operation_field() {
+        let decision = parse_decision_content(
+            r#"{"type":"json_object","tool":"survey_sheet","arguments":{},"reason":"read sheet"}"#,
+        )
+        .unwrap();
+        assert_eq!(decision.tool, "survey_sheet");
+        assert!(parse_decision_content(
+            r#"{"type":"code","tool":"survey_sheet","arguments":{},"reason":"read sheet"}"#
+        )
+        .is_err());
+    }
     #[test]
     fn unknown_cost_stays_unknown() {
         assert!(usage(&json!({}))["cost"].is_null());
