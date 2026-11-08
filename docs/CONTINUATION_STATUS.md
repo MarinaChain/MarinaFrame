@@ -536,3 +536,22 @@ original give the same tokens and answers). Image tokens: 184 at 256-512 px, 652
 2048 px, 2 at 3000 px, 0 at 4096 px). Rule for all vision code: send tiles of at most 2048 px per
 side, with the smallest feature to read at 16 px or more. The Balclutha round 4 sent a 2408 x 3611
 crop, so the model saw it downscaled; a tiled rerun needs a new fixed protocol.
+
+## 2026-11-09 08:30 SGT: app product features, packaging, whole-vessel lighter hull
+
+- UI lane rounds 25-72 merged: Parts tab (component tree, per-part Accept/Mark, sign-off "usable as a
+  starting model", whole vessel in 3D from a GLB), key usage per OpenCode slot, batch queue (folder
+  drop, native-slot pump, saved queue), multi-page intake, run notifications, places instead of ids,
+  a11y test (`npm run test:a11y`, 18 screens), UI tests (`npm run test:ui`).
+- Packaging (docs/plans/2026-11-09-packaging.md): release build passes (app about 19 MB, arm64, ad
+  hoc); the worker Python is found at run time (env, Settings, inside the bundle, dev .venv; nothing
+  beside the bundle); every build embeds only the checked `ui-release` copy. Step 3 (bundled
+  Python runtime) is in progress. Owner decisions before distribution: PyMuPDF (AGPL or commercial)
+  and VTK licences; Developer ID signing and notarization.
+- Whole vessel (docs/WHOLE_VESSEL_GUNNERUS.md): hull cut at the deck (+52 % volume error fixed),
+  lighter hull (STEP 15.4 MB, GLB 1.5 MB, scores unchanged), 4 appendages (contact gaps remain),
+  part re-run from a mark (CLI), Balclutha model test: no value at whole-image size.
+- DeepSeek images: `detail` is ignored; images over about 2048 px per side are downscaled.
+- Sheet-only accuracy: series60 L0 passes live; blurred L1 sheets fail; lane "trace-fix-2" works on
+  centreline detection, curve identity, first-hull rebuild and run-to-run variance.
+- Real-app check still not done (app window not reachable by Computer Use).
