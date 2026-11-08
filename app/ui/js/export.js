@@ -1,6 +1,7 @@
-// Export sheet (milestone M5): choose the outputs of one revision, write them into the
-// run's exports folder and show each file in Finder. Every export is a draft; nothing
-// here says "approved" or "verified" (engineering sign-off happens outside MarinaFrame).
+// Export page (milestone M5), the Export tab of a vessel: choose the outputs of one
+// revision, write them into the run's exports folder and show each file in Finder. Every
+// export is a draft; nothing here says "approved" or "verified" (engineering sign-off
+// happens outside MarinaFrame).
 
 import { el, icon, fill } from './dom.js';
 import * as fmt from './format.js';
@@ -20,45 +21,24 @@ export function canExport(view) {
   return Boolean(view?.revision) && view.summary.status !== 'running';
 }
 
-/** `invoke` is api.js `invoke`. Errors show inside the sheet. */
-export function createExport({ invoke }) {
+/**
+ * The Export page. `host` is the element it fills; `invoke` is api.js `invoke`.
+ * Errors show inside the page.
+ */
+export function createExport({ host, invoke }) {
   let task = null;
+  let view = null;
   let revision = null;
+  let openIssues = 0;
   const chosen = new Set(OUTPUTS.map((o) => o.kind));
   let files = []; // ExportedFile[] in the folder now
   let notBuilt = new Set();
   let folder = null;
   let busy = false;
-
-  const title = el('h2', { id: 'export-title' }, 'Export');
-  const revisionChip = el('span', { class: 'badge badge-small', dataset: { tone: 'brand' } });
-  const stamp = el('p', { class: 'export-stamp' },
-    el('strong', {}, 'Draft, not for construction.'),
-    ' Each file carries this stamp. Engineering sign-off happens outside MarinaFrame.');
-  const list = el('div', { class: 'export-list', role: 'group', 'aria-label': 'Outputs to export' });
-  const error = el('p', { class: 'form-error', role: 'alert', hidden: true });
-  const folderButton = el('button', { class: 'btn btn-ghost', type: 'button', onclick: () => reveal(folder) },
-    icon('folder'), 'Show folder');
-  const closeButton = el('button', { class: 'btn', type: 'button', onclick: () => sheet.close() }, 'Close');
-  const exportButton = el('button', { class: 'btn btn-primary', type: 'button', onclick: () => runExport() }, 'Export');
-
-  const sheet = el('dialog', { class: 'sheet export-sheet', id: 'export-sheet', 'aria-labelledby': 'export-title' },
-    el('div', { class: 'sheet-body' },
-      el('div', { class: 'sheet-head' }, title, revisionChip),
-      stamp,
-      list,
-      error,
-      el('div', { class: 'sheet-actions export-actions' },
-        folderButton, el('span', { class: 'export-actions-spacer' }), closeButton, exportButton)));
-  document.body.append(sheet);
+  let error = '';
 
   function filesOf(kind) {
     return files.filter((f) => f.kind === kind);
-  }
-
-  function showError(message) {
-    error.textContent = message || '';
-    error.hidden = !message;
   }
 
   function toggle(kind) {
@@ -81,7 +61,7 @@ export function createExport({ invoke }) {
       state = el('span', { class: 'export-size export-size-none' }, '—');
     }
     const finder = el('button', {
-      class: 'btn btn-ghost btn-icon btn-small',
+      class: 'btn btn-ghost btn-icon',
       type: 'button',
       title: 'Show in Finder',
       'aria-label': `Show ${output.name} in Finder`,
@@ -93,24 +73,64 @@ export function createExport({ invoke }) {
         class: 'export-toggle',
         type: 'button',
         'aria-pressed': String(pressed),
-        title: output.hint,
         disabled: busy,
         onclick: () => toggle(output.kind),
       },
       el('span', { class: 'export-check', 'aria-hidden': 'true' }),
       icon(output.glyph),
-      el('span', { class: 'export-name' }, output.name)),
+      el('span', { class: 'export-text' },
+        el('span', { class: 'export-name' }, output.name),
+        el('span', { class: 'export-hint' }, output.hint))),
       state,
       finder);
   }
 
+  /** Why the page cannot export now, in plain words; null when it can. */
+  function blockedText() {
+    if (!view) return 'Open a run to export its draft.';
+    if (view.summary.status === 'running') return 'The AI is still working on this run. Export opens when the run stops.';
+    if (!view.revision) return 'This run has no build yet. Export needs a built hull.';
+    return null;
+  }
+
+  function issuesLine() {
+    if (!openIssues) return null;
+    const noun = openIssues === 1 ? 'section is' : 'sections are';
+    return el('p', { class: 'export-issues', role: 'note' }, icon('warn'),
+      el('span', {}, `${openIssues} ${noun} still a guess or declined. The files show the draft as it is now.`));
+  }
+
   function render() {
-    fill(revisionChip, el('span', { class: 'badge-text' }, revision || ''));
-    fill(list, ...OUTPUTS.map(outputRow));
-    folderButton.disabled = !files.length;
-    closeButton.disabled = busy;
-    exportButton.disabled = busy || chosen.size === 0;
-    exportButton.textContent = busy ? 'Exporting…' : 'Export';
+    const blocked = blockedText();
+    const head = el('header', { class: 'page-head' },
+      el('h1', { id: 'export-title' }, 'Export'),
+      revision ? el('span', { class: 'badge', dataset: { tone: 'brand' }, title: `Revision ${revision}` }, el('span', { class: 'badge-text' }, revision)) : null);
+    if (blocked) {
+      fill(host, el('div', { class: 'page-body export-page' }, head,
+        el('div', { class: 'page-empty' }, icon('export'), el('p', {}, blocked))));
+      return;
+    }
+    const exportButton = el('button', {
+      class: 'btn btn-primary btn-large',
+      type: 'button',
+      disabled: busy || chosen.size === 0,
+      onclick: () => runExport(),
+    }, busy ? 'Exporting…' : 'Export');
+    const folderButton = el('button', {
+      class: 'btn btn-large',
+      type: 'button',
+      disabled: !files.length,
+      onclick: () => reveal(folder),
+    }, icon('folder'), 'Show folder');
+    fill(host, el('div', { class: 'page-body export-page' },
+      head,
+      el('p', { class: 'export-stamp' },
+        el('strong', {}, 'Draft, not for construction.'),
+        ' Each file carries this stamp. Engineering sign-off happens outside MarinaFrame.'),
+      issuesLine(),
+      el('div', { class: 'export-list', role: 'group', 'aria-label': 'Outputs to export' }, ...OUTPUTS.map(outputRow)),
+      error ? el('p', { class: 'form-error', role: 'alert' }, error) : null,
+      el('div', { class: 'export-actions' }, folderButton, el('span', { class: 'export-actions-spacer' }), exportButton)));
   }
 
   function apply(result) {
@@ -122,13 +142,13 @@ export function createExport({ invoke }) {
   async function runExport() {
     if (busy || !chosen.size) return;
     busy = true;
-    showError(null);
+    error = '';
     render();
     try {
       const outputs = OUTPUTS.map((o) => o.kind).filter((kind) => chosen.has(kind));
       apply(await invoke('export_run', { task, revision, outputs }));
     } catch (failure) {
-      showError(failure?.message || 'The export did not finish.');
+      error = failure?.message || 'The export did not finish.';
     } finally {
       busy = false;
       render();
@@ -140,33 +160,36 @@ export function createExport({ invoke }) {
     try {
       await invoke('reveal_export', { task, path });
     } catch (failure) {
-      showError(failure?.message || 'The folder could not be opened.');
+      error = failure?.message || 'The folder could not be opened.';
+      render();
     }
   }
 
-  // Escape closes the sheet, except while the export runs.
-  sheet.addEventListener('cancel', (event) => { if (busy) event.preventDefault(); });
-
   return {
-    /** Open the sheet for the current revision of a task (`view` is its TaskView). */
-    async open(taskPath, view) {
-      if (!canExport(view)) return;
-      if (taskPath !== task || view.revision !== revision) {
+    /**
+     * Show the page for the current revision of a task (`taskView` is its TaskView);
+     * `issues` is the number of sections that are still a guess or declined.
+     */
+    async show(taskPath, taskView, issues = 0) {
+      const changed = taskPath !== task || taskView?.revision !== revision;
+      task = taskPath;
+      view = taskView;
+      openIssues = issues;
+      if (changed) {
+        revision = taskView?.revision || null;
         files = [];
         notBuilt = new Set();
         folder = null;
+        error = '';
       }
-      task = taskPath;
-      revision = view.revision;
-      showError(null);
       render();
-      sheet.showModal();
+      if (!changed || !canExport(taskView)) return;
       try {
         apply(await invoke('list_exports', { task, revision }));
-        render();
       } catch (failure) {
-        showError(failure?.message);
+        error = failure?.message || '';
       }
+      render();
     },
   };
 }

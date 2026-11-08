@@ -2164,71 +2164,146 @@ code { font-family: var(--font-mono); }
   .intake-count { display: none; }
 }
 
-/* ------------------------------------------------------------------ Export sheet (M5)
-   One row per output: a toggle (check, icon, one-word name), the size after export and
-   "Show in Finder". The draft stamp is neutral ink, not amber: it is not review data. */
+/* ------------------------------------------------------------------ Vessel tabs and pages
+   Run | Export | History in the title bar (design plan section 3). Export and History are
+   full-width pages over the run workspace; the Run tab is the workspace itself. */
 
-.export-sheet { width: min(520px, calc(100vw - 48px)); }
+.vessel-tabs { display: flex; align-items: stretch; gap: var(--space-2xs); flex: none; height: 100%; margin-left: var(--space-lg); }
+.vessel-tabs[hidden] { display: none; }
+.vessel-tabs > button {
+  position: relative;
+  padding: 0 var(--space-md);
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font: 600 var(--fs-md) var(--font-ui);
+  cursor: pointer;
+}
+.vessel-tabs > button:hover { color: var(--ink); }
+.vessel-tabs > button[aria-selected="true"] { color: var(--brand); }
+.vessel-tabs > button[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: var(--space-sm);
+  right: var(--space-sm);
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--brand);
+}
+.vessel-tabs > button:focus-visible { outline: 2px solid var(--focus); outline-offset: -4px; border-radius: var(--radius-sm); }
+
+.view-run:not([data-vtab="run"]) > .workspace,
+.view-run:not([data-vtab="run"]) > .inspector,
+.view-run[data-vtab="run"] > .vessel-page { display: none; }
+.vessel-page { grid-column: 1 / -1; min-height: 0; overflow-y: auto; }
+.vessel-page[hidden] { display: none; }
+.page-body { display: flex; flex-direction: column; gap: var(--space-lg); max-width: 880px; padding: var(--space-xl) var(--space-2xl) var(--space-2xl); }
+.page-head { display: flex; align-items: center; gap: var(--space-md); min-width: 0; }
+.page-head h1 { font-size: var(--fs-2xl); font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+.page-head-meta { min-width: 0; overflow: hidden; color: var(--ink-3); font-size: var(--fs-md); white-space: nowrap; text-overflow: ellipsis; }
+.page-empty { display: flex; align-items: center; gap: var(--space-md); padding: var(--space-xl); border: 1px dashed var(--rule-strong); border-radius: var(--radius-lg); color: var(--ink-2); font-size: var(--fs-md); }
+.page-empty .icon { flex: none; width: 24px; height: 24px; color: var(--ink-3); }
+
+/* Export: one row per output: a toggle (check, icon, name and what it is), the size after
+   export and "Show in Finder". The draft stamp is neutral ink, not amber: it is not review data. */
 .export-stamp {
-  padding: var(--space-sm) var(--space-md);
+  padding: var(--space-md) var(--space-lg);
   border: 1px dashed var(--line-strong);
   border-radius: var(--radius-md);
   color: var(--text-2);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   line-height: 1.45;
 }
 .export-stamp strong { color: var(--text); font-weight: 600; }
-.export-list { display: flex; flex-direction: column; gap: 2px; }
-.export-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+.export-issues {
+  display: flex;
   align-items: center;
   gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: var(--fs-md);
+}
+.export-issues .icon { flex: none; }
+.export-list { display: flex; flex-direction: column; gap: var(--space-xs); }
+.export-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px auto;
+  align-items: center;
+  gap: var(--space-md);
   min-width: 0;
 }
 .export-toggle {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  gap: var(--space-md);
   min-width: 0;
-  height: 34px;
-  padding: 0 var(--space-sm);
-  border: 1px solid transparent;
+  min-height: 56px;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: none;
+  background: var(--surface);
   color: var(--text-2);
   font-size: var(--fs-md);
   text-align: left;
+  cursor: pointer;
 }
-.export-toggle:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.export-toggle:hover:not(:disabled) { border-color: var(--line-strong); color: var(--text); }
 .export-toggle[aria-pressed="true"] {
-  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
   background: var(--accent-soft);
   color: var(--text);
 }
 .export-toggle:disabled { opacity: 0.6; }
-.export-toggle .icon { color: var(--text-3); }
+.export-toggle .icon { flex: none; width: 20px; height: 20px; color: var(--text-3); }
 .export-toggle[aria-pressed="true"] .icon { color: var(--accent); }
-.export-name { min-width: 0; overflow: hidden; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.export-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.export-name { font-weight: 600; font-size: var(--fs-lg); color: var(--text); }
+.export-hint { color: var(--text-3); font-size: var(--fs-sm); line-height: 1.35; }
 .export-check {
   flex: none;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border: 1.5px solid var(--line-strong);
   border-radius: var(--radius-sm);
   background: var(--raised);
 }
 .export-toggle[aria-pressed="true"] .export-check {
   border-color: var(--accent);
-  background: var(--accent) no-repeat center / 10px 10px;
+  background: var(--accent) no-repeat center / 11px 11px;
   /* A white check mark; data URLs are allowed by the page's img-src policy. */
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 5.2l2 2 4-4.4' fill='none' stroke='white' stroke-width='1.6'/%3E%3C/svg%3E");
 }
-.export-size { min-width: 64px; color: var(--text-2); font: var(--fs-sm) var(--font-mono); text-align: right; }
+.export-size { color: var(--text-2); font: var(--fs-md) var(--font-mono); text-align: right; white-space: nowrap; }
 .export-size-none { color: var(--text-3); }
-.export-actions { align-items: center; }
+.export-actions { display: flex; align-items: center; gap: var(--space-sm); padding-top: var(--space-sm); }
 .export-actions-spacer { flex: 1; }
-.export-actions .btn-ghost { min-width: 0; }
+
+/* History: every run of the vessel. */
+.history-list { display: flex; flex-direction: column; gap: var(--space-xs); }
+.history-row {
+  display: grid;
+  grid-template-columns: 72px auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-md);
+  width: 100%;
+  min-height: 48px;
+  padding: var(--space-sm) var(--space-lg);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--fs-md);
+  text-align: left;
+  cursor: pointer;
+}
+.history-row:hover { border-color: var(--rule-strong); }
+.history-row[aria-current="true"] { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
+.history-run { font-weight: 600; white-space: nowrap; }
+.history-facts { min-width: 0; overflow: hidden; color: var(--ink-3); white-space: nowrap; text-overflow: ellipsis; }
+.history-time { color: var(--ink-3); font-size: var(--fs-sm); white-space: nowrap; }
 
 /* ------------------------------------------------------------------ Mark and revise (js/mark.js)
    The person's mark is brand blue. Teal stays for AI activity, amber for review. */

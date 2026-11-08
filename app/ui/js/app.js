@@ -11,7 +11,7 @@ import { createModelView } from './model3d.js';
 import { createLiveRun } from './live.js';
 import { createMarkTool } from './mark.js';
 import { createIntake } from './intake.js';
-import { createExport, canExport } from './export.js';
+import { createExport } from './export.js';
 import * as fmt from './format.js';
 
 const $ = (id) => document.getElementById(id);
@@ -42,6 +42,7 @@ const state = {
   lastSequence: 0,
   sectionId: null,
   tab: 'timeline',
+  vesselTab: 'run', // run | export | history: the vessel tabs in the title bar
   aiStatus: null,
   busy: null, // plain-language description of the running action
   settings: null,
@@ -283,6 +284,7 @@ async function refreshTasks() {
     renderHome();
     renderQueue();
     renderCrumbs();
+    if (state.route === 'run' && state.vesselTab === 'history') renderHistory();
   } catch (error) {
     showError(error);
   }
@@ -516,7 +518,62 @@ function renderActions() {
   resume.hidden = !['paused', 'blocked', 'cancelled'].includes(status);
   cancel.hidden = status !== 'running';
   resume.disabled = cancel.disabled = Boolean(state.busy);
-  $('export-task').hidden = !canExport(state.view);
+  renderVesselPage();
+}
+
+// ---------------------------------------------------------------- vessel tabs: Run | Export | History
+
+const VESSEL_TABS = ['run', 'export', 'history'];
+
+function setVesselTab(tab) {
+  if (!VESSEL_TABS.includes(tab)) return;
+  state.vesselTab = tab;
+  renderVesselPage();
+}
+
+/** Show the chosen vessel tab. Run is the workspace; Export and History are full-width pages. */
+function renderVesselPage() {
+  const tab = state.vesselTab;
+  for (const button of $('vessel-tabs').querySelectorAll('[data-vtab]')) {
+    button.setAttribute('aria-selected', String(button.dataset.vtab === tab));
+    button.tabIndex = button.dataset.vtab === tab ? 0 : -1;
+  }
+  $('view-run').dataset.vtab = tab;
+  for (const page of document.querySelectorAll('.vessel-page')) page.hidden = page.dataset.vtab !== tab;
+  // The layout switch only means something on the Run tab.
+  $('view-switch').hidden = tab !== 'run';
+  if (tab === 'export') exporter.show(state.task, state.view, toCheckCount(state.view));
+  if (tab === 'history') renderHistory();
+}
+
+/** History: every run of this vessel, newest first. */
+function renderHistory() {
+  const host = $('vessel-page-history');
+  const vessel = vesselOfTask(state.task);
+  const runs = vessel?.runs || [];
+  const row = (run) => {
+    const current = run.task === state.task;
+    return el('li', {},
+      el('button', {
+        class: 'history-row',
+        type: 'button',
+        'aria-current': current ? 'true' : null,
+        title: run.task,
+        onclick: () => { setVesselTab('run'); openTask(run.task); },
+      },
+      el('span', { class: 'history-run' }, `Run ${runNumber(vessel, run.task)}`),
+      statusBadge(run.status),
+      el('span', { class: 'history-facts' }, fmt.plural(run.sections, 'section')),
+      current ? chip('Open', { tone: 'brand', dot: false, small: true }) : el('span'),
+      el('span', { class: 'history-time', title: fmt.fullTime(run.updated_ms) }, fmt.relativeTime(run.updated_ms))));
+  };
+  fill(host, el('div', { class: 'page-body history-page' },
+    el('header', { class: 'page-head' },
+      el('h1', { id: 'history-title' }, 'History'),
+      vessel ? el('span', { class: 'page-head-meta' }, `${vessel.name} · ${fmt.plural(runs.length, 'run')}`) : null),
+    runs.length
+      ? el('ul', { class: 'history-list' }, ...runs.map(row))
+      : el('div', { class: 'page-empty' }, icon('queue'), el('p', {}, 'No runs of this vessel yet.'))));
 }
 
 /** Global status bar: AI on or off, preview mode, runs folder. Run facts live in the run view. */
@@ -1628,8 +1685,11 @@ for (const item of document.querySelectorAll('.rail-item')) {
   item.addEventListener('click', () => navigate(item.dataset.route));
 }
 $('toast-close').addEventListener('click', () => { $('toast').hidden = true; });
-const exporter = createExport({ invoke });
-$('export-task').addEventListener('click', () => exporter.open(state.task, state.view));
+const exporter = createExport({ host: $('vessel-page-export'), invoke });
+$('vessel-tabs').addEventListener('click', (event) => {
+  const tab = event.target.closest('[data-vtab]');
+  if (tab) setVesselTab(tab.dataset.vtab);
+});
 $('zoom-in').addEventListener('click', () => { live.userMovedCamera(); drawing.zoomIn(); });
 $('zoom-out').addEventListener('click', () => { live.userMovedCamera(); drawing.zoomOut(); });
 $('zoom-fit').addEventListener('click', () => { live.userMovedCamera(); drawing.fitPage(); });
@@ -1726,6 +1786,7 @@ function applyRoute(route) {
     else item.removeAttribute('aria-current');
   }
   $('run-actions').hidden = route !== 'run';
+  $('vessel-tabs').hidden = route !== 'run';
   document.body.dataset.route = route;
   renderCrumbs();
   if (route === 'settings') loadSettingsForm();
