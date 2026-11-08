@@ -90,3 +90,9 @@
 - **Rule:** Keep at most about 8 CPU-heavy processes across all lanes: measurement lanes run at most 2 cases at a time, one `make test-full` at a time. Recheck any regression by rerunning the case alone before trusting it.
 - **Why:** The admission lock covers controller runs, but evaluation scripts bypass it.
 - **W20a correction (2026-11-08):** Read-phase panels with one scale are one view family; reuse the first setup and preserve panel-specific datums. Repair malformed description/envelope fields, coerce usable numbers and retain the rest as metadata with warnings. Unknown off-sheet dimensions stay null with a warning; incomplete waterline sets must also warn. Do not spend requests repeating harmless shape failures.
+
+### Optimise for accuracy and coverage, not model cost (MarinaFrame)
+- **Date:** 2026-11-08
+- **Trigger:** I reported cost per case as a main result and wrote "keep it cheap" into briefs and designs. The founder said model cost is a tiny fraction of a naval architect's time; what matters is accuracy and how much ground the tool helps them cover.
+- **Rule:** Treat model cost as a minor constraint. Prefer the option that gives more correct drafts and more drawings covered (thinking on, more requests, more passes, stronger models, ensembles) when it measurably helps. Still report cost, but do not trade accuracy for it. Wasted runs that teach nothing are still waste (time, not money).
+- **Why:** The value is the naval architect's hours saved, which dwarfs API cost.

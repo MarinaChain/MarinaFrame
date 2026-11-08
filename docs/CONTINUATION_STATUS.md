@@ -454,3 +454,12 @@ campaign counts as a failure.
 - Open: the model adds little over the first hull and still worsens 00679; the combined score accepts
   some truth-worsening edits; 00683-L2 first hull is 33.9 % after integration vs 23.4 % in W19a alone;
   DTMB 4.47 % comes from the hull tops (~1 px); image-enhancement test blocked (no image tool headless).
+
+## 2026-11-08 22:05 SGT: founder priority — accuracy and coverage over model cost
+
+- Model cost is a tiny fraction of a naval architect's time. Optimise for correct drafts and for how
+  much ground the tool helps them cover; report cost but do not trade accuracy for it.
+- Running: end-to-end 24-case dev measurement of a12d0a5 (work/e2e-a12d0a5/, driver.log), 2 jobs.
+- Next experiments to try after it (accuracy levers previously held back for cost): thinking on
+  for the investigator, higher request budget, several independent passes with the best draft kept
+  by the score, and a stronger model for the editing step.
