@@ -103,7 +103,14 @@ const drawing = createDrawingView({
     for (const row of document.querySelectorAll('.cand-row')) row.classList.toggle('hot', row.dataset.candidate === id);
   },
 });
-const model = createModelView({ host: $('model-host') });
+// A click on a section plane in 3D picks it: for Mark and revise while marking, else it selects it.
+const model = createModelView({
+  host: $('model-host'),
+  onPick: (id) => {
+    if (markTool.pickSection(id)) return;
+    if (state.view?.sections.some((s) => s.id === id)) selectSection(id, { focusDrawing: true });
+  },
+});
 
 /** HOOK(M3 live): the live run (js/live.js) owns narration, Thinking and the ladder when it has steps. */
 const live = createLiveRun({

@@ -14,7 +14,7 @@ const HEIGHTS = [
   { id: 'half', label: '½ depth', part: 0.5 },
 ];
 /** A station whose area differs from the curve through its neighbours by more than this part of the largest area is flagged. */
-const OFF_CURVE_LIMIT = 0.15;
+const OFF_CURVE_LIMIT = 0.1; // 0.9% to 4.1% on the real DTMB 5415 hull: about 2x margin
 /** Chart size in SVG units; it scales to the panel width. */
 const CHART = { width: 300, height: 140, left: 34, right: 8, top: 10, bottom: 22 };
 

@@ -42,7 +42,7 @@ export function createMarkTool({ invoke, drawing, drawingHost, strip, context, o
     class: 'btn btn-ghost btn-small mark-toggle',
     type: 'button',
     'aria-pressed': 'false',
-    title: 'Mark part of the drawing, or pick a section below, and say what to fix (M)',
+    title: 'Mark part of the drawing, or pick a section below or in 3D, and say what to fix (M)',
     onclick: () => setActive(!active),
   }, 'Mark');
   drawingHost.closest('.pane')?.querySelector('.pane-tools')?.prepend(button);
@@ -63,7 +63,7 @@ export function createMarkTool({ invoke, drawing, drawingHost, strip, context, o
     },
   }, name === 'box' ? 'Box' : 'Lasso'));
   const hint = el('div', { class: 'mark-hint', onpointerdown: (event) => event.stopPropagation() },
-    el('span', {}, 'Drag on the drawing, or pick a section below.'), ...shapeButtons,
+    el('span', {}, 'Drag on the drawing, or pick a section below or in 3D.'), ...shapeButtons,
     el('button', { class: 'btn btn-ghost btn-small', type: 'button', onclick: () => setActive(false) }, 'Done'));
   const overlay = el('div', { class: 'mark-overlay', hidden: true }, preview, hint);
   drawingHost.append(overlay);
@@ -81,7 +81,7 @@ export function createMarkTool({ invoke, drawing, drawingHost, strip, context, o
     button.hidden = !context().view || context().view.summary.policy !== 'live';
     button.disabled = !ok;
     button.title = ok
-      ? 'Mark part of the drawing, or pick a section below, and say what to fix (M)'
+      ? 'Mark part of the drawing, or pick a section below or in 3D, and say what to fix (M)'
       : 'Marking is possible when the AI run is not working.';
     if (!ok && active) setActive(false);
   }
@@ -189,7 +189,15 @@ export function createMarkTool({ invoke, drawing, drawingHost, strip, context, o
   }
 
   function describe(place, ids) {
-    if (place.target_section_ids) return `Picked section ${ids.join(', ')}`;
+    if (place.target_section_ids) {
+      // Say where the section is (as on the strip), not its internal id.
+      const sections = context().view?.sections || [];
+      const names = ids.map((id) => {
+        const x = sections.find((s) => s.id === id)?.x_m;
+        return Number.isFinite(x) ? `${x.toFixed(1)} m` : id;
+      });
+      return `Picked the section at ${names.join(', ')}`;
+    }
     const what = place.region.page_px_box ? 'Box' : 'Lasso';
     if (!ids.length) return `${what} on the drawing; the AI picks the section`;
     if (ids.length === 1) return `${what}: section ${ids[0]}`;
@@ -306,5 +314,12 @@ export function createMarkTool({ invoke, drawing, drawingHost, strip, context, o
     }
   });
 
-  return { refresh, resultActions, setActive };
+  /** A section picked outside the strip (the 3D view): while marking, ask about it. Returns true when used. */
+  function pickSection(id) {
+    if (!active) return false;
+    openPopover({ target_section_ids: [id] }, null);
+    return true;
+  }
+
+  return { refresh, resultActions, setActive, pickSection };
 }

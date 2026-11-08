@@ -16,6 +16,8 @@ const FRAME_MARGIN = 1.1;
 const GUESS_BAND_MARGIN = 0.04;
 /** Camera direction for the default view: from forward, starboard and above. */
 const HOME_DIRECTION = new THREE.Vector3(1.0, -1.25, 0.75).normalize();
+/** A pointer that moves less than this (CSS px) between press and release is a click, not a drag. */
+const CLICK_SLOP_PX = 4;
 
 /** Convert any CSS colour (including oklch) to a THREE.Color by painting one pixel. */
 const colourProbe = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
@@ -60,7 +62,7 @@ function scaleToMetres(geometry, lengthM) {
   if (Math.abs(factor - 1) > 1e-6) geometry.scale(factor, factor, factor);
 }
 
-export function createModelView({ host }) {
+export function createModelView({ host, onPick = null }) {
   const empty = el('div', { class: 'pane-empty' });
   host.append(empty);
 
@@ -146,6 +148,39 @@ export function createModelView({ host }) {
     });
   }
   controls.addEventListener('change', requestRender);
+
+  // ---- Picking: a click (not a drag) on a section plane picks that section. A pointer over
+  // a plane shows the hand cursor. A drag still rotates the view.
+  const raycaster = new THREE.Raycaster();
+  let pressedAt = null;
+
+  /** The id of the section plane under the pointer, nearest first, or null. */
+  function planeAt(event) {
+    if (!planes.size) return null;
+    const rect = renderer.domElement.getBoundingClientRect();
+    const pointer = new THREE.Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1);
+    raycaster.setFromCamera(pointer, camera);
+    const faces = [...planes].map(([id, group]) => {
+      group.children[0].userData.sectionId = id;
+      return group.children[0];
+    });
+    const hit = raycaster.intersectObjects(faces, false)[0];
+    return hit ? hit.object.userData.sectionId : null;
+  }
+  renderer.domElement.addEventListener('pointerdown', (event) => { pressedAt = [event.clientX, event.clientY]; });
+  renderer.domElement.addEventListener('pointerup', (event) => {
+    const moved = pressedAt ? Math.hypot(event.clientX - pressedAt[0], event.clientY - pressedAt[1]) : Infinity;
+    pressedAt = null;
+    if (moved > CLICK_SLOP_PX || !onPick) return;
+    const id = planeAt(event);
+    if (id) onPick(id);
+  });
+  renderer.domElement.addEventListener('pointermove', (event) => {
+    if (event.buttons || !onPick) return;
+    renderer.domElement.style.cursor = planeAt(event) ? 'pointer' : '';
+  });
 
   function resize() {
     const width = host.clientWidth;

@@ -23,7 +23,7 @@ function smoothHull() {
 test('a smooth hull flags no station', () => {
   const stations = areaCurve(smoothHull(), 3);
   for (const station of stations) {
-    if (station.offCurve !== null) assert.ok(Math.abs(station.offCurve) < 0.15, `${station.id} ${station.offCurve}`);
+    if (station.offCurve !== null) assert.ok(Math.abs(station.offCurve) < 0.1, `${station.id} ${station.offCurve}`);
   }
 });
 
@@ -31,5 +31,5 @@ test('a station 30% too wide is far from the curve', () => {
   const sections = smoothHull();
   sections[4].points_yz_m = sections[4].points_yz_m.map(([y, z]) => [y * 1.3, z]);
   const stations = areaCurve(sections, 3);
-  assert.ok(stations[4].offCurve > 0.15, String(stations[4].offCurve));
+  assert.ok(stations[4].offCurve > 0.1, String(stations[4].offCurve));
 });
