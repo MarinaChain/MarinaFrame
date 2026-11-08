@@ -738,9 +738,12 @@ function renderThinking() {
   }
   const steps = state.view.activity?.steps || [];
   if (!steps.length) {
-    fill(panel, el('p', { class: 'panel-empty' }, state.view.summary.policy === 'live'
-      ? 'The AI has not taken a step yet.'
-      : 'This run did not use the AI. Its steps are under Steps.'));
+    let text = 'This run did not use the AI. Its steps are under Steps.';
+    if (state.view.summary.policy === 'live') {
+      // A stopped run will take no more steps, so "not yet" would mislead.
+      text = isRunning() ? 'The AI has not taken a step yet.' : 'The AI took no recorded steps in this run. Its steps are under Steps.';
+    }
+    fill(panel, el('p', { class: 'panel-empty' }, text));
     return;
   }
   fill(panel, el('ol', { class: 'thinking', 'aria-label': 'AI steps, oldest first' },
