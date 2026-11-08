@@ -94,6 +94,8 @@ Errors return `{ "code": string, "message": string }` with plain-language `messa
 | `list_tasks` | `{}` | `TaskSummary[]` |
 | `get_task` | `{ task: string }` | `TaskView` |
 | `get_events` | `{ task, after_sequence: number }` | `EventView[]` (only newer) |
+| `get_live_steps` | `{ task, after_sequence: number }` | `LiveSteps` (see "Live steps") |
+| `get_hull_sections` | `{ task, revision: string }` | `HullSections` (see "Live steps") |
 | `read_artifact` | `{ task, path }` | `{ mime, base64 }` (`path` is relative to the task folder, with `/` separators, never absolute, and must stay inside it; images and STL only; the STL is in the unit of the CAD export, so the UI scales it to `length_m`) |
 | `start_run` | `{ spec_path: string }` | `{ task: string }` |
 | `cancel_task` | `{ task }` | `{ ok: true }` |
@@ -291,3 +293,82 @@ Command: `python -m vessel_reconstruction.exports --task DIR --revision rN --out
   `benchmarks/factory/truth.py`) are not moved: sealed benchmark manifests hash that file. The
   export computes the same quantities (volume and waterplane area below T) with its own exact
   mesh integrals.
+
+## Live steps (stage L1, 2026-11-09)
+
+Design: [live agent](design/2026-11-08-b-live-agent.md) sections 3 to 5 and 8.2. Code:
+`app/core/src/live.rs` (types, cache), `live/builder.rs` (events to steps), `live/geometry.rs`.
+
+`get_live_steps(task, after_sequence)` derives compact steps from the event ledger. It never
+returns raw events, receipts, keys or host paths: free text from the model or the worker has
+absolute paths replaced by `[path]`; image and build paths are task-relative.
+
+- One step per model decision (`actor: "model"`), person decision (`"person"`) or harness
+  operation without a decision (`"code"`: open, survey, first hull, first score). The worker
+  intent and result of a decision fold into its step. Ledger noise (provider intent and result,
+  staging) is not a step; a pending request or worker shows in `in_flight`.
+- Incremental: the backend keeps the parsed ledger per task and reads only newer event files.
+  A step can change after it was first returned (its result arrives, a repeat count grows); its
+  `last_sequence` then grows and the next call returns it again. **The UI replaces steps by
+  `sequence`.** Pass the returned `last_sequence` as the next `after_sequence`; 0 returns all.
+- Replay: `time_ms` is relative to the first event, so a finished run replays with its own timing.
+- Repeats: a model decision equal to one of the last 3 model steps (same tool, arguments and
+  controller progress key), or a `repeated_action_refused`, folds into one `repeat_collapsed`
+  step per repeated step, with `repeat_of` (the repeated step's `sequence`) and `count` (times in
+  all, original included). Identical system lines in a row (notes shortened) share one step.
+- A decision that the controller did not run (a build declined by `missing_sections_hint`, or
+  another decision came first) closes as `refused` with "Not run ...".
+- Kinds: `survey` (survey_sheet), `views` (describe_views, propose_sheet_setup), `vessel`,
+  `look` (inspect_source, view_region, recall_view, compare_views), `read` (read_region),
+  `strokes` (enumerate_strokes), `trace` (trace_from_point), `corridor` (trace_corridor),
+  `assign` (assign_station, select_contours), `propose_section`, `build`, `render`, `score`
+  (a render with a fit score, validate_candidate), `refused` (host refusal, `operation_rejected`,
+  `finalization_rejected`), `repeat_collapsed`, `finish`, `system`.
+- Marks are in source-page pixels. View pixels convert with the view's `crop_box_px` and
+  `view_px_per_source_px` (from earlier results in the ledger, else the loaded
+  `domain/state.json` `views`); a view that neither knows gives no mark. Section boxes
+  and calibration come from the captured spec and inspection results. A model-drawn section
+  (`curve_summary_yz_m`) converts with the section calibration (`x = centre + y * ppm`,
+  `y = baseline - z * ppm`). Stroke and accepted lines use the catalog candidate polyline (at
+  most 64 points), else the stroke's two ends.
+- Builds: a worker result with a candidate build path gives `revision` with that build's
+  `result.json` sections. A render with `fit_score` gives `revision` with the fit and each
+  section's ink RMS (`fit_score.station_ink_fit[id].rms_m`). Each build's curves travel once:
+  later steps of the same build carry the sections with empty `points_yz_m`.
+- Size: about 30 to 70 KB for a whole finished run of 100 to 130 events (first call), a few KB
+  per later call. A first call takes 30 to 70 ms (release build).
+
+```text
+LiveSteps { steps: LiveStep[], last_sequence: number, started_ms: number (epoch ms of the first event),
+            elapsed_ms: number, in_flight: InFlight | null, finished: boolean }
+InFlight  { kind: "model"|"worker", operation: string|null, since_ms: number }
+LiveStep  { sequence: number, last_sequence: number, time_ms: number,
+            kind: StepKind, actor: "model"|"person"|"code",
+            title: string,                 // plain headline: "Listed 6 strokes in the s01 panel"
+            text: string,                  // narration: the decision reason, or plain text for code
+            notes: string|null,            // the model's notes (plan), for a collapsed "Why"
+            targets: { kind: "section"|"view", id: string }[],
+            attention_px: [l, t, r, b] | null,   // camera box, source pixels
+            marks: Mark[],
+            tool: ToolCard | null,
+            revision: RevisionInfo | null,
+            images: string[],              // task-relative PNG paths for read_artifact (at most 4)
+            model_ms: number|null, cost_usd: number|null,   // model answer time and list cost
+            repeat_of: number|null, count: number }
+Mark      { shape: "box"|"point"|"polyline"|"band", tone: Tone, points_px: [x, y][],
+            label?: string, tag?: number, candidate_id?: string, half_width_px?: number }
+            // box: two corners; point: one point; band: polyline + half_width_px
+Tone      = "attention"|"view"|"panel"|"stroke"|"accepted"|"authored"|"refused"
+            // refused marks carry the refusal reason as label on the first one
+ToolCard  { tool: string, duration_ms: number|null, state: "working"|"ok"|"refused"|"failed",
+            text: string,                  // "Refused: ...", "6 strokes", "Not kept: fit 0.1793 to 0.1752"
+            kept?: boolean }               // model-drawn section kept by the build
+RevisionInfo { id: string|null, path: string|null, fit: number|null, sections: SectionCurve[] }
+SectionCurve { id: string, x_m: number, points_yz_m: [y, z][],   // 64 points by arc length, metres
+               source_label: string|null, ink_rms_m: number|null }
+HullSections { revision: string|null, path: string, sections: SectionCurve[] }
+```
+
+`get_hull_sections(task, revision)` returns the section curves of one build for the 3D growth:
+`revision` is a revision id (`r0002`) or a step's `revision.path`. It reads only that build's
+`result.json` (no STL). Unknown builds return the error code `revision_not_found`.

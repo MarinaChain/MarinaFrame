@@ -388,7 +388,7 @@ fn point_list(value: &Value) -> Vec<[f64; 2]> {
 
 /// Candidate traces of one section from its evidence file (`source_points_px`).
 /// The file is used only when its hash matches the hash the worker recorded.
-fn section_polylines(task: &Path, domain: &Value, section_id: &str) -> Arc<Polylines> {
+pub(crate) fn section_polylines(task: &Path, domain: &Value, section_id: &str) -> Arc<Polylines> {
     let record = domain["inspection_artifacts"].as_array().and_then(|list| {
         list.iter()
             .rev()

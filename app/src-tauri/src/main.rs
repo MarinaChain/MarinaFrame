@@ -2,6 +2,7 @@
 // `marinaframe-app-core`, which has no Tauri types.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use marinaframe_app_core::live::{HullSections, LiveSteps};
 use marinaframe_app_core::types::*;
 use marinaframe_app_core::{AppError, AppPaths, AppResult, Backend};
 use std::path::PathBuf;
@@ -50,6 +51,24 @@ async fn get_events(
     after_sequence: u64,
 ) -> Result<Vec<EventView>, AppError> {
     run(backend, move |b| b.get_events(&task, after_sequence)).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+async fn get_live_steps(
+    backend: Shared<'_>,
+    task: String,
+    after_sequence: u64,
+) -> Result<LiveSteps, AppError> {
+    run(backend, move |b| b.get_live_steps(&task, after_sequence)).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+async fn get_hull_sections(
+    backend: Shared<'_>,
+    task: String,
+    revision: String,
+) -> Result<HullSections, AppError> {
+    run(backend, move |b| b.get_hull_sections(&task, &revision)).await
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -223,6 +242,8 @@ fn main() {
             list_tasks,
             get_task,
             get_events,
+            get_live_steps,
+            get_hull_sections,
             read_artifact,
             start_run,
             cancel_task,

@@ -10,6 +10,7 @@ pub mod draft_view;
 pub mod error;
 pub mod events;
 pub mod files;
+pub mod live;
 pub mod model_keys;
 pub mod provider_view;
 pub mod storage;
