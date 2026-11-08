@@ -125,3 +125,25 @@ def test_a_trace_that_jumps_between_two_curves_is_mixed():
     assert pa.follows_several_strokes(_candidate("jumping", jumping), strokes)
     assert not pa.follows_several_strokes(_candidate("copy", outer), strokes)
     assert not pa.follows_several_strokes(_candidate("own", CENTRE + _half_breadth_px(rows, 110)), strokes)
+
+
+def test_a_trace_stops_at_the_curve_top_below_its_station_label(tmp_path):
+    """The station number touches the curve's top end; the label ink is not hull."""
+    image = Image.new("RGB", (300, 240), "white")
+    draw = ImageDraw.Draw(image)
+    curve_top = 80
+    rows = np.linspace(curve_top, BOTTOM, 2000)
+    xs = CENTRE - _half_breadth_px(rows, WIDTHS["s3"])
+    draw.line(list(zip(xs, rows)), fill=(15,) * 3, width=3)
+    end_x = float(xs[0])
+    # A thin, lighter numeral standing on the curve's end, as on the factory sheets.
+    draw.line([(end_x - 1, curve_top - 1), (end_x - 3, curve_top - 16)], fill=(70,) * 3, width=1)
+    draw.line([(end_x - 3, curve_top - 16), (end_x - 7, curve_top - 12)], fill=(70,) * 3, width=1)
+    image.save(tmp_path / "drawing.png")
+    section = _section("s3", 30)
+    image, details = _read_image({"file": "drawing.png"}, tmp_path)
+    inv._FOREGROUND_CACHE.clear()
+    strokes, _ = inv.enumerate_strokes(image, section, "drawing.png", details, None, [])
+    hull = max(strokes, key=lambda s: s["trace_rows_px"][1] - s["trace_rows_px"][0])
+    assert curve_top - 2 <= hull["trace_rows_px"][0] <= curve_top + 3
+    assert hull["support"]["label_rows_removed"] > 0
