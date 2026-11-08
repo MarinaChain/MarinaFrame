@@ -1016,3 +1016,30 @@ button, input { font: inherit; color: inherit; }
 @media (forced-colors: active) {
   .cand-chosen, .tile[aria-selected="true"] { forced-color-adjust: none; }
 }
+
+/* ---- AI draft view: source labels, warnings, model activity ---- */
+.draft-summary { display: flex; flex-direction: column; flex: none; }
+.draft-summary:empty { display: none; }
+.source-counts {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs) var(--space-sm);
+  margin: 0; padding: var(--space-xs) var(--space-md); font-size: var(--fs-sm);
+}
+.source-counts-title { color: var(--text-3); font-weight: 600; }
+.source-chip { color: var(--text-2); }
+.source-chip[data-ai="true"] { color: var(--accent-strong); font-weight: 600; }
+.draft-warnings { padding: var(--space-xs) var(--space-md); font-size: var(--fs-sm); background: var(--warn-soft); }
+.draft-warnings summary { display: flex; align-items: center; gap: var(--space-xs); cursor: pointer; list-style: none; }
+.draft-warnings summary::-webkit-details-marker { display: none; }
+.draft-warnings summary .icon:last-of-type { color: var(--warn); }
+.draft-warnings ul { margin: var(--space-xs) 0 0; padding-left: var(--space-lg); }
+.tile-source { font-weight: 500; color: var(--text-3); }
+.tile[data-source="ai_inferred"] .tile-source,
+.tile[data-source="ai_corrected"] .tile-source { color: var(--accent-strong); font-weight: 600; }
+.selection-source { margin: var(--space-xs) 0 0; font-size: var(--fs-sm); color: var(--text-2); }
+.selection-source[data-ai="true"] strong { color: var(--accent-strong); }
+.activity { margin-bottom: var(--space-sm); font-size: var(--fs-sm); }
+.activity summary { display: flex; align-items: center; gap: var(--space-xs); cursor: pointer; list-style: none; font-weight: 600; }
+.activity summary::-webkit-details-marker { display: none; }
+.activity-steps { margin: var(--space-xs) 0 0; padding-left: var(--space-lg); }
+.activity .chevron, .draft-warnings .chevron { width: 12px; height: 12px; transition: transform var(--dur-fast); }
+.activity[open] .chevron, .draft-warnings[open] .chevron { transform: rotate(90deg); }

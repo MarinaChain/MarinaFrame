@@ -123,15 +123,19 @@ TaskView {
   provider: ProviderCallView[],
   notices: NoticeView[],         // already filtered: dismissed ones removed
   draft: DraftView | null,       // set while the current build is a draft (see "Drafts")
+  source_counts: { label: string, count: number }[],  // sections per source label of the draft build
+  warnings: string[],            // warnings of the draft build; shown as warnings, never errors
+  activity: ModelActivity | null, // live-model steps and cost; null for a deterministic run
   evidence: object               // raw hashes and contract, shown only in Evidence tab
 }
 SectionView { id: string, x_m: number, roi_px: [x0,y0,x1,y1],
               state: "chosen"|"guessed"|"declined"|"not_read",
               reason: string,                       // plain language; for "guessed" the guess reason
               guess: GuessView | null,              // set when state is "guessed"
+              source: { label: string, basis: string|null } | null,  // draft build only (see "AI in a draft")
               candidates: CandidateView[] }
 GuessView { id: string,                             // guess_id
-            kind: "best_candidate"|"bridged_gap"|"dropped_end",
+            kind: "best_candidate"|"bridged_gap"|"dropped_end"|"model_choice"|"model_authored",
             x_range_m: [number, number] | null,      // bridged or dropped region
             chosen_candidate_id: string | null,      // null when a station was spanned
             alternatives: string[],                  // other candidate ids a person can pick
@@ -189,6 +193,21 @@ LLM-first stays an explicit option, not the default. Reason: see
   offers "Confirm this line" (the guessed line) and "Use another line" (each alternative).
 - UI text examples: "Draft: 2 guesses to check", "Guessed: took the best-supported of 5 lines",
   "No readable line at x=4 m; spanned 2 to 6 m".
+
+## AI in a draft (read-only)
+
+- `SectionView.source.label` is the `source_label` of the section in the current draft build's
+  `result.json`: `traced`, `repaired`, `interpolated`, `ai_inferred`, `ai_corrected`; `omitted`
+  for a dropped end. A bridged gap has no built section and shows `interpolated`. `basis` is
+  `evidence.authored_basis`, the model's one-line basis for the AI labels. `source_counts` counts
+  the labels in a fixed order. Without a draft build all three are empty or null.
+- `warnings` are the build's `gaps` with severity `warning` plus the fairing notes of AI sections.
+  The UI shows them in a collapsible amber list. Blocking gaps are not listed; the status says so.
+- `activity` comes from the event log: `decision` events with actor `live_model` (tool and
+  reason), and provider receipts (`provider_result`, `provider_reconciled`: request count,
+  tokens, `usage.list_cost`). If a receipt has no list cost, `list_cost_complete` is false and the
+  sum is a lower bound. The Model calls tab shows it as a collapsible list.
+- None of this adds a failure state: missing files give empty results.
 
 ## Mock data
 

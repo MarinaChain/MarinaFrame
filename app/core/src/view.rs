@@ -1,5 +1,6 @@
 //! Builds `TaskSummary` and `TaskView` from a task folder, without the controller lock.
 //! The labels and polylines follow `src/vessel_reconstruction/rust_review.py`.
+use crate::draft_view;
 use crate::events::plain_reason;
 use crate::files;
 use crate::types::*;
@@ -15,6 +16,17 @@ pub const ENGINEERING_NOTICE_ID: &str = "engineering-approval";
 
 #[cfg(test)]
 mod tests;
+
+/// Open guesses as `(section id, kind)`, for sections the draft did not build.
+fn open_ids(open: &[SectionGuess]) -> Vec<(String, GuessKind)> {
+    open.iter()
+        .map(|g| (g.section_id.clone(), g.view.kind))
+        .collect()
+}
+
+fn section_stations(sections: &[SectionView]) -> HashMap<String, f64> {
+    sections.iter().map(|s| (s.id.clone(), s.x_m)).collect()
+}
 
 /// What the view needs besides the task folder.
 #[derive(Clone, Debug, Default)]
@@ -106,10 +118,28 @@ pub fn get_task(task: &Path, context: &ViewContext) -> Result<TaskView, String> 
     let summary = summarize(task, &state, domain.as_ref());
     let open = open_guesses(&state, domain.as_ref());
     let draft = draft_view(&state, domain.as_ref(), summary.status, &open);
-    let sections = section_views(task, domain.as_ref(), summary.status, &open);
+    let mut sections = section_views(task, domain.as_ref(), summary.status, &open);
     let validation = current_validation(&state, domain.as_ref());
     let current_build = current_build(&state, domain.as_ref());
+    let record = current_build.and_then(|build| draft_view::build_record(task, build));
+    let draft_sources = record
+        .as_ref()
+        .map(|r| draft_view::draft_sources(r, &open_ids(&open)));
+    if let Some(sources) = &draft_sources {
+        for section in &mut sections {
+            section.source = sources.by_section.get(&section.id).cloned();
+        }
+    }
     Ok(TaskView {
+        source_counts: draft_sources
+            .as_ref()
+            .map(|s| s.counts.clone())
+            .unwrap_or_default(),
+        warnings: record
+            .as_ref()
+            .map(|r| draft_view::draft_warnings(r, &section_stations(&sections)))
+            .unwrap_or_default(),
+        activity: draft_view::model_activity(task),
         revision: state["revision_id"].as_str().map(String::from),
         source_page: source_page(task, domain.as_ref()),
         model: current_build.and_then(|build| model_view(task, build)),
@@ -173,6 +203,8 @@ fn parse_guess(value: &Value) -> Option<SectionGuess> {
         "best_candidate" => GuessKind::BestCandidate,
         "bridged_gap" => GuessKind::BridgedGap,
         "dropped_end" => GuessKind::DroppedEnd,
+        "model_choice" => GuessKind::ModelChoice,
+        "model_authored" => GuessKind::ModelAuthored,
         _ => return None,
     };
     let x_range_m = value["x_range_m"]
@@ -251,12 +283,12 @@ fn draft_view(
 /// Banner for a draft: how many guesses remain and what to do next.
 fn draft_notice(draft: &DraftView) -> NoticeView {
     let open = draft.guesses.len();
-    let pickable = draft
+    let stuck = draft
         .guesses
         .iter()
-        .filter(|g| g.kind == GuessKind::BestCandidate)
+        .filter(|g| matches!(g.kind, GuessKind::BridgedGap | GuessKind::DroppedEnd))
         .count();
-    let stuck = open - pickable;
+    let pickable = open - stuck;
     let text = if open == 0 {
         "Draft: not verified. The app cannot confirm this model.".to_string()
     } else if stuck == 0 {
@@ -509,6 +541,7 @@ fn section_views(
                     state: SectionState::NotRead,
                     reason: "Not read yet.".into(),
                     guess: None,
+                    source: None,
                     candidates: vec![],
                 })
             })
@@ -577,6 +610,7 @@ fn section_views(
                 state: section_state,
                 reason,
                 guess,
+                source: None,
                 candidates,
             }
         })

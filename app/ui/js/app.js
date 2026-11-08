@@ -229,6 +229,7 @@ function defaultSection(view) {
 function renderTask({ fresh = false } = {}) {
   renderToolbar();
   renderNotices();
+  renderDraftSummary();
   renderStrip();
   renderSelection();
   renderTabs();
@@ -309,6 +310,34 @@ async function dismissNotice(notice, row) {
   }
 }
 
+// ---------------------------------------------------------------- draft summary
+
+function chevron() {
+  const node = icon('chevron');
+  node.classList.add('chevron');
+  return node;
+}
+
+/** Sections per source label, and the build's warnings (shown as warnings, not errors). */
+function renderDraftSummary() {
+  const view = state.view;
+  const counts = view?.source_counts || [];
+  const warnings = view?.warnings || [];
+  if (!counts.length && !warnings.length) {
+    fill($('draft-summary'));
+    return;
+  }
+  const chips = counts.map((c) => el('span', {
+    class: 'source-chip',
+    dataset: { ai: String(fmt.isAiSource(c.label)) },
+  }, `${c.count} ${fmt.sourceLabel(c.label).toLowerCase()}`));
+  fill($('draft-summary'),
+    chips.length ? el('p', { class: 'source-counts' }, el('span', { class: 'source-counts-title' }, 'Sources'), ...chips) : null,
+    warnings.length ? el('details', { class: 'draft-warnings' },
+      el('summary', {}, chevron(), icon('warn'), fmt.plural(warnings.length, 'warning')),
+      el('ul', { class: 'selectable-text' }, ...warnings.map((w) => el('li', {}, w)))) : null);
+}
+
 // ---------------------------------------------------------------- section strip
 
 function sectionShapePath(section) {
@@ -335,15 +364,16 @@ function renderStrip() {
       role: 'option',
       id: `tile-${section.id}`,
       'aria-selected': String(section.id === state.sectionId),
-      'aria-label': `Section at ${fmt.metres(section.x_m)}: ${fmt.sectionStateLabel(section.state)}`,
-      dataset: { section: section.id, state: section.state },
+      'aria-label': `Section at ${fmt.metres(section.x_m)}: ${fmt.sectionStateLabel(section.state)}${section.source ? `, ${fmt.sourceLabel(section.source.label)}` : ''}`,
+      dataset: { section: section.id, state: section.state, source: section.source?.label },
       onclick: () => selectSection(section.id),
     },
     svg('svg', { class: 'tile-shape', viewBox: '0 0 44 54', 'aria-hidden': 'true' },
       svg('path', { class: 'axis', d: 'M2 2V52' }),
       path ? svg('path', { class: 'shape', d: path }) : null),
     el('span', { class: 'tile-x' }, section.x_m.toFixed(1), el('small', {}, ' m')),
-    el('span', { class: 'tile-state' }, fmt.sectionStateLabel(section.state)));
+    el('span', { class: 'tile-state' }, fmt.sectionStateLabel(section.state),
+      section.source ? el('span', { class: 'tile-source' }, ` · ${fmt.sourceLabel(section.source.label)}`) : null));
   }));
   strip.setAttribute('aria-activedescendant', `tile-${state.sectionId}`);
 }
@@ -428,6 +458,9 @@ function renderSelection() {
 
   fill(body,
     el('p', { class: 'selection-reason selectable-text' }, section.reason),
+    section.source ? el('p', { class: 'selection-source selectable-text', dataset: { ai: String(fmt.isAiSource(section.source.label)) } },
+      el('strong', {}, fmt.sourceLabel(section.source.label)),
+      section.source.basis ? ` — ${section.source.basis}` : null) : null,
     rows.length ? el('div', { class: 'cand-list', role: 'list', 'aria-label': 'Lines found in this section' }, ...rows) : null,
   );
 }
@@ -549,6 +582,26 @@ function renderChecks() {
   );
 }
 
+/** Collapsible list of what the live model did: each step, request count, tokens, list cost. */
+function renderActivity(activity) {
+  if (!activity) return null;
+  const cost = activity.list_cost_complete
+    ? fmt.usd(activity.list_cost_usd)
+    : `at least ${fmt.usd(activity.list_cost_usd)}`;
+  const facts = [
+    fmt.plural(activity.requests, 'request'),
+    `${fmt.integer(activity.prompt_tokens)} tokens sent`,
+    `${fmt.integer(activity.completion_tokens)} received`,
+    `${cost} list cost`,
+  ];
+  return el('details', { class: 'activity' },
+    el('summary', {}, chevron(), `Model activity: ${fmt.plural(activity.steps.length, 'step')}`),
+    el('p', { class: 'call-facts' }, ...facts.map((f) => el('span', {}, f))),
+    el('ol', { class: 'activity-steps selectable-text' }, ...activity.steps.map((step) => el('li', {},
+      el('strong', {}, step.tool),
+      step.reason ? `: ${step.reason}` : null))));
+}
+
 function renderModelCalls() {
   const panel = $('panel-model');
   const calls = state.view?.provider || [];
@@ -557,13 +610,14 @@ function renderModelCalls() {
     return;
   }
   if (!calls.length) {
-    fill(panel, el('p', { class: 'panel-empty' },
+    fill(panel, renderActivity(state.view.activity), el('p', { class: 'panel-empty' },
       state.view.summary.policy === 'live' ? 'The model has not been asked anything yet.' : 'This run is deterministic. It does not call the model.'));
     return;
   }
   const totalCost = calls.reduce((sum, c) => sum + (c.cost_usd || 0), 0);
   const task = state.task;
   fill(panel,
+    renderActivity(state.view.activity),
     el('p', { class: 'call-total' }, `${fmt.plural(calls.length, 'call')}, ${fmt.usd(totalCost)} in total`),
     ...calls.map((call) => {
       const images = el('div', { class: 'call-images' }, ...call.images.map((image) => {
