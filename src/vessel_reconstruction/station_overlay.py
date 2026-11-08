@@ -101,14 +101,26 @@ def slice_mesh(vertices_m: np.ndarray, triangles: np.ndarray, x_m: float) -> np.
     return np.concatenate(pieces)
 
 
-def ink_fit(segments: np.ndarray, calibration: dict, roi_px, image: np.ndarray, side: int = 1) -> dict | None:
+def ink_distance_px(image: np.ndarray, roi_px) -> np.ndarray | None:
+    """Distance (px) from each pixel of the region to the nearest ink pixel; None when it has no ink."""
+    from scipy.ndimage import distance_transform_edt
+    height, width = image.shape[:2]
+    x0, y0 = max(0, int(roi_px[0])), max(0, int(roi_px[1]))
+    x1, y1 = min(width, int(roi_px[2])), min(height, int(roi_px[3]))
+    ink = image[y0:y1, x0:x1] < INK_THRESHOLD
+    return distance_transform_edt(~ink) if ink.any() else None
+
+
+def ink_fit(segments: np.ndarray, calibration: dict, roi_px, image: np.ndarray, side: int = 1,
+            distance_px: np.ndarray | None = None) -> dict | None:
     """Distance (m) from built cut points to the nearest ink pixel in the section region, or None.
 
     Only starboard cut points away from the centreline and the cut's top are
     used (closure lines). None when the region has no ink or no usable point.
     ``side`` is -1 for a station drawn mirrored, left of its centreline.
+    ``distance_px`` is ``ink_distance_px(image, roi_px)`` when the caller has it
+    already (several stations share one region).
     """
-    from scipy.ndimage import distance_transform_edt
     ppm = float(calibration["pixels_per_metre"])
     margin = INK_FIT_CLOSURE_MARGIN_PX / ppm
     points = np.concatenate([segments[:, 0], segments[:, 1], segments.mean(axis=1)])
@@ -116,10 +128,12 @@ def ink_fit(segments: np.ndarray, calibration: dict, roi_px, image: np.ndarray, 
     height, width = image.shape[:2]
     x0, y0 = max(0, int(roi_px[0])), max(0, int(roi_px[1]))
     x1, y1 = min(width, int(roi_px[2])), min(height, int(roi_px[3]))
-    ink = image[y0:y1, x0:x1] < INK_THRESHOLD
-    if not ink.any() or not len(points):
+    if not len(points):
         return None
-    distance_px = distance_transform_edt(~ink)
+    if distance_px is None:
+        distance_px = ink_distance_px(image, roi_px)
+    if distance_px is None:
+        return None
     columns = np.rint(float(calibration["centerline_px"]) + side * points[:, 0] * ppm).astype(int) - x0
     rows = np.rint(float(calibration["baseline_px"]) - points[:, 1] * ppm).astype(int) - y0
     inside = (columns >= 0) & (columns < x1 - x0) & (rows >= 0) & (rows < y1 - y0)

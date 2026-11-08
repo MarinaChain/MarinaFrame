@@ -221,3 +221,31 @@ def test_profile_ends_are_the_outline_crossings_at_each_height():
     stern, stem_line = profile_ends(outline, [0.0, 5.0, 10.0])
     assert stern[:, 0] == pytest.approx([10.0, 7.5, 5.0])
     assert stem_line[:, 0] == pytest.approx([90.0, 92.5, 95.0])
+
+
+def test_a_station_moved_onto_a_neighbours_ink_scores_worse_than_left_off_the_ink():
+    """W18d 00679: s08 moved onto another station's line scored as a perfect fit although truth got worse."""
+    image = render()
+    ids = [f"s{k + 1:02d}" for k in range(9)]
+    off_ink = [station_curve(x) for x in STATIONS_M]
+    off_ink[7] = off_ink[7] * [0.95, 1.0]  # s08 5 % too narrow: off the ink, but in station order
+    on_wrong_ink = [station_curve(x) for x in STATIONS_M]
+    on_wrong_ink[7] = station_curve(STATIONS_M[5])  # s08 on s06's line: perfect ink, wrong station
+    views = {"body_plan": body_views()}
+    narrow = score_table(VesselTable.from_rows(ids, STATIONS_M, off_ink, WATERLINES_M), views, image,
+                         half_beam_m=HALF_BEAM_M)
+    swapped = score_table(VesselTable.from_rows(ids, STATIONS_M, on_wrong_ink, WATERLINES_M), views, image,
+                          half_beam_m=HALF_BEAM_M)
+    assert swapped["combined_fit"] < narrow["combined_fit"]
+    flagged = [c for c in swapped["cells"] if c.get("station_id") == "s08" and c.get("order_residual_m")]
+    assert flagged and all(c["order_residual_m"] > 0 for c in flagged)
+
+
+def test_stations_with_slightly_different_calibrations_still_share_their_panel():
+    """W19b2: each station's calibration has its own small read error; the panel must not split up."""
+    image = render()
+    views = body_views()
+    for k, panel in enumerate(views["panels"].values()):
+        panel["calibration"] = {**panel["calibration"], "centerline_px": BODY["centerline_px"] + 0.6 * (k % 3) - 0.6}
+    cells = measure_views(known_table(), {"body_plan": views}, image, half_beam_m=HALF_BEAM_M)
+    assert not [c for c in cells if c["target"] == "ink_unexplained"]

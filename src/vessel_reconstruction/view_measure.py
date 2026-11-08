@@ -69,10 +69,26 @@ END_TANGENT_PX = 6.0
 END_STEP_PX = 0.5
 # A column inked on at least this fraction of a body-plan panel's rows is a
 # grid or centre line (a hull section is never vertical over most of the
-# panel height); its runs are not drawn stations.
-VERTICAL_LINE_ROW_FRACTION = 0.8
+# panel height); its runs are not drawn stations. Half, not most: noise breaks
+# light grid lines on degraded sheets (W19b2).
+VERTICAL_LINE_ROW_FRACTION = 0.5
+# Unexplained ink that is inked straight above and below at these distances (px) is a
+# vertical line: a grid column, which noise may have broken too often to be masked.
+VERTICAL_RUN_PX = (4.0, 8.0, 12.0, 16.0)
+# Stations whose body-plan centrelines differ by at most this many pixels share a panel.
+PANEL_CENTRELINE_MATCH_PX = 5.0
+# A body-plan scan row inked over at least this fraction of its length lies on a
+# drawn waterline grid row; it is not used to look for unexplained ink.
+GRID_ROW_INK_FRACTION = 0.3
 # A run centred within this many pixels of such a column belongs to that line.
 VERTICAL_LINE_MATCH_PX = 1.5
+# A keel or top cell weighs at most this many waterline cells.
+END_SPAN_MAX_CELLS = 5.0
+# Unexplained ink must continue as a line this many pixels above and below the
+# scan row, within LINE_CONTINUITY_SLOPE px sideways per pixel (lines down to
+# about 18 degrees from the row; flatter lines run along the row and are skipped).
+LINE_CONTINUITY_PX = (3.0, 6.0)
+LINE_CONTINUITY_SLOPE = 3.0
 # Samples per station when an outline is drawn for the overlay.
 CURVE_SAMPLES = 200
 
@@ -270,6 +286,7 @@ class Sheet:
 
     grey: np.ndarray
     thresholds: dict = field(default_factory=dict)
+    ink_tables: dict = field(default_factory=dict)
 
     def threshold(self, roi_px) -> float:
         key = tuple(int(v) for v in roi_px)
@@ -281,6 +298,16 @@ class Sheet:
                 paper, dark = float(np.median(region)), float(np.percentile(region, INK_DARK_PERCENTILE))
                 self.thresholds[key] = min(INK_THRESHOLD_MAX, 0.5 * (paper + dark))
         return self.thresholds[key]
+
+    def ink_sums(self, roi_px) -> np.ndarray:
+        """Summed-area table (h + 1, w + 1) of the ink pixels of the sheet at this region's threshold."""
+        key = tuple(int(v) for v in roi_px)
+        if key not in self.ink_tables:
+            ink = (self.grey < self.threshold(roi_px)).astype(np.int32)
+            table = np.zeros((ink.shape[0] + 1, ink.shape[1] + 1), dtype=np.int32)
+            table[1:, 1:] = ink.cumsum(axis=0).cumsum(axis=1)
+            self.ink_tables[key] = table
+        return self.ink_tables[key]
 
     def _crop(self, roi_px) -> np.ndarray:
         h, w = self.grey.shape
@@ -387,14 +414,21 @@ def combine_scans(scans: list[dict], sign: float, ppm: float) -> dict:
 
 def inked(sheet: Sheet, roi_px, x_px: float, y_px: float, radius_px: float) -> bool:
     """True when any pixel within ``radius_px`` (a square) of the point is ink."""
+    return bool(inked_many(sheet, roi_px, np.array([x_px]), np.array([y_px]), radius_px)[0])
+
+
+def inked_many(sheet: Sheet, roi_px, x_px: np.ndarray, y_px: np.ndarray, radius_px: float) -> np.ndarray:
+    """``inked`` for many points at once (a summed-area table of the region's ink)."""
     h, w = sheet.grey.shape
-    x0 = int(max(0, roi_px[0], np.floor(x_px - PIXEL_CENTRE - radius_px)))
-    x1 = int(min(w, roi_px[2], np.floor(x_px - PIXEL_CENTRE + radius_px) + 1))
-    y0 = int(max(0, roi_px[1], np.floor(y_px - PIXEL_CENTRE - radius_px)))
-    y1 = int(min(h, roi_px[3], np.floor(y_px - PIXEL_CENTRE + radius_px) + 1))
-    if x1 <= x0 or y1 <= y0:
-        return False
-    return bool(sheet.grey[y0:y1, x0:x1].min() < sheet.threshold(roi_px))
+    x0 = np.maximum(max(0, roi_px[0]), np.floor(x_px - PIXEL_CENTRE - radius_px)).astype(int)
+    x1 = np.minimum(min(w, roi_px[2]), np.floor(x_px - PIXEL_CENTRE + radius_px) + 1).astype(int)
+    y0 = np.maximum(max(0, roi_px[1]), np.floor(y_px - PIXEL_CENTRE - radius_px)).astype(int)
+    y1 = np.minimum(min(h, roi_px[3]), np.floor(y_px - PIXEL_CENTRE + radius_px) + 1).astype(int)
+    table = sheet.ink_sums(roi_px)
+    valid = (x1 > x0) & (y1 > y0)
+    x0, x1, y0, y1 = (np.clip(v, 0, n) for v, n in ((x0, w), (x1, w), (y0, h), (y1, h)))
+    counts = table[y1, x1] - table[y0, x1] - table[y1, x0] + table[y0, x0]
+    return valid & (counts > 0)
 
 
 def measure_curve_end(context: ScanContext, roi_px, curve_px: np.ndarray, ppm: float) -> dict:
@@ -412,7 +446,7 @@ def measure_curve_end(context: ScanContext, roi_px, curve_px: np.ndarray, ppm: f
     # A small neighbourhood: a station label a few pixels past the end must not
     # read as the line running on.
     radius = max(1.0, 0.5 * context.line_width_px)
-    ink = np.array([inked(context.sheet, roi_px, px, py, radius) for px, py in path])
+    ink = inked_many(context.sheet, roi_px, path[:, 0], path[:, 1], radius)
     if not ink.any():
         return {"status": "no_ink", "predicted_px": 0.0}
     # The inked stretch nearest the table's end (s = 0), then its outer end.
@@ -499,13 +533,25 @@ def measure_body_coverage(table: VesselTable, view: dict, context: ScanContext) 
     residual is the distance to the nearest table curve. Long vertical lines
     (grid, centreline) and lines running along the row are not counted.
     """
+    # Stations drawn in one panel: same side, overlapping regions and (nearly) the same
+    # centreline. Each station's calibration is read separately, with its own small read
+    # error, so the centrelines are matched within PANEL_CENTRELINE_MATCH_PX (W19b2:
+    # exact matching split L2/L3 panels into single stations, and every other station's
+    # line then read as unexplained ink).
     groups = {}
     for i, sid in enumerate(table.station_ids):
         panel = view["panels"].get(sid)
-        if panel is not None:
-            cal = panel["calibration"]
-            key = (tuple(round(float(v)) for v in panel["roi_px"]), round(float(cal["centerline_px"])), panel["side"])
-            groups.setdefault(key, []).append(i)
+        if panel is None:
+            continue
+        centre = float(panel["calibration"]["centerline_px"])
+        for key, members in groups.items():
+            other = view["panels"][table.station_ids[members[0]]]
+            if (other["side"] == panel["side"] and _overlap(other["roi_px"], panel["roi_px"])
+                    and abs(float(other["calibration"]["centerline_px"]) - centre) <= PANEL_CENTRELINE_MATCH_PX):
+                members.append(i)
+                break
+        else:
+            groups[i] = [i]
     curves = dict(view_polylines(table, {"body_plan": view}).get("body_plan", []))
     cells = []
     for members in groups.values():
@@ -514,7 +560,11 @@ def measure_body_coverage(table: VesselTable, view: dict, context: ScanContext) 
         ppm, centre, base = float(cal["pixels_per_metre"]), float(cal["centerline_px"]), float(cal["baseline_px"])
         low, high = ((centre + CENTRELINE_CLEARANCE_PX, roi[2]) if side > 0 else
                      (roi[0], centre - CENTRELINE_CLEARANCE_PX))
-        masked = vertical_line_columns(context.sheet, roi, low, high)
+        # Grid columns are looked for over the drawn hull height only (the region may
+        # also hold a title and labels above it).
+        tops = [float(np.nanmax(table.top_z_m[i])) for i in members if np.isfinite(table.top_z_m[i])]
+        rows = (base - max(tops) * ppm, base) if tops else None
+        masked = vertical_line_columns(context.sheet, roi, low, high, rows)
         band = max(BAND_MIN_PX, BAND_FRACTION * context.half_beam_m * ppm)
         panel_curves = {table.station_ids[i]: curves[table.station_ids[i]] for i in members
                         if table.station_ids[i] in curves}
@@ -531,6 +581,9 @@ def measure_body_coverage(table: VesselTable, view: dict, context: ScanContext) 
             runs = ink_runs(context.sheet, roi, "row", row_px, low, high)
             if not runs:
                 continue
+            if sum(end - start + 1 for start, end, _ in runs) >= GRID_ROW_INK_FRACTION * (high - low):
+                # The scan runs along a drawn grid row (broken into short runs by noise).
+                continue
             centroids = np.array([centroid for _, _, centroid in runs])
             # A run that is some station's nearest run is already scored in that station's cell.
             claimed = {int(np.argmin(np.abs(centroids - predicted))) for predicted in predictions}
@@ -539,6 +592,10 @@ def measure_body_coverage(table: VesselTable, view: dict, context: ScanContext) 
                 on_vertical_line = np.any(np.abs(masked - centroid) <= VERTICAL_LINE_MATCH_PX)
                 if index in claimed or along_row or on_vertical_line:
                     continue
+                if not continues_as_line(context.sheet, roi, centroid, row_px):
+                    continue  # a speckle or a dot, not a drawn line
+                if runs_vertically(context.sheet, roi, centroid, row_px):
+                    continue  # a grid column broken by noise (or a vertical side: no station evidence)
                 point = np.array([centroid, row_px])
                 distances = {sid: point_to_polyline_px(point, curve) for sid, curve in panel_curves.items()}
                 nearest = min(distances, key=distances.get)
@@ -552,6 +609,31 @@ def measure_body_coverage(table: VesselTable, view: dict, context: ScanContext) 
     return cells
 
 
+def _overlap(a, b) -> bool:
+    return min(a[2], b[2]) > max(a[0], b[0]) and min(a[3], b[3]) > max(a[1], b[1])
+
+
+def continues_as_line(sheet: Sheet, roi_px, x_px: float, y_px: float) -> bool:
+    """True when the ink at (x, y) continues above and below, as a line crossing the row does.
+
+    At each distance d in LINE_CONTINUITY_PX above and below the point, some ink
+    must lie within LINE_CONTINUITY_SLOPE * d + 1 px sideways. Speckles and dots fail.
+    """
+    for distance in LINE_CONTINUITY_PX:
+        reach = LINE_CONTINUITY_SLOPE * distance + 1.0
+        for row in (y_px - distance, y_px + distance):
+            xs = np.arange(x_px - reach, x_px + reach + 0.5, 1.0)
+            if not inked_many(sheet, roi_px, xs, np.full(len(xs), row), 0.5).any():
+                return False
+    return True
+
+
+def runs_vertically(sheet: Sheet, roi_px, x_px: float, y_px: float) -> bool:
+    """True when the ink at (x, y) runs straight up and down (within 1 px) over VERTICAL_RUN_PX."""
+    offsets = np.array([d for d in VERTICAL_RUN_PX for d in (-d, d)])
+    return bool(inked_many(sheet, roi_px, np.full(len(offsets), x_px), y_px + offsets, 1.0).all())
+
+
 def point_to_polyline_px(point: np.ndarray, polyline: np.ndarray) -> float:
     """Distance from a point to a polyline (both in pixels)."""
     starts, ends = polyline[:-1], polyline[1:]
@@ -562,11 +644,14 @@ def point_to_polyline_px(point: np.ndarray, polyline: np.ndarray) -> float:
     return float(np.sqrt(np.min(np.sum((closest - point) ** 2, axis=1))))
 
 
-def vertical_line_columns(sheet: Sheet, roi_px, low_px: float, high_px: float) -> np.ndarray:
-    """Columns (sheet coordinates) inked on most rows of the view region: grid lines, not hull lines."""
+def vertical_line_columns(sheet: Sheet, roi_px, low_px: float, high_px: float, rows_px=None) -> np.ndarray:
+    """Columns (sheet coordinates) inked on most rows of the view region (or of ``rows_px``,
+    a (top, bottom) pixel range): grid lines, not hull lines."""
     h, w = sheet.grey.shape
     x0, x1 = int(max(0, roi_px[0], np.floor(low_px))), int(min(w, roi_px[2], np.ceil(high_px)))
     y0, y1 = int(max(0, roi_px[1])), int(min(h, roi_px[3]))
+    if rows_px is not None:
+        y0, y1 = max(y0, int(np.floor(rows_px[0]))), min(y1, int(np.ceil(rows_px[1])))
     if x1 <= x0 or y1 <= y0:
         return np.zeros(0)
     fraction = (sheet.grey[y0:y1, x0:x1] < sheet.threshold(roi_px)).mean(axis=0)
@@ -601,6 +686,13 @@ def measure_body_ends(table: VesselTable, i: int, panel: dict, context: ScanCont
         end = measure_curve_end(context, roi, curve_px, ppm)
         cells.append(_cell("body_plan", "top", z_m=float(upward[-1, 1]), **fields,
                            **combine_scans([end], 1.0, ppm)))
+    # An end that is off by several waterline spacings stands for the station cells that
+    # are missing (or extra) there: it weighs that many cells (W19b2: a station curve cut
+    # short at the top otherwise lost only its top cell and improved the fit).
+    spacing = float(np.median(np.diff(table.z_m))) if len(table.z_m) > 1 else 0.0
+    for cell in cells:
+        if cell.get("status") == "measured" and spacing > 0:
+            cell["span_cells"] = round(float(np.clip(abs(cell["residual_m"]) / spacing, 1.0, END_SPAN_MAX_CELLS)), 3)
     return cells
 
 
@@ -704,18 +796,23 @@ def measure_views(table: VesselTable, views: dict, grey: np.ndarray, *, half_bea
 
 def station_ink_fits(table: VesselTable, views: dict, grey: np.ndarray) -> dict:
     """F1 ink fit (station_overlay.ink_fit) of each station curve in its body-plan panel."""
-    from .station_overlay import ink_fit
+    from .station_overlay import ink_distance_px, ink_fit
     body = views.get("body_plan")
     result = {}
     if not body:
         return result
+    distances = {}
     for i, sid in enumerate(table.station_ids):
         row, panel = table.row(i), body["panels"].get(sid)
         if row is None or panel is None:
             continue
         points = np.column_stack([np.abs(row[:, 0]), row[:, 1]])
         segments = np.stack([points[:-1], points[1:]], axis=1)
-        result[sid] = ink_fit(segments, panel["calibration"], panel["roi_px"], grey, side=panel["side"])
+        key = tuple(int(v) for v in panel["roi_px"])
+        if key not in distances:
+            distances[key] = ink_distance_px(grey, panel["roi_px"])
+        result[sid] = (ink_fit(segments, panel["calibration"], panel["roi_px"], grey, side=panel["side"],
+                               distance_px=distances[key]) if distances[key] is not None else None)
     return result
 
 
