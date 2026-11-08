@@ -110,6 +110,23 @@ def test_a_baseline_on_another_grid_line_is_snapped_to_the_keel_line():
     assert abs(heights["keel"]) <= 1.0 / PPM
 
 
+def test_an_x_origin_on_the_region_edge_or_outside_it_is_the_hull_aft_end():
+    image, setup = profile_sheet()
+    assert vd.checked_x_origin(image, setup) == X0  # a read datum inside the view is kept
+    for unread in (10.0, -100.0):  # the region's left edge (shipd-1-00679 live), a crop coordinate (dtmb5415)
+        assert abs(vd.checked_x_origin(image, {**setup, "x_origin_px": unread}) - X0) <= 1.5
+
+
+def test_sides_that_contradict_x_follow_x():
+    from vessel_reconstruction.materialize import assign
+    panel = {"region_px": [0, 0, 200, 100], "centreline_px": 100.0, "kind": "body"}
+    # Numbered from the bow but placed from the stern (shipd-1-00679 live).
+    stations = [{"id": str(i), "x_m": 10.0 * i, "side": "fore" if i <= 5 else "aft"} for i in range(1, 10)]
+    warnings = []
+    halves = {station["id"]: basis for station, _, _, basis in assign(stations, [panel], warnings)}
+    assert halves["1"].startswith("aft") and halves["9"].startswith("fore") and warnings
+
+
 def test_a_trace_that_runs_down_the_centreline_below_the_keel_is_cut_there():
     from vessel_reconstruction.first_hull_tools import cut_bottoms_at_keel
     anchors = [_anchor("1", 9.0), _anchor("2", 9.0), _anchor("3", 9.0)]

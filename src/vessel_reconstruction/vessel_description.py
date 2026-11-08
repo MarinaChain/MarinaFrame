@@ -392,6 +392,9 @@ BASELINE_SNAP_PX = 3.0
 OUTLINE_HALF_LINE_PX = 1.0
 # Hull lines are dark; grid lines and the light baseline ruler are not (grey levels).
 OUTLINE_INK = 110
+# A model x origin outside the profile region, or within this of its edge, is
+# not a datum read on the sheet.
+ORIGIN_EDGE_PX = 3
 
 
 def profile_deck_heights(image, setup, pixels_per_metre, stations):
@@ -420,13 +423,8 @@ def profile_outline_heights(image, setup, pixels_per_metre, stations):
     """
     if setup.get("baseline_px") is None or setup.get("x_origin_px") is None:
         return {}
-    # Dark ink only, rulers kept: a flat deck or a keel line is as long as a ruler.
-    left, top, right, bottom = _region(setup["region_px"], image.shape)
-    mask = _gray(image[top:bottom, left:right]) < OUTLINE_INK
-    labels, _ = ndimage.label(mask, structure=np.ones((3, 3)))
-    wide = [index for index, box in enumerate(ndimage.find_objects(labels), 1)
-            if box and box[1].stop - box[1].start >= DECK_COMPONENT_SHARE * mask.shape[1]]
-    outline = np.isin(labels, wide)
+    outline, left, top = _profile_outline(image, setup)
+    origin = checked_x_origin(image, setup)
     baseline = setup["baseline_px"]
     keel = _bottom_line_centre(outline)
     if keel is not None and abs(top + keel - baseline) > BASELINE_SNAP_PX:
@@ -435,7 +433,7 @@ def profile_outline_heights(image, setup, pixels_per_metre, stations):
         baseline = top + keel
     heights = {}
     for station in stations:
-        column = setup["x_origin_px"] + setup.get("x_direction", 1) * station["x_m"] * pixels_per_metre - left
+        column = origin + setup.get("x_direction", 1) * station["x_m"] * pixels_per_metre - left
         columns = outline[:, max(0, int(round(column)) - DECK_COLUMN_PX):int(round(column)) + DECK_COLUMN_PX + 1]
         rows = np.flatnonzero(columns.any(axis=1))
         if not len(rows):
@@ -444,6 +442,38 @@ def profile_outline_heights(image, setup, pixels_per_metre, stations):
             "deck": (baseline - (top + _line_centre(rows, columns, True))) / pixels_per_metre,
             "keel": (baseline - (top + _line_centre(rows, columns, False))) / pixels_per_metre}
     return heights
+
+
+def _profile_outline(image, setup):
+    """The large hull outline of a profile view (dark ink, rulers kept), and its crop origin."""
+    # Dark ink only, rulers kept: a flat deck or a keel line is as long as a ruler.
+    left, top, right, bottom = _region(setup["region_px"], image.shape)
+    mask = _gray(image[top:bottom, left:right]) < OUTLINE_INK
+    labels, _ = ndimage.label(mask, structure=np.ones((3, 3)))
+    wide = [index for index, box in enumerate(ndimage.find_objects(labels), 1)
+            if box and box[1].stop - box[1].start >= DECK_COMPONENT_SHARE * mask.shape[1]]
+    return np.isin(labels, wide), left, top
+
+
+def checked_x_origin(image, setup):
+    """The profile's x origin: the model's, or the outline's aft end when the model's is not a reading.
+
+    A model origin outside the view region is a coordinate of its view crop,
+    not of the sheet (dtmb5415 live: 10 px); one on the region's edge is the
+    edge, not a datum (shipd-1-00679 live: 87 px, the region's left side).
+    x = 0 is then taken at the hull's aft extreme, the frame the description
+    states for these sheets.
+    """
+    left, _, right, _ = _region(setup["region_px"], image.shape)
+    origin = float(setup["x_origin_px"])
+    if left + ORIGIN_EDGE_PX < origin < right - ORIGIN_EDGE_PX:
+        return origin
+    outline, crop_left, _ = _profile_outline(image, setup)
+    columns = np.flatnonzero(outline.any(axis=0))
+    if not len(columns):
+        return origin
+    aft = columns[0] if setup.get("x_direction", 1) >= 0 else columns[-1]
+    return float(aft + crop_left)
 
 
 def _bottom_line_centre(outline):
@@ -488,6 +518,7 @@ def check_station_positions(image, setups, description, warnings):
     profile = next((s for s in setups if s.get("view") == "profile" and s.get("x_origin_px") is not None), None)
     if profile is None:
         return stations
+    profile = {**profile, "x_origin_px": checked_x_origin(image, profile)}
     scale = (description.get("checked_scales") or {}).get(profile.get("view_id", "profile"),
                                                          profile["pixels_per_metre"])
     measured = sorted(x for x in profile_station_lines(image, profile, float(scale)) if x > -STATION_TOLERANCE_M)
