@@ -1182,7 +1182,16 @@ pub fn check_guess_contract(checkpoint: &Value, description: &Value) -> Result<u
                 .iter()
                 .all(|c| c["selectable"] != true || c["model_traced"] == true),
         };
-        require(consistent, "draft_guess_not_in_catalog")?;
+        let fitted_row = checkpoint["vessel_table"]["stations"]
+            .as_array()
+            .is_some_and(|rows| {
+                rows.iter()
+                    .any(|row| row["id"] == section && row["source"] == "fitted")
+            });
+        require(
+            consistent || (guess["chosen_candidate_id"].is_null() && fitted_row),
+            "draft_guess_not_in_catalog",
+        )?;
         if guess["kind"] == "best_candidate" {
             // A traced line is never a best-score guess; only a station claim
             // (model_choice) can carry it into a draft.

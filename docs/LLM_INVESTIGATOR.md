@@ -196,3 +196,32 @@ Separate layouts went from 12 to 59 of 108, overlays from 18 to 39 of 108. L3 st
 - `make test-full`: passed, including Rust real-CAD guards, app real-task integration, 18 Python CAD tests, and smoke (`awaiting_human_review`, verify valid). Log: main `work/w17/test-full.log`.
 
 Reproduction driver: `scripts/w17_dev_campaign.py prepare|run|score --arm baseline|after|thinking`. It refuses to overwrite an attempt directory. See `docs/plans/2026-11-08-w17-llm-progress.md` for boundaries. W17 is the checkpoint before W17b draft-only geometric repairs. Do not resume the stopped after/thinking campaign. W17b uses DTMB L0–L3 rounds first; only a round with at least three STEP drafts permits one 24-case development run. Commit only on `w17-llm-progress`. Do not push or merge.
+
+## W18d: fitted first hull and edit protection (checkpoint, target not met)
+
+Merged W19-0 integration as `1c2249b`, W19a form fit as `27427d3`, and W19b view measurement as `759aee7`. Human acceptance of authored sections is preserved. The canonical persisted table is W19a's VesselTable; W19b receives a derived measurement projection, not a second geometry store.
+
+Live draft runs now build the anchored fitted hull before the first model turn and render the F1 overlay. The observation includes drawing-only combined score, per-station ink fits and fairness. Proposed station assignments/sections are scored with fixed waterlines and half-beam; non-improving edits restore the previous state and return numbers as an accepted no-change result. Supported ink additionally cannot get worse ink RMS. Exact repeated curves do not advance the accepted revision. The best valid build is retained. After six non-improving edits the model receives a finish hint, then the task delivers the retained draft. Default request budget is 80. Provider decisions truncate notes/reasons and clamp existing numeric arguments before validation; unknown tools/types/IDs are not invented. A resource-limit exception from candidate competition is now a bounded inspection warning rather than an escaped worker failure.
+
+### R-body checkpoints
+
+The first step-2 round was invalid: three controller errors (`draft_guess_not_in_catalog`) and one cancelled remaining case. One actual draft, zero correct; USD0.01283607 known list cost. Kept as failed integration evidence, not a model comparison. The first adapter used raw corridor rows without measured stroke width; this differed from W19a's baseline. The corrected adapter reads extracted sections and measured stroke width.
+
+The intermediate step-4 round built four drafts in 9–16 requests/case, zero correct, but 00679-L0 worsened from10.81% to22.33% truth RMS despite an improved combined score. The ink tie-break was then added.
+
+Corrected round: **4/4 actual draft STEPs, 0/4 gate-correct, zero silent wrong**, 55 total receipts, USD **0.05641496** list cost, no missing costs. All final statuses draft_not_verified. Digest investigation counts48 (other provider receipts account for the difference). First/final RMS (% maximum truth half-breadth):
+
+| Case | First hull | Final |
+|---|---:|---:|
+| dtmb5415-L0 | 4.474 | 4.474 |
+| shipd-1-00045-L2 | 4.564 | 4.564 |
+| shipd-1-00679-L0 | 10.127 | 10.891 |
+| shipd-1-00683-L2 | 33.881 | 33.881 |
+
+**Success target is not met:** DTMB is not near2%, and one case is still worse than its first hull. Combined drawing fit accepted s08/s05 edits on00679 that did not improve truth accuracy; grid/coverage ambiguity remains. Cost fell below$0.10/case. No broad campaign was run. Full compact evidence and factory-enabled digests are in `outputs/w18d/`; the initial malformed integration attempts are retained separately.
+
+### Remaining work and verification
+
+The C2 00683-L0 regression was not separately rerun yet; first_hull's suspect-anchor retry exists, but this is not proof that the reported shell case is repaired. Soft stopping is implemented for non-improving edits, not the separate K-near-identical-build metric. Full output normalization does not repair missing mandatory fields or invalid array cardinalities; a malformed investigation output still appeared in the corrected digest. W19b combined score is not a reliable guarantee of truth improvement. Do not claim all W18d requirements complete.
+
+Full suite passed before the final small resource-limit catch:839 quick Python,24 CAD Python, Rust workspace/CAD/app guards and smoke. Earlier full runs failed: one native admission/timing test (passed isolated retry), and strict candidate checkpoint identity (fixed by limiting best-score candidate bookkeeping to table-backed drafts). Final resource-catch full rerun PASSED in main `work/w17/w18d-resource-full.log`:839 quick Python,24 CAD Python, all Rust/app checks and smoke valid. No guard or frozen scoring tolerance was weakened.

@@ -420,7 +420,8 @@ pub fn interpret_completion(receipt: &mut Receipt, bytes: &[u8], key: &str) -> R
         .ok_or("provider_content_type")?;
     match receipt.purpose {
         Purpose::ModelDecision | Purpose::Investigation => {
-            let decision: Decision = util::parse(content.as_bytes(), 32_768)?;
+            let mut decision: Decision = util::parse(content.as_bytes(), 32_768)?;
+            decision.normalize();
             decision.operation()?;
             receipt.decision = Some(decision);
         }

@@ -414,6 +414,96 @@ pub struct Decision {
     pub notes: Option<String>,
 }
 impl Decision {
+    pub fn normalize(&mut self) {
+        self.reason = self.reason.chars().take(512).collect();
+        self.notes = self
+            .notes
+            .as_ref()
+            .map(|text| text.chars().take(600).collect());
+        fn clamp(value: &mut Value, low: f64, high: f64, integer: bool) {
+            if let Some(number) = value.as_f64() {
+                let number = number.clamp(low, high);
+                *value = if integer {
+                    json!(number.round() as i64)
+                } else {
+                    json!(number)
+                };
+            }
+        }
+        for (key, low, high, integer) in [
+            ("max_side_px", 256., 1024., true),
+            ("half_width_px", 1., 64., false),
+            ("height_m", -100., 1000., false),
+            ("pixels_per_metre", 0.001, 100000., false),
+            ("grid_spacing_m", 0.001, 100., false),
+            ("centreline_px", 0., 1000000., false),
+            ("baseline_px", 0., 1000000., false),
+            ("x_origin_px", 0., 1000000., false),
+            ("fullness", 0.5, 1.5, false),
+            ("beam_m", 0.001, 1000., false),
+            ("draft_m", 0.001, 1000., false),
+            ("bilge_radius_m", 0., 1000., false),
+            ("deadrise_deg", 0., 60., false),
+        ] {
+            if let Some(value) = self.arguments.get_mut(key) {
+                clamp(value, low, high, integer);
+            }
+        }
+        for key in ["point_px", "heights_m", "region_px"] {
+            if let Some(values) = self.arguments[key].as_array_mut() {
+                for value in values {
+                    clamp(
+                        value,
+                        if key == "heights_m" { -100. } else { 0. },
+                        if key == "region_px" {
+                            1000000.
+                        } else if key == "heights_m" {
+                            1000.
+                        } else {
+                            4096.
+                        },
+                        key == "region_px",
+                    );
+                }
+            }
+        }
+        for key in ["path_px", "offsets_m"] {
+            if let Some(points) = self.arguments[key].as_array_mut() {
+                for point in points {
+                    if let Some(values) = point.as_array_mut() {
+                        for value in values {
+                            clamp(
+                                value,
+                                if key == "offsets_m" { -1000. } else { 0. },
+                                if key == "offsets_m" { 1000. } else { 4096. },
+                                false,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(number) = self.arguments["x_direction"].as_f64() {
+            self.arguments["x_direction"] = json!(if number <= 0. { -1 } else { 1 });
+        }
+        if let Some(rect) = self.arguments["region_px"].as_array_mut() {
+            if rect.len() == 4 && rect.iter().all(Value::is_number) {
+                for (low, high) in [(0, 2), (1, 3)] {
+                    if rect[high].as_i64() <= rect[low].as_i64() {
+                        let start = rect[low].as_i64().unwrap().min(999999);
+                        rect[low] = json!(start);
+                        rect[high] = json!(start + 1);
+                    }
+                }
+            }
+        }
+        if let Some(text) = self.arguments["reason"].as_str() {
+            self.arguments["reason"] = json!(text.chars().take(300).collect::<String>());
+        }
+        if let Some(object) = self.arguments.as_object_mut() {
+            object.retain(|_, value| !value.is_null());
+        }
+    }
     pub fn operation(&self) -> Result<Operation> {
         if self.reason.chars().count() > 512 || self.reason.len() > 2048 {
             return Err("reason_limit".into());
@@ -491,7 +581,7 @@ impl Default for OperationalLimits {
             investigation_conversation: false,
             max_context_tokens: default_context_tokens(),
             investigation_temperature: 0.0,
-            max_requests: None,
+            max_requests: Some(80),
             max_total_tokens: None,
             max_spend_usd: None,
         }
@@ -703,6 +793,18 @@ mod tests {
         }
     }
     #[test]
+    fn normalization_keeps_oversized_notes_and_numeric_proposals_usable() {
+        let mut d: Decision = serde_json::from_value(json!({"tool":"trace_from_point","arguments":{"section_id":"s1","view_id":"view-1","point_px":[-20,9000]},"reason":"r","notes":"é".repeat(700)})).unwrap();
+        d.normalize();
+        assert_eq!(d.notes.as_ref().unwrap().chars().count(), 600);
+        assert_eq!(d.arguments["point_px"], json!([0.0, 4096.0]));
+        assert!(d.operation().is_ok());
+        let mut crop: Decision = serde_json::from_value(json!({"tool":"view_region","arguments":{"region_px":[-2,10,0,5],"max_side_px":9000},"reason":"r"})).unwrap();
+        crop.normalize();
+        assert!(crop.operation().is_ok());
+        assert_eq!(crop.arguments["max_side_px"], 1024);
+    }
+    #[test]
     fn decision_notes_are_optional_bounded_and_backward_compatible() {
         let old = json!({"tool":"build_draft","arguments":{},"reason":"ready"});
         let decision: Decision = serde_json::from_value(old.clone()).unwrap();
@@ -751,7 +853,7 @@ mod tests {
     fn campaign_has_no_aggregate_caps_but_finite_worker_limits() {
         let l = OperationalLimits::default();
         l.validate().unwrap();
-        assert_eq!(l.max_requests, None);
+        assert_eq!(l.max_requests, Some(80));
         assert_eq!(l.max_total_tokens, None);
         assert_eq!(l.max_spend_usd, None);
         let mut bad = l;

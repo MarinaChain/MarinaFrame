@@ -68,6 +68,9 @@ def prepare():
 
 def sample_rows(round_only=False):
     rows = json.loads((OUT / 'sample.json').read_text())
+    if round_only and '--rbody' in sys.argv:
+        ids = {'dtmb5415-L0', 'shipd-1-00045-L2', 'shipd-1-00679-L0', 'shipd-1-00683-L2'}
+        return [r for r in rows if r['case_id'] in ids]
     return [r for r in rows if r['hull_id'] == 'dtmb5415'] if round_only else rows
 
 
@@ -178,6 +181,7 @@ def main():
     parser.add_argument('action', choices=['prepare', 'run', 'score'])
     parser.add_argument('--arm', default='baseline')
     parser.add_argument('--round', action='store_true', help='Run only DTMB L0-L3.')
+    parser.add_argument('--rbody', action='store_true', help='Use the four W19 R-body cases.')
     args = parser.parse_args()
     if args.action == 'prepare':
         prepare()

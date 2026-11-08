@@ -1,0 +1,22 @@
+[
+  {
+    "case_id": "dtmb5415-L0",
+    "first_rms_percent": 15.625050015617207,
+    "final_rms_percent": 15.625050015617207
+  },
+  {
+    "case_id": "shipd-1-00045-L2",
+    "first_rms_percent": 4.568218573140296,
+    "final_rms_percent": 4.568218573140296
+  },
+  {
+    "case_id": "shipd-1-00679-L0",
+    "first_rms_percent": 10.807320894133811,
+    "final_rms_percent": 22.32545570625599
+  },
+  {
+    "case_id": "shipd-1-00683-L2",
+    "first_rms_percent": 33.88397817637883,
+    "final_rms_percent": 33.88397817637883
+  }
+]

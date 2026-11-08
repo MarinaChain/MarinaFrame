@@ -1924,6 +1924,22 @@ pub fn initialize(store: &mut Store) -> Result<bool> {
     Ok(true)
 }
 pub fn run_loop(store: &mut Store, max_steps: Option<u64>) -> Result<()> {
+    if investigation_mode(store)
+        && !store
+            .events
+            .iter()
+            .any(|event| event.kind == "first_hull_ready")
+    {
+        if !call_worker(store, "build_first_hull", json!({}))? {
+            return Ok(());
+        }
+        store.append("first_hull_ready", json!({"engineering_approved":false}))?;
+        if store.state.domain["current_candidate"]["valid"] == true
+            && !call_worker(store, "render_candidate", json!({"view":"body"}))?
+        {
+            return Ok(());
+        }
+    }
     let mut steps = 0;
     loop {
         if worker::cancelled(&store.path) {
@@ -1933,6 +1949,23 @@ pub fn run_loop(store: &mut Store, max_steps: Option<u64>) -> Result<()> {
             return stop(store, Status::Paused, "requested_step_boundary");
         }
         store.verify(false)?;
+        if investigation_mode(store) && store.state.domain["last_valid_candidate"]["valid"] == true
+        {
+            let edits = store.state.domain["non_improving_edits"]
+                .as_u64()
+                .unwrap_or(0);
+            if edits >= 6 {
+                if store.events.iter().any(|e| e.kind == "soft_finish_hint") {
+                    return stop(
+                        store,
+                        Status::DraftNotVerified,
+                        "best_draft_after_non_improving_edits",
+                    );
+                }
+                store.state.last_observation["finish_hint"] = json!("Several edits did not improve the drawing fit. Finish now; the best valid draft is preserved.");
+                store.append("soft_finish_hint", json!({"non_improving_edits":edits}))?;
+            }
+        }
         let mut actor = if store.state.config.policy == Policy::Live {
             "live_model"
         } else {
@@ -1996,7 +2029,9 @@ pub fn run_loop(store: &mut Store, max_steps: Option<u64>) -> Result<()> {
             return stop(store, Status::Cancelled, "cancelled_after_model_receipt");
         }
         match execute_decision(store, choice.clone(), actor) {
-            Ok(true) => (),
+            Ok(true) => {
+                store.state.last_observation["normalization_note"] = json!("Oversized notes are truncated to 600 characters; numeric investigation arguments are clamped to tool bounds.");
+            }
             Ok(false) => return Ok(()),
             Err(reason)
                 if actor == "live_model"

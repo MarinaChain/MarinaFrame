@@ -244,6 +244,8 @@ class DomainTools(InvestigationTools):
                 "model_choice_section_ids": sorted(self.state.get("model_choices", {})),
                 "sheet_setup_ids": sorted(self.state.get("sheet_setups", {})),
                 "view_count": len(self.state.get("views", [])),
+                "non_improving_edits": self.state.get("non_improving_edits", 0),
+                "best_valid_candidate": copy.deepcopy(self.state.get("best_valid_candidate")),
                 "input_errors": self.state["input_errors"][:32], **SEMANTIC_FLAGS}
 
     def catalog(self) -> list[dict]:
@@ -271,7 +273,7 @@ class DomainTools(InvestigationTools):
         if not isinstance(arguments, dict) or len(json.dumps(arguments, allow_nan=False)) > 65536:
             raise ToolInputError("Tool arguments must be a bounded JSON object.")
         expected = {"inspect_source": {"section_ids"}, "select_contours": {"selections"},
-                    "build_provisional": set(), "build_draft": set(), "render_candidate": {"view"},
+                    "build_provisional": set(), "build_draft": set(), "build_first_hull": set(), "render_candidate": {"view"},
                     "validate_candidate": set(), "propose_section": PROPOSE_SECTION_ARGUMENTS,
                     **INVESTIGATION_ARGUMENTS}
         if name not in expected:
@@ -330,7 +332,37 @@ class DomainTools(InvestigationTools):
                 if self.cancel_event is not None and self.cancel_event.is_set():
                     return self._observation(False, "cancelled", error_code="cancelled")
                 method = getattr(self, "_" + tool_name)
+                incumbent = copy.deepcopy(self.state) if tool_name in ("propose_section", "assign_station") and self.state.get("vessel_table") else None
                 result = method(**arguments)
+                if incumbent is not None and result.get("ok"):
+                    from .fit_feedback import score, current_table
+                    from .whole_vessel_score import keep_edit
+                    before = incumbent.get("fit_score", {})
+                    after = score(self)
+                    sid = arguments.get("section_id")
+                    old_curve = next((r["points_yz_m"] for r in incumbent["vessel_table"]["stations"] if r["id"] == sid), None)
+                    new_curve = self._section_curve(sid)
+                    identical = old_curve == new_curve
+                    old_ink = before.get("station_ink_fit", {}).get(sid, {})
+                    new_ink = after.get("station_ink_fit", {}).get(sid, {})
+                    protected_ink = old_ink.get("near_fraction", 0) >= .9 and old_ink.get("rms_m") is not None
+                    decision = keep_edit(before, after, before.get("cells"), after.get("cells"), gap_fill_only=old_curve is None)
+                    if protected_ink and new_ink.get("rms_m", float("inf")) > old_ink["rms_m"] + 1e-6:
+                        decision = {**decision, "keep": False, "reason": "Kept supported ink; proposed curve has worse ink RMS.",
+                                    "ink_rms_before_m": old_ink["rms_m"], "ink_rms_after_m": new_ink.get("rms_m")}
+                    if identical or not decision["keep"]:
+                        self.state = incumbent
+                        self.state["non_improving_edits"] = self.state.get("non_improving_edits", 0) + 1
+                        self._save()
+                        result = self._observation(True, "kept_previous_curve", fit_comparison=decision,
+                            repeated_proposal=identical,
+                            message=f"Kept previous curve: combined fit {before.get('combined_fit')} vs proposed {after.get('combined_fit')}. Finish the best draft or try a different section.")
+                    else:
+                        self.state["vessel_table"] = current_table(self).to_json()
+                        self.state["fit_score"] = after
+                        self.state["non_improving_edits"] = 0
+                        self._save()
+                        result["fit_comparison"] = decision
                 if tool_name in ("assign_station", "enumerate_strokes", "inspect_source", "trace_from_point", "trace_corridor"):
                     from .accuracy_feedback import candidate_catalog, candidate_feedback
                     by_id = {s["id"]: s for s in self.spec.get("sections", [])}
@@ -569,6 +601,15 @@ class DomainTools(InvestigationTools):
                 section["evidence"] = (prior[:7000] + " Provisional source-bound agent/policy selection " + cid +
                                         "; excluded strokes retained; human semantic review required.")
         spec["sections"] = kept
+        if self.state.get("first_hull_spec"):
+            present = {s["id"] for s in kept}
+            spec["sections"].extend(copy.deepcopy(s) for s in self.state["first_hull_spec"]["sections"] if s["id"] not in present)
+        if self.state.get("first_hull_spec"):
+            fitted = {s["id"]: s for s in self.state["first_hull_spec"]["sections"]}
+            for index, section in enumerate(spec["sections"]):
+                sid = section["id"]
+                if sid not in self.state.get("authored_sections", {}) and sid not in self.state.get("model_choices", {}):
+                    spec["sections"][index] = copy.deepcopy(fitted.get(sid, section))
         selection = {"revision_id": self.revision_id, "generation_id": self.generation_id,
                      "selected": self.state["selected"], "source_sha256": self.state["sources"], **SEMANTIC_FLAGS}
         if self.open_guesses:
@@ -598,8 +639,15 @@ class DomainTools(InvestigationTools):
                      "gaps": result.get("gaps", [])[:64] if result else [{"kind": outcome.get("error_code", outcome["state"])}],
                      "metrics": result.get("metrics", {}) if result else {}, **SEMANTIC_FLAGS}
         self.state["builds"].append(candidate)
-        if valid:
+        if valid and not self.state.get("vessel_table"):
             self.state["last_valid_candidate"] = candidate
+        if valid and self.state.get("vessel_table"):
+            fit = self.state.get("fit_score", {}).get("combined_fit")
+            candidate["combined_fit"] = fit
+            best = self.state.get("best_valid_candidate")
+            if best is None or fit is None or best.get("combined_fit") is None or fit >= best["combined_fit"]:
+                self.state["best_valid_candidate"] = copy.deepcopy(candidate)
+            self.state["last_valid_candidate"] = copy.deepcopy(self.state.get("best_valid_candidate") or candidate)
         self.state.update(validation=None, rendered_views=[])
         self._save()
         artifacts = []
@@ -615,6 +663,10 @@ class DomainTools(InvestigationTools):
                                  validation_errors=candidate["gaps"], artifacts=artifacts,
                                  resources=outcome.get("resources", {}), changed=True,
                                  last_valid_preserved=self.state["last_valid_candidate"] is not None)
+
+    def _build_first_hull(self):
+        from .first_hull_tools import build_first_hull
+        return build_first_hull(self)
 
     def _build_draft(self):
         """Best-effort build: guess where the source is ambiguous, then build.
@@ -848,6 +900,7 @@ class DomainTools(InvestigationTools):
                                                       **{k: v for k, v in result["model_observation"].items() if k != "file"})]
                                  + overlay_artifacts,
                                  station_overlay=station_overlay,
+                                 fit_score={k: v for k, v in self.state.get("fit_score", {}).items() if k != "cells"},
                                  resources={"wall_seconds": outcome["elapsed_seconds"]})
 
     def _station_overlay_request(self, candidate):
@@ -1222,8 +1275,15 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
             selection = {"anchors_px": anchors, "half_width_px": 2.75}
             cid = "contour-" + digest_object({"source": source_sha, "section": section,
                                               "selection": selection})[:20]
-            competition = _candidate_evidence(mask, ink, rows, xs, centre, (left, top),
-                                               quality["median_stroke_width_px"], None)
+            try:
+                competition = _candidate_evidence(mask, ink, rows, xs, centre, (left, top),
+                                                   quality["median_stroke_width_px"], None)
+            except DrawingError as exc:
+                if exc.kind != "resource_limit":
+                    raise
+                entry.setdefault("baseline_gaps", []).append({"kind":"resource_limit", "severity":"warning",
+                    "section_id":sid, "message":"Candidate competition exceeds inspection budget; use bounded tracing or propose_section."})
+                continue
             non_grid = 0
             for alt in competition["candidate_evidence"]:
                 p = np.asarray(alt["source_points_px"])
