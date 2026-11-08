@@ -148,3 +148,9 @@ def test_latest_valid_draft_step_and_sealed_guard(tmp_path):
     sealed.mkdir()
     with pytest.raises(SystemExit):
         round_digest.main([str(case), "--factory", str(sealed)])
+
+
+def test_truth_hull_name_drops_level_and_three_view_marker():
+    assert round_digest.truth_hull_name("dtmb5415-3v-L0") == "dtmb5415"
+    assert round_digest.truth_hull_name("shipd-1-00679-L2") == "shipd-1-00679"
+    assert round_digest.truth_hull_name("shipd-1-00679-3v-L3") == "shipd-1-00679"

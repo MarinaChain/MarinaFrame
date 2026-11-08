@@ -286,6 +286,15 @@ def latest_valid_draft_step(events: list[dict], case_dir: Path) -> Path | None:
     return steps[-1] if steps else None
 
 
+def truth_hull_name(case_id: str) -> str:
+    """The truth file stem of a factory case: "dtmb5415-3v-L0" -> "dtmb5415".
+
+    The level suffix ("-L0") is dropped, and so is the three-view set marker ("-3v"),
+    because one hull's truth serves both the body-plan and the three-view sets."""
+    hull = case_id.rsplit("-L", 1)[0]
+    return hull.removesuffix("-3v")
+
+
 def score_case(case: dict, case_dir: Path, events: list[dict], factory: Path) -> None:
     """Score the case's final valid draft against DEVELOPMENT truth with the frozen factory
     scorer and gate (2 % RMS half-beam, 5 % in-range volume). Never use it on sealed data."""
@@ -297,7 +306,7 @@ def score_case(case: dict, case_dir: Path, events: list[dict], factory: Path) ->
         return
     params = json.loads((factory / "params" / f"{case_id}.json").read_text())
     stations = [{"id": f"s{i + 1:02d}", "x_m": x} for i, x in enumerate(params["station_x_m"])]
-    hull = case_id.rsplit("-L", 1)[0]
+    hull = truth_hull_name(case_id)
     try:
         score = truth.score_model(factory / "sealed" / "truth" / f"{hull}.npz", step, stations)
     except Exception as exc:  # a scoring failure is reported, not raised
