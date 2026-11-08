@@ -3,12 +3,13 @@
 import {
   invoke, onTaskChanged, pickSpecFile, canPickSpecFile, transportName,
   pickFolder, pickFile, canPickPaths, onFileDrop, isSpecFileName, SPEC_EXTENSIONS,
-  readArtifactAsDataUrl, readArtifactAsBuffer,
+  pickDrawingFiles, isDrawingFileName, readArtifactAsDataUrl, readArtifactAsBuffer,
 } from './api.js';
 import { el, svg, icon, fill } from './dom.js';
 import { createDrawingView } from './drawing.js';
 import { createModelView } from './model3d.js';
 import { createLiveRun } from './live.js';
+import { createIntake } from './intake.js';
 import * as fmt from './format.js';
 
 const $ = (id) => document.getElementById(id);
@@ -25,7 +26,7 @@ const PREFS_KEY = 'marinaframe.ui';
 const RECENT_SPECS_MAX = 5;
 
 /** The places of the app shell. `run` is the run workspace (drawing | 3D | inspector). */
-const ROUTES = ['home', 'queue', 'run', 'settings'];
+const ROUTES = ['home', 'queue', 'intake', 'run', 'settings'];
 
 const state = {
   route: 'home',
@@ -438,7 +439,7 @@ function renderTask({ fresh = false } = {}) {
 
 // ---------------------------------------------------------------- title bar: breadcrumb
 
-const ROUTE_TITLES = { home: 'Home', queue: 'Queue', settings: 'Settings' };
+const ROUTE_TITLES = { home: 'Home', queue: 'Queue', intake: 'New vessel', settings: 'Settings' };
 
 function crumbSeparator() {
   return el('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '›');
@@ -1361,7 +1362,49 @@ $('reset-notices').addEventListener('click', async () => {
   }
 });
 
-// ---------------------------------------------------------------- new run
+// ---------------------------------------------------------------- intake (drawing set)
+
+// A drawing set dropped on the window, or chosen with "Choose files", goes to the intake
+// view (js/intake.js). Start reading opens the new run's live screen.
+
+const intake = createIntake({
+  host: $('view-intake'),
+  invoke,
+  refreshAiStatus: async () => {
+    const status = await refreshAiStatus();
+    renderStatusbar();
+    return status;
+  },
+  onStarted: async (task) => {
+    await refreshTasks();
+    await openTask(task);
+  },
+  onClose: () => navigate('home'),
+  openSettings: () => openSettings(),
+});
+
+/** Read a drawing set and show it in the intake view. */
+async function startIntake(paths) {
+  const reading = intake.prepare(paths); // marks the set as loading before the view opens
+  navigate('intake');
+  try {
+    await reading;
+  } catch (error) {
+    showError(error);
+    if (state.route === 'intake' && !intake.hasSet()) navigate('home');
+  }
+}
+
+async function chooseDrawingSet() {
+  try {
+    const paths = await pickDrawingFiles();
+    if (paths.length) await startIntake(paths);
+  } catch (error) {
+    showError(error);
+  }
+}
+
+// ---------------------------------------------------------------- new run (developers: a spec file)
 
 // The spec file is chosen with the picker, by dropping it on the window, from the recent
 // list or from a dataset folder. Typing a path is the fallback under "Type a path".
@@ -1448,18 +1491,31 @@ async function openNewRun({ browse = null } = {}) {
   if (browse) chooseSpec(browse.path);
 }
 
-/** Files dropped on the window: a spec opens in New run; anything else is explained. */
+/**
+ * Files dropped on the window. Drawings (PDF, PNG, TIFF, JPEG) start an intake. A run spec
+ * opens the developer New run sheet, as does any drop while that sheet is open.
+ */
 async function acceptDroppedFiles(paths) {
   if (!paths.length || state.route === 'settings') return;
-  if (!$('newrun-sheet').open) await openNewRun();
+  const sheetOpen = $('newrun-sheet').open;
   const spec = paths.find((path) => isSpecFileName(path));
-  if (spec) {
-    setSpecPath(spec);
-    $('newrun-start').focus();
+  const drawings = paths.filter((path) => isDrawingFileName(path));
+  if (sheetOpen || (spec && !drawings.length)) {
+    if (!sheetOpen) await openNewRun();
+    if (spec) {
+      setSpecPath(spec);
+      $('newrun-start').focus();
+      return;
+    }
+    const types = SPEC_EXTENSIONS.slice(0, 3).map((ext) => `.${ext}`).join(', ');
+    showNewRunError(`${fileName(paths[0])} is not a run spec. Drop the run spec (${types}) that names the drawing.`);
     return;
   }
-  const types = SPEC_EXTENSIONS.slice(0, 3).map((ext) => `.${ext}`).join(', ');
-  showNewRunError(`${fileName(paths[0])} is not a run spec. Drop the run spec (${types}) that names the drawing.`);
+  if (drawings.length) {
+    await startIntake(drawings);
+    return;
+  }
+  showError(new Error(`${fileName(paths[0])} is not a drawing. Drop PDF, PNG, TIFF or JPEG files.`));
 }
 
 onFileDrop({
@@ -1516,9 +1572,23 @@ $('resume-task').addEventListener('click', async () => {
 
 // ---------------------------------------------------------------- input bindings
 
-$('new-run').addEventListener('click', () => openNewRun());
-// The drop tile opens the New run sheet until the intake lane (M2) takes drawing sets.
-$('drop-choose').addEventListener('click', () => openNewRun());
+$('new-vessel').addEventListener('click', () => chooseDrawingSet());
+$('drop-choose').addEventListener('click', () => chooseDrawingSet());
+$('new-run').addEventListener('click', () => {
+  $('home-more').open = false;
+  openNewRun();
+});
+// The More menu closes on a click outside it or on Escape.
+document.addEventListener('click', (event) => {
+  const menu = $('home-more');
+  if (menu.open && !menu.contains(event.target)) menu.open = false;
+});
+$('home-more').addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    $('home-more').open = false;
+    $('home-more').querySelector('summary').focus();
+  }
+});
 for (const item of document.querySelectorAll('.rail-item')) {
   item.addEventListener('click', () => navigate(item.dataset.route));
 }
@@ -1575,7 +1645,8 @@ document.addEventListener('keydown', (event) => {
     setRail($('app').dataset.rail === 'collapsed' ? 'expanded' : 'collapsed');
   } else if (command && event.key.toLowerCase() === 'n') {
     event.preventDefault();
-    openNewRun();
+    if (event.shiftKey) openNewRun();
+    else chooseDrawingSet();
   } else if (command && event.key === ',') {
     event.preventDefault();
     openSettings();
@@ -1621,6 +1692,16 @@ function applyRoute(route) {
   document.body.dataset.route = route;
   renderCrumbs();
   if (route === 'settings') loadSettingsForm();
+  if (route === 'intake') {
+    // Nothing to show after a reload: the set lives only in this window.
+    if (intake.hasSet()) {
+      intake.show();
+    } else {
+      history.replaceState(null, '', '#home');
+      applyRoute('home');
+      return;
+    }
+  }
   if (route === 'run' && !state.task) openRememberedTask();
 }
 

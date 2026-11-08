@@ -36,6 +36,7 @@
     <symbol id="i-play" viewBox="0 0 16 16"><path class="glyph-fill" d="M5 3.2v9.6L12.6 8z" /></symbol>
     <symbol id="i-pause" viewBox="0 0 16 16"><path d="M5.5 3.5v9M10.5 3.5v9" /></symbol>
     <symbol id="i-follow" viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.5" /><circle class="glyph-fill" cx="8" cy="8" r="1.4" /><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2" /></symbol>
+    <symbol id="i-more" viewBox="0 0 16 16"><circle class="glyph-fill" cx="3.5" cy="8" r="1.2" /><circle class="glyph-fill" cx="8" cy="8" r="1.2" /><circle class="glyph-fill" cx="12.5" cy="8" r="1.2" /></symbol>
     <symbol id="i-drop" viewBox="0 0 16 16"><path d="M8 2.5v7.5M5 7l3 3 3-3" /><path d="M2.5 10.5v3h11v-3" /></symbol>
     <!-- Source-label glyphs: colour is never the only signal (visual language, lane C). -->
     <symbol id="i-src-traced" viewBox="0 0 16 16"><circle class="glyph-fill" cx="8" cy="8" r="3.2" /></symbol>
@@ -100,7 +101,16 @@
         <div class="home-scroll">
           <div class="home-head">
             <h1 id="home-needs-title">Needs you</h1>
-            <button class="btn btn-primary btn-large" id="new-run" type="button" title="New run (⌘N)">New run</button>
+            <div class="home-head-actions">
+              <button class="btn btn-primary btn-large" id="new-vessel" type="button" title="Choose the drawing set of a new vessel (⌘N)">New vessel</button>
+              <!-- Developers: start a run from a run spec file. -->
+              <details class="menu" id="home-more">
+                <summary class="btn btn-large btn-icon" title="More" aria-label="More ways to start"><svg class="icon"><use href="#i-more" /></svg></summary>
+                <div class="menu-list">
+                  <button class="menu-item" id="new-run" type="button" title="Start a run from a run spec file (.json, .toml, .yaml)">New run from a spec file…<kbd>⇧⌘N</kbd></button>
+                </div>
+              </details>
+            </div>
           </div>
           <div class="needs-row" id="needs-row" aria-live="polite"></div>
           <h2 class="home-section-title">Vessels</h2>
@@ -118,12 +128,15 @@
                 <path class="drop-art-wl" d="M6 40h108M6 24h108" />
               </svg>
               <strong>Drop a drawing set</strong>
-              <span class="drop-hint" id="drop-hint" title="Until intake lands, the New run sheet takes a run spec file that names the drawing.">Run spec for now</span>
+              <span class="drop-hint" id="drop-hint" title="Drop the files anywhere on the window. The app finds the views; you check them, then the AI reads the set.">PDF, PNG, TIFF or JPEG</span>
               <button class="btn" type="button" id="drop-choose">Choose files</button>
             </div>
           </div>
         </div>
       </section>
+
+      <!-- ============================================================ Intake (F4): js/intake.js fills it -->
+      <section class="view view-intake" id="view-intake" data-route="intake" aria-labelledby="intake-title" hidden></section>
 
       <!-- ============================================================ Queue (P1) -->
       <section class="view view-queue" id="view-queue" data-route="queue" aria-labelledby="queue-title" hidden>
@@ -335,7 +348,7 @@
   </dialog>
 
   <div class="drop-overlay" aria-hidden="true">
-    <div class="drop-overlay-card"><svg class="icon"><use href="#i-drop" /></svg>Drop run spec</div>
+    <div class="drop-overlay-card"><svg class="icon"><use href="#i-drop" /></svg>Drop a drawing set</div>
   </div>
 
   <div class="toast" id="toast" role="alert" hidden>
