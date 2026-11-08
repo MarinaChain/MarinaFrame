@@ -180,10 +180,14 @@ fn key_usage(slot: u8, body: Result<Value, UsageError>) -> KeyUsage {
 
 /// The next slot and the warning, by the worker's rule: one key is used without
 /// a usage read; with more, the usable key with the lowest highest meter, ties
-/// to the lower slot.
+/// to the lower slot. A key whose meters were read and show a window that is not
+/// "ok" (for example "rate-limited" at 100 %) is never named: even a single key
+/// that the worker would try cannot give an answer until that window resets.
 fn summarize(source: Option<KeySource>, slots: Vec<KeyUsage>, checked_ms: u64) -> ModelUsage {
     let next_slot = if slots.len() == 1 {
-        Some(slots[0].slot)
+        let only = &slots[0];
+        let read_and_limited = only.error.is_none() && !only.usable;
+        (!read_and_limited).then_some(only.slot)
     } else {
         slots
             .iter()
@@ -282,6 +286,29 @@ mod tests {
         let result = usage(vec![key_usage(3, Err(UsageError::Transport))]);
         assert_eq!(result.next_slot, Some(3));
         assert!(result.warning.unwrap().contains("This key"));
+    }
+
+    #[test]
+    fn a_rate_limited_window_makes_a_key_not_the_next_slot() {
+        // The provider's own shape: a window at its limit is "rate-limited" at 100 %.
+        let mut limited = body(30., 20., 10.);
+        limited["usage"]["weekly"] = json!({"status": "rate-limited", "percent": 100, "resetsAt": "2026-11-15T08:25:11.000Z"});
+        let read = key_usage(1, Ok(limited.clone()));
+        assert!(!read.usable);
+        assert_eq!(read.meters[1].status.as_deref(), Some("rate-limited"));
+        assert_eq!(read.meters[1].percent, Some(100.));
+        assert_eq!(
+            read.meters[1].resets_at.as_deref(),
+            Some("2026-11-15T08:25:11.000Z")
+        );
+        let two = usage(vec![
+            key_usage(1, Ok(limited.clone())),
+            key_usage(2, Ok(body(60., 50., 40.))),
+        ]);
+        assert_eq!(two.next_slot, Some(2));
+        let only = usage(vec![key_usage(1, Ok(limited))]);
+        assert_eq!(only.next_slot, None);
+        assert!(only.warning.is_some());
     }
 
     #[test]

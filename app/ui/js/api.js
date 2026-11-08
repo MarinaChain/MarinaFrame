@@ -725,9 +725,9 @@ function mockTransport() {
       const params = new URLSearchParams(location.search);
       const inHours = (hours) => new Date(Date.now() + hours * 3_600_000).toISOString();
       const meters = (rolling, weekly, monthly) => [
-        { window: 'rolling', percent: rolling, status: rolling < 100 ? 'ok' : 'limited', resets_at: inHours(3) },
-        { window: 'weekly', percent: weekly, status: weekly < 100 ? 'ok' : 'limited', resets_at: inHours(52) },
-        { window: 'monthly', percent: monthly, status: monthly < 100 ? 'ok' : 'limited', resets_at: inHours(400) },
+        { window: 'rolling', percent: rolling, status: rolling < 100 ? 'ok' : 'rate-limited', resets_at: inHours(3) },
+        { window: 'weekly', percent: weekly, status: weekly < 100 ? 'ok' : 'rate-limited', resets_at: inHours(52) },
+        { window: 'monthly', percent: monthly, status: monthly < 100 ? 'ok' : 'rate-limited', resets_at: inHours(400) },
       ];
       const slot = (number, rolling, weekly, monthly) => {
         const all = [rolling, weekly, monthly];

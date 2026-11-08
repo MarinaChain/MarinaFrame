@@ -876,6 +876,7 @@ code { font-family: var(--font-mono); }
 .usage-fill { display: block; height: 100%; border-radius: 3px; background: var(--brand); }
 .usage-meter.near .usage-fill { background: var(--guess-ink); }
 .usage-meter.near .usage-percent { color: var(--warn); font-weight: 600; }
+.usage-reset.limited { color: var(--warn); font-weight: 600; }
 .usage-reset { min-height: 1.2em; color: var(--ink-3); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .settings-advanced { padding-bottom: var(--space-sm); }
 .settings-advanced > summary { display: flex; align-items: center; gap: var(--space-xs); width: fit-content; cursor: pointer; list-style: none; }

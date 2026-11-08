@@ -35,6 +35,23 @@ export function resetIn(resetMs, nowMs) {
   return `in ${Math.round(hours / 24)} days`;
 }
 
+/** "Nov 15, 08:25": the date a limited window opens again. */
+function resetDate(ms) {
+  return new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * The line under one meter. A window whose status is not "ok" (the provider says
+ * "rate-limited" at 100 %) is at its limit until it resets.
+ */
+export function meterNote(meter, nowMs) {
+  const resetMs = resetTime(meter.resets_at);
+  const limited = Boolean(meter.status) && meter.status !== 'ok';
+  if (limited) return { limited, text: resetMs === null ? 'At limit' : `At limit until ${resetDate(resetMs)}` };
+  const resets = resetIn(resetMs, nowMs);
+  return { limited, text: resets ? `Resets ${resets}` : '' };
+}
+
 /** The short state word of one slot. */
 export function slotState(slot, nextSlot) {
   if (slot.error) return { word: 'Not checked', tone: 'warn' };
@@ -65,21 +82,21 @@ export function createUsage({ invoke }) {
 
   function meter(m) {
     const percent = m.percent;
-    const near = percent !== null && percent >= NEAR_LIMIT_PERCENT;
-    const resets = resetIn(resetTime(m.resets_at), Date.now());
+    const note = meterNote(m, Date.now());
+    const near = note.limited || (percent !== null && percent >= NEAR_LIMIT_PERCENT);
     const bar = el('span', { class: 'usage-bar', 'aria-hidden': 'true' }, el('span', { class: 'usage-fill' }));
     // The CSP blocks inline style attributes; set the width through the CSSOM.
     bar.firstChild.style.width = `${Math.min(100, Math.max(0, percent ?? 0))}%`;
     return el('div', {
       class: `usage-meter${near ? ' near' : ''}`,
       role: 'group',
-      'aria-label': `${WINDOW_TEXT[m.window] || m.window}: ${percent === null ? 'no reading' : `${Math.round(percent)} percent`}${resets ? `, resets ${resets}` : ''}`,
+      'aria-label': `${WINDOW_TEXT[m.window] || m.window}: ${percent === null ? 'no reading' : `${Math.round(percent)} percent`}${note.text ? `, ${note.text}` : ''}`,
     },
       el('span', { class: 'usage-meter-head' },
         el('span', { class: 'usage-window' }, WINDOW_TEXT[m.window] || m.window),
         el('span', { class: 'usage-percent' }, percent === null ? '—' : `${Math.round(percent)}%`)),
       bar,
-      el('span', { class: 'usage-reset', title: m.resets_at || '' }, resets ? `Resets ${resets}` : (m.status && m.status !== 'ok' ? m.status : '')));
+      el('span', { class: `usage-reset${note.limited ? ' limited' : ''}`, title: m.resets_at || '' }, note.text));
   }
 
   function slotRow(slot) {

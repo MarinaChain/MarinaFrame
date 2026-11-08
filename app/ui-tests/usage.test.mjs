@@ -1,7 +1,15 @@
 // Key usage (js/usage.js): reset times and slot words. Run: cd app && npm run test:ui
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resetTime, resetIn, slotState } from '../ui/js/usage.js';
+import { resetTime, resetIn, slotState, meterNote } from '../ui/js/usage.js';
+
+test('a rate-limited window says until when', () => {
+  const limited = meterNote({ window: 'weekly', percent: 100, status: 'rate-limited', resets_at: '2026-11-15T08:25:11.000Z' }, 0);
+  assert.ok(limited.limited);
+  assert.match(limited.text, /^At limit until /);
+  const ok = meterNote({ window: 'rolling', percent: 20, status: 'ok', resets_at: new Date(3 * 3_600_000).toISOString() }, 0);
+  assert.deepEqual(ok, { limited: false, text: 'Resets in 3 h' });
+});
 
 test('a reset time is read from an ISO time, seconds or milliseconds', () => {
   assert.equal(resetTime('2030-01-01T00:00:00Z'), Date.UTC(2030, 0, 1));
