@@ -1045,23 +1045,28 @@ code { font-family: var(--font-mono); }
 .strip {
   display: flex;
   gap: var(--space-sm);
-  height: var(--strip-h);
+  min-height: var(--strip-h);
   flex: none;
+  align-items: flex-start;
+  /* Height follows the tiles; a horizontal scroll bar adds its own room below them. */
   padding: var(--space-sm) var(--space-md);
   overflow-x: auto;
   border-top: 1px solid var(--line);
   background: var(--bg);
 }
 .strip:focus-visible { outline-offset: -2px; border-radius: 0; }
-.strip-empty { align-self: center; color: var(--text-3); font-size: var(--fs-sm); padding-left: var(--space-xs); }
+.strip-empty { display: flex; align-items: center; gap: var(--space-sm); flex: none; align-self: center; color: var(--text-3); font-size: var(--fs-sm); padding: 0 var(--space-sm) 0 var(--space-xs); }
+.tile-placeholder { height: 62px; border-style: dashed; background: transparent; cursor: default; }
+.tile-placeholder:hover { border-color: var(--line); }
 
+/* A tile: shape | "x m" and the state chip on one line, the source chip below. */
 .tile {
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr);
   grid-template-rows: auto auto;
-  column-gap: var(--space-sm);
+  gap: var(--space-xs) var(--space-sm);
   align-items: center;
-  width: 184px; /* fits "AI corrected" and "Interpolated" chips at 14 px type */
+  width: 216px; /* fits "20.0 m" with "Line chosen", and the "AI corrected" chip */
   flex: none;
   padding: var(--space-sm);
   border: 1px solid var(--line);
@@ -1073,17 +1078,20 @@ code { font-family: var(--font-mono); }
 .tile:hover { border-color: var(--line-strong); }
 .tile[aria-selected="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .strip:focus-visible .tile[aria-selected="true"] { box-shadow: 0 0 0 3px var(--focus); }
-.tile-shape { grid-row: 1 / span 2; width: 40px; height: 100%; max-height: 52px; }
+.tile-shape { grid-row: 1 / span 2; width: 40px; height: 100%; max-height: 44px; }
 .tile-shape path { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 .tile-shape .axis { stroke: var(--line-strong); stroke-width: 1; }
 .tile[data-state="chosen"] .tile-shape .shape { stroke: var(--accent); }
 .tile-shape .shape.src-stroke { stroke: var(--src-color); }
 .tile-chips .badge { max-width: 100%; }
 .tile[data-state="declined"] .tile-shape .shape { stroke: var(--text-3); stroke-dasharray: 3 3; }
-.tile-x { font-size: var(--fs-lg); font-weight: 600; letter-spacing: -0.01em; line-height: 1.2; align-self: end; white-space: nowrap; }
+.tile-head { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; }
+.tile-x { flex: none; font-size: var(--fs-lg); font-weight: 600; letter-spacing: -0.01em; line-height: 1.2; white-space: nowrap; }
 .tile-x small { font-size: var(--fs-sm); font-weight: 500; color: var(--text-3); margin-left: 1px; }
-.tile-chips { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; align-self: start; }
+.tile-chips { display: flex; align-items: center; min-width: 0; min-height: 20px; }
 .tile-state, .tile-source {
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 100%;
   overflow: hidden;
   padding: 0 6px;
@@ -1092,7 +1100,7 @@ code { font-family: var(--font-mono); }
   color: var(--text-2);
   font-size: var(--fs-xs);
   font-weight: 600;
-  line-height: 16px;
+  line-height: 18px;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -1707,7 +1715,8 @@ code { font-family: var(--font-mono); }
   background: color-mix(in srgb, var(--surface) 88%, transparent);
 }
 .fit-dial[hidden] { display: none; }
-.fit-dial svg { grid-area: 1 / 1; width: 48px; height: 48px; transform: rotate(-90deg); }
+/* 64 px: the ring's inner width (about 48 px) holds "0.81" in the mono font without touching it. */
+.fit-dial svg { grid-area: 1 / 1; width: 64px; height: 64px; transform: rotate(-90deg); }
 .dial-track, .dial-arc { fill: none; stroke-width: 4; }
 .dial-track { stroke: var(--rule); }
 .dial-arc { stroke: var(--brand); stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
@@ -1969,23 +1978,47 @@ code { font-family: var(--font-mono); }
 .intake-blocked { color: var(--fail); font-size: var(--fs-sm); }
 .intake-blocked[hidden] { display: none; }
 
+/* Pages tray | the selected page, large (stage) | vessel form. The stage fills the height. */
 .intake-body {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
-  align-content: start;
+  grid-template-columns: minmax(0, 1fr) 300px;
   gap: var(--space-xl);
   padding: 0 var(--space-2xl) var(--space-xl);
-  overflow-y: auto;
 }
+.intake-body.has-tray { grid-template-columns: 184px minmax(0, 1fr) 300px; }
 .intake-tray {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  align-content: start;
-  gap: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px; /* room for the focus ring */
 }
+.intake-tray-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  flex: none;
+  width: 100%;
+  padding: var(--space-xs);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  background: var(--raised);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.intake-tray-item:hover { border-color: var(--rule-strong); }
+.intake-tray-item[aria-pressed="true"] { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); background: var(--brand-soft); }
+.intake-tray-item.skipped .intake-thumb { opacity: 0.45; filter: grayscale(1); }
+.intake-tray-line { display: flex; align-items: center; gap: var(--space-xs); min-width: 0; padding: 0 2px; }
+.intake-tray-views { flex: 1 1 auto; min-width: 0; overflow: hidden; color: var(--ink-2); font-size: var(--fs-xs); white-space: nowrap; text-overflow: ellipsis; }
+.intake-tray-item.skipped .intake-tray-views { color: var(--ink-3); }
+.intake-tray-warn { flex: none; display: inline-flex; color: var(--warn); }
+.intake-tray-warn .icon { width: 14px; height: 14px; }
 .intake-loading {
   display: flex;
   align-items: center;
@@ -1995,22 +2028,39 @@ code { font-family: var(--font-mono); }
   font-size: var(--fs-md);
 }
 
-.intake-card {
+.intake-stage {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
+  gap: var(--space-md);
   min-width: 0;
-  padding: var(--space-md);
+  min-height: 0;
+  padding: var(--space-md) var(--space-lg) var(--space-lg);
   border: 1px solid var(--rule);
   border-radius: var(--radius-lg);
   background: var(--raised);
 }
-.intake-card-head { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; }
+.intake-card-head { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; flex: none; }
 .intake-page-id { flex: none; font: 500 var(--fs-sm) var(--font-mono); color: var(--ink-2); }
-.intake-file { flex: 0 1 auto; min-width: 0; overflow: hidden; font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.intake-file { flex: 0 1 auto; min-width: 0; overflow: hidden; font-size: var(--fs-md); font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
 .intake-where { flex: none; color: var(--ink-3); font-size: var(--fs-sm); }
 .intake-skip { flex: none; margin-left: auto; }
 .intake-skip[aria-pressed="true"] { border-color: var(--brand); color: var(--brand); }
+
+/* The page keeps its aspect ratio and is as large as the frame allows in both directions. */
+.intake-stage-frame {
+  flex: 1 1 auto;
+  min-height: 240px;
+  display: grid;
+  place-items: center;
+  container-type: size;
+}
+.intake-page {
+  width: min(100cqw, 100cqh * var(--page-ratio));
+  aspect-ratio: var(--page-ratio);
+}
+.intake-stage-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm) var(--space-lg); flex: none; }
+.intake-stage.skipped .intake-page { opacity: 0.45; filter: grayscale(1); }
+.intake-stage.skipped .intake-region-chip { display: none; }
 
 .intake-thumb {
   position: relative;
@@ -2025,31 +2075,30 @@ code { font-family: var(--font-mono); }
 .intake-regions { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .intake-region { fill: color-mix(in srgb, var(--view) 8%, transparent); stroke: var(--view); stroke-width: 2; }
 .intake-region.unsure { stroke-dasharray: 6 4; }
+/* Placed in pixels by placeChips() in js/intake.js, so chips never cover each other. */
 .intake-region-chip {
   position: absolute;
-  max-width: 70%;
-  margin: 3px;
-  padding: 1px 6px;
+  max-width: 60%;
+  padding: 2px 8px;
   overflow: hidden;
   border-radius: var(--radius-sm);
   background: var(--view);
   color: #FFFFFF;
-  font: 600 11px/16px var(--font-ui);
+  font: 600 var(--fs-sm)/18px var(--font-ui);
   white-space: nowrap;
   text-overflow: ellipsis;
   cursor: pointer;
+  box-shadow: 0 1px 2px rgba(16, 29, 48, 0.25);
 }
-.intake-card.skipped .intake-thumb { opacity: 0.45; filter: grayscale(1); }
-.intake-card.skipped .intake-region-chip { display: none; }
 .intake-skipped-note { color: var(--ink-3); font-size: var(--fs-sm); }
 
-.intake-region-list { display: flex; flex-direction: column; gap: var(--space-xs); }
-.intake-region-row { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; }
-.intake-swatch { flex: none; width: 10px; height: 10px; border-radius: 2px; background: var(--view); }
+.intake-region-list { display: flex; flex: 1 1 auto; flex-wrap: wrap; gap: var(--space-sm) var(--space-lg); }
+.intake-region-row { display: flex; align-items: center; gap: var(--space-sm); flex: 0 1 220px; min-width: 180px; }
+.intake-swatch { flex: none; width: 12px; height: 12px; border-radius: 3px; background: var(--view); }
 .intake-label-picker {
   flex: 1 1 auto;
   min-width: 0;
-  height: 26px;
+  height: 30px;
   padding: 0 22px 0 var(--space-sm);
   appearance: none;
   -webkit-appearance: none;
@@ -2057,16 +2106,16 @@ code { font-family: var(--font-mono); }
   border-radius: var(--radius-md);
   background: var(--surface) no-repeat right 6px center / 10px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 4l3 3 3-3' fill='none' stroke='%237F899C' stroke-width='1.5'/%3E%3C/svg%3E");
   color: var(--ink);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   cursor: pointer;
 }
-.intake-confidence { flex: none; min-width: 3.2em; text-align: right; font: var(--fs-xs) var(--font-mono); color: var(--ink-3); }
+.intake-confidence { flex: none; min-width: 3.2em; text-align: right; font: var(--fs-sm) var(--font-mono); color: var(--ink-3); }
 .intake-confidence.unsure { color: var(--warn); }
 .intake-card-foot .badge .icon,
 .intake-set-warnings .badge .icon { width: 11px; height: 11px; }
 .intake-dpi { color: var(--ink-3); font: var(--fs-xs) var(--font-mono); }
 
-.intake-side { display: flex; flex-direction: column; gap: var(--space-lg); min-width: 0; align-self: start; position: sticky; top: 0; }
+.intake-side { display: flex; flex-direction: column; gap: var(--space-lg); min-width: 0; min-height: 0; overflow-y: auto; padding: 2px; }
 .intake-side input[type="text"] {
   height: 30px;
   width: 100%;
@@ -2098,8 +2147,12 @@ code { font-family: var(--font-mono); }
 }
 @media (max-width: 1000px) {
   /* The form goes above the pages: the name is the first thing to check. */
-  .intake-body { grid-template-columns: minmax(0, 1fr); }
-  .intake-side { position: static; order: -1; }
+  .intake-body, .intake-body.has-tray { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; overflow-y: auto; }
+  .intake-side { order: -1; overflow: visible; }
+  .intake-tray { flex-direction: row; overflow-x: auto; overflow-y: hidden; }
+  .intake-tray-item { width: 168px; }
+  .intake-stage-frame { container-type: inline-size; }
+  .intake-page { width: 100%; }
   .intake-number-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
 @media (max-width: 900px) {

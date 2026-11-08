@@ -25,6 +25,8 @@ const SPLIT_MAX = 0.8;
 const PREFS_KEY = 'marinaframe.ui';
 /** How many recently started spec files the New run sheet offers. */
 const RECENT_SPECS_MAX = 5;
+/** Empty tiles in the section strip while a run reads the drawing: a hint of what will fill it. */
+const STRIP_PLACEHOLDER_TILES = 3;
 
 /** The places of the app shell. `run` is the run workspace (drawing | 3D | inspector). */
 const ROUTES = ['home', 'queue', 'intake', 'run', 'settings'];
@@ -681,11 +683,22 @@ function sectionShapePath(section) {
   return line.polyline_px.map(([x, y], i) => `${i ? 'L' : 'M'}${(((x - x0) / w) * 44).toFixed(1)} ${(((y - y0) / h) * 54).toFixed(1)}`).join(' ');
 }
 
+/** Placeholder tiles while a run reads the drawing; a plain line when a finished run has none. */
+function stripEmpty() {
+  if (!state.view) return null;
+  if (isRunning()) {
+    const placeholders = Array.from({ length: STRIP_PLACEHOLDER_TILES }, () => el('div', { class: 'tile tile-placeholder', 'aria-hidden': 'true' }));
+    return [el('p', { class: 'strip-empty strip-waiting', role: 'status' },
+      el('span', { class: 'spinner', 'aria-hidden': 'true' }), 'Sections appear here as the AI reads them.'), ...placeholders];
+  }
+  return el('p', { class: 'strip-empty' }, 'This run found no sections on the drawing.');
+}
+
 function renderStrip() {
   const strip = $('strip');
   const sections = state.view?.sections || [];
   if (!sections.length) {
-    fill(strip, el('p', { class: 'strip-empty' }, state.view ? 'No sections found on this drawing.' : ''));
+    fill(strip, stripEmpty());
     strip.removeAttribute('aria-activedescendant');
     return;
   }
@@ -707,9 +720,10 @@ function renderStrip() {
         'data-source': section.source?.label,
         d: path,
       }) : null),
-    el('span', { class: 'tile-x' }, section.x_m.toFixed(1), el('small', {}, ' m')),
+    el('span', { class: 'tile-head' },
+      el('span', { class: 'tile-x' }, section.x_m.toFixed(1), el('small', {}, ' m')),
+      el('span', { class: 'tile-state' }, fmt.sectionStateLabel(section.state))),
     el('span', { class: 'tile-chips' },
-      el('span', { class: 'tile-state' }, fmt.sectionStateLabel(section.state)),
       section.source ? sourceChip(section.source.label, { title: section.source.basis || null }) : null));
   }));
   strip.setAttribute('aria-activedescendant', `tile-${state.sectionId}`);
