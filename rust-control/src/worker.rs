@@ -79,29 +79,70 @@ pub fn domain_guard(root: &Path) -> Result<DomainGuard> {
     }
     Ok(DomainGuard { _file: f })
 }
-fn admission(root: &Path, deadline: u64) -> Result<Option<Admission>> {
-    let path = std::env::temp_dir().join(format!("marinaframe-native-admission-{}.lock", unsafe {
-        libc::geteuid()
-    }));
+/// Native (CAD/tracing) work that may run at once for this user, across all tasks.
+/// Each slot is one lock file; slot 0 keeps the original name so scripts that take
+/// the lock (for example evaluation scorers) still exclude one slot.
+const DEFAULT_NATIVE_SLOTS: usize = 2;
+const MAX_NATIVE_SLOTS: usize = 8;
+/// How long a native step waits for a free slot before it gives up (seconds). Many
+/// concurrent tasks queue here; 120 s ended runs needlessly under load.
+pub const ADMISSION_DEADLINE_SECONDS: u64 = 1800;
+
+fn native_slots() -> usize {
+    std::env::var("MARINAFRAME_NATIVE_SLOTS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|slots| (1..=MAX_NATIVE_SLOTS).contains(slots))
+        .unwrap_or(DEFAULT_NATIVE_SLOTS)
+}
+
+fn open_slot(dir: &Path, slot: usize) -> Result<std::fs::File> {
+    let uid = unsafe { libc::geteuid() };
+    let name = if slot == 0 {
+        format!("marinaframe-native-admission-{uid}.lock")
+    } else {
+        format!("marinaframe-native-admission-{uid}-{slot}.lock")
+    };
     let f = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .mode(0o600)
         .custom_flags(libc::O_NOFOLLOW)
-        .open(path)
+        .open(dir.join(name))
         .map_err(|_| "admission_open")?;
     if !f.metadata().map_err(|_| "admission_metadata")?.is_file() {
         return Err("admission_not_regular".into());
     }
+    Ok(f)
+}
+
+fn admission(root: &Path, deadline: u64) -> Result<Option<Admission>> {
+    admission_in(&std::env::temp_dir(), native_slots(), root, deadline)
+}
+
+fn admission_in(
+    dir: &Path,
+    slot_count: usize,
+    root: &Path,
+    deadline: u64,
+) -> Result<Option<Admission>> {
+    let slots = (0..slot_count)
+        .map(|slot| open_slot(dir, slot))
+        .collect::<Result<Vec<_>>>()?;
     let started = Instant::now();
-    while unsafe { libc::flock(f.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
+    loop {
+        for f in &slots {
+            if unsafe { libc::flock(f.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
+                let file = f.try_clone().map_err(|_| "admission_open")?;
+                return Ok(Some(Admission { _file: file }));
+            }
+        }
         if cancelled(root) || started.elapsed().as_secs() >= deadline {
             return Ok(None);
         }
         std::thread::sleep(Duration::from_millis(25));
     }
-    Ok(Some(Admission { _file: f }))
 }
 
 // Leave an exited leader unreaped until its process group has been cleaned up.
@@ -137,7 +178,7 @@ pub fn run(
     let _admission = if is_provider {
         None
     } else {
-        let slot = admission(root, 120)?;
+        let slot = admission(root, ADMISSION_DEADLINE_SECONDS)?;
         if slot.is_none() {
             return Ok(ProcessOutcome {
                 state: if cancelled(root) {
@@ -394,5 +435,23 @@ pub fn run(
             });
         }
         std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn admission_grants_each_slot_once_and_refuses_when_all_are_taken() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("task");
+        std::fs::create_dir_all(&root).unwrap();
+        let first = admission_in(dir.path(), 2, &root, 0).unwrap();
+        let second = admission_in(dir.path(), 2, &root, 0).unwrap();
+        assert!(first.is_some() && second.is_some());
+        assert!(admission_in(dir.path(), 2, &root, 0).unwrap().is_none());
+        drop(first);
+        assert!(admission_in(dir.path(), 2, &root, 0).unwrap().is_some());
     }
 }
