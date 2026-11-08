@@ -312,8 +312,15 @@ def assign(stations: list[dict], panels: list[dict], warnings: list) -> list[tup
     xs = [s["x_m"] for s in stations]
     middle = (min(xs) + max(xs)) / 2
     sides = {s["side"] for s in stations}
-    # Sides are used only when the reading names both halves.
-    trust_sides = {"fore", "aft"} <= sides
+    # Sides are used only when the reading names both halves and every aft
+    # station lies aft of every fore one (x from aft). A reading that numbers
+    # stations from the bow but has x from the stern (shipd-1-00679 live) is not.
+    aft_x = [s["x_m"] for s in stations if s["side"] == "aft"]
+    fore_x = [s["x_m"] for s in stations if s["side"] == "fore"]
+    trust_sides = {"fore", "aft"} <= sides and max(aft_x) < min(fore_x)
+    if {"fore", "aft"} <= sides and not trust_sides:
+        warnings.append("The stations' fore/aft sides contradict their x positions; each station's half of the "
+                        "body plan follows its x (aft of the middle station: left half).")
     if len(panels) == 1 or (fore_panels and aft_panels):
         pairs = []
         for station in stations:

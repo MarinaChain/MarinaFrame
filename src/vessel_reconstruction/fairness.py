@@ -112,7 +112,8 @@ def neighbour_range(x: np.ndarray, values: np.ndarray, at: float, feature: str) 
 
 def _worst_feature(index: int, active: list[int], x: np.ndarray, rows: dict, allowance: dict) -> dict:
     """Largest normalised distance of one section outside its neighbour ranges."""
-    others = np.array([i for i in active if i != index])
+    # Integer dtype also when no other section is active (every section a straight line).
+    others = np.array([i for i in active if i != index], dtype=int)
     worst = {"score": 0.}
     for name, values in rows.items():
         columns = values if values.ndim == 2 else values[:, None]
