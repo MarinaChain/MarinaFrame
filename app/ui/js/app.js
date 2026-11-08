@@ -2178,6 +2178,7 @@ document.addEventListener('keydown', (event) => {
     if (event.key === '[') stepSection(-1);
     else if (event.key === ']') stepSection(1);
     else if ((event.key === 'n' || event.key === 'N') && state.vesselTab === 'run') nextToCheck();
+    else if ((event.key === 'n' || event.key === 'N') && state.vesselTab === 'parts') handled = parts.nextSelected();
     else if ((event.key === 'a' || event.key === 'A') && state.vesselTab === 'run' && canDecide()) decide(currentSection(), acceptCandidate(currentSection()));
     else if ((event.key === 'a' || event.key === 'A') && state.vesselTab === 'parts') handled = parts.acceptSelected();
     else if ((event.key === 'm' || event.key === 'M') && state.vesselTab === 'parts') handled = parts.markSelected();

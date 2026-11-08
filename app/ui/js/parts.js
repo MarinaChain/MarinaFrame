@@ -204,14 +204,61 @@ export function createParts({ host, review, showIn3d }) {
       guessed ? el('p', { class: 'parts-note' }, icon('warn'), `${guessed} ${guessed === 1 ? 'value is' : 'values are'} guessed. Check them before you use this part.`) : null);
   }
 
+  /** The part list as tab-separated text, for a spreadsheet or a review note. */
+  function partTable() {
+    const header = ['Part', 'Op', 'Built', 'Status', 'x from (m)', 'x to (m)', 'Breadth (m)', 'z from (m)', 'z to (m)', 'Volume (m3)', 'Values read', 'Values guessed', 'Review', 'Note'];
+    const rows = parts.map((p) => {
+      const box = p.bbox_m;
+      const n = (v) => (v === null || v === undefined ? '' : v.toFixed(3));
+      return [p.label, p.op, p.built ? 'yes' : 'no', p.status,
+        n(box?.min[0]), n(box?.max[0]), box ? n(box.max[1] - box.min[1]) : '', n(box?.min[2]), n(box?.max[2]), n(p.volume_m3),
+        p.arguments.filter((a) => a.source !== 'guessed').length, p.arguments.filter((a) => a.source === 'guessed').length,
+        p.review, p.review_note || ''];
+    });
+    const clean = (cell) => String(cell).replace(/[\t\n]+/g, ' ');
+    return [header, ...rows].map((row) => row.map(clean).join('\t')).join('\n')
+      + '\nDraft, not for construction. engineering_approved: false\n';
+  }
+
+  async function copyTable(button) {
+    try {
+      await navigator.clipboard.writeText(partTable());
+      button.textContent = 'Copied';
+    } catch {
+      button.textContent = 'Copy failed';
+    }
+    setTimeout(() => { button.textContent = 'Copy part list'; }, 1600);
+  }
+
+  /** The next part that still needs a person, after the selected one. */
+  function nextToReview() {
+    const index = parts.findIndex((p) => p.id === selectedId);
+    const ordered = [...parts.slice(index + 1), ...parts.slice(0, index + 1)];
+    return ordered.find((p) => p.review !== 'accepted' && p.review !== 'marked') || null;
+  }
+
+  function progress() {
+    const reviewed = parts.filter((p) => p.review === 'accepted' || p.review === 'marked').length;
+    const next = nextToReview();
+    const copy = el('button', { class: 'btn', type: 'button', title: 'Copy the part list as a table (paste into a spreadsheet)', onclick: (event) => copyTable(event.currentTarget) }, 'Copy part list');
+    return el('div', { class: 'parts-progress' },
+      el('span', { class: 'parts-progress-text' }, el('strong', {}, String(reviewed)), ` of ${parts.length} reviewed`),
+      el('span', { class: 'parts-progress-bar', role: 'img', 'aria-label': `${reviewed} of ${parts.length} parts reviewed` },
+        el('span', { style: { width: `${parts.length ? (reviewed / parts.length) * 100 : 0}%` } })),
+      el('button', { class: 'btn', type: 'button', disabled: !next, title: 'Go to the next part to review (N)', onclick: () => next && select(next.id) }, 'Next', el('kbd', { class: 'key-hint' }, 'N')),
+      copy);
+  }
+
   function render() {
     const built = parts.filter((p) => p.built).length;
     const accepted = parts.filter((p) => p.review === 'accepted').length;
+    const marked = parts.filter((p) => p.review === 'marked').length;
     const selected = parts.find((p) => p.id === selectedId) || null;
     fill(host, el('div', { class: 'page-body parts-page' },
-      el('header', { class: 'page-head' },
+      el('header', { class: 'page-head parts-head' },
         el('h1', { id: 'parts-title' }, 'Parts'),
-        el('span', { class: 'page-head-meta' }, `${built} of ${parts.length} built · ${accepted} accepted`)),
+        el('span', { class: 'page-head-meta' }, `${built} of ${parts.length} built · ${accepted} accepted · ${marked} marked`),
+        progress()),
       el('div', { class: 'parts-layout' },
         el('nav', { class: 'parts-tree', 'aria-label': 'Parts' },
           ...GROUPS.map(([op, title]) => {
@@ -246,6 +293,13 @@ export function createParts({ host, review, showIn3d }) {
       marking = true;
       render();
       host.querySelector('.parts-mark textarea')?.focus();
+      return true;
+    },
+    /** Key N on the Parts tab: the next part to review. Returns true when it acted. */
+    nextSelected() {
+      const next = nextToReview();
+      if (!next) return false;
+      select(next.id);
       return true;
     },
     acceptSelected() {
