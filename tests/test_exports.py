@@ -283,3 +283,11 @@ def test_revision_errors_and_cli(tmp_path, capsys):
     printed = json.loads(capsys.readouterr().out)
     assert printed["not_built"] == ["step_model", "stl_mesh"]
     assert (tmp_path / "cli" / printed["package"]["file"]).is_file()
+
+
+def test_csv_text_cells_cannot_become_spreadsheet_formulas():
+    from vessel_reconstruction.exports.csv_safety import safe_text_cell
+    assert safe_text_cell("=HYPERLINK(\"x\")") == "'=HYPERLINK(\"x\")"
+    assert safe_text_cell("+1") == "'+1" and safe_text_cell("@sum") == "'@sum"
+    assert safe_text_cell("-cmd") == "'-cmd" and safe_text_cell("\tx") == "'\tx"
+    assert safe_text_cell("s01") == "s01" and safe_text_cell(None) == ""

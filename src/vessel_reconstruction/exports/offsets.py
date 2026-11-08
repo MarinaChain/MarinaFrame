@@ -19,6 +19,8 @@ from pathlib import Path
 
 import numpy as np
 
+from .csv_safety import safe_text_cell
+
 DEFAULT_WATERLINE_INTERVALS = 10
 # Heights are written to the nearest millimetre.
 HEIGHT_DECIMALS = 3
@@ -120,7 +122,8 @@ def offsets_csv_text(table: OffsetsTable, stamp_lines: list[str]) -> str:
     writer.writerow(header)
     for index, station in enumerate(table.station_ids):
         cells = ["" if v is None else f"{v:.{BREADTH_DECIMALS}f}" for v in table.half_breadths_m[index]]
-        writer.writerow([station, f"{table.x_m[index]:.3f}", table.source_labels[index],
+        writer.writerow([safe_text_cell(station), f"{table.x_m[index]:.3f}",
+                         safe_text_cell(table.source_labels[index]),
                          f"{table.keel_z_m[index]:.3f}", f"{table.top_z_m[index]:.3f}", *cells])
     return buffer.getvalue()
 

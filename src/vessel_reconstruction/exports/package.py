@@ -23,6 +23,7 @@ import zipfile
 
 from .. import __version__
 from ..provenance import digest_file
+from .csv_safety import safe_text_cell
 from .hydrostatics import Hydrostatics, design_draft, mesh_hydrostatics, read_stl, table_hydrostatics
 from .offsets import DEFAULT_WATERLINE_INTERVALS, offsets_table, write_offsets_csv
 from .report import FOOTER, ReportFacts, write_report
@@ -104,11 +105,13 @@ def write_hydrostatics(hydrostatics: Hydrostatics | None, error: str | None, bui
             writer.writerow([f"# {line}"])
         writer.writerow(["quantity", "value"])
         if hydrostatics is None:
-            writer.writerow(["not_computed_reason", error])
+            writer.writerow(["not_computed_reason", safe_text_cell(error)])
             return
         for key, value in hydrostatics.as_dict().items():
             if isinstance(value, (dict, list)):
                 value = json.dumps(value, sort_keys=True)
+            if isinstance(value, str):
+                value = safe_text_cell(value)
             writer.writerow([key, "" if value is None else value])
 
 
