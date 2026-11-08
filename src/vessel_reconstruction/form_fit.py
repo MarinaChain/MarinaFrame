@@ -110,10 +110,13 @@ class Anchor:
 # ------------------------------------------------------------------ ink checks
 
 def measure_stroke_width_px(image: np.ndarray, points_yz_m, calibration: dict) -> float | None:
-    """Median stroke width along a traced curve, in pixels (full width at half maximum).
+    """Median stroke width along a traced curve, in pixels.
 
-    Each sample counts the dark pixels across the curve on its image row and
-    corrects the count for the curve slope. Returns None when nothing is measured.
+    Each sample finds the stroke on its image row (the pixels above half the
+    peak darkness), sums the darkness of those pixels and of one edge pixel a
+    side, divides by the peak (sub-pixel width: an anti-aliased edge pixel
+    counts by its coverage) and corrects for the curve slope. Returns None when
+    nothing is measured.
     """
     if image is None:
         return None
@@ -145,7 +148,11 @@ def measure_stroke_width_px(image: np.ndarray, points_yz_m, calibration: dict) -
         right = centre
         while right < len(line) - 1 and line[right + 1] >= level:
             right += 1
-        widths.append((right - left + 1) / np.sqrt(1.0 + s * s))
+        # Sub-pixel width: the ink darkness summed across the stroke over its peak
+        # darkness (an anti-aliased edge pixel counts by its coverage). The run
+        # is widened by one pixel a side to include the edge pixels below half.
+        run = line[max(left - 1, 0):right + 2]
+        widths.append(float(np.clip(run, 0.0, None).sum()) / peak / np.sqrt(1.0 + s * s))
     return float(np.median(widths)) if len(widths) >= 5 else None
 
 
@@ -425,31 +432,42 @@ def first_hull(declared: list[dict], anchors: list[Anchor], base_spec: dict, bui
 
     ``build(spec)`` builds one draft specification and returns a result that is
     truthy when a solid was made. When it fails (for example a centreline pinch
-    makes an invalid shell), the most suspect anchor is left out and filled by
-    the fit, and the build is tried again, up to ``max_retries`` times.
-    Returns ``(table, result, left_out)``; ``result`` is falsy only when every
-    try failed.
+    makes an invalid shell), each anchor is left out alone, most suspect first,
+    and filled by the fit. One bad anchor is then found even when the fairness
+    ranking puts it last. When no single left-out anchor gives a solid, anchors
+    are left out one more at a time in suspect order, up to ``max_retries``
+    more builds. Returns ``(table, result, left_out)``; ``result`` is falsy
+    only when every try failed.
     """
     import copy
 
     from .vessel_model import build_spec
 
-    order = suspect_order(anchors)
-    left_out: list[str] = []
-    table, result = None, None
-    for _ in range(max_retries + 1):
+    def attempt(left_out):
         usable = [copy.deepcopy(a) for a in anchors if a.id not in left_out]
         table = fit_vessel(declared, usable)
         if table is None:
-            break
+            return None, None
         for row in table.stations:
             if row.id in left_out:
                 row.notes.append("anchor left out: the build with it failed")
-        result = build(build_spec(table, base_spec, declared))
-        if result:
+        return table, build(build_spec(table, base_spec, declared))
+
+    table, result = attempt([])
+    if table is None or result:
+        return table, result, []
+    order = suspect_order(anchors)
+    for suspect in order:
+        single = [suspect]
+        single_table, single_result = attempt(single)
+        if single_result:
+            return single_table, single_result, single
+    # Each single left-out anchor failed, so start with the two most suspect
+    # anchors left out. Keep at least one anchor.
+    left_out = order[:1]
+    for count in range(2, min(len(order) - 1, max_retries + 1) + 1):
+        left_out = order[:count]
+        table, result = attempt(left_out)
+        if table is None or result:
             break
-        remaining = [sid for sid in order if sid not in left_out]
-        if len(remaining) <= 1:
-            break
-        left_out.append(remaining[0])
     return table, result, left_out

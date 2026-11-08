@@ -241,7 +241,8 @@ def enumerate_strokes(image: np.ndarray, section: dict, source_file: str, detail
             continue
         strokes.append({**traced, "seed_px": [round(seed[0], 1), seed[1]]})
     strokes = link_fragments(image, section, source_file, details, strokes)
-    strokes = [{**stroke, **describe_stroke(stroke, section)} for stroke in strokes]
+    grid = grid_columns(image, section)
+    strokes = [{**stroke, **describe_stroke(stroke, section, grid)} for stroke in strokes]
     strokes.sort(key=lambda s: (s["kind"] == "straight_grid_line", -s["hull_likeness"]))
     return strokes, refusals
 
@@ -255,13 +256,40 @@ STRAIGHT_LINE_MIN_HEIGHT_SHARE = 0.5
 STRAIGHT_LINE_MAX_SLOPE = 0.05
 STRAIGHT_LINE_TOLERANCE_PX = 2.0
 STRAIGHT_LINE_ROW_SHARE = 0.9
+# A vertical grid line is a column inked on at least GRID_COLUMN_SHARE of the
+# trace window height (a hull side is curved at the bilge, so it never spans
+# the whole window). A stroke with GRID_RIDE_ROW_SHARE of its rows within
+# GRID_RIDE_TOLERANCE_PX of such a column rides the grid line.
+GRID_COLUMN_SHARE = 0.85
+GRID_RIDE_TOLERANCE_PX = 2.0
+GRID_RIDE_ROW_SHARE = 0.75
 
 
-def stroke_kind(rows, xs, section: dict) -> str:
+def grid_columns(image: np.ndarray, section: dict) -> list[float]:
+    """Source columns (centres) of the vertical grid lines that span the section's trace window."""
+    left = _trace_window(section, image.shape)[0]
+    mask = window_foreground(image, section)[0]
+    if mask.shape[0] == 0:
+        return []
+    padded = np.pad(mask, ((0, 0), (1, 1)))
+    band = padded[:, :-2] | padded[:, 1:-1] | padded[:, 2:]
+    full = np.flatnonzero(band.mean(axis=0) >= GRID_COLUMN_SHARE)
+    groups = np.split(full, np.flatnonzero(np.diff(full) > 1) + 1) if len(full) else []
+    centre = float(section["calibration"]["centerline_px"])
+    # The centreline is not a grid line here: hull strokes end on it.
+    return [float(np.mean(g)) + left for g in groups
+            if len(g) and abs(float(np.mean(g)) + left - centre) > GRID_RIDE_TOLERANCE_PX + 1.0]
+
+
+def stroke_kind(rows, xs, section: dict, grid_columns_px=None) -> str:
     """Label long, straight vertical evidence (grid, centreline, rulers) without removing it.
 
     Section traces are row-indexed, so horizontal grid lines are not enumerated
     as sustained strokes. ``rows`` are the first and last row of the trace.
+    ``grid_columns_px`` (source columns of full-height vertical grid lines,
+    ``grid_columns``) also labels a stroke that rides a grid line for most of
+    its rows: a follower that left a hull curve at a crossing and ran on along
+    the grid line (a hull curve only crosses a grid line).
     """
     calibration = section["calibration"]
     expected_height = (section["z_max_m"] - section["z_min_m"]) * calibration["pixels_per_metre"]
@@ -269,6 +297,11 @@ def stroke_kind(rows, xs, section: dict) -> str:
         return "candidate_stroke"
     xs = np.asarray(xs, dtype=float)
     span = rows[-1] - rows[0]
+    if grid_columns_px is not None and len(grid_columns_px):
+        columns = np.asarray(grid_columns_px, dtype=float)
+        distance = np.min(np.abs(xs[:, None] - columns[None, :]), axis=1)
+        if float(np.mean(distance <= GRID_RIDE_TOLERANCE_PX)) >= GRID_RIDE_ROW_SHARE:
+            return "straight_grid_line"
     if span >= 0.95 * expected_height and float(np.ptp(xs)) <= 2.0:
         return "straight_grid_line"
     if span < STRAIGHT_LINE_MIN_HEIGHT_SHARE * expected_height or len(xs) < 2:
@@ -293,7 +326,7 @@ HULL_KEEL_SHARE = 0.1
 HULL_TURN_DEG = 180.0
 
 
-def describe_stroke(stroke: dict, section: dict) -> dict:
+def describe_stroke(stroke: dict, section: dict, grid_columns_px=None) -> dict:
     """Kind, vertical coverage and hull-likeness of a verified stroke (added fields only).
 
     ``z_coverage_fraction`` is the share of the section's calibrated height
@@ -302,7 +335,7 @@ def describe_stroke(stroke: dict, section: dict) -> dict:
     model; it does not certify that a stroke is a hull line.
     """
     rows_range, xs = stroke["trace_rows_px"], np.asarray(stroke["trace_xs_px"], dtype=float)
-    kind = stroke_kind(rows_range, xs, section)
+    kind = stroke_kind(rows_range, xs, section, grid_columns_px)
     low, high = float(section["z_min_m"]), float(section["z_max_m"])
     z_low, z_high = (float(v) for v in stroke["z_range_m"])
     coverage = float(np.clip((z_high - z_low) / (high - low), 0.0, 1.0))

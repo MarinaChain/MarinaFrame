@@ -179,6 +179,39 @@ def test_first_hull_leaves_out_a_suspect_anchor_after_a_failed_build():
     assert anchors[4].points_yz_m == (np.asarray(hull_section(50.0)) * [1.3, 1.0]).tolist()  # inputs unchanged
 
 
+def test_first_hull_finds_one_bad_anchor_that_the_ranking_puts_last():
+    anchors = synthetic_anchors()
+    base = {"source": {"file": "drawing.png"}, "sections": [a.selection_section for a in anchors]}
+    bad = F.suspect_order(anchors)[-1]
+    builds = []
+
+    def build(spec):
+        traced = {s["id"] for s in spec["sections"] if "contour_selection" in s}
+        builds.append(traced)
+        return bad not in traced  # Only the bad anchor breaks the shell.
+
+    table, result, left_out = F.first_hull(declared(), anchors, base, build)
+    assert result and left_out == [bad]
+    assert len(builds) == 1 + len(anchors)  # The full build, then each single left out.
+    assert table.row(bad).source == "fitted"
+
+
+def test_first_hull_leaves_out_more_anchors_when_no_single_one_is_enough():
+    anchors = synthetic_anchors()
+    base = {"source": {"file": "drawing.png"}, "sections": [a.selection_section for a in anchors]}
+    order = F.suspect_order(anchors)
+    builds = []
+
+    def build(spec):
+        traced = {s["id"] for s in spec["sections"] if "contour_selection" in s}
+        builds.append(traced)
+        return not traced & set(order[:2])  # Both of the two most suspect anchors break it.
+
+    table, result, left_out = F.first_hull(declared(), anchors, base, build)
+    assert result and left_out == order[:2]
+    assert len(builds) == 1 + len(anchors) + 1
+
+
 def test_first_hull_without_anchors_returns_no_table():
     table, result, left_out = F.first_hull(declared(), [], {"sections": []}, lambda spec: True)
     assert table is None and not result and left_out == []
@@ -219,3 +252,26 @@ def test_interpolated_label_only_for_form_fit_sections():
     spec = {"draft": {"guesses": [{"section_id": "s02", "kind": "bridged_gap"},
                                   {"section_id": "s03", "kind": "model_authored"}]}}
     assert _table_fit_section_ids(spec) == {"s02"}
+
+
+def test_build_spec_reads_a_partial_trace_only_on_its_own_height_range():
+    anchors = synthetic_anchors()
+    partial = [p for p in hull_section(50.0) if p[1] >= 2.0]  # Ink starts 2 m above the declared keel.
+    anchors[4].points_yz_m = partial
+    table = F.fit_vessel(declared(), anchors)
+    base = {"source": {"file": "drawing.png"}, "sections": [a.selection_section for a in anchors]}
+    by_id = {s["id"]: s for s in build_spec(table, base, declared())["sections"]}
+    assert by_id[anchors[4].id]["z_min_m"] == pytest.approx(partial[0][1])
+    assert by_id["s01"]["z_min_m"] == pytest.approx(hull_section(STATIONS[0])[0][1])  # Its own keel.
+
+
+def test_stroke_width_counts_anti_aliased_edges_by_coverage():
+    image = np.full((450, 400), 255, dtype=np.uint8)
+    points = hull_section(50.0)
+    for y, z in points:
+        col, row = 10.0 + y * PPM, 440.0 - z * PPM
+        c, r = int(round(col)), int(round(row))
+        image[r, c - 1:c + 2] = 0  # 3 px of full ink and two half-covered edge pixels: 4 px wide.
+        image[r, c - 2] = image[r, c + 2] = 128
+    width = F.measure_stroke_width_px(image, points, declared()[0]["calibration"])
+    assert width == pytest.approx(4.0, abs=0.4)

@@ -160,3 +160,41 @@ def test_nested_drawing_gets_one_stroke_per_station(tmp_path):
     # Inspection now shows the recommendation as an added field.
     observed = domain.execute("inspect_source", {"section_ids": ["s1"]})
     assert observed["sections"][0]["recommended_station_assignment"]["candidate_id"] == guesses[0]["chosen_candidate_id"]
+
+
+def test_a_long_weak_stroke_is_used_before_two_stations_share_one():
+    # A crossing or an occluded end lowers likeness, not length: a long distinct
+    # stroke is a station curve, so no station shares the outermost stroke.
+    strokes = [_stroke("wide", 180), _stroke("middle", 120, likeness=0.09), _stroke("narrow", 60, likeness=0.27)]
+    result = pa.assign_panel(AFT, AFT + FORE, strokes)
+    assert [result[s]["candidate_id"] for s in ("s3", "s2", "s1")] == ["wide", "middle", "narrow"]
+    assert result["s2"]["hull_likeness"] == 0.09
+    assert not any(w.startswith("fewer_strokes") for r in result.values() for w in r["warnings"])
+
+
+def test_short_weak_fragments_still_let_parallel_midbody_stations_share():
+    strokes = [_stroke("wide", 180), _stroke("piece", 120, likeness=0.09, rows=np.arange(120, BOTTOM + 1)),
+               _stroke("narrow", 60, likeness=0.27, rows=np.arange(TOP, 150))]
+    result = pa.assign_panel(AFT, AFT + FORE, strokes)
+    assert result["s3"]["candidate_id"] == result["s2"]["candidate_id"] == "wide"
+
+
+def test_a_stroke_that_rides_a_grid_line_is_tagged_as_grid():
+    section = _section("s1", 10)
+    rows = [TOP, BOTTOM]
+    count = BOTTOM - TOP + 1
+    # A curve top (20 % of the rows) that ran on down a grid line at column 150.
+    xs = np.concatenate([np.linspace(190, 152, count // 5), np.full(count - count // 5, 150.0)])
+    assert inv.stroke_kind(rows, xs, section) == "candidate_stroke"
+    assert inv.stroke_kind(rows, xs, section, [150.0]) == "straight_grid_line"
+    # A hull curve that only crosses the grid line is not.
+    assert inv.stroke_kind(rows, _hull_x(np.arange(TOP, BOTTOM + 1), 180), section, [150.0]) == "candidate_stroke"
+
+
+def test_grid_columns_are_full_height_lines_and_not_the_centreline():
+    image = np.full((240, 260, 3), 255, dtype=np.uint8)
+    image[:, CENTRE] = 0
+    image[:, 150] = 0
+    image[100:200, 90] = 0  # A short vertical piece is not a grid line.
+    columns = inv.grid_columns(image, _section("s1", 10))
+    assert len(columns) == 1 and abs(columns[0] - 150) <= 1
