@@ -1,7 +1,11 @@
-"""Restricted, reference-only ship programs. This module never evaluates model code.
+"""Restricted ship programs. This module never evaluates model code.
 
-Only the drawing measurement harness supplies the measurement map. A program
-cannot add measurements, choose an output path, or set review/approval state.
+The drawing measurement harness supplies the measurement map. Since the
+whole-vessel plan (docs/plans/2026-11-09-whole-vessel-scope.md), gaps are
+filled, not left unbuilt: an argument can also be an inline value with a
+source label (``ai_inferred`` or ``guessed``), and the host can give a
+labelled guess for each measurement reference. A program still cannot run
+code, choose an output path, or set review state.
 """
 from __future__ import annotations
 
@@ -26,7 +30,12 @@ OPERATIONS = {
     'appendage': {'outline': 'outline', 'span': 'interval'},
     'opening': {'outline': 'outline', 'height': 'interval', 'target': 'component'},
 }
-METHODS = {'closed_outline', 'parallel_lines', 'body_plan_regions', 'dimension_text'}
+METHODS = {'closed_outline', 'parallel_lines', 'body_plan_regions', 'dimension_text',
+           'enclosed_region', 'profile_levels'}
+# Source labels of values that are not read from drawing ink.
+FILLED_SOURCES = ('ai_inferred', 'guessed')
+INLINE_FIELDS = {'value', 'source', 'basis'}
+MAX_BASIS_CHARS = 400
 
 
 def _id(value) -> bool:
@@ -74,8 +83,12 @@ def validate_program(program: dict) -> dict:
             raise ValueError('unknown source view, region or method')
         _keys(component['args'], OPERATIONS[op], 'arguments')
         for key, reference in component['args'].items():
+            kind = OPERATIONS[op][key]
+            if isinstance(reference, dict) and kind not in ('component', 'sections'):
+                _validate_inline(reference, kind)
+                continue
             if not _id(reference):
-                raise ValueError('dimensions must be named measurement references')
+                raise ValueError('dimensions must be measurement references or labelled inline values')
             if key == 'target' and reference not in seen:
                 raise ValueError('opening target must be an earlier component')
         seen.add(name)
@@ -86,6 +99,23 @@ def _finite(value) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
+def _validate_inline(item, kind):
+    """An inline value must carry its source label and a short basis."""
+    _keys(item, INLINE_FIELDS, 'inline value')
+    if item['source'] not in FILLED_SOURCES:
+        raise ValueError('inline value source must be ai_inferred or guessed')
+    if not isinstance(item['basis'], str) or not 0 < len(item['basis']) <= MAX_BASIS_CHARS:
+        raise ValueError('inline value needs a short basis text')
+    if not _value_ok(item['value'], kind):
+        raise ValueError(f'inline value is not a valid {kind}')
+
+
+def _guess_ok(record, kind) -> bool:
+    return (isinstance(record, dict) and record.get('kind') == kind
+            and record.get('source') in FILLED_SOURCES and isinstance(record.get('basis'), str)
+            and _value_ok(record.get('value'), kind))
+
+
 def _measurement_ok(record: dict, kind: str) -> bool:
     if (not isinstance(record, dict) or record.get('status') != 'measured' or record.get('kind') != kind
             or record.get('view') not in ('plan', 'profile', 'body')
@@ -94,7 +124,10 @@ def _measurement_ok(record: dict, kind: str) -> bool:
             or re.fullmatch('[a-f0-9]{64}', record['source_sha256']) is None
             or not record.get('entity_ids')):
         return False
-    value = record.get('value')
+    return _value_ok(record.get('value'), kind)
+
+
+def _value_ok(value, kind: str) -> bool:
     if kind == 'length':
         return _finite(value) and 0 < value <= 1000
     if kind == 'interval':
@@ -109,37 +142,79 @@ def _measurement_ok(record: dict, kind: str) -> bool:
     return False
 
 
-def resolve_program(program: dict, measurements: dict) -> list[dict]:
+def _expected_view(op: str, argument: str, kind: str) -> str | None:
+    if kind == 'sections':
+        return 'body'
+    if kind == 'outline':
+        return 'profile' if op == 'appendage' else 'plan'
+    return 'profile' if argument == 'height' else None
+
+
+def _measurement_problem(op, argument, kind, reference, record) -> str | None:
+    """Return why a measurement cannot be used, or None when it is traced evidence."""
+    if not _measurement_ok(record, kind):
+        return f'{reference}: {record.get("reason", "missing or invalid measurement")}'
+    expected_view = _expected_view(op, argument, kind)
+    if expected_view is not None and record['view'] != expected_view:
+        return f'{reference}: expected {expected_view} measurement'
+    return None
+
+
+def resolve_program(program: dict, measurements: dict, guesses: dict | None = None) -> list[dict]:
+    """Resolve each argument to traced evidence, an inline value or a host guess.
+
+    Source labels: ``traced`` (measured drawing ink), ``ai_inferred`` (a model
+    value) and ``guessed`` (a code gap fill). A component that uses any filled
+    value is built with status ``draft_guess``. A component stays unbuilt only
+    when an argument has neither a usable measurement nor a valid guess.
+    """
     validate_program(program)
+    guesses = guesses or {}
     resolved = []
     for component in program['components']:
-        values, evidence, failures = {}, {}, []
-        for argument, kind in OPERATIONS[component['op']].items():
+        op = component['op']
+        values, evidence, labels, failures, fills = {}, {}, {}, [], []
+        for argument, kind in OPERATIONS[op].items():
             reference = component['args'][argument]
             if kind == 'component':
                 values[argument] = reference
                 continue
+            if isinstance(reference, dict):
+                values[argument] = reference['value']
+                labels[argument] = reference['source']
+                evidence[argument] = {'source': reference['source'], 'basis': reference['basis']}
+                fills.append(f'{argument}: {reference["source"]}: {reference["basis"]}')
+                continue
             record = measurements.get(reference, {})
-            if not _measurement_ok(record, kind):
-                failures.append(f'{reference}: {record.get("reason", "missing or invalid measurement")}')
+            problem = _measurement_problem(op, argument, kind, reference, record)
+            if problem is None:
+                values[argument] = record['value']
+                labels[argument] = 'traced'
+                evidence[reference] = record
                 continue
-            expected_view = ('body' if kind == 'sections' else
-                             'profile' if kind == 'outline' and component['op'] == 'appendage' else
-                             'plan' if kind == 'outline' else
-                             'profile' if argument == 'height' else None)
-            if expected_view is not None and record['view'] != expected_view:
-                failures.append(f'{reference}: expected {expected_view} measurement')
+            guess = guesses.get(reference)
+            if not _guess_ok(guess, kind):
+                failures.append(problem)
                 continue
-            values[argument] = record['value']
-            evidence[reference] = record
-        primary = component['args']['sections' if component['op'] == 'hull' else 'outline']
-        if primary in evidence:
+            values[argument] = guess['value']
+            labels[argument] = guess['source']
+            evidence[reference] = {'source': guess['source'], 'basis': guess['basis'],
+                                   'entity_ids': guess.get('entity_ids', []), 'replaces': problem}
+            fills.append(f'{reference}: {guess["source"]}: {guess["basis"]}')
+        primary_argument = 'sections' if op == 'hull' else 'outline'
+        primary = component['args'][primary_argument]
+        if labels.get(primary_argument) == 'traced':
             record = evidence[primary]
             if any(record[key] != component['source'][key] for key in ('view', 'region', 'method')):
                 failures.append('primary measurement does not match named source')
-        resolved.append({'id': component['id'], 'op': component['op'], 'source': component['source'],
-                         'status': 'draft_guess' if failures else 'measured_draft',
-                         'reason': '; '.join(failures) if failures else 'Component identity needs human review',
+        if failures:
+            status, reason = 'draft_guess', '; '.join(failures)
+        elif fills:
+            status, reason = 'draft_guess', '; '.join(fills)
+        else:
+            status, reason = 'measured_draft', 'Component identity needs human review'
+        resolved.append({'id': component['id'], 'op': op, 'source': component['source'],
+                         'status': status, 'reason': reason, 'source_labels': labels,
                          'geometry': None if failures else values, 'provenance': evidence})
     return resolved
 
@@ -169,7 +244,7 @@ def step_cuts(path: Path, planes: dict) -> dict:
     """Reimport STEP and cut profile y, plan z and body x planes (metres)."""
     import cadquery as cq
     from OCP.BRepAlgoAPI import BRepAlgoAPI_Section
-    from OCP.gp import gp_Pln, gp_Pnt, gp_Dir
+    from OCP.gp import gp_Dir, gp_Pln, gp_Pnt
 
     shape = cq.importers.importStep(str(path)).val()
     results = {}
@@ -203,11 +278,12 @@ def _prism(outline, interval, plane='XY'):
     return shape.translate((0, 0, low) if plane == 'XY' else (0, high, 0))
 
 
-def execute(program: dict, measurements: dict, out: Path, *, audit=None, veto=False) -> dict:
+def execute(program: dict, measurements: dict, out: Path, *, audit=None, veto=False,
+            guesses: dict | None = None) -> dict:
     """Trusted worker entry. ``out`` is host-selected, never program-selected."""
     import cadquery as cq
 
-    components = resolve_program(program, measurements)
+    components = resolve_program(program, measurements, guesses)
     shapes = {}
     out.mkdir(parents=True, exist_ok=True)
     for component in components:

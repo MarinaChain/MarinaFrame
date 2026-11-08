@@ -7,12 +7,12 @@ only the fresh task directory is writable. Linux requires a future equivalent.
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
 import json
 import os
 import stat
-from pathlib import Path
 import sys
+from dataclasses import asdict
+from pathlib import Path
 
 from .isolation import DEFAULT_LIMITS, safe_worker_environment, supervise_process
 
@@ -100,7 +100,8 @@ def read_worker_json(root: Path, relative: Path) -> dict | None:
     return json.loads(data)
 
 
-def run(program: dict, measurements: dict, task: Path, *, audit=None, limits=DEFAULT_LIMITS) -> dict:
+def run(program: dict, measurements: dict, task: Path, *, audit=None, limits=DEFAULT_LIMITS,
+        guesses: dict | None = None) -> dict:
     from .ship_cad import validate_program
 
     validate_program(program)
@@ -111,7 +112,8 @@ def run(program: dict, measurements: dict, task: Path, *, audit=None, limits=DEF
     task.mkdir(parents=True)
     task = task.resolve()
     (task/'work').mkdir()
-    (task/'input.json').write_text(json.dumps({'program': program, 'measurements': measurements, 'audit':audit}))
+    (task/'input.json').write_text(json.dumps({'program': program, 'measurements': measurements, 'audit': audit,
+                                               'guesses': guesses or {}}))
     profile = task/'worker.sb'
     profile.write_text(sandbox_profile(task, runtime_paths()))
     env = safe_worker_environment()
@@ -137,7 +139,8 @@ def main(argv=None):
     apply_limits(json.loads(args.limits), args.parent)
     from .ship_cad import execute
     data = json.loads((args.task/'input.json').read_text())
-    execute(data['program'], data['measurements'], args.task/'work'/'output', audit=data.get('audit'))
+    execute(data['program'], data['measurements'], args.task/'work'/'output', audit=data.get('audit'),
+            guesses=data.get('guesses'))
     return 0
 
 
