@@ -141,7 +141,9 @@ def build_command(args: argparse.Namespace, case: str) -> list[str]:
     command = [str(args.binary.resolve()), "run",
                "--task", str(args.out.resolve() / case / "task"),
                "--source", str(args.inputs.resolve() / case / "spec.json"),
-               "--worker-python", str(args.worker_python.resolve()),
+               # absolute(), not resolve(): a venv python is a symlink to the base interpreter,
+               # and resolving it would leave the venv (no CAD packages).
+               "--worker-python", str(args.worker_python.absolute()),
                "--worker-source", str(args.worker_source.resolve())]
     if args.basis:
         command += ["--provider-transfer-basis", args.basis]

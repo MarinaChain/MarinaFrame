@@ -175,3 +175,18 @@ def test_extra_options_must_be_pairs(tmp_path, monkeypatch):
     argv, _, _ = setup_round(tmp_path, monkeypatch, ["c1"], flags=("--policy",))
     with pytest.raises(SystemExit, match="pairs"):
         run_round.main(argv)
+
+
+
+def test_worker_python_symlink_is_not_resolved(tmp_path):
+    """A venv python is a symlink; the command must keep the venv path, not the base interpreter."""
+    import argparse
+    target = tmp_path / "base-python"
+    target.write_text("")
+    link = tmp_path / "venv" / "bin" / "python"
+    link.parent.mkdir(parents=True)
+    link.symlink_to(target)
+    args = argparse.Namespace(binary=tmp_path / "bin", out=tmp_path / "out", inputs=tmp_path / "in",
+                              worker_python=link, worker_source=tmp_path / "src", basis=None, extra=[])
+    command = run_round.build_command(args, "case-1")
+    assert command[command.index("--worker-python") + 1] == str(link)
