@@ -37,6 +37,17 @@ class WorkerLimits:
 
 DEFAULT_LIMITS = WorkerLimits()
 
+# The wall limit stops runaway work, so it counts only work the worker did: a
+# worker past ``wall_seconds`` keeps running while its process group has used
+# less CPU time than that (a busy machine gave it less than one core). A
+# worker that does not progress (a hang, or a machine so busy that it gets
+# under 1 / STALL_WALL_FACTOR of a core) is still stopped at this multiple of
+# the wall limit. 10 covers the 6.5x slowdown seen with parallel CAD lanes
+# (W19a2, shipd-1-00045-L2). RLIMIT_CPU and the memory and file limits are unchanged.
+STALL_WALL_FACTOR = 10
+# How often, after the wall limit, the supervisor reads the group's CPU time.
+CPU_POLL_SECONDS = 1.0
+
 
 def safe_worker_environment() -> dict[str, str]:
     # Explicit allowlist: provider credentials and unrelated inherited secrets
@@ -227,6 +238,56 @@ def child_has_exited(pid: int) -> bool:
     return int.from_bytes(info.raw[offset:offset + 4], sys.byteorder, signed=True) != 0
 
 
+def _ps_time_seconds(text: str) -> float:
+    """Seconds of a ps ``time`` field: [[dd-]hh:]mm:ss[.ff]."""
+    days, _, clock = text.rpartition('-')
+    seconds = 0.0
+    for part in clock.split(':'):
+        seconds = seconds * 60 + float(part)
+    return seconds + (int(days) * 86400 if days else 0)
+
+
+def group_cpu_seconds(pgid: int) -> float | None:
+    """CPU time (user + system) used by the live members of a process group, or None.
+
+    Children that have exited and been reaped no longer count, so the value can
+    be low; the supervisor then waits longer, never less (see STALL_WALL_FACTOR).
+    """
+    try:
+        result = subprocess.run(['/bin/ps', '-A', '-o', 'pgid=', '-o', 'time='],
+                                capture_output=True, text=True, env={'LC_ALL': 'C'}, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    total, found = 0.0, False
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        if len(fields) != 2 or fields[0] != str(pgid):
+            continue
+        try:
+            total += _ps_time_seconds(fields[1])
+            found = True
+        except ValueError:
+            return None
+    return total if found else None
+
+
+def wall_limit_reached(elapsed: float, limits: WorkerLimits, cpu_seconds: Callable[[], float | None]) -> bool:
+    """True when a worker has run ``elapsed`` seconds past its time budget.
+
+    The budget is ``limits.wall_seconds`` of CPU time, so the result does not
+    depend on how busy the machine is. ``cpu_seconds`` is read only after the
+    wall limit; when it is unknown, the wall limit applies as before.
+    """
+    if elapsed < limits.wall_seconds:
+        return False
+    if elapsed >= STALL_WALL_FACTOR * limits.wall_seconds:
+        return True
+    used = cpu_seconds()
+    return used is None or used >= limits.wall_seconds
+
+
 def _tree_bytes(root: Path, *, stop_after: int) -> int:
     total = 0
     if root.is_symlink():
@@ -289,6 +350,8 @@ def supervise_process(command: list[str], *, limits: WorkerLimits = DEFAULT_LIMI
     if identity:
         identity['token'] = child_environment['MARINAFRAME_JOB_TOKEN']
     state = 'exited'
+    group = (identity or {}).get('pgid', process.pid)
+    next_cpu_check = 0.0
     try:
         if on_start:
             on_start(identity or {'pid': process.pid, 'pgid': process.pid, 'start_ticks': -1})
@@ -301,8 +364,13 @@ def supervise_process(command: list[str], *, limits: WorkerLimits = DEFAULT_LIMI
                 state = 'cancelled'; break
             if stop_event is not None and stop_event.is_set():
                 state = 'interrupted'; break
-            if time.monotonic() - started >= limits.wall_seconds:
+            elapsed = time.monotonic() - started
+            if elapsed >= STALL_WALL_FACTOR * limits.wall_seconds:
                 state = 'timed_out'; break
+            if elapsed >= limits.wall_seconds and elapsed >= next_cpu_check:
+                next_cpu_check = elapsed + CPU_POLL_SECONDS
+                if wall_limit_reached(elapsed, limits, lambda: group_cpu_seconds(group)):
+                    state = 'timed_out'; break
             if output_dir is not None and _output_bytes(output_dir, limits.output_bytes) > limits.output_bytes:
                 state = 'resource_limited'; break
             time.sleep(0.05)

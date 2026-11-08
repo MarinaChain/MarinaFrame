@@ -212,9 +212,74 @@ def test_first_hull_leaves_out_more_anchors_when_no_single_one_is_enough():
     assert len(builds) == 1 + len(anchors) + 1
 
 
-def test_first_hull_without_anchors_returns_no_table():
-    table, result, left_out = F.first_hull(declared(), [], {"sections": []}, lambda spec: True)
-    assert table is None and not result and left_out == []
+def test_first_hull_without_anchors_builds_the_prior_form():
+    builds = []
+
+    def build(spec):
+        builds.append(spec)
+        return True
+
+    table, result, left_out = F.first_hull(declared(), [], {"source": {"file": "drawing.png"}, "sections": []}, build)
+    assert result and left_out == [] and len(builds) == 1
+    assert set(table.sources().values()) == {"prior"}
+    assert any(w["kind"] == "no_ink" for w in table.warnings)
+    spec = builds[0]
+    assert check_draft(spec["draft"])
+    assert {g["kind"] for g in spec["draft"]["guesses"]} == {"dropped_end"}
+    for section in spec["sections"]:
+        assert section["authored"]["source_label"] == "ai_inferred"
+        assert check_authored(section["authored"])
+        assert "contour_selection" not in section
+
+
+def test_prior_form_uses_the_given_size_and_is_finest_at_the_ends():
+    size = F.PriorDimensions(half_beam_m=5.0, top_z_m=8.0, source="vessel description")
+    table = F.prior_hull(declared(), size)
+    widths = {row.id: max(p[0] for p in row.points_yz_m) for row in table.stations}
+    tops = {row.top_z_m for row in table.stations}
+    assert max(widths.values()) <= 5.0 + 1e-9 and widths["s05"] == max(widths.values())
+    assert widths["s01"] < widths["s03"] < widths["s05"] and widths["s09"] < widths["s07"]
+    assert tops == {8.0}
+    # With no size given, the calibrated panels give it: (400 - 10) px / 40 px per metre.
+    assert F.panel_dimensions(declared()).half_beam_m == pytest.approx(9.75)
+
+
+def test_every_anchor_dropped_gives_the_prior_form_with_the_reasons():
+    line = [[2.0, z] for z in np.linspace(0.0, DEPTH, 50)]
+    anchors = [anchor("s03", 30.0, line), anchor("s05", 50.0, line)]
+    table = F.fit_vessel(declared(), anchors)
+    assert set(table.sources().values()) == {"prior"}
+    assert {w["section_id"] for w in table.warnings if w["kind"] == "anchor_dropped"} == {"s03", "s05"}
+
+
+def test_left_out_anchors_are_reported_with_the_build_failure_reason():
+    anchors = synthetic_anchors()
+    base = {"source": {"file": "drawing.png"}, "sections": [a.selection_section for a in anchors]}
+    calls = []
+
+    def build(spec):
+        calls.append(spec)
+        return True if len(calls) > 1 else F.BuildFailure("timeout", "the build worker timed out twice")
+
+    table, result, left_out = F.first_hull(declared(), anchors, base, build)
+    assert result and len(left_out) == 1
+    reported = [w for w in table.warnings if w["kind"] == "anchor_left_out"]
+    assert [w["section_id"] for w in reported] == left_out
+    assert reported[0]["reason"] == "timeout" and "timeout" in reported[0]["message"]
+
+
+def test_prior_form_is_built_when_no_anchor_set_builds():
+    anchors = synthetic_anchors()
+    base = {"source": {"file": "drawing.png"}, "sections": [a.selection_section for a in anchors]}
+
+    def build(spec):
+        traced = [s for s in spec["sections"] if "contour_selection" in s]
+        return not traced or F.BuildFailure("invalid_geometry", "invalid_shell")
+
+    table, result, left_out = F.first_hull(declared(), anchors, base, build)
+    assert result and sorted(left_out) == sorted(a.id for a in anchors)
+    assert set(table.sources().values()) == {"prior"}
+    assert {w["reason"] for w in table.warnings if w["kind"] == "anchor_left_out"} == {"invalid_geometry"}
 
 
 def test_stroke_width_is_measured_across_the_curve():
