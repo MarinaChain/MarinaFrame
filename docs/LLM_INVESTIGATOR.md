@@ -90,6 +90,19 @@ All costs were present in both rounds. Round 2 L0/L1 built, rendered and finishe
 
 Verification: draft repair/interpolation unit test passed; two real-CAD tests passed including draft STEP reimport/render and strict refusal. Quick tier passed with 713 tests. Full suite found an explicit-pause regression; fixed to preserve `Paused`. A later quick run was invalidated by an edit during pinned-worker tests (`worker_implementation_changed`); the stable-source rerun passed, no guard weakened. Final `make test-full` passed: Rust workspace and real-CAD guards, app real task, 713 quick Python tests, 19 Python CAD tests, and smoke (`awaiting_human_review`, valid). Log: main `work/w17/w17b-full-final.log`. Independent read-only diff review reported no confirmed correctness defects.
 
+## W17c: the model writes geometry
+
+Founder principle (2026-11-08): the model fills what the drawing does not show, and writing geometry is a main capability of the model, not only a fallback. Draft mode adds the tool `propose_section` (Rust `rust-control/src/authoring.rs`, Python `section_authoring.py`, `DomainTools._propose_section`).
+
+- Input forms: `half_breadths` (5-24 `[height_m, half_breadth_m]` pairs), `blend` (the nearest neighbouring sections with a curve, weighted by station position, scaled by `fullness` 0.5-1.5), `standard_form` (U or V with `beam_m`, `draft_m`, optional `bilge_radius_m`, `deadrise_deg`). The model gives `basis` (one line) and `replaces` (`none` or the traced candidate it corrects).
+- Code fairs the curve (PCHIP resample to 65 heights, then two `[1, 2, 1]/4` passes for offsets), clamps it to the declared section height range, depth and half beam, and reports each change as a warning. A lowest point off the centreline is reported as a flat bottom that the builder closes. A section area more than 50% from its neighbours' mean is reported as possibly unfair. Code refuses only input that cannot become a curve.
+- The result is an authored catalog candidate (`model_traced: true`, so no policy selection and no best-score guess can take it) and an open guess of kind `model_authored` with the checks as verifier evidence. The tool returns the curve on the source panel (orange; the replaced trace in blue).
+- Labels: `ai_inferred` (no trace replaced) or `ai_corrected` (replaces a trace or a selection). With `traced`, `repaired` and `interpolated` from W17b, `build_draft` returns `section_sources` (per section label and basis, and a count per label). Each built section record carries `source_label`.
+- Model-authored geometry is accepted only in a draft specification (`authored_outside_draft` otherwise), so it never reaches the verified path. `engineering_approved` stays false; the scoring gate does not change.
+- Prompt change (`INVESTIGATION_PROMPT`): removed "coordinates of a line" from the "You never write ..." sentence and added one sentence about `propose_section`.
+
+Live check (2 DTMB development cases, data in main `work/w17c/`, not scored): both ended `draft_not_verified` with a STEP draft. The model did not call `propose_section` in either case, because every station had a traced candidate: L0 sources 7 repaired + 2 traced (11 requests, 4 refused for a pre-existing argument-shape error), L1 9 traced (35 requests). Model-authored geometry use is therefore 0/2 so far; a round with blank or faint stations is needed to measure it.
+
 ## Verification and resume
 
 - History test failed before fix with actual null reason, then passed.
