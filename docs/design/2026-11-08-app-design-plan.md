@@ -169,15 +169,17 @@ Research basis: `docs/research/2026-11-09-uiux-research.md`. Screens and where t
 | Queue | Working now / Ready to check / Earlier | `js/app.js` |
 | Parts (whole vessel) | tree by op, true-scale profile and plan sketches, values with source and basis, Accept (A) / Mark (M) / Next (N), 3D outline, Copy part list (formula-safe), sign-off "usable as a starting model" | `js/parts.js`, `app/core/src/parts.rs`, `signoff.rs` |
 | Everywhere | command palette (Cmd/Ctrl+K), shortcut sheet (?), theme button, Draft-only chip | `js/palette.js`, `js/shortcuts.js` |
+| Settings > Key usage | per key slot rolling/weekly/monthly meters with reset time ("At limit until …" for a rate-limited window), the slot the next run uses (worker rule), amber warning when every key is near or at a limit; on demand only | `js/usage.js`, `app/core/src/model_usage.rs` |
+| Batch queue (M6) | Choose folder / folder drop: one set per PDF, subfolder or loose images; batch sheet with check boxes; Queue "Waiting" with order, state, ↑ ↓, Remove and the run-slot line; rail count; Home link; sets wait while the AI is off | `js/batch.js`, `app/core/src/batch.rs` |
 
 Checks: `cd app && npm run test:ui` (section areas, part list safety, reasons) and `npm run
-test:a11y` (axe-core on 15 mock screens, light and dark; must report no violations).
+test:a11y` (axe-core on 18 mock screens, light and dark; must report no violations).
 
 Section areas (Checks tab) compare each station with the fair curve through its neighbours
 and show volume, largest area, centre and Cp between the end stations. The note says that
 the drawings give no area curve to compare with: no worker step reads a printed SAC yet.
 
-Open (next): re-run one part from a mark (controller and worker; the marks are in
+Open (next): a desktop notification when a queued run finishes (needs a Tauri notification plugin); re-run one part from a mark (controller and worker; the marks are in
 `TaskView.components[].review_note`); a worker step that reads a printed SAC (from a
 hydrostatic or capacity sheet) so the Checks tab can draw it under the built curve; parts from a real whole-vessel run folder (the reader is tested on real
 ship-cad output, `app/core/testdata/ship_cad_execution.json`).
