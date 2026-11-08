@@ -125,7 +125,15 @@ def traced_candidate(traced: dict, source_sha: str, section_id: str, tool: str) 
                      "vertical_range_from_ink": traced["vertical_range_from_ink"]},
             "grid_supported_hypothesis": False, "non_grid_competing_components": None,
             "contour_selection": traced["contour_selection"], "z_range_m": traced["z_range_m"],
-            "identity_certified": False}
+            "identity_certified": False, **_stroke_description(traced)}
+
+
+# Stroke fields that enumeration and tracing add to a candidate and a tag.
+STROKE_DESCRIPTION_FIELDS = ("z_coverage_fraction", "hull_likeness", "linked_fragments", "follow_method", "warnings")
+
+
+def _stroke_description(traced: dict) -> dict:
+    return {k: traced[k] for k in STROKE_DESCRIPTION_FIELDS if k in traced}
 
 
 # Distinct colours of enumerated strokes; tags repeat the colour.
@@ -260,20 +268,28 @@ class InvestigationTools:
                 if not any(c["candidate_id"] == candidate["candidate_id"] for c in candidates):
                     candidates.append(copy.deepcopy(candidate))
             rows, xs = traced["trace_rows_px"], traced["trace_xs_px"]
-            tags.append({"tag": index, "candidate_id": candidate["candidate_id"],
-                         "kind": inv.stroke_kind([rows[0], rows[1]], xs, section),
+            tags.append({"tag": index, "candidate_id": candidate["candidate_id"], "kind": traced["kind"],
                          "top_end_px": [round(xs[0], 1), rows[0]], "bottom_end_px": [round(xs[-1], 1), rows[1]],
-                         "z_range_m": traced["z_range_m"]})
+                         "z_range_m": traced["z_range_m"], **_stroke_description(traced)})
         # Already known lines of this section are shown too, so every tag on
         # the picture names a candidate the model can assign.
         for candidate in known:
             trace = inv.dense_trace(candidate)
             if trace is not None and len(tags) < inv.MAX_ENUMERATED_STROKES + 16:
+                z_range = candidate.get("z_range_m") or [section["z_min_m"], section["z_max_m"]]
+                described = inv.describe_stroke({"trace_rows_px": [int(trace[0][0]), int(trace[0][-1])],
+                                                 "trace_xs_px": trace[1], "z_range_m": z_range}, section)
                 tags.append({"tag": len(tags) + 1, "candidate_id": candidate["candidate_id"],
-                             "kind": inv.stroke_kind(trace[0], trace[1], section),
+                             "kind": described["kind"],
                              "top_end_px": [round(float(trace[1][0]), 1), int(trace[0][0])],
                              "bottom_end_px": [round(float(trace[1][-1]), 1), int(trace[0][-1])],
-                             "z_range_m": candidate.get("z_range_m"), "known_candidate": True})
+                             "z_range_m": candidate.get("z_range_m"), "known_candidate": True,
+                             "z_coverage_fraction": described["z_coverage_fraction"],
+                             "hull_likeness": described["hull_likeness"]})
+        # Best hull candidates first, straight rulers last; tags follow that order.
+        tags.sort(key=lambda t: (t["kind"] == "straight_grid_line", -t["hull_likeness"]))
+        for number, tag in enumerate(tags, 1):
+            tag["tag"] = number
         traces = {t["candidate_id"]: inv.dense_trace(next(c for c in self.state["catalog"][section_id]["candidates"]
                                                           if c["candidate_id"] == t["candidate_id"]))
                   for t in tags}
@@ -305,7 +321,9 @@ class InvestigationTools:
                                  refused_seeds=len(refusals), view=record, artifacts=[artifact],
                                  note="Each tag number is drawn twice on its stroke (top end and middle) in the "
                                       "stroke's colour. Find the stroke that carries a station label and assign its "
-                                      "candidate_id to that station. Every stroke is real ink; none is an identity.")
+                                      "candidate_id to that station. Every stroke is real ink; none is an identity. Tags "
+                                      "are ordered by hull_likeness (a ranking heuristic, not identity); "
+                                      "straight_grid_line strokes come last.")
 
     def _record_trace(self, section_id, traced, image, source_sha, tool):
         """Add a verified traced line to the section's catalog and show it to the model."""
@@ -343,6 +361,7 @@ class InvestigationTools:
         return self._observation(True, "traced", section_id=section_id, candidate_id=candidate["candidate_id"],
                                  new_candidate=new, support=traced["support"], z_range_m=traced["z_range_m"],
                                  vertical_range_from_ink=traced["vertical_range_from_ink"], view=record,
+                                 **_stroke_description(traced),
                                  artifacts=[artifact],
                                  note="Red: traced ink. Blue: your corridor. The line is a candidate, not an identity.")
 
