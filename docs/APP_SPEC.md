@@ -515,7 +515,7 @@ Status: the app reads `<task>/whole_vessel/execution.json` (the ship-cad worker 
 ComponentView {
   id: string,                        // ship-cad component id, "house_t1"
   op: string,                        // ship-cad op: "hull"|"deck"|"deckhouse"|"bulwark"|"appendage"|"opening"|…
-  label: string,                     // plain name for people, "Deckhouse tier 1"
+  label: string,                     // the worker's optional "label", else made from the id
   status: "measured_draft"|"draft_guess",   // ship-cad status; both are drafts
   built: boolean,                    // false: no solid (reason says why)
   reason: string,                    // ship-cad reason: what was filled, or why it was not built

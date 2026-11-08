@@ -812,7 +812,9 @@ code { font-family: var(--font-mono); }
 /* HOOK(M3 live): Thinking tab, a vertical pen rule with one node per step. */
 .thinking { position: relative; display: flex; flex-direction: column; gap: var(--space-md); padding-left: 2px; }
 .thinking::before { content: ""; position: absolute; top: 8px; bottom: 8px; left: 7px; width: 1.5px; background: var(--brand); opacity: 0.5; }
-.thought { position: relative; display: grid; grid-template-columns: 12px minmax(0, 1fr); gap: var(--space-md); }
+.thought { position: relative; display: grid; grid-template-columns: 12px minmax(0, 1fr); gap: var(--space-md); scroll-snap-align: start; }
+/* Scrolling the Thinking list rests on the start of a card, so no card sits half under the tabs. */
+#panel-thinking { scroll-snap-type: y proximity; scroll-padding-top: var(--space-md); }
 .thought-dot { width: 12px; height: 12px; margin-top: 3px; border: 1.5px solid var(--brand); border-radius: 50%; background: var(--surface); }
 .thought-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .thought-tool { font-size: var(--fs-sm); font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }

@@ -80,7 +80,11 @@ fn component_view(entry: &Value, reviews: &HashMap<String, String>) -> Option<Co
         _ => None,
     };
     Some(ComponentView {
-        label: label_of(&id),
+        // The worker may give a label ("Deckhouse tier 1"); else one is made from the id.
+        label: entry["label"]
+            .as_str()
+            .map(String::from)
+            .unwrap_or_else(|| label_of(&id)),
         op: entry["op"].as_str().unwrap_or("other").to_string(),
         status: entry["status"]
             .as_str()
@@ -172,7 +176,7 @@ mod tests {
              "geometry": {"top": 3.4, "thickness": 0.01, "outline": [[0, 0], [1, 0], [1, 1]]},
              "provenance": {"thickness": {"source": "guessed", "basis": "typical plate"}},
              "bbox_m": {"min": [0, -3.6, 3.39], "max": [9, 3.6, 3.4]}, "volume_m3": 0.65},
-            {"id": "rudder", "op": "appendage", "status": "draft_guess", "built": false,
+            {"id": "rudder", "label": "Rudder blade", "op": "appendage", "status": "draft_guess", "built": false,
              "reason": "ValueError: no view", "source": {"view": "profile", "region": "r2", "method": "label"},
              "source_labels": {}, "geometry": null, "provenance": {}}
         ]}});
@@ -219,6 +223,7 @@ mod tests {
             Some("3 points")
         );
         let rudder = &parts[1];
+        assert_eq!(rudder.label, "Rudder blade");
         assert!(
             !rudder.built
                 && rudder.bbox_m.is_none()
