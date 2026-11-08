@@ -786,9 +786,14 @@ class DomainTools(InvestigationTools):
     def _render_candidate(self, view):
         candidate, run = self._verified_candidate(allow_previous=True, allow_draft=True)
         out = self.root / "renders" / uuid4().hex
-        outcome, result = self._worker("render", {"run_dir": str(run), "view": view}, out, native=True)
+        request = {"run_dir": str(run), "view": view}
+        overlay_request, overlay_warning = self._station_overlay_request(candidate)
+        if overlay_request is not None:
+            request["station_overlay"] = overlay_request
+        outcome, result = self._worker("render", request, out, native=True)
         if result is None:
             return self._observation(False, outcome["state"], error_code="render_worker_failed")
+        station_overlay, overlay_artifacts = self._station_overlay_result(result, out, overlay_warning)
         stale = candidate["generation_id"] != self.generation_id or candidate["revision_id"] != self.revision_id
         if not stale and view not in self.state["rendered_views"]:
             self.state["rendered_views"].append(view)
@@ -800,8 +805,57 @@ class DomainTools(InvestigationTools):
                                                       model_eligible=False),
                                             _artifact(out / result["model_observation"]["file"], self.task_dir,
                                                       kind="model_observation", view=view,
-                                                      **{k: v for k, v in result["model_observation"].items() if k != "file"})],
+                                                      **{k: v for k, v in result["model_observation"].items() if k != "file"})]
+                                 + overlay_artifacts,
+                                 station_overlay=station_overlay,
                                  resources={"wall_seconds": outcome["elapsed_seconds"]})
+
+    def _station_overlay_request(self, candidate):
+        """Render-worker inputs of the station overlay, as (request, None) or (None, warning).
+
+        The source is saved once as PNG beside the domain, because the worker
+        must not parse a PDF. A station that the build does not contain gets
+        its best trace as the reference curve.
+        """
+        try:
+            from PIL import Image
+            image, _, source_sha = self._source()
+            source_png = self.root / f"overlay-source-{source_sha[:24]}.png"
+            if not source_png.is_file():
+                partial = source_png.with_suffix(".partial.png")
+                Image.fromarray(image).save(partial)
+                partial.replace(source_png)
+            record = self._build_record(candidate) or {}
+            built = {s.get("id") for s in record.get("sections", [])}
+            sections, references = [], {}
+            for section in self.spec.get("sections", []):
+                sections.append({key: section[key] for key in ("id", "x_m", "roi_px", "calibration")})
+                if section["id"] not in built:
+                    curve = self._section_curve(section["id"])
+                    if curve is not None:
+                        references[section["id"]] = curve
+            return {"source_image": str(source_png), "sections": sections, "references": references}, None
+        except Exception as exc:
+            return None, "Station overlay skipped: " + type(exc).__name__ + "."
+
+    def _station_overlay_result(self, result, out, warning):
+        """The render observation's station_overlay field and its artifacts; never fails the render."""
+        overlay = result.get("station_overlay")
+        if not isinstance(overlay, dict) or overlay.get("status") != "rendered":
+            reason = overlay.get("warning") if isinstance(overlay, dict) else None
+            return {"status": "skipped", "warning": warning or reason or "Station overlay skipped."}, []
+        try:
+            artifacts = []
+            for item in overlay["artifacts"]:
+                if Path(item["file"]).name != item["file"]:
+                    raise ValueError("Unsafe overlay artifact name.")
+                extra = {k: v for k, v in item.items() if k not in ("file", "kind")}
+                if item["kind"] == "station_overlay":
+                    extra["model_eligible"] = False
+                artifacts.append(_artifact(out / item["file"], self.task_dir, kind=item["kind"], **extra))
+        except (ValueError, OSError, TypeError, KeyError) as exc:
+            return {"status": "skipped", "warning": "Station overlay skipped: " + type(exc).__name__ + "."}, []
+        return {key: value for key, value in overlay.items() if key != "artifacts"}, artifacts
 
     def _validation_context(self, candidate, run):
         from .validation_contract import build_context
