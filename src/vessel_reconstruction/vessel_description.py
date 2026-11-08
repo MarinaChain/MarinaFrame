@@ -417,6 +417,59 @@ def profile_deck_heights(image, setup, pixels_per_metre, stations):
     return heights
 
 
+# Station lines: on a profile, the station lines are the only vertical lines
+# that run over at least STATION_LINE_SHARE of the view height (waterlines are
+# horizontal; hull ends are short). A model position more than
+# STATION_TOLERANCE_M from its measured line is a misreading.
+STATION_LINE_SHARE = 0.6
+STATION_LINE_INK = 235
+STATION_TOLERANCE_M = 0.5
+MIN_STATION_LINES = 3
+
+
+def profile_station_lines(image, setup, pixels_per_metre):
+    """x positions (m, from the profile's x origin) of the full-height vertical lines in the profile."""
+    left, top, right, bottom = _region(setup["region_px"], image.shape)
+    crop = _gray(image[top:bottom, left:right])
+    columns = np.flatnonzero((crop < STATION_LINE_INK).mean(axis=0) >= STATION_LINE_SHARE)
+    groups = np.split(columns, np.flatnonzero(np.diff(columns) > 1) + 1) if len(columns) else []
+    direction = setup.get("x_direction", 1) or 1
+    return [round(direction * (float(np.mean(g)) + left - setup["x_origin_px"]) / pixels_per_metre, 3)
+            for g in groups if len(g)]
+
+
+def check_station_positions(image, setups, description, warnings):
+    """Replace model station positions with the profile's station lines when they disagree.
+
+    Same count: each station keeps its id and takes the measured x in order.
+    Another count: the measured lines become the stations, numbered 1..n.
+    Returns the (possibly new) station list; a warning names the change.
+    """
+    stations = description.get("stations") or []
+    profile = next((s for s in setups if s.get("view") == "profile" and s.get("x_origin_px") is not None), None)
+    if profile is None:
+        return stations
+    scale = (description.get("checked_scales") or {}).get(profile.get("view_id", "profile"),
+                                                         profile["pixels_per_metre"])
+    measured = sorted(x for x in profile_station_lines(image, profile, float(scale)) if x > -STATION_TOLERANCE_M)
+    if len(measured) < MIN_STATION_LINES:
+        return stations
+    claimed = [s.get("x_m") for s in stations if isinstance(s, dict)]
+    if len(claimed) == len(measured) and all(
+            isinstance(x, (int, float)) and abs(x - m) <= STATION_TOLERANCE_M for x, m in zip(claimed, measured)):
+        return stations
+    if len(claimed) == len(measured):
+        corrected = [{**station, "x_m": x, "source": "profile_station_lines", "model_x_m": station.get("x_m")}
+                     for station, x in zip(stations, measured)]
+    else:
+        corrected = [{"id": str(i + 1), "x_m": x, "label": str(i + 1), "source": "profile_station_lines"}
+                     for i, x in enumerate(measured)]
+    warnings.append(warning("stations", claimed, measured,
+        f"The profile's {len(measured)} station lines are at x {', '.join(f'{x:g}' for x in measured)} m; "
+        "those positions are used. Read the station numbers along the profile or plan if these are not the stations."))
+    return corrected
+
+
 def station_deck_heights(image, setups, description, stations):
     """Deck-at-side height per station from the model's profile setup at its checked scale, {id: z}."""
     profile = next((s for s in setups if s.get("view") == "profile"), None)
@@ -468,6 +521,9 @@ def measure_description(image, spec, description, setups):
     scales, scale_warnings = checked_scales(image, setups, result)
     result["checked_scales"] = scales
     warnings.extend(scale_warnings)
+    if not spec.get("sections"):
+        # A sheet-only reading: the stations come from the model, checked against the profile.
+        result["stations"] = check_station_positions(image, setups, result, warnings)
     result.setdefault("units", spec.get("units", "m"))
     result.setdefault("frame", "x aft to forward from station datum; z up from baseline; metres")
     principal = result.setdefault("principal", {})

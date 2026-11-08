@@ -71,6 +71,27 @@ def test_sheet_only_sections_use_the_printed_scale_over_a_disagreeing_setup():
     assert scale == 18.9
 
 
+def test_model_station_positions_are_checked_against_the_profile_station_lines():
+    image, setup = profile_sheet()
+    picture = Image.fromarray(image)
+    draw = ImageDraw.Draw(picture)
+    for x in range(10, 100, 10):  # light full-height station lines, as on the factory sheets
+        draw.line([(X0 + x * PPM, 10), (X0 + x * PPM, 159)], fill=(205,) * 3, width=1)
+    image = np.array(picture)
+    assert vd.profile_station_lines(image, setup, PPM) == [float(x) for x in range(10, 100, 10)]
+    good = [{"id": str(i), "x_m": 10.0 * i + 0.2, "side": "aft"} for i in range(1, 10)]
+    warnings = []
+    assert vd.check_station_positions(image, [setup], {"stations": good}, warnings) == good and not warnings
+    # One misread station: every station takes its measured line and keeps its id.
+    shifted = [{**s, "x_m": 5.0} if s["id"] == "1" else s for s in good]
+    fixed = vd.check_station_positions(image, [setup], {"stations": shifted}, warnings)
+    assert [s["x_m"] for s in fixed] == [10.0 * i for i in range(1, 10)] and fixed[0]["side"] == "aft"
+    # Ten stations spread over the LOA (series60 live run): the nine lines become the stations.
+    spread = [{"id": str(i + 1), "x_m": 11.08 * i} for i in range(10)]
+    fixed = vd.check_station_positions(image, [setup], {"stations": spread}, warnings)
+    assert [s["id"] for s in fixed] == [str(i) for i in range(1, 10)] and len(warnings) == 2
+
+
 def test_deck_heights_follow_the_sheer_and_skip_the_label():
     image, setup = profile_sheet()
     stations = [{"id": str(i), "x_m": 10.0 * i} for i in range(1, 10)]
