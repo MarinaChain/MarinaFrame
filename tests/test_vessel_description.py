@@ -25,6 +25,39 @@ def sheet():
     return np.array(image), spec, setup
 
 
+def test_printed_dimension_transcription_overrides_extent_and_model_guess():
+    image, spec, setup = sheet()
+    claim = {"dimension_text": "LOA 100.00 m  LWL 94.00 m\nBEAM 6.20 m DEPTH 9.50 m\nDRAFT (DWL) 5.25 m",
+             "principal": {"loa": {"value": 30., "source": "measured"},
+                           "beam": {"value": 8., "source": "measured"}}}
+    result = vd.measure_description(image, spec, claim, [setup])
+    assert {k: result["principal"][k]["value"] for k in ("loa", "beam", "depth", "draft")} == {
+        "loa": 100., "beam": 6.2, "depth": 9.5, "draft": 5.25}
+    assert result["principal"]["beam"]["source"] == "title_block"
+    assert {"principal.loa", "principal.beam", "principal.depth"} <= {w["field"] for w in result["warnings"]}
+
+
+def test_missing_beam_model_reading_is_not_silent_and_depth_prefers_declared_bound():
+    image, spec, setup = sheet()
+    # Cropping the visible top reduces ink depth, not the declared drawing depth.
+    image[:80] = 255
+    result = vd.measure_description(image, spec, {"principal": {"beam": {"value": None}}}, [setup])
+    assert result["principal"]["depth"]["value"] == 9.
+    assert {"principal.beam", "principal.depth"} <= {w["field"] for w in result["warnings"]}
+
+
+def test_draft_hull_dimensions_are_checked_against_body_and_model_readings():
+    from vessel_reconstruction.vessel_model import StationRow, VesselTable
+    image, spec, setup = sheet()
+    description = vd.measure_description(image, spec, {"principal": {
+        "beam": {"value": 6., "source": "title_block"},
+        "depth": {"value": 9., "source": "title_block"}}}, [setup])
+    table = VesselTable([StationRow("s01", 10., [[0., 0.], [4., 7.]], "fitted")], [0., 7.])
+    vd.describe_table(table, description)
+    conflicts = [w for w in table.warnings if "draft_hull" in w["suggested_fix"]]
+    assert {"principal.beam", "principal.depth"} <= {w["field"] for w in conflicts}
+
+
 def test_survey_finds_grid_families_and_keeps_semantics_for_model():
     image, spec, _ = sheet()
     result = vd.survey_sheet(image, spec)

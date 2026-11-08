@@ -1,0 +1,1510 @@
+[
+  {
+    "case": "dtmb5415-L0",
+    "history": [
+      {
+        "arguments": {
+          "views": [
+            {
+              "family_id": "bodyplan",
+              "grid_roles": {
+                "horizontal": "waterline m",
+                "vertical": "half-beam m"
+              },
+              "halves": "Each panel shows one half-section from centreline (left, x=0) to max half-beam at right; mirror about centreline. Vertical axis WL0..WL12, baseline at bottom gridline.",
+              "kind": "body",
+              "mirror": true,
+              "panels": [
+                {
+                  "baseline_px": 754,
+                  "centreline_px": 130,
+                  "panel_id": "s01",
+                  "region_px": [
+                    90,
+                    120,
+                    499,
+                    756
+                  ]
+                },
+                {
+                  "baseline_px": 754,
+                  "centreline_px": 659,
+                  "panel_id": "s02",
+                  "region_px": [
+                    619,
+                    120,
+                    1028,
+                    756
+                  ]
+                },
+                {
+                  "baseline_px": 754,
+                  "centreline_px": 1188,
+                  "panel_id": "s03",
+                  "region_px": [
+                    1148,
+                    120,
+                    1557,
+                    756
+                  ]
+                },
+                {
+                  "baseline_px": 1520,
+                  "centreline_px": 130,
+                  "panel_id": "s04",
+                  "region_px": [
+                    90,
+                    886,
+                    499,
+                    1522
+                  ]
+                },
+                {
+                  "baseline_px": 1520,
+                  "centreline_px": 659,
+                  "panel_id": "s05",
+                  "region_px": [
+                    619,
+                    886,
+                    1028,
+                    1522
+                  ]
+                },
+                {
+                  "baseline_px": 1520,
+                  "centreline_px": 1188,
+                  "panel_id": "s06",
+                  "region_px": [
+                    1148,
+                    886,
+                    1557,
+                    1522
+                  ]
+                },
+                {
+                  "baseline_px": 2286,
+                  "centreline_px": 130,
+                  "panel_id": "s07",
+                  "region_px": [
+                    90,
+                    1652,
+                    499,
+                    2288
+                  ]
+                },
+                {
+                  "baseline_px": 2286,
+                  "centreline_px": 659,
+                  "panel_id": "s08",
+                  "region_px": [
+                    619,
+                    1652,
+                    1028,
+                    2288
+                  ]
+                },
+                {
+                  "baseline_px": 2286,
+                  "centreline_px": 1188,
+                  "panel_id": "s09",
+                  "region_px": [
+                    1148,
+                    1652,
+                    1557,
+                    2288
+                  ]
+                }
+              ],
+              "region_px": [
+                90,
+                120,
+                1557,
+                2288
+              ],
+              "setup": {
+                "grid_spacing_m": 2.0,
+                "pixels_per_metre": 50.438
+              },
+              "view_id": "body"
+            }
+          ]
+        },
+        "notes": "9 body-plan panels, one half each, mirrored. Calibration 50.44 px/m, grid 2 m. Stations s01..s09 at x=10..90 m. Curves: s01-s03 fine entry (narrow, deep V near WL2-4), s04-s06 fuller U, s07-s08 broad, s09 shows bulbous forefoot/flare near WL2-4. Will trace ink per panel, repair gaps, interpolate missing.",
+        "reason": "Survey the nine same-scale body-plan panels as one mirrored family with shared calibration before tracing.",
+        "tool": "describe_views"
+      },
+      {
+        "arguments": {
+          "description": {
+            "deck": {
+              "note": "not shown",
+              "source": "ai_inferred",
+              "value": null
+            },
+            "dimension_text": "not legible on this body-plan-only sheet",
+            "ends": {
+              "bow": {
+                "note": "s09 shows bulbous forefoot; bow beyond x=90",
+                "source": "ai_inferred",
+                "value": null
+              },
+              "stern": {
+                "note": "s01 fine entry; stern beyond x=10",
+                "source": "ai_inferred",
+                "value": null
+              }
+            },
+            "form": {
+              "note": "fine V entry forward, full U midship, bulbous forefoot at s09",
+              "source": "ai_inferred",
+              "type": "round-bilge displacement hull"
+            },
+            "principal": {
+              "beam": {
+                "note": "not on sheet",
+                "source": "ai_inferred",
+                "value": null
+              },
+              "depth": {
+                "note": "declared z_max",
+                "source": "spec",
+                "value": 12.53
+              },
+              "draft": {
+                "note": "not on sheet",
+                "source": "ai_inferred",
+                "value": null
+              },
+              "loa": {
+                "note": "not on sheet",
+                "source": "ai_inferred",
+                "value": null
+              },
+              "lwl": {
+                "note": "not on sheet",
+                "source": "ai_inferred",
+                "value": null
+              }
+            },
+            "stations": [
+              {
+                "id": "s01",
+                "source": "spec",
+                "x_m": 10.0
+              },
+              {
+                "id": "s02",
+                "source": "spec",
+                "x_m": 20.0
+              },
+              {
+                "id": "s03",
+                "source": "spec",
+                "x_m": 30.0
+              },
+              {
+                "id": "s04",
+                "source": "spec",
+                "x_m": 40.0
+              },
+              {
+                "id": "s05",
+                "source": "spec",
+                "x_m": 50.0
+              },
+              {
+                "id": "s06",
+                "source": "spec",
+                "x_m": 60.0
+              },
+              {
+                "id": "s07",
+                "source": "spec",
+                "x_m": 70.0
+              },
+              {
+                "id": "s08",
+                "source": "spec",
+                "x_m": 80.0
+              },
+              {
+                "id": "s09",
+                "source": "spec",
+                "x_m": 90.0
+              }
+            ],
+            "units": "m",
+            "waterlines": [
+              {
+                "id": "WL0",
+                "source": "measured",
+                "z_m": 0.0
+              },
+              {
+                "id": "WL2",
+                "source": "measured",
+                "z_m": 2.0
+              },
+              {
+                "id": "WL4",
+                "source": "measured",
+                "z_m": 4.0
+              },
+              {
+                "id": "WL6",
+                "source": "measured",
+                "z_m": 6.0
+              },
+              {
+                "id": "WL8",
+                "source": "measured",
+                "z_m": 8.0
+              },
+              {
+                "id": "WL10",
+                "source": "measured",
+                "z_m": 10.0
+              },
+              {
+                "id": "WL12",
+                "source": "measured",
+                "z_m": 12.0
+              }
+            ]
+          }
+        },
+        "reason": "Read the drawing and record the result.",
+        "tool": "describe_vessel"
+      },
+      {
+        "task_terminated": "phase1_description_complete"
+      }
+    ]
+  },
+  {
+    "case": "shipd-1-00045-L2",
+    "history": [
+      {
+        "arguments": {
+          "views": [
+            {
+              "family_id": "bodyplan",
+              "grid_roles": {
+                "horizontal": "height above baseline",
+                "vertical": "half-breadth"
+              },
+              "halves": "Nine body-plan stations s01..s09 at x=10..90 m, 3x3 grid; each panel shows starboard half-section from centreline (left) to baseline (bottom). Station labels BODY PLAN STATION 1..9 at panel tops.",
+              "kind": "body",
+              "mirror": true,
+              "panels": [
+                {
+                  "baseline_px": 553.0,
+                  "centreline_px": 129.3,
+                  "region_px": [
+                    89,
+                    120,
+                    530,
+                    556
+                  ]
+                },
+                {
+                  "baseline_px": 552.5,
+                  "centreline_px": 689.3,
+                  "region_px": [
+                    649,
+                    119,
+                    1090,
+                    556
+                  ]
+                },
+                {
+                  "baseline_px": 552.1,
+                  "centreline_px": 1249.3,
+                  "region_px": [
+                    1209,
+                    119,
+                    1650,
+                    555
+                  ]
+                },
+                {
+                  "baseline_px": 1118.0,
+                  "centreline_px": 129.9,
+                  "region_px": [
+                    89,
+                    685,
+                    531,
+                    1121
+                  ]
+                },
+                {
+                  "baseline_px": 1117.6,
+                  "centreline_px": 690.0,
+                  "region_px": [
+                    649,
+                    684,
+                    1091,
+                    1121
+                  ]
+                },
+                {
+                  "baseline_px": 1117.1,
+                  "centreline_px": 1250.0,
+                  "region_px": [
+                    1209,
+                    684,
+                    1651,
+                    1120
+                  ]
+                },
+                {
+                  "baseline_px": 1682.9,
+                  "centreline_px": 130.6,
+                  "region_px": [
+                    90,
+                    1250,
+                    531,
+                    1686
+                  ]
+                },
+                {
+                  "baseline_px": 1682.5,
+                  "centreline_px": 690.7,
+                  "region_px": [
+                    650,
+                    1249,
+                    1091,
+                    1686
+                  ]
+                },
+                {
+                  "baseline_px": 1682.1,
+                  "centreline_px": 1250.6,
+                  "region_px": [
+                    1210,
+                    1249,
+                    1651,
+                    1685
+                  ]
+                }
+              ],
+              "region_px": [
+                89,
+                119,
+                1651,
+                1686
+              ],
+              "setup": {
+                "grid_spacing_m": 1.0,
+                "pixels_per_metre": 34.2508
+              },
+              "view_id": "body"
+            },
+            {
+              "kind": "title_block",
+              "region_px": [
+                1536,
+                1536,
+                1740,
+                1875
+              ],
+              "view_id": "title"
+            }
+          ]
+        },
+        "reason": "Survey shows 3x3 body-plan panels with declared calibration; naming the body family and title block lets me trace sections next.",
+        "tool": "describe_views"
+      },
+      {
+        "arguments": {
+          "region_px": [
+            1536,
+            1536,
+            1740,
+            1875
+          ],
+          "subject": "title_block"
+        },
+        "notes": "Body plan: 3x3 stations s01..s09 at x=10..90 m, 34.25 px/m, baselines ~553/1118/1682, centrelines ~129/690/1250. Sections look like a fine-lined U/V hull, deepest/widest near s05-s06. Next: read title, describe_vessel, then propose_section per panel and build_draft.",
+        "reason": "Title crop is unreadable at thumbnail scale; need exact printed LOA/LWL/BEAM/DEPTH/DRAFT before describing the vessel.",
+        "tool": "read_region"
+      },
+      {
+        "arguments": {
+          "description": {
+            "buttocks": [],
+            "deck": {
+              "source": "ai_inferred",
+              "value": null
+            },
+            "dimension_text": "Title block crop unreadable at this scale; no printed LOA/LWL/BEAM/DEPTH/DRAFT legible.",
+            "ends": {
+              "bow": {
+                "source": "ai_inferred",
+                "value": null
+              },
+              "stern": {
+                "source": "ai_inferred",
+                "value": null
+              }
+            },
+            "form": {
+              "note": "body plan shows fine U-form sections, widest near s05-s06",
+              "source": "ai_inferred",
+              "type": "U/V round-bilge hull"
+            },
+            "principal": {
+              "beam": {
+                "note": "not on sheet; body plan half-breadths only",
+                "source": "ai_inferred",
+                "value": null
+              },
+              "depth": {
+                "note": "declared z_max",
+                "source": "spec",
+                "value": 12.57
+              },
+              "draft": {
+                "note": "not on sheet",
+                "source": "ai_inferred",
+                "value": null
+              },
+              "loa": {
+                "note": "not on sheet",
+                "source": "ai_inferred",
+                "value": null
+              },
+              "lwl": {
+                "note": "not on sheet",
+                "source": "ai_inferred",
+                "value": null
+              }
+            },
+            "stations": [
+              {
+                "id": "s01",
+                "source": "spec",
+                "x_m": 10.0
+              },
+              {
+                "id": "s02",
+                "source": "spec",
+                "x_m": 20.0
+              },
+              {
+                "id": "s03",
+                "source": "spec",
+                "x_m": 30.0
+              },
+              {
+                "id": "s04",
+                "source": "spec",
+                "x_m": 40.0
+              },
+              {
+                "id": "s05",
+                "source": "spec",
+                "x_m": 50.0
+              },
+              {
+                "id": "s06",
+                "source": "spec",
+                "x_m": 60.0
+              },
+              {
+                "id": "s07",
+                "source": "spec",
+                "x_m": 70.0
+              },
+              {
+                "id": "s08",
+                "source": "spec",
+                "x_m": 80.0
+              },
+              {
+                "id": "s09",
+                "source": "spec",
+                "x_m": 90.0
+              }
+            ],
+            "units": "m",
+            "waterlines": []
+          }
+        },
+        "notes": "Plan: body plan 3x3, s01..s09 at x=10..90 m, 34.25 px/m, baselines ~553/1118/1682, centrelines ~129/690/1250. Title crop unreadable \u2014 will retry read_region on title_block before final. Sections are fine U/V forms, max half-breadth near s05-s06. Next: propose_section per panel, build_draft, render_candidate, inspect, revise.",
+        "reason": "Title crop is illegible; record declared station grid and spec depth, leaving undeclared principal dimensions null rather than inventing them.",
+        "tool": "describe_vessel"
+      },
+      {
+        "task_terminated": "phase1_description_complete"
+      }
+    ]
+  },
+  {
+    "case": "shipd-1-00679-L0",
+    "history": [
+      {
+        "arguments": {
+          "views": [
+            {
+              "family_id": "body",
+              "halves": "Left half of body plan: stations 9, 8, 7/6 visible as half-breadth curves; centreline at x\u224840, baseline y\u2248975.",
+              "kind": "body",
+              "mirror": true,
+              "panels": [
+                {
+                  "baseline_px": 975.2,
+                  "centreline_px": 40.0,
+                  "panel_id": "left-panel",
+                  "region_px": [
+                    0,
+                    120,
+                    629,
+                    978
+                  ]
+                }
+              ],
+              "region_px": [
+                0,
+                120,
+                629,
+                978
+              ],
+              "setup": {
+                "baseline_px": 975.2,
+                "centreline_px": 40.0,
+                "grid_spacing_m": 2.0,
+                "pixels_per_metre": 60.2950892456004
+              },
+              "view_id": "body-left"
+            },
+            {
+              "family_id": "body",
+              "halves": "Right half of body plan: stations 5, 4, 3, 2, 1 visible; centreline at x\u2248709, baseline y\u2248975.",
+              "kind": "body",
+              "mirror": true,
+              "panels": [
+                {
+                  "baseline_px": 975.2,
+                  "centreline_px": 709.0,
+                  "panel_id": "right-panel",
+                  "region_px": [
+                    669,
+                    120,
+                    1299,
+                    978
+                  ]
+                }
+              ],
+              "region_px": [
+                669,
+                120,
+                1299,
+                978
+              ],
+              "setup": {
+                "baseline_px": 975.2,
+                "centreline_px": 709.0,
+                "grid_spacing_m": 2.0,
+                "pixels_per_metre": 60.2950892456004
+              },
+              "view_id": "body-right"
+            },
+            {
+              "kind": "title_block",
+              "region_px": [
+                1100,
+                60,
+                1299,
+                140
+              ],
+              "view_id": "title-block"
+            },
+            {
+              "kind": "offsets_table",
+              "region_px": [
+                669,
+                900,
+                1299,
+                978
+              ],
+              "view_id": "offsets-table"
+            }
+          ]
+        },
+        "notes": "Sheet 1299x1098. Body family: left panel x0-629 (stations 9,8,7/6), right panel x669-1299 (stations 5,4,3,2,1). Centreline left\u224840, right\u2248709; baseline\u2248975; 60.295 px/m; grid 2 m. Station labels read at curve tops: 9,8,7/6 left; 5,4,3,2,1 right. Next: read title block and offsets table, then trace sections.",
+        "reason": "Whole sheet read: two same-scale body-plan halves (stations 1\u20139) with shared calibration; title block and offsets table regions named for later legible reading.",
+        "tool": "describe_views"
+      },
+      {
+        "arguments": {
+          "region_px": [
+            669,
+            900,
+            1299,
+            978
+          ],
+          "subject": "dimensions"
+        },
+        "notes": "Sheet 1299x1098. Body plan: left panel x0-629 (stns 9,8,7/6), right panel x669-1299 (stns 5,4,3,2,1). CL left\u224840, right\u2248709; baseline\u2248975; 60.295 px/m; grid 2 m. Title crop shows 'BODY PLAN' (mirrored) and 'WL 14' \u2014 no LOA/BEAM/DRAFT text, so principal dims from spec only. Next: read offsets table, describe_vessel, then trace/propose sections s01-s09 and build_draft.",
+        "reason": "Offsets table region may hold station offsets/waterline data; reading it before describing vessel and tracing sections.",
+        "tool": "read_region"
+      },
+      {
+        "arguments": {
+          "description": {
+            "deck": {
+              "source": "ai_inferred",
+              "value": null
+            },
+            "dimension_text": "BODY PLAN (mirrored); WL 14; no LOA/BEAM/DEPTH/DRAFT text legible on sheet",
+            "ends": {
+              "bow": {
+                "source": "ai_inferred",
+                "value": null
+              },
+              "stern": {
+                "source": "ai_inferred",
+                "value": null
+              }
+            },
+            "form": {
+              "source": "measured",
+              "type": "body plan only, mirrored halves"
+            },
+            "outer_metadata": {
+              "arguments": {
+                "warnings": [
+                  "Body-only sheet: no LOA/LWL/BEAM/DRAFT printed; principal dims left null",
+                  "Station labels read at curve tops: left 9,8,7/6; right 5,4,3,2,1"
+                ]
+              },
+              "outer": {}
+            },
+            "principal": {
+              "beam": {
+                "note": "not on sheet; half-breadth max ~8.5 m from ink at 60.295 px/m",
+                "source": "ai_inferred",
+                "value": null
+              },
+              "depth": {
+                "note": "declared z_max",
+                "source": "spec",
+                "value": 14.15
+              },
+              "draft": {
+                "note": "not on sheet",
+                "source": "ai_inferred",
+                "value": null
+              },
+              "loa": {
+                "note": "not on sheet",
+                "source": "ai_inferred",
+                "value": null
+              },
+              "lwl": {
+                "note": "not on sheet",
+                "source": "ai_inferred",
+                "value": null
+              }
+            },
+            "stations": [
+              {
+                "id": "s01",
+                "source": "spec",
+                "x_m": 10.0
+              },
+              {
+                "id": "s02",
+                "source": "spec",
+                "x_m": 20.0
+              },
+              {
+                "id": "s03",
+                "source": "spec",
+                "x_m": 30.0
+              },
+              {
+                "id": "s04",
+                "source": "spec",
+                "x_m": 40.0
+              },
+              {
+                "id": "s05",
+                "source": "spec",
+                "x_m": 50.0
+              },
+              {
+                "id": "s06",
+                "source": "spec",
+                "x_m": 60.0
+              },
+              {
+                "id": "s07",
+                "source": "spec",
+                "x_m": 70.0
+              },
+              {
+                "id": "s08",
+                "source": "spec",
+                "x_m": 80.0
+              },
+              {
+                "id": "s09",
+                "source": "spec",
+                "x_m": 90.0
+              }
+            ],
+            "units": "m",
+            "waterlines": [
+              {
+                "id": "WL14",
+                "source": "title_block",
+                "z_m": 14.0
+              }
+            ]
+          }
+        },
+        "notes": "Sheet 1299x1098. Left panel x0-629 (stns 9,8,7/6), right x669-1299 (stns 5,4,3,2,1). CL left\u224840, right\u2248709; baseline\u2248975; 60.295 px/m; grid 2 m. Offsets table crop (669,900-1299,978) shows only curves, no numeric table. Next: propose_section s01-s09 from traced ink, build_draft, render, inspect.",
+        "reason": "Title crop is mirrored 'BODY PLAN' with 'WL 14' and no dimension text; record vessel with spec depth and null undeclared dims before tracing sections.",
+        "tool": "describe_vessel"
+      },
+      {
+        "task_terminated": "phase1_description_complete"
+      }
+    ]
+  },
+  {
+    "case": "shipd-1-00683-L2",
+    "history": [
+      {
+        "arguments": {
+          "views": [
+            {
+              "family_id": "body",
+              "halves": "left panel: one half-section, centreline at x\u224840, baseline y\u2248813; stations s05-s09 (x=50..90 m)",
+              "kind": "body",
+              "mirror": false,
+              "panels": [
+                {
+                  "baseline_px": 813.2,
+                  "centreline_px": 40.0,
+                  "region_px": [
+                    0,
+                    116,
+                    488,
+                    820
+                  ]
+                }
+              ],
+              "region_px": [
+                0,
+                116,
+                488,
+                820
+              ],
+              "setup": {
+                "baseline_px": 813.2,
+                "centreline_px": 40.0,
+                "grid_spacing_m": 2.0,
+                "pixels_per_metre": 47.58
+              },
+              "view_id": "body-left"
+            },
+            {
+              "family_id": "body",
+              "halves": "right panel: one half-section, centreline at x\u2248568, baseline y\u2248813; stations s01-s04 (x=10..40 m)",
+              "kind": "body",
+              "mirror": false,
+              "panels": [
+                {
+                  "baseline_px": 813.2,
+                  "centreline_px": 568.0,
+                  "region_px": [
+                    528,
+                    116,
+                    1017,
+                    820
+                  ]
+                }
+              ],
+              "region_px": [
+                528,
+                116,
+                1017,
+                820
+              ],
+              "setup": {
+                "baseline_px": 813.2,
+                "centreline_px": 568.0,
+                "grid_spacing_m": 2.0,
+                "pixels_per_metre": 47.58
+              },
+              "view_id": "body-right"
+            },
+            {
+              "kind": "title_block",
+              "region_px": [
+                768,
+                768,
+                1017,
+                936
+              ],
+              "view_id": "title-block"
+            },
+            {
+              "kind": "offsets_table",
+              "region_px": [
+                0,
+                768,
+                768,
+                936
+              ],
+              "view_id": "offsets-table"
+            }
+          ]
+        },
+        "notes": "Left panel centreline x\u224840, right x\u2248568; baseline y\u2248813, 47.58 px/m, 2 m grid. Stations s01-s04 on right panel, s05-s09 on left. Body label 'BODY PLAN' visible top-right. Next: read title block and offsets table, then trace sections.",
+        "reason": "Two same-scale body panels (left/right halves) with declared calibration; title block and lower strip named for dimensions/offsets.",
+        "tool": "describe_views"
+      },
+      {
+        "arguments": {
+          "region_px": [
+            768,
+            768,
+            1017,
+            936
+          ],
+          "subject": "title_block"
+        },
+        "notes": "Plan: read title block, then offsets table, then describe_vessel with stations s01-s09 at x=10..90 m (right panel s01-s04, left s05-s09), baseline y\u2248813, 47.58 px/m. Body plan shows fine U/V sections; right panel has a knuckle/transom-like step near y\u2248300 and a flat bottom run. Left panel sections are deep U with wide flat bottom. Will trace ink per station, repair poor traces, interpolate ends, then build_draft/render_candidate.",
+        "reason": "Title crop is blank; need exact LOA/BEAM/DEPTH/DRAFT text before describe_vessel.",
+        "tool": "read_region"
+      },
+      {
+        "arguments": {
+          "region_px": [
+            0,
+            768,
+            768,
+            936
+          ],
+          "subject": "dimensions"
+        },
+        "notes": "Plan: read offsets strip, then describe_vessel (s01-s09 at x=10..90 m; right panel s01-s04, left s05-s09; baseline y\u2248813, 47.58 px/m). Body plan: left panel deep U sections with wide flat bottom; right panel shows a step/knuckle near y\u2248300 and flat bottom run. Title block unreadable so principal dims will be ai_inferred/null unless offsets strip gives values. Then trace ink per station, repair poor traces, interpolate ends, build_draft/render_candidate, inspect, revise.",
+        "reason": "Title crop was blank; the lower strip likely holds the offsets table with station/waterline dimensions needed before describe_vessel.",
+        "tool": "read_region"
+      },
+      {
+        "arguments": {
+          "description": {
+            "buttocks": [],
+            "deck": {
+              "source": "ai_inferred",
+              "value": null
+            },
+            "dimension_text": "not legible on sheet (title block and offsets strip blank in crops)",
+            "ends": {
+              "bow": {
+                "source": "ai_inferred",
+                "value": null
+              },
+              "stern": {
+                "source": "ai_inferred",
+                "value": null
+              }
+            },
+            "form": {
+              "note": "left panel deep U with flat bottom; right panel shows knuckle/step near y\u2248300",
+              "source": "ai_inferred",
+              "type": "round-bilge U/V body plan"
+            },
+            "principal": {
+              "beam": {
+                "note": "not on sheet",
+                "source": "ai_inferred",
+                "value": null
+              },
+              "depth": {
+                "note": "declared z_max",
+                "source": "spec",
+                "value": 14.53
+              },
+              "draft": {
+                "note": "not on sheet",
+                "source": "ai_inferred",
+                "value": null
+              },
+              "loa": {
+                "note": "not on sheet",
+                "source": "ai_inferred",
+                "value": null
+              },
+              "lwl": {
+                "note": "not on sheet",
+                "source": "ai_inferred",
+                "value": null
+              }
+            },
+            "stations": [
+              {
+                "id": "s01",
+                "source": "spec",
+                "x_m": 10.0
+              },
+              {
+                "id": "s02",
+                "source": "spec",
+                "x_m": 20.0
+              },
+              {
+                "id": "s03",
+                "source": "spec",
+                "x_m": 30.0
+              },
+              {
+                "id": "s04",
+                "source": "spec",
+                "x_m": 40.0
+              },
+              {
+                "id": "s05",
+                "source": "spec",
+                "x_m": 50.0
+              },
+              {
+                "id": "s06",
+                "source": "spec",
+                "x_m": 60.0
+              },
+              {
+                "id": "s07",
+                "source": "spec",
+                "x_m": 70.0
+              },
+              {
+                "id": "s08",
+                "source": "spec",
+                "x_m": 80.0
+              },
+              {
+                "id": "s09",
+                "source": "spec",
+                "x_m": 90.0
+              }
+            ],
+            "units": "m",
+            "waterlines": []
+          }
+        },
+        "notes": "s01-s04 right panel (cl x\u2248568), s05-s09 left panel (cl x\u224840); baseline y\u2248813, 47.58 px/m, 2 m grid. Right panel shows a knuckle/step near y\u2248300 and flat bottom run; left panel deep U with wide flat bottom. Next: trace ink per station, repair poor traces, interpolate ends, build_draft/render_candidate.",
+        "reason": "Title block and offsets strip are blank; record stations and declared depth, mark other principal dims as not on sheet before tracing sections.",
+        "tool": "describe_vessel"
+      },
+      {
+        "task_terminated": "phase1_description_complete"
+      }
+    ]
+  },
+  {
+    "case": "dtmb5415-3v-L0",
+    "history": [
+      {
+        "arguments": {
+          "views": [
+            {
+              "family_id": "hull-lines",
+              "halves": "profile and half-breadth plan are port-half lines; body plan mirrored about centreline x=2328 px",
+              "kind": "body",
+              "mirror": true,
+              "panels": [
+                {
+                  "baseline_px": 398,
+                  "centreline_px": null,
+                  "panel_id": "profile",
+                  "region_px": [
+                    0,
+                    60,
+                    2100,
+                    400
+                  ]
+                },
+                {
+                  "baseline_px": null,
+                  "centreline_px": null,
+                  "panel_id": "half_breadth_plan",
+                  "region_px": [
+                    0,
+                    400,
+                    2100,
+                    736
+                  ]
+                },
+                {
+                  "baseline_px": 398,
+                  "centreline_px": 2328,
+                  "panel_id": "body_plan",
+                  "region_px": [
+                    2100,
+                    60,
+                    2590,
+                    400
+                  ]
+                }
+              ],
+              "region_px": [
+                0,
+                0,
+                2590,
+                736
+              ],
+              "setup": {
+                "grid_spacing_m": 2.0,
+                "pixels_per_metre": 19.0
+              },
+              "view_id": "body"
+            },
+            {
+              "kind": "title_block",
+              "region_px": [
+                2100,
+                400,
+                2590,
+                736
+              ],
+              "view_id": "title_block"
+            }
+          ]
+        },
+        "notes": "Plan: describe views, then trace body-plan stations s01-s09 (x=10..90 m) from body panel at x=2170-2486, baseline y=398, centreline x=2328, 19 px/m. Title block reads: LINES PLAN, factory 1020/8/2019, LOA 100.00 m, BEAM 15.41 m, DEPTH 12.53 m, DRAFT 5.50 m, SCALE 1:100. Profile/plan used to infer missing sections. Labels WL1.2..WL12 and station numbers 1-9 visible.",
+        "reason": "Survey shows profile (top-left), half-breadth plan (bottom-left) and body plan (right) with title block; one same-scale family with shared 19 px/m setup.",
+        "tool": "describe_views"
+      },
+      {
+        "arguments": {
+          "description": {
+            "deck": {
+              "source": "title_block",
+              "z_m": 12.53
+            },
+            "dimension_text": "LINES PLAN; factory-182d816e9cab; LOA 100.00 m; LWL 93.99 m; BEAM 13.41 m; DEPTH 12.53 m; DRAFT (DWL) 7.52 m; SCALE 1 m = 19.000 px",
+            "ends": {
+              "bow": {
+                "source": "title_block",
+                "x_m": 100.0
+              },
+              "stern": {
+                "source": "ai_inferred",
+                "x_m": 0.0
+              }
+            },
+            "form": {
+              "source": "ai_inferred",
+              "type": "round-bilge monohull"
+            },
+            "frame": {
+              "baseline_px": 398,
+              "centreline_px": 2328,
+              "pixels_per_metre": 19.0,
+              "view_id": "body"
+            },
+            "outer_metadata": {
+              "arguments": {
+                "warnings": [
+                  "Title block reads BEAM 13.41 m (earlier note said 15.41 m) \u2014 using printed value.",
+                  "Stern end not explicitly labelled; assumed x=0 at profile left end.",
+                  "Station x positions taken from declared spec, not measured label positions."
+                ]
+              },
+              "outer": {}
+            },
+            "principal": {
+              "beam": {
+                "source": "title_block",
+                "value": 13.41,
+                "view_id": "title_block"
+              },
+              "depth": {
+                "source": "title_block",
+                "value": 12.53,
+                "view_id": "title_block"
+              },
+              "draft": {
+                "source": "title_block",
+                "value": 7.52,
+                "view_id": "title_block"
+              },
+              "loa": {
+                "source": "title_block",
+                "value": 100.0,
+                "view_id": "title_block"
+              },
+              "lwl": {
+                "source": "title_block",
+                "value": 93.99,
+                "view_id": "title_block"
+              }
+            },
+            "stations": [
+              {
+                "id": "s01",
+                "source": "spec",
+                "x_m": 10.0
+              },
+              {
+                "id": "s02",
+                "source": "spec",
+                "x_m": 20.0
+              },
+              {
+                "id": "s03",
+                "source": "spec",
+                "x_m": 30.0
+              },
+              {
+                "id": "s04",
+                "source": "spec",
+                "x_m": 40.0
+              },
+              {
+                "id": "s05",
+                "source": "spec",
+                "x_m": 50.0
+              },
+              {
+                "id": "s06",
+                "source": "spec",
+                "x_m": 60.0
+              },
+              {
+                "id": "s07",
+                "source": "spec",
+                "x_m": 70.0
+              },
+              {
+                "id": "s08",
+                "source": "spec",
+                "x_m": 80.0
+              },
+              {
+                "id": "s09",
+                "source": "spec",
+                "x_m": 90.0
+              }
+            ],
+            "units": "m",
+            "waterlines": [
+              {
+                "id": "WL1.2",
+                "source": "labels",
+                "z_m": 1.2
+              },
+              {
+                "id": "WL2.4",
+                "source": "labels",
+                "z_m": 2.4
+              },
+              {
+                "id": "WL3.6",
+                "source": "labels",
+                "z_m": 3.6
+              },
+              {
+                "id": "WL4.8",
+                "source": "labels",
+                "z_m": 4.8
+              },
+              {
+                "id": "WL6.0",
+                "source": "labels",
+                "z_m": 6.0
+              },
+              {
+                "id": "WL7.2",
+                "source": "labels",
+                "z_m": 7.2
+              },
+              {
+                "id": "WL8.4",
+                "source": "labels",
+                "z_m": 8.4
+              },
+              {
+                "id": "WL9.6",
+                "source": "labels",
+                "z_m": 9.6
+              },
+              {
+                "id": "WL10.8",
+                "source": "labels",
+                "z_m": 10.8
+              },
+              {
+                "id": "WL12",
+                "source": "labels",
+                "z_m": 12.0
+              }
+            ]
+          }
+        },
+        "reason": "Read the drawing and record the result.",
+        "tool": "describe_vessel"
+      },
+      {
+        "task_terminated": "phase1_description_complete"
+      }
+    ]
+  },
+  {
+    "case": "shipd-1-00679-3v-L0",
+    "history": [
+      {
+        "arguments": {
+          "views": [
+            {
+              "family_id": "body",
+              "halves": "Profile: stations 1-9 along x, waterlines WL14 down to BL; deck line near y=160, baseline y=429.",
+              "kind": "profile",
+              "mirror": false,
+              "region_px": [
+                60,
+                60,
+                2100,
+                440
+              ],
+              "setup": {
+                "grid_spacing_m": 1.0,
+                "pixels_per_metre": 19.003659192620262
+              },
+              "view_id": "profile"
+            },
+            {
+              "family_id": "body",
+              "halves": "Half-breadth plan: centreline at bottom, stations 1-9, waterlines stacked.",
+              "kind": "plan",
+              "mirror": true,
+              "region_px": [
+                60,
+                440,
+                2100,
+                700
+              ],
+              "view_id": "half_breath_plan"
+            },
+            {
+              "family_id": "body",
+              "halves": "Body plan: two half-sections, WL14 top to BL bottom, centreline vertical.",
+              "kind": "body",
+              "mirror": true,
+              "panels": [
+                {
+                  "baseline_px": 428.9,
+                  "centreline_px": 2364,
+                  "region_px": [
+                    2170,
+                    148,
+                    2404,
+                    441
+                  ]
+                },
+                {
+                  "baseline_px": 428.9,
+                  "centreline_px": 2364,
+                  "region_px": [
+                    2324,
+                    148,
+                    2558,
+                    441
+                  ]
+                }
+              ],
+              "region_px": [
+                2170,
+                148,
+                2558,
+                441
+              ],
+              "view_id": "body_plan"
+            },
+            {
+              "halves": "Lines plan title: LOA 23.21m, BEAM 7.21m, DEPTH 14.15m, SCALE 1:100.",
+              "kind": "title_block",
+              "region_px": [
+                2170,
+                500,
+                2560,
+                680
+              ],
+              "view_id": "title_block"
+            }
+          ]
+        },
+        "notes": "Sheet 2648x803. Profile top-left, half-breadth plan below it, body plan right (two half-sections, centreline x=2364, baseline y=429, 19.0 px/m). Stations s01-s09 at x=10..90m map to profile station ticks 1-9. Title: LOA 23.21m, BEAM 7.21m, DEPTH 14.15m, scale 1:100. Next: inspect body-plan panels for traced ink, then propose_section per station.",
+        "reason": "Survey the profile, half-breadth plan, body plan and title block in source pixels before tracing sections.",
+        "tool": "describe_views"
+      },
+      {
+        "arguments": {
+          "region_px": [
+            2170,
+            500,
+            2560,
+            680
+          ],
+          "subject": "title_block"
+        },
+        "notes": "Title reads LOA 99.98 m, LWL 99.76 m, BEAM 17.21 m, DEPTH 14.15 m, DRAFT (DWL) 8.49 m, SCALE 1 m = 19.004 px. Earlier note's LOA 23.21/BEAM 7.21 was a misread; correct to these. Stations s01-s09 at x=10..90 m map to profile ticks 1-9; body plan centreline x=2364, baseline y=429. Next: describe_vessel with title_block values, then propose_section per station.",
+        "reason": "Title crop already legible; confirm exact dimension text before describe_vessel.",
+        "tool": "read_region"
+      },
+      {
+        "arguments": {
+          "description": {
+            "deck": {
+              "source": "title_block",
+              "z_m": 14.15
+            },
+            "dimension_text": "LINES PLAN; LOA 99.98 m; LWL 99.76 m; BEAM 17.21 m; DEPTH 14.15 m; DRAFT (DWL) 8.49 m; SCALE 1 m = 19.004 px",
+            "ends": {
+              "bow": {
+                "source": "ai_inferred",
+                "x_m": 0.0
+              },
+              "stern": {
+                "source": "title_block",
+                "x_m": 99.98
+              }
+            },
+            "form": {
+              "source": "ai_inferred",
+              "type": "round-bilge, full midship, fine ends"
+            },
+            "principal": {
+              "beam": {
+                "source": "title_block",
+                "value": 17.21,
+                "view_id": "title_block"
+              },
+              "depth": {
+                "source": "title_block",
+                "value": 14.15,
+                "view_id": "title_block"
+              },
+              "draft": {
+                "source": "title_block",
+                "value": 8.49,
+                "view_id": "title_block"
+              },
+              "loa": {
+                "source": "title_block",
+                "value": 99.98,
+                "view_id": "title_block"
+              },
+              "lwl": {
+                "source": "title_block",
+                "value": 99.76,
+                "view_id": "title_block"
+              }
+            },
+            "stations": [
+              {
+                "id": "s01",
+                "source": "spec",
+                "x_m": 10.0
+              },
+              {
+                "id": "s02",
+                "source": "spec",
+                "x_m": 20.0
+              },
+              {
+                "id": "s03",
+                "source": "spec",
+                "x_m": 30.0
+              },
+              {
+                "id": "s04",
+                "source": "spec",
+                "x_m": 40.0
+              },
+              {
+                "id": "s05",
+                "source": "spec",
+                "x_m": 50.0
+              },
+              {
+                "id": "s06",
+                "source": "spec",
+                "x_m": 60.0
+              },
+              {
+                "id": "s07",
+                "source": "spec",
+                "x_m": 70.0
+              },
+              {
+                "id": "s08",
+                "source": "spec",
+                "x_m": 80.0
+              },
+              {
+                "id": "s09",
+                "source": "spec",
+                "x_m": 90.0
+              }
+            ],
+            "units": "m",
+            "waterlines": [
+              {
+                "id": "WL14",
+                "source": "measured",
+                "z_m": 14.0
+              },
+              {
+                "id": "WL12",
+                "source": "measured",
+                "z_m": 12.0
+              },
+              {
+                "id": "WL10",
+                "source": "measured",
+                "z_m": 10.0
+              },
+              {
+                "id": "WL8",
+                "source": "measured",
+                "z_m": 8.0
+              },
+              {
+                "id": "WL6",
+                "source": "measured",
+                "z_m": 6.0
+              },
+              {
+                "id": "WL4",
+                "source": "measured",
+                "z_m": 4.0
+              },
+              {
+                "id": "WL2",
+                "source": "measured",
+                "z_m": 2.0
+              },
+              {
+                "id": "BL",
+                "source": "measured",
+                "z_m": 0.0
+              }
+            ]
+          }
+        },
+        "reason": "Read the drawing and record the result.",
+        "tool": "describe_vessel"
+      },
+      {
+        "task_terminated": "phase1_description_complete"
+      }
+    ]
+  }
+]
