@@ -16,6 +16,7 @@ import fcntl
 import json
 import math
 import os
+import re
 from pathlib import Path
 import stat
 import sys
@@ -87,6 +88,15 @@ def _definition(name, description, properties=None, required=()):
         "additionalProperties": False}}
 
 
+# Station overlay artifacts a render worker may return: allowed display keys and file names.
+OVERLAY_ARTIFACT_KEYS = {"station_overlay": ("panel", "section_ids", "crop_box_px", "scale"),
+                         "station_overlay_sheet": ("panel_count",),
+                         "station_scoreboard": ()}
+OVERLAY_FILE_NAMES = {"station_overlay": re.compile(r"station-overlay-\d{2}\.png"),
+                      "station_overlay_sheet": re.compile(r"station-overlay-sheet\.png"),
+                      "station_scoreboard": re.compile(r"station-scoreboard\.json")}
+
+
 def _artifact(path: Path, task_dir: Path, *, kind: str, **extra) -> dict:
     relative = path.relative_to(task_dir).as_posix()
     safe_relative_file(task_dir, relative)
@@ -94,8 +104,9 @@ def _artifact(path: Path, task_dir: Path, *, kind: str, **extra) -> dict:
     mime = {".png": "image/png", ".json": "application/json", ".step": "model/step",
             ".stl": "model/stl"}.get(suffix, "application/octet-stream")
     sha = digest_file(path)
-    return {"id": "artifact-" + sha[:24], "sha256": sha, "mime_type": mime,
-            "path": relative, "kind": kind, "bytes": path.stat().st_size, **extra}
+    # Computed fields come last, so caller-supplied extras can never replace them.
+    return {**extra, "id": "artifact-" + sha[:24], "sha256": sha, "mime_type": mime,
+            "path": relative, "kind": kind, "bytes": path.stat().st_size}
 
 
 class DomainTools(InvestigationTools):
@@ -847,12 +858,13 @@ class DomainTools(InvestigationTools):
         try:
             artifacts = []
             for item in overlay["artifacts"]:
-                if Path(item["file"]).name != item["file"]:
-                    raise ValueError("Unsafe overlay artifact name.")
-                extra = {k: v for k, v in item.items() if k not in ("file", "kind")}
-                if item["kind"] == "station_overlay":
-                    extra["model_eligible"] = False
-                artifacts.append(_artifact(out / item["file"], self.task_dir, kind=item["kind"], **extra))
+                kind, name = item["kind"], item["file"]
+                if kind not in OVERLAY_ARTIFACT_KEYS or not OVERLAY_FILE_NAMES[kind].fullmatch(name):
+                    raise ValueError("Unexpected overlay artifact.")
+                # The worker output is untrusted: copy only the known display keys.
+                extra = {k: item[k] for k in OVERLAY_ARTIFACT_KEYS[kind] if k in item}
+                extra["model_eligible"] = False
+                artifacts.append(_artifact(out / name, self.task_dir, kind=kind, **extra))
         except (ValueError, OSError, TypeError, KeyError) as exc:
             return {"status": "skipped", "warning": "Station overlay skipped: " + type(exc).__name__ + "."}, []
         return {key: value for key, value in overlay.items() if key != "artifacts"}, artifacts

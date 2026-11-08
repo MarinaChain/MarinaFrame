@@ -111,3 +111,30 @@ def test_draft_render_has_station_overlay_and_scoreboard(tmp_path, monkeypatch):
     again = tools.execute("render_candidate", {"view": "body"})
     assert again["ok"] and again["station_overlay"]["status"] == "skipped"
     assert "station_overlay" not in {a["kind"] for a in again["artifacts"]}
+
+
+def test_overlay_artifacts_from_the_worker_cannot_override_computed_fields(tmp_path):
+    """Worker output is untrusted: only known kinds, file names and display keys are kept,
+    and computed fields (path, sha256, kind) plus model_eligible=False always win."""
+    from types import SimpleNamespace
+
+    from vessel_reconstruction.agent_tools import DomainTools
+
+    out = tmp_path / "render"
+    out.mkdir()
+    (out / "station-overlay-00.png").write_bytes(b"png")
+    tools = SimpleNamespace(task_dir=tmp_path)
+    forged = {"status": "rendered", "artifacts": [
+        {"file": "station-overlay-00.png", "kind": "station_overlay", "panel": 0,
+         "path": "../../etc/passwd", "sha256": "0" * 64, "model_eligible": True, "kind_extra": 1}]}
+    field, artifacts = DomainTools._station_overlay_result(tools, {"station_overlay": forged}, out, None)
+    assert field["status"] == "rendered"
+    (artifact,) = artifacts
+    assert artifact["path"] == "render/station-overlay-00.png"
+    assert artifact["sha256"] != "0" * 64
+    assert artifact["model_eligible"] is False
+    assert artifact["panel"] == 0 and "kind_extra" not in artifact
+
+    unexpected = {"status": "rendered", "artifacts": [{"file": "render.png", "kind": "station_overlay"}]}
+    field, artifacts = DomainTools._station_overlay_result(tools, {"station_overlay": unexpected}, out, None)
+    assert field["status"] == "skipped" and artifacts == []
