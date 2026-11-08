@@ -2641,9 +2641,9 @@ code { font-family: var(--font-mono); }
 .parts-progress { display: flex; align-items: center; gap: var(--space-sm); margin-left: auto; }
 .parts-progress-text { color: var(--ink-2); font-size: var(--fs-md); white-space: nowrap; }
 .parts-progress-text strong { color: var(--ink); font: 500 var(--fs-lg) var(--font-mono); }
-.parts-progress-bar { position: relative; width: 120px; height: 6px; overflow: hidden; border-radius: 3px; background: var(--sunken); }
+.parts-progress-bar { position: relative; width: 120px; height: 6px; overflow: hidden; border-radius: 3px; background: var(--rule); }
 .parts-progress-bar > span { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--brand); }
-.parts-layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: var(--space-xl); align-items: start; }
+.parts-layout { display: grid; grid-template-columns: minmax(200px, 260px) minmax(0, 1fr); gap: var(--space-xl); align-items: start; }
 .parts-tree { display: flex; flex-direction: column; gap: var(--space-md); }
 .parts-group h2 { margin-bottom: var(--space-xs); color: var(--ink-3); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
 .parts-group ul { display: flex; flex-direction: column; gap: 2px; }
@@ -2701,7 +2701,7 @@ code { font-family: var(--font-mono); }
 .parts-signoff.is-signed { border-style: solid; border-color: var(--pass); background: var(--pass-soft); color: var(--ink); }
 .parts-signoff.is-signed > .icon { flex: none; width: 20px; height: 20px; color: var(--pass); stroke-width: 2; }
 .parts-signoff-note { color: var(--ink-3); }
-@media (max-width: 1100px) {
+@media (max-width: 900px) {
   .parts-layout { grid-template-columns: minmax(0, 1fr); }
   .parts-sketches { grid-template-columns: minmax(0, 1fr); }
 }
