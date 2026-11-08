@@ -15,6 +15,7 @@ import { createWelcome } from './welcome.js';
 import { createPalette } from './palette.js';
 import { buildChanges, renderChanges } from './changes.js';
 import { createAreas } from './areas.js';
+import { createEvidenceCard } from './evidence.js';
 import { createExport } from './export.js';
 import * as fmt from './format.js';
 
@@ -90,6 +91,12 @@ function cachedArtifact(kind, task, path) {
   }
   return artifactCache.get(key);
 }
+
+// Evidence card on the section strip (js/evidence.js): the page crop, the lines and the ink distance.
+const evidence = createEvidenceCard({
+  pageUrl: () => (state.view?.source_page ? cachedArtifact('image', state.task, state.view.source_page.path).catch(() => null) : Promise.resolve(null)),
+  inkOf: (id) => live.latestInk().get(id) ?? null,
+});
 
 // ---------------------------------------------------------------- views
 
@@ -897,7 +904,9 @@ function renderStrip() {
       'aria-selected': String(section.id === state.sectionId),
       'aria-label': `Section at ${fmt.metres(section.x_m)}: ${fmt.sectionStateLabel(section.state)}${section.source ? `, ${fmt.sourceLabel(section.source.label)}` : ''}`,
       dataset: { section: section.id, state: section.state, source: section.source?.label },
-      onclick: () => selectSection(section.id),
+      onclick: () => { evidence.hide(); selectSection(section.id); },
+      onmouseenter: (event) => evidence.hoverStart(event.currentTarget, section),
+      onmouseleave: () => evidence.hide(),
     },
     svg('svg', { class: 'tile-shape', viewBox: '0 0 44 54', 'aria-hidden': 'true' },
       svg('path', { class: 'axis', d: 'M2 2V52' }),

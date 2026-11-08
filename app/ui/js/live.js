@@ -990,6 +990,16 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
       }
     },
     hasSteps,
+    /** Distance to the ink (RMS, metres) per section id in the newest scored revision. */
+    latestInk() {
+      for (let i = steps.length - 1; i >= 0; i -= 1) {
+        const revision = steps[i].revision;
+        if (revision?.fit !== null && revision?.fit !== undefined && revision.sections?.some((s) => s.ink_rms_m !== null)) {
+          return new Map(revision.sections.map((s) => [s.id, s.ink_rms_m]));
+        }
+      }
+      return new Map();
+    },
     renderNarration,
     renderThinking,
     renderLadder,
