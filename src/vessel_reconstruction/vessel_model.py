@@ -10,6 +10,8 @@ its source:
   table may only clip its height range (``z_min_m``/``z_max_m``).
 * ``fitted``: made by the anchored form fit (form_fit.py) where no anchor is
   usable. It builds as a curve and is shown as ``interpolated``.
+* ``prior``: the prior hull form when no station has usable ink
+  (form_fit.prior_hull). It builds as a curve and is shown as ``ai_inferred``.
 
 The half-breadth cells ``hb(x_i, z_j)`` on stations x waterlines are a
 projection of the rows (``cells``). The body plan, plan view (rows of the cell
@@ -31,15 +33,18 @@ from .draft import DRAFT_STATUS
 from .provenance import digest_object
 
 TABLE_VERSION = "vessel-table/v1"
-ROW_SOURCES = ("traced", "fitted")
+ROW_SOURCES = ("traced", "fitted", "prior")
 # The label each row source has in a draft build (section_authoring.SOURCE_LABELS).
-BUILD_LABELS = {"traced": "traced", "fitted": "interpolated"}
+# A ``prior`` row is the prior form of a hull with no usable ink (form_fit.prior_hull):
+# nothing was measured or interpolated, so it is ``ai_inferred``.
+BUILD_LABELS = {"traced": "traced", "fitted": "interpolated", "prior": "ai_inferred"}
 # Waterlines of the cell matrix. The rows keep full resolution for the build;
 # the cells are the table that views and scores compare.
 DEFAULT_WATERLINES = 21
 # Samples of a fitted row curve (the builder accepts 5 to 1025 points).
 FITTED_ROW_SAMPLES = 65
 MAX_BASIS_CHARS = 300
+PRIOR_BASIS = "Prior hull form (no usable ink)"
 # The builder accepts curve sections of 5 to 1025 points with rising heights.
 MAX_CURVE_POINTS = 1025
 HEIGHT_RESOLUTION_M = 1e-6
@@ -181,14 +186,19 @@ def build_spec(table: VesselTable, base_spec: dict, declared: list[dict] | None 
         section.pop("contour_selection", None)
         section.pop("pieces", None)
         note = "; ".join(row.notes)[:120]
+        row_basis = PRIOR_BASIS if row.source == "prior" else basis
         section["authored"] = {"source_label": BUILD_LABELS[row.source],
-                               "basis": (basis + (": " + note if note else ""))[:MAX_BASIS_CHARS],
+                               "basis": (row_basis + (": " + note if note else ""))[:MAX_BASIS_CHARS],
                                "points_yz_m": _curve_points(row.points_yz_m)}
         section["evidence"] = (section.get("evidence", "")[:7000] +
                                " Filled by the vessel-table form fit; not measured ink; a person must confirm it.")
         sections.append(section)
         lower = max((x for x in traced_x if x < row.x_m), default=None)
         upper = min((x for x in traced_x if x > row.x_m), default=None)
+        if row.source == "prior":
+            guesses.append(_guess(row.id, "dropped_end", row.x_m, None,
+                                  "No usable ink on any station: prior hull form scaled to the vessel size."))
+            continue
         reason = "Form fit filled this station from the hull trend and the traced neighbours."
         if lower is not None and upper is not None:
             guesses.append(_guess(row.id, "bridged_gap", row.x_m, [lower, upper], reason))

@@ -43,9 +43,13 @@ Whole-vessel design, section 4 (docs/plans/2026-11-08-whole-vessel-design.md).
    smooth trend plus a shape-preserving interpolation of measured residuals.
 4. **Fairness.** D1 runs on the finished rows; its findings are warnings.
 
+5. **No ink.** When no anchor is usable (none traced, or every one dropped
+   or left out), the hull is the prior form (``prior_hull``): the same family
+   with fixed start values, scaled to the vessel's beam and depth. Each row
+   is labelled ``ai_inferred`` and the table warns that no ink was used.
+
 Everything here is deterministic and uses no truth and no model. It never
-refuses: with no usable anchor it returns ``None`` and the caller keeps its
-draft (happy path first).
+refuses (happy path first).
 """
 from __future__ import annotations
 
@@ -88,6 +92,20 @@ STROKE_HALF_MAXIMUM = 0.5
 STROKE_SEARCH_PX = 12
 # Builds tried again, each with one more suspect anchor left out, after a failed build.
 FALLBACK_RETRIES = 4
+# Prior form (no usable ink). Plan shape of the half-breadth along the hull,
+# b(u) = B/2 * (1 - |2u - 1|^n)^(1/n) with u = 0..1 between the hull ends: n = 3
+# gives a full midbody and fine ends, a common displacement waterplane. The
+# hull ends are one station spacing beyond the end stations (the
+# perpendiculars of a standard body plan, whose end stations are often not
+# drawn). Section fullness runs from PRIOR_END_FULLNESS (V) at the ends to
+# PRIOR_MID_FULLNESS (round bilge, U) amidships, with the same plan shape.
+PRIOR_PLAN_EXPONENT = 3.0
+PRIOR_MID_FULLNESS = 4.0
+PRIOR_END_FULLNESS = 1.2
+# Smallest prior half-breadth, as a share of the half-beam, so an end row is never a line.
+PRIOR_MIN_BREADTH_SHARE = 0.05
+NO_INK_WARNING = ("No usable traced ink on any station: every section is the prior hull form, "
+                  "scaled to the vessel beam and depth. Treat the whole hull as an estimate.")
 
 
 @dataclass
@@ -105,6 +123,29 @@ class Anchor:
     # then built as a curve (the contour selection cannot extend ink).
     extended: bool = False
     notes: list = field(default_factory=list)
+
+
+@dataclass
+class BuildFailure:
+    """A failed build, as returned by a ``first_hull`` build callback. It is falsy.
+
+    ``reason`` is ``timeout`` (the worker ran out of time, also after one
+    retry), ``invalid_geometry`` (the builder made no valid solid), or another
+    worker state; ``detail`` says more.
+    """
+    reason: str
+    detail: str = ""
+
+    def __bool__(self) -> bool:
+        return False
+
+
+@dataclass
+class PriorDimensions:
+    """Vessel size for the prior form: half-beam and hull top, and where they came from."""
+    half_beam_m: float
+    top_z_m: float | None = None
+    source: str = "panel extents"
 
 
 # ------------------------------------------------------------------ ink checks
@@ -343,16 +384,74 @@ def _interpolate_residual(x_anchor: np.ndarray, values: np.ndarray, x: float) ->
     return PchipInterpolator(x_anchor, values, axis=0, extrapolate=False)(x)
 
 
-def fit_vessel(declared: list[dict], anchors: list[Anchor]) -> VesselTable | None:
+def panel_dimensions(declared: list[dict]) -> PriorDimensions | None:
+    """Vessel size from the calibrated station panels, when nothing better is known.
+
+    The half-beam is the median, over the panels, of the largest distance from
+    the centreline to a panel side; the top is left to each panel's ``z_max_m``.
+    A panel is usually drawn a little larger than the hull, so this is an upper
+    estimate. None when no section has a panel and calibration.
+    """
+    reaches = []
+    for section in declared:
+        roi, cal = section.get("roi_px"), section.get("calibration")
+        if not roi or not cal or not cal.get("pixels_per_metre"):
+            continue
+        centre = float(cal["centerline_px"])
+        reaches.append(max(abs(float(roi[2]) - centre), abs(centre - float(roi[0]))) / float(cal["pixels_per_metre"]))
+    if not reaches:
+        return None
+    return PriorDimensions(half_beam_m=float(np.median(reaches)), top_z_m=None, source="calibrated panel extents")
+
+
+def prior_hull(declared: list[dict], dimensions: PriorDimensions, dropped: list[dict] | None = None) -> VesselTable:
+    """A complete hull with no anchor: the prior form scaled to the vessel's size.
+
+    Every row is ``prior`` (built as ``ai_inferred``); the table warns that no
+    ink was used, and keeps the reason each offered anchor was dropped.
+    """
+    xs = np.array([float(s["x_m"]) for s in declared])
+    spacing = float(np.median(np.diff(np.sort(xs)))) if len(xs) > 1 else max(abs(float(xs[0])), 1.0)
+    start, end = float(xs.min()) - spacing, float(xs.max()) + spacing
+    eta = 0.5 * (1.0 - np.cos(np.linspace(0.0, np.pi, FITTED_ROW_SAMPLES)))
+    rows = []
+    for section in declared:
+        u = (float(section["x_m"]) - start) / (end - start)
+        plan = (1.0 - abs(2.0 * u - 1.0) ** PRIOR_PLAN_EXPONENT) ** (1.0 / PRIOR_PLAN_EXPONENT)
+        breadth = dimensions.half_beam_m * max(plan, PRIOR_MIN_BREADTH_SHARE)
+        fullness = PRIOR_END_FULLNESS + (PRIOR_MID_FULLNESS - PRIOR_END_FULLNESS) * plan
+        keel = float(section.get("z_min_m", 0.0))
+        top = float(section.get("z_max_m", dimensions.top_z_m if dimensions.top_z_m is not None else keel + 1.0))
+        if dimensions.top_z_m is not None:
+            top = min(top, dimensions.top_z_m)
+        if top - keel <= 1e-3:
+            top = keel + 1.0
+        points = np.column_stack([breadth * section_shape(eta, fullness, 0.0), keel + eta * (top - keel)])
+        rows.append(StationRow(id=section["id"], x_m=float(section["x_m"]), points_yz_m=points.tolist(),
+                               source="prior", notes=[f"prior form, no usable ink (size from {dimensions.source})"]))
+    dropped = dropped or []
+    warnings = [{"kind": "no_ink", "section_id": None, "message": NO_INK_WARNING}]
+    warnings += [{"kind": "anchor_dropped", "section_id": d["section_id"], "message": d["reason"]} for d in dropped]
+    trend = {"method": "prior_form_v1", "x_range_m": [start, end], "anchors": [], "dropped": dropped,
+             "dimensions": {"half_beam_m": dimensions.half_beam_m, "top_z_m": dimensions.top_z_m,
+                            "source": dimensions.source}}
+    return VesselTable(rows, waterline_grid(rows), trend, warnings)
+
+
+def fit_vessel(declared: list[dict], anchors: list[Anchor],
+               prior: PriorDimensions | None = None) -> VesselTable | None:
     """The first full hull: traced anchors kept exactly, gaps filled by the form fit.
 
     ``declared`` are the spec sections (``id``, ``x_m``, optional ``z_min_m``
-    and ``z_max_m``). Returns None when no anchor is usable.
+    and ``z_max_m``, ``roi_px`` and ``calibration``). With no usable anchor the
+    hull is the prior form, sized by ``prior`` or else by the panel extents.
+    Returns None only when there is no anchor and no size at all.
     """
     check_tops(anchors)
     kept, dropped = check_anchors(anchors)
     if not kept:
-        return None
+        size = prior or panel_dimensions(declared)
+        return prior_hull(declared, size, dropped) if size and declared else None
     kept = sorted(kept, key=lambda a: a.x_m)
     x_range = (min(float(s["x_m"]) for s in declared), max(float(s["x_m"]) for s in declared))
     params = [station_parameters(a.points_yz_m) for a in kept]
@@ -427,31 +526,50 @@ def suspect_order(anchors: list[Anchor]) -> list[str]:
 
 
 def first_hull(declared: list[dict], anchors: list[Anchor], base_spec: dict, build, *,
-               max_retries: int = FALLBACK_RETRIES):
+               max_retries: int = FALLBACK_RETRIES, prior: PriorDimensions | None = None):
     """Fit, compile and build the first hull; a failed build never ends the draft.
 
     ``build(spec)`` builds one draft specification and returns a result that is
-    truthy when a solid was made. When it fails (for example a centreline pinch
+    truthy when a solid was made; on failure it may return a ``BuildFailure``
+    that says why. When the build fails (for example a centreline pinch
     makes an invalid shell), each anchor is left out alone, most suspect first,
     and filled by the fit. One bad anchor is then found even when the fairness
     ranking puts it last. When no single left-out anchor gives a solid, anchors
     are left out one more at a time in suspect order, up to ``max_retries``
-    more builds. Returns ``(table, result, left_out)``; ``result`` is falsy
-    only when every try failed.
+    more builds. When that also fails, the prior form (no anchor) is built.
+    Every left-out anchor gets an ``anchor_left_out`` warning in the table with
+    the reason of the build that failed with it (timeout or invalid geometry).
+    Returns ``(table, result, left_out)``; ``result`` is falsy only when every
+    try failed.
     """
     import copy
 
     from .vessel_model import build_spec
 
+    first_failure = []
+
     def attempt(left_out):
         usable = [copy.deepcopy(a) for a in anchors if a.id not in left_out]
-        table = fit_vessel(declared, usable)
+        table = fit_vessel(declared, usable, prior)
         if table is None:
             return None, None
-        for row in table.stations:
-            if row.id in left_out:
-                row.notes.append("anchor left out: the build with it failed")
-        return table, build(build_spec(table, base_spec, declared))
+        result = build(build_spec(table, base_spec, declared))
+        if not result and not first_failure:
+            first_failure.append(result)
+        return table, result
+
+    def report(table, left_out):
+        """Say in the table why each anchor was left out of the build."""
+        failure = first_failure[0] if first_failure else None
+        reason = failure.reason if isinstance(failure, BuildFailure) else "build_failed"
+        detail = f" ({failure.detail})" if isinstance(failure, BuildFailure) and failure.detail else ""
+        for sid in left_out:
+            message = f"Anchor left out: the build with it failed: {reason}{detail}."[:300]
+            table.warnings.append({"kind": "anchor_left_out", "section_id": sid, "reason": reason,
+                                   "message": message})
+            if any(row.id == sid for row in table.stations):
+                table.row(sid).notes.append(f"anchor left out: the build with it failed ({reason})")
+        return table
 
     table, result = attempt([])
     if table is None or result:
@@ -461,7 +579,7 @@ def first_hull(declared: list[dict], anchors: list[Anchor], base_spec: dict, bui
         single = [suspect]
         single_table, single_result = attempt(single)
         if single_result:
-            return single_table, single_result, single
+            return report(single_table, single), single_result, single
     # Each single left-out anchor failed, so start with the two most suspect
     # anchors left out. Keep at least one anchor.
     left_out = order[:1]
@@ -470,4 +588,12 @@ def first_hull(declared: list[dict], anchors: list[Anchor], base_spec: dict, bui
         table, result = attempt(left_out)
         if table is None or result:
             break
+    if not result and len(order) > 1:
+        # Happy path: no anchor set builds, so build the prior form with none.
+        left_out = list(order)
+        prior_table, prior_result = attempt(left_out)
+        if prior_table is not None:
+            table, result = prior_table, prior_result
+    if table is not None:
+        report(table, left_out)
     return table, result, left_out
