@@ -203,8 +203,21 @@ def _check_pieces(sec: dict, roi, sid: str, errors: list, unknown) -> None:
             _check_selection(piece["inner_selection"], roi, sid, errors, unknown, "inner_selection")
 
 
-def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
-    """Every JSON type yields validation gaps, never a metadata type exception."""
+def is_sheet_only(spec) -> bool:
+    """A sheet-only intake spec: no sections yet, and an intake record of the sheets.
+
+    Only a live draft run accepts it (the model reads stations and scale in
+    phase 1; see materialize.py). Every other path still requires sections.
+    """
+    return isinstance(spec, dict) and spec.get("sections") == [] and isinstance(spec.get("intake"), dict)
+
+
+def validate_spec(spec: dict, base_dir: Path, *, allow_sheet_only: bool = False) -> list[dict]:
+    """Every JSON type yields validation gaps, never a metadata type exception.
+
+    ``allow_sheet_only`` admits a sheet-only intake spec (see is_sheet_only);
+    the default keeps the strict rule of at least three calibrated sections.
+    """
     errors = []
     if not isinstance(spec, dict):
         return [gap("invalid_spec", "A JSON object is required.")]
@@ -217,7 +230,12 @@ def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
     unknown(spec, {"schema_version", "vessel_id", "input_mode", "units", "source", "station_reference",
                    "symmetry", "symmetry_evidence", "end_closure", "sections", "constraints", "components",
                    "table_value_units", "table_surface", "scope_note", "historical_date", "table_reading",
-                   "draft"}, "specification")
+                   "draft", "intake"}, "specification")
+    if "intake" in spec:
+        intake = spec["intake"]
+        if (not isinstance(intake, dict) or set(intake) - {"file", "sha256"} or not _text(intake.get("file"), 4096)
+                or ("sha256" in intake and not (isinstance(intake["sha256"], str) and SHA256.fullmatch(intake["sha256"])))):
+            errors.append(gap("invalid_intake", "intake must be {file, optional sha256} naming the intake record."))
     if "draft" in spec:
         # A draft revision spec lists its open guesses; see draft.py. Its
         # sections are the read ones only, so the guess list must be exact.
@@ -294,7 +312,9 @@ def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
         if "roi_px" in source and not _rectangle(source["roi_px"]):
             errors.append(gap("invalid_source_region", f"{name}.roi_px must be a bounded positive pixel rectangle."))
     sections = spec.get("sections")
-    if not isinstance(sections, list) or len(sections) < 3:
+    if allow_sheet_only and is_sheet_only(spec):
+        sections = []  # The model reads stations and scale in phase 1.
+    elif not isinstance(sections, list) or len(sections) < 3:
         errors.append(gap("insufficient_sections", "At least three calibrated sections are required."))
         sections = []
     elif len(sections) > MAX_SECTIONS:

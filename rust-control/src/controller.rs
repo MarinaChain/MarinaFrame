@@ -554,6 +554,10 @@ fn description_pending(store: &Store) -> bool {
             .is_some_and(|phase| phase != "complete")
 }
 
+/// Added to the description instructions when the spec is a sheet-only intake:
+/// the harness declares the sections from this reading before the first hull.
+const SHEET_ONLY_INSTRUCTIONS: &str = "This sheet came from intake with NO declared stations or calibration. The survey's intake_regions are code-measured view regions in ORIGINAL sheet pixels (label body_plan, profile, half_breadth, title_block); use their region_px boxes, corrected only where you see an error, never 0-1000 coordinates. Your reading declares the sections: the harness builds one section per station you list, on the body view and setup you give. In describe_views give the body plan its own kind (body, or body_fore/body_aft halves) and, for separate station panels, panels in reading order; give each non-body view its own family_id. In propose_sheet_setup for the body read pixels_per_metre from labelled grid lines (pixel distance between two labelled lines divided by their metre difference), and give centreline_px and baseline_px. In describe_vessel list EVERY station drawn in the body plan in order as {id, x_m, side}: x_m in metres from the aft end forward, read from the profile/plan station marks and LOA; when positions are not printed, space stations evenly over LOA and say so in a note; side 'fore' or 'aft' only for halves of an overlaid body plan. Give loa, beam and depth when readable. Missing values become labelled guesses, never a stop.";
+
 fn description_instructions(phase: &Value) -> &'static str {
     match phase.as_str() {
         Some("survey") => "The harness surveys the sheet first; do not build CAD.",
@@ -681,6 +685,9 @@ fn investigation_observation(store: &Store) -> Result<Value> {
         value["description_phase"] = d["description_phase"].clone();
         value["description_instructions"] =
             json!(description_instructions(&d["description_phase"]));
+        if d["sheet_only"] == true {
+            value["sheet_only_instructions"] = json!(SHEET_ONLY_INSTRUCTIONS);
+        }
         value["description_next_view"] = d["description_next_view"].clone();
         value["described_views"] = d["described_views"].clone();
         value["sheet_setups"] = json!(d["sheet_setups"].as_array().map(|setups| setups
@@ -2053,7 +2060,17 @@ pub fn initialize(store: &mut Store) -> Result<bool> {
         stop(store, Status::Blocked, &format!("input:{kind}"))?;
         return Ok(false);
     }
+    // A sheet-only intake spec has no sections yet. Only the live draft model
+    // reads stations and scale (phase 1); every other policy keeps the strict rule.
+    if sheet_only(store) && !investigation_mode(store) {
+        stop(store, Status::Blocked, "input:sheet_only_needs_live_draft")?;
+        return Ok(false);
+    }
     Ok(true)
+}
+/// The task's spec is a sheet-only intake (no declared sections before phase 1).
+fn sheet_only(store: &Store) -> bool {
+    store.state.domain["sheet_only"] == true
 }
 /// Advance automatic description/CAD work before asking the model. An absent
 /// phase key keeps old workers and stored tasks on their legacy first-hull path.
@@ -2707,6 +2724,23 @@ mod tests {
             .any(|event| event.kind == "worker_started" || event.kind == "first_hull_ready"));
         store.state.domain = json!({});
         assert!(!description_pending(&store));
+    }
+
+    #[test]
+    fn sheet_only_intake_tells_the_model_to_declare_stations() {
+        let (_tmp, mut store) = fixture();
+        store.state.config.on_ambiguity = OnAmbiguity::Draft;
+        store.state.domain =
+            json!({"description_phase":"vessel","sheet_only":true,"described_views":[]});
+        let observation = investigation_observation(&store).unwrap();
+        assert_eq!(
+            observation["sheet_only_instructions"],
+            SHEET_ONLY_INSTRUCTIONS
+        );
+        store.state.domain["sheet_only"] = json!(false);
+        let observation = investigation_observation(&store).unwrap();
+        assert!(observation.get("sheet_only_instructions").is_none());
+        assert!(!sheet_only(&store));
     }
 
     #[test]

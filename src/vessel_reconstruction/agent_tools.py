@@ -31,11 +31,15 @@ from .investigation_tools import (INVESTIGATION_ARGUMENTS, InvestigationTools, T
 from .ingest import _grid_evidence
 from .isolation import DEFAULT_LIMITS, run_isolated, supervise_process
 from .provenance import digest_file, digest_object, safe_relative_file, write_json
-from .schema import MAX_SPEC_BYTES, load_bounded_json, loads_bounded_json, validate_spec
+from .schema import MAX_SPEC_BYTES, is_sheet_only, load_bounded_json, loads_bounded_json, validate_spec
 from . import section_authoring
 
 
 DOMAIN_VERSION = "source_bound_tools_v1"
+# Captured intake record of a sheet-only spec, and the spec with the sections
+# materialized from the phase-1 reading (both in domain/input).
+INTAKE_FILE = "intake.json"
+MATERIALIZED_SPEC = "materialized_spec.json"
 VIEWS = ("body", "plan", "profile", "oblique")
 MAX_CANDIDATES = 10
 # Most sections in one inspection call (and in one observation).
@@ -159,14 +163,24 @@ class DomainTools(InvestigationTools):
                 raise ValueError("Declared source hash does not match captured bytes.")
             settings.update(file=name, sha256=sha)
             sources[role] = {"file": name, "sha256": sha}
+        intake = None
+        if is_sheet_only(captured) and isinstance(captured["intake"].get("file"), str):
+            # The intake record (pages, proposed view regions) is evidence of a
+            # sheet-only spec; it is captured beside the source like the drawing.
+            record = safe_relative_file(spec_path.parent, captured["intake"]["file"])
+            (destination / INTAKE_FILE).write_bytes(record.read_bytes())
+            intake = {"file": INTAKE_FILE, "sha256": digest_file(destination / INTAKE_FILE)}
+            captured["intake"] = dict(intake)
         (destination / "submitted_spec.json").write_bytes(raw)
         write_json(destination / "spec.json", captured)
-        validation = validate_spec(captured, destination)
+        validation = validate_spec(captured, destination, allow_sheet_only=True)
         state = {"version": DOMAIN_VERSION, "submitted_spec_sha256": digest_object(spec),
                  "input_spec_sha256": digest_file(destination / "spec.json"), "sources": sources,
                  "revision": 0, "selected": {}, "catalog": {}, "inspection_artifacts": [],
                  "builds": [], "last_valid_candidate": None, "validation": None,
                  "rendered_views": [], "input_errors": validation}
+        if intake is not None:
+            state.update(sheet_only=True, intake=intake)
         write_json(self.state_path, state)
 
     def _verify_inputs(self):
@@ -178,7 +192,47 @@ class DomainTools(InvestigationTools):
             source = safe_relative_file(self.root / "input", item["file"])
             if digest_file(source) != item["sha256"]:
                 raise ValueError("Captured drawing changed after task admission.")
-        self.spec = load_bounded_json(path)
+        if self.state.get("intake"):
+            record = safe_relative_file(self.root / "input", self.state["intake"]["file"])
+            if digest_file(record) != self.state["intake"]["sha256"]:
+                raise ValueError("Captured intake record changed after task admission.")
+        # The captured spec never changes. A sheet-only task adds the sections it
+        # materialized after phase 1 (materialize.py) in a second, hashed file.
+        self.captured_spec = load_bounded_json(path)
+        self.spec = self.captured_spec
+        if self.state.get("materialized_spec_sha256"):
+            materialized = safe_relative_file(self.root / "input", MATERIALIZED_SPEC)
+            if digest_file(materialized) != self.state["materialized_spec_sha256"]:
+                raise ValueError("Materialized specification changed after it was written.")
+            self.spec = load_bounded_json(materialized)
+
+    @property
+    def spec_path(self) -> Path:
+        """The spec file whose sections the tools use (materialized when present)."""
+        name = MATERIALIZED_SPEC if self.state.get("materialized_spec_sha256") else "spec.json"
+        return self.root / "input" / name
+
+    def intake_hints(self) -> list[dict]:
+        """Proposed view regions of the source page from the intake record, if any."""
+        if not self.state.get("intake"):
+            return []
+        record = load_bounded_json(self.root / "input" / self.state["intake"]["file"])
+        page = next((p for p in record.get("pages", []) if p.get("page_id") == record.get("spec_page_id")), None)
+        return [r for r in (page or {}).get("regions", []) if isinstance(r, dict) and r.get("label") != "skip"]
+
+    def _materialize_sections(self):
+        """Write declared sections for a sheet-only task from its phase-1 reading."""
+        from .materialize import materialize_sections, materialized_spec
+        image, _, _ = self._source()
+        made = materialize_sections(image, self.captured_spec, self.state, self.intake_hints())
+        spec, gaps = materialized_spec(self.captured_spec, made["sections"], self.root / "input")
+        destination = self.root / "input" / MATERIALIZED_SPEC
+        write_json(destination, spec)
+        self.state.update(materialized_spec_sha256=digest_file(destination),
+                          materialization=made["report"], materialization_gaps=gaps[:32])
+        self.spec = spec
+        self._save()
+        return made["report"]
 
     @property
     def revision_id(self):
@@ -253,7 +307,9 @@ class DomainTools(InvestigationTools):
                 "view_count": len(self.state.get("views", [])),
                 "non_improving_edits": self.state.get("non_improving_edits", 0),
                 "best_valid_candidate": copy.deepcopy(self.state.get("best_valid_candidate")),
-                "input_errors": self.state["input_errors"][:32], **SEMANTIC_FLAGS}
+                "input_errors": self.state["input_errors"][:32],
+                "sheet_only": self.state.get("sheet_only", False),
+                "materialization": copy.deepcopy(self.state.get("materialization")), **SEMANTIC_FLAGS}
 
     def catalog(self) -> list[dict]:
         return [
@@ -479,7 +535,7 @@ class DomainTools(InvestigationTools):
         resources = {}
         if missing:
             out = self.root / "inspections" / uuid4().hex
-            outcome, result = self._worker("inspect", {"spec_path": str(self.root / "input/spec.json"),
+            outcome, result = self._worker("inspect", {"spec_path": str(self.spec_path),
                                                         "section_ids": missing}, out)
             resources = {"worker_state": outcome["state"], "wall_seconds": outcome["elapsed_seconds"]}
             if result is None:
@@ -968,7 +1024,7 @@ class DomainTools(InvestigationTools):
 
     def _validation_context(self, candidate, run):
         from .validation_contract import build_context
-        return build_context(self.task_dir, self.root, self.state, self.spec, candidate, run)
+        return build_context(self.task_dir, self.root, self.state, self.captured_spec, candidate, run)
 
     def validation_context(self):
         """Fresh identity/evidence context for an independent finalization gate.

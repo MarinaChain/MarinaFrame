@@ -311,14 +311,29 @@ pub fn verify_domain_identity(root: &Path, description: &Value) -> Result<()> {
         return Err("input_spec_changed".into());
     }
     if d["input_errors"].as_array().is_some_and(|a| a.is_empty()) {
-        let spec = util::read_json(&input, 2 * 1024 * 1024)?;
+        let mut spec = util::read_json(&input, 2 * 1024 * 1024)?;
         if spec["schema_version"] != "1.0" || spec["units"] != "m" {
             return Err("input_unit_or_schema_contract".into());
         }
-        if spec["input_mode"]
-            .as_str()
-            .unwrap_or("calibrated_section_curves")
-            == "calibrated_section_curves"
+        // A sheet-only intake spec declares no sections; after phase 1 the
+        // domain writes them to a second, hash-bound file (materialize.py).
+        let sheet_only =
+            d["sheet_only"] == true && spec["sections"].as_array().is_some_and(|a| a.is_empty());
+        if sheet_only {
+            if let Some(hash) = d["materialized_spec_sha256"].as_str() {
+                let materialized = util::safe_file(root, "domain/input/materialized_spec.json")?;
+                if util::file_hash(&materialized)? != hash {
+                    return Err("materialized_spec_changed".into());
+                }
+                spec = util::read_json(&materialized, 2 * 1024 * 1024)?;
+            }
+        }
+        let awaiting_sections = sheet_only && d["materialized_spec_sha256"].is_null();
+        if !awaiting_sections
+            && spec["input_mode"]
+                .as_str()
+                .unwrap_or("calibrated_section_curves")
+                == "calibrated_section_curves"
         {
             let sections = spec["sections"]
                 .as_array()

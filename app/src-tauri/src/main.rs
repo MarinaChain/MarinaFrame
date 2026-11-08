@@ -2,6 +2,7 @@
 // `marinaframe-app-core`, which has no Tauri types.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use marinaframe_app_core::intake::IntakePreview;
 use marinaframe_app_core::live::{HullSections, LiveSteps};
 use marinaframe_app_core::types::*;
 use marinaframe_app_core::{AppError, AppPaths, AppResult, Backend};
@@ -84,6 +85,27 @@ async fn read_artifact(
 async fn start_run(backend: Shared<'_>, spec_path: String) -> Result<Started, AppError> {
     run(backend, move |b| {
         b.start_run(&spec_path).map(|task| Started { task })
+    })
+    .await
+}
+
+/// Read a dropped drawing set (PDF, PNG, TIFF, JPEG) without a spec file.
+#[tauri::command(rename_all = "snake_case")]
+async fn prepare_intake(
+    backend: Shared<'_>,
+    files: Vec<String>,
+) -> Result<IntakePreview, AppError> {
+    run(backend, move |b| b.prepare_intake(&files)).await
+}
+
+/// Write the spec of the edited preview and start its run with the current AI setting.
+#[tauri::command(rename_all = "snake_case")]
+async fn start_intake_run(
+    backend: Shared<'_>,
+    preview: IntakePreview,
+) -> Result<Started, AppError> {
+    run(backend, move |b| {
+        b.start_intake_run(&preview).map(|task| Started { task })
     })
     .await
 }
@@ -246,6 +268,8 @@ fn main() {
             get_hull_sections,
             read_artifact,
             start_run,
+            prepare_intake,
+            start_intake_run,
             cancel_task,
             resume_task,
             choose_line,

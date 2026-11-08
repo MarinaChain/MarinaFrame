@@ -61,6 +61,10 @@ def prior_dimensions(spec: dict, sections: list[dict]) -> PriorDimensions | None
 def build_first_hull(tools):
     from .vessel_description import first_hull_spec, describe_table
     description = tools.state.get("vessel_description")
+    materialization = None
+    if tools.state.get("sheet_only") and not tools.state.get("materialized_spec_sha256"):
+        # A sheet-only intake: declare the sections from the phase-1 reading first.
+        materialization = tools._materialize_sections()
     sections = first_hull_spec(tools.spec, description)["sections"]
     while not all(s["id"] in tools.state["catalog"] for s in sections):
         observed = tools._inspect_source()
@@ -123,6 +127,10 @@ def build_first_hull(tools):
                                   message="First hull could not form a solid; use propose_section to complete it.")
     describe_table(table, description)
     warnings = hull_warnings(table, retried_builds)
+    if tools.state.get("materialization"):
+        # Sections of a sheet-only intake came from the model's reading: say so.
+        warnings = [w[:300] for w in tools.state["materialization"]["warnings"]] + warnings
+        warnings.insert(0, "Stations and calibration were set from the model's reading of the sheet (ai_inferred).")
     tools.state["vessel_table"] = table.to_json()
     write_json(tools.root / "vessel.json", {"description": description, "table": table.to_json()})
     from .fit_feedback import score
@@ -143,8 +151,9 @@ def build_first_hull(tools):
     message = ("No usable ink: the first hull is the prior form scaled to the vessel size. Author or correct "
                "sections from the drawing." if no_ink else
                "Anchored first hull ready. Render it, preserve good ink and improve only the weak sections.")
+    extra = {"materialized_sections": materialization} if materialization else {}
     return tools._observation(True,"first_hull_built",candidate=candidate,left_out_anchor_ids=left_out,
-                              warnings=warnings, message=message)
+                              warnings=warnings, message=message, **extra)
 
 
 # Kinds of table warning that say what happened to the ink (fairness notes stay in the table).

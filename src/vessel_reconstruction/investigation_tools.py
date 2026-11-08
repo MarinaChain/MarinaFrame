@@ -193,6 +193,11 @@ class InvestigationTools:
         from .vessel_description import survey_sheet
         image, _, _ = self._source()
         survey = survey_sheet(image, self.spec)
+        hints = self.intake_hints()
+        if hints:
+            # A sheet-only intake proposed view regions (code labels, with confidence).
+            survey["intake_regions"] = [{k: r.get(k) for k in ("region_id", "label", "confidence", "region_px")}
+                                        for r in hints[:16]]
         self.state.update(sheet_survey=survey, description_phase="views", phase1_only=phase1_only)
         self._save()
         observed = self._view_region([0, 0, image.shape[1], image.shape[0]], 1024)
@@ -226,6 +231,7 @@ class InvestigationTools:
         image, _, _ = self._source()
         from .vessel_description import warning
         records, warnings = [], []
+        sheet_only = bool(self.state.get("sheet_only"))
         for view in views:
             box = _region(view["region_px"], image.shape)
             if box[2] - box[0] < 8 or box[3] - box[1] < 8:
@@ -235,12 +241,19 @@ class InvestigationTools:
             record = {**copy.deepcopy(view), "region_px": box}
             if record["kind"] in {"body", "body_fore", "body_aft"}:
                 record.setdefault("family_id", "body")
+            elif sheet_only:
+                # Only body panels share a scale family; a profile setup must
+                # not become the body setup of a sheet-only intake.
+                record["family_id"] = record["view_id"]
             records.append(record)
         self.state["described_views"] = records
         self._save()
         for named in records:
             inline = named.get("setup")
-            if isinstance(inline, dict) and not named.get("setup_id"):
+            # A sheet-only intake has no declared calibration: an inline setup
+            # without a scale would default to 1 px/m, so ask for the setup instead.
+            unscaled = sheet_only and not (isinstance(inline, dict) and _number(inline.get("pixels_per_metre"), 1e-3, 1e5))
+            if isinstance(inline, dict) and not named.get("setup_id") and not unscaled:
                 self._record_description_setup(image, named, {**inline, "view": "body" if named["kind"].startswith("body") else named["kind"],
                     "view_id": named["view_id"], "region_px": named["region_px"]}, "shared setup in describe_views")
         crop = self._description_view()
