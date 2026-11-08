@@ -87,12 +87,45 @@ def test_each_wrong_field_has_a_named_warning_and_no_refusal():
     assert result["engineering_approved"] is False
 
 
-def test_malformed_nested_description_is_an_argument_error():
-    assert not vd.valid_description({"stations": "not a station list"})
-    assert not vd.valid_description({"principal": {"beam": {"value": "wide"}}})
-    assert not vd.valid_description({"waterlines": [{"z_m": float("nan")} ]})
-    assert vd.valid_description({"principal": {"beam": {"value": -2., "source": "ai_inferred"}},
-                                 "stations": [{"id": "s01", "x_m": 20.}]})
+def test_odd_description_fields_are_preserved_coerced_and_warned():
+    image, spec, setup = sheet()
+    claim = {"principal": {"beam": {"value": "wide", "source": "visual_guess"},
+                           "depth": "9.0", "scale": {"value": "1:100", "source": "title_block"}},
+             "stations": {"s01": "10", "s02": "20"}, "waterlines": ["1", "2"],
+             "ends": {"stem": "raked", "stern": "transom"}, "deck": "rising sheer",
+             "custom_notes": ["keep this"]}
+    assert vd.valid_description(claim)
+    result = vd.measure_description(image, spec, claim, [setup])
+    assert result["model_description"] == claim
+    assert result["principal"]["depth"]["value"] == 9.
+    assert result["principal"]["scale"]["value"] == "1:100"
+    assert result["custom_notes"] == ["keep this"]
+    assert result["stations"][0]["x_m"] == 10.
+    assert result["ends"]["stem"]["note"] == "raked"
+    assert {"principal.beam", "principal.scale", "deck"} <= {w["field"] for w in result["warnings"]}
+
+
+def test_arbitrary_description_shape_is_recorded_not_rejected():
+    image, spec, setup = sheet()
+    for claim in (None, "Hull with raked bow", ["body plan"], {"stations": "not a station list",
+                  "waterlines": [{"z_m": "unreadable"}], "ends": False}):
+        result = vd.measure_description(image, spec, claim, [setup])
+        assert result["engineering_approved"] is False
+        assert result["warnings"]
+
+
+def test_missing_grid_still_warns_for_nonempty_incomplete_waterlines():
+    image, spec, setup = sheet()
+    result = vd.measure_description(np.full_like(image, 255), spec,
+                                    {"waterlines": [{"id": "w0", "z_m": 0.}]}, [setup])
+    assert "waterlines" in {w["field"] for w in result["warnings"]}
+
+
+def test_waterline_grid_uses_declared_panels_and_excludes_baseline():
+    image, spec, setup = sheet()
+    setup["region_px"] = [0, 0, 400, 260]
+    result = vd.measure_description(image, spec, {}, [setup])
+    assert [w["z_m"] for w in result["waterlines"]] == pytest.approx(list(range(1, 10)), abs=.02)
 
 
 def test_description_feeds_station_positions_dimensions_and_table_grid():

@@ -24,6 +24,21 @@ def test_missing_description_is_not_a_pass(tmp_path):
     assert result["wrong_fields_without_warning"]
 
 
+def test_warned_unknown_is_acceptable_only_when_dimension_not_on_sheet(tmp_path):
+    domain = tmp_path / "domain"
+    domain.mkdir()
+    description = {"principal": {"loa": {"value": None}, "beam": {"value": 10.},
+                                  "depth": {"value": 10.}, "draft": {"value": None}},
+                   "warnings": [{"field": "principal.loa"}, {"field": "principal.draft"}]}
+    (domain / "vessel.json").write_text(json.dumps({"description": description}))
+    result = checker.check_case(tmp_path, reference(), {"sections": []}, {"waterline_grid_z_m": []})
+    assert result["all_dimensions_acceptable"]
+    assert not result["all_dimensions_within_2_percent"]
+    visible = checker.check_case(tmp_path, reference(), {"sections": []},
+                                 {"waterline_grid_z_m": [], "layout": "lines_3view"})
+    assert not visible["all_dimensions_acceptable"]
+
+
 def test_warning_coverage_does_not_change_numeric_pass(tmp_path):
     domain = tmp_path / "domain"
     domain.mkdir()

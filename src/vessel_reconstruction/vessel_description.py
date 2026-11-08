@@ -22,34 +22,87 @@ VIEW_KINDS = GEOMETRY_KINDS | {"title_block", "offsets_table", "other"}
 
 
 def valid_description(description):
-    """Check transport shape only; wrong physical values remain advisory."""
+    """Description claims are data, not a reason to stop the read phase."""
+    return True
+
+
+def _number(value):
+    if isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def normalize_description(description):
+    """Keep every original claim; make only computational fields numeric or null."""
+    result = copy.deepcopy(description) if isinstance(description, dict) else {"extra_metadata": description}
+    warnings = []
+
+    def changed(field, original, value):
+        warnings.append(warning(field, original, value,
+                                "Original data retained in model_description; check the normalized reading."))
+
     if not isinstance(description, dict):
-        return False
+        changed("description", description, None)
     for key in ("principal", "ends", "deck", "form"):
-        if key in description and not isinstance(description[key], dict):
-            return False
+        if key in result and not isinstance(result[key], dict):
+            original = result[key]
+            result[key] = {"note": original}
+            changed(key, original, result[key])
+    known = {"units", "frame", "principal", "stations", "waterlines", "buttocks", "ends", "deck", "form", "warnings"}
+    for key in result.keys() - known:
+        changed(key, result[key], None)
+    principal = result.setdefault("principal", {})
+    for name, original in list(principal.items()):
+        record = copy.deepcopy(original) if isinstance(original, dict) else {"value": original}
+        if record.get("source") not in (None, "spec", "title_block", "measured", "ai_inferred"):
+            changed(f"principal.{name}.source", record["source"], None)
+        if name not in {"loa", "lpp", "beam", "depth", "draft"}:
+            changed(f"principal.{name}", original, None)
+            continue  # Extra metadata, such as a scale string, is not a dimension.
+        value = _number(record.get("value"))
+        if record.get("value") != value or type(record.get("value")) not in (int, float, type(None)):
+            changed(f"principal.{name}", original, value)
+            record["original_value"] = record.get("value")
+        record["value"] = value
+        record.setdefault("source", "ai_inferred")
+        principal[name] = record
     for key, coordinate in (("stations", "x_m"), ("waterlines", "z_m"), ("buttocks", "y_m")):
-        if key not in description:
+        if key not in result:
             continue
-        rows = description[key]
-        if not isinstance(rows, list) or len(rows) > 300:
-            return False
-        for row in rows:
-            if not isinstance(row, dict) or not isinstance(row.get("id"), str):
-                return False
-            value = row.get(coordinate)
-            if type(value) not in (int, float) or not math.isfinite(value):
-                return False
+        original = result[key]
+        rows = original
+        if isinstance(rows, dict):
+            rows = [{"id": str(k), **(v if isinstance(v, dict) else {coordinate: v})} for k, v in rows.items()]
+            changed(key, original, None)
+        if not isinstance(rows, list):
+            changed(key, original, None)
+            result[key] = []
+            continue
+        normalized = []
+        for index, row in enumerate(rows[:300]):
+            row = copy.deepcopy(row) if isinstance(row, dict) else {coordinate: row}
+            row["id"] = str(row.get("id", f"{key}-{index + 1}"))
+            value = _number(row.get(coordinate))
+            if row.get(coordinate) != value or type(row.get(coordinate)) not in (int, float, type(None)):
+                changed(f"{key}[{index}].{coordinate}", row.get(coordinate), value)
+            row[coordinate] = value
             if "label" in row and not isinstance(row["label"], str):
-                return False
-    for record in description.get("principal", {}).values():
-        value = _value(record)
-        if value is not None and (type(value) not in (int, float) or not math.isfinite(value)):
-            return False
-        if isinstance(record, dict) and record.get("source") not in (None, "spec", "title_block", "measured", "ai_inferred"):
-            return False
-    ends = description.get("ends", {})
-    return all(key not in ends or isinstance(ends[key], dict) for key in ("stem", "stern", "bulb"))
+                row["label"] = str(row["label"])
+            normalized.append(row)
+        if len(rows) > 300:
+            changed(key, "More than 300 rows; original retained", 300)
+        result[key] = normalized
+    ends = result.setdefault("ends", {})
+    for name, part in list(ends.items()):
+        if name in {"stem", "bow", "stern", "bulb", "keel"} and not isinstance(part, dict):
+            ends[name] = {"note": part, "source": "ai_inferred"}
+            changed(f"ends.{name}", part, None)
+    result["model_description"] = copy.deepcopy(description)
+    return result, warnings
 
 
 def warning(field, claimed, measured, fix):
@@ -279,10 +332,9 @@ def describe_table(table, description):
 
 def measure_description(image, spec, description, setups):
     """Retain model readings, add measured values, and name every doubtful field."""
-    result = copy.deepcopy(description)
+    result, warnings = normalize_description(description)
     result.setdefault("units", spec.get("units", "m"))
     result.setdefault("frame", "x aft to forward from station datum; z up from baseline; metres")
-    warnings = []
     principal = result.setdefault("principal", {})
     measurements = {}
     # The supplied body regions separate drawing labels from section ink and can
@@ -315,13 +367,13 @@ def measure_description(image, spec, description, setups):
             if extent:
                 measurements["loa"] = [{"view_id": setup.get("view_id", "profile"),
                                          "value": (extent["right_px"] - extent["left_px"]) / setup["pixels_per_metre"]}]
-    for name, record in list(principal.items()):
-        value = _value(record)
+    for name in ("loa", "lpp", "beam", "depth", "draft"):
+        value = _value(principal.get(name))
         if value is not None and value <= 0:
             warnings.append(warning(f"principal.{name}", value, None, "Read a positive principal dimension or label it as unknown/inferred."))
     for name in ("loa", "lpp", "draft"):
         if name not in measurements:
-            record = principal.get(name)
+            record = principal.setdefault(name, {"value": None, "source": "ai_inferred"})
             warnings.append(warning(f"principal.{name}", _value(record), None,
                 "No independent dimension measurement is available; read dimension text or retain this field as ai_inferred."))
     for name, values in measurements.items():
@@ -365,20 +417,47 @@ def measure_description(image, spec, description, setups):
             warnings.append(warning(f"stations[{index}].label", station["label"], None,
                                     "This looks like a waterline/buttock tag, not a station label."))
     grid_heights = []
-    for setup in setups:
-        if setup.get("view") != "body" or setup.get("baseline_px") is None:
-            continue
+    # Repeated panels have different origins. Read each declared drawing region,
+    # not the blank gaps and labels inside a sheet-wide family bounding box.
+    grid_setups = [{"region_px": s["roi_px"], "baseline_px": s["calibration"]["baseline_px"],
+                    "pixels_per_metre": s["calibration"]["pixels_per_metre"], "z_max_m": s["z_max_m"]}
+                   for s in spec.get("sections", [])]
+    if not grid_setups:
+        grid_setups = [s for s in setups if s.get("view") == "body" and s.get("baseline_px") is not None]
+    for setup in grid_setups:
         for family in grid_families(image, setup["region_px"]):
             if family["orientation"] == "horizontal" and family["spacing_px"] is not None:
-                grid_heights.extend((setup["baseline_px"] - p) / setup["pixels_per_metre"]
-                                    for p in family["positions_px"] if p <= setup["baseline_px"] + 1)
-    grid_heights = sorted({round(z, 5) for z in grid_heights})
+                interval = family["spacing_px"] / setup["pixels_per_metre"]
+                for position in family["positions_px"]:
+                    z = (setup["baseline_px"] - position) / setup["pixels_per_metre"]
+                    if .05 < z <= setup.get("z_max_m", math.inf) + .02:
+                        # Snap only to the measured lattice interval, not a hull reference.
+                        grid_heights.append(round(z / interval) * interval)
+    merged = []
+    for z in sorted(grid_heights):
+        if not merged or abs(z - merged[-1]) > .02 * max(1., abs(z)):
+            merged.append(z)
+    grid_heights = [round(z, 5) for z in merged]
+    if len(grid_heights) >= 2:
+        intervals = [f["spacing_px"] / s["pixels_per_metre"] for s in grid_setups
+                     for f in grid_families(image, s["region_px"])
+                     if f["orientation"] == "horizontal" and f["spacing_px"] is not None]
+        interval = float(np.median(intervals)) if intervals else None
+        if interval and interval > 0:
+            # Read-error tolerance permits rounding a measured metric lattice.
+            rounded = round(interval * 4) / 4
+            if rounded > 0 and not _different(interval, rounded):
+                interval = rounded
+            depth_limit = max((s.get("z_max_m", 0) for s in grid_setups), default=0)
+            if depth_limit:
+                grid_heights = [round(i * interval, 5) for i in range(1, min(300, int(depth_limit / interval)) + 1)]
     waterlines = result.setdefault("waterlines", [{"id": f"wl{i}", "z_m": z, "label": f"WL {z:g}", "source": "measured"}
                                                   for i, z in enumerate(grid_heights)])
     heights = [w.get("z_m") for w in waterlines]
-    if grid_heights and (len(heights) != len(grid_heights) or any(
-            z is None or abs(z - g) > .02 * max(1., abs(g)) for z, g in zip(sorted(z for z in heights if z is not None), grid_heights))):
-        warnings.append(warning("waterlines", heights, grid_heights, "Read the body-plan horizontal grid and include its labelled waterlines."))
+    if not grid_heights or len(heights) != len(grid_heights) or any(
+            z is None or abs(z - g) > .02 * max(1., abs(g)) for z, g in zip(sorted(z for z in heights if z is not None), grid_heights)):
+        warnings.append(warning("waterlines", heights, grid_heights or None,
+            "Waterline set is incomplete or unconfirmed; read all labelled heights, excluding the baseline."))
     previous = -math.inf
     depth = _value(principal.get("depth"))
     for index, waterline in enumerate(waterlines):
@@ -388,6 +467,10 @@ def measure_description(image, spec, description, setups):
             warnings.append(warning(f"waterlines[{index}].z_m", z, nearest,
                                     "Check the waterline height, order and depth against the body/profile grid."))
         previous = z if isinstance(z, (int, float)) else previous
+    if grid_heights:
+        # Preserve the model set above; the usable grid comes from measured panels.
+        result["waterlines"] = [{"id": f"wl{i + 1}", "z_m": z, "label": f"WL {z:g}", "source": "measured"}
+                                for i, z in enumerate(grid_heights)]
     ends = result.setdefault("ends", {})
     for name, part in ends.items():
         if isinstance(part, dict) and profile is None:

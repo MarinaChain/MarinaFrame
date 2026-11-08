@@ -423,8 +423,7 @@ impl Operation {
                     && serde_json::to_vec(&x.views).is_ok_and(|bytes| bytes.len() <= 32_768)
             }
             Self::DescribeVessel(x) => {
-                x.description.is_object()
-                    && bounded_description(&x.description, 0)
+                bounded_description(&x.description, 0)
                     && serde_json::to_vec(&x.description).is_ok_and(|bytes| bytes.len() <= 65_536)
             }
             Self::ProposeSection(x) => x.valid(),

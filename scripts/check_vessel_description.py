@@ -22,11 +22,18 @@ def check_case(task, reference, spec, views=None):
                 "depth": reference["depth_m"], "draft": reference["draft_m"]}
     dimensions = {}
     wrong_fields = []
+    warning_fields = [w["field"] for w in description.get("warnings", [])]
+    # The body-only factory sheet has no length or design-draft annotation.
+    # Three-view title blocks print these dimensions, so unknowns do not pass there.
+    absent_dimensions = set() if views and views.get("layout") == "lines_3view" else {"loa", "draft"}
     for name, value in expected.items():
         actual = principal.get(name, {})
         actual = actual.get("value") if isinstance(actual, dict) else actual
         passed = close(actual, value)
-        dimensions[name] = {"value": actual, "reference": value, "within_2_percent": passed}
+        warned_unknown = (bool(description) and actual is None and name in absent_dimensions
+                          and f"principal.{name}" in warning_fields)
+        dimensions[name] = {"value": actual, "reference": value, "within_2_percent": passed,
+                            "acceptable": passed or warned_unknown, "warned_unknown_off_sheet": warned_unknown}
         if not passed:
             wrong_fields.append(f"principal.{name}")
     expected_stations = {s["id"]: s["x_m"] for s in spec["sections"]}
@@ -55,6 +62,7 @@ def check_case(task, reference, spec, views=None):
         w == field or w.startswith(field + "[") or w.startswith(field + ".") for w in warning_fields)]
     return {"description_present": bool(description), "dimensions": dimensions,
             "all_dimensions_within_2_percent": all(d["within_2_percent"] for d in dimensions.values()),
+            "all_dimensions_acceptable": all(d["acceptable"] for d in dimensions.values()),
             "stations_right": stations_right, "waterlines_right": waterlines_right,
             "expected_waterlines": expected_heights, "actual_waterlines": actual_heights,
             "wrong_fields": wrong_fields, "warning_fields": warning_fields,

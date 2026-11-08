@@ -285,6 +285,14 @@ class DomainTools(InvestigationTools):
                     **INVESTIGATION_ARGUMENTS}
         if name not in expected:
             raise ToolInputError("Unknown domain operation.")
+        if name == "describe_vessel":
+            extra = {k: arguments.pop(k) for k in list(arguments) if k != "description"}
+            if extra:
+                description = arguments.get("description")
+                description = copy.deepcopy(description) if isinstance(description, dict) else {"original_description": description}
+                description["outer_metadata"] = {"original": description.get("outer_metadata"), **extra}
+                arguments["description"] = description
+            arguments.setdefault("description", {})
         if set(arguments) - expected[name]:
             raise ToolInputError("Unsupported tool argument; paths and code are not accepted.")
         if name in INVESTIGATION_ARGUMENTS:

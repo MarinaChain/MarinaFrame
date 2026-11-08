@@ -1,0 +1,632 @@
+[
+  {
+    "case": "dtmb5415-L0",
+    "description_present": true,
+    "dimensions": {
+      "loa": {
+        "value": null,
+        "reference": 99.99999999675913,
+        "within_2_percent": false,
+        "acceptable": true,
+        "warned_unknown_off_sheet": true
+      },
+      "beam": {
+        "value": 13.402581971038678,
+        "reference": 13.407173661642242,
+        "within_2_percent": true,
+        "acceptable": true,
+        "warned_unknown_off_sheet": false
+      },
+      "depth": {
+        "value": 12.53,
+        "reference": 12.530224564639711,
+        "within_2_percent": true,
+        "acceptable": true,
+        "warned_unknown_off_sheet": false
+      },
+      "draft": {
+        "value": null,
+        "reference": 7.518134739,
+        "within_2_percent": false,
+        "acceptable": true,
+        "warned_unknown_off_sheet": true
+      }
+    },
+    "all_dimensions_within_2_percent": false,
+    "all_dimensions_acceptable": true,
+    "stations_right": true,
+    "waterlines_right": true,
+    "expected_waterlines": [
+      2.0,
+      4.0,
+      6.0,
+      8.0,
+      10.0,
+      12.0
+    ],
+    "actual_waterlines": [
+      2.0,
+      4.0,
+      6.0,
+      8.0,
+      10.0,
+      12.0
+    ],
+    "wrong_fields": [
+      "principal.loa",
+      "principal.draft"
+    ],
+    "warning_fields": [
+      "outer_metadata",
+      "views.body-stations.shared_setup",
+      "views.body-stations.shared_setup",
+      "views.body-stations.shared_setup",
+      "views.body-stations.shared_setup",
+      "views.body-stations.shared_setup",
+      "views.body-stations.shared_setup",
+      "views.body-stations.shared_setup",
+      "views.body-stations.shared_setup",
+      "views.body-stations.shared_setup",
+      "principal.loa",
+      "principal.lpp",
+      "principal.draft",
+      "principal.depth",
+      "ends.keel",
+      "ends.stem",
+      "ends.bulb",
+      "deck.sheer_z",
+      "buttocks"
+    ],
+    "wrong_fields_without_warning": [],
+    "provider_requests": 2,
+    "known_list_cost_usd": 0.00512057,
+    "receipts_without_list_cost": 0,
+    "digest": {
+      "case": "dtmb5415-L0",
+      "status": "paused",
+      "reason": "phase1_description_complete",
+      "events": 16,
+      "decisions": 2,
+      "tools": [
+        "describe_views",
+        "describe_vessel"
+      ],
+      "tool_sequence": "describe_views > describe_vessel",
+      "first_blocker": null,
+      "last_reasons": [
+        "Nine same-scale body-plan panels in a 3x3 grid, each with a vertical centreline and horizontal baseline; one body family with per-panel centreline/baseline and shared calibration.",
+        "Body plan only: nine half-sections, no title block. Record declared z_max as depth, infer station x from panel order, waterlines from 2 m grid labels; leave loa/lpp/draft null.",
+        "Body plan only: nine half-sections, no title block. Record declared z_max as depth, infer station x from panel order, waterlines from 2 m grid labels; leave loa/lpp/draft null."
+      ],
+      "draft": "no draft",
+      "requests": 2,
+      "list_cost_usd": 0.00512057
+    }
+  },
+  {
+    "case": "shipd-1-00045-L2",
+    "description_present": true,
+    "dimensions": {
+      "loa": {
+        "value": null,
+        "reference": 100.0,
+        "within_2_percent": false,
+        "acceptable": true,
+        "warned_unknown_off_sheet": true
+      },
+      "beam": {
+        "value": 21.50842588634605,
+        "reference": 21.566429138183594,
+        "within_2_percent": true,
+        "acceptable": true,
+        "warned_unknown_off_sheet": false
+      },
+      "depth": {
+        "value": 12.189824493094331,
+        "reference": 12.570371627807617,
+        "within_2_percent": false,
+        "acceptable": false,
+        "warned_unknown_off_sheet": false
+      },
+      "draft": {
+        "value": null,
+        "reference": 7.542222977,
+        "within_2_percent": false,
+        "acceptable": true,
+        "warned_unknown_off_sheet": true
+      }
+    },
+    "all_dimensions_within_2_percent": false,
+    "all_dimensions_acceptable": false,
+    "stations_right": true,
+    "waterlines_right": false,
+    "expected_waterlines": [
+      2.0,
+      4.0,
+      6.0,
+      8.0,
+      10.0,
+      12.0
+    ],
+    "actual_waterlines": [],
+    "wrong_fields": [
+      "principal.loa",
+      "principal.depth",
+      "principal.draft",
+      "waterlines"
+    ],
+    "warning_fields": [
+      "outer_metadata",
+      "views.body.centreline_px",
+      "views.body.x_origin_px",
+      "views.body.shared_setup",
+      "views.body.centreline_px",
+      "views.body.x_origin_px",
+      "views.body.shared_setup",
+      "views.body.centreline_px",
+      "views.body.x_origin_px",
+      "views.body.shared_setup",
+      "views.body.centreline_px",
+      "views.body.x_origin_px",
+      "views.body.shared_setup",
+      "views.body.centreline_px",
+      "views.body.x_origin_px",
+      "views.body.shared_setup",
+      "views.body.centreline_px",
+      "views.body.x_origin_px",
+      "views.body.shared_setup",
+      "views.body.centreline_px",
+      "views.body.x_origin_px",
+      "views.body.shared_setup",
+      "views.body.centreline_px",
+      "views.body.x_origin_px",
+      "views.body.shared_setup",
+      "views.body.centreline_px",
+      "views.body.x_origin_px",
+      "views.body.shared_setup",
+      "principal.loa",
+      "principal.lpp",
+      "principal.draft",
+      "principal.depth",
+      "waterlines",
+      "ends.keel",
+      "ends.stem",
+      "ends.bulb",
+      "deck.sheer_z",
+      "form.type",
+      "waterlines"
+    ],
+    "wrong_fields_without_warning": [],
+    "provider_requests": 2,
+    "known_list_cost_usd": 0.0053721,
+    "receipts_without_list_cost": 0,
+    "digest": {
+      "case": "shipd-1-00045-L2",
+      "status": "paused",
+      "reason": "phase1_description_complete",
+      "events": 16,
+      "decisions": 2,
+      "tools": [
+        "describe_views",
+        "describe_vessel"
+      ],
+      "tool_sequence": "describe_views > describe_vessel",
+      "first_blocker": null,
+      "last_reasons": [
+        "Nine same-scale body-plan panels in a 3x3 grid, each with its own centreline and baseline; one family with shared calibration.",
+        "Body plan has nine labelled station panels; record identity and grid-derived depth before section work.",
+        "Body plan has nine labelled station panels; record identity and grid-derived depth before section work."
+      ],
+      "draft": "no draft",
+      "requests": 2,
+      "list_cost_usd": 0.0053721
+    }
+  },
+  {
+    "case": "shipd-1-00679-L0",
+    "description_present": true,
+    "dimensions": {
+      "loa": {
+        "value": null,
+        "reference": 99.98074479981369,
+        "within_2_percent": false,
+        "acceptable": true,
+        "warned_unknown_off_sheet": true
+      },
+      "beam": {
+        "value": 17.24850253996243,
+        "reference": 17.20943331718445,
+        "within_2_percent": true,
+        "acceptable": true,
+        "warned_unknown_off_sheet": false
+      },
+      "depth": {
+        "value": 14.15,
+        "reference": 14.150406122207642,
+        "within_2_percent": true,
+        "acceptable": true,
+        "warned_unknown_off_sheet": false
+      },
+      "draft": {
+        "value": null,
+        "reference": 8.490243673,
+        "within_2_percent": false,
+        "acceptable": true,
+        "warned_unknown_off_sheet": true
+      }
+    },
+    "all_dimensions_within_2_percent": false,
+    "all_dimensions_acceptable": true,
+    "stations_right": true,
+    "waterlines_right": true,
+    "expected_waterlines": [
+      2.0,
+      4.0,
+      6.0,
+      8.0,
+      10.0,
+      12.0,
+      14.0
+    ],
+    "actual_waterlines": [
+      2.0,
+      4.0,
+      6.0,
+      8.0,
+      10.0,
+      12.0,
+      14.0
+    ],
+    "wrong_fields": [
+      "principal.loa",
+      "principal.draft"
+    ],
+    "warning_fields": [
+      "outer_metadata",
+      "views.body.shared_setup",
+      "views.body.shared_setup",
+      "principal.loa",
+      "principal.lpp",
+      "principal.draft",
+      "ends.keel",
+      "ends.stem",
+      "ends.bulb",
+      "deck.sheer_z",
+      "buttocks"
+    ],
+    "wrong_fields_without_warning": [],
+    "provider_requests": 2,
+    "known_list_cost_usd": 0.0028398,
+    "receipts_without_list_cost": 0,
+    "digest": {
+      "case": "shipd-1-00679-L0",
+      "status": "paused",
+      "reason": "phase1_description_complete",
+      "events": 16,
+      "decisions": 2,
+      "tools": [
+        "describe_views",
+        "describe_vessel"
+      ],
+      "tool_sequence": "describe_views > describe_vessel",
+      "first_blocker": null,
+      "last_reasons": [
+        "Whole sheet read: two same-scale body-section panels plus title text; naming them lets me trace stations next.",
+        "Read the drawing and record the result.",
+        "Read the drawing and record the result."
+      ],
+      "draft": "no draft",
+      "requests": 2,
+      "list_cost_usd": 0.0028398
+    }
+  },
+  {
+    "case": "shipd-1-00683-L2",
+    "description_present": true,
+    "dimensions": {
+      "loa": {
+        "value": null,
+        "reference": 99.93008613586426,
+        "within_2_percent": false,
+        "acceptable": true,
+        "warned_unknown_off_sheet": true
+      },
+      "beam": {
+        "value": 17.194131107713314,
+        "reference": 15.849697589874268,
+        "within_2_percent": false,
+        "acceptable": false,
+        "warned_unknown_off_sheet": false
+      },
+      "depth": {
+        "value": 14.53,
+        "reference": 14.527264833450317,
+        "within_2_percent": true,
+        "acceptable": true,
+        "warned_unknown_off_sheet": false
+      },
+      "draft": {
+        "value": null,
+        "reference": 8.7163589,
+        "within_2_percent": false,
+        "acceptable": true,
+        "warned_unknown_off_sheet": true
+      }
+    },
+    "all_dimensions_within_2_percent": false,
+    "all_dimensions_acceptable": false,
+    "stations_right": true,
+    "waterlines_right": true,
+    "expected_waterlines": [
+      2.0,
+      4.0,
+      6.0,
+      8.0,
+      10.0,
+      12.0,
+      14.0
+    ],
+    "actual_waterlines": [
+      2.0,
+      4.0,
+      6.0,
+      8.0,
+      10.0,
+      12.0,
+      14.0
+    ],
+    "wrong_fields": [
+      "principal.loa",
+      "principal.beam",
+      "principal.draft"
+    ],
+    "warning_fields": [
+      "views.body-right.shared_setup",
+      "principal.loa",
+      "principal.lpp",
+      "principal.draft",
+      "waterlines",
+      "ends.keel",
+      "ends.stem",
+      "ends.bulb",
+      "deck.sheer_z",
+      "waterlines"
+    ],
+    "wrong_fields_without_warning": [
+      "principal.beam"
+    ],
+    "provider_requests": 2,
+    "known_list_cost_usd": 0.0033789,
+    "receipts_without_list_cost": 0,
+    "digest": {
+      "case": "shipd-1-00683-L2",
+      "status": "paused",
+      "reason": "phase1_description_complete",
+      "events": 16,
+      "decisions": 2,
+      "tools": [
+        "describe_views",
+        "describe_vessel"
+      ],
+      "tool_sequence": "describe_views > describe_vessel",
+      "first_blocker": null,
+      "last_reasons": [
+        "Survey shows two same-scale body panels (left x=10-40m, right x=50-90m) with shared 47.58 px/m calibration and 2m grid; naming them as one body family plus title block and offsets table.",
+        "Read the drawing and record the result.",
+        "Read the drawing and record the result."
+      ],
+      "draft": "no draft",
+      "requests": 2,
+      "list_cost_usd": 0.0033789
+    }
+  },
+  {
+    "case": "dtmb5415-3v-L0",
+    "description_present": true,
+    "dimensions": {
+      "loa": {
+        "value": 30.0,
+        "reference": 99.99999999675913,
+        "within_2_percent": false,
+        "acceptable": false,
+        "warned_unknown_off_sheet": false
+      },
+      "beam": {
+        "value": 13.41,
+        "reference": 13.407173661642242,
+        "within_2_percent": true,
+        "acceptable": true,
+        "warned_unknown_off_sheet": false
+      },
+      "depth": {
+        "value": 12.53,
+        "reference": 12.530224564639711,
+        "within_2_percent": true,
+        "acceptable": true,
+        "warned_unknown_off_sheet": false
+      },
+      "draft": {
+        "value": 2.5,
+        "reference": 7.518134739,
+        "within_2_percent": false,
+        "acceptable": false,
+        "warned_unknown_off_sheet": false
+      }
+    },
+    "all_dimensions_within_2_percent": false,
+    "all_dimensions_acceptable": false,
+    "stations_right": true,
+    "waterlines_right": true,
+    "expected_waterlines": [
+      2.0,
+      4.0,
+      6.0,
+      8.0,
+      10.0,
+      12.0
+    ],
+    "actual_waterlines": [
+      2.0,
+      4.0,
+      6.0,
+      8.0,
+      10.0,
+      12.0
+    ],
+    "wrong_fields": [
+      "principal.loa",
+      "principal.draft"
+    ],
+    "warning_fields": [
+      "outer_metadata",
+      "principal.lwl",
+      "views.halfbreadth.pixels_per_metre",
+      "views.halfbreadth.shared_setup",
+      "views.bodyplan.centreline_px",
+      "views.bodyplan.baseline_px",
+      "views.bodyplan.shared_setup",
+      "principal.lpp",
+      "principal.draft",
+      "principal.beam",
+      "principal.depth",
+      "principal.loa",
+      "ends.keel",
+      "ends.stem",
+      "ends.bulb",
+      "deck.sheer_z",
+      "buttocks"
+    ],
+    "wrong_fields_without_warning": [],
+    "provider_requests": 2,
+    "known_list_cost_usd": 0.00365925,
+    "receipts_without_list_cost": 0,
+    "digest": {
+      "case": "dtmb5415-3v-L0",
+      "status": "paused",
+      "reason": "phase1_description_complete",
+      "events": 16,
+      "decisions": 2,
+      "tools": [
+        "describe_views",
+        "describe_vessel"
+      ],
+      "tool_sequence": "describe_views > describe_vessel",
+      "first_blocker": null,
+      "last_reasons": [
+        "Survey shows profile, half-breadth plan, body plan and title block; naming them with source-pixel bounds lets me calibrate and trace sections next.",
+        "Title block gives LOA 30, beam 13.41, depth 12.53, draft 2.5; profile/plan/body plan show 9 stations and WL2-WL12. Recording these with explicit source labels and calibration warnings before any CAD.",
+        "Title block gives LOA 30, beam 13.41, depth 12.53, draft 2.5; profile/plan/body plan show 9 stations and WL2-WL12. Recording these with explicit source labels and calibration warnings before any CAD."
+      ],
+      "draft": "no draft",
+      "requests": 2,
+      "list_cost_usd": 0.00365925
+    }
+  },
+  {
+    "case": "shipd-1-00679-3v-L0",
+    "description_present": true,
+    "dimensions": {
+      "loa": {
+        "value": 100.0,
+        "reference": 99.98074479981369,
+        "within_2_percent": true,
+        "acceptable": true,
+        "warned_unknown_off_sheet": false
+      },
+      "beam": {
+        "value": 17.21,
+        "reference": 17.20943331718445,
+        "within_2_percent": true,
+        "acceptable": true,
+        "warned_unknown_off_sheet": false
+      },
+      "depth": {
+        "value": 14.15,
+        "reference": 14.150406122207642,
+        "within_2_percent": true,
+        "acceptable": true,
+        "warned_unknown_off_sheet": false
+      },
+      "draft": {
+        "value": null,
+        "reference": 8.490243673,
+        "within_2_percent": false,
+        "acceptable": false,
+        "warned_unknown_off_sheet": false
+      }
+    },
+    "all_dimensions_within_2_percent": false,
+    "all_dimensions_acceptable": false,
+    "stations_right": true,
+    "waterlines_right": false,
+    "expected_waterlines": [
+      2.0,
+      4.0,
+      6.0,
+      8.0,
+      10.0,
+      12.0,
+      14.0
+    ],
+    "actual_waterlines": [
+      14.0,
+      12.0,
+      10.0,
+      8.0,
+      6.0,
+      4.0,
+      2.0,
+      0.0
+    ],
+    "wrong_fields": [
+      "principal.draft",
+      "waterlines"
+    ],
+    "warning_fields": [
+      "views.half_breath_plan.pixels_per_metre",
+      "views.half_breath_plan.shared_setup",
+      "views.body_plan.shared_setup",
+      "principal.lpp",
+      "principal.draft",
+      "principal.depth",
+      "principal.loa",
+      "waterlines",
+      "waterlines[1].z_m",
+      "waterlines[2].z_m",
+      "waterlines[3].z_m",
+      "waterlines[4].z_m",
+      "waterlines[5].z_m",
+      "waterlines[6].z_m",
+      "waterlines[7].z_m",
+      "ends.keel",
+      "ends.stem",
+      "ends.bulb",
+      "deck.sheer_z"
+    ],
+    "wrong_fields_without_warning": [],
+    "provider_requests": 2,
+    "known_list_cost_usd": 0.0036918,
+    "receipts_without_list_cost": 0,
+    "digest": {
+      "case": "shipd-1-00679-3v-L0",
+      "status": "paused",
+      "reason": "phase1_description_complete",
+      "events": 16,
+      "decisions": 2,
+      "tools": [
+        "describe_views",
+        "describe_vessel"
+      ],
+      "tool_sequence": "describe_views > describe_vessel",
+      "first_blocker": null,
+      "last_reasons": [
+        "Survey shows profile, half-breadth plan, body plan and title block; naming them with sheet-pixel bounds and shared calibration lets me trace sections next.",
+        "Read the drawing and record the result.",
+        "Read the drawing and record the result."
+      ],
+      "draft": "no draft",
+      "requests": 2,
+      "list_cost_usd": 0.0036918
+    }
+  }
+]

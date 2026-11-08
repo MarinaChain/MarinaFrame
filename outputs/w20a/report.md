@@ -1,6 +1,49 @@
 # W20a — Read the vessel
 
-## Status
+## Current continuation status (PM request, 2026-11-08)
+
+Checkpoint `b7ca986` was committed as-is after a fresh quick pass (855 Python tests). Happy-path changes now complete all 6/6 available descriptions in **two requests per case**, with no typed-output rejections. **Dimension target remains unmet:** R-body 2/4 acceptable dimensions, station sets 4/4, waterline sets 3/4. R-3view: 0/2 all-dimension passes, stations 2/2, waterlines 1/2. No further live round was run.
+
+### Changes after the checkpoint
+
+- Shared body view family accepts optional panels and inline scale/setup. First setup propagates to family members with panel-specific datums. This removes the per-panel request loop.
+- Arbitrary description shapes and extra/odd fields are retained in `model_description` and metadata, coerced where numeric values are usable, and warned. Scale strings such as `1:100`, free-text ends/deck, null dimensions and stringified arguments no longer cause the observed shape refusals.
+- Rust repairs misplaced notes/reason, absent reason, stringified arguments and extra outer metadata before operation parsing. Unknown operations are not executed.
+- Named title blocks are attached on entering vessel description. Body-only LOA/draft stay unknown rather than invented numeric estimates.
+- Waterline measurements use each declared panel's datum, merge the measured metric lattice, exclude baseline zero and warn on incomplete or unconfirmed sets. Original model sets remain available.
+- Checker reports both strict numeric accuracy and PM's accepted warned unknowns. Only body-only LOA/draft are off-sheet unknown exceptions; wrong numeric values still fail. Three-view title-block dimensions have no unknown exception.
+
+### Single round check table
+
+| Case | Description | Dimensions acceptable | Stations | Waterlines | Requests | List cost USD | Wrong fields without warning |
+|---|---|---|---|---|---:|---:|---|
+| dtmb5415-L0 | complete | pass; LOA/draft warned unknown | pass | pass | 2 | 0.00512057 | none |
+| shipd-1-00045-L2 | complete | fail: depth | pass | fail | 2 | 0.00537210 | none |
+| shipd-1-00679-L0 | complete | pass; LOA/draft warned unknown | pass | pass | 2 | 0.00283980 | none |
+| shipd-1-00683-L2 | complete | fail: beam | pass | pass | 2 | 0.00337890 | principal.beam |
+| dtmb5415-3v-L0 | complete | fail: LOA, draft | pass | pass | 2 | 0.00365925 | none |
+| shipd-1-00679-3v-L0 | complete | fail: draft unknown on printed sheet | pass | fail | 2 | 0.00369180 | none |
+| **Total** | **6/6** | **target unmet** | **6/6** | **4/6** | **12** | **0.02406242** | **one uncovered field** |
+
+00045 depth is 12.1898 m versus 12.5704 m (3.0% low); its degraded panel grid remains incomplete. 00683 beam is 17.1941 m versus 15.8497 m (8.5% high): annotation/competing ink is still misread as hull breadth, without a warning when the model leaves beam unknown. DTMB three-view reads LOA 30 m and draft 2.5 m instead of printed 100 m and 7.52 m. 00679 three-view uses normalized-looking coordinates as source pixels, so the title crop is wrong and draft stays null. These are measurement/identity errors, not tool-transport blockers. They are not tuned against truth in this checkpoint.
+
+Evidence: `continue-checks.json`, `continue-traces.json`, `continue-digest.md`. Frozen runtime/source: main `work/w20a/round4-runtime/` and `round4-source/`. Arms `round4-body`, `round4-body-rest`, `round4-3view` contain one execution of each case. The runner stopped after the first two body cases because it misclassified the successful Phase 1 pause as a common failure; only the two unstarted cases were then launched with early-stop disabled. No retries or duplicate case requests. Generic draft-oriented digest success counts are not the Phase 1 acceptance result.
+
+Continuation cost: **12 receipts, USD 0.02406242 nominal list cost, no missing cost records**. Total W20a including historical attempts: **105 receipts, USD 0.19715261**. OpenCode billing reports zero; nominal list cost is retained to show resource use.
+
+### Verification and storage
+
+- Fresh pre-change `make test-quick`: passed (855 Python tests, Rust workspace/format/Clippy, secret scan).
+- Focused post-change tests: 23 Python tests and 77 Rust library tests passed.
+- Post-change `make test-full`: **passed, exit 0**. Rust workspace, format and Clippy passed; 862 non-CAD Python tests passed; real-CAD Rust groups passed (8 audit identity, 8 draft guards, 8 finalization, 1 investigation, 4 region pipeline, 15 validation matrix); app real-task test passed; 24 Python CAD tests passed; release build and deterministic smoke passed (`awaiting_human_review`, verify `valid:true`). Full log: main `work/w20a/continue-test-full.log`.
+- Protected fitting/scoring files remain unchanged. No sealed evaluation. No push or merge.
+- Removed inspected bytecode caches only; no duplicate runtime/build folders existed under work/w20a. Kept one runtime/source for each cited round, all reports and JSON. Work/w20a is about 104 MB versus 84 MB at continuation start: new data about 20 MB, below 2 GB. Existing Cargo cache is reused.
+
+Verification is complete. This report is included in the continuation commit (see `git log -1`). No push or merge. The dimension target is not met; next work is measurement/coordinate identity and the uncovered beam warning, not more transport gates. No additional campaign was run.
+
+---
+
+## Historical checkpoint (before PM continuation)
 
 Implementation checkpoint, **acceptance targets not met**. Phase 1 completes on 2/4 R-body cases and 0/2 available R-3view cases within a seven-request attempt budget. Do not treat this as an accuracy success or held-out validation. No sealed v2/v3 inputs were opened. No push or merge.
 

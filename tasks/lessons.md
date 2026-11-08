@@ -77,3 +77,4 @@
 - **Trigger:** W17c added a new build failure (`authored_outside_draft`) and I proposed more checks. The founder said: stop making builds fail; focus on happy paths first.
 - **Rule:** Until the model reliably produces drafts, do not add refusals or blocked states. In draft mode, turn checks into warnings whenever a solid can be made. Spend effort on read -> geometry -> build -> render -> finish.
 - **Why:** Every gate added before the main path works produces more empty results and no learning.
+- **W20a correction (2026-11-08):** Read-phase panels with one scale are one view family; reuse the first setup and preserve panel-specific datums. Repair malformed description/envelope fields, coerce usable numbers and retain the rest as metadata with warnings. Unknown off-sheet dimensions stay null with a warning; incomplete waterline sets must also warn. Do not spend requests repeating harmless shape failures.

@@ -584,15 +584,70 @@ pub fn provider_worker(response_path: &Path, timeout: u64) -> Result<()> {
 
 fn parse_decision_content(content: &str) -> Result<Decision> {
     let mut value: Value = util::parse(content.as_bytes(), 32_768)?;
-    // Some providers echo response_format in the JSON object. It is transport
-    // metadata, not an operation; retain all other unknown-field checks.
-    if value["type"] == "json_object" {
-        value
-            .as_object_mut()
-            .ok_or("provider_content_type")?
-            .remove("type");
+    let object = value.as_object_mut().ok_or("provider_content_type")?;
+    let tool = object
+        .get("tool")
+        .and_then(Value::as_str)
+        .ok_or("provider_tool")?
+        .to_string();
+    let mut arguments = object.remove("arguments").unwrap_or_else(|| json!({}));
+    if let Some(text) = arguments.as_str() {
+        arguments = util::parse(text.as_bytes(), 32_768)?;
     }
-    serde_json::from_value(value).map_err(|_| "typed_contract_rejected".into())
+    if !arguments.is_object() {
+        arguments = if tool == "describe_vessel" {
+            json!({"description":arguments})
+        } else {
+            json!({})
+        };
+    }
+    let args = arguments.as_object_mut().unwrap();
+    let nested_notes = args.remove("notes");
+    let nested_reason = args.get("reason").cloned();
+    if !matches!(tool.as_str(), "assign_station" | "propose_sheet_setup") {
+        args.remove("reason");
+    }
+    let reason = object
+        .remove("reason")
+        .or(nested_reason)
+        .unwrap_or_else(|| json!("Read the drawing and record the result."));
+    let reason = reason
+        .as_str()
+        .map(String::from)
+        .unwrap_or_else(|| reason.to_string());
+    let mut notes = object
+        .remove("notes")
+        .or(nested_notes)
+        .unwrap_or(Value::Null);
+    if !notes.is_null() && !notes.is_string() {
+        notes = json!(notes.to_string());
+    }
+    object.remove("tool");
+    if object.get("type") == Some(&json!("json_object")) {
+        object.remove("type");
+    }
+    if tool == "describe_vessel" {
+        let mut description = args.remove("description").unwrap_or_else(|| json!({}));
+        if !description.is_object() {
+            description = json!({"original_description":description});
+        }
+        if !args.is_empty() || !object.is_empty() {
+            description["outer_metadata"] = json!({"arguments":args,"outer":object});
+        }
+        arguments = json!({"description":description});
+    } else if !object.is_empty() {
+        let prefix = notes.as_str().unwrap_or("");
+        notes = json!(format!(
+            "{prefix} Envelope metadata retained (unverified): {}",
+            Value::Object(object.clone())
+        ));
+    }
+    let mut decision: Decision =
+        serde_json::from_value(json!({"tool":tool,"arguments":arguments,"reason":reason,
+        "notes":if notes.is_null(){Value::Null}else{notes}}))
+        .map_err(|_| "typed_contract_rejected")?;
+    decision.normalize();
+    Ok(decision)
 }
 
 #[cfg(test)]
@@ -605,10 +660,25 @@ mod tests {
         )
         .unwrap();
         assert_eq!(decision.tool, "survey_sheet");
-        assert!(parse_decision_content(
-            r#"{"type":"code","tool":"survey_sheet","arguments":{},"reason":"read sheet"}"#
+        let repaired = parse_decision_content(
+            r#"{"type":"code","tool":"survey_sheet","arguments":{},"reason":"read sheet"}"#,
         )
-        .is_err());
+        .unwrap();
+        assert!(repaired.notes.unwrap().contains("metadata"));
+    }
+    #[test]
+    fn misplaced_outer_fields_and_string_arguments_are_repaired() {
+        let d = parse_decision_content(r#"{"tool":"describe_vessel","arguments":"{\"description\":{\"principal\":{\"scale\":\"1:100\"}},\"notes\":\"read title\",\"reason\":\"read sheet\",\"extra\":true}","extra_outer":42}"#).unwrap();
+        assert_eq!(d.reason, "read sheet");
+        assert_eq!(d.notes.as_deref(), Some("read title"));
+        assert_eq!(d.arguments["description"]["principal"]["scale"], "1:100");
+        assert_eq!(
+            d.arguments["description"]["outer_metadata"]["outer"]["extra_outer"],
+            42
+        );
+        assert!(d.operation().is_ok());
+        let empty = parse_decision_content(r#"{"tool":"survey_sheet","notes":["read"]}"#).unwrap();
+        assert!(empty.operation().is_ok());
     }
     #[test]
     fn unknown_cost_stays_unknown() {
