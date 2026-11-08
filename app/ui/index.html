@@ -146,7 +146,10 @@
               </svg>
               <strong>Drop a drawing set</strong>
               <span class="drop-hint" id="drop-hint" title="Drop the files anywhere on the window. The app finds the views; you check them, then the AI reads the set.">PDF, PNG, TIFF or JPEG</span>
-              <button class="btn" type="button" id="drop-choose">Choose files</button>
+              <span class="drop-choices">
+                <button class="btn" type="button" id="drop-choose">Choose files</button>
+                <button class="btn btn-ghost" type="button" id="drop-choose-folder" title="A folder of drawing sets: each PDF and each subfolder becomes one run">Choose folder</button>
+              </span>
               <!-- Shown on a first start only (styles.css: [data-empty="true"]). -->
               <button class="btn btn-ghost first-sample" type="button" id="try-sample" title="Run the built-in sample vessel (a generated drawing, no AI cost)">No drawing at hand? Try the sample</button>
               <ol class="first-steps" aria-label="What happens next">

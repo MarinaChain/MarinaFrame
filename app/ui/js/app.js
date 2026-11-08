@@ -20,6 +20,7 @@ import { createShortcutSheet } from './shortcuts.js';
 import { createParts, partState } from './parts.js';
 import { createExport } from './export.js';
 import { createUsage } from './usage.js';
+import { createBatch } from './batch.js';
 import * as fmt from './format.js';
 
 const $ = (id) => document.getElementById(id);
@@ -307,7 +308,10 @@ function runPreview(task) {
 
 async function refreshTasks() {
   try {
-    state.tasks = await invoke('list_tasks', {});
+    [state.tasks, state.queue] = await Promise.all([
+      invoke('list_tasks', {}),
+      invoke('get_queue', {}).catch(() => null),
+    ]);
     state.tasksLoaded = true;
     renderHome();
     renderQueue();
@@ -504,10 +508,16 @@ function renderQueue() {
     for (const task of tasks) grouped.add(task);
     return { ...group, tasks };
   });
-  fill($('queue-list'), ...(state.tasks.length
-    ? groups.filter((g) => g.tasks.length).map((group) => el('li', { class: 'queue-group' },
+  const waiting = batch.waitingGroup(state.queue, {
+    onChange: (queue) => {
+      state.queue = queue;
+      renderQueue();
+    },
+  });
+  fill($('queue-list'), ...(state.tasks.length || waiting
+    ? [waiting, ...groups.filter((g) => g.tasks.length).map((group) => el('li', { class: 'queue-group' },
       el('h2', { class: 'queue-group-title' }, group.title, el('span', { class: 'queue-count' }, String(group.tasks.length))),
-      el('ul', { class: 'queue-rows' }, ...group.tasks.map(queueRow))))
+      el('ul', { class: 'queue-rows' }, ...group.tasks.map(queueRow))))]
     : [el('li', { class: 'home-empty' }, 'No runs yet. Drop a drawing set on Home to start.')]));
 }
 
@@ -1864,10 +1874,45 @@ async function startIntake(paths) {
   }
 }
 
+// Batch queue: a folder or several drawing sets at once (js/batch.js).
+const batch = createBatch({
+  invoke,
+  showError,
+  onQueued: (queue) => {
+    state.queue = queue;
+    navigate('queue');
+    renderQueue();
+    refreshTasksSoon();
+  },
+});
+
+/**
+ * Dropped or chosen drawings and folders: one set opens the intake (the person checks the
+ * views); several sets open the batch sheet, which queues one run per set.
+ */
+async function openDrawings(paths) {
+  const plan = await invoke('plan_batch', { paths });
+  if (plan.sets.length > 1) batch.open(plan);
+  else if (plan.sets.length === 1) await startIntake(plan.sets[0].files);
+  else throw new Error(plan.skipped[0] ? `${fileName(plan.skipped[0].path)}: ${plan.skipped[0].reason}` : 'No drawing was found. Drop PDF, PNG, TIFF or JPEG files.');
+}
+
+/** Choose a folder of drawing sets (each PDF and each subfolder is one set). */
+async function chooseDrawingFolder() {
+  try {
+    const folder = await pickFolder({ title: 'Choose a folder of drawing sets' });
+    // Without a folder dialog (the browser preview), the mock folder shows the sheet.
+    const path = folder || (transportName === 'mock' ? '/mock/Yard order/' : null);
+    if (path) await openDrawings([path]);
+  } catch (error) {
+    showError(error);
+  }
+}
+
 async function chooseDrawingSet() {
   try {
     const paths = await pickDrawingFiles();
-    if (paths.length) await startIntake(paths);
+    if (paths.length) await openDrawings(paths);
   } catch (error) {
     showError(error);
   }
@@ -1992,11 +2037,12 @@ async function acceptDroppedFiles(paths) {
     showNewRunError(`${fileName(paths[0])} is not a run spec. Drop the run spec (${types}) that names the drawing.`);
     return;
   }
-  if (drawings.length) {
-    await startIntake(drawings);
-    return;
+  // Drawings and folders: one set opens the intake, several the batch sheet.
+  try {
+    await openDrawings(paths);
+  } catch (error) {
+    showError(error);
   }
-  showError(new Error(`${fileName(paths[0])} is not a drawing. Drop PDF, PNG, TIFF or JPEG files.`));
 }
 
 onFileDrop({
@@ -2055,6 +2101,7 @@ $('resume-task').addEventListener('click', async () => {
 
 $('new-vessel').addEventListener('click', () => chooseDrawingSet());
 $('drop-choose').addEventListener('click', () => chooseDrawingSet());
+$('drop-choose-folder').addEventListener('click', () => chooseDrawingFolder());
 $('new-run').addEventListener('click', () => {
   $('home-more').open = false;
   openNewRun();

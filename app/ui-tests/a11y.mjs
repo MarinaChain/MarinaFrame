@@ -48,6 +48,8 @@ async function prepare({ vessel, tab, vesselTab, open }) {
   if (vesselTab) { document.querySelector(`[data-vtab="${vesselTab}"]`).click(); await wait(800); }
   if (open === 'intake') { document.getElementById('drop-choose').click(); await wait(2000); }
   if (open === 'palette') { document.getElementById('open-palette').click(); await wait(300); }
+  if (open === 'batch' || open === 'batch-queue') { document.getElementById('drop-choose-folder').click(); await wait(700); }
+  if (open === 'batch-queue') { document.querySelector('.batch-actions .btn-primary').click(); await wait(900); }
   if (open === 'usage') { document.getElementById('check-usage').click(); await wait(900); }
   if (open === 'shortcuts') { document.body.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true })); await wait(300); }
 }
@@ -57,6 +59,8 @@ const SCREENS = [
   { name: 'home', path: '/#home' },
   { name: 'home (first start)', path: '/?mockempty#home' },
   { name: 'queue', path: '/#queue' },
+  { name: 'batch sheet', path: '/#home', steps: { open: 'batch' } },
+  { name: 'queue (waiting sets)', path: '/?mockbatchfail#home', steps: { open: 'batch-queue' } },
   { name: 'settings', path: '/#settings' },
   { name: 'settings (key usage)', path: '/?mockusagefull#settings', steps: { open: 'usage' } },
   { name: 'intake', path: '/#home', steps: { open: 'intake' } },

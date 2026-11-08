@@ -2,6 +2,7 @@
 //! an HTTP server later) only translates arguments, calls one method and returns
 //! the result or the `AppError`. Nothing here depends on a transport.
 use crate::actions::{self, ActionRegistry};
+use crate::batch::{self, BatchPlan, BatchQueue, DrawingSet, QueueState, QueueView};
 use crate::error::{AppError, AppResult};
 use crate::export::{self, ExportResult};
 use crate::live::{HullSections, LiveSteps, LiveStore};
@@ -12,6 +13,7 @@ use crate::{artifact, events, files, intake, model_keys, parts, sample, signoff}
 use marinaframe_control::util;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 pub struct Backend {
     paths: AppPaths,
@@ -20,6 +22,10 @@ pub struct Backend {
     worker_source: Option<PathBuf>,
     datasets_root: Option<PathBuf>,
     live: LiveStore,
+    /// Drawing sets waiting for a run (design plan M6).
+    batch: BatchQueue,
+    /// One pump at a time, so two callers cannot both see the same free slots.
+    pump_lock: std::sync::Mutex<()>,
 }
 
 impl Backend {
@@ -33,7 +39,10 @@ impl Backend {
         let binary_sha256 = std::env::current_exe()
             .ok()
             .and_then(|exe| util::file_hash(&exe).ok());
+        let batch = BatchQueue::load(&paths);
         Self {
+            batch,
+            pump_lock: std::sync::Mutex::new(()),
             paths,
             registry: ActionRegistry::default(),
             binary_sha256,
@@ -218,6 +227,97 @@ impl Backend {
                 .map(|p| p.to_string_lossy().into_owned())
                 .unwrap_or_default(),
         }
+    }
+
+    // ---------------------------------------------------------------- batch queue
+
+    /// Group dropped files and folders into drawing sets (reads names only).
+    pub fn plan_batch(&self, paths: &[String]) -> BatchPlan {
+        batch::plan_batch(paths)
+    }
+
+    /// The waiting sets, the slot limit and how many runs run now.
+    pub fn get_queue(&self) -> QueueView {
+        let running = view::list_tasks(&self.runs_folder())
+            .iter()
+            .filter(|t| t.status == Status::Running)
+            .count()
+            + self.batch.starting_count();
+        let held = (!self.ai_status().active
+            && self
+                .batch
+                .snapshot()
+                .iter()
+                .any(|s| s.state == QueueState::Waiting))
+        .then(|| "Waiting sets start when AI drafting is on and a model key is found.".to_string());
+        QueueView {
+            slots: batch::native_slots(),
+            running,
+            waiting: self.batch.snapshot(),
+            held,
+        }
+    }
+
+    /// Add sets to the end of the queue. The pump starts them as slots free up.
+    pub fn queue_batch(self: &Arc<Self>, sets: &[DrawingSet]) -> AppResult<QueueView> {
+        if sets.is_empty() {
+            return Err(AppError::new(
+                "intake_files",
+                "Choose at least one drawing set.",
+            ));
+        }
+        self.batch.add(&self.paths, sets, util::now_ms())?;
+        self.pump_batch();
+        Ok(self.get_queue())
+    }
+
+    pub fn remove_queued(&self, id: &str) -> AppResult<QueueView> {
+        self.batch.remove(&self.paths, id)?;
+        Ok(self.get_queue())
+    }
+
+    pub fn move_queued(&self, id: &str, delta: i64) -> AppResult<QueueView> {
+        self.batch.move_set(&self.paths, id, delta)?;
+        Ok(self.get_queue())
+    }
+
+    /// Start waiting sets while fewer runs than the slot limit are running. Cheap when
+    /// nothing waits; the watcher calls it every round. Each start runs on its own thread
+    /// (reading a set renders its pages), so this never blocks the caller.
+    pub fn pump_batch(self: &Arc<Self>) {
+        let waiting = self.batch.snapshot();
+        if !waiting.iter().any(|s| s.state == QueueState::Waiting) || !self.ai_status().active {
+            return;
+        }
+        let Ok(_pumping) = self.pump_lock.try_lock() else {
+            return;
+        };
+        let queue = self.get_queue();
+        let free = queue.slots.saturating_sub(queue.running);
+        for set in self.batch.take_for_start(&self.paths, free) {
+            let backend = Arc::clone(self);
+            let spawned = std::thread::Builder::new()
+                .name("marinaframe-batch-start".into())
+                .spawn(move || {
+                    let result = backend
+                        .start_queued(&set)
+                        .map(|_| ())
+                        .map_err(|e| e.message);
+                    backend.batch.finish(&backend.paths, &set.id, result);
+                });
+            if spawned.is_err() {
+                return;
+            }
+        }
+    }
+
+    /// Read one queued set and start its run with the proposed labels and its name.
+    fn start_queued(&self, set: &batch::QueuedSet) -> AppResult<String> {
+        let mut preview = self.prepare_intake(&set.files)?;
+        if preview.particulars.vessel_name.trim().is_empty() {
+            preview.particulars.vessel_name = set.name.clone();
+        }
+        self.start_intake_run(&preview)
     }
 
     /// OpenCode Go usage per key slot, read now (Settings, on demand only).

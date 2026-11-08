@@ -2,6 +2,7 @@
 // `marinaframe-app-core`, which has no Tauri types.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use marinaframe_app_core::batch::{BatchPlan, DrawingSet, QueueView};
 use marinaframe_app_core::export::ExportResult;
 use marinaframe_app_core::intake::IntakePreview;
 use marinaframe_app_core::live::{HullSections, LiveSteps};
@@ -242,6 +243,36 @@ async fn get_setup_status(backend: Shared<'_>) -> Result<SetupStatus, AppError> 
     run(backend, move |b| Ok(b.setup_status())).await
 }
 
+/// Group dropped files and folders into drawing sets (batch queue).
+#[tauri::command(rename_all = "snake_case")]
+async fn plan_batch(backend: Shared<'_>, paths: Vec<String>) -> Result<BatchPlan, AppError> {
+    run(backend, move |b| Ok(b.plan_batch(&paths))).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+async fn get_queue(backend: Shared<'_>) -> Result<QueueView, AppError> {
+    run(backend, move |b| Ok(b.get_queue())).await
+}
+
+/// Add sets to the batch queue; they start as native slots free up.
+#[tauri::command(rename_all = "snake_case")]
+async fn queue_batch(backend: Shared<'_>, sets: Vec<DrawingSet>) -> Result<QueueView, AppError> {
+    let backend = backend.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || backend.queue_batch(&sets))
+        .await
+        .map_err(|_| AppError::new("internal", "The app hit an internal error."))?
+}
+
+#[tauri::command(rename_all = "snake_case")]
+async fn remove_queued(backend: Shared<'_>, id: String) -> Result<QueueView, AppError> {
+    run(backend, move |b| b.remove_queued(&id)).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+async fn move_queued(backend: Shared<'_>, id: String, delta: i64) -> Result<QueueView, AppError> {
+    run(backend, move |b| b.move_queued(&id, delta)).await
+}
+
 /// OpenCode Go usage per key slot (Settings, on demand). Never returns a key.
 #[tauri::command(rename_all = "snake_case")]
 async fn get_model_usage(backend: Shared<'_>) -> Result<ModelUsage, AppError> {
@@ -352,6 +383,8 @@ fn main() {
                         for change in watcher_backend.poll_changes(&mut watcher) {
                             let _ = handle.emit("task-changed", change);
                         }
+                        // Batch queue: start waiting sets when a native slot is free.
+                        watcher_backend.pump_batch();
                         std::thread::sleep(Duration::from_millis(500));
                     }
                 })?;
@@ -383,6 +416,11 @@ fn main() {
             get_ai_status,
             get_setup_status,
             get_model_usage,
+            plan_batch,
+            get_queue,
+            queue_batch,
+            remove_queued,
+            move_queued,
             review_component,
             sign_off,
             dismiss_notice,

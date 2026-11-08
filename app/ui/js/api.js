@@ -493,6 +493,9 @@ function mockTransport() {
     }
   }
 
+  /** Batch queue of the mock: waiting sets, and the run slot limit. */
+  const MOCK_SLOTS = 3;
+  const mockQueue = [];
   const commands = {
     async list_tasks(data) {
       // With ?mockempty the runs folder has no runs (a first start).
@@ -715,6 +718,56 @@ function mockTransport() {
       const keyFound = !mockNoKey;
       return { enabled, key_found: keyFound, active: enabled && keyFound,
                key_file: '/Users/demo/.config/marinaframe/opencode-go-keys.txt' };
+    },
+    /**
+     * Batch queue (APP_SPEC "Batch queue"). Dropped files are one set; a folder (a path
+     * without an extension) gives five synthetic sets. Synthetic names only.
+     */
+    async plan_batch(_data, { paths }) {
+      await pause(200);
+      const folder = paths.some((p) => /[\\/]$/.test(p) || !/\.[a-z0-9]+$/i.test(p));
+      if (folder) {
+        return {
+          sets: ['Survey launch 18 m', 'Harbour tug B', 'Pilot boat 15 m', 'Workboat 12 m', 'Patrol craft 20 m']
+            .map((name, i) => ({ name, files: Array.from({ length: 1 + (i % 3) }, (_, k) => `/mock/Yard order/${name}/sheet-${k + 1}.png`) })),
+          skipped: [{ path: '/mock/Yard order/notes.txt', reason: 'Not a PDF, PNG, TIFF or JPEG drawing.' }],
+        };
+      }
+      // Files dropped on their own are one set (the intake), as in the backend.
+      const stemOf = (p) => p.split(/[\\/]/).pop().replace(/\.[^.]+$/, '');
+      return { sets: paths.length ? [{ name: stemOf(paths[0]), files: paths }] : [], skipped: [] };
+    },
+    async queue_batch(data, { sets }) {
+      await pause(300);
+      const now = Date.now();
+      sets.forEach((set, i) => mockQueue.push({ id: `batch-${now}-${i}`, name: set.name, files: set.files, added_ms: now, state: 'waiting', message: null }));
+      return commands.get_queue(data);
+    },
+    async get_queue(data) {
+      const running = data.tasks.filter((t) => t.status === 'running' || isLiveStreaming(data, t.task)).length;
+      // Mock pump: free slots take the first waiting sets; they stay "starting" in the mock.
+      let free = MOCK_SLOTS - running - mockQueue.filter((s) => s.state === 'starting').length;
+      for (const set of mockQueue) {
+        if (free <= 0) break;
+        if (set.state === 'waiting') { set.state = 'starting'; free -= 1; }
+      }
+      if (new URLSearchParams(location.search).has('mockbatchfail') && mockQueue.length > 2) {
+        Object.assign(mockQueue[mockQueue.length - 1], { state: 'failed', message: 'The drawings could not be read.' });
+      }
+      return { slots: MOCK_SLOTS, running: running + mockQueue.filter((s) => s.state === 'starting').length, waiting: clone(mockQueue), held: null };
+    },
+    async remove_queued(data, { id }) {
+      const index = mockQueue.findIndex((s) => s.id === id);
+      if (index < 0) throw new BackendError('queue_unknown', 'This set is no longer in the queue.');
+      if (mockQueue[index].state === 'starting') throw new BackendError('queue_starting', 'This set is starting; it cannot be removed now.');
+      mockQueue.splice(index, 1);
+      return commands.get_queue(data);
+    },
+    async move_queued(data, { id, delta }) {
+      const index = mockQueue.findIndex((s) => s.id === id);
+      const target = index + Math.sign(delta);
+      if (index >= 0 && target >= 0 && target < mockQueue.length) [mockQueue[index], mockQueue[target]] = [mockQueue[target], mockQueue[index]];
+      return commands.get_queue(data);
     },
     /**
      * Key usage (Settings). Synthetic meters: ?mockusagefull puts every key near or at a limit,

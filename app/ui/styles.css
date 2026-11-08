@@ -757,6 +757,57 @@ code { font-family: var(--font-mono); }
 .queue-time { color: var(--ink-3); font-size: var(--fs-sm); text-align: right; white-space: nowrap; }
 .queue-extra { display: inline-flex; min-width: 0; }
 
+/* Batch queue (js/batch.js): the waiting sets, in start order, above the runs. */
+.queue-wait-note { margin: 0 0 var(--space-sm); color: var(--ink-2); font-size: var(--fs-sm); }
+.queue-wait-note.held { color: var(--warn); font-weight: 600; }
+.queue-wait-rows { list-style: none; }
+.queue-wait-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 110px minmax(0, 220px) auto;
+  align-items: center;
+  gap: var(--space-md);
+  min-height: 48px;
+  padding: var(--space-xs) var(--space-sm) var(--space-xs) var(--space-lg);
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  font-size: var(--fs-md);
+}
+.queue-wait-row[data-state="failed"] { border-color: var(--guess-ink); }
+.queue-wait-row > .badge { justify-self: start; }
+.queue-wait-order { color: var(--ink-3); font: 600 var(--fs-sm) var(--font-mono); }
+.queue-wait-message { display: block; overflow: hidden; color: var(--warn); white-space: nowrap; text-overflow: ellipsis; }
+.queue-wait-actions { display: inline-flex; align-items: center; gap: 2px; }
+.queue-wait-actions .btn-icon { width: 32px; font-size: var(--fs-md); }
+.drop-choices { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: var(--space-sm); }
+
+/* The batch sheet: the drawing sets a drop or a folder gave, each with a check box. */
+.batch-sheet {
+  width: min(640px, calc(100vw - 48px));
+  max-height: calc(100vh - 96px);
+  margin: auto;
+  padding: var(--space-xl);
+  overflow-y: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-dialog);
+  background: var(--raised);
+  color: var(--ink);
+  box-shadow: var(--shadow-sheet);
+}
+.batch-sheet::backdrop { background: rgba(10, 31, 61, 0.22); }
+.batch-sheet h2 { margin-bottom: var(--space-sm); font-size: var(--fs-xl); font-weight: 600; }
+.batch-intro { margin-bottom: var(--space-md); color: var(--ink-2); font-size: var(--fs-md); }
+.batch-sets { display: flex; flex-direction: column; gap: var(--space-xs); margin: 0; padding: 0; list-style: none; }
+.batch-set { display: flex; align-items: flex-start; gap: var(--space-sm); padding: var(--space-sm) var(--space-md); border: 1px solid var(--rule); border-radius: var(--radius-md); background: var(--surface); }
+.batch-set input { flex: none; width: 16px; height: 16px; margin-top: 3px; accent-color: var(--brand); }
+.batch-set-text { display: flex; flex-direction: column; min-width: 0; cursor: pointer; }
+.batch-set-name { font-weight: 600; }
+.batch-set-files { overflow: hidden; color: var(--ink-3); font-size: var(--fs-sm); white-space: nowrap; text-overflow: ellipsis; }
+.batch-skipped details { margin-top: var(--space-md); color: var(--warn); font-size: var(--fs-sm); }
+.batch-skipped summary { display: inline-flex; align-items: center; gap: var(--space-xs); cursor: pointer; }
+.batch-skipped ul { margin: var(--space-xs) 0 0 var(--space-lg); color: var(--ink-2); }
+.batch-actions { display: flex; justify-content: flex-end; gap: var(--space-sm); margin-top: var(--space-xl); }
+
 /* ------------------------------------------------------------------ Run view */
 
 .view-run {
