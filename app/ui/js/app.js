@@ -313,6 +313,7 @@ async function refreshTasks() {
       invoke('get_queue', {}).catch(() => null),
     ]);
     state.tasksLoaded = true;
+    renderRailCount();
     renderHome();
     renderQueue();
     renderCrumbs();
@@ -516,8 +517,21 @@ function pollQueueWhileStarting() {
   }, QUEUE_STARTING_POLL_MS);
 }
 
+/** The Queue rail item: how many runs are going and how many sets wait. */
+function renderRailCount() {
+  const running = state.tasks.filter((t) => t.status === 'running').length;
+  const waiting = state.queue?.waiting.length || 0;
+  const count = $('rail-queue-count');
+  count.hidden = running + waiting === 0;
+  count.textContent = String(running + waiting);
+  const words = [running ? `${running} running` : null, waiting ? `${waiting} waiting` : null].filter(Boolean).join(', ');
+  count.title = words;
+  count.closest('.rail-item').setAttribute('aria-label', words ? `Queue, ${words}` : 'Queue');
+}
+
 function renderQueue() {
   pollQueueWhileStarting();
+  renderRailCount();
   const grouped = new Set();
   const groups = QUEUE_GROUPS.map((group) => {
     const tasks = state.tasks.filter((t) => !grouped.has(t) && (!group.statuses || group.statuses.has(t.status)));

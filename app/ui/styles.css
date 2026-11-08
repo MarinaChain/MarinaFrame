@@ -513,6 +513,13 @@ code { font-family: var(--font-mono); }
 .rail-item .icon { width: 22px; height: 22px; }
 .rail-item span { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .rail-item:hover { background: var(--hover); color: var(--ink); }
+/* Runs going and sets waiting, on the Queue item (js/app.js renderRailCount). */
+.rail-item { position: relative; }
+.rail-count { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--brand); color: var(--on-brand); font: 600 var(--fs-xs)/20px var(--font-mono); text-align: center; }
+.rail-count[hidden] { display: none; }
+.app[data-rail="expanded"] .rail-count { margin-left: auto; }
+/* Collapsed: a small count at the icon's top-right corner, clear of the icon itself. */
+.app[data-rail="collapsed"] .rail-count { position: absolute; top: 0; right: 0; min-width: 16px; height: 16px; padding: 0 3px; border: 2px solid var(--surface); border-radius: 9px; font-size: 10px; line-height: 12px; box-sizing: content-box; }
 .rail-item[aria-current="page"] {
   background: var(--selected);
   color: var(--brand);
