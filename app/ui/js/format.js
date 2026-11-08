@@ -12,11 +12,21 @@ const STATUS_LABELS = {
 };
 
 const SECTION_STATE_LABELS = { chosen: 'Line chosen', guessed: 'Guessed', declined: 'Declined', not_read: 'Not read' };
+const SOURCE_LABELS = {
+  traced: 'Traced',
+  repaired: 'Repaired',
+  interpolated: 'Interpolated',
+  ai_inferred: 'AI inferred',
+  ai_corrected: 'AI corrected',
+  omitted: 'Not drawn',
+};
 const CHECK_LABELS = { pass: 'Pass', fail: 'Fail', not_run: 'Not run' };
 const CALL_STATE_LABELS = { completed: 'Answered', failed: 'Failed', not_sent: 'Not sent', unknown: 'Result unknown' };
 
 export const statusLabel = (status) => STATUS_LABELS[status] || status;
 export const sectionStateLabel = (state) => SECTION_STATE_LABELS[state] || state;
+export const sourceLabel = (label) => SOURCE_LABELS[label] || label.replace(/_/g, ' ');
+export const isAiSource = (label) => label === 'ai_inferred' || label === 'ai_corrected';
 export const checkLabel = (result) => CHECK_LABELS[result] || result;
 export const callStateLabel = (state) => CALL_STATE_LABELS[state] || state;
 

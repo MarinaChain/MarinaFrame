@@ -59,6 +59,10 @@ pub enum GuessKind {
     BestCandidate,
     BridgedGap,
     DroppedEnd,
+    /// The model chose a traced line for a station (W17c).
+    ModelChoice,
+    /// The model wrote the curve of a section (W17c).
+    ModelAuthored,
 }
 
 /// One choice a draft made without a person. `id` is the guess_id.
@@ -104,7 +108,46 @@ pub struct SectionView {
     pub state: SectionState,
     pub reason: String,
     pub guess: Option<GuessView>,
+    /// Where the draft's curve for this section came from. Only in a draft build.
+    pub source: Option<SectionSource>,
     pub candidates: Vec<CandidateView>,
+}
+
+/// Source label of one section of a draft build: `traced`, `repaired`,
+/// `interpolated`, `ai_inferred`, `ai_corrected` or `omitted`.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct SectionSource {
+    pub label: String,
+    /// The model's one-line basis, for the AI labels.
+    pub basis: Option<String>,
+}
+
+/// How many sections of a draft carry one source label.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SourceCount {
+    pub label: String,
+    pub count: usize,
+}
+
+/// One live-model step: the tool it chose and the reason it gave.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct ActivityStep {
+    pub sequence: u64,
+    pub tool: String,
+    pub reason: String,
+}
+
+/// What the live model did in a run. Absent for a deterministic run.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct ModelActivity {
+    pub steps: Vec<ActivityStep>,
+    pub requests: usize,
+    pub prompt_tokens: u64,
+    pub completion_tokens: u64,
+    /// Sum of the list costs that receipts report, in USD.
+    pub list_cost_usd: f64,
+    /// False when a receipt reports no list cost; the sum is then a lower bound.
+    pub list_cost_complete: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -185,6 +228,11 @@ pub struct TaskView {
     pub provider: Vec<ProviderCallView>,
     pub notices: Vec<NoticeView>,
     pub draft: Option<DraftView>,
+    /// Sections per source label of the current draft build, in a fixed order.
+    pub source_counts: Vec<SourceCount>,
+    /// Warnings of the current draft build (repairs, fairing). Not errors.
+    pub warnings: Vec<String>,
+    pub activity: Option<ModelActivity>,
     pub evidence: Value,
 }
 

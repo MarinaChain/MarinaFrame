@@ -127,7 +127,21 @@ def _ordinate(points, elevations, z):
     return left[0] + (right[0] - left[0]) * (z - left[1]) / (right[1] - left[1])
 
 
-def _check_approximation(normalized, metrics):
+def _check_complexity_fit(record: dict, allowed, draft: bool) -> None:
+    """A requested bound of at most 1 cm; only a draft may raise it to fit the CAD limits."""
+    fit = record.get("complexity_fit")
+    if fit is None:
+        _require(finite(allowed) and 0 <= allowed <= .01, "CAD approximation exceeds its declared ordinate-error bound.")
+        return
+    _require(draft, "Only a draft may simplify curves to fit the CAD complexity limits.")
+    _require(isinstance(fit, dict) and set(fit) == {"requested_maximum_deviation_m", "reason"}
+             and isinstance(fit["reason"], str) and len(fit["reason"]) <= 200, "Invalid CAD complexity fit record.")
+    requested = fit["requested_maximum_deviation_m"]
+    _require(finite(requested) and 0 <= requested <= .01 and finite(allowed) and allowed > requested,
+             "CAD complexity fit does not raise a valid requested bound.")
+
+
+def _check_approximation(normalized, metrics, draft: bool = False):
     """Recompute whole-polyline approximation diagnostics using scalar math."""
     derived = []
     for section in normalized:
@@ -145,8 +159,8 @@ def _check_approximation(normalized, metrics):
         _require(isinstance(record, dict) and record.get("method") == "vertical_error_bounded_source_knots_v1"
                  and record.get("correspondence") == "shared_normalized_height_source_knot_union", "Unsupported or missing CAD approximation record.")
         allowed = record.get("maximum_allowed_half_breadth_deviation_m")
-        _require(finite(allowed) and 0 <= allowed <= .01 and maximum <= allowed + 1e-10,
-                 "CAD approximation exceeds its declared ordinate-error bound.")
+        _check_complexity_fit(record, allowed, draft)
+        _require(maximum <= allowed + 1e-10, "CAD approximation exceeds its declared ordinate-error bound.")
         expected = {"maximum_half_breadth_deviation_m": maximum,
                     "height_weighted_rms_deviation_m": rms, "source_section_area_m2": _area(source),
                     "cad_section_area_m2": _area(cad), "section_area_error_m2": _area(cad) - _area(source),
@@ -161,6 +175,9 @@ def _check_approximation(normalized, metrics):
         derived.append(record)
     summary = metrics.get("geometry_approximation")
     _require(isinstance(summary, dict), "Missing geometry approximation summary.")
+    _require(summary.get("complexity_fit") == derived[0].get("complexity_fit")
+             and all(r.get("complexity_fit") == derived[0].get("complexity_fit") for r in derived),
+             "CAD complexity fit disagrees between sections and summary.")
     values = {"maximum_allowed_half_breadth_deviation_m": max(r["maximum_allowed_half_breadth_deviation_m"] for r in derived),
               "maximum_half_breadth_deviation_m": max(r["maximum_half_breadth_deviation_m"] for r in derived),
               "maximum_height_weighted_rms_deviation_m": max(r["height_weighted_rms_deviation_m"] for r in derived),
@@ -171,7 +188,7 @@ def _check_approximation(normalized, metrics):
              and summary.get("estimated_face_count") == derived[0]["estimated_face_count"], "CAD summary counts are inconsistent.")
 
 
-def _check_single_curve_cad(sections: list, normalized: list, metrics: dict):
+def _check_single_curve_cad(sections: list, normalized: list, metrics: dict, draft: bool = False):
     """CAD checks of a build_hull run: one solid lofted from single-curve sections."""
     original = {section["id"]: section for section in sections}
     for section in normalized:
@@ -188,7 +205,7 @@ def _check_single_curve_cad(sections: list, normalized: list, metrics: dict):
         a, b = left["cad_points_yz_m"], right["cad_points_yz_m"]
         midpoint = [[(p[0] + q[0]) / 2, (p[1] + q[1]) / 2] for p, q in zip(a, b)]
         volume += (right["x_m"] - left["x_m"]) * (_area(a) + 4 * _area(midpoint) + _area(b)) / 6
-    _check_approximation(normalized, metrics)
+    _check_approximation(normalized, metrics, draft)
     for name in ("volume_m3", "surface_area_m2", "length_m", "beam_m", "depth_m"):
         _require(finite(metrics.get(name)) and metrics[name] > 0, "Invalid authoritative geometry metric.")
     _require(_close(metrics["volume_m3"], volume), "Volume disagrees with independently integrated normalized sections.")
@@ -475,7 +492,7 @@ def _check_record(root: Path, result: dict, manifest: dict):
     if any("regions" in section for section in sections):
         _check_region_cad(sections, normalized, metrics)
     else:
-        _check_single_curve_cad(sections, normalized, metrics)
+        _check_single_curve_cad(sections, normalized, metrics, draft="draft" in result)
     _require(metrics.get("section_count") == len(normalized) and _close(metrics.get("minimum_observation_coverage"), min(s["coverage"] for s in sections)), "Observation summary disagrees with section evidence.")
     mesh = _read(root, "mesh.json")
     _require(isinstance(mesh, dict) and mesh.get("units") == "m", "Invalid mesh units/schema.")

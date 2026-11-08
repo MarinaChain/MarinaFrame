@@ -28,6 +28,23 @@ def build_hull(*args, **kwargs):
     return build(*args, **kwargs)
 
 
+def _complexity_fit_warnings(normalized: list[dict]) -> list[dict]:
+    """One warning per section that a draft simplified beyond the requested CAD bound."""
+    warnings = []
+    for section in normalized:
+        record = section["cad_approximation"]
+        fit = record.get("complexity_fit")
+        if fit is None or record["maximum_half_breadth_deviation_m"] <= fit["requested_maximum_deviation_m"]:
+            continue
+        warnings.append(gap(
+            "draft_simplified_curve",
+            f"Curve simplified for the CAD knot limit: maximum half-breadth deviation "
+            f"{record['maximum_half_breadth_deviation_m'] * 1000:.1f} mm from the traced curve "
+            f"(requested bound {fit['requested_maximum_deviation_m'] * 1000:g} mm).",
+            section["id"], severity="warning"))
+    return warnings
+
+
 def build_region_hull(*args, **kwargs):
     from .geometry import build_region_hull as build
     return build(*args, **kwargs)
@@ -336,6 +353,21 @@ def reconstruct(spec_path: str | Path, output_dir: str | Path, *, export_cad: bo
             for required in input_spec["sections"]:
                 if required["id"] not in found:
                     result["gaps"].append(gap("unresolved_required_section", "A required drawing view did not yield a supported contour; missing evidence is not interpolated.", required["id"]))
+            if "draft" in result:
+                from .draft import prepare_draft_sections
+                result["sections"], repairs = prepare_draft_sections(result["sections"], input_spec["sections"])
+                result["gaps"] = [{**item, "severity": "warning"} for item in result["gaps"]]
+                result["gaps"].extend(repairs)
+                for section in result["sections"]:
+                    if any("Draft uses unreliable" in warning for warning in section.get("warnings", [])):
+                        result["gaps"].append(gap("draft_unreliable_curve", "Using fragmented curve; re-trace this section, pick another candidate, or accept draft.", section["id"], severity="warning"))
+                # Cross-station fairness: name the section that breaks the hull
+                # (warnings only). Interpolated sections come from their
+                # neighbours, so they are not evidence for or against them.
+                from .fairness import check_fairness, fairness_warnings
+                fairness = check_fairness([s for s in result["sections"] if s.get("source_label") != "interpolated"])
+                result.setdefault("diagnostics", {})["fairness"] = fairness
+                result["gaps"].extend(fairness_warnings(fairness))
             for section in result["sections"]:
                 section.setdefault("evidence", {}).update(source_id="source-1", source_sha256=result["sources"][0]["sha256"],
                     assistance=assistance)
@@ -357,13 +389,16 @@ def reconstruct(spec_path: str | Path, output_dir: str | Path, *, export_cad: bo
                     normalized = [{**section, "cad_station": stations[section["id"]]}
                                   for section in sorted(result["sections"], key=lambda s: s["x_m"])]
                 else:
-                    shape, normalized = build_hull(result["sections"])
+                    # A draft simplifies over-complex curves to fit the CAD
+                    # limits; a strict run still rejects them.
+                    shape, normalized = build_hull(result["sections"], fit_complexity="draft" in result)
+                    result["gaps"].extend(_complexity_fit_warnings(normalized))
                 provisional = metrics_for(shape)
                 constraints = input_spec.get("constraints", {})
                 tolerance = constraints.get("relative_tolerance", .03)
                 for key in ("length_m", "beam_m", "depth_m"):
                     if key in constraints and abs(provisional[key] - constraints[key]) / constraints[key] > tolerance:
-                        result["gaps"].append(gap("dimension_conflict", f"Reconstructed {key} conflicts with the independently declared dimension."))
+                        result["gaps"].append(gap("dimension_conflict", f"Reconstructed {key} conflicts with the independently declared dimension.", severity="warning" if "draft" in result else "blocking"))
                 if not _has_block(result):
                     phase = "geometry_export_and_reload"
                     transaction.checkpoint(phase)

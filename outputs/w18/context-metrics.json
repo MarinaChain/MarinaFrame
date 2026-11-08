@@ -1,0 +1,8 @@
+{
+  "compactions": 25,
+  "max_actual_prompt_tokens_over_estimate": 0.8898720682302772,
+  "context_budget": 32000,
+  "thinking": "disabled",
+  "mode": "conversation",
+  "dedicated_model_handoff_request": false
+}

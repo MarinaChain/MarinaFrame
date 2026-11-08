@@ -241,6 +241,7 @@ pub fn choose_line(
                     tool: "select_contours".into(),
                     arguments: selection,
                     reason: "Line chosen by a person in the app.".into(),
+                    notes: None,
                 },
             };
             controller::intervene(

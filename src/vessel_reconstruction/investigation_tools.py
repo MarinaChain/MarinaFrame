@@ -10,11 +10,11 @@ revise it; nothing here selects a line, sets a review state or changes a gate.
 from __future__ import annotations
 
 import copy
-import json
 import math
 from uuid import uuid4
 
 from . import investigation as inv
+from . import panel_assignment
 from .draft import model_choice_guess
 from .provenance import digest_object, write_json
 
@@ -125,7 +125,15 @@ def traced_candidate(traced: dict, source_sha: str, section_id: str, tool: str) 
                      "vertical_range_from_ink": traced["vertical_range_from_ink"]},
             "grid_supported_hypothesis": False, "non_grid_competing_components": None,
             "contour_selection": traced["contour_selection"], "z_range_m": traced["z_range_m"],
-            "identity_certified": False}
+            "identity_certified": False, **_stroke_description(traced)}
+
+
+# Stroke fields that enumeration and tracing add to a candidate and a tag.
+STROKE_DESCRIPTION_FIELDS = ("z_coverage_fraction", "hull_likeness", "linked_fragments", "follow_method", "warnings")
+
+
+def _stroke_description(traced: dict) -> dict:
+    return {k: traced[k] for k in STROKE_DESCRIPTION_FIELDS if k in traced}
 
 
 # Distinct colours of enumerated strokes; tags repeat the colour.
@@ -243,11 +251,11 @@ class InvestigationTools:
             return self._refused(inv.VerificationError("section_not_inspected",
                                                        "Inspect the section before tracing in it."))
         section = next(s for s in self.spec["sections"] if s["id"] == section_id)
-        panel_key = (tuple(section["roi_px"]), json.dumps(section["calibration"], sort_keys=True),
-                     section["z_min_m"], section["z_max_m"])
+        # Sections with one ROI share the panel, also when a scan gives each
+        # station a calibration that differs by a pixel (panel_assignment.panel_key).
         panel = [s for s in self.spec["sections"]
-                 if (tuple(s["roi_px"]), json.dumps(s["calibration"], sort_keys=True), s["z_min_m"], s["z_max_m"])
-                 == panel_key and s["id"] in self.state["catalog"]]
+                 if panel_assignment.panel_key(s) == panel_assignment.panel_key(section)
+                 and s["id"] in self.state["catalog"]]
         known = [c for c in self.state["catalog"][section_id]["candidates"] if "contour_selection" in c]
         image, details, source_sha = self._source()
         strokes, refusals = inv.enumerate_strokes(image, section, self.spec["source"]["file"], details,
@@ -260,21 +268,32 @@ class InvestigationTools:
                 if not any(c["candidate_id"] == candidate["candidate_id"] for c in candidates):
                     candidates.append(copy.deepcopy(candidate))
             rows, xs = traced["trace_rows_px"], traced["trace_xs_px"]
-            tags.append({"tag": index, "candidate_id": candidate["candidate_id"],
+            tags.append({"tag": index, "candidate_id": candidate["candidate_id"], "kind": traced["kind"],
                          "top_end_px": [round(xs[0], 1), rows[0]], "bottom_end_px": [round(xs[-1], 1), rows[1]],
-                         "z_range_m": traced["z_range_m"]})
+                         "z_range_m": traced["z_range_m"], **_stroke_description(traced)})
         # Already known lines of this section are shown too, so every tag on
         # the picture names a candidate the model can assign.
         for candidate in known:
             trace = inv.dense_trace(candidate)
             if trace is not None and len(tags) < inv.MAX_ENUMERATED_STROKES + 16:
+                z_range = candidate.get("z_range_m") or [section["z_min_m"], section["z_max_m"]]
+                described = inv.describe_stroke({"trace_rows_px": [int(trace[0][0]), int(trace[0][-1])],
+                                                 "trace_xs_px": trace[1], "z_range_m": z_range}, section)
                 tags.append({"tag": len(tags) + 1, "candidate_id": candidate["candidate_id"],
+                             "kind": described["kind"],
                              "top_end_px": [round(float(trace[1][0]), 1), int(trace[0][0])],
                              "bottom_end_px": [round(float(trace[1][-1]), 1), int(trace[0][-1])],
-                             "z_range_m": candidate.get("z_range_m"), "known_candidate": True})
+                             "z_range_m": candidate.get("z_range_m"), "known_candidate": True,
+                             "z_coverage_fraction": described["z_coverage_fraction"],
+                             "hull_likeness": described["hull_likeness"]})
+        # Best hull candidates first, straight rulers last; tags follow that order.
+        tags.sort(key=lambda t: (t["kind"] == "straight_grid_line", -t["hull_likeness"]))
+        for number, tag in enumerate(tags, 1):
+            tag["tag"] = number
         traces = {t["candidate_id"]: inv.dense_trace(next(c for c in self.state["catalog"][section_id]["candidates"]
                                                           if c["candidate_id"] == t["candidate_id"]))
                   for t in tags}
+        recommendation = self._panel_recommendation(panel, tags, traces)
         from .fonts import dejavu_sans
         roi = section["roi_px"]
         region = inv.clip_region(roi, image.shape[1], image.shape[0])
@@ -300,10 +319,69 @@ class InvestigationTools:
         self._save()
         return self._observation(True, "strokes_enumerated", section_id=section_id,
                                  panel_section_ids=[s["id"] for s in panel], strokes=tags,
+                                 recommended_station_assignment=recommendation,
                                  refused_seeds=len(refusals), view=record, artifacts=[artifact],
                                  note="Each tag number is drawn twice on its stroke (top end and middle) in the "
                                       "stroke's colour. Find the stroke that carries a station label and assign its "
-                                      "candidate_id to that station. Every stroke is real ink; none is an identity.")
+                                      "candidate_id to that station. Every stroke is real ink; none is an identity. Tags "
+                                      "are ordered by hull_likeness (a ranking heuristic, not identity); "
+                                      "straight_grid_line strokes come last.")
+
+    def _panel_choices(self, section_ids) -> dict:
+        """Candidate already chosen for each of these sections: a selection, else a model claim."""
+        chosen = {sid: choice["candidate_id"] for sid, choice in self.state.get("model_choices", {}).items()}
+        chosen.update(self.state["selected"])
+        return {sid: cid for sid, cid in chosen.items() if sid in section_ids}
+
+    def _panel_recommendation(self, panel, tags, traces) -> dict | None:
+        """One recommended tag per station of a shared panel (panel_assignment.assign_panel).
+
+        Adds ``recommended_for`` to each recommended tag, so the retained tag
+        list keeps the hint. None for a panel of one section.
+        """
+        if len(panel) < 2:
+            return None
+        strokes = [{"candidate_id": t["candidate_id"], "rows": traces[t["candidate_id"]][0],
+                    "xs": traces[t["candidate_id"]][1], "hull_likeness": t["hull_likeness"], "kind": t["kind"]}
+                   for t in tags if traces.get(t["candidate_id"]) is not None]
+        catalog = self.state["catalog"]
+        tagged = [{"candidate_id": t["candidate_id"], "contour_selection": {
+            "anchors_px": [[float(x), float(y)] for x, y in zip(*traces[t["candidate_id"]][::-1])]}}
+            for t in tags if traces.get(t["candidate_id"]) is not None]
+        pinned = {}
+        for sid, cid in self._panel_choices({s["id"] for s in panel}).items():
+            chosen = next((c for c in catalog[sid]["candidates"] if c["candidate_id"] == cid), None)
+            match = chosen and next((t for t in tagged if t["candidate_id"] == cid or inv.same_ink(chosen, t)), None)
+            if match:
+                pinned[sid] = match["candidate_id"]
+        assigned = panel_assignment.assign_panel(panel, self.spec["sections"], strokes, pinned)
+        tag_of = {t["candidate_id"]: t for t in tags}
+        result = {}
+        for sid, item in assigned.items():
+            tag = tag_of[item["candidate_id"]]
+            tag.setdefault("recommended_for", []).append(sid)
+            result[sid] = {"tag": tag["tag"], "candidate_id": item["candidate_id"],
+                           "confidence": item["confidence"],
+                           "alternative_tags": [tag_of[c]["tag"] for c in item["alternatives"]],
+                           "warnings": item["warnings"]}
+        return {"stations": result, "basis": panel_assignment.BASIS,
+                "note": "A hint from nesting order: midship stations are outermost, end stations innermost, on "
+                        "each side. Confirm with the station labels before assign_station."}
+
+    def _assign_shared_panels(self) -> None:
+        """Recommend one stroke per station for every inspected shared panel (panel_assignment.py).
+
+        Runs once per panel; the catalog entries keep the recommendation and
+        the strokes it names, so inspection and draft guesses can use them.
+        """
+        sections = [s for s in self.spec.get("sections", []) if isinstance(s, dict)]
+        if not panel_assignment.pending_panels(sections, self.state["catalog"]):
+            return
+        image, details, source_sha = self._source()
+        ids = {s["id"] for s in sections}
+        panel_assignment.assign_shared_panels(image, sections, self.state["catalog"], self.spec["source"]["file"],
+                                              details, source_sha, self._panel_choices(ids))
+        self._save()
 
     def _record_trace(self, section_id, traced, image, source_sha, tool):
         """Add a verified traced line to the section's catalog and show it to the model."""
@@ -341,6 +419,7 @@ class InvestigationTools:
         return self._observation(True, "traced", section_id=section_id, candidate_id=candidate["candidate_id"],
                                  new_candidate=new, support=traced["support"], z_range_m=traced["z_range_m"],
                                  vertical_range_from_ink=traced["vertical_range_from_ink"], view=record,
+                                 **_stroke_description(traced),
                                  artifacts=[artifact],
                                  note="Red: traced ink. Blue: your corridor. The line is a candidate, not an identity.")
 
@@ -368,6 +447,8 @@ class InvestigationTools:
                                             label_view_id, label_text, comparison_id)
         except inv.VerificationError as exc:
             return self._refused(exc, section_id=section_id)
+        # A station claim replaces an earlier model-authored shape of the section.
+        self.state.get("authored_sections", {}).pop(section_id, None)
         choices = self.state.setdefault("model_choices", {})
         choices[section_id] = {"candidate_id": candidate_id, "reason": reason, "verifier_evidence": evidence}
         section = next(s for s in self.spec["sections"] if s["id"] == section_id)

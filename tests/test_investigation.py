@@ -270,3 +270,48 @@ def test_grid_spacing_tolerates_missing_and_extra_lines():
     assert inv.grid_spacing([0, 30, 60, 120, 150]) == 30.0
     assert inv.grid_spacing([0, 30, 37, 60, 90]) == 30.0
     assert inv.grid_spacing([0, 30]) is None
+
+
+def test_grid_stroke_kind_retains_straight_evidence():
+    section = {"calibration": {"pixels_per_metre": 60}, "z_min_m": 0, "z_max_m": 3}
+    assert inv.stroke_kind([30, 210], np.full(181, 80.), section) == "straight_grid_line"
+    assert inv.stroke_kind([30, 210], np.linspace(80, 100, 181), section) == "candidate_stroke"
+    assert inv.stroke_kind([30, 100], np.full(71, 80.), section) == "candidate_stroke"
+
+
+def test_resource_failed_inspection_allows_only_real_ink_recovery(tmp_path, monkeypatch):
+    spec = shared_panel_drawing(tmp_path / "src")
+    task = tmp_path / "task"
+    task.mkdir()
+    domain = DomainTools(task, spec)
+    def failure(*args, **kwargs):
+        return {"state": "failed", "elapsed_seconds": 0, "worker_error": {"error_code": "resource_limit",
+                "message": "/private/secret/should-not-escape"}}, None
+    monkeypatch.setattr(domain, "_worker", failure)
+    failed = domain.execute("inspect_source", {})
+    assert failed["ok"] is False and failed["error_code"] == "resource_limit"
+    assert "/private/secret" not in json.dumps(failed)
+    assert all(c["inspection_failure"] == "resource_limit" for c in domain.state["catalog"].values())
+    assert not any(s["inspected"] for s in domain.describe()["sections"])
+    assert domain.describe()["catalog_ready"] is True
+    assert domain.execute("inspect_source", {})["ok"] is False
+    enumerated = domain.execute("enumerate_strokes", {"section_id": "a"})
+    assert enumerated["ok"] and enumerated["strokes"]
+    assert domain.state["selected"] == {}
+    assert domain.state["catalog"]["a"]["inspection_failure"] == "resource_limit"
+    guesses = make_guesses(domain.spec["sections"], {}, domain.state["catalog"])
+    assert not any(g.get("kind") == "best_score" for g in guesses)
+    assert enumerated["engineering_approved"] is False
+
+
+def test_generic_inspection_failure_does_not_unlock_tracing(tmp_path, monkeypatch):
+    spec = shared_panel_drawing(tmp_path / "src")
+    task = tmp_path / "task"
+    task.mkdir()
+    domain = DomainTools(task, spec)
+    monkeypatch.setattr(domain, "_worker", lambda *a, **k: ({"state": "failed", "elapsed_seconds": 0,
+        "worker_error": {"error_code": "domain_worker_failed"}}, None))
+    failed = domain.execute("inspect_source", {})
+    assert failed["error_code"] == "inspection_worker_failed"
+    assert domain.state["catalog"] == {}
+    assert domain.execute("enumerate_strokes", {"section_id": "a"})["error_code"] == "section_not_inspected"

@@ -24,6 +24,21 @@ def _candidate(cid, *, rows=1.0, support=1.0, contrast=0.9, competing=0):
 SECTIONS = [{"id": f"s{i}", "x_m": float(x)} for i, x in enumerate((0, 1, 17.5, 20, 30))]
 
 
+def test_draft_repairs_pinch_and_interpolates_missing_station_without_changing_input():
+    from vessel_reconstruction.draft import prepare_draft_sections
+    measured = [{"id": "a", "x_m": 0., "points_yz_m": [[1., 0.], [1., 1.], [0., 2.], [1., 3.], [1., 4.]], "coverage": 1., "evidence": {}},
+                {"id": "c", "x_m": 2., "points_yz_m": [[2., z] for z in range(5)], "coverage": 1., "evidence": {}}]
+    original = copy.deepcopy(measured)
+    declared = [{"id": sid, "x_m": float(i)} for i, sid in enumerate("abc")]
+    prepared, warnings = prepare_draft_sections(measured, declared)
+    assert measured == original
+    assert [s["id"] for s in prepared] == ["a", "b", "c"]
+    assert min(y for y, z in prepared[0]["points_yz_m"]) == .001
+    assert prepared[1]["coverage"] == 0
+    assert {w["section_id"] for w in warnings} == {"a", "b"}
+    assert all(w["severity"] == "warning" for w in warnings)
+
+
 def test_guesses_take_the_best_line_and_bridge_or_drop_unreadable_stations():
     catalog = {"s0": {"candidates": []},
                "s1": {"candidates": [_candidate("faint", contrast=.2), _candidate("outer", contrast=.95)]},
@@ -152,3 +167,93 @@ def test_draft_build_records_guesses_and_tags_exports(tmp_path):
     history = tools.state["resolved_guesses"]
     assert history[0]["resolution"] == "confirmed" and history[0]["status"] == "resolved"
     assert tools.describe()["open_guesses"] == tools.open_guesses
+
+
+@pytest.mark.cad
+def test_draft_pinch_and_missing_station_make_renderable_step_but_strict_blocks(tmp_path, monkeypatch):
+    from vessel_reconstruction import ingest
+    from vessel_reconstruction.pipeline import reconstruct
+    from vessel_reconstruction.schema import gap
+    path, spec = draft_drawing(tmp_path / "input", count=4)
+    # Exercise real CAD and publication, with deterministic measured defect input.
+    sections = [{"id": s["id"], "x_m": s["x_m"],
+                 "points_yz_m": [[1., 0.], [1., 1.], [0. if i == 1 else 1., 2.], [1., 3.], [1., 4.]],
+                 "coverage": 1., "confidence": .5, "evidence": {}}
+                for i, s in enumerate(spec["sections"]) if i != 2]
+    monkeypatch.setattr(ingest, "extract_sections", lambda *args: {"sections": copy.deepcopy(sections),
+        "gaps": [gap("unreliable_curve", "Fragmented curve.", "s2")]})
+    strict = reconstruct(path, tmp_path / "strict")
+    assert strict["status"] == "blocked" and not strict["exports"]
+    spec["draft"] = {"status": DRAFT_STATUS, "guesses": make_guesses(spec["sections"], {}, {})}
+    path.write_text(json.dumps(spec))
+    draft = reconstruct(path, tmp_path / "draft")
+    assert draft["status"] == "review_required", draft["gaps"]
+    assert draft["exports"]["step"] == "model-draft.step"
+    assert {g["kind"] for g in draft["gaps"]} >= {"draft_repaired", "draft_interpolated"}
+    assert all(g["severity"] == "warning" for g in draft["gaps"])
+    assert verify_run(tmp_path / "draft")["valid"]
+    from vessel_reconstruction.agent_render_worker import render_step
+    render_dir = tmp_path / "render"
+    render_dir.mkdir()
+    rendered = render_step(tmp_path / "draft", "body", render_dir)
+    assert rendered["geometry_audit"]["valid_shape"]
+
+
+def _deck_traced_section():
+    """A flared hull to a deck edge at z 8, a camber line to the centreline, then
+    the centreline up to the panel top at z 12 (pixel 0.02 m), as in dtmb5415-L0."""
+    hull = [[2. + .25 * z, z] for z in np.arange(0., 8.01, .5)]
+    camber = [[2.5, 8.03], [0., 8.06]]
+    centreline = [[0., z] for z in np.arange(8.5, 12.01, .5)]
+    return hull + camber + centreline
+
+
+def test_draft_top_closure_ends_at_the_hull_curve_not_the_panel_top():
+    from vessel_reconstruction.draft import prepare_draft_sections
+    declared = [{"id": sid, "x_m": float(i), "z_max_m": 12., "calibration": {"pixels_per_metre": 50.}}
+                for i, sid in enumerate("abc")]
+    measured = [{"id": sid, "x_m": float(i), "points_yz_m": _deck_traced_section(), "coverage": 1., "evidence": {}}
+                for i, sid in enumerate("abc")]
+    prepared, warnings = prepare_draft_sections(measured, declared)
+    for section in prepared:
+        # The section ends at the deck edge: no camber line, no centreline run.
+        assert section["points_yz_m"] == _deck_traced_section()[:17]
+        assert section["points_yz_m"][-1] == [4., 8.]
+    assert {w["kind"] for w in warnings} == {"draft_top_trimmed"}
+    assert all(w["severity"] == "warning" and "z 8.00 m" in w["message"] for w in warnings)
+
+
+@pytest.mark.cad
+def test_trimmed_top_closure_builds_a_verified_draft_solid(tmp_path, monkeypatch):
+    from vessel_reconstruction import ingest
+    from vessel_reconstruction.pipeline import reconstruct
+    path, spec = draft_drawing(tmp_path / "input", count=4)
+    # The fixture panel top is z 3 m; scale the dtmb5415-L0 shape into it.
+    points = [[y / 4, z / 4] for y, z in _deck_traced_section()]
+    sections = [{"id": s["id"], "x_m": s["x_m"], "points_yz_m": points, "coverage": 1., "confidence": .5,
+                 "evidence": {}} for s in spec["sections"]]
+    monkeypatch.setattr(ingest, "extract_sections", lambda *args: {"sections": copy.deepcopy(sections), "gaps": []})
+    spec["draft"] = {"status": DRAFT_STATUS, "guesses": make_guesses(spec["sections"], {}, {})}
+    path.write_text(json.dumps(spec))
+    draft = reconstruct(path, tmp_path / "draft")
+    assert draft["status"] == "review_required", draft["gaps"]
+    assert {g["kind"] for g in draft["gaps"]} == {"draft_top_trimmed"}
+    assert draft["metrics"]["depth_m"] == pytest.approx(2.)
+    assert verify_run(tmp_path / "draft")["valid"]
+
+
+@pytest.mark.parametrize("change", ["below_panel_top", "one_pixel_tip", "no_calibration", "wall_sided"])
+def test_draft_top_closure_keeps_real_hull_tops(change):
+    from vessel_reconstruction.draft import trim_top_closure
+    points, z_max, pixel = _deck_traced_section(), 12., .02
+    if change == "below_panel_top":
+        z_max = 14.
+    elif change == "one_pixel_tip":
+        # A pointed section that meets the centreline in the top pixel row.
+        points = [[5. - .4 * z, z] for z in np.arange(0., 12., .5)] + [[0., 11.99], [0., 12.]]
+    elif change == "no_calibration":
+        pixel = None
+    else:
+        # Constant breadth up to the panel top is kept: it may be real topsides.
+        points = [[min(4., 2. + .25 * z), z] for z in np.arange(0., 12.01, .5)]
+    assert trim_top_closure(points, .001, z_max, pixel) is None

@@ -366,3 +366,27 @@ conversation --basis TEXT]` (extra controller flags pass through; live policy ne
 one `result.json` per case and `digest.md`, and stops after the first two cases when the digest's
 early-stop hint fires (`--no-early-stop` disables). `--out` must be a new folder under the main
 checkout's `work/`, never a worktree's.
+
+## Three-view lines drawings (layout `lines_3view`)
+
+`python -m benchmarks.factory.generate_lines` renders one sheet per case with profile (top left),
+half-breadth plan (below it) and body plan (right, on the profile baseline), plus a title block with
+LOA, LWL at the design draft, beam, depth, draft and scale. All views have one scale; station lines run
+through profile and plan; waterline rows run through profile and body plan.
+
+- Cuts: waterlines (z = const) and buttocks (y = const) at the body-plan grid steps; profile contour =
+  buttock at y = 5 mm plus the keel line (lowest centreplane point of 1 m station sections); deck line =
+  top outer point of the same sections. Exact hulls are cut with OpenCascade plane sections
+  (`lines.exact_plane_cut`), Ship-D hulls from their mesh, as their body plans are.
+- Degradation, parameter sampling and calibration convention are those of `render.py`
+  (`render.sample_params(level, "lines_3view", seed)`, seed `splits.case_seed("lines_3view:<case>")`).
+- Per case: `inputs/<case>/drawing.png`, `spec.json` (body-plan sections, schema-valid; aft stations use the
+  left half), `views.json` (each view's `kind`, `roi_px`, `calibration` with `pixels_per_metre` and
+  `baseline_px` / `centerline_px` / `x_origin_px`, `halves`, axes), `params/<case>.json` (station x, waterline
+  z, buttock y, profile offset, render parameters). Truth: `sealed/truth/<hull>.npz` (same builder and bytes
+  as v1) and `sealed/lines/<hull>.json` (exact view cuts). Inputs carry no truth.
+- Development set: dtmb5415, series60, shipd-1-08158, shipd-1-09867, shipd-1-00679, shipd-2-02216 (v1
+  development hulls, none in sealed v2/v3), levels L0-L3, 24 cases, in the main checkout's
+  `work/factory-3view/` with `manifest.json` (hashes, cross-view check) and `samples/`. Round set R-3view of
+  the whole-vessel design: dtmb5415-3v-L0, shipd-1-08158-3v-L2, shipd-1-09867-3v-L0, shipd-1-00679-3v-L2.
+- `--verify` checks every hash. New modules only: the files hashed by the sealed v2/v3 manifests are unchanged.

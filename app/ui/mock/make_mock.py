@@ -453,7 +453,7 @@ def draft_task():
         },
     ]
     view = {
-        "summary": summary("2026-11-07-survey-launch", "Survey launch, body plan", "draft", "deterministic", 5, 3),
+        "summary": summary("2026-11-07-survey-launch", "Survey launch, body plan", "draft", "live", 5, 3),
         "revision": "r2",
         "source_page": PAGE,
         "sections": sections,
@@ -462,6 +462,27 @@ def draft_task():
         "provider": [],
         "notices": [APPROVAL_NOTICE, draft_banner(2, 1)],
         "draft": {"status": "draft_not_verified", "guesses": [guess4, guess12], "resolved": []},
+        "source_counts": [
+            {"label": "traced", "count": 1},
+            {"label": "interpolated", "count": 1},
+            {"label": "ai_corrected", "count": 1},
+        ],
+        "warnings": [
+            "At 12.0 m: Missing section interpolated from neighbouring profiles for draft CAD.",
+            "At 4.0 m: Fairing moved the curve by up to 0.020 m.",
+        ],
+        "activity": {
+            "steps": [
+                {"sequence": 4, "tool": "inspect source", "reason": "Read all three sections before choosing lines."},
+                {"sequence": 6, "tool": "propose section", "reason": "The 4 m trace crosses a grid line; wrote the curve from the neighbours."},
+                {"sequence": 8, "tool": "build draft", "reason": "Every section has a curve."},
+            ],
+            "requests": 3,
+            "prompt_tokens": 18420,
+            "completion_tokens": 640,
+            "list_cost_usd": 0.0121,
+            "list_cost_complete": True,
+        },
         "evidence": evidence("r2"),
     }
     events = [
@@ -507,8 +528,17 @@ def main() -> None:
     # Every section and view carries the draft fields of docs/APP_SPEC.md.
     for view in views:
         view.setdefault("draft", None)
+        view.setdefault("source_counts", [])
+        view.setdefault("warnings", [])
+        view.setdefault("activity", None)
         for section in view["sections"]:
             section.setdefault("guess", None)
+            section.setdefault("source", None)
+    sources = {"st4": ("ai_corrected", "The trace crossed a grid line; the curve is a blend of the 0 m and 12 m sections."),
+               "st12": ("interpolated", None), "st20": ("traced", None)}
+    for section in draft["sections"]:
+        label, basis = sources[section["id"]]
+        section["source"] = {"label": label, "basis": basis}
 
     fixtures = {
         "tasks": [v["summary"] for v in views],

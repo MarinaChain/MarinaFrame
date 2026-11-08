@@ -205,6 +205,14 @@ pub struct CompareViews {
 pub struct AskPerson {
     pub question: String,
 }
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecallView {
+    pub view_id: String,
+}
+/// `propose_section`: a section shape the model writes (draft mode).
+#[path = "authoring.rs"]
+pub mod authoring;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "tool", content = "arguments", rename_all = "snake_case")]
@@ -225,6 +233,8 @@ pub enum Operation {
     ProposeSheetSetup(ProposeSheetSetup),
     CompareViews(CompareViews),
     AskPerson(AskPerson),
+    RecallView(RecallView),
+    ProposeSection(authoring::ProposeSection),
 }
 fn bounded_text(text: &str, chars: usize) -> bool {
     let count = text.chars().count();
@@ -255,6 +265,8 @@ impl Operation {
             Self::ProposeSheetSetup(_) => "propose_sheet_setup",
             Self::CompareViews(_) => "compare_views",
             Self::AskPerson(_) => "ask_person",
+            Self::RecallView(_) => "recall_view",
+            Self::ProposeSection(_) => "propose_section",
         }
     }
     /// The model investigation tools. They exist only in draft mode, where an
@@ -271,6 +283,8 @@ impl Operation {
                 | Self::ProposeSheetSetup(_)
                 | Self::CompareViews(_)
                 | Self::AskPerson(_)
+                | Self::RecallView(_)
+                | Self::ProposeSection(_)
         )
     }
     /// The section a tool acts on, if any.
@@ -281,6 +295,7 @@ impl Operation {
             Self::EnumerateStrokes(x) => Some(&x.section_id),
             Self::AssignStation(x) => Some(&x.section_id),
             Self::CompareViews(x) => Some(&x.section_id),
+            Self::ProposeSection(x) => Some(&x.section_id),
             _ => None,
         }
     }
@@ -339,6 +354,8 @@ impl Operation {
                     && x.heights_m.iter().all(|h| finite_in(*h, -100., 1000.))
             }
             Self::AskPerson(x) => bounded_text(&x.question, 512),
+            Self::RecallView(x) => id(&x.view_id),
+            Self::ProposeSection(x) => x.valid(),
             _ => true,
         };
         if ok {
@@ -393,11 +410,110 @@ pub struct Decision {
     pub tool: String,
     pub arguments: Value,
     pub reason: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
 }
 impl Decision {
+    pub fn normalize(&mut self) {
+        self.reason = self.reason.chars().take(512).collect();
+        self.notes = self
+            .notes
+            .as_ref()
+            .map(|text| text.chars().take(600).collect());
+        fn clamp(value: &mut Value, low: f64, high: f64, integer: bool) {
+            if let Some(number) = value.as_f64() {
+                let number = number.clamp(low, high);
+                *value = if integer {
+                    json!(number.round() as i64)
+                } else {
+                    json!(number)
+                };
+            }
+        }
+        for (key, low, high, integer) in [
+            ("max_side_px", 256., 1024., true),
+            ("half_width_px", 1., 64., false),
+            ("height_m", -100., 1000., false),
+            ("pixels_per_metre", 0.001, 100000., false),
+            ("grid_spacing_m", 0.001, 100., false),
+            ("centreline_px", 0., 1000000., false),
+            ("baseline_px", 0., 1000000., false),
+            ("x_origin_px", 0., 1000000., false),
+            ("fullness", 0.5, 1.5, false),
+            ("beam_m", 0.001, 1000., false),
+            ("draft_m", 0.001, 1000., false),
+            ("bilge_radius_m", 0., 1000., false),
+            ("deadrise_deg", 0., 60., false),
+        ] {
+            if let Some(value) = self.arguments.get_mut(key) {
+                clamp(value, low, high, integer);
+            }
+        }
+        for key in ["point_px", "heights_m", "region_px"] {
+            if let Some(values) = self.arguments[key].as_array_mut() {
+                for value in values {
+                    clamp(
+                        value,
+                        if key == "heights_m" { -100. } else { 0. },
+                        if key == "region_px" {
+                            1000000.
+                        } else if key == "heights_m" {
+                            1000.
+                        } else {
+                            4096.
+                        },
+                        key == "region_px",
+                    );
+                }
+            }
+        }
+        for key in ["path_px", "offsets_m"] {
+            if let Some(points) = self.arguments[key].as_array_mut() {
+                for point in points {
+                    if let Some(values) = point.as_array_mut() {
+                        for value in values {
+                            clamp(
+                                value,
+                                if key == "offsets_m" { -1000. } else { 0. },
+                                if key == "offsets_m" { 1000. } else { 4096. },
+                                false,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(number) = self.arguments["x_direction"].as_f64() {
+            self.arguments["x_direction"] = json!(if number <= 0. { -1 } else { 1 });
+        }
+        if let Some(rect) = self.arguments["region_px"].as_array_mut() {
+            if rect.len() == 4 && rect.iter().all(Value::is_number) {
+                for (low, high) in [(0, 2), (1, 3)] {
+                    if rect[high].as_i64() <= rect[low].as_i64() {
+                        let start = rect[low].as_i64().unwrap().min(999999);
+                        rect[low] = json!(start);
+                        rect[high] = json!(start + 1);
+                    }
+                }
+            }
+        }
+        if let Some(text) = self.arguments["reason"].as_str() {
+            self.arguments["reason"] = json!(text.chars().take(300).collect::<String>());
+        }
+        if let Some(object) = self.arguments.as_object_mut() {
+            object.retain(|_, value| !value.is_null());
+        }
+    }
     pub fn operation(&self) -> Result<Operation> {
         if self.reason.chars().count() > 512 || self.reason.len() > 2048 {
             return Err("reason_limit".into());
+        }
+        if self
+            .notes
+            .as_ref()
+            .is_some_and(|notes| notes.chars().count() > 600 || notes.len() > 2400)
+        {
+            return Err("notes_limit".into());
         }
         let op: Operation =
             serde_json::from_value(json!({"tool":self.tool,"arguments":self.arguments}))
@@ -420,10 +536,34 @@ pub struct OperationalLimits {
     pub max_images_per_request: usize,
     pub max_image_bytes: usize,
     pub max_repeated_action: u64,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub investigation_thinking: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub investigation_conversation: bool,
+    #[serde(
+        default = "default_context_tokens",
+        skip_serializing_if = "is_default_context_tokens"
+    )]
+    pub max_context_tokens: u64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub investigation_temperature: f64,
     pub max_requests: Option<u64>,
     pub max_total_tokens: Option<u64>,
     pub max_spend_usd: Option<f64>,
 }
+fn default_context_tokens() -> u64 {
+    32_000
+}
+fn is_default_context_tokens(value: &u64) -> bool {
+    *value == default_context_tokens()
+}
+fn is_false(value: &bool) -> bool {
+    !value
+}
+fn is_zero(value: &f64) -> bool {
+    *value == 0.0
+}
+
 impl Default for OperationalLimits {
     fn default() -> Self {
         Self {
@@ -437,7 +577,11 @@ impl Default for OperationalLimits {
             max_images_per_request: 4,
             max_image_bytes: 196_608,
             max_repeated_action: 3,
-            max_requests: None,
+            investigation_thinking: false,
+            investigation_conversation: false,
+            max_context_tokens: default_context_tokens(),
+            investigation_temperature: 0.0,
+            max_requests: Some(80),
             max_total_tokens: None,
             max_spend_usd: None,
         }
@@ -455,6 +599,9 @@ impl OperationalLimits {
             || self.max_images_per_request > 6
             || !(1024..=1_048_576).contains(&self.max_image_bytes)
             || !(1..=8).contains(&self.max_repeated_action)
+            || !(8_000..=120_000).contains(&self.max_context_tokens)
+            || !self.investigation_temperature.is_finite()
+            || !(0.0..=2.0).contains(&self.investigation_temperature)
             || self.max_spend_usd.is_some_and(|x| !x.is_finite() || x < 0.)
         {
             return Err("invalid_operational_limits".into());
@@ -646,10 +793,67 @@ mod tests {
         }
     }
     #[test]
+    fn normalization_keeps_oversized_notes_and_numeric_proposals_usable() {
+        let mut d: Decision = serde_json::from_value(json!({"tool":"trace_from_point","arguments":{"section_id":"s1","view_id":"view-1","point_px":[-20,9000]},"reason":"r","notes":"é".repeat(700)})).unwrap();
+        d.normalize();
+        assert_eq!(d.notes.as_ref().unwrap().chars().count(), 600);
+        assert_eq!(d.arguments["point_px"], json!([0.0, 4096.0]));
+        assert!(d.operation().is_ok());
+        let mut crop: Decision = serde_json::from_value(json!({"tool":"view_region","arguments":{"region_px":[-2,10,0,5],"max_side_px":9000},"reason":"r"})).unwrap();
+        crop.normalize();
+        assert!(crop.operation().is_ok());
+        assert_eq!(crop.arguments["max_side_px"], 1024);
+    }
+    #[test]
+    fn decision_notes_are_optional_bounded_and_backward_compatible() {
+        let old = json!({"tool":"build_draft","arguments":{},"reason":"ready"});
+        let decision: Decision = serde_json::from_value(old.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&decision).unwrap(), old);
+        for (notes, accepted) in [
+            ("a".repeat(600), true),
+            ("é".repeat(600), true),
+            ("a".repeat(601), false),
+        ] {
+            let decision: Decision = serde_json::from_value(
+                json!({"tool":"build_draft","arguments":{},"reason":"ready","notes":notes}),
+            )
+            .unwrap();
+            assert_eq!(decision.operation().is_ok(), accepted);
+        }
+    }
+    #[test]
+    fn investigation_settings_keep_old_limits_and_bound_temperature() {
+        let defaults = OperationalLimits::default();
+        let serialized = serde_json::to_value(&defaults).unwrap();
+        assert!(serialized.get("investigation_thinking").is_none());
+        assert!(serialized.get("investigation_temperature").is_none());
+        let old: OperationalLimits = serde_json::from_value(serialized.clone()).unwrap();
+        assert!(!old.investigation_thinking);
+        assert_eq!(old.investigation_temperature, 0.0);
+        assert_eq!(serde_json::to_value(old).unwrap(), serialized);
+        for temperature in [-1.0, 2.1, f64::INFINITY, f64::NAN] {
+            let settings = OperationalLimits {
+                investigation_temperature: temperature,
+                ..OperationalLimits::default()
+            };
+            assert!(settings.validate().is_err());
+        }
+        let enabled = OperationalLimits {
+            investigation_thinking: true,
+            investigation_temperature: 0.5,
+            ..OperationalLimits::default()
+        };
+        enabled.validate().unwrap();
+        let roundtrip: OperationalLimits =
+            serde_json::from_value(serde_json::to_value(enabled).unwrap()).unwrap();
+        assert!(roundtrip.investigation_thinking);
+        assert_eq!(roundtrip.investigation_temperature, 0.5);
+    }
+    #[test]
     fn campaign_has_no_aggregate_caps_but_finite_worker_limits() {
         let l = OperationalLimits::default();
         l.validate().unwrap();
-        assert_eq!(l.max_requests, None);
+        assert_eq!(l.max_requests, Some(80));
         assert_eq!(l.max_total_tokens, None);
         assert_eq!(l.max_spend_usd, None);
         let mut bad = l;

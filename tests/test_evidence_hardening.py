@@ -165,7 +165,7 @@ def _reuse_valid_geometry(monkeypatch, good_run):
     reference = json.loads((good_run / "result.json").read_text())
     # Recreate the CAD representation from this test's current observations,
     # preserving actual independently built points and metrics from good_run.
-    def build(sections):
+    def build(sections, **_options):
         normalized = []
         for observed, known in zip(sections, reference["normalized_sections"]):
             normalized.append({**observed, "cad_points_yz_m": known["cad_points_yz_m"], "cad_approximation": known["cad_approximation"]})

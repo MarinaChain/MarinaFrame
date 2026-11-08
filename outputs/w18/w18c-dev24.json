@@ -1,0 +1,503 @@
+{
+  "cases": [
+    {
+      "built": true,
+      "case_id": "dtmb5415-L0",
+      "completion_tokens": 45550,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "separate",
+      "level": 0,
+      "list_cost_usd": 0.36042385,
+      "prompt_tokens": 2273000,
+      "request_states": {
+        "completed": 160,
+        "failed": 1
+      },
+      "requests": 161,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": true,
+      "case_id": "dtmb5415-L1",
+      "completion_tokens": 4325,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "separate",
+      "level": 1,
+      "list_cost_usd": 0.03864354,
+      "prompt_tokens": 279210,
+      "request_states": {
+        "completed": 25,
+        "transmission_or_completion_unknown": 1
+      },
+      "requests": 26,
+      "requests_missing_list_cost": 1,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": true,
+      "case_id": "dtmb5415-L2",
+      "completion_tokens": 17299,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "separate",
+      "level": 2,
+      "list_cost_usd": 0.13477963,
+      "prompt_tokens": 863321,
+      "request_states": {
+        "completed": 52,
+        "failed": 6
+      },
+      "requests": 58,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": true,
+      "case_id": "dtmb5415-L3",
+      "completion_tokens": 16829,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "separate",
+      "level": 3,
+      "list_cost_usd": 0.22128826000000001,
+      "prompt_tokens": 1448005,
+      "request_states": {
+        "completed": 95,
+        "failed": 3
+      },
+      "requests": 98,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": true,
+      "case_id": "series60-L0",
+      "completion_tokens": 8337,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "overlay",
+      "level": 0,
+      "list_cost_usd": 0.05805523,
+      "prompt_tokens": 383271,
+      "request_states": {
+        "completed": 28,
+        "failed": 5
+      },
+      "requests": 33,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": true,
+      "case_id": "series60-L1",
+      "completion_tokens": 9828,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "overlay",
+      "level": 1,
+      "list_cost_usd": 0.0480361,
+      "prompt_tokens": 308494,
+      "request_states": {
+        "completed": 30,
+        "failed": 3
+      },
+      "requests": 33,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": true,
+      "case_id": "series60-L2",
+      "completion_tokens": 11405,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "overlay",
+      "level": 2,
+      "list_cost_usd": 0.0755501,
+      "prompt_tokens": 486330,
+      "request_states": {
+        "completed": 43,
+        "failed": 2
+      },
+      "requests": 45,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": true,
+      "case_id": "series60-L3",
+      "completion_tokens": 3753,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "overlay",
+      "level": 3,
+      "list_cost_usd": 0.03296704,
+      "prompt_tokens": 235105,
+      "request_states": {
+        "completed": 27,
+        "failed": 1
+      },
+      "requests": 28,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": true,
+      "case_id": "shipd-1-00045-L0",
+      "completion_tokens": 651,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "separate",
+      "level": 0,
+      "list_cost_usd": 0.00486662,
+      "prompt_tokens": 38370,
+      "request_states": {
+        "completed": 6
+      },
+      "requests": 6,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": false,
+      "case_id": "shipd-1-00045-L1",
+      "completion_tokens": 2108,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "separate",
+      "level": 1,
+      "list_cost_usd": 0.020600590000000002,
+      "prompt_tokens": 150732,
+      "request_states": {
+        "completed": 18
+      },
+      "requests": 18,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": true,
+      "case_id": "shipd-1-00045-L2",
+      "completion_tokens": 26742,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "separate",
+      "level": 2,
+      "list_cost_usd": 0.20857308,
+      "prompt_tokens": 1321143,
+      "request_states": {
+        "completed": 86,
+        "transmission_or_completion_unknown": 1
+      },
+      "requests": 87,
+      "requests_missing_list_cost": 1,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": true,
+      "case_id": "shipd-1-00045-L3",
+      "completion_tokens": 8595,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "separate",
+      "level": 3,
+      "list_cost_usd": 0.0817773,
+      "prompt_tokens": 550190,
+      "request_states": {
+        "completed": 34,
+        "failed": 3
+      },
+      "requests": 37,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": true,
+      "case_id": "shipd-1-00617-L0",
+      "completion_tokens": 3371,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "separate",
+      "level": 0,
+      "list_cost_usd": 0.02726079,
+      "prompt_tokens": 216800,
+      "request_states": {
+        "completed": 23,
+        "failed": 6
+      },
+      "requests": 29,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": false,
+      "case_id": "shipd-1-00617-L1",
+      "completion_tokens": 21106,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "separate",
+      "level": 1,
+      "list_cost_usd": 0.18467312,
+      "prompt_tokens": 1251907,
+      "request_states": {
+        "completed": 98,
+        "failed": 13
+      },
+      "requests": 111,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": false,
+      "case_id": "shipd-1-00617-L2",
+      "completion_tokens": 72550,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "separate",
+      "level": 2,
+      "list_cost_usd": 0.53551738,
+      "prompt_tokens": 3342744,
+      "request_states": {
+        "completed": 225
+      },
+      "requests": 225,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": true,
+      "case_id": "shipd-1-00617-L3",
+      "completion_tokens": 22670,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "separate",
+      "level": 3,
+      "list_cost_usd": 0.15933472,
+      "prompt_tokens": 1004636,
+      "request_states": {
+        "completed": 66,
+        "failed": 8,
+        "transmission_or_completion_unknown": 1
+      },
+      "requests": 75,
+      "requests_missing_list_cost": 3,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": false,
+      "case_id": "shipd-1-00679-L0",
+      "completion_tokens": 4167,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "overlay",
+      "level": 0,
+      "list_cost_usd": 0.02421508,
+      "prompt_tokens": 169458,
+      "request_states": {
+        "completed": 15,
+        "failed": 1
+      },
+      "requests": 16,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": true,
+      "case_id": "shipd-1-00679-L1",
+      "completion_tokens": 4455,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "overlay",
+      "level": 1,
+      "list_cost_usd": 0.05056821,
+      "prompt_tokens": 351018,
+      "request_states": {
+        "completed": 35,
+        "failed": 4
+      },
+      "requests": 39,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": true,
+      "case_id": "shipd-1-00679-L2",
+      "completion_tokens": 4112,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "overlay",
+      "level": 2,
+      "list_cost_usd": 0.03588925,
+      "prompt_tokens": 253217,
+      "request_states": {
+        "completed": 28,
+        "failed": 1
+      },
+      "requests": 29,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": true,
+      "case_id": "shipd-1-00679-L3",
+      "completion_tokens": 6259,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "overlay",
+      "level": 3,
+      "list_cost_usd": 0.04914394,
+      "prompt_tokens": 342480,
+      "request_states": {
+        "completed": 31,
+        "failed": 4
+      },
+      "requests": 35,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": true,
+      "case_id": "shipd-1-00683-L0",
+      "completion_tokens": 3519,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "overlay",
+      "level": 0,
+      "list_cost_usd": 0.02248258,
+      "prompt_tokens": 164706,
+      "request_states": {
+        "completed": 20
+      },
+      "requests": 20,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": false,
+      "case_id": "shipd-1-00683-L1",
+      "completion_tokens": 872,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "overlay",
+      "level": 1,
+      "list_cost_usd": 0.0030562,
+      "prompt_tokens": 32943,
+      "request_states": {
+        "completed": 7
+      },
+      "requests": 7,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": true,
+      "case_id": "shipd-1-00683-L2",
+      "completion_tokens": 15522,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "overlay",
+      "level": 2,
+      "list_cost_usd": 0.09908539,
+      "prompt_tokens": 640035,
+      "request_states": {
+        "completed": 47,
+        "failed": 4
+      },
+      "requests": 51,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": true,
+      "case_id": "shipd-1-00683-L3",
+      "completion_tokens": 2200,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "overlay",
+      "level": 3,
+      "list_cost_usd": 0.02484024,
+      "prompt_tokens": 193430,
+      "request_states": {
+        "completed": 22,
+        "failed": 1
+      },
+      "requests": 23,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    }
+  ],
+  "summary": {
+    "arm": "w18c-dev24",
+    "built": 19,
+    "completion_tokens": 316225,
+    "correct": 0,
+    "gate": {
+      "rms_fraction": 0.02,
+      "volume_relative": 0.05
+    },
+    "labelled_wrong_draft": 19,
+    "list_cost_usd": 2.50162824,
+    "no_progress_rate": 0.20833333333333334,
+    "planned_cases": 24,
+    "prompt_tokens": 16300545,
+    "requests": 1290,
+    "requests_missing_list_cost": 5,
+    "sample_sha256": "b1bd879b48ff647f267c31acacab7c2d86fd450b56a8399eb0a809f1057ff4d2",
+    "silent_wrong_build": 0,
+    "status_counts": {
+      "draft_not_verified": 19,
+      "no_progress": 5
+    }
+  }
+}

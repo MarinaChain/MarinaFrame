@@ -11,6 +11,8 @@ use std::time::{Duration, Instant};
 
 #[path = "model_review.rs"]
 pub mod model_review;
+#[path = "transcript.rs"]
+pub mod transcript;
 
 /// Test-only hook into finalization. It runs at "after_predicate" (current
 /// contract passed, domain guard held) and "before_commit" (review-ready state
@@ -59,7 +61,19 @@ pub fn new_state(config: Config) -> State {
     }
 }
 fn stop(store: &mut Store, status: Status, reason: &str) -> Result<()> {
-    store.state.status = status;
+    let has_draft = status != Status::Paused
+        && store.state.config.on_ambiguity == OnAmbiguity::Draft
+        && ["current_candidate", "last_valid_candidate"]
+            .iter()
+            .any(|key| {
+                let candidate = &store.state.domain[*key];
+                candidate["draft"] == true && candidate["valid"] == true
+            });
+    store.state.status = if has_draft {
+        Status::DraftNotVerified
+    } else {
+        status
+    };
     store.state.termination_reason = Some(reason.into());
     store.append(
         "task_terminated",
@@ -382,7 +396,13 @@ fn collect_images(store: &Store) -> Result<Vec<(ImageReceipt, String)>> {
     let investigating = investigation_mode(store);
     if investigating {
         // The model asked for these pixels: the newest views come first.
-        values.sort_by_key(|(seq, _, _, _, _)| std::cmp::Reverse(*seq));
+        let recalled = store.state.last_observation["recalled_view_id"].as_str();
+        values.sort_by_key(|(seq, artifact, _, _, _)| {
+            (
+                recalled.is_none_or(|id| artifact["view_id"] != id),
+                std::cmp::Reverse(*seq),
+            )
+        });
     } else {
         values.sort_by_key(|(seq, a, _, _, _)| (!a.get("view").is_some(), std::cmp::Reverse(*seq)));
     }
@@ -468,6 +488,10 @@ pub fn tool_catalog(on_ambiguity: &OnAmbiguity) -> Value {
             .as_array_mut()
             .unwrap()
             .extend(investigation_catalog());
+        tools
+            .as_array_mut()
+            .unwrap()
+            .push(crate::types::authoring::tool());
     }
     tools
 }
@@ -477,6 +501,7 @@ fn investigation_catalog() -> Vec<Value> {
     let region = json!({"type":"array","items":{"type":"integer","minimum":0},"minItems":4,"maxItems":4,"description":"[left, top, right, bottom] in sheet pixels"});
     let id = json!({"type":"string","maxLength":64});
     vec![
+        json!({"name":"recall_view","description":"Reattach a previous task view by view_id without creating a new crop.","parameters":{"type":"object","properties":{"view_id":id},"required":["view_id"],"additionalProperties":false}}),
         json!({"name":"view_region","description":"Return the pixels of any sheet region at any zoom (up to 1024 px per side, 4x enlargement). Start with the whole sheet, then zoom.","parameters":{"type":"object","properties":{"region_px":region,"max_side_px":{"type":"integer","minimum":256,"maximum":1024}},"required":["region_px"],"additionalProperties":false}}),
         json!({"name":"read_region","description":"Return the pixels of a region to read station labels, a scale bar, dimensions or the title block. What you read is your claim.","parameters":{"type":"object","properties":{"region_px":region,"subject":{"enum":["labels","scale_bar","dimensions","title_block"]}},"required":["region_px","subject"],"additionalProperties":false}}),
         json!({"name":"trace_corridor","description":"Draw a corridor on a view (2-24 points in that view's pixels, top to bottom, and a half width in view pixels) around one curve of a section. The host traces the real ink in it and re-reads it with the engine; it returns a candidate id with support scores, or refuses when no ink supports one continuous line.","parameters":{"type":"object","properties":{"section_id":id,"view_id":id,"path_px":{"type":"array","items":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2},"minItems":2,"maxItems":24},"half_width_px":{"type":"number","minimum":1,"maximum":64}},"required":["section_id","view_id","path_px","half_width_px"],"additionalProperties":false}}),
@@ -517,6 +542,7 @@ fn investigation_observation(store: &Store) -> Result<Value> {
                 let guess = s["id"].as_str().and_then(|id| guesses.get(id));
                 json!({"id":s["id"],"x_m":s["x_m"],"panel_roi_px":s["roi_px"],"inspected":s["inspected"],
                     "selected_candidate_id":s["selected_candidate_id"],
+                    "catalog_available":s["catalog_available"],"inspection_failure":s["inspection_failure"],
                     "guess":guess.map(|g| json!({"kind":g["kind"],"chosen_candidate_id":g["chosen_candidate_id"]}))})
             })
             .collect::<Vec<_>>()
@@ -546,10 +572,25 @@ fn investigation_observation(store: &Store) -> Result<Value> {
         .take(12)
         .map(|e| {
             json!({"kind":e.kind,"tool":e.payload["decision"]["tool"],
-                "arguments":e.payload["decision"]["arguments"],"reason":e.payload["reason"]})
+                "arguments":e.payload["decision"]["arguments"],
+                "reason":e.payload["decision"].get("reason").unwrap_or(&e.payload["reason"])})
         })
         .collect::<Vec<_>>();
+    let notes = store
+        .events
+        .iter()
+        .rev()
+        .filter(|event| event.kind == "decision" && event.payload["actor"] == "live_model")
+        .filter_map(|event| {
+            event.payload["decision"]["notes"]
+                .as_str()
+                .map(|claim| json!({"claim":claim,"verified":false,"source":"model_claim"}))
+        })
+        .take(8)
+        .collect::<Vec<_>>();
     let mut value = json!({"task_id":store.state.task_id,
+        "your_notes_newest_first":notes,
+        "notes_warning":"Unverified model claims, not measurements or certified station identities.",
         "sections":sections,"catalog_ready":d["catalog_ready"],"selected_count":d["selected_count"],
         "open_guess_count":guesses.len(),"model_choice_section_ids":d["model_choice_section_ids"],
         "sheet_setup_ids":d["sheet_setup_ids"],"rendered_views":d["rendered_views"],
@@ -843,8 +884,54 @@ fn live_decision(store: &mut Store) -> Result<bool> {
         content.push(json!({"type":"image_url","image_url":{"url":format!("data:image/png;base64,{pixels}"),"detail":"original"}}));
     }
     let purpose = decision_purpose(store);
-    let payload = json!({"model":GO_MODEL,"max_tokens":store.state.config.limits.max_output_tokens_per_request,"stream":false,"thinking":{"type":"disabled"},"temperature":0,
-        "response_format":{"type":"json_object"},"messages":[{"role":"system","content":purpose.prompt()},{"role":"user","content":content}]});
+    let thinking = if investigation_mode(store) && store.state.config.limits.investigation_thinking
+    {
+        "enabled"
+    } else {
+        "disabled"
+    };
+    let temperature = if investigation_mode(store) {
+        store.state.config.limits.investigation_temperature
+    } else {
+        0.0
+    };
+    let mut messages = vec![
+        json!({"role":"system","content":purpose.prompt()}),
+        json!({"role":"user","content":content.clone()}),
+    ];
+    let mut context = Value::Null;
+    if investigation_mode(store) && store.state.config.limits.investigation_conversation {
+        let mut current = prompt["observation"].clone();
+        if let Some(object) = current.as_object_mut() {
+            object.remove("recent_history_newest_first");
+            object.remove("your_notes_newest_first");
+        }
+        let transcript = transcript::build(
+            &store.events,
+            &store.state,
+            purpose.prompt(),
+            current,
+            tool_catalog(&store.state.config.on_ambiguity),
+            content,
+        )?;
+        context = json!({"format":1,"steps_total":transcript.steps_total,"steps_kept":transcript.steps_kept,"estimated_tokens":transcript.estimated_tokens});
+        if let Some(summary) = transcript.summary {
+            let previous = store
+                .events
+                .iter()
+                .rev()
+                .find(|e| e.kind == "context_compacted");
+            if previous.is_none_or(|e| e.payload["summary"] != summary) {
+                store.append(
+                    "context_compacted",
+                    json!({"summary":summary,"context":context}),
+                )?;
+            }
+        }
+        messages = transcript.messages;
+    }
+    let payload = json!({"model":GO_MODEL,"max_tokens":store.state.config.limits.max_output_tokens_per_request,"stream":false,"thinking":{"type":thinking},"temperature":temperature,
+        "response_format":{"type":"json_object"},"messages":messages});
     let mut retry_of = None;
     for attempt in 1..=3 {
         budget_admission(store)?;
@@ -873,7 +960,19 @@ fn live_decision(store: &mut Store) -> Result<bool> {
                 .clone()
                 .ok_or("generation_binding")?,
             revision_id: store.state.revision_id.clone().ok_or("revision_binding")?,
-            observation_sha256: util::hash_json(&prompt)?,
+            observation_sha256: if context.is_null() {
+                util::hash_json(&prompt)?
+            } else {
+                let mut text_messages = payload["messages"].clone();
+                if let Some(content) = text_messages
+                    .as_array_mut()
+                    .and_then(|messages| messages.last_mut())
+                    .and_then(|last| last["content"].as_array_mut())
+                {
+                    content.retain(|part| part["type"] != "image_url");
+                }
+                util::hash_json(&json!({"messages":text_messages,"images":metas}))?
+            },
             images: metas.clone(),
             payload: payload.clone(),
             attempt,
@@ -883,7 +982,7 @@ fn live_decision(store: &mut Store) -> Result<bool> {
         util::atomic_json(&store.path.join(&pending.request_path), &input, false)?;
         store.state.pending = Some(pending.clone());
         store.state.counters.requests_intended += 1;
-        store.append("provider_intent",json!({"request_id":id,"request":store::artifact(&store.path,&pending.request_path,"provider_request")?,"source_manifest_sha256":input.source_manifest_sha256,"images":metas,"attempt":attempt,"retry_of":retry_of,"aggregate_caps":null}))?;
+        store.append("provider_intent",json!({"request_id":id,"request":store::artifact(&store.path,&pending.request_path,"provider_request")?,"source_manifest_sha256":input.source_manifest_sha256,"images":metas,"attempt":attempt,"retry_of":retry_of,"aggregate_caps":null,"context":context}))?;
         let outcome = worker::run(
             &store.path,
             &store.state.config,
@@ -976,7 +1075,11 @@ fn consecutive_refusals(store: &Store) -> u64 {
         match event.kind.as_str() {
             "operation_rejected" | "model_output_rejected" => count += 1,
             // Provider bookkeeping between refusals is not an accepted action.
-            "provider_intent" | "provider_result" | "provider_reconciled" | "provider_backoff" => {}
+            "provider_intent"
+            | "provider_result"
+            | "provider_reconciled"
+            | "provider_backoff"
+            | "context_compacted" => {}
             _ => break,
         }
     }
@@ -1069,6 +1172,7 @@ fn decision(tool: &str, arguments: Value, reason: &str) -> Decision {
         tool: tool.into(),
         arguments,
         reason: reason.into(),
+        notes: None,
     }
 }
 /// Inspect the next uninspected sections, named explicitly.
@@ -1081,7 +1185,7 @@ fn decision(tool: &str, arguments: Value, reason: &str) -> Decision {
 fn inspect_next(sections: &[Value]) -> Decision {
     let ids = sections
         .iter()
-        .filter(|s| s["inspected"] != true)
+        .filter(|s| s["inspected"] != true && s["catalog_available"] != true)
         .filter_map(|s| s["id"].as_str())
         .take(12)
         .collect::<Vec<_>>();
@@ -1404,6 +1508,7 @@ fn validate_selection(store: &Store, operation: &Operation, actor: &str) -> Resu
         Operation::TraceFromPoint(x) => known_section(store, &x.section_id)?,
         Operation::EnumerateStrokes(x) => known_section(store, &x.section_id)?,
         Operation::CompareViews(x) => known_section(store, &x.section_id)?,
+        Operation::ProposeSection(x) => known_section(store, &x.section_id)?,
         Operation::InspectSource(x) => {
             if let Some(ids) = &x.section_ids {
                 let sections = store.state.domain["sections"]
@@ -1431,6 +1536,47 @@ fn live_abstention_becomes_draft(store: &Store, actor: &str) -> bool {
         && d["catalog_ready"] == true
         && d["current_candidate"].is_null()
         && d["input_errors"].as_array().is_none_or(Vec::is_empty)
+}
+
+fn ask_to_fill_missing_once(store: &mut Store) -> Result<bool> {
+    if store
+        .events
+        .iter()
+        .any(|e| e.kind == "missing_sections_hint")
+    {
+        return Ok(false);
+    }
+    let checkpoint = validation::domain_checkpoint(&store.path)?;
+    let missing = store.state.domain["sections"]
+        .as_array()
+        .map(|sections| {
+            sections
+                .iter()
+                .filter(|s| {
+                    let id = s["id"].as_str().unwrap_or("");
+                    !checkpoint["selected"][id].is_string()
+                        && !checkpoint["model_choices"][id]["candidate_id"].is_string()
+                        && !checkpoint["authored_sections"][id]["candidate_id"].is_string()
+                        && checkpoint["catalog"][id]["candidates"]
+                            .as_array()
+                            .is_none_or(|c| {
+                                !c.iter()
+                                    .any(|c| c["selectable"] == true && c["model_traced"] != true)
+                            })
+                })
+                .map(|s| s["id"].clone())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if missing.is_empty() {
+        return Ok(false);
+    }
+    store.state.staged_decision = None;
+    store.state.last_observation = json!({"ok":true,"status":"fill_missing_sections",
+        "missing_section_ids":missing,"message":"Before building, use propose_section to fill these missing sections. This is a one-time suggestion; build_draft again to keep the current gaps.",
+        "engineering_approved":false,"human_semantic_review_required":true});
+    store.append("missing_sections_hint", json!({"section_ids":missing}))?;
+    Ok(true)
 }
 
 /// Build a best-effort draft. When it has open guesses, the task stops at
@@ -1500,10 +1646,93 @@ fn live_visual_coverage(store: &Store, step_hash: &str) -> bool {
     }
     views.contains("body") && views.contains("oblique")
 }
+/// Evidence changes, unlike new crops, permit a previously used action again.
+fn investigation_progress_key(store: &Store) -> Result<String> {
+    let domain = &store.state.domain;
+    util::hash_json(&json!({"generation":store.state.generation_id,
+        "revision":store.state.revision_id,"sections":domain["sections"],
+        "catalog":domain["inspected_sections"],"guesses":domain["open_guesses"],
+        "setups":domain["sheet_setup_ids"],"candidate":domain["current_candidate"]}))
+}
+
+fn refuse_repeated_investigation(store: &mut Store, choice: &Decision) -> Result<bool> {
+    let progress = if choice.tool == "build_draft" {
+        util::hash_json(&json!({"generation":store.state.generation_id}))?
+    } else {
+        investigation_progress_key(store)?
+    };
+    let earlier = store.events.iter().rev().find(|event| {
+        event.kind == "decision"
+            && event.payload["actor"] == "live_model"
+            && event.payload["progress_key"] == progress
+            && event.payload["decision"]["tool"] == choice.tool
+            && event.payload["decision"]["arguments"] == choice.arguments
+            && !(choice.tool == "build_draft"
+                && store.events.iter().any(|hint| {
+                    hint.kind == "missing_sections_hint" && hint.sequence == event.sequence + 1
+                }))
+    });
+    let Some(earlier) = earlier else {
+        return Ok(false);
+    };
+    let earlier_id = earlier.sequence;
+    let result = store
+        .events
+        .iter()
+        .find(|event| {
+            event.sequence > earlier_id
+                && ["worker_result", "worker_reconciled"].contains(&event.kind.as_str())
+        })
+        .map(|event| {
+            json!({"event_id":event.sequence,"status":event.payload["response"]["result"]["status"],
+            "view":event.payload["response"]["result"]["view"]})
+        });
+    let key = format!(
+        "repeat_refusal:{}",
+        util::hash_json(
+            &json!({"progress":progress,"tool":choice.tool,"arguments":choice.arguments})
+        )?
+    );
+    let count = store.state.action_fingerprints.entry(key).or_default();
+    *count += 1;
+    let exhausted = *count >= store.state.config.limits.max_repeated_action;
+    store.state.staged_decision = None;
+    store.state.last_observation = json!({"ok":false,"status":"repeated_action_refused",
+        "error_code":"repeated_action_refused","earlier_decision_event_id":earlier_id,"earlier_result":result,
+        "message":"This action was already executed with unchanged evidence. Use its earlier result and your notes; choose a different next action.",
+        "useful_next_actions":["assign_station for unassigned sections", "build_draft", "render_candidate after building", "trace_from_point on different ink"],
+        "engineering_approved":false,"human_semantic_review_required":true});
+    store.append(
+        "repeated_action_refused",
+        json!({"decision":choice,"progress_key":progress,"earlier_decision_event_id":earlier_id}),
+    )?;
+    if exhausted {
+        stop(
+            store,
+            Status::NoProgress,
+            "repeated_identical_action_refusals",
+        )?;
+    }
+    Ok(true)
+}
+
 pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Result<bool> {
     let operation = choice.operation()?;
     store.verify(false)?;
     validate_selection(store, &operation, actor)?;
+    let investigating = actor == "live_model" && investigation_mode(store);
+    if investigating && refuse_repeated_investigation(store, &choice)? {
+        return Ok(store.state.status == Status::Running);
+    }
+    let progress_key = if investigating && choice.tool == "build_draft" {
+        Some(util::hash_json(
+            &json!({"generation":store.state.generation_id}),
+        )?)
+    } else {
+        investigating
+            .then(|| investigation_progress_key(store))
+            .transpose()?
+    };
     let fingerprint =
         util::hash_json(&json!({"operation":operation,"generation_id":store.state.generation_id}))?;
     let repeats = store
@@ -1512,7 +1741,7 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
         .entry(fingerprint)
         .or_default();
     *repeats += 1;
-    if *repeats > store.state.config.limits.max_repeated_action {
+    if !investigating && *repeats > store.state.config.limits.max_repeated_action {
         stop(
             store,
             Status::NoProgress,
@@ -1522,9 +1751,29 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
     }
     store.append(
         "decision",
-        json!({"decision":choice,"actor":actor,"live_inference":actor=="live_model"}),
+        json!({"decision":choice,"actor":actor,"live_inference":actor=="live_model","progress_key":progress_key}),
     )?;
+    if let Operation::RecallView(recall) = &operation {
+        let known = store
+            .events
+            .iter()
+            .any(|event| event.payload["response"]["result"]["view"]["view_id"] == recall.view_id);
+        store.state.staged_decision = None;
+        store.state.last_observation = if known {
+            json!({"ok":true,"status":"view_recalled","recalled_view_id":recall.view_id,"engineering_approved":false,"human_semantic_review_required":true})
+        } else {
+            json!({"ok":false,"status":"proposal_refused","error_code":"unknown_view","message":"Recall a view_id returned by this task.","engineering_approved":false,"human_semantic_review_required":true})
+        };
+        store.append(
+            "view_recalled",
+            json!({"view_id":recall.view_id,"known":known}),
+        )?;
+        return Ok(true);
+    }
     if let Operation::BuildDraft(_) = operation {
+        if actor == "live_model" && ask_to_fill_missing_once(store)? {
+            return Ok(true);
+        }
         let investigating = actor == "live_model" && investigation_mode(store);
         return build_draft(store, !investigating);
     }
@@ -1541,10 +1790,9 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
         // The investigating model submits its draft: when its latest choices
         // are not built yet, the harness builds the draft first. With open
         // guesses that build stops at draft_not_verified.
-        if actor == "live_model"
-            && investigation_mode(store)
+        if store.state.config.on_ambiguity == OnAmbiguity::Draft
             && finish.outcome == FinishOutcome::CandidateReadyForReview
-            && store.state.domain["current_candidate"].is_null()
+            && store.state.domain["current_candidate"]["valid"] != true
             && store.state.domain["catalog_ready"] == true
         {
             store.state.staged_decision = None;
@@ -1568,8 +1816,15 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
         // Open guesses make the task a draft: it is never validated or
         // finalized for review. `validation::ready` refuses it independently.
         if !validation::open_guesses(&validation::domain_checkpoint(&store.path)?)?.is_empty() {
-            stop(store, Status::DraftNotVerified, "open_guesses_block_review")?;
-            return Ok(false);
+            if store.state.domain["current_candidate"]["valid"] == true
+                || store.state.domain["last_valid_candidate"]["valid"] == true
+            {
+                stop(store, Status::DraftNotVerified, "open_guesses_block_review")?;
+                return Ok(false);
+            }
+            // A failed build's existing feedback remains actionable; do not
+            // claim a delivered draft when no STEP has been made.
+            return Ok(true);
         }
         if !call_worker(store, "validate_candidate", json!({}))? {
             return Ok(false);
@@ -1599,7 +1854,16 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
                 // The vision model can only add a blocking finding here; no veto changes nothing.
                 if let Some(veto) = model_review::veto(store, &contract.binding.step_sha256)? {
                     store.state.last_observation = json!({"ok":false,"status":"rejected","error_code":"model_review_veto","model_review":veto,"engineering_approved":false,"human_semantic_review_required":true});
-                    stop(store, Status::ValidationFailed, "model_review_veto")?;
+                    let status = if store.state.config.on_ambiguity == OnAmbiguity::Draft {
+                        store.state.last_observation["status"] = json!("draft_warning");
+                        store.state.last_observation["message"] = json!(
+                            "Model review findings remain warnings on this unverified draft."
+                        );
+                        Status::DraftNotVerified
+                    } else {
+                        Status::ValidationFailed
+                    };
+                    stop(store, status, "model_review_veto")?;
                     return Ok(false);
                 }
                 store.state.status = Status::AwaitingHumanReview;
@@ -1617,7 +1881,14 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
                 Ok(false)
             }
             Err(reason) => {
-                stop(store, Status::ValidationFailed, &reason)?;
+                let draft_available = store.state.config.on_ambiguity == OnAmbiguity::Draft
+                    && store.state.domain["current_candidate"]["valid"] == true;
+                if draft_available {
+                    store.state.last_observation["warning"] = json!(reason);
+                    stop(store, Status::DraftNotVerified, &reason)?;
+                } else {
+                    stop(store, Status::ValidationFailed, &reason)?;
+                }
                 Ok(false)
             }
         }
@@ -1653,6 +1924,22 @@ pub fn initialize(store: &mut Store) -> Result<bool> {
     Ok(true)
 }
 pub fn run_loop(store: &mut Store, max_steps: Option<u64>) -> Result<()> {
+    if investigation_mode(store)
+        && !store
+            .events
+            .iter()
+            .any(|event| event.kind == "first_hull_ready")
+    {
+        if !call_worker(store, "build_first_hull", json!({}))? {
+            return Ok(());
+        }
+        store.append("first_hull_ready", json!({"engineering_approved":false}))?;
+        if store.state.domain["current_candidate"]["valid"] == true
+            && !call_worker(store, "render_candidate", json!({"view":"body"}))?
+        {
+            return Ok(());
+        }
+    }
     let mut steps = 0;
     loop {
         if worker::cancelled(&store.path) {
@@ -1662,6 +1949,23 @@ pub fn run_loop(store: &mut Store, max_steps: Option<u64>) -> Result<()> {
             return stop(store, Status::Paused, "requested_step_boundary");
         }
         store.verify(false)?;
+        if investigation_mode(store) && store.state.domain["last_valid_candidate"]["valid"] == true
+        {
+            let edits = store.state.domain["non_improving_edits"]
+                .as_u64()
+                .unwrap_or(0);
+            if edits >= 6 {
+                if store.events.iter().any(|e| e.kind == "soft_finish_hint") {
+                    return stop(
+                        store,
+                        Status::DraftNotVerified,
+                        "best_draft_after_non_improving_edits",
+                    );
+                }
+                store.state.last_observation["finish_hint"] = json!("Several edits did not improve the drawing fit. Finish now; the best valid draft is preserved.");
+                store.append("soft_finish_hint", json!({"non_improving_edits":edits}))?;
+            }
+        }
         let mut actor = if store.state.config.policy == Policy::Live {
             "live_model"
         } else {
@@ -1696,8 +2000,16 @@ pub fn run_loop(store: &mut Store, max_steps: Option<u64>) -> Result<()> {
                                 "investigation_without_progress",
                             );
                         }
-                        if !live_decision(store)? {
-                            return Ok(());
+                        match live_decision(store) {
+                            Ok(true) => (),
+                            Ok(false) => return Ok(()),
+                            Err(reason)
+                                if ["task_storage_limit", "configured_deployment_budget"]
+                                    .contains(&reason.as_str()) =>
+                            {
+                                return stop(store, Status::Blocked, &reason);
+                            }
+                            Err(reason) => return Err(reason),
                         }
                         if store.state.staged_decision.is_none() {
                             // A refused model output became an observation.
@@ -1717,7 +2029,9 @@ pub fn run_loop(store: &mut Store, max_steps: Option<u64>) -> Result<()> {
             return stop(store, Status::Cancelled, "cancelled_after_model_receipt");
         }
         match execute_decision(store, choice.clone(), actor) {
-            Ok(true) => (),
+            Ok(true) => {
+                store.state.last_observation["normalization_note"] = json!("Oversized notes are truncated to 600 characters; numeric investigation arguments are clamped to tool bounds.");
+            }
             Ok(false) => return Ok(()),
             Err(reason)
                 if actor == "live_model"
@@ -1730,6 +2044,18 @@ pub fn run_loop(store: &mut Store, max_steps: Option<u64>) -> Result<()> {
                 store.state.last_observation = json!({"ok":false,"status":"proposal_refused","error_code":reason,
                     "refused_decision":choice,"what_you_can_do":refusal_hint(&reason),
                     "engineering_approved":false,"human_semantic_review_required":true});
+                if [
+                    "unsnapped_or_unknown_candidate",
+                    "unknown_or_unsupported_candidate",
+                ]
+                .contains(&reason.as_str())
+                {
+                    let checkpoint = validation::domain_checkpoint(&store.path)?;
+                    let sid = choice.arguments["section_id"].as_str().unwrap_or("");
+                    store.state.last_observation["current_candidate_catalog"] = json!({"section_id":sid,
+                        "candidates":checkpoint["catalog"][sid]["candidates"].as_array().map(|candidates| candidates.iter().map(|c| json!({"candidate_id":c["candidate_id"],"hypothesis":c["hypothesis"],"selectable":c["selectable"]})).collect::<Vec<_>>()),
+                        "hint":"Use one of these current IDs, or propose_section to author the section."});
+                }
                 store.append(
                     "operation_rejected",
                     json!({"reason":reason,"actor":actor,"decision":choice}),
@@ -1872,13 +2198,154 @@ pub fn intervene(store: &mut Store, input: Intervention, actor: &str, note: &str
 pub fn summary(store: &Store) -> Value {
     json!({"schema_version":CONTROL_VERSION,"controller":"rust","task_id":store.state.task_id,"status":store.state.status,
     "termination_reason":store.state.termination_reason,"generation_id":store.state.generation_id,"revision_id":store.state.revision_id,
-    "current_candidate":store.state.domain.get("current_candidate"),"counters":store.state.counters,"head_sha256":store.head,
+    "current_candidate":store.state.domain.get("current_candidate"),
+    "last_valid_candidate":store.state.domain.get("last_valid_candidate"),
+    "counters":store.state.counters,"head_sha256":store.head,
     "engineering_approved":false,"semantic_review":"required","pending":store.state.pending,"policy":store.state.config.policy})
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn stop_keeps_available_draft_for_every_terminal_reason() {
+        for status in [
+            Status::NoProgress,
+            Status::Blocked,
+            Status::Interrupted,
+            Status::Cancelled,
+            Status::ProviderFailed,
+        ] {
+            let (_tmp, mut store) = fixture();
+            store.state.config.on_ambiguity = OnAmbiguity::Draft;
+            store.state.domain["last_valid_candidate"] =
+                json!({"draft":true,"valid":true,"path":"domain/builds/draft"});
+            stop(&mut store, status, "test_stop").unwrap();
+            assert_eq!(store.state.status, Status::DraftNotVerified);
+            assert_eq!(store.state.termination_reason.as_deref(), Some("test_stop"));
+        }
+    }
+    #[test]
+    fn unchanged_draft_build_is_refused_even_after_build_revision_changes() {
+        let (_tmp, mut store) = fixture();
+        let choice = decision("build_draft", json!({}), "build");
+        let key = util::hash_json(&json!({"generation":store.state.generation_id})).unwrap();
+        store
+            .append(
+                "decision",
+                json!({"decision":choice,"actor":"live_model","progress_key":key}),
+            )
+            .unwrap();
+        store.state.revision_id = Some("r0009".into());
+        store.state.domain["current_candidate"] = json!({"valid":false});
+        assert!(refuse_repeated_investigation(&mut store, &choice).unwrap());
+        assert_eq!(
+            store.state.last_observation["status"],
+            "repeated_action_refused"
+        );
+    }
+    #[test]
+    fn recall_view_contract_accepts_ids_and_refuses_paths() {
+        let (_tmp, mut store) = fixture();
+        store.state.config.on_ambiguity = OnAmbiguity::Draft;
+        store.state.config.binary_sha256 =
+            util::file_hash(&std::env::current_exe().unwrap()).unwrap();
+        store
+            .append(
+                "worker_result",
+                json!({"response":{"result":{"view":{"view_id":"view-existing"}}}}),
+            )
+            .unwrap();
+        // The typed operation bounds IDs before any execution.
+        let valid = decision("recall_view", json!({"view_id":"view-existing"}), "recall");
+        assert_eq!(valid.operation().unwrap().name(), "recall_view");
+        assert!(
+            decision("recall_view", json!({"view_id":"../path"}), "recall")
+                .operation()
+                .is_err()
+        );
+    }
+    #[test]
+    fn missing_sections_prompt_is_once_only_and_allows_next_build() {
+        let (_tmp, mut store) = fixture();
+        store.state.domain["sections"] = json!([{"id":"s01"}]);
+        util::atomic_json(
+            &store.path.join("domain/state.json"),
+            &json!({"catalog":{"s01":{"candidates":[]}},"selected":{}}),
+            false,
+        )
+        .unwrap();
+        let choice = decision("build_draft", json!({}), "build");
+        let progress = util::hash_json(&json!({"generation":store.state.generation_id})).unwrap();
+        store
+            .append(
+                "decision",
+                json!({"decision":choice,"actor":"live_model","progress_key":progress}),
+            )
+            .unwrap();
+        assert!(ask_to_fill_missing_once(&mut store).unwrap());
+        assert_eq!(
+            store.state.last_observation["missing_section_ids"],
+            json!(["s01"])
+        );
+        assert!(!ask_to_fill_missing_once(&mut store).unwrap());
+        assert!(!refuse_repeated_investigation(&mut store, &choice).unwrap());
+    }
+    #[test]
+    fn recorded_decision_reason_is_visible_in_investigation() {
+        let (_tmp, mut store) = fixture();
+        store.append("decision", json!({"decision":{"tool":"read_region","arguments":{},"reason":"Tag 4 labels station 2"},"actor":"live_model"})).unwrap();
+        let observed = investigation_observation(&store).unwrap();
+        assert_eq!(
+            observed["recent_history_newest_first"][0]["reason"],
+            "Tag 4 labels station 2"
+        );
+    }
+    #[test]
+    fn investigation_keeps_last_eight_notes_as_unverified_claims() {
+        let (_tmp, mut store) = fixture();
+        for n in 0..10 {
+            store.append("decision", json!({"decision":{"tool":"read_region","arguments":{},"reason":"read","notes":format!("label {n}")},"actor":"live_model"})).unwrap();
+        }
+        let observed = investigation_observation(&store).unwrap();
+        let notes = observed["your_notes_newest_first"].as_array().unwrap();
+        assert_eq!(notes.len(), 8);
+        assert_eq!(notes[0]["claim"], "label 9");
+        assert_eq!(notes[7]["claim"], "label 2");
+        assert_eq!(notes[0]["verified"], false);
+    }
+    #[test]
+    fn repeated_investigation_refuses_then_stops_but_progress_allows_retry() {
+        let (_tmp, mut store) = fixture();
+        let choice = decision(
+            "read_region",
+            json!({"region_px":[0,0,100,100],"subject":"labels"}),
+            "read",
+        );
+        let key = investigation_progress_key(&store).unwrap();
+        store
+            .append(
+                "decision",
+                json!({"decision":choice,"actor":"live_model","progress_key":key}),
+            )
+            .unwrap();
+        store.append("worker_result", json!({"response":{"result":{"status":"viewed","view":{"view_id":"view-earlier"}}}})).unwrap();
+        store.state.domain["view_count"] = json!(2);
+        for n in 1..=3 {
+            assert!(refuse_repeated_investigation(&mut store, &choice).unwrap());
+            assert_eq!(
+                store.state.last_observation["status"],
+                "repeated_action_refused"
+            );
+            assert_eq!(
+                store.state.last_observation["earlier_result"]["view"]["view_id"],
+                "view-earlier"
+            );
+            assert_eq!(store.state.status == Status::NoProgress, n == 3);
+        }
+        store.state.generation_id = Some("new-generation".into());
+        assert!(!refuse_repeated_investigation(&mut store, &choice).unwrap());
+    }
     #[test]
     fn inspect_next_names_the_next_uninspected_sections() {
         // 59 sections inspected 5 per call (Gunnerus) need 12 calls; each call

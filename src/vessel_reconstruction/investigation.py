@@ -166,7 +166,6 @@ def corridor_trace(image: np.ndarray, section: dict, source_file: str, details: 
 SEED_SEARCH_PX = 8.0
 SEED_MAX_GAP_ROWS = 6
 SEED_CORRIDOR_HALF_WIDTH_PX = 4.0
-SEED_PATH_STEP_ROWS = 12
 SEED_HISTORY_ROWS = 24
 
 
@@ -193,21 +192,25 @@ def window_foreground(image: np.ndarray, section: dict):
 
 
 # Stroke enumeration: scanlines at these shares of the calibrated height, and
-# the most strokes that one call traces and shows.
-ENUMERATION_SCANLINES = (0.25, 0.5, 0.75)
+# the most strokes that one call traces and shows. The scanlines are spread
+# over the height so that a stroke broken by noise is seeded on each piece.
+ENUMERATION_SCANLINES = (0.15, 0.3, 0.45, 0.6, 0.75, 0.9)
 MAX_ENUMERATED_STROKES = 30
-MAX_ENUMERATION_SEEDS = 60
+MAX_ENUMERATION_SEEDS = 90
 
 
 def enumerate_strokes(image: np.ndarray, section: dict, source_file: str, details: dict,
                       height_m: float | None, known: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Every verified ink stroke that crosses the section's scanlines.
+    """Every verified ink stroke that crosses the section's scanlines, best hull candidates first.
 
     Seeds are the ink runs on each scanline right of the centreline; each is
-    followed, traced and verified as a corridor (``trace_from_point``). A stroke
-    with the same ink as an earlier one, or as a ``known`` candidate, is not
-    repeated. Returns (strokes, refusals). The harness finds the ink; the model
-    only says which stroke is which station.
+    followed (``follow_stroke_paths``), traced and verified as a corridor. A
+    stroke with the same ink as an earlier one, or as a ``known`` candidate, is
+    not repeated. Verified pieces of one broken stroke are then linked when
+    their direction agrees (``link_fragments``), and every stroke is described
+    and ordered by ``describe_stroke``: straight axis-aligned lines last, then
+    by hull likeness. Returns (strokes, refusals). The harness finds the ink;
+    the model only says which stroke is which station.
     """
     from .ingest import _runs
     left, top, right, bottom = _trace_window(section, image.shape)
@@ -229,14 +232,7 @@ def enumerate_strokes(image: np.ndarray, section: dict, source_file: str, detail
         if any(_point_on(seed, s) for s in strokes):
             continue
         try:
-            followed = follow_stroke(image, section, seed)
-            if len(followed) < 33:
-                raise VerificationError("stroke_too_short", "Short stroke.")
-            sample = followed[::SEED_PATH_STEP_ROWS]
-            if sample[-1][0] != followed[-1][0]:
-                sample = np.vstack([sample, followed[-1]])
-            traced = trace_in_source_corridor(image, section, source_file, details, sample[:, ::-1].astype(float),
-                                              SEED_CORRIDOR_HALF_WIDTH_PX)
+            traced = _trace_best_path(image, section, source_file, details, seed)
         except VerificationError as exc:
             refusals.append({"seed_px": [round(seed[0], 1), seed[1]], "reason": exc.code})
             continue
@@ -244,7 +240,100 @@ def enumerate_strokes(image: np.ndarray, section: dict, source_file: str, detail
         if any(same_ink(probe, other) for other in [*strokes, *known]):
             continue
         strokes.append({**traced, "seed_px": [round(seed[0], 1), seed[1]]})
+    strokes = link_fragments(image, section, source_file, details, strokes)
+    strokes = [{**stroke, **describe_stroke(stroke, section)} for stroke in strokes]
+    strokes.sort(key=lambda s: (s["kind"] == "straight_grid_line", -s["hull_likeness"]))
     return strokes, refusals
+
+
+# A straight axis-aligned line: it spans at least this share of the section
+# height, leans at most STRAIGHT_LINE_MAX_SLOPE px per row (a line drawn or
+# scanned slightly off vertical), and STRAIGHT_LINE_ROW_SHARE of its rows lie
+# within STRAIGHT_LINE_TOLERANCE_PX of a fitted straight line (raster
+# thickness; the remaining rows allow bumps where other strokes cross it).
+STRAIGHT_LINE_MIN_HEIGHT_SHARE = 0.5
+STRAIGHT_LINE_MAX_SLOPE = 0.05
+STRAIGHT_LINE_TOLERANCE_PX = 2.0
+STRAIGHT_LINE_ROW_SHARE = 0.9
+
+
+def stroke_kind(rows, xs, section: dict) -> str:
+    """Label long, straight vertical evidence (grid, centreline, rulers) without removing it.
+
+    Section traces are row-indexed, so horizontal grid lines are not enumerated
+    as sustained strokes. ``rows`` are the first and last row of the trace.
+    """
+    calibration = section["calibration"]
+    expected_height = (section["z_max_m"] - section["z_min_m"]) * calibration["pixels_per_metre"]
+    if not len(xs):
+        return "candidate_stroke"
+    xs = np.asarray(xs, dtype=float)
+    span = rows[-1] - rows[0]
+    if span >= 0.95 * expected_height and float(np.ptp(xs)) <= 2.0:
+        return "straight_grid_line"
+    if span < STRAIGHT_LINE_MIN_HEIGHT_SHARE * expected_height or len(xs) < 2:
+        return "candidate_stroke"
+    heights = np.linspace(rows[0], rows[-1], len(xs))
+    slope, intercept = np.polyfit(heights, xs, 1)
+    on_line = np.abs(xs - (slope * heights + intercept)) <= STRAIGHT_LINE_TOLERANCE_PX
+    if abs(slope) <= STRAIGHT_LINE_MAX_SLOPE and float(on_line.mean()) >= STRAIGHT_LINE_ROW_SHARE:
+        return "straight_grid_line"
+    return "candidate_stroke"
+
+
+# Hull likeness (a ranking heuristic, never identity): the half-breadth of a
+# hull section is a smooth curve that spans the section height, mostly widens
+# upwards and ends at the keel near the baseline or the centreline. Monotony
+# is reduced by counter-movement (tumblehome, flare, a bulb) as a share of the
+# breadth range. A stroke "reaches the keel" when its lowest point is within
+# HULL_KEEL_SHARE of the height above the lowest calibrated height, or within
+# that share of its own breadth from the centreline.
+HULL_SAMPLES = 64
+HULL_KEEL_SHARE = 0.1
+HULL_TURN_DEG = 180.0
+
+
+def describe_stroke(stroke: dict, section: dict) -> dict:
+    """Kind, vertical coverage and hull-likeness of a verified stroke (added fields only).
+
+    ``z_coverage_fraction`` is the share of the section's calibrated height
+    that the stroke's ink spans. ``hull_likeness`` is in [0, 1]: coverage times
+    the monotony, smoothness and keel factors. It orders candidates for the
+    model; it does not certify that a stroke is a hull line.
+    """
+    rows_range, xs = stroke["trace_rows_px"], np.asarray(stroke["trace_xs_px"], dtype=float)
+    kind = stroke_kind(rows_range, xs, section)
+    low, high = float(section["z_min_m"]), float(section["z_max_m"])
+    z_low, z_high = (float(v) for v in stroke["z_range_m"])
+    coverage = float(np.clip((z_high - z_low) / (high - low), 0.0, 1.0))
+    # Half-breadth (px from the window) against height, bottom first.
+    half_breadth = xs[::-1]
+    heights = np.arange(len(half_breadth), dtype=float)
+    steps = np.diff(half_breadth)
+    breadth_range = max(float(np.ptp(half_breadth)), 1.0)
+    counter = float(min(np.sum(np.maximum(-steps, 0)), np.sum(np.maximum(steps, 0)))) / breadth_range
+    monotone = float(np.clip(1.0 - counter, 0.0, 1.0))
+    # Smoothness: total turning of the curve, resampled evenly along its
+    # length. Keel to deck turns through up to about HULL_TURN_DEG; a trace that
+    # jumps between strokes turns back and forth much more.
+    lengths = np.r_[0.0, np.cumsum(np.hypot(steps, 1.0))]
+    along = np.linspace(0.0, lengths[-1], HULL_SAMPLES)
+    curve = np.column_stack([np.interp(along, lengths, half_breadth), np.interp(along, lengths, heights)])
+    directions = np.unwrap(np.arctan2(*np.diff(curve, axis=0).T[::-1]))
+    turning = math.degrees(float(np.sum(np.abs(np.diff(directions)))))
+    smooth = 1.0 / (1.0 + max(0.0, turning - HULL_TURN_DEG) / HULL_TURN_DEG)
+    centre = float(section["calibration"]["centerline_px"])
+    bottom_offset = float(half_breadth[0] - centre)
+    keel = (z_low - low <= HULL_KEEL_SHARE * (high - low)
+            or bottom_offset <= HULL_KEEL_SHARE * max(float(half_breadth.max() - centre), 1.0))
+    keel_factor = 1.0 if keel else 0.6
+    likeness = coverage * (0.7 + 0.3 * monotone) * smooth * keel_factor
+    if kind == "straight_grid_line":
+        likeness *= 0.1
+    return {"kind": kind, "z_coverage_fraction": round(coverage, 4), "hull_likeness": round(likeness, 4),
+            "hull_likeness_factors": {"monotone": round(monotone, 3), "smooth": round(smooth, 3),
+                                      "reaches_keel": bool(keel)},
+            "hull_likeness_basis": "ranking heuristic over the traced half-breadth; not identity or approval"}
 
 
 def _point_on(seed, stroke) -> bool:
@@ -311,24 +400,380 @@ def follow_stroke(image: np.ndarray, section: dict, seed_source) -> np.ndarray:
     return np.column_stack([rows + top, np.array([points[r] for r in rows]) + left])
 
 
+# Two-dimensional stroke following. Row-by-row following loses a stroke where
+# it runs nearly horizontally (bilge, flat bottom) and where a vertical ruler
+# crosses it. This tracker steps along the ink direction instead. Vertical
+# rulers are hidden from its direction choice, so it crosses them, and it
+# bridges short breaks (scan noise, a crossing) along its heading and
+# curvature. Its path is only a corridor: the line is traced and verified by
+# ``trace_in_source_corridor`` like any other.
+TRACK_STEP_PX = 2.0
+# Look-ahead points from TRACK_LOOKAHEAD_MIN_PX to the larger of
+# TRACK_LOOKAHEAD_MIN_REACH_PX and TRACK_LOOKAHEAD_WIDTHS stroke widths: along a
+# thick stroke a longer ray tells its axis from a slanted chord. At least half
+# of them (and TRACK_MIN_HITS) must be on ink. Ink up to TRACK_FAR_LOOKAHEAD_PX
+# further on steers the track across a break.
+TRACK_LOOKAHEAD_MIN_PX = 2.0
+TRACK_LOOKAHEAD_MIN_REACH_PX = 5.0
+TRACK_LOOKAHEAD_WIDTHS = 2.0
+TRACK_LOOKAHEAD_POINTS = 6
+TRACK_FAR_LOOKAHEAD_PX = 10
+TRACK_MIN_HITS = 2
+TRACK_FAN_DEG = 45  # the widest turn considered per step
+TRACK_FAN_STEP_DEG = 5
+TRACK_TURN_COST_PER_DEG = 0.01  # among equally supported directions, the straightest wins
+TRACK_RECENTRE_PX = 3  # re-centre across the stroke within this half width (or one stroke width)
+TRACK_MAX_WIDTH_PX = 15  # stroke width is measured up to this many px
+TRACK_MAX_GAP_SHARE = 0.04  # longest bridged break: this share of the window height,
+TRACK_MIN_GAP_PX = 10.0  # but at least this many source px
+TRACK_LOOP_STEPS = 8  # a cell revisited after more steps than this ends the track
+TRACK_HEADING_STEPS = 4  # heading is measured over this many steps (8 px)
+TRACK_MAX_TURN = math.radians(4)  # largest curvature (per step) carried through a break
+# A column inked on this share of the window rows (within one column either
+# side) is a vertical ruler: grid, centreline or a drawn border. Where a stroke
+# runs on a ruler (a wall side on a grid line) only straight-on steps continue.
+RULER_COLUMN_SHARE = 0.5
+RULER_MARGIN_PX = 2
+RULER_FOLLOW_FAN_DEG = 10
+# Corridor paths are simplified to this error before tracing.
+PATH_TOLERANCE_PX = 1.0
+# The stroke direction at a seed is the principal axis of the ink within this radius.
+SEED_DIRECTION_RADIUS_PX = 8
+
+
+def _ruler_columns(eligible: np.ndarray) -> np.ndarray:
+    """Columns of the trace window that carry a long vertical ruler (with a stroke margin)."""
+    from scipy import ndimage
+    padded = np.pad(eligible, ((0, 0), (1, 1)))
+    band = padded[:, :-2] | padded[:, 1:-1] | padded[:, 2:]
+    ruler = band.mean(axis=0) >= RULER_COLUMN_SHARE
+    return ndimage.binary_dilation(ruler, iterations=RULER_MARGIN_PX) if ruler.any() else ruler
+
+
+def _ruler_mask(eligible: np.ndarray) -> np.ndarray:
+    """Pixels of long vertical and horizontal rulers (grid, centreline, waterlines).
+
+    Broad horizontal runs are already excluded from the eligible mask; a
+    horizontal ruler broken by noise into shorter runs is found here.
+    """
+    return _ruler_columns(eligible)[None, :] | _ruler_columns(eligible.T)[:, None]
+
+
+def _ink_at(mask: np.ndarray, x: float, y: float) -> bool:
+    column, row = int(round(x)), int(round(y))
+    return 0 <= row < mask.shape[0] and 0 <= column < mask.shape[1] and bool(mask[row, column])
+
+
+def _rotate(vector: np.ndarray, angle: float) -> np.ndarray:
+    cos, sin = math.cos(angle), math.sin(angle)
+    return np.array([cos * vector[0] - sin * vector[1], sin * vector[0] + cos * vector[1]])
+
+
+def _signed_angle(first: np.ndarray, second: np.ndarray) -> float:
+    return math.atan2(first[0] * second[1] - first[1] * second[0], float(first @ second))
+
+
+def _stroke_width(mask: np.ndarray, point: np.ndarray, direction: np.ndarray) -> float:
+    """Width of the ink run through a point, across the given direction."""
+    normal = np.array([-direction[1], direction[0]])
+    width = 1
+    for sign in (-1, 1):
+        k = 1
+        while k <= TRACK_MAX_WIDTH_PX and _ink_at(mask, *(point + sign * k * normal)):
+            k += 1
+        width += k - 1
+    return float(min(width, TRACK_MAX_WIDTH_PX))
+
+
+def _recentre(mask: np.ndarray, point: np.ndarray, direction: np.ndarray, radius: int) -> np.ndarray:
+    """Move a point across the stroke to the centre of the ink run nearest to it."""
+    normal = np.array([-direction[1], direction[0]])
+    offsets = [k for k in range(-radius, radius + 1) if _ink_at(mask, *(point + k * normal))]
+    if not offsets:
+        return point
+    # Keep only the contiguous run that is nearest to the point, so that a
+    # neighbouring stroke within the search width does not pull it across.
+    nearest = min(offsets, key=abs)
+    run = [nearest]
+    for step in (-1, 1):
+        k = nearest + step
+        while k in offsets:
+            run.append(k)
+            k += step
+    return point + float(np.mean(run)) * normal
+
+
+def _track(primary: np.ndarray, full: np.ndarray, start: np.ndarray, heading: np.ndarray,
+           max_gap: float, stroke_width: float = 1.0) -> np.ndarray:
+    """Points (x, y) of one direction of a stroke, ending at its last ink point."""
+    height, width = primary.shape
+    point, heading = start.astype(float), heading / np.linalg.norm(heading)
+    angles = np.radians(np.arange(-TRACK_FAN_DEG, TRACK_FAN_DEG + 1, TRACK_FAN_STEP_DEG))
+    reach = max(TRACK_LOOKAHEAD_MIN_REACH_PX, TRACK_LOOKAHEAD_WIDTHS * stroke_width)
+    near = tuple(np.linspace(TRACK_LOOKAHEAD_MIN_PX, reach, TRACK_LOOKAHEAD_POINTS))
+    far = tuple(float(r) for r in range(int(reach) + 1, int(reach) + 1 + TRACK_FAR_LOOKAHEAD_PX))
+    needed = max(TRACK_MIN_HITS, len(near) // 2)
+    recentre_radius = max(TRACK_RECENTRE_PX, int(math.ceil(stroke_width)))
+    # In order: the stroke ahead; straight on along a ruler; ink further
+    # ahead, which steers across a hidden ruler or a break towards the stroke.
+    searches = ((primary, angles, needed, near),
+                (full, angles[np.abs(angles) <= math.radians(RULER_FOLLOW_FAN_DEG) + 1e-9], len(near), near),
+                (primary, angles, TRACK_MIN_HITS, far))
+    points, last_ink, gap, turn, visited = [point], 1, 0.0, 0.0, {}
+    for step in range(4 * (height + width)):
+        best, search = None, None
+        for search, (mask, fan, needed, radii) in enumerate(searches):
+            for angle in fan:
+                direction = _rotate(heading, angle)
+                hits = sum(_ink_at(mask, *(point + r * direction)) for r in radii)
+                score = hits - TRACK_TURN_COST_PER_DEG * abs(math.degrees(angle))
+                if hits >= needed and (best is None or score > best[0]):
+                    best = (score, direction, mask)
+            if best is not None:
+                break
+        on_ink = best is not None and search < 2
+        if on_ink:
+            following = _recentre(best[2], point + TRACK_STEP_PX * best[1], best[1], recentre_radius)
+            gap = 0.0
+        else:
+            # A break: continue along the heading (turning as the stroke
+            # turned) or towards ink seen further ahead.
+            if best is not None:
+                heading = best[1]
+            following = point + TRACK_STEP_PX * heading
+            gap += TRACK_STEP_PX
+            if gap > max_gap:
+                break
+        if not (0 <= following[0] < width and 0 <= following[1] < height):
+            break
+        cell = (int(following[0]) // 2, int(following[1]) // 2)
+        if step - visited.setdefault(cell, step) > TRACK_LOOP_STEPS:
+            break
+        if float(np.linalg.norm(following - point)) < 1e-6:
+            break
+        point = following
+        points.append(point)
+        if on_ink:
+            last_ink = len(points)
+            # Heading and curvature over a few steps, so that re-centring
+            # jitter of single steps does not steer a bridged break.
+            recent = points[-1] - points[max(0, len(points) - 1 - TRACK_HEADING_STEPS)]
+            if np.linalg.norm(recent) > 1e-6:
+                earlier_end = max(0, len(points) - 1 - TRACK_HEADING_STEPS)
+                earlier = points[earlier_end] - points[max(0, earlier_end - TRACK_HEADING_STEPS)]
+                if np.linalg.norm(earlier) > 1e-6:
+                    turn = float(np.clip(_signed_angle(earlier, recent) / TRACK_HEADING_STEPS,
+                                         -TRACK_MAX_TURN, TRACK_MAX_TURN))
+                heading = recent / np.linalg.norm(recent)
+        elif best is None:
+            heading = _rotate(heading, turn)
+    return np.array(points[:last_ink])
+
+
+def _principal_direction(mask: np.ndarray, point: np.ndarray, radius: int = 5) -> np.ndarray:
+    """Direction of the ink around a point (principal axis), vertical when unclear."""
+    x0, y0 = int(round(point[0])), int(round(point[1]))
+    rows, cols = np.nonzero(mask[max(0, y0 - radius):y0 + radius + 1, max(0, x0 - radius):x0 + radius + 1])
+    if len(rows) < 3:
+        return np.array([0.0, 1.0])
+    offsets = np.column_stack([cols + max(0, x0 - radius) - point[0], rows + max(0, y0 - radius) - point[1]])
+    _, vectors = np.linalg.eigh(offsets.T @ offsets)
+    direction = vectors[:, -1]
+    return direction / np.linalg.norm(direction)
+
+
+def follow_stroke_2d(image: np.ndarray, section: dict, seed_source, *, width_scaled: bool = True) -> np.ndarray:
+    """Follow the ink stroke through a seed point along its own direction, both ways.
+
+    ``width_scaled`` scales the look-ahead and re-centring to the stroke width
+    measured at the seed; without it they suit a thin stroke. Neither setting
+    is best on every scan, so ``_trace_best_path`` tries both.
+
+    Returns (row, column) source points, one per row (the mean column where the
+    stroke runs nearly horizontally), like ``follow_stroke``. Raises when no ink
+    is at the seed.
+    """
+    left, top, _, _ = _trace_window(section, image.shape)
+    eligible = window_foreground(image, section)[2]
+    height = eligible.shape[0]
+    primary = eligible & ~_ruler_mask(eligible)
+    seed = np.array([float(seed_source[0]) - left, float(seed_source[1]) - top])
+    if not 0 <= seed[1] < height:
+        raise VerificationError("point_outside_section", "The point is outside the section's calibrated height range.")
+    from scipy import ndimage
+    y0, x0 = int(max(0, seed[1] - SEED_SEARCH_PX)), int(max(0, seed[0] - SEED_SEARCH_PX))
+    near = primary[y0:int(seed[1] + SEED_SEARCH_PX) + 1, x0:int(seed[0] + SEED_SEARCH_PX) + 1]
+    labels, _ = ndimage.label(near, structure=np.ones((3, 3), dtype=int))
+    rows, cols = np.nonzero(near)
+    points = np.column_stack([cols + x0, rows + y0]).astype(float)
+    distances = np.linalg.norm(points - seed, axis=1) if len(points) else np.array([np.inf])
+    if distances.min() > SEED_SEARCH_PX:
+        # No ink off the rulers: a ruler itself is followed row by row
+        # (``follow_stroke``); tracking from it would leave it onto a curve.
+        raise VerificationError("no_ink_at_point",
+                                f"No ink off a ruler within {SEED_SEARCH_PX:g} source px of the point.")
+    # Prefer a stroke to a nearer noise speck: the nearest pixel of the
+    # largest ink component around the point.
+    component = labels[rows, cols]
+    sizes = np.bincount(component)
+    largest = (component == int(np.argmax(sizes))) & (distances <= SEED_SEARCH_PX)
+    if largest.any():
+        distances = np.where(largest, distances, np.inf)
+    start = points[int(np.argmin(distances))]
+    heading = _principal_direction(primary, start, radius=SEED_DIRECTION_RADIUS_PX)
+    max_gap = max(TRACK_MIN_GAP_PX, TRACK_MAX_GAP_SHARE * height)
+    stroke_width = _stroke_width(primary, start, heading) if width_scaled else 1.0
+    start = _recentre(primary, start, heading, max(TRACK_RECENTRE_PX, int(math.ceil(stroke_width))))
+    forward = _track(primary, eligible, start, heading, max_gap, stroke_width)
+    backward = _track(primary, eligible, start, -heading, max_gap, stroke_width)
+    path = np.vstack([backward[::-1], forward[1:]])
+    rows = np.rint(path[:, 1]).astype(int)
+    unique_rows = np.unique(rows)
+    columns = np.array([path[rows == row, 0].mean() for row in unique_rows])
+    return np.column_stack([unique_rows + top, columns + left])
+
+
+def _simplified_path(followed: np.ndarray) -> np.ndarray:
+    """(column, row) corridor points of a followed stroke, within PATH_TOLERANCE_PX of it."""
+    rows, columns = followed[:, 0].astype(float), followed[:, 1].astype(float)
+    keep = [0, len(rows) - 1]
+    while True:
+        keep.sort()
+        residual = np.abs(np.interp(rows, rows[keep], columns[keep]) - columns)
+        worst = int(np.argmax(residual))
+        if residual[worst] <= PATH_TOLERANCE_PX or worst in keep:
+            break
+        keep.append(worst)
+    return np.column_stack([columns[keep], rows[keep]])
+
+
+def _trace_best_path(image: np.ndarray, section: dict, source_file: str, details: dict, seed_source) -> dict:
+    """Follow a stroke from a seed by direction tracking and by row following; return the longest verified trace.
+
+    Both followers only propose corridors. When neither is verified, the row
+    follower's refusal is raised (its codes predate the tracker).
+    """
+    traced, refusal = [], None
+    followers = (("direction_tracking", follow_stroke_2d),
+                 ("direction_tracking_thin", lambda *a: follow_stroke_2d(*a, width_scaled=False)),
+                 ("row_following", follow_stroke))
+    for method, follow in followers:
+        try:
+            followed = follow(image, section, seed_source)
+            if len(followed) < 33:
+                raise VerificationError("stroke_too_short",
+                                        f"The stroke at the point is followed for only {len(followed)} rows.")
+            result = trace_in_source_corridor(image, section, source_file, details, _simplified_path(followed),
+                                              SEED_CORRIDOR_HALF_WIDTH_PX)
+            traced.append({**result, "follow_method": method})
+        except VerificationError as exc:
+            refusal = exc
+    if not traced:
+        raise refusal
+    return max(traced, key=lambda t: t["trace_rows_px"][1] - t["trace_rows_px"][0])
+
+
+# Linking verified pieces of one stroke broken by noise or a crossing: the
+# lower piece must start within LINK_MAX_GAP_SHARE of the window height below
+# the upper piece's end (or overlap it by at most LINK_MAX_OVERLAP_SHARE), its
+# end must lie on the upper piece's extrapolated direction within
+# LINK_MAX_OFFSET_PX plus LINK_OFFSET_PER_GAP_PX per px of gap, and the two end
+# directions (fitted over LINK_FIT_ROWS rows) must agree within LINK_MAX_ANGLE_DEG.
+# The joined corridor is then traced and verified like any other.
+LINK_MAX_GAP_SHARE = 0.06
+LINK_MAX_OVERLAP_SHARE = 0.04
+LINK_MAX_OFFSET_PX = 4.0
+LINK_OFFSET_PER_GAP_PX = 0.25
+LINK_FIT_ROWS = 15
+LINK_MAX_ANGLE_DEG = 25.0
+
+
+def _end_direction(rows: np.ndarray, xs: np.ndarray, at_bottom: bool) -> tuple[np.ndarray, np.ndarray]:
+    """End point (x, row) and unit direction pointing away from the piece."""
+    part = slice(-LINK_FIT_ROWS, None) if at_bottom else slice(0, LINK_FIT_ROWS)
+    r, x = rows[part].astype(float), xs[part]
+    slope = float(np.polyfit(r, x, 1)[0]) if len(r) >= 2 else 0.0
+    direction = np.array([slope, 1.0]) * (1 if at_bottom else -1)
+    end = np.array([x[-1], r[-1]]) if at_bottom else np.array([x[0], r[0]])
+    return end, direction / np.linalg.norm(direction)
+
+
+def _pieces_agree(upper: dict, lower: dict, window_height: int) -> bool:
+    a_rows = np.arange(upper["trace_rows_px"][0], upper["trace_rows_px"][1] + 1)
+    b_rows = np.arange(lower["trace_rows_px"][0], lower["trace_rows_px"][1] + 1)
+    gap = int(b_rows[0] - a_rows[-1])
+    if gap > LINK_MAX_GAP_SHARE * window_height or -gap > LINK_MAX_OVERLAP_SHARE * window_height:
+        return False
+    if b_rows[-1] <= a_rows[-1] or b_rows[0] <= a_rows[0]:
+        return False  # one piece contains the other in height
+    a_end, a_dir = _end_direction(a_rows, np.asarray(upper["trace_xs_px"]), True)
+    b_end, b_dir = _end_direction(b_rows, np.asarray(lower["trace_xs_px"]), False)
+    angle = math.degrees(math.acos(float(np.clip(-(a_dir @ b_dir), -1.0, 1.0))))
+    if angle > LINK_MAX_ANGLE_DEG:
+        return False
+    tolerance = LINK_MAX_OFFSET_PX + LINK_OFFSET_PER_GAP_PX * float(np.linalg.norm(b_end - a_end))
+    # Each end must lie near the other piece's extrapolated direction.
+    for end, origin, direction in ((b_end, a_end, a_dir), (a_end, b_end, b_dir)):
+        offset = end - origin
+        if abs(offset[0] * direction[1] - offset[1] * direction[0]) > tolerance:
+            return False
+    return True
+
+
+def link_fragments(image: np.ndarray, section: dict, source_file: str, details: dict,
+                   strokes: list[dict]) -> list[dict]:
+    """Join verified stroke pieces whose ends agree in position and direction.
+
+    A joined stroke replaces its pieces only when the engine verifies the
+    joined corridor (the usual coverage and gap limits); otherwise the pieces
+    stay as they are. Straight rulers are never joined.
+    """
+    window_height = _trace_window(section, image.shape)[3] - _trace_window(section, image.shape)[1] + 1
+    pieces = list(strokes)
+    joined = True
+    while joined:
+        joined = False
+        curved = [p for p in pieces if stroke_kind(p["trace_rows_px"], p["trace_xs_px"], section) != "straight_grid_line"]
+        pairs = [(u, l) for u in curved for l in curved
+                 if u is not l and _pieces_agree(u, l, window_height)]
+        pairs.sort(key=lambda pair: abs(pair[1]["trace_rows_px"][0] - pair[0]["trace_rows_px"][1]))
+        for upper, lower in pairs:
+            junction = (upper["trace_rows_px"][1] + lower["trace_rows_px"][0]) / 2
+            followed = []
+            for piece, keep in ((upper, lambda r: r < junction), (lower, lambda r: r >= junction)):
+                rows = np.arange(piece["trace_rows_px"][0], piece["trace_rows_px"][1] + 1)
+                xs = np.asarray(piece["trace_xs_px"], dtype=float)
+                followed += [(r, x) for r, x in zip(rows, xs) if keep(r)]
+            try:
+                traced = trace_in_source_corridor(image, section, source_file, details,
+                                                  _simplified_path(np.asarray(followed, dtype=float)),
+                                                  SEED_CORRIDOR_HALF_WIDTH_PX)
+            except VerificationError:
+                continue
+            span = traced["trace_rows_px"][1] - traced["trace_rows_px"][0]
+            if span <= max(p["trace_rows_px"][1] - p["trace_rows_px"][0] for p in (upper, lower)):
+                continue
+            count = upper.get("linked_fragments", 1) + lower.get("linked_fragments", 1)
+            pieces = [p for p in pieces if p is not upper and p is not lower]
+            pieces.append({**traced, "seed_px": upper.get("seed_px"), "follow_method": "linked_fragments",
+                           "linked_fragments": count})
+            joined = True
+            break
+    return pieces
+
+
 def trace_from_point(image: np.ndarray, section: dict, source_file: str, details: dict,
                      view: dict, point_view_px) -> dict:
     """Follow the stroke under a point the model chose, then trace and verify it as a corridor."""
-    followed = follow_stroke(image, section, view_to_source(view, point_view_px))
-    if len(followed) < 33:
-        raise VerificationError("stroke_too_short", f"The stroke at the point is followed for only {len(followed)} rows.")
-    sample = followed[::SEED_PATH_STEP_ROWS]
-    if sample[-1][0] != followed[-1][0]:
-        sample = np.vstack([sample, followed[-1]])
-    path = sample[:, ::-1].astype(float)  # (column, row) points
-    return trace_in_source_corridor(image, section, source_file, details, path, SEED_CORRIDOR_HALF_WIDTH_PX)
+    traced = _trace_best_path(image, section, source_file, details, view_to_source(view, point_view_px))
+    return {**traced, **describe_stroke(traced, section)}
 
 
 def trace_in_source_corridor(image: np.ndarray, section: dict, source_file: str, details: dict,
                              path: np.ndarray, half_width: float) -> dict:
     """Trace and verify the ink inside a corridor given in source pixels (see corridor_trace)."""
     from .agent_tools import _adaptive_anchors
-    from .ingest import DrawingError, _eligible_trace_mask, _extract_one, _foreground, _trace
+    from .ingest import COMPLEXITY_REDUCTION_WARNING, DrawingError, _eligible_trace_mask, _extract_one, _trace
     path = path[np.argsort(path[:, 1], kind="stable")]
     if np.any(np.diff(path[:, 1]) <= 0):
         raise VerificationError("corridor_path_invalid", "Corridor points must be at distinct heights.")
@@ -399,13 +844,15 @@ def trace_in_source_corridor(image: np.ndarray, section: dict, source_file: str,
     # The decisive check: the engine itself re-reads the line in the tight
     # corridor, with its own coverage, gap, ambiguity and side checks.
     try:
-        _extract_one(image, {**narrowed, "contour_selection": selection}, source_file, details)
+        _, engine = _extract_one(image, {**narrowed, "contour_selection": selection}, source_file, details)
     except DrawingError as exc:
         raise VerificationError("engine_rejected_line", f"The engine refused the traced line: {exc.kind}.",
                                 {**support, "engine_reason": exc.kind}) from None
     dense_rows = np.arange(n_top, n_bottom + 1)
     dense_xs = np.interp(dense_rows, absolute_rows, absolute_xs)
-    return {"contour_selection": selection, "z_range_m": [z_min, z_max],
+    reduced = any(key in engine or key in quality for key in ("complexity_reduction", "evidence_complexity_reduction"))
+    warnings = {"warnings": [COMPLEXITY_REDUCTION_WARNING]} if reduced else {}
+    return {**warnings, "contour_selection": selection, "z_range_m": [z_min, z_max],
             "vertical_range_from_ink": not (near_top and near_bottom),
             "support": support, "corridor_source_px": {"path": path.round(2).tolist(),
                                                        "half_width_px": round(half_width, 3)},

@@ -1,0 +1,105 @@
+{
+  "cases": [
+    {
+      "built": true,
+      "case_id": "dtmb5415-L0",
+      "completion_tokens": 4864,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "separate",
+      "level": 0,
+      "list_cost_usd": 0.02522575,
+      "prompt_tokens": 189860,
+      "request_states": {
+        "completed": 16,
+        "failed": 5
+      },
+      "requests": 21,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": true,
+      "case_id": "shipd-1-00045-L2",
+      "completion_tokens": 2260,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "separate",
+      "level": 2,
+      "list_cost_usd": 0.00882367,
+      "prompt_tokens": 70733,
+      "request_states": {
+        "completed": 9,
+        "failed": 1
+      },
+      "requests": 10,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": true,
+      "case_id": "shipd-1-00679-L0",
+      "completion_tokens": 2001,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "overlay",
+      "level": 0,
+      "list_cost_usd": 0.00966128,
+      "prompt_tokens": 83625,
+      "request_states": {
+        "completed": 11,
+        "failed": 1
+      },
+      "requests": 12,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": true,
+      "case_id": "shipd-1-00683-L2",
+      "completion_tokens": 3412,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "overlay",
+      "level": 2,
+      "list_cost_usd": 0.01270426,
+      "prompt_tokens": 105794,
+      "request_states": {
+        "completed": 12
+      },
+      "requests": 12,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    }
+  ],
+  "summary": {
+    "arm": "w18d-corrected",
+    "built": 4,
+    "completion_tokens": 12537,
+    "correct": 0,
+    "gate": {
+      "rms_fraction": 0.02,
+      "volume_relative": 0.05
+    },
+    "labelled_wrong_draft": 4,
+    "list_cost_usd": 0.05641496,
+    "no_progress_rate": 0.0,
+    "planned_cases": 4,
+    "prompt_tokens": 450012,
+    "requests": 55,
+    "requests_missing_list_cost": 0,
+    "sample_sha256": "b1bd879b48ff647f267c31acacab7c2d86fd450b56a8399eb0a809f1057ff4d2",
+    "silent_wrong_build": 0,
+    "status_counts": {
+      "draft_not_verified": 4
+    }
+  }
+}

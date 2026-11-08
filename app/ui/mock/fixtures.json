@@ -12,7 +12,7 @@
    "task": "/Users/demo/MarinaFrame/runs/2026-11-07-survey-launch",
    "name": "Survey launch, body plan",
    "status": "draft",
-   "policy": "deterministic",
+   "policy": "live",
    "updated_ms": 1794041700000,
    "sections": 3
   },
@@ -330,7 +330,8 @@
        ]
       }
      ],
-     "guess": null
+     "guess": null,
+     "source": null
     },
     {
      "id": "st12",
@@ -344,7 +345,8 @@
      "state": "not_read",
      "reason": "Not read yet.",
      "candidates": [],
-     "guess": null
+     "guess": null,
+     "source": null
     },
     {
      "id": "st20",
@@ -358,7 +360,8 @@
      "state": "not_read",
      "reason": "Not read yet.",
      "candidates": [],
-     "guess": null
+     "guess": null,
+     "source": null
     }
    ],
    "model": null,
@@ -375,14 +378,17 @@
     "revision_id": null,
     "contract": null
    },
-   "draft": null
+   "draft": null,
+   "source_counts": [],
+   "warnings": [],
+   "activity": null
   },
   "/Users/demo/MarinaFrame/runs/2026-11-07-survey-launch": {
    "summary": {
     "task": "/Users/demo/MarinaFrame/runs/2026-11-07-survey-launch",
     "name": "Survey launch, body plan",
     "status": "draft",
-    "policy": "deterministic",
+    "policy": "live",
     "updated_ms": 1794041700000,
     "sections": 3
    },
@@ -675,7 +681,11 @@
         ]
        ]
       }
-     ]
+     ],
+     "source": {
+      "label": "ai_corrected",
+      "basis": "The trace crossed a grid line; the curve is a blend of the 0 m and 12 m sections."
+     }
     },
     {
      "id": "st12",
@@ -700,7 +710,11 @@
       "score": null,
       "reason": "No readable line at x=12 m; smoothed across x=4 to 20 m."
      },
-     "candidates": []
+     "candidates": [],
+     "source": {
+      "label": "interpolated",
+      "basis": null
+     }
     },
     {
      "id": "st20",
@@ -974,7 +988,11 @@
         ]
        ]
       }
-     ]
+     ],
+     "source": {
+      "label": "traced",
+      "basis": null
+     }
     }
    ],
    "model": {
@@ -1033,6 +1051,48 @@
      }
     ],
     "resolved": []
+   },
+   "source_counts": [
+    {
+     "label": "traced",
+     "count": 1
+    },
+    {
+     "label": "interpolated",
+     "count": 1
+    },
+    {
+     "label": "ai_corrected",
+     "count": 1
+    }
+   ],
+   "warnings": [
+    "At 12.0 m: Missing section interpolated from neighbouring profiles for draft CAD.",
+    "At 4.0 m: Fairing moved the curve by up to 0.020 m."
+   ],
+   "activity": {
+    "steps": [
+     {
+      "sequence": 4,
+      "tool": "inspect source",
+      "reason": "Read all three sections before choosing lines."
+     },
+     {
+      "sequence": 6,
+      "tool": "propose section",
+      "reason": "The 4 m trace crosses a grid line; wrote the curve from the neighbours."
+     },
+     {
+      "sequence": 8,
+      "tool": "build draft",
+      "reason": "Every section has a curve."
+     }
+    ],
+    "requests": 3,
+    "prompt_tokens": 18420,
+    "completion_tokens": 640,
+    "list_cost_usd": 0.0121,
+    "list_cost_complete": true
    },
    "evidence": {
     "revision_id": "r2",
@@ -1333,7 +1393,8 @@
        ]
       }
      ],
-     "guess": null
+     "guess": null,
+     "source": null
     },
     {
      "id": "st12",
@@ -1607,7 +1668,8 @@
        ]
       }
      ],
-     "guess": null
+     "guess": null,
+     "source": null
     },
     {
      "id": "st20",
@@ -1881,7 +1943,8 @@
        ]
       }
      ],
-     "guess": null
+     "guess": null,
+     "source": null
     }
    ],
    "model": {
@@ -1941,7 +2004,10 @@
      "trace_fidelity_mm": 0.86
     }
    },
-   "draft": null
+   "draft": null,
+   "source_counts": [],
+   "warnings": [],
+   "activity": null
   },
   "/Users/demo/MarinaFrame/runs/2026-11-06-ferry-midship": {
    "summary": {
@@ -2231,7 +2297,8 @@
        ]
       }
      ],
-     "guess": null
+     "guess": null,
+     "source": null
     },
     {
      "id": "st12",
@@ -2505,7 +2572,8 @@
        ]
       }
      ],
-     "guess": null
+     "guess": null,
+     "source": null
     },
     {
      "id": "st20",
@@ -2779,7 +2847,8 @@
        ]
       }
      ],
-     "guess": null
+     "guess": null,
+     "source": null
     }
    ],
    "model": {
@@ -2875,7 +2944,10 @@
      "trace_fidelity_mm": 0.86
     }
    },
-   "draft": null
+   "draft": null,
+   "source_counts": [],
+   "warnings": [],
+   "activity": null
   },
   "/Users/demo/MarinaFrame/runs/2026-11-05-workboat": {
    "summary": {
@@ -2897,7 +2969,10 @@
     "revision_id": null,
     "contract": null
    },
-   "draft": null
+   "draft": null,
+   "source_counts": [],
+   "warnings": [],
+   "activity": null
   }
  },
  "events": {

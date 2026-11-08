@@ -132,7 +132,12 @@ fn draft_fixture() -> tempfile::TempDir {
     fs::write(build.join("model-draft.stl"), b"solid x\nendsolid x\n").unwrap();
     fs::write(
         build.join("result.json"),
-        json!({"exports":{"stl":"model-draft.stl","step":"model-draft.step"}}).to_string(),
+        json!({"exports":{"stl":"model-draft.stl","step":"model-draft.step"},
+            "sections":[{"id":"s0","source_label":"ai_corrected",
+                "evidence":{"authored_basis":"Trace crossed the grid."},"warnings":["Fairing moved the curve."]}],
+            "gaps":[{"severity":"warning","kind":"draft_interpolated","section_id":"s1",
+                "message":"Missing section interpolated."}]})
+        .to_string(),
     )
     .unwrap();
     let guesses = json!([
@@ -185,6 +190,25 @@ fn draft_task_shows_guessed_sections_draft_model_and_banner() {
     assert_eq!(s1.state, SectionState::Guessed);
     assert_eq!(s1.guess.as_ref().unwrap().x_range_m, Some([0.0, 4.0]));
     assert!(s1.candidates.is_empty());
+    // Source labels, counts and warnings of the draft build.
+    let source = s0.source.as_ref().unwrap();
+    assert_eq!(source.label, "ai_corrected");
+    assert_eq!(source.basis.as_deref(), Some("Trace crossed the grid."));
+    assert_eq!(s1.source.as_ref().unwrap().label, "interpolated");
+    let counts: Vec<(&str, usize)> = view
+        .source_counts
+        .iter()
+        .map(|c| (c.label.as_str(), c.count))
+        .collect();
+    assert_eq!(counts, [("interpolated", 1), ("ai_corrected", 1)]);
+    assert_eq!(
+        view.warnings,
+        [
+            "At 2.0 m: Missing section interpolated.",
+            "At 0.0 m: Fairing moved the curve."
+        ]
+    );
+    assert!(view.activity.is_none());
     // Draft view and banner.
     let draft = view.draft.expect("draft view");
     assert_eq!(draft.guesses.len(), 2);

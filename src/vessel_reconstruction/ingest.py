@@ -25,6 +25,65 @@ class DrawingError(ValueError):
 
 MAX_ROW_CANDIDATES = 64
 MAX_TRACE_CANDIDATES = 50_000
+# Most competing contours kept as review evidence for one panel.
+MAX_COMPETING_CANDIDATES = 64
+COMPLEXITY_REDUCTION_WARNING = ("Noise specks (small connected ink components) were removed to keep the panel within "
+                                "the bounded evidence budget; sustained strokes are kept, removed ink is counted.")
+
+
+def _row_run_counts(mask: np.ndarray) -> np.ndarray:
+    """Number of ink runs on each row (every run, broad or not)."""
+    if not mask.shape[1]:
+        return np.zeros(mask.shape[0], dtype=int)
+    return mask[:, 0].astype(int) + (mask[:, 1:] & ~mask[:, :-1]).sum(axis=1)
+
+
+def _within_run_budget(counts: np.ndarray) -> bool:
+    return int(counts.max(initial=0)) <= MAX_ROW_CANDIDATES and int(counts.sum()) <= MAX_TRACE_CANDIDATES
+
+
+def _reduce_to_run_budget(mask: np.ndarray) -> tuple[np.ndarray, dict[str, Any] | None]:
+    """Degrade a too complex mask gracefully instead of refusing it.
+
+    Speckle noise, not drawn strokes, is what usually exceeds the run budget.
+    Connected components are removed smallest first, doubling the size limit,
+    until every row has at most MAX_ROW_CANDIDATES runs and the panel at most
+    MAX_TRACE_CANDIDATES. A sustained stroke is one large component, so it
+    stays. Rows that still exceed the budget (dense hatching) are cleared, so
+    they become unobserved rows. Returns the mask unchanged and None when it
+    is already within the budget; otherwise the record says what was removed.
+    """
+    counts = _row_run_counts(mask)
+    if _within_run_budget(counts):
+        return mask, None
+    labels, count = ndimage.label(mask, structure=np.ones((3, 3), dtype=int))
+    sizes = np.bincount(labels.ravel())
+    sizes[0] = 0
+    reduced, limit = mask, 1
+    # Never remove the largest component by size alone.
+    while not _within_run_budget(counts) and limit * 2 < int(sizes.max(initial=0)):
+        limit *= 2
+        keep = sizes > limit
+        keep[0] = False
+        reduced = keep[labels]
+        counts = _row_run_counts(reduced)
+    # Clear the busiest rows until both bounds hold.
+    cleared = []
+    if not _within_run_budget(counts):
+        reduced, counts = reduced.copy(), counts.copy()
+        for row in np.argsort(-counts, kind="stable"):
+            if _within_run_budget(counts):
+                break
+            reduced[row] = False
+            counts[row] = 0
+            cleared.append(int(row))
+    kept_labels = np.unique(labels[reduced])
+    return reduced, {"method": "small_component_removal_v1",
+                     "minimum_kept_component_pixels": int(limit) + 1,
+                     "removed_component_count": int(count - np.count_nonzero(kept_labels)),
+                     "removed_pixel_count": int(mask.sum() - reduced.sum()),
+                     "cleared_row_count": int(len(cleared)),
+                     "warning": COMPLEXITY_REDUCTION_WARNING}
 
 
 def _gap(section_id: str | None, kind: str, message: str) -> dict[str, Any]:
@@ -166,6 +225,7 @@ def _runs(row: np.ndarray) -> list[tuple[int, int]]:
 
 def _trace(mask: np.ndarray, ink: np.ndarray, centre_local: float) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
     """Viterbi trace through pixel-run centres; no parametric hull prior."""
+    mask, complexity_reduction = _reduce_to_run_budget(mask)
     h, w = mask.shape
     rows: list[int] = []
     candidates: list[np.ndarray] = []
@@ -264,6 +324,8 @@ def _trace(mask: np.ndarray, ink: np.ndarray, centre_local: float) -> tuple[np.n
                    "long_component_support_fraction": float(np.mean(long_support)),
                    "maximum_step_px_per_row": float(np.max(np.abs(slopes))) if len(slopes) else 0.0,
                    "interpolated_row_count": h - len(rows)}
+    if complexity_reduction is not None:
+        diagnostics["complexity_reduction"] = complexity_reduction
     return row_array, x, diagnostics
 
 
@@ -567,7 +629,11 @@ def _candidate_evidence(mask: np.ndarray, ink: np.ndarray, rows: np.ndarray, xs:
     Full source pixels remain the evidence of record. Stored points are an
     explicitly bounded review sample of each sustained competing component.
     A selected corridor can exclude candidates, but cannot erase their record.
+    A panel over the evidence budget is reduced (``_reduce_to_run_budget``) and
+    at most MAX_COMPETING_CANDIDATES are kept, the most sustained first; the
+    result then carries ``evidence_complexity_reduction``.
     """
+    mask, complexity_reduction = _reduce_to_run_budget(mask)
     h, w = mask.shape
     proposed = np.interp(np.arange(h), rows, xs)
     alternatives = np.zeros_like(mask, dtype=bool)
@@ -624,10 +690,16 @@ def _candidate_evidence(mask: np.ndarray, ink: np.ndarray, rows: np.ndarray, xs:
             "source_points_px": [[observed[i][1] + ox, observed[i][0] + oy] for i in indices],
             "point_sampling": "at most 129 evenly indexed observed pixel-run centres; complete evidence is in the immutable source image",
         })
-        if len(candidates) > 64:
-            raise DrawingError("resource_limit", "Too many sustained candidate contours for bounded review; split the panel.")
+    if len(candidates) > MAX_COMPETING_CANDIDATES:
+        candidates.sort(key=lambda c: -c["observed_row_count"])
+        complexity_reduction = {**(complexity_reduction or {"warning": COMPLEXITY_REDUCTION_WARNING}),
+                                "competing_candidates_omitted": len(candidates) - MAX_COMPETING_CANDIDATES}
+        # The unresolved count below includes only kept candidates; the
+        # alternative span keeps its maximum over all of them (conservative).
+        candidates = candidates[:MAX_COMPETING_CANDIDATES]
     selected_indices = np.unique(np.linspace(0, len(rows) - 1, min(257, len(rows))).astype(int))
-    return {"candidate_evidence": candidates, "competing_candidate_count": len(candidates),
+    reduction = {"evidence_complexity_reduction": complexity_reduction} if complexity_reduction is not None else {}
+    return {**reduction, "candidate_evidence": candidates, "competing_candidate_count": len(candidates),
             "unresolved_candidate_count": sum(c["status"] == "unresolved" for c in candidates),
             "alternative_contour_span_fraction": float(maximum_active_span / h),
             "candidate_identity_policy": "Contrast does not identify engineering semantics; sustained alternatives require explicit source-pixel selection or abstention",
@@ -736,7 +808,7 @@ def _bounded_source_samples(rows: np.ndarray, xs: np.ndarray, *, baseline: float
         "scope": "Interpolation loss relative to the measured row-centroid trace only; excludes endpoint identity, source raster error, calibration, gaps, and semantics."}
 
 
-def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, input_details: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, input_details: dict[str, Any], *, draft: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
     section_id = str(section.get("id", "unnamed"))
     x_m = _finite_number(section.get("x_m"), "x_m")
     calibration = section.get("calibration")
@@ -793,19 +865,24 @@ def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, i
     diagnostic.update(trace_diag)
     diagnostic.update(_candidate_evidence(mask, ink, rows, xs, centre - trace_left,
                                           (trace_left, trace_top), diagnostic["median_stroke_width_px"], selection))
+    # Noise removal keeps the bounded budget, but removed specks could have
+    # been a faint competitor. Only an explicit selection or a draft accepts it.
+    complexity_reduced = "complexity_reduction" in diagnostic or "evidence_complexity_reduction" in diagnostic
+    if complexity_reduced and selection is None and not draft:
+        raise DrawingError("resource_limit", "Contour candidate complexity exceeds the bounded evidence budget; select a source-pixel corridor, a smaller panel, or use draft mode.", diagnostic)
     identity = _stroke_identity(mask, ink, rows, xs, (trace_left, trace_top))
     diagnostic["stroke_identity"] = identity
     if identity["ruler_continuations"]:
         raise DrawingError("stroke_identity_unresolved", "The trace follows a sustained grid or buttock ruler. The calibrated range may extend beyond the local hull stroke; supply source-supported local endpoints or a separate view. A corridor cannot establish whole-stroke identity.", diagnostic)
     coverage = len(rows) / mask.shape[0]
     allowed_gap = max(3, int(math.ceil(mask.shape[0] * .025)))
-    if diagnostic["max_missing_run_px"] > allowed_gap:
+    if diagnostic["max_missing_run_px"] > allowed_gap and not draft:
         raise DrawingError("missing_curve_segment", f"A curve segment is missing for {diagnostic['max_missing_run_px']} pixels (limit {allowed_gap}); long gaps are not filled.", diagnostic)
-    if coverage < .9:
+    if coverage < .9 and not draft:
         raise DrawingError("missing_curve_segment", f"Only {coverage:.1%} of calibrated rows have source evidence; at least 90% is required.", diagnostic)
     if diagnostic["unresolved_candidate_count"]:
         raise DrawingError("ambiguous_curve", "Multiple sustained source strokes remain plausible across contrast bands. Supply an explicit source-pixel contour selection or separate the views; darkness is not contour identity.", diagnostic)
-    if diagnostic["long_component_support_fraction"] < .65:
+    if diagnostic["long_component_support_fraction"] < .65 and not draft:
         raise DrawingError("unreliable_curve", "Most trace points lack sustained connected ink support; the panel may contain noise or fragmented marks.", diagnostic)
     sample_count = section.get("sample_count", 129)
     if not isinstance(sample_count, int) or isinstance(sample_count, bool) or not 65 <= sample_count <= 1025:
@@ -831,11 +908,16 @@ def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, i
     if diagnostic["interpolated_row_count"]:
         warnings.append(f"Interpolated {diagnostic['interpolated_row_count']} unsupported rows across short gaps; longest gap {diagnostic['max_missing_run_px']} pixels.")
     warnings.append("Output samples retain the observed row trace within 0.25 pixel interpolation loss; sample_count is a minimum density. No hull-family shape prior or reference geometry is used.")
+    if complexity_reduced:
+        warnings.append(COMPLEXITY_REDUCTION_WARNING)
     if selection_record is not None:
         warnings.append("Contour identity is constrained by an explicit caller-supplied source-pixel selection; excluded candidate strokes remain in diagnostics.")
     else:
         warnings.append("One sustained candidate was detected in the declared view; this is not proof of semantic identity or absence of undetectably faint features.")
     contrast = min(1.0, diagnostic["mean_trace_contrast"] / .7)
+    if draft and (diagnostic["long_component_support_fraction"] < .65 or coverage < .9
+                  or diagnostic["max_missing_run_px"] > allowed_gap):
+        warnings.append("Draft uses unreliable or fragmented measured curve as is; re-trace this section or accept the draft.")
     confidence = float(np.clip(coverage * (.65 + .2 * contrast + .15 * diagnostic["long_component_support_fraction"]) * (1 - .25 * diagnostic["alternative_contour_span_fraction"]), 0, 1))
     diagnostic["measurement_uncertainty_m"] = float(max(.75, diagnostic["median_stroke_width_px"] / 2) / ppm)
     diagnostic["coverage"] = coverage
@@ -952,6 +1034,25 @@ def extract_pieces(image: np.ndarray, section: dict[str, Any], source_file: str,
                     "identity_status": "explicit_supplied_piece_selections", "region_count": len(regions)}
 
 
+def authored_section(section: dict[str, Any], source_file: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """A model-authored draft section (propose_section): its curve, not traced ink.
+
+    The schema accepts ``authored`` only in a draft specification. The curve
+    was faired and clamped by section_authoring when the model proposed it.
+    """
+    authored = section["authored"]
+    result = {"id": str(section["id"]), "x_m": float(section["x_m"]),
+              "points_yz_m": [[float(y), float(z)] for y, z in authored["points_yz_m"]],
+              "confidence": 0.0, "coverage": 0.0, "source_label": authored["source_label"],
+              "evidence": {"roi_px": list(section["roi_px"]), "calibration": dict(section["calibration"]),
+                           "source_file": source_file, "identity_status": "model_authored",
+                           "authored_basis": authored["basis"],
+                           "human_assistance": section.get("evidence", "Model-authored draft section.")},
+              "warnings": [f"Model-authored section ({authored['source_label']}); not measured from source ink. "
+                           "Basis: " + authored["basis"]]}
+    return result, {"status": "model_authored", "source_label": authored["source_label"]}
+
+
 def extract_sections(spec: dict, base_dir: Path) -> dict:
     """Measure supported starboard half-sections and return structured gaps.
 
@@ -993,9 +1094,16 @@ def extract_sections(spec: dict, base_dir: Path) -> dict:
             output["gaps"].append(_gap(section_id, "invalid_view", "Each section requires a unique nonempty id."))
             continue
         seen.add(section_id)
+        if "authored" in section:
+            result, diagnostic = authored_section(section, source["file"])
+            output["sections"].append(result)
+            output["diagnostics"]["sections"][section_id] = diagnostic
+            continue
         try:
             extract = extract_pieces if "pieces" in section else _extract_one
-            result, diagnostic = extract(image, section, source["file"], input_details)
+            from .draft import check_draft
+            options = {"draft": True} if extract is _extract_one and check_draft(spec.get("draft")) else {}
+            result, diagnostic = extract(image, section, source["file"], input_details, **options)
             output["sections"].append(result)
             output["diagnostics"]["sections"][section_id] = diagnostic
         except DrawingError as exc:

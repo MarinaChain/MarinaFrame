@@ -1,7 +1,9 @@
 """Source-bound, typed operations for the hull reconstruction agent.
 
-The model chooses opaque candidates, never Python, paths, or geometry.  A
-candidate is a hypothesis about visible ink.  Selecting it remains a semantic
+The model chooses opaque candidates, never Python or paths. In draft mode it
+may also write a section's geometry (propose_section); code fairs it, checks it
+and labels it ai_inferred or ai_corrected. A traced candidate is a hypothesis
+about visible ink.  Selecting it remains a semantic
 review obligation even when the ordinary engine can construct a valid solid.
 All image/native work runs in the existing bounded worker profile.
 """
@@ -14,18 +16,23 @@ import fcntl
 import json
 import math
 import os
+import re
 from pathlib import Path
 import stat
 import sys
 from uuid import uuid4
 
-from .draft import DRAFT_STATUS, guessed_choices, make_guesses, model_choice_guess
+import numpy as np
+
+from .draft import (DRAFT_STATUS, guessed_choices, make_guesses, model_authored_guess, model_choice_guess,
+                    section_sources)
 from .investigation_tools import (INVESTIGATION_ARGUMENTS, InvestigationTools, ToolArgumentError,
                                   check_investigation_arguments)
 from .ingest import _grid_evidence
 from .isolation import DEFAULT_LIMITS, run_isolated, supervise_process
 from .provenance import digest_file, digest_object, safe_relative_file, write_json
 from .schema import MAX_SPEC_BYTES, load_bounded_json, loads_bounded_json, validate_spec
+from . import section_authoring
 
 
 DOMAIN_VERSION = "source_bound_tools_v1"
@@ -46,6 +53,29 @@ INSPECTION_BUDGET_SHARE = 0.5
 MAX_INSPECTION_BYTES = 24 * 1024 * 1024
 SEMANTIC_FLAGS = {"human_semantic_review_required": True, "engineering_approved": False,
                   "identity_certified": False}
+# propose_section: the model writes a section's shape (section_authoring.py).
+PROPOSE_SECTION_ARGUMENTS = {"section_id", "form", "basis", "replaces", "offsets_m", "fullness", "shape",
+                             "beam_m", "draft_m", "bilge_radius_m", "deadrise_deg"}
+PROPOSE_SECTION_DESCRIPTION = (
+    "Write the shape of a section yourself when it has no usable traced curve or you judge the trace wrong. "
+    "form half_breadths: offsets_m = 5-24 [height_m, half_breadth_m] pairs; blend: the two neighbouring "
+    "sections blended by station position, scaled by fullness (0.5-1.5); standard_form: U or V section with "
+    "beam_m, draft_m, optional bilge_radius_m and deadrise_deg. The host fairs the curve, clamps it to the "
+    "declared beam and depth, shows it on the source panel and returns warnings. build_draft uses it, labelled "
+    "ai_inferred (replaces 'none') or ai_corrected (replaces a traced candidate id).")
+PROPOSE_SECTION_PROPERTIES = {
+    "section_id": {"type": "string", "maxLength": 64},
+    "form": {"type": "string", "enum": list(section_authoring.FORMS)},
+    "basis": {"type": "string", "maxLength": section_authoring.MAX_BASIS_CHARS},
+    "replaces": {"type": "string", "maxLength": 64},
+    "offsets_m": {"type": "array", "minItems": section_authoring.MIN_OFFSETS,
+                  "maxItems": section_authoring.MAX_OFFSETS,
+                  "items": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}},
+    "fullness": {"type": "number", "minimum": section_authoring.FULLNESS_RANGE[0],
+                 "maximum": section_authoring.FULLNESS_RANGE[1]},
+    "shape": {"type": "string", "enum": list(section_authoring.SHAPES)},
+    "beam_m": {"type": "number"}, "draft_m": {"type": "number"},
+    "bilge_radius_m": {"type": "number"}, "deadrise_deg": {"type": "number"}}
 
 
 class ToolInputError(ValueError):
@@ -58,6 +88,15 @@ def _definition(name, description, properties=None, required=()):
         "additionalProperties": False}}
 
 
+# Station overlay artifacts a render worker may return: allowed display keys and file names.
+OVERLAY_ARTIFACT_KEYS = {"station_overlay": ("panel", "section_ids", "crop_box_px", "scale"),
+                         "station_overlay_sheet": ("panel_count",),
+                         "station_scoreboard": ()}
+OVERLAY_FILE_NAMES = {"station_overlay": re.compile(r"station-overlay-\d{2}\.png"),
+                      "station_overlay_sheet": re.compile(r"station-overlay-sheet\.png"),
+                      "station_scoreboard": re.compile(r"station-scoreboard\.json")}
+
+
 def _artifact(path: Path, task_dir: Path, *, kind: str, **extra) -> dict:
     relative = path.relative_to(task_dir).as_posix()
     safe_relative_file(task_dir, relative)
@@ -65,8 +104,9 @@ def _artifact(path: Path, task_dir: Path, *, kind: str, **extra) -> dict:
     mime = {".png": "image/png", ".json": "application/json", ".step": "model/step",
             ".stl": "model/stl"}.get(suffix, "application/octet-stream")
     sha = digest_file(path)
-    return {"id": "artifact-" + sha[:24], "sha256": sha, "mime_type": mime,
-            "path": relative, "kind": kind, "bytes": path.stat().st_size, **extra}
+    # Computed fields come last, so caller-supplied extras can never replace them.
+    return {**extra, "id": "artifact-" + sha[:24], "sha256": sha, "mime_type": mime,
+            "path": relative, "kind": kind, "bytes": path.stat().st_size}
 
 
 class DomainTools(InvestigationTools):
@@ -168,7 +208,10 @@ class DomainTools(InvestigationTools):
     def describe(self) -> dict:
         sections = [{"id": s.get("id"), "x_m": s.get("x_m"), "roi_px": s.get("roi_px"),
                      "selected_candidate_id": self.state["selected"].get(s.get("id")),
-                     "inspected": s.get("id") in self.state["catalog"]}
+                     "catalog_available": s.get("id") in self.state["catalog"],
+                     "inspection_failure": self.state["catalog"].get(s.get("id"), {}).get("inspection_failure"),
+                     "inspected": s.get("id") in self.state["catalog"] and not
+                                  self.state["catalog"][s.get("id")].get("inspection_failure")}
                     for s in self.spec.get("sections", []) if isinstance(s, dict)]
         current = next((b for b in reversed(self.state["builds"])
                         if b["generation_id"] == self.generation_id and b["revision_id"] == self.revision_id), None)
@@ -187,7 +230,8 @@ class DomainTools(InvestigationTools):
                 "generation_id": self.generation_id, "sections": sections,
                 "section_count": len(sections), "selected_count": len(self.state["selected"]),
                 "remaining_count": len(sections) - len(self.state["selected"]),
-                "catalog_ready": bool(sections) and all(s["inspected"] for s in sections),
+                "catalog_ready": bool(sections) and all(s["catalog_available"] for s in sections),
+                "failed_inspection_section_ids": [s["id"] for s in sections if s["inspection_failure"]],
                 "inspected_sections": inspected, "inspected_section_count": len(ordered),
                 "inspected_sections_truncated": len(ordered) > INSPECTION_BATCH,
                 "remaining_section_ids": [s["id"] for s in sections if not s["inspected"]],
@@ -200,6 +244,8 @@ class DomainTools(InvestigationTools):
                 "model_choice_section_ids": sorted(self.state.get("model_choices", {})),
                 "sheet_setup_ids": sorted(self.state.get("sheet_setups", {})),
                 "view_count": len(self.state.get("views", [])),
+                "non_improving_edits": self.state.get("non_improving_edits", 0),
+                "best_valid_candidate": copy.deepcopy(self.state.get("best_valid_candidate")),
                 "input_errors": self.state["input_errors"][:32], **SEMANTIC_FLAGS}
 
     def catalog(self) -> list[dict]:
@@ -216,6 +262,8 @@ class DomainTools(InvestigationTools):
                         ["selections"]),
             _definition("build_provisional", "Run the unchanged, fail-closed drawing/CAD engine in an isolated worker using the current explicit candidate selections. Keep the last valid candidate if this attempt fails."),
             _definition("build_draft", "Build a best-effort draft after full inspection: take the best-scoring line where a section is ambiguous and span unreadable stations. Each such choice is recorded as an open guess. A draft is never verified and cannot be finished for review until a person resolves every guess."),
+            _definition("propose_section", PROPOSE_SECTION_DESCRIPTION, PROPOSE_SECTION_PROPERTIES,
+                        ["section_id", "form", "basis"]),
             _definition("render_candidate", "Reimport a verified exported STEP file and render a named physical view. Output identifies the revision and whether it is an older preserved candidate.",
                         {"view": {"type": "string", "enum": list(VIEWS)}}, ["view"]),
             _definition("validate_candidate", "Verify the current immutable run and independently reimport STEP. Report source-to-CAD section checks and remaining semantic review obligations; never grant engineering approval."),
@@ -225,16 +273,26 @@ class DomainTools(InvestigationTools):
         if not isinstance(arguments, dict) or len(json.dumps(arguments, allow_nan=False)) > 65536:
             raise ToolInputError("Tool arguments must be a bounded JSON object.")
         expected = {"inspect_source": {"section_ids"}, "select_contours": {"selections"},
-                    "build_provisional": set(), "build_draft": set(), "render_candidate": {"view"},
-                    "validate_candidate": set(), **INVESTIGATION_ARGUMENTS}
+                    "build_provisional": set(), "build_draft": set(), "build_first_hull": set(), "render_candidate": {"view"},
+                    "validate_candidate": set(), "propose_section": PROPOSE_SECTION_ARGUMENTS,
+                    **INVESTIGATION_ARGUMENTS}
         if name not in expected:
             raise ToolInputError("Unknown domain operation.")
         if set(arguments) - expected[name]:
-            raise ToolInputError("Unsupported tool argument; paths, code, and geometry are not accepted.")
+            raise ToolInputError("Unsupported tool argument; paths and code are not accepted.")
         if name in INVESTIGATION_ARGUMENTS:
             try:
                 check_investigation_arguments(name, arguments, self.spec)
             except ToolArgumentError as exc:
+                raise ToolInputError(str(exc)) from None
+        if name == "propose_section":
+            known = {s.get("id") for s in self.spec.get("sections", []) if isinstance(s, dict)}
+            if arguments.get("section_id") not in known:
+                raise ToolInputError("section_id must be a known section of this task.")
+            try:
+                section_authoring.check_proposal_arguments(
+                    {k: v for k, v in arguments.items() if v is not None})
+            except section_authoring.ProposalError as exc:
                 raise ToolInputError(str(exc)) from None
         if name == "inspect_source" and "section_ids" in arguments:
             ids = arguments["section_ids"]
@@ -274,9 +332,67 @@ class DomainTools(InvestigationTools):
                 if self.cancel_event is not None and self.cancel_event.is_set():
                     return self._observation(False, "cancelled", error_code="cancelled")
                 method = getattr(self, "_" + tool_name)
-                return method(**arguments)
+                incumbent = copy.deepcopy(self.state) if tool_name in ("propose_section", "assign_station") and self.state.get("vessel_table") else None
+                result = method(**arguments)
+                if incumbent is not None and result.get("ok"):
+                    from .fit_feedback import score, current_table
+                    from .whole_vessel_score import keep_edit
+                    before = incumbent.get("fit_score", {})
+                    after = score(self)
+                    sid = arguments.get("section_id")
+                    old_curve = next((r["points_yz_m"] for r in incumbent["vessel_table"]["stations"] if r["id"] == sid), None)
+                    new_curve = self._section_curve(sid)
+                    identical = old_curve == new_curve
+                    old_ink = before.get("station_ink_fit", {}).get(sid, {})
+                    new_ink = after.get("station_ink_fit", {}).get(sid, {})
+                    protected_ink = old_ink.get("near_fraction", 0) >= .9 and old_ink.get("rms_m") is not None
+                    decision = keep_edit(before, after, before.get("cells"), after.get("cells"), gap_fill_only=old_curve is None)
+                    if protected_ink and new_ink.get("rms_m", float("inf")) > old_ink["rms_m"] + 1e-6:
+                        decision = {**decision, "keep": False, "reason": "Kept supported ink; proposed curve has worse ink RMS.",
+                                    "ink_rms_before_m": old_ink["rms_m"], "ink_rms_after_m": new_ink.get("rms_m")}
+                    if identical or not decision["keep"]:
+                        self.state = incumbent
+                        self.state["non_improving_edits"] = self.state.get("non_improving_edits", 0) + 1
+                        self._save()
+                        result = self._observation(True, "kept_previous_curve", fit_comparison=decision,
+                            repeated_proposal=identical,
+                            message=f"Kept previous curve: combined fit {before.get('combined_fit')} vs proposed {after.get('combined_fit')}. Finish the best draft or try a different section.")
+                    else:
+                        self.state["vessel_table"] = current_table(self).to_json()
+                        self.state["fit_score"] = after
+                        self.state["non_improving_edits"] = 0
+                        self._save()
+                        result["fit_comparison"] = decision
+                if tool_name in ("assign_station", "enumerate_strokes", "inspect_source", "trace_from_point", "trace_corridor"):
+                    from .accuracy_feedback import candidate_catalog, candidate_feedback
+                    by_id = {s["id"]: s for s in self.spec.get("sections", [])}
+                    sid = arguments.get("section_id")
+                    ids = [sid] if sid in by_id else result.get("returned_section_ids", [])
+                    result["candidate_guidance"] = [{"section_id": section_id,
+                        "candidates": candidate_catalog(by_id[section_id], self.state["catalog"].get(section_id, {}))}
+                        for section_id in ids[:12] if section_id in by_id]
+                    if tool_name == "assign_station" and sid in by_id:
+                        candidate = next((c for c in self.state["catalog"].get(sid, {}).get("candidates", [])
+                            if c["candidate_id"] == arguments.get("candidate_id")), {})
+                        result["accuracy_feedback"] = candidate_feedback(by_id[sid], candidate, arguments.get("label_text", ""))
+                if tool_name == "build_draft":
+                    from .accuracy_feedback import candidate_feedback
+                    chosen = {g["section_id"]: g["chosen_candidate_id"] for g in self.open_guesses}
+                    chosen.update(self.state["selected"])
+                    result["section_accuracy_feedback"] = [{"section_id": s["id"],
+                        **candidate_feedback(s, next((c for c in self.state["catalog"].get(s["id"], {}).get("candidates", [])
+                            if c["candidate_id"] == chosen.get(s["id"])), {}))}
+                        for s in self.spec["sections"] if chosen.get(s["id"])]
+                return result
         except ToolInputError as exc:
-            return self._observation(False, "rejected", error_code="invalid_tool_arguments", message=str(exc))
+            result = self._observation(False, "rejected", error_code="invalid_tool_arguments", message=str(exc))
+            if tool_name == "assign_station":
+                from .accuracy_feedback import candidate_catalog
+                sid = arguments.get("section_id")
+                section = next((s for s in self.spec["sections"] if s["id"] == sid), None)
+                if section:
+                    result["current_candidate_catalog"] = candidate_catalog(section, self.state["catalog"].get(sid, {}))
+            return result
         except (ValueError, OSError, TypeError, KeyError, RuntimeError) as exc:
             return self._observation(False, "blocked", error_code="domain_integrity_or_input_error",
                                      exception_type=type(exc).__name__)
@@ -352,7 +468,25 @@ class DomainTools(InvestigationTools):
                                                         "section_ids": missing}, out)
             resources = {"worker_state": outcome["state"], "wall_seconds": outcome["elapsed_seconds"]}
             if result is None:
-                return self._observation(False, outcome["state"], error_code="inspection_worker_failed", resources=resources)
+                limited = outcome.get("worker_error", {}).get("error_code") == "resource_limit"
+                if limited:
+                    by_id = {section["id"]: section for section in self.spec["sections"]}
+                    for sid in missing:
+                        section = by_id[sid]
+                        self.state["catalog"].setdefault(sid, {
+                            "section_id": sid, "source_sha256": self.state["sources"]["source"]["sha256"],
+                            "x_m": section["x_m"], "roi_px": section["roi_px"],
+                            "calibration": section["calibration"], "candidates": [],
+                            "inspection_failure": "resource_limit",
+                            "grid_evidence": {"lattice_detected": False, "unique_non_grid_candidate_id": None,
+                                              "non_grid_competing_components": None}, **SEMANTIC_FLAGS})
+                    self._save()
+                return self._observation(False, outcome["state"],
+                    error_code="resource_limit" if limited else "inspection_worker_failed",
+                    message="Source inspection exceeds the bounded evidence budget." if limited
+                            else "Source inspection worker failed; no recoverable diagnostic is available.",
+                    failed_section_ids=missing, recovery_tools=["enumerate_strokes", "trace_from_point", "trace_corridor"] if limited else [],
+                    resources=resources)
             for section in result["sections"]:
                 # Coordinates/complete diagnostics remain in immutable inspection
                 # evidence files; persistent selection state only needs corridors.
@@ -371,12 +505,18 @@ class DomainTools(InvestigationTools):
             for candidate in item["candidates"]:
                 candidate.pop("contour_selection", None)
                 candidate.pop("source_points_px", None)
+                if "authored" in candidate:  # The curve stays in the task state.
+                    candidate["authored"] = {k: candidate["authored"][k] for k in ("source_label", "basis")}
             # Full diagnostics and coordinates remain in source-bound artifacts.
             item.pop("retained_diagnostics", None)
             sections.append(item)
         page_artifacts = [a for a in self.state["inspection_artifacts"] if
                           a["kind"] == "source_page" or a.get("evidence_kind") == "source_page"][-2:]
-        observation = self._observation(True, "observed", sections=sections, resources=resources,
+        failed_ids = [item["section_id"] for item in sections if item.get("inspection_failure")]
+        observation = self._observation(not failed_ids, "resource_limited" if failed_ids else "observed",
+            error_code="resource_limit" if failed_ids else None,
+            message="Cached failed inspection; use bounded ink tools." if failed_ids else "Source inspection evidence.",
+            failed_section_ids=failed_ids, sections=sections, resources=resources,
             returned_section_ids=list(ids), remaining_requested_section_ids=requested[len(ids):],
             remaining_section_ids=[s["id"] for s in self.spec["sections"] if s["id"] not in self.state["catalog"]][:24],
             artifacts=[a for a in self.state["inspection_artifacts"] if a.get("section_id") in ids] + page_artifacts)
@@ -438,6 +578,15 @@ class DomainTools(InvestigationTools):
             if cid is None:
                 continue
             candidate = next(c for c in self.state["catalog"][section["id"]]["candidates"] if c["candidate_id"] == cid)
+            if "authored" in candidate:
+                # The model wrote this section; the build uses its curve as is.
+                authored = candidate["authored"]
+                section.pop("contour_selection", None)
+                section["authored"] = {key: copy.deepcopy(authored[key])
+                                       for key in ("source_label", "basis", "points_yz_m")}
+                section["evidence"] = (section.get("evidence", "")[:7000] + " Model-authored section " + cid + " (" +
+                                       authored["source_label"] + "); not verified; a person must confirm or replace it.")
+                continue
             if not candidate.get("declared_pieces"):
                 section["contour_selection"] = copy.deepcopy(candidate["contour_selection"])
             if candidate.get("z_range_m") is not None:
@@ -452,6 +601,15 @@ class DomainTools(InvestigationTools):
                 section["evidence"] = (prior[:7000] + " Provisional source-bound agent/policy selection " + cid +
                                         "; excluded strokes retained; human semantic review required.")
         spec["sections"] = kept
+        if self.state.get("first_hull_spec"):
+            present = {s["id"] for s in kept}
+            spec["sections"].extend(copy.deepcopy(s) for s in self.state["first_hull_spec"]["sections"] if s["id"] not in present)
+        if self.state.get("first_hull_spec"):
+            fitted = {s["id"]: s for s in self.state["first_hull_spec"]["sections"]}
+            for index, section in enumerate(spec["sections"]):
+                sid = section["id"]
+                if sid not in self.state.get("authored_sections", {}) and sid not in self.state.get("model_choices", {}):
+                    spec["sections"][index] = copy.deepcopy(fitted.get(sid, section))
         selection = {"revision_id": self.revision_id, "generation_id": self.generation_id,
                      "selected": self.state["selected"], "source_sha256": self.state["sources"], **SEMANTIC_FLAGS}
         if self.open_guesses:
@@ -481,8 +639,15 @@ class DomainTools(InvestigationTools):
                      "gaps": result.get("gaps", [])[:64] if result else [{"kind": outcome.get("error_code", outcome["state"])}],
                      "metrics": result.get("metrics", {}) if result else {}, **SEMANTIC_FLAGS}
         self.state["builds"].append(candidate)
-        if valid:
+        if valid and not self.state.get("vessel_table"):
             self.state["last_valid_candidate"] = candidate
+        if valid and self.state.get("vessel_table"):
+            fit = self.state.get("fit_score", {}).get("combined_fit")
+            candidate["combined_fit"] = fit
+            best = self.state.get("best_valid_candidate")
+            if best is None or fit is None or best.get("combined_fit") is None or fit >= best["combined_fit"]:
+                self.state["best_valid_candidate"] = copy.deepcopy(candidate)
+            self.state["last_valid_candidate"] = copy.deepcopy(self.state.get("best_valid_candidate") or candidate)
         self.state.update(validation=None, rendered_views=[])
         self._save()
         artifacts = []
@@ -492,9 +657,16 @@ class DomainTools(InvestigationTools):
                 artifacts.extend(_artifact(out / result["exports"][key], self.task_dir, kind="provisional_" + key)
                                  for key in ("step", "stl", "mesh") if key in result["exports"])
         return self._observation(valid, candidate["status"], candidate=candidate,
+                                 next_actions=[{"section_id": item.get("section_id"), "gap": item.get("kind"),
+                                                "suggestion": "Re-trace this section, pick another candidate, or finish to accept draft."}
+                                               for item in candidate["gaps"]],
                                  validation_errors=candidate["gaps"], artifacts=artifacts,
                                  resources=outcome.get("resources", {}), changed=True,
                                  last_valid_preserved=self.state["last_valid_candidate"] is not None)
+
+    def _build_first_hull(self):
+        from .first_hull_tools import build_first_hull
+        return build_first_hull(self)
 
     def _build_draft(self):
         """Best-effort build: guess where the source is ambiguous, then build.
@@ -507,8 +679,9 @@ class DomainTools(InvestigationTools):
         if not sections or any(s["id"] not in self.state["catalog"] for s in sections):
             return self._observation(False, "blocked", error_code="draft_requires_complete_inspection",
                                      message="Inspect every section before a draft is built.")
+        self._assign_shared_panels()
         guesses = make_guesses(sections, self.state["selected"], self.state["catalog"],
-                               self.state.get("model_choices"))
+                               self.state.get("model_choices"), self.state.get("authored_sections"))
         if guesses != self.open_guesses:
             self.state.update(guesses=guesses, revision=self.state["revision"] + 1,
                               validation=None, rendered_views=[])
@@ -516,7 +689,174 @@ class DomainTools(InvestigationTools):
         observation = self._build_provisional()
         observation["draft"] = ({"status": DRAFT_STATUS, "guesses": copy.deepcopy(guesses)}
                                 if guesses else None)
+        record = self._build_record(observation.get("candidate"))
+        if record is not None and record.get("sections"):
+            observation["section_sources"] = section_sources(record["sections"], guesses)
         return observation
+
+    def _build_record(self, candidate):
+        """The immutable result record of a build, or None."""
+        if not isinstance(candidate, dict) or not isinstance(candidate.get("path"), str):
+            return None
+        try:
+            path = safe_relative_file(self.task_dir, candidate["path"] + "/result.json")
+        except (ValueError, OSError):
+            return None
+        return load_bounded_json(path, max_bytes=MAX_INSPECTION_BYTES, max_nodes=600_000)
+
+    # ------------------------------------------------------------ authoring
+    def _section_curve(self, section_id):
+        """The curve (points_yz_m) a draft would build for a section, or None.
+
+        A model-authored candidate gives its curve; a traced candidate (the
+        selection, the model's station claim or the best guess) is converted
+        from its source pixels with the section calibration.
+        """
+        from . import investigation as inv
+        from .draft import candidate_score
+        section = next(s for s in self.spec["sections"] if s["id"] == section_id)
+        candidates = [c for c in self.state["catalog"].get(section_id, {}).get("candidates", [])
+                      if c.get("selectable") is True]
+        choices = (self.state["selected"],
+                   {k: v["candidate_id"] for k, v in self.state.get("authored_sections", {}).items()},
+                   {k: v["candidate_id"] for k, v in self.state.get("model_choices", {}).items()})
+        chosen = None
+        for choice in choices:
+            if section_id in choice:
+                chosen = next((c for c in candidates if c["candidate_id"] == choice[section_id]), None)
+                if chosen is not None:
+                    break
+        if chosen is None:
+            traced = [c for c in candidates if not c.get("model_traced")]
+            chosen = max(traced, key=candidate_score, default=None)
+        if chosen is None:
+            return None
+        if "authored" in chosen:
+            return chosen["authored"]["points_yz_m"]
+        trace = inv.dense_trace(chosen)
+        if trace is None or len(trace[0]) < 5:
+            return None
+        calibration = section["calibration"]
+        ppm = float(calibration["pixels_per_metre"])
+        heights = (float(calibration["baseline_px"]) - trace[0]) / ppm
+        breadths = np.maximum(0.0, (trace[1] - float(calibration["centerline_px"])) / ppm)
+        order = np.argsort(heights)
+        return [[float(breadths[i]), float(heights[i])] for i in order]
+
+    def _neighbour_curves(self, section_id):
+        """The nearest sections below and above in x that have a curve, as (x_m, points)."""
+        x = next(s["x_m"] for s in self.spec["sections"] if s["id"] == section_id)
+        found = {"lower": None, "upper": None}
+        others = sorted((s for s in self.spec["sections"] if s["id"] != section_id),
+                        key=lambda s: abs(s["x_m"] - x))
+        for other in others:
+            side = "lower" if other["x_m"] < x else "upper"
+            if found[side] is None:
+                curve = self._section_curve(other["id"])
+                if curve is not None:
+                    found[side] = (other["x_m"], curve)
+            if all(found.values()):
+                break
+        return found["lower"], found["upper"]
+
+    def _propose_section(self, section_id, form, basis, replaces="none", **parameters):
+        """Make the model's section shape a fair curve and this section's draft choice."""
+        section = next(s for s in self.spec["sections"] if s["id"] == section_id)
+        entry = self.state["catalog"].get(section_id)
+        candidates = entry["candidates"] if entry else []
+        if replaces != "none" and not any(c["candidate_id"] == replaces for c in candidates):
+            return self._observation(False, "proposal_refused", error_code="unknown_replaced_candidate",
+                                     message="replaces must be 'none' or a candidate id of this section.")
+        lower, upper = self._neighbour_curves(section_id)
+        constraints = self.spec.get("constraints") or {}
+        arguments = {"form": form, "basis": basis, "replaces": replaces,
+                     **{k: v for k, v in parameters.items() if v is not None}}
+        try:
+            authored = section_authoring.author_section(
+                arguments, x_m=section["x_m"], z_limits=(section["z_min_m"], section["z_max_m"]),
+                half_beam_limit=constraints["beam_m"] / 2 if "beam_m" in constraints else None,
+                depth_limit=constraints.get("depth_m"), lower=lower, upper=upper)
+        except section_authoring.ProposalError as exc:
+            return self._observation(False, "proposal_refused", error_code="unusable_section_proposal",
+                                     message=str(exc), section_id=section_id)
+        warnings = authored["warnings"]
+        selected = self.state["selected"].get(section_id)
+        label = "ai_corrected" if replaces != "none" else "ai_inferred"
+        previous = self.state.get("authored_sections", {}).get(section_id)
+        if replaces == "none" and selected is not None:
+            label = "ai_corrected"
+            warnings.append(f"Replaces the selected trace {selected}; labelled ai_corrected.")
+        elif replaces == "none" and previous and previous["verifier_evidence"]["source_label"] == "ai_corrected":
+            label = "ai_corrected"  # A revision of a correction still replaces that trace.
+        cid = "authored-" + digest_object({"section": section_id, "arguments": arguments,
+                                           "points": authored["points_yz_m"]})[:20]
+        parameters = {k: v for k, v in arguments.items() if k not in ("form", "basis", "replaces")}
+        candidate = {"candidate_id": cid, "hypothesis": "model_authored_" + form, "generated_by": ["propose_section"],
+                     "selectable": True, "model_traced": True, "grid_supported_hypothesis": False,
+                     "non_grid_competing_components": None, "identity_certified": False,
+                     "authored": {"source_label": label, "basis": basis, "form": form, "replaces": replaces,
+                                  "parameters": parameters, "points_yz_m": authored["points_yz_m"],
+                                  "checks": authored["checks"], "warnings": warnings}}
+        if entry is None:
+            # A section that was never inspected still gets a catalog entry, so
+            # the draft can be built; its only line is the model's.
+            entry = self.state["catalog"].setdefault(section_id, {
+                "section_id": section_id, "source_sha256": self.state["sources"]["source"]["sha256"],
+                "x_m": section["x_m"], "roi_px": section["roi_px"], "calibration": section["calibration"],
+                "candidates": [], "inspection_failure": None,
+                "grid_evidence": {"lattice_detected": False, "unique_non_grid_candidate_id": None,
+                                  "non_grid_competing_components": None}, **SEMANTIC_FLAGS})
+        # Only the newest proposal of a section stays in the catalog; older
+        # ones stay in their evidence files.
+        entry["candidates"] = [c for c in entry["candidates"] if "authored" not in c] + [candidate]
+        evidence = {"verifier": "section_authoring_checks_v1", "passed": True, "identity_certified": False,
+                    "source_label": label, "form": form, "checks": authored["checks"], "warnings": warnings[:8]}
+        record = {"candidate_id": cid, "verifier_evidence": evidence}
+        self.state.setdefault("authored_sections", {})[section_id] = record
+        self.state.setdefault("model_choices", {}).pop(section_id, None)
+        self.state["selected"].pop(section_id, None)
+        selectable = [c for c in entry["candidates"] if c.get("selectable") is True]
+        guess = model_authored_guess(section, selectable, record)
+        guesses = [g for g in self.open_guesses if g["section_id"] != section_id] + [guess]
+        order = {s["id"]: i for i, s in enumerate(self.spec["sections"])}
+        self.state.update(guesses=sorted(guesses, key=lambda g: order[g["section_id"]]),
+                          revision=self.state["revision"] + 1, validation=None, rendered_views=[])
+        directory = self.root / "authored"
+        directory.mkdir(exist_ok=True)
+        write_json(directory / f"{cid}.json", {"section_id": section_id, **candidate,
+                                               "neighbours_x_m": [n[0] for n in (lower, upper) if n is not None]})
+        view, artifact = self._authored_overlay(section, candidate, replaces)
+        self._save()
+        points = authored["points_yz_m"]
+        summary = [points[i] for i in np.linspace(0, len(points) - 1, 7).astype(int)]
+        return self._observation(True, "section_proposed", section_id=section_id, candidate_id=cid,
+                                 source_label=label, warnings=warnings, checks=authored["checks"],
+                                 curve_summary_yz_m=summary, guess=copy.deepcopy(guess), view=view,
+                                 artifacts=[artifact],
+                                 note=("Orange: your section on the source panel (blue: the trace it replaces). "
+                                       "build_draft uses it, labelled " + label + "; propose again to revise it."))
+
+    def _authored_overlay(self, section, candidate, replaces):
+        """The proposed curve (orange) and any replaced trace (blue) on the source panel."""
+        from . import investigation as inv
+        image, _, source_sha = self._source()
+        calibration = section["calibration"]
+        ppm = float(calibration["pixels_per_metre"])
+        centre, baseline = float(calibration["centerline_px"]), float(calibration["baseline_px"])
+        pixels = [(centre + y * ppm, baseline - z * ppm) for y, z in candidate["authored"]["points_yz_m"]]
+        replaced = next((c for c in self.state["catalog"][section["id"]]["candidates"]
+                         if c["candidate_id"] == replaces), None)
+        trace = inv.dense_trace(replaced) if replaced else None
+        region = inv.clip_region(section["roi_px"], image.shape[1], image.shape[0])
+
+        def overlay(draw, to_view):
+            if trace is not None:
+                draw.line([to_view(x, y) for x, y in zip(trace[1][::3], trace[0][::3])], fill=(40, 90, 220), width=2)
+            draw.line([to_view(x, y) for x, y in pixels], fill=(245, 130, 48), width=3)
+
+        payload, meta = inv.render_view(image, region, inv.MAX_VIEW_SIDE_PX, overlay=overlay)
+        return self._store_view(payload, meta, "authored_section", source_sha, section_id=section["id"],
+                                candidate_id=candidate["candidate_id"])
 
     def _verified_candidate(self, *, allow_previous=False, allow_draft=False):
         from .run_record import verify_run
@@ -538,9 +878,14 @@ class DomainTools(InvestigationTools):
     def _render_candidate(self, view):
         candidate, run = self._verified_candidate(allow_previous=True, allow_draft=True)
         out = self.root / "renders" / uuid4().hex
-        outcome, result = self._worker("render", {"run_dir": str(run), "view": view}, out, native=True)
+        request = {"run_dir": str(run), "view": view}
+        overlay_request, overlay_warning = self._station_overlay_request(candidate)
+        if overlay_request is not None:
+            request["station_overlay"] = overlay_request
+        outcome, result = self._worker("render", request, out, native=True)
         if result is None:
             return self._observation(False, outcome["state"], error_code="render_worker_failed")
+        station_overlay, overlay_artifacts = self._station_overlay_result(result, out, overlay_warning)
         stale = candidate["generation_id"] != self.generation_id or candidate["revision_id"] != self.revision_id
         if not stale and view not in self.state["rendered_views"]:
             self.state["rendered_views"].append(view)
@@ -552,8 +897,59 @@ class DomainTools(InvestigationTools):
                                                       model_eligible=False),
                                             _artifact(out / result["model_observation"]["file"], self.task_dir,
                                                       kind="model_observation", view=view,
-                                                      **{k: v for k, v in result["model_observation"].items() if k != "file"})],
+                                                      **{k: v for k, v in result["model_observation"].items() if k != "file"})]
+                                 + overlay_artifacts,
+                                 station_overlay=station_overlay,
+                                 fit_score={k: v for k, v in self.state.get("fit_score", {}).items() if k != "cells"},
                                  resources={"wall_seconds": outcome["elapsed_seconds"]})
+
+    def _station_overlay_request(self, candidate):
+        """Render-worker inputs of the station overlay, as (request, None) or (None, warning).
+
+        The source is saved once as PNG beside the domain, because the worker
+        must not parse a PDF. A station that the build does not contain gets
+        its best trace as the reference curve.
+        """
+        try:
+            from PIL import Image
+            image, _, source_sha = self._source()
+            source_png = self.root / f"overlay-source-{source_sha[:24]}.png"
+            if not source_png.is_file():
+                partial = source_png.with_suffix(".partial.png")
+                Image.fromarray(image).save(partial)
+                partial.replace(source_png)
+            record = self._build_record(candidate) or {}
+            built = {s.get("id") for s in record.get("sections", [])}
+            sections, references = [], {}
+            for section in self.spec.get("sections", []):
+                sections.append({key: section[key] for key in ("id", "x_m", "roi_px", "calibration")})
+                if section["id"] not in built:
+                    curve = self._section_curve(section["id"])
+                    if curve is not None:
+                        references[section["id"]] = curve
+            return {"source_image": str(source_png), "sections": sections, "references": references}, None
+        except Exception as exc:
+            return None, "Station overlay skipped: " + type(exc).__name__ + "."
+
+    def _station_overlay_result(self, result, out, warning):
+        """The render observation's station_overlay field and its artifacts; never fails the render."""
+        overlay = result.get("station_overlay")
+        if not isinstance(overlay, dict) or overlay.get("status") != "rendered":
+            reason = overlay.get("warning") if isinstance(overlay, dict) else None
+            return {"status": "skipped", "warning": warning or reason or "Station overlay skipped."}, []
+        try:
+            artifacts = []
+            for item in overlay["artifacts"]:
+                kind, name = item["kind"], item["file"]
+                if kind not in OVERLAY_ARTIFACT_KEYS or not OVERLAY_FILE_NAMES[kind].fullmatch(name):
+                    raise ValueError("Unexpected overlay artifact.")
+                # The worker output is untrusted: copy only the known display keys.
+                extra = {k: item[k] for k in OVERLAY_ARTIFACT_KEYS[kind] if k in item}
+                extra["model_eligible"] = False
+                artifacts.append(_artifact(out / name, self.task_dir, kind=kind, **extra))
+        except (ValueError, OSError, TypeError, KeyError) as exc:
+            return {"status": "skipped", "warning": "Station overlay skipped: " + type(exc).__name__ + "."}, []
+        return {key: value for key, value in overlay.items() if key != "artifacts"}, artifacts
 
     def _validation_context(self, candidate, run):
         from .validation_contract import build_context
@@ -732,7 +1128,7 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
     """Private worker operation. No labels/reference geometry are opened."""
     import numpy as np
     from PIL import Image, ImageDraw
-    from .ingest import (DrawingError, _candidate_evidence, _eligible_trace_mask, _extract_one,
+    from .ingest import (COMPLEXITY_REDUCTION_WARNING, DrawingError, _candidate_evidence, _eligible_trace_mask, _extract_one,
                          _foreground, _read_image, _source_endpoint_hypothesis, _stroke_identity, _trace)
     from .resources import validate_sources
     spec = load_bounded_json(spec_path)
@@ -879,8 +1275,15 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
             selection = {"anchors_px": anchors, "half_width_px": 2.75}
             cid = "contour-" + digest_object({"source": source_sha, "section": section,
                                               "selection": selection})[:20]
-            competition = _candidate_evidence(mask, ink, rows, xs, centre, (left, top),
-                                               quality["median_stroke_width_px"], None)
+            try:
+                competition = _candidate_evidence(mask, ink, rows, xs, centre, (left, top),
+                                                   quality["median_stroke_width_px"], None)
+            except DrawingError as exc:
+                if exc.kind != "resource_limit":
+                    raise
+                entry.setdefault("baseline_gaps", []).append({"kind":"resource_limit", "severity":"warning",
+                    "section_id":sid, "message":"Candidate competition exceeds inspection budget; use bounded tracing or propose_section."})
+                continue
             non_grid = 0
             for alt in competition["candidate_evidence"]:
                 p = np.asarray(alt["source_points_px"])
@@ -911,6 +1314,8 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
                          "contour_selection": selection,
                          "source_points_px": [[float(x), float(y)] for x, y in zip(absolute_xs, absolute_rows)],
                          "identity_certified": False}
+            if "complexity_reduction" in quality or "evidence_complexity_reduction" in competition:
+                candidate["warnings"] = [COMPLEXITY_REDUCTION_WARNING]
             if endpoint_evidence is not None:
                 parent = next((t for t in traces
                                if float(np.max(np.abs(t["dense"] - parent_dense))) < 1.1), None)
