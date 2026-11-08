@@ -13,6 +13,7 @@ import { createMarkTool } from './mark.js';
 import { createIntake } from './intake.js';
 import { createWelcome } from './welcome.js';
 import { createPalette } from './palette.js';
+import { buildChanges, renderChanges } from './changes.js';
 import { createExport } from './export.js';
 import * as fmt from './format.js';
 
@@ -615,7 +616,21 @@ function renderHistory() {
       vessel ? el('span', { class: 'page-head-meta' }, `${vessel.name} · ${fmt.plural(runs.length, 'run')}`) : null),
     runs.length
       ? el('ul', { class: 'history-list' }, ...runs.map(row))
-      : el('div', { class: 'page-empty' }, icon('queue'), el('p', {}, 'No runs of this vessel yet.'))));
+      : el('div', { class: 'page-empty' }, icon('queue'), el('p', {}, 'No runs of this vessel yet.')),
+    state.task ? changesSection(vessel) : null));
+}
+
+/** "Changes in Run N": what each revision of the open run changed (js/changes.js). */
+function changesSection(vessel) {
+  const task = state.task;
+  const body = el('div', { class: 'changes-body' }, el('p', { class: 'panel-empty' }, 'Reading the steps…'));
+  invoke('get_live_steps', { task, after_sequence: 0 })
+    .then((live) => { if (task === state.task) fill(body, renderChanges(buildChanges(live.steps))); })
+    .catch(() => fill(body, el('p', { class: 'panel-empty' }, 'The steps of this run could not be read.')));
+  const run = vessel ? `Run ${runNumber(vessel, task)}` : 'this run';
+  return el('section', { class: 'changes', 'aria-labelledby': 'changes-title' },
+    el('h2', { class: 'page-subtitle', id: 'changes-title' }, `Changes in ${run}`),
+    body);
 }
 
 /** Global status bar: AI on or off, preview mode, runs folder. Run facts live in the run view. */
