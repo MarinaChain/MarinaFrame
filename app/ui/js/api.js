@@ -299,7 +299,7 @@ const MOCK_COMPONENTS = (() => {
   const part = (id, op, label, status, view, reason, box, volume, args) => ({
     id, op, label, status, built: Boolean(box), view, reason,
     bbox_m: box ? { min: box[0], max: box[1] } : null,
-    volume_m3: volume, step_path: box ? `${id}.step` : null, arguments: args, review: 'open',
+    volume_m3: volume, step_path: box ? `whole_vessel/${id}.step` : null, arguments: args, review: 'open',
   });
   return [
     part('hull', 'hull', 'Hull', 'measured_draft', 'body', 'Built from the body plan sections; see the section strip.',

@@ -14,6 +14,7 @@ pub mod files;
 pub mod intake;
 pub mod live;
 pub mod model_keys;
+pub mod parts;
 pub mod provider_view;
 pub mod sample;
 pub mod storage;

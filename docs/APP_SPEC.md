@@ -502,9 +502,9 @@ Errors: `intake_files` (0 or more than 32 files), `intake_file_type`, `intake_fi
 `intake_region`, `intake_no_pages`, `intake_unknown`, `intake_worker`, `intake_copy`,
 `worker_python_missing`.
 
-## Whole-vessel parts (proposed UI contract, 2026-11-09)
+## Whole-vessel parts (2026-11-09)
 
-Status: the UI reads this shape from the mock; no backend writes it yet. It mirrors one entry of
+Status: the app reads `<task>/whole_vessel/execution.json` (the ship-cad worker output, `app/core/src/parts.rs`); the mock gives the same shape. It mirrors one entry of
 `result.components` in the ship-cad worker output (`src/vessel_reconstruction/ship_cad.py`,
 `execution.json`), plus a plain label and the person's review. Plan:
 `docs/plans/2026-11-09-whole-vessel-scope.md` section 7.
@@ -522,7 +522,7 @@ ComponentView {
   view: "plan"|"profile"|"body"|null,      // ship-cad source.view
   bbox_m: { min: [x, y, z], max: [x, y, z] } | null,   // hull frame, metres; null when not built
   volume_m3: number | null,
-  step_path: string | null,          // "<id>.step" relative to the task folder (mm, draft stamp)
+  step_path: string | null,          // "whole_vessel/<id>.step" relative to the task folder (mm)
   arguments: { name: string, value: string|null,       // value as text with its unit, when known
                source: "traced"|"ai_inferred"|"guessed",  // ship-cad source_labels[name]
                basis: string|null }[],                  // ship-cad provenance[name].basis
@@ -530,8 +530,8 @@ ComponentView {
 }
 ```
 
-Command (proposed): `review_component { task, component_id, decision: "accepted"|"open" }` →
-`{ ok: true }`. A part with guessed values can be accepted as a draft part; nothing is ever
+Command: `review_component { task, component_id, decision: "accepted"|"open" }` →
+`{ ok: true }`; saved in the app config folder (`part_reviews.json`), not in the run folder. A part with guessed values can be accepted as a draft part; nothing is ever
 "approved" (`engineering_approved` stays false). Marking a part to revise it uses Mark and revise
 with `target_component_ids` (later).
 

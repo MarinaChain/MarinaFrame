@@ -37,6 +37,8 @@ pub struct ViewContext {
     pub binary_sha256: Option<String>,
     /// Plain-language failure of the last background action on this task.
     pub action_error: Option<String>,
+    /// The person's review of whole-vessel parts in this task: component id -> decision.
+    pub part_reviews: std::collections::HashMap<String, String>,
 }
 
 pub fn map_status(controller_status: &str) -> Status {
@@ -176,6 +178,7 @@ pub fn get_task(task: &Path, context: &ViewContext) -> Result<TaskView, String> 
         provider: crate::provider_view::provider_calls(task),
         notices: notices(&summary, &state, context, draft.as_ref()),
         evidence: evidence(&state, validation, task),
+        components: crate::parts::read_components(task, &context.part_reviews),
         draft,
         sections,
         summary,

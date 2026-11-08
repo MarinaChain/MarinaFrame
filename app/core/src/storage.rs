@@ -81,6 +81,18 @@ struct Dismissed {
     dismissed: BTreeSet<String>,
 }
 
+/// A small JSON file of the app config folder, or None when it is missing or not valid.
+pub fn read_config_json<T: serde::de::DeserializeOwned>(paths: &AppPaths, name: &str) -> Option<T> {
+    read_small(&paths.config_dir.join(name)).and_then(|bytes| serde_json::from_slice(&bytes).ok())
+}
+
+/// Write a small JSON file of the app config folder (atomic).
+pub fn write_config_json<T: Serialize>(paths: &AppPaths, name: &str, value: &T) -> AppResult<()> {
+    let bytes = serde_json::to_vec_pretty(value)
+        .map_err(|_| AppError::new("storage_write", "Settings could not be saved."))?;
+    write_atomic(&paths.config_dir, name, &bytes)
+}
+
 pub fn dismissed_notices(paths: &AppPaths) -> BTreeSet<String> {
     read_small(&paths.config_dir.join(NOTICES_FILE))
         .and_then(|bytes| serde_json::from_slice::<Dismissed>(&bytes).ok())

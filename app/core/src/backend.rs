@@ -8,7 +8,7 @@ use crate::live::{HullSections, LiveSteps, LiveStore};
 use crate::storage::{self, AppPaths};
 use crate::types::*;
 use crate::view::{self, ViewContext};
-use crate::{artifact, events, files, intake, model_keys, sample};
+use crate::{artifact, events, files, intake, model_keys, parts, sample};
 use marinaframe_control::util;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -60,8 +60,19 @@ impl Backend {
             dismissed_notices: storage::dismissed_notices(&self.paths),
             binary_sha256: self.binary_sha256.clone(),
             action_error: self.registry.last_error(&path),
+            part_reviews: parts::reviews_of(&self.paths, &path),
         };
         Ok(view::get_task(&path, &context)?)
+    }
+
+    /// Save a person's review of one whole-vessel part ("accepted" or "open").
+    pub fn review_component(
+        &self,
+        task: &str,
+        component_id: &str,
+        decision: &str,
+    ) -> AppResult<()> {
+        parts::review_component(&self.paths, &self.task_path(task)?, component_id, decision)
     }
 
     pub fn get_events(&self, task: &str, after_sequence: u64) -> AppResult<Vec<EventView>> {

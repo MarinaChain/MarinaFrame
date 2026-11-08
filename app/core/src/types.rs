@@ -234,6 +234,44 @@ pub struct TaskView {
     pub warnings: Vec<String>,
     pub activity: Option<ModelActivity>,
     pub evidence: Value,
+    /// Whole-vessel parts (APP_SPEC "Whole-vessel parts"); None without whole-vessel output.
+    #[serde(default)]
+    pub components: Option<Vec<ComponentView>>,
+}
+
+/// One whole-vessel part: a ship-cad result component, a plain label and the person's review.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct ComponentView {
+    pub id: String,
+    pub op: String,
+    pub label: String,
+    /// "measured_draft" or "draft_guess" (ship-cad); both are drafts.
+    pub status: String,
+    pub built: bool,
+    pub reason: String,
+    pub view: Option<String>,
+    pub bbox_m: Option<ComponentBox>,
+    pub volume_m3: Option<f64>,
+    /// Relative to the task folder.
+    pub step_path: Option<String>,
+    pub arguments: Vec<ComponentArgument>,
+    /// "open" or "accepted".
+    pub review: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct ComponentBox {
+    pub min: [f64; 3],
+    pub max: [f64; 3],
+}
+
+/// One argument of a part with its source label ("traced", "ai_inferred" or "guessed").
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ComponentArgument {
+    pub name: String,
+    pub value: Option<String>,
+    pub source: String,
+    pub basis: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
