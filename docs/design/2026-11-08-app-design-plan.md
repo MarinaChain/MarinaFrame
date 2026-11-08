@@ -153,3 +153,24 @@ system, `marinachain-website-revamp-2026/docs/HANDOVER-DESIGN.md` and `design-sy
 
 Type: Manrope (the brand's product-frame font, OFL) for the UI, IBM Plex Mono for numbers.
 No orange anywhere. The concept images in `images/` use the earlier orange Vellum palette.
+
+## 10. Built UI status (2026-11-09, UI lead rounds 1-24)
+
+Research basis: `docs/research/2026-11-09-uiux-research.md`. Screens and where they live:
+
+| Area | Built | Files |
+|---|---|---|
+| Welcome and setup check | AI key, CAD worker, runs folder; Choose... fixes a path; continue without AI | `js/welcome.js`, `get_setup_status` |
+| Home | Needs-you cards (body-plan thumb, what to do, Review); vessels; placeholders while loading; first start: one drop target, four steps, sample vessel | `js/app.js`, `start_sample_run` |
+| Intake | page tray, large page with non-overlapping view chips, labels above the page, particulars | `js/intake.js` |
+| Run | vessel tabs Run / Export / History; review counter and Next (N); decide bar Accept (A) / Other line (O) / Mark (M); ink distance in mm per tile; evidence card on hover; 3D section picking; section-area curve on Checks | `js/app.js`, `js/evidence.js`, `js/areas.js`, `js/model3d.js` |
+| Export | full page, draft stamp, open-issue line | `js/export.js` |
+| History | runs of the vessel; Changes per revision (fit, cause, section changes, not-kept edits) | `js/changes.js` |
+| Queue | Working now / Ready to check / Earlier | `js/app.js` |
+| Everywhere | command palette (Cmd/Ctrl+K), shortcut sheet (?), theme button, Draft-only chip | `js/palette.js`, `js/shortcuts.js` |
+
+Checks: `cd app && npm run test:ui` (section-area unit tests) and `npm run test:a11y` (axe-core
+on 13 mock screens, light and dark; must report no violations).
+
+Open (next): whole-vessel component tree with per-component review once runs write components;
+sectional-area against the drawing's own SAC when a profile is read; scroll snap in Thinking.
