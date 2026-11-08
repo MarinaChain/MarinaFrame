@@ -513,7 +513,7 @@ async function openTask(task) {
   live.open(task);
   navigate('run');
   // Clear the previous run at once: its drawing and model must not show under this name.
-  model.setHighlightBox(null);
+  setPartOutline(null);
   renderTask({ fresh: true });
   await loadTask({ fresh: true });
 }
@@ -2045,9 +2045,21 @@ const parts = createParts({
   signOff: (name) => invoke('sign_off', { task: state.task, name }).then(afterPartsChange, (error) => { showError(error); throw error; }),
   showIn3d: (part) => {
     setVesselTab('run');
-    model.setHighlightBox(part.bbox_m);
+    setPartOutline(part);
   },
+  // The selected part is the one outlined in 3D, so Run shows what Parts shows.
+  onSelect: (part) => setPartOutline(part),
 });
+
+/** Outline one part in the 3D view (null hides it); the 3D pane offers Hide outline. */
+function setPartOutline(part) {
+  const box = part?.bbox_m || null;
+  model.setHighlightBox(box);
+  const button = $('clear-outline');
+  button.hidden = !box;
+  button.title = box ? `Hide the outline of ${part.label}` : '';
+}
+$('clear-outline').addEventListener('click', () => setPartOutline(null));
 $('vessel-tabs').addEventListener('click', (event) => {
   const tab = event.target.closest('[data-vtab]');
   if (tab) setVesselTab(tab.dataset.vtab);

@@ -77,7 +77,7 @@ function chip(text, tone, title) {
  * `review(id, decision)` saves a review (review_component) and resolves when done;
  * `showIn3d(part)` switches to the Run tab with the part outlined.
  */
-export function createParts({ host, review, showIn3d, signOff }) {
+export function createParts({ host, review, showIn3d, signOff, onSelect = () => {} }) {
   let parts = [];
   let selectedId = null;
   let busy = false;
@@ -367,6 +367,7 @@ export function createParts({ host, review, showIn3d, signOff }) {
   function select(id) {
     marking = false;
     selectedId = id;
+    onSelect(parts.find((p) => p.id === id) || null);
     render();
   }
 
