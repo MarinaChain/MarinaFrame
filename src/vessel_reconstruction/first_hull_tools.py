@@ -64,6 +64,9 @@ DECK_TOP_TOLERANCE_PX = 3.0
 # The profile deck line is trusted when its median distance to the traced
 # body-plan tops is at most this (most tops are read correctly).
 DECK_AGREEMENT_M = 0.5
+# A traced curve that ends below this share of its deck height is broken
+# (noise, a gap), not a section that ends there.
+SHORT_TOP_SHARE = 0.25
 
 
 def cap_tops_at_deck(sections: list[dict], anchors: list[Anchor], decks: dict) -> list[dict]:
@@ -87,7 +90,8 @@ def cap_tops_at_deck(sections: list[dict], anchors: list[Anchor], decks: dict) -
         if deck is None or not anchor.pixels_per_metre or len(points) < 2:
             continue
         points = points[np.argsort(points[:, 1], kind="stable")]
-        if points[-1, 1] > deck + DECK_TOP_TOLERANCE_PX / anchor.pixels_per_metre and points[0, 1] < deck:
+        tolerance = DECK_TOP_TOLERANCE_PX / anchor.pixels_per_metre
+        if points[-1, 1] > deck + tolerance and points[0, 1] < deck:
             anchor.points_yz_m = _clip_top(points, deck).tolist()
             # The deck height is the line's centre already: no pen-cap correction.
             anchor.stroke_width_px = None
@@ -123,10 +127,31 @@ def cut_bottoms_at_keel(anchors: list[Anchor], keels: dict) -> None:
             anchor.notes.append(f"bottom cut at z {keel:.3f} m: the profile keel line at this station")
 
 
-def cap_at_profile_outline(sections: list[dict], anchors: list[Anchor], heights: dict) -> list[dict]:
-    """Apply the profile outline (vessel_description.station_outline_heights): deck tops, keel bottoms."""
+def short_of_deck(anchors: list[Anchor], decks: dict) -> list[str]:
+    """Ids of traced anchors that end far below the profile deck line (a trace broken by noise).
+
+    Used only when the deck agrees with most traced tops. The form fit then
+    fills those stations from the trend and their neighbours.
+    """
+    import numpy as np
+    tops = {a.id: max(p[1] for p in a.points_yz_m) for a in anchors if a.points_yz_m}
+    differences = [abs(tops[sid] - deck) for sid, deck in decks.items() if sid in tops]
+    if not differences or float(np.median(differences)) > DECK_AGREEMENT_M:
+        return []
+    return [sid for sid, top in tops.items() if sid in decks and top < (1 - SHORT_TOP_SHARE) * decks[sid]]
+
+
+def cap_at_profile_outline(sections: list[dict], anchors: list[Anchor], heights: dict) -> tuple[list, list]:
+    """Apply the profile outline (vessel_description.station_outline_heights).
+
+    Keel bottoms and deck tops cut traces that run on; traces that stop far
+    below the deck are left to the form fit. Returns (sections, anchors).
+    """
+    decks = {sid: h["deck"] for sid, h in heights.items()}
+    short = set(short_of_deck(anchors, decks))
+    anchors = [a for a in anchors if a.id not in short]
     cut_bottoms_at_keel(anchors, {sid: h["keel"] for sid, h in heights.items()})
-    return cap_tops_at_deck(sections, anchors, {sid: h["deck"] for sid, h in heights.items()})
+    return cap_tops_at_deck(sections, anchors, decks), anchors
 
 
 def build_first_hull(tools):
@@ -179,7 +204,7 @@ def build_first_hull(tools):
     from .vessel_description import station_outline_heights
     outline = station_outline_heights(image, list(tools.state.get("sheet_setups", {}).values()), description,
                                       sections)
-    sections = cap_at_profile_outline(sections, anchors, outline)
+    sections, anchors = cap_at_profile_outline(sections, anchors, outline)
     built = {}
     retried_builds = []
 

@@ -386,12 +386,14 @@ def checked_scales(image, setups, description):
 # labels) are not the outline. Columns within DECK_COLUMN_PX of the station are read.
 DECK_COMPONENT_SHARE = 0.25
 DECK_COLUMN_PX = 2
-# A model baseline more than BASELINE_SNAP_PX from the outline's lowest line
-# is another grid line; OUTLINE_HALF_LINE_PX is half a drawn hull line.
+# A model baseline this far from the outline's lowest line is another grid
+# line; OUTLINE_HALF_LINE_PX is half the width of a drawn hull line.
 BASELINE_SNAP_PX = 3.0
 OUTLINE_HALF_LINE_PX = 1.0
 # Hull lines are dark; grid lines and the light baseline ruler are not (grey levels).
 OUTLINE_INK = 110
+# Blank rows that separate two views' outlines inside one region.
+OUTLINE_GAP_ROWS = 10
 # A model x origin outside the profile region, or within this of its edge, is
 # not a datum read on the sheet.
 ORIGIN_EDGE_PX = 3
@@ -425,12 +427,21 @@ def profile_outline_heights(image, setup, pixels_per_metre, stations):
         return {}
     outline, left, top = _profile_outline(image, setup)
     origin = checked_x_origin(image, setup)
-    baseline = setup["baseline_px"]
-    keel = _bottom_line_centre(outline)
-    if keel is not None and abs(top + keel - baseline) > BASELINE_SNAP_PX:
-        # The model's baseline is another grid line (dtmb5415 live: a waterline
-        # 2 m up); heights are read from the outline's keel line, z = 0.
-        baseline = top + keel
+    # A rotated scan tilts every horizontal line: rows are levelled about the view's middle column.
+    slope = view_skew(image, setup["region_px"])
+    middle = outline.shape[1] / 2
+
+    def level(row, column):
+        return row - slope * (column - middle)
+
+    # The model's baseline row (taken as read at the view's middle, the
+    # levelling pivot) is kept unless the outline's lowest line is more than
+    # BASELINE_SNAP_PX away: it is then another grid line (dtmb5415 live: a
+    # waterline 2 m up), and z = 0 is the outline's keel line.
+    baseline = setup["baseline_px"] - top
+    keel = _bottom_line_centre(outline, slope)
+    if keel is not None and abs(keel - baseline) > BASELINE_SNAP_PX:
+        baseline = keel
     heights = {}
     for station in stations:
         column = origin + setup.get("x_direction", 1) * station["x_m"] * pixels_per_metre - left
@@ -439,9 +450,42 @@ def profile_outline_heights(image, setup, pixels_per_metre, stations):
         if not len(rows):
             continue
         heights[station["id"]] = {
-            "deck": (baseline - (top + _line_centre(rows, columns, True))) / pixels_per_metre,
-            "keel": (baseline - (top + _line_centre(rows, columns, False))) / pixels_per_metre}
+            "deck": (baseline - level(_line_centre(rows, columns, True), column)) / pixels_per_metre,
+            "keel": (baseline - level(_line_centre(rows, columns, False), column)) / pixels_per_metre}
     return heights
+
+
+# Sheet rotation: a scanned or photographed sheet is rotated by a fraction of
+# a degree, so long horizontal lines (grid, baseline, deck, keel) climb or
+# fall across a long view. Slopes within +-SKEW_MAX_SLOPE (about 1.1 degrees)
+# are tried; the one that stacks the view's line ink into the sharpest rows wins.
+SKEW_MAX_SLOPE = 0.02
+SKEW_STEPS = 161
+SKEW_INK_CONTRAST = 25
+SKEW_MIN_GAIN = 1.25
+
+
+def view_skew(image, region):
+    """Rows per column by which horizontal lines climb in a view (0 on an unrotated sheet)."""
+    left, top, right, bottom = _region(region, image.shape)
+    gray = _gray(image[top:bottom, left:right])
+    ys, xs = np.nonzero(gray < np.percentile(gray, 95) - SKEW_INK_CONTRAST)
+    if len(ys) < 100:
+        return 0.0
+    centred = xs - gray.shape[1] / 2
+
+    def sharpness(slope):
+        rows = np.rint(ys - slope * centred).astype(int)
+        return float(np.sum(np.bincount(rows - rows.min()).astype(float) ** 2))
+
+    level = sharpness(0.0)
+    best, best_score = 0.0, level
+    for slope in np.linspace(-SKEW_MAX_SLOPE, SKEW_MAX_SLOPE, SKEW_STEPS):
+        score = sharpness(slope)
+        if score > best_score:
+            best, best_score = float(slope), score
+    # A sloped sheer can also stack into rows; a rotated grid stacks far better.
+    return best if best_score >= SKEW_MIN_GAIN * level else 0.0
 
 
 def _profile_outline(image, setup):
@@ -452,7 +496,14 @@ def _profile_outline(image, setup):
     labels, _ = ndimage.label(mask, structure=np.ones((3, 3)))
     wide = [index for index, box in enumerate(ndimage.find_objects(labels), 1)
             if box and box[1].stop - box[1].start >= DECK_COMPONENT_SHARE * mask.shape[1]]
-    return np.isin(labels, wide), left, top
+    outline = np.isin(labels, wide)
+    # A region drawn over two views (profile and the plan below it, series60-3v-L2
+    # live) holds two outlines with blank rows between: the profile is the top one.
+    rows = np.flatnonzero(outline.any(axis=1))
+    gaps = np.flatnonzero(np.diff(rows) > OUTLINE_GAP_ROWS)
+    if len(gaps):
+        outline[rows[gaps[0]] + 1:] = False
+    return outline, left, top
 
 
 def checked_x_origin(image, setup):
@@ -476,14 +527,17 @@ def checked_x_origin(image, setup):
     return float(aft + crop_left)
 
 
-def _bottom_line_centre(outline):
-    """Row (in the outline crop) of the centre of the hull outline's lowest ink, or None.
+def _bottom_line_centre(outline, slope=0.0):
+    """Levelled row (in the outline crop) of the centre of the hull outline's lowest ink, or None.
 
     z = 0 is the lowest hull point (a keel, or a bulb or dome below it); its
-    drawn line centre is half a line width above the lowest inked row.
+    drawn line centre is half a line width above the lowest inked row. Rows
+    are levelled by ``slope`` about the crop's middle column (view_skew).
     """
-    rows = np.flatnonzero(outline.any(axis=1))
-    return float(rows[-1]) - OUTLINE_HALF_LINE_PX if len(rows) else None
+    ys, xs = np.nonzero(outline)
+    if not len(ys):
+        return None
+    return float(np.max(ys - slope * (xs - outline.shape[1] / 2))) - OUTLINE_HALF_LINE_PX
 
 
 # Station lines: on a profile, the station lines are the only vertical lines
@@ -491,20 +545,26 @@ def _bottom_line_centre(outline):
 # horizontal; hull ends are short). A model position more than
 # STATION_TOLERANCE_M from its measured line is a misreading.
 STATION_LINE_SHARE = 0.6
-STATION_LINE_INK = 235
+STATION_LINE_CONTRAST = 25
 STATION_TOLERANCE_M = 0.5
 MIN_STATION_LINES = 3
+# Station lines are evenly spaced: every gap within this share of the median gap.
+STATION_SPACING_SPREAD = 0.15
 
 
 def profile_station_lines(image, setup, pixels_per_metre):
     """x positions (m, from the profile's x origin) of the full-height vertical lines in the profile."""
     left, top, right, bottom = _region(setup["region_px"], image.shape)
     crop = _gray(image[top:bottom, left:right])
-    columns = np.flatnonzero((crop < STATION_LINE_INK).mean(axis=0) >= STATION_LINE_SHARE)
+    # Ink relative to the paper: a scan's paper is grey, not white.
+    inked = crop < np.percentile(crop, 95) - STATION_LINE_CONTRAST
+    columns = np.flatnonzero(inked.mean(axis=0) >= STATION_LINE_SHARE)
     groups = np.split(columns, np.flatnonzero(np.diff(columns) > 1) + 1) if len(columns) else []
+    # Station lines are drawn light; a dark full-height line is hull ink (a transom, a stem).
+    grid = [g for g in groups if len(g) and float(np.median(crop[:, g][inked[:, g]])) >= OUTLINE_INK]
     direction = setup.get("x_direction", 1) or 1
     return [round(direction * (float(np.mean(g)) + left - setup["x_origin_px"]) / pixels_per_metre, 3)
-            for g in groups if len(g)]
+            for g in grid]
 
 
 def check_station_positions(image, setups, description, warnings):
@@ -522,7 +582,10 @@ def check_station_positions(image, setups, description, warnings):
     scale = (description.get("checked_scales") or {}).get(profile.get("view_id", "profile"),
                                                          profile["pixels_per_metre"])
     measured = sorted(x for x in profile_station_lines(image, profile, float(scale)) if x > -STATION_TOLERANCE_M)
-    if len(measured) < MIN_STATION_LINES:
+    spacing = np.diff(measured)
+    if len(measured) < MIN_STATION_LINES or np.max(np.abs(spacing - np.median(spacing))) > \
+            STATION_SPACING_SPREAD * np.median(spacing):
+        # Too few lines, or uneven ones (noise, a heavily degraded scan): not a station grid.
         return stations
     claimed = [s.get("x_m") for s in stations if isinstance(s, dict)]
     if len(claimed) == len(measured) and all(
