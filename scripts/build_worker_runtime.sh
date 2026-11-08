@@ -126,15 +126,18 @@ build_package_wheel() {
 # Remove what the app never runs and anything that records the build machine's paths.
 trim_runtime() {
     "$RUNTIME/bin/python3" -I -m pip uninstall --quiet --yes pip
-    find "$RUNTIME/bin" -mindepth 1 \
-        ! -name python3 ! -name python3.12 ! -name python -exec rm -f {} +
-    rm -rf "$RUNTIME/include" "$RUNTIME/share"
+    # One interpreter file, bin/python3 (the path the app looks for), and no symbolic links:
+    # the bundler would copy each link as a second 18 MB file.
+    find "$RUNTIME/bin" -mindepth 1 ! -name python3.12 -exec rm -f {} +
+    mv "$RUNTIME/bin/python3.12" "$RUNTIME/bin/python3"
+    rm -rf "$RUNTIME/include" "$RUNTIME/share" "$RUNTIME/lib/pkgconfig"
     find "$RUNTIME/lib/python3.12/site-packages" -name direct_url.json -delete
+    [[ -z "$(find "$RUNTIME" -type l)" ]] || fail "symbolic links left in the runtime"
     find "$RUNTIME" -name __pycache__ -type d -prune -exec rm -rf {} +
     # Bytecode that Python never re-checks or rewrites: a signed bundle is read only, and a
-    # write inside it would break the signature.
-    "$RUNTIME/bin/python3" -I -m compileall -q -j 0 --invalidation-mode unchecked-hash \
-        "$RUNTIME/lib/python3.12" > /dev/null
+    # write inside it would break the signature. Old escape sequences in VTK only warn.
+    "$RUNTIME/bin/python3" -I -W ignore::SyntaxWarning -m compileall -q -j 0 \
+        --invalidation-mode unchecked-hash "$RUNTIME/lib/python3.12" > /dev/null
 }
 
 write_manifest() {

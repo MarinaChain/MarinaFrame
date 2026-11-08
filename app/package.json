@@ -5,7 +5,8 @@
   "description": "MarinaFrame desktop app (Tauri 2). The UI in ui/ is static files.",
   "scripts": {
     "dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
-    "build": "tauri build",
+    "build": "tauri build --config src-tauri/tauri.worker.conf.json",
+    "build:no-worker": "tauri build",
     "test:ui": "node --test ui-tests/",
     "test:a11y": "node ui-tests/a11y.mjs"
   },
