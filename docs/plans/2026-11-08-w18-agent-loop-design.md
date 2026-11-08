@@ -6,6 +6,21 @@ Date 2026-11-08. Base: `continue/v0.5` (a1208db). Decision: Option B of
 Implement on `w17-llm-progress` AFTER W17 is committed (section 10). No code
 changes in this document.
 
+## 0. Priority (founder, 2026-11-08) — read first
+
+The goal now is a model that produces **workable CAD drafts**. Line-by-line evidence and provenance
+come later. Where this document asks for provenance machinery, build the simplest version:
+
+- Keep: summaries (model and controller) stored in the event log with an author label; drafts stay
+  labelled unverified; `engineering_approved` false; the frozen 2% / 5% scoring gate as the measure.
+- Defer: `unresolved_ids` checks, per-field hashes of covered events, the byte-identical replay test,
+  and anything else that does not help the model build a draft. Note each deferred item in the doc.
+- In **draft mode**, relax tool-level evidence requirements that block progress: for example let
+  `assign_station` accept a traced candidate without a separate label view, let tracing tools work in
+  a section whose inspection failed, and let the model choose among non-unique candidates. Each choice
+  is still recorded as an open guess so a person can review it later.
+- Success on dev data = more built drafts and more gate-correct drafts, fewer `no_progress` stops.
+
 ## 1. The failure this fixes (evidence, sealed v2, read-only)
 
 - `shipd-1-00922-overlay-L0`: inspection OK, `enumerate_strokes`, then

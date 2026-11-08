@@ -41,3 +41,9 @@
 - **Trigger:** W15 review found that taking the darkest pixel across a three-column strip merged two diagonal waterline crossings into one run and accepted an anchor on white station-column pixels.
 - **Rule:** Count ink runs separately in each scan column. Refuse any competing crossing, and measure the accepted anchor on the actual station column. Test diagonal competitors as well as separated horizontal strokes.
 - **Why:** A union of neighbouring pixels loses stroke multiplicity; apparent strip continuity does not establish unique station-column evidence.
+
+### Progress before provenance (MarinaFrame)
+- **Date:** 2026-11-08
+- **Trigger:** I designed W18 memory with heavy provenance (controller-only summaries, id checks, byte replay tests). The founder said: do not be obsessed with provenance; get the model producing workable CAD first, line-by-line evidence later.
+- **Rule:** For the LLM investigator, optimise for built and gate-correct drafts first. Keep only cheap safety labels (unverified draft, open guesses, engineering_approved=false, fixed scoring gate). Defer provenance machinery that does not help the model build a draft, and relax tool evidence rules in draft mode when they block progress.
+- **Why:** Evidence rules added before the model could build anything blocked all progress (270 of 288 no_progress).
