@@ -472,12 +472,24 @@ const QUEUE_GROUPS = [
 function queueRow(task) {
   const vessel = vesselOfTask(task.task);
   const run = vessel ? `Run ${runNumber(vessel, task.task)}` : 'Run';
+  // Whole-vessel runs add their parts and a sign-off once the run's view is read (cached).
+  const extra = el('span', { class: 'queue-extra' });
+  runPreview(task).then((view) => {
+    const parts = view?.components || [];
+    if (!parts.length) return;
+    const open = partsToCheck(view);
+    fill(extra,
+      view.sign_off ? chip('Signed off', { tone: 'pass', dot: false, small: true, title: `Signed off by ${view.sign_off.name}: ${view.sign_off.statement}` })
+        : open ? chip(`${open} ${open === 1 ? 'part' : 'parts'} to check`, { tone: 'draft', dot: false, small: true })
+          : chip(fmt.plural(parts.length, 'part'), { dot: false, small: true }));
+  });
   return el('li', {},
     el('button', { class: 'queue-row', type: 'button', title: task.name, onclick: () => openTask(task.task) },
       el('span', { class: 'queue-name' }, vessel?.name || vesselNameOf(task.name)),
       el('span', { class: 'queue-run' }, run),
       statusBadge(task.status),
       el('span', { class: 'queue-facts' }, fmt.plural(task.sections, 'section')),
+      extra,
       el('span', { class: 'queue-time', title: fmt.fullTime(task.updated_ms) }, fmt.relativeTime(task.updated_ms))));
 }
 
