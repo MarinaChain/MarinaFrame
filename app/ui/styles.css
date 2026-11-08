@@ -1509,6 +1509,9 @@ code { font-family: var(--font-mono); }
 .status-ai::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted-line); }
 .status-ai[data-state="on"]::before { background: var(--ai); }
 .status-folder { font-family: var(--font-mono); min-width: 0; flex: 0 1 auto; display: block; }
+.status-theme { display: inline-flex; align-items: center; gap: 4px; flex: none; height: 18px; padding: 0 6px; border: 0; border-radius: var(--radius-sm); background: none; color: var(--ink-2); font: var(--fs-xs) var(--font-ui); cursor: pointer; }
+.status-theme:hover { background: var(--hover); color: var(--ink); }
+.status-theme .icon { width: 13px; height: 13px; }
 .status-progress.error { color: var(--fail); }
 .spinner {
   width: 10px;

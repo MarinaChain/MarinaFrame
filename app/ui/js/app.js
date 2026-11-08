@@ -680,6 +680,7 @@ function changesSection(vessel) {
 
 /** Global status bar: AI on or off, preview mode, runs folder. Run facts live in the run view. */
 function renderStatusbar() {
+  renderThemeToggle();
   const status = state.aiStatus;
   const on = status ? status.active : null;
   const ai = $('status-ai');
@@ -1511,6 +1512,37 @@ function applyTheme(theme) {
 }
 systemDark.addEventListener('change', () => model.refreshTheme());
 
+// ---- Theme button in the status bar: System → Light → Dark, saved like the Settings choice.
+const THEME_ORDER = ['system', 'light', 'dark'];
+const THEME_ICON = { system: 'auto', light: 'sun', dark: 'moon' };
+const THEME_WORD = { system: 'System', light: 'Light', dark: 'Dark' };
+
+function renderThemeToggle() {
+  const theme = state.settings?.theme || 'system';
+  const next = THEME_ORDER[(THEME_ORDER.indexOf(theme) + 1) % THEME_ORDER.length];
+  const button = $('theme-toggle');
+  fill(button, icon(THEME_ICON[theme]), THEME_WORD[theme]);
+  button.title = `Theme: ${THEME_WORD[theme]}. Click for ${THEME_WORD[next]}.`;
+  button.setAttribute('aria-label', button.title);
+}
+
+/** Use and save a theme (the status-bar button and the palette). */
+async function setThemeChoice(theme) {
+  if (!state.settings) return;
+  applyTheme(theme);
+  try {
+    state.settings = await invoke('set_settings', { ...state.settings, theme });
+  } catch (error) {
+    showError(error);
+  }
+  renderThemeToggle();
+}
+
+$('theme-toggle').addEventListener('click', () => {
+  const current = state.settings?.theme || 'system';
+  setThemeChoice(THEME_ORDER[(THEME_ORDER.indexOf(current) + 1) % THEME_ORDER.length]);
+});
+
 /** One line on whether new runs use the AI, and what to do when they cannot. Shown as a tooltip. */
 function aiStatusText(status) {
   if (!status) return 'The AI reads the drawing and builds the draft.';
@@ -2049,6 +2081,7 @@ function paletteCommands() {
   add('Go to', 'Settings', () => openSettings(), { keys: '⌘,' });
   add('Go to', 'Setup check', () => navigate('welcome'));
   add('Help', 'Keyboard shortcuts', () => shortcutSheet.open(), { keys: '?' });
+  for (const theme of THEME_ORDER) add('Theme', `${THEME_WORD[theme]} theme`, () => setThemeChoice(theme));
   add('Start', 'New vessel from drawings', () => chooseDrawingSet(), { keys: '⌘N' });
   add('Start', 'Open the sample vessel', () => startSampleRun(), { hint: 'a generated drawing, no AI cost' });
   return list;
