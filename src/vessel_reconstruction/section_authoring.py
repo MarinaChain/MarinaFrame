@@ -21,6 +21,9 @@ import numpy as np
 # Source label of each section of a draft build.
 SOURCE_LABELS = ("traced", "repaired", "interpolated", "ai_inferred", "ai_corrected")
 AUTHORED_LABELS = ("ai_inferred", "ai_corrected")
+# Curve sections that code fills in a draft: the vessel-table form fit
+# (form_fit.py) labels a station it fills ``interpolated``. Never model output.
+TABLE_FIT_LABELS = ("interpolated",)
 FORMS = ("half_breadths", "blend", "standard_form")
 SHAPES = ("U", "V")
 # Bounds of the model's input. Few points are enough for a fair section; more
@@ -90,12 +93,19 @@ def check_proposal_arguments(arguments: dict) -> None:
             raise ProposalError(f"deadrise_deg must be in [0, {MAX_DEADRISE_DEG:g}].")
 
 
-def check_authored(authored) -> bool:
-    """Shape of the ``authored`` record of a draft revision section."""
+def check_authored(authored, *, table_fit: bool = False) -> bool:
+    """Shape of the ``authored`` record of a draft revision section.
+
+    The ``interpolated`` label (TABLE_FIT_LABELS) is accepted only with ``table_fit``:
+    the caller passes it when the vessel-table form fit filled the section (its draft
+    guess is a bridged_gap or dropped_end). A model-authored section can therefore
+    never be labelled as interpolated.
+    """
     if type(authored) is not dict or set(authored) != {"source_label", "basis", "points_yz_m"}:
         return False
     points = authored["points_yz_m"]
-    if (authored["source_label"] not in AUTHORED_LABELS or type(authored["basis"]) is not str
+    allowed = AUTHORED_LABELS + (TABLE_FIT_LABELS if table_fit else ())
+    if (authored["source_label"] not in allowed or type(authored["basis"]) is not str
             or not 1 <= len(authored["basis"]) <= MAX_BASIS_CHARS
             or type(points) is not list or not 5 <= len(points) <= 1025):
         return False
