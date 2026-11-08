@@ -76,3 +76,9 @@
 - **Trigger:** W17c added a new build failure (`authored_outside_draft`) and I proposed more checks. The founder said: stop making builds fail; focus on happy paths first.
 - **Rule:** Until the model reliably produces drafts, do not add refusals or blocked states. In draft mode, turn checks into warnings whenever a solid can be made. Spend effort on read -> geometry -> build -> render -> finish.
 - **Why:** Every gate added before the main path works produces more empty results and no learning.
+
+### Watch disk space when many lanes build CAD (MarinaFrame)
+- **Date:** 2026-11-08
+- **Trigger:** With 4-6 parallel lanes, the disk filled (ENOSPC, 154 MB free) and the first-hull lane stopped mid-measurement. Each worktree keeps its own Rust `target/` (1-7.5 GB) and CAD runs keep build folders.
+- **Rule:** Remove a worktree (after checking `git status --short --ignored` and copying ignored data) as soon as its branch is merged. Tell measurement lanes to delete per-case build folders after scoring and keep new data under ~3 GB. Keep a disk check (stop and warn below ~6 GB free) in the lane watcher.
+- **Why:** Rebuildable build output in finished worktrees took 19 GB that live lanes needed.
