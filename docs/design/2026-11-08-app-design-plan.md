@@ -135,3 +135,21 @@ chats above).
 ![Live run](images/vellum-live-run.png)
 
 ![Home](images/vellum-home.png)
+
+## 9. Palette change: MarinaChain brand (founder, 2026-11-08)
+
+Keep the Vellum structure; use the MarinaChain brand tokens (source: the MarinaChain website design
+system, `marinachain-website-revamp-2026/docs/HANDOVER-DESIGN.md` and `design-system.md`).
+
+| Role | Light | Notes |
+|---|---|---|
+| Paper / background / cards / accent bg | `#FBFBF9` / `#FCFCFD` / `#F2F4F7` / `#EFF8FF` | brand neutrals |
+| Ink / muted | `#101D30` / `#7F899C` | |
+| Primary action, selection, focus | MarinaChain blue `#06448E` (hover `#0A57B4`) | replaces drafting blue and the orange primary button |
+| "AI acted here" (reserved) | teal `#07AF87` | brand product-UI colour; replaces signal orange |
+| Needs review / warnings | amber `#8A6A1E` on `#FDF3DC` (dark: `#F5B14C`) | brand rule: amber only for review data |
+| Dark mode base | navy `#0A1F3D` with lighter navy surfaces | brand dark band |
+| Source labels | traced ink solid; repaired navy `#004557` ticks; interpolated `#7AA2D6` long dash; ai_inferred amber dotted; ai_corrected teal diamonds | patterns and glyphs stay |
+
+Type: Manrope (the brand's product-frame font, OFL) for the UI, IBM Plex Mono for numbers.
+No orange anywhere. The concept images in `images/` use the earlier orange Vellum palette.
