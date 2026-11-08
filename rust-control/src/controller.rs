@@ -505,10 +505,9 @@ fn phase_tool_catalog(store: &Store) -> Value {
     };
     if investigation_mode(store) {
         if let Some(name) = next {
-            tools
-                .as_array_mut()
-                .unwrap()
-                .retain(|tool| tool["name"] == name);
+            tools.as_array_mut().unwrap().retain(|tool| {
+                tool["name"] == name || (name == "describe_vessel" && tool["name"] == "read_region")
+            });
         }
     }
     tools
@@ -522,7 +521,7 @@ fn investigation_catalog() -> Vec<Value> {
     vec![
         json!({"name":"survey_sheet","description":"Survey the sheet without CAD. The harness normally runs this before view identification.","parameters":{"type":"object","properties":{},"additionalProperties":false}}),
         json!({"name":"describe_views","description":"Name view families and sheet-pixel bounds. All same-scale body panels are ONE family: use one body view with optional panels [{region_px,centreline_px,baseline_px}], family_id and shared setup {pixels_per_metre,grid_spacing_m}. The first body setup is reused across the family. Include plan/profile and useful title or offset tables.","parameters":{"type":"object","properties":{"views":{"type":"array","minItems":1,"maxItems":32,"items":{"type":"object","properties":{"view_id":{"type":"string","maxLength":64},"kind":{"enum":["body","body_fore","body_aft","plan","profile","title_block","offsets_table","other"]},"region_px":region,"halves":{"type":"string","maxLength":2000},"mirror":{"type":"boolean"},"grid_roles":{"type":"object"},"family_id":{"type":"string"},"panels":{"type":"array","items":{"type":"object"}},"setup":{"type":"object"}},"required":["view_id","kind","region_px"],"additionalProperties":true}}},"required":["views"],"additionalProperties":false}}),
-        json!({"name":"describe_vessel","description":"Record the vessel before CAD: principal dimensions with value/source/view_id, stations (id/x_m), waterlines (id/z_m), buttocks (id/y_m), ends, deck and form. Keep measured and inferred values labelled. Doubtful dimensions receive warnings, not approval.","parameters":{"type":"object","properties":{"description":{"type":"object","properties":{"units":{"type":"string"},"frame":{},"principal":{"type":"object"},"stations":{"type":"array","maxItems":300,"items":{"type":"object"}},"waterlines":{"type":"array","maxItems":300,"items":{"type":"object"}},"buttocks":{"type":"array","maxItems":300,"items":{"type":"object"}},"ends":{"type":"object"},"deck":{"type":"object"},"form":{"type":"object"}},"additionalProperties":true}},"required":["description"],"additionalProperties":false}}),
+        json!({"name":"describe_vessel","description":"Record the vessel before CAD: principal dimensions with value/source/view_id, stations (id/x_m), waterlines (id/z_m), buttocks (id/y_m), ends, deck and form. Keep measured and inferred values labelled. Doubtful dimensions receive warnings, not approval.","parameters":{"type":"object","properties":{"description":{"type":"object","properties":{"units":{"type":"string"},"dimension_text":{"type":"string","description":"Exact labelled dimension text read from the title/dimension crop: LOA, LWL, BEAM, DEPTH, DRAFT (DWL), units. Do not invent unreadable numbers."},"frame":{},"principal":{"type":"object"},"stations":{"type":"array","maxItems":300,"items":{"type":"object"}},"waterlines":{"type":"array","maxItems":300,"items":{"type":"object"}},"buttocks":{"type":"array","maxItems":300,"items":{"type":"object"}},"ends":{"type":"object"},"deck":{"type":"object"},"form":{"type":"object"}},"additionalProperties":true}},"required":["description"],"additionalProperties":false}}),
         json!({"name":"recall_view","description":"Reattach a previous task view by view_id without creating a new crop.","parameters":{"type":"object","properties":{"view_id":id},"required":["view_id"],"additionalProperties":false}}),
         json!({"name":"view_region","description":"Return the pixels of any sheet region at any zoom (up to 1024 px per side, 4x enlargement). Start with the whole sheet, then zoom.","parameters":{"type":"object","properties":{"region_px":region,"max_side_px":{"type":"integer","minimum":256,"maximum":1024}},"required":["region_px"],"additionalProperties":false}}),
         json!({"name":"read_region","description":"Return the pixels of a region to read station labels, a scale bar, dimensions or the title block. What you read is your claim.","parameters":{"type":"object","properties":{"region_px":region,"subject":{"enum":["labels","scale_bar","dimensions","title_block"]}},"required":["region_px","subject"],"additionalProperties":false}}),
@@ -558,9 +557,9 @@ fn description_pending(store: &Store) -> bool {
 fn description_instructions(phase: &Value) -> &'static str {
     match phase.as_str() {
         Some("survey") => "The harness surveys the sheet first; do not build CAD.",
-        Some("views") => "Read the attached whole sheet and survey. Call describe_views with named view bounds in ORIGINAL sheet pixels from the survey sheet size, not normalized 0-1000 coordinates or resized attachment pixels. Convert visual positions using the sheet width/height. Same-scale body panels are ONE view family: name one body bounding box and optional panels with per-panel region_px/centreline_px/baseline_px. You may include shared setup pixels_per_metre/grid_spacing_m from declared calibration; otherwise one setup call serves every body panel. Include the title_block for legible dimensions. Do not trace sections or build CAD yet.",
+        Some("views") => "Read the attached whole sheet and survey. Call describe_views with named view bounds in ORIGINAL sheet pixels from the survey sheet size, not normalized 0-1000 coordinates or resized attachment pixels. Convert visual positions using the sheet width/height. Same-scale body panels are ONE view family: name one body bounding box and optional panels with per-panel region_px/centreline_px/baseline_px. You may include shared setup pixels_per_metre/grid_spacing_m from declared calibration; otherwise one setup call serves every body panel. Include the title_block for legible dimensions. For a 2590-pixel wide sheet, the rightmost quarter is near x=1940..2590, NOT x=750..1000. The whole-sheet ruler is normalized; multiply x by sheet_width/1000 and y by sheet_height/1000. Copy title text into dimension_text only after reading a legible crop. Do not trace sections or build CAD yet.",
         Some("setups") => "Call propose_sheet_setup once for description_next_view. Use its actual crop view_id as evidence_view_id and its sheet region_px. Map body_fore/body_aft to body. Read scale, grid spacing and datums; label inferences. The result attaches the next view crop. Do not build CAD yet.",
-        Some("vessel") => "Call describe_vessel now. Use the survey declared specification, measured sheet_setups and source pixels for principal dimensions, station identities/positions, waterlines, buttocks, ends, deck and form. Keep principal dimensions supplied by declared specification bounds as source=spec (including depth from declared z_max); retain measured discrepancies as warnings, not replacements. Measure beam and other undeclared dimensions from hull ink and the measured grid, not grid extents. A body-only drawing does not supply loa/lpp/draft: use {value:null,source:ai_inferred,note:not on sheet}, not invented numbers. In three-view drawings read LOA/BEAM/DEPTH/DRAFT directly from the attached title_block; keep title_block values rather than mistaking LWL for LOA. Use declared station IDs/x_m unless a clear measured correction exists. Label each dimension source (spec, title_block, measured, ai_inferred); do not confuse grid extents with hull extents. Keep doubtful fields explicit; warnings are advisory. Do not build CAD yet.",
+        Some("vessel") => "Before describe_vessel, inspect the title crop. If it shows geometry or is unreadable, call read_region with subject=title_block and corrected ORIGINAL sheet-pixel region_px; do not guess text from the thumbnail. On a three-view sheet the title is normally below the body plan at right. Transcribe exact labelled lines into dimension_text, e.g. LOA ... m LWL ... m BEAM ... m DEPTH ... m DRAFT (DWL) ... m. Read digits carefully: LOA is not LWL; DRAFT is not a grid interval. Prefer printed values with source=title_block over pixel extents. Then call describe_vessel. Use the survey declared specification, measured sheet_setups and source pixels for principal dimensions, station identities/positions, waterlines, buttocks, ends, deck and form. Keep principal dimensions supplied by declared specification bounds as source=spec (including depth from declared z_max); retain measured discrepancies as warnings, not replacements. Measure beam and other undeclared dimensions from hull ink and the measured grid, not grid extents. A body-only drawing does not supply loa/lpp/draft: use {value:null,source:ai_inferred,note:not on sheet}, not invented numbers. In three-view drawings read LOA/BEAM/DEPTH/DRAFT directly from the attached title_block; keep title_block values rather than mistaking LWL for LOA. Use declared station IDs/x_m unless a clear measured correction exists. Label each dimension source (spec, title_block, measured, ai_inferred); do not confuse grid extents with hull extents. Keep doubtful fields explicit; warnings are advisory. Do not build CAD yet.",
         _ => "The vessel description is complete. The harness builds the first hull unless this is a Phase 1-only run.",
     }
 }
@@ -2642,7 +2641,18 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(names, vec!["propose_sheet_setup"]);
         store.state.domain["description_phase"] = json!("vessel");
-        assert_eq!(phase_tool_catalog(&store)[0]["name"], "describe_vessel");
+        let catalog = phase_tool_catalog(&store);
+        assert!(catalog
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|tool| tool["name"] == "describe_vessel"));
+        assert!(catalog
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|tool| tool["name"] == "read_region"));
+        assert_eq!(catalog.as_array().unwrap().len(), 2);
     }
 
     #[test]

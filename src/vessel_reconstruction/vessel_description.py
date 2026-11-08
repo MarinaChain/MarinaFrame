@@ -52,7 +52,7 @@ def normalize_description(description):
             original = result[key]
             result[key] = {"note": original}
             changed(key, original, result[key])
-    known = {"units", "frame", "principal", "stations", "waterlines", "buttocks", "ends", "deck", "form", "warnings"}
+    known = {"units", "frame", "principal", "stations", "waterlines", "buttocks", "ends", "deck", "form", "warnings", "dimension_text"}
     for key in result.keys() - known:
         changed(key, result[key], None)
     principal = result.setdefault("principal", {})
@@ -319,6 +319,30 @@ def first_hull_spec(spec, description):
     return result
 
 
+def printed_dimensions(description):
+    """Parse labelled text transcribed by the model, never evaluator metadata/OCR."""
+    text = description.get("dimension_text", "")
+    if not isinstance(text, str):
+        return {}
+    labels = {"LOA": "loa", "LPP": "lpp", "BEAM": "beam", "DEPTH": "depth", "DRAFT": "draft"}
+    readings = {}
+    for match in re.finditer(r"\b(LOA|LPP|BEAM|DEPTH|DRAFT)\b\s*(?:\(DWL\))?\s*[:=]?\s*(\d+(?:\.\d+)?)\s*m\b", text, re.I):
+        readings[labels[match[1].upper()]] = {"value": float(match[2]), "source": "title_block",
+                                            "text": match[0]}
+    return readings
+
+
+def dimension_conflicts(name, readings):
+    """Compare independent readings pairwise; no fitted value becomes truth."""
+    conflicts = []
+    for index, first in enumerate(readings):
+        for second in readings[index + 1:]:
+            if _different(first["value"], second["value"]):
+                conflicts.append(warning(f"principal.{name}", first["value"], second["value"],
+                    f"Recheck {name}: {first['view_id']} disagrees with {second['view_id']} by more than 2%; retain the printed reading when legible."))
+    return conflicts
+
+
 def describe_table(table, description):
     """Use the read waterline grid and carry form/end hints via the public table."""
     if not description:
@@ -328,6 +352,19 @@ def describe_table(table, description):
         table.waterlines_z_m = sorted(set(heights))
     table.trend["description"] = copy.deepcopy(description)
     table.warnings.extend(copy.deepcopy(description.get("warnings", [])))
+    points = [point for row in table.stations for point in row.points_yz_m]
+    if points:
+        hull = {"beam": 2 * max(abs(p[0]) for p in points),
+                "depth": max(p[1] for p in points) - min(p[1] for p in points)}
+        for name, value in hull.items():
+            record = description.get("principal", {}).get(name, {})
+            readings = copy.deepcopy(record.get("measurements", [])) if isinstance(record, dict) else []
+            claimed = _number(_value(record))
+            if claimed is not None:
+                readings.append({"view_id": "description", "value": claimed})
+            readings.append({"view_id": "draft_hull", "value": value})
+            table.warnings.extend(dimension_conflicts(name, readings))
+        table.trend["description"]["draft_hull_dimensions"] = hull
 
 
 def measure_description(image, spec, description, setups):
@@ -376,23 +413,35 @@ def measure_description(image, spec, description, setups):
             record = principal.setdefault(name, {"value": None, "source": "ai_inferred"})
             warnings.append(warning(f"principal.{name}", _value(record), None,
                 "No independent dimension measurement is available; read dimension text or retain this field as ai_inferred."))
-    for name, values in measurements.items():
+    printed = printed_dimensions(result)
+    declared_depth = max((s["z_max_m"] for s in spec.get("sections", [])), default=None)
+    for name in sorted(set(measurements) | set(printed)):
         record = principal.get(name)
-        if record is None:
-            record = {"value": values[0]["value"], "source": "measured"}
-        elif not isinstance(record, dict):
-            record = {"value": record, "source": "ai_inferred"}
-        claimed = _value(record)
+        record = copy.deepcopy(record) if isinstance(record, dict) else {"value": record, "source": "ai_inferred"}
+        claimed = _number(_value(record))
+        readings = copy.deepcopy(measurements.get(name, []))
+        if claimed is not None:
+            readings.insert(0, {"view_id": "model_reading", "value": claimed})
+        if name == "depth" and declared_depth is not None:
+            readings.append({"view_id": "declared_depth", "value": declared_depth})
+        if name in printed:
+            readings.append({"view_id": "printed_dimension", "value": printed[name]["value"]})
+        warnings.extend(dimension_conflicts(name, readings))
+        if name in {"beam", "depth"} and claimed is None and name not in printed:
+            warnings.append(warning(f"principal.{name}", None, measurements.get(name),
+                "No independent model/text reading supports the ink extent; annotation or competing strokes may inflate it. Read the dimension or mark it uncertain."))
         record["model_value"] = claimed
-        record["measured_value"] = values[0]["value"]
-        record["measurements"] = values
-        for measured in values:
-            if claimed is not None and _different(claimed, measured["value"]):
-                warnings.append(warning(f"principal.{name}", claimed, measured["value"],
-                    f"Check {name} against {measured['view_id']} ink and dimension text; do not treat the claim as verified."))
-        if record.get("source") == "measured" or claimed is None:
-            record["value"] = values[0]["value"]
-            record["source"] = "measured"
+        record["measurements"] = readings
+        if measurements.get(name):
+            record["measured_value"] = measurements[name][0]["value"]
+        if name in printed:
+            record.update(printed[name])
+        elif record.get("source") == "title_block" and claimed is not None:
+            pass  # Explicit printed readings outrank approximate pixel extents.
+        elif name == "depth" and declared_depth is not None:
+            record.update(value=declared_depth, source="spec")
+        elif measurements.get(name) and (record.get("source") == "measured" or claimed is None):
+            record.update(value=measurements[name][0]["value"], source="measured")
         principal[name] = record
     # Draft is a design waterline, not the top of a section. Do not substitute depth.
     if "draft" in principal:
