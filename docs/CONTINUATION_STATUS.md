@@ -475,3 +475,17 @@ campaign counts as a failure.
 - Follow-ups: sheet-only intake without an AI key is blocked (only the model reads stations);
   intake drafts are far off (dtmb5415-L0 43 %, 3-view 42 %: scale read 2x too high in one case);
   round_digest needs the 3-view truth naming (looks for "dtmb5415-3v").
+
+## 2026-11-09 01:30 SGT: first real live run watched in the desktop app
+
+- Built the app, wrapped the debug build as `work/app-live-check/MarinaFrame.app` (ad-hoc signed,
+  bundle id io.marinachain.marinaframe; added to the Computer Use allowlist at the founder's request),
+  and drove it with Computer Use. A real DeepSeek run (shipd-1-00679-L0, started from the CLI into the
+  app's runs folder) appeared live: Thinking cards, propose_section "Kept: fit 0.8737 to 0.9671",
+  first hull growing, fit dial, revision ladder r0 0.87 > r1 0.97. 9 requests, $0.018, 4 min 47 s.
+  Score vs dev truth: RMS 3.02 % of half-beam, volume -1.2 % (gate 2 % / 5 %); first hull was 3.13 %.
+- Fixed during the check (ab6466c): live screen froze on an empty event batch; 3D guess bands hid the
+  hull; stacked amber fill on shared panels; state chip truncated on cards.
+- Still to do: drop-a-drawing-set UI wired to intake (backend exists); section strip's second chip row
+  is clipped by its scrollbar; vessel names for factory drawings are hash ids; a full `tauri build`
+  release bundle with icon; runs started from the CLI show "a different build made this run" (expected).
