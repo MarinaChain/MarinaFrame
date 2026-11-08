@@ -501,7 +501,23 @@ function queueRow(task) {
       el('span', { class: 'queue-time', title: fmt.fullTime(task.updated_ms) }, fmt.relativeTime(task.updated_ms))));
 }
 
+/**
+ * While a queued set is starting, read the queue again every few seconds: a start that
+ * fails changes no run folder, so no task-changed event would show it.
+ */
+const QUEUE_STARTING_POLL_MS = 3000;
+let queuePollTimer = 0;
+function pollQueueWhileStarting() {
+  clearTimeout(queuePollTimer);
+  if (state.route !== 'queue' || !state.queue?.waiting.some((s) => s.state === 'starting')) return;
+  queuePollTimer = setTimeout(async () => {
+    state.queue = await invoke('get_queue', {}).catch(() => state.queue);
+    renderQueue();
+  }, QUEUE_STARTING_POLL_MS);
+}
+
 function renderQueue() {
+  pollQueueWhileStarting();
   const grouped = new Set();
   const groups = QUEUE_GROUPS.map((group) => {
     const tasks = state.tasks.filter((t) => !grouped.has(t) && (!group.statuses || group.statuses.has(t.status)));
@@ -2280,6 +2296,7 @@ function paletteCommands() {
   add('Help', 'Keyboard shortcuts', () => shortcutSheet.open(), { keys: '?' });
   for (const theme of THEME_ORDER) add('Theme', `${THEME_WORD[theme]} theme`, () => setThemeChoice(theme));
   add('Start', 'New vessel from drawings', () => chooseDrawingSet(), { keys: '⌘N' });
+  add('Start', 'New vessels from a folder', () => chooseDrawingFolder(), { hint: 'one run per drawing set' });
   add('Start', 'Open the sample vessel', () => startSampleRun(), { hint: 'a generated drawing, no AI cost' });
   return list;
 }
@@ -2372,6 +2389,8 @@ function applyRoute(route) {
   renderCrumbs();
   if (route === 'settings') loadSettingsForm();
   if (route === 'welcome') welcome.show();
+  // The queue may have moved while another page was open (a set started or failed).
+  if (route === 'queue') refreshTasksSoon();
   if (route === 'intake') {
     // Nothing to show after a reload: the set lives only in this window.
     if (intake.hasSet()) {
