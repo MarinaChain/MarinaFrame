@@ -25,7 +25,30 @@ export function buildChanges(steps) {
   const revisions = new Map(); // id -> { id, fit, sections, cause, order }
   const entries = [];
   let cause = null;
+  let pass = null; // the open Mark and revise pass, until its result step
   for (const step of steps) {
+    // Mark and revise: the person's step opens a pass; its edits and the keep rule's result
+    // belong to that one entry (APP_SPEC "Mark and revise", live steps).
+    if (step.kind === 'revise' && step.actor === 'person') {
+      if (step.title === 'Kept anyway') {
+        const last = [...entries].reverse().find((e) => e.kind === 'mark');
+        if (last) last.forced = true;
+        continue;
+      }
+      pass = { kind: 'mark', instruction: step.text || '', marks: step.marks || [], area: step.attention_px || null,
+        sections: (step.targets || []).filter((t) => t.kind === 'section').map((t) => t.id), why: null, result: null, forced: false };
+      entries.push(pass);
+      continue;
+    }
+    if (pass) {
+      if (step.actor === 'model' && step.text && !pass.why) pass.why = step.text;
+      if (step.mark_revision) {
+        pass.result = { ...step.mark_revision, title: step.title, detail: step.tool?.text || '' };
+        pass.forced = Boolean(step.mark_revision.operator_forced);
+        pass = null;
+      }
+      if (step.tool?.kept === false) continue; // told in the pass entry
+    }
     if (step.tool?.kept === false) {
       entries.push({ kind: 'not_kept', title: step.title, text: step.tool.text });
       continue;
@@ -62,7 +85,7 @@ export function buildChanges(steps) {
     }
     previous = entry;
   }
-  return entries.filter((e) => e.kind === 'not_kept' || e.fit !== null);
+  return entries.filter((e) => e.kind === 'not_kept' || e.kind === 'mark' || e.fit !== null);
 }
 
 function fitLine(entry) {
@@ -88,12 +111,95 @@ function sectionChange(change) {
     el('span', {}, parts.join(' · ')));
 }
 
-/** The Changes list for the History tab. */
-export function renderChanges(entries) {
+/** Thumbnail box around a mark (sheet pixels): its points, else the area the pass looked at. */
+function markBox(entry) {
+  const points = entry.marks.flatMap((m) => m.points_px || []);
+  if (points.length) {
+    const xs = points.map((p) => p[0]);
+    const ys = points.map((p) => p[1]);
+    return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+  }
+  return entry.area;
+}
+
+/** Size of a mark thumbnail in CSS pixels, and the space around the mark (part of its size). */
+const THUMB = { width: 168, height: 120, pad: 0.35 };
+
+/** A small crop of the drawing page around the person's mark, with the mark in brand blue. */
+function markThumbnail(entry, pageUrl) {
+  const box = markBox(entry);
+  if (!box || !pageUrl) return null;
+  const canvas = el('canvas', { class: 'change-thumb', 'aria-hidden': 'true', width: String(THUMB.width * 2), height: String(THUMB.height * 2) });
+  pageUrl().then((url) => {
+    if (!url) return;
+    const image = new Image();
+    image.onload = () => {
+      const [x0, y0, x1, y1] = box;
+      const padX = Math.max(20, (x1 - x0) * THUMB.pad);
+      const padY = Math.max(20, (y1 - y0) * THUMB.pad);
+      const sx = Math.max(0, x0 - padX);
+      const sy = Math.max(0, y0 - padY);
+      const sw = Math.min(image.naturalWidth - sx, x1 - x0 + 2 * padX);
+      const sh = Math.min(image.naturalHeight - sy, y1 - y0 + 2 * padY);
+      const scale = Math.min(canvas.width / sw, canvas.height / sh);
+      const g = canvas.getContext('2d');
+      g.fillStyle = '#F7F5F0';
+      g.fillRect(0, 0, canvas.width, canvas.height);
+      g.setTransform(scale, 0, 0, scale, -sx * scale, -sy * scale);
+      g.drawImage(image, 0, 0);
+      g.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--ink-chosen').trim() || '#06448E';
+      g.lineWidth = 2.5 / scale;
+      g.setLineDash([6 / scale, 4 / scale]);
+      for (const mark of entry.marks) {
+        const pts = mark.points_px || [];
+        if (mark.shape === 'box' && pts.length === 2) g.strokeRect(pts[0][0], pts[0][1], pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]);
+        else if (pts.length > 1) {
+          g.beginPath();
+          pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+          g.stroke();
+        }
+      }
+    };
+    image.src = url;
+  }).catch(() => {});
+  return canvas;
+}
+
+const OUTCOME = {
+  kept: { word: 'Kept', tone: 'brand' },
+  partly_kept: { word: 'Partly kept', tone: 'brand' },
+  not_kept: { word: 'Not kept', tone: 'warn' },
+  no_edit: { word: 'No edit', tone: '' },
+  stopped: { word: 'Stopped', tone: 'warn' },
+};
+
+/** One Mark and revise pass: what the person asked, where, what the AI did and the keep rule's answer. */
+function markEntry(entry, pageUrl, placeOf) {
+  const result = entry.result;
+  const outcome = entry.forced ? { word: 'Kept anyway', tone: 'brand' } : result ? (OUTCOME[result.outcome] || { word: result.outcome, tone: '' }) : { word: 'Working', tone: 'ai' };
+  let fitText = null;
+  if (result?.fit_change) fitText = `fit ${result.fit_change > 0 ? '+' : '−'}${Math.abs(result.fit_change).toFixed(3)}`;
+  else if (result?.not_kept_fit_change) fitText = `would have been ${result.not_kept_fit_change > 0 ? '+' : '−'}${Math.abs(result.not_kept_fit_change).toFixed(3)}`;
+  return el('li', { class: 'change change-mark', dataset: { outcome: result?.outcome || 'working' } },
+    markThumbnail(entry, pageUrl),
+    el('div', { class: 'change-mark-body' },
+      el('div', { class: 'change-head' },
+        el('span', { class: 'change-who' }, 'You marked'),
+        el('span', { class: 'badge badge-small', dataset: { tone: outcome.tone } }, el('span', { class: 'badge-text' }, outcome.word)),
+        fitText ? el('span', { class: 'change-fit' }, fitText) : null),
+      el('blockquote', { class: 'change-instruction' }, `“${entry.instruction}”`),
+      entry.sections.length ? el('p', { class: 'change-cause' }, `${entry.sections.length === 1 ? 'Section' : 'Sections'} at ${entry.sections.map(placeOf).join(', ')}`) : null,
+      entry.why ? el('p', { class: 'change-why' }, el('strong', {}, 'The AI: '), entry.why) : null,
+      result?.detail && result.outcome !== 'kept' ? el('p', { class: 'change-cause' }, `Why: ${result.detail}`) : null));
+}
+
+/** The Changes list for the History tab. `pageUrl()` gives the drawing page image for mark thumbnails. */
+export function renderChanges(entries, { pageUrl = null, placeOf = (id) => id } = {}) {
   if (!entries.length) {
     return el('p', { class: 'panel-empty' }, 'This run has no scored revisions yet.');
   }
   return el('ol', { class: 'change-list' }, ...entries.map((entry) => {
+    if (entry.kind === 'mark') return markEntry(entry, pageUrl, placeOf);
     if (entry.kind === 'not_kept') {
       return el('li', { class: 'change change-not-kept' },
         el('div', { class: 'change-head' },

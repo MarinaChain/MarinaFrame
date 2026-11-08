@@ -2727,6 +2727,14 @@ code { font-family: var(--font-mono); }
 .change-sections { display: flex; flex-direction: column; gap: 2px; margin-top: var(--space-xs); padding-top: var(--space-sm); border-top: 1px solid var(--rule); }
 .change-section { display: flex; gap: var(--space-md); color: var(--ink-2); font-size: var(--fs-sm); }
 .change-x { flex: none; min-width: 56px; font: 500 var(--fs-sm) var(--font-mono); color: var(--ink); }
+/* A Mark and revise pass: thumbnail of the marked area | what was asked, done and kept. */
+.change-mark { flex-direction: row; align-items: flex-start; gap: var(--space-md); border-left: 3px solid var(--brand); }
+.change-mark[data-outcome="not_kept"], .change-mark[data-outcome="stopped"] { border-left-color: var(--warn-ink); }
+.change-thumb { flex: none; width: 168px; height: 120px; border: 1px solid var(--rule); border-radius: var(--radius-sm); background: #F7F5F0; }
+.change-mark-body { display: flex; flex-direction: column; gap: var(--space-xs); min-width: 0; }
+.change-who { color: var(--brand); font-weight: 600; }
+.change-instruction { margin: 0; color: var(--ink); font-size: var(--fs-md); font-style: italic; overflow-wrap: anywhere; }
+.change-why { color: var(--ink-2); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 
 /* ------------------------------------------------------------------ Mark and revise (js/mark.js)
    The person's mark is brand blue. Teal stays for AI activity, amber for review. */

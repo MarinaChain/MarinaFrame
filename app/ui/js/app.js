@@ -96,8 +96,10 @@ function cachedArtifact(kind, task, path) {
 }
 
 // Evidence card on the section strip (js/evidence.js): the page crop, the lines and the ink distance.
+/** The open run's drawing page as a data URL (or null): evidence cards and mark thumbnails. */
+const evidencePageUrl = () => (state.view?.source_page ? cachedArtifact('image', state.task, state.view.source_page.path).catch(() => null) : Promise.resolve(null));
 const evidence = createEvidenceCard({
-  pageUrl: () => (state.view?.source_page ? cachedArtifact('image', state.task, state.view.source_page.path).catch(() => null) : Promise.resolve(null)),
+  pageUrl: evidencePageUrl,
   inkOf: (id) => live.latestInk().get(id) ?? null,
 });
 
@@ -703,7 +705,7 @@ function changesSection(vessel) {
   const task = state.task;
   const body = el('div', { class: 'changes-body' }, el('p', { class: 'panel-empty' }, 'Reading the steps…'));
   invoke('get_live_steps', { task, after_sequence: 0 })
-    .then((live) => { if (task === state.task) fill(body, renderChanges(buildChanges(live.steps))); })
+    .then((live) => { if (task === state.task) fill(body, renderChanges(buildChanges(live.steps), { pageUrl: evidencePageUrl, placeOf: sectionPlace })); })
     .catch(() => fill(body, el('p', { class: 'panel-empty' }, 'The steps of this run could not be read.')));
   const run = vessel ? `Run ${runNumber(vessel, task)}` : 'this run';
   return el('section', { class: 'changes', 'aria-labelledby': 'changes-title' },
@@ -904,6 +906,12 @@ function renderDraftSummary() {
 }
 
 // ---------------------------------------------------------------- section strip
+
+/** "st12" -> "12.0 m": a section by its place, as on the strip (the id when unknown). */
+function sectionPlace(id) {
+  const section = state.view?.sections.find((s) => s.id === id);
+  return section ? fmt.metres(section.x_m) : id;
+}
 
 function sectionShapePath(section) {
   const line = section.candidates.find((c) => c.chosen) || (section.state === 'declined' ? section.candidates[0] : null);
