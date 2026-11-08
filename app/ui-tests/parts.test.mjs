@@ -1,7 +1,17 @@
 // Part list copy (js/parts.js): no spreadsheet formulas from labels or notes. Run: npm run test:ui
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { safeTextCell, partTableText } from '../ui/js/parts.js';
+import { safeTextCell, partTableText, plainReason } from '../ui/js/parts.js';
+
+test('ship-cad reasons read as plain sentences', () => {
+  assert.equal(plainReason('mast_outline: missing or invalid measurement; mast_height: missing or invalid measurement'),
+    'Outline: not read from the drawing. Height: not read from the drawing.');
+  assert.equal(plainReason('aft_bulwark_thickness: guessed: GA gives no bulwark thickness'),
+    'Thickness: guessed (GA gives no bulwark thickness).');
+  assert.equal(plainReason('Component identity needs human review'),
+    'Every value was read from the drawing. Check that this is the right part.');
+  assert.equal(plainReason('ValueError: invalid or empty CAD solid'), 'ValueError: invalid or empty CAD solid.');
+});
 
 test('text cells that a spreadsheet would run as a formula get a leading quote', () => {
   for (const cell of ['=HYPERLINK("x")', '+1', '-2+3', '@SUM(A1)', '\t=1', '\r=1']) {

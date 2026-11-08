@@ -25,10 +25,35 @@ const MARK_CHIPS = ['Too high', 'Too low', 'Too long', 'Too short', 'Wrong place
 const SKETCH = { unitsPerMetre: 30, pad: 10 };
 
 /** One state word per part: the review wins, then what the build could do. */
+/** "house_height" or "height" -> "Height": the argument word of a ship-cad name. */
+function argumentWord(name) {
+  const word = name.split('_').pop() || name;
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+/**
+ * The ship-cad reason in plain words (the raw text stays in the tooltip). Each '; '-separated
+ * item becomes one short sentence.
+ */
+export function plainReason(reason) {
+  if (!reason) return '';
+  if (reason === 'Component identity needs human review') {
+    return 'Every value was read from the drawing. Check that this is the right part.';
+  }
+  return reason.split('; ').map((item) => {
+    let match = /^(\w+): missing or invalid measurement$/.exec(item);
+    if (match) return `${argumentWord(match[1])}: not read from the drawing.`;
+    match = /^(\w+): (guessed|ai_inferred): (.+)$/.exec(item);
+    if (match) return `${argumentWord(match[1])}: ${match[2] === 'guessed' ? 'guessed' : 'read by the AI'} (${match[3]}).`;
+    if (item === 'primary measurement does not match named source') return 'The outline was read from another view than the part names.';
+    return item.endsWith('.') ? item : `${item}.`;
+  }).join(' ');
+}
+
 export function partState(part) {
   if (part.review === 'accepted') return { word: 'Accepted', tone: 'brand', title: 'You accepted this part as a draft part.' };
   if (part.review === 'marked') return { word: 'Marked', tone: 'brand', title: `You marked it: ${part.review_note || ''}` };
-  if (!part.built) return { word: 'Not built', tone: 'warn', title: part.reason };
+  if (!part.built) return { word: 'Not built', tone: 'warn', title: plainReason(part.reason) };
   if (part.status === 'draft_guess') return { word: 'Guessed', tone: 'draft', title: 'One or more values were guessed. Check them.' };
   return { word: 'To check', tone: '', title: 'Every value was read from the drawing. Check what the part is.' };
 }
@@ -231,7 +256,7 @@ export function createParts({ host, review, showIn3d, signOff, onSelect = () => 
       part.review === 'marked' && part.review_note
         ? el('p', { class: 'parts-marked' }, el('strong', {}, 'You marked: '), part.review_note, ' Saved with the review of this run.')
         : null,
-      el('p', { class: 'parts-reason' }, part.reason),
+      el('p', { class: 'parts-reason', title: part.reason }, plainReason(part.reason)),
       box ? el('p', { class: 'parts-box-line' },
         `x ${box.min[0].toFixed(2)} to ${box.max[0].toFixed(2)} m · breadth ${(box.max[1] - box.min[1]).toFixed(2)} m · `
         + `z ${box.min[2].toFixed(2)} to ${box.max[2].toFixed(2)} m`
