@@ -35,8 +35,10 @@ PLAN_PIXEL_M = 0.02
 PLAN_LINE_PIXELS = 3
 # Drawn lines are up to one pixel wider than PLAN_LINE_PIXELS; the band must cover all of them.
 EDGE_BAND_PIXELS = 2 * PLAN_LINE_PIXELS
-# Outline simplification tolerance (a fraction of a deckhouse wall thickness).
+# Outline simplification tolerance (a fraction of a deckhouse wall thickness). When the outline
+# is not a simple polygon, the tolerance doubles, at most this many times in all.
 OUTLINE_TOLERANCE_M = 0.02
+OUTLINE_SIMPLIFY_STEPS = 5
 
 
 @dataclass
@@ -148,8 +150,68 @@ def transverse_walls(entities, view: View, x_range: list[float], min_length_m: f
     return sorted(walls, key=lambda wall: wall['x_m'])
 
 
+def _row_clusters(mask: np.ndarray) -> list[tuple[int, int]]:
+    """Runs of consecutive rows that contain ink (one drawn line is a few pixels thick)."""
+    rows = np.nonzero(mask.any(axis=1))[0]
+    clusters = []
+    for row in rows:
+        if clusters and row <= clusters[-1][1] + 1:
+            clusters[-1][1] = row
+        else:
+            clusters.append([row, row])
+    return [tuple(c) for c in clusters]
+
+
+def _runs(line: np.ndarray) -> list[tuple[int, int]]:
+    padded = np.r_[0, line.astype(np.int8), 0]
+    edges = np.diff(padded)
+    return list(zip(np.nonzero(edges == 1)[0], np.nonzero(edges == -1)[0] - 1))
+
+
+def raster_levels(ink: np.ndarray, x_of_column, z_of_row, pixel_m: float) -> list[Level]:
+    """Horizontal drawn levels in a raster profile: ink runs at least MIN_LEVEL_LENGTH_M long."""
+    import cv2
+
+    length = max(3, int(round(MIN_LEVEL_LENGTH_M / pixel_m))) | 1  # odd: an even kernel shifts by one pixel
+    long_runs = cv2.morphologyEx(ink, cv2.MORPH_OPEN, np.ones((1, length), np.uint8)) > 0
+    levels = []
+    for top, bottom in _row_clusters(long_runs):
+        band = long_runs[top:bottom + 1].any(axis=0)
+        intervals = [sorted([float(x_of_column(a)), float(x_of_column(b))]) for a, b in _runs(band)]
+        z = float(z_of_row((top + bottom) / 2))
+        levels.append(Level(z_m=round(z, 4), intervals=_merge(intervals, LEVEL_GAP_M),
+                            entity_ids=[f'raster rows {top}-{bottom}']))
+    return sorted(levels, key=lambda level: level.z_m)
+
+
+def raster_transverse_walls(ink: np.ndarray, x_of_column, x_range, min_length_m: float,
+                            pixel_m: float) -> list[dict]:
+    """Ink runs across the ship (constant x) at least min_length_m long, in a raster plan."""
+    import cv2
+
+    length = max(3, int(round(min_length_m / pixel_m))) | 1  # odd: an even kernel shifts by one pixel
+    long_runs = cv2.morphologyEx(ink, cv2.MORPH_OPEN, np.ones((length, 1), np.uint8)) > 0
+    walls = []
+    for left, right in _row_clusters(long_runs.T):
+        x = float(x_of_column((left + right) / 2))
+        if x_range[0] - LEVEL_GAP_M <= x <= x_range[1] + LEVEL_GAP_M:
+            run = max(b - a + 1 for column in long_runs.T[left:right + 1] for a, b in _runs(column) or [(0, -1)])
+            walls.append({'x_m': round(x, 4), 'length_m': round(run * pixel_m, 4),
+                          'entity_id': f'raster columns {left}-{right}'})
+    return sorted(walls, key=lambda wall: wall['x_m'])
+
+
 class PlanRaster:
     """Plan-view linework on a grid; the enclosed region is what the lines surround."""
+
+    @classmethod
+    def from_ink(cls, ink: np.ndarray, x_min: float, y_max: float, pixel_m: float, evidence: str) -> PlanRaster:
+        """A plan from a scanned or rendered drawing: ink pixels are the lines."""
+        plan = cls.__new__(cls)
+        plan.view, plan.pixel_m, plan.x_min, plan.y_max = None, pixel_m, x_min, y_max
+        plan.lines = (ink > 0).astype(np.uint8) * 255
+        plan.entity_ids = [evidence]
+        return plan
 
     def __init__(self, entities, view: View, pixel_m: float = PLAN_PIXEL_M):
         import cv2
@@ -226,13 +288,50 @@ class PlanRaster:
         largest = ndimage.binary_fill_holes(labels == (int(np.argmax(sizes)) + 1))
         if largest.sum() * self.pixel_m ** 2 < 1.0:
             return None  # Less than 1 m2 is a detail, not a deck or a deckhouse.
-        contours, _ = cv2.findContours(largest.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        contour = max(contours, key=cv2.contourArea)
-        simple = cv2.approxPolyDP(contour, OUTLINE_TOLERANCE_M / self.pixel_m, True)[:, 0, :]
-        if len(simple) < 3:
-            return None
-        points = self.to_ship(simple)
-        return [[round(float(x), 4), round(float(y), 4)] for x, y in points]
+        # One-pixel spurs and necks (common on raster ink) make self-touching outlines: when
+        # the outline is not simple, try coarser outlines, then the mask without spurs.
+        for shape in (largest, ndimage.binary_opening(largest, iterations=2)):
+            contours, _ = cv2.findContours(shape.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if not contours:
+                continue
+            contour = max(contours, key=cv2.contourArea)
+            tolerance = OUTLINE_TOLERANCE_M
+            for _ in range(OUTLINE_SIMPLIFY_STEPS):
+                simple = cv2.approxPolyDP(contour, tolerance / self.pixel_m, True)[:, 0, :]
+                points = [[round(float(x), 4), round(float(y), 4)] for x, y in self.to_ship(simple)]
+                if len(points) >= 3 and is_simple_polygon(points):
+                    return points
+                tolerance *= 2
+        return None
+
+
+def is_simple_polygon(points) -> bool:
+    """True when no two non-adjacent edges touch or cross and no vertex repeats."""
+    p = np.asarray(points, dtype=float)
+    n = len(p)
+    if n < 3 or len({(round(x, 6), round(y, 6)) for x, y in p}) != n or polygon_area(p) <= 0:
+        return False
+
+    def cross(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    def touches(a, b, c, d):
+        d1, d2, d3, d4 = cross(c, d, a), cross(c, d, b), cross(a, b, c), cross(a, b, d)
+        if ((d1 > 0) != (d2 > 0)) and ((d3 > 0) != (d4 > 0)) and 0 not in (d1, d2, d3, d4):
+            return True
+        def on(o, a, q):
+            return (cross(o, a, q) == 0 and min(o[0], a[0]) <= q[0] <= max(o[0], a[0])
+                    and min(o[1], a[1]) <= q[1] <= max(o[1], a[1]))
+        return on(c, d, a) or on(c, d, b) or on(a, b, c) or on(a, b, d)
+
+    for i in range(n):
+        a, b = p[i], p[(i + 1) % n]
+        for j in range(i + 2, n):
+            if i == 0 and j == n - 1:
+                continue  # Adjacent through the closing edge.
+            if touches(a, b, p[j], p[(j + 1) % n]):
+                return False
+    return True
 
 
 def polygon_area(points) -> float:

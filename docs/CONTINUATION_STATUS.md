@@ -489,3 +489,28 @@ campaign counts as a failure.
 - Still to do: drop-a-drawing-set UI wired to intake (backend exists); section strip's second chip row
   is clipped by its scrollbar; vessel names for factory drawings are hash ids; a full `tauri build`
   release bundle with icon; runs started from the CLI show "a different build made this run" (expected).
+
+## 2026-11-09 04:30 SGT: app features, sheet-only accuracy, whole-vessel step 1 (continue/v0.5 e63ece1)
+
+Founder decisions this stretch: commercial licence for all acquired data (Gunnerus included; see
+`docs/DEPENDENCIES_AND_RIGHTS.md`), so drawings may go to DeepSeek but never into the public repo;
+model output format for whole-vessel parts is ship-cad JSON (A/B below); arm B sandbox kept light
+by founder choice (timeout, own folder, env allow-list); a standing Opus UI/UX lane works in rounds.
+
+| Area | State | Where |
+|---|---|---|
+| Export (M5) | Export tab: STEP, STL, offsets, hydrostatics, PDF, package, draft stamp | `app/core/src/export.rs`, `app/ui/js/export.js` |
+| Mark and revise | box/lasso/strip/3D pick + instruction; focused pass; keep rule checks the marked sections first; force keep | `rust-control/src/revision.rs`, `app/ui/js/mark.js` |
+| UI rounds 1-24 | intake stage, vessel tabs, review counter + A/O/M keys, ⌘K palette, Changes, section-area check, evidence cards, a11y (`npm run test:a11y`), sample vessel, loading states | map: `docs/design/2026-11-08-app-design-plan.md` section 10; research `docs/research/2026-11-09-uiux-research.md` |
+| Sheet-only accuracy (live, dev) | series60-3v-L0 1.70 % RMS / +0.9 % volume (passes); dtmb5415-3v-L0 9.5 % / +3.5 % | fixes: mirrored aft half, label-row cut, deck line, printed scale, station lines; `scripts/run_round.py --sheet-only` |
+| Whole vessel (Gunnerus, dev) | 7 parts from the GA; deckhouse IoU 0.94, volume +9.4 %; JSON beats CadQuery 3-1 (thinking off); model adds no accuracy on vector input | `docs/WHOLE_VESSEL_GUNNERUS.md`, plan `docs/plans/2026-11-09-whole-vessel-scope.md` |
+| Controller | repeated refusals: strong hint, stop at 2x limit; tool errors undo and refuse instead of ending the run | `rust-control/src/controller.rs`, `agent_tools.py` |
+
+Keys: OpenCode keys 2 and 3 are at their monthly limit until 14-15 Nov; key 1 carries all runs.
+Real-app check of rounds 5-24 and the sample vessel is not done (app rebuilt and running; screen
+was not reachable). Memory measured in a live app run: app 54-120 MB, web view 34-117 MB, CAD
+worker peak 1.7 GB, total peak about 1.9 GB.
+
+Resume: (1) trace lane: profile baseline snap, worsening edits kept on dtmb, 6-case dev round;
+(2) whole-vessel lane: raster round 3 (protocol c2a5e2f), hull + parts assembly, components.json;
+(3) UI lane: rounds 25-32 starting with the component tree; (4) real-app check of the sample run.

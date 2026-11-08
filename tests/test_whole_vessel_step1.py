@@ -164,3 +164,62 @@ def test_transverse_walls_find_long_end_walls_only():
                 {'id': 'side', 'points': [[15500, 4800], [30000, 4800]]}]
     walls = ga_reader.transverse_walls(entities, view, [12.3, 34.6], min_length_m=3.84)
     assert [(wall['x_m'], wall['entity_id']) for wall in walls] == [(15.5, 'end')]
+
+
+def raster_with_lines():
+    """A 0.05 m/px raster: one deck line, one short detail and one transverse wall."""
+    ink = np.zeros((200, 400), np.uint8)
+    ink[100:102, 20:300] = 255  # 14 m long horizontal line
+    ink[50:52, 20:30] = 255  # 0.5 m detail
+    ink[110:190, 150:152] = 255  # 4 m transverse line
+    return ink
+
+
+def test_raster_levels_and_walls():
+    ink = raster_with_lines()
+    x_of_column = lambda c: -1.0 + 0.05 * c  # noqa: E731
+    z_of_row = lambda r: 10.0 - 0.05 * r  # noqa: E731
+    levels = ga_reader.raster_levels(ink, x_of_column, z_of_row, 0.05)
+    assert len(levels) == 1
+    assert levels[0].z_m == pytest.approx(4.975)
+    assert levels[0].intervals == [pytest.approx([0.0, 13.95])]
+    walls = ga_reader.raster_transverse_walls(ink, x_of_column, [0, 20], 3.0, 0.05)
+    assert [round(wall['x_m'], 3) for wall in walls] == [6.525]
+    assert walls[0]['length_m'] == pytest.approx(4.0)
+
+
+def test_plan_raster_from_ink_footprint():
+    ink = np.zeros((120, 220), np.uint8)
+    ink[10:12, 10:210] = 255
+    ink[108:110, 10:210] = 255
+    ink[10:110, 10:12] = 255
+    ink[10:110, 208:210] = 255
+    plan = ga_reader.PlanRaster.from_ink(ink, x_min=0.0, y_max=3.0, pixel_m=0.05, evidence='test')
+    outline = plan.footprint([0.0, 20.0])
+    assert ga_reader.polygon_area(outline) == pytest.approx(10.0 * 5.0, rel=0.03)
+
+
+def test_is_simple_polygon():
+    assert ga_reader.is_simple_polygon(SQUARE)
+    assert not ga_reader.is_simple_polygon([[0, 0], [2, 2], [2, 0], [0, 2]])  # bow tie
+    assert not ga_reader.is_simple_polygon([[0, 0], [2, 0], [1, 0], [1, 1]])  # spur back on an edge
+
+
+def test_components_record_counts_labels(tmp_path):
+    import json
+
+    from benchmarks.gunnerus.whole_vessel_assembly import components_record
+
+    step1 = tmp_path / 'step1'
+    step1.mkdir()
+    (step1 / 'execution.json').write_text(json.dumps({'result': {'components': [
+        {'id': 'house_t1', 'op': 'deckhouse', 'status': 'draft_guess', 'built': True, 'volume_m3': 4.0,
+         'bbox_m': {'min': [0, 0, 0], 'max': [1, 1, 1]}, 'source_labels': {'outline': 'traced', 'height': 'guessed'}},
+        {'id': 'rail', 'op': 'bulwark', 'status': 'draft_guess', 'built': False, 'source_labels': {}}]}}))
+    record = components_record(step1, tmp_path, 10.0, {'min': [0, 0, 0], 'max': [1, 1, 1]})
+    items = {item['id']: item for item in record['components']}
+    assert record['engineering_approved'] is False
+    assert items['hull']['kind'] == 'hull'
+    assert items['house_t1']['source_counts'] == {'traced': 1, 'ai_inferred': 0, 'guessed': 1}
+    assert items['rail']['step_path'] is None and items['rail']['review_state'] == 'needs_review'
+    assert (tmp_path / 'components.json').is_file()
