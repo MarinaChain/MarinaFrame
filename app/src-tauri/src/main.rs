@@ -12,11 +12,6 @@ use marinaframe_app_core::{AppError, AppPaths, AppResult, Backend};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-
-// The release UI staging of build.rs, compiled here only to run its tests.
-#[cfg(test)]
-#[path = "../stage_ui.rs"]
-mod stage_ui;
 use tauri::{Emitter, Manager, State};
 
 type Shared<'a> = State<'a, Arc<Backend>>;

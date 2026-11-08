@@ -1,12 +1,15 @@
-// Release UI staging (docs/plans/2026-11-09-packaging.md, step 2). Used by build.rs on every
-// build and tested from main.rs (`#[path]` module), so `cargo build`, `tauri build` and CI all
-// embed the same checked copy.
+// Release UI staging (docs/plans/2026-11-09-packaging.md, step 2).
 //
-// It copies only the files the app needs from `app/ui` into `app/ui-release` (git-ignored),
-// which `tauri.conf.json` embeds. The browser mock (`ui/mock`), the screenshots and any local
-// data stay out. Staging fails when a copied file has a type outside ALLOWED_EXTENSIONS
-// (drawings and CAD or model files such as .glb, .step, .tif or .pdf are never UI files) or is
-// larger than MAX_FILE_BYTES. `tauri dev` serves `app/ui` itself (tauri.dev.conf.json).
+// `app/src-tauri/build.rs` includes this file and runs [`stage`] on every build of the app;
+// the tests run here, in marinaframe-app-core, which the Linux CI job also tests (it cannot
+// build the Tauri shell). It copies only the files the app needs from `app/ui` into
+// `app/ui-release` (not tracked), which `tauri.conf.json` embeds. The browser mock
+// (`ui/mock`), the screenshots and any local data stay out. Staging fails when a copied file
+// has a type outside [`ALLOWED_EXTENSIONS`] (drawings and CAD or model files such as .glb,
+// .step, .tif or .pdf are never UI files), is a link, or is larger than [`MAX_FILE_BYTES`].
+// `npm run dev` serves `app/ui` itself (tauri.dev.conf.json).
+//
+// The file stands alone (std only) because build.rs includes it with `include!`.
 
 use std::path::{Path, PathBuf};
 
