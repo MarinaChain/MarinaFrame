@@ -361,6 +361,13 @@ def reconstruct(spec_path: str | Path, output_dir: str | Path, *, export_cad: bo
                 for section in result["sections"]:
                     if any("Draft uses unreliable" in warning for warning in section.get("warnings", [])):
                         result["gaps"].append(gap("draft_unreliable_curve", "Using fragmented curve; re-trace this section, pick another candidate, or accept draft.", section["id"], severity="warning"))
+                # Cross-station fairness: name the section that breaks the hull
+                # (warnings only). Interpolated sections come from their
+                # neighbours, so they are not evidence for or against them.
+                from .fairness import check_fairness, fairness_warnings
+                fairness = check_fairness([s for s in result["sections"] if s.get("source_label") != "interpolated"])
+                result.setdefault("diagnostics", {})["fairness"] = fairness
+                result["gaps"].extend(fairness_warnings(fairness))
             for section in result["sections"]:
                 section.setdefault("evidence", {}).update(source_id="source-1", source_sha256=result["sources"][0]["sha256"],
                     assistance=assistance)
