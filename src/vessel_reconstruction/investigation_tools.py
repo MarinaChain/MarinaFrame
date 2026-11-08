@@ -382,9 +382,14 @@ class InvestigationTools:
         setups = list(self.state.get("sheet_setups", {}).values())
         measured = measure_description(image, self.spec, description, setups, self.intake_hints())
         measured["views"] = copy.deepcopy(self.state.get("described_views", []))
+        previous = copy.deepcopy(self.state.get("vessel_description"))
         self.state.update(vessel_description=measured, description_phase="complete", description_next_view=None)
         write_json(self.root / "vessel.json", {"description": measured})
         self._save()
+        from .first_hull_tools import rebuild_if_setup_changed
+        rebuilt = rebuild_if_setup_changed(self, previous)
+        if rebuilt is not None:
+            return rebuilt
         return self._observation(True, "vessel_described", description=measured, warnings=measured["warnings"],
                                  message="Description recorded; warnings name doubtful fields. Continue with the first hull.")
 
@@ -701,8 +706,12 @@ class InvestigationTools:
             return self._observation(True, "setup_accepted_as_model_choice", setup=copy.deepcopy(records[0]),
                                      shared_panel_count=len(records),
                                      warnings=[w for r in records for w in r["warnings"]], **crop)
+        # A sheet-only task's section calibration came from the model's own
+        # reading (materialize.py), not from a declaration: a new reading is
+        # checked against the drawn grid, not against the earlier reading.
+        declared = [] if self.state.get("sheet_only") else self.spec["sections"]
         try:
-            evidence = inv.check_sheet_setup(image, self.spec["sections"], setup)
+            evidence = inv.check_sheet_setup(image, declared, setup)
         except inv.VerificationError as exc:
             return self._refused(exc)
         setup_id = "setup-" + digest_object(setup)[:16]
@@ -712,6 +721,12 @@ class InvestigationTools:
                   "identity_certified": False}
         self.state.setdefault("sheet_setups", {})[setup_id] = record
         self._save()
+        if view == "body":
+            # A body setup read after the first hull may correct its scale or datums.
+            from .first_hull_tools import rebuild_if_setup_changed
+            rebuilt = rebuild_if_setup_changed(self, self.state.get("vessel_description"))
+            if rebuilt is not None:
+                return {**rebuilt, "setup": copy.deepcopy(record)}
         return self._observation(True, "setup_accepted_as_model_choice", setup=copy.deepcopy(record),
                                  message="Accepted for comparisons only. The build keeps the declared calibration.")
 

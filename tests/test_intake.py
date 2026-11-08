@@ -192,3 +192,75 @@ def test_materialize_replaces_body_regions_that_miss_the_sheet(tmp_path):
     assert made["report"]["panel_source"] == "the intake's body regions"
     assert all(s["roi_px"][0] >= 1000 for s in made["sections"])
     assert any("do not match" in w for w in made["warnings"])
+
+
+def blurred_body_plan():
+    """A grey, blurred scan of a body plan: light grid, dash-dot centreline at x = 200, baseline at y = 260."""
+    from PIL import ImageFilter
+    image = Image.new("RGB", (400, 320), (235,) * 3)
+    draw = ImageDraw.Draw(image)
+    for x in range(80, 321, 40):
+        if x != 200:
+            draw.line([(x, 40), (x, 260)], fill=(205,) * 3, width=1)
+    for y in range(60, 261, 40):
+        draw.line([(60, y), (340, y)], fill=(205,) * 3, width=1)
+    for top in range(30, 270, 24):  # dash-dot: a long dash and a dot
+        draw.line([(200, top), (200, top + 14)], fill=(110,) * 3, width=1)
+        draw.line([(200, top + 18), (200, top + 19)], fill=(110,) * 3, width=1)
+    draw.line([(60, 260), (340, 260)], fill=(110,) * 3, width=2)
+    for offset in (50, 90, 125):
+        draw.line([(200, 258), (200 + offset, 200), (200 + offset + 8, 70)], fill="black", width=3)
+        draw.line([(200, 258), (200 - offset, 200), (200 - offset - 8, 70)], fill="black", width=3)
+    return np.asarray(image.filter(ImageFilter.GaussianBlur(1.5)))
+
+
+def test_grid_datums_find_a_dash_dot_centreline_on_a_blurred_scan():
+    from vessel_reconstruction.materialize import grid_datums
+    datums = grid_datums(blurred_body_plan(), [0, 0, 400, 320])
+    assert abs(datums["centreline_px"] - 200) <= 1.0
+    assert abs(datums["baseline_px"] - 260) <= 1.5
+
+
+def _section(sid, x, ppm=20.0, centre=1200.0):
+    return {"id": sid, "x_m": x, "z_max_m": 5.0,
+            "calibration": {"pixels_per_metre": ppm, "centerline_px": centre, "baseline_px": 260.0}}
+
+
+def test_setup_changes_name_moved_stations_scales_datums_and_dimensions():
+    from vessel_reconstruction.first_hull_tools import setup_changes
+    old = {"sections": [_section("1", 0.0), _section("2", 10.0)], "constraints": {"beam_m": 7.2}}
+    assert setup_changes(old, old) == []
+    # Reading noise (0.5 % of the length, half a pixel) keeps the built hull.
+    noisy = {"sections": [_section("1", 0.0), _section("2", 10.05, centre=1200.5)], "constraints": {"beam_m": 7.2}}
+    assert setup_changes(old, noisy) == []
+    corrected = {"sections": [_section("1", 0.0, ppm=2.0), _section("2", 100.0, ppm=2.0, centre=1190.0)],
+                 "constraints": {"beam_m": 13.4}}
+    changes = setup_changes(old, corrected)
+    assert any("x 10 -> 100" in c for c in changes) and any("scale" in c for c in changes)
+    assert any("centerline_px" in c for c in changes) and any("beam_m" in c for c in changes)
+
+
+def test_a_corrected_reading_after_the_first_hull_builds_it_again(tmp_path, monkeypatch):
+    from vessel_reconstruction import first_hull_tools
+    preview = intake.prepare([three_view_png(tmp_path / "sheet.png")], tmp_path / "prep")
+    written = intake.write_spec(preview, tmp_path / "run")
+    (tmp_path / "task").mkdir()
+    tools = DomainTools(tmp_path / "task", written["spec_path"])
+    body = next(h["region_px"] for h in tools.intake_hints() if h["label"] == "body_plan")
+    tools.state.update(_state(views=[{"view_id": "body", "kind": "body", "region_px": body}]))
+    first = {"stations": [{"id": f"{i}", "x_m": 1.0 * i} for i in range(5)], "principal": {"loa": {"value": 4.0}}}
+    tools._describe_vessel(json.loads(json.dumps(first)))
+    tools._materialize_sections()
+    tools.state.update(vessel_table={"stations": []}, selected={"0": "old"}, authored_sections={"1": {}})
+    built = []
+    monkeypatch.setattr(first_hull_tools, "build_first_hull",
+                        lambda t: built.append(t.state.get("materialized_spec_sha256")) or {"message": "built"})
+    # The same reading again keeps the hull.
+    same = tools._describe_vessel(json.loads(json.dumps(first)))
+    assert built == [] and same["status"] == "vessel_described", same.get("setup_changes")
+    # The title block read again: LOA 40 m, stations ten times farther apart.
+    corrected = {"stations": [{"id": f"{i}", "x_m": 10.0 * i} for i in range(5)],
+                 "principal": {"loa": {"value": 40.0}}}
+    rebuilt = tools._describe_vessel(corrected)
+    assert built == [None], "the sections are materialized again from the corrected reading"
+    assert rebuilt["setup_changes"] and tools.state["selected"] == {} and tools.state["authored_sections"] == {}

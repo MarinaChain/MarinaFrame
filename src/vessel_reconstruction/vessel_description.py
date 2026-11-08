@@ -444,7 +444,7 @@ def profile_outline_heights(image, setup, pixels_per_metre, stations):
         baseline = keel
     heights = {}
     for station in stations:
-        column = origin + setup.get("x_direction", 1) * station["x_m"] * pixels_per_metre - left
+        column = origin + (setup.get("x_direction") or 1) * station["x_m"] * pixels_per_metre - left
         columns = outline[:, max(0, int(round(column)) - DECK_COLUMN_PX):int(round(column)) + DECK_COLUMN_PX + 1]
         rows = np.flatnonzero(columns.any(axis=1))
         if not len(rows):
@@ -523,7 +523,7 @@ def checked_x_origin(image, setup):
     columns = np.flatnonzero(outline.any(axis=0))
     if not len(columns):
         return origin
-    aft = columns[0] if setup.get("x_direction", 1) >= 0 else columns[-1]
+    aft = columns[0] if (setup.get("x_direction") or 1) >= 0 else columns[-1]
     return float(aft + crop_left)
 
 
@@ -545,7 +545,6 @@ def _bottom_line_centre(outline, slope=0.0):
 # horizontal; hull ends are short). A model position more than
 # STATION_TOLERANCE_M from its measured line is a misreading.
 STATION_LINE_SHARE = 0.6
-STATION_LINE_CONTRAST = 25
 STATION_TOLERANCE_M = 0.5
 MIN_STATION_LINES = 3
 # Station lines are evenly spaced: every gap within this share of the median gap.
@@ -556,8 +555,10 @@ def profile_station_lines(image, setup, pixels_per_metre):
     """x positions (m, from the profile's x origin) of the full-height vertical lines in the profile."""
     left, top, right, bottom = _region(setup["region_px"], image.shape)
     crop = _gray(image[top:bottom, left:right])
-    # Ink relative to the paper: a scan's paper is grey, not white.
-    inked = crop < np.percentile(crop, 95) - STATION_LINE_CONTRAST
+    # Ink relative to the paper beside it (inv.drawn_lines): a scan's paper is
+    # grey and uneven, and a blurred light station line is only a little darker.
+    paper = ndimage.grey_closing(crop, size=(1, inv.LINE_BACKGROUND_PX))
+    inked = paper - crop >= inv.LINE_CONTRAST
     columns = np.flatnonzero(inked.mean(axis=0) >= STATION_LINE_SHARE)
     groups = np.split(columns, np.flatnonzero(np.diff(columns) > 1) + 1) if len(columns) else []
     # Station lines are drawn light; a dark full-height line is hull ink (a transom, a stem).
@@ -597,6 +598,14 @@ def check_station_positions(image, setups, description, warnings, hints=None):
     else:
         corrected = [{"id": str(i + 1), "x_m": x, "label": str(i + 1), "source": "profile_station_lines"}
                      for i, x in enumerate(measured)]
+        # The body-plan half of a station is read from its label there: a model
+        # station with the same number keeps its side (series60-3v-L1 live: ten
+        # stations 0-9 over LOA, nine lines; station 5 is drawn on the fore half).
+        read_sides = {str(s.get("id")): s.get("side") for s in stations
+                      if isinstance(s, dict) and s.get("side") in ("fore", "aft")}
+        for station in corrected:
+            if station["id"] in read_sides:
+                station["side"] = read_sides[station["id"]]
     warnings.append(warning("stations", claimed, measured,
         f"The profile's {len(measured)} station lines are at x {', '.join(f'{x:g}' for x in measured)} m; "
         "those positions are used. Read the station numbers along the profile or plan if these are not the stations."))
@@ -620,13 +629,28 @@ def _iou(first, second) -> float:
 
 def profile_setup(setups, hints=None):
     """The model's profile setup, on the intake's profile region when the model's region disagrees, or None."""
-    profile = next((s for s in setups if s.get("view") == "profile" and s.get("x_origin_px") is not None), None)
+    profile = next((s for s in setups if s.get("view") == "profile" and s.get("x_origin_px") is not None), None) \
+        or next((s for s in setups if s.get("view") == "profile" and s.get("region_px")), None)
     if profile is None:
         return None
+    if profile.get("x_origin_px") is None:
+        # No origin read (shipd-1-09867-3v-L1 live): the region's edge, which
+        # checked_x_origin takes as unread (x = 0 at the hull's aft end).
+        profile = {**profile, "x_origin_px": float(profile["region_px"][0])}
     proposed = next((h["region_px"] for h in hints or [] if h.get("label") == "profile" and h.get("region_px")),
                     None)
     if proposed and _iou(profile["region_px"], proposed) < PROFILE_REGION_AGREEMENT:
         return {**profile, "region_px": list(proposed), "region_source": "intake proposal"}
+    if proposed:
+        # The intake's rows are measured on the ink. A taller model box adds
+        # paper and labels that hide the station lines' full height
+        # (series60-3v-L1 live: 100 px above a 175 px profile); a shorter one
+        # cuts the keel off (another run: bottom 302 px over a keel at 303 px).
+        # Columns are the union: an intake region can hold only part of a long
+        # view (shipd-1-09867-3v-L0: the fore half of the profile).
+        left, _, right, _ = profile["region_px"]
+        return {**profile, "region_px": [min(left, proposed[0]), proposed[1], max(right, proposed[2]), proposed[3]],
+                "region_source": "the intake's rows"}
     return profile
 
 

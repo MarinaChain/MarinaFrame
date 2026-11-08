@@ -141,17 +141,64 @@ def short_of_deck(anchors: list[Anchor], decks: dict) -> list[str]:
     return [sid for sid, top in tops.items() if sid in decks and top < (1 - SHORT_TOP_SHARE) * decks[sid]]
 
 
+def extend_tops_to_deck(anchors: list[Anchor], decks: dict) -> None:
+    """Continue traced tops that stop a little below the profile deck line up to it.
+
+    A body-plan curve runs up to the deck at side, which the profile's deck
+    line gives at each station. On a blurred sheet a trace can stop short of
+    it where a station label or a neighbouring curve's top merges with the
+    curve (series60-3v-L1: three aft stations ended 0.4-1.7 m low). The top is
+    continued along the direction of its last EXTEND_FIT_SHARE of height. Used
+    only when the deck agrees with most traced tops; traces that end far below
+    it (short_of_deck) are already left to the form fit. Changes ``anchors``.
+    """
+    import numpy as np
+    tops = {a.id: max(p[1] for p in a.points_yz_m) for a in anchors if a.points_yz_m}
+    differences = [abs(tops[sid] - deck) for sid, deck in decks.items() if sid in tops]
+    if not differences or float(np.median(differences)) > DECK_AGREEMENT_M:
+        return
+    for anchor in anchors:
+        deck = decks.get(anchor.id)
+        points = np.asarray(anchor.points_yz_m, dtype=float)
+        if deck is None or not anchor.pixels_per_metre or len(points) < 4:
+            continue
+        points = points[np.argsort(points[:, 1], kind="stable")]
+        top = float(points[-1, 1])
+        if top >= deck - DECK_TOP_TOLERANCE_PX / anchor.pixels_per_metre:
+            continue
+        upper = points[points[:, 1] >= top - EXTEND_FIT_SHARE * deck]
+        if len(upper) < 2 or np.ptp(upper[:, 1]) <= 0:
+            continue
+        slope, intercept = np.polyfit(upper[:, 1], upper[:, 0], 1)
+        breadth = max(0.0, float(slope * deck + intercept))
+        anchor.points_yz_m = np.vstack([points, [breadth, deck]]).tolist()
+        # The deck height is the line's centre already: no pen-cap correction.
+        anchor.stroke_width_px = None
+        anchor.notes.append(f"top continued from z {top:.3f} to the profile deck line at z {deck:.3f} m")
+
+
+# A top continued to the deck follows the direction of its upper part: the
+# points within this share of the deck height below the traced top.
+EXTEND_FIT_SHARE = 0.1
+
+
 def cap_at_profile_outline(sections: list[dict], anchors: list[Anchor], heights: dict) -> tuple[list, list]:
     """Apply the profile outline (vessel_description.station_outline_heights).
 
-    Keel bottoms and deck tops cut traces that run on; traces that stop far
-    below the deck are left to the form fit. Returns (sections, anchors).
+    Keel bottoms and deck tops cut traces that run on, tops that stop a little
+    below the deck are continued to it, and traces that stop far below the
+    deck are left to the form fit. Returns (sections, anchors).
     """
     decks = {sid: h["deck"] for sid, h in heights.items()}
     short = set(short_of_deck(anchors, decks))
     anchors = [a for a in anchors if a.id not in short]
-    cut_bottoms_at_keel(anchors, {sid: h["keel"] for sid, h in heights.items()})
-    return cap_tops_at_deck(sections, anchors, decks), anchors
+    # A keel read at the deck (an outline broken at that station) is no keel:
+    # a station section is never that shallow.
+    keels = {sid: h["keel"] for sid, h in heights.items() if h["keel"] < (1 - SHORT_TOP_SHARE) * h["deck"]}
+    cut_bottoms_at_keel(anchors, keels)
+    sections = cap_tops_at_deck(sections, anchors, decks)
+    extend_tops_to_deck(anchors, decks)
+    return sections, anchors
 
 
 def build_first_hull(tools):
@@ -255,6 +302,87 @@ def build_first_hull(tools):
     extra = {"materialized_sections": materialization} if materialization else {}
     return tools._observation(True,"first_hull_built",candidate=candidate,left_out_anchor_ids=left_out,
                               warnings=warnings, message=message, **extra)
+
+
+# A later reading changes the first hull's setup when a station moves by more
+# than SETUP_X_SHARE of the hull length, a scale or height by more than
+# SETUP_SCALE_SHARE, or a datum by more than SETUP_DATUM_PX. Smaller
+# differences are reading noise and keep the built hull.
+SETUP_X_SHARE = 0.01
+SETUP_SCALE_SHARE = 0.01
+SETUP_DATUM_PX = 2.0
+# State of the sections built on the old setup; a rebuild starts them again.
+SECTION_STATE = {"catalog": {}, "selected": {}, "model_choices": {}, "authored_sections": {}, "guesses": [],
+                 "resolved_guesses": [], "validation": None, "non_improving_edits": 0}
+
+
+def setup_changes(old: dict, new: dict) -> list[str]:
+    """What differs between two first-hull setups: materialized sections and description constraints.
+
+    ``old`` and ``new`` are first_hull_spec results (sections, constraints).
+    Returns one short line per change; empty when the setup is the same.
+    """
+    old_sections, new_sections = old.get("sections", []), new.get("sections", [])
+    if [s["id"] for s in old_sections] != [s["id"] for s in new_sections]:
+        return [f"stations {[s['id'] for s in old_sections]} -> {[s['id'] for s in new_sections]}"]
+    changes = []
+    length = max([abs(float(s["x_m"])) for s in old_sections + new_sections] + [1e-6])
+
+    def relative(a, b):
+        return abs(float(a) - float(b)) / max(abs(float(b)), 1e-9)
+
+    for before, after in zip(old_sections, new_sections):
+        sid = after["id"]
+        if abs(float(before["x_m"]) - float(after["x_m"])) > SETUP_X_SHARE * length:
+            changes.append(f"{sid}: x {before['x_m']:g} -> {after['x_m']:g} m")
+        if relative(before["z_max_m"], after["z_max_m"]) > SETUP_SCALE_SHARE:
+            changes.append(f"{sid}: top {before['z_max_m']:g} -> {after['z_max_m']:g} m")
+        cal_before, cal_after = before["calibration"], after["calibration"]
+        if relative(cal_before["pixels_per_metre"], cal_after["pixels_per_metre"]) > SETUP_SCALE_SHARE:
+            changes.append(f"{sid}: scale {cal_before['pixels_per_metre']:g} -> "
+                           f"{cal_after['pixels_per_metre']:g} px/m")
+        for key in ("centerline_px", "baseline_px"):
+            if abs(float(cal_before[key]) - float(cal_after[key])) > SETUP_DATUM_PX:
+                changes.append(f"{sid}: {key} {cal_before[key]:g} -> {cal_after[key]:g}")
+    old_limits, new_limits = old.get("constraints") or {}, new.get("constraints") or {}
+    for key in ("beam_m", "depth_m", "length_m"):
+        a, b = old_limits.get(key), new_limits.get(key)
+        if (a is None) != (b is None) or (a is not None and relative(a, b) > SETUP_SCALE_SHARE):
+            changes.append(f"{key} {a} -> {b}")
+    return changes
+
+
+def rebuild_if_setup_changed(tools, previous_description) -> dict | None:
+    """Build the first hull again when a later reading changes its setup (sheet-only happy path).
+
+    The first hull is built once, after phase 1. When the model later reads the
+    title block or a scale again and the corrected reading gives other stations,
+    scale, datums or principal dimensions, the old hull and the sections traced
+    or authored on it rest on a wrong setup: they are set aside and the first
+    hull is built from the corrected setup. Returns the rebuild observation, or
+    None when nothing was built yet or nothing changed.
+    """
+    if not (tools.state.get("sheet_only") and tools.state.get("vessel_table")
+            and tools.state.get("materialized_spec_sha256")):
+        return None
+    from .materialize import materialize_sections
+    from .vessel_description import first_hull_spec
+    image, _, _ = tools._source()
+    made = materialize_sections(image, tools.captured_spec, tools.state, tools.intake_hints())
+    old = first_hull_spec(tools.spec, previous_description)
+    new = first_hull_spec({**tools.captured_spec, "sections": made["sections"]}, tools.state.get("vessel_description"))
+    changes = setup_changes(old, new)
+    if not changes:
+        return None
+    tools.state.pop("materialized_spec_sha256", None)
+    tools.state.update(copy.deepcopy(SECTION_STATE))
+    tools.spec = tools.captured_spec
+    tools._save()
+    observation = build_first_hull(tools)
+    observation["setup_changes"] = changes[:12]
+    observation["message"] = ("The corrected reading changed the hull setup; the first hull was built again from it "
+                              "and earlier section edits were set aside. " + observation.get("message", ""))[:600]
+    return observation
 
 
 # Kinds of table warning that say what happened to the ink (fairness notes stay in the table).

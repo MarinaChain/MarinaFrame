@@ -101,10 +101,15 @@ def hull_ink_box(image, region) -> list[float] | None:
 
 
 def grid_datums(image, region) -> dict:
-    """Centreline, baseline and grid spacing measured from the drawn grid lines."""
+    """Centreline, baseline and grid spacing measured from the drawn grid lines.
+
+    Lines are read at local contrast too (inv.drawn_lines), so the light grid
+    of a blurred scan and a dash-dot centreline count as drawn lines; a dark
+    baseline that hull ink thickens is still found by inv.long_lines.
+    """
     gray = _gray(image, region)
-    rows = [region[1] + v for v in inv.long_lines(gray, 0)]
-    columns = [region[0] + v for v in inv.long_lines(gray, 1)]
+    rows = [region[1] + v for v in inv.datum_lines(gray, 0)]
+    columns = [region[0] + v for v in inv.datum_lines(gray, 1)]
     ink = hull_ink_box(image, region)
     centre = None
     if columns and ink:
@@ -207,6 +212,10 @@ def read_scale(image, setups, described, hints, description, body_region, warnin
         return printed, "the scale printed on the sheet (the model's setup disagreed)"
     if read:
         return float(np.median(read)), "the model's body-plan scale (setup)"
+    if printed:
+        # No scale read (shipd-1-08158-3v-L0 live: 1 px/m "provisional" on a
+        # "100 m grid"): the printed scale comes before any grid measurement.
+        return printed, "the scale printed on the sheet (no body-plan scale was read)"
     spacing_m = [float(s["grid_spacing_m"]) for s in setups if _finite(s.get("grid_spacing_m"))
                  and s["grid_spacing_m"] > 0 and s["grid_spacing_m"] != 1.0]
     grid = grid_datums(image, body_region)
@@ -257,7 +266,7 @@ def body_panels(image, state, hints, warnings) -> list[dict]:
         panels, source = [{"region_px": [0, 0, width, height], "view_id": None}], "the whole sheet"
     result = []
     for panel in panels:
-        region = _clip(panel["region_px"], width, height)
+        region = _with_intake_region(_clip(panel["region_px"], width, height), hint_regions)
         grid = grid_datums(image, region)
         datums = {}
         for field in ("centreline_px", "baseline_px"):
@@ -282,6 +291,20 @@ def body_panels(image, state, hints, warnings) -> list[dict]:
                        "pixels_per_metre": panel.get("pixels_per_metre"),
                        "grid_spacing_m": panel.get("grid_spacing_m"), **datums})
     return result
+
+
+def _with_intake_region(region: list[int], hint_regions: list) -> list[int]:
+    """A model body region grown to the intake body region it matches.
+
+    The intake's region is measured on the ink and its light marks; a model box
+    can stop short of the baseline (series60-3v-L1 live: bottom 302 px over a
+    baseline at 306 px, so a waterline 1 m up was taken as the baseline).
+    """
+    matching = [h for h in hint_regions if _iou(region, h) >= MIN_REGION_AGREEMENT]
+    if not matching:
+        return region
+    hint = max(matching, key=lambda h: _iou(region, h))
+    return [min(region[0], hint[0]), min(region[1], hint[1]), max(region[2], hint[2]), max(region[3], hint[3])]
 
 
 # ------------------------------------------------------------------ assignment
@@ -324,7 +347,8 @@ def assign(stations: list[dict], panels: list[dict], warnings: list) -> list[tup
     if len(panels) == 1 or (fore_panels and aft_panels):
         pairs = []
         for station in stations:
-            fore = station["side"] == "fore" if trust_sides else station["x_m"] >= middle
+            read_side = trust_sides and station["side"] in ("fore", "aft")
+            fore = station["side"] == "fore" if read_side else station["x_m"] >= middle
             if fore_panels and aft_panels:
                 panel = fore_panels[0] if fore else aft_panels[0]
                 roi, basis = list(panel["region_px"]), "fore/aft body view"

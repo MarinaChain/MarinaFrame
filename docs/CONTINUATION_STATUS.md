@@ -555,3 +555,25 @@ crop, so the model saw it downscaled; a tiled rerun needs a new fixed protocol.
 - Sheet-only accuracy: series60 L0 passes live; blurred L1 sheets fail; lane "trace-fix-2" works on
   centreline detection, curve identity, first-hull rebuild and run-to-run variance.
 - Real-app check still not done (app window not reachable by Computer Use).
+
+## 2026-11-09: sheet-only accuracy on blurred L1 sheets (lane commits 5345d70..c4169f2)
+
+| Case | L0 before | L0 live ba8114c | L1 before | L1 live (5345d70 / ba8114c) | L1 replay c4169f2 |
+|---|---|---|---|---|---|
+| dtmb5415 | 5.4 % | 9.3 % (twice; top-cell residual) | 29.7 % | 18.6 / 18.5 % | 18.5 % |
+| series60 | 1.4 % | 1.4 % (passes) | 74.8 % | 28.1 / crash (fixed df2faa7); 34.9 % on df2faa7 | 4.3 % |
+| shipd-1-00679 | 6.8 % | 6.8 % | 9.5 % | 9.9 / 8.9 % | 9.9 % |
+| shipd-1-08158 | 2.8 % | 0.75 % (passes) | 16.0 % | 3.5 / 2.1 % | 10.5 % (s01 end-face slice) |
+| shipd-1-09867 | 3.4 % | 3.4 % | 12.5 % | 11.5 / 12.5 % | 2.1 % |
+
+RMS of half-beam, development truth. Replays run the model's recorded phase-1 reading through
+`build_first_hull` with the current code (script pattern in `tasks/lessons.md`); live L1 numbers
+for c4169f2 are not measured yet. Fixed: body-plan centreline and light grid/station lines read
+by local contrast (dash-dot centreline), first hull rebuilt when a later reading changes its
+setup, station lines on grey scans and with no x origin, tops continued to the profile deck,
+model-read body-plan sides kept, printed scale before a grid guess, datums on the intake's
+ink-measured rows. Variance (same code ba8114c): dtmb5415-L1 18.5 / 13.8 / 18.5 %;
+shipd-1-08158-L0 0.75 / 0.73 % plus two runs lost to bugs fixed in df2faa7. Best-of-N not added.
+Open: dtmb5415-L1 fore-half identity (curve 9 weak, a mixed contour takes the outermost slot;
+filtering mixed strokes broke the aft half, reverted); dtmb5415 top-cell residual; aft/fore ends
+beyond the terminal stations are not modelled.
