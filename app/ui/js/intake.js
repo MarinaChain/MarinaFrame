@@ -342,12 +342,13 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
         where ? el('span', { class: 'intake-where' }, where) : null,
         dpi ? el('span', { class: 'intake-dpi' }, dpi) : null,
         skipButton(page)),
-      pagePreview(page),
+      // The labels sit above the page, next to the thing they name; spare height goes below.
       el('div', { class: 'intake-stage-foot' },
         page.skip
           ? el('p', { class: 'intake-skipped-note' }, 'Skipped. The run does not read this page.')
           : el('ul', { class: 'intake-region-list', 'aria-label': 'View regions' }, ...page.regions.map((r, i) => regionRow(page, r, i))),
-        page.warnings.length ? el('div', { class: 'chip-row intake-card-foot' }, ...page.warnings.map(warningChip)) : null));
+        page.warnings.length ? el('div', { class: 'chip-row intake-card-foot' }, ...page.warnings.map(warningChip)) : null),
+      pagePreview(page));
   }
 
   function numberField(key, label, unit) {

@@ -2113,6 +2113,9 @@ code { font-family: var(--font-mono); }
   gap: var(--space-md);
   min-width: 0;
   min-height: 0;
+  align-self: start;
+  max-height: 100%;
+  overflow-y: auto;
   padding: var(--space-md) var(--space-lg) var(--space-lg);
   border: 1px solid var(--rule);
   border-radius: var(--radius-lg);
@@ -2125,16 +2128,17 @@ code { font-family: var(--font-mono); }
 .intake-skip { flex: none; margin-left: auto; }
 .intake-skip[aria-pressed="true"] { border-color: var(--brand); color: var(--brand); }
 
-/* The page keeps its aspect ratio and is as large as the frame allows in both directions. */
+/* The page keeps its aspect ratio and is as large as the stage width and the window height
+   allow; the card then ends under the page, with no empty band. */
 .intake-stage-frame {
-  flex: 1 1 auto;
-  min-height: 240px;
   display: grid;
-  place-items: center;
-  container-type: size;
+  place-items: start center;
+  container-type: inline-size;
 }
 .intake-page {
-  width: min(100cqw, 100cqh * var(--page-ratio));
+  /* The other parts of the screen above and below the page are about 300 px tall. */
+  width: min(100cqw, (100vh - 300px) * var(--page-ratio));
+  min-width: min(100cqw, 320px);
   aspect-ratio: var(--page-ratio);
 }
 .intake-stage-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm) var(--space-lg); flex: none; }
