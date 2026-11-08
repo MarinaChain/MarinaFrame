@@ -42,6 +42,7 @@ const state = {
   route: 'home',
   previousRoute: 'home', // where Settings returns to after Save or Cancel
   tasks: [],
+  tasksLoaded: false, // true after the first list_tasks answer
   task: null, // absolute path of the open task
   view: null, // TaskView
   events: [],
@@ -302,6 +303,7 @@ function runPreview(task) {
 async function refreshTasks() {
   try {
     state.tasks = await invoke('list_tasks', {});
+    state.tasksLoaded = true;
     renderHome();
     renderQueue();
     renderCrumbs();
@@ -414,7 +416,25 @@ function vesselCard(vessel) {
   run.status === 'running' ? el('span', { class: 'vessel-progress', 'aria-hidden': 'true' }) : null);
 }
 
+/** Grey placeholder cards while the run list loads, so Home does not flash "No runs yet". */
+const HOME_SKELETON = { needs: 2, vessels: 4 };
+
+function renderHomeLoading() {
+  const bar = (cls) => el('span', { class: `skeleton ${cls}` });
+  fill($('needs-row'), ...Array.from({ length: HOME_SKELETON.needs }, () =>
+    el('div', { class: 'needs-card is-loading', 'aria-hidden': 'true' }, bar('skeleton-art'), el('span', { class: 'needs-body' }, bar('skeleton-line'), bar('skeleton-line short')))));
+  fill($('vessel-grid'), ...Array.from({ length: HOME_SKELETON.vessels }, () =>
+    el('div', { class: 'vessel-card is-loading', 'aria-hidden': 'true' }, bar('skeleton-thumb'), bar('skeleton-line'), bar('skeleton-line short'))),
+  $('drop-tile'));
+  $('needs-row').setAttribute('aria-busy', 'true');
+}
+
 function renderHome() {
+  if (!state.tasksLoaded) {
+    renderHomeLoading();
+    return;
+  }
+  $('needs-row').removeAttribute('aria-busy');
   const vessels = groupVessels(state.tasks);
   const waiting = vessels.filter((v) => DRAFT_READY.has(v.latest.status) || NEEDS_ATTENTION.has(v.latest.status));
   fill($('needs-row'), ...(waiting.length
@@ -479,6 +499,8 @@ async function openTask(task) {
   prefs.set('lastTask', task);
   live.open(task);
   navigate('run');
+  // Clear the previous run at once: its drawing and model must not show under this name.
+  renderTask({ fresh: true });
   await loadTask({ fresh: true });
 }
 
@@ -974,7 +996,7 @@ function renderSelection() {
 
   if (!view) {
     fill(head, el('h2', {}, 'Section'));
-    fill(body, el('p', { class: 'selection-empty' }, 'Open a run to see its sections.'));
+    fill(body, el('p', { class: 'selection-empty' }, (state.task || state.pendingOpen) ? 'Opening the run…' : 'Open a run to see its sections.'));
     return;
   }
   if (!section) {
@@ -1316,8 +1338,8 @@ async function renderDrawing({ fresh = false } = {}) {
     drawing.setPage(null, null);
     drawing.setSections([], null);
     fill(drawingEmpty, icon('drawing'),
-      el('strong', {}, view ? 'No drawing page' : 'No run open'),
-      el('p', {}, view ? 'This run did not find a drawing page to read.' : 'Open a vessel on Home.'));
+      el('strong', {}, view ? 'No drawing page' : (state.task || state.pendingOpen) ? 'Opening the run…' : 'No run open'),
+      el('p', {}, view ? 'This run did not find a drawing page to read.' : (state.task || state.pendingOpen) ? 'Reading the run folder.' : 'Open a vessel on Home.'));
     drawingEmpty.hidden = false;
     $('drawing-meta').textContent = '';
     state.pageKey = null;
@@ -1367,8 +1389,8 @@ async function renderModel() {
     state.modelKey = null;
     meta.textContent = '';
     model.setModel(null, [], {
-      emptyTitle: view ? 'No 3D model yet' : 'No run open',
-      emptyText: !view ? 'Open a vessel on Home.'
+      emptyTitle: view ? 'No 3D model yet' : (state.task || state.pendingOpen) ? 'Opening the run…' : 'No run open',
+      emptyText: !view ? ((state.task || state.pendingOpen) ? 'Reading the run folder.' : 'Open a vessel on Home.')
         : isRunning() ? 'The model appears here when the run builds it.'
           : 'This run stopped before it built a model.',
     });
@@ -2139,6 +2161,13 @@ window.addEventListener('popstate', () => applyRoute(routeFromHash() || 'home'))
 
 /** The run view with no run open: open the last one, else the newest. */
 async function openRememberedTask() {
+  // Before the run list arrives, say the run is opening; start() opens it after the list.
+  if (!state.tasksLoaded) {
+    state.pendingOpen = true;
+    renderNoTask();
+    return;
+  }
+  state.pendingOpen = false;
   const remembered = prefs.get('lastTask', null);
   const first = state.tasks.find((t) => t.task === remembered) || state.tasks[0];
   if (first) await openTask(first.task);
@@ -2149,6 +2178,13 @@ async function start() {
   setLayout(prefs.get('layout', 'split'));
   setSplit(prefs.get('split', 0.56));
   selectTab(prefs.get('tab', 'thinking'));
+  renderHome(); // placeholders until the run list arrives
+  const route = routeFromHash() || 'home';
+  // Show the place at once (Home with placeholders, a run with "Opening the run…"); the
+  // data fills in as it arrives. A first use goes to the welcome screen instead.
+  const firstUse = route === 'home' && !prefs.get('setupSeen', false);
+  if (firstUse) history.replaceState(null, '', '#welcome');
+  applyRoute(firstUse ? 'welcome' : route);
   try {
     state.settings = await invoke('get_settings', {});
     applyTheme(state.settings.theme);
@@ -2158,14 +2194,12 @@ async function start() {
   refreshDatasets();
   await Promise.all([refreshTasks(), refreshAiStatus()]);
   renderStatusbar();
-  const route = routeFromHash() || 'home';
+  if (state.pendingOpen && state.route === 'run' && !state.task) openRememberedTask();
   // A reload keeps its place; the welcome screen only replaces Home.
-  if (route === 'home' && await needsWelcome()) {
+  if (!firstUse && state.route === 'home' && await needsWelcome()) {
     history.replaceState(null, '', '#welcome');
     applyRoute('welcome');
-    return;
   }
-  applyRoute(route);
 }
 
 start();

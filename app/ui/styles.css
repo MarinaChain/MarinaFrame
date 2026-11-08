@@ -686,6 +686,23 @@ code { font-family: var(--font-mono); }
 
 /* First start (no runs): one large drop target and the four steps ahead. */
 .first-steps, .first-sample { display: none; }
+
+/* Loading placeholders (Home while the run list loads). A slow sweep; still under reduced motion. */
+.skeleton {
+  display: block;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--sunken) 25%, var(--rule) 50%, var(--sunken) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.4s linear infinite;
+}
+@keyframes skeleton-sweep { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+.skeleton-art { width: 72px; height: 56px; border-radius: var(--radius-md); }
+.skeleton-thumb { aspect-ratio: 16 / 10; margin-bottom: var(--space-xs); border-radius: var(--radius-md); }
+.skeleton-line { width: 70%; height: 14px; margin: 4px; }
+.skeleton-line.short { width: 40%; }
+.needs-card.is-loading, .vessel-card.is-loading { border-left-color: var(--rule); cursor: default; pointer-events: none; }
+.needs-card.is-loading { grid-template-columns: auto minmax(0, 1fr); }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
 .view-home[data-empty="true"] .first-sample { display: inline-flex; color: var(--brand); }
 .view-home[data-empty="true"] .needs-row,
 .view-home[data-empty="true"] .home-section-title { display: none; }
