@@ -1179,11 +1179,12 @@ code { font-family: var(--font-mono); }
 }
 .inspector-head {
   display: flex;
+  flex-wrap: wrap; /* the chips go to a second line before they shorten */
   align-items: center;
   flex: none;
   gap: var(--space-sm);
   min-height: 44px;
-  padding: 0 var(--space-lg);
+  padding: var(--space-sm) var(--space-lg);
   border-bottom: 1px solid var(--line);
 }
 .inspector-head h2 { min-width: 0; overflow: hidden; font-size: var(--fs-md); font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
@@ -1196,6 +1197,21 @@ code { font-family: var(--font-mono); }
   border-bottom: 1px solid var(--line);
 }
 .selection-reason { color: var(--text); font-size: var(--fs-md); line-height: 1.5; overflow-wrap: anywhere; }
+/* Decide this section: Accept (A), Other line (O), Mark (M). Shown only while it needs a person. */
+.decision-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); padding-bottom: var(--space-xs); }
+.decision-bar .btn { gap: var(--space-sm); }
+.decision-hint { color: var(--warn); font-size: var(--fs-sm); }
+.key-hint {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  font: 500 11px/1 var(--font-mono);
+  opacity: 0.7;
+}
 .selection-empty { color: var(--text-3); font-size: var(--fs-sm); }
 
 .cand-list { margin-top: var(--space-md); display: flex; flex-direction: column; gap: 2px; }

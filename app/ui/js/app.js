@@ -971,12 +971,73 @@ function renderSelection() {
   });
 
   fill(body,
+    decisionBar(section),
     el('p', { class: 'selection-reason selectable-text' }, section.reason),
     section.source?.basis ? el('details', { class: 'selection-source' },
       el('summary', {}, chevron(), `Why ${fmt.sourceLabel(section.source.label)}`),
       el('p', { class: 'selectable-text' }, section.source.basis)) : null,
     rows.length ? el('div', { class: 'cand-list', role: 'list', 'aria-label': 'Lines found in this section' }, ...rows) : null,
   );
+}
+
+// ---- One decision per section, with keys (research finding 2): Accept (A) the guessed line,
+// use the Other line (O), or Mark (M) the drawing and say what to fix. After a decision the
+// next section to check opens, so a review is a short run of key presses.
+
+function canDecide() {
+  return !state.busy && !isRunning() && needsCheck(currentSection() || {});
+}
+
+/** The line a person accepts with A: the guessed line of a guessed section. */
+function acceptCandidate(section) {
+  return section?.state === 'guessed' ? section.candidates.find((c) => c.chosen) || null : null;
+}
+
+/** The line O uses: the one other line that could be used, when there is exactly one. */
+function otherCandidate(section) {
+  const others = section?.candidates.filter((c) => c.selectable && !c.chosen) || [];
+  return others.length === 1 ? others[0] : null;
+}
+
+async function decide(section, candidate) {
+  if (!candidate) return;
+  const id = section.id;
+  await chooseLine(section, candidate);
+  const after = state.view?.sections.find((s) => s.id === id);
+  if (after && !needsCheck(after)) nextToCheck();
+}
+
+function decisionBar(section) {
+  if (!needsCheck(section)) return null;
+  const canChoose = !state.busy && !isRunning();
+  const accept = acceptCandidate(section);
+  const other = otherCandidate(section);
+  const key = (letter) => el('kbd', { class: 'key-hint' }, letter);
+  return el('div', { class: 'decision-bar', role: 'group', 'aria-label': 'Decide this section' },
+    accept ? el('button', {
+      class: 'btn btn-primary',
+      type: 'button',
+      disabled: !canChoose,
+      title: `Accept the guessed ${accept.label.toLowerCase()} (A)`,
+      onclick: () => decide(section, accept),
+    }, 'Accept', key('A')) : null,
+    other ? el('button', {
+      class: 'btn',
+      type: 'button',
+      disabled: !canChoose,
+      title: `Use the ${other.label.toLowerCase()} instead (O)`,
+      onclick: () => decide(section, other),
+    }, 'Other line', key('O')) : null,
+    el('button', {
+      class: 'btn',
+      type: 'button',
+      disabled: isRunning(),
+      title: 'Mark part of the drawing and say what to fix (M)',
+      onclick: () => markTool.setActive(true),
+    }, 'Mark', key('M')),
+    !accept && !other
+      ? el('span', { class: 'decision-hint' }, section.candidates.some((c) => c.selectable) ? 'Pick a line below' : 'No line to pick: mark the drawing')
+      : null);
 }
 
 function chooseButton(section, candidate, label, canChoose, primary) {
@@ -1874,6 +1935,8 @@ document.addEventListener('keydown', (event) => {
     if (event.key === '[') stepSection(-1);
     else if (event.key === ']') stepSection(1);
     else if ((event.key === 'n' || event.key === 'N') && state.vesselTab === 'run') nextToCheck();
+    else if ((event.key === 'a' || event.key === 'A') && state.vesselTab === 'run' && canDecide()) decide(currentSection(), acceptCandidate(currentSection()));
+    else if ((event.key === 'o' || event.key === 'O') && state.vesselTab === 'run' && canDecide()) decide(currentSection(), otherCandidate(currentSection()));
     else if (event.key === 'r' || event.key === 'R') model.resetView();
     else if (event.key === ' ' && !event.target.closest?.('button')) handled = live.togglePlay();
     else if (event.key === 'ArrowLeft' && !arrowsTaken) handled = live.stepModel(-1);
