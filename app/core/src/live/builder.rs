@@ -783,19 +783,7 @@ impl TaskLive {
             .or(arguments["section_id"].as_str())
             .map(String::from);
         match operation {
-            "survey_sheet" => result["sheet_survey"]["candidate_regions"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|region| {
-                    let label = region["kind"].as_str().map(|k| k.replace('_', " "));
-                    Some(box_mark(
-                        geometry::box_px(&region["region_px"])?,
-                        Tone::View,
-                        label,
-                    ))
-                })
-                .collect(),
+            "survey_sheet" => survey_marks(&result["sheet_survey"]),
             "enumerate_strokes" => {
                 let strokes: Vec<Value> = result["strokes"].as_array().cloned().unwrap_or_default();
                 strokes
@@ -1356,6 +1344,52 @@ fn targets(arguments: &Value) -> Vec<Target> {
     found
 }
 
+/// View boxes for a sheet survey. When the run came from the intake screen, show the
+/// views the person saw there (body plan, profile, ...). The survey's own candidate
+/// regions are only fixed-size search tiles, so they are the fallback.
+fn survey_marks(survey: &Value) -> Vec<Mark> {
+    let intake_views: Vec<Mark> = survey["intake_regions"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|region| region["label"] != "other")
+        .filter_map(|region| {
+            let label = region["label"].as_str().map(view_label);
+            Some(box_mark(
+                geometry::box_px(&region["region_px"])?,
+                Tone::View,
+                label,
+            ))
+        })
+        .collect();
+    if !intake_views.is_empty() {
+        return intake_views;
+    }
+    survey["candidate_regions"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|region| {
+            let label = region["kind"].as_str().map(view_label);
+            Some(box_mark(
+                geometry::box_px(&region["region_px"])?,
+                Tone::View,
+                label,
+            ))
+        })
+        .collect()
+}
+
+/// "body_plan" -> "Body plan".
+fn view_label(kind: &str) -> String {
+    let words = kind.replace('_', " ");
+    let mut chars = words.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => words,
+    }
+}
+
 fn box_mark(region: BoxPx, tone: Tone, label: Option<String>) -> Mark {
     let region = round_box(region);
     Mark {
@@ -1452,4 +1486,33 @@ pub(super) fn plain_text(text: &str, max_chars: usize) -> String {
     }
     let cut: String = joined.chars().take(max_chars.saturating_sub(1)).collect();
     format!("{}…", cut.trim_end())
+}
+
+#[cfg(test)]
+mod survey_mark_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn labels(marks: &[Mark]) -> Vec<String> {
+        marks.iter().map(|m| m.label.clone().unwrap_or_default()).collect()
+    }
+
+    #[test]
+    fn intake_views_replace_the_search_tiles() {
+        let survey = json!({
+            "candidate_regions": [{"region_px": [0, 0, 768, 736], "kind": "unclassified"}],
+            "intake_regions": [
+                {"region_px": [10, 10, 900, 300], "label": "profile"},
+                {"region_px": [2000, 10, 2500, 300], "label": "body_plan"},
+                {"region_px": [10, 400, 50, 450], "label": "other"}
+            ]
+        });
+        assert_eq!(labels(&survey_marks(&survey)), ["Profile", "Body plan"]);
+    }
+
+    #[test]
+    fn without_intake_views_the_search_tiles_show() {
+        let survey = json!({"candidate_regions": [{"region_px": [0, 0, 768, 736], "kind": "unclassified"}]});
+        assert_eq!(labels(&survey_marks(&survey)), ["Unclassified"]);
+    }
 }
