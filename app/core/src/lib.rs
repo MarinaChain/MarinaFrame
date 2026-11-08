@@ -9,6 +9,7 @@ pub mod backend;
 pub mod draft_view;
 pub mod error;
 pub mod events;
+pub mod export;
 pub mod files;
 pub mod intake;
 pub mod live;

@@ -2110,3 +2110,69 @@ code { font-family: var(--font-mono); }
   .intake-number-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .intake-count { display: none; }
 }
+
+/* ------------------------------------------------------------------ Export sheet (M5)
+   One row per output: a toggle (check, icon, one-word name), the size after export and
+   "Show in Finder". The draft stamp is neutral ink, not amber: it is not review data. */
+
+.export-sheet { width: min(520px, calc(100vw - 48px)); }
+.export-stamp {
+  padding: var(--space-sm) var(--space-md);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+.export-stamp strong { color: var(--text); font-weight: 600; }
+.export-list { display: flex; flex-direction: column; gap: 2px; }
+.export-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+.export-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+  height: 34px;
+  padding: 0 var(--space-sm);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--text-2);
+  font-size: var(--fs-md);
+  text-align: left;
+}
+.export-toggle:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.export-toggle[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.export-toggle:disabled { opacity: 0.6; }
+.export-toggle .icon { color: var(--text-3); }
+.export-toggle[aria-pressed="true"] .icon { color: var(--accent); }
+.export-name { min-width: 0; overflow: hidden; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.export-check {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--raised);
+}
+.export-toggle[aria-pressed="true"] .export-check {
+  border-color: var(--accent);
+  background: var(--accent) no-repeat center / 10px 10px;
+  /* A white check mark; data URLs are allowed by the page's img-src policy. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 5.2l2 2 4-4.4' fill='none' stroke='white' stroke-width='1.6'/%3E%3C/svg%3E");
+}
+.export-size { min-width: 64px; color: var(--text-2); font: var(--fs-sm) var(--font-mono); text-align: right; }
+.export-size-none { color: var(--text-3); }
+.export-actions { align-items: center; }
+.export-actions-spacer { flex: 1; }
+.export-actions .btn-ghost { min-width: 0; }

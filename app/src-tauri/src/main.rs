@@ -2,6 +2,7 @@
 // `marinaframe-app-core`, which has no Tauri types.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use marinaframe_app_core::export::ExportResult;
 use marinaframe_app_core::intake::IntakePreview;
 use marinaframe_app_core::live::{HullSections, LiveSteps};
 use marinaframe_app_core::types::*;
@@ -108,6 +109,34 @@ async fn start_intake_run(
         b.start_intake_run(&preview).map(|task| Started { task })
     })
     .await
+}
+
+/// Write the chosen exports (`step`, `stl`, `offsets`, `hydrostatics`, `report`,
+/// `package`) of one revision into the run's `exports/<rNNNN>/` folder.
+#[tauri::command(rename_all = "snake_case")]
+async fn export_run(
+    backend: Shared<'_>,
+    task: String,
+    revision: String,
+    outputs: Vec<String>,
+) -> Result<ExportResult, AppError> {
+    run(backend, move |b| b.export_run(&task, &revision, &outputs)).await
+}
+
+/// Files already exported for one revision.
+#[tauri::command(rename_all = "snake_case")]
+async fn list_exports(
+    backend: Shared<'_>,
+    task: String,
+    revision: String,
+) -> Result<ExportResult, AppError> {
+    run(backend, move |b| b.list_exports(&task, &revision)).await
+}
+
+/// Show an exported file or the exports folder in Finder.
+#[tauri::command(rename_all = "snake_case")]
+async fn reveal_export(backend: Shared<'_>, task: String, path: String) -> Result<Ok_, AppError> {
+    run(backend, move |b| b.reveal_export(&task, &path).map(|_| OK)).await
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -270,6 +299,9 @@ fn main() {
             start_run,
             prepare_intake,
             start_intake_run,
+            export_run,
+            list_exports,
+            reveal_export,
             cancel_task,
             resume_task,
             choose_line,

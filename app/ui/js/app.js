@@ -10,6 +10,7 @@ import { createDrawingView } from './drawing.js';
 import { createModelView } from './model3d.js';
 import { createLiveRun } from './live.js';
 import { createIntake } from './intake.js';
+import { createExport, canExport } from './export.js';
 import * as fmt from './format.js';
 
 const $ = (id) => document.getElementById(id);
@@ -494,6 +495,7 @@ function renderActions() {
   resume.hidden = !['paused', 'blocked', 'cancelled'].includes(status);
   cancel.hidden = status !== 'running';
   resume.disabled = cancel.disabled = Boolean(state.busy);
+  $('export-task').hidden = !canExport(state.view);
 }
 
 /** Global status bar: AI on or off, preview mode, runs folder. Run facts live in the run view. */
@@ -1593,6 +1595,8 @@ for (const item of document.querySelectorAll('.rail-item')) {
   item.addEventListener('click', () => navigate(item.dataset.route));
 }
 $('toast-close').addEventListener('click', () => { $('toast').hidden = true; });
+const exporter = createExport({ invoke });
+$('export-task').addEventListener('click', () => exporter.open(state.task, state.view));
 $('zoom-in').addEventListener('click', () => { live.userMovedCamera(); drawing.zoomIn(); });
 $('zoom-out').addEventListener('click', () => { live.userMovedCamera(); drawing.zoomOut(); });
 $('zoom-fit').addEventListener('click', () => { live.userMovedCamera(); drawing.fitPage(); });
