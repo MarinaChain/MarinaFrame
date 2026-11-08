@@ -386,22 +386,53 @@ def checked_scales(image, setups, description):
 # labels) are not the outline. Columns within DECK_COLUMN_PX of the station are read.
 DECK_COMPONENT_SHARE = 0.25
 DECK_COLUMN_PX = 2
+# A model baseline more than BASELINE_SNAP_PX from the outline's lowest line
+# is another grid line; OUTLINE_HALF_LINE_PX is half a drawn hull line.
+BASELINE_SNAP_PX = 3.0
+OUTLINE_HALF_LINE_PX = 1.0
+# Hull lines are dark; grid lines and the light baseline ruler are not (grey levels).
+OUTLINE_INK = 110
 
 
 def profile_deck_heights(image, setup, pixels_per_metre, stations):
-    """Height of the profile's top outline (deck at side) at each station x, {id: z}.
+    """Height of the profile's top outline (deck at side) at each station x, {id: z}."""
+    return {sid: heights["deck"]
+            for sid, heights in profile_outline_heights(image, setup, pixels_per_metre, stations).items()}
+
+
+def _line_centre(rows, columns, from_top):
+    """Row centre of the first ink run in ``columns``, from the top or from the bottom."""
+    first = rows[0] if from_top else rows[-1]
+    step = 1 if from_top else -1
+    end = first
+    while 0 <= end + step < len(columns) and columns[end + step].any():
+        end += step
+    return 0.5 * (first + end)
+
+
+def profile_outline_heights(image, setup, pixels_per_metre, stations):
+    """Deck-at-side and keel heights of the profile outline at each station x, {id: {"deck", "keel"}}.
 
     ``setup`` is the model's profile setup (region, x origin and direction,
-    baseline); ``pixels_per_metre`` is the checked scale. A station outside the
-    outline has no height.
+    baseline); ``pixels_per_metre`` is the checked scale. Heights are line
+    centres, as body-plan curve ends are read. A station outside the outline
+    has no entry.
     """
     if setup.get("baseline_px") is None or setup.get("x_origin_px") is None:
         return {}
-    mask, left, top = _ink(image, setup["region_px"])
+    # Dark ink only, rulers kept: a flat deck or a keel line is as long as a ruler.
+    left, top, right, bottom = _region(setup["region_px"], image.shape)
+    mask = _gray(image[top:bottom, left:right]) < OUTLINE_INK
     labels, _ = ndimage.label(mask, structure=np.ones((3, 3)))
     wide = [index for index, box in enumerate(ndimage.find_objects(labels), 1)
             if box and box[1].stop - box[1].start >= DECK_COMPONENT_SHARE * mask.shape[1]]
     outline = np.isin(labels, wide)
+    baseline = setup["baseline_px"]
+    keel = _bottom_line_centre(outline)
+    if keel is not None and abs(top + keel - baseline) > BASELINE_SNAP_PX:
+        # The model's baseline is another grid line (dtmb5415 live: a waterline
+        # 2 m up); heights are read from the outline's keel line, z = 0.
+        baseline = top + keel
     heights = {}
     for station in stations:
         column = setup["x_origin_px"] + setup.get("x_direction", 1) * station["x_m"] * pixels_per_metre - left
@@ -409,12 +440,20 @@ def profile_deck_heights(image, setup, pixels_per_metre, stations):
         rows = np.flatnonzero(columns.any(axis=1))
         if not len(rows):
             continue
-        # The centre of the top ink run: the drawn line's centre, as body-plan tops are read.
-        run_end = rows[0]
-        while run_end + 1 < len(columns) and columns[run_end + 1].any():
-            run_end += 1
-        heights[station["id"]] = (setup["baseline_px"] - (top + 0.5 * (rows[0] + run_end))) / pixels_per_metre
+        heights[station["id"]] = {
+            "deck": (baseline - (top + _line_centre(rows, columns, True))) / pixels_per_metre,
+            "keel": (baseline - (top + _line_centre(rows, columns, False))) / pixels_per_metre}
     return heights
+
+
+def _bottom_line_centre(outline):
+    """Row (in the outline crop) of the centre of the hull outline's lowest ink, or None.
+
+    z = 0 is the lowest hull point (a keel, or a bulb or dome below it); its
+    drawn line centre is half a line width above the lowest inked row.
+    """
+    rows = np.flatnonzero(outline.any(axis=1))
+    return float(rows[-1]) - OUTLINE_HALF_LINE_PX if len(rows) else None
 
 
 # Station lines: on a profile, the station lines are the only vertical lines
@@ -470,14 +509,14 @@ def check_station_positions(image, setups, description, warnings):
     return corrected
 
 
-def station_deck_heights(image, setups, description, stations):
-    """Deck-at-side height per station from the model's profile setup at its checked scale, {id: z}."""
+def station_outline_heights(image, setups, description, stations):
+    """Deck and keel heights per station from the model's profile setup at its checked scale."""
     profile = next((s for s in setups if s.get("view") == "profile"), None)
     if profile is None:
         return {}
     scales = (description or {}).get("checked_scales") or {}
     scale = scales.get(profile.get("view_id", "profile"), profile["pixels_per_metre"])
-    return profile_deck_heights(image, profile, float(scale), stations)
+    return profile_outline_heights(image, profile, float(scale), stations)
 
 
 def dimension_conflicts(name, readings):

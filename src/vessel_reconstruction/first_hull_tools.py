@@ -70,7 +70,7 @@ def cap_tops_at_deck(sections: list[dict], anchors: list[Anchor], decks: dict) -
     """Cut traced tops that run above the profile deck line; fitted stations end at the deck.
 
     ``decks`` maps station ids to the deck-at-side height read on the profile
-    (vessel_description.station_deck_heights). Changes ``anchors`` in place and
+    (vessel_description.station_outline_heights). Changes ``anchors`` in place and
     returns the sections with ``z_max_m`` lowered to the deck where it is lower.
     """
     from .form_fit import _clip_top
@@ -98,6 +98,35 @@ def cap_tops_at_deck(sections: list[dict], anchors: list[Anchor], decks: dict) -
         if deck is not None and section.get("z_min_m", 0.0) < deck < section["z_max_m"]:
             section["z_max_m"] = round(float(deck), 6)
     return capped
+
+
+def cut_bottoms_at_keel(anchors: list[Anchor], keels: dict) -> None:
+    """Cut traced bottoms that run below the profile keel line (a trace down the centreline).
+
+    ``keels`` maps station ids to the keel height read on the profile. Used
+    only when it agrees with most traced bottoms; changes ``anchors`` in place.
+    """
+    import numpy as np
+    bottoms = {a.id: min(p[1] for p in a.points_yz_m) for a in anchors if a.points_yz_m}
+    differences = [abs(bottoms[sid] - keel) for sid, keel in keels.items() if sid in bottoms]
+    if not differences or float(np.median(differences)) > DECK_AGREEMENT_M:
+        return
+    for anchor in anchors:
+        keel = keels.get(anchor.id)
+        points = np.asarray(anchor.points_yz_m, dtype=float)
+        if keel is None or not anchor.pixels_per_metre or len(points) < 2:
+            continue
+        points = points[np.argsort(points[:, 1], kind="stable")]
+        if points[0, 1] < keel - DECK_TOP_TOLERANCE_PX / anchor.pixels_per_metre and points[-1, 1] > keel:
+            start = [float(np.interp(keel, points[:, 1], points[:, 0])), keel]
+            anchor.points_yz_m = np.vstack([start, points[points[:, 1] > keel]]).tolist()
+            anchor.notes.append(f"bottom cut at z {keel:.3f} m: the profile keel line at this station")
+
+
+def cap_at_profile_outline(sections: list[dict], anchors: list[Anchor], heights: dict) -> list[dict]:
+    """Apply the profile outline (vessel_description.station_outline_heights): deck tops, keel bottoms."""
+    cut_bottoms_at_keel(anchors, {sid: h["keel"] for sid, h in heights.items()})
+    return cap_tops_at_deck(sections, anchors, {sid: h["deck"] for sid, h in heights.items()})
 
 
 def build_first_hull(tools):
@@ -147,9 +176,10 @@ def build_first_hull(tools):
         selected["contour_selection"] = copy.deepcopy(candidate["contour_selection"])
         anchors.append(Anchor(section["id"], section["x_m"], points, selected,
             z_max_m=section["z_max_m"], pixels_per_metre=cal["pixels_per_metre"], stroke_width_px=width))
-    from .vessel_description import station_deck_heights
-    decks = station_deck_heights(image, list(tools.state.get("sheet_setups", {}).values()), description, sections)
-    sections = cap_tops_at_deck(sections, anchors, decks)
+    from .vessel_description import station_outline_heights
+    outline = station_outline_heights(image, list(tools.state.get("sheet_setups", {}).values()), description,
+                                      sections)
+    sections = cap_at_profile_outline(sections, anchors, outline)
     built = {}
     retried_builds = []
 
