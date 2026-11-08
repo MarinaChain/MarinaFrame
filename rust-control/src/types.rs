@@ -646,11 +646,13 @@ impl Default for OperationalLimits {
     fn default() -> Self {
         Self {
             worker_wall_seconds: 210,
-            request_wall_seconds: 90,
+            // Generous: thinking requests took up to 45 s and the old 90 s limit cut them off.
+            request_wall_seconds: 300,
             worker_memory_bytes: 5 * 1024 * 1024 * 1024,
             worker_cpu_seconds: 180,
             task_disk_bytes: 2 * 1024 * 1024 * 1024,
-            max_output_tokens_per_request: 2048,
+            // Thinking spends output tokens on reasoning before the answer.
+            max_output_tokens_per_request: 16_384,
             max_observation_bytes: 96_000,
             max_images_per_request: 4,
             max_image_bytes: 196_608,
