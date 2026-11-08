@@ -23,7 +23,12 @@ const PREFS_KEY = 'marinaframe.ui';
 /** How many recently started spec files the New run sheet offers. */
 const RECENT_SPECS_MAX = 5;
 
+/** The places of the app shell. `run` is the run workspace (drawing | 3D | inspector). */
+const ROUTES = ['home', 'queue', 'run', 'settings'];
+
 const state = {
+  route: 'home',
+  previousRoute: 'home', // where Settings returns to after Save or Cancel
   tasks: [],
   task: null, // absolute path of the open task
   view: null, // TaskView
@@ -31,6 +36,7 @@ const state = {
   lastSequence: 0,
   sectionId: null,
   tab: 'timeline',
+  aiStatus: null,
   busy: null, // plain-language description of the running action
   settings: null,
   modelKey: null,
@@ -145,11 +151,19 @@ function chip(text, { tone = null, status = null, title = null, dot = true, smal
   return el('span', { class: classes.join(' '), dataset, title: title || text }, el('span', { class: 'badge-text' }, text));
 }
 
-/** Chip tone for a section source label: AI work in accent, filled-in lines in draft amber. */
-function sourceTone(label) {
-  if (fmt.isAiSource(label)) return 'accent';
-  if (label === 'interpolated' || label === 'omitted') return 'draft';
-  return null;
+/**
+ * Chip for a section source label: tinted fill in the label's colour with its glyph, so the
+ * label does not depend on colour alone. `text` replaces the label name (for counts).
+ */
+function sourceChip(label, { text = null, title = null, small = true } = {}) {
+  const name = fmt.sourceLabel(label);
+  const glyph = icon(`src-${label}`);
+  glyph.classList.add('badge-glyph');
+  return el('span', {
+    class: small ? 'badge badge-source badge-small' : 'badge badge-source',
+    dataset: { source: label },
+    title: title || name,
+  }, glyph, el('span', { class: 'badge-text' }, text || name));
 }
 
 function debounce(fn, ms) {
@@ -160,39 +174,67 @@ function debounce(fn, ms) {
   };
 }
 
-// ---------------------------------------------------------------- task list
-
-function renderTaskList() {
-  const list = $('task-list');
-  if (!state.tasks.length) {
-    const folder = state.settings?.runs_folder;
-    fill(list, el('li', { class: 'empty-list' }, folder ? `No runs in ${folder}.` : 'No runs yet.'));
-    return;
-  }
-  fill(list, ...state.tasks.map((task) => el('li', {
-    class: 'task-item',
-    role: 'option',
-    id: `task-${CSS.escape(task.task)}`,
-    'aria-selected': String(task.task === state.task),
-    dataset: { task: task.task },
-    onclick: () => openTask(task.task),
-  },
-  el('span', { class: 'task-name', title: task.name }, task.name),
-  el('span', { class: 'task-time', title: fmt.fullTime(task.updated_ms) }, fmt.shortTime(task.updated_ms)),
-  el('span', { class: 'task-sub' }, statusBadge(task.status), task.sections ? fmt.plural(task.sections, 'section') : null),
-  )));
-  const selected = list.querySelector('[aria-selected="true"]');
-  list.setAttribute('aria-activedescendant', selected?.id || '');
+function statusBadge(status) {
+  return el('span', { class: 'badge', dataset: { status }, title: fmt.statusLabel(status) },
+    el('span', { class: 'badge-text' }, fmt.statusLabel(status)));
 }
 
-function statusBadge(status) {
-  return el('span', { class: 'badge', dataset: { status } }, fmt.statusLabel(status));
+// ---------------------------------------------------------------- vessels (derived from runs)
+
+// There is no vessel model yet: runs are grouped by the vessel name at the start of the run
+// name ("Pilot boat, lines plan" -> "Pilot boat"). The vessel lane replaces this.
+
+/** Run states that put a vessel in the "Needs you" row. */
+const DRAFT_READY = new Set(['draft', 'needs_review']);
+const NEEDS_ATTENTION = new Set(['failed', 'blocked', 'declined']);
+
+function vesselNameOf(runName) {
+  const name = runName.split(/,|·| — | – | - /)[0].trim() || runName.trim();
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+/** Vessels, most recently active first. Each has its runs, newest first. */
+function groupVessels(tasks) {
+  const byKey = new Map();
+  for (const task of tasks) {
+    const name = vesselNameOf(task.name);
+    const key = name.toLowerCase();
+    if (!byKey.has(key)) byKey.set(key, { key, name, runs: [] });
+    byKey.get(key).runs.push(task);
+  }
+  const vessels = [...byKey.values()];
+  for (const vessel of vessels) {
+    vessel.runs.sort((a, b) => b.updated_ms - a.updated_ms);
+    vessel.latest = vessel.runs[0];
+  }
+  return vessels.sort((a, b) => b.latest.updated_ms - a.latest.updated_ms);
+}
+
+/** Runs of a vessel are numbered oldest first: "Run 1" is the first attempt. */
+function runNumber(vessel, task) {
+  return vessel.runs.length - vessel.runs.findIndex((r) => r.task === task);
+}
+
+function vesselOfTask(task) {
+  return groupVessels(state.tasks).find((v) => v.runs.some((r) => r.task === task)) || null;
+}
+
+// Card previews need the run's page and sections. Cached per run and update time.
+const previewCache = new Map();
+function runPreview(task) {
+  const key = `${task.task}|${task.updated_ms}`;
+  if (!previewCache.has(key)) {
+    previewCache.set(key, invoke('get_task', { task: task.task }).catch(() => null));
+  }
+  return previewCache.get(key);
 }
 
 async function refreshTasks() {
   try {
     state.tasks = await invoke('list_tasks', {});
-    renderTaskList();
+    renderHome();
+    renderQueue();
+    renderCrumbs();
   } catch (error) {
     showError(error);
   }
@@ -202,26 +244,116 @@ const refreshTasksSoon = debounce(refreshTasks, LIST_REFRESH_DEBOUNCE_MS);
 async function refreshDatasets() {
   try {
     state.datasets = await invoke('list_datasets', {});
-    const datasets = state.datasets;
-    fill($('dataset-list'), ...(datasets.length
-      ? datasets.map((d) => el('li', {},
-        el('button', {
-          type: 'button',
-          class: 'dataset-item',
-          title: `${d.path}\nStart a run from a spec in this folder`,
-          onclick: () => openNewRun({ browse: d }),
-        }, el('span', { class: 'dataset-name' }, d.name), el('span', { class: 'size' }, fmt.bytes(d.bytes)))))
-      : [el('li', { class: 'dataset-empty' }, 'None')]));
   } catch {
     state.datasets = [];
-    fill($('dataset-list'), el('li', { class: 'dataset-empty', title: 'Could not read the datasets folder.' }, 'Unavailable'));
   }
+}
+
+// ---------------------------------------------------------------- home
+
+/** Sections a reviewer should look at: guessed lines and declined sections. */
+function toCheckCount(view) {
+  return view?.sections.filter((s) => s.state === 'guessed' || s.state === 'declined').length || 0;
+}
+
+function needsCard(vessel) {
+  const run = vessel.latest;
+  const chips = el('span', { class: 'chip-row' }, statusBadge(run.status));
+  runPreview(run).then((view) => {
+    if (view?.revision) chips.append(chip(view.revision, { dot: false, title: `Revision ${view.revision}` }));
+    const count = toCheckCount(view);
+    if (count) chips.append(chip(`${count} to check`, { dot: false, title: fmt.plural(count, 'section') + ' to check' }));
+  });
+  return el('button', {
+    class: 'needs-card',
+    type: 'button',
+    title: `Open ${run.name}`,
+    onclick: () => openTask(run.task),
+  },
+  el('span', { class: 'needs-icon' }, icon('sheet')),
+  el('span', { class: 'needs-body' },
+    el('strong', { class: 'needs-name' }, vessel.name),
+    chips));
+}
+
+/** A mini body plan of the built sections: each station's chosen line, mirrored, in its source style. */
+function hullThumb(view) {
+  const lines = [];
+  for (const section of view.sections) {
+    const path = sectionShapePath(section);
+    if (path) lines.push({ path, source: section.source?.label || 'traced' });
+  }
+  if (!lines.length) return null;
+  return svg('svg', { class: 'hull-thumb', viewBox: '-46 -2 92 58', 'aria-hidden': 'true' },
+    svg('path', { class: 'hull-thumb-axis', d: 'M0 0V54' }),
+    ...lines.flatMap(({ path, source }) => [
+      svg('path', { class: 'src-stroke', 'data-source': source, d: path }),
+      svg('path', { class: 'src-stroke', 'data-source': source, d: path, transform: 'scale(-1 1)' }),
+    ]));
+}
+
+function vesselCard(vessel) {
+  const run = vessel.latest;
+  const thumb = el('span', { class: 'vessel-thumb' }, el('span', { class: 'crop-marks', 'aria-hidden': 'true' }));
+  runPreview(run).then(async (view) => {
+    if (!view) return;
+    if (view.model) {
+      const hull = hullThumb(view);
+      if (hull) thumb.append(el('span', { class: 'hull-badge', title: 'Built sections' }, hull));
+    }
+    if (!view.source_page) return;
+    try {
+      const url = await cachedArtifact('image', run.task, view.source_page.path);
+      thumb.prepend(el('img', { src: url, alt: '' }));
+    } catch {
+      // No drawing image: the card keeps its blank paper.
+    }
+  });
+  const runs = vessel.runs.length > 1 ? `${vessel.runs.length} runs · ` : '';
+  return el('button', {
+    class: 'vessel-card',
+    type: 'button',
+    title: `Open ${run.name}`,
+    dataset: { status: run.status },
+    onclick: () => openTask(run.task),
+  },
+  thumb,
+  el('span', { class: 'vessel-row' },
+    el('strong', { class: 'vessel-name' }, vessel.name),
+    statusBadge(run.status)),
+  el('span', { class: 'vessel-meta', title: fmt.fullTime(run.updated_ms) }, `${runs}${fmt.relativeTime(run.updated_ms)}`),
+  run.status === 'running' ? el('span', { class: 'vessel-progress', 'aria-hidden': 'true' }) : null);
+}
+
+function renderHome() {
+  const vessels = groupVessels(state.tasks);
+  const waiting = vessels.filter((v) => DRAFT_READY.has(v.latest.status) || NEEDS_ATTENTION.has(v.latest.status));
+  fill($('needs-row'), ...(waiting.length
+    ? waiting.map(needsCard)
+    : [el('p', { class: 'home-empty' }, state.tasks.length ? 'Nothing waiting for you.' : 'No runs yet. Drop a drawing set to start.')]));
+  const grid = $('vessel-grid');
+  const dropTile = $('drop-tile');
+  fill(grid, ...vessels.map(vesselCard), dropTile);
+}
+
+function renderQueue() {
+  const active = state.tasks.filter((t) => t.status === 'running' || t.status === 'paused');
+  fill($('queue-list'), ...(active.length
+    ? active.map((task) => el('li', {},
+      el('button', { class: 'queue-row', type: 'button', onclick: () => openTask(task.task) },
+        el('span', { class: 'queue-name', title: task.name }, task.name),
+        statusBadge(task.status),
+        el('span', { class: 'queue-time' }, fmt.shortTime(task.updated_ms)))))
+    : [el('li', { class: 'home-empty' }, 'No runs in the queue.')]));
 }
 
 // ---------------------------------------------------------------- opening a task
 
 async function openTask(task) {
-  if (task === state.task) return;
+  if (task === state.task) {
+    navigate('run');
+    return;
+  }
   state.task = task;
   state.view = null;
   state.events = [];
@@ -230,7 +362,7 @@ async function openTask(task) {
   state.modelKey = null;
   state.pageKey = null;
   prefs.set('lastTask', task);
-  renderTaskList();
+  navigate('run');
   await loadTask({ fresh: true });
 }
 
@@ -263,31 +395,67 @@ function defaultSection(view) {
 }
 
 function renderTask({ fresh = false } = {}) {
-  renderToolbar();
+  renderCrumbs();
+  renderActions();
   renderNotices();
   renderDraftSummary();
+  renderNarration();
   renderStrip();
   renderSelection();
   renderTabs();
-  renderStatusbar();
+  renderRevisionStrip();
   renderDrawing({ fresh });
   renderModel();
 }
 
-// ---------------------------------------------------------------- toolbar and status
+// ---------------------------------------------------------------- title bar: breadcrumb
 
-function renderToolbar() {
-  const view = state.view;
-  $('task-name').textContent = view ? view.summary.name : 'MarinaFrame';
-  $('task-name').title = view ? view.summary.name : '';
-  document.title = view ? `${view.summary.name} — MarinaFrame` : 'MarinaFrame';
+const ROUTE_TITLES = { home: 'Home', queue: 'Queue', settings: 'Settings' };
+
+function crumbSeparator() {
+  return el('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '›');
+}
+
+/** Breadcrumb Vessel › Run N › rN on the run view; the place name elsewhere. */
+function renderCrumbs() {
+  const crumbs = $('crumbs');
   const badge = $('task-badge');
+  const view = state.route === 'run' ? state.view : null;
   badge.hidden = !view;
-  if (view) {
-    badge.dataset.status = view.summary.status;
-    badge.textContent = fmt.statusLabel(view.summary.status);
+  if (state.route !== 'run') {
+    fill(crumbs, el('span', { class: 'crumb crumb-current', 'aria-current': 'page' }, ROUTE_TITLES[state.route]));
+    document.title = 'MarinaFrame';
+    return;
   }
-  renderActions();
+  if (!view) {
+    fill(crumbs, el('span', { class: 'crumb crumb-current' }, 'Run'));
+    document.title = 'MarinaFrame';
+    return;
+  }
+  const vessel = vesselOfTask(state.task);
+  const vesselName = vessel?.name || vesselNameOf(view.summary.name);
+  // The run crumb is a picker when the vessel has more than one run.
+  const runCrumb = vessel && vessel.runs.length > 1
+    ? el('select', {
+      class: 'crumb crumb-select',
+      'aria-label': 'Run of this vessel',
+      title: view.summary.name,
+      onchange: (event) => openTask(event.target.value),
+    }, ...vessel.runs.map((run) => {
+      const option = el('option', { value: run.task }, `Run ${runNumber(vessel, run.task)}`);
+      option.selected = run.task === state.task;
+      return option;
+    }))
+    : el('span', { class: 'crumb', title: view.summary.name }, `Run ${vessel ? runNumber(vessel, state.task) : 1}`);
+  fill(crumbs,
+    el('button', { class: 'crumb crumb-link', type: 'button', title: `${vesselName}: back to Home`, onclick: () => navigate('home') }, vesselName),
+    crumbSeparator(),
+    runCrumb,
+    view.revision ? [crumbSeparator(), el('span', { class: 'crumb crumb-current crumb-mono', 'aria-current': 'page', title: `Revision ${view.revision}` }, view.revision)] : null);
+  document.title = `${vesselName} › Run — MarinaFrame`;
+  badge.dataset.status = view.summary.status;
+  fill(badge, el('span', { class: 'badge-text' }, fmt.statusLabel(view.summary.status)));
+  badge.title = fmt.statusLabel(view.summary.status);
 }
 
 function renderActions() {
@@ -299,32 +467,95 @@ function renderActions() {
   resume.disabled = cancel.disabled = Boolean(state.busy);
 }
 
+/** Global status bar: AI on or off, preview mode, runs folder. Run facts live in the run view. */
 function renderStatusbar() {
-  const view = state.view;
-  const badge = $('status-badge');
-  badge.hidden = !view;
-  if (view) {
-    badge.dataset.status = view.summary.status;
-    badge.textContent = fmt.statusLabel(view.summary.status);
-  }
-  fill($('status-policy'), view ? policyChip(view.summary.policy) : null);
-  fill($('status-revision'), view ? chip(view.revision || 'No revision', {
-    dot: false, small: true, title: view.revision ? `Revision ${view.revision}` : 'No revision yet',
-  }) : null);
-  const updated = $('status-updated');
-  updated.textContent = view ? fmt.relativeTime(view.summary.updated_ms) : '';
-  updated.title = view ? `Updated ${fmt.fullTime(view.summary.updated_ms)}` : '';
+  const status = state.aiStatus;
+  const on = status ? status.active : null;
+  const ai = $('status-ai');
+  ai.dataset.state = on === null ? 'unknown' : on ? 'on' : 'off';
+  ai.textContent = on === null ? 'AI unknown' : on ? 'AI on' : 'AI off';
+  ai.title = aiStatusText(status);
   fill($('status-mode'), transportName === 'mock'
     ? chip('Preview', { dot: false, small: true, title: 'Preview data: sample runs, not your runs folder.' })
     : null);
+  const folder = state.settings?.runs_folder || '';
+  const folderNode = $('status-folder');
+  folderNode.textContent = folder ? `Runs folder: ${folder.replace(/^\/Users\/[^/]+/, '~')}` : '';
+  folderNode.title = folder;
 }
-setInterval(renderStatusbar, 30_000);
 
 /** Run mode chip: "AI draft" for the live policy, else "Deterministic". */
 function policyChip(policy) {
   return policy === 'live'
-    ? chip('AI draft', { tone: 'accent', dot: false, small: true, title: 'The AI read the drawing and built the draft (live model).' })
-    : chip('Deterministic', { dot: false, small: true, title: 'Deterministic draft: no model calls.' });
+    ? chip('AI draft', { tone: 'ai', dot: false, small: true, title: 'The AI read the drawing and built the draft (live model).' })
+    : chip('No AI', { dot: false, small: true, title: 'Deterministic draft: no model calls.' });
+}
+
+// ---------------------------------------------------------------- run view: hooks for the live lane
+
+/** HOOK(M3 live): narration strip. M1 shows the latest recorded step in plain words. */
+function renderNarration() {
+  const strip = $('narration');
+  const last = state.events[state.events.length - 1];
+  strip.dataset.live = String(isRunning());
+  if (!state.view || !last) {
+    fill(strip, el('span', { class: 'narration-dot', 'aria-hidden': 'true' }),
+      el('span', { class: 'narration-text narration-empty' }, state.view ? 'No steps recorded yet.' : ''));
+    return;
+  }
+  fill(strip,
+    el('span', { class: 'narration-dot', 'aria-hidden': 'true' }),
+    el('span', { class: 'narration-text', title: last.text }, last.text),
+    el('time', { class: 'narration-time', datetime: new Date(last.time_ms).toISOString() }, fmt.clock(last.time_ms)));
+}
+
+/**
+ * HOOK(M3 live, M7 compare): revision and timeline strip. M1 shows the current revision,
+ * the run mode, when it changed, and the model requests and cost (small; accuracy leads).
+ */
+function renderRevisionStrip() {
+  const view = state.view;
+  fill($('revision-ladder'), view
+    ? (view.revision
+      ? el('span', { class: 'rev-step rev-current', title: `Revision ${view.revision}` }, view.revision)
+      : el('span', { class: 'rev-empty' }, 'No revision yet'))
+    : null);
+  if (!view) {
+    fill($('revision-facts'));
+    return;
+  }
+  const activity = view.activity;
+  const cost = activity ? (activity.list_cost_complete ? fmt.usd(activity.list_cost_usd) : `≥ ${fmt.usd(activity.list_cost_usd)}`) : null;
+  fill($('revision-facts'),
+    policyChip(view.summary.policy),
+    activity ? el('span', { class: 'rev-fact', title: 'Requests to the model, list cost' }, `${fmt.plural(activity.requests, 'request')} · ${cost}`) : null,
+    el('span', { class: 'rev-fact', title: `Updated ${fmt.fullTime(view.summary.updated_ms)}` }, fmt.relativeTime(view.summary.updated_ms)));
+}
+setInterval(() => {
+  renderRevisionStrip();
+  renderStatusbar();
+}, 30_000);
+
+/** HOOK(M3 live): the Thinking tab. M1 lists the model's recorded steps with their reasons. */
+function renderThinking() {
+  const panel = $('panel-thinking');
+  if (!state.view) {
+    fill(panel);
+    return;
+  }
+  const steps = state.view.activity?.steps || [];
+  if (!steps.length) {
+    fill(panel, el('p', { class: 'panel-empty' }, state.view.summary.policy === 'live'
+      ? 'The AI has not taken a step yet.'
+      : 'This run did not use the AI. Its steps are under Steps.'));
+    return;
+  }
+  fill(panel, el('ol', { class: 'thinking', 'aria-label': 'AI steps, oldest first' },
+    ...steps.map((step) => el('li', { class: 'thought' },
+      el('span', { class: 'thought-dot', 'aria-hidden': 'true' }),
+      el('span', { class: 'thought-body' },
+        el('code', { class: 'thought-tool' }, step.tool),
+        step.reason ? el('span', { class: 'thought-reason selectable-text' }, step.reason) : null)))));
 }
 
 // ---------------------------------------------------------------- notices
@@ -386,10 +617,8 @@ function renderDraftSummary() {
     fill($('draft-summary'));
     return;
   }
-  const chips = counts.map((c) => chip(`${c.count} ${fmt.sourceLabel(c.label)}`, {
-    tone: sourceTone(c.label),
-    dot: false,
-    small: true,
+  const chips = counts.map((c) => sourceChip(c.label, {
+    text: `${c.count} ${fmt.sourceLabel(c.label)}`,
     title: `${fmt.plural(c.count, 'section')}: ${fmt.sourceLabel(c.label)}`,
   }));
   const warningList = warnings.length ? el('details', { class: 'draft-warnings' },
@@ -433,14 +662,15 @@ function renderStrip() {
     },
     svg('svg', { class: 'tile-shape', viewBox: '0 0 44 54', 'aria-hidden': 'true' },
       svg('path', { class: 'axis', d: 'M2 2V52' }),
-      path ? svg('path', { class: 'shape', d: path }) : null),
+      path ? svg('path', {
+        class: section.source ? 'shape src-stroke' : 'shape',
+        'data-source': section.source?.label,
+        d: path,
+      }) : null),
     el('span', { class: 'tile-x' }, section.x_m.toFixed(1), el('small', {}, ' m')),
     el('span', { class: 'tile-chips' },
       el('span', { class: 'tile-state' }, fmt.sectionStateLabel(section.state)),
-      section.source ? el('span', {
-        class: 'tile-source',
-        title: section.source.basis || fmt.sourceLabel(section.source.label),
-      }, fmt.sourceLabel(section.source.label)) : null));
+      section.source ? sourceChip(section.source.label, { title: section.source.basis || null }) : null));
   }));
   strip.setAttribute('aria-activedescendant', `tile-${state.sectionId}`);
 }
@@ -483,15 +713,11 @@ function renderSelection() {
     return;
   }
 
-  const tone = { chosen: 'accent', declined: 'warn', guessed: 'draft' }[section.state];
+  const tone = { chosen: 'brand', declined: 'warn', guessed: 'draft' }[section.state];
   fill(head,
     el('h2', { title: `Section at ${fmt.metres(section.x_m)}` }, `Section at ${fmt.metres(section.x_m)}`),
     chip(fmt.sectionStateLabel(section.state), { tone }),
-    section.source ? chip(fmt.sourceLabel(section.source.label), {
-      tone: sourceTone(section.source.label),
-      dot: false,
-      title: section.source.basis || null,
-    }) : null,
+    section.source ? sourceChip(section.source.label, { title: section.source.basis || null, small: false }) : null,
   );
 
   const canChoose = !state.busy && !isRunning();
@@ -510,7 +736,7 @@ function renderSelection() {
     if (guessedLine) {
       trailing = chip('Guessed', { tone: 'draft', small: true });
       action = chooseButton(section, candidate, 'Confirm', canChoose, true);
-    } else if (candidate.chosen) trailing = chip('In use', { tone: 'accent', small: true });
+    } else if (candidate.chosen) trailing = chip('In use', { tone: 'brand', small: true });
     else if (candidate.selectable) {
       const label = guessedSection ? 'Use instead' : 'Use';
       if (guessedSection) action = chooseButton(section, candidate, label, canChoose, false);
@@ -561,7 +787,7 @@ async function chooseLine(section, candidate) {
 
 // ---------------------------------------------------------------- inspector: tabs
 
-const TABS = ['timeline', 'checks', 'model', 'evidence'];
+const TABS = ['thinking', 'timeline', 'checks', 'model', 'evidence'];
 
 function selectTab(tab, { focus = false } = {}) {
   state.tab = tab;
@@ -581,7 +807,8 @@ function renderTabs() {
   const failing = view?.checks.filter((c) => c.result === 'fail').length || 0;
   const calls = view?.provider.length || 0;
   fill($('tab-checks'), 'Checks', failing ? el('span', { class: 'count bad' }, `${failing} fail`) : null);
-  fill($('tab-model'), 'Model calls', calls ? el('span', { class: 'count' }, String(calls)) : null);
+  fill($('tab-model'), 'Calls', calls ? el('span', { class: 'count' }, String(calls)) : null);
+  renderThinking();
   renderTimeline();
   renderChecks();
   renderModelCalls();
@@ -624,6 +851,7 @@ function appendEvents(events) {
   }
   for (const event of events) list.append(eventRow(event, true));
   if (nearBottom) panel.scrollTop = panel.scrollHeight;
+  renderNarration();
 }
 
 function renderChecks() {
@@ -740,7 +968,7 @@ async function renderDrawing({ fresh = false } = {}) {
     drawing.setSections([], null);
     fill(drawingEmpty, icon('drawing'),
       el('strong', {}, view ? 'No drawing page' : 'No run open'),
-      el('p', {}, view ? 'This run did not find a drawing page to read.' : 'Choose a run in the sidebar.'));
+      el('p', {}, view ? 'This run did not find a drawing page to read.' : 'Open a vessel on Home.'));
     drawingEmpty.hidden = false;
     $('drawing-meta').textContent = '';
     state.pageKey = null;
@@ -791,7 +1019,7 @@ async function renderModel() {
     meta.textContent = '';
     model.setModel(null, [], {
       emptyTitle: view ? 'No 3D model yet' : 'No run open',
-      emptyText: !view ? 'Choose a run in the sidebar.'
+      emptyText: !view ? 'Open a vessel on Home.'
         : isRunning() ? 'The model appears here when the run builds it.'
           : 'This run stopped before it built a model.',
     });
@@ -933,13 +1161,13 @@ function setChip(node, text, tone, title) {
 function showAiStatus(node, status) {
   if (status && !status.enabled) setChip(node, 'Off', null, aiStatusText(status));
   else if (status && !status.key_found) setChip(node, 'No key', 'warn', aiStatusText(status));
-  else setChip(node, 'On', 'accent', aiStatusText(status));
+  else setChip(node, 'On', 'ai', aiStatusText(status));
 }
 
 /** Mode of the next run: AI draft or Deterministic. */
 function showRunMode(node, status) {
   if (status && !status.active) setChip(node, 'Deterministic', null, aiStatusText(status));
-  else setChip(node, 'AI draft', 'accent', 'The AI reads the drawing and builds a draft. You review it before anything is approved.');
+  else setChip(node, 'AI draft', 'ai', 'The AI reads the drawing and builds a draft. A person reviews it and signs it off.');
 }
 
 async function refreshAiStatus() {
@@ -996,7 +1224,8 @@ function renderPathSuggestions(form, field) {
   }, chip(PATH_FIELDS[field].defaultLabel, { dot: false, small: true }), pathLabel(suggested)));
 }
 
-async function openSettings() {
+/** Fill the Settings view from the saved settings. Called when the view opens. */
+async function loadSettingsForm() {
   const form = $('settings-form');
   const s = state.settings || { runs_folder: '', worker_python: '', theme: 'system', ai_drafting: true };
   form.runs_folder.value = s.runs_folder;
@@ -1010,12 +1239,17 @@ async function openSettings() {
   $('settings-error').hidden = true;
   setChip($('notices-reset-status'), 'Hidden', null, 'Notices you close stay hidden until you show them again.');
   $('reset-notices').disabled = false;
-  $('settings-sheet').showModal();
+  renderStatusbar();
 }
 
+function openSettings() {
+  navigate('settings');
+}
+
+/** Leave Settings without saving: undo the theme preview, go back. */
 function closeSettings() {
   applyTheme(state.settings?.theme || 'system');
-  $('settings-sheet').close();
+  navigate(state.previousRoute);
 }
 
 $('settings-form').addEventListener('change', (event) => {
@@ -1047,7 +1281,6 @@ $('settings-form').addEventListener('click', async (event) => {
   }
 });
 $('settings-cancel').addEventListener('click', closeSettings);
-$('settings-sheet').addEventListener('cancel', () => applyTheme(state.settings?.theme || 'system'));
 $('settings-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const form = event.target;
@@ -1062,7 +1295,9 @@ $('settings-form').addEventListener('submit', async (event) => {
     const folderChanged = next.runs_folder !== state.settings?.runs_folder;
     state.settings = await invoke('set_settings', next);
     applyTheme(state.settings.theme);
-    $('settings-sheet').close();
+    await refreshAiStatus();
+    renderStatusbar();
+    navigate(state.previousRoute);
     if (folderChanged) {
       await refreshTasks();
       refreshDatasets();
@@ -1157,7 +1392,7 @@ async function chooseSpec(defaultPath) {
 /** Open the New run sheet. `browse` is a dataset whose folder the file dialog opens in. */
 async function openNewRun({ browse = null } = {}) {
   const sheet = $('newrun-sheet');
-  if (sheet.open || $('settings-sheet').open) return;
+  if (sheet.open) return;
   const form = $('newrun-form');
   form.spec_path.value = '';
   showNewRunError('');
@@ -1175,7 +1410,7 @@ async function openNewRun({ browse = null } = {}) {
 
 /** Files dropped on the window: a spec opens in New run; anything else is explained. */
 async function acceptDroppedFiles(paths) {
-  if (!paths.length || $('settings-sheet').open) return;
+  if (!paths.length || state.route === 'settings') return;
   if (!$('newrun-sheet').open) await openNewRun();
   const spec = paths.find((path) => isSpecFileName(path));
   if (spec) {
@@ -1242,7 +1477,11 @@ $('resume-task').addEventListener('click', async () => {
 // ---------------------------------------------------------------- input bindings
 
 $('new-run').addEventListener('click', () => openNewRun());
-$('open-settings').addEventListener('click', openSettings);
+// The drop tile opens the New run sheet until the intake lane (M2) takes drawing sets.
+$('drop-choose').addEventListener('click', () => openNewRun());
+for (const item of document.querySelectorAll('.rail-item')) {
+  item.addEventListener('click', () => navigate(item.dataset.route));
+}
 $('toast-close').addEventListener('click', () => { $('toast').hidden = true; });
 $('zoom-in').addEventListener('click', () => drawing.zoomIn());
 $('zoom-out').addEventListener('click', () => drawing.zoomOut());
@@ -1264,14 +1503,6 @@ $('tabs').addEventListener('keydown', (event) => {
   selectTab(next, { focus: true });
 });
 
-$('task-list').addEventListener('keydown', (event) => {
-  const step = { ArrowDown: 1, ArrowUp: -1 }[event.key];
-  if (!step || !state.tasks.length) return;
-  event.preventDefault();
-  const index = state.tasks.findIndex((t) => t.task === state.task);
-  const next = state.tasks[Math.min(state.tasks.length - 1, Math.max(0, index + step))];
-  openTask(next.task);
-});
 $('strip').addEventListener('keydown', (event) => {
   const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
   if (!step) return;
@@ -1294,7 +1525,7 @@ document.addEventListener('keydown', (event) => {
   } else if (command && ['1', '2', '3'].includes(event.key)) {
     event.preventDefault();
     setLayout({ 1: 'drawing', 2: 'split', 3: 'model' }[event.key]);
-  } else if (!command && !event.altKey && !isTyping(event.target)) {
+  } else if (!command && !event.altKey && !isTyping(event.target) && state.route === 'run') {
     if (event.key === '[') stepSection(-1);
     else if (event.key === ']') stepSection(1);
     else if (event.key === 'r' || event.key === 'R') model.resetView();
@@ -1304,6 +1535,46 @@ document.addEventListener('keydown', (event) => {
 });
 
 // ---------------------------------------------------------------- start
+
+// ---------------------------------------------------------------- routes
+
+function routeFromHash() {
+  const route = location.hash.replace(/^#\/?/, '');
+  return ROUTES.includes(route) ? route : null;
+}
+
+/** Show one view. The hash keeps the place across reloads and gives Back a meaning. */
+function applyRoute(route) {
+  if (route !== state.route) {
+    if (route === 'settings') state.previousRoute = state.route === 'settings' ? 'home' : state.route;
+    state.route = route;
+  }
+  for (const view of document.querySelectorAll('.view')) view.hidden = view.dataset.route !== route;
+  for (const item of document.querySelectorAll('.rail-item')) {
+    if (item.dataset.route === route) item.setAttribute('aria-current', 'page');
+    else item.removeAttribute('aria-current');
+  }
+  $('run-actions').hidden = route !== 'run';
+  document.body.dataset.route = route;
+  renderCrumbs();
+  if (route === 'settings') loadSettingsForm();
+  if (route === 'run' && !state.task) openRememberedTask();
+}
+
+function navigate(route) {
+  if (location.hash !== `#${route}`) history.pushState(null, '', `#${route}`);
+  applyRoute(route);
+}
+
+window.addEventListener('popstate', () => applyRoute(routeFromHash() || 'home'));
+
+/** The run view with no run open: open the last one, else the newest. */
+async function openRememberedTask() {
+  const remembered = prefs.get('lastTask', null);
+  const first = state.tasks.find((t) => t.task === remembered) || state.tasks[0];
+  if (first) await openTask(first.task);
+  else renderNoTask();
+}
 
 async function start() {
   setLayout(prefs.get('layout', 'split'));
@@ -1316,11 +1587,9 @@ async function start() {
     showError(error);
   }
   refreshDatasets();
-  await refreshTasks();
-  const remembered = prefs.get('lastTask', null);
-  const first = state.tasks.find((t) => t.task === remembered) || state.tasks[0];
-  if (first) await openTask(first.task);
-  else renderNoTask();
+  await Promise.all([refreshTasks(), refreshAiStatus()]);
+  renderStatusbar();
+  applyRoute(routeFromHash() || 'home');
 }
 
 start();

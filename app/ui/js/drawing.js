@@ -16,7 +16,11 @@ export function createDrawingView({ host, tooltip, readout, onSelectSection, onH
   const pageLayer = svg('g');
   const regionLayer = svg('g');
   const lineLayer = svg('g');
-  root.append(pageLayer, regionLayer, lineLayer);
+  // HOOK(M3 live): attention layer. Empty in M1. The live lane draws here, in page pixels and
+  // on top of everything: the attention ring on the crop the model asks for, pinned
+  // dimensions, enumerated stroke tags. This view never clears it.
+  const attentionLayer = svg('g', { class: 'attention-layer', 'data-hook': 'attention-layer' });
+  root.append(pageLayer, regionLayer, lineLayer, attentionLayer);
   host.append(root);
 
   let page = null;
@@ -355,6 +359,8 @@ export function createDrawingView({ host, tooltip, readout, onSelectSection, onH
       if (focus && changedSelection && selectedId) fitSection(selectedId);
     },
     highlightCandidate: setHot,
+    /** HOOK(M3 live): the SVG group for live marks, in page pixel coordinates. */
+    attentionLayer,
     fitPage: () => fitPage(),
     fitSections: () => fitSections(false),
     fitSection,
