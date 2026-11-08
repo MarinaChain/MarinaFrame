@@ -29,7 +29,8 @@ export function createExport({ host, invoke }) {
   let task = null;
   let view = null;
   let revision = null;
-  let openIssues = 0;
+  let openIssues = 0; // sections still a guess or declined
+  let openParts = 0; // whole-vessel parts guessed or not built, not accepted
   const chosen = new Set(OUTPUTS.map((o) => o.kind));
   let files = []; // ExportedFile[] in the folder now
   let notBuilt = new Set();
@@ -94,10 +95,12 @@ export function createExport({ host, invoke }) {
   }
 
   function issuesLine() {
-    if (!openIssues) return null;
-    const noun = openIssues === 1 ? 'section is' : 'sections are';
+    const lines = [];
+    if (openIssues) lines.push(`${openIssues} ${openIssues === 1 ? 'section is' : 'sections are'} still a guess or declined.`);
+    if (openParts) lines.push(`${openParts} ${openParts === 1 ? 'part is' : 'parts are'} guessed or not built.`);
+    if (!lines.length) return null;
     return el('p', { class: 'export-issues', role: 'note' }, icon('warn'),
-      el('span', {}, `${openIssues} ${noun} still a guess or declined. The files show the draft as it is now.`));
+      el('span', {}, `${lines.join(' ')} The files show the draft as it is now.`));
   }
 
   function render() {
@@ -168,13 +171,15 @@ export function createExport({ host, invoke }) {
   return {
     /**
      * Show the page for the current revision of a task (`taskView` is its TaskView);
-     * `issues` is the number of sections that are still a guess or declined.
+     * `issues` is the number of sections that are still a guess or declined, `parts` the
+     * number of whole-vessel parts guessed or not built and not accepted.
      */
-    async show(taskPath, taskView, issues = 0) {
+    async show(taskPath, taskView, issues = 0, partsOpen = 0) {
       const changed = taskPath !== task || taskView?.revision !== revision;
       task = taskPath;
       view = taskView;
       openIssues = issues;
+      openParts = partsOpen;
       if (changed) {
         revision = taskView?.revision || null;
         files = [];

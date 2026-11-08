@@ -331,9 +331,18 @@ function toCheckCount(view) {
 }
 
 /** One line on a "Needs you" card: what the person is asked to do. */
+/** Whole-vessel parts that still need a look: guessed or not built, and not accepted. */
+function partsToCheck(view) {
+  return (view?.components || []).filter((p) => p.review !== 'accepted' && (p.status === 'draft_guess' || !p.built)).length;
+}
+
 function needsReason(run, view) {
-  const count = toCheckCount(view);
-  if (count) return `${fmt.plural(count, 'section')} to check`;
+  const things = [];
+  const sections = toCheckCount(view);
+  const parts = partsToCheck(view);
+  if (sections) things.push(fmt.plural(sections, 'section'));
+  if (parts) things.push(fmt.plural(parts, 'part'));
+  if (things.length) return `${things.join(', ')} to check`;
   if (NEEDS_ATTENTION.has(run.status)) return 'The run stopped. Open it to see why.';
   return 'Ready for your review';
 }
@@ -636,7 +645,7 @@ function renderVesselPage() {
   for (const page of document.querySelectorAll('.vessel-page')) page.hidden = page.dataset.vtab !== tab;
   // The layout switch only means something on the Run tab.
   $('view-switch').hidden = tab !== 'run';
-  if (tab === 'export') exporter.show(state.task, state.view, toCheckCount(state.view));
+  if (tab === 'export') exporter.show(state.task, state.view, toCheckCount(state.view), partsToCheck(state.view));
   if (tab === 'history') renderHistory();
   if (tab === 'parts') parts.show(state.view);
 }
@@ -865,7 +874,7 @@ function renderDraftSummary() {
     el('ul', { class: 'selectable-text' }, ...warnings.map((w) => el('li', {}, w)))) : null;
   // Whole-vessel parts: one button to the Parts tab with what still needs a look.
   const parts = view?.components || [];
-  const partsOpen = parts.filter((p) => p.review !== 'accepted' && (p.status === 'draft_guess' || !p.built)).length;
+  const partsOpen = partsToCheck(view);
   const partsLink = parts.length ? el('button', {
     class: 'btn btn-ghost btn-small parts-link',
     type: 'button',
