@@ -257,13 +257,44 @@ listed as unbuilt with the reason; the others build. The program header stays st
 `validate_program` stays strict for the Rust provider path. The 6 W13 safety mutations are still
 caught.
 
+### 4.4 Re-run one part from a mark (CLI)
+
+`benchmarks/gunnerus/whole_vessel_revise.py --folder <run> --pack <pack.json> --part <id> --note "..."`
+takes a person's mark (part id and note, 1 to 500 characters, as the app saves it), gives DeepSeek
+the drawing crops, the part's current values with their source labels and the note (ship-cad JSON,
+thinking disabled, at most 3 turns), rebuilds only that part in the ship-cad worker, and rewrites its
+entry in `whole_vessel/execution.json`: new `geometry`, `args`, `source_labels` (`ai_inferred`),
+`revision`, `revision_note`, `revision_history` (the old values) and the request receipts. The old
+STEP stays as `<id>.r<n>.step`; the other parts do not change. The hull cannot be revised this way
+yet (it is a loft, not ship-cad values).
+
+One live check, 2026-11-09: part `wheelhouse` (outline guessed), note "The wheelhouse outline is a
+code guess (tier-2 breadth). Read its breadth and both ends from the drawings; its roof runs from x
+13.57 to 21.27 m in the profile." Result: revision 1 built in 1 turn, 4.8 s; the model returned the
+same outline (x 13.57 to 21.27 m, y ±3.54 m) and height (9.087 to 11.487 m). The path works end to
+end; the model again kept the values it was given (as in sections 2 and 3). A note with a number
+("make it 5.2 m wide") is the useful case.
+
+### 4.5 Lighter hull: tried, not reached
+
+Target: hull STEP under 30 MB and GLB under 10 MB at the accuracy of section 4.1. Not reached.
+
+- Station decimation (drop a station that straight lofting between its neighbours reproduces
+  within 5 to 20 mm): 0 to 2 of 68 stations can go. This hull has no parallel midbody.
+- One smooth loft per run side through spline-approximated station curves (OCC ThruSections),
+  smooth or ruled: the first run (frames -2 to 10) gives an invalid solid, with +33 % and +212 %
+  volume against the station prismatoid. The approximated station curves of a run do not keep the
+  common-knot correspondence of the region loft.
+
+Next approach: fit one B-spline surface per run side to the existing knot grid (stations x common
+knots, `GeomAPI_PointsToBSplineSurface` within the 1 mm bound), with the end caps cut from that
+surface, and keep the volume audit. Until then the app loads the GLB (48.5 MB) or the gzip STEP.
+
 ## 5. Resume point
 
 1. Done: tier aft-end rule (section 1.1), raster code path (section 3), assembly and hull volume
    fix (section 4), app parts folder (section 4.2), happy path for invalid metadata (section 4.3).
-2. Lighter hull loft for the app (fewer shared knots per run), section 4.2.
+2. Lighter hull loft for the app: one B-spline surface per run side (section 4.5).
 3. Appendages (rudder, skeg, thrusters) and openings in step 1 (not started).
-4. Raster path on a scanned historic sheet (Balclutha, C.A. Thayer): code-first, the model as gap
-   filler only (section 3 decision). A new model test needs a case where the code reading is
-   wrong; fix its protocol first.
+4. Balclutha model-value test: choose option A or B in plan section 3.5.3, commit, then run.
 5. Rust `ship_cad` vision schema: accept labelled inline values (Python accepts them now).

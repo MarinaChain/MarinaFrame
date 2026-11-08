@@ -301,3 +301,61 @@ def test_cap_region_rows_cuts_at_the_deck():
                 {'id': 'b', 'x_m': 15.0, 'regions': [{'kind': 'centreline', 'rows_m': rows}]}]
     capped = cap_sections(sections, deck)
     assert capped[0]['regions'][0]['rows_m'][-1][0] == 4.0 and capped[1]['regions'][0]['rows_m'][-1][0] == 5.0
+
+
+def revision_folder(tmp_path):
+    import json
+
+    from PIL import Image
+
+    parts = tmp_path / 'whole_vessel'
+    parts.mkdir()
+    entries = [{'id': 'hull', 'op': 'hull', 'built': True, 'status': 'measured_draft'},
+               {'id': 'wheelhouse', 'op': 'deckhouse', 'label': 'Wheelhouse', 'built': True,
+                'status': 'draft_guess', 'geometry': {'outline': SQUARE, 'height': [9.0, 11.5]},
+                'source_labels': {'outline': 'guessed', 'height': 'traced'}, 'provenance': {}}]
+    (parts / 'execution.json').write_text(json.dumps({'result': {'components': entries}}))
+    (parts / 'wheelhouse.step').write_text('old')
+    Image.new('L', (10, 10), 255).save(tmp_path / 'view.png')
+    pack = {'images': [{'view': 'profile', 'path': str(tmp_path / 'view.png'), 'width': 10, 'height': 10,
+                        'calibration': {'x_m': '0 + 1 * px', 'z_m': '10 - 1 * py'}}]}
+    return pack
+
+
+def fake_model(reply):
+    def call(messages, receipts, settings):
+        assert settings['thinking'] == 'disabled'
+        assert 'narrower' in messages[0]['content'][0]['text']
+        return reply, {'request_id': 'test', 'state': 'completed', 'usage': {}, 'seconds': 0.0}
+    return call
+
+
+@pytest.mark.cad
+def test_revise_rebuilds_only_the_marked_part(tmp_path):
+    import json
+
+    from benchmarks.gunnerus.whole_vessel_revise import revise
+
+    pack = revision_folder(tmp_path)
+    narrow = [[0.0, -0.5], [2.0, -0.5], [2.0, 0.5], [0.0, 0.5]]
+    reply = json.dumps({'schema': 'ship-cad/v1', 'components': [
+        {'id': 'wheelhouse', 'op': 'deckhouse', 'source': {'view': 'plan', 'region': 'wheelhouse',
+                                                          'method': 'closed_outline'},
+         'args': {'outline': inline(narrow), 'height': inline([9.0, 11.5])}}]})
+    entry = revise(tmp_path, pack, 'wheelhouse', 'Make it narrower: 1 m wide', call=fake_model(reply))
+    assert entry['revision'] == 1 and entry['geometry']['outline'] == narrow
+    assert entry['source_labels'] == {'outline': 'ai_inferred', 'height': 'ai_inferred'}
+    assert entry['revision_history'][0]['geometry']['outline'] == SQUARE
+    saved = json.loads((tmp_path / 'whole_vessel' / 'execution.json').read_text())['result']['components']
+    assert saved[0] == {'id': 'hull', 'op': 'hull', 'built': True, 'status': 'measured_draft'}
+    assert (tmp_path / 'whole_vessel' / 'wheelhouse.r0.step').read_text() == 'old'
+
+
+def test_revise_refuses_hull_and_empty_note(tmp_path):
+    from benchmarks.gunnerus.whole_vessel_revise import revise
+
+    pack = revision_folder(tmp_path)
+    with pytest.raises(ValueError, match='cannot be revised'):
+        revise(tmp_path, pack, 'hull', 'lower it', call=fake_model('{}'))
+    with pytest.raises(ValueError, match='1 to 500'):
+        revise(tmp_path, pack, 'wheelhouse', ' ', call=fake_model('{}'))
