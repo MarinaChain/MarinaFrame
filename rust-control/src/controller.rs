@@ -1839,18 +1839,26 @@ fn refuse_repeated_investigation(store: &mut Store, choice: &Decision) -> Result
     );
     let count = store.state.action_fingerprints.entry(key).or_default();
     *count += 1;
-    let exhausted = *count >= store.state.config.limits.max_repeated_action;
+    let count = *count;
+    let limit = store.state.config.limits.max_repeated_action;
     store.state.staged_decision = None;
+    let message = if count >= limit {
+        format!("You repeated this action {count} times with unchanged evidence. It will not run again. Pick a different tool now (build_draft if you have not built yet).")
+    } else {
+        "This action was already executed with unchanged evidence. Use its earlier result and your notes; choose a different next action.".to_string()
+    };
     store.state.last_observation = json!({"ok":false,"status":"repeated_action_refused",
         "error_code":"repeated_action_refused","earlier_decision_event_id":earlier_id,"earlier_result":result,
-        "message":"This action was already executed with unchanged evidence. Use its earlier result and your notes; choose a different next action.",
+        "message":message,
         "useful_next_actions":["assign_station for unassigned sections", "build_draft", "render_candidate after building", "trace_from_point on different ink"],
         "engineering_approved":false,"human_semantic_review_required":true});
     store.append(
         "repeated_action_refused",
         json!({"decision":choice,"progress_key":progress,"earlier_decision_event_id":earlier_id}),
     )?;
-    if exhausted {
+    // After the strong hint above the model gets `limit` more chances to
+    // change course before the run stops. `stop` keeps a valid draft.
+    if count >= 2 * limit {
         stop(
             store,
             Status::NoProgress,
@@ -2543,7 +2551,8 @@ mod tests {
             .unwrap();
         store.append("worker_result", json!({"response":{"result":{"status":"viewed","view":{"view_id":"view-earlier"}}}})).unwrap();
         store.state.domain["view_count"] = json!(2);
-        for n in 1..=3 {
+        // max_repeated_action is 3: a strong hint from the 3rd refusal, a stop at the 6th.
+        for n in 1..=6 {
             assert!(refuse_repeated_investigation(&mut store, &choice).unwrap());
             assert_eq!(
                 store.state.last_observation["status"],
@@ -2553,7 +2562,12 @@ mod tests {
                 store.state.last_observation["earlier_result"]["view"]["view_id"],
                 "view-earlier"
             );
-            assert_eq!(store.state.status == Status::NoProgress, n == 3);
+            let strong_hint = store.state.last_observation["message"]
+                .as_str()
+                .unwrap()
+                .contains("Pick a different tool now");
+            assert_eq!(strong_hint, n >= 3);
+            assert_eq!(store.state.status == Status::NoProgress, n == 6);
         }
         store.state.generation_id = Some("new-generation".into());
         assert!(!refuse_repeated_investigation(&mut store, &choice).unwrap());
