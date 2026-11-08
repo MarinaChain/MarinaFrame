@@ -514,3 +514,16 @@ worker peak 1.7 GB, total peak about 1.9 GB.
 Resume: (1) trace lane: profile baseline snap, worsening edits kept on dtmb, 6-case dev round;
 (2) whole-vessel lane: raster round 3 (protocol c2a5e2f), hull + parts assembly, components.json;
 (3) UI lane: rounds 25-32 starting with the component tree; (4) real-app check of the sample run.
+
+## 2026-11-09 05:30 SGT: baseline vs thinking (e2e-9e7161f, frozen binary, w17 factory, 24 dev cases each)
+
+| Arm | Drafts scored | Both gates | Median RMS half-beam | Median abs volume | Main end reason |
+|---|---|---|---|---|---|
+| Baseline (thinking off) | 21 | 2 | 21.6 % | 6.1 % | repeated_identical_action_refusals (13) |
+| Thinking on | 22 | 2 | 21.8 % | 6.1 % | open_guesses_block_review (15) |
+
+Paired on 20 cases, thinking is better on 4 and the medians are equal. Thinking changes how runs
+end (1 repeated-refusal stop instead of 13), not accuracy: the score comes mostly from the code's
+first hull. Decision: keep thinking off by default (faster, same accuracy); accuracy work stays on
+the readers (see the sheet-only fixes, which this frozen binary does not have). The disk filled
+during this run (watcher stopped at 1 GB free); results are complete for both arms.
