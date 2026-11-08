@@ -57,6 +57,23 @@ INSPECTION_BUDGET_SHARE = 0.5
 MAX_INSPECTION_BYTES = 24 * 1024 * 1024
 SEMANTIC_FLAGS = {"human_semantic_review_required": True, "engineering_approved": False,
                   "identity_certified": False}
+# Mark and revise: an edit of a section a person asked to revise is kept only
+# when its ink RMS grows by at most this much (metres, or share of the old
+# RMS, whichever is larger); then the whole-sheet fit decides.
+REVISION_INK_TOLERANCE_M = 0.05
+REVISION_INK_TOLERANCE_SHARE = 0.05
+
+
+def revision_ink_worse(old_ink: dict, new_ink: dict) -> bool:
+    """True when a revision edit makes its section's ink fit worse than the tolerance allows."""
+    before = old_ink.get("rms_m")
+    if before is None:
+        return False  # No measured ink to protect: the overall fit decides.
+    after = new_ink.get("rms_m")
+    allowed = max(REVISION_INK_TOLERANCE_M, REVISION_INK_TOLERANCE_SHARE * before)
+    return after is None or after > before + allowed
+
+
 MIRRORED_HALF_NOTE = ("The curve is drawn left of the centreline (afterbody of an overlay body plan). The "
                       "panel's strokes are enumerated on the mirrored image; use enumerate_strokes or "
                       "trace_from_point on this section, or propose_section.")
@@ -406,6 +423,10 @@ class DomainTools(InvestigationTools):
                 # not-kept revision edit anyway; the model's tool schema has no such field.
                 force_keep = (tool_name == "propose_section" and isinstance(arguments, dict)
                               and arguments.pop("operator_force_keep", False) is True)
+                # Only the Rust controller sets this flag, on an edit a person asked
+                # for (mark and revise): the edit must not worsen its section's ink fit.
+                revision_target = (tool_name == "propose_section" and isinstance(arguments, dict)
+                                   and arguments.pop("revision_target", False) is True)
                 self._arguments(tool_name, arguments)
                 if self.cancel_event is not None and self.cancel_event.is_set():
                     return self._observation(False, "cancelled", error_code="cancelled")
@@ -438,6 +459,12 @@ class DomainTools(InvestigationTools):
                     decision = keep_edit(before, after, before.get("cells"), after.get("cells"), gap_fill_only=old_curve is None)
                     if protected_ink and new_ink.get("rms_m", float("inf")) > old_ink["rms_m"] + 1e-6:
                         decision = {**decision, "keep": False, "reason": "Kept supported ink; proposed curve has worse ink RMS.",
+                                    "ink_rms_before_m": old_ink["rms_m"], "ink_rms_after_m": new_ink.get("rms_m")}
+                    elif revision_target and revision_ink_worse(old_ink, new_ink):
+                        decision = {**decision, "keep": False,
+                                    "reason": (f"A revision must not worsen its section's ink fit: ink RMS "
+                                               f"{old_ink['rms_m']:.2f} m before, {new_ink.get('rms_m', float('nan')):.2f} m "
+                                               "after. Follow the drawn ink of this section more closely."),
                                     "ink_rms_before_m": old_ink["rms_m"], "ink_rms_after_m": new_ink.get("rms_m")}
                     if identical or not decision["keep"]:
                         self.state = incumbent
