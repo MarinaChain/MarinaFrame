@@ -877,6 +877,8 @@ function renderTimeline() {
 }
 
 function appendEvents(events) {
+  // A task can change (a worker writes build files) without a new step; nothing to add then.
+  if (!events.length) return;
   const panel = $('panel-timeline');
   const nearBottom = panel.scrollHeight - panel.scrollTop - panel.clientHeight < 40;
   state.events.push(...events);

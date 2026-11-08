@@ -180,10 +180,11 @@ export function createModelView({ host }) {
 
   function styleGuessBand(band) {
     const [face, edge] = band.children;
+    // Faint: a draft can have a guess at every station, and strong boxes then hide the hull.
     face.material.color = colours.guess;
-    face.material.opacity = 0.28;
+    face.material.opacity = 0.06;
     edge.material.color = colours.guess;
-    edge.material.opacity = 0.9;
+    edge.material.opacity = 0.22;
   }
 
   /** A translucent amber box over a guessed x range, so gaps and guesses show on the hull. */

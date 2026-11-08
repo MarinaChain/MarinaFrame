@@ -628,8 +628,8 @@ code { font-family: var(--font-mono); }
 .hull-thumb { width: 56px; height: 34px; }
 .hull-thumb-axis { stroke: var(--rule-strong); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .vessel-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); min-width: 0; padding: 0 var(--space-xs); }
-.vessel-name { min-width: 0; overflow: hidden; font-size: var(--fs-lg); font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
-.vessel-row .badge { flex: 0 1 auto; }
+.vessel-name { flex: 1 1 auto; min-width: 0; overflow: hidden; font-size: var(--fs-lg); font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.vessel-row .badge { flex: none; } /* the one-word state stays whole; the name shortens instead */
 .vessel-meta { padding: 0 var(--space-xs); color: var(--ink-3); font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* A running vessel: a teal hairline that travels (no progress number exists yet). */
 .vessel-progress {
@@ -974,7 +974,7 @@ code { font-family: var(--font-mono); }
 }
 .region:hover { fill: rgba(6, 68, 142, 0.04); }
 .region[data-state="declined"] { stroke: var(--ink-declined); stroke-dasharray: none; stroke-width: 1.5; }
-.region[data-state="guessed"] { stroke: var(--guess-ink); stroke-dasharray: 7 4; stroke-width: 1.5; fill: rgba(245, 177, 76, 0.08); }
+.region[data-state="guessed"] { stroke: var(--guess-ink); stroke-dasharray: 7 4; stroke-width: 1.5; fill: none; } /* stations sharing a panel would stack a fill into solid amber */
 .region.selected { stroke: var(--ink-chosen); stroke-dasharray: none; stroke-width: 1.5; fill: rgba(6, 68, 142, 0.04); }
 .region-label {
   font: 600 13px var(--font-ui);
