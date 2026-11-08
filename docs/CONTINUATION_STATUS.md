@@ -443,3 +443,14 @@ campaign counts as a failure.
 - GLM analysis of deterministic drafts: `work/deterministic-draft-analysis.md` (uncaught
   `resource_limit` at agent_tools.py:882 kills inspection; blocking gaps abort draft mode before
   guesses; overlay panels give every station the same curve).
+
+## 2026-11-08 17:50 SGT: everything integrated into continue/v0.5 (595cb78)
+
+- Merged: W17-W18d (Sol: memory, happy-path drafts, model geometry, W19 first hull, combined score,
+  keep rule, loop controls), w19-0 (CAD fix, stroke discovery, C2, F1+security fix, D1, three-view
+  factory), w19a/w19b, app LLM-first + UI polish. `make test-full` passes (839 quick, 24 CAD, smoke).
+- R-body round (W18d, 4 cases): 4/4 drafts, 0/4 correct, $0.056 total (W18c: $0.85). RMS: DTMB L0
+  4.47 %, 00045 L2 4.56 %, 00679 L0 10.89 % (first hull 10.13 %), 00683 L2 33.88 %.
+- Open: the model adds little over the first hull and still worsens 00679; the combined score accepts
+  some truth-worsening edits; 00683-L2 first hull is 33.9 % after integration vs 23.4 % in W19a alone;
+  DTMB 4.47 % comes from the hull tops (~1 px); image-enhancement test blocked (no image tool headless).
