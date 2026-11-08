@@ -3,11 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self'; font-src 'self'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="color-scheme" content="light dark">
   <!-- For the web build, add: <meta name="marinaframe-backend" content="http"> -->
   <title>MarinaFrame</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/fonts/Manrope-Latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="js/app.js"></script>
 </head>
@@ -15,6 +16,8 @@
   <svg class="icon-sprite" aria-hidden="true">
     <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" /></symbol>
     <symbol id="i-gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2" /><path d="M8 1.8v1.7M8 12.5v1.7M1.8 8h1.7M12.5 8h1.7M3.6 3.6l1.2 1.2M11.2 11.2l1.2 1.2M3.6 12.4l1.2-1.2M11.2 4.8l1.2-1.2" /></symbol>
+    <symbol id="i-home" viewBox="0 0 16 16"><path d="M2.5 7.2L8 2.5l5.5 4.7" /><path d="M4 6v7.5h8V6" /><path d="M6.6 13.5V10h2.8v3.5" /></symbol>
+    <symbol id="i-queue" viewBox="0 0 16 16"><path d="M8 2.2l5.8 3L8 8.2 2.2 5.2z" /><path d="M2.2 8L8 11l5.8-3" /><path d="M2.2 10.8L8 13.8l5.8-3" /></symbol>
     <symbol id="i-close" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" /></symbol>
     <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" /><path d="M8 7.2V11M8 5v.2" /></symbol>
     <symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 2.2l6 10.8H2z" /><path d="M8 6.5v3M8 11v.2" /></symbol>
@@ -28,159 +31,247 @@
     <symbol id="i-chevron" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4" /></symbol>
     <symbol id="i-folder" viewBox="0 0 16 16"><path d="M2 4.5h4l1.5 1.5H14v6.5H2z" /></symbol>
     <symbol id="i-file" viewBox="0 0 16 16"><path d="M4 1.8h5.2L12.5 5v9.2H4z" /><path d="M9 1.8V5.2h3.5" /></symbol>
+    <symbol id="i-sheet" viewBox="0 0 16 16"><path d="M4 1.8h5.2L12.5 5v9.2H4z" /><path d="M9 1.8V5.2h3.5" /><path d="M5.6 10.6h5.2l-.9 1.4H6.4z" /><path d="M7 10.6V9h2.2l.6 1.6" /></symbol>
     <symbol id="i-drop" viewBox="0 0 16 16"><path d="M8 2.5v7.5M5 7l3 3 3-3" /><path d="M2.5 10.5v3h11v-3" /></symbol>
+    <!-- Source-label glyphs: colour is never the only signal (visual language, lane C). -->
+    <symbol id="i-src-traced" viewBox="0 0 16 16"><circle class="glyph-fill" cx="8" cy="8" r="3.2" /></symbol>
+    <symbol id="i-src-repaired" viewBox="0 0 16 16"><path d="M10.6 2.6a3 3 0 0 0-3.4 4L2.8 11a1.3 1.3 0 0 0 1.9 1.9l4.4-4.4a3 3 0 0 0 4-3.4l-1.8 1.8-1.7-.4-.4-1.7z" /></symbol>
+    <symbol id="i-src-interpolated" viewBox="0 0 16 16"><circle class="glyph-fill" cx="3.5" cy="8" r="1.8" /><circle class="glyph-fill" cx="12.5" cy="8" r="1.8" /><path d="M5.5 8h1.2M8.4 8h1.2" /></symbol>
+    <symbol id="i-src-ai_inferred" viewBox="0 0 16 16"><path d="M8 2l1.5 4.5L14 8l-4.5 1.5L8 14l-1.5-4.5L2 8l4.5-1.5z" /></symbol>
+    <symbol id="i-src-ai_corrected" viewBox="0 0 16 16"><path class="glyph-fill" d="M8 2l1.5 4.5L14 8l-4.5 1.5L8 14l-1.5-4.5L2 8l4.5-1.5z" /></symbol>
+    <symbol id="i-src-omitted" viewBox="0 0 16 16"><path d="M4 8h8" /></symbol>
+  </svg>
+
+  <!-- Stroke markers for source-label patterns. Not display:none, so markers still render. -->
+  <svg class="marker-defs" width="0" height="0" aria-hidden="true" focusable="false">
+    <defs>
+      <marker id="m-diamond" viewBox="-4 -4 8 8" markerWidth="5" markerHeight="5" markerUnits="userSpaceOnUse">
+        <path d="M0 -3.2L3.2 0 0 3.2-3.2 0z" fill="var(--raised)" stroke="var(--stroke-ai_corrected)" stroke-width="1.2" />
+      </marker>
+      <marker id="m-tick" viewBox="-4 -4 8 8" markerWidth="5" markerHeight="5" markerUnits="userSpaceOnUse" orient="auto">
+        <path d="M0 -3.5V3.5" stroke="var(--src-repaired)" stroke-width="1.2" />
+      </marker>
+    </defs>
   </svg>
 
   <div class="app" id="app">
-    <aside class="sidebar" aria-label="Library">
-      <div class="titlebar" data-tauri-drag-region>
-        <img class="brand-mark" src="assets/mark.svg" alt="MarinaFrame" width="24" height="20">
-      </div>
-      <div class="sidebar-head">
-        <h2 class="sidebar-title">Runs</h2>
-        <button class="btn btn-ghost btn-icon" id="new-run" type="button" title="New run (⌘N)" aria-label="New run">
-          <svg class="icon"><use href="#i-plus" /></svg>
-        </button>
-      </div>
-      <ul class="task-list" id="task-list" role="listbox" aria-label="Runs" tabindex="0"></ul>
-      <details class="datasets" id="datasets">
-        <summary><svg class="icon chevron"><use href="#i-chevron" /></svg>Datasets</summary>
-        <ul class="dataset-list" id="dataset-list"></ul>
-      </details>
-      <div class="sidebar-foot">
-        <button class="btn btn-ghost" id="open-settings" type="button" title="Settings (⌘,)">
-          <svg class="icon"><use href="#i-gear" /></svg>Settings
-        </button>
-      </div>
-    </aside>
-
-    <main class="workspace" id="workspace">
-      <header class="toolbar" data-tauri-drag-region>
-        <div class="toolbar-title" data-tauri-drag-region>
-          <h1 id="task-name">MarinaFrame</h1>
-          <span class="badge" id="task-badge" hidden></span>
+    <!-- Title bar: traffic-light inset, breadcrumb Vessel › Run › rN, run actions. -->
+    <header class="titlebar" data-tauri-drag-region>
+      <img class="brand-mark" src="assets/mark.svg" alt="MarinaFrame" width="24" height="20">
+      <nav class="crumbs" id="crumbs" aria-label="Breadcrumb" data-tauri-drag-region></nav>
+      <span class="badge" id="task-badge" hidden></span>
+      <div class="titlebar-actions" id="run-actions" hidden>
+        <div class="segmented" role="radiogroup" aria-label="Layout" id="view-switch">
+          <button type="button" role="radio" data-view="drawing" title="Drawing (⌘1)" aria-label="Drawing only"><svg class="icon"><use href="#i-drawing" /></svg></button>
+          <button type="button" role="radio" data-view="split" title="Drawing and model (⌘2)" aria-label="Drawing and model"><svg class="icon"><use href="#i-split" /></svg></button>
+          <button type="button" role="radio" data-view="model" title="Model (⌘3)" aria-label="Model only"><svg class="icon"><use href="#i-cube" /></svg></button>
         </div>
-        <div class="toolbar-actions">
-          <div class="segmented" role="radiogroup" aria-label="Layout" id="view-switch">
-            <button type="button" role="radio" data-view="drawing" title="Drawing (⌘1)" aria-label="Drawing only"><svg class="icon"><use href="#i-drawing" /></svg></button>
-            <button type="button" role="radio" data-view="split" title="Drawing and model (⌘2)" aria-label="Drawing and model"><svg class="icon"><use href="#i-split" /></svg></button>
-            <button type="button" role="radio" data-view="model" title="Model (⌘3)" aria-label="Model only"><svg class="icon"><use href="#i-cube" /></svg></button>
+        <button class="btn" id="resume-task" type="button" hidden>Resume</button>
+        <button class="btn btn-danger-quiet" id="cancel-task" type="button" hidden>Stop</button>
+      </div>
+    </header>
+
+    <!-- Narrow left rail: the three global places. -->
+    <nav class="rail" aria-label="Main">
+      <button class="rail-item" type="button" data-route="home" title="Home">
+        <svg class="icon"><use href="#i-home" /></svg><span>Home</span>
+      </button>
+      <button class="rail-item" type="button" data-route="queue" title="Queue">
+        <svg class="icon"><use href="#i-queue" /></svg><span>Queue</span>
+      </button>
+      <button class="rail-item" type="button" data-route="settings" title="Settings (⌘,)">
+        <svg class="icon"><use href="#i-gear" /></svg><span>Settings</span>
+      </button>
+    </nav>
+
+    <main class="views" id="views">
+      <!-- ============================================================ Home (F3, F18) -->
+      <section class="view view-home" id="view-home" data-route="home" aria-labelledby="home-needs-title" hidden>
+        <div class="home-scroll">
+          <div class="home-head">
+            <h1 id="home-needs-title">Needs you</h1>
+            <button class="btn btn-primary btn-large" id="new-run" type="button" title="New run (⌘N)">New run</button>
           </div>
-          <button class="btn" id="resume-task" type="button" hidden>Resume</button>
-          <button class="btn btn-danger-quiet" id="cancel-task" type="button" hidden>Stop run</button>
-        </div>
-      </header>
-
-      <div class="notices" id="notices" aria-live="polite"></div>
-      <div class="draft-summary" id="draft-summary"></div>
-
-      <div class="stage" id="stage" data-view="split">
-        <section class="pane pane-drawing" aria-label="Drawing">
-          <div class="pane-head">
-            <span class="pane-title">Drawing</span>
-            <span class="pane-meta" id="drawing-meta"></span>
-            <div class="pane-tools">
-              <button class="btn btn-ghost btn-icon" id="zoom-out" type="button" title="Zoom out (−)" aria-label="Zoom out"><svg class="icon"><use href="#i-zoom-out" /></svg></button>
-              <span class="zoom-readout" id="zoom-readout" aria-live="off">100%</span>
-              <button class="btn btn-ghost btn-icon" id="zoom-in" type="button" title="Zoom in (+)" aria-label="Zoom in"><svg class="icon"><use href="#i-zoom-in" /></svg></button>
-              <button class="btn btn-ghost btn-icon" id="zoom-fit" type="button" title="Fit page (0)" aria-label="Fit page"><svg class="icon"><use href="#i-fit" /></svg></button>
+          <div class="needs-row" id="needs-row" aria-live="polite"></div>
+          <h2 class="home-section-title">Vessels</h2>
+          <div class="vessel-grid" id="vessel-grid">
+            <!-- The drop tile is the last card; renderHome() keeps it at the end. -->
+            <div class="drop-tile" id="drop-tile">
+              <svg class="drop-art" viewBox="0 0 120 64" aria-hidden="true">
+                <path d="M60 4v58" />
+                <path d="M60 60C46 60 22 50 12 30 10 22 10 14 10 8" />
+                <path d="M60 60C50 58 34 46 26 28 24 20 24 12 24 6" />
+                <path d="M60 60C54 54 44 40 40 24 39 16 39 10 39 5" />
+                <path d="M60 60C74 60 98 50 108 30 110 22 110 14 110 8" />
+                <path d="M60 60C70 58 86 46 94 28 96 20 96 12 96 6" />
+                <path d="M60 60C66 54 76 40 80 24 81 16 81 10 81 5" />
+                <path class="drop-art-wl" d="M6 40h108M6 24h108" />
+              </svg>
+              <strong>Drop a drawing set</strong>
+              <span class="drop-hint" id="drop-hint" title="Until intake lands, the New run sheet takes a run spec file that names the drawing.">Run spec for now</span>
+              <button class="btn" type="button" id="drop-choose">Choose files</button>
             </div>
           </div>
-          <div class="drawing-host" id="drawing-host" tabindex="0" aria-label="Drawing. Drag to pan, scroll to zoom."></div>
-          <div class="tooltip" id="drawing-tooltip" role="tooltip" hidden></div>
-        </section>
+        </div>
+      </section>
 
-        <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" aria-label="Resize drawing and model" tabindex="0"></div>
+      <!-- ============================================================ Queue (P1) -->
+      <section class="view view-queue" id="view-queue" data-route="queue" aria-labelledby="queue-title" hidden>
+        <div class="home-scroll">
+          <div class="home-head"><h1 id="queue-title">Queue</h1></div>
+          <ul class="queue-list" id="queue-list"></ul>
+        </div>
+      </section>
 
-        <section class="pane pane-model" aria-label="3D model">
-          <div class="pane-head">
-            <span class="pane-title">3D model</span>
-            <span class="pane-meta" id="model-meta"></span>
-            <div class="pane-tools">
-              <button class="btn btn-ghost btn-icon" id="model-reset" type="button" title="Reset view (R)" aria-label="Reset view"><svg class="icon"><use href="#i-reset" /></svg></button>
-            </div>
+      <!-- ============================================================ Run: drawing | 3D | inspector -->
+      <section class="view view-run" id="view-run" data-route="run" aria-label="Run" hidden>
+        <div class="workspace" id="workspace">
+          <div class="notices" id="notices" aria-live="polite"></div>
+          <div class="draft-summary" id="draft-summary"></div>
+
+          <div class="stage" id="stage" data-view="split">
+            <section class="pane pane-drawing" aria-label="Drawing">
+              <div class="pane-head">
+                <span class="pane-title">Drawing</span>
+                <span class="pane-meta" id="drawing-meta"></span>
+                <div class="pane-tools">
+                  <button class="btn btn-ghost btn-icon" id="zoom-out" type="button" title="Zoom out (−)" aria-label="Zoom out"><svg class="icon"><use href="#i-zoom-out" /></svg></button>
+                  <span class="zoom-readout" id="zoom-readout" aria-live="off">100%</span>
+                  <button class="btn btn-ghost btn-icon" id="zoom-in" type="button" title="Zoom in (+)" aria-label="Zoom in"><svg class="icon"><use href="#i-zoom-in" /></svg></button>
+                  <button class="btn btn-ghost btn-icon" id="zoom-fit" type="button" title="Fit page (0)" aria-label="Fit page"><svg class="icon"><use href="#i-fit" /></svg></button>
+                </div>
+              </div>
+              <div class="drawing-host" id="drawing-host" tabindex="0" aria-label="Drawing. Drag to pan, scroll to zoom."></div>
+              <div class="tooltip" id="drawing-tooltip" role="tooltip" hidden></div>
+            </section>
+
+            <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" aria-label="Resize drawing and model" tabindex="0"></div>
+
+            <section class="pane pane-model" aria-label="3D model">
+              <div class="pane-head">
+                <span class="pane-title">3D model</span>
+                <span class="pane-meta" id="model-meta"></span>
+                <div class="pane-tools">
+                  <button class="btn btn-ghost btn-icon" id="model-reset" type="button" title="Reset view (R)" aria-label="Reset view"><svg class="icon"><use href="#i-reset" /></svg></button>
+                </div>
+              </div>
+              <div class="model-host" id="model-host" tabindex="0" aria-label="3D model. Drag to rotate, scroll to zoom."></div>
+            </section>
           </div>
-          <div class="model-host" id="model-host" tabindex="0" aria-label="3D model. Drag to rotate, scroll to zoom."></div>
-        </section>
-      </div>
 
-      <div class="strip" id="strip" role="listbox" aria-label="Sections" aria-orientation="horizontal" tabindex="0"></div>
+          <!-- HOOK(M3 live): narration strip. Two short lines under both panes: what the agent
+               does now. M1 shows the latest recorded step; the live lane streams into it. -->
+          <div class="narration" id="narration" data-hook="narration" role="status" aria-live="polite"></div>
+
+          <div class="strip" id="strip" role="listbox" aria-label="Sections" aria-orientation="horizontal" tabindex="0"></div>
+
+          <!-- HOOK(M3 live, M7 compare): revision and timeline strip. M1 shows the current
+               revision and the model cost; the live lane adds the revision ladder, the fit
+               sparkline and replay/scrub here. -->
+          <div class="revision-strip" id="revision-strip" data-hook="revision-strip">
+            <div class="revision-ladder" id="revision-ladder" data-hook="revision-ladder"></div>
+            <div class="revision-facts" id="revision-facts"></div>
+          </div>
+        </div>
+
+        <aside class="inspector" aria-label="Inspector">
+          <header class="inspector-head" id="selection-head"></header>
+          <section class="selection" id="selection" aria-live="polite"></section>
+          <div class="tabs" role="tablist" aria-label="Run details" id="tabs">
+            <!-- HOOK(M3 live): the Thinking tab. One card per model step; the live lane adds
+                 tool-call cards and "Why" disclosures. -->
+            <button role="tab" type="button" id="tab-thinking" aria-controls="panel-thinking" data-tab="thinking">Thinking</button>
+            <button role="tab" type="button" id="tab-timeline" aria-controls="panel-timeline" data-tab="timeline">Steps</button>
+            <button role="tab" type="button" id="tab-checks" aria-controls="panel-checks" data-tab="checks">Checks</button>
+            <button role="tab" type="button" id="tab-model" aria-controls="panel-model" data-tab="model">Calls</button>
+            <button role="tab" type="button" id="tab-evidence" aria-controls="panel-evidence" data-tab="evidence">Evidence</button>
+          </div>
+          <div class="tab-panels">
+            <div role="tabpanel" class="tab-panel" id="panel-thinking" aria-labelledby="tab-thinking" tabindex="0" data-hook="thinking" hidden></div>
+            <div role="tabpanel" class="tab-panel" id="panel-timeline" aria-labelledby="tab-timeline" tabindex="0"></div>
+            <div role="tabpanel" class="tab-panel" id="panel-checks" aria-labelledby="tab-checks" tabindex="0" hidden></div>
+            <div role="tabpanel" class="tab-panel" id="panel-model" aria-labelledby="tab-model" tabindex="0" hidden></div>
+            <div role="tabpanel" class="tab-panel" id="panel-evidence" aria-labelledby="tab-evidence" tabindex="0" hidden></div>
+          </div>
+        </aside>
+      </section>
+
+      <!-- ============================================================ Settings -->
+      <section class="view view-settings" id="view-settings" data-route="settings" aria-labelledby="settings-title" hidden>
+        <div class="home-scroll">
+          <form class="settings-form" id="settings-form">
+            <h1 id="settings-title">Settings</h1>
+
+            <section class="settings-group" aria-labelledby="settings-ai-title">
+              <h2 class="settings-group-title" id="settings-ai-title">AI</h2>
+              <div class="setting-row">
+                <span class="setting-label">AI drafting <span class="badge" id="ai-status"></span></span>
+                <label class="switch" title="Turn AI drafting on or off">
+                  <input type="checkbox" name="ai_drafting" role="switch" aria-label="AI drafting">
+                  <span class="switch-track" aria-hidden="true"></span>
+                </label>
+              </div>
+            </section>
+
+            <section class="settings-group" aria-labelledby="settings-look-title">
+              <h2 class="settings-group-title" id="settings-look-title">Appearance</h2>
+              <div class="setting-row">
+                <span class="setting-label">Theme</span>
+                <div class="segmented segmented-text" role="radiogroup" aria-label="Theme">
+                  <label><input type="radio" name="theme" value="system"><span>System</span></label>
+                  <label><input type="radio" name="theme" value="light"><span>Light</span></label>
+                  <label><input type="radio" name="theme" value="dark"><span>Dark</span></label>
+                </div>
+              </div>
+              <div class="setting-row">
+                <span class="setting-label">Notices <span class="badge" id="notices-reset-status" title="Notices you close stay hidden until you show them again.">Hidden</span></span>
+                <button class="btn" type="button" id="reset-notices" title="Show dismissed notices again">Show again</button>
+              </div>
+            </section>
+
+            <!-- Developer paths: the setup check finds them, so they stay out of the way. -->
+            <details class="settings-group settings-advanced" id="settings-advanced">
+              <summary class="settings-group-title"><svg class="icon chevron"><use href="#i-chevron" /></svg>Advanced</summary>
+              <div class="field">
+                <label class="field-label" for="runs-folder">Runs folder</label>
+                <span class="input-with-button">
+                  <input type="text" id="runs-folder" name="runs_folder" spellcheck="false" autocomplete="off" required>
+                  <button class="btn" type="button" id="pick-runs-folder" data-pick="folder" data-field="runs_folder" data-title="Choose the runs folder">
+                    <svg class="icon"><use href="#i-folder" /></svg>Choose…
+                  </button>
+                </span>
+                <div class="suggestions" id="runs-folder-suggestions" aria-label="Suggested runs folders"></div>
+              </div>
+              <div class="field">
+                <label class="field-label" for="worker-python">Worker Python</label>
+                <span class="input-with-button">
+                  <input type="text" id="worker-python" name="worker_python" spellcheck="false" autocomplete="off" required>
+                  <button class="btn" type="button" id="pick-worker-python" data-pick="file" data-field="worker_python" data-title="Choose the Python for the worker">
+                    <svg class="icon"><use href="#i-file" /></svg>Choose…
+                  </button>
+                </span>
+                <div class="suggestions" id="worker-python-suggestions" aria-label="Suggested Python programs"></div>
+              </div>
+            </details>
+
+            <p class="form-error" id="settings-error" role="alert" hidden></p>
+            <div class="sheet-actions">
+              <button class="btn" type="button" id="settings-cancel">Cancel</button>
+              <button class="btn btn-primary" type="submit" id="settings-save">Save</button>
+            </div>
+          </form>
+        </div>
+      </section>
     </main>
 
-    <aside class="inspector" aria-label="Inspector">
-      <header class="titlebar inspector-head" id="selection-head" data-tauri-drag-region></header>
-      <section class="selection" id="selection" aria-live="polite"></section>
-      <div class="tabs" role="tablist" aria-label="Run details" id="tabs">
-        <button role="tab" type="button" id="tab-timeline" aria-controls="panel-timeline" data-tab="timeline">Timeline</button>
-        <button role="tab" type="button" id="tab-checks" aria-controls="panel-checks" data-tab="checks">Checks</button>
-        <button role="tab" type="button" id="tab-model" aria-controls="panel-model" data-tab="model">Model calls</button>
-        <button role="tab" type="button" id="tab-evidence" aria-controls="panel-evidence" data-tab="evidence">Evidence</button>
-      </div>
-      <div class="tab-panels">
-        <div role="tabpanel" class="tab-panel" id="panel-timeline" aria-labelledby="tab-timeline" tabindex="0"></div>
-        <div role="tabpanel" class="tab-panel" id="panel-checks" aria-labelledby="tab-checks" tabindex="0" hidden></div>
-        <div role="tabpanel" class="tab-panel" id="panel-model" aria-labelledby="tab-model" tabindex="0" hidden></div>
-        <div role="tabpanel" class="tab-panel" id="panel-evidence" aria-labelledby="tab-evidence" tabindex="0" hidden></div>
-      </div>
-    </aside>
-
     <footer class="statusbar" id="statusbar">
-      <span class="badge badge-plain" id="status-badge"></span>
-      <span class="status-item" id="status-policy"></span>
-      <span class="status-item" id="status-revision"></span>
-      <span class="status-item" id="status-updated"></span>
-      <span class="status-spacer"></span>
+      <span class="status-ai" id="status-ai"></span>
       <span class="status-progress" id="status-progress" role="status" aria-live="polite"></span>
+      <span class="status-spacer"></span>
       <span class="status-item status-mode" id="status-mode"></span>
+      <span class="status-item status-folder" id="status-folder"></span>
     </footer>
   </div>
-
-  <dialog class="sheet" id="settings-sheet" aria-labelledby="settings-title">
-    <form method="dialog" class="sheet-body" id="settings-form">
-      <h2 id="settings-title">Settings</h2>
-      <div class="field">
-        <label class="field-label" for="runs-folder">Runs folder</label>
-        <span class="input-with-button">
-          <input type="text" id="runs-folder" name="runs_folder" spellcheck="false" autocomplete="off" required>
-          <button class="btn" type="button" id="pick-runs-folder" data-pick="folder" data-field="runs_folder" data-title="Choose the runs folder">
-            <svg class="icon"><use href="#i-folder" /></svg>Choose…
-          </button>
-        </span>
-        <div class="suggestions" id="runs-folder-suggestions" aria-label="Suggested runs folders"></div>
-      </div>
-      <div class="field">
-        <label class="field-label" for="worker-python">Worker Python</label>
-        <span class="input-with-button">
-          <input type="text" id="worker-python" name="worker_python" spellcheck="false" autocomplete="off" required>
-          <button class="btn" type="button" id="pick-worker-python" data-pick="file" data-field="worker_python" data-title="Choose the Python for the worker">
-            <svg class="icon"><use href="#i-file" /></svg>Choose…
-          </button>
-        </span>
-        <div class="suggestions" id="worker-python-suggestions" aria-label="Suggested Python programs"></div>
-      </div>
-      <div class="field field-row">
-        <span class="field-label field-label-chip">AI drafting <span class="badge" id="ai-status"></span></span>
-        <label class="toggle" title="Turn AI drafting on or off"><input type="checkbox" name="ai_drafting" aria-label="AI drafting"></label>
-      </div>
-      <fieldset class="field">
-        <legend class="field-label">Appearance</legend>
-        <div class="segmented segmented-text" role="radiogroup">
-          <label><input type="radio" name="theme" value="system"><span>System</span></label>
-          <label><input type="radio" name="theme" value="light"><span>Light</span></label>
-          <label><input type="radio" name="theme" value="dark"><span>Dark</span></label>
-        </div>
-      </fieldset>
-      <div class="field field-row">
-        <span class="field-label field-label-chip">Notices <span class="badge" id="notices-reset-status" title="Notices you close stay hidden until you show them again.">Hidden</span></span>
-        <button class="btn" type="button" id="reset-notices" title="Show dismissed notices again">Show again</button>
-      </div>
-      <p class="form-error" id="settings-error" role="alert" hidden></p>
-      <div class="sheet-actions">
-        <button class="btn" type="button" id="settings-cancel">Cancel</button>
-        <button class="btn btn-primary" type="submit" id="settings-save">Save</button>
-      </div>
-    </form>
-  </dialog>
 
   <dialog class="sheet" id="newrun-sheet" aria-labelledby="newrun-title">
     <form method="dialog" class="sheet-body" id="newrun-form">
