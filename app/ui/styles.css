@@ -178,8 +178,8 @@
     --ink-2: #C1CEE0;
     --ink-3: #8FB4E8;
     --muted-line: #6F8BB3;
-    --brand: #88B0E2; /* 4.5:1 on its own soft tint over navy */
-    --brand-hover: #9BBCE6;
+    --brand: #9DBFEA; /* 4.5:1 on its own soft tint over the raised navy */
+    --brand-hover: #B8D2F2;
     --brand-soft: rgba(122, 162, 214, 0.16);
     --brand-ghost: rgba(122, 162, 214, 0.35);
     --on-brand: #0A1F3D;
@@ -224,8 +224,8 @@
   --ink-2: #C1CEE0;
   --ink-3: #8FB4E8;
   --muted-line: #6F8BB3;
-  --brand: #88B0E2; /* 4.5:1 on its own soft tint over navy */
-  --brand-hover: #9BBCE6;
+  --brand: #9DBFEA; /* 4.5:1 on its own soft tint over the raised navy */
+  --brand-hover: #B8D2F2;
   --brand-soft: rgba(122, 162, 214, 0.16);
   --brand-ghost: rgba(122, 162, 214, 0.35);
   --on-brand: #0A1F3D;
