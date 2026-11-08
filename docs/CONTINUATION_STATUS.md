@@ -402,3 +402,7 @@ campaign counts as a failure.
 - Work order on `w17-llm-progress` (Sol, one session): W17 (committed by Sol in W17b step 0), W17b
   (build CAD through gaps, router job `20261108-100601-60204`), W17c (AI gap filling, brief
   `work/w17/w17c-brief.md`), then W18 (memory loop). Testing in 4-case rounds, not big campaigns.
+- **Founder correction (later the same day):** the model writing geometry is a main capability, not
+  only a gap fallback. It may author or correct any section or sheet value; code fairs, builds,
+  renders back and labels the source. The old rule "model chooses WHAT, code measures HOW MUCH" is
+  superseded. W17c brief updated.
