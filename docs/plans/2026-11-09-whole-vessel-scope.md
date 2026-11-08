@@ -273,6 +273,30 @@ model pass for HAER sheets). Checks: synthetic unit tests for the reader, the ex
 and the height-map metrics (`tests/test_whole_vessel_*.py`); `make test-quick`; one Gunnerus run
 with the frozen metric file. Resume: `docs/WHOLE_VESSEL_GUNNERUS.md` "Resume point".
 
+### 3.7 Lighter hull and appendages: metrics (fixed before the build, 2026-11-09)
+
+Lighter hull (development, `docs/WHOLE_VESSEL_GUNNERUS.md` section 4.5):
+
+- Size targets: hull STEP below 30 MB; whole-vessel GLB below 10 MB.
+- Accuracy: the score of section 4.1 of that document (`benchmarks/gunnerus/score.py`,
+  `config/metric_gunnerus.json`, cached truth sections), each metric no worse than the "cut at
+  the deck" column by more than 0.5 percentage points: volume below T = 2.50 m, waterplane area
+  at 2.50 m, and the station and between-station half-breadth RMS (the RMS as a percentage of the
+  truth half-breadth at the design draft, 4.8 m: 0.5 points is 0.024 m).
+- Volume audit: each hull solid passes the polygon prismatoid check.
+- GLB display mesh: its hull volume within 0.5 % of the solid volume.
+
+Appendages. Truth content (checked before these metrics, as in section 3.3): the lowest truth
+point in each 1 m x slice follows the hull bottom (x 1 to 2 m: -0.547 m; x 0 to 1 m: 1.632 m). The
+truth has no azimuth thruster, no skeg or fin under the keel, and no rudder. Thus no appendage
+shape is measurable against the truth; we report "not measurable", never zero error.
+
+| ID | Metric | Development target (not a gate) |
+|---|---|---|
+| A1 | Appendages built, by argument source label (`traced`, `guessed`) | all requested built |
+| A2 | Hull contact: the largest vertical gap between the appendage top and the built hull bottom, over the appendage top | at most 0.05 m |
+| A3 | Truth: appendage volume where the truth has none (content difference, reported only) | report |
+
 Next in step 1: appendages from the profile (rudder, skeg, thrusters) and the lines plan; openings
 (hatches) from the plan views; model pass (DeepSeek, now authorized for Gunnerus) to name tiers
 and fill gaps on drawings without vector layers (HAER Balclutha, C.A. Thayer).
