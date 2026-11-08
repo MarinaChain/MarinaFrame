@@ -851,7 +851,8 @@ def trace_in_source_corridor(image: np.ndarray, section: dict, source_file: str,
                              path: np.ndarray, half_width: float) -> dict:
     """Trace and verify the ink inside a corridor given in source pixels (see corridor_trace)."""
     from .agent_tools import _adaptive_anchors
-    from .ingest import COMPLEXITY_REDUCTION_WARNING, DrawingError, _eligible_trace_mask, _extract_one, _trace
+    from .ingest import (COMPLEXITY_REDUCTION_WARNING, DrawingError, _eligible_trace_mask, _extract_one, _trace,
+                         label_rows_above_curve)
     if _is_left(section):
         width = image.shape[1]
         mirrored_path = np.column_stack([width - 1 - path[:, 0], path[:, 1]])
@@ -889,6 +890,11 @@ def trace_in_source_corridor(image: np.ndarray, section: dict, source_file: str,
             f"No supported ink line in the corridor ({exc.kind}): ink on {ink_rows} of {corridor_rows} corridor "
             "rows. Look at the attached image of your corridor and move it onto the curve.", diagnosis) from None
     rows = rows + first_row
+    # A stroke followed past the curve's top end runs onto its station label.
+    label_rows = label_rows_above_curve(rows, xs, ink)
+    rows, xs = rows[label_rows:], xs[label_rows:]
+    if label_rows:
+        diagnosis["label_rows_removed"] = label_rows
     first, last = int(rows[0]), int(rows[-1])
     span = last - first + 1
     gaps = np.diff(rows) - 1

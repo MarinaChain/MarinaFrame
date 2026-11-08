@@ -808,6 +808,41 @@ def _bounded_source_samples(rows: np.ndarray, xs: np.ndarray, *, baseline: float
         "scope": "Interpolation loss relative to the measured row-centroid trace only; excludes endpoint identity, source raster error, calibration, gaps, and semantics."}
 
 
+# --------------------------------------------------------- label tops
+# A body-plan curve ends at the deck edge, and its station number is printed
+# just above that end, often touching it. A trace that runs on past the end
+# follows the label glyphs (thin, anti-aliased, lighter than the curve) or a
+# light grid line. The curve's top is the first row, from the top of the
+# trace, that starts LABEL_SOLID_ROWS consecutive rows of solid ink: peak ink
+# within LABEL_SEARCH_PX of the trace at least LABEL_SOLID_SHARE of the
+# trace's median peak. Only rows within LABEL_TOP_SHARE of the window height
+# below the trace's top are removed; a faint stretch lower down is kept.
+LABEL_TOP_SHARE = 0.2
+LABEL_SOLID_ROWS = 8
+LABEL_SOLID_SHARE = 0.85
+LABEL_SEARCH_PX = 2
+
+
+def label_rows_above_curve(rows: np.ndarray, xs: np.ndarray, ink: np.ndarray) -> int:
+    """How many rows at the top of a trace follow label or grid ink above the curve's end.
+
+    ``rows`` and ``xs`` are the trace in ``ink`` coordinates (rows rise
+    downwards, row 0 is the top of the window), as ``_trace`` returns them.
+    """
+    if len(rows) <= LABEL_SOLID_ROWS:
+        return 0
+    peaks = np.array([float(ink[int(r), max(0, int(round(x)) - LABEL_SEARCH_PX):int(round(x)) + LABEL_SEARCH_PX + 1].max())
+                      for r, x in zip(rows, xs)])
+    solid = peaks >= LABEL_SOLID_SHARE * float(np.median(peaks))
+    limit = rows[0] + LABEL_TOP_SHARE * ink.shape[0]
+    for index in range(len(rows) - LABEL_SOLID_ROWS + 1):
+        if rows[index] > limit:
+            return 0
+        if solid[index:index + LABEL_SOLID_ROWS].all():
+            return index
+    return 0
+
+
 # --------------------------------------------------------- mirrored halves
 # An overlay body plan draws the afterbody stations left of the centreline,
 # mirrored. The tracer reads the half right of the centreline, so a section
