@@ -351,6 +351,13 @@ pub struct Settings {
     /// key the app falls back to the deterministic draft and says so.
     #[serde(default = "ai_drafting_default")]
     pub ai_drafting: bool,
+    /// A desktop notification when a run stops (js Settings > Notifications). On by default.
+    #[serde(default = "notify_finished_default")]
+    pub notify_finished: bool,
+}
+
+fn notify_finished_default() -> bool {
+    true
 }
 
 fn ai_drafting_default() -> bool {

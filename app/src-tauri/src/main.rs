@@ -217,6 +217,7 @@ async fn set_settings(
     worker_python: Option<String>,
     theme: Option<Theme>,
     ai_drafting: Option<bool>,
+    notify_finished: Option<bool>,
 ) -> Result<Settings, AppError> {
     run(backend, move |b| {
         let next = settings.unwrap_or_else(|| {
@@ -226,6 +227,7 @@ async fn set_settings(
                 worker_python: worker_python.unwrap_or(current.worker_python),
                 theme: theme.unwrap_or(current.theme),
                 ai_drafting: ai_drafting.unwrap_or(current.ai_drafting),
+                notify_finished: notify_finished.unwrap_or(current.notify_finished),
             }
         });
         b.set_settings(next)

@@ -36,6 +36,7 @@ impl AppPaths {
                 .unwrap_or_default(),
             theme: Theme::System,
             ai_drafting: true,
+            notify_finished: true,
         }
     }
 }

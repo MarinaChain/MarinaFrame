@@ -397,9 +397,17 @@ impl Backend {
     pub fn watcher(&self) -> TaskWatcher {
         TaskWatcher::default()
     }
-    /// One watch round: returns a `TaskChanged` for every task whose event count is new.
+    /// One watch round: returns a `TaskChanged` for every task whose event count is new,
+    /// and shows a desktop notification for each run that stopped (when the setting is on).
     pub fn poll_changes(&self, watcher: &mut TaskWatcher) -> Vec<TaskChanged> {
-        watcher.poll(&self.runs_folder())
+        let (changed, notices) = watcher.poll(&self.runs_folder());
+        if !notices.is_empty() && storage::get_settings(&self.paths).notify_finished {
+            // osascript takes a moment; the watch loop does not wait for it.
+            let _ = std::thread::Builder::new()
+                .name("marinaframe-notify".into())
+                .spawn(move || notices.iter().for_each(crate::notify::show));
+        }
+        changed
     }
 }
 
@@ -408,12 +416,16 @@ impl Backend {
 pub struct TaskWatcher {
     seen: HashMap<String, u64>,
     primed: bool,
+    finished: crate::notify::FinishWatcher,
 }
 impl TaskWatcher {
-    pub fn poll(&mut self, runs_folder: &Path) -> Vec<TaskChanged> {
+    /// Changed tasks, and the runs that stopped since the last round (one notice each).
+    pub fn poll(&mut self, runs_folder: &Path) -> (Vec<TaskChanged>, Vec<crate::notify::Notice>) {
         let mut changed = vec![];
         let mut now = HashMap::new();
-        for summary in view::list_tasks(runs_folder) {
+        let summaries = view::list_tasks(runs_folder);
+        let notices = self.finished.poll(&summaries);
+        for summary in summaries {
             let sequence = files::event_count(Path::new(&summary.task));
             if self.primed && self.seen.get(&summary.task) != Some(&sequence) {
                 changed.push(TaskChanged {
@@ -425,7 +437,7 @@ impl TaskWatcher {
         }
         self.seen = now;
         self.primed = true;
-        changed
+        (changed, notices)
     }
 }
 

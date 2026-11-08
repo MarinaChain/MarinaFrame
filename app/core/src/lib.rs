@@ -16,6 +16,7 @@ pub mod intake;
 pub mod live;
 pub mod model_keys;
 pub mod model_usage;
+pub mod notify;
 pub mod parts;
 pub mod provider_view;
 pub mod sample;

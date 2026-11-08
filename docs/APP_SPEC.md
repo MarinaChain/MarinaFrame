@@ -239,6 +239,15 @@ agent builds a real `TaskView` from a real task and checks it against the same s
 - All existing tests, Clippy and the deterministic smoke still pass.
 
 
+## Run notifications (2026-11-09)
+
+- Setting `notify_finished` (default `true`, also for older settings files). When the watcher sees a
+  run go from running to stopped, the app shows one macOS notification for that run: the run name
+  and its outcome only (draft ready, ready for review, declined, stopped with an error, waiting for
+  you), never drawing content. A cancel gives none; the first watch round after start gives none.
+- Shown with `/usr/bin/osascript` (`display notification`); the texts are script arguments, not
+  script source. No notification plugin is used (none was in the lock file).
+
 ## AI drafting (LLM-first default, 2026-11-08)
 
 - Founder decision: the AI builds the draft by default. Setting `ai_drafting` (default `true`,

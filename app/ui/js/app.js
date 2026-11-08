@@ -1754,6 +1754,7 @@ async function loadSettingsForm() {
   form.worker_python.value = s.worker_python;
   form.theme.value = s.theme;
   form.ai_drafting.checked = s.ai_drafting !== false;
+  form.notify_finished.checked = s.notify_finished !== false;
   const [status] = await Promise.all([refreshAiStatus(), loadDefaults()]);
   showAiStatus($('ai-status'), status);
   for (const field of Object.keys(PATH_FIELDS)) renderPathSuggestions(form, field);
@@ -1811,6 +1812,7 @@ $('settings-form').addEventListener('submit', async (event) => {
     worker_python: form.worker_python.value.trim(),
     theme: form.theme.value,
     ai_drafting: form.ai_drafting.checked,
+    notify_finished: form.notify_finished.checked,
   };
   $('settings-save').disabled = true;
   try {
