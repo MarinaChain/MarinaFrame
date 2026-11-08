@@ -423,6 +423,10 @@ function renderHome() {
   const grid = $('vessel-grid');
   const dropTile = $('drop-tile');
   fill(grid, ...vessels.map(vesselCard), dropTile);
+  // First start: no runs. Home becomes one large drop target with the four steps ahead.
+  const empty = !state.tasks.length;
+  $('view-home').dataset.empty = String(empty);
+  $('home-needs-title').textContent = empty ? 'Your first vessel' : 'Needs you';
 }
 
 /** Queue groups, in order: what the AI works on, what waits for a person, the rest. */

@@ -143,6 +143,13 @@
               <strong>Drop a drawing set</strong>
               <span class="drop-hint" id="drop-hint" title="Drop the files anywhere on the window. The app finds the views; you check them, then the AI reads the set.">PDF, PNG, TIFF or JPEG</span>
               <button class="btn" type="button" id="drop-choose">Choose files</button>
+              <!-- Shown on a first start only (styles.css: [data-empty="true"]). -->
+              <ol class="first-steps" aria-label="What happens next">
+                <li><strong>Drop</strong><span>the pages of one lines plan</span></li>
+                <li><strong>Check</strong><span>the views the app found</span></li>
+                <li><strong>Watch</strong><span>the AI read it and build the hull</span></li>
+                <li><strong>Review</strong><span>the few sections it guessed</span></li>
+              </ol>
             </div>
           </div>
         </div>
@@ -377,7 +384,11 @@
   </dialog>
 
   <div class="drop-overlay" aria-hidden="true">
-    <div class="drop-overlay-card"><svg class="icon"><use href="#i-drop" /></svg>Drop a drawing set</div>
+    <div class="drop-overlay-card">
+      <svg class="icon"><use href="#i-drop" /></svg>
+      <strong>Drop to start a new vessel</strong>
+      <span>PDF, PNG, TIFF or JPEG pages of one drawing set. You check the views before the AI reads them.</span>
+    </div>
   </div>
 
   <div class="toast" id="toast" role="alert" hidden>

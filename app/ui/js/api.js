@@ -454,6 +454,8 @@ function mockTransport() {
 
   const commands = {
     async list_tasks(data) {
+      // With ?mockempty the runs folder has no runs (a first start).
+      if (new URLSearchParams(location.search).has("mockempty")) return [];
       startPlayback(data);
       return [...data.tasks]
         .map((t) => (isLiveStreaming(data, t.task) ? { ...t, status: 'running' } : t))

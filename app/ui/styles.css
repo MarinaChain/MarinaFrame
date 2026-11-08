@@ -684,6 +684,31 @@ code { font-family: var(--font-mono); }
 .drop-hint { color: var(--ink-3); font: var(--fs-sm) var(--font-mono); max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .drop-tile .btn { margin-top: var(--space-sm); }
 
+/* First start (no runs): one large drop target and the four steps ahead. */
+.first-steps { display: none; }
+.view-home[data-empty="true"] .needs-row,
+.view-home[data-empty="true"] .home-section-title { display: none; }
+.view-home[data-empty="true"] .vessel-grid { grid-template-columns: minmax(0, 1fr); }
+.view-home[data-empty="true"] .drop-tile { min-height: 420px; gap: var(--space-sm); border-width: 2px; }
+.view-home[data-empty="true"] .drop-art { width: 200px; height: 106px; }
+.view-home[data-empty="true"] .drop-tile strong { font-size: var(--fs-2xl); }
+.view-home[data-empty="true"] .drop-tile .btn { height: 36px; padding: 0 var(--space-lg); font-size: var(--fs-lg); }
+.view-home[data-empty="true"] .first-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 160px));
+  gap: var(--space-lg);
+  margin-top: var(--space-xl);
+  counter-reset: step;
+  text-align: left;
+}
+.first-steps li { display: flex; flex-direction: column; gap: 2px; counter-increment: step; }
+.first-steps li::before { content: counter(step); display: grid; place-items: center; width: 24px; height: 24px; margin-bottom: var(--space-xs); border-radius: 50%; background: var(--brand-soft); color: var(--brand); font: 500 var(--fs-sm) var(--font-mono); }
+.first-steps strong { font-size: var(--fs-md) !important; font-weight: 600; }
+.first-steps span { color: var(--ink-2); font-size: var(--fs-sm); }
+@media (max-width: 900px) {
+  .view-home[data-empty="true"] .first-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 .queue-list { display: flex; flex-direction: column; gap: var(--space-xl); max-width: 1040px; }
 .queue-group { display: flex; flex-direction: column; gap: var(--space-sm); }
 .queue-group-title { display: flex; align-items: center; gap: var(--space-sm); font-size: var(--fs-lg); font-weight: 600; }
@@ -1615,29 +1640,45 @@ code { font-family: var(--font-mono); }
 }
 .typed-path input:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; border-color: var(--accent); }
 
-/* Shown while a file is dragged over the window (no sheet open). */
+/* Shown while a file is dragged over the window (no sheet open): the whole window is the
+   target, framed by a dashed edge, with one card that says what a drop does. */
 .drop-overlay {
   position: fixed;
   inset: 0;
   z-index: 40;
   display: none;
   place-items: center;
-  background: rgba(10, 31, 61, 0.18);
+  padding: var(--space-lg);
+  background: rgba(10, 31, 61, 0.28);
   pointer-events: none;
+}
+.drop-overlay::before {
+  content: "";
+  position: absolute;
+  inset: var(--space-lg);
+  border: 2px dashed var(--brand);
+  border-radius: var(--radius-dialog);
+  background: color-mix(in srgb, var(--brand-soft) 35%, transparent);
 }
 .dragging-file .drop-overlay { display: grid; }
 .dragging-file:has(dialog[open]) .drop-overlay { display: none; }
 .drop-overlay-card {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: var(--space-sm);
-  padding: var(--space-lg) var(--space-xl);
-  border: 1.5px dashed var(--accent);
+  max-width: 420px;
+  padding: var(--space-xl) var(--space-2xl);
   border-radius: var(--radius-lg);
   background: var(--surface-raised);
-  font-weight: 600;
+  color: var(--ink);
+  text-align: center;
   box-shadow: var(--shadow-sheet);
 }
+.drop-overlay-card .icon { width: 40px; height: 40px; color: var(--brand); stroke-width: 1.4; }
+.drop-overlay-card strong { font-size: var(--fs-xl); font-weight: 600; }
+.drop-overlay-card span { color: var(--ink-2); font-size: var(--fs-md); line-height: 1.45; }
 .form-error { color: var(--fail); font-size: var(--fs-sm); }
 .sheet-actions { display: flex; justify-content: flex-end; gap: var(--space-sm); padding-top: var(--space-xs); }
 .sheet-actions .btn { height: 28px; min-width: 80px; justify-content: center; }
