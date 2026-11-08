@@ -101,6 +101,43 @@ def test_deck_heights_follow_the_sheer_and_skip_the_label():
         assert abs(heights[station["id"]] - _deck_z(station["x_m"])) <= 1.0 / PPM
 
 
+def test_a_baseline_on_another_grid_line_is_snapped_to_the_keel_line():
+    image, setup = profile_sheet()
+    wrong = {**setup, "baseline_px": BASE - 2 * PPM}  # the model took a waterline 2 m up (dtmb5415 live)
+    stations = [{"id": "5", "x_m": 50.0}]
+    heights = vd.profile_outline_heights(image, wrong, PPM, stations)["5"]
+    assert abs(heights["deck"] - _deck_z(50.0)) <= 1.0 / PPM
+    assert abs(heights["keel"]) <= 1.0 / PPM
+
+
+def test_an_x_origin_on_the_region_edge_or_outside_it_is_the_hull_aft_end():
+    image, setup = profile_sheet()
+    assert vd.checked_x_origin(image, setup) == X0  # a read datum inside the view is kept
+    for unread in (10.0, -100.0):  # the region's left edge (shipd-1-00679 live), a crop coordinate (dtmb5415)
+        assert abs(vd.checked_x_origin(image, {**setup, "x_origin_px": unread}) - X0) <= 1.5
+
+
+def test_sides_that_contradict_x_follow_x():
+    from vessel_reconstruction.materialize import assign
+    panel = {"region_px": [0, 0, 200, 100], "centreline_px": 100.0, "kind": "body"}
+    # Numbered from the bow but placed from the stern (shipd-1-00679 live).
+    stations = [{"id": str(i), "x_m": 10.0 * i, "side": "fore" if i <= 5 else "aft"} for i in range(1, 10)]
+    warnings = []
+    halves = {station["id"]: basis for station, _, _, basis in assign(stations, [panel], warnings)}
+    assert halves["1"].startswith("aft") and halves["9"].startswith("fore") and warnings
+
+
+def test_a_trace_that_runs_down_the_centreline_below_the_keel_is_cut_there():
+    from vessel_reconstruction.first_hull_tools import cut_bottoms_at_keel
+    anchors = [_anchor("1", 9.0), _anchor("2", 9.0), _anchor("3", 9.0)]
+    for anchor in anchors:
+        anchor.points_yz_m = [[y, z + 2.0] for y, z in anchor.points_yz_m]  # keel at z 2 m
+    anchors[1].points_yz_m = [[0.0, 0.0]] + anchors[1].points_yz_m  # station 2 runs on down to z 0
+    cut_bottoms_at_keel(anchors, {"1": 2.0, "2": 2.0, "3": 2.0})
+    assert [round(min(p[1] for p in a.points_yz_m), 6) for a in anchors] == [2.0, 2.0, 2.0]
+    assert anchors[1].notes and not anchors[0].notes
+
+
 def _anchor(sid, top):
     z = np.linspace(0.0, top, 30)
     return Anchor(sid, float(sid), [[3.0 * np.sqrt(v / top), v] for v in z], {}, z_max_m=12.0,
