@@ -239,6 +239,33 @@ Balclutha with the data on disk. Two options; the founder or CEO chooses one bef
 Recommendation: option B now (no download, independent printed truth), option A when the sheets
 arrive. Neither is run until this section names the chosen option and is committed.
 
+**Chosen 2026-11-09: option B.** Fixed before the run:
+
+- Image: `balclutha_ca54_s7.tif` (SHA-256 `32f09c60…a8`), greyscale at 1/4 scale (2408 x 3611 px).
+  The model sees only the body-plan crop (rows above the scale bars); the table is not in the image.
+- Host calibration (the sheet's own grid, as in `docs/GEOMETRY_ACCURACY_V05.md` section 8.2):
+  centreline column 1206, base row 1714.4, 122.87 px per metre (32 ft waterline at row 516).
+  The forebody (stations 11 to 20) is drawn right of the centreline, the aftbody (0 to 10) left.
+- Truth: the table rows "half-breadths" at the 4, 8, 12, 16, 20, 24, 28 and 32 ft waterlines for
+  stations 0 to 20 (inner surface of hull; feet, inches, eighths, converted to metres). The
+  assistant (Claude, not DeepSeek) transcribes the table twice from high-resolution crops; a cell
+  whose two reads differ is left out; crossed or empty cells are left out. The truth is not
+  checked by a person; the report says so. The truth file stays outside the repository.
+- R0 (code only): the existing deterministic raster tracer with the section 8.2 specs. Its last
+  run abstained on both sheet 7 specs (`ambiguous_curve`: overlaid stations); R0 is not run again,
+  its cells read are 0. Any R1 build is therefore compared with the truth, not with R0 values.
+- R1 (model): DeepSeek V4.1 Flash, thinking disabled, `max_tokens` 32,000, temperature 0.2,
+  at most 3 turns (turns 2 and 3 only for an invalid reply), 3 repeats. Reply: JSON with, per
+  station 0 to 20, the half-breadth in metres at each of the 8 waterlines (or null where the
+  station does not cross that waterline), each value labelled `ai_inferred`.
+- Metrics per repeat: cells given of truth cells; RMS and maximum error (m) over cells given;
+  share of cells within 0.05 m and within 0.15 m; station identity errors (a station whose
+  values fit a neighbouring station's truth better, by RMS). Report median and range over repeats.
+- Decision rule (fixed now): the model adds value on scanned body plans if all 3 repeats give
+  at least 60 % of the truth cells with a median RMS at most 0.15 m (about 1.5 % of the 8.5 m
+  half-breadth). Otherwise the scanned-hull path stays code first with the model only as a
+  gap filler with low weight.
+
 ### 3.6 Effort, checks, resume
 
 Effort: 1-2 weeks (reader, executor change, scoring, Gunnerus run; then raster path and a
