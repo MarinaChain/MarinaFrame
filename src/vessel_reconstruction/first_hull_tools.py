@@ -58,6 +58,48 @@ def prior_dimensions(spec: dict, sections: list[dict]) -> PriorDimensions | None
     return panel_dimensions(sections)
 
 
+# A body-plan top more than this many body-plan pixels above the profile's deck
+# line ran on into other ink (a label, a neighbouring curve); it is cut at the deck.
+DECK_TOP_TOLERANCE_PX = 3.0
+# The profile deck line is trusted when its median distance to the traced
+# body-plan tops is at most this (most tops are read correctly).
+DECK_AGREEMENT_M = 0.5
+
+
+def cap_tops_at_deck(sections: list[dict], anchors: list[Anchor], decks: dict) -> list[dict]:
+    """Cut traced tops that run above the profile deck line; fitted stations end at the deck.
+
+    ``decks`` maps station ids to the deck-at-side height read on the profile
+    (vessel_description.station_deck_heights). Changes ``anchors`` in place and
+    returns the sections with ``z_max_m`` lowered to the deck where it is lower.
+    """
+    from .form_fit import _clip_top
+    import numpy as np
+    tops = {a.id: max(p[1] for p in a.points_yz_m) for a in anchors if a.points_yz_m}
+    differences = [abs(tops[sid] - deck) for sid, deck in decks.items() if sid in tops]
+    if not differences or float(np.median(differences)) > DECK_AGREEMENT_M:
+        # The deck line is used only when it agrees with most body-plan tops
+        # (a wrong profile scale or origin puts it elsewhere).
+        return sections
+    for anchor in anchors:
+        deck = decks.get(anchor.id)
+        points = np.asarray(anchor.points_yz_m, dtype=float)
+        if deck is None or not anchor.pixels_per_metre or len(points) < 2:
+            continue
+        points = points[np.argsort(points[:, 1], kind="stable")]
+        if points[-1, 1] > deck + DECK_TOP_TOLERANCE_PX / anchor.pixels_per_metre and points[0, 1] < deck:
+            anchor.points_yz_m = _clip_top(points, deck).tolist()
+            # The deck height is the line's centre already: no pen-cap correction.
+            anchor.stroke_width_px = None
+            anchor.notes.append(f"top cut at z {deck:.3f} m: the profile deck line at this station")
+    capped = copy.deepcopy(sections)
+    for section in capped:
+        deck = decks.get(section["id"])
+        if deck is not None and section.get("z_min_m", 0.0) < deck < section["z_max_m"]:
+            section["z_max_m"] = round(float(deck), 6)
+    return capped
+
+
 def build_first_hull(tools):
     from .vessel_description import first_hull_spec, describe_table
     description = tools.state.get("vessel_description")
@@ -105,6 +147,9 @@ def build_first_hull(tools):
         selected["contour_selection"] = copy.deepcopy(candidate["contour_selection"])
         anchors.append(Anchor(section["id"], section["x_m"], points, selected,
             z_max_m=section["z_max_m"], pixels_per_metre=cal["pixels_per_metre"], stroke_width_px=width))
+    from .vessel_description import station_deck_heights
+    decks = station_deck_heights(image, list(tools.state.get("sheet_setups", {}).values()), description, sections)
+    sections = cap_tops_at_deck(sections, anchors, decks)
     built = {}
     retried_builds = []
 
