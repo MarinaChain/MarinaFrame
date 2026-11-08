@@ -8,6 +8,7 @@ import {
 import { el, svg, icon, fill } from './dom.js';
 import { createDrawingView } from './drawing.js';
 import { createModelView } from './model3d.js';
+import { createLiveRun } from './live.js';
 import * as fmt from './format.js';
 
 const $ = (id) => document.getElementById(id);
@@ -87,11 +88,36 @@ const drawing = createDrawingView({
   tooltip: $('drawing-tooltip'),
   readout: $('zoom-readout'),
   onSelectSection: (id) => selectSection(id, { focusDrawing: false }),
+  onUserCamera: () => live?.userMovedCamera(),
   onHoverCandidate: (id) => {
     for (const row of document.querySelectorAll('.cand-row')) row.classList.toggle('hot', row.dataset.candidate === id);
   },
 });
 const model = createModelView({ host: $('model-host') });
+
+/** HOOK(M3 live): the live run (js/live.js) owns narration, Thinking and the ladder when it has steps. */
+const live = createLiveRun({
+  invoke,
+  drawing,
+  model,
+  isRunning: () => isRunning(),
+  nodes: {
+    narration: $('narration'),
+    thinking: $('panel-thinking'),
+    ladder: $('revision-ladder'),
+    transport: $('live-transport'),
+    follow: $('live-follow'),
+    dial: $('fit-dial'),
+    caption: $('model-caption'),
+  },
+  onStepsChanged: () => {
+    if (!live.hasSteps()) {
+      renderNarration();
+      renderThinking();
+      renderRevisionStrip();
+    }
+  },
+});
 
 const drawingEmpty = el('div', { class: 'pane-empty', hidden: true });
 $('drawing-host').append(drawingEmpty);
@@ -362,6 +388,7 @@ async function openTask(task) {
   state.modelKey = null;
   state.pageKey = null;
   prefs.set('lastTask', task);
+  live.open(task);
   navigate('run');
   await loadTask({ fresh: true });
 }
@@ -383,6 +410,7 @@ async function loadTask({ fresh = false } = {}) {
     }
     if (!view.sections.some((s) => s.id === state.sectionId)) state.sectionId = defaultSection(view);
     renderTask({ fresh });
+    live.statusChanged();
   } catch (error) {
     if (token === state.loadToken) showError(error);
   }
@@ -495,6 +523,10 @@ function policyChip(policy) {
 
 /** HOOK(M3 live): narration strip. M1 shows the latest recorded step in plain words. */
 function renderNarration() {
+  if (live.hasSteps()) {
+    live.renderNarration();
+    return;
+  }
   const strip = $('narration');
   const last = state.events[state.events.length - 1];
   strip.dataset.live = String(isRunning());
@@ -515,7 +547,8 @@ function renderNarration() {
  */
 function renderRevisionStrip() {
   const view = state.view;
-  fill($('revision-ladder'), view
+  if (live.hasSteps()) live.renderLadder();
+  else fill($('revision-ladder'), view
     ? (view.revision
       ? el('span', { class: 'rev-step rev-current', title: `Revision ${view.revision}` }, view.revision)
       : el('span', { class: 'rev-empty' }, 'No revision yet'))
@@ -538,6 +571,10 @@ setInterval(() => {
 
 /** HOOK(M3 live): the Thinking tab. M1 lists the model's recorded steps with their reasons. */
 function renderThinking() {
+  if (live.hasSteps()) {
+    live.renderThinking();
+    return;
+  }
   const panel = $('panel-thinking');
   if (!state.view) {
     fill(panel);
@@ -1061,6 +1098,7 @@ function renderNoTask() {
 
 onTaskChanged(async ({ task, sequence }) => {
   refreshTasksSoon();
+  live.poke(task);
   if (task !== state.task || sequence <= state.lastSequence) return;
   try {
     const events = await invoke('get_events', { task, after_sequence: state.lastSequence });
@@ -1483,9 +1521,9 @@ for (const item of document.querySelectorAll('.rail-item')) {
   item.addEventListener('click', () => navigate(item.dataset.route));
 }
 $('toast-close').addEventListener('click', () => { $('toast').hidden = true; });
-$('zoom-in').addEventListener('click', () => drawing.zoomIn());
-$('zoom-out').addEventListener('click', () => drawing.zoomOut());
-$('zoom-fit').addEventListener('click', () => drawing.fitPage());
+$('zoom-in').addEventListener('click', () => { live.userMovedCamera(); drawing.zoomIn(); });
+$('zoom-out').addEventListener('click', () => { live.userMovedCamera(); drawing.zoomOut(); });
+$('zoom-fit').addEventListener('click', () => { live.userMovedCamera(); drawing.fitPage(); });
 $('model-reset').addEventListener('click', () => model.resetView());
 $('view-switch').addEventListener('click', (event) => {
   const button = event.target.closest('button[data-view]');
@@ -1526,11 +1564,17 @@ document.addEventListener('keydown', (event) => {
     event.preventDefault();
     setLayout({ 1: 'drawing', 2: 'split', 3: 'model' }[event.key]);
   } else if (!command && !event.altKey && !isTyping(event.target) && state.route === 'run') {
+    // Arrow keys already mean something in tabs, the section strip, the panes and the scrub bar.
+    const arrowsTaken = event.target.closest?.('[role="tablist"], [role="radiogroup"], [role="listbox"], .splitter, #drawing-host, #model-host, .scrub, select');
+    let handled = true;
     if (event.key === '[') stepSection(-1);
     else if (event.key === ']') stepSection(1);
     else if (event.key === 'r' || event.key === 'R') model.resetView();
-    else return;
-    event.preventDefault();
+    else if (event.key === ' ' && !event.target.closest?.('button')) handled = live.togglePlay();
+    else if (event.key === 'ArrowLeft' && !arrowsTaken) handled = live.stepModel(-1);
+    else if (event.key === 'ArrowRight' && !arrowsTaken) handled = live.stepModel(1);
+    else handled = false;
+    if (handled) event.preventDefault();
   }
 });
 
@@ -1579,7 +1623,7 @@ async function openRememberedTask() {
 async function start() {
   setLayout(prefs.get('layout', 'split'));
   setSplit(prefs.get('split', 0.56));
-  selectTab(prefs.get('tab', 'timeline'));
+  selectTab(prefs.get('tab', 'thinking'));
   try {
     state.settings = await invoke('get_settings', {});
     applyTheme(state.settings.theme);
