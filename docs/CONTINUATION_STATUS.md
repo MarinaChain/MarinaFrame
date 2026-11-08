@@ -390,3 +390,6 @@ campaign counts as a failure.
   measures before/after on ~24 non-sealed dev cases. Results to `outputs/w17/`.
 - **Open:** apply the app default change (draft) from the rule; W16 after W17; a new held-out
   split is needed before any claim that W17 improves the LLM arm.
+- **W18 (queued after W17, founder direction):** build a native agent loop with memory into the
+  MarinaFrame harness, not an external framework. Brief: `work/w17/w18-brief.md`. It resumes the
+  same Sol session on `w17-llm-progress` when W17 reports.
