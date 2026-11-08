@@ -115,7 +115,7 @@ def test_standard_forms_have_the_declared_beam_bilge_and_deadrise():
     assert "Bilge radius reduced" in " ".join(big["warnings"])
 
 
-def test_authored_record_is_checked_and_accepted_only_in_a_draft(tmp_path):
+def test_authored_record_can_be_accepted_by_a_person_without_a_draft(tmp_path):
     record = {"source_label": "ai_inferred", "basis": "Neighbours.",
               "points_yz_m": author_section(half_breadths(), **LIMITS)["points_yz_m"]}
     assert check_authored(record)
@@ -125,7 +125,7 @@ def test_authored_record_is_checked_and_accepted_only_in_a_draft(tmp_path):
     path, spec = draft_drawing(tmp_path, count=3)
     spec["sections"][1]["authored"] = record
     errors = validate_spec(spec, tmp_path)
-    assert [e["kind"] for e in errors] == ["authored_outside_draft"]
+    assert errors == []
     spec["draft"] = {"status": DRAFT_STATUS, "guesses": make_guesses(spec["sections"], {}, {})}
     assert validate_spec(spec, tmp_path) == []
 
@@ -218,3 +218,26 @@ def test_draft_with_an_ai_inferred_section_builds_labelled_cad(tmp_path):
     assert record["exports"]["step"] == "model-draft.step"
     rendered = tools.execute("render_candidate", {"view": "body"})
     assert rendered["ok"], rendered
+
+
+@pytest.mark.cad
+def test_person_can_confirm_ai_authored_section_and_keep_its_source_label(tmp_path):
+    tools = inspected_task(tmp_path)
+    proposal = tools.execute("propose_section", {"section_id": "s2", "form": "blend",
+        "basis": "Fill missing station from neighbours."})
+    assert proposal["ok"], proposal
+    selected = tools.execute("select_contours", {"selections": [{"section_id": "s2",
+        "candidate_id": proposal["candidate_id"]}]})
+    assert selected["ok"], selected
+    # Confirm the remaining ordinary choices, then build without open guesses.
+    from vessel_reconstruction.draft import make_guesses
+    guesses = make_guesses(tools.spec["sections"], tools.state["selected"], tools.state["catalog"])
+    choices = [{"section_id": g["section_id"], "candidate_id": g["chosen_candidate_id"]}
+               for g in guesses if g["chosen_candidate_id"] is not None]
+    assert tools.execute("select_contours", {"selections": choices})["ok"]
+    built = tools.execute("build_provisional", {})
+    assert built["ok"], built
+    run = tmp_path / "task" / built["candidate"]["path"]
+    record = json.loads((run / "result.json").read_text())
+    assert next(s for s in record["sections"] if s["id"] == "s2")["source_label"] == "ai_inferred"
+    assert record["review"]["engineering_approved"] is False

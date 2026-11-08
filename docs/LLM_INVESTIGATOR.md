@@ -112,6 +112,38 @@ Founder principle (2026-11-08): the model fills what the drawing does not show, 
 
 Live check (2 DTMB development cases, data in main `work/w17c/`, not scored): both ended `draft_not_verified` with a STEP draft. The model did not call `propose_section` in either case, because every station had a traced candidate: L0 sources 7 repaired + 2 traced (11 requests, 4 refused for a pre-existing argument-shape error), L1 9 traced (35 requests). Model-authored geometry use is therefore 0/2 so far; a round with blank or faint stations is needed to measure it.
 
+## W18b: authored geometry, happy path and short prompt
+
+Inbound merges explicitly requested by the founder: W17c `3abaa5e` merged as `3b4ffe0`; current `continue/v0.5` merged as `a53849e` for round_digest and current directions. Additive conflicts retain both recall_view and propose_section, both result histories, and both lesson sets. No sealed/v3 evaluation was performed.
+
+Removed `authored_outside_draft`: a person can accept an AI-authored section and build it with its source label retained. A real-CAD test confirms this. Draft finish now attempts a build for absent **or invalid** current CAD rather than treating a failed candidate as a delivered draft. Without a valid STEP it keeps the existing actionable build result; no new terminal state or refusal was added. Existing final validation/model-review failures become warnings on a deliverable draft instead of discarding it. Engineering approval remains false. CAD loft/surface code and the 513-knot limit were not edited; that work belongs to `w18-cad-complexity`.
+
+Rewrote INVESTIGATION_PROMPT once to **1,368 characters**: deliver a complete draft, prefer good traced ink, use propose_section for missing geometry and poor traces, disclose inference, build/render early and revise. Tool mechanics remain in tool descriptions. Dedicated model-written compaction request remains deferred by founder direction.
+
+### One four-case DTMB conversation round
+
+Frozen runtime/source: main `work/w17/w18b-round1-{runtime,source}`. Same live/draft/model-review flags; conversation mode, thinking disabled, two jobs maximum. No broad campaign followed.
+
+| Case | Terminal status | STEP draft | Gate-correct | First digest blocker |
+|---|---|---:|---:|---|
+| L0 | draft_not_verified | yes | no | operation_contract |
+| L1 | no_progress | no | no | notes_limit |
+| L2 | draft_not_verified | yes | no | repeated build |
+| L3 | no_progress | no | no | model_traced_candidate_requires_person |
+
+Frozen scorer: **2/4 built, 0/4 correct, 2 labelled wrong drafts, zero silent wrong builds**, 147 receipts, USD **0.27155848** list cost, no missing costs; prompt/completion tokens 1,772,531 / 29,974. The required `scripts/round_digest.py` output reports 142 investigation requests (excludes five other provider receipts) and the same rounded list cost. Its generic “dominant failure: 4/4 failed” text classifies draft_not_verified as failure; actual STEP count is two, not zero.
+
+Digest tool totals: propose_section **61**, enumerate_strokes 18, assign_station 17, build_draft 15, inspect_source 8, render_candidate 7, finish 2, select_contours 1. L0 built/rendered early then authored corrections and finished. L2 authored all nine sections, built/rendered and revised. L1's seven builds failed at 723/721 knots against 513. L3's two builds failed at 575/534 knots. The next build blocker is therefore the separately owned CAD complexity work; no change was made to it here. Other observed friction: notes limit, malformed operation, attempts to select a model trace, and repeated unchanged builds. Complete digest: `outputs/w18/w18b-digest.md`; scored rows: `outputs/w18/w18b-round1.json`.
+
+### Verification
+
+- Merge quick: passed, 747 Python tests.
+- Happy-path quick: passed; authored acceptance regression first failed on authored_outside_draft, then passed after removal.
+- Real authored CAD acceptance/render tests: 2 passed.
+- Short-prompt and final quick: passed, 747 Python tests, 21 CAD tests deselected.
+- `make test-full`: passed, Rust workspace/real-CAD/app checks, 747 quick Python tests, 21 Python CAD tests, smoke awaiting_human_review and verify valid. Log main `work/w17/w18b-full.log`.
+- No push or merge to main. Only the two requested inbound branch merges.
+
 ## Verification and resume
 
 - History test failed before fix with actual null reason, then passed.

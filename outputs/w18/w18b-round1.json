@@ -1,0 +1,106 @@
+{
+  "cases": [
+    {
+      "built": true,
+      "case_id": "dtmb5415-L0",
+      "completion_tokens": 1443,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "separate",
+      "level": 0,
+      "list_cost_usd": 0.01095436,
+      "prompt_tokens": 75787,
+      "request_states": {
+        "completed": 9,
+        "failed": 2
+      },
+      "requests": 11,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": false,
+      "case_id": "dtmb5415-L1",
+      "completion_tokens": 6937,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "separate",
+      "level": 1,
+      "list_cost_usd": 0.09768686,
+      "prompt_tokens": 641310,
+      "request_states": {
+        "completed": 52,
+        "failed": 1
+      },
+      "requests": 53,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": true,
+      "case_id": "dtmb5415-L2",
+      "completion_tokens": 5599,
+      "correct": false,
+      "labelled_wrong_draft": true,
+      "layout": "separate",
+      "level": 2,
+      "list_cost_usd": 0.05163851,
+      "prompt_tokens": 348454,
+      "request_states": {
+        "completed": 34
+      },
+      "requests": 34,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": false,
+      "case_id": "dtmb5415-L3",
+      "completion_tokens": 15995,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "separate",
+      "level": 3,
+      "list_cost_usd": 0.11127875,
+      "prompt_tokens": 706980,
+      "request_states": {
+        "completed": 47,
+        "failed": 2
+      },
+      "requests": 49,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    }
+  ],
+  "summary": {
+    "arm": "w18b-round1",
+    "built": 2,
+    "completion_tokens": 29974,
+    "correct": 0,
+    "gate": {
+      "rms_fraction": 0.02,
+      "volume_relative": 0.05
+    },
+    "labelled_wrong_draft": 2,
+    "list_cost_usd": 0.27155848,
+    "no_progress_rate": 0.5,
+    "planned_cases": 4,
+    "prompt_tokens": 1772531,
+    "requests": 147,
+    "requests_missing_list_cost": 0,
+    "sample_sha256": "b1bd879b48ff647f267c31acacab7c2d86fd450b56a8399eb0a809f1057ff4d2",
+    "silent_wrong_build": 0,
+    "status_counts": {
+      "draft_not_verified": 2,
+      "no_progress": 2
+    }
+  }
+}

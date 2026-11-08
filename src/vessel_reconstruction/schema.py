@@ -317,11 +317,8 @@ def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
             unknown(sec, {"id", "x_m", "roi_px", "calibration", "z_min_m", "z_max_m", "evidence", "sample_count",
                           "cells", "contour_selection", "pieces", "authored"}, "section", sid)
             if "authored" in sec:
-                from .draft import check_draft
                 from .section_authoring import check_authored
-                if not check_draft(spec.get("draft")):
-                    errors.append(gap("authored_outside_draft", "Model-authored section geometry builds only as a draft.", sid))
-                elif not check_authored(sec["authored"]):
+                if not check_authored(sec["authored"]):
                     errors.append(gap("invalid_authored_section", "authored must be {source_label, basis, points_yz_m} with a bounded fair curve.", sid))
         if FORBIDDEN.intersection(sec):
             errors.append(gap("geometry_in_input", "Drawing input must not contain target geometry or evaluation answers.", sid))

@@ -1742,10 +1742,9 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
         // The investigating model submits its draft: when its latest choices
         // are not built yet, the harness builds the draft first. With open
         // guesses that build stops at draft_not_verified.
-        if actor == "live_model"
-            && investigation_mode(store)
+        if store.state.config.on_ambiguity == OnAmbiguity::Draft
             && finish.outcome == FinishOutcome::CandidateReadyForReview
-            && store.state.domain["current_candidate"].is_null()
+            && store.state.domain["current_candidate"]["valid"] != true
             && store.state.domain["catalog_ready"] == true
         {
             store.state.staged_decision = None;
@@ -1769,8 +1768,15 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
         // Open guesses make the task a draft: it is never validated or
         // finalized for review. `validation::ready` refuses it independently.
         if !validation::open_guesses(&validation::domain_checkpoint(&store.path)?)?.is_empty() {
-            stop(store, Status::DraftNotVerified, "open_guesses_block_review")?;
-            return Ok(false);
+            if store.state.domain["current_candidate"]["valid"] == true
+                || store.state.domain["last_valid_candidate"]["valid"] == true
+            {
+                stop(store, Status::DraftNotVerified, "open_guesses_block_review")?;
+                return Ok(false);
+            }
+            // A failed build's existing feedback remains actionable; do not
+            // claim a delivered draft when no STEP has been made.
+            return Ok(true);
         }
         if !call_worker(store, "validate_candidate", json!({}))? {
             return Ok(false);
@@ -1800,7 +1806,16 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
                 // The vision model can only add a blocking finding here; no veto changes nothing.
                 if let Some(veto) = model_review::veto(store, &contract.binding.step_sha256)? {
                     store.state.last_observation = json!({"ok":false,"status":"rejected","error_code":"model_review_veto","model_review":veto,"engineering_approved":false,"human_semantic_review_required":true});
-                    stop(store, Status::ValidationFailed, "model_review_veto")?;
+                    let status = if store.state.config.on_ambiguity == OnAmbiguity::Draft {
+                        store.state.last_observation["status"] = json!("draft_warning");
+                        store.state.last_observation["message"] = json!(
+                            "Model review findings remain warnings on this unverified draft."
+                        );
+                        Status::DraftNotVerified
+                    } else {
+                        Status::ValidationFailed
+                    };
+                    stop(store, status, "model_review_veto")?;
                     return Ok(false);
                 }
                 store.state.status = Status::AwaitingHumanReview;
@@ -1818,7 +1833,14 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
                 Ok(false)
             }
             Err(reason) => {
-                stop(store, Status::ValidationFailed, &reason)?;
+                let draft_available = store.state.config.on_ambiguity == OnAmbiguity::Draft
+                    && store.state.domain["current_candidate"]["valid"] == true;
+                if draft_available {
+                    store.state.last_observation["warning"] = json!(reason);
+                    stop(store, Status::DraftNotVerified, &reason)?;
+                } else {
+                    stop(store, Status::ValidationFailed, &reason)?;
+                }
                 Ok(false)
             }
         }

@@ -533,6 +533,18 @@ fn submitting_an_investigated_draft_stops_at_draft_not_verified() {
         json!({"section_id":"s0","candidate_id":traced,"label_view_id":view_id,"label_text":"s0","reason":"Labelled s0 curve."})
     )
     .unwrap());
+    // Finish without a STEP first builds and submits a real draft.
+    assert!(!model(
+        &mut store,
+        "finish",
+        json!({"outcome":"candidate_ready_for_review","summary":"Build and submit."})
+    )
+    .unwrap());
+    assert_eq!(store.state.domain["current_candidate"]["valid"], true);
+    assert!(store
+        .events
+        .iter()
+        .any(|event| event.kind == "submission_builds_draft"));
     // The model's own rebuild does not stop; it may render and revise.
     assert!(model(&mut store, "build_draft", json!({})).unwrap());
     assert_eq!(store.state.domain["current_candidate"]["draft"], true);
