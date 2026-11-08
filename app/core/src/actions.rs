@@ -278,12 +278,24 @@ mod tests {
 
     #[test]
     fn app_runs_use_the_model_in_draft_mode_or_the_deterministic_draft() {
-        let ai = app_run_config("python".into(), None, "spec.json".into(), String::new(), true);
+        let ai = app_run_config(
+            "python".into(),
+            None,
+            "spec.json".into(),
+            String::new(),
+            true,
+        );
         assert_eq!(ai.on_ambiguity, OnAmbiguity::Draft);
         assert_eq!(ai.policy, Policy::Live);
         assert!(ai.provider_transfer_authorized);
         assert_eq!(ai.authorization_basis, AI_DRAFTING_BASIS);
-        let fallback = app_run_config("python".into(), None, "spec.json".into(), String::new(), false);
+        let fallback = app_run_config(
+            "python".into(),
+            None,
+            "spec.json".into(),
+            String::new(),
+            false,
+        );
         assert_eq!(fallback.on_ambiguity, OnAmbiguity::Draft);
         assert_eq!(fallback.policy, Policy::Deterministic);
         assert!(!fallback.provider_transfer_authorized);
