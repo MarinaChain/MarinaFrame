@@ -280,7 +280,10 @@ def latest_valid_draft_step(events: list[dict], case_dir: Path) -> Path | None:
                 step = case_dir / "task" / candidate["path"] / name
                 if step.is_file():
                     return step
-    return None
+    # Builds made by other operations (for example the vessel-table first hull) record no
+    # build_draft result: fall back to the newest draft STEP in the task's builds.
+    steps = sorted((case_dir / "task").glob("domain/builds/*/model-draft.step"), key=lambda p: p.stat().st_mtime)
+    return steps[-1] if steps else None
 
 
 def score_case(case: dict, case_dir: Path, events: list[dict], factory: Path) -> None:
