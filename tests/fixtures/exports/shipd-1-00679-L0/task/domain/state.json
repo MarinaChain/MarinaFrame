@@ -1,0 +1,205 @@
+{
+ "version": "source_bound_tools_v1",
+ "revision": 3,
+ "builds": [
+  {
+   "id": "generation-80a10f5d3b00de149aa0f8e5",
+   "generation_id": "generation-80a10f5d3b00de149aa0f8e5",
+   "revision_id": "r0003",
+   "path": "domain/builds/r0003-c7d863568efb",
+   "status": "review_required",
+   "valid": true,
+   "draft": true,
+   "run_id": "6472c17ce9b7e29c00b5",
+   "human_semantic_review_required": true,
+   "engineering_approved": false,
+   "identity_certified": false,
+   "combined_fit": 0.8572
+  }
+ ],
+ "guesses": [
+  {
+   "guess_id": "guess-08f3015020ebb938505f",
+   "section_id": "s01",
+   "kind": "best_candidate",
+   "x_m": 10.0,
+   "x_range_m": null,
+   "chosen_candidate_id": "stroke-1e113ab1a5cd0f56cf5c",
+   "alternatives": [
+    "contour-c3df0b9c12085772b1c2",
+    "contour-cbec7ba9696312ee31b3"
+   ],
+   "score": 0.7114,
+   "reason": "Shared panel: stroke 4 of 4 from outside by nesting order, for the station 4 nearest midship (confidence 0.66).",
+   "status": "open"
+  },
+  {
+   "guess_id": "guess-fa48ee48be3ce091d4f5",
+   "section_id": "s02",
+   "kind": "best_candidate",
+   "x_m": 20.0,
+   "x_range_m": null,
+   "chosen_candidate_id": "stroke-1fbecc1054892aedbe62",
+   "alternatives": [
+    "stroke-a985a0b46e051d1a3f30",
+    "contour-00fc154d9073aa794686",
+    "contour-9e1cef6e9291e24d3f0b"
+   ],
+   "score": 0.6793,
+   "reason": "Shared panel: stroke 3 of 4 from outside by nesting order, for the station 3 nearest midship (confidence 0.96).",
+   "status": "open"
+  },
+  {
+   "guess_id": "guess-1e3fec56b17ac56b342b",
+   "section_id": "s03",
+   "kind": "best_candidate",
+   "x_m": 30.0,
+   "x_range_m": null,
+   "chosen_candidate_id": "contour-5d7f7bf7a5980307112f",
+   "alternatives": [
+    "stroke-a985a0b46e051d1a3f30",
+    "contour-58c5c46b2cdeea11e407"
+   ],
+   "score": 0.7466,
+   "reason": "Shared panel: stroke 1 of 4 from outside by nesting order, for the station 2 nearest midship (confidence 0.33). Warning: fewer_strokes_than_stations: shares the stroke with s04",
+   "status": "open"
+  },
+  {
+   "guess_id": "guess-0897972f658f6d95f4e6",
+   "section_id": "s04",
+   "kind": "best_candidate",
+   "x_m": 40.0,
+   "x_range_m": null,
+   "chosen_candidate_id": "contour-41ccbd49dc165fbb8e67",
+   "alternatives": [
+    "contour-73ac03a7919140589a9c"
+   ],
+   "score": 0.7466,
+   "reason": "Shared panel: stroke 1 of 4 from outside by nesting order, for the station 1 nearest midship (confidence 0.33). Warning: fewer_strokes_than_stations: shares the stroke with s03",
+   "status": "open"
+  },
+  {
+   "guess_id": "guess-7e3090f2d4b80310b4a7",
+   "section_id": "s05",
+   "kind": "model_authored",
+   "x_m": 50.0,
+   "x_range_m": null,
+   "chosen_candidate_id": "authored-103ff771a9751ef9f31e",
+   "alternatives": [
+    "contour-092d9cf9bc59329195bc",
+    "contour-462dfaea58ee22133b13",
+    "contour-70f3fe2d52d0a757acbc",
+    "contour-d14eff414362de9812be"
+   ],
+   "score": null,
+   "reason": "ai_inferred: s05 is a bridged gap with no valid authored curve; blend of traced neighbours s04 (x=40) and s06 (x=60) at x=50, midship region so full U form.",
+   "status": "open",
+   "verifier_evidence": {
+    "verifier": "section_authoring_checks_v1",
+    "passed": true,
+    "identity_certified": false,
+    "source_label": "ai_inferred",
+    "form": "blend",
+    "checks": {
+     "closure": "flat_bottom_to_centreline",
+     "half_breadth_max_m": 8.5834,
+     "height_range_m": [
+      0.0033,
+      14.1504
+     ],
+     "area_m2": 104.1946,
+     "neighbour_area_m2": 104.3623
+    },
+    "warnings": [
+     "The lowest point has half-breadth 0.145 m; the build closes it to the centreline with a flat bottom."
+    ]
+   }
+  },
+  {
+   "guess_id": "guess-e56d704ec724e4ad0cc9",
+   "section_id": "s06",
+   "kind": "best_candidate",
+   "x_m": 60.0,
+   "x_range_m": null,
+   "chosen_candidate_id": "contour-8c7b70f0d6fd04e4854e",
+   "alternatives": [
+    "contour-271d4594bb52ebfc06c1",
+    "contour-9e846596bf65b92e3105",
+    "contour-15ffe681c5388493b586"
+   ],
+   "score": 0.9189,
+   "reason": "Shared panel: stroke 2 of 5 from outside by nesting order, for the station 2 nearest midship (confidence 0.65).",
+   "status": "open"
+  },
+  {
+   "guess_id": "guess-a35c13bf50ac28709ed3",
+   "section_id": "s07",
+   "kind": "best_candidate",
+   "x_m": 70.0,
+   "x_range_m": null,
+   "chosen_candidate_id": "stroke-3a9c929bf8ce3c222048",
+   "alternatives": [
+    "contour-15691d90f5f64918f434",
+    "contour-72c482bdd058516452c4",
+    "contour-5434f26953d371d0ae81",
+    "contour-d3967c3afad97b28e09d"
+   ],
+   "score": 0.7127,
+   "reason": "Shared panel: stroke 3 of 5 from outside by nesting order, for the station 3 nearest midship (confidence 0.80).",
+   "status": "open"
+  },
+  {
+   "guess_id": "guess-6357831d0aaffe323a68",
+   "section_id": "s08",
+   "kind": "model_authored",
+   "x_m": 80.0,
+   "x_range_m": null,
+   "chosen_candidate_id": "authored-70fc9a44a954efa16e3a",
+   "alternatives": [
+    "contour-4252e9bb4d0d441d62ef",
+    "contour-0932e0023163c0b69ef9",
+    "contour-71970448d8222c3f1550",
+    "contour-9702f9722e89fb179402",
+    "stroke-d60b995c26d1a78a7f18"
+   ],
+   "score": null,
+   "reason": "ai_inferred: s08 has no usable trace (ink fit 1.68 m, near_fraction 0.15); blend of neighbours s07 (traced, fit 0.98) and s09 (traced) at x=80 m, near the stern where sections run full and flat-bottomed.",
+   "status": "open",
+   "verifier_evidence": {
+    "verifier": "section_authoring_checks_v1",
+    "passed": true,
+    "identity_certified": false,
+    "source_label": "ai_inferred",
+    "form": "blend",
+    "checks": {
+     "closure": "keel_on_centreline",
+     "half_breadth_max_m": 8.5878,
+     "height_range_m": [
+      0.0033,
+      14.1504
+     ],
+     "area_m2": 105.2934,
+     "neighbour_area_m2": 105.6192
+    },
+    "warnings": []
+   }
+  },
+  {
+   "guess_id": "guess-f766e86be6b70f3c131f",
+   "section_id": "s09",
+   "kind": "best_candidate",
+   "x_m": 90.0,
+   "x_range_m": null,
+   "chosen_candidate_id": "stroke-39acf161551e41fae9e2",
+   "alternatives": [
+    "contour-fd8deb807ec05a4529d9",
+    "contour-e3afe6c6a1fabb1e32f9",
+    "contour-6c128a1ff58c075fd5cc",
+    "contour-f7e95514e2964c161b73"
+   ],
+   "score": 0.1608,
+   "reason": "Shared panel: stroke 5 of 5 from outside by nesting order, for the station 5 nearest midship (confidence 0.81).",
+   "status": "open"
+  }
+ ]
+}
