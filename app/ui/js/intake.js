@@ -1,8 +1,8 @@
 // Intake (M2, storyboard F4): a dropped drawing set becomes a run without a spec file.
 //
-// prepare_intake reads the files and proposes view regions per page. This view shows one card
-// per page, lets the person correct region labels, skip pages and type what they know of the
-// vessel, then start_intake_run starts the run and the app opens its live screen.
+// prepare_intake reads the files and proposes view regions per page. This view shows the pages
+// in a tray and the selected page large (the "stage"), lets the person correct region labels,
+// skip pages and type what they know of the vessel, then start_intake_run starts the run and the app opens its live screen.
 // Contract: docs/APP_SPEC.md, section "Intake".
 
 import { el, svg, icon, fill } from './dom.js';
@@ -19,8 +19,8 @@ const LABEL_TEXT = Object.fromEntries(VIEW_LABELS);
 
 /** Below this confidence a proposed label is drawn dashed: check it. */
 const UNSURE_BELOW = 0.5;
-/** A region that starts past this fraction of the page carries its chip on the far side. */
-const CHIP_FLIP_AT = 0.55;
+/** Gap in screen pixels between a region chip and the region edge or another chip. */
+const CHIP_GAP_PX = 4;
 
 /** Optional particulars: field name, label, unit. All in metres; never required. */
 const PARTICULAR_FIELDS = [
@@ -56,11 +56,14 @@ function readPositive(text) {
  */
 export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose, openSettings }) {
   let preview = null; // the edited IntakePreview
+  let selectedPageId = null; // the page shown large in the stage
   let aiStatus = null;
   let loading = null; // { count } while prepare_intake reads the files
   let starting = false;
   let error = '';
   let token = 0;
+  // Chip positions are in pixels, so they follow the page size.
+  window.addEventListener('resize', () => requestAnimationFrame(placeChips));
   /** The form values, kept as typed so a half-typed number is not lost on render. */
   let form = { vessel_name: '', scale: '', loa_m: '', beam_m: '', depth_m: '', draft_m: '' };
 
@@ -78,6 +81,7 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
       if (mine !== token) return false;
       aiStatus = status;
       preview = clone(result);
+      selectedPageId = (preview.pages.find((p) => !p.skip) || preview.pages[0])?.page_id || null;
       form = initialForm(preview);
       return true;
     } finally {
@@ -192,13 +196,15 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
         startButton));
   }
 
-  /** Thumbnail with the proposed regions drawn on it and a label chip on each. */
-  function thumbnail(page) {
-    const { width_px: width, height_px: height } = page;
-    const image = page.thumbnail_png_base64
+  function pageImage(page) {
+    return page.thumbnail_png_base64
       ? el('img', { class: 'intake-thumb-img', src: `data:image/png;base64,${page.thumbnail_png_base64}`, alt: `Page ${page.page_index + 1} of ${page.file_name}`, draggable: 'false' })
       : el('div', { class: 'intake-thumb-missing' }, 'No preview');
-    const frame = svg('svg', { class: 'intake-regions', viewBox: `0 0 ${width} ${height}`, preserveAspectRatio: 'none', 'aria-hidden': 'true' },
+  }
+
+  function regionFrame(page) {
+    const { width_px: width, height_px: height } = page;
+    return svg('svg', { class: 'intake-regions', viewBox: `0 0 ${width} ${height}`, preserveAspectRatio: 'none', 'aria-hidden': 'true' },
       ...page.regions.map((region) => {
         const [left, top, right, bottom] = region.region_px;
         return svg('rect', {
@@ -208,26 +214,57 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
           'vector-effect': 'non-scaling-stroke',
         });
       }));
+  }
+
+  /** The large page in the stage: regions drawn on it and a label chip on each. */
+  function pagePreview(page) {
+    const { width_px: width, height_px: height } = page;
     const chips = page.regions.map((region, index) => {
-      const [left, top, right, bottom] = region.region_px;
-      // The chip sits in the region's top-left corner; near the right or lower edge of the
-      // page it moves to the region's other side so it stays on the thumbnail.
-      const place = {};
-      if (left / width > CHIP_FLIP_AT) place.right = `${(1 - right / width) * 100}%`;
-      else place.left = `${(left / width) * 100}%`;
-      if (top / height > CHIP_FLIP_AT) place.bottom = `${(1 - bottom / height) * 100}%`;
-      else place.top = `${(top / height) * 100}%`;
+      const [left, top] = region.region_px;
+      // Each chip starts in its region's top-left corner; placeChips() then moves chips so
+      // that they do not cover each other.
       return el('button', {
         class: 'intake-region-chip',
         type: 'button',
-        dataset: { label: region.label },
-        style: place,
+        dataset: { label: region.label, left: left / width, top: top / height },
+        style: { left: `${(left / width) * 100}%`, top: `${(top / height) * 100}%` },
         title: `${LABEL_TEXT[region.label]}, ${percent(region.confidence)} sure. ${region.evidence || ''} Change the label below.`.trim(),
         tabindex: '-1',
         onclick: () => host.querySelector(`#${CSS.escape(`label-${page.page_id}-${index}`)}`)?.focus(),
       }, LABEL_TEXT[region.label]);
     });
-    return el('div', { class: 'intake-thumb', style: { 'aspect-ratio': `${width} / ${height}` } }, image, frame, ...chips);
+    return el('div', { class: 'intake-stage-frame' },
+      el('div', { class: 'intake-thumb intake-page', style: { '--page-ratio': String(width / height) } },
+        pageImage(page), regionFrame(page), ...chips));
+  }
+
+  /**
+   * Move region chips down until no two chips overlap. Chips keep their region's left edge;
+   * a chip that would leave the page is held inside it.
+   */
+  function placeChips() {
+    const page = host.querySelector('.intake-page');
+    if (!page) return;
+    const box = page.getBoundingClientRect();
+    if (!box.width) return;
+    const placed = [];
+    const chips = [...page.querySelectorAll('.intake-region-chip')]
+      .sort((a, b) => Number(a.dataset.top) - Number(b.dataset.top) || Number(a.dataset.left) - Number(b.dataset.left));
+    for (const chip of chips) {
+      const width = chip.offsetWidth;
+      const height = chip.offsetHeight;
+      const x = Math.max(CHIP_GAP_PX, Math.min(Number(chip.dataset.left) * box.width + CHIP_GAP_PX, box.width - width - CHIP_GAP_PX));
+      let y = Number(chip.dataset.top) * box.height + CHIP_GAP_PX;
+      for (const other of placed) {
+        const overlaps = x < other.x + other.width + CHIP_GAP_PX && other.x < x + width + CHIP_GAP_PX
+          && y < other.y + other.height + CHIP_GAP_PX && other.y < y + height + CHIP_GAP_PX;
+        if (overlaps) y = other.y + other.height + CHIP_GAP_PX;
+      }
+      y = Math.min(y, box.height - height - CHIP_GAP_PX);
+      chip.style.setProperty('left', `${x}px`);
+      chip.style.setProperty('top', `${y}px`);
+      placed.push({ x, y, width, height });
+    }
   }
 
   function regionRow(page, region, index) {
@@ -255,32 +292,62 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
       }, percent(region.confidence)));
   }
 
-  function pageCard(page) {
-    const where = page.kind === 'pdf' ? `page ${page.page_index + 1}` : (page.page_index ? `frame ${page.page_index + 1}` : null);
+  function pageWhere(page) {
+    return page.kind === 'pdf' ? `page ${page.page_index + 1}` : (page.page_index ? `frame ${page.page_index + 1}` : null);
+  }
+
+  function skipButton(page) {
+    return el('button', {
+      class: 'btn intake-skip',
+      type: 'button',
+      id: `skip-${page.page_id}`,
+      'aria-pressed': String(page.skip),
+      disabled: starting,
+      title: page.skip ? 'Use this page again' : 'Leave this page out (for example a cover page)',
+      onclick: () => { page.skip = !page.skip; render(); },
+    }, page.skip ? 'Keep' : 'Skip');
+  }
+
+  /** One small page in the tray. Click to show it large. */
+  function trayItem(page) {
+    const where = pageWhere(page);
+    const selected = page.page_id === selectedPageId;
+    const views = page.regions
+      .filter((r) => r.label !== 'other' && r.label !== 'title_block')
+      .map((r) => LABEL_TEXT[r.label]);
+    return el('button', {
+      class: `intake-tray-item${page.skip ? ' skipped' : ''}`,
+      type: 'button',
+      'aria-pressed': String(selected),
+      title: `${page.file_name}${where ? `, ${where}` : ''}`,
+      onclick: () => { selectedPageId = page.page_id; render(); },
+    },
+      el('div', { class: 'intake-thumb', style: { 'aspect-ratio': `${page.width_px} / ${page.height_px}` } }, pageImage(page), regionFrame(page)),
+      el('span', { class: 'intake-tray-line' },
+        el('span', { class: 'intake-page-id' }, page.page_id),
+        el('span', { class: 'intake-tray-views' }, page.skip ? 'Skipped' : (views.join(', ') || 'No view')),
+        page.warnings.length && !page.skip
+          ? el('span', { class: 'intake-tray-warn', title: page.warnings.map((w) => w.message).join(' ') }, icon('warn'))
+          : null));
+  }
+
+  /** The selected page, large, with its region labels and warnings. */
+  function stage(page) {
+    const where = pageWhere(page);
     const dpi = page.dpi ? `${Math.round(page.dpi)} dpi` : null;
-    return el('article', { class: `intake-card${page.skip ? ' skipped' : ''}`, 'aria-label': `${page.file_name}${where ? `, ${where}` : ''}` },
+    return el('section', { class: `intake-stage${page.skip ? ' skipped' : ''}`, 'aria-label': `${page.file_name}${where ? `, ${where}` : ''}` },
       el('header', { class: 'intake-card-head' },
         el('span', { class: 'intake-page-id' }, page.page_id),
         el('span', { class: 'intake-file', title: page.file }, page.file_name),
         where ? el('span', { class: 'intake-where' }, where) : null,
-        el('button', {
-          class: 'btn btn-small intake-skip',
-          type: 'button',
-          id: `skip-${page.page_id}`,
-          'aria-pressed': String(page.skip),
-          disabled: starting,
-          title: page.skip ? 'Use this page again' : 'Leave this page out (for example a cover page)',
-          onclick: () => { page.skip = !page.skip; render(); },
-        }, page.skip ? 'Keep' : 'Skip')),
-      thumbnail(page),
-      page.skip
-        ? el('p', { class: 'intake-skipped-note' }, 'Skipped. The run does not read this page.')
-        : el('ul', { class: 'intake-region-list', 'aria-label': 'View regions' }, ...page.regions.map((r, i) => regionRow(page, r, i))),
-      page.warnings.length || dpi
-        ? el('div', { class: 'chip-row intake-card-foot' },
-          ...page.warnings.map(warningChip),
-          dpi && !page.warnings.some((w) => w.code === 'low_dpi') ? el('span', { class: 'intake-dpi' }, dpi) : null)
-        : null);
+        dpi ? el('span', { class: 'intake-dpi' }, dpi) : null,
+        skipButton(page)),
+      pagePreview(page),
+      el('div', { class: 'intake-stage-foot' },
+        page.skip
+          ? el('p', { class: 'intake-skipped-note' }, 'Skipped. The run does not read this page.')
+          : el('ul', { class: 'intake-region-list', 'aria-label': 'View regions' }, ...page.regions.map((r, i) => regionRow(page, r, i))),
+        page.warnings.length ? el('div', { class: 'chip-row intake-card-foot' }, ...page.warnings.map(warningChip)) : null));
   }
 
   function numberField(key, label, unit) {
@@ -368,12 +435,19 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
       setWarnings.length ? el('div', { class: 'chip-row intake-set-warnings' }, ...setWarnings.map(warningChip)) : null,
       error ? el('p', { class: 'form-error intake-error', role: 'alert' }, error) : null,
       preview ? el('p', { class: 'intake-blocked', role: 'status', hidden: !reason || reason === 'ai' }, reason === 'ai' ? '' : reason) : null,
-      el('div', { class: 'intake-body' },
-        loading
-          ? loadingBody()
-          : el('div', { class: 'intake-tray', 'aria-label': 'Pages' }, ...preview.pages.map(pageCard)),
-        preview ? sidePanel() : null));
+      loading ? el('div', { class: 'intake-body' }, loadingBody()) : body());
     if (focusedId) host.querySelector(`#${CSS.escape(focusedId)}`)?.focus();
+    requestAnimationFrame(placeChips);
+  }
+
+  function body() {
+    const pages = preview.pages;
+    const selected = pages.find((p) => p.page_id === selectedPageId) || pages[0];
+    // One page needs no tray: the stage takes its room.
+    const tray = pages.length > 1
+      ? el('nav', { class: 'intake-tray', 'aria-label': 'Pages' }, ...pages.map(trayItem))
+      : null;
+    return el('div', { class: `intake-body${tray ? ' has-tray' : ''}` }, tray, stage(selected), sidePanel());
   }
 
   /** Show the view again (for example after Settings): the AI status may have changed. */

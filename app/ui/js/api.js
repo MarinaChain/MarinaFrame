@@ -486,7 +486,15 @@ function mockTransport() {
     },
     async get_task(data, { task }) {
       const view = clone(requireTask(data, task));
-      if (isLiveStreaming(data, task)) view.summary.status = 'running';
+      if (isLiveStreaming(data, task)) {
+        view.summary.status = 'running';
+        // Before the first build, a real run has read no sections and has no model yet.
+        const snapshot = liveSnapshot(data, task);
+        if (!snapshot.steps.some((step) => step.kind === 'build')) {
+          view.sections = [];
+          view.model = null;
+        }
+      }
       const dismissed = new Set(readStored(MOCK_DISMISSED_KEY, []));
       view.notices = view.notices.filter((n) => !dismissed.has(n.id));
       return view;
