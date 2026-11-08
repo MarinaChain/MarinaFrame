@@ -29,6 +29,11 @@ const GROUPS = [
     ['+ − 0', 'Zoom the drawing in, out, to fit (click the drawing first)'],
     ['← → ↑ ↓', 'Pan the drawing (click the drawing first)'],
   ]],
+  ['Review parts (Parts tab)', [
+    ['A', 'Accept the part as a draft part'],
+    ['M', 'Mark the part and say what to change'],
+    ['N', 'Next part to review'],
+  ]],
   ['Replay a run', [
     ['Space', 'Play or pause'],
     ['← →', 'Previous or next AI step'],

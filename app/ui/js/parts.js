@@ -25,7 +25,7 @@ const MARK_CHIPS = ['Too high', 'Too low', 'Too long', 'Too short', 'Wrong place
 const SKETCH = { unitsPerMetre: 30, pad: 10 };
 
 /** One state word per part: the review wins, then what the build could do. */
-function partState(part) {
+export function partState(part) {
   if (part.review === 'accepted') return { word: 'Accepted', tone: 'brand', title: 'You accepted this part as a draft part.' };
   if (part.review === 'marked') return { word: 'Marked', tone: 'brand', title: `You marked it: ${part.review_note || ''}` };
   if (!part.built) return { word: 'Not built', tone: 'warn', title: part.reason };
@@ -394,6 +394,10 @@ export function createParts({ host, review, showIn3d, signOff }) {
       return true;
     },
     /** Key N on the Parts tab: the next part to review. Returns true when it acted. */
+    /** Show one part (the command palette). */
+    selectPart(id) {
+      if (parts.some((p) => p.id === id)) select(id);
+    },
     nextSelected() {
       const next = nextToReview();
       if (!next) return false;

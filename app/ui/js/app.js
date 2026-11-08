@@ -17,7 +17,7 @@ import { buildChanges, renderChanges } from './changes.js';
 import { createAreas } from './areas.js';
 import { createEvidenceCard } from './evidence.js';
 import { createShortcutSheet } from './shortcuts.js';
-import { createParts } from './parts.js';
+import { createParts, partState } from './parts.js';
 import { createExport } from './export.js';
 import * as fmt from './format.js';
 
@@ -2124,6 +2124,9 @@ function paletteCommands() {
     }
     add('This vessel', 'Run', () => setVesselTab('run'));
     if (state.view.components?.length) add('This vessel', 'Parts', () => setVesselTab('parts'), { hint: 'hull, decks, deckhouses' });
+    for (const part of state.view.components || []) {
+      add('Parts', part.label, () => { setVesselTab('parts'); parts.selectPart(part.id); }, { hint: partState(part).word });
+    }
     add('This vessel', 'Export', () => setVesselTab('export'), { hint: 'STEP, STL, offsets, hydrostatics, report' });
     add('This vessel', 'History', () => setVesselTab('history'));
     add('Layout', 'Drawing only', () => setLayout('drawing'), { keys: '⌘1' });
