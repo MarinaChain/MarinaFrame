@@ -377,6 +377,6 @@ the data it needs.
 
 ## 9. Resume point
 
-Step 1 on Gunnerus: see `docs/WHOLE_VESSEL_GUNNERUS.md`. Next actions in order: (a) appendages
+Step 1 on Gunnerus: see `docs/WHOLE_VESSEL_GUNNERUS.md`. Next actions in order: (a) appendage shapes (first run: section 4.6 of that document)
 and openings in step 1; (b) model pass on Balclutha HAER sheets for a like-for-like comparison;
 (c) step 2 plan (`docs/STRUCTURE_V2.md`) with metrics.

@@ -229,23 +229,27 @@ error of section 1.1 (+9.4 %).
 
 ### 4.2 Files and sizes
 
-| File | Size | Use |
-|---|---|---|
-| `whole_vessel/execution.json` | small | App parts list: ship-cad worker shape, plus `label`, `args`, `geometry`, and a per-argument `provenance` basis (docs/APP_SPEC.md "Whole-vessel parts") |
-| `whole_vessel/hull.step` | 147.5 MB (21.1 MB gzip) | Hull to the deck, mm, no pcurves |
-| `whole_vessel/<part>.step` (7 parts) | 7 kB to 158 kB each | Decks, tiers, bulwark, rail |
-| `whole-vessel-draft.step` | 148.0 MB | All 22 solids in one compound |
-| `whole-vessel-draft.glb` | 48.5 MB | Mesh for a 3D view, 5 mm chord tolerance |
-| `whole-vessel-draft.png` | | matplotlib render |
+Sizes before (panel hull) and after the lighter hull of section 4.5 (with the appendages of
+section 4.6):
+
+| File | Before | After | Use |
+|---|---|---|---|
+| `whole_vessel/execution.json` | small | small | App parts list: ship-cad worker shape, plus `label`, `args`, `geometry`, and a per-argument `provenance` basis (docs/APP_SPEC.md "Whole-vessel parts") |
+| `whole_vessel/hull.step` | 147.5 MB (21.1 MB gzip) | **15.4 MB** (3.4 MB gzip) | Hull to the deck, mm, no pcurves |
+| `whole_vessel/<part>.step` | 7 parts, 7 kB to 158 kB | 11 parts, 7 kB to 158 kB | Decks, tiers, bulwark, rail; thrusters and skeg fins |
+| `whole-vessel-draft.step` | 148.0 MB | **16.1 MB** | All solids in one compound (22 before, 26 after) |
+| `whole-vessel-draft.glb` | 48.5 MB | **1.5 MB** | Display mesh for the 3D view (section 4.5), mm, Y-up, one node per part |
+| `whole-vessel-draft.png` | | | matplotlib render of the display meshes |
 
 STEP size: the first assembly STEP was 321 MB. Writing STEP without pcurves halves it (no change
 to geometry). The hull is the rest: the region loft makes about 89,800 faces (shared knots of all
 stations in a run times the stations). A coarser CAD bound does little (5 mm: 123.7 MB; 10 mm:
 94.5 MB), and fewer section rows do not change the knots. For the app: load the GLB for the 3D view
-and the small part STEP files; send the hull STEP gzip-compressed (21 MB, 1.3 s). A lighter hull
-needs a loft change (fewer shared knots per run): open work.
+and the small part STEP files; send the hull STEP gzip-compressed (21 MB, 1.3 s). Section 4.5
+makes 28 of the 30 run-side pieces one side face each (2 stay panels): 3,151 faces, 15.4 MB.
 
-Build time: 366 s (capped loft 80 s, exports, mesh and render), peak memory about 5 GB.
+Build time before: 366 s (capped loft 80 s, exports, mesh and render), peak memory about 5 GB
+(9.6 GB in a rerun on 2026-11-09). After section 4.5: 184 s, peak memory 4.6 GB.
 
 ### 4.3 Happy path for invalid metadata
 
@@ -275,20 +279,105 @@ same outline (x 13.57 to 21.27 m, y ±3.54 m) and height (9.087 to 11.487 m). Th
 end; the model again kept the values it was given (as in sections 2 and 3). A note with a number
 ("make it 5.2 m wide") is the useful case.
 
-### 4.5 Lighter hull: tried, not reached
+### 4.5 Lighter hull: reached
 
-Target: hull STEP under 30 MB and GLB under 10 MB at the accuracy of section 4.1. Not reached.
+Target (plan section 3.7, fixed before the build): hull STEP below 30 MB, GLB below 10 MB, hull
+metrics of section 4.1 no worse by more than 0.5 percentage points. **Reached.**
 
-- Station decimation (drop a station that straight lofting between its neighbours reproduces
-  within 5 to 20 mm): 0 to 2 of 68 stations can go. This hull has no parallel midbody.
-- One smooth loft per run side through spline-approximated station curves (OCC ThruSections),
-  smooth or ruled: the first run (frames -2 to 10) gives an invalid solid, with +33 % and +212 %
-  volume against the station prismatoid. The approximated station curves of a run do not keep the
-  common-knot correspondence of the region loft.
+First tries (no result): station decimation (0 to 2 of 68 stations can go: this hull has no
+parallel midbody) and one smooth loft per run side through spline-approximated station curves
+(an invalid solid, +33 % and +212 % volume: the approximated curves do not keep the common-knot
+correspondence).
 
-Next approach: fit one B-spline surface per run side to the existing knot grid (stations x common
-knots, `GeomAPI_PointsToBSplineSurface` within the 1 mm bound), with the end caps cut from that
-surface, and keep the volume audit. Until then the app loads the GLB (48.5 MB) or the gzip STEP.
+Method (`geometry.build_region_hull(..., one_face_per_side=True)`, `geometry._bilinear_side_faces`):
+a ruled panel between two corresponding polygon edges is a bilinear patch. A B-spline surface of
+degree 1 in both directions, with the polygon vertices (ring x stations) as poles and periodic
+around the ring, is the same surface as all the panels of a run side. It is one face, not one
+face per panel. The end caps are planar faces bounded by the end curves of the surface. The
+geometry does not change, so no fit tolerance is necessary. Details:
+
+- Volume: the default volume integration of the kernel is not exact on this face (-16 % on a
+  test box). `geometry.precise_volume_mm3` uses adaptive integration. The volume audit stays:
+  each solid against its polygon prismatoid, at 1e-5 relative for this face type (the
+  integration differed by up to 4.4e-6 relative on Gunnerus; a malformed solid is wrong by whole
+  percents).
+- Happy path: when the one-face solid is not a valid closed shell or fails the audit, that piece
+  is built from ruled panels (the same geometry). On Gunnerus 2 of 30 run-side pieces (offset
+  region, frames 18 to 25, port and starboard) use panels: their end polygon touches itself, and
+  a cap bounded by the B-spline end curve is then not valid. Polygon caps sewn to the side face
+  are valid, but they split the end curve into one STEP curve copy per polygon edge (1.4 GB STEP).
+- GLB: `src/vessel_reconstruction/display_mesh.py` makes a display mesh separate from the STEP.
+  The kernel mesher is not reliable on a one-face side (at 20 mm it lost 18 % of the volume; at
+  5 mm, 0.4 %). The mesh of a degree-1 face comes from its poles: a ring column is left out when
+  it stays within 1 mm of the chord at every station; each remaining cell gives two triangles.
+  End caps are meshed from their polygon. Display hull volume 966.62 m3 against 966.71 m3 for the
+  solid (-0.01 %). The GLB keeps the app contract (mm, Y-up, one node per part named by its id)
+  and has vertex normals.
+- Hull score: `benchmarks/gunnerus/whole_vessel_hull_score.py` runs `score.py` unchanged except
+  for the mesher. On the one-face STEP, the kernel mesher at 0.1 mm gave no result in 20 minutes;
+  the wrapper uses the exact triangulation of the same faces (two triangles per bilinear patch).
+
+| Metric (section 4.1 scorer) | Panel hull (before) | One face per side (after) | Change |
+|---|---|---|---|
+| Hull volume (solid) | 966.712 m3 | 966.712 m3 | 0 |
+| Volume below T = 2.50 m (truth 486.3 m3) | 482.96 m3 (-0.69 %) | 482.96 m3 (-0.69 %) | 0 |
+| Waterplane area at 2.50 m | -0.06 % | -0.06 % | 0 |
+| Station half-breadth RMS, main band (median) | 0.468 m (0.279 m) | 0.468 m (0.279 m) | 0 |
+| Station half-breadth RMS, below draft (median) | 0.277 m (0.063 m) | 0.277 m (0.063 m) | 0 |
+| Between-station RMS, main band | 0.488 m (140 cuts) | 0.488 m (140 cuts) | 0 |
+| Hull + tier 1 vs truth 1,302.3 m3 | +5.9 % | +5.9 % | 0 |
+| Hull STEP | 147.5 MB | 15.4 MB | -90 % |
+| GLB | 48.5 MB | 1.5 MB | -97 % |
+
+The scores agree to the printed digits because the surfaces are the same. The "before" column is
+a rerun of section 4.1 on 2026-11-09 with the same result.
+
+### 4.6 Appendages (development case)
+
+Code: `benchmarks/gunnerus/whole_vessel_appendages.py` (the reader; `whole_vessel.py` adds its
+components to the step 1 inputs, `--no-appendages` leaves them out) and
+`benchmarks/gunnerus/whole_vessel_appendage_metrics.py` (metrics A1 to A3 of plan section 3.7,
+fixed before the build in commit `8182deb`). Each appendage is a ship-cad `appendage`: a profile
+outline (x, z) over a transverse span (y). The parts are in the assembly, in
+`whole_vessel/execution.json` (label, args, geometry, per-argument basis) and in the GLB.
+
+What the GA gives (selectors read by a person, snapped to ink by code):
+
+- Azimuth thrusters, two: the profile block (side view) and the tank-top plan blocks at
+  y = ±2.70 m. Outline `traced`: convex hull of the block linework below the drawn stern bottom
+  (centre lines and phantom lines left out), x -1.02 to 0.99 m, z -0.76 to 2.23 m. Span
+  `guessed`: centre ±2.70 m (traced), underwater breadth not drawn, half breadth 0.25 m.
+- Skeg fins: S0CO2 linework under the profile keel line, x 1.56 to 7.94 m, down to z -0.91 m.
+  Outline `traced` (closed by the keel line). Span `guessed`: breadth 0.30 m.
+- Not built: rudder (none drawn: azimuth propulsion); bow thruster (a tunnel inside the hull:
+  an opening, not an appendage); drop keel (marked "optional" on the GA).
+
+| Metric | Run 1 | Run 2 (development) | Target |
+|---|---|---|---|
+| A1 built | 3 of 3 (outline `traced`, span `guessed`) | 4 of 4 (outline `traced`, span `guessed`) | all: yes |
+| A2 thruster, max gap to the hull | 1.17 m (90 % of cells within 0.05 m) | 1.17 m (90 %) | <= 0.05 m: no |
+| A2 skeg, max gap to the hull | 2.28 m (one fin on the centreline) | 2.51 m (89 % of cells within 0.05 m) | <= 0.05 m: no |
+| A3 volume where the truth has none | thrusters 2.26 m3 each; skeg 0.46 m3 | thrusters 2.26 m3 each; fins 0.43 m3 each | report |
+
+Truth: the truth STEP has no thruster, skeg fin or rudder (plan section 3.7). No appendage shape
+is measurable. A3 is a content difference, not an error.
+
+Causes (after the run):
+
+- Run 1 put one skeg on the centreline (a guess). The built hull has twin skegs and a centre
+  tunnel: the hull bottom at the centreline is about 1.7 m above the base at x 1 to 3 m, so the
+  fin was 2.3 m below the hull. The profile keel line is the side view of the twin-skeg bottom
+  (built hull bottom at y = 2.7 m: -0.484, -0.414, -0.345 m at x 3, 5, 7 m; keel line -0.482,
+  -0.413, -0.344 m), and the thrusters are at the aft end of the twin skegs. Run 2 puts one fin
+  under each twin skeg at the thruster centre y. This change came after the run 1 score: run 2 is
+  a development result.
+- Remaining A2 gaps: (a) the fins start at x 1.56 m, where the drawn skeg ends, but the twin skeg
+  of the built hull starts at about x 3 m (truth: about x 2 m); the largest gap is at x 1.6 m.
+  (b) The thruster outline is a convex hull: its aft edge slopes from the hull at z 2.23 m down
+  to the propeller at x -1.0 m, so the top of the part there is 1.2 m below the hull. At the
+  thruster mounting the contact is good (90 % of the top cells within 0.05 m).
+- The guessed breadths (thruster 0.50 m, fin 0.30 m) and the convex outline make the volumes
+  rough. The next step is a pod, a strut and a propeller disc as separate shapes.
 
 ## 5. Round 4: Balclutha sheet 7, model value on a scanned body plan (protocol 3.5.3, option B)
 
@@ -322,9 +411,16 @@ must check the image size the provider accepts; fix its protocol first.
 ## 6. Resume point
 
 1. Done: tier aft-end rule (section 1.1), raster code path (section 3), assembly and hull volume
-   fix (section 4), app parts folder (section 4.2), happy path for invalid metadata (section 4.3).
-2. Lighter hull loft for the app: one B-spline surface per run side (section 4.5).
-3. Appendages (rudder, skeg, thrusters) and openings in step 1 (not started).
+   fix (section 4), app parts folder (section 4.2), happy path for invalid metadata (section 4.3),
+   lighter hull (section 4.5: STEP 15.4 MB, GLB 1.5 MB, same scores), appendages run 2
+   (section 4.6).
+2. Appendages: thruster as pod, strut and propeller disc; fins from the x where the twin skeg of
+   the built hull starts; bow-thruster tunnel as an opening in the hull. Then check A2 again.
+3. Openings (hatches) in step 1 (not started).
 4. Balclutha: option B run (section 5), no model value at whole-image resolution. Next: a tiled
-   reading protocol, and option A when a person downloads the profile and deck sheets.
+   reading protocol, and option A when a person downloads the profile and deck sheets. Image
+   limit (vision probe, `work/vision-probe/REPORT.md`): the provider ignores `"detail"` and makes
+   images smaller when a side is more than about 2,048 px (12 px text at 3,000 px is not
+   readable). A new model-reading round must send tiles of at most 2,048 px per side, with
+   features of at least 16 px. Put this in its protocol before the run.
 5. Rust `ship_cad` vision schema: accept labelled inline values (Python accepts them now).
