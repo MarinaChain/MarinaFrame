@@ -27,6 +27,8 @@ Example (references, not dimensions):
 
 An opening cannot erase its complete target. Profile-window openings are not implemented by the plan-prism operation and must remain unresolved. A deck needs two levels; plate thickness is never invented. Bulwark thickness needs a measured length; a measured height interval is not a length.
 
+**Superseded 2026-11-09 (founder direction, `docs/plans/2026-11-09-whole-vessel-scope.md`).** The AI fills gaps and writes geometry. An argument can now be a measurement reference or an inline value `{"value", "source", "basis"}` with source `ai_inferred` or `guessed`; a bare number is still rejected. The host can also give a labelled guess for each reference (`execute(..., guesses=...)`); a failed measurement then builds from the guess as `draft_guess` instead of staying unbuilt. Components record `source_labels` per argument (`traced`, `ai_inferred`, `guessed`). New host methods: `enclosed_region` (plan footprint) and `profile_levels` (two drawn levels). The Rust `ship_cad` vision schema still rejects numeric arguments; changing it is open work. The text below describes the W13 design.
+
 The model names the component, source view, region and measurement method. It does not provide physical coordinates, sizes or offsets. Only the host drawing adapter supplies the measurement map. Invalid, absent or failed measurements leave an **unbuilt draft guess with a reason**, not a plausible box. Even fully measured solids remain drafts because semantic line identity and drawing calibration need review.
 
 ## Tools and provenance
