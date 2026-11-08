@@ -1651,7 +1651,10 @@ mod survey_mark_tests {
     use serde_json::json;
 
     fn labels(marks: &[Mark]) -> Vec<String> {
-        marks.iter().map(|m| m.label.clone().unwrap_or_default()).collect()
+        marks
+            .iter()
+            .map(|m| m.label.clone().unwrap_or_default())
+            .collect()
     }
 
     #[test]
@@ -1669,7 +1672,8 @@ mod survey_mark_tests {
 
     #[test]
     fn without_intake_views_the_search_tiles_show() {
-        let survey = json!({"candidate_regions": [{"region_px": [0, 0, 768, 736], "kind": "unclassified"}]});
+        let survey =
+            json!({"candidate_regions": [{"region_px": [0, 0, 768, 736], "kind": "unclassified"}]});
         assert_eq!(labels(&survey_marks(&survey)), ["Unclassified"]);
     }
 }
