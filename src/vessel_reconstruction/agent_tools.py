@@ -980,7 +980,7 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
     """Private worker operation. No labels/reference geometry are opened."""
     import numpy as np
     from PIL import Image, ImageDraw
-    from .ingest import (DrawingError, _candidate_evidence, _eligible_trace_mask, _extract_one,
+    from .ingest import (COMPLEXITY_REDUCTION_WARNING, DrawingError, _candidate_evidence, _eligible_trace_mask, _extract_one,
                          _foreground, _read_image, _source_endpoint_hypothesis, _stroke_identity, _trace)
     from .resources import validate_sources
     spec = load_bounded_json(spec_path)
@@ -1159,6 +1159,8 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
                          "contour_selection": selection,
                          "source_points_px": [[float(x), float(y)] for x, y in zip(absolute_xs, absolute_rows)],
                          "identity_certified": False}
+            if "complexity_reduction" in quality or "evidence_complexity_reduction" in competition:
+                candidate["warnings"] = [COMPLEXITY_REDUCTION_WARNING]
             if endpoint_evidence is not None:
                 parent = next((t for t in traces
                                if float(np.max(np.abs(t["dense"] - parent_dense))) < 1.1), None)
