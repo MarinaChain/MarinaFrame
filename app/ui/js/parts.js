@@ -17,8 +17,8 @@ const GROUPS = [
 const KNOWN_OPS = new Set(GROUPS.map(([op]) => op));
 const SOURCE_WORD = { traced: 'Read', ai_inferred: 'AI read', guessed: 'Guessed' };
 const SOURCE_TONE = { traced: '', ai_inferred: 'ai', guessed: 'draft' };
-/** Sketch size in SVG units (it scales to the panel). */
-const SKETCH = { width: 900, height: 160, pad: 14 };
+/** Sketch scale (SVG units per metre) and margin; the SVG scales to its column width. */
+const SKETCH = { unitsPerMetre: 30, pad: 10 };
 
 /** One state word per part: the review wins, then what the build could do. */
 function partState(part) {
@@ -46,14 +46,18 @@ export function createParts({ host, review, showIn3d }) {
     if (!built.length) return null;
     const lo = [0, 1, 2].map((k) => Math.min(...built.map((p) => p.bbox_m.min[k])));
     const hi = [0, 1, 2].map((k) => Math.max(...built.map((p) => p.bbox_m.max[k])));
-    const scale = Math.min((SKETCH.width - 2 * SKETCH.pad) / (hi[0] - lo[0] || 1), (SKETCH.height - 2 * SKETCH.pad) / (hi[vertical] - lo[vertical] || 1));
+    // True scale, as on a general arrangement; both sketches share the scale, so in their two
+    // equal columns the profile and the plan show the same length the same size.
+    const scale = SKETCH.unitsPerMetre;
+    const width = (hi[0] - lo[0]) * scale + 2 * SKETCH.pad;
+    const height = (hi[vertical] - lo[vertical]) * scale + 2 * SKETCH.pad;
     const px = (x) => SKETCH.pad + (x - lo[0]) * scale;
-    const py = (v) => SKETCH.height - SKETCH.pad - (v - lo[vertical]) * scale;
+    const py = (v) => height - SKETCH.pad - (v - lo[vertical]) * scale;
     // The selected part is drawn last, on top.
     const order = [...built].sort((a, b) => Number(a.id === selectedId) - Number(b.id === selectedId));
     return el('figure', { class: 'parts-sketch' },
       el('figcaption', {}, title),
-      svg('svg', { viewBox: `0 0 ${SKETCH.width} ${SKETCH.height}`, role: 'img', 'aria-label': `${title} sketch of the parts` },
+      svg('svg', { viewBox: `0 0 ${width.toFixed(0)} ${height.toFixed(0)}`, role: 'img', 'aria-label': `${title} sketch of the parts` },
         ...order.map((p) => {
           const { min, max } = p.bbox_m;
           const rect = svg('rect', {
