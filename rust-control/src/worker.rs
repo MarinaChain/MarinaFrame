@@ -80,10 +80,17 @@ pub fn domain_guard(root: &Path) -> Result<DomainGuard> {
     Ok(DomainGuard { _file: f })
 }
 /// Native (CAD/tracing) work that may run at once for this user, across all tasks.
-/// Each slot is one lock file; slot 0 keeps the original name so scripts that take
-/// the lock (for example evaluation scorers) still exclude one slot.
-const DEFAULT_NATIVE_SLOTS: usize = 2;
+/// This is a capacity limit, not a correctness lock: each task has its own folder and
+/// domain lock. Each native worker uses about one core and up to its memory limit, so
+/// the default is half the cores (at least 1, at most MAX_NATIVE_SLOTS); set
+/// MARINAFRAME_NATIVE_SLOTS to override. Each slot is one lock file; slot 0 keeps the
+/// original name so scripts that take the lock (for example scorers) exclude one slot.
 const MAX_NATIVE_SLOTS: usize = 8;
+
+fn default_native_slots() -> usize {
+    let cores = std::thread::available_parallelism().map_or(2, |n| n.get());
+    (cores / 2).clamp(1, MAX_NATIVE_SLOTS)
+}
 /// How long a native step waits for a free slot before it gives up (seconds). Many
 /// concurrent tasks queue here; 120 s ended runs needlessly under load.
 pub const ADMISSION_DEADLINE_SECONDS: u64 = 1800;
@@ -93,7 +100,7 @@ fn native_slots() -> usize {
         .ok()
         .and_then(|value| value.parse::<usize>().ok())
         .filter(|slots| (1..=MAX_NATIVE_SLOTS).contains(slots))
-        .unwrap_or(DEFAULT_NATIVE_SLOTS)
+        .unwrap_or_else(default_native_slots)
 }
 
 fn open_slot(dir: &Path, slot: usize) -> Result<std::fs::File> {
