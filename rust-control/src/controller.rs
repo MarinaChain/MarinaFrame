@@ -480,6 +480,10 @@ pub fn tool_catalog(on_ambiguity: &OnAmbiguity) -> Value {
             .as_array_mut()
             .unwrap()
             .extend(investigation_catalog());
+        tools
+            .as_array_mut()
+            .unwrap()
+            .push(crate::types::authoring::tool());
     }
     tools
 }
@@ -1444,6 +1448,7 @@ fn validate_selection(store: &Store, operation: &Operation, actor: &str) -> Resu
         Operation::TraceFromPoint(x) => known_section(store, &x.section_id)?,
         Operation::EnumerateStrokes(x) => known_section(store, &x.section_id)?,
         Operation::CompareViews(x) => known_section(store, &x.section_id)?,
+        Operation::ProposeSection(x) => known_section(store, &x.section_id)?,
         Operation::InspectSource(x) => {
             if let Some(ids) = &x.section_ids {
                 let sections = store.state.domain["sections"]

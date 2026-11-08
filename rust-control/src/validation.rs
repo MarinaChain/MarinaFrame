@@ -975,12 +975,16 @@ fn check_piece_reports(report: &Value, counts: &[usize]) -> Result<()> {
 // guess in the domain checkpoint (`guesses`). Rust checks every guess against
 // the inspected catalog and refuses review readiness while any guess is open.
 
-const GUESS_KINDS: [&str; 4] = [
+const GUESS_KINDS: [&str; 5] = [
     "best_candidate",
     "bridged_gap",
     "dropped_end",
     "model_choice",
+    // A section shape the model wrote (propose_section, see authoring.rs).
+    "model_authored",
 ];
+/// Source labels of a model-authored section.
+const AUTHORED_LABELS: [&str; 2] = ["ai_inferred", "ai_corrected"];
 /// Largest verifier evidence of one model choice (JSON bytes).
 const MAX_VERIFIER_EVIDENCE_BYTES: usize = 4096;
 /// Row coverage that the engine requires of a traced line.
@@ -1046,8 +1050,8 @@ pub fn guessed_choices(checkpoint: &Value) -> Result<Option<Value>> {
 }
 
 fn guess_shape(guess: &Value, selected: &serde_json::Map<String, Value>) -> Result<()> {
-    if guess["kind"] == "model_choice" {
-        // A model choice also carries the verifier's evidence, which must say
+    if guess["kind"] == "model_choice" || guess["kind"] == "model_authored" {
+        // A model choice (or model-authored section) also carries the verifier's evidence, which must say
         // that the deterministic checks passed.
         let mut fields = GUESS_FIELDS.to_vec();
         fields.push("verifier_evidence");
@@ -1104,6 +1108,9 @@ fn guess_shape(guess: &Value, selected: &serde_json::Map<String, Value>) -> Resu
                     .as_f64()
                     .is_some_and(|s| (0.0..=1.0).contains(&s))
                 && range.is_none()
+        }
+        Some("model_authored") => {
+            guess["chosen_candidate_id"].is_string() && guess["score"].is_null() && range.is_none()
         }
         Some(kind) => {
             let no_choice = guess["chosen_candidate_id"].is_null()
@@ -1196,6 +1203,22 @@ pub fn check_guess_contract(checkpoint: &Value, description: &Value) -> Result<u
             require(
                 chosen.is_some_and(snapped_candidate),
                 "draft_guess_not_snapped_to_ink",
+            )?;
+        }
+        if guess["kind"] == "model_authored" {
+            // A model-authored section names the model's own curve, with its
+            // source label; it never poses as traced ink.
+            let chosen = candidates
+                .iter()
+                .find(|c| c["candidate_id"] == guess["chosen_candidate_id"]);
+            require(
+                chosen.is_some_and(|c| {
+                    c["model_traced"] == true
+                        && AUTHORED_LABELS
+                            .iter()
+                            .any(|label| c["authored"]["source_label"] == *label)
+                }),
+                "draft_guess_not_model_authored",
             )?;
         }
     }
@@ -1598,5 +1621,70 @@ mod tests {
             check_guess_contract(&checkpoint, &described(&checkpoint)).unwrap_err(),
             "draft_guess_contract"
         );
+    }
+
+    /// The s0 guess of `draft_checkpoint` as a section shape the model wrote.
+    fn model_authored_checkpoint() -> Value {
+        let mut checkpoint = draft_checkpoint();
+        checkpoint["catalog"]["s0"]["candidates"]
+            .as_array_mut()
+            .unwrap()
+            .push(
+                json!({"candidate_id":"authored-s0","selectable":true,"model_traced":true,
+                "authored":{"source_label":"ai_inferred","basis":"Blend of s1 and s2."}}),
+            );
+        let guess = &mut checkpoint["guesses"][0];
+        guess["kind"] = json!("model_authored");
+        guess["chosen_candidate_id"] = json!("authored-s0");
+        guess["alternatives"] = json!(["c-outer", "c-inner"]);
+        guess["score"] = json!(null);
+        guess["reason"] = json!("ai_inferred: Blend of s1 and s2.");
+        guess["verifier_evidence"] = json!({"verifier":"section_authoring_checks_v1","passed":true,
+            "identity_certified":false,"source_label":"ai_inferred"});
+        checkpoint
+    }
+
+    #[test]
+    fn a_model_authored_guess_names_the_models_labelled_curve() {
+        let checkpoint = model_authored_checkpoint();
+        assert_eq!(
+            check_guess_contract(&checkpoint, &described(&checkpoint)).unwrap(),
+            2
+        );
+        type Forge = (fn(&mut Value), &'static str);
+        let forged: [Forge; 4] = [
+            (
+                |c| {
+                    c["catalog"]["s0"]["candidates"][2]["authored"]["source_label"] =
+                        json!("traced")
+                },
+                "draft_guess_not_model_authored",
+            ),
+            (
+                |c| c["guesses"][0]["chosen_candidate_id"] = json!("c-outer"),
+                "draft_guess_not_in_catalog",
+            ),
+            (
+                |c| c["guesses"][0]["score"] = json!(0.9),
+                "draft_guess_contract",
+            ),
+            (
+                |c| {
+                    c["guesses"][0]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("verifier_evidence");
+                },
+                "draft_guess_contract",
+            ),
+        ];
+        for (forge, code) in forged {
+            let mut checkpoint = model_authored_checkpoint();
+            forge(&mut checkpoint);
+            assert_eq!(
+                check_guess_contract(&checkpoint, &described(&checkpoint)).unwrap_err(),
+                code
+            );
+        }
     }
 }

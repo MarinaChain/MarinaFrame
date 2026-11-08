@@ -205,6 +205,9 @@ pub struct CompareViews {
 pub struct AskPerson {
     pub question: String,
 }
+/// `propose_section`: a section shape the model writes (draft mode).
+#[path = "authoring.rs"]
+pub mod authoring;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "tool", content = "arguments", rename_all = "snake_case")]
@@ -225,6 +228,7 @@ pub enum Operation {
     ProposeSheetSetup(ProposeSheetSetup),
     CompareViews(CompareViews),
     AskPerson(AskPerson),
+    ProposeSection(authoring::ProposeSection),
 }
 fn bounded_text(text: &str, chars: usize) -> bool {
     let count = text.chars().count();
@@ -255,6 +259,7 @@ impl Operation {
             Self::ProposeSheetSetup(_) => "propose_sheet_setup",
             Self::CompareViews(_) => "compare_views",
             Self::AskPerson(_) => "ask_person",
+            Self::ProposeSection(_) => "propose_section",
         }
     }
     /// The model investigation tools. They exist only in draft mode, where an
@@ -271,6 +276,7 @@ impl Operation {
                 | Self::ProposeSheetSetup(_)
                 | Self::CompareViews(_)
                 | Self::AskPerson(_)
+                | Self::ProposeSection(_)
         )
     }
     /// The section a tool acts on, if any.
@@ -281,6 +287,7 @@ impl Operation {
             Self::EnumerateStrokes(x) => Some(&x.section_id),
             Self::AssignStation(x) => Some(&x.section_id),
             Self::CompareViews(x) => Some(&x.section_id),
+            Self::ProposeSection(x) => Some(&x.section_id),
             _ => None,
         }
     }
@@ -339,6 +346,7 @@ impl Operation {
                     && x.heights_m.iter().all(|h| finite_in(*h, -100., 1000.))
             }
             Self::AskPerson(x) => bounded_text(&x.question, 512),
+            Self::ProposeSection(x) => x.valid(),
             _ => true,
         };
         if ok {

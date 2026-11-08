@@ -955,6 +955,25 @@ def extract_pieces(image: np.ndarray, section: dict[str, Any], source_file: str,
                     "identity_status": "explicit_supplied_piece_selections", "region_count": len(regions)}
 
 
+def authored_section(section: dict[str, Any], source_file: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """A model-authored draft section (propose_section): its curve, not traced ink.
+
+    The schema accepts ``authored`` only in a draft specification. The curve
+    was faired and clamped by section_authoring when the model proposed it.
+    """
+    authored = section["authored"]
+    result = {"id": str(section["id"]), "x_m": float(section["x_m"]),
+              "points_yz_m": [[float(y), float(z)] for y, z in authored["points_yz_m"]],
+              "confidence": 0.0, "coverage": 0.0, "source_label": authored["source_label"],
+              "evidence": {"roi_px": list(section["roi_px"]), "calibration": dict(section["calibration"]),
+                           "source_file": source_file, "identity_status": "model_authored",
+                           "authored_basis": authored["basis"],
+                           "human_assistance": section.get("evidence", "Model-authored draft section.")},
+              "warnings": [f"Model-authored section ({authored['source_label']}); not measured from source ink. "
+                           "Basis: " + authored["basis"]]}
+    return result, {"status": "model_authored", "source_label": authored["source_label"]}
+
+
 def extract_sections(spec: dict, base_dir: Path) -> dict:
     """Measure supported starboard half-sections and return structured gaps.
 
@@ -996,6 +1015,11 @@ def extract_sections(spec: dict, base_dir: Path) -> dict:
             output["gaps"].append(_gap(section_id, "invalid_view", "Each section requires a unique nonempty id."))
             continue
         seen.add(section_id)
+        if "authored" in section:
+            result, diagnostic = authored_section(section, source["file"])
+            output["sections"].append(result)
+            output["diagnostics"]["sections"][section_id] = diagnostic
+            continue
         try:
             extract = extract_pieces if "pieces" in section else _extract_one
             from .draft import check_draft
