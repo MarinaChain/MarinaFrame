@@ -8,6 +8,8 @@
 //              Commands: POST /api/<command> with a JSON body; errors use a non-2xx status
 //              and the spec's { code, message } body. Live updates: Server-Sent Events at
 //              /api/events, one `task-changed` event per change with { task, sequence }.
+//              Uploads (the browser has no paths): POST /api/upload_spec?name= gives
+//              { spec_path }; POST /api/upload_drawing?name= gives { path }.
 //   3. Mock:   neither of the above. Fixtures from mock/fixtures.json.
 //
 // Arguments follow docs/APP_SPEC.md exactly (snake_case keys such as `after_sequence`).
@@ -21,6 +23,8 @@ const MOCK_PICK_FOLDER = '/Users/demo/MarinaFrame/examples';
 
 /** File types the run spec picker accepts (start_run takes one of these). */
 export const SPEC_EXTENSIONS = ['json', 'toml', 'yaml', 'yml'];
+/** File types of a drawing set (prepare_intake takes these; app/core/src/intake.rs). */
+export const DRAWING_EXTENSIONS = ['pdf', 'png', 'tif', 'tiff', 'jpg', 'jpeg'];
 /** Delay between mock events for the running task, to imitate a live run. */
 const MOCK_PLAYBACK_MS = 4000;
 /** With ?mocklive, the mock live run shows one more step this often. */
@@ -75,6 +79,16 @@ function tauriTransport(tauri) {
     },
     pickFile({ title, defaultPath } = {}) {
       return openDialog({ title, defaultPath });
+    },
+    async pickDrawingFiles() {
+      if (!tauri.dialog?.open) return [];
+      const picked = await tauri.dialog.open({
+        title: 'Choose a drawing set',
+        multiple: true,
+        filters: [{ name: 'Drawings', extensions: DRAWING_EXTENSIONS }],
+      });
+      if (!picked) return [];
+      return Array.isArray(picked) ? picked : [picked];
     },
     onFileDrop({ enter, leave, drop }) {
       // Tauri takes file drops from the window and sends the full paths as events.
@@ -167,8 +181,25 @@ function httpTransport() {
     },
     pickFolder: async () => null,
     pickFile: async () => null,
+    pickDrawingFiles() {
+      return new Promise((resolve, reject) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = true;
+        input.accept = DRAWING_EXTENSIONS.map((ext) => `.${ext}`).join(',');
+        input.addEventListener('change', () => {
+          Promise.all([...(input.files || [])].map(uploadDrawing)).then(resolve, reject);
+        });
+        input.addEventListener('cancel', () => resolve([]));
+        input.click();
+      });
+    },
     onFileDrop(handlers) {
-      listenForBrowserDrops(handlers, (file) => (isSpecFileName(file.name) ? uploadSpec(file) : file.name));
+      listenForBrowserDrops(handlers, (file) => {
+        if (isSpecFileName(file.name)) return uploadSpec(file);
+        if (isDrawingFileName(file.name)) return uploadDrawing(file);
+        return file.name;
+      });
     },
   };
 
@@ -176,6 +207,12 @@ function httpTransport() {
   async function uploadSpec(file) {
     const result = await post(`/api/upload_spec?name=${encodeURIComponent(file.name)}`, file, 'application/octet-stream');
     return result.spec_path;
+  }
+
+  // Upload one drawing file; the server stores it and returns the path for prepare_intake.
+  async function uploadDrawing(file) {
+    const result = await post(`/api/upload_drawing?name=${encodeURIComponent(file.name)}`, file, 'application/octet-stream');
+    return result.path;
   }
 }
 
@@ -204,6 +241,53 @@ function blobToBase64(blob) {
     reader.onload = () => resolve(String(reader.result).split(',')[1]);
     reader.readAsDataURL(blob);
   });
+}
+
+/** What the mock's "Choose files" picks: a two-page PDF and a low-resolution scan. */
+const MOCK_DRAWING_SET = ['/Users/demo/Downloads/survey-launch-lines.pdf', '/Users/demo/Downloads/survey-launch-sections.tif'];
+/** The mock page image (mock/files/page-1.png) in pixels. */
+const MOCK_PAGE = { width: 1600, height: 1000 };
+
+/**
+ * An IntakePreview for `files`, shaped like the worker's: a PDF gives a lines page (body plan,
+ * title block) and a cover page with no view; a raster gives a 150 dpi scan whose view the
+ * code is unsure of.
+ */
+function mockIntakePreview(files, thumbnail, aiActive) {
+  const pages = [];
+  const page = (file, fields) => {
+    const fileName = file.split('/').pop();
+    pages.push({
+      page_id: `p${pages.length + 1}`, file, file_name: fileName, page_index: 0,
+      width_px: MOCK_PAGE.width, height_px: MOCK_PAGE.height,
+      thumbnail_png_base64: thumbnail, thumbnail_scale: 1, warnings: [], skip: false, ...fields,
+    });
+  };
+  const region = (id, label, confidence, box, evidence) => ({ region_id: id, label, confidence, region_px: box, evidence });
+  for (const file of files) {
+    if (file.toLowerCase().endsWith('.pdf')) {
+      page(file, {
+        kind: 'pdf', dpi: 200, dpi_source: 'pdf_render',
+        regions: [
+          region('r1', 'body_plan', 0.86, [120, 240, 1480, 830], 'Three framed curve groups share a centre line.'),
+          region('r2', 'title_block', 0.74, [1180, 860, 1560, 960], 'Small boxed text at the lower right.'),
+        ],
+      });
+      page(file, {
+        kind: 'pdf', page_index: 1, dpi: 200, dpi_source: 'pdf_render',
+        regions: [region('r1', 'other', 0.18, [40, 40, 1560, 960], 'No separate ink groups.')],
+        warnings: [{ code: 'no_view_found', message: 'No drawing view found on this page.' }],
+      });
+    } else {
+      page(file, {
+        kind: 'raster', dpi: 150, dpi_source: 'file_metadata',
+        regions: [region('r1', 'profile', 0.41, [140, 250, 1470, 820], 'One wide ink group; could be a profile or a body plan.')],
+        warnings: [{ code: 'low_dpi', message: 'Scan 150 dpi: lines may be read less exactly.' }],
+      });
+    }
+  }
+  const warnings = aiActive ? [] : [{ code: 'ai_off', message: 'AI drafting is off. A drawing set without a spec needs the AI to read stations and scale.' }];
+  return { intake_id: `intake-${Date.now()}`, pages, warnings, render_dpi: 200, particulars: { vessel_name: '' }, ai_active: aiActive };
 }
 
 function mockTransport() {
@@ -279,7 +363,10 @@ function mockTransport() {
   // ---- Live steps. With ?mocklive in the page address, the fixture's live run streams in
   // as if it were running: one step every MOCK_LIVE_STEP_MS, with a request in flight
   // between steps. Otherwise it is a finished run to replay.
-  const liveStream = new URLSearchParams(location.search).has('mocklive');
+  // A run started from the intake streams its live steps the same way.
+  let liveStream = new URLSearchParams(location.search).has('mocklive');
+  // With ?mocknokey, the mock has no model key (the intake then cannot start).
+  const mockNoKey = new URLSearchParams(location.search).has('mocknokey');
   let liveStreamStarted = 0;
 
   /** Steps of the task's live run that exist "now", and whether the run is still going. */
@@ -438,7 +525,8 @@ function mockTransport() {
     async get_ai_status(data) {
       const settings = { ...data.settings, ...readStored(MOCK_SETTINGS_KEY, {}) };
       const enabled = settings.ai_drafting !== false;
-      return { enabled, key_found: true, active: enabled,
+      const keyFound = !mockNoKey;
+      return { enabled, key_found: keyFound, active: enabled && keyFound,
                key_file: '/Users/demo/.config/marinaframe/opencode-go-keys.txt' };
     },
     async dismiss_notice(_data, { id }) {
@@ -454,7 +542,34 @@ function mockTransport() {
     async list_datasets(data) {
       return data.datasets;
     },
+    async prepare_intake(data, { files }) {
+      if (!files?.length || files.length > 32) throw new BackendError('intake_files', 'Drop between 1 and 32 drawing files.');
+      const wrong = files.find((path) => !isDrawingFileName(path));
+      if (wrong) throw new BackendError('intake_file_type', `${wrong.split('/').pop()} is not a drawing. Use PDF, PNG, TIFF or JPEG files.`);
+      await pause(900);
+      const status = await commands.get_ai_status(data);
+      return mockIntakePreview(files, await mockThumbnail(), status.active);
+    },
+    async start_intake_run(data, { preview }) {
+      await pause(700);
+      if (!preview.pages.some((page) => !page.skip)) throw new BackendError('intake_no_pages', 'Every page is skipped. Keep at least one page.');
+      // The preview has one recorded live run: the new run plays it from the first step.
+      const task = Object.keys(data.live || {})[0];
+      if (!task) throw new BackendError('mock_mode', 'Runs cannot start in the preview.');
+      liveStream = true;
+      liveStreamStarted = 0;
+      return { task };
+    },
   };
+
+  let thumbnail = null;
+  async function mockThumbnail() {
+    if (!thumbnail) {
+      const response = await fetch(`${MOCK_FILES_URL}page-1.png`);
+      thumbnail = await blobToBase64(await response.blob());
+    }
+    return thumbnail;
+  }
 
   return {
     name: 'mock',
@@ -477,6 +592,9 @@ function mockTransport() {
     },
     async pickFile({ defaultPath } = {}) {
       return defaultPath || '/usr/local/bin/python3';
+    },
+    async pickDrawingFiles() {
+      return MOCK_DRAWING_SET;
     },
     onFileDrop(handlers) {
       listenForBrowserDrops(handlers, async (file) => `/Users/demo/Downloads/${file.name}`);
@@ -537,10 +655,24 @@ export function pickFile(options) {
 
 /**
  * Files dragged onto the window. `enter` and `leave` mark the drag; `drop` receives the
- * paths of the dropped files (for start_run: on the web, spec files are uploaded first).
+ * paths of the dropped files (on the web, spec and drawing files are uploaded first).
  */
 export function onFileDrop(handlers) {
   transport.onFileDrop(handlers);
+}
+
+/**
+ * Ask for the files of a drawing set (several at once). Resolves to their paths for
+ * prepare_intake, or an empty list (cancelled or unsupported).
+ */
+export function pickDrawingFiles() {
+  return transport.pickDrawingFiles();
+}
+
+/** True when the file name has a drawing set extension (PDF, PNG, TIFF, JPEG). */
+export function isDrawingFileName(name) {
+  const ext = name.split('.').pop()?.toLowerCase();
+  return name.includes('.') && DRAWING_EXTENSIONS.includes(ext);
 }
 
 /** True when the file name has a run spec extension. */
