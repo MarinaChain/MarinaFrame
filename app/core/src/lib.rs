@@ -17,6 +17,7 @@ pub mod model_keys;
 pub mod parts;
 pub mod provider_view;
 pub mod sample;
+pub mod signoff;
 pub mod storage;
 pub mod types;
 pub mod view;

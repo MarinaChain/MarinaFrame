@@ -242,6 +242,15 @@ async fn get_setup_status(backend: Shared<'_>) -> Result<SetupStatus, AppError> 
 }
 
 #[tauri::command(rename_all = "snake_case")]
+async fn sign_off(
+    backend: Shared<'_>,
+    task: String,
+    name: String,
+) -> Result<Option<SignOffView>, AppError> {
+    run(backend, move |b| b.sign_off(&task, &name)).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
 async fn review_component(
     backend: Shared<'_>,
     task: String,
@@ -367,6 +376,7 @@ fn main() {
             get_ai_status,
             get_setup_status,
             review_component,
+            sign_off,
             dismiss_notice,
             reset_notices,
             list_datasets

@@ -8,7 +8,7 @@ use crate::live::{HullSections, LiveSteps, LiveStore};
 use crate::storage::{self, AppPaths};
 use crate::types::*;
 use crate::view::{self, ViewContext};
-use crate::{artifact, events, files, intake, model_keys, parts, sample};
+use crate::{artifact, events, files, intake, model_keys, parts, sample, signoff};
 use marinaframe_control::util;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -61,6 +61,7 @@ impl Backend {
             binary_sha256: self.binary_sha256.clone(),
             action_error: self.registry.last_error(&path),
             part_reviews: parts::reviews_of(&self.paths, &path),
+            sign_off: signoff::sign_off_of(&self.paths, &path),
         };
         Ok(view::get_task(&path, &context)?)
     }
@@ -73,13 +74,24 @@ impl Backend {
         decision: &str,
         note: Option<&str>,
     ) -> AppResult<()> {
-        parts::review_component(
-            &self.paths,
-            &self.task_path(task)?,
-            component_id,
-            decision,
-            note,
-        )
+        let path = self.task_path(task)?;
+        parts::review_component(&self.paths, &path, component_id, decision, note)?;
+        // A part open again means the parts are no longer all reviewed: the sign-off ends.
+        if decision == "open" {
+            signoff::withdraw(&self.paths, &path)?;
+        }
+        Ok(())
+    }
+
+    /// Record a person's sign-off of a run's parts: "usable as a starting model". The run
+    /// stays a draft. `name` empty withdraws the sign-off.
+    pub fn sign_off(&self, task: &str, name: &str) -> AppResult<Option<SignOffView>> {
+        let path = self.task_path(task)?;
+        if name.trim().is_empty() {
+            signoff::withdraw(&self.paths, &path)?;
+            return Ok(None);
+        }
+        signoff::sign_off(&self.paths, &path, name, util::now_ms()).map(Some)
     }
 
     pub fn get_events(&self, task: &str, after_sequence: u64) -> AppResult<Vec<EventView>> {

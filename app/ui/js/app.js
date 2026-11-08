@@ -2029,6 +2029,8 @@ const exporter = createExport({ host: $('vessel-page-export'), invoke });
 const parts = createParts({
   host: $('vessel-page-parts'),
   review: (id, decision, note = null) => invoke('review_component', { task: state.task, component_id: id, decision, note }).catch((error) => { showError(error); throw error; }),
+  // Sign off the parts (a person's record, the run stays a draft); an empty name withdraws it.
+  signOff: (name) => invoke('sign_off', { task: state.task, name }).catch((error) => { showError(error); throw error; }),
   showIn3d: (part) => {
     setVesselTab('run');
     model.setHighlightBox(part.bbox_m);

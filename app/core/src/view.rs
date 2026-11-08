@@ -39,6 +39,8 @@ pub struct ViewContext {
     pub action_error: Option<String>,
     /// The person's review of whole-vessel parts in this task: component id -> decision.
     pub part_reviews: std::collections::HashMap<String, crate::parts::PartReview>,
+    /// A person's sign-off of this task's parts, if any.
+    pub sign_off: Option<SignOffView>,
 }
 
 pub fn map_status(controller_status: &str) -> Status {
@@ -179,6 +181,7 @@ pub fn get_task(task: &Path, context: &ViewContext) -> Result<TaskView, String> 
         notices: notices(&summary, &state, context, draft.as_ref()),
         evidence: evidence(&state, validation, task),
         components: crate::parts::read_components(task, &context.part_reviews),
+        sign_off: context.sign_off.clone(),
         draft,
         sections,
         summary,

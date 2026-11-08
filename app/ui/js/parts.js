@@ -33,6 +33,42 @@ function partState(part) {
   return { word: 'To check', tone: '', title: 'Every value was read from the drawing. Check what the part is.' };
 }
 
+/**
+ * A spreadsheet runs a text cell that starts with one of these as a formula. Part labels can
+ * come from model output and notes are typed, so such cells get a leading single quote (the
+ * rule of src/vessel_reconstruction/exports/csv_safety.py). Numbers are formatted apart and
+ * never pass through here, so negative numbers stay numbers.
+ */
+const FORMULA_PREFIXES = ['=', '+', '-', '@', '\t', '\r'];
+
+/** One text cell of the part list: one line, and never a formula. */
+export function safeTextCell(value) {
+  const raw = (value ?? '').toString();
+  const text = raw.replace(/[\t\r\n]+/g, ' ');
+  const formula = [raw, text].some((cell) => FORMULA_PREFIXES.some((prefix) => cell.startsWith(prefix)));
+  return formula ? `'${text}` : text;
+}
+
+/** One number cell: three decimals, or empty. */
+function numberCell(value) {
+  return Number.isFinite(value) ? value.toFixed(3) : '';
+}
+
+/** The part list as tab-separated text, for a spreadsheet or a sign-off note. */
+export function partTableText(parts, signOff = null) {
+  const header = ['Part', 'Op', 'Built', 'Status', 'x from (m)', 'x to (m)', 'Breadth (m)', 'z from (m)', 'z to (m)', 'Volume (m3)', 'Values read', 'Values guessed', 'Review', 'Note'];
+  const rows = parts.map((p) => {
+    const box = p.bbox_m;
+    const text = [p.label, p.op, p.built ? 'yes' : 'no', p.status].map(safeTextCell);
+    const numbers = [box?.min[0], box?.max[0], box ? box.max[1] - box.min[1] : null, box?.min[2], box?.max[2], p.volume_m3].map(numberCell);
+    const counts = [p.arguments.filter((a) => a.source !== 'guessed').length, p.arguments.filter((a) => a.source === 'guessed').length].map(String);
+    return [...text, ...numbers, ...counts, safeTextCell(p.review), safeTextCell(p.review_note || '')];
+  });
+  return [header, ...rows].map((row) => row.join('\t')).join('\n')
+    + (signOff ? `\n${safeTextCell(`Signed off by ${signOff.name}, ${new Date(signOff.time_ms).toISOString().slice(0, 10)}: ${signOff.statement}.`)}` : '')
+    + '\nDraft, not for construction. engineering_approved: false\n';
+}
+
 function chip(text, tone, title) {
   return el('span', { class: 'badge badge-small', dataset: { tone }, title }, el('span', { class: 'badge-text' }, text));
 }
@@ -41,11 +77,12 @@ function chip(text, tone, title) {
  * `review(id, decision)` saves a review (review_component) and resolves when done;
  * `showIn3d(part)` switches to the Run tab with the part outlined.
  */
-export function createParts({ host, review, showIn3d }) {
+export function createParts({ host, review, showIn3d, signOff }) {
   let parts = [];
   let selectedId = null;
   let busy = false;
   let marking = false; // the mark form is open on the selected part
+  let signedOff = null; // SignOffView of this run, or null
 
   function sketch(vertical, title) {
     const built = parts.filter((p) => p.bbox_m);
@@ -98,6 +135,8 @@ export function createParts({ host, review, showIn3d }) {
         return; // the app showed the error; the part keeps its review
       }
       part.review = decision;
+      // Reopening a part ends a sign-off of the parts (the backend withdraws it too).
+      if (decision === 'open') signedOff = null;
       part.review_note = decision === 'marked' ? note.trim() : null;
       marking = false;
       // After an accept, the next part with guesses opens: a review is a short run of keys.
@@ -204,30 +243,77 @@ export function createParts({ host, review, showIn3d }) {
       guessed ? el('p', { class: 'parts-note' }, icon('warn'), `${guessed} ${guessed === 1 ? 'value is' : 'values are'} guessed. Check them before you use this part.`) : null);
   }
 
-  /** The part list as tab-separated text, for a spreadsheet or a review note. */
-  function partTable() {
-    const header = ['Part', 'Op', 'Built', 'Status', 'x from (m)', 'x to (m)', 'Breadth (m)', 'z from (m)', 'z to (m)', 'Volume (m3)', 'Values read', 'Values guessed', 'Review', 'Note'];
-    const rows = parts.map((p) => {
-      const box = p.bbox_m;
-      const n = (v) => (v === null || v === undefined ? '' : v.toFixed(3));
-      return [p.label, p.op, p.built ? 'yes' : 'no', p.status,
-        n(box?.min[0]), n(box?.max[0]), box ? n(box.max[1] - box.min[1]) : '', n(box?.min[2]), n(box?.max[2]), n(p.volume_m3),
-        p.arguments.filter((a) => a.source !== 'guessed').length, p.arguments.filter((a) => a.source === 'guessed').length,
-        p.review, p.review_note || ''];
-    });
-    const clean = (cell) => String(cell).replace(/[\t\n]+/g, ' ');
-    return [header, ...rows].map((row) => row.map(clean).join('\t')).join('\n')
-      + '\nDraft, not for construction. engineering_approved: false\n';
-  }
+
 
   async function copyTable(button) {
     try {
-      await navigator.clipboard.writeText(partTable());
+      await navigator.clipboard.writeText(partTableText(parts, signedOff));
       button.textContent = 'Copied';
     } catch {
       button.textContent = 'Copy failed';
     }
     setTimeout(() => { button.textContent = 'Copy part list'; }, 1600);
+  }
+
+  /**
+   * Sign-off (founder wording): "Signed off by <name>, <date>: usable as a starting model".
+   * Open once every part is reviewed. It records a person's judgement; the run and its files
+   * stay drafts and engineering_approved stays false.
+   */
+  function signOffBlock() {
+    if (!parts.length) return null;
+    const open = parts.filter((p) => p.review !== 'accepted' && p.review !== 'marked').length;
+    const draftLine = el('span', { class: 'parts-signoff-note' }, 'The run and its files stay drafts.');
+    if (signedOff) {
+      const date = new Date(signedOff.time_ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+      return el('section', { class: 'parts-signoff is-signed', 'aria-label': 'Sign-off' },
+        icon('check'),
+        el('p', {}, el('strong', {}, `Signed off by ${signedOff.name}, ${date}: `), signedOff.statement, '. ', draftLine),
+        el('button', { class: 'btn', type: 'button', disabled: busy, onclick: () => submitSignOff('') }, 'Withdraw'));
+    }
+    if (open) {
+      return el('section', { class: 'parts-signoff', 'aria-label': 'Sign-off' },
+        el('p', {}, `Sign-off opens when every part is reviewed: ${open} still open.`));
+    }
+    const name = el('input', { type: 'text', maxlength: '80', placeholder: 'Your name', 'aria-label': 'Your name for the sign-off', value: lastName() });
+    const form = el('form', {
+      class: 'parts-signoff',
+      'aria-label': 'Sign-off',
+      onsubmit: (event) => { event.preventDefault(); submitSignOff(name.value); },
+    },
+    el('p', {}, el('strong', {}, 'Every part is reviewed. '), `Sign off as usable as a starting model. `, draftLine),
+    name,
+    el('button', { class: 'btn btn-primary', type: 'submit', disabled: busy }, 'Sign off'));
+    return form;
+  }
+
+  function lastName() {
+    try {
+      return localStorage.getItem('marinaframe.signoff-name') || '';
+    } catch {
+      return '';
+    }
+  }
+
+  async function submitSignOff(name) {
+    if (busy) return;
+    if (name.trim()) {
+      try {
+        localStorage.setItem('marinaframe.signoff-name', name.trim());
+      } catch {
+        // Not remembered; the field is empty next time.
+      }
+    }
+    busy = true;
+    render();
+    try {
+      signedOff = await signOff(name);
+    } catch {
+      // The app showed the error.
+    } finally {
+      busy = false;
+      render();
+    }
   }
 
   /** The next part that still needs a person, after the selected one. */
@@ -259,6 +345,7 @@ export function createParts({ host, review, showIn3d }) {
         el('h1', { id: 'parts-title' }, 'Parts'),
         el('span', { class: 'page-head-meta' }, `${built} of ${parts.length} built · ${accepted} accepted · ${marked} marked`),
         progress()),
+      signOffBlock(),
       el('div', { class: 'parts-layout' },
         el('nav', { class: 'parts-tree', 'aria-label': 'Parts' },
           ...GROUPS.map(([op, title]) => {
@@ -280,6 +367,7 @@ export function createParts({ host, review, showIn3d }) {
     /** Show the parts of a TaskView (`view.components`). */
     show(view) {
       parts = view?.components || [];
+      signedOff = view?.sign_off || null;
       if (!parts.some((p) => p.id === selectedId)) {
         selectedId = (parts.find((p) => p.built && p.status === 'draft_guess') || parts[0])?.id || null;
       }

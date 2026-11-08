@@ -414,6 +414,8 @@ function mockTransport() {
   let sampleTask = null;
   // The person's review of whole-vessel parts in this page session (component id -> decision).
   const componentReviews = new Map();
+  // The sign-off of the mock survey launch's parts (SignOffView or null).
+  let mockSignOff = null;
 
   /** Steps of the task's live run that exist "now", and whether the run is still going. */
   function liveSnapshot(data, task) {
@@ -533,6 +535,7 @@ function mockTransport() {
           review_note: componentReviews.get(c.id)?.note || null,
         }))
         : null;
+      view.sign_off = task.endsWith('survey-launch') ? clone(mockSignOff) : null;
       if (isLiveStreaming(data, task)) {
         view.summary.status = 'running';
         // Before the first build, a real run has read no sections and has no model yet.
@@ -716,6 +719,18 @@ function mockTransport() {
         runs_folder: { ok: true, path: settings.runs_folder, message: 'Runs are saved here.' },
       };
     },
+    async sign_off(data, { task, name }) {
+      requireTask(data, task);
+      await pause(300);
+      if (!name?.trim()) {
+        mockSignOff = null;
+        return null;
+      }
+      const open = MOCK_COMPONENTS.filter((c) => !['accepted', 'marked'].includes(componentReviews.get(c.id)?.decision)).length;
+      if (open) throw new BackendError('sign_off_open_parts', `Review every part first: ${open} still open.`);
+      mockSignOff = { name: name.trim(), time_ms: Date.now(), statement: 'usable as a starting model' };
+      return mockSignOff;
+    },
     async review_component(data, { task, component_id: id, decision, note }) {
       requireTask(data, task);
       if (!['accepted', 'marked', 'open'].includes(decision)) throw new BackendError('review_decision', 'Unknown review decision.');
@@ -723,6 +738,7 @@ function mockTransport() {
       if (decision === 'marked' && (!text || text.length > 500)) throw new BackendError('review_note', 'Say what to change, in 1 to 500 characters.');
       await pause(300);
       componentReviews.set(id, { decision, note: decision === 'marked' ? text : null });
+      if (decision === 'open') mockSignOff = null;
       return { ok: true };
     },
     async dismiss_notice(_data, { id }) {

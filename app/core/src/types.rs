@@ -237,6 +237,17 @@ pub struct TaskView {
     /// Whole-vessel parts (APP_SPEC "Whole-vessel parts"); None without whole-vessel output.
     #[serde(default)]
     pub components: Option<Vec<ComponentView>>,
+    /// A person's sign-off of the parts ("usable as a starting model"); the run stays a draft.
+    #[serde(default)]
+    pub sign_off: Option<SignOffView>,
+}
+
+/// "Signed off by <name>, <date>: usable as a starting model". Not an approval.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SignOffView {
+    pub name: String,
+    pub time_ms: u64,
+    pub statement: String,
 }
 
 /// One whole-vessel part: a ship-cad result component, a plain label and the person's review.

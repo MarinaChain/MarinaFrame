@@ -2692,6 +2692,13 @@ code { font-family: var(--font-mono); }
 .parts-mark-actions { display: flex; align-items: center; gap: var(--space-sm); }
 .parts-mark-count { color: var(--ink-3); font: var(--fs-xs) var(--font-mono); }
 .parts-marked { padding: var(--space-sm) var(--space-md); border-left: 3px solid var(--brand); border-radius: var(--radius-sm); background: var(--brand-soft); color: var(--ink); font-size: var(--fs-md); }
+/* Sign-off: product navy ("pass"), never green and never the word approved. */
+.parts-signoff { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm) var(--space-md); padding: var(--space-md) var(--space-lg); border: 1px dashed var(--rule-strong); border-radius: var(--radius-md); color: var(--ink-2); font-size: var(--fs-md); }
+.parts-signoff p { flex: 1 1 320px; min-width: 0; }
+.parts-signoff input { flex: 0 1 220px; height: 32px; padding: 0 var(--space-sm); border: 1px solid var(--rule-strong); border-radius: var(--radius-md); background: var(--raised); color: var(--ink); font: var(--fs-md) var(--font-ui); user-select: text; -webkit-user-select: text; }
+.parts-signoff.is-signed { border-style: solid; border-color: var(--pass); background: var(--pass-soft); color: var(--ink); }
+.parts-signoff.is-signed > .icon { flex: none; width: 20px; height: 20px; color: var(--pass); stroke-width: 2; }
+.parts-signoff-note { color: var(--ink-3); }
 @media (max-width: 1100px) {
   .parts-layout { grid-template-columns: minmax(0, 1fr); }
   .parts-sketches { grid-template-columns: minmax(0, 1fr); }

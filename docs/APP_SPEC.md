@@ -538,4 +538,13 @@ with `target_component_ids` (later).
 
 The Parts tab groups parts by op, draws a profile and a plan sketch of the boxes (the selected
 part in the selection blue, parts with guesses dashed amber), lists each value with its source
-label and basis, and offers Accept (A), Show in 3D and Mark.
+label and basis, and offers Accept (A), Mark (M), Next (N), Show in 3D and Copy part list.
+
+Sign-off: `sign_off { task, name }` → `SignOffView { name, time_ms, statement: "usable as a
+starting model" } | null` (an empty name withdraws it). Allowed only when every part is reviewed
+(accepted or marked); a part opened again ends it. `TaskView.sign_off` shows it as "Signed off by
+<name>, <date>: usable as a starting model". It records a person's judgement in the app config
+folder (`signoffs.json`); the run and every file stay drafts and `engineering_approved` stays false.
+
+The part list copy is tab-separated; a text cell that starts with =, +, -, @, a tab or a carriage
+return gets a leading single quote (as `exports/csv_safety.py`); numbers stay numbers.
