@@ -65,3 +65,9 @@
 - **Trigger:** I described the old rule "the model must never write geometry" as a draft-mode exception only. The founder said writing geometry is half the point of the model.
 - **Rule:** Treat model-authored geometry (sections, waterlines, sheet values, corrections of traces) as a main path. Code fairs, sanity-checks, builds, renders back and labels the source of each section; the frozen scoring gate measures quality. Do not design tools or prompts that forbid the model from writing geometry.
 - **Why:** The earlier evidence-only framing made the model a selector of traced ink; on imperfect drawings that delivers nothing.
+
+### Happy path first; do not add failure paths (MarinaFrame)
+- **Date:** 2026-11-08
+- **Trigger:** W17c added a new build failure (`authored_outside_draft`) and I proposed more checks. The founder said: stop making builds fail; focus on happy paths first.
+- **Rule:** Until the model reliably produces drafts, do not add refusals or blocked states. In draft mode, turn checks into warnings whenever a solid can be made. Spend effort on read -> geometry -> build -> render -> finish.
+- **Why:** Every gate added before the main path works produces more empty results and no learning.

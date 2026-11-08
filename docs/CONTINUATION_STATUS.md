@@ -406,3 +406,6 @@ campaign counts as a failure.
   only a gap fallback. It may author or correct any section or sheet value; code fairs, builds,
   renders back and labels the source. The old rule "model chooses WHAT, code measures HOW MUCH" is
   superseded. W17c brief updated.
+- **Founder direction (later):** happy path first. No new refusals or blocked states; in draft mode
+  checks become warnings whenever a solid can be made. W17c is on branch `w17c-model-geometry`
+  (pushed); Sol merges it after W18 and rewrites the prompt.
