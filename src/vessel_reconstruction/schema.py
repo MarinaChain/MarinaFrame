@@ -321,7 +321,7 @@ def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
                 from .section_authoring import check_authored
                 if not check_draft(spec.get("draft")):
                     errors.append(gap("authored_outside_draft", "Model-authored section geometry builds only as a draft.", sid))
-                elif not check_authored(sec["authored"]):
+                elif not check_authored(sec["authored"], table_fit=sid in _table_fit_section_ids(spec)):
                     errors.append(gap("invalid_authored_section", "authored must be {source_label, basis, points_yz_m} with a bounded fair curve.", sid))
         if FORBIDDEN.intersection(sec):
             errors.append(gap("geometry_in_input", "Drawing input must not contain target geometry or evaluation answers.", sid))
@@ -388,3 +388,12 @@ def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
     if "components" in spec and (not isinstance(spec["components"], list) or spec["components"]):
         errors.append(gap("unsupported_components", "This version reconstructs the hull envelope only; components must be an empty list."))
     return errors
+
+
+def _table_fit_section_ids(spec: dict) -> set:
+    """Sections the vessel-table form fit filled: their draft guess is a bridged gap or a
+    dropped end (vessel_model.build_spec). Only these may carry the ``interpolated`` label."""
+    draft = spec.get("draft") if isinstance(spec.get("draft"), dict) else {}
+    guesses = draft.get("guesses") if isinstance(draft.get("guesses"), list) else []
+    return {g.get("section_id") for g in guesses
+            if isinstance(g, dict) and g.get("kind") in ("bridged_gap", "dropped_end")}

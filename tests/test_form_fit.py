@@ -156,7 +156,7 @@ def test_build_spec_keeps_ink_selection_and_builds_fitted_rows_as_curves():
     assert "contour_selection" in by_id["s02"] and by_id["s02"]["z_max_m"] == 9.5
     fitted = by_id["s04"]
     assert "contour_selection" not in fitted and fitted["authored"]["source_label"] == "interpolated"
-    assert check_authored(fitted["authored"])
+    assert check_authored(fitted["authored"], table_fit=True)
     assert check_draft(spec["draft"])
     guess = next(g for g in spec["draft"]["guesses"] if g["section_id"] == "s04")
     assert guess["kind"] == "bridged_gap" and guess["x_range_m"] == [30.0, 50.0]
@@ -205,3 +205,17 @@ def test_table_cells_and_json_round_trip():
     assert again.sources() == {"a": "traced", "b": "fitted"}
     with pytest.raises(ValueError):
         StationRow(id="c", x_m=0.0, points_yz_m=[[0.0, 0.0], [1.0, 1.0]], source="guessed")
+
+
+def test_interpolated_label_only_for_form_fit_sections():
+    """A model-authored section cannot pass as interpolated: the label needs a form-fit guess."""
+    from vessel_reconstruction.schema import _table_fit_section_ids
+    from vessel_reconstruction.section_authoring import check_authored
+
+    authored = {"source_label": "interpolated", "basis": "form fit",
+                "points_yz_m": [[0.0, 0.0], [1.0, 1.0], [2.0, 2.0], [2.5, 3.0], [2.6, 4.0]]}
+    assert not check_authored(authored)
+    assert check_authored(authored, table_fit=True)
+    spec = {"draft": {"guesses": [{"section_id": "s02", "kind": "bridged_gap"},
+                                  {"section_id": "s03", "kind": "model_authored"}]}}
+    assert _table_fit_section_ids(spec) == {"s02"}
