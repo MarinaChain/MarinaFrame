@@ -793,9 +793,47 @@ function stripEmpty() {
   return el('p', { class: 'strip-empty' }, 'This run found no sections on the drawing.');
 }
 
+/** Sections a person still has to look at: a guessed line or a declined section. */
+function needsCheck(section) {
+  return section.state === 'guessed' || section.state === 'declined';
+}
+
+/** Select the next section to check after the current one (wraps to the first). */
+function nextToCheck() {
+  const sections = state.view?.sections || [];
+  const index = sections.findIndex((s) => s.id === state.sectionId);
+  const ordered = [...sections.slice(index + 1), ...sections.slice(0, index + 1)];
+  const next = ordered.find(needsCheck);
+  if (next) {
+    selectSection(next.id);
+    $(`tile-${next.id}`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+}
+
+/** The review counter left of the tiles: how many sections still need a person, and Next. */
+function renderStripHead() {
+  const sections = state.view?.sections || [];
+  const open = sections.filter(needsCheck).length;
+  const head = $('strip-head');
+  head.hidden = !sections.length;
+  if (!sections.length) return;
+  fill(head,
+    el('span', { class: 'strip-count', dataset: { open: String(open > 0) } },
+      el('strong', {}, String(open)), ` of ${sections.length}`),
+    el('span', { class: 'strip-count-label' }, 'to check'),
+    el('button', {
+      class: 'btn btn-small',
+      type: 'button',
+      disabled: !open,
+      title: 'Go to the next section to check (N)',
+      onclick: nextToCheck,
+    }, 'Next'));
+}
+
 function renderStrip() {
   const strip = $('strip');
   const sections = state.view?.sections || [];
+  renderStripHead();
   if (!sections.length) {
     fill(strip, stripEmpty());
     strip.removeAttribute('aria-activedescendant');
@@ -1810,6 +1848,7 @@ document.addEventListener('keydown', (event) => {
     let handled = true;
     if (event.key === '[') stepSection(-1);
     else if (event.key === ']') stepSection(1);
+    else if ((event.key === 'n' || event.key === 'N') && state.vesselTab === 'run') nextToCheck();
     else if (event.key === 'r' || event.key === 'R') model.resetView();
     else if (event.key === ' ' && !event.target.closest?.('button')) handled = live.togglePlay();
     else if (event.key === 'ArrowLeft' && !arrowsTaken) handled = live.stepModel(-1);

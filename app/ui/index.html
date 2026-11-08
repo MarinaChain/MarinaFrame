@@ -213,7 +213,11 @@
                does now. M1 shows the latest recorded step; the live lane streams into it. -->
           <div class="narration" id="narration" data-hook="narration" role="status" aria-live="polite"></div>
 
-          <div class="strip" id="strip" role="listbox" aria-label="Sections" aria-orientation="horizontal" tabindex="0"></div>
+          <!-- Review counter (sections still to check, Next) beside the section tiles. -->
+          <div class="strip-row">
+            <div class="strip-head" id="strip-head" aria-live="polite"></div>
+            <div class="strip" id="strip" role="listbox" aria-label="Sections" aria-orientation="horizontal" tabindex="0"></div>
+          </div>
 
           <!-- HOOK(M3 live, M7 compare): revision and timeline strip. M1 shows the current
                revision and the model cost; the live lane adds the revision ladder, the fit

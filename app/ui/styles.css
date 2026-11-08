@@ -1052,17 +1052,41 @@ code { font-family: var(--font-mono); }
 .pane-empty p { max-width: 34ch; font-size: var(--fs-sm); color: var(--text-3); }
 
 /* Section strip. */
+/* Section strip: the review counter, then the tiles (scrolling sideways). */
+.strip-row {
+  display: flex;
+  flex: none;
+  min-width: 0;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+}
+.strip-head {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 2px;
+  flex: none;
+  width: 96px;
+  padding: var(--space-sm) var(--space-md);
+  border-right: 1px solid var(--line);
+}
+.strip-head[hidden] { display: none; }
+.strip-count { font: var(--fs-sm) var(--font-mono); color: var(--text-3); white-space: nowrap; }
+.strip-count strong { font-size: var(--fs-xl); font-weight: 500; color: var(--text); }
+.strip-count[data-open="true"] strong { color: var(--warn); }
+.strip-count-label { color: var(--text-3); font-size: var(--fs-xs); white-space: nowrap; }
+.strip-head .btn { margin-top: 2px; }
 .strip {
   display: flex;
   gap: var(--space-sm);
   min-height: var(--strip-h);
-  flex: none;
+  flex: 1 1 auto;
+  min-width: 0;
   align-items: flex-start;
   /* Height follows the tiles; a horizontal scroll bar adds its own room below them. */
   padding: var(--space-sm) var(--space-md);
   overflow-x: auto;
-  border-top: 1px solid var(--line);
-  background: var(--bg);
 }
 .strip:focus-visible { outline-offset: -2px; border-radius: 0; }
 .strip-empty { display: flex; align-items: center; gap: var(--space-sm); flex: none; align-self: center; color: var(--text-3); font-size: var(--fs-sm); padding: 0 var(--space-sm) 0 var(--space-xs); }
@@ -1821,9 +1845,9 @@ code { font-family: var(--font-mono); }
   background: var(--raised);
 }
 .thought.is-current .thought-card { border-color: var(--brand); box-shadow: inset 2px 0 0 var(--brand); }
-.thought-head { display: flex; align-items: baseline; gap: var(--space-sm); min-width: 0; }
+.thought-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--space-sm); min-width: 0; }
 .thought-title {
-  flex: 1;
+  flex: 1 1 12em; /* the time and cost move under a long title in a narrow inspector */
   min-width: 0;
   padding: 0;
   border: 0;
@@ -1855,10 +1879,14 @@ code { font-family: var(--font-mono); }
 .thought-notes { margin: var(--space-xs) 0 0; color: var(--ink-2); overflow-wrap: anywhere; }
 .thought-images { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-xs); margin-top: var(--space-xs); }
 .thought-images img { width: 100%; border: 1px solid var(--rule); border-radius: var(--radius-sm); background: #FBFBF9; }
+/* A quiet step: the title (up to two lines) and its time on the first row, the result below.
+   Text wraps instead of being cut, so a narrow inspector still reads in full. */
 .thought-line {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
-  gap: var(--space-sm);
+  column-gap: var(--space-sm);
+  row-gap: 1px;
   width: 100%;
   min-width: 0;
   padding: 0;
@@ -1866,13 +1894,24 @@ code { font-family: var(--font-mono); }
   background: none;
   color: var(--ink-3);
   font-size: var(--fs-sm);
+  line-height: 1.4;
   text-align: left;
   cursor: pointer;
 }
 .thought-line:hover, .thought.is-current .thought-line { color: var(--ink); }
-.thought-line-title { flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.thought-line-result { flex: 1 1 auto; min-width: 0; overflow: hidden; color: var(--ink-3); font-family: var(--font-mono); font-size: var(--fs-xs); white-space: nowrap; text-overflow: ellipsis; }
-.thought-time { flex: none; margin-left: auto; font: var(--fs-xs) var(--font-mono); color: var(--ink-3); }
+.thought-line-title {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  padding-right: 2px; /* room for the slant of italic text */
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+.thought-line-result { grid-column: 1; grid-row: 2; min-width: 0; color: var(--ink-3); font-family: var(--font-mono); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.thought-time { grid-column: 2; grid-row: 1; flex: none; margin-left: auto; font: var(--fs-xs) var(--font-mono); color: var(--ink-3); }
 .thought[data-category="quiet"] .thought-line-title { font-style: italic; }
 .thinking-jump { position: sticky; bottom: var(--space-sm); display: flex; width: fit-content; margin: var(--space-sm) 0 0 auto; background: var(--ai-soft); color: var(--ai-text); cursor: pointer; box-shadow: 0 2px 8px rgba(10, 31, 61, 0.15); }
 .thinking-jump[hidden] { display: none; }
