@@ -421,6 +421,11 @@ mod tests {
             parts.len(),
             whole_vessel_model(&task).map(|m| (m.bytes, m.loadable))
         );
+        // For a local UI check only: the parts as the app sees them, for the browser mock
+        // (`?mockpartsfile`). The output path must be git-ignored; it holds the run's numbers.
+        if let Ok(out) = std::env::var("MARINAFRAME_PARTS_OUT") {
+            std::fs::write(out, serde_json::to_vec_pretty(&parts).unwrap()).unwrap();
+        }
     }
 
     #[test]

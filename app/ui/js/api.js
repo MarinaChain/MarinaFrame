@@ -534,8 +534,13 @@ function mockTransport() {
     async get_task(data, { task }) {
       const view = clone(requireTask(data, task));
       // Whole-vessel parts (APP_SPEC "Whole-vessel parts"): the mock gives them to the survey launch.
+      // ?mockpartsfile: parts read by app/core from a real run folder into the git-ignored
+      // mock/files/parts-local.json (parts.rs ignored test, MARINAFRAME_PARTS_OUT). Local checks only.
+      const localParts = new URLSearchParams(location.search).has('mockpartsfile')
+        ? await fetch('mock/files/parts-local.json').then((r) => (r.ok ? r.json() : null)).catch(() => null)
+        : null;
       view.components = task.endsWith('survey-launch')
-        ? clone(MOCK_COMPONENTS).map((c) => ({
+        ? clone(localParts || MOCK_COMPONENTS).map((c) => ({
           ...c,
           review: componentReviews.get(c.id)?.decision || 'open',
           review_note: componentReviews.get(c.id)?.note || null,

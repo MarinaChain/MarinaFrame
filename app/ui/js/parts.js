@@ -35,8 +35,24 @@ function argumentWord(name) {
  * The ship-cad reason in plain words (the raw text stays in the tooltip). Each '; '-separated
  * item becomes one short sentence.
  */
+/**
+ * A CAD entity handle in worker text, for example E496460BAFD67193 or A$C18113CC1: ten or more
+ * capitals, digits and $ with at least one digit. People cannot use them; the full text stays in
+ * the tooltip for engineers.
+ */
+const HANDLE = String.raw`(?=[A-Z$]*\d)[A-Z0-9$]{10,}`;
+const HANDLE_LIST = new RegExp(String.raw`\s*\((?:${HANDLE})(?:,\s*${HANDLE})*\)`, 'g');
+const HANDLE_WORD = new RegExp(String.raw`\s*\b${HANDLE}\b`, 'g');
+
+/** Text without CAD entity handles: "(E4964…, E4964…)" lists and single handles go. */
+export function withoutHandles(text) {
+  if (!text) return text;
+  return text.replace(HANDLE_LIST, '').replace(HANDLE_WORD, '').replace(/\s{2,}/g, ' ').trim();
+}
+
 export function plainReason(reason) {
   if (!reason) return '';
+  reason = withoutHandles(reason);
   if (reason === 'Component identity needs human review') {
     return 'Every value was read from the drawing. Check that this is the right part.';
   }
@@ -46,7 +62,9 @@ export function plainReason(reason) {
     match = /^(\w+): (guessed|ai_inferred): (.+)$/.exec(item);
     if (match) return `${argumentWord(match[1])}: ${match[2] === 'guessed' ? 'guessed' : 'read by the AI'} (${match[3]}).`;
     if (item === 'primary measurement does not match named source') return 'The outline was read from another view than the part names.';
-    return item.endsWith('.') ? item : `${item}.`;
+    // A plain item is its own sentence: capital first letter, full stop.
+    const sentence = item.charAt(0).toUpperCase() + item.slice(1);
+    return sentence.endsWith('.') ? sentence : `${sentence}.`;
   }).join(' ');
 }
 
@@ -271,7 +289,7 @@ export function createParts({ host, review, showIn3d, signOff, onSelect = () => 
             el('th', { scope: 'row' }, a.name),
             el('td', { class: 'parts-value' }, a.value || '—'),
             el('td', {}, chip(SOURCE_WORD[a.source] || a.source, SOURCE_TONE[a.source] || '', a.basis || '')),
-            el('td', { class: 'parts-basis' }, a.basis || '')))))
+            el('td', { class: 'parts-basis', title: a.basis || '' }, withoutHandles(a.basis || ''))))))
         : null,
       guessed ? el('p', { class: 'parts-note' }, icon('warn'), `${guessed} ${guessed === 1 ? 'value is' : 'values are'} guessed. ${guessed === 1 ? 'Check it' : 'Check them'} before you use this part.`) : null);
   }

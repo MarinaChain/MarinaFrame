@@ -2780,7 +2780,7 @@ code { font-family: var(--font-mono); }
 }
 .parts-row:hover { background: var(--hover); }
 .parts-row[aria-pressed="true"] { border-color: var(--brand); background: var(--brand-soft); }
-.parts-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.parts-name { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; } /* long labels wrap to two lines */
 .parts-row .badge { flex: none; }
 .parts-main { display: flex; flex-direction: column; gap: var(--space-lg); min-width: 0; }
 .parts-sketches { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-md); align-items: start; }

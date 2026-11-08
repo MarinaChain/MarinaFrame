@@ -24,3 +24,5 @@ app/src-tauri/target/
 
 # A whole-vessel GLB placed in the mock for a local check (?mockglb); never committed.
 app/ui/mock/files/*.glb
+# Parts read from a real run folder for a local UI check (?mockpartsfile); never committed.
+app/ui/mock/files/*-local.json

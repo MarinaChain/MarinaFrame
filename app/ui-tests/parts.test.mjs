@@ -1,7 +1,17 @@
 // Part list copy (js/parts.js): no spreadsheet formulas from labels or notes. Run: npm run test:ui
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { safeTextCell, partTableText, plainReason } from '../ui/js/parts.js';
+import { safeTextCell, partTableText, plainReason, withoutHandles } from '../ui/js/parts.js';
+
+test('CAD entity handles are left out of shown text', () => {
+  // Made-up handles in the shape of DXF ones.
+  assert.equal(withoutHandles('from the plan (1A2B3C4D5E6F, 1A2B3C4D5E70); breadth'), 'from the plan; breadth');
+  assert.equal(withoutHandles('the block linework (A$C0000ABCD1) below'), 'the block linework below');
+  assert.equal(withoutHandles('stray 0000FFFF1111 handle'), 'stray handle');
+  // Plain words, station names and short codes stay.
+  assert.equal(withoutHandles('Label MAIN DECK, ST 12, DXF R2018'), 'Label MAIN DECK, ST 12, DXF R2018');
+  assert.equal(withoutHandles('BULWARKHEIGHT is not a handle'), 'BULWARKHEIGHT is not a handle');
+});
 
 test('ship-cad reasons read as plain sentences', () => {
   assert.equal(plainReason('mast_outline: missing or invalid measurement; mast_height: missing or invalid measurement'),
