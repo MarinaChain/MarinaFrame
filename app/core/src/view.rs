@@ -38,7 +38,7 @@ pub struct ViewContext {
     /// Plain-language failure of the last background action on this task.
     pub action_error: Option<String>,
     /// The person's review of whole-vessel parts in this task: component id -> decision.
-    pub part_reviews: std::collections::HashMap<String, String>,
+    pub part_reviews: std::collections::HashMap<String, crate::parts::PartReview>,
 }
 
 pub fn map_status(controller_status: &str) -> Status {

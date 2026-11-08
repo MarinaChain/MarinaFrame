@@ -2680,6 +2680,12 @@ code { font-family: var(--font-mono); }
 .parts-basis { color: var(--ink-2); font-size: var(--fs-sm); }
 .parts-args tr[data-source="guessed"] { background: var(--guess-soft); }
 .parts-note { display: flex; align-items: center; gap: var(--space-sm); color: var(--warn); font-size: var(--fs-sm); }
+/* Mark a part: the person's words are brand blue (a person's mark), not amber (review data). */
+.parts-mark { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-md); border: 1px solid var(--brand); border-radius: var(--radius-md); background: var(--brand-soft); }
+.parts-mark textarea { width: 100%; min-height: 72px; padding: var(--space-sm); border: 1px solid var(--rule-strong); border-radius: var(--radius-md); background: var(--raised); color: var(--ink); font: var(--fs-md)/1.45 var(--font-ui); resize: vertical; user-select: text; -webkit-user-select: text; }
+.parts-mark-actions { display: flex; align-items: center; gap: var(--space-sm); }
+.parts-mark-count { color: var(--ink-3); font: var(--fs-xs) var(--font-mono); }
+.parts-marked { padding: var(--space-sm) var(--space-md); border-left: 3px solid var(--brand); border-radius: var(--radius-sm); background: var(--brand-soft); color: var(--ink); font-size: var(--fs-md); }
 @media (max-width: 1100px) {
   .parts-layout { grid-template-columns: minmax(0, 1fr); }
   .parts-sketches { grid-template-columns: minmax(0, 1fr); }

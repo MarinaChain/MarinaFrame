@@ -527,7 +527,11 @@ function mockTransport() {
       const view = clone(requireTask(data, task));
       // Whole-vessel parts (APP_SPEC "Whole-vessel parts"): the mock gives them to the survey launch.
       view.components = task.endsWith('survey-launch')
-        ? clone(MOCK_COMPONENTS).map((c) => ({ ...c, review: componentReviews.get(c.id) || 'open' }))
+        ? clone(MOCK_COMPONENTS).map((c) => ({
+          ...c,
+          review: componentReviews.get(c.id)?.decision || 'open',
+          review_note: componentReviews.get(c.id)?.note || null,
+        }))
         : null;
       if (isLiveStreaming(data, task)) {
         view.summary.status = 'running';
@@ -712,11 +716,13 @@ function mockTransport() {
         runs_folder: { ok: true, path: settings.runs_folder, message: 'Runs are saved here.' },
       };
     },
-    async review_component(data, { task, component_id: id, decision }) {
+    async review_component(data, { task, component_id: id, decision, note }) {
       requireTask(data, task);
-      if (!['accepted', 'open'].includes(decision)) throw new BackendError('review_decision', 'Unknown review decision.');
+      if (!['accepted', 'marked', 'open'].includes(decision)) throw new BackendError('review_decision', 'Unknown review decision.');
+      const text = (note || '').trim();
+      if (decision === 'marked' && (!text || text.length > 500)) throw new BackendError('review_note', 'Say what to change, in 1 to 500 characters.');
       await pause(300);
-      componentReviews.set(id, decision);
+      componentReviews.set(id, { decision, note: decision === 'marked' ? text : null });
       return { ok: true };
     },
     async dismiss_notice(_data, { id }) {

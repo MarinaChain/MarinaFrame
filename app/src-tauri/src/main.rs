@@ -247,9 +247,10 @@ async fn review_component(
     task: String,
     component_id: String,
     decision: String,
+    note: Option<String>,
 ) -> Result<Ok_, AppError> {
     run(backend, move |b| {
-        b.review_component(&task, &component_id, &decision)
+        b.review_component(&task, &component_id, &decision, note.as_deref())
             .map(|_| OK)
     })
     .await

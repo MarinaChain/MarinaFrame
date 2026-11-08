@@ -2028,7 +2028,7 @@ const exporter = createExport({ host: $('vessel-page-export'), invoke });
 // Parts tab (js/parts.js): whole-vessel components with per-part review.
 const parts = createParts({
   host: $('vessel-page-parts'),
-  review: (id, decision) => invoke('review_component', { task: state.task, component_id: id, decision }).catch((error) => { showError(error); throw error; }),
+  review: (id, decision, note = null) => invoke('review_component', { task: state.task, component_id: id, decision, note }).catch((error) => { showError(error); throw error; }),
   showIn3d: (part) => {
     setVesselTab('run');
     model.setHighlightBox(part.bbox_m);
@@ -2180,6 +2180,7 @@ document.addEventListener('keydown', (event) => {
     else if ((event.key === 'n' || event.key === 'N') && state.vesselTab === 'run') nextToCheck();
     else if ((event.key === 'a' || event.key === 'A') && state.vesselTab === 'run' && canDecide()) decide(currentSection(), acceptCandidate(currentSection()));
     else if ((event.key === 'a' || event.key === 'A') && state.vesselTab === 'parts') handled = parts.acceptSelected();
+    else if ((event.key === 'm' || event.key === 'M') && state.vesselTab === 'parts') handled = parts.markSelected();
     else if ((event.key === 'o' || event.key === 'O') && state.vesselTab === 'run' && canDecide()) decide(currentSection(), otherCandidate(currentSection()));
     else if (event.key === 'r' || event.key === 'R') model.resetView();
     else if (event.key === ' ' && !event.target.closest?.('button')) handled = live.togglePlay();

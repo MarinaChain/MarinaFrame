@@ -308,7 +308,8 @@ export function createMarkTool({ invoke, drawing, drawingHost, strip, context, o
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && active && !popover) setActive(false);
     const typing = event.target.closest?.('input, textarea, select, [contenteditable]');
-    if (!typing && !event.metaKey && !event.ctrlKey && (event.key === 'm' || event.key === 'M') && !button.hidden && !button.disabled) {
+    if (!typing && !event.metaKey && !event.ctrlKey && (event.key === 'm' || event.key === 'M') && !button.hidden && !button.disabled
+      && button.offsetParent !== null) { // only while the drawing is on screen (the Run tab)
       if (document.getElementById('view-run')?.hidden) return;
       setActive(!active);
     }

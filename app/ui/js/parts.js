@@ -17,12 +17,17 @@ const GROUPS = [
 const KNOWN_OPS = new Set(GROUPS.map(([op]) => op));
 const SOURCE_WORD = { traced: 'Read', ai_inferred: 'AI read', guessed: 'Guessed' };
 const SOURCE_TONE = { traced: '', ai_inferred: 'ai', guessed: 'draft' };
+/** Longest mark note (the same limit as Mark and revise). */
+const MAX_NOTE = 500;
+/** Phrases that start a mark note: one tap, then the person adds the numbers. */
+const MARK_CHIPS = ['Too high', 'Too low', 'Too long', 'Too short', 'Wrong place', 'Not a part', 'Missing part'];
 /** Sketch scale (SVG units per metre) and margin; the SVG scales to its column width. */
 const SKETCH = { unitsPerMetre: 30, pad: 10 };
 
 /** One state word per part: the review wins, then what the build could do. */
 function partState(part) {
   if (part.review === 'accepted') return { word: 'Accepted', tone: 'brand', title: 'You accepted this part as a draft part.' };
+  if (part.review === 'marked') return { word: 'Marked', tone: 'brand', title: `You marked it: ${part.review_note || ''}` };
   if (!part.built) return { word: 'Not built', tone: 'warn', title: part.reason };
   if (part.status === 'draft_guess') return { word: 'Guessed', tone: 'draft', title: 'One or more values were guessed. Check them.' };
   return { word: 'To check', tone: '', title: 'Every value was read from the drawing. Check what the part is.' };
@@ -40,6 +45,7 @@ export function createParts({ host, review, showIn3d }) {
   let parts = [];
   let selectedId = null;
   let busy = false;
+  let marking = false; // the mark form is open on the selected part
 
   function sketch(vertical, title) {
     const built = parts.filter((p) => p.bbox_m);
@@ -81,17 +87,19 @@ export function createParts({ host, review, showIn3d }) {
         chip(state.word, state.tone, state.title)));
   }
 
-  async function decide(part, decision) {
+  async function decide(part, decision, note = null) {
     if (busy) return;
     busy = true;
     render();
     try {
       try {
-        await review(part.id, decision);
+        await review(part.id, decision, note);
       } catch {
         return; // the app showed the error; the part keeps its review
       }
       part.review = decision;
+      part.review_note = decision === 'marked' ? note.trim() : null;
+      marking = false;
       // After an accept, the next part with guesses opens: a review is a short run of keys.
       if (decision === 'accepted') {
         const next = parts.find((p) => p.review !== 'accepted' && p.built && p.status === 'draft_guess');
@@ -104,16 +112,62 @@ export function createParts({ host, review, showIn3d }) {
   }
 
   function actions(part) {
-    const accepted = part.review === 'accepted';
+    const reviewed = part.review === 'accepted' || part.review === 'marked';
     return el('div', { class: 'decision-bar' },
-      part.built ? el('button', {
-        class: accepted ? 'btn' : 'btn btn-primary',
+      part.built && !reviewed ? el('button', {
+        class: 'btn btn-primary',
         type: 'button',
         disabled: busy,
-        title: accepted ? 'Open this part again for review' : 'Accept this part as a draft part (A)',
-        onclick: () => decide(part, accepted ? 'open' : 'accepted'),
-      }, accepted ? 'Reopen' : 'Accept', accepted ? null : el('kbd', { class: 'key-hint' }, 'A')) : null,
+        title: 'Accept this part as a draft part (A)',
+        onclick: () => decide(part, 'accepted'),
+      }, 'Accept', el('kbd', { class: 'key-hint' }, 'A')) : null,
+      !reviewed ? el('button', {
+        class: 'btn',
+        type: 'button',
+        disabled: busy,
+        title: 'Say what is wrong with this part (M)',
+        onclick: () => { marking = true; render(); host.querySelector('.parts-mark textarea')?.focus(); },
+      }, 'Mark', el('kbd', { class: 'key-hint' }, 'M')) : null,
+      reviewed ? el('button', {
+        class: 'btn',
+        type: 'button',
+        disabled: busy,
+        title: 'Open this part again for review',
+        onclick: () => decide(part, 'open'),
+      }, 'Reopen') : null,
       part.bbox_m ? el('button', { class: 'btn', type: 'button', onclick: () => showIn3d(part) }, icon('cube'), 'Show in 3D') : null);
+  }
+
+  /** What the person wants changed: chips that start a sentence, then their words. */
+  function markForm(part) {
+    const text = el('textarea', { rows: '3', maxlength: String(MAX_NOTE), placeholder: 'What should change in this part?', 'aria-label': `What should change in ${part.label}` });
+    const count = el('span', { class: 'parts-mark-count' }, `0 / ${MAX_NOTE}`);
+    const save = el('button', { class: 'btn btn-primary', type: 'submit', disabled: true }, 'Save mark');
+    const update = () => {
+      count.textContent = `${text.value.length} / ${MAX_NOTE}`;
+      save.disabled = busy || !text.value.trim();
+    };
+    text.addEventListener('input', update);
+    text.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') { marking = false; render(); }
+      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !save.disabled) form.requestSubmit();
+    });
+    const form = el('form', {
+      class: 'parts-mark',
+      onsubmit: (event) => { event.preventDefault(); decide(part, 'marked', text.value); },
+    },
+    el('div', { class: 'chip-row' }, ...MARK_CHIPS.map((phrase) => el('button', {
+      class: 'btn btn-small',
+      type: 'button',
+      onclick: () => { text.value = text.value ? `${text.value.trim()} ${phrase}` : phrase; update(); text.focus(); },
+    }, phrase))),
+    text,
+    el('div', { class: 'parts-mark-actions' },
+      count,
+      el('span', { class: 'export-actions-spacer' }),
+      el('button', { class: 'btn', type: 'button', onclick: () => { marking = false; render(); } }, 'Cancel'),
+      save));
+    return form;
   }
 
   function detail(part) {
@@ -127,6 +181,10 @@ export function createParts({ host, review, showIn3d }) {
         chip(state.word, state.tone, state.title),
         part.view ? chip(`From the ${part.view}`, '', 'The drawing view this part was read from') : null),
       actions(part),
+      marking ? markForm(part) : null,
+      part.review === 'marked' && part.review_note
+        ? el('p', { class: 'parts-marked' }, el('strong', {}, 'You marked: '), part.review_note, ' Saved with the review of this run.')
+        : null,
       el('p', { class: 'parts-reason' }, part.reason),
       box ? el('p', { class: 'parts-box-line' },
         `x ${box.min[0].toFixed(2)} to ${box.max[0].toFixed(2)} m · breadth ${(box.max[1] - box.min[1]).toFixed(2)} m · `
@@ -166,6 +224,7 @@ export function createParts({ host, review, showIn3d }) {
   }
 
   function select(id) {
+    marking = false;
     selectedId = id;
     render();
   }
@@ -180,6 +239,15 @@ export function createParts({ host, review, showIn3d }) {
       render();
     },
     /** Key A on the Parts tab: accept the selected part. Returns true when it acted. */
+    /** Key M on the Parts tab: start a mark on the selected part. Returns true when it acted. */
+    markSelected() {
+      const part = parts.find((p) => p.id === selectedId);
+      if (!part || part.review === 'accepted' || part.review === 'marked' || busy) return false;
+      marking = true;
+      render();
+      host.querySelector('.parts-mark textarea')?.focus();
+      return true;
+    },
     acceptSelected() {
       const part = parts.find((p) => p.id === selectedId);
       if (!part?.built || part.review === 'accepted' || busy) return false;

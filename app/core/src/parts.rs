@@ -14,7 +14,9 @@ pub const EXECUTION_FILE: &str = "whole_vessel/execution.json";
 const EXECUTION_MAX_BYTES: usize = 8 * 1024 * 1024;
 const REVIEWS_FILE: &str = "part_reviews.json";
 /// Review decisions a person can save.
-pub const DECISIONS: [&str; 2] = ["accepted", "open"];
+pub const DECISIONS: [&str; 3] = ["accepted", "marked", "open"];
+/// Longest note of a marked part (the same limit as a Mark and revise instruction).
+pub const MAX_NOTE_CHARS: usize = 500;
 
 /// "house_t1" -> "House t1": a plain label from a ship-cad id.
 fn label_of(id: &str) -> String {
@@ -51,7 +53,7 @@ fn point(value: &Value) -> Option<[f64; 3]> {
     Some([items[0].as_f64()?, items[1].as_f64()?, items[2].as_f64()?])
 }
 
-fn component_view(entry: &Value, reviews: &HashMap<String, String>) -> Option<ComponentView> {
+fn component_view(entry: &Value, reviews: &HashMap<String, PartReview>) -> Option<ComponentView> {
     let id = entry["id"].as_str()?.to_string();
     let built = entry["built"].as_bool().unwrap_or(false);
     let labels = entry["source_labels"].as_object();
@@ -97,7 +99,11 @@ fn component_view(entry: &Value, reviews: &HashMap<String, String>) -> Option<Co
         volume_m3: entry["volume_m3"].as_f64().filter(|_| built),
         step_path: built.then(|| format!("whole_vessel/{id}.step")),
         arguments,
-        review: reviews.get(&id).cloned().unwrap_or_else(|| "open".into()),
+        review: reviews
+            .get(&id)
+            .map(|r| r.decision.clone())
+            .unwrap_or_else(|| "open".into()),
+        review_note: reviews.get(&id).and_then(|r| r.note.clone()),
         id,
     })
 }
@@ -105,7 +111,7 @@ fn component_view(entry: &Value, reviews: &HashMap<String, String>) -> Option<Co
 /// The parts of a run, or None when the run has no whole-vessel output.
 pub fn read_components(
     task: &Path,
-    reviews: &HashMap<String, String>,
+    reviews: &HashMap<String, PartReview>,
 ) -> Option<Vec<ComponentView>> {
     let bytes =
         marinaframe_control::util::read_bounded(&task.join(EXECUTION_FILE), EXECUTION_MAX_BYTES)
@@ -120,29 +126,51 @@ pub fn read_components(
     )
 }
 
-type AllReviews = BTreeMap<String, BTreeMap<String, String>>;
+/// A person's review of one part. "marked" carries what the person wants changed.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct PartReview {
+    pub decision: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+type AllReviews = BTreeMap<String, BTreeMap<String, PartReview>>;
 
 fn all_reviews(paths: &AppPaths) -> AllReviews {
     storage::read_config_json(paths, REVIEWS_FILE).unwrap_or_default()
 }
 
-/// The saved reviews of one task: component id -> decision.
-pub fn reviews_of(paths: &AppPaths, task: &Path) -> HashMap<String, String> {
+/// The saved reviews of one task: component id -> review.
+pub fn reviews_of(paths: &AppPaths, task: &Path) -> HashMap<String, PartReview> {
     all_reviews(paths)
         .remove(&task.to_string_lossy().into_owned())
         .map(|m| m.into_iter().collect())
         .unwrap_or_default()
 }
 
-/// Save a person's review of one part.
+/// Save a person's review of one part. "marked" needs a note (what to change, 1 to
+/// `MAX_NOTE_CHARS` characters); the other decisions drop any note.
 pub fn review_component(
     paths: &AppPaths,
     task: &Path,
     component_id: &str,
     decision: &str,
+    note: Option<&str>,
 ) -> AppResult<()> {
     if !DECISIONS.contains(&decision) {
         return Err(AppError::new("review_decision", "Unknown review decision."));
+    }
+    let note = note.map(str::trim).filter(|n| !n.is_empty());
+    if decision == "marked" {
+        let fits = note.is_some_and(|n| {
+            n.chars().count() <= MAX_NOTE_CHARS && !n.chars().any(char::is_control)
+        });
+        if !fits {
+            return Err(AppError::new(
+                "review_note",
+                "Say what to change, in 1 to 500 characters.",
+            ));
+        }
     }
     let known = read_components(task, &HashMap::new())
         .is_some_and(|parts| parts.iter().any(|p| p.id == component_id));
@@ -152,11 +180,15 @@ pub fn review_component(
             "This run has no such part.",
         ));
     }
+    let review = PartReview {
+        decision: decision.to_string(),
+        note: (decision == "marked").then(|| note.unwrap_or_default().to_string()),
+    };
     let mut reviews = all_reviews(paths);
     reviews
         .entry(task.to_string_lossy().into_owned())
         .or_default()
-        .insert(component_id.to_string(), decision.to_string());
+        .insert(component_id.to_string(), review);
     storage::write_config_json(paths, REVIEWS_FILE, &reviews)
 }
 
@@ -242,16 +274,50 @@ mod tests {
             data_dir: tmp.path().join("data"),
             repo_root: None,
         };
-        review_component(&paths, &task, "aft_deck", "accepted").unwrap();
-        assert_eq!(
-            reviews_of(&paths, &task)
-                .get("aft_deck")
-                .map(String::as_str),
-            Some("accepted")
-        );
+        review_component(&paths, &task, "aft_deck", "accepted", None).unwrap();
         let parts = read_components(&task, &reviews_of(&paths, &task)).unwrap();
-        assert_eq!(parts[0].review, "accepted");
-        assert!(review_component(&paths, &task, "aft_deck", "approved").is_err());
-        assert!(review_component(&paths, &task, "no_such_part", "accepted").is_err());
+        assert_eq!(
+            (parts[0].review.as_str(), parts[0].review_note.as_deref()),
+            ("accepted", None)
+        );
+        assert!(review_component(&paths, &task, "aft_deck", "approved", None).is_err());
+        assert!(review_component(&paths, &task, "no_such_part", "accepted", None).is_err());
+    }
+
+    #[test]
+    fn a_marked_part_keeps_what_to_change() {
+        let tmp = tempfile::tempdir().unwrap();
+        let task = task_with_parts(&tmp);
+        let paths = AppPaths {
+            config_dir: tmp.path().join("config"),
+            data_dir: tmp.path().join("data"),
+            repo_root: None,
+        };
+        // A mark needs a note of 1 to 500 characters.
+        assert!(review_component(&paths, &task, "aft_deck", "marked", None).is_err());
+        assert!(review_component(&paths, &task, "aft_deck", "marked", Some("  ")).is_err());
+        assert!(
+            review_component(&paths, &task, "aft_deck", "marked", Some(&"x".repeat(501))).is_err()
+        );
+        review_component(
+            &paths,
+            &task,
+            "aft_deck",
+            "marked",
+            Some(" Deck is 0.1 m too high "),
+        )
+        .unwrap();
+        let parts = read_components(&task, &reviews_of(&paths, &task)).unwrap();
+        assert_eq!(
+            (parts[0].review.as_str(), parts[0].review_note.as_deref()),
+            ("marked", Some("Deck is 0.1 m too high"))
+        );
+        // Opening it again drops the note.
+        review_component(&paths, &task, "aft_deck", "open", Some("ignored")).unwrap();
+        let parts = read_components(&task, &reviews_of(&paths, &task)).unwrap();
+        assert_eq!(
+            (parts[0].review.as_str(), parts[0].review_note.as_deref()),
+            ("open", None)
+        );
     }
 }

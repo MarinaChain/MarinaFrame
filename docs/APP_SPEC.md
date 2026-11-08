@@ -526,13 +526,14 @@ ComponentView {
   arguments: { name: string, value: string|null,       // value as text with its unit, when known
                source: "traced"|"ai_inferred"|"guessed",  // ship-cad source_labels[name]
                basis: string|null }[],                  // ship-cad provenance[name].basis
-  review: "open"|"accepted"|"marked"  // the person's review of this part (app state)
+  review: "open"|"accepted"|"marked", // the person's review of this part (app state)
+  review_note: string | null        // what to change, when "marked"
 }
 ```
 
-Command: `review_component { task, component_id, decision: "accepted"|"open" }` →
+Command: `review_component { task, component_id, decision: "accepted"|"marked"|"open", note?: string }` →
 `{ ok: true }`; saved in the app config folder (`part_reviews.json`), not in the run folder. A part with guessed values can be accepted as a draft part; nothing is ever
-"approved" (`engineering_approved` stays false). Marking a part to revise it uses Mark and revise
+"approved" (`engineering_approved` stays false). "marked" needs a note of 1 to 500 characters (what to change); it is saved with the review for the whole-vessel pass to read. Re-running one part from a mark through Mark and revise
 with `target_component_ids` (later).
 
 The Parts tab groups parts by op, draws a profile and a plan sketch of the boxes (the selected

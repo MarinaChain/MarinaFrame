@@ -65,14 +65,21 @@ impl Backend {
         Ok(view::get_task(&path, &context)?)
     }
 
-    /// Save a person's review of one whole-vessel part ("accepted" or "open").
+    /// Save a person's review of one whole-vessel part ("accepted", "marked" with a note, or "open").
     pub fn review_component(
         &self,
         task: &str,
         component_id: &str,
         decision: &str,
+        note: Option<&str>,
     ) -> AppResult<()> {
-        parts::review_component(&self.paths, &self.task_path(task)?, component_id, decision)
+        parts::review_component(
+            &self.paths,
+            &self.task_path(task)?,
+            component_id,
+            decision,
+            note,
+        )
     }
 
     pub fn get_events(&self, task: &str, after_sequence: u64) -> AppResult<Vec<EventView>> {

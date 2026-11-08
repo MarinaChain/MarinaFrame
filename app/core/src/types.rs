@@ -255,8 +255,11 @@ pub struct ComponentView {
     /// Relative to the task folder.
     pub step_path: Option<String>,
     pub arguments: Vec<ComponentArgument>,
-    /// "open" or "accepted".
+    /// "open", "accepted" or "marked".
     pub review: String,
+    /// What the person wants changed, when the review is "marked".
+    #[serde(default)]
+    pub review_note: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
