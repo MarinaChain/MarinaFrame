@@ -3,6 +3,7 @@
 //! the result or the `AppError`. Nothing here depends on a transport.
 use crate::actions::{self, ActionRegistry};
 use crate::error::{AppError, AppResult};
+use crate::live::{HullSections, LiveSteps, LiveStore};
 use crate::storage::{self, AppPaths};
 use crate::types::*;
 use crate::view::{self, ViewContext};
@@ -17,6 +18,7 @@ pub struct Backend {
     binary_sha256: Option<String>,
     worker_source: Option<PathBuf>,
     datasets_root: Option<PathBuf>,
+    live: LiveStore,
 }
 
 impl Backend {
@@ -36,6 +38,7 @@ impl Backend {
             binary_sha256,
             worker_source,
             datasets_root,
+            live: LiveStore::default(),
         }
     }
 
@@ -62,6 +65,16 @@ impl Backend {
 
     pub fn get_events(&self, task: &str, after_sequence: u64) -> AppResult<Vec<EventView>> {
         Ok(events::get_events(&self.task_path(task)?, after_sequence))
+    }
+
+    /// Live steps that are new or changed after `after_sequence` (see `live`).
+    pub fn get_live_steps(&self, task: &str, after_sequence: u64) -> AppResult<LiveSteps> {
+        Ok(self.live.steps(&self.task_path(task)?, after_sequence))
+    }
+
+    /// Section curves of one build for the 3D view.
+    pub fn get_hull_sections(&self, task: &str, revision: &str) -> AppResult<HullSections> {
+        self.live.hull_sections(&self.task_path(task)?, revision)
     }
 
     pub fn read_artifact(&self, task: &str, path: &str) -> AppResult<Artifact> {

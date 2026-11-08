@@ -1,0 +1,1 @@
+{"kind":"decision","payload":{"actor":"live_model","decision":{"arguments":{"region_px":[90,120,650,524],"subject":"labels"},"reason":"Need to read the station label near the s01 panel curve to identify which station this stroke belongs to before assigning.","tool":"read_region"},"live_inference":true},"sequence":35,"state_after":{"status":"running"},"time_ms":1794098199207}
