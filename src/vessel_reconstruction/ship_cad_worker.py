@@ -102,9 +102,9 @@ def read_worker_json(root: Path, relative: Path) -> dict | None:
 
 def run(program: dict, measurements: dict, task: Path, *, audit=None, limits=DEFAULT_LIMITS,
         guesses: dict | None = None) -> dict:
-    from .ship_cad import validate_program
+    from .ship_cad import triage_program
 
-    validate_program(program)
+    triage_program(program)  # Header strict; a bad component is reported, not fatal.
     if sys.platform != 'darwin' or not Path('/usr/bin/sandbox-exec').is_file():
         raise RuntimeError('ship CAD requires the supported OS sandbox; no unsafe fallback')
     if task.exists():

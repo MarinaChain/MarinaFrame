@@ -22,18 +22,101 @@ LINES_FILE = 'polarkonsult/Lines Plan Rev0.dxf'
 PART_IDS = ('aft_deck', 'main_deck', 'house_t1', 'aft_bulwark', 'house_t2', 'wheelhouse', 'fwd_rail')
 # Render: isometric view from aft starboard, above (pixels of the PNG).
 RENDER_SIZE = (1600, 900)
+# Viewer mesh chord tolerance (mm): fine enough for a 36 m ship on screen.
+MESH_TOLERANCE_MM = 5.0
+# Truth STEP volume (hull and first tier; docs/SHIP_CAD_LANGUAGE.md).
+TRUTH_VOLUME_M3 = 1302.280
 
 
-def build_hull(sources: Path, out: Path) -> Path:
+def deck_at_side(inputs: dict) -> dict:
+    """Deck at side from the GA reading: aft deck aft of the first-tier end wall, 1-deck forward.
+
+    The lines-plan stations run up to the bulwark and forecastle tops (up to 7.59 m), so a loft
+    to those tops holds the bulwarks and the first tier as hull: +52 % volume against the truth.
+    In the whole vessel those are their own parts, so the hull stops at the deck.
+    """
+    levels = inputs['levels']
+    walls = inputs.get('tier_end_walls', {}).get('house_t1', {}).get('walls') or []
+    split_x = walls[0]['x_m'] if walls else (levels['aft_deck']['extent'] or [0, 15.5])[1]
+    return {'split_x_m': split_x, 'aft_deck_z_m': levels['aft_deck']['z'], 'main_deck_z_m': levels['main_deck']['z']}
+
+
+def cap_stations(config: dict, deck: dict) -> dict:
+    """End each station at the deck at side (never above its drawn top)."""
+    for station in config['stations']:
+        deck_z = deck['aft_deck_z_m'] if station['x_m'] < deck['split_x_m'] else deck['main_deck_z_m']
+        drawn = station.get('top_z_m', config['side_line']['top_z_m'])
+        station['top_z_m'] = round(min(drawn, deck_z), 4)
+    config['side_line']['top_z_m'] = round(min(config['side_line']['top_z_m'], deck['main_deck_z_m']), 4)
+    return config
+
+
+def build_hull(sources: Path, out: Path, deck: dict | None = None) -> Path:
     from benchmarks.gunnerus import make_gunnerus_configs, vector_path
 
     config, ledger = make_gunnerus_configs.vector_config(sources / LINES_FILE)
+    if deck:
+        config = cap_stations(config, deck)
     config['dxf'] = str((sources / LINES_FILE).resolve())
     (out / 'hull_config.json').write_text(json.dumps(config, indent=2) + '\n')
     (out / 'hull_identity.json').write_text(json.dumps(ledger, indent=2) + '\n')
     summary = vector_path.run(out / 'hull_config.json', out / 'hull')
     (out / 'hull_summary.json').write_text(json.dumps(summary, indent=2, default=str) + '\n')
     return out / 'hull' / 'model.brep'
+
+
+def cap_region_rows(rows: list, cap_z: float) -> list | None:
+    """Rows ``[z, y_in, y_out]`` up to cap_z, with an interpolated row at cap_z; None if too few."""
+    kept = [row for row in rows if row[0] <= cap_z]
+    above = [row for row in rows if row[0] > cap_z]
+    if kept and above and kept[-1][0] < cap_z:
+        low, high = kept[-1], above[0]
+        t = (cap_z - low[0]) / (high[0] - low[0])
+        kept.append([cap_z] + [low[i] + t * (high[i] - low[i]) for i in (1, 2)])
+    return kept if len(kept) >= 2 else None
+
+
+def cap_sections(sections: list[dict], deck: dict) -> list[dict]:
+    """End each station at the deck at side, cutting the read section rows (no CAD Boolean).
+
+    Station tops only end the side-line extension; forward station curves are drawn up to the
+    forecastle top (7.59 m), so their rows must be cut. A Boolean cut of the lofted solids lost
+    whole solids on this hull, so the cut happens before the loft.
+    """
+    capped = []
+    for section in sections:
+        cap_z = deck['aft_deck_z_m'] if section['x_m'] < deck['split_x_m'] else deck['main_deck_z_m']
+        regions = []
+        for region in section['regions']:
+            rows = cap_region_rows(region['rows_m'], cap_z)
+            if rows:
+                regions.append({'kind': region['kind'], 'rows_m': rows})
+        if regions:
+            capped.append({'id': section['id'], 'x_m': section['x_m'], 'regions': regions})
+    return capped
+
+
+def build_hull_to_deck(sections_path: Path, deck: dict, out: Path) -> tuple[Path, dict]:
+    """Loft the capped sections with the production region builder (same CAD bound ladder)."""
+    from benchmarks.gunnerus.vector_path import CAD_DEVIATION_LADDER_M
+    from vessel_reconstruction.errors import GeometryError
+    from vessel_reconstruction.geometry import build_region_hull
+
+    sections = cap_sections(json.loads(sections_path.read_text()), deck)
+    error = None
+    for bound in CAD_DEVIATION_LADDER_M:
+        try:
+            shape, report = build_region_hull(sections, max_deviation_m=bound)
+        except GeometryError as exc:
+            error = str(exc)
+            if 'complexity limit' in error:
+                continue
+            break
+        path = out / 'hull_to_deck.brep'
+        write_brep(shape, path)
+        return path, {'status': 'built', 'cad_bound_m': bound, 'stations': len(sections),
+                      'solid_count': report['solid_count'], 'volume_m3': report['volume_m3']}
+    raise GeometryError(f'hull to deck not built: {error}')
 
 
 def read_shape(path: Path):
@@ -74,37 +157,102 @@ def render(shape, path: Path) -> None:
     plt.close(figure)
 
 
-KIND_OF_OP = {'deck': 'deck', 'deckhouse': 'deckhouse', 'bulwark': 'bulwark', 'appendage': 'appendage'}
+def write_brep(shape, path: Path) -> None:
+    from OCP.BinTools import BinTools
+
+    BinTools.Write_s(shape.wrapped, str(path))
 
 
-def components_record(step1: Path, out: Path, hull_volume_m3: float | None, hull_box: dict | None) -> dict:
-    """Component list for the app tree (TaskView ``components``; see docs/APP_SPEC.md when it lands).
+def export_all(shapes: dict, out: Path) -> dict:
+    """STEP per part and for the assembly (no pcurves: about half the size), plus a GLB mesh view."""
+    import cadquery as cq
 
-    One item per component: id, kind, box (m), source counts, review state, STEP path, volume.
-    Every item starts as ``needs_review``; nothing here is approved.
+    sizes = {}
+    parts = out / 'whole_vessel'
+    parts.mkdir(exist_ok=True)
+    for name, shape in shapes.items():
+        path = parts / f'{name}.step'
+        cq.exporters.export(shape, str(path), opt={'write_pcurves': False})
+        sizes[f'whole_vessel/{name}.step'] = path.stat().st_size
+    step = out / 'whole-vessel-draft.step'
+    cq.exporters.export(cq.Compound.makeCompound(list(shapes.values())), str(step), opt={'write_pcurves': False})
+    sizes[step.name] = step.stat().st_size
+    assembly = cq.Assembly()
+    for name, shape in shapes.items():
+        assembly.add(shape, name=name)
+    mesh = out / 'whole-vessel-draft.glb'
+    assembly.save(str(mesh), exportType='GLTF', tolerance=MESH_TOLERANCE_MM, angularTolerance=0.5)
+    sizes[mesh.name] = mesh.stat().st_size
+    return {'bytes': sizes, 'assembly_step_sha256': hashlib.sha256(step.read_bytes()).hexdigest(),
+            'mesh_tolerance_mm': MESH_TOLERANCE_MM}
+
+
+LABELS = {'hull': 'Hull (to the deck at side)', 'aft_deck': 'Aft working deck', 'main_deck': '1-deck',
+          'house_t1': 'Superstructure tier 1 (1-deck to A-deck)', 'aft_bulwark': 'Aft bulwark',
+          'house_t2': 'Deckhouse tier 2 (on A-deck)', 'wheelhouse': 'Wheelhouse',
+          'fwd_rail': 'Forward rail (A-deck)'}
+
+
+def _argument_provenance(component: dict) -> dict:
+    """Provenance keyed by argument name, with a basis for each value (the app reads this)."""
+    by_argument = {}
+    references = {name: ref for name, ref in component.get('args', {}).items() if isinstance(ref, str)}
+    for argument, label in component.get('source_labels', {}).items():
+        record = component.get('provenance', {}).get(references.get(argument, argument), {})
+        basis = record.get('basis')
+        if basis is None and label == 'traced':
+            basis = f'{record.get("method", "measured")} in the {record.get("view", "drawing")} view'
+        by_argument[argument] = {'source': label, 'basis': basis}
+    return by_argument
+
+
+def write_app_parts(step1: Path, inputs: dict, out: Path, hull: dict | None) -> Path:
+    """The app's whole-vessel folder: ``whole_vessel/execution.json`` and ``<id>.step``.
+
+    Same shape as the ship-cad worker output (docs/APP_SPEC.md "Whole-vessel parts"), plus a
+    ``label`` per part, the program ``args`` and the resolved ``geometry`` values (an older
+    worker result has no geometry, so it is resolved again from the run inputs). The STEP
+    files are written by ``export_all`` into the same folder.
     """
+    from vessel_reconstruction.ship_cad import resolve_program
+
     execution = json.loads((step1 / 'execution.json').read_text())
-    items = []
-    if hull_volume_m3 is not None:
-        items.append({'id': 'hull', 'kind': 'hull', 'box_m': hull_box, 'volume_m3': hull_volume_m3,
-                      'source_counts': {'traced': None, 'ai_inferred': 0, 'guessed': None},
-                      'review_state': 'needs_review', 'step_path': 'hull/model.brep',
-                      'note': 'Region loft from the lines plan; per-value source counts are not recorded'})
+    program = inputs['program']
+    references = {c['id']: c['args'] for c in program.get('components', [])}
+    resolved = {c['id']: c['geometry'] for c in resolve_program(program, inputs.get('measurements', {}),
+                                                                inputs.get('guesses', {}))}
+    components = []
+    if hull:
+        components.append(hull)
     for component in (execution.get('result') or {}).get('components', []):
-        counts = {'traced': 0, 'ai_inferred': 0, 'guessed': 0}
-        for label in component.get('source_labels', {}).values():
-            counts[label] = counts.get(label, 0) + 1
-        built = component.get('built', False)
-        items.append({'id': component['id'], 'kind': KIND_OF_OP.get(component['op'], component['op']),
-                      'box_m': component.get('bbox_m') if built else None,
-                      'volume_m3': component.get('volume_m3') if built else None,
-                      'source_counts': counts, 'review_state': 'needs_review', 'status': component['status'],
-                      'step_path': str(step1 / 'task' / 'work' / 'output' / f'{component["id"]}.step') if built
-                      else None})
-    record = {'schema': 'marinaframe.components.v0', 'engineering_approved': False,
-              'assembly_step': 'whole-vessel-draft.step', 'components': items}
-    (out / 'components.json').write_text(json.dumps(record, indent=2) + '\n')
-    return record
+        item = dict(component, label=LABELS.get(component['id'], component['id']))
+        item['args'] = component.get('args') or references.get(component['id'], {})
+        if item.get('geometry') is None and item.get('built'):
+            item['geometry'] = resolved.get(component['id'])
+        item['provenance'] = {**component.get('provenance', {}), **_argument_provenance(item)}
+        components.append(item)
+    folder = out / 'whole_vessel'
+    folder.mkdir(exist_ok=True)
+    record = {'exit_code': 0, 'result': {'schema': 'ship-cad-result/v1', 'status': 'draft_only',
+                                         'engineering_approved': False, 'components': components}}
+    (folder / 'execution.json').write_text(json.dumps(record, indent=2) + '\n')
+    return folder
+
+
+def hull_component(volume_m3: float, box: dict, cap: dict, summary: dict) -> dict:
+    return {'id': 'hull', 'op': 'hull', 'label': LABELS['hull'], 'status': 'measured_draft', 'built': True,
+            'reason': 'Region loft of the lines-plan stations, cut at the deck at side read from the GA',
+            'source': {'view': 'body', 'region': 'hull', 'method': 'body_plan_regions'},
+            'source_labels': {'sections': 'traced', 'deck_at_side': 'traced'},
+            'provenance': {'sections': {'source': 'traced', 'basis': f'{summary.get("stations")} body-plan '
+                                        'stations read from the lines plan DXF'},
+                           'deck_at_side': {'source': 'traced', 'basis': f'aft deck {cap["aft_deck_z_m"]} m aft of '
+                                            f'x {cap["split_x_m"]} m, 1-deck {cap["main_deck_z_m"]} m forward '
+                                            '(GA profile)'}},
+            'args': {'sections': 'hull_sections', 'deck_at_side': 'hull_deck_at_side'},
+            'geometry': {'sections': f'{summary.get("stations")} stations',
+                         'deck_at_side': [cap['aft_deck_z_m'], cap['main_deck_z_m']]},
+            'bbox_m': box, 'volume_m3': volume_m3}
 
 
 def main() -> None:
@@ -112,39 +260,50 @@ def main() -> None:
     parser.add_argument('--sources', type=Path, required=True)
     parser.add_argument('--step1', type=Path, required=True, help='Step 1 run folder (whole_vessel.py output)')
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--hull-brep', type=Path, help='Reuse a hull model.brep built by this script earlier.')
     args = parser.parse_args()
     import cadquery as cq
 
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
     started = time.time()
-    hull_path = build_hull(args.sources, out)
-    record = {'engineering_approved': False, 'status': 'draft_only', 'hull_seconds': time.time() - started}
-    shapes, volumes, hull_box = [], {}, None
+    step1 = args.step1.resolve()
+    deck = deck_at_side(json.loads((step1 / 'inputs.json').read_text()))
+    hull_path = args.hull_brep.resolve() if args.hull_brep else build_hull(args.sources, out, deck)
+    record = {'engineering_approved': False, 'status': 'draft_only', 'hull_source': str(hull_path),
+              'hull_station_cap': deck, 'hull_seconds': time.time() - started}
+    shapes, volumes, hull_box = {}, {}, None
     if hull_path.is_file():
-        hull = read_shape(hull_path)
-        shapes.append(hull)
+        record['hull_loft_volume_m3'] = read_shape(hull_path).Volume() / 1e9
+        to_deck, record['hull_to_deck'] = build_hull_to_deck(hull_path.parent / 'sections.json', deck, out)
+        hull = read_shape(to_deck)
+        shapes['hull'] = hull
         volumes['hull'] = hull.Volume() / 1e9
         box = hull.BoundingBox()
         hull_box = {'min': [box.xmin / 1000, box.ymin / 1000, box.zmin / 1000],
                     'max': [box.xmax / 1000, box.ymax / 1000, box.zmax / 1000]}
-    parts = args.step1 / 'task' / 'work' / 'output'
+    parts = step1 / 'task' / 'work' / 'output'
     for part in PART_IDS:
         path = parts / f'{part}.step'
         if path.is_file():
-            shape = read_shape(path)
-            shapes.append(shape)
-            volumes[part] = shape.Volume() / 1e9
-    assembly = cq.Compound.makeCompound(shapes)
-    step = out / 'whole-vessel-draft.step'
-    cq.exporters.export(assembly, str(step))
+            shapes[part] = read_shape(path)
+            volumes[part] = shapes[part].Volume() / 1e9
+    record.update(volumes_m3=volumes, sum_of_parts_m3=sum(volumes.values()))
+    if 'hull' in volumes and 'house_t1' in volumes:
+        # The truth STEP holds the hull and the first tier only (docs/plans/...-scope.md, 3.3).
+        record['truth_comparable_m3'] = volumes['hull'] + volumes['house_t1']
+        record['truth_volume_m3'] = TRUTH_VOLUME_M3
+        record['truth_comparable_error'] = record['truth_comparable_m3'] / TRUTH_VOLUME_M3 - 1
+    record['exports'] = export_all(shapes, out)
+    assembly = cq.Compound.makeCompound(list(shapes.values()))
     box = assembly.BoundingBox()
-    record.update(volumes_m3=volumes, sum_of_parts_m3=sum(volumes.values()),
-                  bbox_m={'min': [box.xmin / 1000, box.ymin / 1000, box.zmin / 1000],
+    record.update(bbox_m={'min': [box.xmin / 1000, box.ymin / 1000, box.zmin / 1000],
                           'max': [box.xmax / 1000, box.ymax / 1000, box.zmax / 1000]},
-                  step=step.name, step_sha256=hashlib.sha256(step.read_bytes()).hexdigest(),
-                  step_bytes=step.stat().st_size, solids=len(assembly.Solids()))
-    components_record(args.step1.resolve(), out, volumes.get('hull'), hull_box)
+                  solids=len(assembly.Solids()))
+    hull_entry = (hull_component(volumes['hull'], hull_box, deck, record['hull_to_deck'])
+                  if 'hull' in volumes else None)
+    inputs = json.loads((step1 / 'inputs.json').read_text())
+    write_app_parts(step1, inputs, out, hull_entry)
     render(assembly, out / 'whole-vessel-draft.png')
     record.update(render='whole-vessel-draft.png', seconds=time.time() - started)
     (out / 'assembly.json').write_text(json.dumps(record, indent=2) + '\n')

@@ -32,6 +32,9 @@ OPERATIONS = {
 }
 METHODS = {'closed_outline', 'parallel_lines', 'body_plan_regions', 'dimension_text',
            'enclosed_region', 'profile_levels'}
+SOURCE_VIEWS = ('plan', 'profile', 'body')
+# A component source the program declared wrongly; its geometry still builds (triage_program).
+UNSPECIFIED = 'unspecified'
 # Source labels of values that are not read from drawing ink.
 FILLED_SOURCES = ('ai_inferred', 'guessed')
 INLINE_FIELDS = {'value', 'source', 'basis'}
@@ -63,38 +66,87 @@ def parse_program(text: str) -> dict:
                                       parse_constant=lambda x: (_ for _ in ()).throw(ValueError(x))))
 
 
-def validate_program(program: dict) -> dict:
+def _check_header(program: dict) -> None:
     _keys(program, {'schema', 'components'}, 'program')
     if program['schema'] != SCHEMA:
         raise ValueError('unknown ship language version')
     components = program['components']
     if not isinstance(components, list) or not 1 <= len(components) <= MAX_COMPONENTS:
         raise ValueError('ship component count')
+
+
+class SourceMetadataError(ValueError):
+    """Only the source view or method value is unknown; the geometry arguments are valid."""
+
+
+def _check_component(component, seen: set) -> None:
+    _keys(component, {'id', 'op', 'source', 'args'}, 'component')
+    name, op = component['id'], component['op']
+    if not _id(name) or name in seen or not isinstance(op, str) or op not in OPERATIONS:
+        raise ValueError('invalid component id or operation')
+    _keys(component['source'], {'view', 'region', 'method'}, 'source')
+    source = component['source']
+    if not all(isinstance(source[key], str) and _id(source[key]) for key in ('view', 'region', 'method')):
+        raise ValueError(f'component {name!r}: source values must be short identifiers')
+    _keys(component['args'], OPERATIONS[op], 'arguments')
+    for key, reference in component['args'].items():
+        kind = OPERATIONS[op][key]
+        if isinstance(reference, dict) and kind not in ('component', 'sections'):
+            _validate_inline(reference, kind)
+            continue
+        if not _id(reference):
+            raise ValueError('dimensions must be measurement references or labelled inline values')
+        if key == 'target' and reference not in seen:
+            raise ValueError('opening target must be an earlier component')
+    if (source['view'] not in SOURCE_VIEWS + (UNSPECIFIED,)
+            or (source['method'] not in METHODS and source['method'] != UNSPECIFIED)):
+        # Name the component and the allowed values: a model can only fix what it is told.
+        raise SourceMetadataError(f'component {name!r}: unknown source view or method {source!r}; view is '
+                                  f'plan, profile or body; method is one of {sorted(METHODS)}')
+
+
+def validate_program(program: dict) -> dict:
+    """Strict check: any invalid component rejects the program (``triage_program`` does not)."""
+    _check_header(program)
     seen = set()
-    for component in components:
-        _keys(component, {'id', 'op', 'source', 'args'}, 'component')
-        name, op = component['id'], component['op']
-        if not _id(name) or name in seen or not isinstance(op, str) or op not in OPERATIONS:
-            raise ValueError('invalid component id or operation')
-        _keys(component['source'], {'view', 'region', 'method'}, 'source')
-        source = component['source']
-        if (source['view'] not in ('plan', 'profile', 'body') or not _id(source['region'])
-                or source['method'] not in METHODS):
-            # Name the component and the allowed values: a model can only fix what it is told.
-            raise ValueError(f'component {name!r}: unknown source view, region or method {source!r}; '
-                             f'view is plan, profile or body; method is one of {sorted(METHODS)}')
-        _keys(component['args'], OPERATIONS[op], 'arguments')
-        for key, reference in component['args'].items():
-            kind = OPERATIONS[op][key]
-            if isinstance(reference, dict) and kind not in ('component', 'sections'):
-                _validate_inline(reference, kind)
-                continue
-            if not _id(reference):
-                raise ValueError('dimensions must be measurement references or labelled inline values')
-            if key == 'target' and reference not in seen:
-                raise ValueError('opening target must be an earlier component')
-        seen.add(name)
+    for component in program['components']:
+        _check_component(component, seen)
+        seen.add(component['id'])
     return program
+
+
+def triage_program(program: dict) -> tuple[dict, list[dict], dict]:
+    """Keep every buildable component; never reject the whole program for one component.
+
+    Founder rule: do not make builds fail. A component with only unknown source metadata
+    (view or method) is kept with its source marked ``unspecified`` and builds as a labelled
+    ``draft_guess``. A component with invalid geometry arguments is left out and reported
+    as unbuilt with the reason. The program header (schema, component list) stays strict.
+    Returns the buildable program, the unbuilt components and the source notes by id.
+    """
+    _check_header(program)
+    kept, rejected, notes, seen = [], [], {}, set()
+    for component in program['components']:
+        try:
+            _check_component(component, seen)
+            kept.append(component)
+        except SourceMetadataError as exc:
+            repaired = dict(component, source={'view': UNSPECIFIED, 'region': component['source']['region'],
+                                               'method': UNSPECIFIED})
+            _check_component(repaired, seen)
+            notes[component['id']] = str(exc)[:MAX_BASIS_CHARS]
+            kept.append(repaired)
+        except ValueError as exc:
+            name = component.get('id') if isinstance(component, dict) else None
+            rejected.append({'id': name if _id(name) else f'component_{len(kept) + len(rejected) + 1}',
+                             'op': component.get('op') if isinstance(component, dict) else None,
+                             'status': 'draft_guess', 'built': False, 'source_labels': {},
+                             'reason': f'not built: {str(exc)[:MAX_BASIS_CHARS]}'})
+            continue
+        seen.add(component['id'])
+    if not kept:
+        raise ValueError('no buildable component: ' + '; '.join(r['reason'] for r in rejected)[:2000])
+    return {'schema': program['schema'], 'components': kept}, rejected, notes
 
 
 def _finite(value) -> bool:
@@ -205,7 +257,10 @@ def resolve_program(program: dict, measurements: dict, guesses: dict | None = No
             fills.append(f'{reference}: {guess["source"]}: {guess["basis"]}')
         primary_argument = 'sections' if op == 'hull' else 'outline'
         primary = component['args'][primary_argument]
-        if labels.get(primary_argument) == 'traced':
+        unspecified = UNSPECIFIED in (component['source']['view'], component['source']['method'])
+        if unspecified:
+            fills.append('source metadata not recognised; built from its values')
+        elif labels.get(primary_argument) == 'traced':
             record = evidence[primary]
             if any(record[key] != component['source'][key] for key in ('view', 'region', 'method')):
                 failures.append('primary measurement does not match named source')
@@ -285,11 +340,21 @@ def execute(program: dict, measurements: dict, out: Path, *, audit=None, veto=Fa
     """Trusted worker entry. ``out`` is host-selected, never program-selected."""
     import cadquery as cq
 
-    components = resolve_program(program, measurements, guesses)
+    buildable, unbuilt, source_notes = triage_program(program)
+    components = resolve_program(buildable, measurements, guesses)
+    arguments = {c['id']: c['args'] for c in buildable['components']}
+    for component in components:
+        # The app shows each value (geometry) and which reference or inline value gave it (args).
+        component['args'] = arguments[component['id']]
+        if component['id'] in source_notes:
+            component['reason'] = f'{component["reason"]}; {source_notes[component["id"]]}'
     shapes = {}
     out.mkdir(parents=True, exist_ok=True)
     for component in components:
-        values = component.pop('geometry')
+        values = component['geometry']
+        if component['op'] == 'hull' and values is not None:
+            # Station sections are large; the result keeps their count, not the rows.
+            component['geometry'] = {'sections': f'{len(values["sections"])} stations'}
         if values is None:
             component['built'] = False
             continue
@@ -350,7 +415,7 @@ def execute(program: dict, measurements: dict, out: Path, *, audit=None, veto=Fa
                           cut_points={view:len(points) for view,points in cuts.items()},
                           source_provenance=audit.get('provenance', {}))
     report = {'schema': 'ship-cad-result/v1', 'status': 'draft_only', 'engineering_approved': False,
-              'readiness_authority': 'rust_controller_only', 'components': components,
+              'readiness_authority': 'rust_controller_only', 'components': components + unbuilt,
               'cross_view': cross_view}
     (out / 'provenance.json').write_text(json.dumps(report, indent=2) + '\n')
     return report

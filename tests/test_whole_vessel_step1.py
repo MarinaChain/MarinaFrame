@@ -177,8 +177,8 @@ def raster_with_lines():
 
 def test_raster_levels_and_walls():
     ink = raster_with_lines()
-    x_of_column = lambda c: -1.0 + 0.05 * c  # noqa: E731
-    z_of_row = lambda r: 10.0 - 0.05 * r  # noqa: E731
+    x_of_column = lambda c: -1.0 + 0.05 * c
+    z_of_row = lambda r: 10.0 - 0.05 * r
     levels = ga_reader.raster_levels(ink, x_of_column, z_of_row, 0.05)
     assert len(levels) == 1
     assert levels[0].z_m == pytest.approx(4.975)
@@ -205,21 +205,99 @@ def test_is_simple_polygon():
     assert not ga_reader.is_simple_polygon([[0, 0], [2, 0], [1, 0], [1, 1]])  # spur back on an edge
 
 
-def test_components_record_counts_labels(tmp_path):
+def test_app_parts_folder_matches_the_worker_shape(tmp_path):
     import json
 
-    from benchmarks.gunnerus.whole_vessel_assembly import components_record
+    from benchmarks.gunnerus.whole_vessel_assembly import (
+        hull_component,
+        write_app_parts,
+    )
 
     step1 = tmp_path / 'step1'
     step1.mkdir()
     (step1 / 'execution.json').write_text(json.dumps({'result': {'components': [
         {'id': 'house_t1', 'op': 'deckhouse', 'status': 'draft_guess', 'built': True, 'volume_m3': 4.0,
-         'bbox_m': {'min': [0, 0, 0], 'max': [1, 1, 1]}, 'source_labels': {'outline': 'traced', 'height': 'guessed'}},
+         'bbox_m': {'min': [0, 0, 0], 'max': [1, 1, 1]}, 'source_labels': {'outline': 'traced', 'height': 'guessed'},
+         'provenance': {'house_t1_outline': {'view': 'plan', 'method': 'enclosed_region'},
+                        'house_t1_height': {'source': 'guessed', 'basis': 'hint'}}},
         {'id': 'rail', 'op': 'bulwark', 'status': 'draft_guess', 'built': False, 'source_labels': {}}]}}))
-    record = components_record(step1, tmp_path, 10.0, {'min': [0, 0, 0], 'max': [1, 1, 1]})
-    items = {item['id']: item for item in record['components']}
-    assert record['engineering_approved'] is False
-    assert items['hull']['kind'] == 'hull'
-    assert items['house_t1']['source_counts'] == {'traced': 1, 'ai_inferred': 0, 'guessed': 1}
-    assert items['rail']['step_path'] is None and items['rail']['review_state'] == 'needs_review'
-    assert (tmp_path / 'components.json').is_file()
+    program = {'schema': 'ship-cad/v1', 'components': [
+        {'id': 'house_t1', 'op': 'deckhouse',
+         'source': {'view': 'plan', 'region': 'house_t1', 'method': 'enclosed_region'},
+         'args': {'outline': 'house_t1_outline', 'height': 'house_t1_height'}}]}
+    inputs = {'program': program, 'measurements': {}, 'guesses': {
+        'house_t1_outline': {'kind': 'outline', 'value': SQUARE, 'source': 'guessed', 'basis': 'box'},
+        'house_t1_height': {'kind': 'interval', 'value': [4.0, 6.5], 'source': 'guessed', 'basis': 'hint'}}}
+    cap = {'split_x_m': 15.5, 'aft_deck_z_m': 4.114, 'main_deck_z_m': 4.287}
+    hull = hull_component(900.0, {'min': [0, 0, 0], 'max': [1, 1, 1]}, cap, {'stations': 68})
+    folder = write_app_parts(step1, inputs, tmp_path, hull)
+    record = json.loads((folder / 'execution.json').read_text())
+    items = {item['id']: item for item in record['result']['components']}
+    assert record['result']['engineering_approved'] is False
+    assert items['hull']['op'] == 'hull' and items['hull']['label'].startswith('Hull')
+    assert items['house_t1']['label'] == 'Superstructure tier 1 (1-deck to A-deck)'
+    assert items['house_t1']['provenance']['height'] == {'source': 'guessed', 'basis': 'hint'}
+    assert items['house_t1']['provenance']['outline']['basis'] == 'enclosed_region in the plan view'
+    assert items['rail']['built'] is False
+    assert items['house_t1']['args'] == {'outline': 'house_t1_outline', 'height': 'house_t1_height'}
+    assert items['house_t1']['geometry'] == {'outline': SQUARE, 'height': [4.0, 6.5]}
+    assert items['hull']['geometry']['deck_at_side'] == [4.114, 4.287]
+
+
+def two_component_program(bad_method='invented_method', bad_height=None):
+    good = house_program(inline(SQUARE), inline([4.0, 6.5]))['components'][0]
+    other = {'id': 'wheelhouse', 'op': 'deckhouse',
+             'source': {'view': 'profile', 'region': 'wheelhouse', 'method': bad_method},
+             'args': {'outline': inline(SQUARE), 'height': bad_height or inline([6.5, 9.0])}}
+    return {'schema': 'ship-cad/v1', 'components': [good, other]}
+
+
+def test_unknown_source_method_builds_as_labelled_guess():
+    from vessel_reconstruction.ship_cad import UNSPECIFIED, triage_program
+
+    with pytest.raises(ValueError, match='wheelhouse'):
+        validate_program(two_component_program())
+    program, unbuilt, notes = triage_program(two_component_program())
+    assert unbuilt == [] and 'invented_method' in notes['wheelhouse']
+    component = resolve_program(program, {})[1]
+    assert component['source']['method'] == UNSPECIFIED
+    assert component['status'] == 'draft_guess' and component['geometry'] is not None
+    assert 'source metadata not recognised' in component['reason']
+
+
+def test_one_invalid_component_does_not_reject_the_others():
+    from vessel_reconstruction.ship_cad import triage_program
+
+    bad = {'value': [9.0, 6.5], 'source': 'ai_inferred', 'basis': 'reversed interval'}
+    program, unbuilt, _ = triage_program(two_component_program('closed_outline', bad))
+    assert [c['id'] for c in program['components']] == ['house']
+    assert unbuilt[0]['id'] == 'wheelhouse' and unbuilt[0]['built'] is False
+    assert 'not built' in unbuilt[0]['reason']
+    with pytest.raises(ValueError, match='no buildable component'):
+        triage_program({'schema': 'ship-cad/v1', 'components': [two_component_program('x', bad)['components'][1]]})
+
+
+@pytest.mark.cad
+def test_execute_reports_unbuilt_component_and_builds_the_rest(tmp_path):
+    from vessel_reconstruction.ship_cad import execute
+
+    bad = {'value': [9.0, 6.5], 'source': 'ai_inferred', 'basis': 'reversed interval'}
+    report = execute(two_component_program('closed_outline', bad), {}, tmp_path)
+    built = {c['id']: c.get('built') for c in report['components']}
+    assert built == {'house': True, 'wheelhouse': False}
+    assert (tmp_path / 'house.step').is_file()
+    house = report['components'][0]
+    assert house['geometry']['height'] == [4.0, 6.5] and house['args']['outline']['source'] == 'ai_inferred'
+
+
+def test_cap_region_rows_cuts_at_the_deck():
+    from benchmarks.gunnerus.whole_vessel_assembly import cap_region_rows, cap_sections
+
+    rows = [[0.0, 0.0, 1.0], [4.0, 0.0, 3.0], [6.0, 0.0, 4.0]]
+    assert cap_region_rows(rows, 5.0) == [[0.0, 0.0, 1.0], [4.0, 0.0, 3.0], [5.0, 0.0, 3.5]]
+    assert cap_region_rows([[6.0, 0, 1], [7.0, 0, 1]], 5.0) is None
+    deck = {'split_x_m': 10.0, 'aft_deck_z_m': 4.0, 'main_deck_z_m': 5.0}
+    sections = [{'id': 'a', 'x_m': 5.0, 'regions': [{'kind': 'centreline', 'rows_m': rows}]},
+                {'id': 'b', 'x_m': 15.0, 'regions': [{'kind': 'centreline', 'rows_m': rows}]}]
+    capped = cap_sections(sections, deck)
+    assert capped[0]['regions'][0]['rows_m'][-1][0] == 4.0 and capped[1]['regions'][0]['rows_m'][-1][0] == 5.0
