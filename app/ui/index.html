@@ -120,11 +120,14 @@
           <div class="home-head">
             <h1 id="home-needs-title">Needs you</h1>
             <div class="home-head-actions">
+              <!-- Shown while drawing sets wait in the batch queue (js/app.js renderHome). -->
+              <button class="btn btn-ghost" id="home-queue-link" type="button" hidden></button>
               <button class="btn btn-primary btn-large" id="new-vessel" type="button" title="Choose the drawing set of a new vessel (⌘N)">New vessel</button>
               <!-- Developers: start a run from a run spec file. -->
               <details class="menu" id="home-more">
                 <summary class="btn btn-large btn-icon" title="More" aria-label="More ways to start"><svg class="icon"><use href="#i-more" /></svg></summary>
                 <div class="menu-list">
+                  <button class="menu-item" id="new-folder" type="button" title="A folder of drawing sets: each PDF and each subfolder becomes one run">New vessels from a folder…</button>
                   <button class="menu-item" id="new-run" type="button" title="Start a run from a run spec file (.json, .toml, .yaml)">New run from a spec file…<kbd>⇧⌘N</kbd></button>
                 </div>
               </details>

@@ -469,6 +469,10 @@ function renderHome() {
   const empty = !state.tasks.length;
   $('view-home').dataset.empty = String(empty);
   $('home-needs-title').textContent = empty ? 'Your first vessel' : 'Needs you';
+  const queued = state.queue?.waiting.length || 0;
+  const link = $('home-queue-link');
+  link.hidden = queued === 0;
+  link.textContent = `${fmt.plural(queued, 'set')} in the Queue`;
 }
 
 /** Queue groups, in order: what the AI works on, what waits for a person, the rest. */
@@ -2136,6 +2140,11 @@ $('resume-task').addEventListener('click', async () => {
 $('new-vessel').addEventListener('click', () => chooseDrawingSet());
 $('drop-choose').addEventListener('click', () => chooseDrawingSet());
 $('drop-choose-folder').addEventListener('click', () => chooseDrawingFolder());
+$('home-queue-link').addEventListener('click', () => navigate('queue'));
+$('new-folder').addEventListener('click', () => {
+  $('home-more').open = false;
+  chooseDrawingFolder();
+});
 $('new-run').addEventListener('click', () => {
   $('home-more').open = false;
   openNewRun();
