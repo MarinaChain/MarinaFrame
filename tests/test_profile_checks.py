@@ -47,6 +47,30 @@ def test_a_view_scale_that_disagrees_with_the_printed_scale_gets_the_printed_val
     assert vd.checked_scales(image, [setup], {"dimension_text": "SCALE 1 m = 4 px"}) == ({"profile": 4.0}, [])
 
 
+def test_profile_and_plan_lengths_are_compared():
+    image, setup = profile_sheet()
+    # The same outline read as a plan at half the scale: twice the length.
+    plan = {**setup, "view": "plan", "view_id": "plan", "pixels_per_metre": PPM / 2, "centreline_px": 150.0}
+    measured = vd.measure_description(image, {"units": "m", "sections": []}, {}, [setup, plan])
+    readings = {r["view_id"]: r["value"] for r in measured["principal"]["loa"]["measurements"]}
+    assert abs(readings["profile"] - 100) < 2 and abs(readings["plan"] - 200) < 4
+    assert any(w["field"] == "principal.loa" and "plan" in w["suggested_fix"] for w in measured["warnings"])
+
+
+def test_sheet_only_sections_use_the_printed_scale_over_a_disagreeing_setup():
+    from vessel_reconstruction.materialize import read_scale
+    image, _ = profile_sheet()
+    setups = [{"pixels_per_metre": 18.0, "grid_spacing_m": 1.0}]
+    warnings = []
+    scale, basis = read_scale(image, setups, [], [], {"dimension_text": "SCALE 1 m = 19.000 px"}, [10, 10, 450, 160],
+                              warnings)
+    assert scale == 19.0 and "printed" in basis and warnings
+    # An agreeing setup (within 2 %) keeps the model's reading.
+    scale, _ = read_scale(image, [{"pixels_per_metre": 18.9}], [], [], {"dimension_text": "SCALE 1 m = 19 px"},
+                          [10, 10, 450, 160], [])
+    assert scale == 18.9
+
+
 def test_deck_heights_follow_the_sheer_and_skip_the_label():
     image, setup = profile_sheet()
     stations = [{"id": str(i), "x_m": 10.0 * i} for i in range(1, 10)]
