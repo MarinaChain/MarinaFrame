@@ -501,6 +501,9 @@ fn investigation_catalog() -> Vec<Value> {
     let region = json!({"type":"array","items":{"type":"integer","minimum":0},"minItems":4,"maxItems":4,"description":"[left, top, right, bottom] in sheet pixels"});
     let id = json!({"type":"string","maxLength":64});
     vec![
+        json!({"name":"survey_sheet","description":"Survey the sheet without CAD. The harness normally runs this before view identification.","parameters":{"type":"object","properties":{},"additionalProperties":false}}),
+        json!({"name":"describe_views","description":"Name each drawing view and its sheet-pixel bounds before proposing scale and datums. Include geometric views and useful title or offset tables.","parameters":{"type":"object","properties":{"views":{"type":"array","minItems":1,"maxItems":32,"items":{"type":"object","properties":{"view_id":{"type":"string","maxLength":64},"kind":{"enum":["body","body_fore","body_aft","plan","profile","title_block","offsets_table","other"]},"region_px":region,"halves":{"type":"string","maxLength":2000},"mirror":{"type":"boolean"},"grid_roles":{"type":"object"}},"required":["view_id","kind","region_px"],"additionalProperties":false}}},"required":["views"],"additionalProperties":false}}),
+        json!({"name":"describe_vessel","description":"Record the vessel before CAD: principal dimensions with value/source/view_id, stations (id/x_m), waterlines (id/z_m), buttocks (id/y_m), ends, deck and form. Keep measured and inferred values labelled. Doubtful dimensions receive warnings, not approval.","parameters":{"type":"object","properties":{"description":{"type":"object","properties":{"units":{"type":"string"},"frame":{},"principal":{"type":"object"},"stations":{"type":"array","maxItems":300,"items":{"type":"object"}},"waterlines":{"type":"array","maxItems":300,"items":{"type":"object"}},"buttocks":{"type":"array","maxItems":300,"items":{"type":"object"}},"ends":{"type":"object"},"deck":{"type":"object"},"form":{"type":"object"}},"additionalProperties":true}},"required":["description"],"additionalProperties":false}}),
         json!({"name":"recall_view","description":"Reattach a previous task view by view_id without creating a new crop.","parameters":{"type":"object","properties":{"view_id":id},"required":["view_id"],"additionalProperties":false}}),
         json!({"name":"view_region","description":"Return the pixels of any sheet region at any zoom (up to 1024 px per side, 4x enlargement). Start with the whole sheet, then zoom.","parameters":{"type":"object","properties":{"region_px":region,"max_side_px":{"type":"integer","minimum":256,"maximum":1024}},"required":["region_px"],"additionalProperties":false}}),
         json!({"name":"read_region","description":"Return the pixels of a region to read station labels, a scale bar, dimensions or the title block. What you read is your claim.","parameters":{"type":"object","properties":{"region_px":region,"subject":{"enum":["labels","scale_bar","dimensions","title_block"]}},"required":["region_px","subject"],"additionalProperties":false}}),
@@ -526,6 +529,63 @@ fn base_tool_catalog(empty: &Value) -> Value {
 /// The investigating model's observation: a compact task state (one line per
 /// section), the last tool result and the recent history. Full evidence stays
 /// in the task; the model asks for more with the tools.
+fn description_pending(store: &Store) -> bool {
+    investigation_mode(store)
+        && store.state.domain["description_phase"]
+            .as_str()
+            .is_some_and(|phase| phase != "complete")
+}
+
+fn description_instructions(phase: &Value) -> &'static str {
+    match phase.as_str() {
+        Some("survey") => "The harness surveys the sheet first; do not build CAD.",
+        Some("views") => "Read the attached whole sheet and survey. Call describe_views with named view bounds in ORIGINAL sheet pixels from the survey sheet size, not normalized 0-1000 coordinates or resized attachment pixels. Convert visual positions using the sheet width/height. Do not trace sections or build CAD yet.",
+        Some("setups") => "Call propose_sheet_setup once for description_next_view. Use its actual crop view_id as evidence_view_id and its sheet region_px. Map body_fore/body_aft to body. Read scale, grid spacing and datums; label inferences. The result attaches the next view crop. Do not build CAD yet.",
+        Some("vessel") => "Call describe_vessel now. Use the survey declared specification, measured sheet_setups and source pixels for principal dimensions, station identities/positions, waterlines, buttocks, ends, deck and form. Keep principal dimensions supplied by declared specification bounds as source=spec (including depth from declared z_max); retain measured discrepancies as warnings, not replacements. Measure beam and other undeclared dimensions from hull ink and the measured grid, not grid extents. A body-only drawing may not supply loa/lpp/draft; label unknown estimates ai_inferred, never spec or measured. Label each dimension source (spec, title_block, measured, ai_inferred); do not confuse grid extents with hull extents. Keep doubtful fields explicit; warnings are advisory. Do not build CAD yet.",
+        _ => "The vessel description is complete. The harness builds the first hull unless this is a Phase 1-only run.",
+    }
+}
+
+/// Surveys can contain tile and stroke inventories. Send only a bounded sample
+/// beside declared specification data; the full survey stays in the checkpoint.
+fn compact_survey(value: &Value, depth: usize) -> Value {
+    if depth >= 10 {
+        return Value::Null;
+    }
+    match value {
+        Value::Array(items) => Value::Array(
+            items
+                .iter()
+                .take(300)
+                .map(|v| compact_survey(v, depth + 1))
+                .collect(),
+        ),
+        Value::Object(items) => Value::Object(
+            items
+                .iter()
+                .filter(|(key, _)| !["artifacts", "ink_components"].contains(&key.as_str()))
+                .take(32)
+                .map(|(key, value)| {
+                    let limit = match key.as_str() {
+                        "strokes" => 6,
+                        "tiles" => 32,
+                        "grid_families" | "positions_px" => 128,
+                        _ => 300,
+                    };
+                    let bounded = if let Some(items) = value.as_array() {
+                        Value::Array(items.iter().take(limit).cloned().collect())
+                    } else {
+                        value.clone()
+                    };
+                    (key.clone(), compact_survey(&bounded, depth + 1))
+                })
+                .collect(),
+        ),
+        Value::String(text) => Value::String(text.chars().take(512).collect()),
+        _ => value.clone(),
+    }
+}
+
 fn investigation_observation(store: &Store) -> Result<Value> {
     let d = &store.state.domain;
     let guesses = d["open_guesses"]
@@ -599,6 +659,49 @@ fn investigation_observation(store: &Store) -> Result<Value> {
         "retained_stroke_panels":panels,"omitted_stroke_panel_ids":[],
         "current_policy":"live_investigation","engineering_approved":false,
         "source_truth":"source evidence and deployment-available checks only; no evaluator references"});
+    if d["description_phase"].is_string() {
+        value["description_phase"] = d["description_phase"].clone();
+        value["description_instructions"] =
+            json!(description_instructions(&d["description_phase"]));
+        value["description_next_view"] = d["description_next_view"].clone();
+        value["described_views"] = d["described_views"].clone();
+        value["sheet_setups"] = json!(d["sheet_setups"].as_array().map(|setups| setups
+            .iter()
+            .take(32)
+            .map(|setup| {
+                let mut summary = serde_json::Map::new();
+                for key in [
+                    "view_id",
+                    "view",
+                    "region_px",
+                    "pixels_per_metre",
+                    "centreline_px",
+                    "baseline_px",
+                    "x_origin_px",
+                    "x_direction",
+                    "grid_spacing_m",
+                    "datum_snaps",
+                    "warnings",
+                ] {
+                    if let Some(value) = setup.get(key) {
+                        summary.insert(key.into(), compact_survey(value, 0));
+                    }
+                }
+                Value::Object(summary)
+            })
+            .collect::<Vec<_>>()));
+        value["vessel_description"] = d["vessel_description"].clone();
+        value["phase1_only"] =
+            json!(store.state.config.limits.phase1_only || d["phase1_only"] == true);
+        value["sheet_survey"] = compact_survey(&d["sheet_survey"], 0);
+        if let Some(last) = value["last_observation"].as_object_mut() {
+            for key in ["sheet_survey", "survey"] {
+                if let Some(survey) = last.get_mut(key) {
+                    *survey = compact_survey(survey, 0);
+                }
+            }
+        }
+    }
     // Images are attached separately. Their artifact inventories can be large;
     // omit them before reducing tool evidence such as tags and view mappings.
     if let Some(last) = value["last_observation"].as_object_mut() {
@@ -1155,7 +1258,10 @@ fn refusal_hint(code: &str) -> &'static str {
 /// of every section and the unique source-supported selections, exactly as
 /// the deterministic draft policy makes them. No model call is spent on it.
 fn investigation_preparation(store: &Store) -> Result<Option<Decision>> {
-    if !investigation_mode(store) || store.state.last_observation["ok"] == false {
+    if !investigation_mode(store)
+        || description_pending(store)
+        || store.state.last_observation["ok"] == false
+    {
         return Ok(None);
     }
     let d = &store.state.domain;
@@ -1652,7 +1758,9 @@ fn investigation_progress_key(store: &Store) -> Result<String> {
     util::hash_json(&json!({"generation":store.state.generation_id,
         "revision":store.state.revision_id,"sections":domain["sections"],
         "catalog":domain["inspected_sections"],"guesses":domain["open_guesses"],
-        "setups":domain["sheet_setup_ids"],"candidate":domain["current_candidate"]}))
+        "setups":domain["sheet_setup_ids"],"candidate":domain["current_candidate"],
+        "description_phase":domain["description_phase"],"described_views":domain["described_views"],
+        "description_next_view":domain["description_next_view"],"vessel_description":domain["vessel_description"]}))
 }
 
 fn refuse_repeated_investigation(store: &mut Store, choice: &Decision) -> Result<bool> {
@@ -1893,7 +2001,12 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
             }
         }
     } else {
-        let done = call_worker(store, operation.name(), operation.args())?;
+        let arguments = if matches!(operation, Operation::SurveySheet(_)) {
+            json!({"phase1_only":store.state.config.limits.phase1_only})
+        } else {
+            operation.args()
+        };
+        let done = call_worker(store, operation.name(), arguments)?;
         if done
             && store.state.last_observation["ok"] == false
             && store.state.last_observation["error_code"] == "domain_integrity_or_input_error"
@@ -1923,27 +2036,80 @@ pub fn initialize(store: &mut Store) -> Result<bool> {
     }
     Ok(true)
 }
-pub fn run_loop(store: &mut Store, max_steps: Option<u64>) -> Result<()> {
-    if investigation_mode(store)
-        && !store
-            .events
-            .iter()
-            .any(|event| event.kind == "first_hull_ready")
+/// Advance automatic description/CAD work before asking the model. An absent
+/// phase key keeps old workers and stored tasks on their legacy first-hull path.
+fn prepare_investigation_phase(store: &mut Store) -> Result<bool> {
+    if !investigation_mode(store) {
+        return Ok(true);
+    }
+    if store.state.domain["description_phase"] == "survey" {
+        if !call_worker(
+            store,
+            "survey_sheet",
+            json!({"phase1_only":store.state.config.limits.phase1_only}),
+        )? {
+            return Ok(false);
+        }
+        if store.state.domain["description_phase"] == "survey" {
+            stop(store, Status::Blocked, "sheet_survey_did_not_advance")?;
+            return Ok(false);
+        }
+    }
+    if description_pending(store) {
+        return Ok(true);
+    }
+    if store.state.config.limits.phase1_only || store.state.domain["phase1_only"] == true {
+        let complete = store.state.domain["description_phase"] == "complete"
+            && store.state.domain["vessel_description"].is_object();
+        stop(
+            store,
+            if complete {
+                Status::Paused
+            } else {
+                Status::Blocked
+            },
+            if complete {
+                "phase1_description_complete"
+            } else {
+                "phase1_description_unavailable"
+            },
+        )?;
+        return Ok(false);
+    }
+    if store.state.domain["description_phase"].is_string()
+        && !store.state.domain["vessel_description"].is_object()
+    {
+        stop(store, Status::Blocked, "vessel_description_missing")?;
+        return Ok(false);
+    }
+    if !store
+        .events
+        .iter()
+        .any(|event| event.kind == "first_hull_ready")
     {
         if !call_worker(store, "build_first_hull", json!({}))? {
-            return Ok(());
+            return Ok(false);
         }
         store.append("first_hull_ready", json!({"engineering_approved":false}))?;
         if store.state.domain["current_candidate"]["valid"] == true
             && !call_worker(store, "render_candidate", json!({"view":"body"}))?
         {
-            return Ok(());
+            return Ok(false);
         }
     }
+    Ok(true)
+}
+
+pub fn run_loop(store: &mut Store, max_steps: Option<u64>) -> Result<()> {
     let mut steps = 0;
     loop {
         if worker::cancelled(&store.path) {
             return stop(store, Status::Cancelled, "operator_or_signal_cancelled");
+        }
+        // Complete Phase 1 and its pause even when its last model call used
+        // the requested step budget; never build CAD in a Phase 1-only run.
+        if !prepare_investigation_phase(store)? {
+            return Ok(());
         }
         if max_steps.is_some_and(|n| steps >= n) {
             return stop(store, Status::Paused, "requested_step_boundary");
@@ -2384,6 +2550,155 @@ mod tests {
         let store = Store::create(&tmp.path().join("task"), new_state(config)).unwrap();
         (tmp, store)
     }
+    #[test]
+    fn description_operations_are_bounded_and_draft_only() {
+        let view = json!({"view_id":"fore-body","kind":"body_fore","region_px":[10,20,300,400]});
+        for (name, arguments) in [
+            ("survey_sheet", json!({})),
+            ("describe_views", json!({"views":[view.clone()]})),
+            (
+                "describe_vessel",
+                json!({"description":{"principal":{"beam":{"value":12.0,"source":"measured"}},"stations":[{"id":"s0","x_m":0.0}]}}),
+            ),
+        ] {
+            let operation = decision(name, arguments.clone(), "contract test")
+                .operation()
+                .unwrap();
+            assert_eq!(operation.name(), name);
+            assert_eq!(operation.args(), arguments);
+            assert!(operation.is_investigation());
+            for policy in [OnAmbiguity::Abstain, OnAmbiguity::Draft] {
+                assert_eq!(
+                    tool_catalog(&policy)
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|tool| tool["name"] == name),
+                    policy == OnAmbiguity::Draft
+                );
+            }
+        }
+        for (name, arguments) in [
+            ("survey_sheet", json!({"phase1_only":true})),
+            ("describe_views", json!({"views":[]})),
+            (
+                "describe_views",
+                json!({"views":[view.clone(),view.clone()]}),
+            ),
+            (
+                "describe_views",
+                json!({"views":[{"view_id":"body","kind":"body","region_px":[20,0,10,100]}]}),
+            ),
+            ("describe_vessel", json!({"description":[]})),
+            (
+                "describe_vessel",
+                json!({"description":{"stations":vec![json!({});301]}}),
+            ),
+            (
+                "describe_vessel",
+                json!({"description":{"notes":"x".repeat(2001)}}),
+            ),
+        ] {
+            assert!(
+                decision(name, arguments, "bounds test")
+                    .operation()
+                    .is_err(),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn description_phases_route_tools_before_cad_and_pause_without_worker() {
+        let (_tmp, mut store) = fixture();
+        store.state.config.on_ambiguity = OnAmbiguity::Draft;
+        store.state.config.limits.phase1_only = true;
+        store.state.domain =
+            json!({"description_phase":"views","sections":[],"current_candidate":null});
+        store.state.last_observation = json!({"ok":true});
+        for (phase, tool, arguments) in [
+            (
+                "views",
+                "describe_views",
+                json!({"views":[{"view_id":"body","kind":"body","region_px":[0,0,100,100]}]}),
+            ),
+            (
+                "setups",
+                "propose_sheet_setup",
+                json!({"view":"body","region_px":[0,0,100,100],"pixels_per_metre":10,"grid_spacing_m":1,"evidence_view_id":"crop-body","scale_claim":"grid","reason":"read grid"}),
+            ),
+            (
+                "vessel",
+                "describe_vessel",
+                json!({"description":{"stations":[]}}),
+            ),
+        ] {
+            store.state.domain["description_phase"] = json!(phase);
+            let operation = decision(tool, arguments, "route").operation().unwrap();
+            assert!(
+                description_instructions(&store.state.domain["description_phase"])
+                    .contains(operation.name())
+            );
+            assert!(investigation_preparation(&store).unwrap().is_none());
+            assert!(prepare_investigation_phase(&mut store).unwrap());
+            assert!(!store
+                .events
+                .iter()
+                .any(|event| event.kind == "first_hull_ready"));
+        }
+        store.state.domain["description_phase"] = json!("complete");
+        store.state.domain["vessel_description"] = json!({"principal":{}});
+        run_loop(&mut store, Some(0)).unwrap();
+        assert_eq!(store.state.status, Status::Paused);
+        assert_eq!(
+            store.state.termination_reason.as_deref(),
+            Some("phase1_description_complete")
+        );
+        assert!(!store
+            .events
+            .iter()
+            .any(|event| event.kind == "worker_started" || event.kind == "first_hull_ready"));
+        store.state.domain = json!({});
+        assert!(!description_pending(&store));
+    }
+
+    #[test]
+    fn description_observation_keeps_specification_not_large_survey_inventory() {
+        let (_tmp, mut store) = fixture();
+        store.state.config.on_ambiguity = OnAmbiguity::Draft;
+        let survey = json!({"declared":{"units":"m","stations":[{"id":"s0","x_m":0.0}]},"tiles":vec![json!({"pixels":"x".repeat(4000)});100]});
+        store.state.domain = json!({"description_phase":"views","sheet_survey":survey,"described_views":[],"vessel_description":null});
+        store.state.last_observation = json!({"ok":true,"sheet_survey":survey});
+        let observation = investigation_observation(&store).unwrap();
+        assert_eq!(observation["sheet_survey"]["declared"]["units"], "m");
+        assert_eq!(
+            observation["sheet_survey"]["declared"]["stations"][0]["id"],
+            "s0"
+        );
+        assert_eq!(
+            observation["sheet_survey"]["tiles"]
+                .as_array()
+                .unwrap()
+                .len(),
+            32
+        );
+        assert_eq!(
+            observation["last_observation"]["sheet_survey"]["tiles"]
+                .as_array()
+                .unwrap()
+                .len(),
+            32
+        );
+        assert!(observation["description_instructions"]
+            .as_str()
+            .unwrap()
+            .contains("describe_views"));
+        assert!(
+            util::json_bytes(&observation).unwrap().len()
+                < store.state.config.limits.max_observation_bytes
+        );
+    }
+
     #[test]
     fn model_cannot_erase_a_retained_competing_stroke() {
         let (_tmp, store) = fixture();

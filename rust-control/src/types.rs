@@ -210,6 +210,37 @@ pub struct AskPerson {
 pub struct RecallView {
     pub view_id: String,
 }
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DescribeViews {
+    pub views: Vec<Value>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DescribeVessel {
+    pub description: Value,
+}
+
+/// Description claims stay flexible, but cannot carry unbounded model output.
+fn bounded_description(value: &Value, depth: usize) -> bool {
+    if depth > 10 {
+        return false;
+    }
+    match value {
+        Value::Null | Value::Bool(_) => true,
+        Value::Number(n) => n.as_f64().is_some_and(f64::is_finite),
+        Value::String(s) => s.chars().count() <= 2000 && !s.chars().any(char::is_control),
+        Value::Array(values) => {
+            values.len() <= 300 && values.iter().all(|v| bounded_description(v, depth + 1))
+        }
+        Value::Object(values) => {
+            values.len() <= 64
+                && values.iter().all(|(key, value)| {
+                    bounded_text(key, 64) && bounded_description(value, depth + 1)
+                })
+        }
+    }
+}
 /// `propose_section`: a section shape the model writes (draft mode).
 #[path = "authoring.rs"]
 pub mod authoring;
@@ -234,6 +265,9 @@ pub enum Operation {
     CompareViews(CompareViews),
     AskPerson(AskPerson),
     RecallView(RecallView),
+    SurveySheet(Empty),
+    DescribeViews(DescribeViews),
+    DescribeVessel(DescribeVessel),
     ProposeSection(authoring::ProposeSection),
 }
 fn bounded_text(text: &str, chars: usize) -> bool {
@@ -266,6 +300,9 @@ impl Operation {
             Self::CompareViews(_) => "compare_views",
             Self::AskPerson(_) => "ask_person",
             Self::RecallView(_) => "recall_view",
+            Self::SurveySheet(_) => "survey_sheet",
+            Self::DescribeViews(_) => "describe_views",
+            Self::DescribeVessel(_) => "describe_vessel",
             Self::ProposeSection(_) => "propose_section",
         }
     }
@@ -284,6 +321,9 @@ impl Operation {
                 | Self::CompareViews(_)
                 | Self::AskPerson(_)
                 | Self::RecallView(_)
+                | Self::SurveySheet(_)
+                | Self::DescribeViews(_)
+                | Self::DescribeVessel(_)
                 | Self::ProposeSection(_)
         )
     }
@@ -355,6 +395,38 @@ impl Operation {
             }
             Self::AskPerson(x) => bounded_text(&x.question, 512),
             Self::RecallView(x) => id(&x.view_id),
+            Self::DescribeViews(x) => {
+                let mut seen = BTreeSet::new();
+                (1..=32).contains(&x.views.len())
+                    && x.views.iter().all(|view| {
+                        view.is_object()
+                            && bounded_description(view, 0)
+                            && view["view_id"]
+                                .as_str()
+                                .is_some_and(|s| id(s) && seen.insert(s))
+                            && view["kind"].as_str().is_some_and(|kind| {
+                                [
+                                    "body",
+                                    "body_fore",
+                                    "body_aft",
+                                    "plan",
+                                    "profile",
+                                    "title_block",
+                                    "offsets_table",
+                                    "other",
+                                ]
+                                .contains(&kind)
+                            })
+                            && serde_json::from_value::<RegionPx>(view["region_px"].clone())
+                                .is_ok_and(|region| valid_region(&region))
+                    })
+                    && serde_json::to_vec(&x.views).is_ok_and(|bytes| bytes.len() <= 32_768)
+            }
+            Self::DescribeVessel(x) => {
+                x.description.is_object()
+                    && bounded_description(&x.description, 0)
+                    && serde_json::to_vec(&x.description).is_ok_and(|bytes| bytes.len() <= 65_536)
+            }
             Self::ProposeSection(x) => x.valid(),
             _ => true,
         };
@@ -540,6 +612,8 @@ pub struct OperationalLimits {
     pub investigation_thinking: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub investigation_conversation: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub phase1_only: bool,
     #[serde(
         default = "default_context_tokens",
         skip_serializing_if = "is_default_context_tokens"
@@ -579,6 +653,7 @@ impl Default for OperationalLimits {
             max_repeated_action: 3,
             investigation_thinking: false,
             investigation_conversation: false,
+            phase1_only: false,
             max_context_tokens: default_context_tokens(),
             investigation_temperature: 0.0,
             max_requests: Some(80),
@@ -825,9 +900,11 @@ mod tests {
     fn investigation_settings_keep_old_limits_and_bound_temperature() {
         let defaults = OperationalLimits::default();
         let serialized = serde_json::to_value(&defaults).unwrap();
+        assert!(serialized.get("phase1_only").is_none());
         assert!(serialized.get("investigation_thinking").is_none());
         assert!(serialized.get("investigation_temperature").is_none());
         let old: OperationalLimits = serde_json::from_value(serialized.clone()).unwrap();
+        assert!(!old.phase1_only);
         assert!(!old.investigation_thinking);
         assert_eq!(old.investigation_temperature, 0.0);
         assert_eq!(serde_json::to_value(old).unwrap(), serialized);
@@ -839,6 +916,7 @@ mod tests {
             assert!(settings.validate().is_err());
         }
         let enabled = OperationalLimits {
+            phase1_only: true,
             investigation_thinking: true,
             investigation_temperature: 0.5,
             ..OperationalLimits::default()
@@ -846,6 +924,7 @@ mod tests {
         enabled.validate().unwrap();
         let roundtrip: OperationalLimits =
             serde_json::from_value(serde_json::to_value(enabled).unwrap()).unwrap();
+        assert!(roundtrip.phase1_only);
         assert!(roundtrip.investigation_thinking);
         assert_eq!(roundtrip.investigation_temperature, 0.5);
     }
