@@ -6,19 +6,22 @@ Read with `docs/CONTINUATION_STATUS.md` (engineering state) and `docs/APP_SPEC.m
 ## 1. Where we stand against Forge Shipyard
 
 Forge (forgeshipyard.com) sells a "2D-to-3D model reconciliation layer for ship repair and
-maintenance": whole-vessel reconstruction plus compliance rules, a signed decision ledger,
+maintenance": reconstruction plus compliance rules, a signed decision ledger,
 reconciliation over time and drydock work packages, delivered as hosted web with on-premise
 options and 90-day governed pilots. One vessel demonstrated (Balclutha), geometry described by
-themselves as a "visual envelope", no published accuracy numbers.
+themselves as a "visual envelope", no published accuracy numbers. Checked 2026-11-09: their
+marketing says "hull today, engine, machinery, and outfitting parts next"; the earlier version of
+this table overstated their scope.
 
 | Edge | Forge | MarinaFrame today |
 |---|---|---|
-| Scope | Whole vessel: hull, decks, structure, openings, outfitting, rigging; piping and machinery in progress | Hull envelope only |
+| Scope (checked 2026-11-09) | Marketing: "hull today, engine, machinery, and outfitting parts next". Balclutha research case: hull, decks, bulkheads, framing, deckhouses, rigging; 44 of 114 identities have geometry | Hull; decks and deckhouses in development (`docs/plans/2026-11-09-whole-vessel-scope.md`) |
+| Gaps in the drawings | Refuse to fill: an identity without drawing evidence has no geometry | Fill with labelled guesses (`traced`, `ai_inferred`, `guessed`) |
 | Compliance | USCG 46 CFR, Plan Review Guides, NVICs as a cited evidence graph | None |
 | Workflow | Propose → approve → sign; append-only decision ledger; work-package readiness | Event ledger and operator interventions; no sign-off product |
 | Reconciliation | Survey, thickness and repair data update the model through a review gate | None |
 | Delivery and customers | Web + on-premise, pilots with design partners, a shipyard owner giving feedback | Desktop app in build; no design partner |
-| Measured geometry | Not published | Numeric gates (trace 1.1 mm, STEP reimport audit), validation contract in Rust, abstention |
+| Measured geometry | Not published; no comparison with ground truth | Numeric gates (trace 1.1 mm, STEP reimport audit), validation contract in Rust, abstention |
 | Table reading | Local OCR for documents | DeepSeek vision for offset tables with deterministic parsing |
 | Proof on a real ship | Visual only | Not yet |
 
