@@ -528,6 +528,8 @@ async function openTask(task) {
   navigate('run');
   // Clear the previous run at once: its drawing and model must not show under this name.
   setPartOutline(null);
+  model.setWholeVessel(null);
+  $('hull-only').hidden = true;
   renderTask({ fresh: true });
   await loadTask({ fresh: true });
 }
@@ -2074,14 +2076,47 @@ const parts = createParts({
     setVesselTab('run');
     setPartOutline(part);
   },
-  // The selected part is the one outlined in 3D, so Run shows what Parts shows.
+  // The selected part is the one outlined (and, with the whole vessel shown, tinted) in 3D.
   onSelect: (part) => setPartOutline(part),
+  showWholeVessel: (part) => showWholeVessel(part),
+});
+
+/** Above this the app does not load a whole-vessel GLB (the same limit as the backend). */
+const MAX_GLB_BYTES = 64 * 1024 * 1024;
+
+/**
+ * Show the run's whole-vessel model (GLB) in the 3D view instead of the hull, with `part`
+ * tinted. STEP files are never loaded; a GLB over the limit is refused with a plain reason.
+ */
+async function showWholeVessel(part) {
+  const info = state.view?.whole_vessel_model;
+  if (!info) return;
+  if (!info.loadable || info.bytes > MAX_GLB_BYTES) {
+    showError(new Error(`The whole-vessel model is ${fmt.bytes(info.bytes)}, more than the ${fmt.bytes(MAX_GLB_BYTES)} the app shows. Open the part STEP files in your CAD program.`));
+    return;
+  }
+  setVesselTab('run');
+  if (!model.showsWholeVessel) {
+    const task = state.task;
+    await runAction('Loading the whole-vessel model…', async () => {
+      const buffer = await cachedArtifact('model', task, info.glb_path);
+      if (task === state.task) await model.setWholeVessel(buffer);
+    });
+  }
+  $('hull-only').hidden = !model.showsWholeVessel;
+  setPartOutline(part);
+}
+
+$('hull-only').addEventListener('click', async () => {
+  await model.setWholeVessel(null);
+  $('hull-only').hidden = true;
 });
 
 /** Outline one part in the 3D view (null hides it); the 3D pane offers Hide outline. */
 function setPartOutline(part) {
   const box = part?.bbox_m || null;
   model.setHighlightBox(box);
+  model.highlightPart(part?.id || null);
   const button = $('clear-outline');
   button.hidden = !box;
   button.title = box ? `Hide the outline of ${part.label}` : '';

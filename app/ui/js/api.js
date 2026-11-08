@@ -281,7 +281,10 @@ function mockIntakePreview(files, thumbnail, aiActive) {
     } else {
       page(file, {
         kind: 'raster', dpi: 150, dpi_source: 'file_metadata',
-        regions: [region('r1', 'profile', 0.41, [140, 250, 1470, 820], 'One wide ink group; could be a profile or a body plan.')],
+        // A set of scans: the sheets take turns at the views a lines plan has (the first is the unsure profile).
+        regions: [pages.length < 3
+          ? region('r1', 'profile', 0.41, [140, 250, 1470, 820], 'One wide ink group; could be a profile or a body plan.')
+          : region('r1', ['half_breadth', 'body_plan', 'profile', 'other'][pages.length % 4], 0.62 + (pages.length % 3) * 0.1, [140, 250, 1470, 820], 'One framed ink group.')],
         warnings: [{ code: 'low_dpi', message: 'Scan 150 dpi: lines may be read less exactly.' }],
       });
     }
@@ -536,6 +539,12 @@ function mockTransport() {
         }))
         : null;
       view.sign_off = task.endsWith('survey-launch') ? clone(mockSignOff) : null;
+      // With ?mockglb (and a GLB placed in mock/files for a local check; none is shipped) the
+      // survey launch has a whole-vessel model; ?mockglbbig makes it too large to load.
+      const glbParam = new URLSearchParams(location.search);
+      view.whole_vessel_model = task.endsWith('survey-launch') && (glbParam.has('mockglb') || glbParam.has('mockglbbig'))
+        ? { glb_path: 'whole-vessel-draft.glb', bytes: glbParam.has('mockglbbig') ? 147_000_000 : 9_000_000, loadable: !glbParam.has('mockglbbig') }
+        : null;
       if (isLiveStreaming(data, task)) {
         view.summary.status = 'running';
         // Before the first build, a real run has read no sections and has no model yet.
@@ -861,6 +870,11 @@ function mockTransport() {
       return defaultPath || '/usr/local/bin/python3';
     },
     async pickDrawingFiles() {
+      // With ?mockset=N (2 to 16) the set is N scanned sheets plus the PDF: a customer's full set.
+      const sheets = Number(new URLSearchParams(location.search).get('mockset'));
+      if (sheets >= 2 && sheets <= 16) {
+        return [MOCK_DRAWING_SET[0], ...Array.from({ length: sheets }, (_, i) => `/Users/demo/Downloads/sheet-${String(i + 1).padStart(2, '0')}-lines-plan-scan.tif`)];
+      }
       return MOCK_DRAWING_SET;
     },
     onFileDrop(handlers) {

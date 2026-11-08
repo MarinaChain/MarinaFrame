@@ -21,3 +21,6 @@ data/examples/
 # Tauri app
 app/src-tauri/gen/
 app/src-tauri/target/
+
+# A whole-vessel GLB placed in the mock for a local check (?mockglb); never committed.
+app/ui/mock/files/*.glb

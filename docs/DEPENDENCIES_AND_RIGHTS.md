@@ -24,6 +24,15 @@ wheel hashes. License metadata may be incomplete and is not legal clearance.
 OSV does not cover every native component or new issue. Pattern scanning is not
 a guarantee of absent secrets.
 
+## Desktop UI vendored code (app/ui/vendor)
+
+three.js r170 (npm `three@0.170.0`, MIT, licence in `app/ui/vendor/three/LICENSE`): the module
+build, `OrbitControls.js`, `STLLoader.js`, and since 2026-11-09 `GLTFLoader.js` and
+`BufferGeometryUtils.js` (for the whole-vessel GLB). The only edits are import paths and a
+two-line origin comment; see `app/ui/vendor/three/README.md`. The UI test tools are npm
+devDependencies with exact versions (`axe-core` 4.10.3, MPL-2.0; `playwright-core` 1.56.1,
+Apache-2.0) and are not shipped.
+
 ## Owner/legal decision: PDF dependency
 
 PyMuPDF 1.26.6 declares **GNU AGPL 3.0 or Artifex Commercial License**. MarinaFrame

@@ -5,6 +5,7 @@
 import * as THREE from '../vendor/three/three.module.min.js';
 import { OrbitControls } from '../vendor/three/OrbitControls.js';
 import { STLLoader } from '../vendor/three/STLLoader.js';
+import { GLTFLoader } from '../vendor/three/GLTFLoader.js';
 import { el, icon, prefersReducedMotion } from './dom.js';
 import { createSectionGrowth } from './growth3d.js';
 
@@ -18,6 +19,8 @@ const GUESS_BAND_MARGIN = 0.04;
 const HOME_DIRECTION = new THREE.Vector3(1.0, -1.25, 0.75).normalize();
 /** A pointer that moves less than this (CSS px) between press and release is a click, not a drag. */
 const CLICK_SLOP_PX = 4;
+/** The CAD worker's GLB is in millimetres. */
+const MM_TO_M = 0.001;
 
 /** Convert any CSS colour (including oklch) to a THREE.Color by painting one pixel. */
 const colourProbe = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
@@ -71,7 +74,7 @@ export function createModelView({ host, onPick = null }) {
     renderer = new THREE.WebGLRenderer({ antialias: true });
   } catch {
     showEmpty('3D view not available', 'This computer did not allow a WebGL view.');
-    return { setModel() {}, setSelected() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {} };
+    return { setModel() {}, setSelected() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), highlightPart() {}, showsWholeVessel: false };
   }
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.domElement.setAttribute('aria-hidden', 'true');
@@ -97,6 +100,8 @@ export function createModelView({ host, onPick = null }) {
   const content = new THREE.Group();
   /** The outline of a whole-vessel part picked on the Parts tab, or null. */
   let highlight = null;
+  /** The whole-vessel model (GLB, one group per part) when shown instead of the hull, or null. */
+  let wholeVessel = null;
   scene.add(content);
   // Live section curves stay outside `content`, so a new STL does not remove them.
   const growth = createSectionGrowth({
@@ -302,11 +307,11 @@ export function createModelView({ host, onPick = null }) {
   }
 
   function resetView({ animate = false } = {}) {
-    if (!hull && !frameBox) return;
+    if (!hull && !frameBox && !wholeVessel) return;
     cameraAtHome = true;
     // Frame the hull and the section planes around it, which reach past the hull
     // across and up; the hull alone would leave them against the pane edge.
-    const box = hull ? new THREE.Box3().setFromObject(hull) : frameBox.clone();
+    const box = wholeVessel ? new THREE.Box3().setFromObject(wholeVessel) : hull ? new THREE.Box3().setFromObject(hull) : frameBox.clone();
     const hullSize = box.getSize(new THREE.Vector3());
     box.expandByVector(new THREE.Vector3(0, hullSize.y * PLANE_MARGIN, hullSize.z * PLANE_MARGIN));
     const sphere = box.getBoundingSphere(new THREE.Sphere());
@@ -394,6 +399,67 @@ export function createModelView({ host, onPick = null }) {
      * Outline one whole-vessel part (APP_SPEC "Whole-vessel parts") as a box in the selection
      * blue; null removes it. `bbox` is { min: [x, y, z], max: [x, y, z] } in metres.
      */
+    /**
+     * Show the whole-vessel model (a GLB with one node per part, named by the part id) in place
+     * of the hull, or go back to the hull with null. The GLB from the CAD worker is Y-up in
+     * millimetres (glTF convention); the app's frame is Z-up in metres, so it is turned back
+     * and scaled. Resolves when it shows; rejects when the file cannot be read.
+     */
+    setWholeVessel(buffer) {
+      if (wholeVessel) {
+        scene.remove(wholeVessel);
+        wholeVessel.traverse((o) => {
+          if (o.isMesh) {
+            o.geometry.dispose();
+            o.material.dispose();
+          }
+        });
+        wholeVessel = null;
+      }
+      if (hull) hull.visible = true;
+      if (!buffer) {
+        resetView({ animate: true });
+        requestRender();
+        return Promise.resolve();
+      }
+      return new Promise((resolve, reject) => {
+        new GLTFLoader().parse(buffer, '', (gltf) => {
+          const group = new THREE.Group();
+          group.add(gltf.scene);
+          group.rotation.x = Math.PI / 2; // glTF Y-up -> the app's Z-up
+          group.scale.setScalar(MM_TO_M);
+          // Each top node is one part; its meshes carry the part id for highlighting.
+          const root = gltf.scene.children.length === 1 && !gltf.scene.children[0].isMesh ? gltf.scene.children[0] : gltf.scene;
+          for (const node of root.children) {
+            node.traverse((o) => {
+              if (!o.isMesh) return;
+              o.userData.partId = node.name;
+              o.material = new THREE.MeshStandardMaterial({ color: colours.hull, roughness: 0.62, metalness: 0, side: THREE.DoubleSide });
+            });
+          }
+          scene.add(group);
+          wholeVessel = group;
+          if (hull) hull.visible = false;
+          empty.hidden = true;
+          renderer.domElement.hidden = false;
+          resize();
+          resetView();
+          requestRender();
+          resolve();
+        }, reject);
+      });
+    },
+    /** Tint one part of the whole-vessel model in the selection blue (null: none). */
+    highlightPart(id) {
+      if (!wholeVessel) return;
+      wholeVessel.traverse((o) => {
+        if (o.isMesh) o.material.color = o.userData.partId === id ? colours.accent : colours.hull;
+      });
+      requestRender();
+    },
+    get showsWholeVessel() {
+      return Boolean(wholeVessel);
+    },
     setHighlightBox(bbox) {
       if (highlight) {
         content.remove(highlight);

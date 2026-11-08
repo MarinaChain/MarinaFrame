@@ -102,7 +102,8 @@ function chip(text, tone, title) {
  * `review(id, decision)` saves a review (review_component) and resolves when done;
  * `showIn3d(part)` switches to the Run tab with the part outlined.
  */
-export function createParts({ host, review, showIn3d, signOff, onSelect = () => {} }) {
+export function createParts({ host, review, showIn3d, signOff, onSelect = () => {}, showWholeVessel = () => {} }) {
+  let wholeModel = null; // TaskView.whole_vessel_model, or null
   let parts = [];
   let selectedId = null;
   let busy = false;
@@ -203,7 +204,7 @@ export function createParts({ host, review, showIn3d, signOff, onSelect = () => 
         title: 'Open this part again for review',
         onclick: () => decide(part, 'open'),
       }, 'Reopen') : null,
-      part.bbox_m ? el('button', { class: 'btn', type: 'button', onclick: () => showIn3d(part) }, icon('cube'), 'Show in 3D') : null);
+      part.bbox_m ? el('button', { class: 'btn', type: 'button', onclick: () => (wholeModel?.loadable ? showWholeVessel(part) : showIn3d(part)) }, icon('cube'), 'Show in 3D') : null);
   }
 
   /** What the person wants changed: chips that start a sentence, then their words. */
@@ -364,6 +365,13 @@ export function createParts({ host, review, showIn3d, signOff, onSelect = () => 
       el('span', { class: 'parts-progress-bar', role: 'img', 'aria-label': `${reviewed} of ${parts.length} parts reviewed` },
         el('span', { style: { width: `${parts.length ? (reviewed / parts.length) * 100 : 0}%` } })),
       el('button', { class: 'btn', type: 'button', disabled: !next, title: 'Go to the next part to review (N)', onclick: () => next && select(next.id) }, 'Next', el('kbd', { class: 'key-hint' }, 'N')),
+      wholeModel ? el('button', {
+        class: 'btn',
+        type: 'button',
+        disabled: !wholeModel.loadable,
+        title: wholeModel.loadable ? 'Show every part in the 3D view' : 'The whole-vessel model is too large for the app; open the part STEP files in your CAD program',
+        onclick: () => showWholeVessel(parts.find((p) => p.id === selectedId) || null),
+      }, icon('cube'), 'Whole vessel in 3D') : null,
       copy);
   }
 
@@ -401,6 +409,7 @@ export function createParts({ host, review, showIn3d, signOff, onSelect = () => 
     show(view) {
       parts = view?.components || [];
       signedOff = view?.sign_off || null;
+      wholeModel = view?.whole_vessel_model || null;
       if (!parts.some((p) => p.id === selectedId)) {
         selectedId = (parts.find((p) => p.built && p.status === 'draft_guess') || parts[0])?.id || null;
       }
