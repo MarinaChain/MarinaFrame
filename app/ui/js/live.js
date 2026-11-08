@@ -113,6 +113,9 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
   let playTimer = 0;
   let followLive = true;
   let speed = 'live';
+  // Replay controls are hidden while the agent works live; a finished run offers
+  // "Watch again", which opens them (founder, 2026-11-09: the point is to watch it live).
+  let replayOpen = false;
   let cameraFollow = true;
   let thinkingFollow = true;
   let pinnedRevision = null;
@@ -151,6 +154,7 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
   }
 
   function reset(nextTask) {
+    replayOpen = false;
     token += 1;
     task = nextTask;
     steps = [];
@@ -852,8 +856,9 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
 
   function renderTransport() {
     const transport = nodes.transport;
-    transport.hidden = !hasSteps();
-    if (!hasSteps()) return;
+    transportParts.watchAgain.hidden = !(hasSteps() && finished && !replayOpen);
+    transport.hidden = !(hasSteps() && finished && replayOpen);
+    if (transport.hidden) return;
     const { play: playButton, scrub, ticks, speeds } = transportParts;
     const atLiveEdge = !finished && followLive && cursor === steps.length - 1;
     playButton.dataset.state = playing ? 'playing' : 'paused';
@@ -918,7 +923,22 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
         catchUp();
         if (cursor === steps.length - 1) showCursor({ animate: false });
       } }, el('span', { class: 'badge-text' }, 'Live'));
-    fill(nodes.transport, playButton, el('div', { class: 'scrub' }, ticks, scrub), speeds, live);
+    const close = el('button', { class: 'btn btn-ghost btn-icon', type: 'button', title: 'Close the replay', 'aria-label': 'Close the replay',
+      onclick: () => {
+        stopPlaying();
+        replayOpen = false;
+        seek(steps.length - 1);
+        renderControls();
+      } }, icon('close'));
+    fill(nodes.transport, playButton, el('div', { class: 'scrub' }, ticks, scrub), speeds, live, close);
+    const watchAgain = el('button', { class: 'btn btn-ghost watch-again', type: 'button', hidden: true,
+      title: 'Replay this run from the start',
+      onclick: () => {
+        replayOpen = true;
+        seek(0);
+        play();
+      } }, icon('play'), el('span', {}, 'Watch again'));
+    nodes.transport.after(watchAgain);
     nodes.transport.addEventListener('keydown', (event) => {
       if (event.key === ' ' && event.target !== scrub) return;
       if (event.key === ' ') {
@@ -926,7 +946,7 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
         playButton.click();
       }
     });
-    return { play: playButton, scrub, ticks, speeds, live };
+    return { play: playButton, scrub, ticks, speeds, live, watchAgain };
   })();
 
   nodes.follow.addEventListener('click', () => {

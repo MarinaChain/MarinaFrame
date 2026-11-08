@@ -1552,9 +1552,26 @@ function isTyping(target) {
   return target.closest('input, textarea, select, [contenteditable="true"], dialog[open]');
 }
 
+// Sidebar: expanded (logo, name, labels) or collapsed (logo and icons). Remembered per viewer.
+function setRail(mode) {
+  const collapsed = mode === 'collapsed';
+  $('app').dataset.rail = collapsed ? 'collapsed' : 'expanded';
+  const toggle = $('rail-toggle');
+  toggle.setAttribute('aria-expanded', String(!collapsed));
+  const label = collapsed ? 'Expand the sidebar (⌘\\)' : 'Collapse the sidebar (⌘\\)';
+  toggle.title = label;
+  toggle.setAttribute('aria-label', label.replace(/ \(.*\)$/, ''));
+  prefs.set('rail', collapsed ? 'collapsed' : 'expanded');
+}
+setRail(prefs.get('rail', 'expanded'));
+$('rail-toggle').addEventListener('click', () => setRail($('app').dataset.rail === 'collapsed' ? 'expanded' : 'collapsed'));
+
 document.addEventListener('keydown', (event) => {
   const command = event.metaKey || event.ctrlKey;
-  if (command && event.key.toLowerCase() === 'n') {
+  if (command && event.key === '\\') {
+    event.preventDefault();
+    setRail($('app').dataset.rail === 'collapsed' ? 'expanded' : 'collapsed');
+  } else if (command && event.key.toLowerCase() === 'n') {
     event.preventDefault();
     openNewRun();
   } else if (command && event.key === ',') {

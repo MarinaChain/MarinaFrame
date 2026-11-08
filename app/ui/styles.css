@@ -42,12 +42,12 @@
   --font-chip: var(--font-ui);
 
   /* Type scale 11/12/13/15/18/24 px. */
-  --fs-xs: 11px;
-  --fs-sm: 12px;
-  --fs-md: 13px;
-  --fs-lg: 15px;
-  --fs-xl: 18px;
-  --fs-2xl: 24px;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-2xl: 26px;
 
   /* 8 px grid: 4, 8, 12, 16, 24, 32 (2 px only inside small controls). */
   --space-2xs: 2px;
@@ -65,8 +65,9 @@
   --radius-dialog: 12px;
 
   /* Height of the macOS title bar overlay; the traffic lights sit inside it. */
-  --titlebar-h: 40px;
-  --traffic-light-inset: 76px;
+  --titlebar-h: 44px;
+  /* 0: the app uses the standard macOS title bar, so the window buttons sit above the web view. */
+  --traffic-light-inset: 0px;
   --statusbar-h: 24px;
   --rail-w: 76px;
   --inspector-w: 340px;
@@ -431,8 +432,16 @@ code { font-family: var(--font-mono); }
   border-bottom: 1px solid var(--rule);
   background: var(--paper);
 }
-/* The brand mark sits beside the window buttons. Clicks pass through so the bar still drags the window. */
-.brand-mark { height: 18px; width: auto; flex: none; pointer-events: none; }
+/* Brand: logo then name, beside the window buttons. With the sidebar collapsed only the logo
+   shows. Clicks pass through so the bar still drags the window. */
+/* The brand cell is as wide as the sidebar, so the logo lines up with the sidebar icons:
+   centred when collapsed, at the icon column when expanded. */
+.brand { display: flex; align-items: center; gap: var(--space-sm); flex: none; pointer-events: none;
+         width: var(--rail-w); height: 100%; padding-left: 19px; border-right: 1px solid var(--rule); }
+.app[data-rail="collapsed"] .brand { justify-content: center; padding-left: 0; }
+.brand-mark { height: 20px; width: auto; flex: none; }
+.brand-name { font-weight: 600; font-size: var(--fs-md); color: var(--ink); letter-spacing: -0.01em; white-space: nowrap; }
+.app[data-rail="collapsed"] .brand-name { display: none; }
 
 .crumbs {
   display: flex;
@@ -499,7 +508,7 @@ code { font-family: var(--font-mono); }
   font-size: var(--fs-xs);
   font-weight: 500;
 }
-.rail-item .icon { width: 20px; height: 20px; }
+.rail-item .icon { width: 22px; height: 22px; }
 .rail-item span { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .rail-item:hover { background: var(--hover); color: var(--ink); }
 .rail-item[aria-current="page"] {
@@ -507,6 +516,27 @@ code { font-family: var(--font-mono); }
   color: var(--brand);
   box-shadow: inset 2px 0 0 var(--brand);
 }
+
+/* Expanded sidebar (default): icon and label in one row. Collapsed: icons only. */
+.app[data-rail="expanded"] { --rail-w: 184px; }
+.app[data-rail="expanded"] .rail-item { flex-direction: row; justify-content: flex-start; gap: var(--space-sm); padding: var(--space-sm) var(--space-md); font-size: var(--fs-sm); }
+.app[data-rail="collapsed"] .rail-item span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.app[data-rail="collapsed"] { --rail-w: 60px; }
+.rail-toggle {
+  margin-top: auto;
+  align-self: flex-start;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-left: 4px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--ink-3);
+}
+.rail-toggle:hover { background: var(--hover); color: var(--ink); }
+.rail-toggle .icon { width: 18px; height: 18px; }
 
 .views { grid-row: 2; grid-column: 2; position: relative; min-width: 0; min-height: 0; }
 .view { position: absolute; inset: 0; min-width: 0; min-height: 0; }
@@ -1031,7 +1061,7 @@ code { font-family: var(--font-mono); }
   grid-template-rows: auto auto;
   column-gap: var(--space-sm);
   align-items: center;
-  width: 164px;
+  width: 184px; /* fits "AI corrected" and "Interpolated" chips at 14 px type */
   flex: none;
   padding: var(--space-sm);
   border: 1px solid var(--line);
@@ -1520,9 +1550,9 @@ code { font-family: var(--font-mono); }
 }
 
 @media (max-width: 900px) {
-  :root { --inspector-w: 264px; --rail-w: 72px; --traffic-light-inset: 72px; }
+  :root { --inspector-w: 264px; --rail-w: 72px; }
   .rail { padding-left: 6px; padding-right: 6px; }
-  .brand-mark { display: none; }
+  .brand-name { display: none; }
   .crumbs { font-size: var(--fs-md); }
   .home-scroll { padding: var(--space-lg); }
   .home-head h1, .settings-form h1 { font-size: var(--fs-xl); }
@@ -1846,3 +1876,7 @@ code { font-family: var(--font-mono); }
   .live-now .mk-ripple { animation: none; }
 }
 
+
+/* Finished run: "Watch again" opens the replay controls (hidden during a live run). */
+.watch-again { gap: var(--space-xs); font-size: var(--fs-sm); color: var(--ink-2); }
+.watch-again[hidden] { display: none; }

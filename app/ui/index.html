@@ -19,6 +19,7 @@
     <symbol id="i-home" viewBox="0 0 16 16"><path d="M2.5 7.2L8 2.5l5.5 4.7" /><path d="M4 6v7.5h8V6" /><path d="M6.6 13.5V10h2.8v3.5" /></symbol>
     <symbol id="i-queue" viewBox="0 0 16 16"><path d="M8 2.2l5.8 3L8 8.2 2.2 5.2z" /><path d="M2.2 8L8 11l5.8-3" /><path d="M2.2 10.8L8 13.8l5.8-3" /></symbol>
     <symbol id="i-close" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" /></symbol>
+    <symbol id="i-sidebar" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5" /><path d="M6 3v10" /></symbol>
     <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" /><path d="M8 7.2V11M8 5v.2" /></symbol>
     <symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 2.2l6 10.8H2z" /><path d="M8 6.5v3M8 11v.2" /></symbol>
     <symbol id="i-fit" viewBox="0 0 16 16"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" /></symbol>
@@ -60,7 +61,10 @@
   <div class="app" id="app">
     <!-- Title bar: traffic-light inset, breadcrumb Vessel › Run › rN, run actions. -->
     <header class="titlebar" data-tauri-drag-region>
-      <img class="brand-mark" src="assets/mark.svg" alt="MarinaFrame" width="24" height="20">
+      <div class="brand" aria-label="MarinaFrame">
+        <img class="brand-mark" src="assets/mark.svg" alt="" width="24" height="20">
+        <span class="brand-name">MarinaFrame</span>
+      </div>
       <nav class="crumbs" id="crumbs" aria-label="Breadcrumb" data-tauri-drag-region></nav>
       <span class="badge" id="task-badge" hidden></span>
       <div class="titlebar-actions" id="run-actions" hidden>
@@ -84,6 +88,9 @@
       </button>
       <button class="rail-item" type="button" data-route="settings" title="Settings (⌘,)">
         <svg class="icon"><use href="#i-gear" /></svg><span>Settings</span>
+      </button>
+      <button class="rail-toggle" type="button" id="rail-toggle" title="Collapse the sidebar (⌘\)" aria-label="Collapse the sidebar" aria-expanded="true">
+        <svg class="icon"><use href="#i-sidebar" /></svg>
       </button>
     </nav>
 
