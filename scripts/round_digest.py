@@ -154,17 +154,22 @@ def model_reasons(events: list[dict]) -> list[str]:
 
 
 def draft_state(events: list[dict], case_dir: Path, stdout: dict) -> str:
-    built = any(
-        e.get("kind") == "worker_result"
-        and as_dict(e.get("payload")).get("operation") == "build_draft"
-        and not worker_blocker(e)
+    """'valid draft' only when a build produced a valid candidate; a blocked build is not a draft."""
+    builds = [
+        as_dict(as_dict(as_dict(e.get("payload")).get("response")).get("result"))
         for e in events
-    ) or bool(as_dict(stdout.get("counters")).get("builds"))
+        if e.get("kind") == "worker_result" and as_dict(e.get("payload")).get("operation") == "build_draft"
+    ]
+    valid = any(as_dict(b.get("candidate")).get("valid") is True for b in builds)
     has_step = any(case_dir.rglob("*.step")) or any(case_dir.rglob("*.stp"))
-    return "draft built" + (" + STEP" if has_step else "") if built or has_step else "no draft"
+    if valid or has_step:
+        return "valid draft" + (" + STEP" if has_step else "")
+    if builds:
+        return f"build attempted {len(builds)}x, none valid"
+    return "no draft"
 
 
-def request_stats(events: list[dict], stdout: dict, result: dict) -> tuple[int, float | None]:
+def request_stats(events: list[dict], stdout: dict, result: dict, case_dir: Path) -> tuple[int, float | None]:
     counters = as_dict(stdout.get("counters"))
     receipts = [
         as_dict(as_dict(e.get("payload")).get("receipt"))
@@ -173,9 +178,23 @@ def request_stats(events: list[dict], stdout: dict, result: dict) -> tuple[int, 
     ]
     requests = counters.get("requests_completed", len(receipts))
     cost = result.get("list_cost_usd")
-    if cost is None and counters.get("observed_cost_usd"):
-        cost = counters["observed_cost_usd"]
+    if cost is None:
+        cost = receipt_list_cost(case_dir)
     return int(requests or 0), cost
+
+
+def receipt_list_cost(case_dir: Path) -> float | None:
+    """Sum provider-reported nominal list cost from request receipts (usage.list_cost)."""
+    total, found = 0.0, False
+    for path in case_dir.glob("task/receipts/request-*.json"):
+        try:
+            usage = as_dict(json.loads(path.read_text()).get("usage"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(usage.get("list_cost"), (int, float)):
+            total += usage["list_cost"]
+            found = True
+    return total if found else None
 
 
 def digest_case(case_dir: Path) -> dict:
@@ -189,7 +208,7 @@ def digest_case(case_dir: Path) -> dict:
         as_dict(as_dict(e.get("payload")).get("decision")) for e in events if e.get("kind") == "decision"
     ]
     tools = [d.get("tool") or "?" for d in decisions]
-    requests, cost = request_stats(events, stdout, result)
+    requests, cost = request_stats(events, stdout, result, case_dir)
     return {
         "case": case_dir.name,
         "status": stdout.get("status") or result.get("controller_status") or ("terminated" if terminated else "unknown"),

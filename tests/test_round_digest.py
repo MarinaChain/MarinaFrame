@@ -16,8 +16,10 @@ def decision(tool, args=None, reason="r"):
     return ("decision", {"actor": "live_model", "decision": {"tool": tool, "arguments": args or {}, "reason": reason}})
 
 
-def worker(operation, status="ok", code=None, message=None):
+def worker(operation, status="ok", code=None, message=None, candidate=None):
     result = {"status": status, "error_code": code, "message": message}
+    if candidate is not None:
+        result["candidate"] = candidate
     return ("worker_result", {"operation": operation, "response": {"result": result}})
 
 
@@ -73,14 +75,26 @@ def test_failed_worker_result_beats_later_repeat(tmp_path):
 
 
 def test_draft_requests_and_cost(tmp_path):
-    events = [decision("build_draft"), worker("build_draft", status="built")]
+    events = [decision("build_draft"), worker("build_draft", status="built", candidate={"valid": True})]
     stdout = {"status": "completed", "counters": {"requests_completed": 7, "builds": 1}}
     case = make_case(tmp_path, "c", events, stdout=stdout, result={"list_cost_usd": 0.5})
     digest = round_digest.digest_case(case)
-    assert digest["draft"] == "draft built"
+    assert digest["draft"] == "valid draft"
     assert digest["requests"] == 7
     assert digest["list_cost_usd"] == 0.5
     assert digest["first_blocker"] is None
+
+
+def test_blocked_build_is_not_a_draft_and_receipt_cost_is_summed(tmp_path):
+    events = [decision("build_draft"), worker("build_draft", status="blocked", candidate={"valid": False})]
+    case = make_case(tmp_path, "c", events, stdout={"status": "no_progress"})
+    receipts = case / "task" / "receipts"
+    receipts.mkdir()
+    for index, cost in enumerate((0.25, 0.5)):
+        (receipts / f"request-{index}.json").write_text(json.dumps({"usage": {"list_cost": cost}}))
+    digest = round_digest.digest_case(case)
+    assert digest["draft"] == "build attempted 1x, none valid"
+    assert digest["list_cost_usd"] == 0.75
 
 
 def test_missing_files_do_not_crash(tmp_path):
