@@ -1,0 +1,112 @@
+{
+  "exit_code": 0,
+  "result": {
+    "schema": "ship-cad-result/v1",
+    "status": "draft_only",
+    "engineering_approved": false,
+    "readiness_authority": "rust_controller_only",
+    "components": [
+      {
+        "id": "house_t1",
+        "op": "deckhouse",
+        "source": {
+          "view": "plan",
+          "region": "house",
+          "method": "closed_outline"
+        },
+        "status": "measured_draft",
+        "reason": "Component identity needs human review",
+        "source_labels": {
+          "outline": "traced",
+          "height": "traced"
+        },
+        "provenance": {
+          "house_outline": {
+            "status": "measured",
+            "kind": "outline",
+            "value": [
+              [
+                9,
+                -2.6
+              ],
+              [
+                17,
+                -2.6
+              ],
+              [
+                17,
+                2.6
+              ],
+              [
+                9,
+                2.6
+              ]
+            ],
+            "view": "plan",
+            "region": "house",
+            "method": "closed_outline",
+            "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "entity_ids": [
+              "A"
+            ]
+          },
+          "house_height": {
+            "status": "measured",
+            "kind": "interval",
+            "value": [
+              3.4,
+              5.8
+            ],
+            "view": "profile",
+            "region": "height",
+            "method": "parallel_lines",
+            "source_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "entity_ids": [
+              "B",
+              "C"
+            ]
+          }
+        },
+        "built": true,
+        "bbox_m": {
+          "min": [
+            9.0,
+            -2.6,
+            3.4
+          ],
+          "max": [
+            17.0,
+            2.6,
+            5.8
+          ]
+        },
+        "volume_m3": 99.84
+      },
+      {
+        "id": "mast",
+        "op": "deckhouse",
+        "source": {
+          "view": "plan",
+          "region": "mast",
+          "method": "closed_outline"
+        },
+        "status": "draft_guess",
+        "reason": "mast_outline: missing or invalid measurement; mast_height: missing or invalid measurement",
+        "source_labels": {},
+        "provenance": {},
+        "built": false
+      }
+    ],
+    "cross_view": {
+      "status": "blocked",
+      "missing": [
+        "profile",
+        "plan",
+        "body"
+      ],
+      "maximum_distance_m": {},
+      "draft_tolerance_m": 0.05,
+      "reviewer_veto": false
+    }
+  }
+}

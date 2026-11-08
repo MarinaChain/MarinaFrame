@@ -53,6 +53,48 @@ fn point(value: &Value) -> Option<[f64; 3]> {
     Some([items[0].as_f64()?, items[1].as_f64()?, items[2].as_f64()?])
 }
 
+/// The evidence of one argument. ship-cad keys `provenance` by the argument for a value given
+/// inline and by the measurement or guess name otherwise; the worker names those
+/// `<region>_<argument>` (`benchmarks/gunnerus/whole_vessel.py`), so a unique key ending in
+/// `_<argument>` is that argument's record.
+fn provenance_of<'a>(entry: &'a Value, argument: &str) -> Option<&'a Value> {
+    let provenance = entry["provenance"].as_object()?;
+    if let Some(record) = provenance.get(argument) {
+        return Some(record);
+    }
+    let suffix = format!("_{argument}");
+    let mut matches = provenance.iter().filter(|(key, _)| key.ends_with(&suffix));
+    match (matches.next(), matches.next()) {
+        (Some((_, record)), None) => Some(record),
+        _ => None,
+    }
+}
+
+fn argument_view(entry: &Value, name: &str, source: &str) -> Option<ComponentArgument> {
+    let record = provenance_of(entry, name);
+    let value = value_text(&entry["geometry"][name])
+        .or_else(|| record.and_then(|r| value_text(&r["value"])));
+    // A guess or an inline value says why; a measurement says where it was read.
+    let basis = record
+        .and_then(|r| r["basis"].as_str().map(String::from))
+        .or_else(|| {
+            let r = record?;
+            let view = r["view"].as_str()?;
+            let method = r["method"].as_str().unwrap_or("").replace('_', " ");
+            Some(if method.is_empty() {
+                format!("Read from the {view}")
+            } else {
+                format!("Read from the {view} ({method})")
+            })
+        });
+    Some(ComponentArgument {
+        name: name.to_string(),
+        value,
+        source: source.to_string(),
+        basis,
+    })
+}
+
 fn component_view(entry: &Value, reviews: &HashMap<String, PartReview>) -> Option<ComponentView> {
     let id = entry["id"].as_str()?.to_string();
     let built = entry["built"].as_bool().unwrap_or(false);
@@ -61,16 +103,7 @@ fn component_view(entry: &Value, reviews: &HashMap<String, PartReview>) -> Optio
         .map(|labels| {
             labels
                 .iter()
-                .filter_map(|(name, label)| {
-                    Some(ComponentArgument {
-                        name: name.clone(),
-                        value: value_text(&entry["geometry"][name]),
-                        source: label.as_str()?.to_string(),
-                        basis: entry["provenance"][name]["basis"]
-                            .as_str()
-                            .map(String::from),
-                    })
-                })
+                .filter_map(|(name, label)| argument_view(entry, name, label.as_str()?))
                 .collect()
         })
         .unwrap_or_default();
@@ -263,6 +296,44 @@ mod tests {
                 && rudder.volume_m3.is_none()
         );
         assert!(read_components(&tmp.path().join("none"), &HashMap::new()).is_none());
+    }
+
+    /// `testdata/ship_cad_execution.json` is real ship-cad worker output (`ship_cad.execute`
+    /// on a synthetic two-part program; no drawing data): the reader must take it as it is.
+    #[test]
+    fn real_worker_output_is_read() {
+        let tmp = tempfile::tempdir().unwrap();
+        let task = tmp.path().join("task");
+        std::fs::create_dir_all(task.join("whole_vessel")).unwrap();
+        std::fs::write(
+            task.join(EXECUTION_FILE),
+            include_str!("../testdata/ship_cad_execution.json"),
+        )
+        .unwrap();
+        let parts = read_components(&task, &HashMap::new()).unwrap();
+        assert_eq!(parts.len(), 2);
+        let house = &parts[0];
+        assert_eq!(
+            (house.id.as_str(), house.status.as_str(), house.built),
+            ("house_t1", "measured_draft", true)
+        );
+        assert_eq!(house.bbox_m.as_ref().unwrap().min, [9.0, -2.6, 3.4]);
+        assert!((house.volume_m3.unwrap() - 99.84).abs() < 1e-6);
+        let height = house.arguments.iter().find(|a| a.name == "height").unwrap();
+        assert_eq!(height.value.as_deref(), Some("3.400 to 5.800 m"));
+        assert_eq!(
+            height.basis.as_deref(),
+            Some("Read from the profile (parallel lines)")
+        );
+        let outline = house
+            .arguments
+            .iter()
+            .find(|a| a.name == "outline")
+            .unwrap();
+        assert_eq!(outline.value.as_deref(), Some("4 points"));
+        let mast = &parts[1];
+        assert!(!mast.built && mast.arguments.is_empty() && mast.bbox_m.is_none());
+        assert!(mast.reason.contains("missing or invalid measurement"));
     }
 
     #[test]
