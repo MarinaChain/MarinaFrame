@@ -452,6 +452,54 @@ fn terminating_ends_the_run_and_resuming_reopens_it() {
 }
 
 #[test]
+fn a_marked_revision_shows_the_mark_its_result_and_a_kept_anyway() {
+    let mut ledger = Ledger::new();
+    ledger.push("task_created", json!({}));
+    ledger.push(
+        "operator_revision_requested",
+        json!({"actor": "human_operator", "revision_id": "revision-1", "sections": ["s01"],
+            "request": {"instruction": "Too full at the bilge",
+                "region": {"page_px_box": [120.0, 300.0, 260.0, 460.0]}}}),
+    );
+    let result = ledger.push(
+        "operator_revision_result",
+        json!({"revision_id": "revision-1", "outcome": "not_kept", "fit_change": 0.0,
+            "not_kept_fit_change": -0.02, "edits": [{"section_id": "s01", "kept": false,
+            "reason": "combined fit 0.8 -> 0.78: needs +0.002"}]}),
+    );
+    let store = LiveStore::default();
+    let live = store.steps(ledger.task(), 0);
+    let marked = &live.steps[1];
+    assert_eq!(
+        (marked.kind, marked.actor),
+        (StepKind::Revise, Actor::Person)
+    );
+    assert_eq!(marked.text, "Too full at the bilge");
+    assert_eq!(marked.marks[0].tone, Tone::Person);
+    assert_eq!(marked.attention_px, Some([120.0, 300.0, 260.0, 460.0]));
+    assert_eq!(marked.targets[0].id, "s01");
+    let outcome = &live.steps[2];
+    assert_eq!(outcome.title, "Not kept: worse by 0.020");
+    assert_eq!(outcome.tool.as_ref().unwrap().kept, Some(false));
+    let revision = outcome.mark_revision.as_ref().unwrap();
+    assert!(revision.can_keep_anyway && !revision.operator_forced);
+    ledger.push(
+        "operator_revision_forced",
+        json!({"revision_id": "revision-1", "operator_forced": true}),
+    );
+    let after = store.steps(ledger.task(), result);
+    let updated = after.steps.iter().find(|s| s.sequence == result).unwrap();
+    let revision = updated.mark_revision.as_ref().unwrap();
+    assert!(!revision.can_keep_anyway && revision.operator_forced);
+    assert_eq!(after.steps.last().unwrap().title, "Kept anyway");
+    assert_eq!(builder_title("kept", Some(0.031), None), "Kept, fit +0.031");
+}
+
+fn builder_title(outcome: &str, change: Option<f64>, not_kept: Option<f64>) -> String {
+    builder::revision_title(outcome, change, not_kept)
+}
+
+#[test]
 fn a_replaced_ledger_is_read_from_the_start() {
     let mut ledger = Ledger::new();
     for _ in 0..3 {

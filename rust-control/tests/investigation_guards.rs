@@ -564,3 +564,149 @@ fn submitting_an_investigated_draft_stops_at_draft_not_verified() {
     assert!(store.verify(false).is_ok());
     assert!(!store.state.engineering_approved);
 }
+
+// ---- Mark and revise (src/revision.rs) ----
+// The scripted model below stages each answer as `live_decision` would; the
+// worker shim's `keep_rule` mode answers as the whole-vessel keep rule would.
+
+use controller::revision;
+
+fn revision_request(value: Value) -> revision::RevisionRequest {
+    serde_json::from_value(value).unwrap()
+}
+
+fn s0_offsets() -> Value {
+    json!({"section_id":"s0","form":"half_breadths","basis":"Follow the marked ink.",
+        "offsets_m":[[0.0,0.0],[0.5,0.6],[1.0,0.9],[1.5,1.0],[2.0,1.0]]})
+}
+
+/// A scripted model: each call stages the next answer and checks that the
+/// person's instruction reaches the model.
+fn scripted(answers: Vec<Decision>) -> impl FnMut(&mut store::Store) -> util::Result<bool> {
+    let mut answers = answers.into_iter();
+    move |store| {
+        assert!(revision::active(store));
+        let brief = &store.state.last_observation["operator_revision"];
+        assert_eq!(brief["instruction"], "Too full at the bilge");
+        assert_eq!(brief["from"], "human_operator");
+        store.state.staged_decision = answers.next();
+        Ok(true)
+    }
+}
+
+fn revise_s0(store: &mut store::Store, answers: Vec<Decision>) -> util::Result<Value> {
+    let request = revision_request(json!({"schema_version":revision::REQUEST_SCHEMA,
+        "instruction":"Too full at the bilge","target_section_ids":["s0"]}));
+    revision::revise_with(store, request, &mut scripted(answers))
+}
+
+fn events_of<'a>(store: &'a store::Store, kind: &str) -> Vec<&'a Value> {
+    store
+        .events
+        .iter()
+        .filter(|e| e.kind == kind)
+        .map(|e| &e.payload)
+        .collect()
+}
+
+#[test]
+fn a_revision_records_the_request_and_keeps_an_improving_edit() {
+    let _serial = serial();
+    let (_directory, mut store) = prepared(json!({"keep_rule":"improve"}));
+    let result = revise_s0(&mut store, vec![decision("propose_section", s0_offsets())]).unwrap();
+    assert_eq!(result["outcome"], "kept");
+    assert_eq!(result["fit_change"], 0.03);
+    assert_eq!(result["edits"][0]["section_id"], "s0");
+    assert_eq!(result["engineering_approved"], false);
+    let requested = events_of(&store, revision::REQUESTED_EVENT);
+    assert_eq!(requested.len(), 1);
+    assert_eq!(requested[0]["actor"], "human_operator");
+    assert_eq!(requested[0]["sections"], json!(["s0"]));
+    // The crop of the marked section was made before the model answered.
+    assert!(store
+        .events
+        .iter()
+        .any(|e| e.kind == "worker_intent" && e.payload["operation"] == "view_region"));
+    assert_eq!(events_of(&store, revision::RESULT_EVENT).len(), 1);
+    assert_eq!(store.state.status, Status::Paused);
+    assert!(!revision::active(&store));
+    assert_eq!(store.state.counters.operator_actions, 1);
+    store.verify(false).unwrap();
+}
+
+#[test]
+fn a_revision_refuses_an_edit_outside_its_range_and_asks_again() {
+    let _serial = serial();
+    let (_directory, mut store) = prepared(json!({"keep_rule":"improve"}));
+    let outside = json!({"section_id":"s1","form":"blend","basis":"Wrong section."});
+    let result = revise_s0(
+        &mut store,
+        vec![
+            decision("propose_section", outside),
+            decision("view_region", json!({"region_px":[0,0,10,10]})),
+            decision("propose_section", s0_offsets()),
+        ],
+    )
+    .unwrap();
+    assert_eq!(result["edit_count"], 1);
+    assert_eq!(result["outcome"], "kept");
+    let refused = events_of(&store, "operation_rejected");
+    assert_eq!(refused.len(), 2);
+    assert!(refused
+        .iter()
+        .all(|e| e["reason"] == "revision_requires_propose_section_in_range"));
+}
+
+#[test]
+fn a_not_kept_revision_can_be_kept_anyway_by_a_person() {
+    let _serial = serial();
+    let (_directory, mut store) = prepared(json!({"keep_rule":"reject"}));
+    let result = revise_s0(&mut store, vec![decision("propose_section", s0_offsets())]).unwrap();
+    assert_eq!(result["outcome"], "not_kept");
+    assert_eq!(result["not_kept_fit_change"], -0.02);
+    assert_eq!(result["edits"][0]["kept"], false);
+    let revision_id = result["revision_id"].as_str().unwrap().to_string();
+    let forced = revision::force_keep(&mut store, &revision_id).unwrap();
+    assert_eq!(forced["operator_forced"], true);
+    assert_eq!(forced["engineering_approved"], false);
+    assert_eq!(forced["edits"][0]["applied"], true);
+    let recorded = events_of(&store, revision::FORCED_EVENT);
+    assert_eq!(recorded[0]["actor"], "human_operator");
+    assert!(!store.state.engineering_approved);
+    assert_eq!(
+        revision::force_keep(&mut store, &revision_id).unwrap_err(),
+        "revision_already_forced"
+    );
+    assert_eq!(
+        revision::force_keep(&mut store, "revision-unknown").unwrap_err(),
+        "unknown_revision"
+    );
+    store.verify(false).unwrap();
+}
+
+#[test]
+fn an_invalid_revision_request_changes_nothing() {
+    let _serial = serial();
+    let (_directory, mut store) = prepared(json!({}));
+    let before = store.events.len();
+    for (value, code) in [
+        (
+            json!({"schema_version":revision::REQUEST_SCHEMA,"instruction":"Smoother","target_section_ids":["s9"]}),
+            "unknown_section_id",
+        ),
+        (
+            json!({"schema_version":revision::REQUEST_SCHEMA,"instruction":"","target_section_ids":["s0"]}),
+            "revision_instruction",
+        ),
+        (
+            json!({"schema_version":revision::REQUEST_SCHEMA,"instruction":"Smoother","station_range_m":[90.0,99.0]}),
+            "revision_range_has_no_sections",
+        ),
+    ] {
+        let error =
+            revision::revise_with(&mut store, revision_request(value), &mut scripted(vec![]))
+                .unwrap_err();
+        assert_eq!(error, code);
+    }
+    assert_eq!(store.events.len(), before);
+}

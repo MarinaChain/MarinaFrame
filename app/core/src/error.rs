@@ -69,6 +69,14 @@ pub fn plain_message(code: &str) -> String {
         "artifact_too_large" => "That file is too large to open.",
         "invalid_settings" => "The settings are not valid.",
         "not_built_yet" => "This run has no model to change yet.",
+        "revision_instruction" => "Say what to fix in up to 500 characters.",
+        "revision_needs_region_range_or_sections" => "Mark a region or pick a section first.",
+        "revision_region_has_no_sections" | "revision_range_has_no_sections" => {
+            "No section lies in the marked range."
+        }
+        "revision_requires_live_draft_run" => "Mark and revise needs a run that uses the model.",
+        "revision_has_no_unkept_edit" => "Every edit of this revision is already kept.",
+        "revision_already_forced" => "This revision was already kept.",
         _ => "",
     };
     if text.is_empty() {

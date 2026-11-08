@@ -9,6 +9,7 @@ import { el, svg, icon, fill } from './dom.js';
 import { createDrawingView } from './drawing.js';
 import { createModelView } from './model3d.js';
 import { createLiveRun } from './live.js';
+import { createMarkTool } from './mark.js';
 import { createIntake } from './intake.js';
 import { createExport, canExport } from './export.js';
 import * as fmt from './format.js';
@@ -112,6 +113,7 @@ const live = createLiveRun({
     dial: $('fit-dial'),
     caption: $('model-caption'),
   },
+  cardActions: (step) => markTool.resultActions(step),
   onStepsChanged: () => {
     if (!live.hasSteps()) {
       renderNarration();
@@ -119,6 +121,20 @@ const live = createLiveRun({
       renderRevisionStrip();
     }
   },
+});
+
+// Mark and revise (js/mark.js): circle part of the drawing and say what to fix.
+const markTool = createMarkTool({
+  invoke,
+  drawing,
+  drawingHost: $('drawing-host'),
+  strip: $('strip'),
+  context: () => ({ task: state.task, view: state.view, running: isRunning() }),
+  onSent: () => {
+    loadTask();
+    live.poke(state.task);
+  },
+  onError: (error) => showError(error),
 });
 
 const drawingEmpty = el('div', { class: 'pane-empty', hidden: true });
@@ -413,6 +429,7 @@ async function loadTask({ fresh = false } = {}) {
     if (!view.sections.some((s) => s.id === state.sectionId)) state.sectionId = defaultSection(view);
     renderTask({ fresh });
     live.statusChanged();
+    markTool.refresh();
   } catch (error) {
     if (token === state.loadToken) showError(error);
   }

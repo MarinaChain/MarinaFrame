@@ -422,6 +422,36 @@ function mockTransport() {
     };
   }
 
+  /** Sections whose panel a marked region touches. */
+  function touchedSections(view, region) {
+    const points = region?.page_px_box ? [region.page_px_box.slice(0, 2), region.page_px_box.slice(2)] : region?.lasso_px || [];
+    if (!points.length) return [];
+    const xs = points.map((p) => p[0]);
+    const ys = points.map((p) => p[1]);
+    const [l, t, r, b] = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+    return view.sections.filter((s) => s.roi_px[0] < r && l < s.roi_px[2] && s.roi_px[1] < b && t < s.roi_px[3]).map((s) => s.id);
+  }
+
+  /** Append scripted live steps one by one (each after its delay), then call `done`. */
+  async function playRevisionSteps(data, task, script, done) {
+    const run = data.live[task];
+    for (const [index, { delay, step, inFlight }] of script.entries()) {
+      await pause(delay);
+      const last = run.steps[run.steps.length - 1];
+      const sequence = last.last_sequence + 1;
+      const time = last.time_ms + Math.max(delay, 300);
+      run.steps.push({ notes: null, revision: null, images: [], model_ms: null, cost_usd: null, repeat_of: null, count: 1,
+        ...step, sequence, last_sequence: sequence, time_ms: time });
+      run.mock_in_flight = inFlight ? { kind: inFlight, operation: null, since_ms: time } : null;
+      if (index === script.length - 1) done();
+      // A ledger event too, so the app reads the run's status again.
+      const events = data.events[task];
+      const eventSequence = events[events.length - 1].sequence + 1;
+      events.push({ sequence: eventSequence, time_ms: Date.now(), text: step.title, kind: 'revise' });
+      emit(task, eventSequence);
+    }
+  }
+
   const commands = {
     async list_tasks(data) {
       startPlayback(data);
@@ -443,7 +473,7 @@ function mockTransport() {
         last_sequence: last.last_sequence,
         started_ms: run.started_ms,
         elapsed_ms: last.time_ms,
-        in_flight: next ? { kind: next.actor === 'model' ? 'model' : 'worker', operation: next.tool?.tool || null, since_ms: last.time_ms } : null,
+        in_flight: run.mock_in_flight || (next ? { kind: next.actor === 'model' ? 'model' : 'worker', operation: next.tool?.tool || null, since_ms: last.time_ms } : null),
         finished,
       });
     },
@@ -487,6 +517,67 @@ function mockTransport() {
     async resume_task(data, { task }) {
       requireTask(data, task);
       await pause(500);
+      return { ok: true };
+    },
+    // Mark and revise: the focused pass streams in as live steps (mark, crop, model edit,
+    // keep-rule result). The preview keeps the edit unless the instruction says "fine" or
+    // "wrong", so both results and "Keep anyway" can be seen.
+    async revise_region(data, { task, request }) {
+      const view = requireTask(data, task);
+      const run = data.live?.[task];
+      if (!run || view.summary.policy !== 'live') throw new BackendError('revision_requires_live_draft_run', 'Mark and revise needs a run that uses the model.');
+      const instruction = String(request?.instruction || '').trim();
+      if (!instruction || instruction.length > 500) throw new BackendError('revision_instruction', 'Say what to fix in up to 500 characters.');
+      const sections = request.target_section_ids?.length ? request.target_section_ids : touchedSections(view, request.region);
+      const section = sections[0] || view.sections[0].id;
+      const kept = !/fine|wrong/i.test(instruction);
+      const revisionId = `revision-mock${run.steps.length}`;
+      const mark = request.region?.page_px_box
+        ? { shape: 'box', tone: 'person', points_px: [request.region.page_px_box.slice(0, 2), request.region.page_px_box.slice(2)] }
+        : request.region?.lasso_px ? { shape: 'polyline', tone: 'person', points_px: [...request.region.lasso_px, request.region.lasso_px[0]] } : null;
+      const roi = view.sections.find((s) => s.id === section)?.roi_px || null;
+      const resumeStatus = view.summary.status;
+      const target = (id) => ({ kind: 'section', id });
+      const script = [
+        { delay: 0, inFlight: 'worker', step: { kind: 'revise', actor: 'person', title: 'Marked for revision', text: instruction, targets: sections.map(target),
+          attention_px: mark ? null : roi, marks: mark ? [mark] : [], tool: null } },
+        { delay: 900, inFlight: 'model', step: { kind: 'look', actor: 'code', title: 'Cropped the marked region for the model', text: '',
+          targets: [], attention_px: roi, marks: roi ? [{ shape: 'box', tone: 'attention', points_px: [roi.slice(0, 2), roi.slice(2)] }] : [],
+          tool: { tool: 'view_region', duration_ms: 310, state: 'ok', text: '1 view' } } },
+        { delay: 2600, step: { kind: 'propose_section', actor: 'model', title: `Drew section ${section}`,
+          text: `The person asked: “${instruction.slice(0, 80)}”. I redrew ${section} from the marked ink, with the turn of the bilge where the line is drawn.`,
+          targets: [target(section)], attention_px: roi, marks: [], model_ms: 2400, cost_usd: 0.0012,
+          tool: { tool: 'propose_section', duration_ms: 820, state: 'ok', kept, text: kept ? 'Kept: the fit improved' : 'Not kept: the fit got worse' } } },
+        { delay: 900, step: { kind: 'revise', actor: 'code', title: kept ? 'Kept, fit +0.012' : 'Not kept: worse by 0.004', text: '',
+          targets: [target(section)], attention_px: null, marks: [],
+          tool: { tool: 'keep rule', duration_ms: null, state: 'ok', kept, text: kept ? 'Kept, fit +0.012' : 'Combined fit 0.931 -> 0.927: needs +0.002' },
+          mark_revision: { revision_id: revisionId, outcome: kept ? 'kept' : 'not_kept', fit_change: kept ? 0.012 : 0, not_kept_fit_change: kept ? null : -0.004, can_keep_anyway: !kept, operator_forced: false } } },
+      ];
+      await pause(400);
+      run.finished = false;
+      view.summary.status = 'running';
+      playRevisionSteps(data, task, script, () => {
+        view.summary.status = resumeStatus;
+        run.finished = true;
+      });
+      return { ok: true };
+    },
+    async force_keep_revision(data, { task, revision_id }) {
+      const view = requireTask(data, task);
+      const run = data.live?.[task];
+      const result = run?.steps.find((s) => s.mark_revision?.revision_id === revision_id);
+      if (!result?.mark_revision.can_keep_anyway) throw new BackendError('revision_has_no_unkept_edit', 'Every edit of this revision is already kept.');
+      await pause(400);
+      const resumeStatus = view.summary.status;
+      run.finished = false;
+      view.summary.status = 'running';
+      playRevisionSteps(data, task, [{ delay: 700, step: { kind: 'revise', actor: 'person', title: 'Kept anyway',
+        text: '', targets: [], attention_px: null, marks: [], tool: null } }], () => {
+        result.mark_revision = { ...result.mark_revision, can_keep_anyway: false, operator_forced: true };
+        result.last_sequence = run.steps[run.steps.length - 1].sequence;
+        view.summary.status = resumeStatus;
+        run.finished = true;
+      });
       return { ok: true };
     },
     async choose_line(data, { task, section_id, candidate_id }) {
