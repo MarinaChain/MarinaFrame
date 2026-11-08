@@ -2,6 +2,7 @@
 
 import {
   invoke, onTaskChanged, pickSpecFile, canPickSpecFile, transportName,
+  pickFolder, pickFile, canPickPaths, onFileDrop, isSpecFileName, SPEC_EXTENSIONS,
   readArtifactAsDataUrl, readArtifactAsBuffer,
 } from './api.js';
 import { el, svg, icon, fill } from './dom.js';
@@ -19,6 +20,8 @@ const STACK_BELOW_PX = 700;
 const SPLIT_MIN = 0.2;
 const SPLIT_MAX = 0.8;
 const PREFS_KEY = 'marinaframe.ui';
+/** How many recently started spec files the New run sheet offers. */
+const RECENT_SPECS_MAX = 5;
 
 const state = {
   tasks: [],
@@ -33,6 +36,8 @@ const state = {
   modelKey: null,
   pageKey: null,
   loadToken: 0,
+  datasets: [],
+  defaults: null, // fresh-install settings, offered as one-click choices
 };
 
 // Per-viewer conveniences only (layout, last tab). Wrapped: storage can be blocked.
@@ -124,6 +129,29 @@ async function runAction(progressText, action) {
   }
 }
 
+/**
+ * A one- or two-word chip. Longer explanations go in `title` (a tooltip), never inline.
+ * `tone` uses the badge colours: accent, pass, fail, warn, draft; `dot: false` drops the
+ * leading dot for chips that are labels rather than states.
+ */
+function chip(text, { tone = null, status = null, title = null, dot = true, small = false } = {}) {
+  const classes = ['badge'];
+  if (!dot) classes.push('badge-nodot');
+  if (small) classes.push('badge-small');
+  const dataset = {};
+  if (tone) dataset.tone = tone;
+  if (status) dataset.status = status;
+  // The inner span lets the text end in an ellipsis when the chip is squeezed.
+  return el('span', { class: classes.join(' '), dataset, title: title || text }, el('span', { class: 'badge-text' }, text));
+}
+
+/** Chip tone for a section source label: AI work in accent, filled-in lines in draft amber. */
+function sourceTone(label) {
+  if (fmt.isAiSource(label)) return 'accent';
+  if (label === 'interpolated' || label === 'omitted') return 'draft';
+  return null;
+}
+
 function debounce(fn, ms) {
   let timer = 0;
   return (...args) => {
@@ -173,12 +201,20 @@ const refreshTasksSoon = debounce(refreshTasks, LIST_REFRESH_DEBOUNCE_MS);
 
 async function refreshDatasets() {
   try {
-    const datasets = await invoke('list_datasets', {});
+    state.datasets = await invoke('list_datasets', {});
+    const datasets = state.datasets;
     fill($('dataset-list'), ...(datasets.length
-      ? datasets.map((d) => el('li', { title: d.path }, el('span', {}, d.name), el('span', { class: 'size' }, fmt.bytes(d.bytes))))
-      : [el('li', {}, 'None')]));
+      ? datasets.map((d) => el('li', {},
+        el('button', {
+          type: 'button',
+          class: 'dataset-item',
+          title: `${d.path}\nStart a run from a spec in this folder`,
+          onclick: () => openNewRun({ browse: d }),
+        }, el('span', { class: 'dataset-name' }, d.name), el('span', { class: 'size' }, fmt.bytes(d.bytes)))))
+      : [el('li', { class: 'dataset-empty' }, 'None')]));
   } catch {
-    fill($('dataset-list'), el('li', {}, 'Could not read the datasets folder.'));
+    state.datasets = [];
+    fill($('dataset-list'), el('li', { class: 'dataset-empty', title: 'Could not read the datasets folder.' }, 'Unavailable'));
   }
 }
 
@@ -243,6 +279,7 @@ function renderTask({ fresh = false } = {}) {
 function renderToolbar() {
   const view = state.view;
   $('task-name').textContent = view ? view.summary.name : 'MarinaFrame';
+  $('task-name').title = view ? view.summary.name : '';
   document.title = view ? `${view.summary.name} — MarinaFrame` : 'MarinaFrame';
   const badge = $('task-badge');
   badge.hidden = !view;
@@ -270,12 +307,25 @@ function renderStatusbar() {
     badge.dataset.status = view.summary.status;
     badge.textContent = fmt.statusLabel(view.summary.status);
   }
-  $('status-policy').textContent = view ? (view.summary.policy === 'live' ? 'Live model' : 'Deterministic') : '';
-  $('status-revision').textContent = view ? (view.revision ? `Revision ${view.revision}` : 'No revision yet') : '';
-  $('status-updated').textContent = view ? `Updated ${fmt.relativeTime(view.summary.updated_ms)}` : '';
-  $('status-mode').textContent = transportName === 'mock' ? 'Preview data' : '';
+  fill($('status-policy'), view ? policyChip(view.summary.policy) : null);
+  fill($('status-revision'), view ? chip(view.revision || 'No revision', {
+    dot: false, small: true, title: view.revision ? `Revision ${view.revision}` : 'No revision yet',
+  }) : null);
+  const updated = $('status-updated');
+  updated.textContent = view ? fmt.relativeTime(view.summary.updated_ms) : '';
+  updated.title = view ? `Updated ${fmt.fullTime(view.summary.updated_ms)}` : '';
+  fill($('status-mode'), transportName === 'mock'
+    ? chip('Preview', { dot: false, small: true, title: 'Preview data: sample runs, not your runs folder.' })
+    : null);
 }
 setInterval(renderStatusbar, 30_000);
+
+/** Run mode chip: "AI draft" for the live policy, else "Deterministic". */
+function policyChip(policy) {
+  return policy === 'live'
+    ? chip('AI draft', { tone: 'accent', dot: false, small: true, title: 'The AI read the drawing and built the draft (live model).' })
+    : chip('Deterministic', { dot: false, small: true, title: 'Deterministic draft: no model calls.' });
+}
 
 // ---------------------------------------------------------------- notices
 
@@ -284,7 +334,16 @@ function renderNotices() {
   fill($('notices'), ...notices.map((notice) => {
     const row = el('div', { class: 'notice', dataset: { tone: notice.tone, notice: notice.id } },
       icon(notice.tone === 'warning' ? 'warn' : 'info'),
-      el('span', { class: 'notice-text' }, notice.text),
+      el('button', {
+        class: 'notice-text',
+        type: 'button',
+        title: notice.text,
+        'aria-expanded': 'false',
+        onclick: (event) => {
+          const expanded = row.classList.toggle('expanded');
+          event.currentTarget.setAttribute('aria-expanded', String(expanded));
+        },
+      }, notice.text),
       el('button', {
         class: 'btn btn-ghost btn-icon btn-small',
         type: 'button',
@@ -327,15 +386,19 @@ function renderDraftSummary() {
     fill($('draft-summary'));
     return;
   }
-  const chips = counts.map((c) => el('span', {
-    class: 'source-chip',
-    dataset: { ai: String(fmt.isAiSource(c.label)) },
-  }, `${c.count} ${fmt.sourceLabel(c.label).toLowerCase()}`));
-  fill($('draft-summary'),
-    chips.length ? el('p', { class: 'source-counts' }, el('span', { class: 'source-counts-title' }, 'Sources'), ...chips) : null,
-    warnings.length ? el('details', { class: 'draft-warnings' },
-      el('summary', {}, chevron(), icon('warn'), fmt.plural(warnings.length, 'warning')),
-      el('ul', { class: 'selectable-text' }, ...warnings.map((w) => el('li', {}, w)))) : null);
+  const chips = counts.map((c) => chip(`${c.count} ${fmt.sourceLabel(c.label)}`, {
+    tone: sourceTone(c.label),
+    dot: false,
+    small: true,
+    title: `${fmt.plural(c.count, 'section')}: ${fmt.sourceLabel(c.label)}`,
+  }));
+  const warningList = warnings.length ? el('details', { class: 'draft-warnings' },
+    el('summary', { title: 'Warnings of the draft build. Click to show them.' }, chevron(),
+      chip(fmt.plural(warnings.length, 'warning'), { tone: 'warn', dot: false, small: true })),
+    el('ul', { class: 'selectable-text' }, ...warnings.map((w) => el('li', {}, w)))) : null;
+  // One row: the source chips, then the warnings toggle; its list opens below the row.
+  fill($('draft-summary'), el('div', { class: 'source-counts' },
+    chips.length ? el('span', { class: 'source-counts-title' }, 'Sources') : null, ...chips, warningList));
 }
 
 // ---------------------------------------------------------------- section strip
@@ -372,8 +435,12 @@ function renderStrip() {
       svg('path', { class: 'axis', d: 'M2 2V52' }),
       path ? svg('path', { class: 'shape', d: path }) : null),
     el('span', { class: 'tile-x' }, section.x_m.toFixed(1), el('small', {}, ' m')),
-    el('span', { class: 'tile-state' }, fmt.sectionStateLabel(section.state),
-      section.source ? el('span', { class: 'tile-source' }, ` · ${fmt.sourceLabel(section.source.label)}`) : null));
+    el('span', { class: 'tile-chips' },
+      el('span', { class: 'tile-state' }, fmt.sectionStateLabel(section.state)),
+      section.source ? el('span', {
+        class: 'tile-source',
+        title: section.source.basis || fmt.sourceLabel(section.source.label),
+      }, fmt.sourceLabel(section.source.label)) : null));
   }));
   strip.setAttribute('aria-activedescendant', `tile-${state.sectionId}`);
 }
@@ -418,8 +485,13 @@ function renderSelection() {
 
   const tone = { chosen: 'accent', declined: 'warn', guessed: 'draft' }[section.state];
   fill(head,
-    el('h2', {}, `Section at ${fmt.metres(section.x_m)}`),
-    el('span', { class: 'badge', dataset: tone ? { tone } : {} }, fmt.sectionStateLabel(section.state)),
+    el('h2', { title: `Section at ${fmt.metres(section.x_m)}` }, `Section at ${fmt.metres(section.x_m)}`),
+    chip(fmt.sectionStateLabel(section.state), { tone }),
+    section.source ? chip(fmt.sourceLabel(section.source.label), {
+      tone: sourceTone(section.source.label),
+      dot: false,
+      title: section.source.basis || null,
+    }) : null,
   );
 
   const canChoose = !state.busy && !isRunning();
@@ -436,11 +508,11 @@ function renderSelection() {
     // In a guessed section, the guessed line is confirmed and any other line replaces it.
     let action = null;
     if (guessedLine) {
-      trailing = el('span', { class: 'cand-tag guess' }, 'Guessed');
-      action = chooseButton(section, candidate, 'Confirm this line', canChoose, true);
-    } else if (candidate.chosen) trailing = el('span', { class: 'cand-tag' }, 'In use');
+      trailing = chip('Guessed', { tone: 'draft', small: true });
+      action = chooseButton(section, candidate, 'Confirm', canChoose, true);
+    } else if (candidate.chosen) trailing = chip('In use', { tone: 'accent', small: true });
     else if (candidate.selectable) {
-      const label = guessedSection ? 'Use another line' : 'Use this line';
+      const label = guessedSection ? 'Use instead' : 'Use';
       if (guessedSection) action = chooseButton(section, candidate, label, canChoose, false);
       else trailing = chooseButton(section, candidate, label, canChoose, false);
     }
@@ -451,16 +523,16 @@ function renderSelection() {
       onmouseleave: () => drawing.highlightCandidate(null),
       onfocusin: () => drawing.highlightCandidate(candidate.id),
       onfocusout: () => drawing.highlightCandidate(null),
-    }, swatch, el('span', { class: 'cand-label' }, candidate.label), trailing || el('span'),
+    }, swatch, el('span', { class: 'cand-label', title: candidate.label }, candidate.label), trailing || el('span'),
     el('span', { class: 'cand-why' }, candidate.why),
     action ? el('div', { class: 'cand-actions' }, action) : null);
   });
 
   fill(body,
     el('p', { class: 'selection-reason selectable-text' }, section.reason),
-    section.source ? el('p', { class: 'selection-source selectable-text', dataset: { ai: String(fmt.isAiSource(section.source.label)) } },
-      el('strong', {}, fmt.sourceLabel(section.source.label)),
-      section.source.basis ? ` — ${section.source.basis}` : null) : null,
+    section.source?.basis ? el('details', { class: 'selection-source' },
+      el('summary', {}, chevron(), `Why ${fmt.sourceLabel(section.source.label)}`),
+      el('p', { class: 'selectable-text' }, section.source.basis)) : null,
     rows.length ? el('div', { class: 'cand-list', role: 'list', 'aria-label': 'Lines found in this section' }, ...rows) : null,
   );
 }
@@ -470,7 +542,7 @@ function chooseButton(section, candidate, label, canChoose, primary) {
     class: primary ? 'btn btn-small btn-primary' : 'btn btn-small',
     type: 'button',
     disabled: !canChoose,
-    title: isRunning() ? 'Available when the run stops' : null,
+    title: isRunning() ? 'Available when the run stops' : `${label}: the ${candidate.label.toLowerCase()}`,
     onclick: () => chooseLine(section, candidate),
   }, label);
 }
@@ -535,7 +607,7 @@ function renderTimeline() {
   }
   fill(panel,
     el('ol', { class: 'timeline', 'aria-label': 'Steps, oldest first' }, ...state.events.map((e) => eventRow(e))),
-    isRunning() ? el('p', { class: 'timeline-live' }, 'Working on the next step') : null,
+    isRunning() ? el('p', { class: 'timeline-live', title: 'Working on the next step' }, 'Working') : null,
   );
   panel.scrollTop = panel.scrollHeight;
 }
@@ -568,12 +640,12 @@ function renderChecks() {
   const counts = { pass: 0, fail: 0, not_run: 0 };
   for (const check of checks) counts[check.result] += 1;
   const summary = [
-    counts.pass && `${counts.pass} pass`,
-    counts.fail && `${counts.fail} fail`,
-    counts.not_run && `${counts.not_run} not run`,
-  ].filter(Boolean).join(', ');
+    counts.pass && chip(`${counts.pass} pass`, { tone: 'pass', small: true }),
+    counts.fail && chip(`${counts.fail} fail`, { tone: 'fail', small: true }),
+    counts.not_run && chip(`${counts.not_run} not run`, { small: true }),
+  ].filter(Boolean);
   fill(panel,
-    el('p', { class: 'check-summary' }, summary),
+    el('p', { class: 'check-summary chip-row' }, ...summary),
     el('ul', {}, ...checks.map((check) => el('li', { class: 'check' },
       el('span', { class: 'check-name' }, check.name),
       el('span', { class: 'check-value selectable-text' }, check.limit ? `${check.value}, limit ${check.limit}` : check.value),
@@ -589,14 +661,15 @@ function renderActivity(activity) {
     ? fmt.usd(activity.list_cost_usd)
     : `at least ${fmt.usd(activity.list_cost_usd)}`;
   const facts = [
-    fmt.plural(activity.requests, 'request'),
-    `${fmt.integer(activity.prompt_tokens)} tokens sent`,
-    `${fmt.integer(activity.completion_tokens)} received`,
-    `${cost} list cost`,
+    [fmt.plural(activity.requests, 'request'), 'Requests to the model'],
+    [`${fmt.integer(activity.prompt_tokens)} sent`, 'Tokens sent to the model'],
+    [`${fmt.integer(activity.completion_tokens)} received`, 'Tokens received from the model'],
+    [cost, 'List cost of the model requests'],
   ];
   return el('details', { class: 'activity' },
-    el('summary', {}, chevron(), `Model activity: ${fmt.plural(activity.steps.length, 'step')}`),
-    el('p', { class: 'call-facts' }, ...facts.map((f) => el('span', {}, f))),
+    el('summary', { title: 'What the AI did in this run' }, chevron(), 'Model activity',
+      chip(fmt.plural(activity.steps.length, 'step'), { dot: false, small: true })),
+    el('p', { class: 'chip-row' }, ...facts.map(([text, title]) => chip(text, { dot: false, small: true, title }))),
     el('ol', { class: 'activity-steps selectable-text' }, ...activity.steps.map((step) => el('li', {},
       el('strong', {}, step.tool),
       step.reason ? `: ${step.reason}` : null))));
@@ -618,7 +691,9 @@ function renderModelCalls() {
   const task = state.task;
   fill(panel,
     renderActivity(state.view.activity),
-    el('p', { class: 'call-total' }, `${fmt.plural(calls.length, 'call')}, ${fmt.usd(totalCost)} in total`),
+    el('p', { class: 'call-total chip-row' },
+      chip(fmt.plural(calls.length, 'call'), { dot: false, small: true }),
+      chip(fmt.usd(totalCost), { dot: false, small: true, title: 'Cost of all calls' })),
     ...calls.map((call) => {
       const images = el('div', { class: 'call-images' }, ...call.images.map((image) => {
         const img = el('img', { alt: image.label });
@@ -727,6 +802,7 @@ async function renderModel() {
     `${fmt.metres(m.length_m, 2)} × ${fmt.metres(m.beam_m, 2)} × ${fmt.metres(m.depth_m, 2)}`,
     m.volume_m3 !== null ? `${fmt.decimal(m.volume_m3, 1)} m³` : null,
   ].filter(Boolean).join(' · ');
+  meta.title = `Length × beam × depth · volume: ${meta.textContent}`;
   const stations = view.sections.map((s) => ({ id: s.id, x_m: s.x_m }));
   const guessedRanges = guessedXRanges(view.sections, m.length_m);
   const key = `${state.task}|${view.revision}|${m.stl_path}|${stations.map((s) => s.x_m).join(',')}|${JSON.stringify(guessedRanges)}`;
@@ -835,7 +911,7 @@ function applyTheme(theme) {
 }
 systemDark.addEventListener('change', () => model.refreshTheme());
 
-/** One line on whether new runs use the AI, and what to do when they cannot. */
+/** One line on whether new runs use the AI, and what to do when they cannot. Shown as a tooltip. */
 function aiStatusText(status) {
   if (!status) return 'The AI reads the drawing and builds the draft.';
   if (!status.enabled) return 'Off: new runs use the deterministic draft and do not call the model.';
@@ -843,6 +919,27 @@ function aiStatusText(status) {
     return `No model key found, so new runs use the deterministic draft. Put your OpenCode Go key in ${status.key_file} (one key per line, chmod 600).`;
   }
   return 'On: the AI (DeepSeek through OpenCode Go) reads the drawing and builds the draft.';
+}
+
+/** Show `text` in the chip `node` with a badge tone, and `title` as its tooltip. */
+function setChip(node, text, tone, title) {
+  node.textContent = text;
+  node.title = title;
+  if (tone) node.dataset.tone = tone;
+  else delete node.dataset.tone;
+}
+
+/** AI drafting setting: On, Off or No key. */
+function showAiStatus(node, status) {
+  if (status && !status.enabled) setChip(node, 'Off', null, aiStatusText(status));
+  else if (status && !status.key_found) setChip(node, 'No key', 'warn', aiStatusText(status));
+  else setChip(node, 'On', 'accent', aiStatusText(status));
+}
+
+/** Mode of the next run: AI draft or Deterministic. */
+function showRunMode(node, status) {
+  if (status && !status.active) setChip(node, 'Deterministic', null, aiStatusText(status));
+  else setChip(node, 'AI draft', 'accent', 'The AI reads the drawing and builds a draft. You review it before anything is approved.');
 }
 
 async function refreshAiStatus() {
@@ -854,6 +951,51 @@ async function refreshAiStatus() {
   return state.aiStatus;
 }
 
+/** Fresh-install settings (default runs folder, repo .venv Python). Read once; optional. */
+async function loadDefaults() {
+  if (!state.defaults) state.defaults = await invoke('get_default_settings', {}).catch(() => null);
+  return state.defaults;
+}
+
+const fileName = (path) => path.split(/[\\/]/).filter(Boolean).pop() || path;
+const folderName = (path) => path.slice(0, Math.max(0, path.length - fileName(path).length)).replace(/[\\/]$/, '');
+
+/** A path as a bold file name and a muted folder that shortens with an ellipsis. */
+function pathLabel(path) {
+  return el('span', { class: 'path-label', title: path },
+    el('span', { class: 'path-name' }, fileName(path)),
+    // The folder box is right-to-left so the ellipsis cuts the start; the left-to-right
+    // marks keep the slashes of the path in their places.
+    el('span', { class: 'path-folder' }, `‎${folderName(path)}‎`));
+}
+
+// ---- settings: path fields with pickers and one-click suggestions
+
+const PATH_FIELDS = {
+  runs_folder: { suggestions: 'runs-folder-suggestions', defaultLabel: 'Default' },
+  worker_python: { suggestions: 'worker-python-suggestions', defaultLabel: 'Repo .venv' },
+};
+
+/** Under a path field: the detected default as a one-click choice, when it is not the value. */
+function renderPathSuggestions(form, field) {
+  const suggested = state.defaults?.[field];
+  const current = form[field].value.trim();
+  const box = $(PATH_FIELDS[field].suggestions);
+  if (!suggested || suggested === current) {
+    fill(box);
+    return;
+  }
+  fill(box, el('button', {
+    class: 'suggestion',
+    type: 'button',
+    title: `Use ${suggested}`,
+    onclick: () => {
+      form[field].value = suggested;
+      renderPathSuggestions(form, field);
+    },
+  }, chip(PATH_FIELDS[field].defaultLabel, { dot: false, small: true }), pathLabel(suggested)));
+}
+
 async function openSettings() {
   const form = $('settings-form');
   const s = state.settings || { runs_folder: '', worker_python: '', theme: 'system', ai_drafting: true };
@@ -861,9 +1003,12 @@ async function openSettings() {
   form.worker_python.value = s.worker_python;
   form.theme.value = s.theme;
   form.ai_drafting.checked = s.ai_drafting !== false;
-  $('ai-status').textContent = aiStatusText(await refreshAiStatus());
+  const [status] = await Promise.all([refreshAiStatus(), loadDefaults()]);
+  showAiStatus($('ai-status'), status);
+  for (const field of Object.keys(PATH_FIELDS)) renderPathSuggestions(form, field);
+  for (const button of form.querySelectorAll('[data-pick]')) button.hidden = !canPickPaths();
   $('settings-error').hidden = true;
-  $('notices-reset-status').textContent = 'Dismissed notices stay hidden.';
+  setChip($('notices-reset-status'), 'Hidden', null, 'Notices you close stay hidden until you show them again.');
   $('reset-notices').disabled = false;
   $('settings-sheet').showModal();
 }
@@ -875,6 +1020,31 @@ function closeSettings() {
 
 $('settings-form').addEventListener('change', (event) => {
   if (event.target.name === 'theme') applyTheme(event.target.value);
+  if (event.target.name === 'ai_drafting') {
+    // Preview the chip for the new value; the saved setting decides the next run.
+    const enabled = event.target.checked;
+    showAiStatus($('ai-status'), state.aiStatus ? { ...state.aiStatus, enabled } : { enabled, key_found: true });
+  }
+});
+$('settings-form').addEventListener('input', (event) => {
+  if (event.target.name in PATH_FIELDS) renderPathSuggestions(event.currentTarget, event.target.name);
+});
+$('settings-form').addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-pick]');
+  if (!button) return;
+  const form = event.currentTarget;
+  const field = button.dataset.field;
+  const current = form[field].value.trim() || state.defaults?.[field] || undefined;
+  const pick = button.dataset.pick === 'folder' ? pickFolder : pickFile;
+  try {
+    const path = await pick({ title: button.dataset.title, defaultPath: current });
+    if (!path) return;
+    form[field].value = path;
+    renderPathSuggestions(form, field);
+  } catch (error) {
+    $('settings-error').textContent = error.message;
+    $('settings-error').hidden = false;
+  }
 });
 $('settings-cancel').addEventListener('click', closeSettings);
 $('settings-sheet').addEventListener('cancel', () => applyTheme(state.settings?.theme || 'system'));
@@ -907,7 +1077,7 @@ $('settings-form').addEventListener('submit', async (event) => {
 $('reset-notices').addEventListener('click', async () => {
   try {
     await invoke('reset_notices', {});
-    $('notices-reset-status').textContent = 'Dismissed notices are back.';
+    setChip($('notices-reset-status'), 'Restored', 'pass', 'Dismissed notices are back.');
     $('reset-notices').disabled = true;
     if (state.task) loadTask();
   } catch (error) {
@@ -918,28 +1088,117 @@ $('reset-notices').addEventListener('click', async () => {
 
 // ---------------------------------------------------------------- new run
 
-async function openNewRun() {
-  const form = $('newrun-form');
-  form.spec_path.value = '';
-  const status = await refreshAiStatus();
-  $('newrun-mode').textContent = status && !status.active
-    ? `${aiStatusText(status)}`
-    : 'The AI reads the drawing and builds a draft. You review it before anything is approved.';
-  $('newrun-error').hidden = true;
-  $('pick-spec').hidden = !canPickSpecFile();
-  $('newrun-sheet').showModal();
-  form.spec_path.focus();
+// The spec file is chosen with the picker, by dropping it on the window, from the recent
+// list or from a dataset folder. Typing a path is the fallback under "Type a path".
+
+function recentSpecs() {
+  const recent = prefs.get('recentSpecs', []);
+  return Array.isArray(recent) ? recent.filter((p) => typeof p === 'string') : [];
 }
 
-$('pick-spec').addEventListener('click', async () => {
-  try {
-    const path = await pickSpecFile();
-    if (path) $('newrun-form').spec_path.value = path;
-  } catch (error) {
-    $('newrun-error').textContent = error.message;
-    $('newrun-error').hidden = false;
+function rememberSpec(path) {
+  prefs.set('recentSpecs', [path, ...recentSpecs().filter((p) => p !== path)].slice(0, RECENT_SPECS_MAX));
+}
+
+function showNewRunError(message) {
+  $('newrun-error').textContent = message;
+  $('newrun-error').hidden = !message;
+}
+
+function setSpecPath(path) {
+  $('newrun-form').spec_path.value = path;
+  showNewRunError('');
+  renderSpecChoice();
+}
+
+/** Show the chosen spec (or the picker when there is none) and enable Start run. */
+function renderSpecChoice() {
+  const path = $('newrun-form').spec_path.value.trim();
+  $('spec-empty').hidden = Boolean(path);
+  $('spec-chosen').hidden = !path;
+  fill($('spec-chosen-label'), path ? pathLabel(path) : null);
+  $('newrun-start').disabled = !path;
+  for (const button of $('recent-specs').querySelectorAll('[data-path]')) {
+    button.setAttribute('aria-pressed', String(button.dataset.path === path));
   }
+}
+
+function renderSpecShortcuts() {
+  const recent = recentSpecs();
+  $('recent-specs-field').hidden = !recent.length;
+  fill($('recent-specs'), ...recent.map((path) => el('button', {
+    class: 'choice',
+    type: 'button',
+    role: 'listitem',
+    dataset: { path },
+    onclick: () => setSpecPath(path),
+  }, icon('file'), pathLabel(path))));
+
+  const canBrowse = canPickSpecFile() && transportName !== 'http'; // the web build uploads, it has no folders
+  $('dataset-specs-field').hidden = !canBrowse || !state.datasets.length;
+  fill($('dataset-specs'), ...state.datasets.map((dataset) => el('button', {
+    class: 'btn btn-small dataset-choice',
+    type: 'button',
+    title: `Choose a run spec in ${dataset.path}`,
+    onclick: () => chooseSpec(dataset.path),
+  }, icon('folder'), el('span', { class: 'dataset-name' }, dataset.name))));
+}
+
+/** Show the file dialog, starting in `defaultPath` when given. */
+async function chooseSpec(defaultPath) {
+  try {
+    const path = await pickSpecFile({ defaultPath });
+    if (path) setSpecPath(path);
+  } catch (error) {
+    showNewRunError(error.message);
+  }
+}
+
+/** Open the New run sheet. `browse` is a dataset whose folder the file dialog opens in. */
+async function openNewRun({ browse = null } = {}) {
+  const sheet = $('newrun-sheet');
+  if (sheet.open || $('settings-sheet').open) return;
+  const form = $('newrun-form');
+  form.spec_path.value = '';
+  showNewRunError('');
+  showRunMode($('newrun-mode'), await refreshAiStatus());
+  const canPick = canPickSpecFile();
+  $('pick-spec').hidden = !canPick;
+  $('change-spec').hidden = !canPick;
+  $('typed-spec').open = !canPick;
+  renderSpecShortcuts();
+  renderSpecChoice();
+  sheet.showModal();
+  (canPick ? $('pick-spec') : form.spec_path).focus();
+  if (browse) chooseSpec(browse.path);
+}
+
+/** Files dropped on the window: a spec opens in New run; anything else is explained. */
+async function acceptDroppedFiles(paths) {
+  if (!paths.length || $('settings-sheet').open) return;
+  if (!$('newrun-sheet').open) await openNewRun();
+  const spec = paths.find((path) => isSpecFileName(path));
+  if (spec) {
+    setSpecPath(spec);
+    $('newrun-start').focus();
+    return;
+  }
+  const types = SPEC_EXTENSIONS.slice(0, 3).map((ext) => `.${ext}`).join(', ');
+  showNewRunError(`${fileName(paths[0])} is not a run spec. Drop the run spec (${types}) that names the drawing.`);
+}
+
+onFileDrop({
+  enter: () => document.body.classList.add('dragging-file'),
+  leave: () => document.body.classList.remove('dragging-file'),
+  drop: (paths) => {
+    document.body.classList.remove('dragging-file');
+    acceptDroppedFiles(paths);
+  },
 });
+
+$('pick-spec').addEventListener('click', () => chooseSpec());
+$('change-spec').addEventListener('click', () => chooseSpec());
+$('newrun-form').spec_path.addEventListener('input', () => renderSpecChoice());
 $('newrun-cancel').addEventListener('click', () => $('newrun-sheet').close());
 $('newrun-form').addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -948,15 +1207,15 @@ $('newrun-form').addEventListener('submit', async (event) => {
   const start = $('newrun-start');
   start.disabled = true;
   start.textContent = 'Starting…';
-  $('newrun-error').hidden = true;
+  showNewRunError('');
   try {
     const { task } = await invoke('start_run', { spec_path: specPath });
+    rememberSpec(specPath);
     $('newrun-sheet').close();
     await refreshTasks();
     await openTask(task);
   } catch (error) {
-    $('newrun-error').textContent = error.message;
-    $('newrun-error').hidden = false;
+    showNewRunError(error.message);
   } finally {
     start.disabled = false;
     start.textContent = 'Start run';
@@ -982,7 +1241,7 @@ $('resume-task').addEventListener('click', async () => {
 
 // ---------------------------------------------------------------- input bindings
 
-$('new-run').addEventListener('click', openNewRun);
+$('new-run').addEventListener('click', () => openNewRun());
 $('open-settings').addEventListener('click', openSettings);
 $('toast-close').addEventListener('click', () => { $('toast').hidden = true; });
 $('zoom-in').addEventListener('click', () => drawing.zoomIn());

@@ -97,6 +97,11 @@ async fn get_settings(backend: Shared<'_>) -> Result<Settings, AppError> {
     run(backend, |b| Ok(b.get_settings())).await
 }
 
+#[tauri::command(rename_all = "snake_case")]
+async fn get_default_settings(backend: Shared<'_>) -> Result<Settings, AppError> {
+    run(backend, |b| Ok(b.default_settings())).await
+}
+
 /// The spec says the argument is `Settings`. Both `{ settings: {...} }` and the
 /// three fields at the top level are accepted; missing fields keep their value.
 #[tauri::command(rename_all = "snake_case")]
@@ -224,6 +229,7 @@ fn main() {
             resume_task,
             choose_line,
             get_settings,
+            get_default_settings,
             set_settings,
             get_ai_status,
             dismiss_notice,

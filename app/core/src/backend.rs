@@ -123,6 +123,11 @@ impl Backend {
     pub fn get_settings(&self) -> Settings {
         storage::get_settings(&self.paths)
     }
+    /// The settings a fresh install starts with (default runs folder, repo `.venv`
+    /// Python when found). The UI offers them as one-click choices.
+    pub fn default_settings(&self) -> Settings {
+        self.paths.default_settings()
+    }
     pub fn set_settings(&self, settings: Settings) -> AppResult<Settings> {
         storage::set_settings(&self.paths, settings)
     }

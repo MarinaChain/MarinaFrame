@@ -100,6 +100,7 @@ Errors return `{ "code": string, "message": string }` with plain-language `messa
 | `resume_task` | `{ task }` | `{ ok: true }` |
 | `choose_line` | `{ task, section_id, candidate_id }` | `{ ok: true }` (operator intervention, then rebuild/validate via the controller) |
 | `get_settings` / `set_settings` | `{}` / `Settings` | `Settings` |
+| `get_default_settings` | `{}` | `Settings` (fresh-install defaults; the UI offers them as one-click choices) |
 | `dismiss_notice` / `reset_notices` | `{ id }` / `{}` | `{ ok: true }` |
 | `list_datasets` | `{}` | `{ name, path, bytes }[]` |
 
