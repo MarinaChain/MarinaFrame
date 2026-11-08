@@ -721,6 +721,12 @@ function mockTransport() {
       if (!task) throw new BackendError('mock_mode', 'Runs cannot start in the preview.');
       liveStream = true;
       liveStreamStarted = 0;
+      // Like the backend, the run takes the vessel name typed at intake.
+      const typedName = preview.particulars?.vessel_name?.trim();
+      if (typedName) {
+        data.views[task].summary.name = typedName;
+        data.tasks.find((t) => t.task === task).name = typedName;
+      }
       return { task };
     },
   };

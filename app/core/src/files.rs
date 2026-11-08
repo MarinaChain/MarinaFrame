@@ -53,6 +53,12 @@ pub fn read_domain(task: &Path) -> Option<Value> {
     read_value(&task.join("domain/state.json"), DOMAIN_MAX)
 }
 
+/// The intake record of a run started from a dropped drawing set
+/// (`intake/intake.json`, copied in by `intake::copy_inputs_to_task`).
+pub fn read_intake_record(task: &Path) -> Option<Value> {
+    read_value(&task.join("intake/intake.json"), 4 * 1024 * 1024)
+}
+
 /// The spec the run captured at start (`domain/input/spec.json`).
 pub fn read_captured_spec(task: &Path) -> Option<Value> {
     read_value(&task.join("domain/input/spec.json"), 8 * 1024 * 1024)

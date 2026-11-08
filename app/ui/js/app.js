@@ -235,7 +235,9 @@ const DRAFT_READY = new Set(['draft', 'needs_review']);
 const NEEDS_ATTENTION = new Set(['failed', 'blocked', 'declined']);
 
 function vesselNameOf(runName) {
-  const name = runName.split(/,|·| — | – | - /)[0].trim() || runName.trim();
+  let name = runName.split(/,|·| — | – | - /)[0].trim() || runName.trim();
+  // A file-name slug such as "dtmb-5415-lines-plan" reads better as words.
+  if (/^[a-z0-9]+([-_][a-z0-9]+)+$/.test(name)) name = name.replace(/[-_]/g, ' ');
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 

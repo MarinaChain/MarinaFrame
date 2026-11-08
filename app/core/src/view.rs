@@ -55,12 +55,41 @@ pub fn map_status(controller_status: &str) -> Status {
 /// Longest run name shown; a longer vessel_id is not a usable label.
 const MAX_NAME_CHARS: usize = 80;
 
-/// Run name: the vessel_id of the captured spec when present, else the task folder name.
+/// Prefix of the blinded vessel_id that the benchmark factory writes
+/// (`benchmarks/factory/generate.py`: "factory-" + 12 hex digits of a hash).
+const FACTORY_ID_PREFIX: &str = "factory-";
+/// Hex digits of a blinded factory id shown in its label.
+const FACTORY_LABEL_HEX: usize = 6;
+
+/// A usable label: trimmed, not empty, not too long.
+fn usable_name(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    (!trimmed.is_empty() && trimmed.chars().count() <= MAX_NAME_CHARS).then(|| trimmed.to_string())
+}
+
+/// "factory-70ed8f4700b0" -> "Benchmark hull 70ed8f". The factory hides the case
+/// name on purpose, so the label keeps the hash but reads as a name.
+fn factory_label(vessel_id: &str) -> Option<String> {
+    let hash = vessel_id.strip_prefix(FACTORY_ID_PREFIX)?;
+    let is_hash = hash.len() >= FACTORY_LABEL_HEX && hash.chars().all(|c| c.is_ascii_hexdigit());
+    is_hash.then(|| format!("Benchmark hull {}", &hash[..FACTORY_LABEL_HEX]))
+}
+
+/// Run name, first found of: the vessel name typed at intake; a label for a
+/// blinded benchmark id; the vessel_id of the captured spec; the task folder name.
 fn run_name(folder: &Path) -> String {
-    let vessel_id = files::read_captured_spec(folder)
-        .and_then(|spec| spec["vessel_id"].as_str().map(|v| v.trim().to_string()))
-        .filter(|v| !v.is_empty() && v.chars().count() <= MAX_NAME_CHARS);
-    vessel_id
+    let typed = files::read_intake_record(folder).and_then(|record| {
+        record["particulars"]["vessel_name"]
+            .as_str()
+            .and_then(usable_name)
+    });
+    let vessel_id = || {
+        files::read_captured_spec(folder)
+            .and_then(|spec| spec["vessel_id"].as_str().and_then(usable_name))
+            .map(|id| factory_label(&id).unwrap_or(id))
+    };
+    typed
+        .or_else(vessel_id)
         .or_else(|| {
             folder
                 .file_name()

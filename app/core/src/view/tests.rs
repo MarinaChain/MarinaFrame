@@ -64,6 +64,51 @@ fn run_name_falls_back_to_the_task_folder_name() {
 }
 
 #[test]
+fn run_name_prefers_the_vessel_name_typed_at_intake() {
+    let tmp = fixture("running");
+    let task = tmp.path().join("task");
+    fs::write(
+        task.join("domain/input/spec.json"),
+        r#"{"vessel_id":"dtmb-5415-lines-plan"}"#,
+    )
+    .unwrap();
+    assert_eq!(run_name(&task), "dtmb-5415-lines-plan");
+    fs::create_dir_all(task.join("intake")).unwrap();
+    fs::write(
+        task.join("intake/intake.json"),
+        r#"{"particulars":{"vessel_name":" DTMB 5415 "}}"#,
+    )
+    .unwrap();
+    assert_eq!(run_name(&task), "DTMB 5415");
+    // An empty typed name falls back to the spec.
+    fs::write(
+        task.join("intake/intake.json"),
+        r#"{"particulars":{"vessel_name":""}}"#,
+    )
+    .unwrap();
+    assert_eq!(run_name(&task), "dtmb-5415-lines-plan");
+}
+
+#[test]
+fn blinded_benchmark_ids_read_as_names() {
+    let tmp = fixture("running");
+    let task = tmp.path().join("task");
+    fs::write(
+        task.join("domain/input/spec.json"),
+        r#"{"vessel_id":"factory-70ed8f4700b0"}"#,
+    )
+    .unwrap();
+    assert_eq!(run_name(&task), "Benchmark hull 70ed8f");
+    // Not a hash: shown as it is.
+    fs::write(
+        task.join("domain/input/spec.json"),
+        r#"{"vessel_id":"factory-box"}"#,
+    )
+    .unwrap();
+    assert_eq!(run_name(&task), "factory-box");
+}
+
+#[test]
 fn notices_are_filtered_and_explain_other_builds() {
     let tmp = fixture("blocked");
     let task = tmp.path().join("task");
