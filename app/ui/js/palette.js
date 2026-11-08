@@ -30,7 +30,8 @@ export function createPalette({ commands }) {
     autocomplete: 'off',
     spellcheck: 'false',
   });
-  const list = el('ul', { class: 'palette-list', id: 'palette-list', role: 'listbox', 'aria-label': 'Commands' });
+  // Focusable so the list can also scroll from the keyboard; arrows in the input move the choice.
+  const list = el('ul', { class: 'palette-list', id: 'palette-list', role: 'listbox', 'aria-label': 'Commands', tabindex: '0' });
   const dialog = el('dialog', { class: 'palette', 'aria-label': 'Command palette' },
     input, list,
     el('p', { class: 'palette-foot' }, '↑↓ to move · Enter to run · Esc to close'));

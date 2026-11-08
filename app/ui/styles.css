@@ -116,7 +116,7 @@
   --src-repaired: #004557;
   --src-interpolated: #3B6499; /* stroke #7AA2D6 is 2.6:1 on paper; darker for chip text */
   --src-ai_inferred: #8A6A1E;
-  --src-ai_corrected: #00745A; /* teal #07AF87 for strokes, darker teal for chip text */
+  --src-ai_corrected: #006A52; /* teal #07AF87 for strokes, darker teal for chip text (4.5:1 on the guessed-tile amber) */
   --src-omitted: #5F6B7E;
   --stroke-interpolated: #7AA2D6;
   --stroke-ai_corrected: #07AF87;
@@ -178,7 +178,7 @@
     --ink-2: #C1CEE0;
     --ink-3: #8FB4E8;
     --muted-line: #6F8BB3;
-    --brand: #7AA2D6;
+    --brand: #88B0E2; /* 4.5:1 on its own soft tint over navy */
     --brand-hover: #9BBCE6;
     --brand-soft: rgba(122, 162, 214, 0.16);
     --brand-ghost: rgba(122, 162, 214, 0.35);
@@ -195,7 +195,7 @@
     --fail-soft: rgba(249, 112, 102, 0.15);
     --src-traced: #E6EDF7;
     --src-repaired: #8CC8D8;
-    --src-interpolated: #7AA2D6;
+    --src-interpolated: #9BBCE6;
     --src-ai_inferred: #F5B14C;
     --src-ai_corrected: #3DD6AE;
     --src-omitted: #8FB4E8;
@@ -224,7 +224,7 @@
   --ink-2: #C1CEE0;
   --ink-3: #8FB4E8;
   --muted-line: #6F8BB3;
-  --brand: #7AA2D6;
+  --brand: #88B0E2; /* 4.5:1 on its own soft tint over navy */
   --brand-hover: #9BBCE6;
   --brand-soft: rgba(122, 162, 214, 0.16);
   --brand-ghost: rgba(122, 162, 214, 0.35);
@@ -241,7 +241,7 @@
   --fail-soft: rgba(249, 112, 102, 0.15);
   --src-traced: #E6EDF7;
   --src-repaired: #8CC8D8;
-  --src-interpolated: #7AA2D6;
+  --src-interpolated: #9BBCE6;
   --src-ai_inferred: #F5B14C;
   --src-ai_corrected: #3DD6AE;
   --src-omitted: #8FB4E8;
@@ -1234,7 +1234,6 @@ code { font-family: var(--font-mono); }
   border: 1px solid currentColor;
   border-radius: var(--radius-sm);
   font: 500 11px/1 var(--font-mono);
-  opacity: 0.7;
 }
 .selection-empty { color: var(--text-3); font-size: var(--fs-sm); }
 

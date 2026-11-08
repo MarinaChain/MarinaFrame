@@ -365,7 +365,7 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
   }
 
   function sidePanel() {
-    return el('aside', { class: 'intake-side', 'aria-label': 'Vessel' },
+    return el('section', { class: 'intake-side', 'aria-label': 'Vessel' },
       el('label', { class: 'field' },
         el('span', { class: 'field-label' }, 'Vessel name'),
         el('input', {

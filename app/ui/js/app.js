@@ -567,6 +567,7 @@ function renderCrumbs() {
     runCrumb,
     view.revision ? [crumbSeparator(), el('span', { class: 'crumb crumb-current crumb-mono', 'aria-current': 'page', title: `Revision ${view.revision}` }, view.revision)] : null);
   document.title = `${vesselName} › Run — MarinaFrame`;
+  $('run-title').textContent = `${vesselName}, run ${vessel ? runNumber(vessel, state.task) : 1}`;
   badge.dataset.status = view.summary.status;
   fill(badge, el('span', { class: 'badge-text' }, fmt.statusLabel(view.summary.status)));
   badge.title = fmt.statusLabel(view.summary.status);
@@ -899,8 +900,13 @@ function renderStrip() {
   if (!sections.length) {
     fill(strip, stripEmpty());
     strip.removeAttribute('aria-activedescendant');
+    // Without tiles the strip is a plain status line, not a list box with no options.
+    strip.removeAttribute('role');
+    strip.removeAttribute('aria-orientation');
     return;
   }
+  strip.setAttribute('role', 'listbox');
+  strip.setAttribute('aria-orientation', 'horizontal');
   const ink = live.hasSteps() ? live.latestInk() : new Map();
   fill(strip, ...sections.map((section) => {
     const path = sectionShapePath(section);
@@ -1008,6 +1014,7 @@ function renderSelection() {
     }
     return el('div', {
       class: 'cand-row',
+      role: 'listitem',
       dataset: { candidate: candidate.id },
       onmouseenter: () => drawing.highlightCandidate(candidate.id),
       onmouseleave: () => drawing.highlightCandidate(null),

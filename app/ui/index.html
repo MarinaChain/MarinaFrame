@@ -163,7 +163,8 @@
       </section>
 
       <!-- ============================================================ Run: drawing | 3D | inspector -->
-      <section class="view view-run" id="view-run" data-route="run" data-vtab="run" aria-label="Run" hidden>
+      <section class="view view-run" id="view-run" data-route="run" data-vtab="run" aria-labelledby="run-title" hidden>
+        <h1 class="visually-hidden" id="run-title">Run</h1>
         <div class="workspace" id="workspace">
           <div class="notices" id="notices" aria-live="polite"></div>
           <div class="draft-summary" id="draft-summary"></div>
@@ -182,7 +183,7 @@
                   <button class="btn btn-ghost btn-icon" id="zoom-fit" type="button" title="Fit page (0)" aria-label="Fit page"><svg class="icon"><use href="#i-fit" /></svg></button>
                 </div>
               </div>
-              <div class="drawing-host" id="drawing-host" tabindex="0" aria-label="Drawing. Drag to pan, scroll to zoom."></div>
+              <div class="drawing-host" id="drawing-host" tabindex="0" role="region" aria-label="Drawing. Drag to pan, scroll to zoom."></div>
               <div class="tooltip" id="drawing-tooltip" role="tooltip" hidden></div>
             </section>
 
@@ -196,7 +197,7 @@
                   <button class="btn btn-ghost btn-icon" id="model-reset" type="button" title="Reset view (R)" aria-label="Reset view"><svg class="icon"><use href="#i-reset" /></svg></button>
                 </div>
               </div>
-              <div class="model-host" id="model-host" tabindex="0" aria-label="3D model. Drag to rotate, scroll to zoom."></div>
+              <div class="model-host" id="model-host" tabindex="0" role="region" aria-label="3D model. Drag to rotate, scroll to zoom, click a section plane to pick it."></div>
               <!-- HOOK(M3 live): fit dial and a one-line caption over the 3D view. -->
               <div class="fit-dial" id="fit-dial" role="img" aria-label="Fit" hidden>
                 <svg viewBox="0 0 48 48" aria-hidden="true">
@@ -230,7 +231,7 @@
           </div>
         </div>
 
-        <aside class="inspector" aria-label="Inspector">
+        <section class="inspector" aria-label="Inspector">
           <header class="inspector-head" id="selection-head"></header>
           <section class="selection" id="selection" aria-live="polite"></section>
           <div class="tabs" role="tablist" aria-label="Run details" id="tabs">
@@ -249,7 +250,7 @@
             <div role="tabpanel" class="tab-panel" id="panel-model" aria-labelledby="tab-model" tabindex="0" hidden></div>
             <div role="tabpanel" class="tab-panel" id="panel-evidence" aria-labelledby="tab-evidence" tabindex="0" hidden></div>
           </div>
-        </aside>
+        </section>
 
         <!-- Export and History tabs of the vessel: full-width pages over the run workspace. -->
         <section class="vessel-page" id="vessel-page-export" data-vtab="export" aria-labelledby="export-title" hidden></section>
