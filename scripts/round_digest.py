@@ -268,6 +268,47 @@ def summarize(cases: list[dict]) -> dict:
     }
 
 
+def latest_valid_draft_step(events: list[dict], case_dir: Path) -> Path | None:
+    """The STEP file of the last build that produced a valid candidate, or None."""
+    for event in reversed(events):
+        payload = as_dict(event.get("payload"))
+        if event.get("kind") != "worker_result" or payload.get("operation") != "build_draft":
+            continue
+        candidate = as_dict(as_dict(as_dict(payload.get("response")).get("result")).get("candidate"))
+        if candidate.get("valid") is True and isinstance(candidate.get("path"), str):
+            for name in ("model-draft.step", "model.step"):
+                step = case_dir / "task" / candidate["path"] / name
+                if step.is_file():
+                    return step
+    return None
+
+
+def score_case(case: dict, case_dir: Path, events: list[dict], factory: Path) -> None:
+    """Score the case's final valid draft against DEVELOPMENT truth with the frozen factory
+    scorer and gate (2 % RMS half-beam, 5 % in-range volume). Never use it on sealed data."""
+    from benchmarks.factory import report, truth  # noqa: PLC0415 (needs the repo on sys.path)
+    step = latest_valid_draft_step(events, case_dir)
+    case_id = case_dir.name
+    if step is None:
+        case["score"] = None
+        return
+    params = json.loads((factory / "params" / f"{case_id}.json").read_text())
+    stations = [{"id": f"s{i + 1:02d}", "x_m": x} for i, x in enumerate(params["station_x_m"])]
+    hull = case_id.rsplit("-L", 1)[0]
+    try:
+        score = truth.score_model(factory / "sealed" / "truth" / f"{hull}.npz", step, stations)
+    except Exception as exc:  # a scoring failure is reported, not raised
+        case["score"] = {"status": "scoring_error", "error": type(exc).__name__}
+        return
+    main = score.get("summary", {}).get("half_breadth_main")
+    hydro = score.get("hydrostatics_at_design_draft", {})
+    rms_pct = 100 * main["rms_of_station_rms_m"] / score["truth"]["max_half_breadth_m"] if main else None
+    volume = hydro.get("volume_error_relative_within_range")
+    case["score"] = {"rms_pct_half_beam": rms_pct, "volume_error_in_range": volume,
+                     "correct": bool(rms_pct is not None and rms_pct <= 100 * report.RMS_GATE_FRACTION
+                                     and volume is not None and abs(volume) <= report.VOLUME_GATE)}
+
+
 def render_markdown(cases: list[dict], summary: dict) -> str:
     out = [f"# Round digest ({len(cases)} cases)", ""]
     for c in cases:
@@ -283,12 +324,23 @@ def render_markdown(cases: list[dict], summary: dict) -> str:
             out.append(f"  - model{f' (x{repeats})' if repeats > 1 else ''}: {reason}")
         cost = "n/a" if not c["list_cost_usd"] else f"${c['list_cost_usd']:.4f}"
         out.append(f"- {c['draft']}; requests {c['requests']}; list cost {cost}")
+        score = c.get("score")
+        if score and "correct" in score:
+            rms = "n/a" if score["rms_pct_half_beam"] is None else f"{score['rms_pct_half_beam']:.2f}%"
+            vol = "n/a" if score["volume_error_in_range"] is None else f"{100 * score['volume_error_in_range']:+.1f}%"
+            out.append(f"- score (dev truth): {'CORRECT' if score['correct'] else 'wrong'}; RMS {rms} of half-beam; volume {vol}")
+        elif score:
+            out.append(f"- score: {score['status']} ({score.get('error')})")
         out.append("")
     out.append("## Across cases")
     out.append("- termination: " + ", ".join(f"{r} x{n}" for r, n in summary["termination_reasons"]))
     out.append("- first blockers: " + ", ".join(f"{r} x{n}" for r, n in summary["first_blockers"][:5]))
     out.append("- tool totals: " + ", ".join(f"{t} x{n}" for t, n in summary["tool_totals"][:8]))
     out.append(f"- requests {summary['total_requests']}; list cost ${summary['total_list_cost_usd']:.4f}")
+    scored = [c for c in cases if c.get("score") and "correct" in c["score"]]
+    if scored:
+        out.append(f"- correct (dev truth, frozen gate): {sum(c['score']['correct'] for c in scored)}/{len(cases)} cases "
+                   f"({len(scored)} drafts scored)")
     out.append(f"- dominant failure: {summary['dominant_failure']}")
     if summary["early_stop_hint"]:
         out.append(f"- **early stop:** {summary['early_stop_hint']}")
@@ -299,8 +351,17 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("runs", nargs="+", type=Path, help="finished case/task folders, in run order")
     parser.add_argument("--json", action="store_true", help="print JSON instead of markdown")
+    parser.add_argument("--factory", type=Path,
+                        help="DEVELOPMENT factory folder (params/, sealed/truth/) to score final drafts; "
+                             "never a sealed evaluation split")
     args = parser.parse_args(argv)
     cases = [digest_case(path) for path in args.runs]
+    if args.factory:
+        if "sealed-v" in str(args.factory.resolve()):
+            parser.error("--factory must be development data, not a sealed evaluation split")
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        for case, path in zip(cases, args.runs):
+            score_case(case, path, load_events(path), args.factory)
     summary = summarize(cases)
     if args.json:
         print(json.dumps({"cases": cases, "summary": summary}, indent=2, default=str))

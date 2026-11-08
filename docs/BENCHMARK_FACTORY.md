@@ -354,6 +354,9 @@ Run `python scripts/round_digest.py RUN_DIR [RUN_DIR ...]` on finished case fold
 It prints, per case: end reason, decision count, compressed tool sequence, first blocker, last 3 model
 reasons, draft/STEP state, requests and list cost. It ends with failure counts, a one-line verdict and an
 early-stop hint. Run 2 to 4 cases first. If the hint says the first cases fail the same way, stop the round.
+Add `--factory DEV_FACTORY_DIR` (for example `work/w17/factory`) to score each case's final valid draft
+against development truth with the frozen factory scorer and gate (2 % RMS half-beam, 5 % in-range volume);
+the digest then reports RMS, volume error and correct/total. It refuses a sealed evaluation split.
 
 To run such a round without an ad hoc driver, first `source scripts/load_opencode_keys.sh`, then
 `python scripts/run_round.py --cases IDS_OR_FILE --inputs INPUT_DIR --out NEW_DIR_UNDER_MAIN_work
