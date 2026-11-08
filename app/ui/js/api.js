@@ -746,7 +746,9 @@ function mockTransport() {
     async get_queue(data) {
       const running = data.tasks.filter((t) => t.status === 'running' || isLiveStreaming(data, t.task)).length;
       // Mock pump: free slots take the first waiting sets; they stay "starting" in the mock.
-      let free = MOCK_SLOTS - running - mockQueue.filter((s) => s.state === 'starting').length;
+      // With ?mocknokey the AI is not active: sets only wait (the backend's "held").
+      const noAi = new URLSearchParams(location.search).has('mocknokey');
+      let free = noAi ? 0 : MOCK_SLOTS - running - mockQueue.filter((s) => s.state === 'starting').length;
       for (const set of mockQueue) {
         if (free <= 0) break;
         if (set.state === 'waiting') { set.state = 'starting'; free -= 1; }
@@ -754,7 +756,7 @@ function mockTransport() {
       if (new URLSearchParams(location.search).has('mockbatchfail') && mockQueue.length > 2) {
         Object.assign(mockQueue[mockQueue.length - 1], { state: 'failed', message: 'The drawings could not be read.' });
       }
-      return { slots: MOCK_SLOTS, running: running + mockQueue.filter((s) => s.state === 'starting').length, waiting: clone(mockQueue), held: null };
+      return { slots: MOCK_SLOTS, running: running + mockQueue.filter((s) => s.state === 'starting').length, waiting: clone(mockQueue), held: noAi && mockQueue.some((s) => s.state === 'waiting') ? 'Waiting sets start when AI drafting is on and a model key is found.' : null };
     },
     async remove_queued(data, { id }) {
       const index = mockQueue.findIndex((s) => s.id === id);

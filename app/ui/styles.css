@@ -804,6 +804,9 @@ code { font-family: var(--font-mono); }
 .batch-sheet::backdrop { background: rgba(10, 31, 61, 0.22); }
 .batch-sheet h2 { margin-bottom: var(--space-sm); font-size: var(--fs-xl); font-weight: 600; }
 .batch-intro { margin-bottom: var(--space-md); color: var(--ink-2); font-size: var(--fs-md); }
+.batch-ai-note { display: flex; align-items: flex-start; gap: var(--space-sm); margin-bottom: var(--space-md); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); background: var(--warn-soft); color: var(--warn); font-size: var(--fs-sm); }
+.batch-ai-note[hidden] { display: none; }
+.batch-ai-note .icon { flex: none; margin-top: 2px; }
 .batch-sets { display: flex; flex-direction: column; gap: var(--space-xs); margin: 0; padding: 0; list-style: none; }
 .batch-set { display: flex; align-items: flex-start; gap: var(--space-sm); padding: var(--space-sm) var(--space-md); border: 1px solid var(--rule); border-radius: var(--radius-md); background: var(--surface); }
 .batch-set input { flex: none; width: 16px; height: 16px; margin-top: 3px; accent-color: var(--brand); }

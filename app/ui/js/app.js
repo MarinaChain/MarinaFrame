@@ -1908,6 +1908,7 @@ async function startIntake(paths) {
 const batch = createBatch({
   invoke,
   showError,
+  aiActive: () => state.aiStatus?.active !== false,
   onQueued: (queue) => {
     state.queue = queue;
     navigate('queue');
@@ -1922,7 +1923,10 @@ const batch = createBatch({
  */
 async function openDrawings(paths) {
   const plan = await invoke('plan_batch', { paths });
-  if (plan.sets.length > 1) batch.open(plan);
+  if (plan.sets.length > 1) {
+    await refreshAiStatus(); // the sheet says when the sets can only wait
+    batch.open(plan);
+  }
   else if (plan.sets.length === 1) await startIntake(plan.sets[0].files);
   else throw new Error(plan.skipped[0] ? `${fileName(plan.skipped[0].path)}: ${plan.skipped[0].reason}` : 'No drawing was found. Drop PDF, PNG, TIFF or JPEG files.');
 }

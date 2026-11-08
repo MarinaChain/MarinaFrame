@@ -18,17 +18,20 @@ export function slotLine(queue) {
   return `${inUse} of ${queue.slots} run slots in use. The next set starts when a slot is free.`;
 }
 
-export function createBatch({ invoke, showError, onQueued }) {
+export function createBatch({ invoke, showError, onQueued, aiActive = () => true }) {
   let plan = null;
   const chosen = new Set();
   let busy = false;
 
   const list = el('ul', { class: 'batch-sets', 'aria-label': 'Drawing sets found' });
   const skipped = el('div', { class: 'batch-skipped' });
+  // A set without a spec needs the AI: with AI drafting off or no key the sets only wait.
+  const aiNote = el('p', { class: 'batch-ai-note', role: 'note' });
   const startButton = el('button', { class: 'btn btn-primary', type: 'button', onclick: () => queueChosen() }, 'Start runs');
   const dialog = el('dialog', { class: 'batch-sheet', 'aria-labelledby': 'batch-title' },
     el('h2', { id: 'batch-title' }, 'New vessels'),
     el('p', { class: 'batch-intro' }, 'Each set becomes one run with the views the app finds. Runs start as slots free up; the rest wait in the Queue.'),
+    aiNote,
     list,
     skipped,
     el('div', { class: 'batch-actions' },
@@ -59,7 +62,10 @@ export function createBatch({ invoke, showError, onQueued }) {
         el('summary', {}, icon('warn'), `${fmt.plural(plan.skipped.length, 'item')} left out`),
         el('ul', {}, ...plan.skipped.map((s) => el('li', { title: s.path }, `${s.path.split(/[\\/]/).pop()}: ${s.reason}`))))
       : null);
-    startButton.textContent = busy ? 'Adding…' : `Start ${fmt.plural(chosen.size, 'run')}`;
+    const active = aiActive();
+    fill(aiNote, active ? null : [icon('warn'), el('span', {}, 'AI drafting is off or has no key. The sets wait in the Queue and start when the AI is on.')]);
+    aiNote.hidden = active;
+    startButton.textContent = busy ? 'Adding…' : active ? `Start ${fmt.plural(chosen.size, 'run')}` : `Queue ${fmt.plural(chosen.size, 'set')}`;
     startButton.disabled = busy || chosen.size === 0;
   }
 
