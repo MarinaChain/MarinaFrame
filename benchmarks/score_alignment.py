@@ -53,7 +53,9 @@ TRUTH_TIE_PCT = 0.05
 # Edits whose truth change is at most this (% B/2) count as "small".
 SMALL_EDIT_PCT = 1.0
 # Number of "first hull" bases with realistic errors, besides the truth hull.
-ERROR_BASES = 3
+ERROR_BASES = 2
+# One-station edits scored per station and base (repairs always; the rest sampled).
+EDITS_PER_STATION = 14
 # Body-plan grid column spacing assumed for grid-line substitution (metres).
 GRID_STEP_M = 2.0
 # Samples of a resampled station curve.
@@ -71,7 +73,7 @@ def list_cases(pattern: str) -> list[dict]:
     cases = []
     for factory, kind in ((BODY_FACTORY, "body"), (THREE_VIEW_FACTORY, "three_view")):
         for case_dir in sorted((factory / "inputs").iterdir()):
-            if fnmatch.fnmatch(case_dir.name, pattern):
+            if any(fnmatch.fnmatch(case_dir.name, one) for one in pattern.split(",")):
                 cases.append({"case": case_dir.name, "kind": kind, "dir": str(case_dir),
                               "truth": str(factory / "sealed" / "truth"
                                            / (case_dir.name.rsplit("-L", 1)[0].replace("-3v", "") + ".npz"))})
@@ -82,13 +84,7 @@ def truth_curve(truth: dict, x_m: float) -> np.ndarray:
     """Station curve (y, z) of the truth at x: the outer half-breadth at each truth height."""
     index = int(np.argmin(np.abs(truth["x_m"] - x_m)))
     hb, z = truth["half_breadth"][index], truth["z_m"]
-    hull = np.flatnonzero(hb > 1e-6)
-    if not len(hull):
-        return np.array([[0.0, 0.0], [0.0, z[-1]]])
-    first = max(0, hull[0] - 1)
-    points = np.column_stack([hb[first:], z[first:]])
-    points[0, 0] = 0.0
-    return points
+    return from_function(hb, z)
 
 
 def station_truth_error(curve: np.ndarray, truth: dict, x_m: float) -> float:
@@ -116,11 +112,13 @@ def as_function(curve: np.ndarray, z: np.ndarray) -> np.ndarray:
 
 
 def from_function(y: np.ndarray, z: np.ndarray) -> np.ndarray:
+    """Station curve from half-breadths at heights z: from the keel point on the centreline up to the
+    highest height with breadth (the deck edge); no points above the hull."""
     keep = np.flatnonzero(y > 1e-6)
     if not len(keep):
         return np.array([[0.0, z[0]], [0.0, z[-1]]])
-    first = max(0, keep[0] - 1)
-    points = np.column_stack([np.maximum(y[first:], 0.0), z[first:]])
+    first, last = max(0, keep[0] - 1), keep[-1]
+    points = np.column_stack([np.maximum(y[first:last + 1], 0.0), z[first:last + 1]])
     points[0, 0] = 0.0
     return points
 
@@ -237,9 +235,11 @@ def load_case(case: dict) -> dict:
     return case
 
 
-def score_hull(curves: dict, case: dict, views: dict, half_beam_m: float) -> dict:
+def score_hull(curves: dict, case: dict, views: dict, half_beam_m: float, waterlines=None) -> dict:
+    """Combined fit of a hull. ``waterlines`` stay fixed across a case's edits, as in the live
+    controller (its table keeps the first hull's waterlines); default: the hull's own grid."""
     rows = [StationRow(s["id"], s["x_m"], np.asarray(curves[s["id"]]).tolist(), "fitted") for s in case["sections"]]
-    table = VesselTable(rows, waterline_grid(rows))
+    table = VesselTable(rows, waterlines if waterlines is not None else waterline_grid(rows))
     board = score_table(measurement_table(table), views, case["grey"], half_beam_m=half_beam_m, overlays=False)
     return {"combined_fit": board["combined_fit"], "cells": board["cells"], "half_beam_m": board["half_beam_m"],
             "station_ink_fit": board["station_ink_fit"], "board": board}
@@ -269,20 +269,27 @@ def evaluate_case(case_ref: dict) -> dict:
         bases.append((f"first{k + 1}", error_base(case, rng, strength=1.0 + 2.0 * k)))
     # A label-free half-beam per case, as the controller fixes it from its first hull.
     half_beam = max(float(np.max(np.asarray(c)[:, 0])) for c in bases[1][1].values())
+    first_rows = [StationRow(s["id"], s["x_m"], np.asarray(bases[1][1][s["id"]]).tolist(), "fitted")
+                  for s in case["sections"]]
+    waterlines = waterline_grid(first_rows)
     results = {mode: {"pairs": [], "hulls": []} for mode, _ in modes}
     for base_name, base in bases:
         base_truth = hull_truth_pct(base, case)
-        base_scores = {mode: score_hull(base, case, views, half_beam) for mode, views in modes}
+        base_scores = {mode: score_hull(base, case, views, half_beam, waterlines) for mode, views in modes}
         for mode, _ in modes:
             results[mode]["hulls"].append({"base": base_name, "truth_pct": base_truth,
                                            "fit": base_scores[mode]["combined_fit"]})
         for section in case["sections"]:
             sid = section["id"]
-            for edit_type, curve in variants(sid, base, case, rng):
+            edits = variants(sid, base, case, rng)
+            repairs = [e for e in edits if e[0].startswith("repair")]
+            others = [e for e in edits if not e[0].startswith("repair")]
+            picked = rng.choice(len(others), size=min(len(others), EDITS_PER_STATION - len(repairs)), replace=False)
+            for edit_type, curve in repairs + [others[k] for k in sorted(picked)]:
                 edited = {**base, sid: curve}
                 truth_pct = hull_truth_pct(edited, case)
                 for mode, views in modes:
-                    after = score_hull(edited, case, views, half_beam)
+                    after = score_hull(edited, case, views, half_beam, waterlines)
                     before = base_scores[mode]
                     results[mode]["hulls"].append({"base": base_name, "truth_pct": truth_pct,
                                                    "fit": after["combined_fit"]})
@@ -366,8 +373,8 @@ def pooled(results: list[dict]) -> dict:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--cases", default="*")
-    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--cases", default="*", help="comma-separated case name patterns")
+    parser.add_argument("--workers", type=int, default=2)
     args = parser.parse_args(argv)
     cases = list_cases(args.cases)
     with ProcessPoolExecutor(args.workers) as pool:
