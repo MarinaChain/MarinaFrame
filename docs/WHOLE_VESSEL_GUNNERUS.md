@@ -290,11 +290,41 @@ Next approach: fit one B-spline surface per run side to the existing knot grid (
 knots, `GeomAPI_PointsToBSplineSurface` within the 1 mm bound), with the end caps cut from that
 surface, and keep the volume audit. Until then the app loads the GLB (48.5 MB) or the gzip STEP.
 
-## 5. Resume point
+## 5. Round 4: Balclutha sheet 7, model value on a scanned body plan (protocol 3.5.3, option B)
+
+Code: `benchmarks/balclutha/model_value.py`. Run 2026-11-09, 3 repeats, `deepseek-v4.1-flash`,
+thinking disabled, 32,000 tokens. Image: the body-plan crop of sheet 7 at 1/4 scale, 1600 x 1096 px,
+without the table. A calibration check (drawn waterlines 0, 16 and 32 ft and two table cells plotted
+on the image) put the cells on their station curves.
+
+Truth: 151 half-breadth cells (stations 0 to 20, 4 to 32 ft waterlines) of the printed table,
+transcribed twice by Claude from different crops; all 151 cells agree; not checked by a person.
+One cell (24 ft WL, station 18) reads 1-9-4 in both reads, against neighbours 10-11-0 and 4-1-0;
+it is kept as printed. The truth file stays outside the repository.
+
+| Repeat | Cells given (of 151) | RMS | Station identity errors | Turns | Prompt / completion tokens |
+|---|---:|---:|---:|---:|---:|
+| R1-1 | 0 (every value null) | - | - | 1 | 1,387 / 463 |
+| R1-2 | 151 (every value 0.0) | 4.35 m | 17 | 1 | 1,387 / 950 |
+| R1-3 | 0 (every value null) | - | - | 1 | 1,387 / 463 |
+| R0 (code, documented abstention) | 0 | - | - | - | - |
+
+Decision by the fixed rule: **the model adds no value on this scanned body plan.** It did not read
+the curves at all.
+
+Cause (checked with one probe request): the image reaches the model (it read "7342" from a test
+image), but an image costs only about 200 prompt tokens, so the provider passes it at low
+resolution. A 1600 px body plan with 21 overlaid station curves is then not readable. This also
+explains the low prompt-token counts of rounds 1 to 3 and why the model copied the code reading.
+A new test needs tiles (one waterline band or a few stations per image, at full resolution) and
+must check the image size the provider accepts; fix its protocol first.
+
+## 6. Resume point
 
 1. Done: tier aft-end rule (section 1.1), raster code path (section 3), assembly and hull volume
    fix (section 4), app parts folder (section 4.2), happy path for invalid metadata (section 4.3).
 2. Lighter hull loft for the app: one B-spline surface per run side (section 4.5).
 3. Appendages (rudder, skeg, thrusters) and openings in step 1 (not started).
-4. Balclutha model-value test: choose option A or B in plan section 3.5.3, commit, then run.
+4. Balclutha: option B run (section 5), no model value at whole-image resolution. Next: a tiled
+   reading protocol, and option A when a person downloads the profile and deck sheets.
 5. Rust `ship_cad` vision schema: accept labelled inline values (Python accepts them now).
