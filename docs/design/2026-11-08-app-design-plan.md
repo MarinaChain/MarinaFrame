@@ -154,7 +154,7 @@ system, `marinachain-website-revamp-2026/docs/HANDOVER-DESIGN.md` and `design-sy
 Type: Manrope (the brand's product-frame font, OFL) for the UI, IBM Plex Mono for numbers.
 No orange anywhere. The concept images in `images/` use the earlier orange Vellum palette.
 
-## 10. Built UI status (2026-11-09, UI lead rounds 1-24)
+## 10. Built UI status (2026-11-09, UI lead rounds 1-47)
 
 Research basis: `docs/research/2026-11-09-uiux-research.md`. Screens and where they live:
 
@@ -167,10 +167,13 @@ Research basis: `docs/research/2026-11-09-uiux-research.md`. Screens and where t
 | Export | full page, draft stamp, open-issue line | `js/export.js` |
 | History | runs of the vessel; Changes per revision (fit, cause, section changes, not-kept edits) | `js/changes.js` |
 | Queue | Working now / Ready to check / Earlier | `js/app.js` |
+| Parts (whole vessel) | tree by op, true-scale profile and plan sketches, values with source and basis, Accept (A) / Mark (M) / Next (N), 3D outline, Copy part list (formula-safe), sign-off "usable as a starting model" | `js/parts.js`, `app/core/src/parts.rs`, `signoff.rs` |
 | Everywhere | command palette (Cmd/Ctrl+K), shortcut sheet (?), theme button, Draft-only chip | `js/palette.js`, `js/shortcuts.js` |
 
-Checks: `cd app && npm run test:ui` (section-area unit tests) and `npm run test:a11y` (axe-core
-on 13 mock screens, light and dark; must report no violations).
+Checks: `cd app && npm run test:ui` (section areas, part list safety, reasons) and `npm run
+test:a11y` (axe-core on 14 mock screens, light and dark; must report no violations).
 
-Open (next): whole-vessel component tree with per-component review once runs write components;
-sectional-area against the drawing's own SAC when a profile is read; scroll snap in Thinking.
+Open (next): re-run one part from a mark (controller and worker; the marks are in
+`TaskView.components[].review_note`); sectional-area against the drawing's own SAC when a
+profile is read; parts from a real whole-vessel run folder (the reader is tested on real
+ship-cad output, `app/core/testdata/ship_cad_execution.json`).
