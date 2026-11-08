@@ -62,7 +62,7 @@ export function createExport({ host, invoke }) {
       state = el('span', { class: 'export-size export-size-none' }, '—');
     }
     const finder = el('button', {
-      class: 'btn btn-ghost btn-icon',
+      class: `btn btn-ghost btn-icon${written.length ? '' : ' export-finder-none'}`,
       type: 'button',
       title: 'Show in Finder',
       'aria-label': `Show ${output.name} in Finder`,
