@@ -70,7 +70,7 @@
   --traffic-light-inset: 0px;
   --statusbar-h: 24px;
   --rail-w: 76px;
-  --inspector-w: 340px;
+  --inspector-w: clamp(340px, 22vw, 420px); /* wider on large screens: the Thinking text reads better */
   --strip-h: 80px;
   --narration-h: 32px;
   --revision-h: 36px;
@@ -745,6 +745,12 @@ code { font-family: var(--font-mono); }
 .revision-facts { display: flex; align-items: center; gap: var(--space-md); min-width: 0; margin-left: auto; overflow: hidden; }
 .rev-fact { min-width: 0; overflow: hidden; color: var(--ink-3); font: var(--fs-sm) var(--font-mono); white-space: nowrap; text-overflow: ellipsis; }
 .revision-facts .badge { flex: none; }
+/* The strip keeps the ladder and the chips whole; the requests, cost and time (also under
+   Calls and on Home) leave first when the workspace is narrow. */
+.revision-strip { container: revstrip / inline-size; }
+@container revstrip (max-width: 960px) {
+  .revision-facts .rev-fact { display: none; }
+}
 
 /* HOOK(M3 live): attention layer on the drawing; marks never take clicks. */
 .attention-layer { pointer-events: none; }
@@ -939,12 +945,12 @@ code { font-family: var(--font-mono); }
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  height: 32px;
+  height: 36px;
   padding: 0 var(--space-sm) 0 var(--space-md);
   flex: none;
   border-bottom: 1px solid var(--line);
 }
-.pane-title { flex: none; font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; }
+.pane-title { flex: none; font-size: var(--fs-md); font-weight: 600; white-space: nowrap; }
 .pane-meta {
   flex: 1 1 auto;
   min-width: 0;
@@ -955,7 +961,13 @@ code { font-family: var(--font-mono); }
   text-overflow: ellipsis;
 }
 .pane-tools { margin-left: auto; display: flex; align-items: center; gap: 2px; flex: none; }
-.pane-tools .btn-icon { width: 24px; height: 24px; }
+.pane-tools .btn-icon { width: 28px; height: 28px; }
+.pane-tools .btn-icon .icon { width: 16px; height: 16px; }
+/* A narrow pane keeps its tools and drops the size line (it is also in the inspector). */
+.pane { container: pane / inline-size; }
+@container pane (max-width: 520px) {
+  .pane-meta { display: none; }
+}
 .zoom-readout { min-width: 40px; text-align: center; color: var(--text-3); font-size: var(--fs-xs); }
 
 .drawing-host, .model-host {
@@ -1847,7 +1859,7 @@ code { font-family: var(--font-mono); }
 .thought.is-current .thought-card { border-color: var(--brand); box-shadow: inset 2px 0 0 var(--brand); }
 .thought-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--space-sm); min-width: 0; }
 .thought-title {
-  flex: 1 1 12em; /* the time and cost move under a long title in a narrow inspector */
+  flex: 1 1 9em; /* the time and cost move under a long title in a narrow inspector */
   min-width: 0;
   padding: 0;
   border: 0;

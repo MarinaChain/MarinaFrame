@@ -664,6 +664,7 @@ function renderRevisionStrip() {
   const activity = view.activity;
   const cost = activity ? (activity.list_cost_complete ? fmt.usd(activity.list_cost_usd) : `≥ ${fmt.usd(activity.list_cost_usd)}`) : null;
   fill($('revision-facts'),
+    chip('Draft only', { dot: false, small: true, title: 'Engineering approval is never automatic. A naval architect signs off outside this app.' }),
     policyChip(view.summary.policy),
     activity ? el('span', { class: 'rev-fact', title: 'Requests to the model, list cost' }, `${fmt.plural(activity.requests, 'request')} · ${cost}`) : null,
     el('span', { class: 'rev-fact', title: `Updated ${fmt.fullTime(view.summary.updated_ms)}` }, fmt.relativeTime(view.summary.updated_ms)));
@@ -701,8 +702,14 @@ function renderThinking() {
 
 // ---------------------------------------------------------------- notices
 
+/**
+ * The backend's standing notice that sign-off happens outside the app. It is the same on
+ * every run, so it shows as the "Draft only" chip in the revision strip, not as a bar.
+ */
+const ENGINEERING_NOTICE_ID = 'engineering-approval';
+
 function renderNotices() {
-  const notices = state.view?.notices || [];
+  const notices = (state.view?.notices || []).filter((n) => n.id !== ENGINEERING_NOTICE_ID);
   fill($('notices'), ...notices.map((notice) => {
     const row = el('div', { class: 'notice', dataset: { tone: notice.tone, notice: notice.id } },
       icon(notice.tone === 'warning' ? 'warn' : 'info'),
