@@ -63,6 +63,8 @@ INK_CONTRAST = 30
 LINE_CONTRAST = 12
 LINE_BACKGROUND_PX = 15
 MAX_LINE_WIDTH_PX = 8
+# Two detected lines closer than this (px) are the same drawn line.
+SAME_LINE_PX = 3.0
 
 
 class VerificationError(ValueError):
@@ -1127,6 +1129,19 @@ def drawn_lines(gray: np.ndarray, axis: int) -> list[float]:
     return [float(np.average(g, weights=share[g])) for g in groups if 0 < len(g) <= MAX_LINE_WIDTH_PX]
 
 
+def datum_lines(gray: np.ndarray, axis: int) -> list[float]:
+    """Drawn lines found by drawn_lines or long_lines, one position per line.
+
+    drawn_lines finds light and dashed lines; long_lines still finds a dark
+    baseline that hull ink running along it widens past MAX_LINE_WIDTH_PX.
+    """
+    found = list(drawn_lines(gray, axis))
+    for position in long_lines(gray, axis):
+        if all(abs(position - other) > SAME_LINE_PX for other in found):
+            found.append(position)
+    return sorted(found)
+
+
 def grid_spacing(positions: list[float]) -> float | None:
     """Smallest spacing of which most line gaps are whole multiples (3 % tolerance)."""
     if len(positions) < 3:
@@ -1145,8 +1160,12 @@ def check_sheet_setup(image: np.ndarray, spec_sections: list[dict], setup: dict)
     """Check a proposed scale and datum against the grid lines and the declared calibration."""
     left, top, right, bottom = clip_region(setup["region_px"], image.shape[1], image.shape[0])
     gray = image[top:bottom, left:right].mean(axis=2)
+    # The scale is checked on the regular grid of long unbroken lines; a datum
+    # may also lie on a dashed or light line (a dash-dot centreline).
     rows = [top + v for v in long_lines(gray, 0)]
     columns = [left + v for v in long_lines(gray, 1)]
+    datum_rows = [top + v for v in datum_lines(gray, 0)]
+    datum_columns = [left + v for v in datum_lines(gray, 1)]
     ppm, unit = float(setup["pixels_per_metre"]), float(setup["grid_spacing_m"])
     expected = ppm * unit
     measured = {"horizontal_lines": grid_spacing(rows), "vertical_lines": grid_spacing(columns)}
@@ -1172,8 +1191,8 @@ def check_sheet_setup(image: np.ndarray, spec_sections: list[dict], setup: dict)
         return lines and min(abs(value - v) for v in lines) <= DATUM_TOLERANCE_PX
 
     view = setup["view"]
-    datums = {"centreline_px": columns if view == "body" else rows,
-              "baseline_px": rows, "x_origin_px": columns}
+    datums = {"centreline_px": datum_columns if view == "body" else datum_rows,
+              "baseline_px": datum_rows, "x_origin_px": datum_columns}
     for name, lines in datums.items():
         value = setup.get(name)
         if value is None:

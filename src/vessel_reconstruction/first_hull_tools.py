@@ -257,6 +257,87 @@ def build_first_hull(tools):
                               warnings=warnings, message=message, **extra)
 
 
+# A later reading changes the first hull's setup when a station moves by more
+# than SETUP_X_SHARE of the hull length, a scale or height by more than
+# SETUP_SCALE_SHARE, or a datum by more than SETUP_DATUM_PX. Smaller
+# differences are reading noise and keep the built hull.
+SETUP_X_SHARE = 0.01
+SETUP_SCALE_SHARE = 0.01
+SETUP_DATUM_PX = 2.0
+# State of the sections built on the old setup; a rebuild starts them again.
+SECTION_STATE = {"catalog": {}, "selected": {}, "model_choices": {}, "authored_sections": {}, "guesses": [],
+                 "resolved_guesses": [], "validation": None, "non_improving_edits": 0}
+
+
+def setup_changes(old: dict, new: dict) -> list[str]:
+    """What differs between two first-hull setups: materialized sections and description constraints.
+
+    ``old`` and ``new`` are first_hull_spec results (sections, constraints).
+    Returns one short line per change; empty when the setup is the same.
+    """
+    old_sections, new_sections = old.get("sections", []), new.get("sections", [])
+    if [s["id"] for s in old_sections] != [s["id"] for s in new_sections]:
+        return [f"stations {[s['id'] for s in old_sections]} -> {[s['id'] for s in new_sections]}"]
+    changes = []
+    length = max([abs(float(s["x_m"])) for s in old_sections + new_sections] + [1e-6])
+
+    def relative(a, b):
+        return abs(float(a) - float(b)) / max(abs(float(b)), 1e-9)
+
+    for before, after in zip(old_sections, new_sections):
+        sid = after["id"]
+        if abs(float(before["x_m"]) - float(after["x_m"])) > SETUP_X_SHARE * length:
+            changes.append(f"{sid}: x {before['x_m']:g} -> {after['x_m']:g} m")
+        if relative(before["z_max_m"], after["z_max_m"]) > SETUP_SCALE_SHARE:
+            changes.append(f"{sid}: top {before['z_max_m']:g} -> {after['z_max_m']:g} m")
+        cal_before, cal_after = before["calibration"], after["calibration"]
+        if relative(cal_before["pixels_per_metre"], cal_after["pixels_per_metre"]) > SETUP_SCALE_SHARE:
+            changes.append(f"{sid}: scale {cal_before['pixels_per_metre']:g} -> "
+                           f"{cal_after['pixels_per_metre']:g} px/m")
+        for key in ("centerline_px", "baseline_px"):
+            if abs(float(cal_before[key]) - float(cal_after[key])) > SETUP_DATUM_PX:
+                changes.append(f"{sid}: {key} {cal_before[key]:g} -> {cal_after[key]:g}")
+    old_limits, new_limits = old.get("constraints") or {}, new.get("constraints") or {}
+    for key in ("beam_m", "depth_m", "length_m"):
+        a, b = old_limits.get(key), new_limits.get(key)
+        if (a is None) != (b is None) or (a is not None and relative(a, b) > SETUP_SCALE_SHARE):
+            changes.append(f"{key} {a} -> {b}")
+    return changes
+
+
+def rebuild_if_setup_changed(tools, previous_description) -> dict | None:
+    """Build the first hull again when a later reading changes its setup (sheet-only happy path).
+
+    The first hull is built once, after phase 1. When the model later reads the
+    title block or a scale again and the corrected reading gives other stations,
+    scale, datums or principal dimensions, the old hull and the sections traced
+    or authored on it rest on a wrong setup: they are set aside and the first
+    hull is built from the corrected setup. Returns the rebuild observation, or
+    None when nothing was built yet or nothing changed.
+    """
+    if not (tools.state.get("sheet_only") and tools.state.get("vessel_table")
+            and tools.state.get("materialized_spec_sha256")):
+        return None
+    from .materialize import materialize_sections
+    from .vessel_description import first_hull_spec
+    image, _, _ = tools._source()
+    made = materialize_sections(image, tools.captured_spec, tools.state, tools.intake_hints())
+    old = first_hull_spec(tools.spec, previous_description)
+    new = first_hull_spec({**tools.captured_spec, "sections": made["sections"]}, tools.state.get("vessel_description"))
+    changes = setup_changes(old, new)
+    if not changes:
+        return None
+    tools.state.pop("materialized_spec_sha256", None)
+    tools.state.update(copy.deepcopy(SECTION_STATE))
+    tools.spec = tools.captured_spec
+    tools._save()
+    observation = build_first_hull(tools)
+    observation["setup_changes"] = changes[:12]
+    observation["message"] = ("The corrected reading changed the hull setup; the first hull was built again from it "
+                              "and earlier section edits were set aside. " + observation.get("message", ""))[:600]
+    return observation
+
+
 # Kinds of table warning that say what happened to the ink (fairness notes stay in the table).
 REPORTED_WARNINGS = ("no_ink", "anchor_dropped", "anchor_left_out")
 

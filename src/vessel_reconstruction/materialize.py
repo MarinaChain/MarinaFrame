@@ -50,8 +50,6 @@ HULL_INK_SHARE = 0.05
 # A model datum farther than this from the measured grid datum is replaced by it
 # (the same distance measure_setup uses to snap a datum to a grid line).
 DATUM_SNAP_PX = 8
-# Two detected lines closer than this (px) are the same drawn line.
-SAME_LINE_PX = 3.0
 BODY_KINDS = ("body", "body_fore", "body_aft")
 SAFE_ID = re.compile(r"[^A-Za-z0-9_.-]")
 
@@ -102,15 +100,6 @@ def hull_ink_box(image, region) -> list[float] | None:
             left + max(b[1].stop for b in boxes), top + max(b[0].stop for b in boxes)]
 
 
-def _lines(gray, axis) -> list[float]:
-    """Drawn lines found by either detector, one position per line (the local-contrast one first)."""
-    found = list(inv.drawn_lines(gray, axis))
-    for position in inv.long_lines(gray, axis):
-        if all(abs(position - other) > SAME_LINE_PX for other in found):
-            found.append(position)
-    return sorted(found)
-
-
 def grid_datums(image, region) -> dict:
     """Centreline, baseline and grid spacing measured from the drawn grid lines.
 
@@ -119,8 +108,8 @@ def grid_datums(image, region) -> dict:
     baseline that hull ink thickens is still found by inv.long_lines.
     """
     gray = _gray(image, region)
-    rows = [region[1] + v for v in _lines(gray, 0)]
-    columns = [region[0] + v for v in _lines(gray, 1)]
+    rows = [region[1] + v for v in inv.datum_lines(gray, 0)]
+    columns = [region[0] + v for v in inv.datum_lines(gray, 1)]
     ink = hull_ink_box(image, region)
     centre = None
     if columns and ink:
