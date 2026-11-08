@@ -20,6 +20,9 @@ from .provenance import digest_object, write_json
 
 ID_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")
 INVESTIGATION_ARGUMENTS = {
+    "survey_sheet": {"phase1_only"},
+    "describe_views": {"views"},
+    "describe_vessel": {"description"},
     "view_region": {"region_px", "max_side_px"},
     "read_region": {"region_px", "subject"},
     "trace_corridor": {"section_id", "view_id", "path_px", "half_width_px"},
@@ -32,6 +35,9 @@ INVESTIGATION_ARGUMENTS = {
     "compare_views": {"section_id", "candidate_id", "setup_id", "heights_m"},
 }
 REQUIRED = {
+    "survey_sheet": set(),
+    "describe_views": {"views"},
+    "describe_vessel": {"description"},
     "view_region": {"region_px"},
     "read_region": {"region_px", "subject"},
     "trace_corridor": {"section_id", "view_id", "path_px", "half_width_px"},
@@ -74,6 +80,17 @@ def check_investigation_arguments(name: str, arguments: dict, spec: dict) -> Non
     sections = {s.get("id") for s in spec.get("sections", []) if isinstance(s, dict)}
     a = arguments
     ok = True
+    if name == "survey_sheet":
+        ok &= a.get("phase1_only") is None or type(a["phase1_only"]) is bool
+    if name == "describe_views":
+        from .vessel_description import VIEW_KINDS
+        views = a["views"]
+        ok &= (type(views) is list and 1 <= len(views) <= 32 and all(
+            isinstance(v, dict) and _identifier(v.get("view_id")) and v.get("kind") in VIEW_KINDS
+            and _region(v.get("region_px")) for v in views))
+    if name == "describe_vessel":
+        from .vessel_description import valid_description
+        ok &= valid_description(a["description"])
     if "region_px" in a:
         ok &= _region(a["region_px"])
     if a.get("max_side_px") is not None:
@@ -171,6 +188,57 @@ class InvestigationTools:
 
     def _view(self, view_id):
         return next((v for v in self.state.get("views", []) if v["view_id"] == view_id), None)
+
+    # ------------------------------------------------------------ sheet description
+    def _survey_sheet(self, phase1_only=False):
+        from .vessel_description import survey_sheet
+        image, _, _ = self._source()
+        survey = survey_sheet(image, self.spec)
+        self.state.update(sheet_survey=survey, description_phase="views", phase1_only=phase1_only)
+        self._save()
+        observed = self._view_region([0, 0, image.shape[1], image.shape[0]], 1024)
+        observed.update(status="sheet_surveyed", sheet_survey=survey,
+                        next_step="describe_views: name body, plan, profile, title_block and offsets_table regions in source pixels.")
+        return observed
+
+    def _description_view(self):
+        from .vessel_description import GEOMETRY_KINDS
+        pending = [v for v in self.state.get("described_views", [])
+                   if v["kind"] in GEOMETRY_KINDS and not v.get("setup_id")]
+        if not pending:
+            self.state.update(description_phase="vessel", description_next_view=None)
+            self._save()
+            return {}
+        named = pending[0]
+        observed = self._view_region(named["region_px"], 1024)
+        named["evidence_view_id"] = observed["view"]["view_id"]
+        self.state.update(description_phase="setups", description_next_view={
+            "view_id": named["evidence_view_id"], "named_view_id": named["view_id"],
+            "kind": named["kind"], "region_px": named["region_px"]})
+        self._save()
+        return {"view": observed["view"], "artifacts": observed.get("artifacts", [])}
+
+    def _describe_views(self, views):
+        from .vessel_description import _region
+        image, _, _ = self._source()
+        self.state["described_views"] = [{**copy.deepcopy(v), "region_px": _region(v["region_px"], image.shape)}
+                                          for v in views]
+        self._save()
+        crop = self._description_view()
+        return self._observation(True, "views_described", described_views=copy.deepcopy(self.state["described_views"]),
+                                 next_step="propose_sheet_setup for each geometry view, then describe_vessel.", **crop)
+
+    def _describe_vessel(self, description):
+        from .vessel_description import measure_description
+        image, _, _ = self._source()
+        setups = list(self.state.get("sheet_setups", {}).values())
+        measured = measure_description(image, self.spec, description, setups)
+        measured["views"] = copy.deepcopy(self.state.get("described_views", []))
+        self.state.update(vessel_description=measured, description_phase="complete", description_next_view=None)
+        write_json(self.root / "vessel.json", {"description": measured})
+        self._save()
+        return self._observation(True, "vessel_described", description=measured, warnings=measured["warnings"],
+                                 message="Description recorded; warnings name doubtful fields. Continue with the first hull.")
 
     # ------------------------------------------------------------ views
     def _view_region(self, region_px, max_side_px=None, *, kind="region_view", subject=None):
@@ -473,6 +541,22 @@ class InvestigationTools:
                  "grid_spacing_m": grid_spacing_m, "centreline_px": centreline_px, "baseline_px": baseline_px,
                  "x_origin_px": x_origin_px, "x_direction": x_direction}
         image, _, _ = self._source()
+        if self.state.get("description_phase") == "setups":
+            from .vessel_description import measure_setup
+            named = next((v for v in self.state.get("described_views", [])
+                          if v.get("evidence_view_id") == evidence_view_id), None)
+            setup["view_id"] = named["view_id"] if named else view
+            record = measure_setup(image, self.spec, setup)
+            setup_id = "setup-" + digest_object(record)[:16]
+            record.update(setup_id=setup_id, status="open_model_choice", evidence_view_id=evidence_view_id,
+                          scale_claim=scale_claim, reason=reason, identity_certified=False)
+            self.state.setdefault("sheet_setups", {})[setup_id] = record
+            if named:
+                named["setup_id"] = setup_id
+            self._save()
+            crop = self._description_view()
+            return self._observation(True, "setup_accepted_as_model_choice", setup=copy.deepcopy(record),
+                                     warnings=record["warnings"], **crop)
         try:
             evidence = inv.check_sheet_setup(image, self.spec["sections"], setup)
         except inv.VerificationError as exc:

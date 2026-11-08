@@ -12,7 +12,9 @@ from .provenance import write_json
 
 
 def build_first_hull(tools):
-    sections = tools.spec["sections"]
+    from .vessel_description import first_hull_spec, describe_table
+    description = tools.state.get("vessel_description")
+    sections = first_hull_spec(tools.spec, description)["sections"]
     while not all(s["id"] in tools.state["catalog"] for s in sections):
         observed = tools._inspect_source()
         if not observed.get("ok") and not observed.get("recovery_tools"):
@@ -23,7 +25,7 @@ def build_first_hull(tools):
     tools._save()
     base = tools._write_revision()
     from .schema import load_bounded_json
-    base_spec = load_bounded_json(base)
+    base_spec = first_hull_spec(load_bounded_json(base), description)
     baseline_out = tools.root / "builds" / f"anchors-{uuid4().hex[:12]}"
     baseline = run_isolated(base, baseline_out, export_cad=False, cancel_event=tools.cancel_event)
     measured = {s["id"]: s for s in (baseline.get("result") or {}).get("sections", [])}
@@ -66,7 +68,9 @@ def build_first_hull(tools):
     table, success, left_out = first_hull(sections, anchors, base_spec, build)
     if not success:
         return tools._observation(False, "blocked", message="First hull could not form a solid; use propose_section to complete it.")
+    describe_table(table, description)
     tools.state["vessel_table"] = table.to_json()
+    write_json(tools.root / "vessel.json", {"description": description, "table": table.to_json()})
     from .fit_feedback import score
     tools.state["fit_score"] = score(tools, table)
     tools.state["first_hull_spec"] = built["spec"]

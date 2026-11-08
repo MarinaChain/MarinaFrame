@@ -29,7 +29,8 @@ OPERATIONS = {"initialize", "observe", "inspect_source", "select_contours",
               "build_provisional", "build_draft", "build_first_hull", "render_candidate", "validate_candidate",
               # Model investigation tools (investigation_tools.py).
               "view_region", "read_region", "trace_corridor", "trace_from_point", "enumerate_strokes", "assign_station",
-              "propose_sheet_setup", "compare_views", "propose_section"}
+              "propose_sheet_setup", "compare_views", "propose_section",
+              "survey_sheet", "describe_views", "describe_vessel"}
 
 
 def implementation_identity():
