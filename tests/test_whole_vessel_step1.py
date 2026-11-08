@@ -1,4 +1,6 @@
 """Synthetic tests for whole-vessel step 1: labelled gap fills, GA reader, metrics, A/B parsing."""
+import sys
+
 import numpy as np
 import pytest
 
@@ -331,6 +333,7 @@ def fake_model(reply):
 
 
 @pytest.mark.cad
+@pytest.mark.skipif(sys.platform != 'darwin', reason='the ship-cad worker needs the macOS sandbox')
 def test_revise_rebuilds_only_the_marked_part(tmp_path):
     import json
 
