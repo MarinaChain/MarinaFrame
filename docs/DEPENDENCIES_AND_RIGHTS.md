@@ -60,3 +60,13 @@ weights enter Git. New diagnostic fixtures are generated locally. Available
 historical inputs are local regression material; availability does not grant new
 model-processing or redistribution permission. No expert traces or new authentic
 scan reconstruction success are claimed.
+
+## Owner decision: commercial data licences (2026-11-09)
+
+The founder states that MarinaChain holds a commercial licence for all acquired data sets,
+including R/V Gunnerus (public licence CC BY-NC 4.0). Effects:
+
+- Commercial development, benchmarking and model training on these data sets are allowed.
+- Sending these drawings to the drafting model provider (DeepSeek through OpenCode Go) is allowed.
+- The repository is public. Drawings, renders, truth files and derivatives stay in the
+  git-ignored `work/` folder. Only hashes and numbers go into committed files.
