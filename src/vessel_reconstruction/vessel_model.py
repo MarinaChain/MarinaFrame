@@ -165,8 +165,12 @@ def build_spec(table: VesselTable, base_spec: dict, declared: list[dict] | None 
             section = copy.deepcopy(row.selection_section)
             if section is None or "contour_selection" not in section:
                 raise ValueError(f"Traced row {row.id} has no contour selection to rebuild from.")
-            # Only the top can move: the fit clips ink above the hull top.
+            # The build reads the ink only on the row's own height range: the
+            # fit clips ink above the hull top, and a stroke that starts above
+            # the declared keel height (a partial or end-station trace) must
+            # not be read, or extended, below its ink.
             section["z_max_m"] = float(min(section.get("z_max_m", row.top_z_m), row.top_z_m))
+            section["z_min_m"] = float(max(section.get("z_min_m", row.keel_z_m), row.keel_z_m))
             sections.append(section)
             if row.id in old_guesses and old_guesses[row.id].get("chosen_candidate_id") is not None:
                 guesses.append(old_guesses[row.id])

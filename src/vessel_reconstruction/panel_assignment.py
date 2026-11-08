@@ -30,6 +30,13 @@ NEST_TIE_PX = 1.0
 # A stroke with hull likeness below this floor (describe_stroke) is weak: it
 # is used only when the panel has fewer hull-like strokes than stations.
 LIKENESS_FLOOR = 0.3
+# A stroke that spans at least this share of the section height is a station
+# curve even when its likeness is low: a crossing, an occluded end or a short
+# hook lowers likeness (smoothness, keel factor), not the stroke's length.
+# A long stroke weighs at least LIKENESS_FLOOR, so every long distinct stroke
+# is used before two stations share one stroke. Pieces of a broken stroke are
+# shorter and stay weak.
+LONG_STROKE_SHARE = 0.6
 # Penalty of one stroke shared by two neighbouring stations. Stations share
 # strokes only when the panel has fewer hull-like strokes than stations (one
 # ink is listed once). Then the outermost stroke is the cheap one to share:
@@ -168,6 +175,14 @@ def _monotone_assignment(weights: np.ndarray, pinned: dict[int, int], may_share:
     return path[::-1]
 
 
+def _weight(stroke: dict, height_px: float) -> float:
+    """Assignment weight of a stroke: its hull likeness, at least LIKENESS_FLOOR for a long stroke."""
+    likeness = float(stroke.get("hull_likeness", 0.0))
+    rows = np.asarray(stroke["rows"])
+    span = float(rows[-1]) - float(rows[0]) + 1.0 if len(rows) else 0.0
+    return max(likeness, LIKENESS_FLOOR) if span >= LONG_STROKE_SHARE * height_px else likeness
+
+
 def assign_panel(members: list[dict], sections: list[dict], strokes: list[dict],
                  pinned: dict[str, str] | None = None) -> dict:
     """Recommended stroke per station of one shared panel.
@@ -181,8 +196,10 @@ def assign_panel(members: list[dict], sections: list[dict], strokes: list[dict],
     pinned = pinned or {}
     ordered_members, order_basis = station_order(members, sections)
     centre = float(members[0]["calibration"]["centerline_px"])
-    usable = [s for s in strokes if s.get("kind") != "straight_grid_line"]
-    good = [s for s in usable if s.get("hull_likeness", 0.0) >= LIKENESS_FLOOR]
+    height_px = max((float(members[0]["z_max_m"]) - float(members[0]["z_min_m"]))
+                    * float(members[0]["calibration"]["pixels_per_metre"]), 1.0)
+    usable = [{**s, "weight": _weight(s, height_px)} for s in strokes if s.get("kind") != "straight_grid_line"]
+    good = [s for s in usable if s["weight"] >= LIKENESS_FLOOR]
     few_good = len(good) < len(members)
     pool = usable if few_good else good
     pool = [{**s, "rows": np.asarray(s["rows"]), "breadth": np.asarray(s["xs"], dtype=float) - centre}
@@ -191,7 +208,8 @@ def assign_panel(members: list[dict], sections: list[dict], strokes: list[dict],
         return {}
     order, consistency = nesting_order(pool)
     ranked = [pool[i] for i in order]
-    likeness = np.array([float(s.get("hull_likeness", 0.0)) for s in ranked])
+    # The assignment weight: hull likeness, raised to the floor for a long stroke (_weight).
+    likeness = np.array([s["weight"] for s in ranked])
     weights = np.tile(likeness, (len(ordered_members), 1))
     position = {s["candidate_id"]: rank for rank, s in enumerate(ranked)}
     pins = {index: position[pinned[m["id"]]] for index, m in enumerate(ordered_members)
@@ -224,7 +242,8 @@ def assign_panel(members: list[dict], sections: list[dict], strokes: list[dict],
             "candidate_id": chosen["candidate_id"], "confidence": round(min(1.0, confidence), 3),
             "alternatives": alternatives, "nesting_rank": rank + 1, "strokes_in_panel": len(ranked),
             "expected_width_rank": index + 1, "station_order_basis": order_basis,
-            "nesting_consistency": round(consistency, 3), "hull_likeness": round(float(likeness[rank]), 4),
+            "nesting_consistency": round(consistency, 3),
+            "hull_likeness": round(float(chosen.get("hull_likeness", 0.0)), 4),
             "panel_section_ids": [m["id"] for m in ordered_members], "warnings": warnings,
             "basis": BASIS, "identity_certified": False}
     return result
@@ -232,8 +251,12 @@ def assign_panel(members: list[dict], sections: list[dict], strokes: list[dict],
 
 # ------------------------------------------------------------ catalog side
 
-def _stroke_of(candidate: dict, section: dict) -> dict | None:
-    """Dense trace and description of a catalog candidate, as an assignment stroke."""
+def _stroke_of(candidate: dict, section: dict, grid_columns_px=None) -> dict | None:
+    """Dense trace and description of a catalog candidate, as an assignment stroke.
+
+    ``grid_columns_px`` (``investigation.grid_columns``) tags a candidate that
+    rides a vertical grid line, also when its stored description predates it.
+    """
     from . import investigation as inv
     trace = inv.dense_trace(candidate)
     if trace is None or len(trace[0]) < 2:
@@ -243,8 +266,12 @@ def _stroke_of(candidate: dict, section: dict) -> dict | None:
     else:
         z_range = candidate.get("z_range_m") or [section["z_min_m"], section["z_max_m"]]
         described = inv.describe_stroke({"trace_rows_px": [int(trace[0][0]), int(trace[0][-1])],
-                                         "trace_xs_px": trace[1], "z_range_m": z_range}, section)
+                                         "trace_xs_px": trace[1], "z_range_m": z_range}, section, grid_columns_px)
         kind, likeness = described["kind"], described["hull_likeness"]
+    if kind != "straight_grid_line" and grid_columns_px:
+        rows = [int(trace[0][0]), int(trace[0][-1])]
+        if inv.stroke_kind(rows, trace[1], section, grid_columns_px) == "straight_grid_line":
+            kind = "straight_grid_line"
     return {"candidate_id": candidate["candidate_id"], "rows": trace[0], "xs": trace[1],
             "hull_likeness": likeness, "kind": kind}
 
@@ -343,7 +370,11 @@ def assign_shared_panels(image, sections: list[dict], catalog: dict, source_file
         found += [c for entry in entries for c in entry.get("candidates", [])
                   if c.get("selectable") is True and "contour_selection" in c
                   and "authored" not in c and not c.get("model_traced") and not c.get("panel_stroke")]
-        described = [(c, _stroke_of(c, section)) for c in found]
+        try:
+            grid = inv.grid_columns(image, section)
+        except Exception:  # noqa: BLE001 - a hint only; never refuse
+            grid = []
+        described = [(c, _stroke_of(c, section, grid)) for c in found]
         described.sort(key=lambda item: -(item[1]["hull_likeness"] if item[1] else -1.0))
         pool, strokes = [], []
         for candidate, stroke in described:
