@@ -53,3 +53,9 @@
 - **Trigger:** The 288-case head-to-head and the 24-case W17 baseline spent hours and tokens mostly on one repeated failure (`no_progress` loops). The founder called it a huge waste with no useful data for making the model work better.
 - **Rule:** Before scaling an LLM run, run 2-4 cases, read every trace, fix the first blocker, and repeat. Stop a round early when the first cases fail the same way as before. Run larger sets only when a small round mostly succeeds or shows varied failures; keep sealed runs for frozen checkpoints only.
 - **Why:** A uniform failure is visible in 2 traces; more cases add cost, not information.
+
+### MarinaFrame's agent fills gaps; it does not stop (product principle)
+- **Date:** 2026-11-08
+- **Trigger:** My W17b brief still treated missing or bad drawing data as a reason to refuse or only interpolate geometrically. The founder said the point of an agentic MarinaFrame is to use AI to fill in what is not in the data, not to stop when data is missing or bad.
+- **Rule:** In draft mode, design every missing-data path so the model infers the missing part (section shape, scale, stations, principal dimensions) and code builds and labels it (`traced`, `repaired`, `interpolated`, `ai_inferred`). Stop only when no solid can be made at all. Keep the labels, `engineering_approved=false` and the fixed scoring gate.
+- **Why:** Earlier evidence-only rules (model never writes geometry, refuse on gaps) made the product deliver nothing on imperfect drawings, which are the normal case.

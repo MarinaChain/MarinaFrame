@@ -19,6 +19,9 @@ come later. Where this document asks for provenance machinery, build the simples
   `assign_station` accept a traced candidate without a separate label view, let tracing tools work in
   a section whose inspection failed, and let the model choose among non-unique candidates. Each choice
   is still recorded as an open guess so a person can review it later.
+- Product principle: in draft mode the model fills gaps that are not in the data (it may propose
+  section shapes and sheet data; code builds and labels them `ai_inferred`). Missing or bad data is
+  never a reason to stop. See W17c.
 - Success on dev data = more built drafts and more gate-correct drafts, fewer `no_progress` stops.
 
 ## 1. The failure this fixes (evidence, sealed v2, read-only)

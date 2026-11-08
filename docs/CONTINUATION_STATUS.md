@@ -393,3 +393,12 @@ campaign counts as a failure.
 - **W18 (approved by the founder; queued after W17):** build a native agent loop with memory into the
   MarinaFrame harness, not an external framework. Brief: `work/w17/w18-brief.md`. It resumes the
   same Sol session on `w17-llm-progress` when W17 reports.
+
+## 2026-11-08 10:15 SGT: product principle — the AI fills the gaps
+
+- Founder: MarinaFrame is agentic so that AI fills in what is not in the data; it must not stop on
+  missing or bad data. In draft mode the model may now propose section shapes and missing sheet data;
+  code builds them and labels each section `traced`, `repaired`, `interpolated` or `ai_inferred`.
+- Work order on `w17-llm-progress` (Sol, one session): W17 (committed by Sol in W17b step 0), W17b
+  (build CAD through gaps, router job `20261108-100601-60204`), W17c (AI gap filling, brief
+  `work/w17/w17c-brief.md`), then W18 (memory loop). Testing in 4-case rounds, not big campaigns.
