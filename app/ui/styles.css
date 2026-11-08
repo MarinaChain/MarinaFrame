@@ -805,6 +805,10 @@ code { font-family: var(--font-mono); }
 @container revstrip (max-width: 960px) {
   .revision-facts .rev-fact { display: none; }
 }
+/* Narrower still: the AI draft chip goes (the mode is under Calls); Draft only stays. */
+@container revstrip (max-width: 640px) {
+  .revision-facts .badge + .badge { display: none; }
+}
 
 /* HOOK(M3 live): attention layer on the drawing; marks never take clicks. */
 .attention-layer { pointer-events: none; }

@@ -2061,7 +2061,7 @@ function isTyping(target) {
 }
 
 // Sidebar: expanded (logo, name, labels) or collapsed (logo and icons). Remembered per viewer.
-function setRail(mode) {
+function setRail(mode, { remember = true } = {}) {
   const collapsed = mode === 'collapsed';
   $('app').dataset.rail = collapsed ? 'collapsed' : 'expanded';
   const toggle = $('rail-toggle');
@@ -2069,9 +2069,17 @@ function setRail(mode) {
   const label = collapsed ? 'Expand the sidebar (⌘\\)' : 'Collapse the sidebar (⌘\\)';
   toggle.title = label;
   toggle.setAttribute('aria-label', label.replace(/ \(.*\)$/, ''));
-  prefs.set('rail', collapsed ? 'collapsed' : 'expanded');
+  if (remember) prefs.set('rail', collapsed ? 'collapsed' : 'expanded');
 }
-setRail(prefs.get('rail', 'expanded'));
+// A narrow window (under 1100 px) starts with the sidebar collapsed; the person's own choice
+// comes back when the window is wide again.
+const narrowWindow = window.matchMedia('(max-width: 1100px)');
+function applyRailForWidth() {
+  if (narrowWindow.matches) setRail('collapsed', { remember: false });
+  else setRail(prefs.get('rail', 'expanded'));
+}
+applyRailForWidth();
+narrowWindow.addEventListener('change', applyRailForWidth);
 $('rail-toggle').addEventListener('click', () => setRail($('app').dataset.rail === 'collapsed' ? 'expanded' : 'collapsed'));
 
 // ---------------------------------------------------------------- command palette (⌘K)
