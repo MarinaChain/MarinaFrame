@@ -166,6 +166,25 @@ Because the requested threshold was at least three actual drafts, one dev24 batc
 Compared with W17b dev24 (10 built, 2 correct), delivery improved to 19 built but accuracy regressed to zero correct. This combined integration/feedback change is not an accuracy win. Long authoring loops and replacing good traces with inferred geometry remain concerns; the pending stroke-discovery branch was deliberately not merged. No further run was started. The small-round L0 cancellation is disclosed above; dev24 attempts were allowed to terminate naturally and all 24 planned cases remain in the denominator.
 
 Verification: merge quick passed (757 Python); final feedback quick passed (759 Python); full suite passed Rust workspace/real-CAD/app tests, **759 quick Python**, **23 CAD Python**, smoke awaiting_human_review and valid. Main log `work/w17/w18c-full.log`.
+## W18: stroke discovery on degraded and overlay drawings
+
+`enumerate_strokes` and `trace_from_point` (`investigation.py`) now give more complete candidates. Every stroke is still only a corridor until `trace_in_source_corridor` and the engine re-read verify it; no verification limit changed.
+
+- Following: a direction tracker (`follow_stroke_2d`) steps along the ink, so it follows near-horizontal bilges and flat bottoms. Long vertical and horizontal rulers (columns or rows inked on at least 50% of the window) are hidden from its direction choice, so it crosses grid lines; it bridges breaks up to 4% of the window height along its heading and curvature. A stroke on a ruler continues only straight on. Each seed is tried with a width-scaled tracker, a thin-stroke tracker and the old row follower; the longest verified trace is kept (`follow_method`). Seeds come from six scanlines instead of three.
+- Linking (`link_fragments`): two verified pieces join when the gap is at most 6% of the height (or an overlap at most 4%), each end lies on the other's extrapolated direction, and the directions agree within 25 degrees. The joined corridor must pass the usual verification; otherwise the pieces stay. `linked_fragments` counts the pieces.
+- Tags: `straight_grid_line` now also covers lines over at least half the height that lean at most 0.05 px/row with 90% of rows within 2 px of a fitted line (slanted scans, crossing bumps). They stay available and come last.
+- Ranking (`describe_stroke`): `z_coverage_fraction` (share of the calibrated height) and `hull_likeness` = coverage x (0.7 + 0.3 monotony) x smoothness (total turning over 180 degrees) x keel factor (0.6 when the lowest point is neither near the lowest height nor near the centreline). Tags are ordered by it, rulers last. It is a ranking heuristic, never identity.
+- Noise budget (`ingest._reduce_to_run_budget`): a mask over the run budget loses its smallest connected components first, then its busiest rows, instead of raising `resource_limit`. Competing-contour evidence keeps the 64 most sustained. Results carry `complexity_reduction` / `evidence_complexity_reduction` and candidates a `warnings` entry. A strict unselected `_extract_one` still refuses with `resource_limit` (removed specks could hide a rival); a selected corridor or a draft reading proceeds with the warning.
+- Only fields were added (`kind` was already a tag field). The agent prompt, tool registration and Rust controller are unchanged.
+
+Development measurement without the LLM (24 development cases, 216 stations, dev truth only; data and `measure.py` in main `work/w18-strokes/`): a station passes when the top-ranked non-grid candidate (top k for an overlay panel shared by k sections) covers at least 90% of the truth hull height and matches truth within 2% of maximum half-beam RMS on that part.
+
+| Arm | Pass | Covers >= 90% | Any candidate passes | L0 | L1 | L2 | L3 | Inspection worker resource failures |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Before (`3abaa5e`) | 30 | 73 | 47 | 25 | 1 | 4 | 0 | 7 of 24 cases |
+| After | 98 | 141 | 102 | 45 | 33 | 16 | 4 | 0 |
+
+Separate layouts went from 12 to 59 of 108, overlays from 18 to 39 of 108. L3 stays weak: faint hull ink under dark blurred grid is often outside the ink mask. Enumeration costs about four times the CPU of before (three followers per seed, six scanlines).
 
 ## Verification and resume
 

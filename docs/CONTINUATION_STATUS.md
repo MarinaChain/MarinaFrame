@@ -409,3 +409,37 @@ campaign counts as a failure.
 - **Founder direction (later):** happy path first. No new refusals or blocked states; in draft mode
   checks become warnings whenever a solid can be made. W17c is on branch `w17c-model-geometry`
   (pushed); Sol merges it after W18 and rewrites the prompt.
+
+## 2026-11-08 13:05 SGT: lanes and results
+
+- **Dev results (24 non-sealed cases):** before W17: 1 draft, 1 correct, 92% no_progress.
+  W17b: 10 drafts, 2 correct, 58% no_progress, 0 silent wrong, $0.76 list cost.
+  W18b 4-case round (conversation mode, merged W17c, short prompt): 2/4 drafts, 0 correct, 61
+  `propose_section` calls, $0.27.
+- **Wrong-draft analysis** (`work/w17/wrong-drafts-analysis.md`): partial strokes 27 sections,
+  grid lines as hulls 15, missing sections 6, plus a deck-closure overshoot. Calibration was never
+  the cause.
+- **Branches:** `w17-llm-progress` (Sol; W17, W17b, W17c merge, W18 prototype, W18b),
+  `w17c-model-geometry`, `w18-cad-complexity` (knot-limit simplification, deck-edge closure),
+  `app-llm-draft-view` (labels, warnings, model activity in the app) — all pushed; Sol merges them
+  into `w17-llm-progress` in W18c (running, router job `20261108-130002-99421`).
+- **Running:** Opus `w18-stroke-discovery` (fragment linking, grid tagging, ranking, graceful noise
+  handling); GLM `tools-run-round` (standard small-round runner with early stop); GLM analysis of
+  deterministic draft errors (app default) to `work/deterministic-draft-analysis.md`.
+- **Founder directions today:** progress before provenance; AI fills gaps; the model writes
+  geometry; happy path first (no new build failures); small rounds before any campaign.
+- **Cleanup:** h2h-sealed-v2 worktree removed (data stays in main `work/h2h-sealed-v2/`). PR #4 CI
+  green at 37113d7/40601cc.
+
+## 2026-11-08 13:35 SGT: LLM-first app default (PM decision, founder "up to you")
+
+- Decision: the desktop app uses AI drafting by default; deterministic draft only when AI drafting is
+  off or no key is found. v3 will be run later as a check, not as a gate. Branch `app-llm-first`
+  (1a9fb88, on top of `app-llm-draft-view`): setting `ai_drafting` (default on), key lookup from
+  env or `~/.config/marinaframe/opencode-go-keys.txt`, `provider-worker` handled by the app binary,
+  AI status in Settings and New run. `make test-quick` passes; UI checked on mocks.
+- Not yet verified: a real AI run started from the built desktop app (needs the merged W17-W18
+  controller; do it after the integration merge).
+- GLM analysis of deterministic drafts: `work/deterministic-draft-analysis.md` (uncaught
+  `resource_limit` at agent_tools.py:882 kills inspection; blocking gaps abort draft mode before
+  guesses; overlay panels give every station the same curve).

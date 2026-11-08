@@ -126,3 +126,24 @@ def test_interior_centreline_pinch_is_rejected_without_width_adjustment():
     with pytest.raises(GeometryError, match="pinch"):
         build_hull(sections)
 
+
+
+def test_a_repeated_sample_point_closes_a_triangle_instead_of_crashing(monkeypatch):
+    """A zero-length profile segment cannot be ruled (OpenCascade crashes); it becomes a triangle."""
+    from vessel_reconstruction import geometry
+    original = geometry.normalize_sections
+
+    def with_repeat(sections, *args, **kwargs):
+        normalized = original(sections, *args, **kwargs)
+        points = normalized[1]["cad_points_yz_m"]
+        middle = len(points) // 2
+        points[middle] = list(points[middle - 1])
+        return normalized
+
+    z = np.linspace(0, 3, 13)
+    sections = [{"id": f"s{i}", "x_m": x, "points_yz_m": [[float(w * (0.2 + np.sqrt(v / 3))), float(v)] for v in z]}
+                for i, (x, w) in enumerate([(0, 1.5), (5, 2.0), (10, 1.5)])]
+    monkeypatch.setattr(geometry, "normalize_sections", with_repeat)
+    shape, normalized = build_hull(sections)
+    assert len(normalized[1]["cad_points_yz_m"]) >= 3
+    assert shape.isValid() and shape.Volume() > 0

@@ -16,6 +16,7 @@ import fcntl
 import json
 import math
 import os
+import re
 from pathlib import Path
 import stat
 import sys
@@ -87,6 +88,15 @@ def _definition(name, description, properties=None, required=()):
         "additionalProperties": False}}
 
 
+# Station overlay artifacts a render worker may return: allowed display keys and file names.
+OVERLAY_ARTIFACT_KEYS = {"station_overlay": ("panel", "section_ids", "crop_box_px", "scale"),
+                         "station_overlay_sheet": ("panel_count",),
+                         "station_scoreboard": ()}
+OVERLAY_FILE_NAMES = {"station_overlay": re.compile(r"station-overlay-\d{2}\.png"),
+                      "station_overlay_sheet": re.compile(r"station-overlay-sheet\.png"),
+                      "station_scoreboard": re.compile(r"station-scoreboard\.json")}
+
+
 def _artifact(path: Path, task_dir: Path, *, kind: str, **extra) -> dict:
     relative = path.relative_to(task_dir).as_posix()
     safe_relative_file(task_dir, relative)
@@ -94,8 +104,9 @@ def _artifact(path: Path, task_dir: Path, *, kind: str, **extra) -> dict:
     mime = {".png": "image/png", ".json": "application/json", ".step": "model/step",
             ".stl": "model/stl"}.get(suffix, "application/octet-stream")
     sha = digest_file(path)
-    return {"id": "artifact-" + sha[:24], "sha256": sha, "mime_type": mime,
-            "path": relative, "kind": kind, "bytes": path.stat().st_size, **extra}
+    # Computed fields come last, so caller-supplied extras can never replace them.
+    return {**extra, "id": "artifact-" + sha[:24], "sha256": sha, "mime_type": mime,
+            "path": relative, "kind": kind, "bytes": path.stat().st_size}
 
 
 class DomainTools(InvestigationTools):
@@ -616,6 +627,7 @@ class DomainTools(InvestigationTools):
         if not sections or any(s["id"] not in self.state["catalog"] for s in sections):
             return self._observation(False, "blocked", error_code="draft_requires_complete_inspection",
                                      message="Inspect every section before a draft is built.")
+        self._assign_shared_panels()
         guesses = make_guesses(sections, self.state["selected"], self.state["catalog"],
                                self.state.get("model_choices"), self.state.get("authored_sections"))
         if guesses != self.open_guesses:
@@ -814,9 +826,14 @@ class DomainTools(InvestigationTools):
     def _render_candidate(self, view):
         candidate, run = self._verified_candidate(allow_previous=True, allow_draft=True)
         out = self.root / "renders" / uuid4().hex
-        outcome, result = self._worker("render", {"run_dir": str(run), "view": view}, out, native=True)
+        request = {"run_dir": str(run), "view": view}
+        overlay_request, overlay_warning = self._station_overlay_request(candidate)
+        if overlay_request is not None:
+            request["station_overlay"] = overlay_request
+        outcome, result = self._worker("render", request, out, native=True)
         if result is None:
             return self._observation(False, outcome["state"], error_code="render_worker_failed")
+        station_overlay, overlay_artifacts = self._station_overlay_result(result, out, overlay_warning)
         stale = candidate["generation_id"] != self.generation_id or candidate["revision_id"] != self.revision_id
         if not stale and view not in self.state["rendered_views"]:
             self.state["rendered_views"].append(view)
@@ -828,8 +845,58 @@ class DomainTools(InvestigationTools):
                                                       model_eligible=False),
                                             _artifact(out / result["model_observation"]["file"], self.task_dir,
                                                       kind="model_observation", view=view,
-                                                      **{k: v for k, v in result["model_observation"].items() if k != "file"})],
+                                                      **{k: v for k, v in result["model_observation"].items() if k != "file"})]
+                                 + overlay_artifacts,
+                                 station_overlay=station_overlay,
                                  resources={"wall_seconds": outcome["elapsed_seconds"]})
+
+    def _station_overlay_request(self, candidate):
+        """Render-worker inputs of the station overlay, as (request, None) or (None, warning).
+
+        The source is saved once as PNG beside the domain, because the worker
+        must not parse a PDF. A station that the build does not contain gets
+        its best trace as the reference curve.
+        """
+        try:
+            from PIL import Image
+            image, _, source_sha = self._source()
+            source_png = self.root / f"overlay-source-{source_sha[:24]}.png"
+            if not source_png.is_file():
+                partial = source_png.with_suffix(".partial.png")
+                Image.fromarray(image).save(partial)
+                partial.replace(source_png)
+            record = self._build_record(candidate) or {}
+            built = {s.get("id") for s in record.get("sections", [])}
+            sections, references = [], {}
+            for section in self.spec.get("sections", []):
+                sections.append({key: section[key] for key in ("id", "x_m", "roi_px", "calibration")})
+                if section["id"] not in built:
+                    curve = self._section_curve(section["id"])
+                    if curve is not None:
+                        references[section["id"]] = curve
+            return {"source_image": str(source_png), "sections": sections, "references": references}, None
+        except Exception as exc:
+            return None, "Station overlay skipped: " + type(exc).__name__ + "."
+
+    def _station_overlay_result(self, result, out, warning):
+        """The render observation's station_overlay field and its artifacts; never fails the render."""
+        overlay = result.get("station_overlay")
+        if not isinstance(overlay, dict) or overlay.get("status") != "rendered":
+            reason = overlay.get("warning") if isinstance(overlay, dict) else None
+            return {"status": "skipped", "warning": warning or reason or "Station overlay skipped."}, []
+        try:
+            artifacts = []
+            for item in overlay["artifacts"]:
+                kind, name = item["kind"], item["file"]
+                if kind not in OVERLAY_ARTIFACT_KEYS or not OVERLAY_FILE_NAMES[kind].fullmatch(name):
+                    raise ValueError("Unexpected overlay artifact.")
+                # The worker output is untrusted: copy only the known display keys.
+                extra = {k: item[k] for k in OVERLAY_ARTIFACT_KEYS[kind] if k in item}
+                extra["model_eligible"] = False
+                artifacts.append(_artifact(out / name, self.task_dir, kind=kind, **extra))
+        except (ValueError, OSError, TypeError, KeyError) as exc:
+            return {"status": "skipped", "warning": "Station overlay skipped: " + type(exc).__name__ + "."}, []
+        return {key: value for key, value in overlay.items() if key != "artifacts"}, artifacts
 
     def _validation_context(self, candidate, run):
         from .validation_contract import build_context
@@ -1008,7 +1075,7 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
     """Private worker operation. No labels/reference geometry are opened."""
     import numpy as np
     from PIL import Image, ImageDraw
-    from .ingest import (DrawingError, _candidate_evidence, _eligible_trace_mask, _extract_one,
+    from .ingest import (COMPLEXITY_REDUCTION_WARNING, DrawingError, _candidate_evidence, _eligible_trace_mask, _extract_one,
                          _foreground, _read_image, _source_endpoint_hypothesis, _stroke_identity, _trace)
     from .resources import validate_sources
     spec = load_bounded_json(spec_path)
@@ -1187,6 +1254,8 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
                          "contour_selection": selection,
                          "source_points_px": [[float(x), float(y)] for x, y in zip(absolute_xs, absolute_rows)],
                          "identity_certified": False}
+            if "complexity_reduction" in quality or "evidence_complexity_reduction" in competition:
+                candidate["warnings"] = [COMPLEXITY_REDUCTION_WARNING]
             if endpoint_evidence is not None:
                 parent = next((t for t in traces
                                if float(np.max(np.abs(t["dense"] - parent_dense))) < 1.1), None)

@@ -6,6 +6,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "round_digest.py"
 spec = importlib.util.spec_from_file_location("round_digest", SCRIPT)
 round_digest = importlib.util.module_from_spec(spec)
@@ -121,3 +123,28 @@ def test_cli_markdown_and_json(tmp_path, capsys):
     assert "## c1" in capsys.readouterr().out
     assert round_digest.main([str(case), "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["cases"][0]["case"] == "c1"
+
+
+def test_a_valid_draft_counts_as_success_whatever_the_stop_reason(tmp_path):
+    events = [decision("build_draft"), worker("build_draft", status="built", candidate={"valid": True}),
+              ("task_terminated", {"reason": "repeated_refused_model_output"})]
+    case = make_case(tmp_path, "c", events, stdout={"status": "draft_not_verified"})
+    summary = round_digest.summarize([round_digest.digest_case(case)])
+    assert summary["dominant_failure"].startswith("1/1 valid drafts; 0/1 failed")
+    assert summary["early_stop_hint"] is None
+
+
+def test_latest_valid_draft_step_and_sealed_guard(tmp_path):
+    build = tmp_path / "c" / "task" / "domain" / "builds" / "r2"
+    events = [decision("build_draft"),
+              worker("build_draft", status="blocked", candidate={"valid": False, "path": "domain/builds/r1"}),
+              worker("build_draft", status="built", candidate={"valid": True, "path": "domain/builds/r2"})]
+    case = make_case(tmp_path, "c", events, stdout={"status": "draft_not_verified"})
+    build.mkdir(parents=True)
+    (build / "model-draft.step").write_text("ISO-10303-21;")
+    step = round_digest.latest_valid_draft_step(round_digest.load_events(case), case)
+    assert step == build / "model-draft.step"
+    sealed = tmp_path / "factory-sealed-v3"
+    sealed.mkdir()
+    with pytest.raises(SystemExit):
+        round_digest.main([str(case), "--factory", str(sealed)])
