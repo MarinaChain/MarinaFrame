@@ -81,7 +81,7 @@ function sectionChange(change) {
   const parts = [];
   if (change.from !== change.to) parts.push(`${fmt.sourceLabel(change.from)} → ${fmt.sourceLabel(change.to)}`);
   if (change.inkFrom !== null && change.inkTo !== null && change.inkFrom !== change.inkTo) {
-    parts.push(`off the ink ${fmt.metres(change.inkFrom, 3)} → ${fmt.metres(change.inkTo, 3)}`);
+    parts.push(`off the ink ${fmt.millimetres(change.inkFrom)} → ${fmt.millimetres(change.inkTo)}`);
   }
   return el('li', { class: 'change-section' },
     el('span', { class: 'change-x' }, fmt.metres(change.x_m)),

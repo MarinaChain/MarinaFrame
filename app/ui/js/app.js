@@ -141,6 +141,8 @@ const live = createLiveRun({
       renderThinking();
       renderRevisionStrip();
     }
+    // New scored revisions bring new ink distances for the tiles.
+    if (state.view) renderStrip();
   },
 });
 
@@ -895,6 +897,7 @@ function renderStrip() {
     strip.removeAttribute('aria-activedescendant');
     return;
   }
+  const ink = live.hasSteps() ? live.latestInk() : new Map();
   fill(strip, ...sections.map((section) => {
     const path = sectionShapePath(section);
     return el('div', {
@@ -919,7 +922,10 @@ function renderStrip() {
       el('span', { class: 'tile-x' }, section.x_m.toFixed(1), el('small', {}, ' m')),
       el('span', { class: 'tile-state' }, fmt.sectionStateLabel(section.state))),
     el('span', { class: 'tile-chips' },
-      section.source ? sourceChip(section.source.label, { title: section.source.basis || null }) : null));
+      section.source ? sourceChip(section.source.label, { title: section.source.basis || null }) : null,
+      Number.isFinite(ink.get(section.id))
+        ? el('span', { class: 'tile-ink', title: 'Distance of the built section from the ink on the drawing (RMS), newest scored revision' }, fmt.millimetres(ink.get(section.id)))
+        : null));
   }));
   strip.setAttribute('aria-activedescendant', `tile-${state.sectionId}`);
 }

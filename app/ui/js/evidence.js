@@ -88,7 +88,7 @@ export function createEvidenceCard({ pageUrl, inkOf }) {
       el('span', {}, used ? `Uses the ${used.label.toLowerCase()}` : fmt.sectionStateLabel(section.state)),
       section.source ? el('span', {}, fmt.sourceLabel(section.source.label), section.source.basis ? `: ${section.source.basis}` : '') : null,
       ink !== null && ink !== undefined
-        ? el('span', { class: 'evidence-ink' }, `Off the ink by ${fmt.metres(ink, 3)} (RMS)`)
+        ? el('span', { class: 'evidence-ink' }, `Off the ink by ${fmt.millimetres(ink)} (RMS)`)
         : null);
     canvas.hidden = true;
     card.hidden = false;

@@ -43,6 +43,11 @@ export function metres(value, digits = 1) {
   return `${decimal(value, digits)} m`;
 }
 
+/** A small length given in metres, shown in whole millimetres (ink distances). */
+export function millimetres(valueM) {
+  return `${Math.round(valueM * 1000).toLocaleString()} mm`;
+}
+
 export function integer(value) {
   return value.toLocaleString();
 }
