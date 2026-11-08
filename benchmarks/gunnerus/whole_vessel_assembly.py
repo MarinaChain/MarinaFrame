@@ -19,11 +19,15 @@ from pathlib import Path
 
 LINES_FILE = 'polarkonsult/Lines Plan Rev0.dxf'
 # Component STEP files of the step 1 run (millimetres). Openings are not material.
-PART_IDS = ('aft_deck', 'main_deck', 'house_t1', 'aft_bulwark', 'house_t2', 'wheelhouse', 'fwd_rail')
+PART_IDS = ('aft_deck', 'main_deck', 'house_t1', 'aft_bulwark', 'house_t2', 'wheelhouse', 'fwd_rail',
+            'azimuth_ps', 'azimuth_sb', 'skeg_ps', 'skeg_sb')
 # Render: isometric view from aft starboard, above (pixels of the PNG).
 RENDER_SIZE = (1600, 900)
-# Viewer mesh chord tolerance (mm): fine enough for a 36 m ship on screen.
-MESH_TOLERANCE_MM = 5.0
+# Display mesh tolerance of the GLB (mm), separate from the STEP: a hull side column is left
+# out of the mesh when it stays within this distance of the chord at every station. 1 mm keeps
+# the mesh volume within 0.01 % of the solid on Gunnerus and the GLB under 1 MB.
+DISPLAY_TOLERANCE_MM = 1.0
+DISPLAY_ANGULAR_RAD = 0.5
 # Truth STEP volume (hull and first tier; docs/SHIP_CAD_LANGUAGE.md).
 TRUTH_VOLUME_M3 = 1302.280
 
@@ -106,7 +110,8 @@ def build_hull_to_deck(sections_path: Path, deck: dict, out: Path) -> tuple[Path
     error = None
     for bound in CAD_DEVIATION_LADDER_M:
         try:
-            shape, report = build_region_hull(sections, max_deviation_m=bound)
+            # One B-spline face per run side: the panel geometry with a light STEP (section 4.5).
+            shape, report = build_region_hull(sections, max_deviation_m=bound, one_face_per_side=True)
         except GeometryError as exc:
             error = str(exc)
             if 'complexity limit' in error:
@@ -115,7 +120,9 @@ def build_hull_to_deck(sections_path: Path, deck: dict, out: Path) -> tuple[Path
         path = out / 'hull_to_deck.brep'
         write_brep(shape, path)
         return path, {'status': 'built', 'cad_bound_m': bound, 'stations': len(sections),
-                      'solid_count': report['solid_count'], 'volume_m3': report['volume_m3']}
+                      'solid_count': report['solid_count'], 'volume_m3': report['volume_m3'],
+                      'side_faces': report['side_faces'], 'panel_fallback_pieces': report['panel_fallback_pieces'],
+                      'volume_audit': report['volume_audit']}
     raise GeometryError(f'hull to deck not built: {error}')
 
 
@@ -131,17 +138,16 @@ def read_shape(path: Path):
     return cq.importers.importStep(str(path)).val()
 
 
-def render(shape, path: Path) -> None:
-    """Shaded isometric PNG of the assembly (matplotlib, no display)."""
+def render(meshes: dict, path: Path) -> None:
+    """Shaded isometric PNG of the display meshes (matplotlib, no display)."""
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     import numpy as np
     from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-    vertices, triangles = shape.tessellate(50.0, 0.5)
-    points = np.array([[v.x, v.y, v.z] for v in vertices]) / 1000.0
-    faces = points[np.asarray(triangles)]
+    faces = np.concatenate([vertices[triangles] for vertices, triangles in meshes.values()]) / 1000.0
+    points = faces.reshape(-1, 3)
     normals = np.cross(faces[:, 1] - faces[:, 0], faces[:, 2] - faces[:, 0])
     normals /= np.linalg.norm(normals, axis=1, keepdims=True) + 1e-12
     light = np.clip(normals @ np.array([0.3, -0.5, 0.8]), 0.1, 1.0)
@@ -163,9 +169,15 @@ def write_brep(shape, path: Path) -> None:
     BinTools.Write_s(shape.wrapped, str(path))
 
 
-def export_all(shapes: dict, out: Path) -> dict:
-    """STEP per part and for the assembly (no pcurves: about half the size), plus a GLB mesh view."""
+def export_all(shapes: dict, out: Path) -> tuple[dict, dict]:
+    """STEP per part and for the assembly (no pcurves: about half the size), plus a GLB mesh view.
+
+    The GLB is a display mesh (``display_mesh``), not a tessellation of the STEP export.
+    Returns the export record and the display meshes.
+    """
     import cadquery as cq
+
+    from vessel_reconstruction.display_mesh import mesh_volume_mm3, shape_mesh, write_glb
 
     sizes = {}
     parts = out / 'whole_vessel'
@@ -177,20 +189,21 @@ def export_all(shapes: dict, out: Path) -> dict:
     step = out / 'whole-vessel-draft.step'
     cq.exporters.export(cq.Compound.makeCompound(list(shapes.values())), str(step), opt={'write_pcurves': False})
     sizes[step.name] = step.stat().st_size
-    assembly = cq.Assembly()
-    for name, shape in shapes.items():
-        assembly.add(shape, name=name)
+    meshes = {name: shape_mesh(shape, DISPLAY_TOLERANCE_MM, DISPLAY_ANGULAR_RAD) for name, shape in shapes.items()}
     mesh = out / 'whole-vessel-draft.glb'
-    assembly.save(str(mesh), exportType='GLTF', tolerance=MESH_TOLERANCE_MM, angularTolerance=0.5)
+    write_glb(meshes, mesh)
     sizes[mesh.name] = mesh.stat().st_size
+    mesh_volumes = {name: mesh_volume_mm3(*meshes[name]) / 1e9 for name in meshes}
     return {'bytes': sizes, 'assembly_step_sha256': hashlib.sha256(step.read_bytes()).hexdigest(),
-            'mesh_tolerance_mm': MESH_TOLERANCE_MM}
+            'display_tolerance_mm': DISPLAY_TOLERANCE_MM, 'display_mesh_volumes_m3': mesh_volumes}, meshes
 
 
 LABELS = {'hull': 'Hull (to the deck at side)', 'aft_deck': 'Aft working deck', 'main_deck': '1-deck',
           'house_t1': 'Superstructure tier 1 (1-deck to A-deck)', 'aft_bulwark': 'Aft bulwark',
           'house_t2': 'Deckhouse tier 2 (on A-deck)', 'wheelhouse': 'Wheelhouse',
-          'fwd_rail': 'Forward rail (A-deck)'}
+          'fwd_rail': 'Forward rail (A-deck)', 'azimuth_ps': 'Azimuth thruster, port',
+          'azimuth_sb': 'Azimuth thruster, starboard', 'skeg_ps': 'Skeg fin, port twin skeg',
+          'skeg_sb': 'Skeg fin, starboard twin skeg'}
 
 
 def _argument_provenance(component: dict) -> dict:
@@ -264,6 +277,8 @@ def main() -> None:
     args = parser.parse_args()
     import cadquery as cq
 
+    from vessel_reconstruction.geometry import precise_volume_mm3
+
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
     started = time.time()
@@ -278,7 +293,8 @@ def main() -> None:
         to_deck, record['hull_to_deck'] = build_hull_to_deck(hull_path.parent / 'sections.json', deck, out)
         hull = read_shape(to_deck)
         shapes['hull'] = hull
-        volumes['hull'] = hull.Volume() / 1e9
+        # The default kernel volume is not exact on the B-spline hull sides.
+        volumes['hull'] = precise_volume_mm3(hull) / 1e9
         box = hull.BoundingBox()
         hull_box = {'min': [box.xmin / 1000, box.ymin / 1000, box.zmin / 1000],
                     'max': [box.xmax / 1000, box.ymax / 1000, box.zmax / 1000]}
@@ -294,7 +310,7 @@ def main() -> None:
         record['truth_comparable_m3'] = volumes['hull'] + volumes['house_t1']
         record['truth_volume_m3'] = TRUTH_VOLUME_M3
         record['truth_comparable_error'] = record['truth_comparable_m3'] / TRUTH_VOLUME_M3 - 1
-    record['exports'] = export_all(shapes, out)
+    record['exports'], meshes = export_all(shapes, out)
     assembly = cq.Compound.makeCompound(list(shapes.values()))
     box = assembly.BoundingBox()
     record.update(bbox_m={'min': [box.xmin / 1000, box.ymin / 1000, box.zmin / 1000],
@@ -304,7 +320,7 @@ def main() -> None:
                   if 'hull' in volumes else None)
     inputs = json.loads((step1 / 'inputs.json').read_text())
     write_app_parts(step1, inputs, out, hull_entry)
-    render(assembly, out / 'whole-vessel-draft.png')
+    render(meshes, out / 'whole-vessel-draft.png')
     record.update(render='whole-vessel-draft.png', seconds=time.time() - started)
     (out / 'assembly.json').write_text(json.dumps(record, indent=2) + '\n')
     print(json.dumps(record, indent=2))

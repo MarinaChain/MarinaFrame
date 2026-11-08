@@ -173,3 +173,37 @@ def test_legacy_half_sections_give_the_build_hull_volume():
     assert shape.Volume() / reference.Volume() == pytest.approx(1.0, abs=1e-4)
     assert report["maximum_half_breadth_deviation_m"] <= 0.001 + 1e-12
     assert math.isclose(report["volume_m3"], shape.Volume() / 1e9, rel_tol=1e-9)
+
+
+def _one_face_cases() -> dict:
+    def skeg(width: float) -> list:
+        return [[0, 1], [1, 1], [1, 0], [1 + width, 0], [1 + width, 1], [3, 1], [3, 2], [0, 2]]
+
+    angle = np.linspace(-np.pi / 2, np.pi / 2, 17)
+    bulb = np.column_stack([np.maximum(0.4 * np.cos(angle), 0.0), 0.5 + 0.4 * np.sin(angle)]).tolist()
+    bow = [[0, 1.2], [1.0, 1.2], [1.5, 3.0], [0, 3.0]]
+    z = np.linspace(0, 3, 40)
+    return {
+        "twin_skeg": stations({0.0: [TWIN_SKEG], 5.0: [TWIN_SKEG], 10.0: [TWIN_SKEG]}),
+        "tapered_skeg": stations({0.0: [skeg(1.0)], 6.0: [skeg(0.5)], 9.0: [skeg(0.2)]}),
+        "bulb": stations({0.0: [bow], 2.0: [bulb, bow], 4.0: [bulb, bow]}),
+        "curved": [{"id": f"l{i}", "x_m": 4.0 * i, "points_yz_m": np.column_stack([s * 2 * np.sqrt(z / 3), z]).tolist()}
+                   for i, s in enumerate((0.6, 1.0, 0.7, 0.3))],
+    }
+
+
+@pytest.mark.parametrize("case", sorted(_one_face_cases()))
+def test_one_face_per_side_keeps_the_panel_geometry(case):
+    sections = _one_face_cases()[case]
+    panels, panel_report = geometry.build_region_hull(sections)
+    light, light_report = geometry.build_region_hull(sections, one_face_per_side=True)
+    assert geometry.precise_volume_mm3(light) == pytest.approx(panels.Volume(), rel=1e-7)
+    assert light_report["volume_m3"] == pytest.approx(panel_report["volume_m3"], rel=1e-7)
+    assert all(solid.isValid() for solid in light.Solids())
+    assert light_report["solid_count"] == panel_report["solid_count"]
+    # One side face and two end caps per solid.
+    assert len(light.Faces()) == 3 * light_report["solid_count"]
+    assert light_report["side_faces"] == "one_bilinear_bspline_per_side"
+    box_a, box_b = panels.BoundingBox(), light.BoundingBox()
+    for a, b in ((box_a.xmin, box_b.xmin), (box_a.ymax, box_b.ymax), (box_a.zmin, box_b.zmin), (box_a.zmax, box_b.zmax)):
+        assert a == pytest.approx(b, abs=1e-3)

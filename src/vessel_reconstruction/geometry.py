@@ -347,6 +347,11 @@ REGION_LOFT_METHOD = "matched_region_ruled_lofts_v1"
 # whose vertices move on straight lines has a cross-section area quadratic in
 # x, so Simpson's rule is exact). Larger differences mean a malformed solid.
 _REGION_VOLUME_AUDIT_TOLERANCE = 1e-6
+# The same audit for one B-spline face per side (``one_face_per_side``). The surface is the
+# panel surface, but the kernel integrates one face of many spans less exactly: on the
+# Gunnerus hull the difference was up to about 4e-6 relative. A malformed solid (open,
+# inverted or missing a part) is wrong by whole percents, so this still finds it.
+_BSPLINE_VOLUME_AUDIT_TOLERANCE = 1e-5
 
 
 def _shoelace(yz: np.ndarray) -> float:
@@ -382,6 +387,102 @@ def _panel_faces(left: np.ndarray, right: np.ndarray) -> list[cq.Face]:
         faces.append(cq.Face.makeRuledSurface(cq.Edge.makeLine(_vector(a), _vector(b)),
                                               cq.Edge.makeLine(_vector(d), _vector(c))))
     return faces
+
+
+def _bilinear_side_faces(profiles: list[np.ndarray]) -> list[cq.Face]:
+    """One side face and two end caps for a run piece, with the panel geometry unchanged.
+
+    The ruled panels between corresponding polygon edges are bilinear patches. A B-spline
+    surface of degree 1 in both directions through the same grid of polygon vertices
+    (around the ring x stations) is the same surface, but it is one face instead of one
+    face per panel. The STEP file and the mesh are then much smaller. The ring direction
+    is periodic (the polygons are closed). The end caps are planar faces bounded by the
+    end curves of the surface (polygon caps would split those curves into one STEP curve
+    copy per polygon edge). Vertices repeated at some stations only (zero breadth there)
+    stay as poles: they make patches of zero area, as the panel path skips them. The
+    kernel's default volume integration is not exact on this surface; use
+    ``precise_volume_mm3``.
+    """
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeWire
+    from OCP.Geom import Geom_BSplineSurface
+    from OCP.TColgp import TColgp_Array2OfPnt
+    from OCP.TColStd import TColStd_Array1OfInteger, TColStd_Array1OfReal
+    from OCP.gp import gp_Pnt
+
+    # A ring edge of zero length at every station only adds a zero-width strip (for example
+    # the keel point repeated at the closure); dropping its vertex keeps the geometry.
+    grid = np.stack(profiles)  # stations x ring vertices x 3
+    edge_lengths = np.linalg.norm(grid - np.roll(grid, -1, axis=1), axis=2)
+    keep = edge_lengths.max(axis=0) > _VERTEX_TOLERANCE_MM
+    profiles = [profile[keep] for profile in profiles]
+    ring_count, station_count = len(profiles[0]), len(profiles)
+    poles = TColgp_Array2OfPnt(1, ring_count, 1, station_count)
+    for v, profile in enumerate(profiles, start=1):
+        for u, point in enumerate(profile, start=1):
+            poles.SetValue(u, v, gp_Pnt(*map(float, point)))
+    # Periodic degree 1 in the ring direction: one knot per vertex plus the closing knot.
+    u_knots = TColStd_Array1OfReal(1, ring_count + 1)
+    u_mults = TColStd_Array1OfInteger(1, ring_count + 1)
+    for index in range(ring_count + 1):
+        u_knots.SetValue(index + 1, float(index))
+        u_mults.SetValue(index + 1, 1)
+    # Clamped degree 1 along the stations, parameterised by station x (mm).
+    v_knots = TColStd_Array1OfReal(1, station_count)
+    v_mults = TColStd_Array1OfInteger(1, station_count)
+    for index, profile in enumerate(profiles):
+        v_knots.SetValue(index + 1, float(profile[0][0]))
+        v_mults.SetValue(index + 1, 2 if index in (0, station_count - 1) else 1)
+    surface = Geom_BSplineSurface(poles, u_knots, v_knots, u_mults, v_mults, 1, 1, True, False)
+    side = cq.Face(BRepBuilderAPI_MakeFace(surface, 1e-6).Face())
+    caps = []
+    for profile in (profiles[0], profiles[-1]):
+        edge = BRepBuilderAPI_MakeEdge(surface.VIso(float(profile[0][0]))).Edge()
+        caps.append(cq.Face(BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(edge).Wire(), True).Face()))
+    return [side, *caps]
+
+
+# Relative error goal of the adaptive volume integration on B-spline faces.
+_PRECISE_VOLUME_EPS = 1e-9
+
+
+def precise_volume_mm3(shape: cq.Shape) -> float:
+    """Volume with adaptive integration: exact enough on degree-1 B-spline faces."""
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+
+    properties = GProp_GProps()
+    BRepGProp.VolumeProperties_s(shape.wrapped, properties, _PRECISE_VOLUME_EPS)
+    return properties.Mass()
+
+
+def _one_face_solid(profiles: list[np.ndarray], prismatoid_m3: float) -> tuple[cq.Solid, float] | None:
+    """The run piece side as one B-spline face, or None when that solid is not good.
+
+    Happy path: the caller then builds the piece from ruled panels (the same geometry,
+    more faces), so the hull always builds. The solid must be one valid closed shell and
+    pass the volume audit against the polygon prismatoid.
+    """
+    from OCP.ShapeFix import ShapeFix_Shape
+
+    try:
+        shell = cq.Shell.makeShell(_bilinear_side_faces(profiles))
+        if shell.ShapeType() != "Shell":
+            return None
+        # Sewing the B-spline side to its caps can leave edge parameter flags unset.
+        fix = ShapeFix_Shape(shell.wrapped)
+        fix.Perform()
+        shell = cq.Shape.cast(fix.Shape())
+        if shell.ShapeType() != "Shell" or not shell.Closed() or not shell.isValid():
+            return None
+        solid = cq.Solid.makeSolid(shell)
+        if precise_volume_mm3(solid) < 0:
+            solid = cq.Solid(solid.wrapped.Reversed())
+        volume = precise_volume_mm3(solid) / 1e9
+    except Exception:
+        return None
+    if not solid.isValid() or abs(volume - prismatoid_m3) > _BSPLINE_VOLUME_AUDIT_TOLERANCE * max(prismatoid_m3, 1e-12):
+        return None
+    return solid, volume
 
 
 def _closed_solid(faces: list[cq.Face], label: str) -> cq.Solid:
@@ -447,7 +548,8 @@ def _station_polygons(member: dict, outer_knots: list, inner_knots: list | None)
 
 
 def build_region_hull(sections: list[dict], *, max_deviation_m: float = DEFAULT_MAX_DEVIATION_M,
-                      min_overlap: float = section_regions.MIN_MATCH_OVERLAP) -> tuple[cq.Shape, dict]:
+                      min_overlap: float = section_regions.MIN_MATCH_OVERLAP,
+                      one_face_per_side: bool = False) -> tuple[cq.Shape, dict]:
     """Loft multi-region stations; return a compound of solids and an audit report.
 
     ``sections`` are ``{"id", "x_m", "regions": [{"kind", "rows_m"}]}`` records
@@ -462,6 +564,11 @@ def build_region_hull(sections: list[dict], *, max_deviation_m: float = DEFAULT_
 
     Every solid passes an exact volume audit (Simpson's rule on its station
     polygons). The report gives station areas, runs and the volume.
+
+    ``one_face_per_side`` writes each run piece side as one degree-1 B-spline surface
+    through the same polygon vertices (``_bilinear_side_faces``): the same geometry with
+    far fewer faces, for a light STEP and mesh. The default keeps the panel faces of the
+    benchmark path.
     """
     if (isinstance(max_deviation_m, bool) or not isinstance(max_deviation_m, (int, float))
             or not math.isfinite(max_deviation_m) or not 0 <= max_deviation_m <= 0.01):
@@ -493,7 +600,7 @@ def build_region_hull(sections: list[dict], *, max_deviation_m: float = DEFAULT_
                  "kind": stations[s]["regions"][r]["kind"],
                  "half_area_m2": section_regions.region_area(stations[s]["regions"][r]["rows_m"])}
                 for path in runs if len(path) == 1 for s, r in path]
-    solids, run_reports, deviations = [], [], []
+    solids, solid_volumes, run_reports, deviations, panel_fallbacks = [], [], [], [], []
     for path in (p for p in runs if len(p) >= 2):
         kind = stations[path[0][0]]["regions"][path[0][1]]["kind"]
         members = [_prepare_region(stations[s]["regions"][r]["rows_m"], kind, max_deviation_m) for s, r in path]
@@ -521,20 +628,26 @@ def build_region_hull(sections: list[dict], *, max_deviation_m: float = DEFAULT_
                 rings = [station_polygons[k][side] for k in range(len(station_polygons))]
                 xs_run = [stations[path[index][0]]["x_m"] for index in range(first, last + 1)]
                 profiles = [np.column_stack([np.full(len(ring), x), ring]) * 1000 for ring, x in zip(rings, xs_run)]
-                faces = [face for left, right in zip(profiles, profiles[1:]) for face in _panel_faces(left, right)]
                 for cap in (profiles[0], profiles[-1]):
-                    cap_face = _planar_face(cap)
-                    if cap_face is None:
+                    if _planar_face(cap) is None:
                         raise GeometryError(f"Region loft {label} has a terminal station without area.")
-                    faces.append(cap_face)
-                solid = _closed_solid(faces, label)
                 simpson = sum((x1 - x0) / 6 * (_shoelace(a) + 4 * _shoelace((a + b) / 2) + _shoelace(b))
                               for a, b, x0, x1 in zip(rings, rings[1:], xs_run, xs_run[1:]))
-                volume = solid.Volume() / 1e9
-                if abs(volume - simpson) > _REGION_VOLUME_AUDIT_TOLERANCE * max(simpson, 1e-12):
-                    raise GeometryError(f"Region loft {label} failed the volume audit: kernel {volume:.9f} m3, "
-                                        f"polygon prismatoid {simpson:.9f} m3.")
+                light = _one_face_solid(profiles, simpson) if one_face_per_side else None
+                if light is not None:
+                    solid, volume = light
+                else:
+                    if one_face_per_side:
+                        panel_fallbacks.append(label)
+                    faces = [face for left, right in zip(profiles, profiles[1:]) for face in _panel_faces(left, right)]
+                    faces += [_planar_face(profiles[0]), _planar_face(profiles[-1])]
+                    solid = _closed_solid(faces, label)
+                    volume = solid.Volume() / 1e9
+                    if abs(volume - simpson) > _REGION_VOLUME_AUDIT_TOLERANCE * max(simpson, 1e-12):
+                        raise GeometryError(f"Region loft {label} failed the volume audit: kernel {volume:.9f} m3, "
+                                            f"polygon prismatoid {simpson:.9f} m3.")
                 solids.append(solid)
+                solid_volumes.append(volume)
                 run_volume += volume
                 run_simpson += simpson
         run_reports.append({"kind": kind, "stations": [stations[s]["id"] for s, _ in path],
@@ -551,15 +664,17 @@ def build_region_hull(sections: list[dict], *, max_deviation_m: float = DEFAULT_
                         "section_area_m2": 2 * section_regions.total_area(st["regions"])}
                        for st in stations]
     report = {
-        "method": REGION_LOFT_METHOD, "decomposition": section_regions.DECOMPOSITION_METHOD,
+        "method": REGION_LOFT_METHOD, "side_faces": "one_bilinear_bspline_per_side" if one_face_per_side
+        else "ruled_panels", "panel_fallback_pieces": panel_fallbacks, "decomposition": section_regions.DECOMPOSITION_METHOD,
         "maximum_allowed_half_breadth_deviation_m": float(max_deviation_m),
         "maximum_half_breadth_deviation_m": float(max(deviations)),
         "min_match_overlap": float(min_overlap),
         "stations": station_reports, "runs": run_reports, "unlofted_regions": unlofted,
         "solid_count": len(solids), "volume_m3": float(sum(r["volume_m3"] for r in run_reports)),
-        "solid_volumes_m3": [float(solid.Volume() / 1e9) for solid in solids],
+        "solid_volumes_m3": [float(volume) for volume in solid_volumes],
         "volume_audit": "each solid's kernel volume equals its polygon prismatoid volume within "
-                        f"{_REGION_VOLUME_AUDIT_TOLERANCE:g} relative",
+                        f"{_BSPLINE_VOLUME_AUDIT_TOLERANCE if one_face_per_side else _REGION_VOLUME_AUDIT_TOLERANCE:g} "
+                        "relative",
         "uncertainty_scope": "CAD approximation and region matching of measured outlines only; excludes contour "
                              "identity, calibration, interpolation between stations, and source accuracy",
     }

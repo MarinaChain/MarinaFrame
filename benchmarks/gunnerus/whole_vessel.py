@@ -269,10 +269,15 @@ def main() -> None:
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--in-process', action='store_true',
                         help='Run the trusted executor in this process (development only; no OS sandbox).')
+    parser.add_argument('--no-appendages', action='store_true',
+                        help='Leave out the appendages (thrusters, skeg) of whole_vessel_appendages.py.')
     args = parser.parse_args()
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
     inputs = build_inputs(args.sources)
+    if not args.no_appendages:
+        from benchmarks.gunnerus.whole_vessel_appendages import add_appendages
+        add_appendages(inputs, args.sources, GA_FILE)
     (out / 'inputs.json').write_text(json.dumps(inputs, indent=2) + '\n')
     if args.in_process:
         from vessel_reconstruction.ship_cad import execute
