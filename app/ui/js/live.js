@@ -662,7 +662,7 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
   // ---------------------------------------------------------------- Thinking tab
 
   function targetChips(step) {
-    return step.targets.filter((t) => t.kind === 'section').map((t) => el('span', { class: 'target-chip' }, t.id));
+    return step.targets.filter((t) => t.kind === 'section').map((t) => el('span', { class: 'target-chip', title: t.id }, placesIn(t.id)));
   }
 
   function resultTone(tool) {

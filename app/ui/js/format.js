@@ -35,6 +35,11 @@ export function plural(count, noun) {
   return `${count} ${noun}${count === 1 ? '' : 's'}`;
 }
 
+/** "No sections", "1 section", "3 sections": a list fact that reads well at zero. */
+export function countOf(count, noun) {
+  return count ? plural(count, noun) : `No ${noun}s`;
+}
+
 export function decimal(value, digits) {
   return value.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }

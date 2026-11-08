@@ -488,7 +488,7 @@ def draft_task():
     events = [
         event(1, 9, "Run created", "other"),
         event(2, 8, "Read 3 sections", "read"),
-        event(3, 7, "Picked lines on section st20", "choose"),
+        event(3, 7, "Picked the line for st20", "choose"),
         event(4, 6, "Built a draft: 2 sections guessed", "build"),
     ]
     return view, events

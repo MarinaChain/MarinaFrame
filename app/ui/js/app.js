@@ -491,7 +491,7 @@ function queueRow(task) {
       el('span', { class: 'queue-name' }, vessel?.name || vesselNameOf(task.name)),
       el('span', { class: 'queue-run' }, run),
       statusBadge(task.status),
-      el('span', { class: 'queue-facts' }, fmt.plural(task.sections, 'section')),
+      el('span', { class: 'queue-facts' }, fmt.countOf(task.sections, 'section')),
       extra,
       el('span', { class: 'queue-time', title: fmt.fullTime(task.updated_ms) }, fmt.relativeTime(task.updated_ms))));
 }
@@ -693,7 +693,7 @@ function renderHistory() {
       },
       el('span', { class: 'history-run' }, `Run ${runNumber(vessel, run.task)}`),
       statusBadge(run.status),
-      el('span', { class: 'history-facts' }, fmt.plural(run.sections, 'section')),
+      el('span', { class: 'history-facts' }, fmt.countOf(run.sections, 'section')),
       el('span', { class: 'history-chips' },
         current && state.view?.sign_off ? chip('Signed off', { tone: 'pass', dot: false, small: true, title: `Signed off by ${state.view.sign_off.name}: ${state.view.sign_off.statement}` }) : null,
         current ? chip('Open', { tone: 'brand', dot: false, small: true }) : null),
@@ -1250,7 +1250,7 @@ function eventRow(event, fresh = false) {
   return el('li', { class: fresh ? 'event fresh' : 'event', dataset: { kind: event.kind } },
     el('time', { class: 'event-time', datetime: new Date(event.time_ms).toISOString(), title: fmt.fullTime(event.time_ms) }, fmt.clock(event.time_ms)),
     el('span', { class: 'event-dot', 'aria-hidden': 'true' }),
-    el('span', { class: 'selectable-text' }, event.text));
+    el('span', { class: 'selectable-text' }, placesIn(event.text)));
 }
 
 function renderTimeline() {
