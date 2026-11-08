@@ -11,7 +11,7 @@ const ZOOM_STEP = 1.25;
 const SECTION_PADDING = 0.18;
 const ANIMATION_MS = 260;
 
-export function createDrawingView({ host, tooltip, readout, onSelectSection, onHoverCandidate }) {
+export function createDrawingView({ host, tooltip, readout, onSelectSection, onHoverCandidate, onUserCamera = () => {} }) {
   const root = svg('svg', { role: 'img', 'aria-label': 'Source drawing' });
   const pageLayer = svg('g');
   const regionLayer = svg('g');
@@ -47,6 +47,8 @@ export function createDrawingView({ host, tooltip, readout, onSelectSection, onH
   function applyView() {
     root.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);
     readout.textContent = `${Math.round(zoomLevel() * 100)}%`;
+    // Page pixels per screen pixel: live marks size their text and rings with it.
+    attentionLayer.style.setProperty('--u', String(1 / zoomLevel()));
   }
 
   /** View box that shows a page rectangle at its largest, centred, with the host's aspect ratio. */
@@ -100,6 +102,19 @@ export function createDrawingView({ host, tooltip, readout, onSelectSection, onH
     const padX = (x1 - x0) * SECTION_PADDING;
     const padY = (y1 - y0) * SECTION_PADDING;
     const target = boxFor(x0 - padX, y0 - padY, x1 - x0 + 2 * padX, y1 - y0 + 2 * padY);
+    if (animate) animateTo(target);
+    else {
+      view = target;
+      applyView();
+    }
+  }
+
+  /** Fit a page rectangle [left, top, right, bottom] with a little space around it. */
+  function fitBox([x0, y0, x1, y1], animate = true) {
+    if (!page) return;
+    refit = () => fitBox([x0, y0, x1, y1], false);
+    const padding = Math.max(x1 - x0, y1 - y0) * 0.08;
+    const target = boxFor(x0 - padding, y0 - padding, x1 - x0 + 2 * padding, y1 - y0 + 2 * padding);
     if (animate) animateTo(target);
     else {
       view = target;
@@ -163,6 +178,7 @@ export function createDrawingView({ host, tooltip, readout, onSelectSection, onH
     const dx = event.clientX - pan.x;
     const dy = event.clientY - pan.y;
     if (!pan.moved && Math.hypot(dx, dy) < 3) return;
+    if (!pan.moved) onUserCamera();
     pan.moved = true;
     host.classList.add('panning');
     hideTooltip();
@@ -191,6 +207,7 @@ export function createDrawingView({ host, tooltip, readout, onSelectSection, onH
 
   host.addEventListener('wheel', (event) => {
     event.preventDefault();
+    onUserCamera();
     if (event.ctrlKey || Math.abs(event.deltaY) >= Math.abs(event.deltaX)) {
       // Pinch gestures arrive as ctrlKey wheel events with small deltas.
       const intensity = event.ctrlKey ? 0.01 : 0.0025;
@@ -217,6 +234,7 @@ export function createDrawingView({ host, tooltip, readout, onSelectSection, onH
     };
     if (event.metaKey || event.ctrlKey || !keys[event.key]) return;
     event.preventDefault();
+    onUserCamera();
     if (event.key.startsWith('Arrow')) refit = null;
     keys[event.key]();
   });
@@ -364,6 +382,12 @@ export function createDrawingView({ host, tooltip, readout, onSelectSection, onH
     fitPage: () => fitPage(),
     fitSections: () => fitSections(false),
     fitSection,
+    /** Fit a page rectangle [l, t, r, b]; the live lane's camera. */
+    fitBox: (box, { animate = true } = {}) => fitBox(box, animate),
+    /** The page shown, or null: { path, width, height }. */
+    get page() {
+      return page;
+    },
     zoomIn: () => zoomAt(ZOOM_STEP),
     zoomOut: () => zoomAt(1 / ZOOM_STEP),
   };

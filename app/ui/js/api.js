@@ -23,6 +23,8 @@ const MOCK_PICK_FOLDER = '/Users/demo/MarinaFrame/examples';
 export const SPEC_EXTENSIONS = ['json', 'toml', 'yaml', 'yml'];
 /** Delay between mock events for the running task, to imitate a live run. */
 const MOCK_PLAYBACK_MS = 4000;
+/** With ?mocklive, the mock live run shows one more step this often. */
+const MOCK_LIVE_STEP_MS = 2500;
 
 /** A backend error in the spec's shape. `message` is plain language for people. */
 export class BackendError extends Error {
@@ -274,13 +276,72 @@ function mockTransport() {
     Object.assign(data.tasks.find((t) => t.task === task), view.summary);
   }
 
+  // ---- Live steps. With ?mocklive in the page address, the fixture's live run streams in
+  // as if it were running: one step every MOCK_LIVE_STEP_MS, with a request in flight
+  // between steps. Otherwise it is a finished run to replay.
+  const liveStream = new URLSearchParams(location.search).has('mocklive');
+  let liveStreamStarted = 0;
+
+  /** Steps of the task's live run that exist "now", and whether the run is still going. */
+  function liveSnapshot(data, task) {
+    const run = data.live?.[task];
+    if (!run) return null;
+    if (!liveStream) return { run, steps: run.steps, finished: run.finished };
+    if (!liveStreamStarted) {
+      liveStreamStarted = Date.now();
+      scheduleLiveStream(data, task);
+    }
+    const shown = Math.min(run.steps.length, 1 + Math.floor((Date.now() - liveStreamStarted) / MOCK_LIVE_STEP_MS));
+    return { run, steps: run.steps.slice(0, shown), finished: shown === run.steps.length };
+  }
+
+  function scheduleLiveStream(data, task) {
+    const total = data.live[task].steps.length;
+    for (let i = 1; i < total; i += 1) {
+      setTimeout(() => emit(task, data.live[task].steps[i].sequence), i * MOCK_LIVE_STEP_MS + 20);
+    }
+  }
+
+  function isLiveStreaming(data, task) {
+    const snapshot = liveStream ? liveSnapshot(data, task) : null;
+    return Boolean(snapshot && !snapshot.finished);
+  }
+
   const commands = {
     async list_tasks(data) {
       startPlayback(data);
-      return [...data.tasks].sort((a, b) => b.updated_ms - a.updated_ms);
+      return [...data.tasks]
+        .map((t) => (isLiveStreaming(data, t.task) ? { ...t, status: 'running' } : t))
+        .sort((a, b) => b.updated_ms - a.updated_ms);
+    },
+    async get_live_steps(data, { task, after_sequence }) {
+      requireTask(data, task);
+      const snapshot = liveSnapshot(data, task);
+      if (!snapshot) {
+        return { steps: [], last_sequence: 0, started_ms: 0, elapsed_ms: 0, in_flight: null, finished: true };
+      }
+      const { run, steps, finished } = snapshot;
+      const last = steps[steps.length - 1];
+      const next = finished ? null : run.steps[steps.length];
+      return clone({
+        steps: steps.filter((s) => s.last_sequence > after_sequence),
+        last_sequence: last.last_sequence,
+        started_ms: run.started_ms,
+        elapsed_ms: last.time_ms,
+        in_flight: next ? { kind: next.actor === 'model' ? 'model' : 'worker', operation: next.tool?.tool || null, since_ms: last.time_ms } : null,
+        finished,
+      });
+    },
+    async get_hull_sections(data, { task, revision }) {
+      requireTask(data, task);
+      const builds = data.hull_sections?.[task] || {};
+      const found = builds[revision] || Object.values(builds).find((b) => b.path === revision);
+      if (!found) throw new BackendError('revision_not_found', 'This build is not in the run folder.');
+      return clone(found);
     },
     async get_task(data, { task }) {
       const view = clone(requireTask(data, task));
+      if (isLiveStreaming(data, task)) view.summary.status = 'running';
       const dismissed = new Set(readStored(MOCK_DISMISSED_KEY, []));
       view.notices = view.notices.filter((n) => !dismissed.has(n.id));
       return view;

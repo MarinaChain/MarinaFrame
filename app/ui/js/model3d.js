@@ -6,6 +6,7 @@ import * as THREE from '../vendor/three/three.module.min.js';
 import { OrbitControls } from '../vendor/three/OrbitControls.js';
 import { STLLoader } from '../vendor/three/STLLoader.js';
 import { el, icon, prefersReducedMotion } from './dom.js';
+import { createSectionGrowth } from './growth3d.js';
 
 /** Extra size of a section plane around the hull, as a fraction of beam and depth. */
 const PLANE_MARGIN = 0.25;
@@ -38,6 +39,15 @@ function themeColours() {
     plane: read('--text-3'),
     accent: read('--accent'),
     guess: read('--guess-ink'),
+    // Section source labels, the same palette as the drawing and the section strip.
+    source: {
+      traced: read('--src-traced'),
+      repaired: read('--src-repaired'),
+      interpolated: read('--stroke-interpolated'),
+      ai_inferred: read('--warn-ink'),
+      ai_corrected: read('--stroke-ai_corrected'),
+      omitted: read('--muted-line'),
+    },
   };
 }
 
@@ -59,7 +69,7 @@ export function createModelView({ host }) {
     renderer = new THREE.WebGLRenderer({ antialias: true });
   } catch {
     showEmpty('3D view not available', 'This computer did not allow a WebGL view.');
-    return { setModel() {}, setSelected() {}, resetView() {}, refreshTheme() {} };
+    return { setModel() {}, setSelected() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {} };
   }
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.domElement.setAttribute('aria-hidden', 'true');
@@ -84,12 +94,35 @@ export function createModelView({ host }) {
   const hullMaterial = new THREE.MeshStandardMaterial({ roughness: 0.62, metalness: 0.0, side: THREE.DoubleSide });
   const content = new THREE.Group();
   scene.add(content);
+  // Live section curves stay outside `content`, so a new STL does not remove them.
+  const growth = createSectionGrowth({
+    scene,
+    hullMaterial,
+    renderer,
+    requestRender: () => requestRender(),
+    colours: () => colours,
+    onFirstSections: (box) => {
+      if (hull) return;
+      // No hull yet: show the curves on their own and frame them.
+      empty.hidden = true;
+      renderer.domElement.hidden = false;
+      frameBox = box;
+      gridBox = box;
+      buildGrid();
+      resize();
+      resetView();
+    },
+  });
+  /** What the home view frames: the hull, else the live section curves. */
+  let frameBox = null;
 
   let hull = null;
   let grid = null;
   let gridBox = null;
   let planes = new Map();
   let guessBands = [];
+  /** Review overlays (guessed ranges) show only for the run's current state, not mid-replay. */
+  let reviewOverlays = true;
   let dims = null;
   let selectedId = null;
   let colours = themeColours();
@@ -132,6 +165,7 @@ export function createModelView({ host }) {
     for (const [id, plane] of planes) styleSectionPlane(plane, id === selectedId);
     for (const band of guessBands) styleGuessBand(band);
     if (grid) buildGrid();
+    growth.refreshColours();
     requestRender();
   }
 
@@ -230,11 +264,11 @@ export function createModelView({ host }) {
   }
 
   function resetView({ animate = false } = {}) {
-    if (!hull) return;
+    if (!hull && !frameBox) return;
     cameraAtHome = true;
     // Frame the hull and the section planes around it, which reach past the hull
     // across and up; the hull alone would leave them against the pane edge.
-    const box = new THREE.Box3().setFromObject(hull);
+    const box = hull ? new THREE.Box3().setFromObject(hull) : frameBox.clone();
     const hullSize = box.getSize(new THREE.Vector3());
     box.expandByVector(new THREE.Vector3(0, hullSize.y * PLANE_MARGIN, hullSize.z * PLANE_MARGIN));
     const sphere = box.getBoundingSphere(new THREE.Sphere());
@@ -277,6 +311,14 @@ export function createModelView({ host }) {
     setModel(buffer, stations, { keepCamera = false, lengthM = null, guessedRanges = [], emptyTitle, emptyText } = {}) {
       clearModel();
       if (!buffer) {
+        frameBox = growth.bounds();
+        if (frameBox) {
+          // Live section curves are on screen: keep them, on their grid.
+          gridBox = frameBox;
+          buildGrid();
+          requestRender();
+          return;
+        }
         showEmpty(emptyTitle || 'No 3D model yet', emptyText || 'The model appears here after the run builds it.');
         renderer.domElement.hidden = true;
         return;
@@ -302,6 +344,7 @@ export function createModelView({ host }) {
       }
       for (const range of guessedRanges) {
         const band = buildGuessBand(range, box);
+        band.visible = reviewOverlays;
         guessBands.push(band);
         content.add(band);
       }
@@ -315,6 +358,20 @@ export function createModelView({ host }) {
       requestRender();
     },
     resetView: () => resetView({ animate: true }),
+    /**
+     * HOOK(M3 live): section curves of a build, coloured and patterned by source label.
+     * `mode`: "grow" (slide in station by station, then the skin fades in between them),
+     * "update" (changed sections morph and flash) or "instant". Null clears them.
+     */
+    showSections: (sections, options) => growth.show(sections, options),
+    /** HOOK(M3 live): show or hide the review overlays (guessed ranges) during a replay. */
+    setReviewOverlays(visible) {
+      reviewOverlays = visible;
+      for (const band of guessBands) band.visible = visible;
+      requestRender();
+    },
+    /** HOOK(M3 live): the section ids the agent works on now (drawn brighter). */
+    setFocusSections: (ids) => growth.setFocus(ids),
     refreshTheme() {
       colours = themeColours();
       applyColours();
