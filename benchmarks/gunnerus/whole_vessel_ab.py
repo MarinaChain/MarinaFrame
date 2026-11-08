@@ -214,10 +214,11 @@ def extract_code(text: str) -> str:
 
 
 def build_arm_a(text: str, folder: Path) -> dict:
-    from vessel_reconstruction.ship_cad import validate_program
+    from vessel_reconstruction.ship_cad import triage_program
     from vessel_reconstruction.ship_cad_worker import run
 
-    program = validate_program(extract_json(text))
+    program = extract_json(text)
+    triage_program(program)  # Raises only when no component can be built.
     (folder / 'program.json').write_text(json.dumps(program, indent=2) + '\n')
     return run(program, {}, folder / 'task')
 

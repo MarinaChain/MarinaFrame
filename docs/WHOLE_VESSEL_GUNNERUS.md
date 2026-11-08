@@ -186,33 +186,84 @@ of 3 repeats (the rule needs 3 of 3), and the one build has the R0 scores (M2 di
 ## 4. Whole-vessel assembly (hull plus step 1 parts)
 
 Code: `benchmarks/gunnerus/whole_vessel_assembly.py`. The hull comes from the current vector hull
-path (`make_gunnerus_configs.vector_config` and `vector_path.run`, region loft) on the lines plan;
-the parts come from development run 2 (section 1.1). No hull score was computed; the sealed hull
-benchmark was not touched. Outputs (`whole-vessel-draft.step`, `whole-vessel-draft.png`, a
-matplotlib render, and `components.json` for the app component tree: id, kind, box, volume,
-source counts, review state `needs_review`, STEP path) stay in the git-ignored run folder. The
-`components.json` shape (`marinaframe.components.v0`) must follow the TaskView `components`
-field in `docs/APP_SPEC.md` when that lands.
+path (`make_gunnerus_configs.vector_config`, `vector_path.run`, region loft) on the lines plan; the
+parts come from development run 2 (section 1.1). Outputs stay in the git-ignored run folder.
 
-| Item | Value |
-|---|---|
-| Solids | 24 (hull 17, parts 7), one STEP compound, 321 MB |
-| Bounding box | x -1.00..35.19 m, y ±5.00 m, z -0.52..11.49 m |
-| Hull volume (region loft) | 1,978.8 m³ |
-| Parts volume | 712.1 m³ (house_t1 412.5, house_t2 160.9, wheelhouse 130.9, decks, bulwark, rail 7.8) |
-| Build time | 393 s (hull loft, assembly and render) |
+### 4.1 Hull volume: cause and fix
 
-The hull volume equals the W13 region-loft hull (1,978.766 m³). That is +52 % against the hull
-truth (1,302.3 m³; `docs/SHIP_CAD_LANGUAGE.md`). The cause is not checked here (overlapping
-region solids are one candidate). The sum of the parts is therefore not a whole-vessel volume.
-Find and fix the hull volume error before the app shows volumes.
+The first assembly had a hull of 1,978.8 m³ against 1,302.3 m³ for the truth (+52 %). Checks:
+units (mm, scaled by 1/1000 once: correct); symmetry (each region solid spans both sides once:
+no doubling); end closure (flat end caps; the forward end is at x = 35.0 m against 34.55 m in the
+truth: small). **Cause: the deck height.** The lines-plan station curves and the side line run up
+to the bulwark and forecastle tops (top 7.59 m), so the loft held the bulwarks and the space of the
+first tier as hull. The truth hull stops at the deck (aft deck about 4.05 m, 1-deck under the
+first tier, which is a separate part in the whole vessel).
+
+Fix: cut each read station at the deck at side from the GA reading (aft deck 4.114 m aft of the
+first-tier end wall at x = 15.5 m, 1-deck 4.287 m forward of it) before the loft
+(`cap_sections`). A CAD Boolean cut of the lofted solids was tried first and rejected: on this hull
+it lost whole solids (volume below the waterline -17 %) and needed 5 GB of memory.
+
+| Hull | Volume | Hull + tier 1 vs truth 1,302.3 m³ |
+|---|---|---|
+| Loft to the drawn tops (7.59 m) | 1,978.8 m³ | (hull alone +52 %) |
+| Loft with station tops capped (forward curves still to 7.59 m) | 1,394.7 m³ | |
+| **Loft of stations cut at the deck at side** | **966.7 m³** (15 solids, 68 stations) | **1,379.2 m³: +5.9 %** |
+
+Hull score with the existing hull metrics (`benchmarks/gunnerus/score.py`, metric file
+`config/metric_gunnerus.json`, cached truth sections). This is a development score of a new
+build; the sealed result in `docs/BENCHMARK_GUNNERUS.md` does not change.
+
+| Metric | Loft to drawn tops | Cut at the deck |
+|---|---|---|
+| Volume below T = 2.50 m (truth 486.3 m³) | 481.7 m³ (-0.96 %) | 483.0 m³ (-0.69 %) |
+| Waterplane area at 2.50 m | -0.24 % | -0.06 % |
+| Station half-breadth RMS, main band (median) | 0.509 m (0.279 m) | 0.468 m (0.279 m) |
+| Station half-breadth RMS, below draft (median) | 0.276 m (0.051 m) | 0.277 m (0.063 m) |
+| Between-station RMS, main band | 0.533 m (143 cuts) | 0.488 m (140 cuts) |
+
+The remaining main-band RMS comes from the known content differences of section 6 of the hull
+benchmark (thruster tunnel, aft step, skeg region). The +5.9 % whole-envelope error includes the
+drawn deck and roof levels 0.065 m above the truth surfaces (section 1) and the first-tier volume
+error of section 1.1 (+9.4 %).
+
+### 4.2 Files and sizes
+
+| File | Size | Use |
+|---|---|---|
+| `whole_vessel/execution.json` | small | App parts list: ship-cad worker shape, plus `label`, `args`, `geometry`, and a per-argument `provenance` basis (docs/APP_SPEC.md "Whole-vessel parts") |
+| `whole_vessel/hull.step` | 147.5 MB (21.1 MB gzip) | Hull to the deck, mm, no pcurves |
+| `whole_vessel/<part>.step` (7 parts) | 7 kB to 158 kB each | Decks, tiers, bulwark, rail |
+| `whole-vessel-draft.step` | 148.0 MB | All 22 solids in one compound |
+| `whole-vessel-draft.glb` | 48.5 MB | Mesh for a 3D view, 5 mm chord tolerance |
+| `whole-vessel-draft.png` | | matplotlib render |
+
+STEP size: the first assembly STEP was 321 MB. Writing STEP without pcurves halves it (no change
+to geometry). The hull is the rest: the region loft makes about 89,800 faces (shared knots of all
+stations in a run times the stations). A coarser CAD bound does little (5 mm: 123.7 MB; 10 mm:
+94.5 MB), and fewer section rows do not change the knots. For the app: load the GLB for the 3D view
+and the small part STEP files; send the hull STEP gzip-compressed (21 MB, 1.3 s). A lighter hull
+needs a loft change (fewer shared knots per run): open work.
+
+Build time: 366 s (capped loft 80 s, exports, mesh and render), peak memory about 5 GB.
+
+### 4.3 Happy path for invalid metadata
+
+`ship_cad.triage_program` (used by `execute`, the worker and the A/B arm A driver): one invalid
+component no longer rejects the program. A component whose only problem is an unknown
+`source.view` or `source.method` builds from its values with source `unspecified` and status
+`draft_guess`, and its reason names the problem. A component with invalid geometry arguments is
+listed as unbuilt with the reason; the others build. The program header stays strict, and
+`validate_program` stays strict for the Rust provider path. The 6 W13 safety mutations are still
+caught.
 
 ## 5. Resume point
 
-1. Done: tier aft-end rule (section 1.1), raster code path (section 3), assembly (section 4).
-2. Hull volume: find why the region-loft hull is +52 % (section 4).
+1. Done: tier aft-end rule (section 1.1), raster code path (section 3), assembly and hull volume
+   fix (section 4), app parts folder (section 4.2), happy path for invalid metadata (section 4.3).
+2. Lighter hull loft for the app (fewer shared knots per run), section 4.2.
 3. Appendages (rudder, skeg, thrusters) and openings in step 1 (not started).
 4. Raster path on a scanned historic sheet (Balclutha, C.A. Thayer): code-first, the model as gap
    filler only (section 3 decision). A new model test needs a case where the code reading is
-   wrong, and invalid metadata must not block a build (section 3).
+   wrong; fix its protocol first.
 5. Rust `ship_cad` vision schema: accept labelled inline values (Python accepts them now).
