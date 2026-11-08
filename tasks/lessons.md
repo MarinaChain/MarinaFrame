@@ -47,3 +47,9 @@
 - **Trigger:** I designed W18 memory with heavy provenance (controller-only summaries, id checks, byte replay tests). The founder said: do not be obsessed with provenance; get the model producing workable CAD first, line-by-line evidence later.
 - **Rule:** For the LLM investigator, optimise for built and gate-correct drafts first. Keep only cheap safety labels (unverified draft, open guesses, engineering_approved=false, fixed scoring gate). Defer provenance machinery that does not help the model build a draft, and relax tool evidence rules in draft mode when they block progress.
 - **Why:** Evidence rules added before the model could build anything blocked all progress (270 of 288 no_progress).
+
+### Iterate on a few cases before any campaign (MarinaFrame)
+- **Date:** 2026-11-08
+- **Trigger:** The 288-case head-to-head and the 24-case W17 baseline spent hours and tokens mostly on one repeated failure (`no_progress` loops). The founder called it a huge waste with no useful data for making the model work better.
+- **Rule:** Before scaling an LLM run, run 2-4 cases, read every trace, fix the first blocker, and repeat. Stop a round early when the first cases fail the same way as before. Run larger sets only when a small round mostly succeeds or shows varied failures; keep sealed runs for frozen checkpoints only.
+- **Why:** A uniform failure is visible in 2 traces; more cases add cost, not information.
