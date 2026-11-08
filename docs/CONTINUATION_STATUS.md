@@ -430,3 +430,16 @@ campaign counts as a failure.
   geometry; happy path first (no new build failures); small rounds before any campaign.
 - **Cleanup:** h2h-sealed-v2 worktree removed (data stays in main `work/h2h-sealed-v2/`). PR #4 CI
   green at 37113d7/40601cc.
+
+## 2026-11-08 14:10 SGT: LLM-first app default (PM decision, founder "up to you")
+
+- Decision: the desktop app uses AI drafting by default; deterministic draft only when AI drafting is
+  off or no key is found. v3 will be run later as a check, not as a gate. Branch `app-llm-first`
+  (1a9fb88, on top of `app-llm-draft-view`): setting `ai_drafting` (default on), key lookup from
+  env or `~/.config/marinaframe/opencode-go-keys.txt`, `provider-worker` handled by the app binary,
+  AI status in Settings and New run. `make test-quick` passes; UI checked on mocks.
+- Not yet verified: a real AI run started from the built desktop app (needs the merged W17-W18
+  controller; do it after the integration merge).
+- GLM analysis of deterministic drafts: `work/deterministic-draft-analysis.md` (uncaught
+  `resource_limit` at agent_tools.py:882 kills inspection; blocking gaps abort draft mode before
+  guesses; overlay panels give every station the same curve).
