@@ -131,6 +131,8 @@ export function createExport({ host, invoke }) {
         el('strong', {}, 'Draft, not for construction.'),
         ' Each file carries this stamp. Engineering sign-off happens outside MarinaFrame.'),
       issuesLine(),
+      // A person's sign-off of the parts goes with the files as a note; the files stay drafts.
+      view?.sign_off ? el('p', { class: 'export-signoff' }, el('strong', {}, `Signed off by ${view.sign_off.name}, ${new Date(view.sign_off.time_ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}: `), `${view.sign_off.statement}. The files stay drafts.`) : null,
       el('div', { class: 'export-list', role: 'group', 'aria-label': 'Outputs to export' }, ...OUTPUTS.map(outputRow)),
       error ? el('p', { class: 'form-error', role: 'alert' }, error) : null,
       el('div', { class: 'export-actions' }, folderButton, el('span', { class: 'export-actions-spacer' }), exportButton)));

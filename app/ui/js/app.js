@@ -392,9 +392,13 @@ function hullThumb(view) {
 
 function vesselCard(vessel) {
   const run = vessel.latest;
+  const runs = vessel.runs.length > 1 ? `${vessel.runs.length} runs · ` : '';
   const thumb = el('span', { class: 'vessel-thumb' }, el('span', { class: 'crop-marks', 'aria-hidden': 'true' }));
+  const meta = el('span', { class: 'vessel-meta', title: fmt.fullTime(run.updated_ms) }, `${runs}${fmt.relativeTime(run.updated_ms)}`);
   runPreview(run).then(async (view) => {
     if (!view) return;
+    // A person's sign-off of the parts (the run stays a draft): one navy chip after the time.
+    if (view.sign_off) meta.append(' ', chip('Signed off', { tone: 'pass', dot: false, small: true, title: `Signed off by ${view.sign_off.name}: ${view.sign_off.statement}. The run stays a draft.` }));
     if (view.model) {
       const hull = hullThumb(view);
       if (hull) thumb.append(el('span', { class: 'hull-badge', title: 'Built sections' }, hull));
@@ -410,7 +414,6 @@ function vesselCard(vessel) {
       // No drawing image: the card keeps its blank paper.
     }
   });
-  const runs = vessel.runs.length > 1 ? `${vessel.runs.length} runs · ` : '';
   return el('button', {
     class: 'vessel-card',
     type: 'button',
@@ -422,7 +425,7 @@ function vesselCard(vessel) {
   el('span', { class: 'vessel-row' },
     el('strong', { class: 'vessel-name' }, vessel.name),
     statusBadge(run.status)),
-  el('span', { class: 'vessel-meta', title: fmt.fullTime(run.updated_ms) }, `${runs}${fmt.relativeTime(run.updated_ms)}`),
+  meta,
   run.status === 'running' ? el('span', { class: 'vessel-progress', 'aria-hidden': 'true' }) : null);
 }
 
@@ -668,7 +671,9 @@ function renderHistory() {
       el('span', { class: 'history-run' }, `Run ${runNumber(vessel, run.task)}`),
       statusBadge(run.status),
       el('span', { class: 'history-facts' }, fmt.plural(run.sections, 'section')),
-      current ? chip('Open', { tone: 'brand', dot: false, small: true }) : el('span'),
+      el('span', { class: 'history-chips' },
+        current && state.view?.sign_off ? chip('Signed off', { tone: 'pass', dot: false, small: true, title: `Signed off by ${state.view.sign_off.name}: ${state.view.sign_off.statement}` }) : null,
+        current ? chip('Open', { tone: 'brand', dot: false, small: true }) : null),
       el('span', { class: 'history-time', title: fmt.fullTime(run.updated_ms) }, fmt.relativeTime(run.updated_ms))));
   };
   fill(host, el('div', { class: 'page-body history-page' },
@@ -2026,11 +2031,18 @@ for (const item of document.querySelectorAll('.rail-item')) {
 $('toast-close').addEventListener('click', () => { $('toast').hidden = true; });
 const exporter = createExport({ host: $('vessel-page-export'), invoke });
 // Parts tab (js/parts.js): whole-vessel components with per-part review.
+/** After a part review or a sign-off: Home cards and the open run read the change. Passes the result on. */
+function afterPartsChange(result) {
+  previewCache.clear();
+  loadTaskSoon();
+  refreshTasksSoon();
+  return result;
+}
 const parts = createParts({
   host: $('vessel-page-parts'),
-  review: (id, decision, note = null) => invoke('review_component', { task: state.task, component_id: id, decision, note }).catch((error) => { showError(error); throw error; }),
+  review: (id, decision, note = null) => invoke('review_component', { task: state.task, component_id: id, decision, note }).then(afterPartsChange, (error) => { showError(error); throw error; }),
   // Sign off the parts (a person's record, the run stays a draft); an empty name withdraws it.
-  signOff: (name) => invoke('sign_off', { task: state.task, name }).catch((error) => { showError(error); throw error; }),
+  signOff: (name) => invoke('sign_off', { task: state.task, name }).then(afterPartsChange, (error) => { showError(error); throw error; }),
   showIn3d: (part) => {
     setVesselTab('run');
     model.setHighlightBox(part.bbox_m);

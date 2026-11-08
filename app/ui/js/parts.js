@@ -83,6 +83,9 @@ export function createParts({ host, review, showIn3d, signOff }) {
   let busy = false;
   let marking = false; // the mark form is open on the selected part
   let signedOff = null; // SignOffView of this run, or null
+  // Typed text kept across re-renders (a reload of the run must not wipe what the person typed).
+  let markDraft = '';
+  let nameDraft = null;
 
   function sketch(vertical, title) {
     const built = parts.filter((p) => p.bbox_m);
@@ -139,6 +142,7 @@ export function createParts({ host, review, showIn3d, signOff }) {
       if (decision === 'open') signedOff = null;
       part.review_note = decision === 'marked' ? note.trim() : null;
       marking = false;
+      markDraft = '';
       // After an accept, the next part with guesses opens: a review is a short run of keys.
       if (decision === 'accepted') {
         const next = parts.find((p) => p.review !== 'accepted' && p.built && p.status === 'draft_guess');
@@ -183,10 +187,13 @@ export function createParts({ host, review, showIn3d, signOff }) {
     const count = el('span', { class: 'parts-mark-count' }, `0 / ${MAX_NOTE}`);
     const save = el('button', { class: 'btn btn-primary', type: 'submit', disabled: true }, 'Save mark');
     const update = () => {
+      markDraft = text.value;
       count.textContent = `${text.value.length} / ${MAX_NOTE}`;
       save.disabled = busy || !text.value.trim();
     };
     text.addEventListener('input', update);
+    text.value = markDraft; // before the first update, which saves the field into the draft
+    update();
     text.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') { marking = false; render(); }
       if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !save.disabled) form.requestSubmit();
@@ -275,7 +282,7 @@ export function createParts({ host, review, showIn3d, signOff }) {
       return el('section', { class: 'parts-signoff', 'aria-label': 'Sign-off' },
         el('p', {}, `Sign-off opens when every part is reviewed: ${open} still open.`));
     }
-    const name = el('input', { type: 'text', maxlength: '80', placeholder: 'Your name', 'aria-label': 'Your name for the sign-off', value: lastName() });
+    const name = el('input', { type: 'text', maxlength: '80', placeholder: 'Your name', 'aria-label': 'Your name for the sign-off', value: nameDraft ?? lastName(), oninput: (event) => { nameDraft = event.target.value; } });
     const form = el('form', {
       class: 'parts-signoff',
       'aria-label': 'Sign-off',
@@ -371,7 +378,10 @@ export function createParts({ host, review, showIn3d, signOff }) {
       if (!parts.some((p) => p.id === selectedId)) {
         selectedId = (parts.find((p) => p.built && p.status === 'draft_guess') || parts[0])?.id || null;
       }
-      render();
+      // While the person types (a mark or a name), a reload of the run waits: re-drawing now
+      // would move the caret. The data is kept and shows with the next render.
+      const typing = host.contains(document.activeElement) && document.activeElement.matches('input, textarea');
+      if (!typing) render();
     },
     /** Key A on the Parts tab: accept the selected part. Returns true when it acted. */
     /** Key M on the Parts tab: start a mark on the selected part. Returns true when it acted. */

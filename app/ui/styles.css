@@ -2538,6 +2538,7 @@ code { font-family: var(--font-mono); }
   line-height: 1.45;
 }
 .export-stamp strong { color: var(--text); font-weight: 600; }
+.export-signoff { padding: var(--space-sm) var(--space-md); border-left: 3px solid var(--pass); border-radius: var(--radius-sm); background: var(--pass-soft); color: var(--ink); font-size: var(--fs-md); }
 .export-issues {
   display: flex;
   align-items: center;
@@ -2632,6 +2633,7 @@ code { font-family: var(--font-mono); }
 .history-run { font-weight: 600; white-space: nowrap; }
 .history-facts { min-width: 0; overflow: hidden; color: var(--ink-3); white-space: nowrap; text-overflow: ellipsis; }
 .history-time { color: var(--ink-3); font-size: var(--fs-sm); white-space: nowrap; }
+.history-chips { display: inline-flex; gap: var(--space-xs); justify-self: end; }
 
 /* Parts (js/parts.js): tree | sketches and the selected part. */
 .parts-page { max-width: 1240px; }
