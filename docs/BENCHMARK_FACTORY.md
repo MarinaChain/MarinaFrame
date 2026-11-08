@@ -354,3 +354,12 @@ Run `python scripts/round_digest.py RUN_DIR [RUN_DIR ...]` on finished case fold
 It prints, per case: end reason, decision count, compressed tool sequence, first blocker, last 3 model
 reasons, draft/STEP state, requests and list cost. It ends with failure counts, a one-line verdict and an
 early-stop hint. Run 2 to 4 cases first. If the hint says the first cases fail the same way, stop the round.
+
+To run such a round without an ad hoc driver, first `source scripts/load_opencode_keys.sh`, then
+`python scripts/run_round.py --cases IDS_OR_FILE --inputs INPUT_DIR --out NEW_DIR_UNDER_MAIN_work
+--binary BIN --worker-source SRC --worker-python PY [--policy live --on-ambiguity draft --context
+conversation --basis TEXT]` (extra controller flags pass through; live policy needs `--basis` and an
+`OPENCODE_API_KEY*` variable). It runs at most `--max-cases 4` with `--jobs 2`, writes `round.log`,
+one `result.json` per case and `digest.md`, and stops after the first two cases when the digest's
+early-stop hint fires (`--no-early-stop` disables). `--out` must be a new folder under the main
+checkout's `work/`, never a worktree's.
