@@ -1199,7 +1199,7 @@ code { font-family: var(--font-mono); }
 .selection-reason { color: var(--text); font-size: var(--fs-md); line-height: 1.5; overflow-wrap: anywhere; }
 /* Decide this section: Accept (A), Other line (O), Mark (M). Shown only while it needs a person. */
 .decision-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); padding-bottom: var(--space-xs); }
-.decision-bar .btn { gap: var(--space-sm); }
+.decision-bar .btn { gap: 6px; padding: 0 10px; }
 .decision-hint { color: var(--warn); font-size: var(--fs-sm); }
 .key-hint {
   display: inline-grid;
@@ -1270,12 +1270,15 @@ code { font-family: var(--font-mono); }
 .tab-panels { flex: 1; min-height: 0; display: flex; }
 .tab-panel { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-md) var(--space-lg) var(--space-xl); }
 .tab-panel:focus-visible { outline-offset: -2px; border-radius: 0; }
-/* Content that scrolls past the top or bottom edge fades out, so a part-hidden card does not look cut.
-   The paddings are at least as tall as the fades: at either end of the list nothing is faded. */
-.tab-panel {
-  padding-top: var(--space-lg);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--space-lg), #000 calc(100% - var(--space-lg)), transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--space-lg), #000 calc(100% - var(--space-lg)), transparent 100%);
+/* Content that scrolls past the top or bottom edge fades out over 48 px, so a part-hidden
+   card does not look cut. js/app.js sets data-scroll-top / data-scroll-bottom only when there
+   is more content that way, so the ends of the list are never faded. */
+.tab-panel { padding-top: var(--space-md); --fade-top: 0px; --fade-bottom: 0px; }
+.tab-panel[data-scroll-top="true"] { --fade-top: 48px; }
+.tab-panel[data-scroll-bottom="true"] { --fade-bottom: 48px; }
+.tab-panel[data-scroll-top="true"], .tab-panel[data-scroll-bottom="true"] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent 100%);
 }
 .panel-empty { color: var(--text-3); font-size: var(--fs-sm); padding: var(--space-sm) 0; }
 
@@ -2263,6 +2266,54 @@ code { font-family: var(--font-mono); }
   .intake-count { display: none; }
 }
 
+/* ------------------------------------------------------------------ Command palette (⌘K, js/palette.js) */
+
+.palette-open { margin-left: auto; gap: var(--space-sm); color: var(--ink-2); }
+.palette-open ~ .titlebar-actions { margin-left: 0; }
+.palette {
+  width: min(600px, calc(100vw - 48px));
+  max-height: min(560px, calc(100vh - 120px));
+  margin: 12vh auto auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-dialog);
+  background: var(--raised);
+  color: var(--ink);
+  box-shadow: var(--shadow-sheet);
+}
+.palette[open] { display: flex; flex-direction: column; }
+.palette::backdrop { background: rgba(10, 31, 61, 0.22); }
+.palette-input {
+  flex: none;
+  height: 52px;
+  padding: 0 var(--space-lg);
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  background: none;
+  color: var(--ink);
+  font: var(--fs-lg) var(--font-ui);
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.palette-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--space-xs) var(--space-sm) var(--space-sm); }
+.palette-group { padding: var(--space-sm) var(--space-sm) 2px; color: var(--ink-3); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
+.palette-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 36px;
+  padding: 0 var(--space-sm);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-md);
+  cursor: pointer;
+}
+.palette-row[aria-selected="true"] { background: var(--brand-soft); color: var(--brand); }
+.palette-title { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.palette-hint { flex: none; color: var(--ink-3); font-size: var(--fs-sm); }
+.palette-empty { padding: var(--space-lg); color: var(--ink-3); font-size: var(--fs-md); }
+.palette-foot { flex: none; padding: var(--space-sm) var(--space-lg); border-top: 1px solid var(--rule); color: var(--ink-3); font-size: var(--fs-xs); }
 /* ------------------------------------------------------------------ Welcome and setup check (F1-F2) */
 
 .view-welcome { overflow-y: auto; }

@@ -12,6 +12,7 @@ import { createLiveRun } from './live.js';
 import { createMarkTool } from './mark.js';
 import { createIntake } from './intake.js';
 import { createWelcome } from './welcome.js';
+import { createPalette } from './palette.js';
 import { createExport } from './export.js';
 import * as fmt from './format.js';
 
@@ -949,11 +950,15 @@ function renderSelection() {
     let trailing = null;
     // In a guessed section, the guessed line is confirmed and any other line replaces it.
     let action = null;
+    // The decision bar already offers Accept and the one other line; a line row keeps its
+    // own button only when the bar does not cover it (one way to decide each line).
+    const coveredByBar = candidate === otherCandidate(section) && needsCheck(section);
     if (guessedLine) {
       trailing = chip('Guessed', { tone: 'draft', small: true });
-      action = chooseButton(section, candidate, 'Confirm', canChoose, true);
     } else if (candidate.chosen) trailing = chip('In use', { tone: 'brand', small: true });
-    else if (candidate.selectable) {
+    else if (candidate.selectable && coveredByBar) {
+      trailing = chip('Other line', { dot: false, small: true, title: 'Use it with Other line (O) above' });
+    } else if (candidate.selectable) {
       const label = guessedSection ? 'Use instead' : 'Use';
       if (guessedSection) action = chooseButton(section, candidate, label, canChoose, false);
       else trailing = chooseButton(section, candidate, label, canChoose, false);
@@ -1913,6 +1918,56 @@ function setRail(mode) {
 setRail(prefs.get('rail', 'expanded'));
 $('rail-toggle').addEventListener('click', () => setRail($('app').dataset.rail === 'collapsed' ? 'expanded' : 'collapsed'));
 
+// ---------------------------------------------------------------- command palette (⌘K)
+
+/** The commands that make sense on the current screen, for js/palette.js. */
+function paletteCommands() {
+  const list = [];
+  const add = (group, title, run, extra = {}) => list.push({ group, title, run, ...extra });
+  const onRun = state.route === 'run' && state.view;
+  if (onRun) {
+    const sections = state.view.sections || [];
+    if (sections.some(needsCheck)) add('Review', 'Next section to check', () => { setVesselTab('run'); nextToCheck(); }, { keys: 'N' });
+    if (canDecide() && acceptCandidate(currentSection())) add('Review', `Accept the guess at ${fmt.metres(currentSection().x_m)}`, () => decide(currentSection(), acceptCandidate(currentSection())), { keys: 'A' });
+    if (canDecide() && otherCandidate(currentSection())) add('Review', `Use the other line at ${fmt.metres(currentSection().x_m)}`, () => decide(currentSection(), otherCandidate(currentSection())), { keys: 'O' });
+    if (!isRunning()) add('Review', 'Mark the drawing', () => { setVesselTab('run'); markTool.setActive(true); }, { keys: 'M' });
+    for (const section of sections) {
+      add('Stations', `Section at ${fmt.metres(section.x_m)}`, () => { setVesselTab('run'); selectSection(section.id); },
+        { hint: fmt.sectionStateLabel(section.state) });
+    }
+    add('This vessel', 'Run', () => setVesselTab('run'));
+    add('This vessel', 'Export', () => setVesselTab('export'), { hint: 'STEP, STL, offsets, hydrostatics, report' });
+    add('This vessel', 'History', () => setVesselTab('history'));
+    add('Layout', 'Drawing only', () => setLayout('drawing'), { keys: '⌘1' });
+    add('Layout', 'Drawing and model', () => setLayout('split'), { keys: '⌘2' });
+    add('Layout', 'Model only', () => setLayout('model'), { keys: '⌘3' });
+  }
+  for (const vessel of groupVessels(state.tasks)) {
+    add('Vessels', vessel.name, () => { setVesselTab('run'); openTask(vessel.latest.task); }, { hint: fmt.statusLabel(vessel.latest.status) });
+  }
+  add('Go to', 'Home', () => navigate('home'));
+  add('Go to', 'Queue', () => navigate('queue'));
+  add('Go to', 'Settings', () => openSettings(), { keys: '⌘,' });
+  add('Go to', 'Setup check', () => navigate('welcome'));
+  add('Start', 'New vessel from drawings', () => chooseDrawingSet(), { keys: '⌘N' });
+  return list;
+}
+
+const palette = createPalette({ commands: paletteCommands });
+$('open-palette').addEventListener('click', () => palette.open());
+
+// Inspector panels fade at an edge only when more content is that way (styles.css).
+function markScrollEdges(panel) {
+  panel.dataset.scrollTop = String(panel.scrollTop > 1);
+  panel.dataset.scrollBottom = String(panel.scrollTop + panel.clientHeight < panel.scrollHeight - 1);
+}
+for (const panel of document.querySelectorAll('.tab-panel')) {
+  const update = () => markScrollEdges(panel);
+  panel.addEventListener('scroll', update, { passive: true });
+  new ResizeObserver(update).observe(panel);
+  new MutationObserver(update).observe(panel, { childList: true, subtree: true });
+}
+
 document.addEventListener('keydown', (event) => {
   const command = event.metaKey || event.ctrlKey;
   if (command && event.key === '\\') {
@@ -1922,6 +1977,9 @@ document.addEventListener('keydown', (event) => {
     event.preventDefault();
     if (event.shiftKey) openNewRun();
     else chooseDrawingSet();
+  } else if (command && event.key.toLowerCase() === 'k') {
+    event.preventDefault();
+    palette.toggle();
   } else if (command && event.key === ',') {
     event.preventDefault();
     openSettings();
