@@ -26,6 +26,13 @@ DEFAULT_ROOT = ROOT / "work" / "factory"
 RMS_GATE_FRACTION = 0.02
 VOLUME_GATE = 0.05
 LEVEL_NAMES = {0: "0 clean", 1: "1 mild", 2: "2 moderate", 3: "3 heavy"}
+# Replacement holdouts must be reported with their disjointness caveat (see sealed_v2.py and sealed_v3.py).
+SPLIT_CAVEATS = {
+    "hull-disjoint (v2)": "Clusters can share broad families with the frozen splits; this is not family-disjoint.",
+    "hull-disjoint (v3)": ("Hull-disjoint from v1 and v2 and cluster-disjoint from v2; no hull shares a v1 family "
+                           "with a v2 hull. Every hull is in a broad family used by the frozen v1 splits; "
+                           "this is not family-disjoint from v1."),
+}
 
 
 def _score_one(args) -> str:
@@ -39,9 +46,9 @@ def _score_one(args) -> str:
         score = T.score_model(root / "sealed" / "truth" / f"{result['hull_id']}.npz", case_dir / "model.step", stations)
     except Exception as exc:  # recorded as a scoring failure
         score = {"status": "scoring_error", "error": f"{type(exc).__name__}: {exc}"}
-    if result["split"] == "hull-disjoint (v2)":
-        score["split"] = "hull-disjoint (v2)"
-        score["split_caveat"] = "Clusters can share broad families with the frozen splits; this is not family-disjoint."
+    if result["split"] in SPLIT_CAVEATS:
+        score["split"] = result["split"]
+        score["split_caveat"] = SPLIT_CAVEATS[result["split"]]
     (case_dir / "score.json").write_text(json.dumps(score, indent=1) + "\n")
     return result["case_id"]
 
@@ -115,13 +122,13 @@ HEADER = ("| {k} | attempted | built | abstained | failed | correct / attempted 
 def cmd_table(root: Path, runs: list[str], out: Path | None) -> str:
     rows = load_rows(root, runs)
     text = []
-    for split in ("development", "validation", "test", "hull-disjoint (v2)"):
+    for split in ("development", "validation", "test", *SPLIT_CAVEATS):
         part = [r for r in rows if r["split"] == split]
         if not part:
             continue
         text.append(f"\n### Split: {split} ({len(part)} cases, {len({r['hull_id'] for r in part})} hulls)\n")
-        if split == "hull-disjoint (v2)":
-            text.append("Clusters can share broad families with the frozen splits; this is not family-disjoint.\n")
+        if split in SPLIT_CAVEATS:
+            text.append(SPLIT_CAVEATS[split] + "\n")
         for title, key, labels in (("By degradation level", "level", LEVEL_NAMES), ("By layout", "layout", None)):
             text.append(f"\n{title}\n\n" + HEADER.format(k=key))
             values = sorted({r[key] for r in part})
