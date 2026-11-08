@@ -808,6 +808,62 @@ def _bounded_source_samples(rows: np.ndarray, xs: np.ndarray, *, baseline: float
         "scope": "Interpolation loss relative to the measured row-centroid trace only; excludes endpoint identity, source raster error, calibration, gaps, and semantics."}
 
 
+# --------------------------------------------------------- mirrored halves
+# An overlay body plan draws the afterbody stations left of the centreline,
+# mirrored. The tracer reads the half right of the centreline, so a section
+# whose panel lies mostly left of its centreline is traced on the image
+# flipped left to right: the flip maps source column x to (width - 1 - x).
+# Callers keep every pixel coordinate in the source frame.
+
+def drawn_left_of_centreline(section: dict[str, Any]) -> bool:
+    """True when the section's panel lies mostly left of its centreline (an afterbody curve)."""
+    if "roi_px" not in section:
+        return False
+    left, _, right, _ = section["roi_px"]
+    return 0.5 * (float(left) + float(right)) < float(section["calibration"]["centerline_px"])
+
+
+def mirror_points(points, width: int) -> list[list[float]]:
+    """[x, y] source points reflected to the flipped image, or back (the flip is its own inverse)."""
+    return [[float(width - 1 - x), float(y)] for x, y in points]
+
+
+def mirror_section(section: dict[str, Any], width: int) -> dict[str, Any]:
+    """The section in the image flipped left to right: panel, centreline and corridor anchors."""
+    left, top, right, bottom = section["roi_px"]
+    mirrored = {**section, "roi_px": [width - right, top, width - left, bottom],
+                "calibration": {**section["calibration"],
+                                "centerline_px": float(width - 1 - float(section["calibration"]["centerline_px"]))}}
+    selection = section.get("contour_selection")
+    if isinstance(selection, dict) and isinstance(selection.get("anchors_px"), list):
+        mirrored["contour_selection"] = {**selection, "anchors_px": mirror_points(selection["anchors_px"], width)}
+    return mirrored
+
+
+def _extract_mirrored(image, section, source_file, input_details, draft):
+    """Trace a left-drawn section on the flipped image; report its pixels in the source frame."""
+    width = int(image.shape[1])
+    flipped = np.ascontiguousarray(image[:, ::-1])
+    try:
+        result, diagnostic = _extract_one(flipped, mirror_section(section, width), source_file, input_details,
+                                          draft=draft)
+    except DrawingError as exc:
+        exc.diagnostics = {**exc.diagnostics, "traced_mirrored_left_half": True}
+        raise
+    for record in (result["evidence"], diagnostic):
+        bounds = record.get("pixel_trace_bounds")
+        if bounds:
+            record["pixel_trace_bounds"] = [width - bounds[2], bounds[1], width - bounds[0], bounds[3]]
+        selection = record.get("contour_selection")
+        if selection:
+            record["contour_selection"] = {**selection, "anchors_px": mirror_points(selection["anchors_px"], width)}
+    result["evidence"].update(roi_px=list(section["roi_px"]), calibration=dict(section["calibration"]))
+    diagnostic["traced_mirrored_left_half"] = True
+    result["warnings"].append("The curve is drawn left of the centreline (afterbody of an overlay body plan); it "
+                              "was traced on the image mirrored about the centreline.")
+    return result, diagnostic
+
+
 def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, input_details: dict[str, Any], *, draft: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
     section_id = str(section.get("id", "unnamed"))
     x_m = _finite_number(section.get("x_m"), "x_m")
@@ -835,6 +891,8 @@ def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, i
         raise DrawingError("invalid_view", "Section ROI falls outside the drawing or has no area.")
     if not left <= centre < right:
         raise DrawingError("invalid_calibration", "The declared centreline lies outside this panel.")
+    if drawn_left_of_centreline(section):
+        return _extract_mirrored(image, section, source_file, input_details, draft)
     py_top = baseline - z_max * ppm
     py_bottom = baseline - z_min * ppm
     if py_top < top - .51 or py_bottom > bottom - .49:

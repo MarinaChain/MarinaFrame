@@ -51,6 +51,9 @@ SHARE_PENALTY = 1.5
 # An alternative within this likeness of the chosen stroke is a near tie.
 NEAR_TIE = 0.05
 MAX_ALTERNATIVES = 3
+# An inspection trace that follows two enumerated strokes, each on at least
+# this share of its rows, jumps between station curves (follows_several_strokes).
+MIXED_STROKE_ROW_SHARE = 0.2
 # Confidence factors (a ranking aid, not a probability).
 SHARED_FACTOR = 0.4
 NEAR_TIE_FACTOR = 0.6
@@ -195,14 +198,17 @@ def assign_panel(members: list[dict], sections: list[dict], strokes: list[dict],
     """
     pinned = pinned or {}
     ordered_members, order_basis = station_order(members, sections)
+    from .ingest import drawn_left_of_centreline
     centre = float(members[0]["calibration"]["centerline_px"])
+    # Half-breadth grows away from the centreline: leftwards on an afterbody half.
+    side = -1.0 if drawn_left_of_centreline(members[0]) else 1.0
     height_px = max((float(members[0]["z_max_m"]) - float(members[0]["z_min_m"]))
                     * float(members[0]["calibration"]["pixels_per_metre"]), 1.0)
     usable = [{**s, "weight": _weight(s, height_px)} for s in strokes if s.get("kind") != "straight_grid_line"]
     good = [s for s in usable if s["weight"] >= LIKENESS_FLOOR]
     few_good = len(good) < len(members)
     pool = usable if few_good else good
-    pool = [{**s, "rows": np.asarray(s["rows"]), "breadth": np.asarray(s["xs"], dtype=float) - centre}
+    pool = [{**s, "rows": np.asarray(s["rows"]), "breadth": side * (np.asarray(s["xs"], dtype=float) - centre)}
             for s in pool]
     if not pool:
         return {}
@@ -274,6 +280,32 @@ def _stroke_of(candidate: dict, section: dict, grid_columns_px=None) -> dict | N
             kind = "straight_grid_line"
     return {"candidate_id": candidate["candidate_id"], "rows": trace[0], "xs": trace[1],
             "hull_likeness": likeness, "kind": kind}
+
+
+def follows_several_strokes(candidate: dict, strokes: list[dict]) -> bool:
+    """True when a candidate's trace jumps between strokes of the panel (a mixed line).
+
+    A whole-window inspection trace in an overlay panel can run along one
+    station's curve, cross over and continue on another. It is mixed when no
+    single enumerated stroke carries it (SAME_INK_ROW_SHARE of its rows) but at
+    least two strokes each carry MIXED_STROKE_ROW_SHARE of its rows.
+    """
+    from . import investigation as inv
+    trace = inv.dense_trace(candidate)
+    if trace is None:
+        return False
+    rows, xs = trace
+    shares = []
+    for stroke in strokes:
+        other = inv.dense_trace(stroke)
+        if other is None:
+            continue
+        common = np.intersect1d(rows, other[0])
+        close = np.abs(np.interp(common, rows, xs) - np.interp(common, *other)) <= inv.SAME_INK_DISTANCE_PX
+        shares.append(float(close.sum()) / len(rows))
+    if not shares or max(shares) >= inv.SAME_INK_ROW_SHARE:
+        return False
+    return sum(share >= MIXED_STROKE_ROW_SHARE for share in shares) >= 2
 
 
 def panel_stroke_candidate(traced: dict, source_sha: str, key: str, others: int) -> dict:
@@ -364,12 +396,15 @@ def assign_shared_panels(image, sections: list[dict], catalog: dict, source_file
             failure = None
         key = panel_key(section)
         found = [panel_stroke_candidate(stroke, source_sha, key, max(0, len(traced) - 1)) for stroke in traced]
-        # Inspected lines of the panel join the enumerated strokes. One ink is
-        # pooled once (each section has its own ids for it): the most
-        # hull-like version is kept, so a full line beats its fragment.
+        # Inspected lines of the panel join the enumerated strokes, unless they
+        # jump between strokes. One ink is pooled once (each section has its
+        # own ids for it): the most hull-like version is kept, so a full line
+        # beats its fragment.
+        enumerated = list(found)
         found += [c for entry in entries for c in entry.get("candidates", [])
                   if c.get("selectable") is True and "contour_selection" in c
-                  and "authored" not in c and not c.get("model_traced") and not c.get("panel_stroke")]
+                  and "authored" not in c and not c.get("model_traced") and not c.get("panel_stroke")
+                  and not follows_several_strokes(c, enumerated)]
         try:
             grid = inv.grid_columns(image, section)
         except Exception:  # noqa: BLE001 - a hint only; never refuse
