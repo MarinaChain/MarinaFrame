@@ -319,3 +319,13 @@ wrong and acceptable cost; a new held-out split is needed before any claim.
    a new allowed usage field in `apply_provider`)?
 4. Is `--context conversation` the default after dev results, or only after
    a new held-out split?
+
+## Decisions on the open questions (PM, 2026-11-08)
+
+1. `recall_view` is its own tool. The repeat refusal also names the earlier view id, so the model
+   knows what to recall.
+2. The 32k budget and the window sizes may be tuned on non-sealed dev data only. Record the values
+   used and freeze them before the held-out run.
+3. Record cache-hit tokens in receipts when the provider returns them. Do not depend on them.
+4. Conversation mode becomes the LLM-first default only after a pre-registered run on the new
+   held-out split (v3). Dev results decide only whether that run is worth doing.
