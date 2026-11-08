@@ -279,6 +279,9 @@ impl TaskLive {
                 self.finished = false;
                 self.push_system(sequence, time, "Resumed", "The run continues.");
             }
+            "operator_revision_requested" => self.on_revision_requested(sequence, time, payload),
+            "operator_revision_result" => self.on_revision_result(sequence, time, payload),
+            "operator_revision_forced" => self.on_revision_forced(sequence, time, payload),
             _ => {}
         }
     }
@@ -486,6 +489,135 @@ impl TaskLive {
                 text: capitalize(&why),
                 kept: None,
             }),
+            ..StepBase::system(sequence, time)
+        });
+    }
+
+    // ---- mark and revise ----
+
+    /// A person marked part of the drawing and said what to fix.
+    fn on_revision_requested(&mut self, sequence: u64, time: u64, payload: &Value) {
+        self.finished = false;
+        let request = &payload["request"];
+        let points = |value: &Value| -> Option<Vec<Point>> {
+            value
+                .as_array()?
+                .iter()
+                .map(|p| Some([p.get(0)?.as_f64()?, p.get(1)?.as_f64()?]))
+                .collect()
+        };
+        let region = &request["region"];
+        let mut marks = vec![];
+        if let Ok(region_box) = serde_json::from_value::<BoxPx>(region["page_px_box"].clone()) {
+            marks.push(box_mark(region_box, Tone::Person, None));
+        } else if let Some(mut lasso) = points(&region["lasso_px"]).filter(|p| !p.is_empty()) {
+            lasso.push(lasso[0]);
+            marks.push(Mark {
+                shape: MarkShape::Polyline,
+                tone: Tone::Person,
+                points_px: lasso,
+                label: None,
+                tag: None,
+                candidate_id: None,
+                half_width_px: None,
+            });
+        }
+        let attention = marks.first().and_then(|mark| {
+            let xs = mark.points_px.iter().map(|p| p[0]);
+            let ys = mark.points_px.iter().map(|p| p[1]);
+            Some([
+                xs.clone().reduce(f64::min)?,
+                ys.clone().reduce(f64::min)?,
+                xs.reduce(f64::max)?,
+                ys.reduce(f64::max)?,
+            ])
+        });
+        let targets = payload["sections"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .take(MAX_TARGETS)
+            .map(|id| Target {
+                kind: TargetKind::Section,
+                id: id.into(),
+            })
+            .collect();
+        let instruction = request["instruction"].as_str().unwrap_or("");
+        self.push_step(StepBase {
+            kind: StepKind::Revise,
+            actor: Actor::Person,
+            title: "Marked for revision".into(),
+            text: plain_text(instruction, MAX_TEXT_CHARS),
+            targets,
+            attention,
+            marks,
+            ..StepBase::system(sequence, time)
+        });
+    }
+
+    /// The focused pass ended: which edits the keep rule kept, and the fit change.
+    fn on_revision_result(&mut self, sequence: u64, time: u64, payload: &Value) {
+        let outcome = payload["outcome"].as_str().unwrap_or("stopped").to_string();
+        let fit_change = payload["fit_change"].as_f64();
+        let not_kept_change = payload["not_kept_fit_change"].as_f64();
+        let title = revision_title(&outcome, fit_change, not_kept_change);
+        let reason = payload["edits"]
+            .as_array()
+            .and_then(|edits| edits.iter().find(|e| e["kept"] == false))
+            .and_then(|edit| edit["reason"].as_str())
+            .map(|reason| capitalize(&plain_text(reason, MAX_TEXT_CHARS)))
+            .unwrap_or_default();
+        let kept = match outcome.as_str() {
+            "kept" => Some(true),
+            "not_kept" | "partly_kept" => Some(false),
+            _ => None,
+        };
+        let index = self.push_step(StepBase {
+            kind: StepKind::Revise,
+            title: title.clone(),
+            text: String::new(),
+            tool: Some(ToolCard {
+                tool: "keep rule".into(),
+                duration_ms: None,
+                state: if outcome == "stopped" {
+                    ResultState::Failed
+                } else {
+                    ResultState::Ok
+                },
+                text: if reason.is_empty() { title } else { reason },
+                kept,
+            }),
+            ..StepBase::system(sequence, time)
+        });
+        self.steps[index].mark_revision = Some(MarkRevision {
+            revision_id: payload["revision_id"].as_str().unwrap_or("").into(),
+            fit_change,
+            not_kept_fit_change: not_kept_change,
+            can_keep_anyway: kept == Some(false),
+            operator_forced: false,
+            outcome,
+        });
+    }
+
+    /// A person kept the not-kept edits anyway: the result step loses its button.
+    fn on_revision_forced(&mut self, sequence: u64, time: u64, payload: &Value) {
+        let revision_id = payload["revision_id"].as_str().unwrap_or("");
+        if let Some(step) = self.steps.iter_mut().rev().find(|s| {
+            s.mark_revision
+                .as_ref()
+                .is_some_and(|r| r.revision_id == revision_id)
+        }) {
+            let revision = step.mark_revision.as_mut().expect("found above");
+            revision.can_keep_anyway = false;
+            revision.operator_forced = true;
+            step.last_sequence = sequence;
+        }
+        self.push_step(StepBase {
+            kind: StepKind::Revise,
+            actor: Actor::Person,
+            title: "Kept anyway".into(),
+            text: String::new(),
             ..StepBase::system(sequence, time)
         });
     }
@@ -1019,6 +1151,7 @@ impl TaskLive {
             cost_usd: base.cost_usd,
             repeat_of: base.repeat_of,
             count: 1,
+            mark_revision: None,
         });
         self.steps.len() - 1
     }
@@ -1419,6 +1552,30 @@ fn safe_relative(path: &str) -> bool {
         && path
             .split('/')
             .all(|part| !part.is_empty() && part != "." && part != "..")
+}
+
+/// "Kept, fit +0.031", "Not kept: worse by 0.020", "Not kept: fit +0.001 is too small".
+pub(super) fn revision_title(
+    outcome: &str,
+    fit_change: Option<f64>,
+    not_kept_change: Option<f64>,
+) -> String {
+    let not_kept = match not_kept_change {
+        Some(change) if change < 0.0 => format!("worse by {:.3}", -change),
+        Some(change) => format!("fit +{change:.3} is too small"),
+        None => "the fit did not improve".into(),
+    };
+    let kept = match fit_change {
+        Some(change) => format!("fit {change:+.3}"),
+        None => "fit not scored".into(),
+    };
+    match outcome {
+        "kept" => format!("Kept, {kept}"),
+        "partly_kept" => format!("Partly kept, {kept}; one edit not kept: {not_kept}"),
+        "not_kept" => format!("Not kept: {not_kept}"),
+        "no_edit" => "No edit made".into(),
+        _ => "Revision stopped".into(),
+    }
 }
 
 fn capitalize(text: &str) -> String {

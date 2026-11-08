@@ -103,6 +103,8 @@ Errors return `{ "code": string, "message": string }` with plain-language `messa
 | `cancel_task` | `{ task }` | `{ ok: true }` |
 | `resume_task` | `{ task }` | `{ ok: true }` |
 | `choose_line` | `{ task, section_id, candidate_id }` | `{ ok: true }` (operator intervention, then rebuild/validate via the controller) |
+| `revise_region` | `{ task, request: RevisionRequest }` | `{ ok: true }` (see "Mark and revise"; the pass runs in the background) |
+| `force_keep_revision` | `{ task, revision_id }` | `{ ok: true }` (see "Mark and revise") |
 | `get_settings` / `set_settings` | `{}` / `Settings` | `Settings` |
 | `get_default_settings` | `{}` | `Settings` (fresh-install defaults; the UI offers them as one-click choices) |
 | `dismiss_notice` / `reset_notices` | `{ id }` / `{}` | `{ ok: true }` |
@@ -360,7 +362,7 @@ LiveStep  { sequence: number, last_sequence: number, time_ms: number,
 Mark      { shape: "box"|"point"|"polyline"|"band", tone: Tone, points_px: [x, y][],
             label?: string, tag?: number, candidate_id?: string, half_width_px?: number }
             // box: two corners; point: one point; band: polyline + half_width_px
-Tone      = "attention"|"view"|"panel"|"stroke"|"accepted"|"authored"|"refused"
+Tone      = "attention"|"view"|"panel"|"stroke"|"accepted"|"authored"|"refused"|"person"
             // refused marks carry the refusal reason as label on the first one
 ToolCard  { tool: string, duration_ms: number|null, state: "working"|"ok"|"refused"|"failed",
             text: string,                  // "Refused: ...", "6 strokes", "Not kept: fit 0.1793 to 0.1752"
@@ -374,6 +376,66 @@ HullSections { revision: string|null, path: string, sections: SectionCurve[] }
 `get_hull_sections(task, revision)` returns the section curves of one build for the 3D growth:
 `revision` is a revision id (`r0002`) or a step's `revision.path`. It reads only that build's
 `result.json` (no STL). Unknown builds return the error code `revision_not_found`.
+
+
+## Mark and revise (2026-11-09)
+
+A person circles part of the drawing and says what to fix, as in an image chat. It works on
+AI runs (live policy, draft mode) that are not working at that moment.
+
+**UI (`js/mark.js`).** The drawing pane has a **Mark** button (key M). In mark mode the person
+drags a **Box** or a freehand **Lasso** on the drawing, or clicks a section tile in the strip.
+A popover shows what was marked, five quick chips (Too full, Too fine, Follow ink, Smoother,
+Wrong line) that prefill a sentence, a text field (500 characters at most) and **Send**. The
+person's mark is brand blue; teal stays for AI activity and amber for review.
+
+**Request.** `revise_region` sends:
+
+```
+RevisionRequest {
+  schema_version: "marinaframe.revision_request.v1",
+  instruction: string,                       // 1..500 characters
+  region?: { page_px_box: [l, t, r, b] } | { lasso_px: [x, y][] },   // sheet pixels, 3..64 lasso points
+  station_range_m?: [from, to],              // a station range, metres
+  target_section_ids?: string[]              // at most 12
+}
+```
+
+At least one of `region`, `station_range_m` or `target_section_ids` is required.
+
+**Controller (`rust-control/src/revision.rs`).** The request is recorded as the ledger event
+`operator_revision_requested` (actor `human_operator`). Then one focused pass runs:
+
+1. The worker crops the marked region (`view_region`); the crop goes to the model first.
+2. The model sees the instruction, the region and the current curves of the sections in range
+   (`[height_m, half_breadth_m]` offsets, with their ink fit), and is offered `propose_section`
+   only. Named sections and a station range give up to three edits; a drawn region alone gives
+   one edit on a section whose panel it touches (any section when it touches none).
+3. The worker's keep rule judges each edit: it is kept only when the combined fit improves.
+4. When an edit was kept and the run had a built draft, the draft is rebuilt.
+
+The result is the event `operator_revision_result` with `outcome` (`kept`, `partly_kept`,
+`not_kept`, `no_edit`, `stopped`), `fit_change`, `not_kept_fit_change` and each edit. A finished
+draft stays a finished draft; any other run pauses. `force_keep_revision` applies the not-kept
+edits without the keep rule and records `operator_revision_forced` with `operator_forced: true`.
+`engineering_approved` stays false in every event.
+
+**Live steps.** The request is a person step (`kind: "revise"`, a `person` mark, the instruction
+as text). The crop and the model's edit are ordinary steps. The result step has `kind: "revise"`,
+the title "Kept, fit +0.012" or "Not kept: worse by 0.004", and `mark_revision`:
+
+```
+MarkRevision { revision_id, outcome, fit_change, not_kept_fit_change,
+               can_keep_anyway: boolean, operator_forced: boolean }
+```
+
+The Thinking card of a result with `can_keep_anyway` has a **Keep anyway** button.
+
+**CLI.** `marinaframe revise --task DIR --request FILE.json` and
+`marinaframe force-keep --task DIR --revision ID` do the same from a terminal.
+
+**Mock.** In the preview the pass streams in as live steps. The edit is kept unless the
+instruction contains "fine" or "wrong", so both results can be seen.
 
 
 ## Intake (drop a drawing set, no spec file; M2)

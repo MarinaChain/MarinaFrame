@@ -133,6 +133,31 @@ async fn choose_line(
     .await
 }
 
+/// Mark and revise: `request` is a `marinaframe.revision_request.v1` object.
+#[tauri::command(rename_all = "snake_case")]
+async fn revise_region(
+    backend: Shared<'_>,
+    task: String,
+    request: serde_json::Value,
+) -> Result<Ok_, AppError> {
+    run(backend, move |b| {
+        b.revise_region(&task, request).map(|_| OK)
+    })
+    .await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+async fn force_keep_revision(
+    backend: Shared<'_>,
+    task: String,
+    revision_id: String,
+) -> Result<Ok_, AppError> {
+    run(backend, move |b| {
+        b.force_keep_revision(&task, &revision_id).map(|_| OK)
+    })
+    .await
+}
+
 #[tauri::command(rename_all = "snake_case")]
 async fn get_settings(backend: Shared<'_>) -> Result<Settings, AppError> {
     run(backend, |b| Ok(b.get_settings())).await
@@ -273,6 +298,8 @@ fn main() {
             cancel_task,
             resume_task,
             choose_line,
+            revise_region,
+            force_keep_revision,
             get_settings,
             get_default_settings,
             set_settings,

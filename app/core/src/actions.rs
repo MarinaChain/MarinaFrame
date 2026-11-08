@@ -2,6 +2,7 @@
 //! CLI on a background thread, so every controller check applies. One action runs
 //! per task at a time. The controller also holds its own lock on the task folder.
 use crate::error::{AppError, AppResult};
+use marinaframe_control::controller::revision::{self, RevisionRequest};
 use marinaframe_control::controller::{self, Intervention};
 use marinaframe_control::store::Store;
 use marinaframe_control::types::{
@@ -269,6 +270,50 @@ pub fn choose_line(
             )?;
             controller::resume(&mut store, false, false, None)
         },
+    )
+}
+
+/// Open a live run for a person's mark-and-revise action.
+fn open_live_run(location: &Path) -> Result<Store, String> {
+    let store = Store::open(location)?;
+    if store.state.config.policy != Policy::Live {
+        return Err("revision_requires_live_draft_run".into());
+    }
+    Ok(store)
+}
+
+/// Run one focused model pass for a person's marked region and instruction
+/// (`controller::revision::revise`). The request is checked before the pass starts.
+pub fn revise_region(
+    registry: &ActionRegistry,
+    task: &Path,
+    request: serde_json::Value,
+) -> AppResult<()> {
+    let request: RevisionRequest = serde_json::from_value(request)
+        .map_err(|_| AppError::from_code("revision_request_shape"))?;
+    request.check()?;
+    let location = task.to_path_buf();
+    spawn_with_store(
+        registry,
+        task,
+        move || open_live_run(&location),
+        move |mut store| revision::revise(&mut store, request).map(|_| ()),
+    )
+}
+
+/// Keep the not-kept edits of a revision anyway (recorded as operator-forced).
+pub fn force_keep_revision(
+    registry: &ActionRegistry,
+    task: &Path,
+    revision_id: &str,
+) -> AppResult<()> {
+    let location = task.to_path_buf();
+    let revision_id = revision_id.to_string();
+    spawn_with_store(
+        registry,
+        task,
+        move || open_live_run(&location),
+        move |mut store| revision::force_keep(&mut store, &revision_id).map(|_| ()),
     )
 }
 

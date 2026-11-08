@@ -11,6 +11,8 @@ use std::time::{Duration, Instant};
 
 #[path = "model_review.rs"]
 pub mod model_review;
+#[path = "revision.rs"]
+pub mod revision;
 #[path = "transcript.rs"]
 pub mod transcript;
 
@@ -497,6 +499,14 @@ pub fn tool_catalog(on_ambiguity: &OnAmbiguity) -> Value {
 }
 fn phase_tool_catalog(store: &Store) -> Value {
     let mut tools = tool_catalog(&store.state.config.on_ambiguity);
+    if revision::active(store) {
+        // A focused revision pass asks for section edits only.
+        tools
+            .as_array_mut()
+            .unwrap()
+            .retain(|tool| tool["name"] == "propose_section");
+        return tools;
+    }
     let next = match store.state.domain["description_phase"].as_str() {
         Some("views") => Some("describe_views"),
         Some("setups") => Some("propose_sheet_setup"),

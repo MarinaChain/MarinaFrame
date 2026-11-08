@@ -399,12 +399,27 @@ class DomainTools(InvestigationTools):
                 self.state = load_bounded_json(self.state_path, max_bytes=MAX_INSPECTION_BYTES,
                                                max_nodes=600_000)
                 self._verify_inputs()
+                # Only the Rust controller sets this flag, when a person keeps a
+                # not-kept revision edit anyway; the model's tool schema has no such field.
+                force_keep = (tool_name == "propose_section" and isinstance(arguments, dict)
+                              and arguments.pop("operator_force_keep", False) is True)
                 self._arguments(tool_name, arguments)
                 if self.cancel_event is not None and self.cancel_event.is_set():
                     return self._observation(False, "cancelled", error_code="cancelled")
                 method = getattr(self, "_" + tool_name)
-                incumbent = copy.deepcopy(self.state) if tool_name in ("propose_section", "assign_station") and self.state.get("vessel_table") else None
+                judged = tool_name in ("propose_section", "assign_station") and self.state.get("vessel_table")
+                incumbent = copy.deepcopy(self.state) if judged and not force_keep else None
+                fit_before = self.state.get("fit_score", {}).get("combined_fit")
                 result = method(**arguments)
+                if force_keep and judged and result.get("ok"):
+                    from .fit_feedback import score, current_table
+                    after = score(self)
+                    self.state["vessel_table"] = current_table(self).to_json()
+                    self.state["fit_score"] = after
+                    self._save()
+                    result["fit_comparison"] = {"keep": True, "operator_forced": True, "fit_before": fit_before,
+                                                "fit_after": after.get("combined_fit"),
+                                                "reason": "A person kept this edit although the keep rule did not."}
                 if incumbent is not None and result.get("ok"):
                     from .fit_feedback import score, current_table
                     from .whole_vessel_score import keep_edit

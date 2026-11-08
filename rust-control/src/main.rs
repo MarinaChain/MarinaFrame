@@ -51,6 +51,8 @@ fn execute() -> Result<serde_json::Value> {
         "run":"--task DIR --source SPEC --worker-python PYTHON [--worker-source SRC] [--policy deterministic|live] [--on-ambiguity abstain|draft] [--provider-transfer-basis TEXT] [--model-review true] [--context stateless|conversation] [--max-context-tokens 8000..120000] [--investigation-thinking disabled|enabled] [--max-output-tokens 16..32768] [--request-wall-seconds 1..600] [--investigation-temperature 0..2] [--phase1-only true] [--steps N]",
         "resume":"--task DIR [--continue-after-unknown true] [--clear-cancel true] [--steps N]",
         "step":"--task DIR --intervention JSON --actor human_operator|assistant_operator --note TEXT",
+        "revise":"--task DIR --request FILE.json (operator mark-and-revise request; one focused model pass, see docs/APP_SPEC.md)",
+        "force-keep":"--task DIR --revision ID (keep the not-kept edits of a revision anyway; recorded as operator-forced)",
         "status":"--task DIR","verify":"--task DIR","cancel":"--task DIR","recover-checkpoint":"--task DIR",
         "read-table":"--crops DIR --out NEW_DIR --provider-transfer-basis TEXT (live offset-table cell transcription; see docs/VISION_TABLE_READING.md)",
         "vision-request":"--request DIR --out NEW_DIR --provider-transfer-basis TEXT (one sheet_setup or build_review request; see docs/LLM_SETUP_AND_REVIEW.md)"},
@@ -269,6 +271,19 @@ fn execute() -> Result<serde_json::Value> {
             let input = util::parse(&util::read_bounded(Path::new(&path), 65_536)?, 65_536)?;
             controller::intervene(&mut store, input, &actor, &note)?;
             Ok(controller::summary(&store))
+        }
+        "revise" => {
+            let path = take(&mut args, "request")?;
+            no_extra(&args)?;
+            let request = util::parse(&util::read_bounded(Path::new(&path), 65_536)?, 65_536)?;
+            let revision = controller::revision::revise(&mut store, request)?;
+            Ok(json!({"revision":revision,"task":controller::summary(&store)}))
+        }
+        "force-keep" => {
+            let revision_id = take(&mut args, "revision")?;
+            no_extra(&args)?;
+            let forced = controller::revision::force_keep(&mut store, &revision_id)?;
+            Ok(json!({"revision":forced,"task":controller::summary(&store)}))
         }
         _ => Err("unknown_command".into()),
     }

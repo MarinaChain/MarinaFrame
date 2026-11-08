@@ -163,6 +163,15 @@ impl Backend {
         )
     }
 
+    /// Mark and revise: one focused model pass on a marked region.
+    pub fn revise_region(&self, task: &str, request: serde_json::Value) -> AppResult<()> {
+        actions::revise_region(&self.registry, &self.task_path(task)?, request)
+    }
+
+    pub fn force_keep_revision(&self, task: &str, revision_id: &str) -> AppResult<()> {
+        actions::force_keep_revision(&self.registry, &self.task_path(task)?, revision_id)
+    }
+
     pub fn get_settings(&self) -> Settings {
         storage::get_settings(&self.paths)
     }

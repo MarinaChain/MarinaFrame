@@ -295,6 +295,8 @@ pub fn plain_reason(reason: &str) -> String {
     let known = match reason {
         "requested_step_boundary" => "paused at a step boundary",
         "operator_action_completed" => "your change was applied",
+        "operator_revision_completed" => "your marked revision is done",
+        "operator_revision_forced" => "your kept edit was applied",
         "operator_or_signal_cancelled" | "cancelled_after_model_receipt" => "cancelled",
         "source_ambiguity_requires_explicit_operator_selection" => {
             "two or more lines fit equally well, so a person has to pick one"
