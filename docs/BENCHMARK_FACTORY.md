@@ -107,6 +107,12 @@ Frozen manifests, full selection parameters and protocol: `benchmarks/factory/ma
 
 **Score only at frozen checkpoints**: deterministic abstain vs deterministic draft vs LLM-first; never during development. Generation was checked by hashes, spec validation, complete truth tables and Read-tool samples at all four levels. No pipeline or scorer was run on v2 and no reader output was inspected.
 
+### Sealed split v3
+
+v2 is spent for model selection. **hull-disjoint (v3)**, generated 2026-11-08 for the next pre-registered evaluation (W17/W18), uses seed **20261201** and the frozen v2 partition. It excludes every v1 and v2 hull and rejected candidate and every cluster that holds one (so it is cluster-disjoint from v2), and it uses no v1 family (k=44) that holds a v2 hull. It is **not family-disjoint from v1**: v1 used all 44 families. Nine clusters (28, 249, 181, 110, 48, 174, 136, 161, 239) × 4 hulls = **36 hulls, 288 drawings**, same layouts, levels and gate.
+
+Manifests and the disjointness table: `benchmarks/factory/manifests-sealed-v3/README.md` (outside `manifests/`, so v2 verification is unchanged). `split_manifest.json` SHA-256: `4b81c182462b03ae71ca38c70d400cb6a0f879e05aa0034914a9982dc904bb76`. Data only in the main checkout's ignored `work/factory-sealed-v3/`. A second generation was byte-identical. No inference or scoring was run, and truth was checked by hash only.
+
 ## 5. Protocol actually followed
 
 1. Metrics, generator and splits written; scorer checked on a box hull with a cadquery STEP (`tests/test_factory.py`, mark `cad`).
