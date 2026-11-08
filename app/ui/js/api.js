@@ -1,5 +1,6 @@
-// The only module that talks to a backend. Every command, every live update and the
-// spec-file picker go through here, so the same UI runs in Tauri, as a web app, or on mocks.
+// The only module that talks to a backend. Every command, every live update, the file and
+// folder pickers and dropped files go through here, so the same UI runs in Tauri, as a web
+// app, or on mocks.
 //
 // Transport selection, in order:
 //   1. Tauri:  window.__TAURI__ is present (Tauri 2 with `withGlobalTauri`).
@@ -15,6 +16,11 @@ const MOCK_FIXTURES_URL = 'mock/fixtures.json';
 const MOCK_FILES_URL = 'mock/files/';
 const MOCK_DISMISSED_KEY = 'marinaframe.mock.dismissed-notices';
 const MOCK_SETTINGS_KEY = 'marinaframe.mock.settings';
+/** The mock has no file system. Its pickers return paths under this folder. */
+const MOCK_PICK_FOLDER = '/Users/demo/MarinaFrame/examples';
+
+/** File types the run spec picker accepts (start_run takes one of these). */
+export const SPEC_EXTENSIONS = ['json', 'toml', 'yaml', 'yml'];
 /** Delay between mock events for the running task, to imitate a live run. */
 const MOCK_PLAYBACK_MS = 4000;
 
@@ -54,16 +60,63 @@ function tauriTransport(tauri) {
       });
       return () => stop();
     },
-    async pickSpecFile() {
-      // The dialog plugin is optional. Without it the caller asks for a typed path.
-      if (!tauri.dialog?.open) return null;
-      const picked = await tauri.dialog.open({
-        multiple: false,
-        filters: [{ name: 'Run spec', extensions: ['json', 'toml', 'yaml', 'yml'] }],
+    canPick: () => Boolean(tauri.dialog?.open),
+    async pickSpecFile({ defaultPath } = {}) {
+      return openDialog({
+        title: 'Choose a run spec',
+        defaultPath,
+        filters: [{ name: 'Run spec', extensions: SPEC_EXTENSIONS }],
       });
-      return typeof picked === 'string' ? picked : null;
+    },
+    pickFolder({ title, defaultPath } = {}) {
+      return openDialog({ title, defaultPath, directory: true });
+    },
+    pickFile({ title, defaultPath } = {}) {
+      return openDialog({ title, defaultPath });
+    },
+    onFileDrop({ enter, leave, drop }) {
+      // Tauri takes file drops from the window and sends the full paths as events.
+      tauri.event.listen('tauri://drag-enter', () => enter());
+      tauri.event.listen('tauri://drag-leave', () => leave());
+      tauri.event.listen('tauri://drag-drop', (event) => drop(event.payload?.paths || []));
     },
   };
+
+  // The dialog plugin is optional. Without it the caller asks for a typed path.
+  async function openDialog(options) {
+    if (!tauri.dialog?.open) return null;
+    const picked = await tauri.dialog.open({ multiple: false, ...options });
+    return typeof picked === 'string' ? picked : null;
+  }
+}
+
+/**
+ * File drops in a plain browser. The browser gives the file, not its path, so `toPath`
+ * turns each dropped file into a path for start_run (an upload, or a mock path).
+ */
+function listenForBrowserDrops({ enter, leave, drop }, toPath) {
+  let depth = 0; // dragenter and dragleave fire for every child element
+  const hasFiles = (event) => event.dataTransfer?.types.includes('Files');
+  document.addEventListener('dragenter', (event) => {
+    if (!hasFiles(event)) return;
+    depth += 1;
+    if (depth === 1) enter();
+  });
+  document.addEventListener('dragleave', (event) => {
+    if (!hasFiles(event)) return;
+    depth = Math.max(0, depth - 1);
+    if (depth === 0) leave();
+  });
+  document.addEventListener('dragover', (event) => {
+    if (hasFiles(event)) event.preventDefault();
+  });
+  document.addEventListener('drop', async (event) => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    depth = 0;
+    const files = [...event.dataTransfer.files];
+    drop(await Promise.all(files.map(toPath)));
+  });
 }
 
 // ---------------------------------------------------------------- HTTP transport
@@ -95,27 +148,33 @@ function httpTransport() {
       source.addEventListener('task-changed', (event) => handler(JSON.parse(event.data)));
       return () => source.close();
     },
+    canPick: () => false, // server paths: the settings are typed
     pickSpecFile() {
-      // Upload the chosen file; the server stores it and returns the path to pass to start_run.
       return new Promise((resolve, reject) => {
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = '.json,.toml,.yaml,.yml';
-        input.addEventListener('change', async () => {
+        input.accept = SPEC_EXTENSIONS.map((ext) => `.${ext}`).join(',');
+        input.addEventListener('change', () => {
           const file = input.files?.[0];
           if (!file) return resolve(null);
-          try {
-            const result = await post(`/api/upload_spec?name=${encodeURIComponent(file.name)}`, file, 'application/octet-stream');
-            resolve(result.spec_path);
-          } catch (error) {
-            reject(error);
-          }
+          uploadSpec(file).then(resolve, reject);
         });
         input.addEventListener('cancel', () => resolve(null));
         input.click();
       });
     },
+    pickFolder: async () => null,
+    pickFile: async () => null,
+    onFileDrop(handlers) {
+      listenForBrowserDrops(handlers, (file) => (isSpecFileName(file.name) ? uploadSpec(file) : file.name));
+    },
   };
+
+  // Upload a spec file; the server stores it and returns the path to pass to start_run.
+  async function uploadSpec(file) {
+    const result = await post(`/api/upload_spec?name=${encodeURIComponent(file.name)}`, file, 'application/octet-stream');
+    return result.spec_path;
+  }
 }
 
 // ---------------------------------------------------------------- Mock transport
@@ -308,9 +367,18 @@ function mockTransport() {
     async get_settings(data) {
       return { ...data.settings, ...readStored(MOCK_SETTINGS_KEY, {}) };
     },
+    async get_default_settings(data) {
+      return { ...data.default_settings };
+    },
     async set_settings(data, settings) {
       writeStored(MOCK_SETTINGS_KEY, settings);
       return { ...data.settings, ...settings };
+    },
+    async get_ai_status(data) {
+      const settings = { ...data.settings, ...readStored(MOCK_SETTINGS_KEY, {}) };
+      const enabled = settings.ai_drafting !== false;
+      return { enabled, key_found: true, active: enabled,
+               key_file: '/Users/demo/.config/marinaframe/opencode-go-keys.txt' };
     },
     async dismiss_notice(_data, { id }) {
       const dismissed = new Set(readStored(MOCK_DISMISSED_KEY, []));
@@ -338,8 +406,19 @@ function mockTransport() {
       listeners.add(handler);
       return () => listeners.delete(handler);
     },
-    async pickSpecFile() {
-      return null;
+    // The preview has no file system or dialogs: pickers answer at once with demo paths.
+    canPick: () => true,
+    async pickSpecFile({ defaultPath } = {}) {
+      return `${defaultPath || MOCK_PICK_FOLDER}/spec.json`;
+    },
+    async pickFolder({ defaultPath } = {}) {
+      return defaultPath || '/Users/demo/MarinaFrame/runs';
+    },
+    async pickFile({ defaultPath } = {}) {
+      return defaultPath || '/usr/local/bin/python3';
+    },
+    onFileDrop(handlers) {
+      listenForBrowserDrops(handlers, async (file) => `/Users/demo/Downloads/${file.name}`);
     },
   };
 }
@@ -367,15 +446,46 @@ export function onTaskChanged(handler) {
   return transport.onTaskChanged(handler);
 }
 
-/** Ask for a run spec file. Resolves to a path for start_run, or null (cancelled or unsupported). */
-export function pickSpecFile() {
-  return transport.pickSpecFile();
+/**
+ * Ask for a run spec file, starting in `defaultPath` when given. Resolves to a path for
+ * start_run, or null (cancelled or unsupported).
+ */
+export function pickSpecFile(options) {
+  return transport.pickSpecFile(options);
 }
 
 /** True when pickSpecFile can show a picker; otherwise the UI asks for a typed path. */
 export function canPickSpecFile() {
-  if (transport.name === 'tauri') return Boolean(window.__TAURI__?.dialog?.open);
-  return transport.name === 'http';
+  return transport.name === 'http' || transport.canPick();
+}
+
+/** True when pickFolder and pickFile can show a picker (the desktop app and the preview). */
+export function canPickPaths() {
+  return transport.canPick();
+}
+
+/** Ask for a folder. Resolves to its path, or null. */
+export function pickFolder(options) {
+  return transport.pickFolder(options);
+}
+
+/** Ask for a file of any type. Resolves to its path, or null. */
+export function pickFile(options) {
+  return transport.pickFile(options);
+}
+
+/**
+ * Files dragged onto the window. `enter` and `leave` mark the drag; `drop` receives the
+ * paths of the dropped files (for start_run: on the web, spec files are uploaded first).
+ */
+export function onFileDrop(handlers) {
+  transport.onFileDrop(handlers);
+}
+
+/** True when the file name has a run spec extension. */
+export function isSpecFileName(name) {
+  const ext = name.split('.').pop()?.toLowerCase();
+  return name.includes('.') && SPEC_EXTENSIONS.includes(ext);
 }
 
 /** Fetch an artifact from a task as a data: URL (images) or an ArrayBuffer (STL). */

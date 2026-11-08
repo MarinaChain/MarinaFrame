@@ -283,6 +283,26 @@ pub struct Settings {
     pub runs_folder: String,
     pub worker_python: String,
     pub theme: Theme,
+    /// Let the AI (DeepSeek through OpenCode Go) read the drawing and build the
+    /// draft. On by default (founder decision 2026-11-08: LLM-first). Without a
+    /// key the app falls back to the deterministic draft and says so.
+    #[serde(default = "ai_drafting_default")]
+    pub ai_drafting: bool,
+}
+
+fn ai_drafting_default() -> bool {
+    true
+}
+
+/// Whether new runs use the AI. `active` is false when AI drafting is off or no
+/// model key was found; runs then use the deterministic draft.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AiStatus {
+    pub enabled: bool,
+    pub key_found: bool,
+    pub active: bool,
+    /// Where the app looks for keys (never the keys themselves).
+    pub key_file: String,
 }
 
 /// Payload of the `task-changed` event.

@@ -3195,7 +3195,14 @@
  "settings": {
   "runs_folder": "/Users/demo/MarinaFrame/runs",
   "worker_python": "/Users/demo/MarinaFrame/.venv/bin/python",
-  "theme": "system"
+  "theme": "system",
+  "ai_drafting": true
+ },
+ "default_settings": {
+  "runs_folder": "/Users/demo/Library/Application Support/io.marinachain.marinaframe/runs",
+  "worker_python": "/Users/demo/MarinaFrame/.venv/bin/python",
+  "theme": "system",
+  "ai_drafting": true
  },
  "datasets": [
   {

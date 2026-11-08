@@ -106,38 +106,54 @@ fn spawn_with_store(
     }
 }
 
-/// Configuration of a run started from the app: deterministic policy, and draft
-/// on ambiguity. The default follows the sealed head-to-head (v2) in
-/// `docs/BENCHMARK_FACTORY.md`, section "Head-to-head, hull-disjoint (v2)". A
-/// draft is never review-ready. The CLI default stays `abstain`.
+/// Why an AI run may send the drawing to the model. The person enabled AI
+/// drafting in Settings; the founder made AI drafting the default (2026-11-08).
+pub const AI_DRAFTING_BASIS: &str =
+    "AI drafting is enabled in MarinaFrame settings: the drawing goes to DeepSeek through OpenCode Go to build a draft.";
+
+/// Configuration of a run started from the app: always draft on ambiguity (a draft
+/// is never review-ready). With `use_model` the AI reads the drawing (live policy,
+/// founder decision 2026-11-08: LLM-first); without it the deterministic draft runs,
+/// which the sealed head-to-head (v2) picked over abstain. The CLI default stays `abstain`.
 fn app_run_config(
     worker_python: String,
     worker_source: Option<String>,
     source_spec: String,
     binary_sha256: String,
+    use_model: bool,
 ) -> Config {
     Config {
         worker_python,
         worker_source,
         source_spec,
-        policy: Policy::Deterministic,
+        policy: if use_model {
+            Policy::Live
+        } else {
+            Policy::Deterministic
+        },
         limits: OperationalLimits::default(),
-        provider_transfer_authorized: false,
-        authorization_basis: String::new(),
+        provider_transfer_authorized: use_model,
+        authorization_basis: if use_model {
+            AI_DRAFTING_BASIS.into()
+        } else {
+            String::new()
+        },
         model: GO_MODEL.into(),
         binary_sha256,
         on_ambiguity: OnAmbiguity::Draft,
     }
 }
 
-/// Start a deterministic run of `spec_path`. The task folder is created inside
-/// `runs_folder`. Runs that call the model are not started from the app.
+/// Start a run of `spec_path` in draft mode. The task folder is created inside
+/// `runs_folder`. With `use_model` the AI reads the drawing and builds the draft
+/// (live policy); without it the deterministic draft runs.
 pub fn start_run(
     registry: &ActionRegistry,
     runs_folder: &Path,
     worker_python: &str,
     worker_source: Option<&Path>,
     spec_path: &str,
+    use_model: bool,
 ) -> AppResult<String> {
     let source = util::absolute(Path::new(spec_path))?;
     if !source.is_file() || source.is_symlink() {
@@ -156,6 +172,7 @@ pub fn start_run(
         worker_source,
         source.to_string_lossy().into_owned(),
         util::file_hash(&std::env::current_exe().map_err(|_| "binary_path")?)?,
+        use_model,
     );
     let stem = source
         .file_stem()
@@ -260,10 +277,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn app_runs_default_to_deterministic_draft() {
-        let config = app_run_config("python".into(), None, "spec.json".into(), String::new());
-        assert_eq!(config.on_ambiguity, OnAmbiguity::Draft);
-        assert_eq!(config.policy, Policy::Deterministic);
-        assert!(!config.provider_transfer_authorized);
+    fn app_runs_use_the_model_in_draft_mode_or_the_deterministic_draft() {
+        let ai = app_run_config("python".into(), None, "spec.json".into(), String::new(), true);
+        assert_eq!(ai.on_ambiguity, OnAmbiguity::Draft);
+        assert_eq!(ai.policy, Policy::Live);
+        assert!(ai.provider_transfer_authorized);
+        assert_eq!(ai.authorization_basis, AI_DRAFTING_BASIS);
+        let fallback = app_run_config("python".into(), None, "spec.json".into(), String::new(), false);
+        assert_eq!(fallback.on_ambiguity, OnAmbiguity::Draft);
+        assert_eq!(fallback.policy, Policy::Deterministic);
+        assert!(!fallback.provider_transfer_authorized);
     }
 }

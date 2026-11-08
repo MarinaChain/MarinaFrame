@@ -76,6 +76,8 @@ fn draft_run_shows_its_guess_and_confirming_it_reaches_review() {
     let backend = Backend::new(paths, Some(repo.join("src")), None);
     let mut settings = backend.get_settings();
     settings.worker_python = python;
+    // These tests cover the deterministic flow; never call the model.
+    settings.ai_drafting = false;
     backend.set_settings(settings).unwrap();
 
     let task = backend

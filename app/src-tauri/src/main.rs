@@ -97,6 +97,11 @@ async fn get_settings(backend: Shared<'_>) -> Result<Settings, AppError> {
     run(backend, |b| Ok(b.get_settings())).await
 }
 
+#[tauri::command(rename_all = "snake_case")]
+async fn get_default_settings(backend: Shared<'_>) -> Result<Settings, AppError> {
+    run(backend, |b| Ok(b.default_settings())).await
+}
+
 /// The spec says the argument is `Settings`. Both `{ settings: {...} }` and the
 /// three fields at the top level are accepted; missing fields keep their value.
 #[tauri::command(rename_all = "snake_case")]
@@ -106,6 +111,7 @@ async fn set_settings(
     runs_folder: Option<String>,
     worker_python: Option<String>,
     theme: Option<Theme>,
+    ai_drafting: Option<bool>,
 ) -> Result<Settings, AppError> {
     run(backend, move |b| {
         let next = settings.unwrap_or_else(|| {
@@ -114,11 +120,17 @@ async fn set_settings(
                 runs_folder: runs_folder.unwrap_or(current.runs_folder),
                 worker_python: worker_python.unwrap_or(current.worker_python),
                 theme: theme.unwrap_or(current.theme),
+                ai_drafting: ai_drafting.unwrap_or(current.ai_drafting),
             }
         });
         b.set_settings(next)
     })
     .await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+async fn get_ai_status(backend: Shared<'_>) -> Result<AiStatus, AppError> {
+    run(backend, move |b| Ok(b.ai_status())).await
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -145,7 +157,36 @@ fn development_checkout() -> Option<PathBuf> {
         .flatten()
 }
 
+/// The controller runs each model request in a child process of its own
+/// executable (`<exe> provider-worker --response FILE --timeout SECONDS`). In the
+/// desktop app that executable is the app, so handle that call before any window
+/// or thread starts. Returns the process exit code when this was such a call.
+fn run_provider_worker_if_asked() -> Option<i32> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) != Some("provider-worker") {
+        return None;
+    }
+    let value = |flag: &str| {
+        args.iter()
+            .position(|a| a == flag)
+            .and_then(|i| args.get(i + 1))
+            .cloned()
+    };
+    let (Some(response), Some(timeout)) = (value("--response"), value("--timeout")) else {
+        return Some(2);
+    };
+    let Ok(timeout) = timeout.parse::<u64>() else {
+        return Some(2);
+    };
+    let finished =
+        marinaframe_app_core::model_keys::run_provider_worker(&PathBuf::from(response), timeout);
+    Some(if finished { 0 } else { 1 })
+}
+
 fn main() {
+    if let Some(code) = run_provider_worker_if_asked() {
+        std::process::exit(code);
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
@@ -188,7 +229,9 @@ fn main() {
             resume_task,
             choose_line,
             get_settings,
+            get_default_settings,
             set_settings,
+            get_ai_status,
             dismiss_notice,
             reset_notices,
             list_datasets

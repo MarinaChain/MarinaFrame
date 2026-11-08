@@ -50,7 +50,8 @@ another user.
 ## Screens
 
 1. **Library (left sidebar).** Tasks found under the configured runs folder, newest first:
-   name, status chip, time. A "New run" button (pick a spec file, policy deterministic).
+   name, status chip, time. A "New run" button (pick a spec file). With AI drafting on (the default) and a model key
+   found, the run uses the live policy in draft mode; otherwise the deterministic draft.
    Section "Datasets" lists `work/sources/*` folders read-only (v1: name and size only).
 2. **Workspace (centre).** Drawing and 3D model side by side, resizable split.
    - Drawing: the source page image with the section regions. For the selected section,
@@ -99,6 +100,7 @@ Errors return `{ "code": string, "message": string }` with plain-language `messa
 | `resume_task` | `{ task }` | `{ ok: true }` |
 | `choose_line` | `{ task, section_id, candidate_id }` | `{ ok: true }` (operator intervention, then rebuild/validate via the controller) |
 | `get_settings` / `set_settings` | `{}` / `Settings` | `Settings` |
+| `get_default_settings` | `{}` | `Settings` (fresh-install defaults; the UI offers them as one-click choices) |
 | `dismiss_notice` / `reset_notices` | `{ id }` / `{}` | `{ ok: true }` |
 | `list_datasets` | `{}` | `{ name, path, bytes }[]` |
 
@@ -223,3 +225,17 @@ agent builds a real `TaskView` from a real task and checks it against the same s
 - Choosing another line rebuilds and re-validates through the controller.
 - A dismissed notice stays dismissed after restart.
 - All existing tests, Clippy and the deterministic smoke still pass.
+
+
+## AI drafting (LLM-first default, 2026-11-08)
+
+- Founder decision: the AI builds the draft by default. Setting `ai_drafting` (default `true`,
+  also for settings files written before the field existed).
+- Keys: the environment (`OPENCODE_API_KEY`, `_2`, `_3`) or the key file
+  `~/.config/marinaframe/opencode-go-keys.txt` (one key per line, mode 600; the same file as
+  `scripts/load_opencode_keys.sh`). The app never shows or logs a key; `get_ai_status` returns only
+  `enabled`, `key_found`, `active` and the key file path.
+- Without a key, or with AI drafting off, runs use the deterministic draft and the New run sheet
+  says so.
+- The controller runs each model request in a child process of its own executable
+  (`provider-worker`); the desktop app handles that call in `main` before any window starts.

@@ -27,6 +27,8 @@
     <symbol id="i-cube" viewBox="0 0 16 16"><path d="M8 1.8l5.5 3v6.4L8 14.2l-5.5-3V4.8z" /><path d="M2.5 4.8L8 7.8l5.5-3M8 7.8v6.4" /></symbol>
     <symbol id="i-chevron" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4" /></symbol>
     <symbol id="i-folder" viewBox="0 0 16 16"><path d="M2 4.5h4l1.5 1.5H14v6.5H2z" /></symbol>
+    <symbol id="i-file" viewBox="0 0 16 16"><path d="M4 1.8h5.2L12.5 5v9.2H4z" /><path d="M9 1.8V5.2h3.5" /></symbol>
+    <symbol id="i-drop" viewBox="0 0 16 16"><path d="M8 2.5v7.5M5 7l3 3 3-3" /><path d="M2.5 10.5v3h11v-3" /></symbol>
   </svg>
 
   <div class="app" id="app">
@@ -136,14 +138,30 @@
   <dialog class="sheet" id="settings-sheet" aria-labelledby="settings-title">
     <form method="dialog" class="sheet-body" id="settings-form">
       <h2 id="settings-title">Settings</h2>
-      <label class="field">
-        <span class="field-label">Runs folder</span>
-        <input type="text" name="runs_folder" spellcheck="false" autocomplete="off" required>
-      </label>
-      <label class="field">
-        <span class="field-label">Worker Python</span>
-        <input type="text" name="worker_python" spellcheck="false" autocomplete="off" required>
-      </label>
+      <div class="field">
+        <label class="field-label" for="runs-folder">Runs folder</label>
+        <span class="input-with-button">
+          <input type="text" id="runs-folder" name="runs_folder" spellcheck="false" autocomplete="off" required>
+          <button class="btn" type="button" id="pick-runs-folder" data-pick="folder" data-field="runs_folder" data-title="Choose the runs folder">
+            <svg class="icon"><use href="#i-folder" /></svg>Choose…
+          </button>
+        </span>
+        <div class="suggestions" id="runs-folder-suggestions" aria-label="Suggested runs folders"></div>
+      </div>
+      <div class="field">
+        <label class="field-label" for="worker-python">Worker Python</label>
+        <span class="input-with-button">
+          <input type="text" id="worker-python" name="worker_python" spellcheck="false" autocomplete="off" required>
+          <button class="btn" type="button" id="pick-worker-python" data-pick="file" data-field="worker_python" data-title="Choose the Python for the worker">
+            <svg class="icon"><use href="#i-file" /></svg>Choose…
+          </button>
+        </span>
+        <div class="suggestions" id="worker-python-suggestions" aria-label="Suggested Python programs"></div>
+      </div>
+      <div class="field field-row">
+        <span class="field-label field-label-chip">AI drafting <span class="badge" id="ai-status"></span></span>
+        <label class="toggle" title="Turn AI drafting on or off"><input type="checkbox" name="ai_drafting" aria-label="AI drafting"></label>
+      </div>
       <fieldset class="field">
         <legend class="field-label">Appearance</legend>
         <div class="segmented segmented-text" role="radiogroup">
@@ -153,11 +171,8 @@
         </div>
       </fieldset>
       <div class="field field-row">
-        <div>
-          <span class="field-label">Notices</span>
-          <p class="field-help" id="notices-reset-status">Dismissed notices stay hidden.</p>
-        </div>
-        <button class="btn" type="button" id="reset-notices">Show dismissed notices again</button>
+        <span class="field-label field-label-chip">Notices <span class="badge" id="notices-reset-status" title="Notices you close stay hidden until you show them again.">Hidden</span></span>
+        <button class="btn" type="button" id="reset-notices" title="Show dismissed notices again">Show again</button>
       </div>
       <p class="form-error" id="settings-error" role="alert" hidden></p>
       <div class="sheet-actions">
@@ -169,22 +184,45 @@
 
   <dialog class="sheet" id="newrun-sheet" aria-labelledby="newrun-title">
     <form method="dialog" class="sheet-body" id="newrun-form">
-      <h2 id="newrun-title">New run</h2>
-      <label class="field">
-        <span class="field-label">Run spec file</span>
-        <span class="input-with-button">
-          <input type="text" name="spec_path" spellcheck="false" autocomplete="off" placeholder="/path/to/spec.json" required>
-          <button class="btn" type="button" id="pick-spec">Choose…</button>
-        </span>
-      </label>
-      <p class="field-help">The run uses the deterministic policy. It does not call the model.</p>
+      <div class="sheet-head">
+        <h2 id="newrun-title">New run</h2>
+        <span class="badge" id="newrun-mode"></span>
+      </div>
+      <div class="dropzone" id="spec-dropzone">
+        <div class="dropzone-empty" id="spec-empty">
+          <svg class="icon dropzone-icon"><use href="#i-drop" /></svg>
+          <button class="btn btn-primary" type="button" id="pick-spec">Choose run spec…</button>
+          <span class="dropzone-hint" title="A run spec is a .json, .toml or .yaml file that names the drawing.">or drop it here</span>
+        </div>
+        <div class="dropzone-chosen" id="spec-chosen" hidden>
+          <svg class="icon"><use href="#i-file" /></svg>
+          <span class="path-label" id="spec-chosen-label"></span>
+          <button class="btn btn-small" type="button" id="change-spec">Change…</button>
+        </div>
+      </div>
+      <div class="field" id="recent-specs-field" hidden>
+        <span class="field-label">Recent</span>
+        <div class="choice-list" id="recent-specs" role="list"></div>
+      </div>
+      <div class="field" id="dataset-specs-field" hidden>
+        <span class="field-label">Browse a dataset</span>
+        <div class="suggestions" id="dataset-specs"></div>
+      </div>
+      <details class="typed-path" id="typed-spec">
+        <summary><svg class="icon chevron"><use href="#i-chevron" /></svg>Type a path</summary>
+        <input type="text" name="spec_path" spellcheck="false" autocomplete="off" placeholder="/path/to/spec.json" aria-label="Run spec file path">
+      </details>
       <p class="form-error" id="newrun-error" role="alert" hidden></p>
       <div class="sheet-actions">
         <button class="btn" type="button" id="newrun-cancel">Cancel</button>
-        <button class="btn btn-primary" type="submit" id="newrun-start">Start run</button>
+        <button class="btn btn-primary" type="submit" id="newrun-start" disabled>Start run</button>
       </div>
     </form>
   </dialog>
+
+  <div class="drop-overlay" aria-hidden="true">
+    <div class="drop-overlay-card"><svg class="icon"><use href="#i-drop" /></svg>Drop run spec</div>
+  </div>
 
   <div class="toast" id="toast" role="alert" hidden>
     <span id="toast-text"></span>
