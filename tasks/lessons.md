@@ -41,3 +41,9 @@
 - **Trigger:** W15 review found that taking the darkest pixel across a three-column strip merged two diagonal waterline crossings into one run and accepted an anchor on white station-column pixels.
 - **Rule:** Count ink runs separately in each scan column. Refuse any competing crossing, and measure the accepted anchor on the actual station column. Test diagonal competitors as well as separated horizontal strokes.
 - **Why:** A union of neighbouring pixels loses stroke multiplicity; apparent strip continuity does not establish unique station-column evidence.
+
+### Use small CAD-first development rounds
+- **Date:** 2026-11-08
+- **Trigger:** W17's large campaign repeated the same blocked draft build after investigation already succeeded; the PM stopped it after four after-change cases.
+- **Rule:** Test DTMB L0-L3 first, inspect every trace, and fix the first common blocker. Stop early when the first two cases repeat the prior blocker. Run 24 development cases only after at least three of four produce STEP drafts. In draft mode prioritize usable CAD with cheap warning labels and open guesses; keep strict mode and the frozen 2% RMS/5% volume gate unchanged.
+- **Why:** More instances of the same failure spend tokens without testing a new hypothesis; draft evidence defects must not discard otherwise usable CAD.

@@ -518,6 +518,9 @@ class DomainTools(InvestigationTools):
                 artifacts.extend(_artifact(out / result["exports"][key], self.task_dir, kind="provisional_" + key)
                                  for key in ("step", "stl", "mesh") if key in result["exports"])
         return self._observation(valid, candidate["status"], candidate=candidate,
+                                 next_actions=[{"section_id": item.get("section_id"), "gap": item.get("kind"),
+                                                "suggestion": "Re-trace this section, pick another candidate, or finish to accept draft."}
+                                               for item in candidate["gaps"]],
                                  validation_errors=candidate["gaps"], artifacts=artifacts,
                                  resources=outcome.get("resources", {}), changed=True,
                                  last_valid_preserved=self.state["last_valid_candidate"] is not None)

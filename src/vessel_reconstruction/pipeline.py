@@ -336,6 +336,14 @@ def reconstruct(spec_path: str | Path, output_dir: str | Path, *, export_cad: bo
             for required in input_spec["sections"]:
                 if required["id"] not in found:
                     result["gaps"].append(gap("unresolved_required_section", "A required drawing view did not yield a supported contour; missing evidence is not interpolated.", required["id"]))
+            if "draft" in result:
+                from .draft import prepare_draft_sections
+                result["sections"], repairs = prepare_draft_sections(result["sections"], input_spec["sections"])
+                result["gaps"] = [{**item, "severity": "warning"} for item in result["gaps"]]
+                result["gaps"].extend(repairs)
+                for section in result["sections"]:
+                    if any("Draft uses unreliable" in warning for warning in section.get("warnings", [])):
+                        result["gaps"].append(gap("draft_unreliable_curve", "Using fragmented curve; re-trace this section, pick another candidate, or accept draft.", section["id"], severity="warning"))
             for section in result["sections"]:
                 section.setdefault("evidence", {}).update(source_id="source-1", source_sha256=result["sources"][0]["sha256"],
                     assistance=assistance)
@@ -363,7 +371,7 @@ def reconstruct(spec_path: str | Path, output_dir: str | Path, *, export_cad: bo
                 tolerance = constraints.get("relative_tolerance", .03)
                 for key in ("length_m", "beam_m", "depth_m"):
                     if key in constraints and abs(provisional[key] - constraints[key]) / constraints[key] > tolerance:
-                        result["gaps"].append(gap("dimension_conflict", f"Reconstructed {key} conflicts with the independently declared dimension."))
+                        result["gaps"].append(gap("dimension_conflict", f"Reconstructed {key} conflicts with the independently declared dimension.", severity="warning" if "draft" in result else "blocking"))
                 if not _has_block(result):
                     phase = "geometry_export_and_reload"
                     transaction.checkpoint(phase)

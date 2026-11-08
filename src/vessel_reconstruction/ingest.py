@@ -736,7 +736,7 @@ def _bounded_source_samples(rows: np.ndarray, xs: np.ndarray, *, baseline: float
         "scope": "Interpolation loss relative to the measured row-centroid trace only; excludes endpoint identity, source raster error, calibration, gaps, and semantics."}
 
 
-def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, input_details: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, input_details: dict[str, Any], *, draft: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
     section_id = str(section.get("id", "unnamed"))
     x_m = _finite_number(section.get("x_m"), "x_m")
     calibration = section.get("calibration")
@@ -799,13 +799,13 @@ def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, i
         raise DrawingError("stroke_identity_unresolved", "The trace follows a sustained grid or buttock ruler. The calibrated range may extend beyond the local hull stroke; supply source-supported local endpoints or a separate view. A corridor cannot establish whole-stroke identity.", diagnostic)
     coverage = len(rows) / mask.shape[0]
     allowed_gap = max(3, int(math.ceil(mask.shape[0] * .025)))
-    if diagnostic["max_missing_run_px"] > allowed_gap:
+    if diagnostic["max_missing_run_px"] > allowed_gap and not draft:
         raise DrawingError("missing_curve_segment", f"A curve segment is missing for {diagnostic['max_missing_run_px']} pixels (limit {allowed_gap}); long gaps are not filled.", diagnostic)
-    if coverage < .9:
+    if coverage < .9 and not draft:
         raise DrawingError("missing_curve_segment", f"Only {coverage:.1%} of calibrated rows have source evidence; at least 90% is required.", diagnostic)
     if diagnostic["unresolved_candidate_count"]:
         raise DrawingError("ambiguous_curve", "Multiple sustained source strokes remain plausible across contrast bands. Supply an explicit source-pixel contour selection or separate the views; darkness is not contour identity.", diagnostic)
-    if diagnostic["long_component_support_fraction"] < .65:
+    if diagnostic["long_component_support_fraction"] < .65 and not draft:
         raise DrawingError("unreliable_curve", "Most trace points lack sustained connected ink support; the panel may contain noise or fragmented marks.", diagnostic)
     sample_count = section.get("sample_count", 129)
     if not isinstance(sample_count, int) or isinstance(sample_count, bool) or not 65 <= sample_count <= 1025:
@@ -836,6 +836,9 @@ def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, i
     else:
         warnings.append("One sustained candidate was detected in the declared view; this is not proof of semantic identity or absence of undetectably faint features.")
     contrast = min(1.0, diagnostic["mean_trace_contrast"] / .7)
+    if draft and (diagnostic["long_component_support_fraction"] < .65 or coverage < .9
+                  or diagnostic["max_missing_run_px"] > allowed_gap):
+        warnings.append("Draft uses unreliable or fragmented measured curve as is; re-trace this section or accept the draft.")
     confidence = float(np.clip(coverage * (.65 + .2 * contrast + .15 * diagnostic["long_component_support_fraction"]) * (1 - .25 * diagnostic["alternative_contour_span_fraction"]), 0, 1))
     diagnostic["measurement_uncertainty_m"] = float(max(.75, diagnostic["median_stroke_width_px"] / 2) / ppm)
     diagnostic["coverage"] = coverage
@@ -995,7 +998,9 @@ def extract_sections(spec: dict, base_dir: Path) -> dict:
         seen.add(section_id)
         try:
             extract = extract_pieces if "pieces" in section else _extract_one
-            result, diagnostic = extract(image, section, source["file"], input_details)
+            from .draft import check_draft
+            options = {"draft": True} if extract is _extract_one and check_draft(spec.get("draft")) else {}
+            result, diagnostic = extract(image, section, source["file"], input_details, **options)
             output["sections"].append(result)
             output["diagnostics"]["sections"][section_id] = diagnostic
         except DrawingError as exc:

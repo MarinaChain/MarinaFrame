@@ -71,6 +71,25 @@ The PM stopped the after-change campaign deliberately after four DTMB cases. Do 
 
 Known list cost totals USD 0.11546171 across 83 receipts; the two interrupted requests have unknown cost, not zero cost. No silent wrong builds occurred. These four cases show that investigation now reaches assignments/builds, but draft geometry gates discard the work. The founder redirected work to draft CAD first and four-case rounds, not another large campaign. Compact outcomes go in `outputs/w17/`; no drawings, truth arrays or keys are included.
 
+## W17b: draft CAD first
+
+W17 was committed as `46363f6` after the full suite passed. W17b follows the founder's progress-first direction: only draft mode retains weak traced curves, repairs local centreline defects, and interpolates failed declared sections. These are warnings and open guesses, not measured truth or approval. Strict reconstruction and the 2% RMS/5% volume scoring gate are unchanged.
+
+The draft preparation copies input profiles, applies a 1 mm construction floor at centreline breadth, and interpolates absent declared sections from neighbouring profiles on a 129-sample height-fraction grid. End gaps may copy the nearest usable profile and remain labelled. The normal CAD builder must still produce a valid positive-volume solid. No extra provenance system was added. Build feedback lists section gaps and suggests re-trace, another candidate, or acceptance. Terminal failures retain a valid draft as `draft_not_verified`; an explicit step-boundary pause remains a pause.
+
+### Small-round log
+
+Round 1 used frozen `w17b-round1` runtime/source, four DTMB development cases, two jobs maximum. Every trace was inspected. L0 and L1 reached builds but failed the positive-volume solid check after interior-only pinch repair. A local reproduction showed that flooring all zero-width closure samples, not only interior zeros, makes the same measured profiles form a solid. L2 produced a draft, but it failed the frozen accuracy gate. L3 hit the unchanged CAD complexity limit (603 common knots, limit 513). Round 2 tests the closure correction. The stopped W17 after/thinking campaign was not restarted.
+
+| Round | Status counts | STEP drafts | Gate-correct | Silent wrong | Requests | List cost USD |
+|---|---|---:|---:|---:|---:|---:|
+| W17b 1 | 3 no_progress, 1 draft_not_verified | 1/4 | 0/4 | 0 | 83 | 0.12763727 |
+| W17b 2 | 1 no_progress, 3 draft_not_verified | 3/4 | 0/4 | 0 | 80 | 0.11823454 |
+
+All costs were present in both rounds. Round 2 L0/L1 built, rendered and finished; L2 retained a draft; L3 remains blocked by CAD complexity (614 common knots, limit 513). All three round-two exports fail the unchanged accuracy gate and remain explicitly labelled wrong drafts, not review-ready results. Thus construction progress improved, not accuracy. The threshold of three drafts is met; one 24-case development run is now authorized and running with the same frozen round-two code. No further broad campaign or thinking comparison is started.
+
+Verification: draft repair/interpolation unit test passed; two real-CAD tests passed including draft STEP reimport/render and strict refusal. Quick tier passed with 713 tests. Full suite found an explicit-pause regression; fixed to preserve `Paused`. A later quick run was invalidated by an edit during pinned-worker tests (`worker_implementation_changed`); the stable-source rerun passed, no guard weakened. Final `make test-full` passed: Rust workspace and real-CAD guards, app real task, 713 quick Python tests, 19 Python CAD tests, and smoke (`awaiting_human_review`, valid). Log: main `work/w17/w17b-full-final.log`. Independent read-only diff review reported no confirmed correctness defects.
+
 ## Verification and resume
 
 - History test failed before fix with actual null reason, then passed.

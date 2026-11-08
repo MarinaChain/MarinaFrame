@@ -24,6 +24,21 @@ def _candidate(cid, *, rows=1.0, support=1.0, contrast=0.9, competing=0):
 SECTIONS = [{"id": f"s{i}", "x_m": float(x)} for i, x in enumerate((0, 1, 17.5, 20, 30))]
 
 
+def test_draft_repairs_pinch_and_interpolates_missing_station_without_changing_input():
+    from vessel_reconstruction.draft import prepare_draft_sections
+    measured = [{"id": "a", "x_m": 0., "points_yz_m": [[1., 0.], [1., 1.], [0., 2.], [1., 3.], [1., 4.]], "coverage": 1., "evidence": {}},
+                {"id": "c", "x_m": 2., "points_yz_m": [[2., z] for z in range(5)], "coverage": 1., "evidence": {}}]
+    original = copy.deepcopy(measured)
+    declared = [{"id": sid, "x_m": float(i)} for i, sid in enumerate("abc")]
+    prepared, warnings = prepare_draft_sections(measured, declared)
+    assert measured == original
+    assert [s["id"] for s in prepared] == ["a", "b", "c"]
+    assert min(y for y, z in prepared[0]["points_yz_m"]) == .001
+    assert prepared[1]["coverage"] == 0
+    assert {w["section_id"] for w in warnings} == {"a", "b"}
+    assert all(w["severity"] == "warning" for w in warnings)
+
+
 def test_guesses_take_the_best_line_and_bridge_or_drop_unreadable_stations():
     catalog = {"s0": {"candidates": []},
                "s1": {"candidates": [_candidate("faint", contrast=.2), _candidate("outer", contrast=.95)]},
@@ -152,3 +167,33 @@ def test_draft_build_records_guesses_and_tags_exports(tmp_path):
     history = tools.state["resolved_guesses"]
     assert history[0]["resolution"] == "confirmed" and history[0]["status"] == "resolved"
     assert tools.describe()["open_guesses"] == tools.open_guesses
+
+
+@pytest.mark.cad
+def test_draft_pinch_and_missing_station_make_renderable_step_but_strict_blocks(tmp_path, monkeypatch):
+    from vessel_reconstruction import ingest
+    from vessel_reconstruction.pipeline import reconstruct
+    from vessel_reconstruction.schema import gap
+    path, spec = draft_drawing(tmp_path / "input", count=4)
+    # Exercise real CAD and publication, with deterministic measured defect input.
+    sections = [{"id": s["id"], "x_m": s["x_m"],
+                 "points_yz_m": [[1., 0.], [1., 1.], [0. if i == 1 else 1., 2.], [1., 3.], [1., 4.]],
+                 "coverage": 1., "confidence": .5, "evidence": {}}
+                for i, s in enumerate(spec["sections"]) if i != 2]
+    monkeypatch.setattr(ingest, "extract_sections", lambda *args: {"sections": copy.deepcopy(sections),
+        "gaps": [gap("unreliable_curve", "Fragmented curve.", "s2")]})
+    strict = reconstruct(path, tmp_path / "strict")
+    assert strict["status"] == "blocked" and not strict["exports"]
+    spec["draft"] = {"status": DRAFT_STATUS, "guesses": make_guesses(spec["sections"], {}, {})}
+    path.write_text(json.dumps(spec))
+    draft = reconstruct(path, tmp_path / "draft")
+    assert draft["status"] == "review_required", draft["gaps"]
+    assert draft["exports"]["step"] == "model-draft.step"
+    assert {g["kind"] for g in draft["gaps"]} >= {"draft_repaired", "draft_interpolated"}
+    assert all(g["severity"] == "warning" for g in draft["gaps"])
+    assert verify_run(tmp_path / "draft")["valid"]
+    from vessel_reconstruction.agent_render_worker import render_step
+    render_dir = tmp_path / "render"
+    render_dir.mkdir()
+    rendered = render_step(tmp_path / "draft", "body", render_dir)
+    assert rendered["geometry_audit"]["valid_shape"]

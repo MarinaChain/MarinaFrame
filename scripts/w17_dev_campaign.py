@@ -66,8 +66,13 @@ def prepare():
     print('Prepared and hash-verified 24 development cases.', flush=True)
 
 
-def run(arm, thinking):
+def sample_rows(round_only=False):
     rows = json.loads((OUT / 'sample.json').read_text())
+    return [r for r in rows if r['hull_id'] == 'dtmb5415'] if round_only else rows
+
+
+def run(arm, thinking, round_only=False):
+    rows = sample_rows(round_only)
     runtime = OUT / f'{arm}-runtime'
     source = OUT / f'{arm}-source/src'
     binary = runtime / 'marinaframe'
@@ -98,13 +103,13 @@ def run(arm, thinking):
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         list(pool.map(one, rows))
-    print(f'{arm}: all 24 attempts finished', flush=True)
+    print(f'{arm}: all {len(rows)} attempts finished', flush=True)
 
 
-def score(arm):
+def score(arm, round_only=False):
     from benchmarks.factory import truth, report
 
-    rows = json.loads((OUT / 'sample.json').read_text())
+    rows = sample_rows(round_only)
     results = []
     for row in rows:
         directory = OUT / 'runs' / arm / row['case_id']
@@ -116,6 +121,8 @@ def score(arm):
         except (ValueError, IndexError):
             status = {'status': 'driver_error', 'current_candidate': None}
         candidate = status.get('current_candidate')
+        if not candidate or not candidate.get('valid'):
+            candidate = status.get('last_valid_candidate')
         models = []
         if candidate and candidate.get('path'):
             run_dir = directory / 'task' / candidate['path']
@@ -167,14 +174,15 @@ def score(arm):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['prepare', 'run', 'score'])
-    parser.add_argument('--arm', choices=['baseline', 'after', 'thinking'], default='baseline')
+    parser.add_argument('--arm', default='baseline')
+    parser.add_argument('--round', action='store_true', help='Run only DTMB L0-L3.')
     args = parser.parse_args()
     if args.action == 'prepare':
         prepare()
     elif args.action == 'score':
-        score(args.arm)
+        score(args.arm, args.round)
     else:
-        run(args.arm, args.arm == 'thinking')
+        run(args.arm, args.arm == 'thinking', args.round)
 
 
 if __name__ == '__main__':

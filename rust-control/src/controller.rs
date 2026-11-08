@@ -59,7 +59,19 @@ pub fn new_state(config: Config) -> State {
     }
 }
 fn stop(store: &mut Store, status: Status, reason: &str) -> Result<()> {
-    store.state.status = status;
+    let has_draft = status != Status::Paused
+        && store.state.config.on_ambiguity == OnAmbiguity::Draft
+        && ["current_candidate", "last_valid_candidate"]
+            .iter()
+            .any(|key| {
+                let candidate = &store.state.domain[*key];
+                candidate["draft"] == true && candidate["valid"] == true
+            });
+    store.state.status = if has_draft {
+        Status::DraftNotVerified
+    } else {
+        status
+    };
     store.state.termination_reason = Some(reason.into());
     store.append(
         "task_terminated",
@@ -1538,7 +1550,11 @@ fn investigation_progress_key(store: &Store) -> Result<String> {
 }
 
 fn refuse_repeated_investigation(store: &mut Store, choice: &Decision) -> Result<bool> {
-    let progress = investigation_progress_key(store)?;
+    let progress = if choice.tool == "build_draft" {
+        util::hash_json(&json!({"generation":store.state.generation_id}))?
+    } else {
+        investigation_progress_key(store)?
+    };
     let earlier = store.events.iter().rev().find(|event| {
         event.kind == "decision"
             && event.payload["actor"] == "live_model"
@@ -1598,9 +1614,15 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
     if investigating && refuse_repeated_investigation(store, &choice)? {
         return Ok(store.state.status == Status::Running);
     }
-    let progress_key = investigating
-        .then(|| investigation_progress_key(store))
-        .transpose()?;
+    let progress_key = if investigating && choice.tool == "build_draft" {
+        Some(util::hash_json(
+            &json!({"generation":store.state.generation_id}),
+        )?)
+    } else {
+        investigating
+            .then(|| investigation_progress_key(store))
+            .transpose()?
+    };
     let fingerprint =
         util::hash_json(&json!({"operation":operation,"generation_id":store.state.generation_id}))?;
     let repeats = store
@@ -1793,8 +1815,16 @@ pub fn run_loop(store: &mut Store, max_steps: Option<u64>) -> Result<()> {
                                 "investigation_without_progress",
                             );
                         }
-                        if !live_decision(store)? {
-                            return Ok(());
+                        match live_decision(store) {
+                            Ok(true) => (),
+                            Ok(false) => return Ok(()),
+                            Err(reason)
+                                if ["task_storage_limit", "configured_deployment_budget"]
+                                    .contains(&reason.as_str()) =>
+                            {
+                                return stop(store, Status::Blocked, &reason);
+                            }
+                            Err(reason) => return Err(reason),
                         }
                         if store.state.staged_decision.is_none() {
                             // A refused model output became an observation.
@@ -1969,13 +1999,52 @@ pub fn intervene(store: &mut Store, input: Intervention, actor: &str, note: &str
 pub fn summary(store: &Store) -> Value {
     json!({"schema_version":CONTROL_VERSION,"controller":"rust","task_id":store.state.task_id,"status":store.state.status,
     "termination_reason":store.state.termination_reason,"generation_id":store.state.generation_id,"revision_id":store.state.revision_id,
-    "current_candidate":store.state.domain.get("current_candidate"),"counters":store.state.counters,"head_sha256":store.head,
+    "current_candidate":store.state.domain.get("current_candidate"),
+    "last_valid_candidate":store.state.domain.get("last_valid_candidate"),
+    "counters":store.state.counters,"head_sha256":store.head,
     "engineering_approved":false,"semantic_review":"required","pending":store.state.pending,"policy":store.state.config.policy})
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn stop_keeps_available_draft_for_every_terminal_reason() {
+        for status in [
+            Status::NoProgress,
+            Status::Blocked,
+            Status::Interrupted,
+            Status::Cancelled,
+            Status::ProviderFailed,
+        ] {
+            let (_tmp, mut store) = fixture();
+            store.state.config.on_ambiguity = OnAmbiguity::Draft;
+            store.state.domain["last_valid_candidate"] =
+                json!({"draft":true,"valid":true,"path":"domain/builds/draft"});
+            stop(&mut store, status, "test_stop").unwrap();
+            assert_eq!(store.state.status, Status::DraftNotVerified);
+            assert_eq!(store.state.termination_reason.as_deref(), Some("test_stop"));
+        }
+    }
+    #[test]
+    fn unchanged_draft_build_is_refused_even_after_build_revision_changes() {
+        let (_tmp, mut store) = fixture();
+        let choice = decision("build_draft", json!({}), "build");
+        let key = util::hash_json(&json!({"generation":store.state.generation_id})).unwrap();
+        store
+            .append(
+                "decision",
+                json!({"decision":choice,"actor":"live_model","progress_key":key}),
+            )
+            .unwrap();
+        store.state.revision_id = Some("r0009".into());
+        store.state.domain["current_candidate"] = json!({"valid":false});
+        assert!(refuse_repeated_investigation(&mut store, &choice).unwrap());
+        assert_eq!(
+            store.state.last_observation["status"],
+            "repeated_action_refused"
+        );
+    }
     #[test]
     fn recorded_decision_reason_is_visible_in_investigation() {
         let (_tmp, mut store) = fixture();

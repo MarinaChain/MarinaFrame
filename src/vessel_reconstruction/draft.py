@@ -188,3 +188,52 @@ def check_draft(draft) -> bool:
         return False
     ids = [g.get("section_id") if type(g) is dict else None for g in guesses]
     return all(check_guess(g) for g in guesses) and len(set(ids)) == len(ids)
+
+
+def prepare_draft_sections(sections: list[dict], declared: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Make draft-only profiles usable; generated geometry stays explicitly labelled."""
+    import copy
+    import numpy as np
+    from .errors import GeometryError
+    from .schema import gap
+
+    # Draft construction constants, not evidence or scoring tolerances.
+    minimum_breadth_m = .001
+    interpolation_samples = 129
+    prepared = copy.deepcopy(sections)
+    warnings = []
+    for section in prepared:
+        if "points_yz_m" not in section:
+            continue
+        points = np.asarray(section["points_yz_m"], dtype=float)
+        positive = np.flatnonzero(points[:, 0] > 0)
+        if len(positive):
+            pinched = np.flatnonzero(points[:, 0] < minimum_breadth_m)
+            if len(pinched):
+                # One millimetre is a draft construction floor, not measured ink.
+                points[pinched, 0] = minimum_breadth_m
+                section["points_yz_m"] = points.tolist()
+                warnings.append(gap("draft_repaired", "Centreline breadth clamped to 1 mm for draft CAD; avoids pinches and zero-width closures.", section["id"], severity="warning"))
+    anchors = sorted([s for s in prepared if "points_yz_m" in s], key=lambda s: s["x_m"])
+    found = {s["id"] for s in prepared}
+    for missing in declared:
+        if missing["id"] in found:
+            continue
+        if not anchors:
+            raise GeometryError(f"Section {missing['id']}: no usable neighbouring profile for draft interpolation.")
+        x = missing["x_m"]
+        left = max((s for s in anchors if s["x_m"] < x), key=lambda s: s["x_m"], default=anchors[0])
+        right = min((s for s in anchors if s["x_m"] > x), key=lambda s: s["x_m"], default=anchors[-1])
+        weight = 0. if left["x_m"] == right["x_m"] else (x - left["x_m"]) / (right["x_m"] - left["x_m"])
+        t = np.linspace(0., 1., interpolation_samples)
+        profiles = []
+        for neighbour in (left, right):
+            points = np.asarray(neighbour["points_yz_m"], dtype=float)
+            z = points[0, 1] + t * (points[-1, 1] - points[0, 1])
+            profiles.append(np.column_stack([np.interp(z, points[:, 1], points[:, 0]), z]))
+        points = (1 - weight) * profiles[0] + weight * profiles[1]
+        prepared.append({"id": missing["id"], "x_m": x, "points_yz_m": points.tolist(),
+                         "coverage": 0., "confidence": 0., "evidence": {},
+                         "warnings": ["Draft interpolation; not measured source geometry."]})
+        warnings.append(gap("draft_interpolated", "Missing section interpolated from neighbouring profiles for draft CAD.", missing["id"], severity="warning"))
+    return sorted(prepared, key=lambda s: s["x_m"]), warnings
