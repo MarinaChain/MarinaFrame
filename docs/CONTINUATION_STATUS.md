@@ -463,3 +463,15 @@ campaign counts as a failure.
 - Next experiments to try after it (accuracy levers previously held back for cost): thinking on
   for the investigator, higher request budget, several independent passes with the best draft kept
   by the score, and a stronger model for the editing step.
+
+## 2026-11-09 00:40 SGT: app milestones merged (M1 shell, M2 intake, M3 live backend, M5 exports)
+
+- `continue/v0.5` has: MarinaChain-palette shell with Home/Settings (M1), drawing-set intake with
+  the sheet-only live draft path (M2: intake.py, materialize.py, app/core intake.rs, controller
+  phase-1-first for sheet-only specs, hash-bound materialized spec), live steps API (M3 backend),
+  exports (M5: offsets CSV with formula escaping, hydrostatics, PDF report, package). make test-full
+  passes (912 quick, 24 CAD, smoke).
+- Running: M3 UI (live run screen) lane; 48-case measurement of 9e7161f (baseline vs thinking).
+- Follow-ups: sheet-only intake without an AI key is blocked (only the model reads stations);
+  intake drafts are far off (dtmb5415-L0 43 %, 3-view 42 %: scale read 2x too high in one case);
+  round_digest needs the 3-view truth naming (looks for "dtmb5415-3v").
