@@ -370,3 +370,23 @@ Next idea (W16, after the head-to-head): let DeepSeek identify which waterline e
 crossing belongs to (the model chooses WHAT), and let the W15 adapter measure. Do not start it
 while the head-to-head LLM arm runs: it shares the provider keys, and a rate-limit failure in the
 campaign counts as a failure.
+
+## 2026-11-08 09:50 SGT: head-to-head on sealed v2 finished and published; W17 started
+
+- **Result (288 cases per arm, frozen gate):** abstain 7 correct, deterministic draft 13 correct
+  (75 built, 62 labelled wrong drafts), LLM-first 9 correct (14 built, 5 labelled wrong drafts).
+  No silent wrong build in any arm. Pre-registered rule: **deterministic draft becomes the default**;
+  LLM-first stays an explicit option. Report: `docs/BENCHMARK_FACTORY.md`, section
+  "Head-to-head, hull-disjoint (v2)"; rows in `outputs/h2h-sealed-v2/`. Split v2 is now spent.
+- **Deviations recorded:** 2 abstain cases interrupted by the harness (counted as failures); the
+  W12 model review was added for the LLM arm before any LLM case ran.
+- **Why the LLM arm stalled (270 of 288 `no_progress`):** (1) 87 L1/L2 cases: inspection hit an
+  evidence-budget `resource_limit`, the model saw no reason and every tool refused; (2) the rest:
+  the observation history always sent `"reason": null` (controller read the wrong field), there is
+  no working memory for what the model read, and temperature 0 / thinking off made it repeat the
+  same action until the repeat limit.
+- **W17 (running):** Sol, router job `20261108-093458-14738`, worktree
+  `.claude/worktrees/w17-llm-progress`, brief `work/w17/brief.md`. Fixes the causes above and
+  measures before/after on ~24 non-sealed dev cases. Results to `outputs/w17/`.
+- **Open:** apply the app default change (draft) from the rule; W16 after W17; a new held-out
+  split is needed before any claim that W17 improves the LLM arm.
