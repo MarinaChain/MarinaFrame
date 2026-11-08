@@ -217,7 +217,9 @@ pub fn build(
         }
         messages.push(json!({"role":"user","content":content}));
         let estimated = estimate(&messages, image_count)?;
-        if estimated <= budget {
+        // With no history left (keep == 0) the request is as small as it can be: send it
+        // rather than end the run (happy path). The budget is an estimate, not the model limit.
+        if estimated <= budget || keep == 0 {
             return Ok(Transcript {
                 messages,
                 steps_total: total,
@@ -225,9 +227,6 @@ pub fn build(
                 estimated_tokens: estimated,
                 summary,
             });
-        }
-        if keep == 0 {
-            return Err("context_budget_exceeded".into());
         }
         keep = if keep > 4 { 4 } else { keep - 1 };
     }
@@ -295,15 +294,19 @@ mod tests {
             .messages,
             transcript.messages
         );
-        assert!(build(
+        // An observation over the budget on its own is still sent (happy path), with no
+        // history kept, instead of ending the run.
+        let oversized = build(
             &events,
             &state,
             "system",
-            json!({"large":"x".repeat(120000)}),
+            json!({"large":"x".repeat(600_000)}),
             json!([]),
-            vec![]
+            vec![],
         )
-        .is_err());
+        .unwrap();
+        assert_eq!(oversized.steps_kept, 0);
+        assert!(oversized.estimated_tokens > 100_000);
     }
     #[test]
     fn image_payload_bytes_are_not_text_tokens() {

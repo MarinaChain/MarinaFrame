@@ -630,7 +630,8 @@ pub struct OperationalLimits {
     pub max_spend_usd: Option<f64>,
 }
 fn default_context_tokens() -> u64 {
-    32_000
+    // DeepSeek V4.1 Flash takes about 128k tokens; keep headroom for the reply and the estimate.
+    100_000
 }
 fn is_default_context_tokens(value: &u64) -> bool {
     *value == default_context_tokens()
