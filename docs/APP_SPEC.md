@@ -247,8 +247,26 @@ agent builds a real `TaskView` from a real task and checks it against the same s
 ## Exports
 
 Backend for milestone M5 (design plan section 7; review workflow sections 3, 5, 6 P0-6, P0-7,
-P0-9, P0-11). Package `src/vessel_reconstruction/exports/`. The Tauri command and `js/export.js`
-come later and call this package; it only reads the task folder.
+P0-9, P0-11). Package `src/vessel_reconstruction/exports/`; it only reads the task folder.
+
+In the app (`app/core/src/export.rs`, `js/export.js`):
+
+- `export_run(task, revision, outputs)` with `outputs` a subset of `step`, `stl`, `offsets`,
+  `hydrostatics`, `report`, `package`. The backend runs the command below (arguments, no shell;
+  at most 300 s, then the worker is stopped: `export_timeout`) into a staging folder, moves the
+  chosen files and the manifest into `<task>/exports/<rNNNN>/` and removes the staging folder.
+  Refused while an action runs on the task. Returns `{ folder, revision, files: [{ kind, file,
+  path, bytes }], not_built, stamp, engineering_approved: false }`; `not_built` lists chosen
+  outputs the build does not have (`step`, `stl`). Worker refusal: `export_worker` with the
+  worker's reason.
+- `list_exports(task, revision)`: the same shape for the files already in the folder.
+- `reveal_export(task, path)`: shows a file or folder inside `<task>/exports/` in Finder
+  (`open -R`; `explorer /select,` on Windows; `xdg-open` of the folder on Linux). Other paths:
+  `export_reveal`.
+- UI: an **Export** button in the run title bar (any run with a revision that is not running)
+  opens a sheet: one toggle per output (icon, one-word name), size after export, "Show in
+  Finder" per row and "Show folder". The sheet states "Draft, not for construction"; it never
+  says approved or verified.
 
 Command: `python -m vessel_reconstruction.exports --task DIR --revision rN --out DIR
 [--draft-m T] [--waterlines N] [--vessel NAME]`. It prints the manifest as JSON; exit code 2 (and

@@ -290,6 +290,16 @@ function mockIntakePreview(files, thumbnail, aiActive) {
   return { intake_id: `intake-${Date.now()}`, pages, warnings, render_dpi: 200, particulars: { vessel_name: '' }, ai_active: aiActive };
 }
 
+/** File suffixes and sizes (bytes) the mock "writes" for each export. */
+const MOCK_EXPORT_FILES = {
+  step: [['model.step', 4_812_330]],
+  stl: [['model.stl', 2_160_084]],
+  offsets: [['offsets.csv', 3_912]],
+  hydrostatics: [['hydrostatics.json', 1_731], ['hydrostatics.csv', 1_452]],
+  report: [['report.pdf', 486_220]],
+  package: [['package.zip', 6_903_118]],
+};
+
 function mockTransport() {
   const listeners = new Set();
   let fixtures = null;
@@ -392,6 +402,24 @@ function mockTransport() {
   function isLiveStreaming(data, task) {
     const snapshot = liveStream ? liveSnapshot(data, task) : null;
     return Boolean(snapshot && !snapshot.finished);
+  }
+
+  // ---- Exports: the files the mock "wrote" in this page session.
+  const mockExports = new Map();
+  const mockRevision = (revision) => `r${String(revision).replace(/^r/, '').padStart(4, '0')}`;
+  function mockExportResult(task, revision) {
+    const order = ['step', 'stl', 'offsets', 'hydrostatics', 'report', 'package', 'manifest'];
+    const folderRevision = mockRevision(revision);
+    const files = [...(mockExports.get(`${task}|${folderRevision}`) || [])]
+      .sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
+    return {
+      folder: `${task}/exports/${folderRevision}`,
+      revision: folderRevision,
+      files,
+      not_built: [],
+      stamp: 'Draft hull model from MarinaFrame. Not approved for construction.',
+      engineering_approved: false,
+    };
   }
 
   const commands = {
@@ -541,6 +569,42 @@ function mockTransport() {
     },
     async list_datasets(data) {
       return data.datasets;
+    },
+    async list_exports(data, { task, revision }) {
+      requireTask(data, task);
+      return mockExportResult(task, revision);
+    },
+    async export_run(data, { task, revision, outputs }) {
+      const view = requireTask(data, task);
+      if (!outputs?.length) throw new BackendError('export_outputs', 'Choose at least one export.');
+      await pause(900);
+      const folderRevision = mockRevision(revision);
+      const stem = `${view.summary.name.split(',')[0].replace(/\W+/g, '_')}_${folderRevision}_DRAFT`;
+      const written = mockExports.get(`${task}|${folderRevision}`) || [];
+      const notBuilt = [];
+      const add = (kind, suffix, bytes) => {
+        const file = `${stem}_${suffix}`;
+        const entry = { kind, file, path: `${task}/exports/${folderRevision}/${file}`, bytes };
+        const index = written.findIndex((f) => f.file === file);
+        if (index >= 0) written[index] = entry;
+        else written.push(entry);
+      };
+      for (const kind of outputs) {
+        // A run without a model has no mesh to copy.
+        if (kind === 'stl' && !view.model) {
+          notBuilt.push(kind);
+          continue;
+        }
+        for (const [suffix, bytes] of MOCK_EXPORT_FILES[kind]) add(kind, suffix, bytes);
+      }
+      add('manifest', 'manifest.json', 2310);
+      mockExports.set(`${task}|${folderRevision}`, written);
+      return { ...mockExportResult(task, revision), not_built: notBuilt };
+    },
+    async reveal_export(data, { task, path }) {
+      requireTask(data, task);
+      if (!path?.startsWith(`${task}/exports/`)) throw new BackendError('export_reveal', "That file is not in this run's exports.");
+      return { ok: true };
     },
     async prepare_intake(data, { files }) {
       if (!files?.length || files.length > 32) throw new BackendError('intake_files', 'Drop between 1 and 32 drawing files.');

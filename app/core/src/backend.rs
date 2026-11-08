@@ -3,6 +3,7 @@
 //! the result or the `AppError`. Nothing here depends on a transport.
 use crate::actions::{self, ActionRegistry};
 use crate::error::{AppError, AppResult};
+use crate::export::{self, ExportResult};
 use crate::live::{HullSections, LiveSteps, LiveStore};
 use crate::storage::{self, AppPaths};
 use crate::types::*;
@@ -124,6 +125,39 @@ impl Backend {
         let task = self.start_run(&spec.to_string_lossy())?;
         intake::copy_inputs_to_task(&inputs, Path::new(&task))?;
         Ok(task)
+    }
+
+    /// Write the chosen exports of one revision into `<task>/exports/<rNNNN>/`.
+    /// Refused while an action runs on the task, so the build cannot change meanwhile.
+    pub fn export_run(
+        &self,
+        task: &str,
+        revision: &str,
+        outputs: &[String],
+    ) -> AppResult<ExportResult> {
+        let path = self.task_path(task)?;
+        if self.registry.is_busy(&path) {
+            return Err(AppError::from_code("action_in_progress"));
+        }
+        let settings = storage::get_settings(&self.paths);
+        export::export_run(
+            &path,
+            &self.intake_worker(&settings),
+            revision,
+            outputs,
+            export::EXPORT_TIMEOUT,
+        )
+    }
+
+    /// Files already exported for one revision.
+    pub fn list_exports(&self, task: &str, revision: &str) -> AppResult<ExportResult> {
+        export::list_exports(&self.task_path(task)?, revision)
+    }
+
+    /// Show an exported file (or the exports folder) in Finder.
+    pub fn reveal_export(&self, task: &str, path: &str) -> AppResult<()> {
+        let target = export::check_reveal_path(&self.task_path(task)?, path)?;
+        export::reveal(&target)
     }
 
     /// Whether new runs use the AI, and why not when they do not.
