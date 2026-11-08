@@ -82,3 +82,9 @@
 - **Trigger:** With 4-6 parallel lanes, the disk filled (ENOSPC, 154 MB free) and the first-hull lane stopped mid-measurement. Each worktree keeps its own Rust `target/` (1-7.5 GB) and CAD runs keep build folders.
 - **Rule:** Remove a worktree (after checking `git status --short --ignored` and copying ignored data) as soon as its branch is merged. Tell measurement lanes to delete per-case build folders after scoring and keep new data under ~3 GB. Keep a disk check (stop and warn below ~6 GB free) in the lane watcher.
 - **Why:** Rebuildable build output in finished worktrees took 19 GB that live lanes needed.
+
+### Cap CPU-heavy parallel work at the core count (MarinaFrame)
+- **Date:** 2026-11-08
+- **Trigger:** On a 10-core Mac (4 performance, 6 efficiency) the load average reached 22-26: one lane ran 5 measurement shards, another scored many perturbed hulls, and Sol ran rounds and `make test-full`. CAD builds then hit worker wall-time limits and silently dropped stations, so results depended on load (00045-L2: 4.56 % alone, 14.87 % under load).
+- **Rule:** Keep at most about 8 CPU-heavy processes across all lanes: measurement lanes run at most 2 cases at a time, one `make test-full` at a time. Recheck any regression by rerunning the case alone before trusting it.
+- **Why:** The admission lock covers controller runs, but evaluation scripts bypass it.
