@@ -229,6 +229,11 @@ async fn get_ai_status(backend: Shared<'_>) -> Result<AiStatus, AppError> {
 }
 
 #[tauri::command(rename_all = "snake_case")]
+async fn get_setup_status(backend: Shared<'_>) -> Result<SetupStatus, AppError> {
+    run(backend, move |b| Ok(b.setup_status())).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
 async fn dismiss_notice(backend: Shared<'_>, id: String) -> Result<Ok_, AppError> {
     run(backend, move |b| b.dismiss_notice(&id).map(|_| OK)).await
 }
@@ -336,6 +341,7 @@ fn main() {
             get_default_settings,
             set_settings,
             get_ai_status,
+            get_setup_status,
             dismiss_notice,
             reset_notices,
             list_datasets

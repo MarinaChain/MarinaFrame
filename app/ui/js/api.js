@@ -656,6 +656,19 @@ function mockTransport() {
       return { enabled, key_found: keyFound, active: enabled && keyFound,
                key_file: '/Users/demo/.config/marinaframe/opencode-go-keys.txt' };
     },
+    async get_setup_status(data) {
+      await pause(300);
+      const settings = { ...data.settings, ...readStored(MOCK_SETTINGS_KEY, {}) };
+      // With ?mocknoworker the worker Python is "missing", to show the failing check.
+      const workerOk = !new URLSearchParams(location.search).has('mocknoworker');
+      return {
+        ai: await commands.get_ai_status(data),
+        worker: workerOk
+          ? { ok: true, path: settings.worker_python, message: 'The CAD worker Python is found.' }
+          : { ok: false, path: settings.worker_python, message: 'This Python was not found.' },
+        runs_folder: { ok: true, path: settings.runs_folder, message: 'Runs are saved here.' },
+      };
+    },
     async dismiss_notice(_data, { id }) {
       const dismissed = new Set(readStored(MOCK_DISMISSED_KEY, []));
       dismissed.add(id);

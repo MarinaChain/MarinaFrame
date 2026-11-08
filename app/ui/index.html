@@ -15,6 +15,7 @@
 <body>
   <svg class="icon-sprite" aria-hidden="true">
     <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" /></symbol>
+    <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.4l3.2 3.1L13 4.6" /></symbol>
     <symbol id="i-gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2" /><path d="M8 1.8v1.7M8 12.5v1.7M1.8 8h1.7M12.5 8h1.7M3.6 3.6l1.2 1.2M11.2 11.2l1.2 1.2M3.6 12.4l1.2-1.2M11.2 4.8l1.2-1.2" /></symbol>
     <symbol id="i-home" viewBox="0 0 16 16"><path d="M2.5 7.2L8 2.5l5.5 4.7" /><path d="M4 6v7.5h8V6" /><path d="M6.6 13.5V10h2.8v3.5" /></symbol>
     <symbol id="i-queue" viewBox="0 0 16 16"><path d="M8 2.2l5.8 3L8 8.2 2.2 5.2z" /><path d="M2.2 8L8 11l5.8-3" /><path d="M2.2 10.8L8 13.8l5.8-3" /></symbol>
@@ -149,6 +150,9 @@
       <!-- ============================================================ Intake (F4): js/intake.js fills it -->
       <section class="view view-intake" id="view-intake" data-route="intake" aria-labelledby="intake-title" hidden></section>
 
+      <!-- ============================================================ Welcome and setup check (F1-F2): js/welcome.js fills it -->
+      <section class="view view-welcome" id="view-welcome" data-route="welcome" aria-labelledby="welcome-title" hidden></section>
+
       <!-- ============================================================ Queue (P1) -->
       <section class="view view-queue" id="view-queue" data-route="queue" aria-labelledby="queue-title" hidden>
         <div class="home-scroll">
@@ -261,6 +265,10 @@
                   <input type="checkbox" name="ai_drafting" role="switch" aria-label="AI drafting">
                   <span class="switch-track" aria-hidden="true"></span>
                 </label>
+              </div>
+              <div class="setting-row">
+                <span class="setting-label">Setup check</span>
+                <button class="btn" type="button" id="open-setup" title="Check the AI key, the CAD worker and the runs folder">Check setup</button>
               </div>
             </section>
 

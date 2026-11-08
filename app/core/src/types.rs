@@ -305,6 +305,25 @@ pub struct AiStatus {
     pub key_file: String,
 }
 
+/// One line of the setup check: is this part ready, and what to do when it is not.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SetupCheck {
+    pub ok: bool,
+    /// The path that was checked (empty when none is set).
+    pub path: String,
+    /// One plain sentence for people.
+    pub message: String,
+}
+
+/// The welcome screen's setup check: AI key, CAD worker (Python) and runs folder.
+/// Without a key the app still works with the deterministic draft.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SetupStatus {
+    pub ai: AiStatus,
+    pub worker: SetupCheck,
+    pub runs_folder: SetupCheck,
+}
+
 /// Payload of the `task-changed` event.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskChanged {

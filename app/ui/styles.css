@@ -673,22 +673,32 @@ code { font-family: var(--font-mono); }
 .drop-hint { color: var(--ink-3); font: var(--fs-sm) var(--font-mono); max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .drop-tile .btn { margin-top: var(--space-sm); }
 
-.queue-list { display: flex; flex-direction: column; gap: var(--space-xs); }
+.queue-list { display: flex; flex-direction: column; gap: var(--space-xl); max-width: 1040px; }
+.queue-group { display: flex; flex-direction: column; gap: var(--space-sm); }
+.queue-group-title { display: flex; align-items: center; gap: var(--space-sm); font-size: var(--fs-lg); font-weight: 600; }
+.queue-count { padding: 0 var(--space-sm); border-radius: 999px; background: var(--sunken); color: var(--ink-2); font: 500 var(--fs-sm)/20px var(--font-mono); }
+.queue-rows { display: flex; flex-direction: column; gap: var(--space-xs); }
 .queue-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) 64px 120px 96px 140px;
   align-items: center;
   gap: var(--space-md);
   width: 100%;
-  padding: var(--space-sm) var(--space-md);
+  min-height: 48px;
+  padding: var(--space-sm) var(--space-lg);
   border: 1px solid var(--rule);
   border-radius: var(--radius-lg);
   background: var(--raised);
+  color: var(--ink);
+  font-size: var(--fs-md);
   text-align: left;
+  cursor: pointer;
 }
 .queue-row:hover { border-color: var(--rule-strong); }
-.queue-name { overflow: hidden; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
-.queue-time { color: var(--ink-3); font-size: var(--fs-sm); }
+.queue-row > .badge { justify-self: start; }
+.queue-name { overflow: hidden; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.queue-run, .queue-facts { color: var(--ink-2); white-space: nowrap; }
+.queue-time { color: var(--ink-3); font-size: var(--fs-sm); text-align: right; white-space: nowrap; }
 
 /* ------------------------------------------------------------------ Run view */
 
@@ -2164,6 +2174,46 @@ code { font-family: var(--font-mono); }
   .intake-count { display: none; }
 }
 
+/* ------------------------------------------------------------------ Welcome and setup check (F1-F2) */
+
+.view-welcome { overflow-y: auto; }
+.view-welcome[hidden] { display: none; }
+.welcome { display: grid; place-items: center; min-height: 100%; padding: var(--space-2xl) var(--space-xl); }
+.welcome-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  width: min(680px, 100%);
+  padding: var(--space-2xl);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-dialog);
+  background: var(--surface);
+}
+.welcome-mark { width: 48px; height: auto; }
+.welcome-card h1 { font-size: var(--fs-2xl); font-weight: 600; letter-spacing: -0.01em; }
+.welcome-lead { color: var(--ink-2); font-size: var(--fs-lg); line-height: 1.5; }
+.welcome-checking { display: flex; align-items: center; gap: var(--space-sm); color: var(--ink-2); font-size: var(--fs-md); }
+.setup-list { display: flex; flex-direction: column; gap: var(--space-sm); }
+.setup-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  background: var(--raised);
+}
+.setup-mark { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--pass-soft); color: var(--pass); }
+.setup-row[data-ok="false"] .setup-mark { background: var(--warn-soft); color: var(--warn); }
+.setup-mark .icon { width: 18px; height: 18px; stroke-width: 2; }
+.setup-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.setup-title { display: flex; align-items: center; gap: var(--space-sm); font-size: var(--fs-lg); font-weight: 600; }
+.setup-message { color: var(--ink-2); font-size: var(--fs-md); }
+.setup-path { min-width: 0; overflow: hidden; color: var(--ink-3); font: var(--fs-sm) var(--font-mono); white-space: nowrap; text-overflow: ellipsis; }
+.welcome-actions { display: flex; align-items: center; gap: var(--space-sm); padding-top: var(--space-sm); }
+.welcome-spacer { flex: 1; }
+.welcome-note { color: var(--ink-3); font-size: var(--fs-sm); }
 /* ------------------------------------------------------------------ Vessel tabs and pages
    Run | Export | History in the title bar (design plan section 3). Export and History are
    full-width pages over the run workspace; the Run tab is the workspace itself. */
@@ -2228,12 +2278,22 @@ code { font-family: var(--font-mono); }
 }
 .export-issues .icon { flex: none; }
 .export-list { display: flex; flex-direction: column; gap: var(--space-xs); }
+/* The row is the card: the toggle fills it, the size and Show in Finder sit inside on the right. */
 .export-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 88px auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: var(--space-md);
+  gap: var(--space-sm);
   min-width: 0;
+  padding-right: var(--space-sm);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.export-row:hover { border-color: var(--line-strong); }
+.export-row:has(> .export-toggle[aria-pressed="true"]) {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: var(--accent-soft);
 }
 .export-toggle {
   display: flex;
@@ -2242,20 +2302,16 @@ code { font-family: var(--font-mono); }
   min-width: 0;
   min-height: 56px;
   padding: var(--space-sm) var(--space-md);
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: var(--radius-md);
-  background: var(--surface);
+  background: none;
   color: var(--text-2);
   font-size: var(--fs-md);
   text-align: left;
   cursor: pointer;
 }
-.export-toggle:hover:not(:disabled) { border-color: var(--line-strong); color: var(--text); }
-.export-toggle[aria-pressed="true"] {
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-  background: var(--accent-soft);
-  color: var(--text);
-}
+.export-toggle:hover:not(:disabled), .export-toggle[aria-pressed="true"] { color: var(--text); }
+.export-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .export-toggle:disabled { opacity: 0.6; }
 .export-toggle .icon { flex: none; width: 20px; height: 20px; color: var(--text-3); }
 .export-toggle[aria-pressed="true"] .icon { color: var(--accent); }
@@ -2276,7 +2332,7 @@ code { font-family: var(--font-mono); }
   /* A white check mark; data URLs are allowed by the page's img-src policy. */
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 5.2l2 2 4-4.4' fill='none' stroke='white' stroke-width='1.6'/%3E%3C/svg%3E");
 }
-.export-size { color: var(--text-2); font: var(--fs-md) var(--font-mono); text-align: right; white-space: nowrap; }
+.export-size { min-width: 72px; color: var(--text-2); font: var(--fs-md) var(--font-mono); text-align: right; white-space: nowrap; }
 .export-size-none { color: var(--text-3); }
 .export-actions { display: flex; align-items: center; gap: var(--space-sm); padding-top: var(--space-sm); }
 .export-actions-spacer { flex: 1; }

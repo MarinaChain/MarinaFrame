@@ -174,6 +174,16 @@ impl Backend {
         }
     }
 
+    /// The setup check of the welcome screen. Only file-system checks: it starts no process.
+    pub fn setup_status(&self) -> SetupStatus {
+        let settings = storage::get_settings(&self.paths);
+        SetupStatus {
+            ai: self.ai_status(),
+            worker: check_worker_python(&settings.worker_python),
+            runs_folder: check_runs_folder(&settings.runs_folder),
+        }
+    }
+
     /// True while a background action runs on the task.
     pub fn is_busy(&self, task: &str) -> bool {
         self.task_path(task)
@@ -267,6 +277,50 @@ impl TaskWatcher {
     }
 }
 
+fn setup_check(ok: bool, path: &str, message: &str) -> SetupCheck {
+    SetupCheck {
+        ok,
+        path: path.to_string(),
+        message: message.to_string(),
+    }
+}
+
+/// The worker Python must be an absolute path to a file (the same rule as `start_run`).
+pub fn check_worker_python(worker_python: &str) -> SetupCheck {
+    if worker_python.is_empty() {
+        return setup_check(false, "", "No Python is chosen for the CAD worker.");
+    }
+    let python = Path::new(worker_python);
+    if python.is_absolute() && python.is_file() {
+        setup_check(true, worker_python, "The CAD worker Python is found.")
+    } else {
+        setup_check(false, worker_python, "This Python was not found.")
+    }
+}
+
+/// The runs folder may be missing: the first run makes it, if its parent exists.
+pub fn check_runs_folder(runs_folder: &str) -> SetupCheck {
+    let folder = Path::new(runs_folder);
+    if !folder.is_absolute() {
+        return setup_check(false, runs_folder, "The runs folder is not a full path.");
+    }
+    if folder.is_dir() {
+        return setup_check(true, runs_folder, "Runs are saved here.");
+    }
+    if folder.exists() {
+        return setup_check(false, runs_folder, "This path is a file, not a folder.");
+    }
+    if folder.parent().is_some_and(Path::is_dir) {
+        setup_check(true, runs_folder, "The first run makes this folder.")
+    } else {
+        setup_check(
+            false,
+            runs_folder,
+            "The folder above this one does not exist.",
+        )
+    }
+}
+
 /// Subfolders of `root` with their total size. Symlinks are skipped.
 pub fn list_datasets(root: &Path) -> Vec<Dataset> {
     let Ok(entries) = std::fs::read_dir(root) else {
@@ -324,5 +378,23 @@ mod tests {
         assert!(!status.enabled);
         assert!(!status.active);
         assert!(status.key_file.ends_with("opencode-go-keys.txt"));
+    }
+
+    #[test]
+    fn setup_check_reads_the_worker_python_and_runs_folder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let python = tmp.path().join("python3");
+        std::fs::write(&python, "").unwrap();
+        let path = |p: &Path| p.to_string_lossy().into_owned();
+
+        assert!(!check_worker_python("").ok);
+        assert!(!check_worker_python("python3").ok);
+        assert!(check_worker_python(&path(&python)).ok);
+
+        assert!(check_runs_folder(&path(tmp.path())).ok);
+        assert!(check_runs_folder(&path(&tmp.path().join("runs"))).ok);
+        assert!(!check_runs_folder(&path(&tmp.path().join("a/b"))).ok);
+        assert!(!check_runs_folder(&path(&python)).ok);
+        assert!(!check_runs_folder("runs").ok);
     }
 }

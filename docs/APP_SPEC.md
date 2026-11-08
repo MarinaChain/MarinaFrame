@@ -107,6 +107,7 @@ Errors return `{ "code": string, "message": string }` with plain-language `messa
 | `force_keep_revision` | `{ task, revision_id }` | `{ ok: true }` (see "Mark and revise") |
 | `get_settings` / `set_settings` | `{}` / `Settings` | `Settings` |
 | `get_default_settings` | `{}` | `Settings` (fresh-install defaults; the UI offers them as one-click choices) |
+| `get_setup_status` | `{}` | `SetupStatus { ai: AiStatus, worker: SetupCheck, runs_folder: SetupCheck }`, `SetupCheck { ok, path, message }`. File-system checks only (no process starts). The welcome screen shows it on first use and when the worker or runs folder is not ready; a missing key is not a stop (continue without AI) |
 | `dismiss_notice` / `reset_notices` | `{ id }` / `{}` | `{ ok: true }` |
 | `list_datasets` | `{}` | `{ name, path, bytes }[]` |
 

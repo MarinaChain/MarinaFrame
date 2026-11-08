@@ -11,6 +11,7 @@ import { createModelView } from './model3d.js';
 import { createLiveRun } from './live.js';
 import { createMarkTool } from './mark.js';
 import { createIntake } from './intake.js';
+import { createWelcome } from './welcome.js';
 import { createExport } from './export.js';
 import * as fmt from './format.js';
 
@@ -30,7 +31,7 @@ const RECENT_SPECS_MAX = 5;
 const STRIP_PLACEHOLDER_TILES = 3;
 
 /** The places of the app shell. `run` is the run workspace (drawing | 3D | inspector). */
-const ROUTES = ['home', 'queue', 'intake', 'run', 'settings'];
+const ROUTES = ['home', 'queue', 'intake', 'run', 'settings', 'welcome'];
 
 const state = {
   route: 'home',
@@ -386,15 +387,37 @@ function renderHome() {
   fill(grid, ...vessels.map(vesselCard), dropTile);
 }
 
+/** Queue groups, in order: what the AI works on, what waits for a person, the rest. */
+const QUEUE_GROUPS = [
+  { id: 'working', title: 'Working now', statuses: new Set(['running', 'paused']) },
+  { id: 'ready', title: 'Ready to check', statuses: new Set([...DRAFT_READY, ...NEEDS_ATTENTION]) },
+  { id: 'earlier', title: 'Earlier', statuses: null }, // everything else
+];
+
+function queueRow(task) {
+  const vessel = vesselOfTask(task.task);
+  const run = vessel ? `Run ${runNumber(vessel, task.task)}` : 'Run';
+  return el('li', {},
+    el('button', { class: 'queue-row', type: 'button', title: task.name, onclick: () => openTask(task.task) },
+      el('span', { class: 'queue-name' }, vessel?.name || vesselNameOf(task.name)),
+      el('span', { class: 'queue-run' }, run),
+      statusBadge(task.status),
+      el('span', { class: 'queue-facts' }, fmt.plural(task.sections, 'section')),
+      el('span', { class: 'queue-time', title: fmt.fullTime(task.updated_ms) }, fmt.relativeTime(task.updated_ms))));
+}
+
 function renderQueue() {
-  const active = state.tasks.filter((t) => t.status === 'running' || t.status === 'paused');
-  fill($('queue-list'), ...(active.length
-    ? active.map((task) => el('li', {},
-      el('button', { class: 'queue-row', type: 'button', onclick: () => openTask(task.task) },
-        el('span', { class: 'queue-name', title: task.name }, task.name),
-        statusBadge(task.status),
-        el('span', { class: 'queue-time' }, fmt.shortTime(task.updated_ms)))))
-    : [el('li', { class: 'home-empty' }, 'No runs in the queue.')]));
+  const grouped = new Set();
+  const groups = QUEUE_GROUPS.map((group) => {
+    const tasks = state.tasks.filter((t) => !grouped.has(t) && (!group.statuses || group.statuses.has(t.status)));
+    for (const task of tasks) grouped.add(task);
+    return { ...group, tasks };
+  });
+  fill($('queue-list'), ...(state.tasks.length
+    ? groups.filter((g) => g.tasks.length).map((group) => el('li', { class: 'queue-group' },
+      el('h2', { class: 'queue-group-title' }, group.title, el('span', { class: 'queue-count' }, String(group.tasks.length))),
+      el('ul', { class: 'queue-rows' }, ...group.tasks.map(queueRow))))
+    : [el('li', { class: 'home-empty' }, 'No runs yet. Drop a drawing set on Home to start.')]));
 }
 
 // ---------------------------------------------------------------- opening a task
@@ -463,7 +486,7 @@ function renderTask({ fresh = false } = {}) {
 
 // ---------------------------------------------------------------- title bar: breadcrumb
 
-const ROUTE_TITLES = { home: 'Home', queue: 'Queue', intake: 'New vessel', settings: 'Settings' };
+const ROUTE_TITLES = { home: 'Home', queue: 'Queue', intake: 'New vessel', settings: 'Settings', welcome: 'Setup' };
 
 function crumbSeparator() {
   return el('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '›');
@@ -1475,6 +1498,37 @@ const intake = createIntake({
   openSettings: () => openSettings(),
 });
 
+// ---------------------------------------------------------------- welcome and setup check
+
+const welcome = createWelcome({
+  host: $('view-welcome'),
+  invoke,
+  pickFile,
+  pickFolder,
+  canPickPaths,
+  onDone: async () => {
+    prefs.set('setupSeen', true);
+    state.settings = await invoke('get_settings', {}).catch(() => state.settings);
+    await refreshAiStatus();
+    renderStatusbar();
+    refreshTasks();
+    navigate('home');
+  },
+  openSettings: () => openSettings(),
+});
+$('open-setup').addEventListener('click', () => navigate('welcome'));
+
+/** At start: the welcome screen on first use, or when the worker or runs folder is not ready. */
+async function needsWelcome() {
+  if (!prefs.get('setupSeen', false)) return true;
+  try {
+    const status = await welcome.check();
+    return !status.worker.ok || !status.runs_folder.ok;
+  } catch {
+    return false;
+  }
+}
+
 /** Read a drawing set and show it in the intake view. */
 async function startIntake(paths) {
   const reading = intake.prepare(paths); // marks the set as loading before the view opens
@@ -1790,6 +1844,7 @@ function applyRoute(route) {
   document.body.dataset.route = route;
   renderCrumbs();
   if (route === 'settings') loadSettingsForm();
+  if (route === 'welcome') welcome.show();
   if (route === 'intake') {
     // Nothing to show after a reload: the set lives only in this window.
     if (intake.hasSet()) {
@@ -1831,7 +1886,14 @@ async function start() {
   refreshDatasets();
   await Promise.all([refreshTasks(), refreshAiStatus()]);
   renderStatusbar();
-  applyRoute(routeFromHash() || 'home');
+  const route = routeFromHash() || 'home';
+  // A reload keeps its place; the welcome screen only replaces Home.
+  if (route === 'home' && await needsWelcome()) {
+    history.replaceState(null, '', '#welcome');
+    applyRoute('welcome');
+    return;
+  }
+  applyRoute(route);
 }
 
 start();
