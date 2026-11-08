@@ -6,6 +6,7 @@
 pub mod actions;
 pub mod artifact;
 pub mod backend;
+pub mod draft_view;
 pub mod error;
 pub mod events;
 pub mod files;
