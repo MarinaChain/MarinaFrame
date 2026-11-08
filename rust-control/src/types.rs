@@ -594,6 +594,11 @@ impl Decision {
     }
 }
 
+/// Upper bound for one model request's output tokens (thinking needs room for reasoning).
+pub const MAX_OUTPUT_TOKENS_PER_REQUEST: u64 = 32_768;
+/// Upper bound for one model request's wall time (thinking requests are slow).
+pub const MAX_REQUEST_WALL_SECONDS: u64 = 600;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OperationalLimits {
@@ -664,11 +669,11 @@ impl Default for OperationalLimits {
 impl OperationalLimits {
     pub fn validate(&self) -> Result<()> {
         if !(1..=900).contains(&self.worker_wall_seconds)
-            || !(1..=180).contains(&self.request_wall_seconds)
+            || !(1..=MAX_REQUEST_WALL_SECONDS).contains(&self.request_wall_seconds)
             || !(256 * 1024 * 1024..=8 * 1024 * 1024 * 1024).contains(&self.worker_memory_bytes)
             || !(1..=600).contains(&self.worker_cpu_seconds)
             || !(32 * 1024 * 1024..=8 * 1024 * 1024 * 1024).contains(&self.task_disk_bytes)
-            || !(16..=8192).contains(&self.max_output_tokens_per_request)
+            || !(16..=MAX_OUTPUT_TOKENS_PER_REQUEST).contains(&self.max_output_tokens_per_request)
             || !(4096..=196_608).contains(&self.max_observation_bytes)
             || self.max_images_per_request > 6
             || !(1024..=1_048_576).contains(&self.max_image_bytes)

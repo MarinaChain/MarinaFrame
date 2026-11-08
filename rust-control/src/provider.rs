@@ -219,7 +219,7 @@ pub fn check_input(input: &ProviderInput) -> Result<Vec<u8>> {
         || p["stream"] != false
         || p["max_tokens"]
             .as_u64()
-            .is_none_or(|n| !(16..=8192).contains(&n))
+            .is_none_or(|n| !(16..=crate::types::MAX_OUTPUT_TOKENS_PER_REQUEST).contains(&n))
     {
         return Err("provider_request_contract".into());
     }
@@ -442,7 +442,7 @@ pub fn interpret_completion(receipt: &mut Receipt, bytes: &[u8], key: &str) -> R
 }
 
 pub fn provider_worker(response_path: &Path, timeout: u64) -> Result<()> {
-    if !(1..=180).contains(&timeout) || response_path.exists() {
+    if !(1..=crate::types::MAX_REQUEST_WALL_SECONDS).contains(&timeout) || response_path.exists() {
         return Err("provider_worker_configuration".into());
     }
     let mut raw = Vec::new();

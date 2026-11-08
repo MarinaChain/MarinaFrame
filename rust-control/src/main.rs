@@ -7,6 +7,11 @@ use std::path::{Path, PathBuf};
 use types::*;
 use util::Result;
 
+/// Output-token limit per model request when investigation thinking is enabled.
+const THINKING_OUTPUT_TOKENS: u64 = 16_384;
+/// Wall time per model request when thinking is enabled (completed thinking requests took up to 45 s; 90 s timed out).
+const THINKING_REQUEST_WALL_SECONDS: u64 = 300;
+
 fn arguments(raw: Vec<String>) -> Result<BTreeMap<String, String>> {
     if !raw.len().is_multiple_of(2) {
         return Err("options_require_values".into());
@@ -48,7 +53,7 @@ fn execute() -> Result<serde_json::Value> {
     if command == "help" || command == "--help" {
         return Ok(
             json!({"program":"MarinaFrame 0.4.0 Rust authoritative controller","commands":{
-        "run":"--task DIR --source SPEC --worker-python PYTHON [--worker-source SRC] [--policy deterministic|live] [--on-ambiguity abstain|draft] [--provider-transfer-basis TEXT] [--model-review true] [--context stateless|conversation] [--max-context-tokens 8000..120000] [--investigation-thinking disabled|enabled] [--investigation-temperature 0..2] [--phase1-only true] [--steps N]",
+        "run":"--task DIR --source SPEC --worker-python PYTHON [--worker-source SRC] [--policy deterministic|live] [--on-ambiguity abstain|draft] [--provider-transfer-basis TEXT] [--model-review true] [--context stateless|conversation] [--max-context-tokens 8000..120000] [--investigation-thinking disabled|enabled] [--max-output-tokens 16..32768] [--request-wall-seconds 1..600] [--investigation-temperature 0..2] [--phase1-only true] [--steps N]",
         "resume":"--task DIR [--continue-after-unknown true] [--clear-cancel true] [--steps N]",
         "step":"--task DIR --intervention JSON --actor human_operator|assistant_operator --note TEXT",
         "status":"--task DIR","verify":"--task DIR","cancel":"--task DIR","recover-checkpoint":"--task DIR",
@@ -185,6 +190,21 @@ fn execute() -> Result<serde_json::Value> {
             },
             ..OperationalLimits::default()
         };
+        // Thinking spends output tokens on reasoning before the answer; with the default
+        // 2048 the answer is often cut off (finish_reason "length"). Give it room unless the
+        // caller sets a limit.
+        if limits.investigation_thinking {
+            limits.max_output_tokens_per_request = THINKING_OUTPUT_TOKENS;
+            limits.request_wall_seconds = THINKING_REQUEST_WALL_SECONDS;
+        }
+        if let Some(value) = args.remove("request-wall-seconds") {
+            limits.request_wall_seconds =
+                value.parse().map_err(|_| "invalid_request_wall_seconds")?;
+        }
+        if let Some(value) = args.remove("max-output-tokens") {
+            limits.max_output_tokens_per_request =
+                value.parse().map_err(|_| "invalid_max_output_tokens")?;
+        }
         if let Some(value) = args.remove("investigation-temperature") {
             limits.investigation_temperature = value
                 .parse()
