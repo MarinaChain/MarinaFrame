@@ -21,6 +21,9 @@ import numpy as np
 # Source label of each section of a draft build.
 SOURCE_LABELS = ("traced", "repaired", "interpolated", "ai_inferred", "ai_corrected")
 AUTHORED_LABELS = ("ai_inferred", "ai_corrected")
+# Curve sections that code fills in a draft: the vessel-table form fit
+# (form_fit.py) labels a station it fills ``interpolated``. Never model output.
+TABLE_FIT_LABELS = ("interpolated",)
 FORMS = ("half_breadths", "blend", "standard_form")
 SHAPES = ("U", "V")
 # Bounds of the model's input. Few points are enough for a fair section; more
@@ -95,7 +98,7 @@ def check_authored(authored) -> bool:
     if type(authored) is not dict or set(authored) != {"source_label", "basis", "points_yz_m"}:
         return False
     points = authored["points_yz_m"]
-    if (authored["source_label"] not in AUTHORED_LABELS or type(authored["basis"]) is not str
+    if (authored["source_label"] not in AUTHORED_LABELS + TABLE_FIT_LABELS or type(authored["basis"]) is not str
             or not 1 <= len(authored["basis"]) <= MAX_BASIS_CHARS
             or type(points) is not list or not 5 <= len(points) <= 1025):
         return False
