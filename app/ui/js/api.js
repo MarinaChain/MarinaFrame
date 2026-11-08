@@ -378,6 +378,8 @@ function mockTransport() {
   // With ?mocknokey, the mock has no model key (the intake then cannot start).
   const mockNoKey = new URLSearchParams(location.search).has('mocknokey');
   let liveStreamStarted = 0;
+  // The task the mock started as the sample vessel (shown even with ?mockempty).
+  let sampleTask = null;
 
   /** Steps of the task's live run that exist "now", and whether the run is still going. */
   function liveSnapshot(data, task) {
@@ -455,7 +457,7 @@ function mockTransport() {
   const commands = {
     async list_tasks(data) {
       // With ?mockempty the runs folder has no runs (a first start).
-      if (new URLSearchParams(location.search).has("mockempty")) return [];
+      if (new URLSearchParams(location.search).has("mockempty")) return data.tasks.filter((t) => t.task === sampleTask).map((t) => ({ ...t, status: "running" }));
       startPlayback(data);
       return [...data.tasks]
         .map((t) => (isLiveStreaming(data, t.task) ? { ...t, status: 'running' } : t))
@@ -728,6 +730,18 @@ function mockTransport() {
       await pause(900);
       const status = await commands.get_ai_status(data);
       return mockIntakePreview(files, await mockThumbnail(), status.active);
+    },
+    async start_sample_run(data) {
+      await pause(500);
+      // The mock plays its one recorded live run as the sample.
+      const task = Object.keys(data.live || {})[0];
+      if (!task) throw new BackendError('mock_mode', 'Runs cannot start in the preview.');
+      liveStream = true;
+      liveStreamStarted = 0;
+      sampleTask = task;
+      data.views[task].summary.name = 'Sample hull';
+      data.tasks.find((t) => t.task === task).name = 'Sample hull';
+      return { task };
     },
     async start_intake_run(data, { preview }) {
       await pause(700);

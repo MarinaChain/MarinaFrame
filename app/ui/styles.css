@@ -685,7 +685,8 @@ code { font-family: var(--font-mono); }
 .drop-tile .btn { margin-top: var(--space-sm); }
 
 /* First start (no runs): one large drop target and the four steps ahead. */
-.first-steps { display: none; }
+.first-steps, .first-sample { display: none; }
+.view-home[data-empty="true"] .first-sample { display: inline-flex; color: var(--brand); }
 .view-home[data-empty="true"] .needs-row,
 .view-home[data-empty="true"] .home-section-title { display: none; }
 .view-home[data-empty="true"] .vessel-grid { grid-template-columns: minmax(0, 1fr); }

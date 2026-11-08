@@ -98,6 +98,7 @@ Errors return `{ "code": string, "message": string }` with plain-language `messa
 | `get_hull_sections` | `{ task, revision: string }` | `HullSections` (see "Live steps") |
 | `read_artifact` | `{ task, path }` | `{ mime, base64 }` (`path` is relative to the task folder, with `/` separators, never absolute, and must stay inside it; images and STL only; the STL is in the unit of the CAD export, so the UI scales it to `length_m`) |
 | `start_run` | `{ spec_path: string }` | `{ task: string }` |
+| `start_sample_run` | `{}` | `{ task: string }`. The built-in sample vessel (`app/core/sample/`: a generated three-station drawing and its spec, made by `examples/make_agent_example.py`; no licensed data) is written to `<runs>/samples/sample-<ms>/` and started as a deterministic run (no model calls). Home offers it on a first start |
 | `prepare_intake` | `{ files: string[] }` | `IntakePreview` (see "Intake") |
 | `start_intake_run` | `{ preview: IntakePreview }` | `{ task: string }` (see "Intake") |
 | `cancel_task` | `{ task }` | `{ ok: true }` |

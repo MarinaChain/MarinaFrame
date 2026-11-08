@@ -8,7 +8,7 @@ use crate::live::{HullSections, LiveSteps, LiveStore};
 use crate::storage::{self, AppPaths};
 use crate::types::*;
 use crate::view::{self, ViewContext};
-use crate::{artifact, events, files, intake, model_keys};
+use crate::{artifact, events, files, intake, model_keys, sample};
 use marinaframe_control::util;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -94,6 +94,22 @@ impl Backend {
             self.worker_source.as_deref(),
             spec_path,
             self.ai_status().active,
+        )
+    }
+
+    /// Start the built-in sample vessel (core/sample): a deterministic run, so a first-time
+    /// user sees a whole run with no model key and no cost.
+    pub fn start_sample_run(&self) -> AppResult<String> {
+        let settings = storage::get_settings(&self.paths);
+        let runs = PathBuf::from(&settings.runs_folder);
+        let spec = sample::write_sample(&runs)?;
+        actions::start_run(
+            &self.registry,
+            &runs,
+            &settings.worker_python,
+            self.worker_source.as_deref(),
+            &spec.to_string_lossy(),
+            false,
         )
     }
 

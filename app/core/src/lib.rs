@@ -15,6 +15,7 @@ pub mod intake;
 pub mod live;
 pub mod model_keys;
 pub mod provider_view;
+pub mod sample;
 pub mod storage;
 pub mod types;
 pub mod view;

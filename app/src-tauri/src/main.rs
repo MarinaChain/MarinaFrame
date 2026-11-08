@@ -83,6 +83,14 @@ async fn read_artifact(
 }
 
 #[tauri::command(rename_all = "snake_case")]
+async fn start_sample_run(backend: Shared<'_>) -> Result<Started, AppError> {
+    run(backend, move |b| {
+        b.start_sample_run().map(|task| Started { task })
+    })
+    .await
+}
+
+#[tauri::command(rename_all = "snake_case")]
 async fn start_run(backend: Shared<'_>, spec_path: String) -> Result<Started, AppError> {
     run(backend, move |b| {
         b.start_run(&spec_path).map(|task| Started { task })
@@ -327,6 +335,7 @@ fn main() {
             get_hull_sections,
             read_artifact,
             start_run,
+            start_sample_run,
             prepare_intake,
             start_intake_run,
             export_run,

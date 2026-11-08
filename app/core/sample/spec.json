@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0",
+  "vessel_id": "sample-hull",
+  "units": "m",
+  "symmetry": "port_starboard",
+  "symmetry_evidence": "Explicit generated fixture assumption.",
+  "end_closure": "flat_at_terminal_stations",
+  "source": {
+    "file": "drawing.png"
+  },
+  "sections": [
+    {
+      "id": "s0",
+      "x_m": 0.0,
+      "roi_px": [
+        10,
+        20,
+        195,
+        220
+      ],
+      "calibration": {
+        "centerline_px": 20,
+        "baseline_px": 210,
+        "pixels_per_metre": 60
+      },
+      "z_min_m": 0.0,
+      "z_max_m": 3.0,
+      "evidence": "Declared calibration for a generated development drawing."
+    },
+    {
+      "id": "s1",
+      "x_m": 2.0,
+      "roi_px": [
+        210,
+        20,
+        395,
+        220
+      ],
+      "calibration": {
+        "centerline_px": 220,
+        "baseline_px": 210,
+        "pixels_per_metre": 60
+      },
+      "z_min_m": 0.0,
+      "z_max_m": 3.0,
+      "evidence": "Declared calibration for a generated development drawing."
+    },
+    {
+      "id": "s2",
+      "x_m": 4.0,
+      "roi_px": [
+        410,
+        20,
+        595,
+        220
+      ],
+      "calibration": {
+        "centerline_px": 420,
+        "baseline_px": 210,
+        "pixels_per_metre": 60
+      },
+      "z_min_m": 0.0,
+      "z_max_m": 3.0,
+      "evidence": "Declared calibration for a generated development drawing."
+    }
+  ]
+}

@@ -1744,6 +1744,18 @@ async function chooseDrawingSet() {
   }
 }
 
+/** The built-in sample vessel (a generated drawing): a whole run without the person's files. */
+async function startSampleRun() {
+  let task = null;
+  const started = await runAction('Starting the sample vessel…', async () => {
+    ({ task } = await invoke('start_sample_run', {}));
+  });
+  if (!started || !task) return;
+  await refreshTasks();
+  await openTask(task);
+}
+$('try-sample').addEventListener('click', () => startSampleRun());
+
 // ---------------------------------------------------------------- new run (developers: a spec file)
 
 // The spec file is chosen with the picker, by dropping it on the window, from the recent
@@ -2016,6 +2028,7 @@ function paletteCommands() {
   add('Go to', 'Setup check', () => navigate('welcome'));
   add('Help', 'Keyboard shortcuts', () => shortcutSheet.open(), { keys: '?' });
   add('Start', 'New vessel from drawings', () => chooseDrawingSet(), { keys: '⌘N' });
+  add('Start', 'Open the sample vessel', () => startSampleRun(), { hint: 'a generated drawing, no AI cost' });
   return list;
 }
 
