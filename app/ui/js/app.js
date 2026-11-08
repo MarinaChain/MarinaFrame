@@ -17,6 +17,7 @@ import { buildChanges, renderChanges } from './changes.js';
 import { createAreas } from './areas.js';
 import { createEvidenceCard } from './evidence.js';
 import { createShortcutSheet } from './shortcuts.js';
+import { createParts } from './parts.js';
 import { createExport } from './export.js';
 import * as fmt from './format.js';
 
@@ -500,6 +501,7 @@ async function openTask(task) {
   live.open(task);
   navigate('run');
   // Clear the previous run at once: its drawing and model must not show under this name.
+  model.setHighlightBox(null);
   renderTask({ fresh: true });
   await loadTask({ fresh: true });
 }
@@ -611,7 +613,7 @@ function renderActions() {
 
 // ---------------------------------------------------------------- vessel tabs: Run | Export | History
 
-const VESSEL_TABS = ['run', 'export', 'history'];
+const VESSEL_TABS = ['run', 'parts', 'export', 'history'];
 
 function setVesselTab(tab) {
   if (!VESSEL_TABS.includes(tab)) return;
@@ -621,6 +623,10 @@ function setVesselTab(tab) {
 
 /** Show the chosen vessel tab. Run is the workspace; Export and History are full-width pages. */
 function renderVesselPage() {
+  // Parts shows only for a run with whole-vessel parts; without them the tab falls back to Run.
+  const hasParts = Boolean(state.view?.components?.length);
+  if (state.vesselTab === 'parts' && !hasParts && state.view) state.vesselTab = 'run';
+  $('vessel-tabs').querySelector('[data-vtab="parts"]').hidden = !hasParts;
   const tab = state.vesselTab;
   for (const button of $('vessel-tabs').querySelectorAll('[data-vtab]')) {
     button.setAttribute('aria-selected', String(button.dataset.vtab === tab));
@@ -632,6 +638,7 @@ function renderVesselPage() {
   $('view-switch').hidden = tab !== 'run';
   if (tab === 'export') exporter.show(state.task, state.view, toCheckCount(state.view));
   if (tab === 'history') renderHistory();
+  if (tab === 'parts') parts.show(state.view);
 }
 
 /** History: every run of this vessel, newest first. */
@@ -2000,6 +2007,15 @@ for (const item of document.querySelectorAll('.rail-item')) {
 }
 $('toast-close').addEventListener('click', () => { $('toast').hidden = true; });
 const exporter = createExport({ host: $('vessel-page-export'), invoke });
+// Parts tab (js/parts.js): whole-vessel components with per-part review.
+const parts = createParts({
+  host: $('vessel-page-parts'),
+  review: (id, decision) => invoke('review_component', { task: state.task, component_id: id, decision }).catch((error) => { showError(error); throw error; }),
+  showIn3d: (part) => {
+    setVesselTab('run');
+    model.setHighlightBox(part.bbox_m);
+  },
+});
 $('vessel-tabs').addEventListener('click', (event) => {
   const tab = event.target.closest('[data-vtab]');
   if (tab) setVesselTab(tab.dataset.vtab);
@@ -2067,6 +2083,7 @@ function paletteCommands() {
         { hint: fmt.sectionStateLabel(section.state) });
     }
     add('This vessel', 'Run', () => setVesselTab('run'));
+    if (state.view.components?.length) add('This vessel', 'Parts', () => setVesselTab('parts'), { hint: 'hull, decks, deckhouses' });
     add('This vessel', 'Export', () => setVesselTab('export'), { hint: 'STEP, STL, offsets, hydrostatics, report' });
     add('This vessel', 'History', () => setVesselTab('history'));
     add('Layout', 'Drawing only', () => setLayout('drawing'), { keys: '⌘1' });
@@ -2136,6 +2153,7 @@ document.addEventListener('keydown', (event) => {
     else if (event.key === ']') stepSection(1);
     else if ((event.key === 'n' || event.key === 'N') && state.vesselTab === 'run') nextToCheck();
     else if ((event.key === 'a' || event.key === 'A') && state.vesselTab === 'run' && canDecide()) decide(currentSection(), acceptCandidate(currentSection()));
+    else if ((event.key === 'a' || event.key === 'A') && state.vesselTab === 'parts') handled = parts.acceptSelected();
     else if ((event.key === 'o' || event.key === 'O') && state.vesselTab === 'run' && canDecide()) decide(currentSection(), otherCandidate(currentSection()));
     else if (event.key === 'r' || event.key === 'R') model.resetView();
     else if (event.key === ' ' && !event.target.closest?.('button')) handled = live.togglePlay();

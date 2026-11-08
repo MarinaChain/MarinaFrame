@@ -290,6 +290,38 @@ function mockIntakePreview(files, thumbnail, aiActive) {
   return { intake_id: `intake-${Date.now()}`, pages, warnings, render_dpi: 200, particulars: { vessel_name: '' }, ai_active: aiActive };
 }
 
+/**
+ * Whole-vessel parts of the mock survey launch (a made-up 24 m vessel, not a real drawing),
+ * in the shape of APP_SPEC "Whole-vessel parts".
+ */
+const MOCK_COMPONENTS = (() => {
+  const arg = (name, value, source, basis = null) => ({ name, value, source, basis });
+  const part = (id, op, label, status, view, reason, box, volume, args) => ({
+    id, op, label, status, built: Boolean(box), view, reason,
+    bbox_m: box ? { min: box[0], max: box[1] } : null,
+    volume_m3: volume, step_path: box ? `${id}.step` : null, arguments: args, review: 'open',
+  });
+  return [
+    part('hull', 'hull', 'Hull', 'measured_draft', 'body', 'Built from the body plan sections; see the section strip.',
+      [[0, -3.6, 0], [24, 3.6, 3.4]], 341.7,
+      [arg('length', '24.00 m', 'traced', 'Station spacing on the body plan'), arg('beam', '7.20 m', 'traced', 'Widest section'), arg('depth', '3.40 m', 'traced', 'Deck line at midship')]),
+    part('main_deck', 'deck', 'Main deck', 'draft_guess', 'profile', 'thickness: guessed: typical deck plate',
+      [[0, -3.6, 3.39], [24, 3.6, 3.4]], 1.6,
+      [arg('top', '3.40 m', 'traced', 'Label MAIN DECK on the profile'), arg('outline', 'deck edge, 18 points', 'traced', 'Plan view outline'), arg('thickness', '0.010 m', 'guessed', 'Typical deck plate')]),
+    part('house_t1', 'deckhouse', 'Deckhouse tier 1', 'measured_draft', 'plan', 'Component identity needs human review',
+      [[9, -2.6, 3.4], [17, 2.6, 5.8]], 99.8,
+      [arg('outline', '4 walls', 'traced', 'End wall and side walls on the main deck plan'), arg('height', '3.40 to 5.80 m', 'traced', 'Labels MAIN DECK and A DECK')]),
+    part('wheelhouse', 'deckhouse', 'Wheelhouse', 'draft_guess', 'profile', 'outline: guessed: the tier below gives the breadth; the wheelhouse plan has no scale',
+      [[11, -2.0, 5.8], [15.5, 2.0, 8.2]], 43.2,
+      [arg('height', '5.80 to 8.20 m', 'traced', 'Profile roof line'), arg('outline', 'tier 1 breadth', 'guessed', 'Wheelhouse plan has no scale')]),
+    part('aft_bulwark', 'bulwark', 'Aft bulwark', 'draft_guess', 'profile', 'thickness: guessed: typical bulwark plate',
+      [[0, -3.6, 3.4], [9, 3.6, 4.4]], 1.6,
+      [arg('height', '3.40 to 4.40 m', 'traced', 'Profile bulwark line'), arg('outline', 'deck edge aft of the house', 'traced', 'Plan view outline'), arg('thickness', '0.050 m', 'guessed', 'Typical bulwark plate')]),
+    part('rudder', 'appendage', 'Rudder', 'draft_guess', null, 'Not built: no view of the stern below the waterline was found.',
+      null, null, []),
+  ];
+})();
+
 /** File suffixes and sizes (bytes) the mock "writes" for each export. */
 const MOCK_EXPORT_FILES = {
   step: [['model.step', 4_812_330]],
@@ -380,6 +412,8 @@ function mockTransport() {
   let liveStreamStarted = 0;
   // The task the mock started as the sample vessel (shown even with ?mockempty).
   let sampleTask = null;
+  // The person's review of whole-vessel parts in this page session (component id -> decision).
+  const componentReviews = new Map();
 
   /** Steps of the task's live run that exist "now", and whether the run is still going. */
   function liveSnapshot(data, task) {
@@ -491,6 +525,10 @@ function mockTransport() {
     },
     async get_task(data, { task }) {
       const view = clone(requireTask(data, task));
+      // Whole-vessel parts (APP_SPEC "Whole-vessel parts"): the mock gives them to the survey launch.
+      view.components = task.endsWith('survey-launch')
+        ? clone(MOCK_COMPONENTS).map((c) => ({ ...c, review: componentReviews.get(c.id) || 'open' }))
+        : null;
       if (isLiveStreaming(data, task)) {
         view.summary.status = 'running';
         // Before the first build, a real run has read no sections and has no model yet.
@@ -673,6 +711,13 @@ function mockTransport() {
           : { ok: false, path: settings.worker_python, message: 'This Python was not found.' },
         runs_folder: { ok: true, path: settings.runs_folder, message: 'Runs are saved here.' },
       };
+    },
+    async review_component(data, { task, component_id: id, decision }) {
+      requireTask(data, task);
+      if (!['accepted', 'open'].includes(decision)) throw new BackendError('review_decision', 'Unknown review decision.');
+      await pause(300);
+      componentReviews.set(id, decision);
+      return { ok: true };
     },
     async dismiss_notice(_data, { id }) {
       const dismissed = new Set(readStored(MOCK_DISMISSED_KEY, []));

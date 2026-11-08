@@ -71,7 +71,7 @@ export function createModelView({ host, onPick = null }) {
     renderer = new THREE.WebGLRenderer({ antialias: true });
   } catch {
     showEmpty('3D view not available', 'This computer did not allow a WebGL view.');
-    return { setModel() {}, setSelected() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {} };
+    return { setModel() {}, setSelected() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {} };
   }
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.domElement.setAttribute('aria-hidden', 'true');
@@ -95,6 +95,8 @@ export function createModelView({ host, onPick = null }) {
 
   const hullMaterial = new THREE.MeshStandardMaterial({ roughness: 0.62, metalness: 0.0, side: THREE.DoubleSide });
   const content = new THREE.Group();
+  /** The outline of a whole-vessel part picked on the Parts tab, or null. */
+  let highlight = null;
   scene.add(content);
   // Live section curves stay outside `content`, so a new STL does not remove them.
   const growth = createSectionGrowth({
@@ -387,6 +389,25 @@ export function createModelView({ host, onPick = null }) {
       applyColours();
       resize();
       if (!keepCamera) resetView();
+    },
+    /**
+     * Outline one whole-vessel part (APP_SPEC "Whole-vessel parts") as a box in the selection
+     * blue; null removes it. `bbox` is { min: [x, y, z], max: [x, y, z] } in metres.
+     */
+    setHighlightBox(bbox) {
+      if (highlight) {
+        content.remove(highlight);
+        highlight.geometry.dispose();
+        highlight = null;
+      }
+      if (bbox) {
+        const size = bbox.max.map((v, i) => Math.max(v - bbox.min[i], 0.02));
+        const geometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(...size));
+        highlight = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: colours.accent }));
+        highlight.position.set(...bbox.min.map((v, i) => v + size[i] / 2));
+        content.add(highlight);
+      }
+      requestRender();
     },
     setSelected(id) {
       selectedId = id;

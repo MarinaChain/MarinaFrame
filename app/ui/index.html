@@ -80,6 +80,7 @@
       <!-- Vessel tabs (design plan section 3). Sheets and Compare come later. -->
       <div class="vessel-tabs" id="vessel-tabs" role="tablist" aria-label="Vessel" hidden>
         <button type="button" role="tab" data-vtab="run" aria-controls="views">Run</button>
+        <button type="button" role="tab" data-vtab="parts" aria-controls="views" hidden>Parts</button>
         <button type="button" role="tab" data-vtab="export" aria-controls="views">Export</button>
         <button type="button" role="tab" data-vtab="history" aria-controls="views">History</button>
       </div>
@@ -264,6 +265,7 @@
         </section>
 
         <!-- Export and History tabs of the vessel: full-width pages over the run workspace. -->
+        <section class="vessel-page" id="vessel-page-parts" data-vtab="parts" aria-labelledby="parts-title" hidden></section>
         <section class="vessel-page" id="vessel-page-export" data-vtab="export" aria-labelledby="export-title" hidden></section>
         <section class="vessel-page" id="vessel-page-history" data-vtab="history" aria-labelledby="history-title" hidden></section>
       </section>

@@ -2626,6 +2626,57 @@ code { font-family: var(--font-mono); }
 .history-facts { min-width: 0; overflow: hidden; color: var(--ink-3); white-space: nowrap; text-overflow: ellipsis; }
 .history-time { color: var(--ink-3); font-size: var(--fs-sm); white-space: nowrap; }
 
+/* Parts (js/parts.js): tree | sketches and the selected part. */
+.parts-page { max-width: 1240px; }
+.parts-layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: var(--space-xl); align-items: start; }
+.parts-tree { display: flex; flex-direction: column; gap: var(--space-md); }
+.parts-group h2 { margin-bottom: var(--space-xs); color: var(--ink-3); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
+.parts-group ul { display: flex; flex-direction: column; gap: 2px; }
+.parts-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  width: 100%;
+  min-height: 36px;
+  padding: 0 var(--space-md);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--ink);
+  font-size: var(--fs-md);
+  text-align: left;
+  cursor: pointer;
+}
+.parts-row:hover { background: var(--hover); }
+.parts-row[aria-pressed="true"] { border-color: var(--brand); background: var(--brand-soft); }
+.parts-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.parts-row .badge { flex: none; }
+.parts-main { display: flex; flex-direction: column; gap: var(--space-lg); min-width: 0; }
+.parts-sketches { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-md); }
+.parts-sketch { margin: 0; padding: var(--space-sm) var(--space-md) var(--space-md); border: 1px solid var(--rule); border-radius: var(--radius-md); background: var(--surface); }
+.parts-sketch figcaption { margin-bottom: var(--space-xs); color: var(--ink-3); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
+.parts-sketch svg { display: block; width: 100%; height: auto; }
+.parts-box { fill: color-mix(in srgb, var(--ink-3) 10%, transparent); stroke: var(--ink-3); stroke-width: 1.2; vector-effect: non-scaling-stroke; cursor: pointer; }
+.parts-box[data-status="draft_guess"] { stroke: var(--guess-ink); stroke-dasharray: 5 3; fill: color-mix(in srgb, var(--guess-ink) 10%, transparent); }
+.parts-box.selected { stroke: var(--brand); stroke-width: 2.4; stroke-dasharray: none; fill: color-mix(in srgb, var(--brand) 16%, transparent); }
+.parts-detail { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-lg); border: 1px solid var(--rule); border-radius: var(--radius-lg); background: var(--surface); }
+.parts-detail-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); }
+.parts-detail-head h2 { font-size: var(--fs-xl); font-weight: 600; }
+.parts-reason { color: var(--ink-2); font-size: var(--fs-md); }
+.parts-box-line { color: var(--ink-2); font: var(--fs-sm) var(--font-mono); }
+.parts-args { width: 100%; border-collapse: collapse; font-size: var(--fs-md); }
+.parts-args th, .parts-args td { padding: var(--space-xs) var(--space-sm); border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
+.parts-args thead th { color: var(--ink-3); font-size: var(--fs-xs); font-weight: 600; }
+.parts-args tbody th { font-weight: 600; white-space: nowrap; }
+.parts-value { font-family: var(--font-mono); font-size: var(--fs-sm); white-space: nowrap; }
+.parts-basis { color: var(--ink-2); font-size: var(--fs-sm); }
+.parts-args tr[data-source="guessed"] { background: var(--guess-soft); }
+.parts-note { display: flex; align-items: center; gap: var(--space-sm); color: var(--warn); font-size: var(--fs-sm); }
+@media (max-width: 1100px) {
+  .parts-layout { grid-template-columns: minmax(0, 1fr); }
+  .parts-sketches { grid-template-columns: minmax(0, 1fr); }
+}
 /* Changes in a run (js/changes.js): one card per scored revision, oldest first. */
 .page-subtitle { margin-top: var(--space-lg); font-size: var(--fs-xl); font-weight: 600; }
 .changes { display: flex; flex-direction: column; gap: var(--space-md); }

@@ -63,6 +63,7 @@ const SCREENS = [
   { name: 'checks', path: '/#home', steps: { vessel: 'Survey', tab: 'checks' } },
   { name: 'export', path: '/#home', steps: { vessel: 'Survey', vesselTab: 'export' } },
   { name: 'history', path: '/#home', steps: { vessel: 'Survey', vesselTab: 'history' } },
+  { name: 'parts', path: '/#home', steps: { vessel: 'Survey', vesselTab: 'parts' } },
   { name: 'palette', path: '/#home', steps: { vessel: 'Survey', open: 'palette' } },
   { name: 'shortcuts', path: '/#queue', steps: { open: 'shortcuts' } },
 ];
