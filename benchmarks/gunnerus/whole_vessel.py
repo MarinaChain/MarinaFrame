@@ -110,30 +110,54 @@ def interval_record(region, low, high, sha) -> dict:
             'entity_ids': low['entity_ids'] + high['entity_ids']}
 
 
-def outline_record(region, view, outline, entity_count, sha) -> dict:
+def outline_record(region, view, outline, evidence, sha) -> dict:
     return {'status': 'measured', 'kind': 'outline', 'view': 'plan', 'region': region,
             'method': 'enclosed_region', 'source_sha256': sha, 'value': outline,
-            'entity_ids': [f'{view}:{entity_count} entities'], 'plan_view': view}
+            'entity_ids': [evidence], 'plan_view': view}
 
 
-def build_inputs(sources: Path) -> dict:
-    """Program, measurements and guesses for the step 1 components."""
-    path = sources / GA_FILE
-    sha = source_hash(path)
-    entities = read_dxf(path)
-    levels = ga_reader.profile_levels(entities, VIEWS['profile'])
-    lv = read_levels(levels, label_heights(path, VIEWS['profile']))
-    rasters = {name: ga_reader.PlanRaster(entities, view) for name, view in VIEWS.items() if view.kind == 'plan'}
+class VectorReader:
+    """Drawing evidence from the GA DXF: levels, printed labels, footprints and end walls."""
+
+    def __init__(self, sources: Path):
+        path = sources / GA_FILE
+        self.source_file, self.sha = GA_FILE, source_hash(path)
+        self.entities = read_dxf(path)
+        self.levels = ga_reader.profile_levels(self.entities, VIEWS['profile'])
+        self.labels = label_heights(path, VIEWS['profile'])
+        self.plans = {name: ga_reader.PlanRaster(self.entities, view)
+                      for name, view in VIEWS.items() if view.kind == 'plan'}
+
+    def footprint(self, view, x_range, mode, peel):
+        return self.plans[view].footprint(x_range, mode, peel)
+
+    def evidence(self, view) -> str:
+        return f'{view}:{len(self.plans[view].entity_ids)} entities'
+
+    def end_walls(self, deck_view, x_range, min_length_m):
+        view = VIEWS[deck_view]
+        wall_view = View(view.name, view.kind, view.bounds, view.origin, layers=END_WALL_LAYERS)
+        return ga_reader.transverse_walls(self.entities, wall_view, x_range, min_length_m)
+
+
+def build_inputs(sources: Path, reader=None) -> dict:
+    """Program, measurements and guesses for the step 1 components.
+
+    ``reader`` gives the drawing evidence (default: the GA DXF). The raster path
+    (``whole_vessel_raster.RasterReader``) gives the same evidence from the PDF image.
+    """
+    reader = reader or VectorReader(sources)
+    sha = reader.sha
+    lv = read_levels(reader.levels, reader.labels)
     measurements, guesses, components = {}, {}, []
 
     def extent(name, fallback):
         return lv[name]['extent'] or fallback
 
     def outline(region, view, x_range, mode, fallback, basis, peel=1):
-        polygon = rasters[view].footprint(x_range, mode, peel) if view else None
+        polygon = reader.footprint(view, x_range, mode, peel) if view else None
         if polygon:
-            measurements[f'{region}_outline'] = outline_record(region, view, polygon,
-                                                               len(rasters[view].entity_ids), sha)
+            measurements[f'{region}_outline'] = outline_record(region, view, polygon, reader.evidence(view), sha)
         else:
             guesses[f'{region}_outline'] = {'kind': 'outline', 'value': fallback, 'source': 'guessed',
                                             'basis': basis}
@@ -167,9 +191,7 @@ def build_inputs(sources: Path) -> dict:
 
     def walls_aft_end(region, deck_view, roof_range):
         """Move the aft end of a tier from its roof end to its aftmost end wall, when one is drawn."""
-        view = VIEWS[deck_view]
-        wall_view = View(view.name, view.kind, view.bounds, view.origin, layers=END_WALL_LAYERS)
-        walls = ga_reader.transverse_walls(entities, wall_view, roof_range, END_WALL_MIN_FRACTION * BREADTH_M)
+        walls = reader.end_walls(deck_view, roof_range, END_WALL_MIN_FRACTION * BREADTH_M)
         walls = [wall for wall in walls if wall['x_m'] < roof_range[1]]
         aft_walls[region] = {'roof_range': roof_range, 'walls': walls[:3]}
         if not walls:
@@ -184,6 +206,8 @@ def build_inputs(sources: Path) -> dict:
     # The tier starts at its aft end wall on the deck below, not at the roof end (overhang).
     tier1 = walls_aft_end('house_t1', 'plan_1deck', lv['a_deck'].get('x_range') or [12.3, 34.6])
     tier2 = walls_aft_end('house_t2', 'plan_adeck', extent('tier2_roof', [14.5, 24.1]))
+    # The open aft deck ends where the first tier starts (raster levels can merge nearby lines).
+    aft = [aft[0], min(aft[1], tier1[0])]
     wheel = extent('wheelhouse_roof', [13.6, 21.3])
     rail = extent('fwd_rail_top', [27.5, 35.2])
 
@@ -235,8 +259,8 @@ def build_inputs(sources: Path) -> dict:
 
     program = {'schema': 'ship-cad/v1', 'components': components}
     return {'program': program, 'measurements': measurements, 'guesses': guesses, 'levels': lv,
-            'source': {'file': GA_FILE, 'sha256': sha}, 'tier_end_walls': aft_walls,
-            'all_profile_levels': [{'z': level.z_m, 'intervals': level.intervals} for level in levels]}
+            'source': {'file': reader.source_file, 'sha256': sha}, 'tier_end_walls': aft_walls,
+            'all_profile_levels': [{'z': level.z_m, 'intervals': level.intervals} for level in reader.levels]}
 
 
 def main() -> None:

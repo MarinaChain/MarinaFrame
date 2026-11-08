@@ -80,7 +80,9 @@ def validate_program(program: dict) -> dict:
         source = component['source']
         if (source['view'] not in ('plan', 'profile', 'body') or not _id(source['region'])
                 or source['method'] not in METHODS):
-            raise ValueError('unknown source view, region or method')
+            # Name the component and the allowed values: a model can only fix what it is told.
+            raise ValueError(f'component {name!r}: unknown source view, region or method {source!r}; '
+                             f'view is plan, profile or body; method is one of {sorted(METHODS)}')
         _keys(component['args'], OPERATIONS[op], 'arguments')
         for key, reference in component['args'].items():
             kind = OPERATIONS[op][key]

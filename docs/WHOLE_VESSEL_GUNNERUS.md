@@ -144,10 +144,75 @@ JSON form; test whether the model adds accuracy over the code reading, for examp
 where the code reading is wrong or missing (the round 1 reading with the overhang, or a drawing
 without vector layers), and ask the model to check each tier's ends against its walls.
 
-## 3. Resume point
+## 3. Round 3: raster path, model value test (protocol section 3.5.2)
 
-1. Done: tier aft-end rule (section 1.1).
-2. Appendages (rudder, skeg, thrusters) and openings in step 1.
-3. Model pass for drawings without vector layers (Balclutha, C.A. Thayer), using the arm that
-   section 2 selects.
-4. Rust `ship_cad` vision schema: accept labelled inline values (Python accepts them now).
+Code: `benchmarks/gunnerus/whole_vessel_raster.py` (page render, host calibration, `RasterReader`,
+R1 driver), `ga_reader.raster_levels`, `ga_reader.raster_transverse_walls`,
+`ga_reader.PlanRaster.from_ink`. The PDF page is rendered at 150 dpi (4,967 x 7,021 px); the
+readers see only crops of that image.
+
+Host calibration (registration of each crop to the GA vector file, not part of the test): one
+scale of 0.08125 px per drawing mm for all three crops (0.0123 m per pixel), offsets within 1.4 px
+of each other; match scores 0.69 (profile), 0.58 (1-deck plan), 0.61 (A-deck plan).
+
+R0, raster code only, was developed on this case: two fixes came from R0 build failures before
+the R1 run (an outline that touched itself was not a valid solid; raster levels merged the aft
+deck line with a nearby line, so the open aft deck now ends at the first tier). R0 has seen the
+truth scores; it is a development result.
+
+| Run | Built (of 7) | Success | M1 deck | M2 IoU | M3 roof | M4 volume | M5 ends (aft, fwd) | Turns | Prompt / completion tokens | Time (s) |
+|---|---:|---|---:|---:|---:|---:|---|---:|---:|---:|
+| R0 code only | 7 | yes | +0.082 m (cov 1.00) | 0.942 | +0.062 m | +9.0 % | 0.00, +0.70 m | - | - | 9 |
+| R1-1 model | 0 | no | - | - | - | - | - | 3 | 21,798 / 5,208 | 26 |
+| R1-2 model | 7 | yes | +0.082 m (cov 1.00) | 0.942 | +0.062 m | +9.0 % | 0.00, +0.70 m | 1 | 5,445 / 1,764 | 18 |
+| R1-3 model | 0 | no | - | - | - | - | - | 3 | 23,852 / 7,275 | 44 |
+
+R0 values: 11 traced and 5 guessed argument values, as on the vector path. Provider-reported
+cost: USD 0. The R0 row is from the run that fed R1; R0 with the final code (an odd morphology
+kernel, a one-pixel shift fix) gives the same scores.
+
+Decision by the fixed rule: **the model does not add value on this raster case.** R1 built in 1
+of 3 repeats (the rule needs 3 of 3), and the one build has the R0 scores (M2 differs by 0.0001).
+
+- R1-1 and R1-3 failed validation in all 3 turns: the wheelhouse `source.method` was an invented
+  value (`traced_extent`), and the error text did not name the component or the allowed values,
+  so the model could not fix it. The error now names both (`ship_cad.validate_program`).
+- The model again copied the code reading. It did not move the forward end of tier 1 (+0.70 m,
+  from the raster reading of the A-deck extent) or correct the deck level.
+- Raster versus vector code reading: IoU 0.942 vs 0.940, volume +9.0 % vs +9.4 %, forward end
+  +0.70 m vs +0.05 m, deck level +0.082 m vs +0.065 m. On this clean plot, the raster code path
+  is almost as good as the vector path. A scanned historic sheet will be harder.
+
+## 4. Whole-vessel assembly (hull plus step 1 parts)
+
+Code: `benchmarks/gunnerus/whole_vessel_assembly.py`. The hull comes from the current vector hull
+path (`make_gunnerus_configs.vector_config` and `vector_path.run`, region loft) on the lines plan;
+the parts come from development run 2 (section 1.1). No hull score was computed; the sealed hull
+benchmark was not touched. Outputs (`whole-vessel-draft.step`, `whole-vessel-draft.png`, a
+matplotlib render, and `components.json` for the app component tree: id, kind, box, volume,
+source counts, review state `needs_review`, STEP path) stay in the git-ignored run folder. The
+`components.json` shape (`marinaframe.components.v0`) must follow the TaskView `components`
+field in `docs/APP_SPEC.md` when that lands.
+
+| Item | Value |
+|---|---|
+| Solids | 24 (hull 17, parts 7), one STEP compound, 321 MB |
+| Bounding box | x -1.00..35.19 m, y ±5.00 m, z -0.52..11.49 m |
+| Hull volume (region loft) | 1,978.8 m³ |
+| Parts volume | 712.1 m³ (house_t1 412.5, house_t2 160.9, wheelhouse 130.9, decks, bulwark, rail 7.8) |
+| Build time | 393 s (hull loft, assembly and render) |
+
+The hull volume equals the W13 region-loft hull (1,978.766 m³). That is +52 % against the hull
+truth (1,302.3 m³; `docs/SHIP_CAD_LANGUAGE.md`). The cause is not checked here (overlapping
+region solids are one candidate). The sum of the parts is therefore not a whole-vessel volume.
+Find and fix the hull volume error before the app shows volumes.
+
+## 5. Resume point
+
+1. Done: tier aft-end rule (section 1.1), raster code path (section 3), assembly (section 4).
+2. Hull volume: find why the region-loft hull is +52 % (section 4).
+3. Appendages (rudder, skeg, thrusters) and openings in step 1 (not started).
+4. Raster path on a scanned historic sheet (Balclutha, C.A. Thayer): code-first, the model as gap
+   filler only (section 3 decision). A new model test needs a case where the code reading is
+   wrong, and invalid metadata must not block a build (section 3).
+5. Rust `ship_cad` vision schema: accept labelled inline values (Python accepts them now).
