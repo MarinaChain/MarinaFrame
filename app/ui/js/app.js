@@ -16,6 +16,7 @@ import { createPalette } from './palette.js';
 import { buildChanges, renderChanges } from './changes.js';
 import { createAreas } from './areas.js';
 import { createEvidenceCard } from './evidence.js';
+import { createShortcutSheet } from './shortcuts.js';
 import { createExport } from './export.js';
 import * as fmt from './format.js';
 
@@ -1954,7 +1955,7 @@ $('strip').addEventListener('keydown', (event) => {
 });
 
 function isTyping(target) {
-  return target.closest('input, textarea, select, [contenteditable="true"], dialog[open]');
+  return target?.closest?.('input, textarea, select, [contenteditable="true"], dialog[open]');
 }
 
 // Sidebar: expanded (logo, name, labels) or collapsed (logo and icons). Remembered per viewer.
@@ -2002,11 +2003,20 @@ function paletteCommands() {
   add('Go to', 'Queue', () => navigate('queue'));
   add('Go to', 'Settings', () => openSettings(), { keys: '⌘,' });
   add('Go to', 'Setup check', () => navigate('welcome'));
+  add('Help', 'Keyboard shortcuts', () => shortcutSheet.open(), { keys: '?' });
   add('Start', 'New vessel from drawings', () => chooseDrawingSet(), { keys: '⌘N' });
   return list;
 }
 
 const palette = createPalette({ commands: paletteCommands });
+const shortcutSheet = createShortcutSheet();
+// "?" opens the shortcut list anywhere except while typing.
+document.addEventListener('keydown', (event) => {
+  if (event.key === '?' && !event.metaKey && !event.ctrlKey && !isTyping(event.target)) {
+    event.preventDefault();
+    shortcutSheet.open();
+  }
+});
 $('open-palette').addEventListener('click', () => palette.open());
 
 // Inspector panels fade at an edge only when more content is that way (styles.css).

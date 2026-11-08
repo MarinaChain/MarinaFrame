@@ -2307,6 +2307,29 @@ code { font-family: var(--font-mono); }
   .intake-count { display: none; }
 }
 
+/* ------------------------------------------------------------------ Keyboard shortcuts (?, js/shortcuts.js) */
+
+.shortcuts {
+  width: min(720px, calc(100vw - 48px));
+  max-height: calc(100vh - 96px);
+  margin: auto;
+  padding: var(--space-xl);
+  overflow-y: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-dialog);
+  background: var(--raised);
+  color: var(--ink);
+  box-shadow: var(--shadow-sheet);
+}
+.shortcuts::backdrop { background: rgba(10, 31, 61, 0.22); }
+.shortcuts h2 { margin-bottom: var(--space-lg); font-size: var(--fs-xl); font-weight: 600; }
+.shortcut-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--space-lg) var(--space-xl); }
+.shortcut-group h3 { margin-bottom: var(--space-sm); color: var(--ink-3); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; }
+.shortcut-group dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-sm) var(--space-md); align-items: center; }
+.shortcut-group dt { display: flex; gap: 4px; }
+.shortcut-group dt .key-hint { min-width: 24px; height: 22px; font-size: var(--fs-xs); opacity: 1; color: var(--ink-2); }
+.shortcut-group dd { color: var(--ink-2); font-size: var(--fs-md); }
+.shortcuts-actions { display: flex; justify-content: flex-end; margin-top: var(--space-xl); }
 /* ------------------------------------------------------------------ Command palette (⌘K, js/palette.js) */
 
 .palette-open { margin-left: auto; gap: var(--space-sm); color: var(--ink-2); }
