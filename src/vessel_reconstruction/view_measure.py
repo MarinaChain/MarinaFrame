@@ -270,6 +270,7 @@ class Sheet:
 
     grey: np.ndarray
     thresholds: dict = field(default_factory=dict)
+    ink_tables: dict = field(default_factory=dict)
 
     def threshold(self, roi_px) -> float:
         key = tuple(int(v) for v in roi_px)
@@ -281,6 +282,16 @@ class Sheet:
                 paper, dark = float(np.median(region)), float(np.percentile(region, INK_DARK_PERCENTILE))
                 self.thresholds[key] = min(INK_THRESHOLD_MAX, 0.5 * (paper + dark))
         return self.thresholds[key]
+
+    def ink_sums(self, roi_px) -> np.ndarray:
+        """Summed-area table (h + 1, w + 1) of the ink pixels of the sheet at this region's threshold."""
+        key = tuple(int(v) for v in roi_px)
+        if key not in self.ink_tables:
+            ink = (self.grey < self.threshold(roi_px)).astype(np.int32)
+            table = np.zeros((ink.shape[0] + 1, ink.shape[1] + 1), dtype=np.int32)
+            table[1:, 1:] = ink.cumsum(axis=0).cumsum(axis=1)
+            self.ink_tables[key] = table
+        return self.ink_tables[key]
 
     def _crop(self, roi_px) -> np.ndarray:
         h, w = self.grey.shape
@@ -387,14 +398,21 @@ def combine_scans(scans: list[dict], sign: float, ppm: float) -> dict:
 
 def inked(sheet: Sheet, roi_px, x_px: float, y_px: float, radius_px: float) -> bool:
     """True when any pixel within ``radius_px`` (a square) of the point is ink."""
+    return bool(inked_many(sheet, roi_px, np.array([x_px]), np.array([y_px]), radius_px)[0])
+
+
+def inked_many(sheet: Sheet, roi_px, x_px: np.ndarray, y_px: np.ndarray, radius_px: float) -> np.ndarray:
+    """``inked`` for many points at once (a summed-area table of the region's ink)."""
     h, w = sheet.grey.shape
-    x0 = int(max(0, roi_px[0], np.floor(x_px - PIXEL_CENTRE - radius_px)))
-    x1 = int(min(w, roi_px[2], np.floor(x_px - PIXEL_CENTRE + radius_px) + 1))
-    y0 = int(max(0, roi_px[1], np.floor(y_px - PIXEL_CENTRE - radius_px)))
-    y1 = int(min(h, roi_px[3], np.floor(y_px - PIXEL_CENTRE + radius_px) + 1))
-    if x1 <= x0 or y1 <= y0:
-        return False
-    return bool(sheet.grey[y0:y1, x0:x1].min() < sheet.threshold(roi_px))
+    x0 = np.maximum(max(0, roi_px[0]), np.floor(x_px - PIXEL_CENTRE - radius_px)).astype(int)
+    x1 = np.minimum(min(w, roi_px[2]), np.floor(x_px - PIXEL_CENTRE + radius_px) + 1).astype(int)
+    y0 = np.maximum(max(0, roi_px[1]), np.floor(y_px - PIXEL_CENTRE - radius_px)).astype(int)
+    y1 = np.minimum(min(h, roi_px[3]), np.floor(y_px - PIXEL_CENTRE + radius_px) + 1).astype(int)
+    table = sheet.ink_sums(roi_px)
+    valid = (x1 > x0) & (y1 > y0)
+    x0, x1, y0, y1 = (np.clip(v, 0, n) for v, n in ((x0, w), (x1, w), (y0, h), (y1, h)))
+    counts = table[y1, x1] - table[y0, x1] - table[y1, x0] + table[y0, x0]
+    return valid & (counts > 0)
 
 
 def measure_curve_end(context: ScanContext, roi_px, curve_px: np.ndarray, ppm: float) -> dict:
@@ -412,7 +430,7 @@ def measure_curve_end(context: ScanContext, roi_px, curve_px: np.ndarray, ppm: f
     # A small neighbourhood: a station label a few pixels past the end must not
     # read as the line running on.
     radius = max(1.0, 0.5 * context.line_width_px)
-    ink = np.array([inked(context.sheet, roi_px, px, py, radius) for px, py in path])
+    ink = inked_many(context.sheet, roi_px, path[:, 0], path[:, 1], radius)
     if not ink.any():
         return {"status": "no_ink", "predicted_px": 0.0}
     # The inked stretch nearest the table's end (s = 0), then its outer end.
@@ -704,18 +722,23 @@ def measure_views(table: VesselTable, views: dict, grey: np.ndarray, *, half_bea
 
 def station_ink_fits(table: VesselTable, views: dict, grey: np.ndarray) -> dict:
     """F1 ink fit (station_overlay.ink_fit) of each station curve in its body-plan panel."""
-    from .station_overlay import ink_fit
+    from .station_overlay import ink_distance_px, ink_fit
     body = views.get("body_plan")
     result = {}
     if not body:
         return result
+    distances = {}
     for i, sid in enumerate(table.station_ids):
         row, panel = table.row(i), body["panels"].get(sid)
         if row is None or panel is None:
             continue
         points = np.column_stack([np.abs(row[:, 0]), row[:, 1]])
         segments = np.stack([points[:-1], points[1:]], axis=1)
-        result[sid] = ink_fit(segments, panel["calibration"], panel["roi_px"], grey, side=panel["side"])
+        key = tuple(int(v) for v in panel["roi_px"])
+        if key not in distances:
+            distances[key] = ink_distance_px(grey, panel["roi_px"])
+        result[sid] = (ink_fit(segments, panel["calibration"], panel["roi_px"], grey, side=panel["side"],
+                               distance_px=distances[key]) if distances[key] is not None else None)
     return result
 
 
