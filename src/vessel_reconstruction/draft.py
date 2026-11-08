@@ -214,6 +214,56 @@ def check_draft(draft) -> bool:
     return all(check_guess(g) for g in guesses) and len(set(ids)) == len(ids)
 
 
+# Smallest height, in pixels, of a centreline run at the panel top that counts
+# as a drawn closure line. A hull curve that only touches the centreline at the
+# top (a pointed stern section) spans about one pixel row there.
+TOP_CLOSURE_MINIMUM_RUN_PX = 3.
+
+
+def trim_top_closure(points: list, minimum_breadth_m: float, z_max_m: float | None,
+                     pixel_m: float | None) -> list | None:
+    """Points without the deck/centreline closure above the hull curve, or None.
+
+    A traced contour often continues above the hull: a deck camber line to the
+    centreline and then up the centreline to the panel top (``z_max_m``).
+    Neither is hull ink. The trimmed section ends at the top of the hull curve;
+    the CAD top closure then goes straight to the centreline at that height.
+    Removed, in this order:
+      1. a top run on the centreline (breadth at most ``minimum_breadth_m``)
+         that reaches the panel top and is at least three pixels high;
+      2. then, top segments that go inward and are flatter than 45 degrees
+         (a deck camber line; a hull side at the top is steeper or flares out).
+    A constant-breadth line up to the panel top is kept: it cannot be told
+    apart from wall-sided topsides. Returns None when nothing is removed, when
+    the calibration is unknown, or when fewer than five points would remain.
+    """
+    import numpy as np
+
+    if z_max_m is None or pixel_m is None:
+        return None
+    ordered = np.asarray(points, dtype=float)
+    ordered = ordered[np.argsort(ordered[:, 1], kind="stable")]
+    y, z = ordered[:, 0], ordered[:, 1]
+    if z[-1] < z_max_m - pixel_m:
+        return None
+    end = len(ordered)
+    while end > 0 and y[end - 1] <= minimum_breadth_m:
+        end -= 1
+    if end == len(ordered) or end == 0 or z[-1] - z[end] < TOP_CLOSURE_MINIMUM_RUN_PX * pixel_m:
+        return None
+    while end >= 2 and y[end - 2] - y[end - 1] > z[end - 1] - z[end - 2]:
+        end -= 1
+    if end < 5:
+        return None
+    return ordered[:end].tolist()
+
+
+def _pixel_metres(declared_section: dict | None) -> float | None:
+    calibration = (declared_section or {}).get("calibration") or {}
+    scale = calibration.get("pixels_per_metre")
+    return 1. / scale if isinstance(scale, (int, float)) and not isinstance(scale, bool) and scale > 0 else None
+
+
 def prepare_draft_sections(sections: list[dict], declared: list[dict]) -> tuple[list[dict], list[dict]]:
     """Make draft-only profiles usable; generated geometry stays explicitly labelled."""
     import copy
@@ -225,12 +275,22 @@ def prepare_draft_sections(sections: list[dict], declared: list[dict]) -> tuple[
     minimum_breadth_m = .001
     interpolation_samples = 129
     prepared = copy.deepcopy(sections)
+    declared_by_id = {item["id"]: item for item in declared}
     warnings = []
     for section in prepared:
         # The source label of each section (see section_authoring.SOURCE_LABELS).
         section.setdefault("source_label", "traced")
         if "points_yz_m" not in section:
             continue
+        spec_section = declared_by_id.get(section["id"])
+        trimmed = trim_top_closure(section["points_yz_m"], minimum_breadth_m,
+                                   (spec_section or {}).get("z_max_m"), _pixel_metres(spec_section))
+        if trimmed is not None:
+            removed_to_m = max(z for _, z in section["points_yz_m"])
+            section["points_yz_m"] = trimmed
+            warnings.append(gap("draft_top_trimmed", f"Top closure trimmed to the top of the hull curve at z {trimmed[-1][1]:.2f} m; "
+                                f"removed a deck and centreline line up to z {removed_to_m:.2f} m.",
+                                section["id"], severity="warning"))
         points = np.asarray(section["points_yz_m"], dtype=float)
         positive = np.flatnonzero(points[:, 0] > 0)
         if len(positive):

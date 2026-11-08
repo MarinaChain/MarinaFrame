@@ -57,9 +57,54 @@ def _bounded_knots(t: np.ndarray, y: np.ndarray, tolerance_m: float) -> np.ndarr
     return np.asarray(sorted(selected), dtype=int)
 
 
+# A draft build (fit_complexity=True) raises its approximation bound by this
+# factor per step until the section curves fit the CAD limits. 1.25 keeps the
+# final bound within 25 % of the smallest bound on the ladder that fits.
+COMPLEXITY_FIT_STEP = 1.25
+
+
+def _common_knots(knots: list[np.ndarray], samples: int | None) -> list[float]:
+    """Union of normalized-height knots of all sections plus the optional minimum grid."""
+    all_knots = [np.linspace(0, 1, samples)] if samples is not None else []
+    all_knots.extend(knots)
+    raw_knots = np.sort(np.concatenate(all_knots))
+    # Fractional-height grids derived from different bases have roundoff-sized
+    # differences. Coalesce those only; verify the final bound afterwards.
+    common = [float(raw_knots[0])]
+    for value in raw_knots[1:]:
+        if value - common[-1] > 1e-12:
+            common.append(float(value))
+    common[0], common[-1] = 0.0, 1.0
+    return common
+
+
+def _estimated_faces(section_count: int, knot_count: int) -> int:
+    return 2 * (section_count - 1) * knot_count + 2
+
+
+def _fits_cad_limits(section_count: int, knot_count: int) -> bool:
+    return knot_count <= MAX_COMMON_KNOTS and _estimated_faces(section_count, knot_count) <= MAX_ESTIMATED_FACES
+
+
+def _select_knots(prepared: list[tuple], samples: int | None, bound_m: float,
+                  fit_complexity: bool) -> tuple[float, list[np.ndarray], list[float]]:
+    """Select source knots with ``bound_m``; a complexity fit raises the bound until they fit.
+
+    The ladder ends at the largest ordinate span of any section. At that bound
+    every chord is within tolerance, so only mandatory knots remain.
+    """
+    ceiling = max(float(np.ptp(yy)) for _, _, yy, _ in prepared)
+    while True:
+        selections = [_bounded_knots(t, yy, bound_m) for _, _, yy, t in prepared]
+        common = _common_knots([t[selected] for (_, _, _, t), selected in zip(prepared, selections)], samples)
+        if not fit_complexity or _fits_cad_limits(len(prepared), len(common)) or bound_m >= ceiling:
+            return bound_m, selections, common
+        bound_m = min(ceiling, max(bound_m, DEFAULT_MAX_DEVIATION_M) * COMPLEXITY_FIT_STEP)
+
+
 def normalize_sections(
     sections: list[dict], samples: int | None = None, *,
-    max_deviation_m: float = DEFAULT_MAX_DEVIATION_M,
+    max_deviation_m: float = DEFAULT_MAX_DEVIATION_M, fit_complexity: bool = False,
 ) -> list[dict]:
     """Create bounded, explicit correspondence without dropping narrow features.
 
@@ -69,6 +114,11 @@ def normalize_sections(
     never a cap on retained source detail. The default 1 mm bound is a CAD
     approximation bound relative to the observed polyline, not source accuracy.
     Excessive correspondence/face complexity is rejected before native CAD.
+
+    A draft build sets ``fit_complexity``: instead of a rejection, the bound is
+    raised step by step until the knots fit the CAD limits. Each record then
+    keeps the requested bound in ``complexity_fit`` and the raised bound as its
+    allowed deviation, so the simplification is visible and verifiable.
     """
     if not isinstance(sections, list) or not 3 <= len(sections) <= MAX_SECTIONS:
         raise GeometryError(f"At least three measured sections are required; the limit is {MAX_SECTIONS}.")
@@ -89,7 +139,6 @@ def normalize_sections(
     if np.min(np.diff([s["x_m"] for s in ordered_sections])) <= 0:
         raise GeometryError("Section station coordinates are not strictly increasing.")
     prepared = []
-    all_knots = [np.linspace(0, 1, samples)] if samples is not None else []
     for sec in ordered_sections:
         section_id = sec.get("id", "unnamed")
         try:
@@ -111,31 +160,27 @@ def normalize_sections(
         if np.any(yy[positive[0]:positive[-1] + 1] == 0):
             raise GeometryError(f"Section {section_id} contains an unsupported interior centreline pinch.")
         t = (zz - zz[0]) / (zz[-1] - zz[0])
-        selected = _bounded_knots(t, yy, max_deviation_m)
-        all_knots.append(t[selected])
-        prepared.append((sec, zz, yy, t, selected))
-    raw_knots = np.sort(np.concatenate(all_knots))
-    # Fractional-height grids derived from different bases have roundoff-sized
-    # differences. Coalesce those only; verify the final bound afterwards.
-    common = [float(raw_knots[0])]
-    for value in raw_knots[1:]:
-        if value - common[-1] > 1e-12:
-            common.append(float(value))
-    common[0], common[-1] = 0.0, 1.0
+        prepared.append((sec, zz, yy, t))
+    bound_m, selections, common = _select_knots(prepared, samples, float(max_deviation_m), fit_complexity)
     if len(common) > MAX_COMMON_KNOTS:
         raise GeometryError(f"CAD complexity limit: {len(common)} common knots exceeds {MAX_COMMON_KNOTS}; split the job or review source complexity.")
-    estimated_faces = 2 * (len(prepared) - 1) * len(common) + 2
+    estimated_faces = _estimated_faces(len(prepared), len(common))
     if estimated_faces > MAX_ESTIMATED_FACES:
         raise GeometryError(f"CAD complexity limit: {estimated_faces} estimated faces exceeds {MAX_ESTIMATED_FACES}; split the job.")
+    complexity_fit = None
+    if bound_m > max_deviation_m:
+        complexity_fit = {"requested_maximum_deviation_m": float(max_deviation_m),
+                          "reason": f"section curves simplified to fit {MAX_COMMON_KNOTS} common knots "
+                                    f"and {MAX_ESTIMATED_FACES} faces"}
     common_t = np.asarray(common)
     normalized = []
-    for sec, zz, yy, t, selected in prepared:
+    for (sec, zz, yy, t), selected in zip(prepared, selections):
         z = zz[0] + common_t * (zz[-1] - zz[0])
         y = np.interp(common_t, t[selected], yy[selected])
         check_t = np.unique(np.concatenate((t, common_t)))
         differences = np.interp(check_t, common_t, y) - np.interp(check_t, t, yy)
         maximum = float(np.max(np.abs(differences)))
-        if maximum > max_deviation_m + 1e-10:
+        if maximum > bound_m + 1e-10:
             raise GeometryError(f"Section {sec['id']} cannot meet the declared CAD approximation bound after knot correspondence.")
         if np.any(np.diff(z) <= 0):
             raise GeometryError(f"Section {sec['id']} has unresolvable elevation spacing at the declared coordinate scale.")
@@ -147,7 +192,7 @@ def normalize_sections(
         diagnostics = {
             "method": "vertical_error_bounded_source_knots_v1",
             "correspondence": "shared_normalized_height_source_knot_union",
-            "maximum_allowed_half_breadth_deviation_m": float(max_deviation_m),
+            "maximum_allowed_half_breadth_deviation_m": float(bound_m),
             "maximum_half_breadth_deviation_m": maximum,
             "height_weighted_rms_deviation_m": rms,
             "source_point_count": len(yy), "retained_source_knots": len(selected),
@@ -157,6 +202,8 @@ def normalize_sections(
             "section_beam_error_m": float(2 * (np.max(y) - np.max(yy))),
             "uncertainty_scope": "CAD approximation of measured polyline only; excludes contour identity, calibration, interpolation between stations, and source accuracy",
         }
+        if complexity_fit is not None:
+            diagnostics["complexity_fit"] = complexity_fit
         normalized.append({**sec, "cad_points_yz_m": np.column_stack([y, z]).tolist(),
                            "cad_approximation": diagnostics})
     return normalized
@@ -165,7 +212,7 @@ def normalize_sections(
 def approximation_summary(sections: list[dict]) -> dict:
     """Expose the declared and measured approximation bounds in run metrics."""
     records = [s["cad_approximation"] for s in sections]
-    return {
+    summary = {
         "method": "vertical_error_bounded_source_knots_v1",
         "correspondence": "shared_normalized_height_source_knot_union",
         "maximum_allowed_half_breadth_deviation_m": max(r["maximum_allowed_half_breadth_deviation_m"] for r in records),
@@ -179,6 +226,9 @@ def approximation_summary(sections: list[dict]) -> dict:
                    "sections": MAX_SECTIONS, "source_points_per_section": MAX_SECTION_POINTS},
         "uncertainty_scope": records[0]["uncertainty_scope"],
     }
+    if "complexity_fit" in records[0]:
+        summary["complexity_fit"] = records[0]["complexity_fit"]
+    return summary
 
 
 def _vector(point: np.ndarray) -> cq.Vector:
@@ -216,7 +266,8 @@ def _terminal_cap(half: np.ndarray, section_id: str) -> cq.Face:
 
 
 def build_hull(sections: list[dict], samples: int | None = None, *,
-               max_deviation_m: float = DEFAULT_MAX_DEVIATION_M) -> tuple[cq.Shape, list[dict]]:
+               max_deviation_m: float = DEFAULT_MAX_DEVIATION_M,
+               fit_complexity: bool = False) -> tuple[cq.Shape, list[dict]]:
     """Build an explicitly matched ruled BRep from normalized observations.
 
     Each half-section has the same sampling indices. Corresponding straight
@@ -227,9 +278,11 @@ def build_hull(sections: list[dict], samples: int | None = None, *,
 
     Source polyline approximation has an explicit maximum ordinate error.
     Correspondence retains narrow source features and zero-width transitions;
-    no hull-family fit or minimum breadth is introduced.
+    no hull-family fit or minimum breadth is introduced. A draft build sets
+    ``fit_complexity`` to simplify over-complex curves (see normalize_sections).
     """
-    sections = normalize_sections(sections, samples=samples, max_deviation_m=max_deviation_m)
+    sections = normalize_sections(sections, samples=samples, max_deviation_m=max_deviation_m,
+                                  fit_complexity=fit_complexity)
     profiles = [np.column_stack([
         np.full(len(section["cad_points_yz_m"]), section["x_m"]),
         section["cad_points_yz_m"],
