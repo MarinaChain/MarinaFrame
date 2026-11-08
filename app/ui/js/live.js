@@ -94,7 +94,7 @@ function boxOfMarks(marks) {
   return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
 }
 
-export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStepsChanged }) {
+export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStepsChanged, cardActions = () => null }) {
   const layer = drawing.attentionLayer;
 
   let task = null;
@@ -703,7 +703,8 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
   function buildCard(step, index) {
     const category = stepCategory(step);
     const seekHere = () => seek(index);
-    if (step.actor === 'code' || step.kind === 'repeat_collapsed' || step.kind === 'system') {
+    const quiet = (step.actor === 'code' && step.kind !== 'revise') || step.kind === 'repeat_collapsed' || step.kind === 'system';
+    if (quiet) {
       return el('li', { class: 'thought thought-quiet', dataset: { category, sequence: String(step.sequence) } },
         el('span', { class: 'thought-dot', 'aria-hidden': 'true' }),
         el('button', { class: 'thought-line', type: 'button', onclick: seekHere, title: step.text },
@@ -727,7 +728,9 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
         notes ? el('details', { class: 'thought-more' },
           el('summary', {}, icon('chevron'), 'Why'),
           el('p', { class: 'thought-notes selectable-text' }, notes)) : null,
-        imagesBlock(step)));
+        imagesBlock(step),
+        // Mark and revise: "Keep anyway" on a result the keep rule did not keep (mark.js).
+        cardActions(step)));
   }
 
   function cardFor(step, index) {

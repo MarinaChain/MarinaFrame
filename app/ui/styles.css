@@ -2229,3 +2229,45 @@ code { font-family: var(--font-mono); }
 .export-actions { align-items: center; }
 .export-actions-spacer { flex: 1; }
 .export-actions .btn-ghost { min-width: 0; }
+
+/* ------------------------------------------------------------------ Mark and revise (js/mark.js)
+   The person's mark is brand blue. Teal stays for AI activity, amber for review. */
+
+.mark-toggle[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand); }
+.mark-overlay { position: absolute; inset: 0; z-index: 3; cursor: crosshair; touch-action: none; }
+.mark-overlay[hidden] { display: none; }
+.mark-preview { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.mark-shape { fill: var(--brand-ghost); fill-opacity: 0.35; stroke: var(--brand); stroke-width: 2; stroke-dasharray: 6 4; }
+.mark-hint {
+  position: absolute; top: var(--space-sm); left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-xs) var(--space-xs) var(--space-md);
+  border-radius: var(--radius-lg); background: var(--raised); box-shadow: var(--shadow-sheet);
+  font-size: var(--fs-sm); color: var(--ink-2); cursor: default; white-space: nowrap; max-width: calc(100% - 16px);
+}
+.mark-hint span { overflow: hidden; text-overflow: ellipsis; }
+.mark-hint .btn[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand); }
+.mark-popover {
+  position: absolute; width: 320px; max-width: calc(100% - 16px);
+  display: flex; flex-direction: column; gap: var(--space-sm);
+  padding: var(--space-md); border-radius: var(--radius-dialog);
+  background: var(--raised); box-shadow: var(--shadow-sheet); cursor: default;
+}
+.mark-popover-docked { left: 50%; bottom: var(--space-lg); transform: translateX(-50%); }
+.mark-place { margin: 0; font-size: var(--fs-sm); color: var(--ink-3); }
+.mark-chips { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+.mark-chip { cursor: pointer; }
+.mark-chip:hover { background: var(--brand-soft); color: var(--brand); }
+.mark-text {
+  width: 100%; resize: vertical; min-height: 64px; padding: var(--space-sm);
+  border: 1px solid var(--rule-strong); border-radius: var(--radius-md);
+  background: var(--surface); color: var(--ink); font: inherit; font-size: var(--fs-md);
+}
+.mark-error { margin: 0; font-size: var(--fs-sm); color: var(--fail); }
+.mark-actions { display: flex; align-items: center; gap: var(--space-xs); }
+.mark-count { margin-right: auto; font-size: var(--fs-xs); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.strip.mark-picking .tile, #strip.mark-picking .tile { cursor: crosshair; outline: 1px dashed var(--brand-ghost); outline-offset: -3px; }
+.mark-result-actions { display: flex; justify-content: flex-end; margin-top: var(--space-xs); }
+.mark-keep { border-color: var(--warn-ink); color: var(--warn); }
+.mark-forced { margin: var(--space-xs) 0 0; font-size: var(--fs-sm); color: var(--warn); }
+.mk-box.tone-person, .mk-line.tone-person { stroke: var(--brand); stroke-width: calc(var(--u) * 2px); stroke-dasharray: calc(var(--u) * 8px) calc(var(--u) * 5px); }

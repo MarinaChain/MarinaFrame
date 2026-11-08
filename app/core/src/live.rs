@@ -46,6 +46,8 @@ pub enum StepKind {
     RepeatCollapsed,
     Finish,
     System,
+    /// A person's mark-and-revise request, and its result.
+    Revise,
 }
 
 /// Who took the step: the live model, a person in the app, or deterministic code.
@@ -112,6 +114,8 @@ pub enum Tone {
     Authored,
     /// A refused click, corridor or claim; `label` holds the reason.
     Refused,
+    /// A region a person marked for revision.
+    Person,
 }
 
 /// A mark on the sheet. All points are in source-page pixels.
@@ -203,6 +207,25 @@ pub struct LiveStep {
     pub repeat_of: Option<u64>,
     /// How many times the step happened (repeats and identical system lines).
     pub count: u32,
+    /// Set on the result step of a mark-and-revise pass.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mark_revision: Option<MarkRevision>,
+}
+
+/// The result of a person's mark-and-revise pass (`docs/APP_SPEC.md`, "Mark and revise").
+#[derive(Clone, Debug, Serialize, PartialEq)]
+pub struct MarkRevision {
+    pub revision_id: String,
+    /// kept, partly_kept, not_kept, no_edit or stopped.
+    pub outcome: String,
+    /// Change of the combined fit by the kept edits.
+    pub fit_change: Option<f64>,
+    /// How the first not-kept edit would have changed the fit (negative = worse).
+    pub not_kept_fit_change: Option<f64>,
+    /// A not-kept edit exists and nobody has kept it anyway yet.
+    pub can_keep_anyway: bool,
+    /// A person kept the not-kept edits anyway (never an engineering approval).
+    pub operator_forced: bool,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq)]
