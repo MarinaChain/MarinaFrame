@@ -137,7 +137,46 @@ inside the house (covered). Hull metrics: not run (sealed).
 
 Scoring code: `benchmarks/gunnerus/whole_vessel_metrics.py`. Results: `docs/WHOLE_VESSEL_GUNNERUS.md`.
 
-### 3.5 Effort, checks, resume
+### 3.5 A/B protocol: ship-cad JSON vs CadQuery code (fixed before running)
+
+Founder decision 2026-11-09. Question: which output form gives the model better geometry for the
+same step 1 components? Gunnerus drawings may go to DeepSeek (commercial licence, 2026-11-09).
+
+| | Arm A: ship-cad JSON | Arm B: CadQuery code |
+|---|---|---|
+| Model output | `ship-cad/v1` program; every argument an inline value with source `ai_inferred` (or `guessed`) and a basis | One Python module with `build()` that returns `{component id: cadquery shape}` in metres |
+| Execution | Existing executor (`ship_cad.execute`) in the W13 Seatbelt worker | Normal Python subprocess with the repo venv in its own work folder; wall-clock timeout 120 s; the prompt forbids network and file access outside the folder (no OS-level block, founder decision) |
+| Output | One STEP per component (mm), `execution.json` | Same files, same format (the runner writes them) |
+
+Same for both arms:
+
+- Model: DeepSeek V4.1 Flash (`deepseek-v4.1-flash`) through the OpenCode Go endpoint, key 1, one
+  Python client with a receipt per request (time, tokens, request and reply hashes).
+- Inputs: three renders of GA vector linework and labels (profile, 1-deck plan, A-deck plan), each
+  with its pixel-to-metre calibration; the title-block dimensions; the deterministic step 1
+  reading (levels with x extents, footprints, which values are guesses) as text; the list of
+  component ids to build (`aft_deck`, `main_deck`, `house_t1`, `aft_bulwark`, `house_t2`,
+  `wheelhouse`, `fwd_rail`) with one-line meanings. No truth data.
+- Limits: at most 3 turns per repeat (turn 2 and 3 only feed back the build errors and the
+  component volumes and boxes), `max_tokens` 16,000 per reply, temperature 0.2.
+- Repeats: 3 per arm, arms run in turn (A1, B1, A2, B2, A3, B3). No retry outside the 3 turns.
+- Hull: not included in either arm (the step 1 metrics use top-height maps and do not need it).
+
+Metrics (per repeat, then median and range over the 3 repeats):
+
+1. Build success: components built of 7; repeat success = at least the 3 scored components built.
+2. Accuracy: M1 to M6 of section 3.4 with the same scorer
+   (`benchmarks/gunnerus/whole_vessel_metrics.py`, unchanged).
+3. Model turns, prompt and completion tokens, provider-reported cost if the reply gives it.
+4. Wall time (model plus build).
+
+Decision rule (fixed now): the arm with more repeat successes wins; on a tie, the arm with the
+higher median M2 IoU; on a tie, the lower median absolute M4 volume error. The deterministic step 1
+result is the reference line, not an arm. With 3 repeats the result is a direction, not proof.
+
+Code: `benchmarks/gunnerus/whole_vessel_ab.py`. Results: `docs/WHOLE_VESSEL_GUNNERUS.md`.
+
+### 3.6 Effort, checks, resume
 
 Effort: 1-2 weeks (reader, executor change, scoring, Gunnerus run; then raster path and a
 model pass for HAER sheets). Checks: synthetic unit tests for the reader, the executor guesses
