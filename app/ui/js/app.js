@@ -1747,6 +1747,19 @@ function renderPathSuggestions(form, field) {
 }
 
 /** Fill the Settings view from the saved settings. Called when the view opens. */
+/**
+ * Under the Worker Python field: the Python runs use now. An empty field is allowed: the app
+ * then looks for MARINAFRAME_WORKER_PYTHON, the runtime inside the app bundle, or the repository .venv.
+ */
+async function showWorkerInUse() {
+  const line = $('worker-python-in-use');
+  const setup = await invoke('get_setup_status', {}).catch(() => null);
+  const worker = setup?.worker;
+  if (!worker) return fill(line);
+  fill(line, worker.ok ? `In use: ${worker.path}. ${worker.message}` : `${worker.message} Choose a Python, or leave the field empty to find one automatically.`);
+  line.classList.toggle('field-warn', !worker.ok);
+}
+
 async function loadSettingsForm() {
   const form = $('settings-form');
   const s = state.settings || { runs_folder: '', worker_python: '', theme: 'system', ai_drafting: true };
@@ -1755,7 +1768,7 @@ async function loadSettingsForm() {
   form.theme.value = s.theme;
   form.ai_drafting.checked = s.ai_drafting !== false;
   form.notify_finished.checked = s.notify_finished !== false;
-  const [status] = await Promise.all([refreshAiStatus(), loadDefaults()]);
+  const [status] = await Promise.all([refreshAiStatus(), loadDefaults(), showWorkerInUse()]);
   showAiStatus($('ai-status'), status);
   for (const field of Object.keys(PATH_FIELDS)) renderPathSuggestions(form, field);
   for (const button of form.querySelectorAll('[data-pick]')) button.hidden = !canPickPaths();
@@ -2470,6 +2483,8 @@ async function start() {
   try {
     state.settings = await invoke('get_settings', {});
     applyTheme(state.settings.theme);
+    // A reload on Settings drew the form before the settings arrived: fill it now.
+    if (state.route === 'settings') loadSettingsForm();
   } catch (error) {
     showError(error);
   }

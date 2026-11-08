@@ -340,12 +340,13 @@
               <div class="field">
                 <label class="field-label" for="worker-python">Worker Python</label>
                 <span class="input-with-button">
-                  <input type="text" id="worker-python" name="worker_python" spellcheck="false" autocomplete="off" required>
+                  <input type="text" id="worker-python" name="worker_python" spellcheck="false" autocomplete="off" placeholder="Empty: found automatically" aria-describedby="worker-python-in-use">
                   <button class="btn" type="button" id="pick-worker-python" data-pick="file" data-field="worker_python" data-title="Choose the Python for the worker">
                     <svg class="icon"><use href="#i-file" /></svg>Choose…
                   </button>
                 </span>
                 <div class="suggestions" id="worker-python-suggestions" aria-label="Suggested Python programs"></div>
+                <p class="field-help" id="worker-python-in-use"></p>
               </div>
             </details>
 

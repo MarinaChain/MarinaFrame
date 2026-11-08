@@ -4,7 +4,7 @@
   "version": "0.5.0",
   "identifier": "io.marinachain.marinaframe",
   "build": {
-    "frontendDist": "../ui"
+    "frontendDist": "../ui-release"
   },
   "app": {
     "withGlobalTauri": true,

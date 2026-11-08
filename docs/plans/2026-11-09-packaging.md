@@ -44,26 +44,24 @@ external Python environment of about 1 GB with the worker package.
 
 Each step is independent and ends with a check. Resume at the first step whose check fails.
 
-Status: steps 1 and 2 are done (UI round 68). Resume at step 3.
+Status: steps 1 and 2 are done (UI rounds 68 and 69). Resume at step 3.
 
 1. **Done: stop baking the build path.** `app/core/src/worker_python.rs` finds the worker Python
-   at run time in this order: `MARINAFRAME_WORKER_PYTHON`, the Settings value, a runtime next to
-   the app (`MarinaFrame.app/Contents/Resources/worker/bin/python3`, or
-   `MarinaFrame Worker/bin/python3` beside the bundle), then the repository `.venv` (only when
-   `MARINAFRAME_REPO` names a checkout, or in a debug build). Else the setup check asks. The
-   repository root is `MARINAFRAME_REPO` at run time; only debug builds fall back to the compile
-   folder. Original text of the step: **Stop baking the build path.** Replace the compile-time `development_checkout()` default with:
-   the `MARINAFRAME_REPO` environment variable, else the bundled worker (step 3), else none.
-   Check: a release build moved to another folder shows "choose a Python" and nothing else
-   from the build machine (dataset list empty).
-2. **Done: leave the mock out of the release UI.** `npm run build` uses
-   `src-tauri/tauri.release.conf.json`: `scripts/stage-release-ui.mjs` copies only `index.html`,
-   `styles.css`, `js/`, `vendor/` and `assets/` into `ui-release/` (not tracked) and fails the
-   build on any other file type (for example .glb, .step, .tif, .png, .pdf) or a file over 1 MiB.
-   Tests: `ui-tests/stage.test.mjs`. `tauri dev` still serves `ui/` with the mock.
-   Original text of the step: **Leave the mock out of the release UI.** Build step that copies `app/ui` without `mock/`
-   into a staging `frontendDist` (or a `beforeBuildCommand`). Check: the bundle has no
-   `fixtures.json`; the browser preview still works from `app/ui`.
+   at run time in this order: `MARINAFRAME_WORKER_PYTHON`, the Settings value, the runtime inside
+   the app bundle (`MarinaFrame.app/Contents/Resources/worker/bin/python3`), then the repository
+   `.venv` (only when `MARINAFRAME_REPO` names a checkout, or in a debug build). Else the setup
+   check asks, and the person's choice is saved to Settings. No folder merely beside the app is
+   searched: anyone who can write it could plant a Python that the app would run without asking
+   (security review of b33f637). The repository root is `MARINAFRAME_REPO` at run time; only
+   debug builds fall back to the compile folder. A release binary holds no build path.
+2. **Done: leave the mock out of the release UI, by default.** `src-tauri/build.rs` runs
+   `src-tauri/stage_ui.rs` on every build (`cargo build`, `tauri build`, CI): it copies only
+   `index.html`, `styles.css`, `js/`, `vendor/` and `assets/` from `ui/` into `ui-release/` (not
+   tracked; unchanged files are not rewritten; stale files are removed) and fails the build on
+   any other file type (for example .glb, .step, .tif, .png, .pdf), a link, or a file over 1 MiB.
+   The base `tauri.conf.json` embeds `ui-release/`. Only `npm run dev`
+   (`tauri dev --config src-tauri/tauri.dev.conf.json`) serves `ui/` with the mock. Tests: the
+   `stage_ui` tests in `cargo test -p marinaframe-app`.
 3. **Ship the worker Python.** Options, in the order recommended:
    - a. A relocatable CPython 3.12 (python-build-standalone) in `Contents/Resources/worker/`
      with a **macOS arm64 lock with hashes** (the current locks are Linux only) and the
@@ -86,10 +84,10 @@ Status: steps 1 and 2 are done (UI round 68). Resume at step 3.
 
 ```
 cd app
-npm run build -- --bundles app,dmg   # stages ui-release/ and checks it first
+npm run build -- --bundles app,dmg   # build.rs stages ui-release/ and checks it first
 du -sh ../target/release/bundle/macos/MarinaFrame.app ../target/release/bundle/dmg/*.dmg
 codesign -dv ../target/release/bundle/macos/MarinaFrame.app
 ```
 
-`npm run build` embeds `ui-release/` only, so local data in `app/ui/mock/files/` stays out. A
-plain `npx tauri build` (without the release config) still embeds all of `app/ui`.
+Every build embeds `ui-release/` only, so local data in `app/ui/mock/files/` stays out; a
+forbidden file anywhere in the staged entries stops the build.

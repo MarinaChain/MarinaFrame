@@ -1646,6 +1646,7 @@ code { font-family: var(--font-mono); }
 .field { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; border: 0; min-width: 0; }
 .field-label { font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); padding: 0; }
 .field-help { color: var(--text-3); font-size: var(--fs-sm); }
+.field-help.field-warn { color: var(--warn); }
 .field-row { flex-direction: row; align-items: center; justify-content: space-between; gap: var(--space-lg); }
 .field input[type="text"] {
   height: 30px;
