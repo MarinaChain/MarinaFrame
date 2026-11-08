@@ -20,6 +20,9 @@ from .provenance import digest_object, write_json
 
 ID_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")
 INVESTIGATION_ARGUMENTS = {
+    "survey_sheet": {"phase1_only"},
+    "describe_views": {"views"},
+    "describe_vessel": {"description"},
     "view_region": {"region_px", "max_side_px"},
     "read_region": {"region_px", "subject"},
     "trace_corridor": {"section_id", "view_id", "path_px", "half_width_px"},
@@ -32,6 +35,9 @@ INVESTIGATION_ARGUMENTS = {
     "compare_views": {"section_id", "candidate_id", "setup_id", "heights_m"},
 }
 REQUIRED = {
+    "survey_sheet": set(),
+    "describe_views": {"views"},
+    "describe_vessel": {"description"},
     "view_region": {"region_px"},
     "read_region": {"region_px", "subject"},
     "trace_corridor": {"section_id", "view_id", "path_px", "half_width_px"},
@@ -68,12 +74,22 @@ def _region(value) -> bool:
 
 def check_investigation_arguments(name: str, arguments: dict, spec: dict) -> None:
     """Bounds of every investigation argument, independent of the Rust contract."""
+    if name == "describe_vessel":
+        return  # Arbitrary JSON claims are normalized and warned, never refused.
     given = {k for k, v in arguments.items() if v is not None}
     if not REQUIRED[name] <= given:
         raise ToolArgumentError("Missing required argument: " + ", ".join(sorted(REQUIRED[name] - given)) + ".")
     sections = {s.get("id") for s in spec.get("sections", []) if isinstance(s, dict)}
     a = arguments
     ok = True
+    if name == "survey_sheet":
+        ok &= a.get("phase1_only") is None or type(a["phase1_only"]) is bool
+    if name == "describe_views":
+        from .vessel_description import VIEW_KINDS
+        views = a["views"]
+        ok &= (type(views) is list and 1 <= len(views) <= 32 and all(
+            isinstance(v, dict) and _identifier(v.get("view_id")) and v.get("kind") in VIEW_KINDS
+            and _region(v.get("region_px")) for v in views))
     if "region_px" in a:
         ok &= _region(a["region_px"])
     if a.get("max_side_px") is not None:
@@ -171,6 +187,130 @@ class InvestigationTools:
 
     def _view(self, view_id):
         return next((v for v in self.state.get("views", []) if v["view_id"] == view_id), None)
+
+    # ------------------------------------------------------------ sheet description
+    def _survey_sheet(self, phase1_only=False):
+        from .vessel_description import survey_sheet
+        image, _, _ = self._source()
+        survey = survey_sheet(image, self.spec)
+        self.state.update(sheet_survey=survey, description_phase="views", phase1_only=phase1_only)
+        self._save()
+        observed = self._view_region([0, 0, image.shape[1], image.shape[0]], 1024)
+        observed.update(status="sheet_surveyed", sheet_survey=survey,
+                        next_step="describe_views: name body, plan, profile, title_block and offsets_table regions in source pixels.")
+        return observed
+
+    def _description_view(self):
+        from .vessel_description import GEOMETRY_KINDS
+        pending = [v for v in self.state.get("described_views", [])
+                   if v["kind"] in GEOMETRY_KINDS and not v.get("setup_id")]
+        if not pending:
+            self.state.update(description_phase="vessel", description_next_view=None)
+            self._save()
+            title = next((v for v in self.state.get("described_views", []) if v["kind"] == "title_block"), None)
+            if title:
+                observed = self._view_region(title["region_px"], 1024)
+                return {"view": observed["view"], "artifacts": observed.get("artifacts", [])}
+            return {}
+        named = pending[0]
+        observed = self._view_region(named["region_px"], 1024)
+        named["evidence_view_id"] = observed["view"]["view_id"]
+        self.state.update(description_phase="setups", description_next_view={
+            "view_id": named["evidence_view_id"], "named_view_id": named["view_id"],
+            "kind": named["kind"], "region_px": named["region_px"]})
+        self._save()
+        return {"view": observed["view"], "artifacts": observed.get("artifacts", [])}
+
+    def _describe_views(self, views):
+        from .vessel_description import _region
+        image, _, _ = self._source()
+        from .vessel_description import warning
+        records, warnings = [], []
+        for view in views:
+            box = _region(view["region_px"], image.shape)
+            if box[2] - box[0] < 8 or box[3] - box[1] < 8:
+                warnings.append(warning(f"views.{view['view_id']}.region_px", view["region_px"], box,
+                                        "Region has too little sheet overlap; expanded to the sheet for a new reading."))
+                box = [0, 0, image.shape[1], image.shape[0]]
+            record = {**copy.deepcopy(view), "region_px": box}
+            if record["kind"] in {"body", "body_fore", "body_aft"}:
+                record.setdefault("family_id", "body")
+            records.append(record)
+        self.state["described_views"] = records
+        self._save()
+        for named in records:
+            inline = named.get("setup")
+            if isinstance(inline, dict) and not named.get("setup_id"):
+                self._record_description_setup(image, named, {**inline, "view": "body" if named["kind"].startswith("body") else named["kind"],
+                    "view_id": named["view_id"], "region_px": named["region_px"]}, "shared setup in describe_views")
+        crop = self._description_view()
+        return self._observation(True, "views_described", warnings=warnings, described_views=copy.deepcopy(self.state["described_views"]),
+                                 next_step="propose_sheet_setup for each geometry view, then describe_vessel.", **crop)
+
+    def _record_description_setup(self, image, named, setup, reason, evidence_view_id=None):
+        """One scale reading serves the body family; each panel keeps its own datum."""
+        from .vessel_description import measure_setup, _number, _region, warning
+        family = named.get("family_id") if named else None
+        members = [v for v in self.state.get("described_views", [])
+                   if v is named or (family and v.get("family_id") == family)]
+        if not members:
+            members = [{"view_id": setup.get("view_id", setup["view"]), "region_px": setup["region_px"]}]
+        records = []
+        for member in members:
+            panels = member.get("panels")
+            if not isinstance(panels, list) or not panels:
+                panels = [member]
+            for index, panel in enumerate(panels):
+                if not isinstance(panel, dict):
+                    continue
+                box = _region(panel.get("region_px", member["region_px"]), image.shape)
+                proposal = {**setup, "region_px": box, "view_id": member["view_id"]}
+                # Drawing-section calibrations locate repeated panel origins without
+                # pretending that a sheet-wide centreline applies to every panel.
+                section = next((s for s in self.spec.get("sections", []) if
+                    box[0] <= s["calibration"]["centerline_px"] <= box[2]
+                    and box[1] <= s["calibration"]["baseline_px"] <= box[3]), None)
+                dx, dy = box[0] - setup["region_px"][0], box[1] - setup["region_px"][1]
+                for field, axis in (("centreline_px", 0), ("baseline_px", 1), ("x_origin_px", 0)):
+                    value = _number(panel.get(field))
+                    if value is None and section and setup["view"] == "body":
+                        value = section["calibration"].get("centerline_px" if field == "centreline_px" else
+                                                           "baseline_px" if field == "baseline_px" else "centerline_px")
+                    if value is None and setup.get(field) is not None:
+                        value = setup[field] + (dx if axis == 0 else dy)
+                    proposal[field] = value
+                for field, default in (("pixels_per_metre", 1.), ("grid_spacing_m", 1.)):
+                    proposal[field] = _number(proposal.get(field)) or default
+                if member is named and len(panels) == 1:
+                    for field in ("centreline_px", "baseline_px", "x_origin_px"):
+                        if setup.get(field) is not None:
+                            proposal[field] = setup[field]
+                record = measure_setup(image, self.spec, proposal)
+                record.update(status="open_model_choice", evidence_view_id=evidence_view_id,
+                              reason=reason, identity_certified=False, family_id=family,
+                              inherited_from=setup.get("view_id"), panel_index=index)
+                if member is not named or len(panels) > 1:
+                    record["warnings"].append(warning(f"views.{member['view_id']}.shared_setup", None,
+                        proposal["pixels_per_metre"], "Shared family scale; panel datums use declared calibration or translated origin."))
+                setup_id = "setup-" + digest_object(record)[:16]
+                record["setup_id"] = setup_id
+                self.state.setdefault("sheet_setups", {})[setup_id] = record
+                member["setup_id"] = setup_id
+                records.append(record)
+        self._save()
+        return records
+
+    def _describe_vessel(self, description):
+        from .vessel_description import measure_description
+        image, _, _ = self._source()
+        setups = list(self.state.get("sheet_setups", {}).values())
+        measured = measure_description(image, self.spec, description, setups)
+        measured["views"] = copy.deepcopy(self.state.get("described_views", []))
+        self.state.update(vessel_description=measured, description_phase="complete", description_next_view=None)
+        write_json(self.root / "vessel.json", {"description": measured})
+        self._save()
+        return self._observation(True, "vessel_described", description=measured, warnings=measured["warnings"],
+                                 message="Description recorded; warnings name doubtful fields. Continue with the first hull.")
 
     # ------------------------------------------------------------ views
     def _view_region(self, region_px, max_side_px=None, *, kind="region_view", subject=None):
@@ -473,6 +613,15 @@ class InvestigationTools:
                  "grid_spacing_m": grid_spacing_m, "centreline_px": centreline_px, "baseline_px": baseline_px,
                  "x_origin_px": x_origin_px, "x_direction": x_direction}
         image, _, _ = self._source()
+        if self.state.get("description_phase") == "setups":
+            named = next((v for v in self.state.get("described_views", [])
+                          if v.get("evidence_view_id") == evidence_view_id), None)
+            setup.update(view_id=named["view_id"] if named else view, scale_claim=scale_claim)
+            records = self._record_description_setup(image, named, setup, reason, evidence_view_id)
+            crop = self._description_view()
+            return self._observation(True, "setup_accepted_as_model_choice", setup=copy.deepcopy(records[0]),
+                                     shared_panel_count=len(records),
+                                     warnings=[w for r in records for w in r["warnings"]], **crop)
         try:
             evidence = inv.check_sheet_setup(image, self.spec["sections"], setup)
         except inv.VerificationError as exc:

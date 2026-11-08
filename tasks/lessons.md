@@ -5,6 +5,7 @@
 - **Trigger:** W11 `make test-full` rebuilt `target/release/marinaframe` while a live benchmark used it. The controller correctly stopped at `controller_binary_changed`. The smoke target also lacked `--worker-source`, so its cleared environment could use the main checkout's editable Python install.
 - **Rule:** Copy the evaluation executable to `work/` before starting batches and point every arm at that immutable copy. Freeze the Python worker source too. Always pass `--worker-source` for worktree runs, including smoke. Do not rebuild or clean an executable used by active runs. Keep interrupted attempts and their usage; label retries separately.
 - **Why:** A git commit label does not pin executable bytes or the source imported by an editable Python installation.
+- **W20a correction (2026-11-08):** `run_round.py` resolves `--worker-python`; a venv Python symlink then becomes the base interpreter and loses NumPy/Pillow. Preserve the absolute venv executable path without resolving its final symlink, or pass a frozen executable wrapper that invokes the venv Python. Confirm a worker initializes before spending model requests.
 
 ### Keep source stable during pinned worker tests
 - **Date:** 2026-11-08
@@ -88,3 +89,4 @@
 - **Trigger:** On a 10-core Mac (4 performance, 6 efficiency) the load average reached 22-26: one lane ran 5 measurement shards, another scored many perturbed hulls, and Sol ran rounds and `make test-full`. CAD builds then hit worker wall-time limits and silently dropped stations, so results depended on load (00045-L2: 4.56 % alone, 14.87 % under load).
 - **Rule:** Keep at most about 8 CPU-heavy processes across all lanes: measurement lanes run at most 2 cases at a time, one `make test-full` at a time. Recheck any regression by rerunning the case alone before trusting it.
 - **Why:** The admission lock covers controller runs, but evaluation scripts bypass it.
+- **W20a correction (2026-11-08):** Read-phase panels with one scale are one view family; reuse the first setup and preserve panel-specific datums. Repair malformed description/envelope fields, coerce usable numbers and retain the rest as metadata with warnings. Unknown off-sheet dimensions stay null with a warning; incomplete waterline sets must also warn. Do not spend requests repeating harmless shape failures.

@@ -1,0 +1,529 @@
+[
+  {
+    "case": "dtmb5415-L0",
+    "description_present": false,
+    "dimensions": {
+      "loa": {
+        "value": null,
+        "reference": 99.99999999675913,
+        "within_2_percent": false
+      },
+      "beam": {
+        "value": null,
+        "reference": 13.407173661642242,
+        "within_2_percent": false
+      },
+      "depth": {
+        "value": null,
+        "reference": 12.530224564639711,
+        "within_2_percent": false
+      },
+      "draft": {
+        "value": null,
+        "reference": 7.518134739,
+        "within_2_percent": false
+      }
+    },
+    "all_dimensions_within_2_percent": false,
+    "stations_right": false,
+    "waterlines_right": false,
+    "expected_waterlines": [
+      2.0,
+      4.0,
+      6.0,
+      8.0,
+      10.0,
+      12.0
+    ],
+    "actual_waterlines": [],
+    "wrong_fields": [
+      "principal.loa",
+      "principal.beam",
+      "principal.depth",
+      "principal.draft",
+      "stations",
+      "waterlines"
+    ],
+    "warning_fields": [],
+    "wrong_fields_without_warning": [
+      "principal.loa",
+      "principal.beam",
+      "principal.depth",
+      "principal.draft",
+      "stations",
+      "waterlines"
+    ],
+    "provider_requests": 7,
+    "known_list_cost_usd": 0.01678847,
+    "receipts_without_list_cost": 0,
+    "digest": {
+      "case": "dtmb5415-L0",
+      "status": "paused",
+      "reason": "requested_step_boundary",
+      "events": 41,
+      "decisions": 7,
+      "tools": [
+        "describe_views",
+        "propose_sheet_setup",
+        "propose_sheet_setup",
+        "propose_sheet_setup",
+        "propose_sheet_setup",
+        "propose_sheet_setup",
+        "propose_sheet_setup"
+      ],
+      "tool_sequence": "describe_views > propose_sheet_setup x6",
+      "first_blocker": null,
+      "last_reasons": [
+        "Confirm station 5 calibration matches stations 1-4 (50.44 px/m, 2 m grid) before tracing all nine sections.",
+        "Confirm station 6 calibration matches stations 1-5 (50.44 px/m, 2 m grid) before tracing all nine sections.",
+        "Confirm station 6 calibration matches stations 1-5 (50.44 px/m, 2 m grid) before tracing all nine sections."
+      ],
+      "draft": "no draft",
+      "requests": 7,
+      "list_cost_usd": 0.01678847
+    }
+  },
+  {
+    "case": "shipd-1-00683-L2",
+    "description_present": true,
+    "dimensions": {
+      "loa": {
+        "value": 100.0,
+        "reference": 99.93008613586426,
+        "within_2_percent": true
+      },
+      "beam": {
+        "value": 17.194131107713314,
+        "reference": 15.849697589874268,
+        "within_2_percent": false
+      },
+      "depth": {
+        "value": 14.53,
+        "reference": 14.527264833450317,
+        "within_2_percent": true
+      },
+      "draft": {
+        "value": null,
+        "reference": 8.7163589,
+        "within_2_percent": false
+      }
+    },
+    "all_dimensions_within_2_percent": false,
+    "stations_right": true,
+    "waterlines_right": false,
+    "expected_waterlines": [
+      2.0,
+      4.0,
+      6.0,
+      8.0,
+      10.0,
+      12.0,
+      14.0
+    ],
+    "actual_waterlines": [
+      0.0,
+      2.0,
+      4.0,
+      6.0,
+      8.0,
+      10.0,
+      12.0,
+      14.0
+    ],
+    "wrong_fields": [
+      "principal.beam",
+      "principal.draft",
+      "waterlines"
+    ],
+    "warning_fields": [
+      "principal.loa",
+      "principal.lpp",
+      "principal.draft",
+      "principal.beam",
+      "waterlines",
+      "ends.keel",
+      "ends.stem",
+      "ends.bulb",
+      "deck.sheer_z"
+    ],
+    "wrong_fields_without_warning": [],
+    "provider_requests": 4,
+    "known_list_cost_usd": 0.0064474499999999995,
+    "receipts_without_list_cost": 0,
+    "digest": {
+      "case": "shipd-1-00683-L2",
+      "status": "paused",
+      "reason": "phase1_description_complete",
+      "events": 26,
+      "decisions": 4,
+      "tools": [
+        "describe_views",
+        "propose_sheet_setup",
+        "propose_sheet_setup",
+        "describe_vessel"
+      ],
+      "tool_sequence": "describe_views > propose_sheet_setup x2 > describe_vessel",
+      "first_blocker": null,
+      "last_reasons": [
+        "Confirm fore-half datums (centreline 568, baseline 813, 2 m grid) so s01-s04 map before proposing sections.",
+        "Record principal dimensions, station/waterline grid and form before authoring sections; beam measured from ink, LOA/draft inferred.",
+        "Record principal dimensions, station/waterline grid and form before authoring sections; beam measured from ink, LOA/draft inferred."
+      ],
+      "draft": "no draft",
+      "requests": 4,
+      "list_cost_usd": 0.0064474499999999995
+    }
+  },
+  {
+    "case": "shipd-1-00045-L2",
+    "description_present": true,
+    "dimensions": {
+      "loa": {
+        "value": 100.0,
+        "reference": 100.0,
+        "within_2_percent": true
+      },
+      "beam": {
+        "value": 21.50842588634605,
+        "reference": 21.566429138183594,
+        "within_2_percent": true
+      },
+      "depth": {
+        "value": 12.57,
+        "reference": 12.570371627807617,
+        "within_2_percent": true
+      },
+      "draft": {
+        "value": null,
+        "reference": 7.542222977,
+        "within_2_percent": false
+      }
+    },
+    "all_dimensions_within_2_percent": false,
+    "stations_right": true,
+    "waterlines_right": false,
+    "expected_waterlines": [
+      2.0,
+      4.0,
+      6.0,
+      8.0,
+      10.0,
+      12.0
+    ],
+    "actual_waterlines": [
+      0.0,
+      1.0
+    ],
+    "wrong_fields": [
+      "principal.draft",
+      "waterlines"
+    ],
+    "warning_fields": [
+      "principal.loa",
+      "principal.lpp",
+      "principal.draft",
+      "principal.beam",
+      "principal.depth",
+      "ends.keel",
+      "ends.stem",
+      "ends.bulb",
+      "deck.sheer_z",
+      "form.type"
+    ],
+    "wrong_fields_without_warning": [
+      "waterlines"
+    ],
+    "provider_requests": 7,
+    "known_list_cost_usd": 0.01408067,
+    "receipts_without_list_cost": 0,
+    "digest": {
+      "case": "shipd-1-00045-L2",
+      "status": "paused",
+      "reason": "phase1_description_complete",
+      "events": 33,
+      "decisions": 3,
+      "tools": [
+        "describe_views",
+        "propose_sheet_setup",
+        "describe_vessel"
+      ],
+      "tool_sequence": "describe_views > propose_sheet_setup > describe_vessel",
+      "first_blocker": {
+        "seq": 8,
+        "source": "model_output_rejected:None",
+        "code": "operation_contract",
+        "message": "operation_contract"
+      },
+      "last_reasons": [
+        "Confirm the body-plan scale and datums from the nine-panel grid before tracing sections.",
+        "Record principal dimensions, nine station identities and form from the body plan before tracing sections; beam measured from ink, length/draft inferred and flagged.",
+        "Record principal dimensions, nine station identities and form from the body plan before tracing sections; beam measured from ink, length/draft inferred and flagged."
+      ],
+      "draft": "no draft",
+      "requests": 3,
+      "list_cost_usd": 0.014080669999999998
+    }
+  },
+  {
+    "case": "shipd-1-00679-L0",
+    "description_present": false,
+    "dimensions": {
+      "loa": {
+        "value": null,
+        "reference": 99.98074479981369,
+        "within_2_percent": false
+      },
+      "beam": {
+        "value": null,
+        "reference": 17.20943331718445,
+        "within_2_percent": false
+      },
+      "depth": {
+        "value": null,
+        "reference": 14.150406122207642,
+        "within_2_percent": false
+      },
+      "draft": {
+        "value": null,
+        "reference": 8.490243673,
+        "within_2_percent": false
+      }
+    },
+    "all_dimensions_within_2_percent": false,
+    "stations_right": false,
+    "waterlines_right": false,
+    "expected_waterlines": [
+      2.0,
+      4.0,
+      6.0,
+      8.0,
+      10.0,
+      12.0,
+      14.0
+    ],
+    "actual_waterlines": [],
+    "wrong_fields": [
+      "principal.loa",
+      "principal.beam",
+      "principal.depth",
+      "principal.draft",
+      "stations",
+      "waterlines"
+    ],
+    "warning_fields": [],
+    "wrong_fields_without_warning": [
+      "principal.loa",
+      "principal.beam",
+      "principal.depth",
+      "principal.draft",
+      "stations",
+      "waterlines"
+    ],
+    "provider_requests": 7,
+    "known_list_cost_usd": 0.01038377,
+    "receipts_without_list_cost": 0,
+    "digest": {
+      "case": "shipd-1-00679-L0",
+      "status": "paused",
+      "reason": "requested_step_boundary",
+      "events": 33,
+      "decisions": 3,
+      "tools": [
+        "describe_views",
+        "propose_sheet_setup",
+        "propose_sheet_setup"
+      ],
+      "tool_sequence": "describe_views > propose_sheet_setup x2",
+      "first_blocker": {
+        "seq": 23,
+        "source": "model_output_rejected:None",
+        "code": "operation_contract",
+        "message": "operation_contract"
+      },
+      "last_reasons": [
+        "Establish left body-plan scale/datum from declared calibration and visible 2 m grid before tracing stations.",
+        "Establish right body-panel datum so stations 6 and 5 can be traced against the same declared calibration as the left panel.",
+        "Establish right body-panel datum so stations 6 and 5 can be traced against the same declared calibration as the left panel."
+      ],
+      "draft": "no draft",
+      "requests": 3,
+      "list_cost_usd": 0.01038377
+    }
+  },
+  {
+    "case": "dtmb5415-3v-L0",
+    "description_present": false,
+    "dimensions": {
+      "loa": {
+        "value": null,
+        "reference": 99.99999999675913,
+        "within_2_percent": false
+      },
+      "beam": {
+        "value": null,
+        "reference": 13.407173661642242,
+        "within_2_percent": false
+      },
+      "depth": {
+        "value": null,
+        "reference": 12.530224564639711,
+        "within_2_percent": false
+      },
+      "draft": {
+        "value": null,
+        "reference": 7.518134739,
+        "within_2_percent": false
+      }
+    },
+    "all_dimensions_within_2_percent": false,
+    "stations_right": false,
+    "waterlines_right": false,
+    "expected_waterlines": [
+      2.0,
+      4.0,
+      6.0,
+      8.0,
+      10.0,
+      12.0
+    ],
+    "actual_waterlines": [],
+    "wrong_fields": [
+      "principal.loa",
+      "principal.beam",
+      "principal.depth",
+      "principal.draft",
+      "stations",
+      "waterlines"
+    ],
+    "warning_fields": [],
+    "wrong_fields_without_warning": [
+      "principal.loa",
+      "principal.beam",
+      "principal.depth",
+      "principal.draft",
+      "stations",
+      "waterlines"
+    ],
+    "provider_requests": 7,
+    "known_list_cost_usd": 0.01298213,
+    "receipts_without_list_cost": 0,
+    "digest": {
+      "case": "dtmb5415-3v-L0",
+      "status": "paused",
+      "reason": "requested_step_boundary",
+      "events": 37,
+      "decisions": 5,
+      "tools": [
+        "describe_views",
+        "propose_sheet_setup",
+        "propose_sheet_setup",
+        "propose_sheet_setup",
+        "describe_vessel"
+      ],
+      "tool_sequence": "describe_views > propose_sheet_setup x3 > describe_vessel",
+      "first_blocker": {
+        "seq": 30,
+        "source": "worker_result:describe_vessel",
+        "code": "invalid_tool_arguments",
+        "message": "Investigation arguments are outside their bounds or name unknown sections."
+      },
+      "last_reasons": [
+        "Record principal dimensions from title block and station/waterline grid before CAD; body plan shows 9 stations with U/V sections.",
+        "Record title-block principal dimensions and the measured station/waterline grid before CAD; body plan shows nine nested U/V sections.",
+        "Record title-block dimensions and measured station/waterline grid; body plan shows 9 nested U/V sections with a skeg, so form is round-bilge displacement."
+      ],
+      "draft": "no draft",
+      "requests": 7,
+      "list_cost_usd": 0.01298213
+    }
+  },
+  {
+    "case": "shipd-1-00679-3v-L0",
+    "description_present": false,
+    "dimensions": {
+      "loa": {
+        "value": null,
+        "reference": 99.98074479981369,
+        "within_2_percent": false
+      },
+      "beam": {
+        "value": null,
+        "reference": 17.20943331718445,
+        "within_2_percent": false
+      },
+      "depth": {
+        "value": null,
+        "reference": 14.150406122207642,
+        "within_2_percent": false
+      },
+      "draft": {
+        "value": null,
+        "reference": 8.490243673,
+        "within_2_percent": false
+      }
+    },
+    "all_dimensions_within_2_percent": false,
+    "stations_right": false,
+    "waterlines_right": false,
+    "expected_waterlines": [
+      2.0,
+      4.0,
+      6.0,
+      8.0,
+      10.0,
+      12.0,
+      14.0
+    ],
+    "actual_waterlines": [],
+    "wrong_fields": [
+      "principal.loa",
+      "principal.beam",
+      "principal.depth",
+      "principal.draft",
+      "stations",
+      "waterlines"
+    ],
+    "warning_fields": [],
+    "wrong_fields_without_warning": [
+      "principal.loa",
+      "principal.beam",
+      "principal.depth",
+      "principal.draft",
+      "stations",
+      "waterlines"
+    ],
+    "provider_requests": 7,
+    "known_list_cost_usd": 0.01368045,
+    "receipts_without_list_cost": 0,
+    "digest": {
+      "case": "shipd-1-00679-3v-L0",
+      "status": "paused",
+      "reason": "requested_step_boundary",
+      "events": 39,
+      "decisions": 6,
+      "tools": [
+        "describe_views",
+        "propose_sheet_setup",
+        "propose_sheet_setup",
+        "propose_sheet_setup",
+        "describe_vessel",
+        "describe_vessel"
+      ],
+      "tool_sequence": "describe_views > propose_sheet_setup x3 > describe_vessel x2",
+      "first_blocker": {
+        "seq": 28,
+        "source": "model_output_rejected:None",
+        "code": "typed_contract_rejected",
+        "message": "typed_contract_rejected"
+      },
+      "last_reasons": [
+        "Record principal dimensions from title block, station/waterline/buttock identities and form from the three views before CAD. Station x values are ai_inferred because declared 10-90 m conflicts with...",
+        "Record title-block principals, station/waterline/buttock identities and form; station x remapped to LOA 23.21 m because declared 10-90 m conflicts with the sheet.",
+        "Record title-block principals, station/waterline/buttock identities and form; station x remapped to LOA 23.21 m because declared 10-90 m conflicts with the sheet."
+      ],
+      "draft": "no draft",
+      "requests": 6,
+      "list_cost_usd": 0.01368045
+    }
+  }
+]
