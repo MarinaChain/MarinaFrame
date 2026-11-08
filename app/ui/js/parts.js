@@ -23,6 +23,13 @@ const MAX_NOTE = 500;
 const MARK_CHIPS = ['Too high', 'Too low', 'Too long', 'Too short', 'Wrong place', 'Not a part', 'Missing part'];
 /** Sketch scale (SVG units per metre) and margin; the SVG scales to its column width. */
 const SKETCH = { unitsPerMetre: 30, pad: 10 };
+/**
+ * A selected part whose larger side is under this part of the sketch width also gets a ring
+ * around it, so a thruster or a skeg fin on a 40 m hull is easy to find. The ring radius is a
+ * part of the sketch width too, so it looks the same on any hull length.
+ */
+const SMALL_PART_SHARE = 0.08;
+const RING_RADIUS_SHARE = 0.05;
 
 /** One state word per part: the review wins, then what the build could do. */
 /** "house_height" or "height" -> "Height": the argument word of a ship-cad name. */
@@ -160,7 +167,24 @@ export function createParts({ host, review, showIn3d, signOff, onSelect = () => 
           rect.append(svg('title', {}, p.label));
           rect.addEventListener('click', () => select(p.id));
           return rect;
-        })));
+        }),
+        focusRing(order.find((p) => p.id === selectedId), { px, py, vertical, scale, sketchWidth: width })));
+  }
+
+  /** A ring around the selected part when it is too small to see at once in the sketch. */
+  function focusRing(part, { px, py, vertical, scale, sketchWidth }) {
+    if (!part) return null;
+    const { min, max } = part.bbox_m;
+    const width = (max[0] - min[0]) * scale;
+    const height = (max[vertical] - min[vertical]) * scale;
+    if (Math.max(width, height) >= sketchWidth * SMALL_PART_SHARE) return null;
+    return svg('circle', {
+      class: 'parts-focus',
+      cx: ((px(min[0]) + px(max[0])) / 2).toFixed(1),
+      cy: ((py(min[vertical]) + py(max[vertical])) / 2).toFixed(1),
+      r: (sketchWidth * RING_RADIUS_SHARE).toFixed(1),
+      'aria-hidden': 'true',
+    });
   }
 
   function treeRow(part) {
