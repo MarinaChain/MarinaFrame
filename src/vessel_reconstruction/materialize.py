@@ -329,7 +329,8 @@ def assign(stations: list[dict], panels: list[dict], warnings: list) -> list[tup
     if len(panels) == 1 or (fore_panels and aft_panels):
         pairs = []
         for station in stations:
-            fore = station["side"] == "fore" if trust_sides else station["x_m"] >= middle
+            read_side = trust_sides and station["side"] in ("fore", "aft")
+            fore = station["side"] == "fore" if read_side else station["x_m"] >= middle
             if fore_panels and aft_panels:
                 panel = fore_panels[0] if fore else aft_panels[0]
                 roi, basis = list(panel["region_px"]), "fore/aft body view"

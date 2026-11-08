@@ -141,17 +141,61 @@ def short_of_deck(anchors: list[Anchor], decks: dict) -> list[str]:
     return [sid for sid, top in tops.items() if sid in decks and top < (1 - SHORT_TOP_SHARE) * decks[sid]]
 
 
+def extend_tops_to_deck(anchors: list[Anchor], decks: dict) -> None:
+    """Continue traced tops that stop a little below the profile deck line up to it.
+
+    A body-plan curve runs up to the deck at side, which the profile's deck
+    line gives at each station. On a blurred sheet a trace can stop short of
+    it where a station label or a neighbouring curve's top merges with the
+    curve (series60-3v-L1: three aft stations ended 0.4-1.7 m low). The top is
+    continued along the direction of its last EXTEND_FIT_SHARE of height. Used
+    only when the deck agrees with most traced tops; traces that end far below
+    it (short_of_deck) are already left to the form fit. Changes ``anchors``.
+    """
+    import numpy as np
+    tops = {a.id: max(p[1] for p in a.points_yz_m) for a in anchors if a.points_yz_m}
+    differences = [abs(tops[sid] - deck) for sid, deck in decks.items() if sid in tops]
+    if not differences or float(np.median(differences)) > DECK_AGREEMENT_M:
+        return
+    for anchor in anchors:
+        deck = decks.get(anchor.id)
+        points = np.asarray(anchor.points_yz_m, dtype=float)
+        if deck is None or not anchor.pixels_per_metre or len(points) < 4:
+            continue
+        points = points[np.argsort(points[:, 1], kind="stable")]
+        top = float(points[-1, 1])
+        if top >= deck - DECK_TOP_TOLERANCE_PX / anchor.pixels_per_metre:
+            continue
+        upper = points[points[:, 1] >= top - EXTEND_FIT_SHARE * deck]
+        if len(upper) < 2 or np.ptp(upper[:, 1]) <= 0:
+            continue
+        slope, intercept = np.polyfit(upper[:, 1], upper[:, 0], 1)
+        breadth = max(0.0, float(slope * deck + intercept))
+        anchor.points_yz_m = np.vstack([points, [breadth, deck]]).tolist()
+        # The deck height is the line's centre already: no pen-cap correction.
+        anchor.stroke_width_px = None
+        anchor.notes.append(f"top continued from z {top:.3f} to the profile deck line at z {deck:.3f} m")
+
+
+# A top continued to the deck follows the direction of its upper part: the
+# points within this share of the deck height below the traced top.
+EXTEND_FIT_SHARE = 0.1
+
+
 def cap_at_profile_outline(sections: list[dict], anchors: list[Anchor], heights: dict) -> tuple[list, list]:
     """Apply the profile outline (vessel_description.station_outline_heights).
 
-    Keel bottoms and deck tops cut traces that run on; traces that stop far
-    below the deck are left to the form fit. Returns (sections, anchors).
+    Keel bottoms and deck tops cut traces that run on, tops that stop a little
+    below the deck are continued to it, and traces that stop far below the
+    deck are left to the form fit. Returns (sections, anchors).
     """
     decks = {sid: h["deck"] for sid, h in heights.items()}
     short = set(short_of_deck(anchors, decks))
     anchors = [a for a in anchors if a.id not in short]
     cut_bottoms_at_keel(anchors, {sid: h["keel"] for sid, h in heights.items()})
-    return cap_tops_at_deck(sections, anchors, decks), anchors
+    sections = cap_tops_at_deck(sections, anchors, decks)
+    extend_tops_to_deck(anchors, decks)
+    return sections, anchors
 
 
 def build_first_hull(tools):

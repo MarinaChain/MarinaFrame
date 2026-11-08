@@ -90,6 +90,10 @@ def test_model_station_positions_are_checked_against_the_profile_station_lines()
     spread = [{"id": str(i + 1), "x_m": 11.08 * i} for i in range(10)]
     fixed = vd.check_station_positions(image, [setup], {"stations": spread}, warnings)
     assert [s["id"] for s in fixed] == [str(i) for i in range(1, 10)] and len(warnings) == 2
+    # The body-plan side the model read for a station number stays with that number.
+    sided = [{"id": str(i), "x_m": 11.08 * i, "side": "aft" if i <= 4 else "fore"} for i in range(10)]
+    fixed = vd.check_station_positions(image, [setup], {"stations": sided}, [])
+    assert [s["side"] for s in fixed] == ["aft"] * 4 + ["fore"] * 5
 
 
 def test_deck_heights_follow_the_sheer_and_skip_the_label():
@@ -118,10 +122,16 @@ def test_light_station_lines_are_found_on_a_blurred_grey_scan():
 def test_the_intake_profile_region_inside_the_model_region_is_measured():
     setup = {"view": "profile", "region_px": [60, 40, 2070, 320], "x_origin_px": 60.0}
     hints = [{"label": "profile", "region_px": [153, 132, 2064, 318]}]
-    assert vd.profile_setup([setup], hints)["region_px"] == [153, 132, 2064, 318]
+    assert vd.profile_setup([setup], hints)["region_px"] == [60, 132, 2070, 318]
+    # An intake region with only part of the view keeps the model's full width (shipd-1-09867-3v-L0).
+    half = [{"label": "profile", "region_px": [500, 135, 2064, 318]}]
+    assert vd.profile_setup([setup], half)["region_px"] == [60, 135, 2070, 318]
     # A model region that does not hold the intake's is kept (the intake may have cut the view short).
     other = {**setup, "region_px": [160, 120, 2070, 320]}
     assert vd.profile_setup([other], hints)["region_px"] == [160, 120, 2070, 320]
+    # A profile setup without an x origin is still used; its origin is the region edge (unread).
+    unread = {"view": "profile", "region_px": [60, 40, 2070, 320], "x_origin_px": None}
+    assert vd.profile_setup([unread], hints)["x_origin_px"] == 60.0
 
 
 def test_a_baseline_on_another_grid_line_is_snapped_to_the_keel_line():
@@ -218,6 +228,22 @@ def test_a_top_that_runs_above_the_deck_line_is_cut_there():
     assert tops == {"1": 9.0, "2": 9.1, "3": 9.05}  # Only the overshooting top is cut.
     assert anchors[1].notes and anchors[1].stroke_width_px is None
     assert [s["z_max_m"] for s in capped] == [9.0, 9.1, 9.0, 9.2]
+
+
+def test_a_top_that_stops_a_little_below_the_deck_line_is_continued_to_it():
+    from vessel_reconstruction.first_hull_tools import extend_tops_to_deck
+    # Station 2 stopped 0.6 m low where a label merged with its top (series60-3v-L1).
+    anchors = [_anchor("1", 9.0), _anchor("2", 8.4), _anchor("3", 9.0)]
+    side = max(p[0] for p in anchors[1].points_yz_m)
+    extend_tops_to_deck(anchors, {"1": 9.0, "2": 9.0, "3": 9.0})
+    top = max(anchors[1].points_yz_m, key=lambda p: p[1])
+    # The side still widens a little at its top; the continuation follows it.
+    assert top[1] == 9.0 and side < top[0] < side + 0.2 and anchors[1].stroke_width_px is None
+    assert anchors[1].notes and not anchors[0].notes and not anchors[2].notes
+    # A deck line that disagrees with most tops (a wrong profile setup) is not used.
+    low = [_anchor("1", 6.0), _anchor("2", 6.0)]
+    extend_tops_to_deck(low, {"1": 9.0, "2": 9.0})
+    assert max(p[1] for p in low[0].points_yz_m) == 6.0
 
 
 def test_a_deck_line_that_disagrees_with_most_tops_is_not_used():
