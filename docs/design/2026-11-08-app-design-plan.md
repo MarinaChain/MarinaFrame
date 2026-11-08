@@ -171,9 +171,13 @@ Research basis: `docs/research/2026-11-09-uiux-research.md`. Screens and where t
 | Everywhere | command palette (Cmd/Ctrl+K), shortcut sheet (?), theme button, Draft-only chip | `js/palette.js`, `js/shortcuts.js` |
 
 Checks: `cd app && npm run test:ui` (section areas, part list safety, reasons) and `npm run
-test:a11y` (axe-core on 14 mock screens, light and dark; must report no violations).
+test:a11y` (axe-core on 15 mock screens, light and dark; must report no violations).
+
+Section areas (Checks tab) compare each station with the fair curve through its neighbours
+and show volume, largest area, centre and Cp between the end stations. The note says that
+the drawings give no area curve to compare with: no worker step reads a printed SAC yet.
 
 Open (next): re-run one part from a mark (controller and worker; the marks are in
-`TaskView.components[].review_note`); sectional-area against the drawing's own SAC when a
-profile is read; parts from a real whole-vessel run folder (the reader is tested on real
+`TaskView.components[].review_note`); a worker step that reads a printed SAC (from a
+hydrostatic or capacity sheet) so the Checks tab can draw it under the built curve; parts from a real whole-vessel run folder (the reader is tested on real
 ship-cad output, `app/core/testdata/ship_cad_execution.json`).

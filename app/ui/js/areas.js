@@ -58,6 +58,39 @@ export function areaCurve(sections, top) {
   return stations;
 }
 
+/**
+ * The numbers a naval architect reads off an area curve, between the end stations only
+ * (trapezoids along x, so the ends beyond the first and last station are not counted):
+ * volume, the largest area and where it is, the centre of the volume along x, and the
+ * prismatic coefficient Cp = volume / (largest area x span). Null when there is no curve.
+ */
+export function curveSummary(stations) {
+  if (stations.length < 2) return null;
+  let volume = 0;
+  let moment = 0;
+  for (let i = 1; i < stations.length; i += 1) {
+    const a = stations[i - 1];
+    const b = stations[i];
+    const width = b.x_m - a.x_m;
+    const slice = ((a.area + b.area) / 2) * width;
+    volume += slice;
+    // Centroid of a trapezoid slice along x.
+    const sum = a.area + b.area;
+    const centre = sum ? a.x_m + (width * (a.area + 2 * b.area)) / (3 * sum) : (a.x_m + b.x_m) / 2;
+    moment += slice * centre;
+  }
+  const largest = stations.reduce((best, s) => (s.area > best.area ? s : best), stations[0]);
+  const span = stations[stations.length - 1].x_m - stations[0].x_m;
+  if (!volume || !largest.area || !span) return null;
+  return {
+    volume_m3: volume,
+    largest_area_m2: largest.area,
+    largest_x_m: largest.x_m,
+    centre_x_m: moment / volume,
+    prismatic: volume / (largest.area * span),
+  };
+}
+
 /** The polynomial through `points` ({ x_m, area }) evaluated at x. */
 function lagrange(points, x) {
   let sum = 0;
@@ -133,6 +166,17 @@ export function createAreas({ invoke, onSelect }) {
       }));
   }
 
+  function summaryList(summary) {
+    if (!summary) return null;
+    const item = (term, value, title) => el('div', { class: 'areas-stat', title },
+      el('dt', {}, term), el('dd', {}, value));
+    return el('dl', { class: 'areas-stats' },
+      item('Volume', `${fmt.decimal(summary.volume_m3, 1)} m³`, 'Volume under the curve, between the end stations'),
+      item('Largest', `${fmt.decimal(summary.largest_area_m2, 2)} m² at ${fmt.metres(summary.largest_x_m)}`, 'The largest section area and where it is'),
+      item('Centre', fmt.metres(summary.centre_x_m), 'Centre of the volume along the length, from the aft end'),
+      item('Cp', fmt.decimal(summary.prismatic, 2), 'Prismatic coefficient: volume / (largest area × length between the end stations)'));
+  }
+
   function render() {
     const heightChips = el('div', { class: 'segmented segmented-small', role: 'radiogroup', 'aria-label': 'Area up to' },
       ...HEIGHTS.map((h) => el('button', {
@@ -155,14 +199,17 @@ export function createAreas({ invoke, onSelect }) {
       return;
     }
     const flagged = stations.filter((s) => s.offCurve !== null && Math.abs(s.offCurve) > OFF_CURVE_LIMIT);
-    fill(host, head, chart(stations),
+    fill(host, head, chart(stations), summaryList(curveSummary(stations)),
       flagged.length
         ? el('ul', { class: 'areas-flags' }, ...flagged.map((s) => el('li', {},
           el('button', { class: 'areas-flag', type: 'button', onclick: () => onSelect(s.id) },
             el('span', { class: 'change-x' }, fmt.metres(s.x_m)),
             `${Math.round(Math.abs(s.offCurve) * 100)}% ${s.offCurve > 0 ? 'above' : 'below'} the curve`))))
         : el('p', { class: 'areas-note' }, 'The curve is smooth: no station is far from its neighbours.'),
-      el('p', { class: 'areas-note' }, `Up to ${fmt.metres((depth || 0) * height.part, 2)} above the keel. A draft check, not a hydrostatic result.`));
+      // Say what the stations are compared with. No worker step reads an area curve printed
+      // on a drawing yet, so the only reference is the hull's own fair curve.
+      el('p', { class: 'areas-note' },
+        `Each station is compared with the fair curve through its neighbours; the drawings give no area curve to compare with. Up to ${fmt.metres((depth || 0) * height.part, 2)} above the keel, between the end stations. A draft check, not a hydrostatic result.`));
   }
 
   return {
