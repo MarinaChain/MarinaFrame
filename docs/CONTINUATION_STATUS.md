@@ -431,7 +431,7 @@ campaign counts as a failure.
 - **Cleanup:** h2h-sealed-v2 worktree removed (data stays in main `work/h2h-sealed-v2/`). PR #4 CI
   green at 37113d7/40601cc.
 
-## 2026-11-08 14:10 SGT: LLM-first app default (PM decision, founder "up to you")
+## 2026-11-08 13:35 SGT: LLM-first app default (PM decision, founder "up to you")
 
 - Decision: the desktop app uses AI drafting by default; deterministic draft only when AI drafting is
   off or no key is found. v3 will be run later as a check, not as a gate. Branch `app-llm-first`

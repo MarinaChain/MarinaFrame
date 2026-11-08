@@ -237,7 +237,10 @@ def summarize(cases: list[dict]) -> dict:
     total = len(cases)
     top_reason, top_reason_n = reasons.most_common(1)[0] if reasons else ("none", 0)
     top_blocker, top_blocker_n = blockers.most_common(1)[0] if blockers else ("none", 0)
-    failed = [c["status"] not in SUCCESS_STATUSES for c in cases]
+    # A case that ends with a valid draft is a success in draft mode (happy path first),
+    # whatever its stop reason.
+    failed = [c["status"] not in SUCCESS_STATUSES and not c["draft"].startswith("valid draft")
+              for c in cases]
     same_prefix = 0  # leading failed cases, in run order, that ended with the top reason
     for case, case_failed in zip(cases, failed):
         if not case_failed or case["reason"] != top_reason:
@@ -246,8 +249,9 @@ def summarize(cases: list[dict]) -> dict:
     if not cases:
         verdict = "no cases found"
     else:
+        drafts = sum(c["draft"].startswith("valid draft") for c in cases)
         verdict = (
-            f"{sum(failed)}/{total} failed; most common end `{top_reason}` ({top_reason_n}/{total}); "
+            f"{drafts}/{total} valid drafts; {sum(failed)}/{total} failed; most common end `{top_reason}` ({top_reason_n}/{total}); "
             f"most common first blocker `{top_blocker}` ({top_blocker_n}/{total})"
         )
     hint = None
