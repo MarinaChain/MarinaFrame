@@ -102,6 +102,7 @@ fn decision(tool: &str, arguments: Value) -> Decision {
         tool: tool.into(),
         arguments,
         reason: "Investigation guard test.".into(),
+        notes: None,
     }
 }
 

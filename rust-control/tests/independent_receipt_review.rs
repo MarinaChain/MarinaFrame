@@ -95,6 +95,7 @@ fn provider_fixture() -> (tempfile::TempDir, store::Store, Pending, Receipt) {
             tool: "finish".into(),
             arguments: json!({"outcome":"abstain","summary":"Protocol fixture only."}),
             reason: "Controlled receipt.".into(),
+            notes: None,
         }),
         error_code: None,
         attempt: 1,

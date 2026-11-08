@@ -247,6 +247,19 @@ def enumerate_strokes(image: np.ndarray, section: dict, source_file: str, detail
     return strokes, refusals
 
 
+def stroke_kind(rows, xs, section: dict) -> str:
+    """Label full-height, pixel-straight vertical evidence without removing it.
+
+    Section traces are row-indexed, so horizontal grid lines are not enumerated
+    as sustained strokes. Two source pixels allow raster thickness, not curvature.
+    """
+    calibration = section["calibration"]
+    expected_height = (section["z_max_m"] - section["z_min_m"]) * calibration["pixels_per_metre"]
+    if len(xs) and rows[-1] - rows[0] >= 0.95 * expected_height and float(np.ptp(xs)) <= 2.0:
+        return "straight_grid_line"
+    return "candidate_stroke"
+
+
 def _point_on(seed, stroke) -> bool:
     """True when a seed lies on an already traced stroke (2 px)."""
     rows, xs = stroke["trace_rows_px"], stroke["trace_xs_px"]

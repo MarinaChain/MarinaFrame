@@ -1,0 +1,483 @@
+{
+  "cases": [
+    {
+      "built": false,
+      "case_id": "dtmb5415-L0",
+      "completion_tokens": 850,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "separate",
+      "level": 0,
+      "list_cost_usd": 0.00889191,
+      "prompt_tokens": 60897,
+      "request_states": {
+        "completed": 9
+      },
+      "requests": 9,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": false,
+      "case_id": "dtmb5415-L1",
+      "completion_tokens": 343,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "separate",
+      "level": 1,
+      "list_cost_usd": 0.00577062,
+      "prompt_tokens": 40862,
+      "request_states": {
+        "completed": 6
+      },
+      "requests": 6,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": false,
+      "case_id": "dtmb5415-L2",
+      "completion_tokens": 1323,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "separate",
+      "level": 2,
+      "list_cost_usd": 0.02425368,
+      "prompt_tokens": 165180,
+      "request_states": {
+        "completed": 20
+      },
+      "requests": 20,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": false,
+      "case_id": "dtmb5415-L3",
+      "completion_tokens": 2458,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "separate",
+      "level": 3,
+      "list_cost_usd": 0.04400784,
+      "prompt_tokens": 300488,
+      "request_states": {
+        "completed": 34
+      },
+      "requests": 34,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": false,
+      "case_id": "series60-L0",
+      "completion_tokens": 260,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "overlay",
+      "level": 0,
+      "list_cost_usd": 0.00557178,
+      "prompt_tokens": 38614,
+      "request_states": {
+        "completed": 5
+      },
+      "requests": 5,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": false,
+      "case_id": "series60-L1",
+      "completion_tokens": 248,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "overlay",
+      "level": 1,
+      "list_cost_usd": 0.00143154,
+      "prompt_tokens": 9806,
+      "request_states": {
+        "completed": 3
+      },
+      "requests": 3,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": false,
+      "case_id": "series60-L2",
+      "completion_tokens": 292,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "overlay",
+      "level": 2,
+      "list_cost_usd": 0.0042378599999999995,
+      "prompt_tokens": 28966,
+      "request_states": {
+        "completed": 5
+      },
+      "requests": 5,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": false,
+      "case_id": "series60-L3",
+      "completion_tokens": 574,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "overlay",
+      "level": 3,
+      "list_cost_usd": 0.00923649,
+      "prompt_tokens": 63671,
+      "request_states": {
+        "completed": 11
+      },
+      "requests": 11,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": false,
+      "case_id": "shipd-1-00045-L0",
+      "completion_tokens": 884,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "separate",
+      "level": 0,
+      "list_cost_usd": 0.01603302,
+      "prompt_tokens": 110250,
+      "request_states": {
+        "completed": 13
+      },
+      "requests": 13,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": false,
+      "case_id": "shipd-1-00045-L1",
+      "completion_tokens": 213,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "separate",
+      "level": 1,
+      "list_cost_usd": 0.00132411,
+      "prompt_tokens": 9857,
+      "request_states": {
+        "completed": 3
+      },
+      "requests": 3,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": false,
+      "case_id": "shipd-1-00045-L2",
+      "completion_tokens": 1876,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "separate",
+      "level": 2,
+      "list_cost_usd": 0.04172202,
+      "prompt_tokens": 286950,
+      "request_states": {
+        "completed": 28
+      },
+      "requests": 28,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": false,
+      "case_id": "shipd-1-00045-L3",
+      "completion_tokens": 611,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "separate",
+      "level": 3,
+      "list_cost_usd": 0.01381902,
+      "prompt_tokens": 96582,
+      "request_states": {
+        "completed": 12
+      },
+      "requests": 12,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": true,
+      "case_id": "shipd-1-00617-L0",
+      "completion_tokens": 819,
+      "correct": true,
+      "labelled_wrong_draft": false,
+      "layout": "separate",
+      "level": 0,
+      "list_cost_usd": 0.008194129999999999,
+      "prompt_tokens": 57749,
+      "request_states": {
+        "completed": 9
+      },
+      "requests": 9,
+      "requests_missing_list_cost": 0,
+      "score_status": "scored",
+      "silent_wrong_build": false,
+      "status": "draft_not_verified"
+    },
+    {
+      "built": false,
+      "case_id": "shipd-1-00617-L1",
+      "completion_tokens": 222,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "separate",
+      "level": 1,
+      "list_cost_usd": 0.00132606,
+      "prompt_tokens": 9834,
+      "request_states": {
+        "completed": 3
+      },
+      "requests": 3,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": false,
+      "case_id": "shipd-1-00617-L2",
+      "completion_tokens": 213,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "separate",
+      "level": 2,
+      "list_cost_usd": 0.00141834,
+      "prompt_tokens": 9858,
+      "request_states": {
+        "completed": 3
+      },
+      "requests": 3,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": false,
+      "case_id": "shipd-1-00617-L3",
+      "completion_tokens": 635,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "separate",
+      "level": 3,
+      "list_cost_usd": 0.0116489,
+      "prompt_tokens": 81846,
+      "request_states": {
+        "completed": 12
+      },
+      "requests": 12,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": false,
+      "case_id": "shipd-1-00679-L0",
+      "completion_tokens": 283,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "overlay",
+      "level": 0,
+      "list_cost_usd": 0.00613522,
+      "prompt_tokens": 42192,
+      "request_states": {
+        "completed": 5
+      },
+      "requests": 5,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": false,
+      "case_id": "shipd-1-00679-L1",
+      "completion_tokens": 213,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "overlay",
+      "level": 1,
+      "list_cost_usd": 0.00131616,
+      "prompt_tokens": 9804,
+      "request_states": {
+        "completed": 3
+      },
+      "requests": 3,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": false,
+      "case_id": "shipd-1-00679-L2",
+      "completion_tokens": 566,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "overlay",
+      "level": 2,
+      "list_cost_usd": 0.0095781,
+      "prompt_tokens": 67862,
+      "request_states": {
+        "completed": 11
+      },
+      "requests": 11,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": false,
+      "case_id": "shipd-1-00679-L3",
+      "completion_tokens": 274,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "overlay",
+      "level": 3,
+      "list_cost_usd": 0.00438795,
+      "prompt_tokens": 31293,
+      "request_states": {
+        "completed": 5
+      },
+      "requests": 5,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": false,
+      "case_id": "shipd-1-00683-L0",
+      "completion_tokens": 316,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "overlay",
+      "level": 0,
+      "list_cost_usd": 0.0067592699999999995,
+      "prompt_tokens": 47561,
+      "request_states": {
+        "completed": 6
+      },
+      "requests": 6,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": false,
+      "case_id": "shipd-1-00683-L1",
+      "completion_tokens": 326,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "overlay",
+      "level": 1,
+      "list_cost_usd": 0.00306513,
+      "prompt_tokens": 21639,
+      "request_states": {
+        "completed": 6
+      },
+      "requests": 6,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": false,
+      "case_id": "shipd-1-00683-L2",
+      "completion_tokens": 213,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "overlay",
+      "level": 2,
+      "list_cost_usd": 0.0013169100000000001,
+      "prompt_tokens": 9809,
+      "request_states": {
+        "completed": 3
+      },
+      "requests": 3,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    },
+    {
+      "built": false,
+      "case_id": "shipd-1-00683-L3",
+      "completion_tokens": 325,
+      "correct": false,
+      "labelled_wrong_draft": false,
+      "layout": "overlay",
+      "level": 3,
+      "list_cost_usd": 0.00570978,
+      "prompt_tokens": 39274,
+      "request_states": {
+        "completed": 6
+      },
+      "requests": 6,
+      "requests_missing_list_cost": 0,
+      "score_status": null,
+      "silent_wrong_build": false,
+      "status": "no_progress"
+    }
+  ],
+  "summary": {
+    "arm": "baseline",
+    "built": 1,
+    "completion_tokens": 14337,
+    "correct": 1,
+    "gate": {
+      "rms_fraction": 0.02,
+      "volume_relative": 0.05
+    },
+    "labelled_wrong_draft": 0,
+    "list_cost_usd": 0.23715584,
+    "no_progress_rate": 0.9166666666666666,
+    "planned_cases": 24,
+    "prompt_tokens": 1640844,
+    "requests": 221,
+    "requests_missing_list_cost": 0,
+    "sample_sha256": "b1bd879b48ff647f267c31acacab7c2d86fd450b56a8399eb0a809f1057ff4d2",
+    "silent_wrong_build": 0,
+    "status_counts": {
+      "draft_not_verified": 2,
+      "no_progress": 22
+    }
+  }
+}

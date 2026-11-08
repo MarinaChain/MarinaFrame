@@ -393,11 +393,20 @@ pub struct Decision {
     pub tool: String,
     pub arguments: Value,
     pub reason: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
 }
 impl Decision {
     pub fn operation(&self) -> Result<Operation> {
         if self.reason.chars().count() > 512 || self.reason.len() > 2048 {
             return Err("reason_limit".into());
+        }
+        if self
+            .notes
+            .as_ref()
+            .is_some_and(|notes| notes.chars().count() > 600 || notes.len() > 2400)
+        {
+            return Err("notes_limit".into());
         }
         let op: Operation =
             serde_json::from_value(json!({"tool":self.tool,"arguments":self.arguments}))
@@ -420,10 +429,21 @@ pub struct OperationalLimits {
     pub max_images_per_request: usize,
     pub max_image_bytes: usize,
     pub max_repeated_action: u64,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub investigation_thinking: bool,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub investigation_temperature: f64,
     pub max_requests: Option<u64>,
     pub max_total_tokens: Option<u64>,
     pub max_spend_usd: Option<f64>,
 }
+fn is_false(value: &bool) -> bool {
+    !value
+}
+fn is_zero(value: &f64) -> bool {
+    *value == 0.0
+}
+
 impl Default for OperationalLimits {
     fn default() -> Self {
         Self {
@@ -437,6 +457,8 @@ impl Default for OperationalLimits {
             max_images_per_request: 4,
             max_image_bytes: 196_608,
             max_repeated_action: 3,
+            investigation_thinking: false,
+            investigation_temperature: 0.0,
             max_requests: None,
             max_total_tokens: None,
             max_spend_usd: None,
@@ -455,6 +477,8 @@ impl OperationalLimits {
             || self.max_images_per_request > 6
             || !(1024..=1_048_576).contains(&self.max_image_bytes)
             || !(1..=8).contains(&self.max_repeated_action)
+            || !self.investigation_temperature.is_finite()
+            || !(0.0..=2.0).contains(&self.investigation_temperature)
             || self.max_spend_usd.is_some_and(|x| !x.is_finite() || x < 0.)
         {
             return Err("invalid_operational_limits".into());
@@ -644,6 +668,51 @@ mod tests {
             let d: Decision = serde_json::from_value(v).unwrap();
             assert!(d.operation().is_err());
         }
+    }
+    #[test]
+    fn decision_notes_are_optional_bounded_and_backward_compatible() {
+        let old = json!({"tool":"build_draft","arguments":{},"reason":"ready"});
+        let decision: Decision = serde_json::from_value(old.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&decision).unwrap(), old);
+        for (notes, accepted) in [
+            ("a".repeat(600), true),
+            ("é".repeat(600), true),
+            ("a".repeat(601), false),
+        ] {
+            let decision: Decision = serde_json::from_value(
+                json!({"tool":"build_draft","arguments":{},"reason":"ready","notes":notes}),
+            )
+            .unwrap();
+            assert_eq!(decision.operation().is_ok(), accepted);
+        }
+    }
+    #[test]
+    fn investigation_settings_keep_old_limits_and_bound_temperature() {
+        let defaults = OperationalLimits::default();
+        let serialized = serde_json::to_value(&defaults).unwrap();
+        assert!(serialized.get("investigation_thinking").is_none());
+        assert!(serialized.get("investigation_temperature").is_none());
+        let old: OperationalLimits = serde_json::from_value(serialized.clone()).unwrap();
+        assert!(!old.investigation_thinking);
+        assert_eq!(old.investigation_temperature, 0.0);
+        assert_eq!(serde_json::to_value(old).unwrap(), serialized);
+        for temperature in [-1.0, 2.1, f64::INFINITY, f64::NAN] {
+            let settings = OperationalLimits {
+                investigation_temperature: temperature,
+                ..OperationalLimits::default()
+            };
+            assert!(settings.validate().is_err());
+        }
+        let enabled = OperationalLimits {
+            investigation_thinking: true,
+            investigation_temperature: 0.5,
+            ..OperationalLimits::default()
+        };
+        enabled.validate().unwrap();
+        let roundtrip: OperationalLimits =
+            serde_json::from_value(serde_json::to_value(enabled).unwrap()).unwrap();
+        assert!(roundtrip.investigation_thinking);
+        assert_eq!(roundtrip.investigation_temperature, 0.5);
     }
     #[test]
     fn campaign_has_no_aggregate_caps_but_finite_worker_limits() {

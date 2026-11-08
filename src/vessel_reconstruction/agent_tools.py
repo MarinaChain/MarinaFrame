@@ -168,7 +168,10 @@ class DomainTools(InvestigationTools):
     def describe(self) -> dict:
         sections = [{"id": s.get("id"), "x_m": s.get("x_m"), "roi_px": s.get("roi_px"),
                      "selected_candidate_id": self.state["selected"].get(s.get("id")),
-                     "inspected": s.get("id") in self.state["catalog"]}
+                     "catalog_available": s.get("id") in self.state["catalog"],
+                     "inspection_failure": self.state["catalog"].get(s.get("id"), {}).get("inspection_failure"),
+                     "inspected": s.get("id") in self.state["catalog"] and not
+                                  self.state["catalog"][s.get("id")].get("inspection_failure")}
                     for s in self.spec.get("sections", []) if isinstance(s, dict)]
         current = next((b for b in reversed(self.state["builds"])
                         if b["generation_id"] == self.generation_id and b["revision_id"] == self.revision_id), None)
@@ -187,7 +190,8 @@ class DomainTools(InvestigationTools):
                 "generation_id": self.generation_id, "sections": sections,
                 "section_count": len(sections), "selected_count": len(self.state["selected"]),
                 "remaining_count": len(sections) - len(self.state["selected"]),
-                "catalog_ready": bool(sections) and all(s["inspected"] for s in sections),
+                "catalog_ready": bool(sections) and all(s["catalog_available"] for s in sections),
+                "failed_inspection_section_ids": [s["id"] for s in sections if s["inspection_failure"]],
                 "inspected_sections": inspected, "inspected_section_count": len(ordered),
                 "inspected_sections_truncated": len(ordered) > INSPECTION_BATCH,
                 "remaining_section_ids": [s["id"] for s in sections if not s["inspected"]],
@@ -352,7 +356,25 @@ class DomainTools(InvestigationTools):
                                                         "section_ids": missing}, out)
             resources = {"worker_state": outcome["state"], "wall_seconds": outcome["elapsed_seconds"]}
             if result is None:
-                return self._observation(False, outcome["state"], error_code="inspection_worker_failed", resources=resources)
+                limited = outcome.get("worker_error", {}).get("error_code") == "resource_limit"
+                if limited:
+                    by_id = {section["id"]: section for section in self.spec["sections"]}
+                    for sid in missing:
+                        section = by_id[sid]
+                        self.state["catalog"].setdefault(sid, {
+                            "section_id": sid, "source_sha256": self.state["sources"]["source"]["sha256"],
+                            "x_m": section["x_m"], "roi_px": section["roi_px"],
+                            "calibration": section["calibration"], "candidates": [],
+                            "inspection_failure": "resource_limit",
+                            "grid_evidence": {"lattice_detected": False, "unique_non_grid_candidate_id": None,
+                                              "non_grid_competing_components": None}, **SEMANTIC_FLAGS})
+                    self._save()
+                return self._observation(False, outcome["state"],
+                    error_code="resource_limit" if limited else "inspection_worker_failed",
+                    message="Source inspection exceeds the bounded evidence budget." if limited
+                            else "Source inspection worker failed; no recoverable diagnostic is available.",
+                    failed_section_ids=missing, recovery_tools=["enumerate_strokes", "trace_from_point", "trace_corridor"] if limited else [],
+                    resources=resources)
             for section in result["sections"]:
                 # Coordinates/complete diagnostics remain in immutable inspection
                 # evidence files; persistent selection state only needs corridors.
@@ -376,7 +398,11 @@ class DomainTools(InvestigationTools):
             sections.append(item)
         page_artifacts = [a for a in self.state["inspection_artifacts"] if
                           a["kind"] == "source_page" or a.get("evidence_kind") == "source_page"][-2:]
-        observation = self._observation(True, "observed", sections=sections, resources=resources,
+        failed_ids = [item["section_id"] for item in sections if item.get("inspection_failure")]
+        observation = self._observation(not failed_ids, "resource_limited" if failed_ids else "observed",
+            error_code="resource_limit" if failed_ids else None,
+            message="Cached failed inspection; use bounded ink tools." if failed_ids else "Source inspection evidence.",
+            failed_section_ids=failed_ids, sections=sections, resources=resources,
             returned_section_ids=list(ids), remaining_requested_section_ids=requested[len(ids):],
             remaining_section_ids=[s["id"] for s in self.spec["sections"] if s["id"] not in self.state["catalog"]][:24],
             artifacts=[a for a in self.state["inspection_artifacts"] if a.get("section_id") in ids] + page_artifacts)

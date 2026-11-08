@@ -517,6 +517,7 @@ fn investigation_observation(store: &Store) -> Result<Value> {
                 let guess = s["id"].as_str().and_then(|id| guesses.get(id));
                 json!({"id":s["id"],"x_m":s["x_m"],"panel_roi_px":s["roi_px"],"inspected":s["inspected"],
                     "selected_candidate_id":s["selected_candidate_id"],
+                    "catalog_available":s["catalog_available"],"inspection_failure":s["inspection_failure"],
                     "guess":guess.map(|g| json!({"kind":g["kind"],"chosen_candidate_id":g["chosen_candidate_id"]}))})
             })
             .collect::<Vec<_>>()
@@ -546,10 +547,25 @@ fn investigation_observation(store: &Store) -> Result<Value> {
         .take(12)
         .map(|e| {
             json!({"kind":e.kind,"tool":e.payload["decision"]["tool"],
-                "arguments":e.payload["decision"]["arguments"],"reason":e.payload["reason"]})
+                "arguments":e.payload["decision"]["arguments"],
+                "reason":e.payload["decision"].get("reason").unwrap_or(&e.payload["reason"])})
         })
         .collect::<Vec<_>>();
+    let notes = store
+        .events
+        .iter()
+        .rev()
+        .filter(|event| event.kind == "decision" && event.payload["actor"] == "live_model")
+        .filter_map(|event| {
+            event.payload["decision"]["notes"]
+                .as_str()
+                .map(|claim| json!({"claim":claim,"verified":false,"source":"model_claim"}))
+        })
+        .take(8)
+        .collect::<Vec<_>>();
     let mut value = json!({"task_id":store.state.task_id,
+        "your_notes_newest_first":notes,
+        "notes_warning":"Unverified model claims, not measurements or certified station identities.",
         "sections":sections,"catalog_ready":d["catalog_ready"],"selected_count":d["selected_count"],
         "open_guess_count":guesses.len(),"model_choice_section_ids":d["model_choice_section_ids"],
         "sheet_setup_ids":d["sheet_setup_ids"],"rendered_views":d["rendered_views"],
@@ -843,7 +859,18 @@ fn live_decision(store: &mut Store) -> Result<bool> {
         content.push(json!({"type":"image_url","image_url":{"url":format!("data:image/png;base64,{pixels}"),"detail":"original"}}));
     }
     let purpose = decision_purpose(store);
-    let payload = json!({"model":GO_MODEL,"max_tokens":store.state.config.limits.max_output_tokens_per_request,"stream":false,"thinking":{"type":"disabled"},"temperature":0,
+    let thinking = if investigation_mode(store) && store.state.config.limits.investigation_thinking
+    {
+        "enabled"
+    } else {
+        "disabled"
+    };
+    let temperature = if investigation_mode(store) {
+        store.state.config.limits.investigation_temperature
+    } else {
+        0.0
+    };
+    let payload = json!({"model":GO_MODEL,"max_tokens":store.state.config.limits.max_output_tokens_per_request,"stream":false,"thinking":{"type":thinking},"temperature":temperature,
         "response_format":{"type":"json_object"},"messages":[{"role":"system","content":purpose.prompt()},{"role":"user","content":content}]});
     let mut retry_of = None;
     for attempt in 1..=3 {
@@ -1069,6 +1096,7 @@ fn decision(tool: &str, arguments: Value, reason: &str) -> Decision {
         tool: tool.into(),
         arguments,
         reason: reason.into(),
+        notes: None,
     }
 }
 /// Inspect the next uninspected sections, named explicitly.
@@ -1081,7 +1109,7 @@ fn decision(tool: &str, arguments: Value, reason: &str) -> Decision {
 fn inspect_next(sections: &[Value]) -> Decision {
     let ids = sections
         .iter()
-        .filter(|s| s["inspected"] != true)
+        .filter(|s| s["inspected"] != true && s["catalog_available"] != true)
         .filter_map(|s| s["id"].as_str())
         .take(12)
         .collect::<Vec<_>>();
@@ -1500,10 +1528,79 @@ fn live_visual_coverage(store: &Store, step_hash: &str) -> bool {
     }
     views.contains("body") && views.contains("oblique")
 }
+/// Evidence changes, unlike new crops, permit a previously used action again.
+fn investigation_progress_key(store: &Store) -> Result<String> {
+    let domain = &store.state.domain;
+    util::hash_json(&json!({"generation":store.state.generation_id,
+        "revision":store.state.revision_id,"sections":domain["sections"],
+        "catalog":domain["inspected_sections"],"guesses":domain["open_guesses"],
+        "setups":domain["sheet_setup_ids"],"candidate":domain["current_candidate"]}))
+}
+
+fn refuse_repeated_investigation(store: &mut Store, choice: &Decision) -> Result<bool> {
+    let progress = investigation_progress_key(store)?;
+    let earlier = store.events.iter().rev().find(|event| {
+        event.kind == "decision"
+            && event.payload["actor"] == "live_model"
+            && event.payload["progress_key"] == progress
+            && event.payload["decision"]["tool"] == choice.tool
+            && event.payload["decision"]["arguments"] == choice.arguments
+    });
+    let Some(earlier) = earlier else {
+        return Ok(false);
+    };
+    let earlier_id = earlier.sequence;
+    let result = store
+        .events
+        .iter()
+        .find(|event| {
+            event.sequence > earlier_id
+                && ["worker_result", "worker_reconciled"].contains(&event.kind.as_str())
+        })
+        .map(|event| {
+            json!({"event_id":event.sequence,"status":event.payload["response"]["result"]["status"],
+            "view":event.payload["response"]["result"]["view"]})
+        });
+    let key = format!(
+        "repeat_refusal:{}",
+        util::hash_json(
+            &json!({"progress":progress,"tool":choice.tool,"arguments":choice.arguments})
+        )?
+    );
+    let count = store.state.action_fingerprints.entry(key).or_default();
+    *count += 1;
+    let exhausted = *count >= store.state.config.limits.max_repeated_action;
+    store.state.staged_decision = None;
+    store.state.last_observation = json!({"ok":false,"status":"repeated_action_refused",
+        "error_code":"repeated_action_refused","earlier_decision_event_id":earlier_id,"earlier_result":result,
+        "message":"This action was already executed with unchanged evidence. Use its earlier result and your notes; choose a different next action.",
+        "useful_next_actions":["assign_station for unassigned sections", "build_draft", "render_candidate after building", "trace_from_point on different ink"],
+        "engineering_approved":false,"human_semantic_review_required":true});
+    store.append(
+        "repeated_action_refused",
+        json!({"decision":choice,"progress_key":progress,"earlier_decision_event_id":earlier_id}),
+    )?;
+    if exhausted {
+        stop(
+            store,
+            Status::NoProgress,
+            "repeated_identical_action_refusals",
+        )?;
+    }
+    Ok(true)
+}
+
 pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Result<bool> {
     let operation = choice.operation()?;
     store.verify(false)?;
     validate_selection(store, &operation, actor)?;
+    let investigating = actor == "live_model" && investigation_mode(store);
+    if investigating && refuse_repeated_investigation(store, &choice)? {
+        return Ok(store.state.status == Status::Running);
+    }
+    let progress_key = investigating
+        .then(|| investigation_progress_key(store))
+        .transpose()?;
     let fingerprint =
         util::hash_json(&json!({"operation":operation,"generation_id":store.state.generation_id}))?;
     let repeats = store
@@ -1512,7 +1609,7 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
         .entry(fingerprint)
         .or_default();
     *repeats += 1;
-    if *repeats > store.state.config.limits.max_repeated_action {
+    if !investigating && *repeats > store.state.config.limits.max_repeated_action {
         stop(
             store,
             Status::NoProgress,
@@ -1522,7 +1619,7 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
     }
     store.append(
         "decision",
-        json!({"decision":choice,"actor":actor,"live_inference":actor=="live_model"}),
+        json!({"decision":choice,"actor":actor,"live_inference":actor=="live_model","progress_key":progress_key}),
     )?;
     if let Operation::BuildDraft(_) = operation {
         let investigating = actor == "live_model" && investigation_mode(store);
@@ -1879,6 +1976,61 @@ pub fn summary(store: &Store) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn recorded_decision_reason_is_visible_in_investigation() {
+        let (_tmp, mut store) = fixture();
+        store.append("decision", json!({"decision":{"tool":"read_region","arguments":{},"reason":"Tag 4 labels station 2"},"actor":"live_model"})).unwrap();
+        let observed = investigation_observation(&store).unwrap();
+        assert_eq!(
+            observed["recent_history_newest_first"][0]["reason"],
+            "Tag 4 labels station 2"
+        );
+    }
+    #[test]
+    fn investigation_keeps_last_eight_notes_as_unverified_claims() {
+        let (_tmp, mut store) = fixture();
+        for n in 0..10 {
+            store.append("decision", json!({"decision":{"tool":"read_region","arguments":{},"reason":"read","notes":format!("label {n}")},"actor":"live_model"})).unwrap();
+        }
+        let observed = investigation_observation(&store).unwrap();
+        let notes = observed["your_notes_newest_first"].as_array().unwrap();
+        assert_eq!(notes.len(), 8);
+        assert_eq!(notes[0]["claim"], "label 9");
+        assert_eq!(notes[7]["claim"], "label 2");
+        assert_eq!(notes[0]["verified"], false);
+    }
+    #[test]
+    fn repeated_investigation_refuses_then_stops_but_progress_allows_retry() {
+        let (_tmp, mut store) = fixture();
+        let choice = decision(
+            "read_region",
+            json!({"region_px":[0,0,100,100],"subject":"labels"}),
+            "read",
+        );
+        let key = investigation_progress_key(&store).unwrap();
+        store
+            .append(
+                "decision",
+                json!({"decision":choice,"actor":"live_model","progress_key":key}),
+            )
+            .unwrap();
+        store.append("worker_result", json!({"response":{"result":{"status":"viewed","view":{"view_id":"view-earlier"}}}})).unwrap();
+        store.state.domain["view_count"] = json!(2);
+        for n in 1..=3 {
+            assert!(refuse_repeated_investigation(&mut store, &choice).unwrap());
+            assert_eq!(
+                store.state.last_observation["status"],
+                "repeated_action_refused"
+            );
+            assert_eq!(
+                store.state.last_observation["earlier_result"]["view"]["view_id"],
+                "view-earlier"
+            );
+            assert_eq!(store.state.status == Status::NoProgress, n == 3);
+        }
+        store.state.generation_id = Some("new-generation".into());
+        assert!(!refuse_repeated_investigation(&mut store, &choice).unwrap());
+    }
     #[test]
     fn inspect_next_names_the_next_uninspected_sections() {
         // 59 sections inspected 5 per call (Gunnerus) need 12 calls; each call

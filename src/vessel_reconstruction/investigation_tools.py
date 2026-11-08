@@ -261,6 +261,7 @@ class InvestigationTools:
                     candidates.append(copy.deepcopy(candidate))
             rows, xs = traced["trace_rows_px"], traced["trace_xs_px"]
             tags.append({"tag": index, "candidate_id": candidate["candidate_id"],
+                         "kind": inv.stroke_kind([rows[0], rows[1]], xs, section),
                          "top_end_px": [round(xs[0], 1), rows[0]], "bottom_end_px": [round(xs[-1], 1), rows[1]],
                          "z_range_m": traced["z_range_m"]})
         # Already known lines of this section are shown too, so every tag on
@@ -269,6 +270,7 @@ class InvestigationTools:
             trace = inv.dense_trace(candidate)
             if trace is not None and len(tags) < inv.MAX_ENUMERATED_STROKES + 16:
                 tags.append({"tag": len(tags) + 1, "candidate_id": candidate["candidate_id"],
+                             "kind": inv.stroke_kind(trace[0], trace[1], section),
                              "top_end_px": [round(float(trace[1][0]), 1), int(trace[0][0])],
                              "bottom_end_px": [round(float(trace[1][-1]), 1), int(trace[0][-1])],
                              "z_range_m": candidate.get("z_range_m"), "known_candidate": True})

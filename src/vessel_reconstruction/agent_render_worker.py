@@ -289,8 +289,14 @@ def main():
     except BaseException as exc:
         # Bounded diagnostic only; no exception message, path, request or secret.
         args.out.mkdir(parents=True, exist_ok=True)
-        write_json(args.out / "worker-error.json", {"error_code": "domain_worker_failed",
-                                                   "exception_type": type(exc).__name__})
+        from .ingest import DrawingError
+        from .resources import ResourceLimitError
+        resource_limited = isinstance(exc, (DrawingError, ResourceLimitError)) and exc.kind == "resource_limit"
+        write_json(args.out / "worker-error.json", {
+            "error_code": "resource_limit" if resource_limited else "domain_worker_failed",
+            "message": "Source inspection exceeds the bounded evidence budget." if resource_limited
+                       else "The observation worker failed.",
+            "exception_type": type(exc).__name__})
         return 1
 
 
