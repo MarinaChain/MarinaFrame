@@ -245,6 +245,15 @@ def build_hull(sections: list[dict], samples: int | None = None, *,
                     continue
                 for sign in (1, -1):
                     side = panel * [1, sign, 1]
+                    if min(np.linalg.norm(side[1] - side[0]), np.linalg.norm(side[3] - side[2])) \
+                            <= _VERTEX_TOLERANCE_MM:
+                        # A repeated sample point makes a zero-length edge;
+                        # OpenCascade cannot rule it (it crashes). The panel
+                        # is the triangle of its distinct corners, if any.
+                        triangle = _planar_face(side[[0, 1, 3, 2]])
+                        if triangle is not None:
+                            faces.append(triangle)
+                        continue
                     first = cq.Edge.makeLine(_vector(side[0]), _vector(side[1]))
                     second = cq.Edge.makeLine(_vector(side[2]), _vector(side[3]))
                     faces.append(cq.Face.makeRuledSurface(first, second))

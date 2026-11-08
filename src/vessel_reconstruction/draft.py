@@ -77,15 +77,46 @@ def model_authored_guess(section: dict, candidates: list[dict], authored: dict) 
             "status": "open", "verifier_evidence": authored["verifier_evidence"]}
 
 
+def panel_recommendation(entry: dict, candidates: list[dict]) -> dict | None:
+    """The shared-panel assignment of a section (panel_assignment.py), when it names one of ``candidates``."""
+    recommendation = entry.get("recommended_station_assignment")
+    if not isinstance(recommendation, dict):
+        return None
+    if not any(c["candidate_id"] == recommendation.get("candidate_id") for c in candidates):
+        return None
+    return recommendation
+
+
+def recommended_guess(section: dict, candidates: list[dict], recommendation: dict) -> dict:
+    """Best-candidate guess that follows the shared-panel assignment (one stroke per station)."""
+    chosen = next(c for c in candidates if c["candidate_id"] == recommendation["candidate_id"])
+    others = [c["candidate_id"] for c in candidates if c["candidate_id"] != chosen["candidate_id"]]
+    preferred = [cid for cid in recommendation.get("alternatives", []) if cid in others]
+    alternatives = preferred + [cid for cid in others if cid not in preferred]
+    reason = (f"Shared panel: stroke {recommendation.get('nesting_rank')} of "
+              f"{recommendation.get('strokes_in_panel')} from outside by nesting order, for the station "
+              f"{recommendation.get('expected_width_rank')} nearest midship "
+              f"(confidence {recommendation.get('confidence', 0):.2f}).")
+    warnings = recommendation.get("warnings") or []
+    if warnings:
+        reason += " Warning: " + "; ".join(warnings)
+    return {"guess_id": _guess_id(section["id"], "best_candidate", chosen["candidate_id"]),
+            "section_id": section["id"], "kind": "best_candidate", "x_m": section["x_m"],
+            "x_range_m": None, "chosen_candidate_id": chosen["candidate_id"], "alternatives": alternatives,
+            "score": candidate_score(chosen), "reason": reason[:MAX_REASON_CHARS], "status": "open"}
+
+
 def make_guesses(sections: list[dict], selected: dict, catalog: dict,
                  model_choices: dict | None = None, authored: dict | None = None) -> list[dict]:
     """One open guess for every section that has no person- or policy-selected line.
 
     ``sections`` are the declared spec sections. A section with a verified
-    model choice keeps that choice. Other sections with a selectable
-    candidate get the best-scoring one. Unreadable sections are left out of the
-    draft; the loft spans them (bridged_gap) or the draft ends before them
-    (dropped_end).
+    model choice keeps that choice. A section of a shared panel with a
+    ``recommended_station_assignment`` (panel_assignment.py) takes that
+    stroke, so the stations of one panel do not all take one stroke. Other
+    sections with a selectable candidate get the best-scoring one.
+    Unreadable sections are left out of the draft; the loft spans them
+    (bridged_gap) or the draft ends before them (dropped_end).
     """
     guesses, read_x = [], [s["x_m"] for s in sections if s["id"] in selected]
     unread = []
@@ -109,6 +140,15 @@ def make_guesses(sections: list[dict], selected: dict, catalog: dict,
         # best-score guess never takes one (a panel's traced strokes are
         # candidates of every section that shares the panel).
         candidates = [c for c in candidates if not c.get("model_traced")]
+        recommended = panel_recommendation(catalog.get(sid, {}), candidates)
+        if recommended is not None:
+            guesses.append(recommended_guess(section, candidates, recommended))
+            read_x.append(section["x_m"])
+            continue
+        # Panel strokes enter a draft through the panel assignment; a section
+        # whose only lines are panel strokes still takes one (it is readable).
+        inspected = [c for c in candidates if not c.get("panel_stroke")]
+        candidates = inspected or candidates
         if not candidates:
             unread.append(section)
             continue

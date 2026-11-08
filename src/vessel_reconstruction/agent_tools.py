@@ -588,6 +588,7 @@ class DomainTools(InvestigationTools):
         if not sections or any(s["id"] not in self.state["catalog"] for s in sections):
             return self._observation(False, "blocked", error_code="draft_requires_complete_inspection",
                                      message="Inspect every section before a draft is built.")
+        self._assign_shared_panels()
         guesses = make_guesses(sections, self.state["selected"], self.state["catalog"],
                                self.state.get("model_choices"), self.state.get("authored_sections"))
         if guesses != self.open_guesses:
