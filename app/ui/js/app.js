@@ -307,24 +307,39 @@ function toCheckCount(view) {
   return view?.sections.filter((s) => s.state === 'guessed' || s.state === 'declined').length || 0;
 }
 
+/** One line on a "Needs you" card: what the person is asked to do. */
+function needsReason(run, view) {
+  const count = toCheckCount(view);
+  if (count) return `${fmt.plural(count, 'section')} to check`;
+  if (NEEDS_ATTENTION.has(run.status)) return 'The run stopped. Open it to see why.';
+  return 'Ready for your review';
+}
+
 function needsCard(vessel) {
   const run = vessel.latest;
   const chips = el('span', { class: 'chip-row' }, statusBadge(run.status));
+  const art = el('span', { class: 'needs-icon' }, icon('sheet'));
+  const reason = el('span', { class: 'needs-why' }, '');
   runPreview(run).then((view) => {
     if (view?.revision) chips.append(chip(view.revision, { dot: false, title: `Revision ${view.revision}` }));
-    const count = toCheckCount(view);
-    if (count) chips.append(chip(`${count} to check`, { dot: false, title: fmt.plural(count, 'section') + ' to check' }));
+    reason.textContent = needsReason(run, view);
+    // The built sections, as a small body plan, say more than a file icon.
+    const hull = view?.model ? hullThumb(view) : null;
+    if (hull) fill(art, hull);
   });
   return el('button', {
     class: 'needs-card',
     type: 'button',
     title: `Open ${run.name}`,
+    dataset: { status: run.status },
     onclick: () => openTask(run.task),
   },
-  el('span', { class: 'needs-icon' }, icon('sheet')),
+  art,
   el('span', { class: 'needs-body' },
     el('strong', { class: 'needs-name' }, vessel.name),
-    chips));
+    chips,
+    reason),
+  el('span', { class: 'needs-go', 'aria-hidden': 'true' }, 'Review', icon('chevron')));
 }
 
 /** A mini body plan of the built sections: each station's chosen line, mirrored, in its source style. */
@@ -352,7 +367,10 @@ function vesselCard(vessel) {
       const hull = hullThumb(view);
       if (hull) thumb.append(el('span', { class: 'hull-badge', title: 'Built sections' }, hull));
     }
-    if (!view.source_page) return;
+    if (!view.source_page) {
+      thumb.append(el('span', { class: 'vessel-thumb-empty' }, 'No drawing read'));
+      return;
+    }
     try {
       const url = await cachedArtifact('image', run.task, view.source_page.path);
       thumb.prepend(el('img', { src: url, alt: '' }));
