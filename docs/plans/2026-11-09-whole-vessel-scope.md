@@ -216,6 +216,29 @@ repeats **and** its median beats R0 on at least 3 of these 4: abs M1, M2, abs M3
 Otherwise the raster product path stays code-first, with the model as gap filler only. Report
 also turns, tokens, provider cost and wall time.
 
+#### 3.5.3 Round 4: Balclutha (HAER, scanned), protocol draft, not run
+
+Data check (2026-11-09): only two Balclutha sheets are on disk: sheet 7 (overlaid body plan and an
+offset table of the inner hull) and sheet 48 (section at frame 108). There is no outboard profile,
+no deck plan and no 3D truth. Thus the step 1 parts (decks, deckhouses) cannot be read or scored on
+Balclutha with the data on disk. Two options; the founder or CEO chooses one before a run:
+
+- Option A (step 1 on Balclutha): a person downloads the HAER CA-54 profile and deck plan sheets
+  from loc.gov. Truth: the printed dimensions on those sheets (deck heights, house lengths and
+  breadths) and a person's reading of the house outlines, fixed before the run. Arms R0 (raster
+  code only) and R1 (model, JSON, thinking off, 32k, 3 repeats) as in section 3.5.2. Metrics:
+  per part, level error and footprint IoU against the person's reading; parts built of requested.
+- Option B (data on disk now, hull only): sheet 7. Truth: the printed offset table (half-breadths
+  at stations and waterlines), which the readers do not see (the table area is masked in the
+  image). R0: the existing deterministic raster station reader; R1: the model reads the station
+  curves (arm A JSON form with per-station half-breadth lists, thinking off, 32k, 3 repeats).
+  Metrics: half-breadth RMS and max error at table cells, cells read of cells in the table, wrong
+  station identity count. Decision rule: as section 3.5.2 (3 builds in 3 repeats and better on 3
+  of 4: RMS, max, coverage, identity errors).
+
+Recommendation: option B now (no download, independent printed truth), option A when the sheets
+arrive. Neither is run until this section names the chosen option and is committed.
+
 ### 3.6 Effort, checks, resume
 
 Effort: 1-2 weeks (reader, executor change, scoring, Gunnerus run; then raster path and a
