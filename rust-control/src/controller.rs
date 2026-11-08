@@ -2045,11 +2045,16 @@ pub fn execute_decision(store: &mut Store, choice: Decision, actor: &str) -> Res
             }
         }
     } else {
-        let arguments = if matches!(operation, Operation::SurveySheet(_)) {
+        let mut arguments = if matches!(operation, Operation::SurveySheet(_)) {
             json!({"phase1_only":store.state.config.limits.phase1_only})
         } else {
             operation.args()
         };
+        if matches!(operation, Operation::ProposeSection(_)) && revision::active(store) {
+            // A person asked to revise this section: the worker's keep rule
+            // first requires its own ink error not to get worse.
+            arguments["revision_target"] = json!(true);
+        }
         let done = call_worker(store, operation.name(), arguments)?;
         if done
             && store.state.last_observation["ok"] == false

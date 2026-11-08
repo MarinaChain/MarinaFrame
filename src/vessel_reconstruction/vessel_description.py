@@ -332,6 +332,101 @@ def printed_dimensions(description):
     return readings
 
 
+def printed_scale(description):
+    """Pixels per metre printed on the sheet ("SCALE 1 m = 19.000 px"), or None."""
+    text = description.get("dimension_text", "")
+    match = re.search(r"\b1\s*m\s*=\s*(\d+(?:\.\d+)?)\s*px\b", text if isinstance(text, str) else "", re.I)
+    return float(match[1]) if match and float(match[1]) > 0 else None
+
+
+def _implied_scale(image, setup, printed):
+    """Pixels per metre implied by a view's ink extent and a printed length (LOA or beam), or None."""
+    extent = _extents(image, setup["region_px"], setup["pixels_per_metre"])
+    if not extent:
+        return None
+    kind = setup.get("view", setup.get("kind"))
+    loa, beam = (_value(printed.get(name)) for name in ("loa", "beam"))
+    if kind in ("profile", "plan") and loa:
+        return (extent["right_px"] - extent["left_px"]) / loa
+    if kind == "body" and beam and setup.get("centreline_px") is not None:
+        centre = setup["centreline_px"]
+        return 2 * max(abs(extent["left_px"] - centre), abs(extent["right_px"] - centre)) / beam
+    return None
+
+
+def checked_scales(image, setups, description):
+    """Each view's likely scale and a warning for every view whose scale disagrees with it.
+
+    The likely scale is the printed sheet scale when one is legible, else the
+    scale implied by the view's ink length and the printed LOA (beam for a
+    body plan). Returns ({view_id: pixels_per_metre}, warnings); a view with no
+    independent reading keeps its own scale. Advisory: the model re-proposes the setup.
+    """
+    sheet = printed_scale(description)
+    printed = printed_dimensions(description)
+    likely, warnings = {}, []
+    for setup in setups:
+        view_id = setup.get("view_id", setup.get("view"))
+        own = float(setup["pixels_per_metre"])
+        implied = sheet or _implied_scale(image, setup, printed)
+        likely[view_id] = own
+        if implied is None or not _different(own, implied):
+            continue
+        basis = (f"the sheet prints SCALE 1 m = {sheet:g} px" if sheet else
+                 "the view's ink length over the printed LOA/beam gives " f"{implied:.2f} px/m")
+        likely[view_id] = implied
+        warnings.append(warning(f"views.{view_id}.pixels_per_metre", own, round(implied, 3),
+            f"Scale conflict: this view uses {own:g} px/m but {basis}. Re-propose this view with "
+            f"propose_sheet_setup and pixels_per_metre {implied:.3f}, or explain the difference."))
+    return likely, warnings
+
+
+# The deck line in a profile is the top edge of the large hull outline. Ink
+# components narrower than DECK_COMPONENT_SHARE of the view (station numbers,
+# labels) are not the outline. Columns within DECK_COLUMN_PX of the station are read.
+DECK_COMPONENT_SHARE = 0.25
+DECK_COLUMN_PX = 2
+
+
+def profile_deck_heights(image, setup, pixels_per_metre, stations):
+    """Height of the profile's top outline (deck at side) at each station x, {id: z}.
+
+    ``setup`` is the model's profile setup (region, x origin and direction,
+    baseline); ``pixels_per_metre`` is the checked scale. A station outside the
+    outline has no height.
+    """
+    if setup.get("baseline_px") is None or setup.get("x_origin_px") is None:
+        return {}
+    mask, left, top = _ink(image, setup["region_px"])
+    labels, _ = ndimage.label(mask, structure=np.ones((3, 3)))
+    wide = [index for index, box in enumerate(ndimage.find_objects(labels), 1)
+            if box and box[1].stop - box[1].start >= DECK_COMPONENT_SHARE * mask.shape[1]]
+    outline = np.isin(labels, wide)
+    heights = {}
+    for station in stations:
+        column = setup["x_origin_px"] + setup.get("x_direction", 1) * station["x_m"] * pixels_per_metre - left
+        columns = outline[:, max(0, int(round(column)) - DECK_COLUMN_PX):int(round(column)) + DECK_COLUMN_PX + 1]
+        rows = np.flatnonzero(columns.any(axis=1))
+        if not len(rows):
+            continue
+        # The centre of the top ink run: the drawn line's centre, as body-plan tops are read.
+        run_end = rows[0]
+        while run_end + 1 < len(columns) and columns[run_end + 1].any():
+            run_end += 1
+        heights[station["id"]] = (setup["baseline_px"] - (top + 0.5 * (rows[0] + run_end))) / pixels_per_metre
+    return heights
+
+
+def station_deck_heights(image, setups, description, stations):
+    """Deck-at-side height per station from the model's profile setup at its checked scale, {id: z}."""
+    profile = next((s for s in setups if s.get("view") == "profile"), None)
+    if profile is None:
+        return {}
+    scales = (description or {}).get("checked_scales") or {}
+    scale = scales.get(profile.get("view_id", "profile"), profile["pixels_per_metre"])
+    return profile_deck_heights(image, profile, float(scale), stations)
+
+
 def dimension_conflicts(name, readings):
     """Compare independent readings pairwise; no fitted value becomes truth."""
     conflicts = []
@@ -370,6 +465,9 @@ def describe_table(table, description):
 def measure_description(image, spec, description, setups):
     """Retain model readings, add measured values, and name every doubtful field."""
     result, warnings = normalize_description(description)
+    scales, scale_warnings = checked_scales(image, setups, result)
+    result["checked_scales"] = scales
+    warnings.extend(scale_warnings)
     result.setdefault("units", spec.get("units", "m"))
     result.setdefault("frame", "x aft to forward from station datum; z up from baseline; metres")
     principal = result.setdefault("principal", {})
