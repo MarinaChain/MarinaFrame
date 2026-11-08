@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -44,7 +45,7 @@ LIVE_FLAGS = ("--policy", "live", "--on-ambiguity", "draft", "--context", "conve
 def setup_round(tmp_path, monkeypatch, case_names, known_extra=(), flags=("--policy", "deterministic"),
                 cases_arg=None, key=None):
     """Build argv for main() against a fake main checkout; returns (argv, out, binary)."""
-    for name in list(__import__("os").environ):
+    for name in list(os.environ):
         if name.startswith("OPENCODE_API_KEY"):
             monkeypatch.delenv(name)
     if key:
