@@ -121,6 +121,36 @@ Tools used: read_region 3, enumerate_strokes 1, assign_station 2, build_draft 1.
 Your last notes (step 15): "tag 4 = st 3; labels sit above the 8 m waterline".
 ```
 
+### 4a. Model-written handoff summary (founder revision, 2026-11-08)
+
+The founder approved model-written summaries, as Codex and Claude Code do in their compaction,
+provided that the ontology and provenance stay explicit. So a compaction has TWO typed parts:
+
+1. **Verified record (controller-written).** The summary above, built only from events. Only this
+   part states facts (inspections, selections, assignments, refusals, drafts, views).
+2. **Model handoff (model-written, unverified claim).** At compaction the controller makes one extra
+   provider request (`purpose: "compaction"`) with the folded steps, the verified record and a short
+   instruction: write a handoff for your next turn — current plan, which tag or candidate you believe
+   is which station and why, what failed, what to try next (cap about 2,000 bytes).
+
+Provenance and ontology rules:
+
+- The `context_compacted` event stores both parts plus `handoff_author: "model"`, the model id,
+  the provider request and receipt ids, `prompt_sha256`, the covered event range and
+  `covered_events_sha256`. Replay reads the stored handoff; it never asks the model again, so
+  replay stays byte-identical.
+- In the next request the handoff is shown inside a block labelled as the model's own unverified
+  claim, after the verified record. Where they differ, the verified record wins and the prompt says so.
+- The handoff cannot create or change state: verifiers never read it, and any candidate, view or
+  section id it names is checked against the log; unknown ids are listed as `unresolved_ids` in the
+  event and shown to the model.
+- The compaction request counts against the task's budgets and has its own receipt like any request.
+- If the compaction request fails, times out or returns invalid output, the controller records that
+  and continues with the verified record only (fail closed, no retry loop).
+
+Measure on dev data: verified record only vs verified record + model handoff (no_progress rate,
+correct, tokens, cost).
+
 ## 5. Memory blocks, notes, progress and repeat refusal (W17 fit)
 
 The last user message starts with fixed-order, size-capped blocks the model
@@ -214,7 +244,8 @@ the task; use it last.
 | Sub-investigation with typed report (7.6) | Defer to W18 phase 2, only if phase 1 measures well |
 | Thrash guard (7.7) | Adopt: fixed parts over budget fail closed; no repeated compaction in one turn |
 | Prompt/tool patches as log events (7.8) | Reject for W18: prompt and catalog are code constants bound by `prompt_sha256` and `current_binary`; a task never changes binary |
-| Model-edited memory, LLM summaries, server compaction, embeddings | Reject (C1/C2) |
+| LLM-written summary | Adopt as a typed, unverified model handoff with provenance, stored in the log (section 4a; founder revision) |
+| Model-edited memory blocks, server-side compaction, embeddings | Reject (C1/C2) |
 
 ## 10. Where the code goes and size
 
