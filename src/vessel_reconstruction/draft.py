@@ -15,11 +15,14 @@ import math
 from .provenance import digest_object
 
 DRAFT_STATUS = "draft_not_verified"
-GUESS_KINDS = ("best_candidate", "bridged_gap", "dropped_end", "model_choice")
+GUESS_KINDS = ("best_candidate", "bridged_gap", "dropped_end", "model_choice", "model_authored")
 GUESS_FIELDS = {"guess_id", "section_id", "kind", "x_m", "x_range_m", "chosen_candidate_id",
                 "alternatives", "score", "reason", "status"}
 # A model choice also carries the deterministic verifier's evidence.
 MODEL_CHOICE_FIELDS = GUESS_FIELDS | {"verifier_evidence"}
+# A model-authored section (propose_section) carries the sanity checks the
+# same way; its candidate holds the curve (see section_authoring.py).
+MODEL_AUTHORED_KINDS = ("model_choice", "model_authored")
 MAX_EVIDENCE_BYTES = 4096
 MAX_GUESSES = 300
 MAX_REASON_CHARS = 512
@@ -61,8 +64,21 @@ def model_choice_guess(section: dict, candidates: list[dict], choice: dict) -> d
             "status": "open", "verifier_evidence": choice["verifier_evidence"]}
 
 
+def model_authored_guess(section: dict, candidates: list[dict], authored: dict) -> dict:
+    """The open guess of a model-authored section: its label, basis and checks."""
+    chosen = next(c for c in candidates if c["candidate_id"] == authored["candidate_id"])
+    label = chosen["authored"]["source_label"]
+    return {"guess_id": _guess_id(section["id"], "model_authored", chosen["candidate_id"]),
+            "section_id": section["id"], "kind": "model_authored", "x_m": section["x_m"], "x_range_m": None,
+            "chosen_candidate_id": chosen["candidate_id"],
+            "alternatives": [c["candidate_id"] for c in candidates
+                             if c["candidate_id"] != chosen["candidate_id"] and "authored" not in c],
+            "score": None, "reason": (label + ": " + chosen["authored"]["basis"])[:MAX_REASON_CHARS],
+            "status": "open", "verifier_evidence": authored["verifier_evidence"]}
+
+
 def make_guesses(sections: list[dict], selected: dict, catalog: dict,
-                 model_choices: dict | None = None) -> list[dict]:
+                 model_choices: dict | None = None, authored: dict | None = None) -> list[dict]:
     """One open guess for every section that has no person- or policy-selected line.
 
     ``sections`` are the declared spec sections. A section with a verified
@@ -73,12 +89,17 @@ def make_guesses(sections: list[dict], selected: dict, catalog: dict,
     """
     guesses, read_x = [], [s["x_m"] for s in sections if s["id"] in selected]
     unread = []
-    model_choices = model_choices or {}
+    model_choices, authored = model_choices or {}, authored or {}
     for section in sections:
         sid = section["id"]
         if sid in selected:
             continue
         candidates = [c for c in catalog.get(sid, {}).get("candidates", []) if c.get("selectable") is True]
+        proposal = authored.get(sid)
+        if proposal is not None and any(c["candidate_id"] == proposal["candidate_id"] for c in candidates):
+            guesses.append(model_authored_guess(section, candidates, proposal))
+            read_x.append(section["x_m"])
+            continue
         choice = model_choices.get(sid)
         if choice is not None and any(c["candidate_id"] == choice["candidate_id"] for c in candidates):
             guesses.append(model_choice_guess(section, candidates, choice))
@@ -146,7 +167,7 @@ def check_guess(guess) -> bool:
     """Shape and type of one open guess record (no catalog cross-check)."""
     if type(guess) is not dict or guess.get("status") != "open":
         return False
-    if guess.get("kind") == "model_choice":
+    if guess.get("kind") in MODEL_AUTHORED_KINDS:
         evidence = guess.get("verifier_evidence")
         if (set(guess) != MODEL_CHOICE_FIELDS or type(evidence) is not dict or evidence.get("passed") is not True
                 or len(json.dumps(evidence)) > MAX_EVIDENCE_BYTES):
@@ -168,6 +189,9 @@ def check_guess(guess) -> bool:
     if x_range is not None and (type(x_range) is not list or len(x_range) != 2
                                 or not all(_finite(v) for v in x_range) or x_range[0] > x_range[1]):
         return False
+    if guess["kind"] == "model_authored":
+        return (type(guess["chosen_candidate_id"]) is str and guess["score"] is None and x_range is None
+                and guess["chosen_candidate_id"] not in alternatives)
     if guess["kind"] in ("best_candidate", "model_choice"):
         return (type(guess["chosen_candidate_id"]) is str and _finite(guess["score"])
                 and 0 <= guess["score"] <= 1 and x_range is None
@@ -203,6 +227,8 @@ def prepare_draft_sections(sections: list[dict], declared: list[dict]) -> tuple[
     prepared = copy.deepcopy(sections)
     warnings = []
     for section in prepared:
+        # The source label of each section (see section_authoring.SOURCE_LABELS).
+        section.setdefault("source_label", "traced")
         if "points_yz_m" not in section:
             continue
         points = np.asarray(section["points_yz_m"], dtype=float)
@@ -213,6 +239,8 @@ def prepare_draft_sections(sections: list[dict], declared: list[dict]) -> tuple[
                 # One millimetre is a draft construction floor, not measured ink.
                 points[pinched, 0] = minimum_breadth_m
                 section["points_yz_m"] = points.tolist()
+                if section["source_label"] == "traced":
+                    section["source_label"] = "repaired"
                 warnings.append(gap("draft_repaired", "Centreline breadth clamped to 1 mm for draft CAD; avoids pinches and zero-width closures.", section["id"], severity="warning"))
     anchors = sorted([s for s in prepared if "points_yz_m" in s], key=lambda s: s["x_m"])
     found = {s["id"] for s in prepared}
@@ -233,7 +261,32 @@ def prepare_draft_sections(sections: list[dict], declared: list[dict]) -> tuple[
             profiles.append(np.column_stack([np.interp(z, points[:, 1], points[:, 0]), z]))
         points = (1 - weight) * profiles[0] + weight * profiles[1]
         prepared.append({"id": missing["id"], "x_m": x, "points_yz_m": points.tolist(),
-                         "coverage": 0., "confidence": 0., "evidence": {},
+                         "coverage": 0., "confidence": 0., "evidence": {}, "source_label": "interpolated",
                          "warnings": ["Draft interpolation; not measured source geometry."]})
         warnings.append(gap("draft_interpolated", "Missing section interpolated from neighbouring profiles for draft CAD.", missing["id"], severity="warning"))
     return sorted(prepared, key=lambda s: s["x_m"]), warnings
+
+
+def section_sources(sections: list[dict], guesses: list[dict]) -> dict:
+    """Source label of every section of a draft build, and the count per label.
+
+    ``sections`` are the built sections (each with ``source_label``). A station
+    that the loft spans is ``interpolated``; one beyond the draft's end is
+    ``omitted``. A model-authored section also gives the model's basis.
+    """
+    rows = []
+    for section in sorted(sections, key=lambda s: s["x_m"]):
+        row = {"section_id": section["id"], "label": section.get("source_label", "traced")}
+        basis = section.get("evidence", {}).get("authored_basis")
+        if basis:
+            row["basis"] = basis
+        rows.append(row)
+    built = {row["section_id"] for row in rows}
+    for guess in guesses:
+        if guess["section_id"] not in built and guess["kind"] in ("bridged_gap", "dropped_end"):
+            rows.append({"section_id": guess["section_id"],
+                         "label": "interpolated" if guess["kind"] == "bridged_gap" else "omitted"})
+    counts = {}
+    for row in rows:
+        counts[row["label"]] = counts.get(row["label"], 0) + 1
+    return {"sections": rows, "counts": counts}

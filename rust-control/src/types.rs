@@ -210,6 +210,9 @@ pub struct AskPerson {
 pub struct RecallView {
     pub view_id: String,
 }
+/// `propose_section`: a section shape the model writes (draft mode).
+#[path = "authoring.rs"]
+pub mod authoring;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "tool", content = "arguments", rename_all = "snake_case")]
@@ -231,6 +234,7 @@ pub enum Operation {
     CompareViews(CompareViews),
     AskPerson(AskPerson),
     RecallView(RecallView),
+    ProposeSection(authoring::ProposeSection),
 }
 fn bounded_text(text: &str, chars: usize) -> bool {
     let count = text.chars().count();
@@ -262,6 +266,7 @@ impl Operation {
             Self::CompareViews(_) => "compare_views",
             Self::AskPerson(_) => "ask_person",
             Self::RecallView(_) => "recall_view",
+            Self::ProposeSection(_) => "propose_section",
         }
     }
     /// The model investigation tools. They exist only in draft mode, where an
@@ -279,6 +284,7 @@ impl Operation {
                 | Self::CompareViews(_)
                 | Self::AskPerson(_)
                 | Self::RecallView(_)
+                | Self::ProposeSection(_)
         )
     }
     /// The section a tool acts on, if any.
@@ -289,6 +295,7 @@ impl Operation {
             Self::EnumerateStrokes(x) => Some(&x.section_id),
             Self::AssignStation(x) => Some(&x.section_id),
             Self::CompareViews(x) => Some(&x.section_id),
+            Self::ProposeSection(x) => Some(&x.section_id),
             _ => None,
         }
     }
@@ -348,6 +355,7 @@ impl Operation {
             }
             Self::AskPerson(x) => bounded_text(&x.question, 512),
             Self::RecallView(x) => id(&x.view_id),
+            Self::ProposeSection(x) => x.valid(),
             _ => true,
         };
         if ok {

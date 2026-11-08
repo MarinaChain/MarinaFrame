@@ -370,6 +370,8 @@ class InvestigationTools:
                                             label_view_id, label_text, comparison_id)
         except inv.VerificationError as exc:
             return self._refused(exc, section_id=section_id)
+        # A station claim replaces an earlier model-authored shape of the section.
+        self.state.get("authored_sections", {}).pop(section_id, None)
         choices = self.state.setdefault("model_choices", {})
         choices[section_id] = {"candidate_id": candidate_id, "reason": reason, "verifier_evidence": evidence}
         section = next(s for s in self.spec["sections"] if s["id"] == section_id)
