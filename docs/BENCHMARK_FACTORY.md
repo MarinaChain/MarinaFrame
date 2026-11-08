@@ -107,6 +107,12 @@ Frozen manifests, full selection parameters and protocol: `benchmarks/factory/ma
 
 **Score only at frozen checkpoints**: deterministic abstain vs deterministic draft vs LLM-first; never during development. Generation was checked by hashes, spec validation, complete truth tables and Read-tool samples at all four levels. No pipeline or scorer was run on v2 and no reader output was inspected.
 
+### Sealed split v3
+
+v2 is spent for model selection. **hull-disjoint (v3)**, generated 2026-11-08 for the next pre-registered evaluation (W17/W18), uses seed **20261201** and the frozen v2 partition. It excludes every v1 and v2 hull and rejected candidate and every cluster that holds one (so it is cluster-disjoint from v2), and it uses no v1 family (k=44) that holds a v2 hull. It is **not family-disjoint from v1**: v1 used all 44 families. Nine clusters (28, 249, 181, 110, 48, 174, 136, 161, 239) × 4 hulls = **36 hulls, 288 drawings**, same layouts, levels and gate.
+
+Manifests and the disjointness table: `benchmarks/factory/manifests-sealed-v3/README.md` (outside `manifests/`, so v2 verification is unchanged). `split_manifest.json` SHA-256: `4b81c182462b03ae71ca38c70d400cb6a0f879e05aa0034914a9982dc904bb76`. Data only in the main checkout's ignored `work/factory-sealed-v3/`. A second generation was byte-identical. No inference or scoring was run, and truth was checked by hash only.
+
 ## 5. Protocol actually followed
 
 1. Metrics, generator and splits written; scorer checked on a box hull with a cadquery STEP (`tests/test_factory.py`, mark `cad`).
@@ -217,3 +223,170 @@ python -m benchmarks.factory.report table --run dev1 --out dev1.md
 The frozen manifests must reproduce byte for byte from the same sources and code (image hashes can differ across OpenCV or Pillow builds;
 the hull and truth hashes are the first thing to compare). Tests: `make test-quick`; the scorer test is `@pytest.mark.cad`.
 Disk: `work/factory/inputs` is 1.7 GB and the hull cache 1.6 GB (deleted after generation; rebuild with the `hulls` step).
+
+## Head-to-head, hull-disjoint (v2)
+
+**Silent wrong builds are reported first:** abstain: 0, draft: 0, llm: 0.
+
+**Decision from the pre-registered rule: deterministic draft becomes the default; LLM-first remains an explicit option.** No app setting was changed by this evaluation.
+
+Protocol: [pre-registration](plans/2026-11-08-h2h-sealed-v2.md). Each arm ran once on all 288 drawings, with two jobs at most. Frozen inference code is `7c2d4f6`, captured from `d9d8609` (only the protocol document differs). DeepSeek uses `deepseek-v4.1-flash`, draft ambiguity mode, the frozen W11 tools and CLI operational defaults, with W12/W14 code present. The W12 `--model-review` veto was enabled for the LLM arm by the resume driver, before any LLM case ran (see deviations). No retries replaced results and no inference settings changed after the first case.
+
+**Broad-family caveat:** Clusters can share broad families with the frozen splits; this is not family-disjoint. These are 36 Ship-D hulls, both layouts, four levels; no named real-ship family is included.
+
+**Restoration note (not a protocol deviation):** Regenerated with unchanged frozen generator after original worktree deletion; frozen manifests and all input, parameter and truth hashes match. No inference/scoring during restoration. Before the first case, this run independently checked all 900 unique drawing/spec/parameter/truth files against the frozen manifests (288 cases, 36 truth tables). Hash checking is separate from inference. Inference received only each drawing/spec input folder; it never opened sealed truth. Each arm was scored only after completion, using the existing independent factory scorer and unchanged 2% RMS half-beam / 5% in-range volume gate. Scoring used the same per-user native admission lock as inference.
+
+Snapshot tree SHA-256: `0ca02b07eeb9dd69d220ce838d06137e8092d43d050cec5abb1a26c93c8359c9`. Controller SHA-256: `6593e6bc65de13cc7c06a380282956e69bb6f69074c7ad6658344655834e9197`. Git archive SHA-256: `2f1ad1a2e76d03fc287d0c54686f5f162c131f34f8e5806a605aaaddbb0e3522`. Manifest SHA-256: `856a37fad69439cd9fc83a75382699d5988323c0aa68ed9b1eaf66fcfdef81d3`.
+
+| Arm / group | Cases | Built | Correct | Silent wrong | Wrong draft | Review-ready | Draft status | Abstained | Blocked | Failed* | Guesses / lines median |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| abstain | 288 | 7 | 7 | 0 | 0 | 2 | 0 | 282 | 2 | 4 | 0 / 0 |
+| draft | 288 | 75 | 13 | 0 | 62 | 2 | 68 | 218 | 0 | 0 | 9 / 0 |
+| llm | 288 | 14 | 9 | 0 | 5 | 0 | 10 | 0 | 0 | 274 | 0 / 0 |
+
+*Failed includes blocked and other non-built/non-abstained outcomes; it overlaps the blocked column. Built counts valid CAD candidates even if the final status is not review-ready. Lines are sections with a selected or guessed source-backed candidate, not correct models. Guesses count open final-state guesses. A missing model is `no_model`, not zero error.
+
+### By layout and level
+
+| Arm / group | Cases | Built | Correct | Silent wrong | Wrong draft | Review-ready | Draft status | Abstained | Blocked | Failed* | Guesses / lines median |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| abstain / separate/L0 | 36 | 7 | 7 | 0 | 0 | 2 | 0 | 34 | 0 | 0 | 0 / 7 |
+| abstain / separate/L1 | 36 | 0 | 0 | 0 | 0 | 0 | 0 | 35 | 0 | 1 | 0 / 0 |
+| abstain / separate/L2 | 36 | 0 | 0 | 0 | 0 | 0 | 0 | 35 | 0 | 1 | 0 / 0 |
+| abstain / separate/L3 | 36 | 0 | 0 | 0 | 0 | 0 | 0 | 36 | 0 | 0 | 0 / 0 |
+| abstain / overlay/L0 | 36 | 0 | 0 | 0 | 0 | 0 | 0 | 36 | 0 | 0 | 0 / 0 |
+| abstain / overlay/L1 | 36 | 0 | 0 | 0 | 0 | 0 | 0 | 35 | 1 | 1 | 0 / 0 |
+| abstain / overlay/L2 | 36 | 0 | 0 | 0 | 0 | 0 | 0 | 36 | 0 | 0 | 0 / 0 |
+| abstain / overlay/L3 | 36 | 0 | 0 | 0 | 0 | 0 | 0 | 35 | 1 | 1 | 0 / 0 |
+| draft / separate/L0 | 36 | 13 | 12 | 0 | 1 | 2 | 6 | 28 | 0 | 0 | 1 / 9 |
+| draft / separate/L1 | 36 | 0 | 0 | 0 | 0 | 0 | 0 | 36 | 0 | 0 | 0 / 0 |
+| draft / separate/L2 | 36 | 7 | 0 | 0 | 7 | 0 | 7 | 29 | 0 | 0 | 8.5 / 0 |
+| draft / separate/L3 | 36 | 4 | 0 | 0 | 4 | 0 | 4 | 32 | 0 | 0 | 9 / 0 |
+| draft / overlay/L0 | 36 | 35 | 1 | 0 | 34 | 0 | 35 | 1 | 0 | 0 | 9 / 9 |
+| draft / overlay/L1 | 36 | 5 | 0 | 0 | 5 | 0 | 5 | 31 | 0 | 0 | 0 / 0 |
+| draft / overlay/L2 | 36 | 9 | 0 | 0 | 9 | 0 | 9 | 27 | 0 | 0 | 9 / 0 |
+| draft / overlay/L3 | 36 | 2 | 0 | 0 | 2 | 0 | 2 | 34 | 0 | 0 | 9 / 0 |
+| llm / separate/L0 | 36 | 13 | 9 | 0 | 4 | 0 | 7 | 0 | 0 | 23 | 0 / 9 |
+| llm / separate/L1 | 36 | 0 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 36 | 0 / 0 |
+| llm / separate/L2 | 36 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 36 | 0 / 0 |
+| llm / separate/L3 | 36 | 1 | 0 | 0 | 1 | 0 | 1 | 0 | 0 | 35 | 0 / 0 |
+| llm / overlay/L0 | 36 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 36 | 0 / 0 |
+| llm / overlay/L1 | 36 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 36 | 0 / 0 |
+| llm / overlay/L2 | 36 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 36 | 0 / 0 |
+| llm / overlay/L3 | 36 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 36 | 0 / 0 |
+
+### Marginal layout and level counts
+
+| Arm / group | Cases | Built | Correct | Silent wrong | Wrong draft | Review-ready | Draft status | Abstained | Blocked | Failed* | Guesses / lines median |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| abstain / separate | 144 | 7 | 7 | 0 | 0 | 2 | 0 | 140 | 0 | 2 | 0 / 0 |
+| abstain / overlay | 144 | 0 | 0 | 0 | 0 | 0 | 0 | 142 | 2 | 2 | 0 / 0 |
+| abstain / L0 | 72 | 7 | 7 | 0 | 0 | 2 | 0 | 70 | 0 | 0 | 0 / 0 |
+| abstain / L1 | 72 | 0 | 0 | 0 | 0 | 0 | 0 | 70 | 1 | 2 | 0 / 0 |
+| abstain / L2 | 72 | 0 | 0 | 0 | 0 | 0 | 0 | 71 | 0 | 1 | 0 / 0 |
+| abstain / L3 | 72 | 0 | 0 | 0 | 0 | 0 | 0 | 71 | 1 | 1 | 0 / 0 |
+| draft / separate | 144 | 24 | 12 | 0 | 12 | 2 | 17 | 125 | 0 | 0 | 2 / 0 |
+| draft / overlay | 144 | 51 | 1 | 0 | 50 | 0 | 51 | 93 | 0 | 0 | 9 / 0 |
+| draft / L0 | 72 | 48 | 13 | 0 | 35 | 2 | 41 | 29 | 0 | 0 | 4.5 / 9 |
+| draft / L1 | 72 | 5 | 0 | 0 | 5 | 0 | 5 | 67 | 0 | 0 | 0 / 0 |
+| draft / L2 | 72 | 16 | 0 | 0 | 16 | 0 | 16 | 56 | 0 | 0 | 9 / 0 |
+| draft / L3 | 72 | 6 | 0 | 0 | 6 | 0 | 6 | 66 | 0 | 0 | 9 / 0 |
+| llm / separate | 144 | 14 | 9 | 0 | 5 | 0 | 10 | 0 | 0 | 130 | 0 / 0 |
+| llm / overlay | 144 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 144 | 0 / 0 |
+| llm / L0 | 72 | 13 | 9 | 0 | 4 | 0 | 7 | 0 | 0 | 59 | 0 / 5 |
+| llm / L1 | 72 | 0 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 72 | 0 / 0 |
+| llm / L2 | 72 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 72 | 0 / 0 |
+| llm / L3 | 72 | 1 | 0 | 0 | 1 | 0 | 1 | 0 | 0 | 71 | 0 / 0 |
+
+### Model usage, wall time and failures
+
+Arm wall is for the driver session that finished the arm; abstain also ran 65 cases before the interruption.
+
+| Arm | Requests intended / completed / failed / unknown / not sent | Prompt tokens | Completion tokens | List cost USD | Observed cost USD | Arm wall s | Case wall median s |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| abstain | 0 / 0 / 0 / 0 / 0 | 0 | 0 | 0.00000000 | 0.00000000 | 1719.9 | 8.1 |
+| draft | 0 / 0 / 0 / 0 / 0 | 0 | 0 | 0.00000000 | 0.00000000 | 3387.0 | 17.1 |
+| llm | 2611 / 2611 / 0 / 0 / 0 | 20,038,411 | 171,563 | 2.89340212 | 0.00000000 | 8427.7 | 32.4 |
+
+List cost is provider-reported nominal usage, not an invoice. Observed cost is the receipt cost field; subscription cost is unknown. Case wall includes native queue waits and provider time. Summed case wall is not elapsed arm wall.
+
+- **abstain failures:** `{"interrupted_by_harness_stop": 2, "source_ambiguity_requires_explicit_operator_selection": 2}`. Score statuses: `{"no_model": 281, "scored": 7}`.
+- **draft failures:** `{}`. Score statuses: `{"no_model": 213, "scored": 75}`.
+- **llm failures:** `{"open_guesses_block_review": 3, "repeated_identical_action_without_generation_progress": 270, "repeated_refused_proposals": 1}`. Score statuses: `{"no_model": 274, "scored": 14}`.
+
+**Protocol deviations:**
+
+- The first driver process stopped at 05:36 when its router session ended its turn (65 abstain cases done). The two abstain cases in progress (shipd-3-06455-separate-L1, -L2) are counted as failures (`interrupted_by_harness_stop`) and were not rerun. A detached resume driver ran only the cases that had not started.
+- The original driver did not pass `--model-review true`, although the pre-registered LLM-first arm includes the W12 veto. The resume driver added it for the LLM arm only, before any LLM case ran.
+
+The dataset restoration preserved the frozen input bytes. The split is now spent for model selection; later tuning requires a new holdout.
+
+Compact per-case rows and all marginal counts, usage, timing and provenance: [`outputs/h2h-sealed-v2/`](../outputs/h2h-sealed-v2/). Full finished task folders remain local under the main checkout’s ignored `work/h2h-sealed-v2/`. Drawings, truth, overlays and credentials are not committed.
+
+### Reading the result
+
+- **Draft wins on the rule, but most of its builds are wrong.** Draft built 75 models and 13 pass
+  the gate. The other 62 are labelled `draft_not_verified`, so none is a silent wrong build. On
+  overlay L0 draft built 35 models and only 1 is correct. Draft is useful as a labelled first
+  guess, not as an answer.
+- **LLM-first was more precise but stalled.** It built 14 models and 9 pass the gate. All 9 are on
+  separate L0. On separate L0 draft had 12 correct and LLM-first had 9. The LLM arm built nothing on
+  overlay drawings.
+- **Why the LLM arm stalled (diagnosis after scoring; no result changed).** 270 cases stopped with
+  `repeated_identical_action_without_generation_progress`. Two harness causes, not the model's
+  ability:
+  1. In 87 L1/L2 cases, `inspect_source` failed for every section with an evidence-budget
+     `resource_limit`. The model received only `inspection_worker_failed` without the reason, and
+     every model tool then refused with `section_not_inspected`. The deterministic arms abstained on
+     the same 87 cases.
+  2. In the other cases, the model repeated an identical `read_region` or `enumerate_strokes` until
+     the repeat limit stopped it. The observation history sent `"reason": null` for every earlier
+     decision (the controller read the reason from the wrong field), the model had no place to
+     record what it read, and requests used temperature 0 with thinking off. The same observation
+     therefore produced the same action.
+- **Follow-up:** W17 fixes these causes and measures them on non-sealed development data. Any
+  claim that W17 improves the LLM arm needs a new held-out split, because this one is spent.
+
+## Reading a small LLM round cheaply
+
+Run `python scripts/round_digest.py RUN_DIR [RUN_DIR ...]` on finished case folders (each holds
+`task/events/*.json`; `result.json` and `stdout.log` are optional). Add `--json` for machine output.
+It prints, per case: end reason, decision count, compressed tool sequence, first blocker, last 3 model
+reasons, draft/STEP state, requests and list cost. It ends with failure counts, a one-line verdict and an
+early-stop hint. Run 2 to 4 cases first. If the hint says the first cases fail the same way, stop the round.
+Add `--factory DEV_FACTORY_DIR` (for example `work/w17/factory`) to score each case's final valid draft
+against development truth with the frozen factory scorer and gate (2 % RMS half-beam, 5 % in-range volume);
+the digest then reports RMS, volume error and correct/total. It refuses a sealed evaluation split.
+
+To run such a round without an ad hoc driver, first `source scripts/load_opencode_keys.sh`, then
+`python scripts/run_round.py --cases IDS_OR_FILE --inputs INPUT_DIR --out NEW_DIR_UNDER_MAIN_work
+--binary BIN --worker-source SRC --worker-python PY [--policy live --on-ambiguity draft --context
+conversation --basis TEXT]` (extra controller flags pass through; live policy needs `--basis` and an
+`OPENCODE_API_KEY*` variable). It runs at most `--max-cases 4` with `--jobs 2`, writes `round.log`,
+one `result.json` per case and `digest.md`, and stops after the first two cases when the digest's
+early-stop hint fires (`--no-early-stop` disables). `--out` must be a new folder under the main
+checkout's `work/`, never a worktree's.
+
+## Three-view lines drawings (layout `lines_3view`)
+
+`python -m benchmarks.factory.generate_lines` renders one sheet per case with profile (top left),
+half-breadth plan (below it) and body plan (right, on the profile baseline), plus a title block with
+LOA, LWL at the design draft, beam, depth, draft and scale. All views have one scale; station lines run
+through profile and plan; waterline rows run through profile and body plan.
+
+- Cuts: waterlines (z = const) and buttocks (y = const) at the body-plan grid steps; profile contour =
+  buttock at y = 5 mm plus the keel line (lowest centreplane point of 1 m station sections); deck line =
+  top outer point of the same sections. Exact hulls are cut with OpenCascade plane sections
+  (`lines.exact_plane_cut`), Ship-D hulls from their mesh, as their body plans are.
+- Degradation, parameter sampling and calibration convention are those of `render.py`
+  (`render.sample_params(level, "lines_3view", seed)`, seed `splits.case_seed("lines_3view:<case>")`).
+- Per case: `inputs/<case>/drawing.png`, `spec.json` (body-plan sections, schema-valid; aft stations use the
+  left half), `views.json` (each view's `kind`, `roi_px`, `calibration` with `pixels_per_metre` and
+  `baseline_px` / `centerline_px` / `x_origin_px`, `halves`, axes), `params/<case>.json` (station x, waterline
+  z, buttock y, profile offset, render parameters). Truth: `sealed/truth/<hull>.npz` (same builder and bytes
+  as v1) and `sealed/lines/<hull>.json` (exact view cuts). Inputs carry no truth.
+- Development set: dtmb5415, series60, shipd-1-08158, shipd-1-09867, shipd-1-00679, shipd-2-02216 (v1
+  development hulls, none in sealed v2/v3), levels L0-L3, 24 cases, in the main checkout's
+  `work/factory-3view/` with `manifest.json` (hashes, cross-view check) and `samples/`. Round set R-3view of
+  the whole-vessel design: dtmb5415-3v-L0, shipd-1-08158-3v-L2, shipd-1-09867-3v-L0, shipd-1-00679-3v-L2.
+- `--verify` checks every hash. New modules only: the files hashed by the sealed v2/v3 manifests are unchanged.

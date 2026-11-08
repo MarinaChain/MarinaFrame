@@ -106,6 +106,30 @@ fn spawn_with_store(
     }
 }
 
+/// Configuration of a run started from the app: deterministic policy, and draft
+/// on ambiguity. The default follows the sealed head-to-head (v2) in
+/// `docs/BENCHMARK_FACTORY.md`, section "Head-to-head, hull-disjoint (v2)". A
+/// draft is never review-ready. The CLI default stays `abstain`.
+fn app_run_config(
+    worker_python: String,
+    worker_source: Option<String>,
+    source_spec: String,
+    binary_sha256: String,
+) -> Config {
+    Config {
+        worker_python,
+        worker_source,
+        source_spec,
+        policy: Policy::Deterministic,
+        limits: OperationalLimits::default(),
+        provider_transfer_authorized: false,
+        authorization_basis: String::new(),
+        model: GO_MODEL.into(),
+        binary_sha256,
+        on_ambiguity: OnAmbiguity::Draft,
+    }
+}
+
 /// Start a deterministic run of `spec_path`. The task folder is created inside
 /// `runs_folder`. Runs that call the model are not started from the app.
 pub fn start_run(
@@ -127,20 +151,12 @@ pub fn start_run(
     let worker_source = worker_source
         .map(|p| util::absolute(p).map(|p| p.to_string_lossy().into_owned()))
         .transpose()?;
-    let config = Config {
-        worker_python: python.to_string_lossy().into_owned(),
+    let config = app_run_config(
+        python.to_string_lossy().into_owned(),
         worker_source,
-        source_spec: source.to_string_lossy().into_owned(),
-        policy: Policy::Deterministic,
-        limits: OperationalLimits::default(),
-        provider_transfer_authorized: false,
-        authorization_basis: String::new(),
-        model: GO_MODEL.into(),
-        binary_sha256: util::file_hash(&std::env::current_exe().map_err(|_| "binary_path")?)?,
-        // The app builds a best-effort draft instead of declining (founder
-        // decision 2026-11-07); a draft is never review-ready.
-        on_ambiguity: OnAmbiguity::Draft,
-    };
+        source.to_string_lossy().into_owned(),
+        util::file_hash(&std::env::current_exe().map_err(|_| "binary_path")?)?,
+    );
     let stem = source
         .file_stem()
         .and_then(|s| s.to_str())
@@ -237,4 +253,17 @@ pub fn choose_line(
             controller::resume(&mut store, false, false, None)
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn app_runs_default_to_deterministic_draft() {
+        let config = app_run_config("python".into(), None, "spec.json".into(), String::new());
+        assert_eq!(config.on_ambiguity, OnAmbiguity::Draft);
+        assert_eq!(config.policy, Policy::Deterministic);
+        assert!(!config.provider_transfer_authorized);
+    }
 }

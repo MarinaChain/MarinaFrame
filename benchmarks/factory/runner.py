@@ -128,7 +128,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     parser.add_argument("--manifest-dir", type=Path, default=MANIFEST_DIR,
-                        help="frozen case manifests (use sealed-v2 only at an approved frozen checkpoint)")
+                        help="frozen case manifests (use sealed-v2 or manifests-sealed-v3 only at an approved frozen checkpoint)")
     parser.add_argument("--run", required=True, help="run name; one folder under runs/")
     parser.add_argument("--split")
     parser.add_argument("--cases", help="comma-separated case ids")

@@ -47,3 +47,32 @@
 - **Trigger:** W17's large campaign repeated the same blocked draft build after investigation already succeeded; the PM stopped it after four after-change cases.
 - **Rule:** Test DTMB L0-L3 first, inspect every trace, and fix the first common blocker. Stop early when the first two cases repeat the prior blocker. Run 24 development cases only after at least three of four produce STEP drafts. In draft mode prioritize usable CAD with cheap warning labels and open guesses; keep strict mode and the frozen 2% RMS/5% volume gate unchanged.
 - **Why:** More instances of the same failure spend tokens without testing a new hypothesis; draft evidence defects must not discard otherwise usable CAD.
+### Progress before provenance (MarinaFrame)
+- **Date:** 2026-11-08
+- **Trigger:** I designed W18 memory with heavy provenance (controller-only summaries, id checks, byte replay tests). The founder said: do not be obsessed with provenance; get the model producing workable CAD first, line-by-line evidence later.
+- **Rule:** For the LLM investigator, optimise for built and gate-correct drafts first. Keep only cheap safety labels (unverified draft, open guesses, engineering_approved=false, fixed scoring gate). Defer provenance machinery that does not help the model build a draft, and relax tool evidence rules in draft mode when they block progress.
+- **Why:** Evidence rules added before the model could build anything blocked all progress (270 of 288 no_progress).
+
+### Iterate on a few cases before any campaign (MarinaFrame)
+- **Date:** 2026-11-08
+- **Trigger:** The 288-case head-to-head and the 24-case W17 baseline spent hours and tokens mostly on one repeated failure (`no_progress` loops). The founder called it a huge waste with no useful data for making the model work better.
+- **Rule:** Before scaling an LLM run, run 2-4 cases, read every trace, fix the first blocker, and repeat. Stop a round early when the first cases fail the same way as before. Run larger sets only when a small round mostly succeeds or shows varied failures; keep sealed runs for frozen checkpoints only.
+- **Why:** A uniform failure is visible in 2 traces; more cases add cost, not information.
+
+### MarinaFrame's agent fills gaps; it does not stop (product principle)
+- **Date:** 2026-11-08
+- **Trigger:** My W17b brief still treated missing or bad drawing data as a reason to refuse or only interpolate geometrically. The founder said the point of an agentic MarinaFrame is to use AI to fill in what is not in the data, not to stop when data is missing or bad.
+- **Rule:** In draft mode, design every missing-data path so the model infers the missing part (section shape, scale, stations, principal dimensions) and code builds and labels it (`traced`, `repaired`, `interpolated`, `ai_inferred`). Stop only when no solid can be made at all. Keep the labels, `engineering_approved=false` and the fixed scoring gate.
+- **Why:** Earlier evidence-only rules (model never writes geometry, refuse on gaps) made the product deliver nothing on imperfect drawings, which are the normal case.
+
+### The model writes geometry (MarinaFrame, supersedes "model chooses WHAT, code measures HOW MUCH")
+- **Date:** 2026-11-08
+- **Trigger:** I described the old rule "the model must never write geometry" as a draft-mode exception only. The founder said writing geometry is half the point of the model.
+- **Rule:** Treat model-authored geometry (sections, waterlines, sheet values, corrections of traces) as a main path. Code fairs, sanity-checks, builds, renders back and labels the source of each section; the frozen scoring gate measures quality. Do not design tools or prompts that forbid the model from writing geometry.
+- **Why:** The earlier evidence-only framing made the model a selector of traced ink; on imperfect drawings that delivers nothing.
+
+### Happy path first; do not add failure paths (MarinaFrame)
+- **Date:** 2026-11-08
+- **Trigger:** W17c added a new build failure (`authored_outside_draft`) and I proposed more checks. The founder said: stop making builds fail; focus on happy paths first.
+- **Rule:** Until the model reliably produces drafts, do not add refusals or blocked states. In draft mode, turn checks into warnings whenever a solid can be made. Spend effort on read -> geometry -> build -> render -> finish.
+- **Why:** Every gate added before the main path works produces more empty results and no learning.

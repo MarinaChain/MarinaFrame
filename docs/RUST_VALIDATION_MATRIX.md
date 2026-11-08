@@ -88,7 +88,7 @@ Rows before: of 18 sub-rows, 7 had a full Rust test (1, 4c, 4e, 5b, 5c, 5d, 5f) 
 
 ## Draft guards (best-effort drafts, 2026-11-07)
 
-With `on_ambiguity = draft` (app default; CLI `--on-ambiguity draft`), an ambiguous or unreadable
+With `on_ambiguity = draft` (app default, see the head-to-head section of `BENCHMARK_FACTORY.md`; CLI `--on-ambiguity draft`), an ambiguous or unreadable
 section gives a draft instead of an abstention. Each choice is an open guess in `domain/state.json`
 `guesses` (`src/vessel_reconstruction/draft.py`). Rust enforces, independently of Python:
 
