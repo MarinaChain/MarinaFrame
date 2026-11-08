@@ -346,3 +346,11 @@ Compact per-case rows and all marginal counts, usage, timing and provenance: [`o
      therefore produced the same action.
 - **Follow-up:** W17 fixes these causes and measures them on non-sealed development data. Any
   claim that W17 improves the LLM arm needs a new held-out split, because this one is spent.
+
+## Reading a small LLM round cheaply
+
+Run `python scripts/round_digest.py RUN_DIR [RUN_DIR ...]` on finished case folders (each holds
+`task/events/*.json`; `result.json` and `stdout.log` are optional). Add `--json` for machine output.
+It prints, per case: end reason, decision count, compressed tool sequence, first blocker, last 3 model
+reasons, draft/STEP state, requests and list cost. It ends with failure counts, a one-line verdict and an
+early-stop hint. Run 2 to 4 cases first. If the hint says the first cases fail the same way, stop the round.
