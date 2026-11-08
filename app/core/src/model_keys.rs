@@ -62,6 +62,33 @@ pub fn key_source() -> Option<KeySource> {
         .map(|_| KeySource::KeyFile)
 }
 
+/// The keys a new run's provider worker would load, with their 1-based slot,
+/// following the same rules: the environment (slot = variable position) when it
+/// has any key, else the key file in line order. For the usage check only
+/// ([`crate::model_usage`]): the keys go into a request header and nowhere else.
+pub(crate) fn configured_keys() -> (Option<KeySource>, Vec<(u8, String)>) {
+    if environment_has_key() {
+        let keys = CREDENTIAL_VARIABLES
+            .iter()
+            .enumerate()
+            .filter_map(|(index, name)| {
+                let key = std::env::var(name).ok().filter(|k| !k.is_empty())?;
+                Some((index as u8 + 1, key))
+            })
+            .collect();
+        return (Some(KeySource::Environment), keys);
+    }
+    let keys: Vec<(u8, String)> = key_file()
+        .map(|path| read_keys(&path))
+        .unwrap_or_default()
+        .into_iter()
+        .zip(1u8..)
+        .map(|(key, slot)| (slot, key))
+        .collect();
+    let source = (!keys.is_empty()).then_some(KeySource::KeyFile);
+    (source, keys)
+}
+
 /// For the provider worker process only: when the environment has no key,
 /// load the key file into `OPENCODE_API_KEY*`. Call it before any other thread
 /// starts, because it changes this process's environment.

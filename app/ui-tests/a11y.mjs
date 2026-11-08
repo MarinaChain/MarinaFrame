@@ -48,6 +48,7 @@ async function prepare({ vessel, tab, vesselTab, open }) {
   if (vesselTab) { document.querySelector(`[data-vtab="${vesselTab}"]`).click(); await wait(800); }
   if (open === 'intake') { document.getElementById('drop-choose').click(); await wait(2000); }
   if (open === 'palette') { document.getElementById('open-palette').click(); await wait(300); }
+  if (open === 'usage') { document.getElementById('check-usage').click(); await wait(900); }
   if (open === 'shortcuts') { document.body.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true })); await wait(300); }
 }
 
@@ -57,6 +58,7 @@ const SCREENS = [
   { name: 'home (first start)', path: '/?mockempty#home' },
   { name: 'queue', path: '/#queue' },
   { name: 'settings', path: '/#settings' },
+  { name: 'settings (key usage)', path: '/?mockusagefull#settings', steps: { open: 'usage' } },
   { name: 'intake', path: '/#home', steps: { open: 'intake' } },
   { name: 'intake (10 sheets)', path: '/?mockset=10#home', steps: { open: 'intake' } },
   { name: 'run (draft)', path: '/#home', steps: { vessel: 'Survey' } },

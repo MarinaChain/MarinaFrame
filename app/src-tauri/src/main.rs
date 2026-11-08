@@ -5,6 +5,7 @@
 use marinaframe_app_core::export::ExportResult;
 use marinaframe_app_core::intake::IntakePreview;
 use marinaframe_app_core::live::{HullSections, LiveSteps};
+use marinaframe_app_core::model_usage::ModelUsage;
 use marinaframe_app_core::types::*;
 use marinaframe_app_core::{AppError, AppPaths, AppResult, Backend};
 use std::path::PathBuf;
@@ -241,6 +242,12 @@ async fn get_setup_status(backend: Shared<'_>) -> Result<SetupStatus, AppError> 
     run(backend, move |b| Ok(b.setup_status())).await
 }
 
+/// OpenCode Go usage per key slot (Settings, on demand). Never returns a key.
+#[tauri::command(rename_all = "snake_case")]
+async fn get_model_usage(backend: Shared<'_>) -> Result<ModelUsage, AppError> {
+    run(backend, move |b| Ok(b.model_usage())).await
+}
+
 #[tauri::command(rename_all = "snake_case")]
 async fn sign_off(
     backend: Shared<'_>,
@@ -375,6 +382,7 @@ fn main() {
             set_settings,
             get_ai_status,
             get_setup_status,
+            get_model_usage,
             review_component,
             sign_off,
             dismiss_notice,

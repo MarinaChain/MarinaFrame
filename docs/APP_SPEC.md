@@ -109,6 +109,7 @@ Errors return `{ "code": string, "message": string }` with plain-language `messa
 | `get_settings` / `set_settings` | `{}` / `Settings` | `Settings` |
 | `get_default_settings` | `{}` | `Settings` (fresh-install defaults; the UI offers them as one-click choices) |
 | `get_setup_status` | `{}` | `SetupStatus { ai: AiStatus, worker: SetupCheck, runs_folder: SetupCheck }`, `SetupCheck { ok, path, message }`. File-system checks only (no process starts). The welcome screen shows it on first use and when the worker or runs folder is not ready; a missing key is not a stop (continue without AI) |
+| `get_model_usage` | `{}` | `ModelUsage { key_source, slots: KeyUsage[], next_slot, warning, checked_ms }`, `KeyUsage { slot, meters: UsageMeter[], highest_percent, usable, error }`, `UsageMeter { window, percent, status, resets_at }`. Settings > Key usage, on demand only (no timer). One `GET https://opencode.ai/zen/go/v1/usage` per configured key, made exactly as the provider worker makes it (bearer key, same User-Agent, 64 KiB bound, an answer that echoes the key is refused). Keys are read as `model_keys.rs` reads them and never returned; `next_slot` uses the worker's rule (`credentials::highest_usage_percent`; one key is used without a read). `warning` when every usable key is at 90% or more, or none is usable |
 | `dismiss_notice` / `reset_notices` | `{ id }` / `{}` | `{ ok: true }` |
 | `list_datasets` | `{}` | `{ name, path, bytes }[]` |
 

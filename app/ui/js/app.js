@@ -19,6 +19,7 @@ import { createEvidenceCard } from './evidence.js';
 import { createShortcutSheet } from './shortcuts.js';
 import { createParts, partState } from './parts.js';
 import { createExport } from './export.js';
+import { createUsage } from './usage.js';
 import * as fmt from './format.js';
 
 const $ = (id) => document.getElementById(id);
@@ -1837,6 +1838,8 @@ const welcome = createWelcome({
   openSettings: () => openSettings(),
 });
 $('open-setup').addEventListener('click', () => navigate('welcome'));
+// Key usage (Settings > AI): read only when the person asks.
+$('key-usage-host').replaceWith(createUsage({ invoke }).element);
 
 /** At start: the welcome screen on first use, or when the worker or runs folder is not ready. */
 async function needsWelcome() {

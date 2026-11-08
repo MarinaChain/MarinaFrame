@@ -853,6 +853,30 @@ code { font-family: var(--font-mono); }
 }
 .setting-row:first-of-type { border-top: 0; }
 .setting-label { display: inline-flex; align-items: center; gap: var(--space-sm); min-width: 0; font-weight: 500; }
+/* Key usage (js/usage.js): one card per key slot with three meters. Brand blue fills;
+   amber at 90 % or more. Teal is not used: a usage check is not AI activity. */
+.usage { display: flex; flex-direction: column; gap: var(--space-sm); padding-bottom: var(--space-md); border-top: 1px solid var(--rule); }
+.usage > .usage-head { border-top: 0; }
+.usage .field-help { margin: 0; }
+.usage-body { display: flex; flex-direction: column; gap: var(--space-sm); }
+.usage-warning { display: flex; align-items: flex-start; gap: var(--space-sm); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); background: var(--warn-soft); color: var(--warn); font-size: var(--fs-sm); }
+.usage-warning .icon { flex: none; margin-top: 2px; }
+.usage-error { color: var(--warn); font-size: var(--fs-sm); }
+.usage-slots { display: flex; flex-direction: column; gap: var(--space-sm); margin: 0; padding: 0; list-style: none; }
+.usage-slot { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-sm) var(--space-md); border: 1px solid var(--rule); border-radius: var(--radius-md); background: var(--surface); }
+.usage-slot.next { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
+.usage-slot-head { display: flex; align-items: center; gap: var(--space-sm); }
+.usage-slot-name { font-weight: 600; }
+.usage-meters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-md); }
+.usage-meter { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.usage-meter-head { display: flex; justify-content: space-between; gap: var(--space-xs); font-size: var(--fs-sm); }
+.usage-window { color: var(--ink-2); }
+.usage-percent { font: 500 var(--fs-sm) var(--font-mono); }
+.usage-bar { display: block; height: 6px; border-radius: 3px; background: var(--rule); overflow: hidden; }
+.usage-fill { display: block; height: 100%; border-radius: 3px; background: var(--brand); }
+.usage-meter.near .usage-fill { background: var(--guess-ink); }
+.usage-meter.near .usage-percent { color: var(--warn); font-weight: 600; }
+.usage-reset { min-height: 1.2em; color: var(--ink-3); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .settings-advanced { padding-bottom: var(--space-sm); }
 .settings-advanced > summary { display: flex; align-items: center; gap: var(--space-xs); width: fit-content; cursor: pointer; list-style: none; }
 .settings-advanced > summary::-webkit-details-marker { display: none; }

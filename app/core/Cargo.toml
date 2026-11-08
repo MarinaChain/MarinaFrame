@@ -9,6 +9,8 @@ description = "Transport-independent backend of the MarinaFrame desktop app: tas
 [dependencies]
 marinaframe-control = { path = "../../rust-control" }
 base64 = "=0.22.1"
+# Same version and features as rust-control: the Settings usage check (model_usage.rs).
+reqwest = { version = "=0.12.24", default-features = false, features = ["blocking", "json", "rustls-tls-native-roots"] }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = { version = "=1.0.145", features = ["float_roundtrip"] }
 

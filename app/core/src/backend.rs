@@ -220,6 +220,11 @@ impl Backend {
         }
     }
 
+    /// OpenCode Go usage per key slot, read now (Settings, on demand only).
+    pub fn model_usage(&self) -> crate::model_usage::ModelUsage {
+        crate::model_usage::check_usage()
+    }
+
     /// The setup check of the welcome screen. Only file-system checks: it starts no process.
     pub fn setup_status(&self) -> SetupStatus {
         let settings = storage::get_settings(&self.paths);

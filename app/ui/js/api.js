@@ -716,6 +716,44 @@ function mockTransport() {
       return { enabled, key_found: keyFound, active: enabled && keyFound,
                key_file: '/Users/demo/.config/marinaframe/opencode-go-keys.txt' };
     },
+    /**
+     * Key usage (Settings). Synthetic meters: ?mockusagefull puts every key near or at a limit,
+     * ?mockusageone has one key whose check fails. Never real account data.
+     */
+    async get_model_usage() {
+      await pause(500);
+      const params = new URLSearchParams(location.search);
+      const inHours = (hours) => new Date(Date.now() + hours * 3_600_000).toISOString();
+      const meters = (rolling, weekly, monthly) => [
+        { window: 'rolling', percent: rolling, status: rolling < 100 ? 'ok' : 'limited', resets_at: inHours(3) },
+        { window: 'weekly', percent: weekly, status: weekly < 100 ? 'ok' : 'limited', resets_at: inHours(52) },
+        { window: 'monthly', percent: monthly, status: monthly < 100 ? 'ok' : 'limited', resets_at: inHours(400) },
+      ];
+      const slot = (number, rolling, weekly, monthly) => {
+        const all = [rolling, weekly, monthly];
+        const usable = all.every((p) => p < 100);
+        return { slot: number, meters: meters(rolling, weekly, monthly), highest_percent: usable ? Math.max(...all) : null, usable, error: null };
+      };
+      if (params.has('mockusageone')) {
+        return {
+          key_source: 'key_file', next_slot: 1, checked_ms: Date.now(),
+          slots: [{ slot: 1, meters: [], highest_percent: null, usable: false, error: 'Could not reach OpenCode. Check the network and try again.' }],
+          warning: 'This key is at a limit or could not be checked. A run may stop until a meter resets.',
+        };
+      }
+      if (params.has('mockusagefull')) {
+        return {
+          key_source: 'key_file', next_slot: 2, checked_ms: Date.now(),
+          slots: [slot(1, 100, 64, 41), slot(2, 93, 71, 58), slot(3, 88, 97, 62)],
+          warning: 'Every usable key is near a limit (90% or more). A long run may stop when a meter reaches 100%.',
+        };
+      }
+      return {
+        key_source: 'key_file', next_slot: 2, checked_ms: Date.now(),
+        slots: [slot(1, 72, 45, 30), slot(2, 18, 33, 21), slot(3, 100, 80, 52)],
+        warning: null,
+      };
+    },
     async get_setup_status(data) {
       await pause(300);
       const settings = { ...data.settings, ...readStored(MOCK_SETTINGS_KEY, {}) };
