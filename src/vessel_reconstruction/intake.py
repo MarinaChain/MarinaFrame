@@ -54,6 +54,13 @@ INK_LEVEL = 160
 # A view's region also takes in the light marks (grid lines, axes) touching its
 # dark ink, so that it holds its datum lines and not only its curves.
 GROUP_LEVEL = 235
+# On a grey scan both levels follow the paper (its PAPER_PERCENTILE grey level):
+# ink at least INK_CONTRAST, light marks at least LIGHT_CONTRAST darker.
+PAPER_PERCENTILE = 90
+INK_CONTRAST = 80
+LIGHT_CONTRAST = 20
+# Ink components smaller than this (work pixels) are scan specks.
+SPECK_PIXELS = 4
 # Light marks are searched at most this many box sizes around the dark ink.
 LIGHT_GROWTH = 1.0
 # A row or column with more ink than this fraction is a border or frame line.
@@ -143,12 +150,28 @@ def _gray(image: np.ndarray) -> np.ndarray:
     return image.mean(axis=2) if image.ndim == 3 else image.astype(float)
 
 
+def ink_levels(gray: np.ndarray) -> tuple[float, float]:
+    """Grey levels below which a page is dark ink and light marks (grid, axes).
+
+    A scan's paper is grey and noisy, not white: both levels sit at least
+    INK_CONTRAST and LIGHT_CONTRAST below the paper, and never above the
+    levels of a clean white sheet.
+    """
+    paper = float(np.percentile(gray, PAPER_PERCENTILE))
+    return min(INK_LEVEL, paper - INK_CONTRAST), min(GROUP_LEVEL, paper - LIGHT_CONTRAST)
+
+
 def ink_groups(image: np.ndarray) -> list[list[int]]:
     """Boxes (page pixels) of the separate ink groups on the page, largest first."""
     height, width = image.shape[:2]
     step = max(1, int(np.ceil(max(height, width) / WORK_SIDE)))
     gray = _gray(image)[::step, ::step]
-    ink = gray < INK_LEVEL
+    ink_level, light_level = ink_levels(gray)
+    ink = gray < ink_level
+    # Scan specks would bridge the gaps between views.
+    labels, _ = ndimage.label(ink, structure=np.ones((3, 3)))
+    sizes = np.bincount(labels.ravel())
+    ink &= (sizes >= SPECK_PIXELS)[labels]
     # Sheet borders and frames would join every view into one group.
     ink[ink.mean(axis=1) > FRAME_LINE_FRACTION, :] = False
     ink[:, ink.mean(axis=0) > FRAME_LINE_FRACTION] = False
@@ -165,12 +188,12 @@ def ink_groups(image: np.ndarray) -> list[list[int]]:
         if (rows.stop - rows.start) * (cols.stop - cols.start) < minimum:
             continue
         boxes.append([cols.start, rows.start, cols.stop, rows.stop])
-    boxes = _merge_overlapping([_with_light_marks(gray, box) for box in boxes])
+    boxes = _merge_overlapping([_with_light_marks(gray, box, light_level) for box in boxes])
     boxes = [[b[0] * step, b[1] * step, min(width, b[2] * step), min(height, b[3] * step)] for b in boxes]
     return sorted(boxes, key=lambda b: (b[2] - b[0]) * (b[3] - b[1]), reverse=True)
 
 
-def _with_light_marks(gray: np.ndarray, box: list[int]) -> list[int]:
+def _with_light_marks(gray: np.ndarray, box: list[int], light_level: float = GROUP_LEVEL) -> list[int]:
     """Grow a dark-ink box over the light grid and axes it touches.
 
     Grid lines are lighter than hull lines; a view's region must hold them, since
@@ -181,7 +204,7 @@ def _with_light_marks(gray: np.ndarray, box: list[int]) -> list[int]:
     grow_x, grow_y = int(LIGHT_GROWTH * (right - left)), int(LIGHT_GROWTH * (bottom - top))
     window = [max(0, left - grow_x), max(0, top - grow_y),
               min(gray.shape[1], right + grow_x), min(gray.shape[0], bottom + grow_y)]
-    light = gray[window[1]:window[3], window[0]:window[2]] < GROUP_LEVEL
+    light = gray[window[1]:window[3], window[0]:window[2]] < light_level
     labels, _ = ndimage.label(light, structure=np.ones((3, 3)))
     inner = labels[top - window[1]:bottom - window[1], left - window[0]:right - window[0]]
     touching = set(np.unique(inner)) - {0}
@@ -231,11 +254,12 @@ def framed(image: np.ndarray, box: list[int]) -> bool:
     """True when a rectangle is drawn around the box (as around a title block)."""
     left, top, right, bottom = box
     gray = _gray(image)
+    ink_level, _ = ink_levels(gray)
     # Group boxes are grown by the grouping gap, so search inward this far for the line.
     band = max(4, int(FRAME_SEARCH_FRACTION * min(right - left, bottom - top)))
 
     def side_ink(strip, axis):
-        return float((strip < INK_LEVEL).any(axis=axis).mean()) if strip.size else 0.0
+        return float((strip < ink_level).any(axis=axis).mean()) if strip.size else 0.0
 
     sides = [side_ink(gray[top:top + band, left:right], 0), side_ink(gray[bottom - band:bottom, left:right], 0),
              side_ink(gray[top:bottom, left:left + band], 1), side_ink(gray[top:bottom, right - band:right], 1)]

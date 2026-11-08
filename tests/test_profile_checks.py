@@ -127,6 +127,48 @@ def test_sides_that_contradict_x_follow_x():
     assert halves["1"].startswith("aft") and halves["9"].startswith("fore") and warnings
 
 
+def _gridded_sheet(angle_deg=0.0, with_plan=False):
+    """profile_sheet with light waterlines (and a plan outline below it), rotated as a scan may be."""
+    image, setup = profile_sheet()
+    height = 300 if with_plan else image.shape[0]
+    grid = Image.new("RGB", (image.shape[1], height), "white")
+    draw = ImageDraw.Draw(grid)
+    for z in range(0, 12):
+        draw.line([(10, BASE - z * PPM), (450, BASE - z * PPM)], fill=(205,) * 3, width=1)
+    if with_plan:  # a waterline curve of a half-breadth plan, 40 px below the profile
+        draw.line([(X0, 230), (X0 + 50 * PPM, 200), (X0 + 100 * PPM, 230)], fill=(15,) * 3, width=2)
+    sheet = np.array(grid)
+    sheet[:image.shape[0]] = np.minimum(sheet[:image.shape[0]], image)  # the hull ink lies over the grid
+    picture = Image.fromarray(sheet).rotate(angle_deg, resample=Image.BICUBIC, fillcolor="white")
+    return np.array(picture), setup
+
+
+def test_a_rotated_sheet_is_levelled_before_deck_and_keel_heights_are_read():
+    image, setup = _gridded_sheet(angle_deg=0.3)
+    # PIL turns the picture counter-clockwise: lines climb to the left, rows fall to the right.
+    assert abs(vd.view_skew(image, setup["region_px"]) - np.tan(np.radians(-0.3))) < 0.0015
+    stations = [{"id": str(i), "x_m": 10.0 * i} for i in range(1, 10)]
+    heights = vd.profile_outline_heights(image, setup, PPM, stations)
+    for station in stations:
+        # Within 2 px: resampling the turned picture blurs line ends by about a pixel.
+        assert abs(heights[station["id"]]["deck"] - _deck_z(station["x_m"])) <= 2.0 / PPM
+        assert abs(heights[station["id"]]["keel"]) <= 2.0 / PPM
+    assert vd.view_skew(_gridded_sheet()[0], setup["region_px"]) == 0.0
+
+
+def test_a_region_over_two_views_reads_the_top_outline():
+    image, setup = _gridded_sheet(with_plan=True)
+    wide = {**setup, "region_px": [10, 10, 450, 290]}  # profile and plan (series60-3v-L2 live)
+    heights = vd.profile_outline_heights(image, wide, PPM, [{"id": "5", "x_m": 50.0}])["5"]
+    assert abs(heights["deck"] - _deck_z(50.0)) <= 1.0 / PPM and abs(heights["keel"]) <= 1.0 / PPM
+
+
+def test_a_trace_that_stops_far_below_the_deck_is_left_to_the_fit():
+    from vessel_reconstruction.first_hull_tools import short_of_deck
+    anchors = [_anchor("1", 9.0), _anchor("2", 9.0), _anchor("3", 4.0)]
+    assert short_of_deck(anchors, {"1": 9.0, "2": 9.0, "3": 9.0}) == ["3"]
+
+
 def test_a_trace_that_runs_down_the_centreline_below_the_keel_is_cut_there():
     from vessel_reconstruction.first_hull_tools import cut_bottoms_at_keel
     anchors = [_anchor("1", 9.0), _anchor("2", 9.0), _anchor("3", 9.0)]
