@@ -419,87 +419,13 @@ class DomainTools(InvestigationTools):
                 self.state = load_bounded_json(self.state_path, max_bytes=MAX_INSPECTION_BYTES,
                                                max_nodes=600_000)
                 self._verify_inputs()
-                # Only the Rust controller sets this flag, when a person keeps a
-                # not-kept revision edit anyway; the model's tool schema has no such field.
-                force_keep = (tool_name == "propose_section" and isinstance(arguments, dict)
-                              and arguments.pop("operator_force_keep", False) is True)
-                # Only the Rust controller sets this flag, on an edit a person asked
-                # for (mark and revise): the edit must not worsen its section's ink fit.
-                revision_target = (tool_name == "propose_section" and isinstance(arguments, dict)
-                                   and arguments.pop("revision_target", False) is True)
-                self._arguments(tool_name, arguments)
-                if self.cancel_event is not None and self.cancel_event.is_set():
-                    return self._observation(False, "cancelled", error_code="cancelled")
-                method = getattr(self, "_" + tool_name)
-                judged = tool_name in ("propose_section", "assign_station") and self.state.get("vessel_table")
-                incumbent = copy.deepcopy(self.state) if judged and not force_keep else None
-                fit_before = self.state.get("fit_score", {}).get("combined_fit")
-                result = method(**arguments)
-                if force_keep and judged and result.get("ok"):
-                    from .fit_feedback import score, current_table
-                    after = score(self)
-                    self.state["vessel_table"] = current_table(self).to_json()
-                    self.state["fit_score"] = after
-                    self._save()
-                    result["fit_comparison"] = {"keep": True, "operator_forced": True, "fit_before": fit_before,
-                                                "fit_after": after.get("combined_fit"),
-                                                "reason": "A person kept this edit although the keep rule did not."}
-                if incumbent is not None and result.get("ok"):
-                    from .fit_feedback import score, current_table
-                    from .whole_vessel_score import keep_edit
-                    before = incumbent.get("fit_score", {})
-                    after = score(self)
-                    sid = arguments.get("section_id")
-                    old_curve = next((r["points_yz_m"] for r in incumbent["vessel_table"]["stations"] if r["id"] == sid), None)
-                    new_curve = self._section_curve(sid)
-                    identical = old_curve == new_curve
-                    old_ink = before.get("station_ink_fit", {}).get(sid, {})
-                    new_ink = after.get("station_ink_fit", {}).get(sid, {})
-                    protected_ink = old_ink.get("near_fraction", 0) >= .9 and old_ink.get("rms_m") is not None
-                    decision = keep_edit(before, after, before.get("cells"), after.get("cells"), gap_fill_only=old_curve is None)
-                    if protected_ink and new_ink.get("rms_m", float("inf")) > old_ink["rms_m"] + 1e-6:
-                        decision = {**decision, "keep": False, "reason": "Kept supported ink; proposed curve has worse ink RMS.",
-                                    "ink_rms_before_m": old_ink["rms_m"], "ink_rms_after_m": new_ink.get("rms_m")}
-                    elif revision_target and revision_ink_worse(old_ink, new_ink):
-                        decision = {**decision, "keep": False,
-                                    "reason": (f"A revision must not worsen its section's ink fit: ink RMS "
-                                               f"{old_ink['rms_m']:.2f} m before, {new_ink.get('rms_m', float('nan')):.2f} m "
-                                               "after. Follow the drawn ink of this section more closely."),
-                                    "ink_rms_before_m": old_ink["rms_m"], "ink_rms_after_m": new_ink.get("rms_m")}
-                    if identical or not decision["keep"]:
-                        self.state = incumbent
-                        self.state["non_improving_edits"] = self.state.get("non_improving_edits", 0) + 1
-                        self._save()
-                        result = self._observation(True, "kept_previous_curve", fit_comparison=decision,
-                            repeated_proposal=identical,
-                            message=f"Kept previous curve: combined fit {before.get('combined_fit')} vs proposed {after.get('combined_fit')}. Finish the best draft or try a different section.")
-                    else:
-                        self.state["vessel_table"] = current_table(self).to_json()
-                        self.state["fit_score"] = after
-                        self.state["non_improving_edits"] = 0
-                        self._save()
-                        result["fit_comparison"] = decision
-                if tool_name in ("assign_station", "enumerate_strokes", "inspect_source", "trace_from_point", "trace_corridor"):
-                    from .accuracy_feedback import candidate_catalog, candidate_feedback
-                    by_id = {s["id"]: s for s in self.spec.get("sections", [])}
-                    sid = arguments.get("section_id")
-                    ids = [sid] if sid in by_id else result.get("returned_section_ids", [])
-                    result["candidate_guidance"] = [{"section_id": section_id,
-                        "candidates": candidate_catalog(by_id[section_id], self.state["catalog"].get(section_id, {}))}
-                        for section_id in ids[:12] if section_id in by_id]
-                    if tool_name == "assign_station" and sid in by_id:
-                        candidate = next((c for c in self.state["catalog"].get(sid, {}).get("candidates", [])
-                            if c["candidate_id"] == arguments.get("candidate_id")), {})
-                        result["accuracy_feedback"] = candidate_feedback(by_id[sid], candidate, arguments.get("label_text", ""))
-                if tool_name == "build_draft":
-                    from .accuracy_feedback import candidate_feedback
-                    chosen = {g["section_id"]: g["chosen_candidate_id"] for g in self.open_guesses}
-                    chosen.update(self.state["selected"])
-                    result["section_accuracy_feedback"] = [{"section_id": s["id"],
-                        **candidate_feedback(s, next((c for c in self.state["catalog"].get(s["id"], {}).get("candidates", [])
-                            if c["candidate_id"] == chosen.get(s["id"])), {}))}
-                        for s in self.spec["sections"] if chosen.get(s["id"])]
-                return result
+                state_before = self.state_path.read_bytes()
+                try:
+                    return self._execute_verified(tool_name, arguments)
+                except (ToolInputError, ValueError, OSError, TypeError, KeyError, RuntimeError):
+                    raise
+                except Exception as exc:  # noqa: BLE001 - a tool bug must not end the run
+                    return self._tool_failed(exc, state_before)
         except ToolInputError as exc:
             result = self._observation(False, "rejected", error_code="invalid_tool_arguments", message=str(exc))
             if tool_name == "assign_station":
@@ -512,6 +438,104 @@ class DomainTools(InvestigationTools):
         except (ValueError, OSError, TypeError, KeyError, RuntimeError) as exc:
             return self._observation(False, "blocked", error_code="domain_integrity_or_input_error",
                                      exception_type=type(exc).__name__)
+
+    def _tool_failed(self, exc: Exception, state_before: bytes) -> dict:
+        """An unexpected error inside a verified tool call: undo its domain changes and say so.
+
+        The run goes on: the controller receives an ordinary refusal, and the
+        draft built before this call stays the best draft.
+        """
+        self.state_path.write_bytes(state_before)
+        self.state = load_bounded_json(self.state_path, max_bytes=MAX_INSPECTION_BYTES, max_nodes=600_000)
+        return self._observation(False, "tool_failed", error_code="tool_internal_error",
+                                 exception_type=type(exc).__name__,
+                                 message="The tool failed on this request and the domain is unchanged. "
+                                         "Try a different action, or build_draft / finish with the best draft.")
+
+    def _execute_verified(self, tool_name: str, arguments: dict) -> dict:
+        """Run one tool on a verified domain (the caller holds the domain lock)."""
+        # Only the Rust controller sets this flag, when a person keeps a
+        # not-kept revision edit anyway; the model's tool schema has no such field.
+        force_keep = (tool_name == "propose_section" and isinstance(arguments, dict)
+                      and arguments.pop("operator_force_keep", False) is True)
+        # Only the Rust controller sets this flag, on an edit a person asked
+        # for (mark and revise): the edit must not worsen its section's ink fit.
+        revision_target = (tool_name == "propose_section" and isinstance(arguments, dict)
+                           and arguments.pop("revision_target", False) is True)
+        self._arguments(tool_name, arguments)
+        if self.cancel_event is not None and self.cancel_event.is_set():
+            return self._observation(False, "cancelled", error_code="cancelled")
+        method = getattr(self, "_" + tool_name)
+        judged = tool_name in ("propose_section", "assign_station") and self.state.get("vessel_table")
+        incumbent = copy.deepcopy(self.state) if judged and not force_keep else None
+        fit_before = self.state.get("fit_score", {}).get("combined_fit")
+        result = method(**arguments)
+        if force_keep and judged and result.get("ok"):
+            from .fit_feedback import score, current_table
+            after = score(self)
+            self.state["vessel_table"] = current_table(self).to_json()
+            self.state["fit_score"] = after
+            self._save()
+            result["fit_comparison"] = {"keep": True, "operator_forced": True, "fit_before": fit_before,
+                                        "fit_after": after.get("combined_fit"),
+                                        "reason": "A person kept this edit although the keep rule did not."}
+        if incumbent is not None and result.get("ok"):
+            from .fit_feedback import score, current_table
+            from .whole_vessel_score import keep_edit
+            before = incumbent.get("fit_score", {})
+            after = score(self)
+            sid = arguments.get("section_id")
+            old_curve = next((r["points_yz_m"] for r in incumbent["vessel_table"]["stations"] if r["id"] == sid), None)
+            new_curve = self._section_curve(sid)
+            identical = old_curve == new_curve
+            # A station with no measurable ink has no entry, or a null one.
+            old_ink = (before.get("station_ink_fit") or {}).get(sid) or {}
+            new_ink = (after.get("station_ink_fit") or {}).get(sid) or {}
+            protected_ink = old_ink.get("near_fraction", 0) >= .9 and old_ink.get("rms_m") is not None
+            decision = keep_edit(before, after, before.get("cells"), after.get("cells"), gap_fill_only=old_curve is None)
+            if protected_ink and new_ink.get("rms_m", float("inf")) > old_ink["rms_m"] + 1e-6:
+                decision = {**decision, "keep": False, "reason": "Kept supported ink; proposed curve has worse ink RMS.",
+                            "ink_rms_before_m": old_ink["rms_m"], "ink_rms_after_m": new_ink.get("rms_m")}
+            elif revision_target and revision_ink_worse(old_ink, new_ink):
+                decision = {**decision, "keep": False,
+                            "reason": (f"A revision must not worsen its section's ink fit: ink RMS "
+                                       f"{old_ink['rms_m']:.2f} m before, {new_ink.get('rms_m', float('nan')):.2f} m "
+                                       "after. Follow the drawn ink of this section more closely."),
+                            "ink_rms_before_m": old_ink["rms_m"], "ink_rms_after_m": new_ink.get("rms_m")}
+            if identical or not decision["keep"]:
+                self.state = incumbent
+                self.state["non_improving_edits"] = self.state.get("non_improving_edits", 0) + 1
+                self._save()
+                result = self._observation(True, "kept_previous_curve", fit_comparison=decision,
+                    repeated_proposal=identical,
+                    message=f"Kept previous curve: combined fit {before.get('combined_fit')} vs proposed {after.get('combined_fit')}. Finish the best draft or try a different section.")
+            else:
+                self.state["vessel_table"] = current_table(self).to_json()
+                self.state["fit_score"] = after
+                self.state["non_improving_edits"] = 0
+                self._save()
+                result["fit_comparison"] = decision
+        if tool_name in ("assign_station", "enumerate_strokes", "inspect_source", "trace_from_point", "trace_corridor"):
+            from .accuracy_feedback import candidate_catalog, candidate_feedback
+            by_id = {s["id"]: s for s in self.spec.get("sections", [])}
+            sid = arguments.get("section_id")
+            ids = [sid] if sid in by_id else result.get("returned_section_ids", [])
+            result["candidate_guidance"] = [{"section_id": section_id,
+                "candidates": candidate_catalog(by_id[section_id], self.state["catalog"].get(section_id, {}))}
+                for section_id in ids[:12] if section_id in by_id]
+            if tool_name == "assign_station" and sid in by_id:
+                candidate = next((c for c in self.state["catalog"].get(sid, {}).get("candidates", [])
+                    if c["candidate_id"] == arguments.get("candidate_id")), {})
+                result["accuracy_feedback"] = candidate_feedback(by_id[sid], candidate, arguments.get("label_text", ""))
+        if tool_name == "build_draft":
+            from .accuracy_feedback import candidate_feedback
+            chosen = {g["section_id"]: g["chosen_candidate_id"] for g in self.open_guesses}
+            chosen.update(self.state["selected"])
+            result["section_accuracy_feedback"] = [{"section_id": s["id"],
+                **candidate_feedback(s, next((c for c in self.state["catalog"].get(s["id"], {}).get("candidates", [])
+                    if c["candidate_id"] == chosen.get(s["id"])), {}))}
+                for s in self.spec["sections"] if chosen.get(s["id"])]
+        return result
 
     def _observation(self, ok, status, **values):
         try:
