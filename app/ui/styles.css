@@ -466,6 +466,8 @@ code { font-family: var(--font-mono); }
   text-overflow: ellipsis;
 }
 .crumb-link { flex: 0 1 auto; cursor: pointer; }
+/* Only the vessel name shortens; "Run 1" and the revision stay whole. */
+.crumbs > .crumb:not(.crumb-link) { flex: none; }
 .crumb-link:hover { background: var(--hover); }
 .crumb-mono { flex: none; font-family: var(--font-mono); font-weight: 500; color: var(--ink-2); }
 .crumb-sep { flex: none; color: var(--ink-3); font-weight: 400; }
@@ -478,7 +480,7 @@ code { font-family: var(--font-mono); }
   cursor: pointer;
 }
 .crumb-select:hover { background-color: var(--hover); }
-.titlebar > .badge { flex: 0 1 auto; }
+.titlebar > .badge { flex: none; } /* the one-word status stays whole */
 .titlebar-actions { display: flex; align-items: center; gap: var(--space-sm); flex: none; margin-left: auto; }
 
 /* Rail: Home, Queue, Settings. Selected: a raised card with a 2 px drafting rule. */
@@ -1939,6 +1941,8 @@ code { font-family: var(--font-mono); }
   pointer-events: none;
 }
 .model-caption[hidden] { display: none; }
+/* With no model yet the empty-state text says it; the caption would sit on top of it. */
+.pane-model:has(.pane-empty:not([hidden])) .model-caption { display: none; }
 
 /* ---- Revision ladder, sparkline and the replay transport. */
 .revision-ladder { flex: 0 1 auto; scrollbar-width: none; overflow-x: auto; }
