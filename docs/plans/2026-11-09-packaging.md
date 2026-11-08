@@ -44,11 +44,24 @@ external Python environment of about 1 GB with the worker package.
 
 Each step is independent and ends with a check. Resume at the first step whose check fails.
 
-1. **Stop baking the build path.** Replace the compile-time `development_checkout()` default with:
+Status: steps 1 and 2 are done (UI round 68). Resume at step 3.
+
+1. **Done: stop baking the build path.** `app/core/src/worker_python.rs` finds the worker Python
+   at run time in this order: `MARINAFRAME_WORKER_PYTHON`, the Settings value, a runtime next to
+   the app (`MarinaFrame.app/Contents/Resources/worker/bin/python3`, or
+   `MarinaFrame Worker/bin/python3` beside the bundle), then the repository `.venv` (only when
+   `MARINAFRAME_REPO` names a checkout, or in a debug build). Else the setup check asks. The
+   repository root is `MARINAFRAME_REPO` at run time; only debug builds fall back to the compile
+   folder. Original text of the step: **Stop baking the build path.** Replace the compile-time `development_checkout()` default with:
    the `MARINAFRAME_REPO` environment variable, else the bundled worker (step 3), else none.
    Check: a release build moved to another folder shows "choose a Python" and nothing else
    from the build machine (dataset list empty).
-2. **Leave the mock out of the release UI.** Build step that copies `app/ui` without `mock/`
+2. **Done: leave the mock out of the release UI.** `npm run build` uses
+   `src-tauri/tauri.release.conf.json`: `scripts/stage-release-ui.mjs` copies only `index.html`,
+   `styles.css`, `js/`, `vendor/` and `assets/` into `ui-release/` (not tracked) and fails the
+   build on any other file type (for example .glb, .step, .tif, .png, .pdf) or a file over 1 MiB.
+   Tests: `ui-tests/stage.test.mjs`. `tauri dev` still serves `ui/` with the mock.
+   Original text of the step: **Leave the mock out of the release UI.** Build step that copies `app/ui` without `mock/`
    into a staging `frontendDist` (or a `beforeBuildCommand`). Check: the bundle has no
    `fixtures.json`; the browser preview still works from `app/ui`.
 3. **Ship the worker Python.** Options, in the order recommended:
@@ -73,10 +86,10 @@ Each step is independent and ends with a check. Resume at the first step whose c
 
 ```
 cd app
-npx tauri build --bundles app,dmg
+npm run build -- --bundles app,dmg   # stages ui-release/ and checks it first
 du -sh ../target/release/bundle/macos/MarinaFrame.app ../target/release/bundle/dmg/*.dmg
 codesign -dv ../target/release/bundle/macos/MarinaFrame.app
 ```
 
-Before building, make sure `app/ui/mock/files/` has no git-ignored local data (for example a
-whole-vessel GLB): it would be embedded in the app.
+`npm run build` embeds `ui-release/` only, so local data in `app/ui/mock/files/` stays out. A
+plain `npx tauri build` (without the release config) still embeds all of `app/ui`.

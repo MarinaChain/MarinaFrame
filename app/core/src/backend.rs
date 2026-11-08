@@ -52,6 +52,21 @@ impl Backend {
         }
     }
 
+    /// Settings with the worker Python found at run time (environment, Settings, next to
+    /// the app, repository .venv in development; see `worker_python.rs`), and where it came
+    /// from. For runs, intake, export and the setup check; the Settings page shows the
+    /// stored value.
+    fn run_settings_with_source(&self) -> (Settings, crate::worker_python::PythonSource) {
+        let mut settings = storage::get_settings(&self.paths);
+        let found =
+            crate::worker_python::find(&settings.worker_python, self.paths.repo_root.as_deref());
+        settings.worker_python = found.path;
+        (settings, found.source)
+    }
+    fn run_settings(&self) -> Settings {
+        self.run_settings_with_source().0
+    }
+
     fn runs_folder(&self) -> PathBuf {
         PathBuf::from(storage::get_settings(&self.paths).runs_folder)
     }
@@ -122,7 +137,7 @@ impl Backend {
     }
 
     pub fn start_run(&self, spec_path: &str) -> AppResult<String> {
-        let settings = storage::get_settings(&self.paths);
+        let settings = self.run_settings();
         let runs = PathBuf::from(&settings.runs_folder);
         std::fs::create_dir_all(&runs)
             .map_err(|_| AppError::new("runs_folder", "The runs folder could not be created."))?;
@@ -139,7 +154,7 @@ impl Backend {
     /// Start the built-in sample vessel (core/sample): a deterministic run, so a first-time
     /// user sees a whole run with no model key and no cost.
     pub fn start_sample_run(&self) -> AppResult<String> {
-        let settings = storage::get_settings(&self.paths);
+        let settings = self.run_settings();
         let runs = PathBuf::from(&settings.runs_folder);
         let spec = sample::write_sample(&runs)?;
         actions::start_run(
@@ -161,7 +176,7 @@ impl Backend {
 
     /// Read a dropped drawing set: pages, thumbnails, proposed view labels, warnings.
     pub fn prepare_intake(&self, files: &[String]) -> AppResult<intake::IntakePreview> {
-        let settings = storage::get_settings(&self.paths);
+        let settings = self.run_settings();
         intake::prepare_intake(
             Path::new(&settings.runs_folder),
             &self.intake_worker(&settings),
@@ -173,7 +188,7 @@ impl Backend {
     /// Write the spec of an edited intake preview, start its run with the current
     /// AI setting and copy the inputs into the task's `intake/` folder.
     pub fn start_intake_run(&self, preview: &intake::IntakePreview) -> AppResult<String> {
-        let settings = storage::get_settings(&self.paths);
+        let settings = self.run_settings();
         let runs = PathBuf::from(&settings.runs_folder);
         let inputs = intake::write_run_inputs(&runs, &self.intake_worker(&settings), preview)?;
         let spec = inputs.join("spec.json");
@@ -194,7 +209,7 @@ impl Backend {
         if self.registry.is_busy(&path) {
             return Err(AppError::from_code("action_in_progress"));
         }
-        let settings = storage::get_settings(&self.paths);
+        let settings = self.run_settings();
         export::export_run(
             &path,
             &self.intake_worker(&settings),
@@ -328,10 +343,14 @@ impl Backend {
 
     /// The setup check of the welcome screen. Only file-system checks: it starts no process.
     pub fn setup_status(&self) -> SetupStatus {
-        let settings = storage::get_settings(&self.paths);
+        let (settings, source) = self.run_settings_with_source();
+        let mut worker = check_worker_python(&settings.worker_python);
+        if worker.ok && source != crate::worker_python::PythonSource::Settings {
+            worker.message = format!("The CAD worker Python is found {}.", source.words());
+        }
         SetupStatus {
             ai: self.ai_status(),
-            worker: check_worker_python(&settings.worker_python),
+            worker,
             runs_folder: check_runs_folder(&settings.runs_folder),
         }
     }

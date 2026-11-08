@@ -24,6 +24,7 @@ pub mod signoff;
 pub mod storage;
 pub mod types;
 pub mod view;
+pub mod worker_python;
 
 pub use backend::Backend;
 pub use error::{AppError, AppResult};

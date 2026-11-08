@@ -320,9 +320,15 @@ async fn list_datasets(backend: Shared<'_>) -> Result<Vec<Dataset>, AppError> {
     run(backend, |b| Ok(b.list_datasets())).await
 }
 
-/// Source checkout of a development build, used for the default Python and datasets.
+/// The source checkout, used for the default Python (`.venv`) and the dataset list.
+/// `MARINAFRAME_REPO` names it at run time. Only a debug build (`tauri dev`) also uses the
+/// folder it was compiled in; a release build never carries the build machine's path
+/// (packaging plan step 1).
 fn development_checkout() -> Option<PathBuf> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let named = std::env::var_os("MARINAFRAME_REPO").map(PathBuf::from);
+    #[cfg(debug_assertions)]
+    let named = named.or_else(|| Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")));
+    let root = named?;
     root.join("pyproject.toml")
         .is_file()
         .then(|| root.canonicalize().ok())
