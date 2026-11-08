@@ -101,6 +101,29 @@ def test_deck_heights_follow_the_sheer_and_skip_the_label():
         assert abs(heights[station["id"]] - _deck_z(station["x_m"])) <= 1.0 / PPM
 
 
+def test_light_station_lines_are_found_on_a_blurred_grey_scan():
+    from PIL import ImageFilter
+    image, setup = profile_sheet()
+    picture = Image.fromarray(image)
+    draw = ImageDraw.Draw(picture)
+    for x in range(10, 100, 10):
+        draw.line([(X0 + x * PPM, 10), (X0 + x * PPM, 159)], fill=(185,) * 3, width=1)
+    # Grey paper (226) and blur: a light line ends only about 20 levels darker than the paper
+    # (shipd-1-08158-3v-L1, where the sheet-wide ink level missed three of nine lines).
+    grey = (np.asarray(picture.filter(ImageFilter.GaussianBlur(1.2))) * (226 / 255)).astype(np.uint8)
+    measured = vd.profile_station_lines(grey, setup, PPM)
+    assert len(measured) == 9 and max(abs(m - x) for m, x in zip(measured, range(10, 100, 10))) <= 0.5
+
+
+def test_the_intake_profile_region_inside_the_model_region_is_measured():
+    setup = {"view": "profile", "region_px": [60, 40, 2070, 320], "x_origin_px": 60.0}
+    hints = [{"label": "profile", "region_px": [153, 132, 2064, 318]}]
+    assert vd.profile_setup([setup], hints)["region_px"] == [153, 132, 2064, 318]
+    # A model region that does not hold the intake's is kept (the intake may have cut the view short).
+    other = {**setup, "region_px": [160, 120, 2070, 320]}
+    assert vd.profile_setup([other], hints)["region_px"] == [160, 120, 2070, 320]
+
+
 def test_a_baseline_on_another_grid_line_is_snapped_to_the_keel_line():
     image, setup = profile_sheet()
     wrong = {**setup, "baseline_px": BASE - 2 * PPM}  # the model took a waterline 2 m up (dtmb5415 live)
