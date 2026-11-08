@@ -527,3 +527,12 @@ end (1 repeated-refusal stop instead of 13), not accuracy: the score comes mostl
 first hull. Decision: keep thinking off by default (faster, same accuracy); accuracy work stays on
 the readers (see the sheet-only fixes, which this frozen binary does not have). The disk filled
 during this run (watcher stopped at 1 GB free); results are complete for both arms.
+
+## 2026-11-09: DeepSeek image resolution (probe, work/vision-probe/REPORT.md)
+
+DeepSeek V4.1 Flash through OpenCode Go ignores the image `detail` field (omitted, low, high and
+original give the same tokens and answers). Image tokens: 184 at 256-512 px, 652 at 1024 px, 994 at
+2048 px; images above about 2048 px per side are downscaled silently (12 px text: 11 of 12 read at
+2048 px, 2 at 3000 px, 0 at 4096 px). Rule for all vision code: send tiles of at most 2048 px per
+side, with the smallest feature to read at 16 px or more. The Balclutha round 4 sent a 2408 x 3611
+crop, so the model saw it downscaled; a tiled rerun needs a new fixed protocol.
