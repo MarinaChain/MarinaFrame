@@ -110,7 +110,39 @@ def _cut_edges(shape, x: float, regions: bool):
     return edges
 
 
-def render_step(run: Path, view: str, out: Path):
+def station_overlay(record: dict, request: dict, out: Path, vertices_m, triangles, tolerance_m: float) -> dict:
+    """Built station cuts on the source body plan and their scoreboard (station_overlay.py).
+
+    ``request`` comes from DomainTools: the source image as PNG, every
+    declared section (id, x_m, roi_px, calibration) and, for a station that
+    the build does not contain, the best trace as its reference curve. The
+    cuts slice the render tessellation (vertices in metres).
+    """
+    import numpy as np
+    from PIL import Image
+    from .draft import section_sources
+    from .station_overlay import AUTHORED_LABELS, build_overlay, slice_mesh
+    triangles = np.asarray(triangles, dtype=int)
+    guesses = (record.get("draft") or {}).get("guesses", [])
+    labels = {row["section_id"]: row["label"] for row in section_sources(record["sections"], guesses)["sections"]}
+    built = {section["id"]: section for section in record["sections"]}
+    references = {}
+    for sid, section in built.items():
+        kind = "authored_curve" if labels.get(sid) in AUTHORED_LABELS else "built_trace"
+        references[sid] = (kind, _observed_samples(section)[0])
+    for sid, points in request.get("references", {}).items():
+        if sid not in built and points:
+            references[sid] = ("best_unbuilt_trace", np.asarray(points, dtype=float))
+    sections = [{"id": s["id"], "x_m": s["x_m"], "roi_px": s["roi_px"], "calibration": s["calibration"]}
+                for s in request["sections"]]
+    with Image.open(request["source_image"]) as opened:
+        image = np.asarray(opened.convert("L"))
+    return build_overlay(sections=sections, labels=labels, references=references, image=image,
+                         cut=lambda x: slice_mesh(vertices_m, triangles, x), out=out,
+                         cut_tolerance_m=tolerance_m)
+
+
+def render_step(run: Path, view: str, out: Path, overlay: dict | None = None):
     import numpy as np
     from PIL import Image, ImageDraw, ImageFont
     from .fonts import dejavu_sans
@@ -171,8 +203,17 @@ def render_step(run: Path, view: str, out: Path):
     draw.text((28, 792), "STEP SHA-256 " + audit["step_sha256"], fill="#657581", font=small)
     canvas.save(out / "render.png")
     from .agent_tools import _model_observation_image
-    return {"geometry_audit": audit, "view": view,
-            "model_observation": _model_observation_image(out / "render.png")}
+    result = {"geometry_audit": audit, "view": view,
+              "model_observation": _model_observation_image(out / "render.png")}
+    if overlay is not None:
+        # A display aid: it never fails the render.
+        try:
+            result["station_overlay"] = station_overlay(record, overlay, out, vertices, triangles,
+                                                        tolerance / 1000)
+        except Exception as exc:
+            result["station_overlay"] = {"status": "skipped", "warning": "Station overlay skipped: "
+                                         + type(exc).__name__ + "."}
+    return result
 
 
 def audit_step(run: Path, out: Path):
@@ -277,7 +318,8 @@ def main():
             result = inspect_source_worker(Path(request["spec_path"]), request["section_ids"], args.out)
         else:
             args.out.mkdir(parents=True, exist_ok=False)
-            result = (render_step(Path(request["run_dir"]), request["view"], args.out)
+            result = (render_step(Path(request["run_dir"]), request["view"], args.out,
+                                  request.get("station_overlay"))
                       if args.operation == "render" else audit_step(Path(request["run_dir"]), args.out))
         usage = resource.getrusage(resource.RUSAGE_SELF)
         result["resources"] = {"wall_seconds": round(time.monotonic() - started, 4),
