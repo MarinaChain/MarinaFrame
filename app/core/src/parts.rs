@@ -4,7 +4,7 @@
 //! state, kept in the app config folder (`part_reviews.json`), never in the run folder.
 use crate::error::{AppError, AppResult};
 use crate::storage::{self, AppPaths};
-use crate::types::{ComponentArgument, ComponentBox, ComponentView};
+use crate::types::{ComponentArgument, ComponentBox, ComponentView, WholeVesselModel};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
@@ -138,6 +138,29 @@ fn component_view(entry: &Value, reviews: &HashMap<String, PartReview>) -> Optio
             .unwrap_or_else(|| "open".into()),
         review_note: reviews.get(&id).and_then(|r| r.note.clone()),
         id,
+    })
+}
+
+/// Where a whole-vessel run puts its tessellated model (one node per part, named by id).
+pub const WHOLE_VESSEL_GLB: [&str; 2] = [
+    "whole-vessel-draft.glb",
+    "whole_vessel/whole-vessel-draft.glb",
+];
+
+/// The whole-vessel GLB of a run, if there is one: its path, size and whether the app can
+/// load it. STEP files are never loaded into the 3D view (a hull STEP can be 150 MB); a GLB
+/// above `artifact::MAX_GLB_BYTES` is listed but not loaded, and the UI says so.
+pub fn whole_vessel_model(task: &Path) -> Option<WholeVesselModel> {
+    WHOLE_VESSEL_GLB.iter().find_map(|relative| {
+        let meta = std::fs::symlink_metadata(task.join(relative)).ok()?;
+        if !meta.is_file() {
+            return None;
+        }
+        Some(WholeVesselModel {
+            glb_path: (*relative).to_string(),
+            bytes: meta.len(),
+            loadable: meta.len() <= crate::artifact::MAX_GLB_BYTES as u64,
+        })
     })
 }
 
@@ -334,6 +357,70 @@ mod tests {
         let mast = &parts[1];
         assert!(!mast.built && mast.arguments.is_empty() && mast.bbox_m.is_none());
         assert!(mast.reason.contains("missing or invalid measurement"));
+    }
+
+    #[test]
+    fn a_whole_vessel_glb_is_listed_and_a_huge_one_is_not_loaded() {
+        let tmp = tempfile::tempdir().unwrap();
+        let task = tmp.path().join("task");
+        std::fs::create_dir_all(&task).unwrap();
+        assert!(whole_vessel_model(&task).is_none());
+        let glb = std::fs::File::create(task.join(WHOLE_VESSEL_GLB[0])).unwrap();
+        glb.set_len(1024).unwrap();
+        let model = whole_vessel_model(&task).unwrap();
+        assert_eq!(
+            (model.glb_path.as_str(), model.bytes, model.loadable),
+            ("whole-vessel-draft.glb", 1024, true)
+        );
+        // A sparse file: the size is checked from the metadata, nothing is read.
+        glb.set_len(crate::artifact::MAX_GLB_BYTES as u64 + 1)
+            .unwrap();
+        assert!(!whole_vessel_model(&task).unwrap().loadable);
+    }
+
+    /// Reads a real whole-vessel run folder when one is named (never committed: drawings and
+    /// their numbers may be licensed). `MARINAFRAME_PARTS_TASK=<task folder> cargo test -- --ignored`.
+    #[test]
+    #[ignore]
+    fn a_real_whole_vessel_task_reads() {
+        let Ok(task) = std::env::var("MARINAFRAME_PARTS_TASK") else {
+            return;
+        };
+        let task = std::path::PathBuf::from(task);
+        let parts = read_components(&task, &HashMap::new()).expect("whole_vessel/execution.json");
+        assert!(!parts.is_empty());
+        for part in &parts {
+            assert!(!part.label.is_empty(), "{} has no label", part.id);
+            if part.built {
+                assert!(part.bbox_m.is_some(), "{} has no box", part.id);
+                assert!(
+                    part.step_path
+                        .as_deref()
+                        .is_some_and(|p| task.join(p).is_file()),
+                    "{} has no STEP",
+                    part.id
+                );
+            }
+            for argument in &part.arguments {
+                assert!(
+                    argument.value.is_some(),
+                    "{}.{} has no value",
+                    part.id,
+                    argument.name
+                );
+                assert!(
+                    argument.basis.is_some(),
+                    "{}.{} has no basis",
+                    part.id,
+                    argument.name
+                );
+            }
+        }
+        eprintln!(
+            "{} parts read; model: {:?}",
+            parts.len(),
+            whole_vessel_model(&task).map(|m| (m.bytes, m.loadable))
+        );
     }
 
     #[test]

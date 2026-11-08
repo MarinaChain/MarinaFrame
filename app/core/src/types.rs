@@ -240,6 +240,17 @@ pub struct TaskView {
     /// A person's sign-off of the parts ("usable as a starting model"); the run stays a draft.
     #[serde(default)]
     pub sign_off: Option<SignOffView>,
+    /// The whole-vessel GLB for the 3D view, when the run has one.
+    #[serde(default)]
+    pub whole_vessel_model: Option<WholeVesselModel>,
+}
+
+/// A whole-vessel model file: task-relative path, size in bytes, and whether the app loads it.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WholeVesselModel {
+    pub glb_path: String,
+    pub bytes: u64,
+    pub loadable: bool,
 }
 
 /// "Signed off by <name>, <date>: usable as a starting model". Not an approval.

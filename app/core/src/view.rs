@@ -182,6 +182,7 @@ pub fn get_task(task: &Path, context: &ViewContext) -> Result<TaskView, String> 
         evidence: evidence(&state, validation, task),
         components: crate::parts::read_components(task, &context.part_reviews),
         sign_off: context.sign_off.clone(),
+        whole_vessel_model: crate::parts::whole_vessel_model(task),
         draft,
         sections,
         summary,

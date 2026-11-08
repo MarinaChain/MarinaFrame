@@ -1,4 +1,4 @@
-//! `read_artifact`: send one image or STL file from inside a task folder.
+//! `read_artifact`: send one image, STL or GLB file from inside a task folder.
 use crate::error::{AppError, AppResult};
 use crate::types::Artifact;
 use base64::{engine::general_purpose::STANDARD, Engine};
@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 
 const MAX_IMAGE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_STL_BYTES: usize = 48 * 1024 * 1024;
+/// A whole-vessel GLB (tessellated parts). Above this the app does not load it (see `parts::whole_vessel_model`).
+pub const MAX_GLB_BYTES: usize = 64 * 1024 * 1024;
 
 /// Check a task-relative path and return the file path.
 ///
@@ -47,7 +49,7 @@ pub fn guard_inside_task(task_root: &Path, relative: &str) -> AppResult<PathBuf>
     Ok(path)
 }
 
-/// `guard_inside_task` plus the type rule: only PNG, JPEG and STL. Returns the
+/// `guard_inside_task` plus the type rule: only PNG, JPEG, STL and GLB. Returns the
 /// file path, the MIME type and the size limit.
 pub fn guard_artifact_path(
     task_root: &Path,
@@ -62,6 +64,7 @@ pub fn guard_artifact_path(
         Some("png") => ("image/png", MAX_IMAGE_BYTES),
         Some("jpg" | "jpeg") => ("image/jpeg", MAX_IMAGE_BYTES),
         Some("stl") => ("model/stl", MAX_STL_BYTES),
+        Some("glb") => ("model/gltf-binary", MAX_GLB_BYTES),
         _ => return Err(AppError::from_code("artifact_type_not_allowed")),
     };
     Ok((guard_inside_task(task_root, relative)?, mime, limit))

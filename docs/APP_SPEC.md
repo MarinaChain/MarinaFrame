@@ -96,7 +96,7 @@ Errors return `{ "code": string, "message": string }` with plain-language `messa
 | `get_events` | `{ task, after_sequence: number }` | `EventView[]` (only newer) |
 | `get_live_steps` | `{ task, after_sequence: number }` | `LiveSteps` (see "Live steps") |
 | `get_hull_sections` | `{ task, revision: string }` | `HullSections` (see "Live steps") |
-| `read_artifact` | `{ task, path }` | `{ mime, base64 }` (`path` is relative to the task folder, with `/` separators, never absolute, and must stay inside it; images and STL only; the STL is in the unit of the CAD export, so the UI scales it to `length_m`) |
+| `read_artifact` | `{ task, path }` | `{ mime, base64 }` (`path` is relative to the task folder, with `/` separators, never absolute, and must stay inside it; images, STL (48 MB) and GLB (64 MB) only; the STL is in the unit of the CAD export, so the UI scales it to `length_m`) |
 | `start_run` | `{ spec_path: string }` | `{ task: string }` |
 | `start_sample_run` | `{}` | `{ task: string }`. The built-in sample vessel (`app/core/sample/`: a generated three-station drawing and its spec, made by `examples/make_agent_example.py`; no licensed data) is written to `<runs>/samples/sample-<ms>/` and started as a deterministic run (no model calls). Home offers it on a first start |
 | `prepare_intake` | `{ files: string[] }` | `IntakePreview` (see "Intake") |
@@ -539,6 +539,11 @@ with `target_component_ids` (later).
 The Parts tab groups parts by op, draws a profile and a plan sketch of the boxes (the selected
 part in the selection blue, parts with guesses dashed amber), lists each value with its source
 label and basis, and offers Accept (A), Mark (M), Next (N), Show in 3D and Copy part list.
+
+3D: `TaskView.whole_vessel_model: { glb_path, bytes, loadable } | null` names the run's
+tessellated model (`whole-vessel-draft.glb`, one node per part named by its id). The app loads
+it through `read_artifact` only when `loadable` (at most 64 MB); STEP files are never loaded into
+the 3D view (a hull STEP can be 150 MB). Above the limit the Parts tab says so.
 
 Sign-off: `sign_off { task, name }` → `SignOffView { name, time_ms, statement: "usable as a
 starting model" } | null` (an empty name withdraws it). Allowed only when every part is reviewed
