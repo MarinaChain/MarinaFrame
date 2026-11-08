@@ -101,11 +101,12 @@ def slice_mesh(vertices_m: np.ndarray, triangles: np.ndarray, x_m: float) -> np.
     return np.concatenate(pieces)
 
 
-def ink_fit(segments: np.ndarray, calibration: dict, roi_px, image: np.ndarray) -> dict | None:
+def ink_fit(segments: np.ndarray, calibration: dict, roi_px, image: np.ndarray, side: int = 1) -> dict | None:
     """Distance (m) from built cut points to the nearest ink pixel in the section region, or None.
 
     Only starboard cut points away from the centreline and the cut's top are
     used (closure lines). None when the region has no ink or no usable point.
+    ``side`` is -1 for a station drawn mirrored, left of its centreline.
     """
     from scipy.ndimage import distance_transform_edt
     ppm = float(calibration["pixels_per_metre"])
@@ -119,7 +120,7 @@ def ink_fit(segments: np.ndarray, calibration: dict, roi_px, image: np.ndarray) 
     if not ink.any() or not len(points):
         return None
     distance_px = distance_transform_edt(~ink)
-    columns = np.rint(float(calibration["centerline_px"]) + points[:, 0] * ppm).astype(int) - x0
+    columns = np.rint(float(calibration["centerline_px"]) + side * points[:, 0] * ppm).astype(int) - x0
     rows = np.rint(float(calibration["baseline_px"]) - points[:, 1] * ppm).astype(int) - y0
     inside = (columns >= 0) & (columns < x1 - x0) & (rows >= 0) & (rows < y1 - y0)
     if not inside.any():
@@ -176,21 +177,11 @@ def draw_panel(image: np.ndarray, sections: list[dict], rows: list[dict], cuts: 
     """One panel: faded source, each station's cut (solid) and reference (dots) in its own colour."""
     from PIL import Image, ImageDraw, ImageFont
     from .fonts import dejavu_sans
-    height, width = image.shape[:2]
-    x0 = max(0, min(s["roi_px"][0] for s in sections) - PANEL_MARGIN_PX)
-    y0 = max(0, min(s["roi_px"][1] for s in sections) - PANEL_MARGIN_PX)
-    x1 = min(width, max(s["roi_px"][2] for s in sections) + PANEL_MARGIN_PX)
-    y1 = min(height, max(s["roi_px"][3] for s in sections) + PANEL_MARGIN_PX)
-    crop = image[y0:y1, x0:x1]
-    if crop.ndim == 3:
-        crop = crop[..., :3].mean(axis=2)
-    # Fade the drawing so coloured lines read clearly while the ink stays visible:
-    # black ink becomes a mid grey, white paper stays white.
-    faded = (FADED_INK_GREY + crop.astype(float) * ((255 - FADED_INK_GREY) / 255)).astype(np.uint8)
-    scale = min(MAX_PANEL_ENLARGEMENT, MAX_PANEL_SIDE_PX / max(crop.shape))
-    panel = Image.fromarray(faded, "L").convert("RGB")
-    if scale != 1.0:
-        panel = panel.resize((max(1, int(panel.width * scale)), max(1, int(panel.height * scale))))
+    box = (min(s["roi_px"][0] for s in sections) - PANEL_MARGIN_PX,
+           min(s["roi_px"][1] for s in sections) - PANEL_MARGIN_PX,
+           max(s["roi_px"][2] for s in sections) + PANEL_MARGIN_PX,
+           max(s["roi_px"][3] for s in sections) + PANEL_MARGIN_PX)
+    panel, (x0, y0, x1, y1), scale = faded_crop(image, box)
     # Text and lines grow with the panel, so they stay readable when the
     # panel is shrunk into the sheet.
     unit = max(1.0, panel.width / 500)
@@ -328,3 +319,78 @@ def build_overlay(*, sections: list[dict], labels: dict, references: dict, image
     (out / "station-scoreboard.json").write_text(json.dumps(summary, indent=2))
     artifacts.append({"file": "station-scoreboard.json", "kind": "station_scoreboard"})
     return {**summary, "artifacts": artifacts}
+
+
+# Residual colour classes of the whole-vessel view overlays (design section 5):
+# green below 1 % of the half-beam, orange below 3 %, red above.
+RESIDUAL_COLOURS = ((0.01, "#2ca02c"), (0.03, "#ff7f0e"), (float("inf"), "#d62728"))
+TABLE_LINE_COLOUR = "#1f77b4"
+
+
+def residual_colour(fraction_of_half_beam: float) -> str:
+    """Overlay colour of a residual given as a fraction of the half-beam."""
+    return next(colour for limit, colour in RESIDUAL_COLOURS if fraction_of_half_beam < limit)
+
+
+def faded_crop(image: np.ndarray, box_px) -> tuple:
+    """The image inside ``box_px`` (x0, y0, x1, y1), faded to grey and enlarged or shrunk for display.
+
+    Returns the PIL panel, the clipped box and the display scale.
+    """
+    from PIL import Image
+    height, width = image.shape[:2]
+    x0, y0 = max(0, int(box_px[0])), max(0, int(box_px[1]))
+    x1, y1 = min(width, int(box_px[2])), min(height, int(box_px[3]))
+    crop = image[y0:y1, x0:x1]
+    if crop.ndim == 3:
+        crop = crop[..., :3].mean(axis=2)
+    # Fade the drawing so coloured lines read clearly while the ink stays visible:
+    # black ink becomes a mid grey, white paper stays white.
+    faded = (FADED_INK_GREY + crop.astype(float) * ((255 - FADED_INK_GREY) / 255)).astype(np.uint8)
+    scale = min(MAX_PANEL_ENLARGEMENT, MAX_PANEL_SIDE_PX / max(crop.shape))
+    panel = Image.fromarray(faded, "L").convert("RGB")
+    if scale != 1.0:
+        panel = panel.resize((max(1, int(panel.width * scale)), max(1, int(panel.height * scale))))
+    return panel, (x0, y0, x1, y1), float(scale)
+
+
+def draw_view_overlay(image: np.ndarray, roi_px, polylines: list, markers: list, path: Path, title: str) -> dict:
+    """One whole-vessel view (body plan, half-breadth plan or profile) with the table drawn over the ink.
+
+    ``polylines`` are (label, n x 2 sheet-pixel points), drawn solid in the
+    table colour; ``markers`` are ((x, y) sheet pixels, colour), the measured
+    ink points coloured by residual. Display aid only.
+    """
+    from PIL import Image, ImageDraw, ImageFont
+    from .fonts import dejavu_sans
+    box = (roi_px[0] - PANEL_MARGIN_PX, roi_px[1] - PANEL_MARGIN_PX,
+           roi_px[2] + PANEL_MARGIN_PX, roi_px[3] + PANEL_MARGIN_PX)
+    panel, (x0, y0, _, _), scale = faded_crop(image, box)
+    # Long, flat views (plan, profile) size their text by the shorter side.
+    unit = max(1.0, min(panel.width, 2 * panel.height) / 500)
+    line_px = int(18 * unit)
+    try:
+        font = dejavu_sans(int(13 * unit))
+    except OSError:
+        font = ImageFont.load_default()
+    title_width = int(ImageDraw.Draw(panel).textlength(title, font=font)) + 16
+    canvas = Image.new("RGB", (max(panel.width, title_width), panel.height + 2 * line_px + 8), "white")
+    canvas.paste(panel, (0, 0))
+    draw = ImageDraw.Draw(canvas)
+
+    def to_view(px, py):
+        return ((px - x0) * scale, (py - y0) * scale)
+
+    for label, points in polylines:
+        view_points = [to_view(float(px), float(py)) for px, py in points]
+        if len(view_points) >= 2:
+            draw.line(view_points, fill=TABLE_LINE_COLOUR, width=max(1, int(1.5 * unit)))
+            draw.text((view_points[0][0] + 3, view_points[0][1] - line_px), str(label), fill=TABLE_LINE_COLOUR,
+                      font=font)
+    dot = 2.0 * unit
+    for (px, py), colour in markers:
+        vx, vy = to_view(px, py)
+        draw.ellipse((vx - dot, vy - dot, vx + dot, vy + dot), fill=colour)
+    draw.text((8, panel.height + 4), title, fill="#17344a", font=font)
+    canvas.save(path)
+    return {"crop_box_px": [int(v) for v in box], "scale": scale}
