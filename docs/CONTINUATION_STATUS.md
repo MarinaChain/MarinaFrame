@@ -370,3 +370,42 @@ Next idea (W16, after the head-to-head): let DeepSeek identify which waterline e
 crossing belongs to (the model chooses WHAT), and let the W15 adapter measure. Do not start it
 while the head-to-head LLM arm runs: it shares the provider keys, and a rate-limit failure in the
 campaign counts as a failure.
+
+## 2026-11-08 09:50 SGT: head-to-head on sealed v2 finished and published; W17 started
+
+- **Result (288 cases per arm, frozen gate):** abstain 7 correct, deterministic draft 13 correct
+  (75 built, 62 labelled wrong drafts), LLM-first 9 correct (14 built, 5 labelled wrong drafts).
+  No silent wrong build in any arm. Pre-registered rule: **deterministic draft becomes the default**;
+  LLM-first stays an explicit option. Report: `docs/BENCHMARK_FACTORY.md`, section
+  "Head-to-head, hull-disjoint (v2)"; rows in `outputs/h2h-sealed-v2/`. Split v2 is now spent.
+- **Deviations recorded:** 2 abstain cases interrupted by the harness (counted as failures); the
+  W12 model review was added for the LLM arm before any LLM case ran.
+- **Why the LLM arm stalled (270 of 288 `no_progress`):** (1) 87 L1/L2 cases: inspection hit an
+  evidence-budget `resource_limit`, the model saw no reason and every tool refused; (2) the rest:
+  the observation history always sent `"reason": null` (controller read the wrong field), there is
+  no working memory for what the model read, and temperature 0 / thinking off made it repeat the
+  same action until the repeat limit.
+- **W17 (running):** Sol, router job `20261108-093458-14738`, worktree
+  `.claude/worktrees/w17-llm-progress`, brief `work/w17/brief.md`. Fixes the causes above and
+  measures before/after on ~24 non-sealed dev cases. Results to `outputs/w17/`.
+- **Open:** apply the app default change (draft) from the rule; W16 after W17; a new held-out
+  split is needed before any claim that W17 improves the LLM arm.
+- **W18 (approved by the founder; queued after W17):** build a native agent loop with memory into the
+  MarinaFrame harness, not an external framework. Brief: `work/w17/w18-brief.md`. It resumes the
+  same Sol session on `w17-llm-progress` when W17 reports.
+
+## 2026-11-08 10:15 SGT: product principle — the AI fills the gaps
+
+- Founder: MarinaFrame is agentic so that AI fills in what is not in the data; it must not stop on
+  missing or bad data. In draft mode the model may now propose section shapes and missing sheet data;
+  code builds them and labels each section `traced`, `repaired`, `interpolated` or `ai_inferred`.
+- Work order on `w17-llm-progress` (Sol, one session): W17 (committed by Sol in W17b step 0), W17b
+  (build CAD through gaps, router job `20261108-100601-60204`), W17c (AI gap filling, brief
+  `work/w17/w17c-brief.md`), then W18 (memory loop). Testing in 4-case rounds, not big campaigns.
+- **Founder correction (later the same day):** the model writing geometry is a main capability, not
+  only a gap fallback. It may author or correct any section or sheet value; code fairs, builds,
+  renders back and labels the source. The old rule "model chooses WHAT, code measures HOW MUCH" is
+  superseded. W17c brief updated.
+- **Founder direction (later):** happy path first. No new refusals or blocked states; in draft mode
+  checks become warnings whenever a solid can be made. W17c is on branch `w17c-model-geometry`
+  (pushed); Sol merges it after W18 and rewrites the prompt.

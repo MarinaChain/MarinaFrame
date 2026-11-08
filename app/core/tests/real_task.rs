@@ -18,10 +18,11 @@ fn repo_root() -> PathBuf {
 fn wait_until_idle(backend: &Backend, task: &str) -> TaskView {
     let start = Instant::now();
     loop {
-        let view = backend.get_task(task).unwrap();
         // A finished action leaves the status at needs_review, declined, failed, paused ...
+        // Read the view only after the run is idle: a view read first can still show
+        // `Running` when the run finishes between the two calls.
         if !backend.is_busy(task) {
-            return view;
+            return backend.get_task(task).unwrap();
         }
         assert!(
             start.elapsed() < Duration::from_secs(240),

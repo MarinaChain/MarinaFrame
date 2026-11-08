@@ -157,9 +157,14 @@ Settings { runs_folder: string, worker_python: string, theme: "system"|"light"|"
 
 ## Drafts (best-effort result)
 
-Decision (founder, 2026-11-07): where the source is ambiguous, a run started from the app
-builds a draft instead of declining (controller `on_ambiguity: draft`; the CLI default stays
-`abstain`, flag `--on-ambiguity draft|abstain`). The verified path is unchanged.
+Decision (founder, 2026-11-07, confirmed by the sealed head-to-head on 2026-11-08): where the
+source is ambiguous, a run started from the app builds a draft instead of declining
+(controller `on_ambiguity: draft`, deterministic policy). The CLI default stays `abstain`; the
+app sets draft explicitly and does not read the CLI default (flag `--on-ambiguity draft|abstain`).
+LLM-first stays an explicit option, not the default. Reason: see
+[Head-to-head, hull-disjoint (v2)](BENCHMARK_FACTORY.md#head-to-head-hull-disjoint-v2) and its
+[protocol](plans/2026-11-08-h2h-sealed-v2.md). The verified path is unchanged. A pinned test
+(`app_runs_default_to_deterministic_draft`, `app/core/src/actions.rs`) guards the default.
 
 - Controller status `draft_not_verified` (app Status `"draft"`, badge "Draft"). A draft never
   becomes "Needs review" while a guess is open; the controller refuses it at finish and in
