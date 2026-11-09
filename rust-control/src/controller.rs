@@ -569,6 +569,9 @@ fn description_pending(store: &Store) -> bool {
 /// the harness declares the sections from this reading before the first hull.
 const SHEET_ONLY_INSTRUCTIONS: &str = "This sheet came from intake with NO declared stations or calibration. The survey's intake_regions are code-measured view regions in ORIGINAL sheet pixels (label body_plan, profile, half_breadth, title_block); use their region_px boxes, corrected only where you see an error, never 0-1000 coordinates. Your reading declares the sections: the harness builds one section per station you list, on the body view and setup you give. In describe_views give the body plan its own kind (body, or body_fore/body_aft halves) and, for separate station panels, panels in reading order; give each non-body view its own family_id. In propose_sheet_setup for the body read pixels_per_metre from labelled grid lines (pixel distance between two labelled lines divided by their metre difference), and give centreline_px and baseline_px. In describe_vessel list EVERY station drawn in the body plan in order as {id, x_m, side}: x_m in metres from the aft end forward, read from the profile/plan station marks and LOA; when positions are not printed, space stations evenly over LOA and say so in a note; the hull ends (x 0 and LOA) are stations only when the body plan draws a curve for them, because the harness makes the ends from the profile outline; side 'fore' or 'aft' only for halves of an overlaid body plan. The two halves of one overlaid body plan share one centreline: describe them as one body view (or body_aft and body_fore), never as two panels. Give loa, beam and depth when readable. Missing values become labelled guesses, never a stop.";
 
+/// Said while a sheet-only task reads the sheet a second time (best of 2 readings).
+const SECOND_READING_NOTE: &str = "Second reading: the first hull is built and kept as the draft. Read the sheet again as an independent check with the listed tool (describe_views, then propose_sheet_setup, then describe_vessel); the reading whose first hull fits the drawing better is kept. Section edits (propose_section), build_draft and finish are offered again after describe_vessel.";
+
 fn description_instructions(phase: &Value) -> &'static str {
     match phase.as_str() {
         Some("survey") => "The harness surveys the sheet first; do not build CAD.",
@@ -740,6 +743,11 @@ fn investigation_observation(store: &Store) -> Result<Value> {
             json!(description_instructions(&d["description_phase"]));
         if d["sheet_only"] == true && description_pending(store) {
             value["sheet_only_instructions"] = json!(SHEET_ONLY_INSTRUCTIONS);
+            if d["last_valid_candidate"].is_object() {
+                // Sonnet 5.5 live (round 7ac5e2b): during the second reading it
+                // tried finish or propose_section, which this phase does not list.
+                value["reading_note"] = json!(SECOND_READING_NOTE);
+            }
         }
         value["description_next_view"] = d["description_next_view"].clone();
         value["described_views"] = d["described_views"].clone();
