@@ -361,6 +361,10 @@ def _half_roi(panel: dict, fore: bool) -> list[int]:
     return [left, top, int(min(right, centre + overlap)), bottom]
 
 
+# A station within this share of the station spacing of the middle station x is the midship station.
+MIDSHIP_SHARE = 0.25
+
+
 def assign(stations: list[dict], panels: list[dict], warnings: list) -> list[tuple]:
     """Pair each station with a panel and an ROI."""
     if len(panels) == len(stations):
@@ -382,8 +386,15 @@ def assign(stations: list[dict], panels: list[dict], warnings: list) -> list[tup
                         "body plan follows its x (aft of the middle station: left half).")
     if len(panels) == 1 or (fore_panels and aft_panels):
         pairs = []
+        spacing = (max(xs) - min(xs)) / max(1, len(xs) - 1)
         for station in stations:
-            read_side = trust_sides and station["side"] in ("fore", "aft")
+            # The midship station's half follows its x (at or forward of the
+            # middle: fore). Sonnet 5.5 put station 5 on the aft half in 9 of 11
+            # readings that named sides; its curve is drawn on the fore half
+            # (series60-3v-L0: 4.61 against 1.39 % RMS; shipd-1-00679-3v-L0:
+            # 6.58 against 6.17 %).
+            midship = abs(station["x_m"] - middle) < MIDSHIP_SHARE * spacing
+            read_side = trust_sides and station["side"] in ("fore", "aft") and not midship
             fore = station["side"] == "fore" if read_side else station["x_m"] >= middle
             if fore_panels and aft_panels:
                 panel = fore_panels[0] if fore else aft_panels[0]

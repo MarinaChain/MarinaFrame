@@ -186,6 +186,15 @@ def test_sides_that_contradict_x_follow_x():
     assert halves["1"].startswith("aft") and halves["9"].startswith("fore") and warnings
 
 
+def test_the_midship_station_half_follows_x_and_the_others_follow_the_reading():
+    from vessel_reconstruction.materialize import assign
+    panel = {"region_px": [0, 0, 200, 100], "centreline_px": 100.0, "kind": "body"}
+    # Sonnet 5.5 live (series60-3v-L0): station 5 at the middle x read as aft.
+    stations = [{"id": str(i), "x_m": 10.0 * i, "side": "aft" if i <= 5 else "fore"} for i in range(1, 10)]
+    halves = {station["id"]: basis for station, _, _, basis in assign(stations, [panel], [])}
+    assert halves["5"].startswith("fore") and halves["4"].startswith("aft") and halves["6"].startswith("fore")
+
+
 def _gridded_sheet(angle_deg=0.0, with_plan=False):
     """profile_sheet with light waterlines (and a plan outline below it), rotated as a scan may be."""
     image, setup = profile_sheet()
