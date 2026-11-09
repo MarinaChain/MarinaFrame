@@ -1,14 +1,16 @@
 """OCX 3.0.1 export and plate reader for structure blocks (docs/STRUCTURE_V2.md section 6.1).
 
-Export: one ``ocx:Plate`` per block member, directly under ``ocx:Vessel`` (the schema allows plates
+Export: one ``ocx:Plate`` per plate member, directly under ``ocx:Vessel`` (the schema allows plates
 outside a panel; a block zone holds members in several planes, so it is not one OCX panel). Each
-plate has its mid-plane rectangle as a closed ``PolyLine3D`` outer contour, its thickness and
-material (``PlateMaterial``), net area and dry weight. Stiffener webs and flanges are flat parts in
-the block model and are written as plates too. The member ID is the plate ``name``; the source
+plate has a closed ``PolyLine3D`` outer contour (the member's ``contour`` when it has one, else the
+mid-plane rectangle of its box), its thickness and material (``PlateMaterial``), net area and dry
+weight. A member with a ``trace`` and a ``profile`` is written as an ``ocx:Stiffener`` (trace line,
+material, section from the ``XSectionCatalogue``, web direction); the MiDShip block members have
+no trace, so their stiffener webs and flanges stay plates. The member ID is the ``name``; the source
 labels go in ``Description``.
 
-Reader: streams ``Plate`` elements (name, thickness, area), so a large model such as the 22 MB
-D-VLCC sample reads in flat memory.
+Reader: streams ``Plate`` and ``Stiffener`` elements (name, thickness, area; section and length),
+so a large model such as the 22 MB D-VLCC sample reads in flat memory.
 
 Schema check: ``validate`` runs ``xmllint`` against the local OCX 3.0.1 XSD. The XSD imports UnitsML
 and the W3C ``xml.xsd`` by URL; the check copies the schema to a temporary folder and points both
@@ -122,7 +124,7 @@ def _units_xml() -> str:
     return "\n".join(lines)
 
 
-def _material_xml(material_ids: dict[str, str]) -> str:
+def _material_xml(material_ids: dict[str, str], sections: str = "") -> str:
     lines = ['  <ocx:ClassCatalogue id="catalogue">', '    <ocx:MaterialCatalogue id="materials">']
     for grade, xml_id in material_ids.items():
         yield_stress, tensile = GRADE_STRENGTH[grade]
@@ -136,7 +138,10 @@ def _material_xml(material_ids: dict[str, str]) -> str:
             f'        <ocx:YieldStress numericvalue="{yield_stress}" unit="UNOvermm2"/>',
             f'        <ocx:UltimateStress numericvalue="{tensile}" unit="UNOvermm2"/>',
             "      </ocx:Material>"]
-    lines += ["    </ocx:MaterialCatalogue>", "  </ocx:ClassCatalogue>"]
+    lines.append("    </ocx:MaterialCatalogue>")
+    if sections:
+        lines += ['    <ocx:XSectionCatalogue id="sections" name="sections">', sections, "    </ocx:XSectionCatalogue>"]
+    lines.append("  </ocx:ClassCatalogue>")
     return "\n".join(lines)
 
 
@@ -147,14 +152,27 @@ def _description(member: dict) -> str:
             "engineering_approved=false")
 
 
+def _volume_m3(member: dict) -> float:
+    if member.get("volume_m3") is not None:
+        return member["volume_m3"]
+    return member["area_m2"] * (member["thickness_mm"] or 0.0) / 1000
+
+
+def _centre(member: dict, points) -> list[float]:
+    """Centre of gravity estimate: mean of the outline or trace points, else the box centre."""
+    if points:
+        return [sum(p[i] for p in points) / len(points) for i in range(3)]
+    return [(member["box"][i] + member["box"][i + 3]) / 2 for i in range(3)]
+
+
 def _plate_xml(number: int, member: dict, material_id: str, grade: str) -> str:
-    corners = plate_corners(member["box"])
+    corners = [tuple(p) for p in member["contour"]] if member.get("contour") else plate_corners(member["box"])
     closed = corners + [corners[0]]
     perimeter = sum(math.dist(a, b) for a, b in zip(closed, closed[1:]))
     thickness_m = (member["thickness_mm"] or 0.0) / 1000
     area = member["area_m2"]
-    weight_kg = area * thickness_m * STEEL_DENSITY_T_M3 * 1000
-    centre = [(member["box"][i] + member["box"][i + 3]) / 2 for i in range(3)]
+    weight_kg = _volume_m3(member) * STEEL_DENSITY_T_M3 * 1000
+    centre = _centre(member, member.get("contour"))
     key = member["member_id"]
     points = "\n".join(f'              <ocx:Point3D coordinates="{_coords(p)}" unit="Um"/>' for p in closed)
     return f"""    <ocx:Plate id="{_xml_id('plate', number)}" name={quoteattr(key)} ocx:GUIDRef="{_guid('plate/' + key)}">
@@ -179,6 +197,64 @@ def _plate_xml(number: int, member: dict, material_id: str, grade: str) -> str:
     </ocx:Plate>"""
 
 
+def section_name(profile: dict) -> str:
+    return profile["name"]
+
+
+def _section_xml(profile: dict, xml_id: str) -> str:
+    """One ``BarSection`` of the section catalogue (dimensions in metres)."""
+    def quantity(tag, mm):
+        return f'          <ocx:{tag} numericvalue="{mm / 1000:.6f}" unit="Um"/>'
+    kind = profile["kind"]
+    if kind == "FlatBar":
+        body = [quantity("Height", profile["height_mm"]), quantity("Width", profile["web_mm"])]
+    elif kind == "BulbFlat":
+        body = [quantity("Height", profile["height_mm"]), quantity("WebThickness", profile["web_mm"])]
+    else:  # TBar
+        body = [quantity("Height", profile["height_mm"]), quantity("Width", profile["flange_width_mm"]),
+                quantity("WebThickness", profile["web_mm"]), quantity("FlangeThickness", profile["flange_thickness_mm"])]
+    name = section_name(profile)
+    return "\n".join([f'      <ocx:BarSection id="{xml_id}" name={quoteattr(name)} ocx:GUIDRef="{_guid("section/" + name)}">',
+                      f"        <ocx:{kind}>", *body, f"        </ocx:{kind}>", "      </ocx:BarSection>"])
+
+
+def _stiffener_xml(number: int, member: dict, material_id: str, grade: str, section_id: str) -> str:
+    trace = [tuple(p) for p in member["trace"]]
+    length = sum(math.dist(a, b) for a, b in zip(trace, trace[1:]))
+    weight_kg = _volume_m3(member) * STEEL_DENSITY_T_M3 * 1000
+    centre = _centre(member, trace)
+    key = member["member_id"]
+    name = section_name(member["profile"])
+    points = "\n".join(f'              <ocx:Point3D coordinates="{_coords(p)}" unit="Um"/>' for p in trace)
+    web = " ".join(f"{v:.6f}" for v in member["web_direction"])
+    middle = trace[len(trace) // 2]
+    return f"""    <ocx:Stiffener id="{_xml_id('stiffener', number)}" name={quoteattr(key)} ocx:GUIDRef="{_guid('stiffener/' + key)}">
+      <ocx:Description>{escape(_description(member))}</ocx:Description>
+      <ocx:PhysicalProperties>
+        <ocx:DryWeight numericvalue="{weight_kg:.3f}" unit="UKg"/>
+        <ocx:CenterOfGravity coordinates="{_coords(centre)}" unit="Um"/>
+      </ocx:PhysicalProperties>
+      <ocx:TraceLine>
+        <ocx:CompositeCurve3D id="{_xml_id('trace', number)}" ocx:GUIDRef="{_guid('trace/' + key)}">
+          <ocx:CurveLength numericvalue="{length:.{COORDINATE_DIGITS}f}" unit="Um"/>
+          <ocx:PolyLine3D id="{_xml_id('tracepolyline', number)}" ocx:GUIDRef="{_guid('tracepolyline/' + key)}">
+            <ocx:CurveLength numericvalue="{length:.{COORDINATE_DIGITS}f}" unit="Um"/>
+{points}
+          </ocx:PolyLine3D>
+        </ocx:CompositeCurve3D>
+      </ocx:TraceLine>
+      <ocx:MaterialRef localRef="{material_id}" ocx:GUIDRef="{_guid('material/' + grade)}" ocx:refType="ocx:Material"/>
+      <ocx:SectionRef localRef="{section_id}" ocx:GUIDRef="{_guid('section/' + name)}" ocx:refType="ocx:BarSection">
+        <ocx:OffsetU numericvalue="0" unit="Um"/>
+        <ocx:OffsetV numericvalue="0" unit="Um"/>
+      </ocx:SectionRef>
+      <ocx:Inclination>
+        <ocx:WebDirection direction="{web}"/>
+        <ocx:Position coordinates="{_coords(middle)}" unit="Um"/>
+      </ocx:Inclination>
+    </ocx:Stiffener>"""
+
+
 def _frame_planes_xml(block: dict, name: str) -> str:
     """X reference planes: the block's bulkhead, web-frame and ordinary-frame stations (x = 0 if none)."""
     stations = block.get("stations") or {}
@@ -192,15 +268,28 @@ def _frame_planes_xml(block: dict, name: str) -> str:
     return "\n".join(lines)
 
 
+def is_stiffener(member: dict) -> bool:
+    return bool(member.get("trace")) and bool(member.get("profile"))
+
+
 def export_ocx(block: dict, path: Path, name: str = "MarinaFrame structure block") -> int:
-    """Write the block as an OCX 3.0.1 file; return the number of plates written."""
+    """Write the block as an OCX 3.0.1 file; return the number of parts (plates and stiffeners)."""
     members = block["members"]
     grades = sorted({grade_of(m.get("material")) for m in members})
     material_ids = {grade: _xml_id("material", k) for k, grade in enumerate(grades)}
     breadth, depth = block.get("breadth_m") or 0.0, block.get("depth_m") or 0.0
-    length = (block.get("guesses") or {}).get("block_length_m") or 0.0
-    plates = "\n".join(_plate_xml(n, m, material_ids[grade_of(m.get("material"))], grade_of(m.get("material")))
-                       for n, m in enumerate(members))
+    length = (block.get("guesses") or {}).get("block_length_m") or block.get("length_m") or 0.0
+    plate_members = [m for m in members if not is_stiffener(m)]
+    stiffener_members = [m for m in members if is_stiffener(m)]
+    profiles = {section_name(m["profile"]): m["profile"] for m in stiffener_members}
+    section_ids = {key: _xml_id("section", k) for k, key in enumerate(sorted(profiles))}
+    parts = [_plate_xml(n, m, material_ids[grade_of(m.get("material"))], grade_of(m.get("material")))
+             for n, m in enumerate(plate_members)]
+    parts += [_stiffener_xml(n, m, material_ids[grade_of(m.get("material"))], grade_of(m.get("material")),
+                             section_ids[section_name(m["profile"])])
+              for n, m in enumerate(stiffener_members)]
+    plates = "\n".join(parts)
+    sections = "\n".join(_section_xml(profiles[key], section_ids[key]) for key in sorted(profiles))
     text = f"""<?xml version="1.0" encoding="utf-8"?>
 <ocx:ocxXML xmlns:ocx="{OCX_NAMESPACE}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" schemaVersion="{SCHEMA_VERSION}">
   <ocx:Header name={quoteattr(name)} author="MarinaFrame" organization="MarinaFrame" originating_system="MarinaFrame structure block" application_version="structure block v2" time_stamp="2026-01-01T00:00:00" documentation="DRAFT: engineering_approved=false. Read from drawings; values labelled printed or guessed per plate."/>
@@ -233,7 +322,7 @@ def export_ocx(block: dict, path: Path, name: str = "MarinaFrame structure block
     </ocx:ClassificationData>
 {plates}
   </ocx:Vessel>
-{_material_xml(material_ids)}
+{_material_xml(material_ids, sections)}
 {_units_xml()}
 </ocx:ocxXML>
 """
@@ -277,6 +366,33 @@ def _contour_area(contour) -> float | None:
     if len(points) > 1 and points[0] == points[-1]:
         points = points[:-1]
     return polygon_area(points) if len(points) >= 3 else None
+
+
+@dataclass(frozen=True)
+class OcxStiffener:
+    name: str | None
+    section: str | None  # the referenced BarSection's name (from the catalogue)
+    length_m: float | None
+
+
+def read_stiffeners(path: Path) -> list[OcxStiffener]:
+    """All ``Stiffener`` elements with their section name and trace length (streamed)."""
+    stiffeners, section_names = [], {}
+    for _, element in ElementTree.iterparse(path, events=("end",)):
+        tag = _tag(element)
+        if tag == "BarSection":
+            section_names[element.get("id")] = element.get("name")
+        elif tag == "Stiffener":
+            trace = _child(element, "TraceLine")
+            curve = _child(trace, "CompositeCurve3D") if trace is not None else None
+            length = _metres(_child(curve, "CurveLength")) if curve is not None else None
+            reference = _child(element, "SectionRef")
+            stiffeners.append(OcxStiffener(element.get("name"),
+                                           reference.get("localRef") if reference is not None else None, length))
+            element.clear()
+        elif tag == "Plate":
+            element.clear()
+    return [OcxStiffener(s.name, section_names.get(s.section, s.section), s.length_m) for s in stiffeners]
 
 
 def read_plates(path: Path) -> list[OcxPlate]:
@@ -345,9 +461,34 @@ def validate(path: Path, schema_dir: Path, max_errors: int = 20) -> SchemaCheck:
 
 
 def round_trip(block: dict, path: Path) -> dict:
-    """Compare a written export with the block: plate count, thickness and area per plate."""
+    """Compare a written export with the block: plate count, thickness and area per plate; and
+    stiffener count, section name and trace length per stiffener."""
     plates = {p.name: p for p in read_plates(path)}
-    members = block["members"]
+    members = [m for m in block["members"] if not is_stiffener(m)]
+    result = _plate_round_trip(members, plates)
+    stiffener_members = [m for m in block["members"] if is_stiffener(m)]
+    if stiffener_members:
+        result["stiffeners"] = _stiffener_round_trip(stiffener_members, path)
+        result["all_equal"] = result["all_equal"] and result["stiffeners"]["all_equal"]
+    return result
+
+
+def _stiffener_round_trip(members: list[dict], path: Path) -> dict:
+    read = {s.name: s for s in read_stiffeners(path)}
+    section_equal = length_equal = 0
+    for member in members:
+        found = read.get(member["member_id"])
+        if found is None:
+            continue
+        section_equal += found.section == section_name(member["profile"])
+        length = member["length_m"]
+        length_equal += found.length_m is not None and abs(found.length_m - length) <= 1e-6 * max(1.0, length)
+    return {"members": len(members), "stiffeners_read": len(read), "count_equal": len(read) == len(members),
+            "section_equal": section_equal, "length_equal": length_equal,
+            "all_equal": len(read) == len(members) == section_equal == length_equal}
+
+
+def _plate_round_trip(members: list[dict], plates: dict) -> dict:
     thickness_equal = area_equal = 0
     for member in members:
         plate = plates.get(member["member_id"])

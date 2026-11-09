@@ -29,7 +29,8 @@ def member_weights(members: list[dict], density_t_m3: float = STEEL_DENSITY_T_M3
     rows = []
     for member in members:
         thickness_m = (member["thickness_mm"] or 0.0) / 1000
-        volume = member["area_m2"] * thickness_m
+        # A stiffener gives its own volume (section area x length); a plate is area x thickness.
+        volume = member["volume_m3"] if member.get("volume_m3") is not None else member["area_m2"] * thickness_m
         sources = member.get("sources") or {}
         rows.append({**{key: member.get(key) for key, _ in MEMBER_COLUMNS},
                      "volume_m3": volume, "weight_t": volume * density_t_m3,
