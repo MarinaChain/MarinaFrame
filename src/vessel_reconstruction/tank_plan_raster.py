@@ -56,9 +56,10 @@ HOUGH_GAP_MM = 4.0
 JOIN_GAP_MM = 15.0
 HOUGH_MIN_MM = 5.0  # shortest straight non-axis line looked for
 CROSS_MIN_MM = 6.0  # a cross-mark diagonal is at least this long
-# A thin straight stroke at least this long is a dash of a dashed line, not a character (text
-# on these sheets is 2 to 3.5 mm high, so an "l" or "1" stays text).
-DASH_MIN_MM = 4.0
+# A thin straight stroke at least this long is line ink (a dash of a dashed line), not a text
+# seed. Letters such as "l" or "1" fall in this class too: they stay in the label crops (the
+# crop margin), but a row of dashes cannot chain labels into one block.
+DASH_MIN_MM = 1.5
 # Spread across a dash (standard deviation of its pixels across the stroke) as a share of the line
 # width: a straight stroke of width w has a spread of about 0.3 w.
 DASH_SPREAD = 0.6
@@ -71,7 +72,8 @@ TICK_MIN_MM = 0.8  # frame tick: total length range
 TICK_MAX_MM = 9.0
 AXIS_LABEL_BAND_MM = (0.6, 12.0)  # frame numbers sit this far below (or above) the axis line
 # A cross mark's diagonals cross each other near their middles (the longer arm of a diagonal at
-# most CROSS_ARM_RATIO times the shorter), and their x ends agree within CROSS_END_TOL (share of the length) or CROSS_END_MIN_MM.
+# most CROSS_ARM_RATIO times the shorter), and their x ends agree within CROSS_END_TOL (share of
+# the length) or CROSS_END_MIN_MM.
 CROSS_ARM_RATIO = 3.0
 CROSS_SIDE_INKED = (0.5, 0.7)  # the less and the more inked end side
 CROSS_END_TOL = 0.04
@@ -92,6 +94,13 @@ MIN_PROFILE_COVER = 0.6
 # A deck line spans at least this share of the profile; a tank is at least this high (m).
 DECK_MIN_COVER = 0.3
 MIN_TANK_HEIGHT_M = 1.0
+# Plan to profile alignment (scale-bar sheets): search range and bin (m); a long vertical line
+# spans at least this share of its view's height.
+ALIGN_SEARCH_M = 6.0
+ALIGN_BIN_M = 0.1
+ALIGN_MIN_LINE = 0.15
+# A baseline label lies within this many character heights of its line.
+BASELINE_REACH = 4
 # Double-bottom plans: the tank top is the lowest horizontal line at least this far above base.
 MIN_DOUBLE_BOTTOM_M = 0.35
 # Text height in the question images (px): small print is enlarged to this.
@@ -136,7 +145,7 @@ class ViewSpec:
     window: tuple[float, float, float, float]  # x0, y0, x1, y1 as shares of the sheet
     # Plans: 'double_bottom' (tanks below the tank top) or 'above' (other tanks).
     role: str = 'double_bottom'
-    bow_right: bool = True
+    # Views are read as drawn with the bow to the right (a mirrored crop would mirror the text).
 
 
 @dataclass
@@ -151,10 +160,6 @@ class SheetSpec:
 
 # ---------------------------------------------------------------------------------------------
 # Ink
-
-
-def ink_from_grey(grey: np.ndarray) -> np.ndarray:
-    return np.asarray(grey) < INK_THRESHOLD
 
 
 def skew_angle_deg(ink: np.ndarray, px_per_mm: float) -> float:
@@ -296,7 +301,8 @@ def cross_marks(segments: list[Segment], stops: np.ndarray, px_per_mm: float,
                     np.linalg.norm(b1 - point)]
             if min(arms) < CROSS_MIN_MM * px_per_mm / 2:
                 continue
-            if not all(1 / CROSS_ARM_RATIO <= x / y <= CROSS_ARM_RATIO for x, y in ((arms[0], arms[1]), (arms[2], arms[3]))):
+            ratios = (arms[0] / arms[1], arms[2] / arms[3])
+            if not all(1 / CROSS_ARM_RATIO <= ratio <= CROSS_ARM_RATIO for ratio in ratios):
                 continue
             ends_a = sorted((a0[0], a1[0]))
             ends_b = sorted((b0[0], b1[0]))
@@ -446,7 +452,8 @@ def axis_line_masks(image: np.ndarray, px_per_mm: float, close_dashes: bool = Fa
         work = image
         if close_dashes:
             work = cv2.morphologyEx(work, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, shape_close))
-        masks.append(cv2.morphologyEx(work, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, shape_open)).astype(bool))
+        opened = cv2.morphologyEx(work, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, shape_open))
+        masks.append(opened.astype(bool))
     return masks[0], masks[1]
 
 
@@ -491,10 +498,9 @@ def parse_view(ink: np.ndarray, spec: ViewSpec, origin: tuple[int, int], px_per_
     erased = erased.astype(bool) | axis_lines
     text, dashes, heights = small_components(erased & ~axis_lines, px_per_mm, line_width)
     char_height = float(np.median(heights)) if heights else 2.5 * px_per_mm
-    # A straight stroke can be a dash or a letter ("l", "1"): blocks are grouped from both, and a
-    # block made of dashes only is left out.
-    blocks = [b for b in text_blocks(text | dashes, char_height)
-              if text[b.box[0]:b.box[2], b.box[1]:b.box[3]].any()]
+    # Blocks grow from letters only: straight strokes (dashes, and letters such as "l") stay
+    # line ink, so a dashed line cannot chain labels into one block.
+    blocks = text_blocks(text, char_height)
     # Boundary ink: everything but text and cross marks; dashed straight lines drawn solid so
     # that dashed boundaries close, then the cross marks erased again (their dashed pieces too).
     boundary = (erased & ~text).astype(np.uint8)
@@ -599,13 +605,9 @@ class Axis:
         return np.where(columns > cols[-1], xs[-1] + (columns - cols[-1]) * slope_high, inside)
 
 
-def _px_per_mm(view: ViewInk) -> float:
-    return view.px_per_mm
-
-
 def axis_rows(view: ViewInk) -> list[float]:
     """Rows of long horizontal lines, solid or dashed (at least AXIS_COVER of the view width)."""
-    horizontal, _ = axis_line_masks(view.ink & ~view.text, _px_per_mm(view), close_dashes=True)
+    horizontal, _ = axis_line_masks(view.ink & ~view.text, view.px_per_mm, close_dashes=True)
     cover = horizontal.sum(axis=1) / horizontal.shape[1]
     rows = np.flatnonzero(cover >= AXIS_COVER)
     bands = np.split(rows, np.flatnonzero(np.diff(rows) > 1) + 1) if len(rows) else []
@@ -740,7 +742,6 @@ def fit_scale_bar(row: float, ticks: list[Tick], unit_m: float) -> Axis | None:
         return None
     columns, values = np.array(numbered, float).T
     slope, intercept = np.polyfit(columns, values, 1)  # units per pixel
-    rebuilt = [Tick(c, i) for i, c in enumerate(columns)]
     # Store the fit as ticks one unit apart in value (ordinal = value).
     rebuilt = [Tick(float(c), int(v)) for c, v in zip(columns, values)]
     return Axis(row, rebuilt, unit_m, 0.0, 'read',
@@ -781,7 +782,8 @@ def mosaic(crops: list[np.ndarray], scale: float) -> tuple[np.ndarray, list[tupl
     for number, (cx, cy, image) in enumerate(placed, start=1):
         draw.text((cx, cy), f'{number}:', fill=0, font=font)
         sheet.paste(image, (cx + tag_width, cy))
-        draw.rectangle((cx + tag_width - 3, cy - 3, cx + tag_width + image.width + 2, cy + image.height + 2), outline=150)
+        left = cx + tag_width
+        draw.rectangle((left - 3, cy - 3, left + image.width + 2, cy + image.height + 2), outline=150)
         cells.append((cx, cy, image.width, image.height))
     return np.asarray(sheet), cells
 
@@ -952,8 +954,6 @@ def read_view(ink: np.ndarray, spec: ViewSpec, px_per_mm: float, sheet: 'SheetSp
     x0, y0, x1, y1 = spec.window
     r0, c0, r1, c1 = int(y0 * height), int(x0 * width), int(y1 * height), int(x1 * width)
     view_ink = ink[r0:r1, c0:c1]
-    if not spec.bow_right:
-        view_ink = view_ink[:, ::-1]
     parsed = parse_view(view_ink, spec, (r0, c0), px_per_mm)
     view = ReadView(parsed, None)
     rows = axis_rows(parsed)
@@ -975,10 +975,12 @@ def read_view(ink: np.ndarray, spec: ViewSpec, px_per_mm: float, sheet: 'SheetSp
         if view.axis is None:
             view.notes.append('frame axis found but fewer than two frame numbers read')
     if view.axis is None and bar_axis is not None:
-        # Scale only: x from the view's left edge until the views are aligned (x origin guessed).
+        # Scale only: x from the sheet's left edge, the same origin for every view (the views of
+        # a capacity plan are drawn one above the other); plans are then aligned to the profile
+        # (``align_to_profile``). The x origin is not a ship datum (guessed).
         scale = bar_axis.px_per_m
-        view.axis = Axis(best[2] if best else float(height), [Tick(0.0, 0), Tick(scale, 1)], 1.0, 0.0, 'guessed',
-                         'scale bar scale; x origin at the view edge (guessed)')
+        view.axis = Axis(best[2] if best else float(height), [Tick(-c0, 0), Tick(-c0 + scale, 1)], 1.0, 0.0,
+                         'guessed', 'scale bar scale; x from the sheet edge (guessed origin)')
     if spec.kind == 'plan':
         # The centre line is the frame axis (plans draw it on the centre line), else the
         # longest horizontal line nearest the middle of the view.
@@ -1027,8 +1029,13 @@ def label_crop(view: ViewInk, blocks: list[TextBlock]) -> np.ndarray:
 
 
 def region_at(view: ViewInk, block: TextBlock) -> int:
-    """The region under a label: the most common region id inside its box."""
+    """The region under a label: the region at its centre, else the most common region id inside
+    its box (the centre may fall on a letter or a line). A label in a small box can reach out
+    of it; its centre stays inside."""
     r0, c0, r1, c1 = block.box
+    centre = view.regions[int(block.centre[0]), int(block.centre[1])]
+    if centre:
+        return int(centre)
     ids = view.regions[r0:r1, c0:c1]
     ids = ids[ids > 0]
     if not len(ids):
@@ -1070,15 +1077,16 @@ def label_groups(view: ViewInk, blocks: list[TextBlock], centre_row: float | Non
 
 
 def resolve_sides(groups: list[RegionLabel]) -> list[RegionLabel]:
-    """A plan region with a tank label on each side of the centre line holds a port and a
-    starboard tank; otherwise its two sides are one label (port text first)."""
+    """A plan region with a whole tank label on each side of the centre line (a tank number, or
+    a content word other than a dry space) holds a port and a starboard tank; otherwise its two
+    sides are one label, port text first ("CARGO" over "TANK NO. 9" is one tank)."""
     by_region: dict[int, list[RegionLabel]] = {}
     for group in groups:
         by_region.setdefault(group.region, []).append(group)
     resolved = []
     for region, parts in by_region.items():
         parts.sort(key=lambda g: -(g.side or 0))
-        if len(parts) == 2 and all(is_tank_label(p.text) for p in parts):
+        if len(parts) == 2 and all(_names_a_tank(p.text) for p in parts):
             resolved.extend(parts)
             continue
         text = ' '.join(p.text for p in parts if p.text)
@@ -1086,11 +1094,22 @@ def resolve_sides(groups: list[RegionLabel]) -> list[RegionLabel]:
     return resolved
 
 
+def _names_a_tank(text: str) -> bool:
+    return bool(tank_key(text)) or content_of(text) not in (None, 'dry')
+
+
+def _several_tanks(text: str) -> bool:
+    """A label with two different tank numbers belongs to a room that holds several tanks (or a
+    region that leaks into them), not to one tank."""
+    numbers = {re.sub(r'\s+', '', m.group(1)) for m in re.finditer(r'\bno\.?\s*(\d{1,2})', text.lower())}
+    return len(numbers) > 1
+
+
 def plan_tanks(view: ReadView, labels: list[RegionLabel]) -> list[PlanTank]:
     """Tank regions of a plan: labelled regions whose label names a tank."""
     found: list[PlanTank] = []
     for label in labels:
-        if not is_tank_label(label.text):
+        if not is_tank_label(label.text) or _several_tanks(label.text):
             continue
         tank = PlanTank(view.ink.spec.name, label.text, tank_key(label.text), label.region, {}, (0.0, 0.0),
                         label.side)
@@ -1156,24 +1175,66 @@ def profile_regions(view: ReadView, labels: list[RegionLabel]) -> list[ProfileRe
 
 
 def find_baseline(view: ReadView, blocks: list[TextBlock]) -> tuple[float, str]:
-    """Baseline row: the long horizontal line next to a "BL"/"base line" label, else the lowest
-    long horizontal line above the frame axis."""
+    """Baseline row: the horizontal line next to a "BL"/"base line" label (within
+    BASELINE_REACH character heights of it; a line at or below the label first), else the
+    lowest long horizontal line (a fifth of the view wide) above the frame axis."""
     parsed = view.ink
-    cover = parsed.horizontal.sum(axis=1)
-    long_rows = np.flatnonzero(cover >= 0.2 * parsed.horizontal.shape[1])
-    bands = np.split(long_rows, np.flatnonzero(np.diff(long_rows) > 1) + 1) if len(long_rows) else []
-    lines = [float(b.mean()) for b in bands if len(b)]
-    if view.axis is not None and view.axis.ticks:
-        lines = [r for r in lines if r < view.axis.row - 2]
+    # A baseline is often drawn dashed: dash gaps are closed here.
+    horizontal, _ = axis_line_masks(parsed.ink & ~parsed.text, parsed.px_per_mm, close_dashes=True)
+    axis_row = view.axis.row if view.axis is not None else float(horizontal.shape[0])
     for block in blocks:
         text = block.text.lower().replace('.', ' ')
-        if re.search(r'\bb\s*l\b|base\s*line|baseline', text) and lines:
-            row = min(lines, key=lambda r: abs(r - block.centre[0]))
-            if abs(row - block.centre[0]) < 4 * block.char_height_px:
-                return row, f'long horizontal line at the label "{block.text}"'
+        if not re.search(r'\bb\s*l\b|base\s*line|baseline', text):
+            continue
+        reach = int(BASELINE_REACH * block.char_height_px)
+        r0, c0, r1, c1 = _label_line_box(block, blocks)
+        # The frame axis itself may be the baseline: rows down to just below the axis line.
+        top, bottom = max(0, r0 - reach), min(int(axis_row + 2 * parsed.line_width_px) + 1, r1 + reach)
+        window = horizontal[top:bottom, max(0, c0 - 3 * reach):c1 + 3 * reach]
+        rows = np.flatnonzero(window.any(axis=1)) + top
+        if len(rows):
+            bands = [float(b.mean()) for b in np.split(rows, np.flatnonzero(np.diff(rows) > 1) + 1)]
+            # A line that ends at the label, on the label's rows, is the labelled line; else a
+            # label is written above its line: a line at or below the label's top wins.
+            ending = [r for r in bands if r0 <= r <= r1 + 2 * parsed.line_width_px
+                      and _line_ends_at(horizontal[int(round(r))], c0, c1, block.char_height_px)]
+            below = [r for r in bands if r >= r0]
+            row = min(ending or below or bands, key=lambda r: abs(r - block.centre[0]))
+            return row, f'horizontal line at the label "{block.text}"'
+    cover = horizontal.sum(axis=1)
+    long_rows = np.flatnonzero(cover >= 0.2 * horizontal.shape[1])
+    bands = np.split(long_rows, np.flatnonzero(np.diff(long_rows) > 1) + 1) if len(long_rows) else []
+    lines = [float(b.mean()) for b in bands if len(b) and b.mean() < axis_row - 2]
     if lines:
         return max(lines), 'lowest long horizontal line above the frame axis (no baseline label read)'
     return float(parsed.ink.shape[0]), 'view bottom (no baseline found)'
+
+
+def _label_line_box(block: TextBlock, blocks: list[TextBlock]) -> tuple[int, int, int, int]:
+    """Box of a block and the words beside it on its text line ("Ny" before "BL."): blocks
+    whose rows overlap and that follow each other with gaps under two character heights."""
+    r0, c0, r1, c1 = block.box
+    gap = 2 * block.char_height_px
+    grown = True
+    while grown:
+        grown = False
+        for other in blocks:
+            b0, d0, b1, d1 = other.box
+            if min(r1, b1) - max(r0, b0) <= 0 or (d0 >= c0 and d1 <= c1):
+                continue
+            if c0 - gap <= d1 <= c0 or c1 <= d0 <= c1 + gap:
+                r0, c0, r1, c1 = min(r0, b0), min(c0, d0), max(r1, b1), max(c1, d1)
+                grown = True
+    return r0, c0, r1, c1
+
+
+def _line_ends_at(row: np.ndarray, c0: int, c1: int, char_height: float) -> bool:
+    """Whether a run of ``row`` ends within 1.5 character heights left of column ``c0`` or
+    starts within that distance right of ``c1`` (a label placed at the end of its line)."""
+    gap = int(1.5 * char_height)
+    left = row[max(0, c0 - gap):c0]
+    right = row[c1:c1 + gap]
+    return bool(left.any() and not row[c0:c1].any()) or bool(right.any() and not row[c0:c1].any())
 
 
 def floor_above_base(view: ReadView, x_m: float) -> float | None:
@@ -1233,12 +1294,46 @@ def match_profile(tank: PlanTank, regions: list[ProfileRegion]) -> ProfileRegion
         if longer <= 0 or overlap < MIN_PROFILE_COVER * longer:
             continue
         shared = plan_words & words(region.label)
-        if not shared and not any(a.startswith(b) or b.startswith(a) for a in plan_words for b in words(region.label)
-                                  if min(len(a), len(b)) >= 3):
+        same_number = _number(tank.key) is not None and _number(tank.key) == _number(tank_key(region.label))
+        # A shortened word counts ("FRESH W." names "Fresh water").
+        prefixed = any(a.startswith(b) or b.startswith(a) for a in plan_words for b in words(region.label)
+                       if min(len(a), len(b)) >= 3)
+        if not (shared or same_number or prefixed):
             continue
         if overlap > best_overlap:
             best, best_overlap = region, overlap
     return best
+
+
+def _number(key: str | None) -> str | None:
+    match = re.match(r'no (\d+)', key or '')
+    return match.group(1) if match else None
+
+
+def align_to_profile(plan: ReadView, profile: ReadView, search_m: float = None) -> tuple[float, str]:
+    """Shift (m) of a plan's x that puts its transverse bulkheads on the profile's: the shift
+    within ``search_m`` (default ALIGN_SEARCH_M) that best correlates the long vertical lines of both views (0.1 m
+    bins). Used when x comes from a scale bar, with no frame numbers to tie the views."""
+    def presence(view: ReadView) -> tuple[np.ndarray, float]:
+        vertical = view.ink.vertical
+        long_columns = vertical.sum(axis=0) >= ALIGN_MIN_LINE * vertical.shape[0]
+        xs = view.axis.x_m(np.flatnonzero(long_columns) + 0.5)
+        return xs, float(view.axis.x_m([0.0])[0])
+
+    search_m = ALIGN_SEARCH_M if search_m is None else search_m
+    plan_xs, _ = presence(plan)
+    profile_xs, _ = presence(profile)
+    if not len(plan_xs) or not len(profile_xs):
+        return 0.0, 'no long vertical lines to align on; views taken as drawn one above the other'
+    low = min(plan_xs.min(), profile_xs.min()) - search_m
+    bins = np.arange(low, max(plan_xs.max(), profile_xs.max()) + search_m, ALIGN_BIN_M)
+    a = np.histogram(plan_xs, bins)[0] > 0
+    b = np.histogram(profile_xs, bins)[0] > 0
+    steps = int(search_m / ALIGN_BIN_M)
+    scores = {shift: float(np.sum(np.roll(a, shift) & b)) for shift in range(-steps, steps + 1)}
+    best = max(scores, key=lambda k: (scores[k], -abs(k)))
+    return best * ALIGN_BIN_M, (f'plan shifted {best * ALIGN_BIN_M:+.1f} m: {scores[best]:.0f} vertical-line bins '
+                                f'agree with the profile (at no shift: {scores[0]:.0f})')
 
 
 def double_bottom_level(profile: ReadView, xs: np.ndarray) -> float | None:
@@ -1345,54 +1440,99 @@ def schedule_row_for(label: str, rows: list[dict]) -> dict | None:
 def read_sheet(ink: np.ndarray, dpi: float, sheet: SheetSpec, ask: Asker,
                slicer: tanks.HullSlicer | None = None) -> tuple[list[RasterTank], dict]:
     """Read one sheet: tanks (with solids) and a reading record (no image data)."""
+    return read_sheets([(ink, dpi, sheet)], ask, slicer)
+
+
+@dataclass
+class _SheetViews:
+    views: dict[str, ReadView]
+    labels: dict[str, list[RegionLabel]]
+    free: dict[str, list[TextBlock]]
+    schedule: list[dict]
+
+
+def _read_views(ink: np.ndarray, dpi: float, sheet: SheetSpec, ask: Asker, prefix: str,
+                reading: dict) -> _SheetViews:
+    """All views of one sheet with their axes and labels, and its tank schedule."""
     px_per_mm = dpi / MM_PER_INCH
     ink, angle = deskew(ink, px_per_mm)
-    reading: dict = {'dpi': dpi, 'skew_removed_deg': round(angle, 3), 'views': {}, 'engineering_approved': False}
+    reading.setdefault('sheets', []).append({'dpi': dpi, 'skew_removed_deg': round(angle, 3)})
     bar_axis = None
     if sheet.scale_bar is not None:
         bar_axis = read_scale_bar(ink, sheet.scale_bar, px_per_mm, sheet.scale_bar_unit_m, ask)
-        reading['scale_bar'] = None if bar_axis is None else {
+        reading['sheets'][-1]['scale_bar'] = None if bar_axis is None else {
             'px_per_m': bar_axis.px_per_m, 'evidence': bar_axis.evidence}
+    found = _SheetViews({}, {}, {}, read_schedule(ink, sheet.schedule, ask) if sheet.schedule else [])
+    for spec in sheet.views:
+        name = prefix + spec.name
+        view = read_view(ink, spec, px_per_mm, sheet, ask, bar_axis)
+        if view.axis is None:
+            reading['views'][name] = {'error': 'no axis or scale', 'notes': view.notes}
+            continue
+        found.labels[name], found.free[name] = read_labels(view, ask)
+        found.views[name] = view
+        reading['views'][name] = {
+            'kind': spec.kind, 'px_per_m': round(view.px_per_m, 3), 'axis': view.axis.evidence,
+            'axis_source': view.axis.source, 'ticks': len(view.axis.ticks),
+            'labels': [label.text for label in found.labels[name]],
+            'free_text': [b.text for b in found.free[name]],
+            'cross_marks': len(view.ink.crosses), 'notes': view.notes}
+    return found
+
+
+def read_sheets(sheets: list[tuple[np.ndarray, float, SheetSpec]], ask: Asker,
+                slicer: tanks.HullSlicer | None = None) -> tuple[list[RasterTank], dict]:
+    """Read the views of one or more sheets (a profile on one sheet, plans on others) and build
+    the tanks. The first profile is the profile of every plan. Views without frame numbers are
+    aligned to it by their bulkheads (``align_to_profile``): within ALIGN_SEARCH_M on the same
+    sheet, within half the profile's length on another sheet."""
+    reading: dict = {'views': {}, 'engineering_approved': False}
     views: dict[str, ReadView] = {}
     labels: dict[str, list[RegionLabel]] = {}
     free: dict[str, list[TextBlock]] = {}
-    for spec in sheet.views:
-        view = read_view(ink, spec, px_per_mm, sheet, ask, bar_axis)
-        if view.axis is None:
-            reading['views'][spec.name] = {'error': 'no axis or scale', 'notes': view.notes}
-            continue
-        labels[spec.name], free[spec.name] = read_labels(view, ask)
-        views[spec.name] = view
-        reading['views'][spec.name] = {
-            'kind': spec.kind, 'px_per_m': round(view.px_per_m, 3), 'axis': view.axis.evidence,
-            'axis_source': view.axis.source, 'ticks': len(view.axis.ticks),
-            'labels': [label.text for label in labels[spec.name]],
-            'free_text': [b.text for b in free[spec.name]],
-            'cross_marks': len(view.ink.crosses), 'notes': view.notes}
-    profile = next((v for v in views.values() if v.ink.spec.kind == 'profile'), None)
+    schedule: list[dict] = []
+    sheet_of: dict[str, int] = {}
+    for number, (ink, dpi, sheet) in enumerate(sheets):
+        prefix = f'sheet{number + 1}_' if len(sheets) > 1 else ''
+        found = _read_views(ink, dpi, sheet, ask, prefix, reading)
+        views.update(found.views)
+        labels.update(found.labels)
+        free.update(found.free)
+        schedule.extend(found.schedule)
+        sheet_of.update({name: number for name in found.views})
+    profile_name = next((name for name, v in views.items() if v.ink.spec.kind == 'profile'), None)
+    profile = views.get(profile_name)
     regions: list[ProfileRegion] = []
     if profile is not None:
-        name = profile.ink.spec.name
-        profile.baseline_row, basis = find_baseline(profile, free[name] + [
-            TextBlock(_box_of(label.blocks), label.blocks[0].char_height_px, label.text) for label in labels[name]])
-        reading['views'][profile.ink.spec.name]['baseline'] = basis
-        regions = profile_regions(profile, labels[profile.ink.spec.name])
-    schedule = read_schedule(ink, sheet.schedule, ask) if sheet.schedule else []
+        profile_length = profile.ink.ink.shape[1] / profile.px_per_m
+        for name, view in views.items():
+            if view.ink.spec.kind == 'plan' and view.axis.source == 'guessed':
+                search = ALIGN_SEARCH_M if sheet_of[name] == sheet_of[profile_name] else profile_length / 2
+                shift, evidence = align_to_profile(view, profile, search)
+                shift_px = shift * view.px_per_m  # before the ticks move (the scale reads them)
+                for tick in view.axis.ticks:
+                    tick.column -= shift_px
+                reading['views'][name]['alignment'] = evidence
+        profile.baseline_row, basis = find_baseline(profile, free[profile_name] + [
+            TextBlock(_box_of(label.blocks), label.blocks[0].char_height_px, label.text)
+            for label in labels[profile_name]])
+        reading['views'][profile_name]['baseline'] = basis
+        regions = profile_regions(profile, labels[profile_name])
     reading['schedule_rows'] = len(schedule)
     results: list[RasterTank] = []
-    for view in views.values():
+    for name, view in views.items():
         if view.ink.spec.kind != 'plan':
             continue
-        for tank in plan_tanks(view, labels[view.ink.spec.name]):
+        for tank in plan_tanks(view, labels[name]):
             row = schedule_row_for(tank.label, schedule) if schedule else None
             content = content_of(row.get('content', '') if row else '', row.get('name', '') if row else '',
                                  tank.label) or 'misc'
-            name = row.get('name') if row else tank.label
+            tank_name = row.get('name') if row else tank.label
             triangles, z_source, z_basis, profile_label = build_tank(tank, view.ink.spec.role, profile, regions, slicer)
             volume = tanks.fill_state(tanks.outward(triangles), float(triangles[:, :, 2].max())).volume_m3 \
                 if triangles is not None else 0.0
-            results.append(RasterTank(tank, content, name or tank.label, row.get('key') if row else None, z_source,
-                                      z_basis, profile_label, triangles, volume))
+            results.append(RasterTank(tank, content, tank_name or tank.label, row.get('key') if row else None,
+                                      z_source, z_basis, profile_label, triangles, volume))
     reading['tanks'] = [tank_record(t) for t in results]
     return results, reading
 

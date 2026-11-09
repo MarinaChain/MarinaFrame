@@ -154,13 +154,14 @@ def main() -> None:
 
     started = time.time()
     args.out.mkdir(parents=True, exist_ok=True)
-    ink, dpi, spec = load_case(args.sources, args.case, args.dpi, args.scan)
+    sheets = load_case(args.sources, args.case, args.dpi, args.scan)
     slicer = None
     if args.hull:
         from benchmarks.gunnerus.whole_vessel_internals import hull_triangles_from_glb
         slicer = tanks.HullSlicer(hull_triangles_from_glb(args.hull))
     ask = raster.claude_asker(args.cache)
-    results, reading = raster.read_sheet(ink, dpi, spec, ask, slicer)
+    results, reading = raster.read_sheets(sheets, ask, slicer)
+    del sheets
     reading.update(case=args.case, scan_variant=args.scan, seconds=round(time.time() - started, 1))
     model = raster.tank_model(results)
     tanks.save_tanks(model, args.out / 'tanks.npz')

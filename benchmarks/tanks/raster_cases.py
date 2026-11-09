@@ -41,12 +41,31 @@ SAUGATUCK_SHEET4 = SheetSpec(
            ViewSpec('second_deck_and_hold', 'plan', _share(240, 1095, 1880, 1320, 2200, 1700), role='above')],
     scale_bar=_share(395, 1478, 1795, 1530, 2200, 1700), scale_bar_unit_m=FEET_M)
 
+# Empire State V (HAER VA-131): the inboard capacity profile on sheet 6 and the double-bottom
+# capacity plan on sheet 8; both print a schedule of rooms (names of the numbered spaces).
+ESV_PREVIEW = (1800, 1200)
+EMPIRE_STATE_V_SHEET6 = SheetSpec(
+    views=[ViewSpec('profile', 'profile', _share(180, 300, 1640, 485, *ESV_PREVIEW))],
+    scale_bar=_share(345, 688, 1470, 752, *ESV_PREVIEW), scale_bar_unit_m=FEET_M,
+    schedule=_share(265, 800, 1550, 1025, *ESV_PREVIEW))
+EMPIRE_STATE_V_SHEET8 = SheetSpec(
+    views=[ViewSpec('double_bottom', 'plan', _share(270, 335, 1515, 530, *ESV_PREVIEW), role='double_bottom')],
+    scale_bar=_share(345, 688, 1470, 752, *ESV_PREVIEW), scale_bar_unit_m=FEET_M,
+    schedule=_share(265, 800, 1550, 985, *ESV_PREVIEW))
+ESV_DIR = 'tanks-public/empire_state_v_haer_va131/'
+ESV_SUFFIX = '_-_Empire_State_V,_James_River_Reserve_Fleet,_Newport_News,_Newport_News,_VA_HAER_VA-131_'
+
+# Case -> sheets (path under the sources folder, sheet description). A case may span sheets
+# (a profile on one sheet, plans on others).
 CASES = {
-    'gunnerus_tank_plan': ('gunnerus/polarkonsult/Tank Plan Rev1.pdf', GUNNERUS_TANK_PLAN),
-    'gunnerus_tank_arrangement': ('gunnerus/extended/CJOB/Tank Arrangement Rev0.pdf', GUNNERUS_TANK_ARRANGEMENT),
-    'saugatuck': ('tanks-public/saugatuck_haer_va128/Capacity_Plan_Profile,_Upper_Deck_Capacity_Plan,_Second_Deck_and_'
-                  'Hold_Capacity_Plan_-_Saugatuck,_James_River_Reserve_Fleet,_Newport_News,_Newport_News,_VA_HAER_'
-                  'VA-128_(sheet_4_of_6).tif', SAUGATUCK_SHEET4),
+    'gunnerus_tank_plan': [('gunnerus/polarkonsult/Tank Plan Rev1.pdf', GUNNERUS_TANK_PLAN)],
+    'gunnerus_tank_arrangement': [('gunnerus/extended/CJOB/Tank Arrangement Rev0.pdf', GUNNERUS_TANK_ARRANGEMENT)],
+    'saugatuck': [('tanks-public/saugatuck_haer_va128/Capacity_Plan_Profile,_Upper_Deck_Capacity_Plan,_Second_Deck_'
+                   'and_Hold_Capacity_Plan_-_Saugatuck,_James_River_Reserve_Fleet,_Newport_News,_Newport_News,_VA_'
+                   'HAER_VA-128_(sheet_4_of_6).tif', SAUGATUCK_SHEET4)],
+    'empire_state_v': [
+        (ESV_DIR + 'Capacity_Plan_Inboard_Profile' + ESV_SUFFIX + '(sheet_6_of_13).tif', EMPIRE_STATE_V_SHEET6),
+        (ESV_DIR + 'Capacity_Plan_Double_Bottom' + ESV_SUFFIX + '(sheet_8_of_13).tif', EMPIRE_STATE_V_SHEET8)],
 }
 
 # Scan variant (docs/TANKS_V2.md section 2): skew, blur, grey noise, 1-bit threshold, flips.
@@ -80,19 +99,22 @@ def scan_variant(grey: np.ndarray, seed: int = 0) -> np.ndarray:
     return ink ^ flips
 
 
-def load_case(sources: Path, case: str, dpi: int | None, scan: bool) -> tuple[np.ndarray, float, SheetSpec]:
-    """Ink mask, its dpi and the sheet description of a case."""
+def load_sheet(path: Path, dpi: int | None, scan: bool) -> tuple[np.ndarray, float]:
+    """Ink mask of a sheet and its dpi: a PDF page rendered at ``dpi`` (optionally as the scan
+    variant), or a scanned TIFF at its own resolution."""
     from vessel_reconstruction.body_plan_crossings import load_ink
 
-    relative, spec = CASES[case]
-    path = sources / relative
     if path.suffix.lower() == '.pdf':
         grey = render_pdf(path, dpi or 300)
-        ink = scan_variant(grey) if scan else grey < INK_THRESHOLD
-        return ink, float(dpi or 300), spec
+        return (scan_variant(grey) if scan else grey < INK_THRESHOLD), float(dpi or 300)
     from PIL import Image
 
     Image.MAX_IMAGE_PIXELS = None
     with Image.open(path) as image:
         sheet_dpi = float((image.info.get('dpi') or (400, 400))[0])
-    return load_ink(path), sheet_dpi, spec
+    return load_ink(path), sheet_dpi
+
+
+def load_case(sources: Path, case: str, dpi: int | None, scan: bool) -> list[tuple[np.ndarray, float, SheetSpec]]:
+    """Ink mask, dpi and sheet description of each sheet of a case."""
+    return [(*load_sheet(sources / relative, dpi, scan), spec) for relative, spec in CASES[case]]

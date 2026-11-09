@@ -1,7 +1,7 @@
 # Tanks v2: tank and compartment model from scanned (raster) tank and capacity plans
 
 Date: 2026-11-09. Branch `feature/tanks-raster` (from `continue/v0.5` at `0388ff1`).
-Status: metrics fixed (section 3) before the raster reader is built.
+Status: built; development results in section 5; Huddell holdout protocol in section 4 (not run).
 Builds on `docs/TANKS_V1.md` (tank model, sounding tables, capacity plan; vector DXF reader for
 Gunnerus). Why: customer inputs are mostly old scanned PDFs, and the holdout (Arthur M. Huddell,
 Liberty ship, `docs/TANKS_V1.md` section 3.1) has only raster sheets.
@@ -144,3 +144,106 @@ targets in the one run. Otherwise it fails; the result names the metric(s) misse
 found in the reading record. The result is reported as measured, in a new section of this file;
 targets are not changed after the run, and any later fix makes a new development round (the
 holdout is then spent).
+
+## 5. Development results (2026-11-09)
+
+Code: `src/vessel_reconstruction/tank_plan_raster.py` (reader), `benchmarks/tanks/raster_cases.py`
+(host calibration, renders, scan variant), `benchmarks/tanks/raster_run.py` (run and scorer),
+`tests/test_tank_plan_raster.py` (synthetic drawings). Outputs in git-ignored
+`work/tanks-raster/runs/` (reading record, tank model, capacity plan and sounding tables).
+
+### 5.1 What the reader does
+
+- Lines by morphological opening; straight non-axis lines by a Hough transform, joined over dash
+  gaps (drawn solid so dashed boundaries close) and over labels (for cross marks).
+- Cross marks: two diagonals with opposite slopes that cross; each is cut to its arms (to the
+  next horizontal or vertical line, or a little past a dashed line's end); the crossing lies near
+  both middles, the x ends agree, and both end sides of the box are drawn. The arms are erased.
+- Text: small components that are not thin straight strokes; blocks are the words of a line; the
+  blocks of one region (each side of a plan's centre line) are one label, read from one crop.
+- Frame axis: the long horizontal line with the most regular ticks; hidden ticks are counted;
+  one crop per tick is read; frame 0 from the lowest numbers that agree (inserted lettered frames
+  of a lengthened ship work). Scale-bar sheets: the bar's numbers give the scale; plans are
+  aligned to the profile by their bulkheads.
+- Tank = plan region at a tank label (a region with two different tank numbers is a room, not a
+  tank). Height: the profile region with a shared label word or tank number whose x extent agrees
+  (60 % of the longer), else, in a double-bottom plan, the tank-top line (median of the lowest
+  horizontal line above the baseline), else (gap fill, `guessed`) tank top to the deck above.
+  Baseline: the line at a "BL"/"Baseline" label (a line ending at the label first, else at or
+  below it). Clip to the hull (`tanks.tank_slabs_in_hull`) or a prism without a hull.
+- Model use: 168 Claude Sonnet 5.5 calls over all development runs (all completed; 1.19 M
+  prompt and 0.12 M completion tokens), text only. A fresh-cache run of D1 at 300 dpi gave the
+  same scores as the cached run (81 s).
+
+### 5.2 Metrics (last run of each case with the final code)
+
+| Case | R1 coverage | R2 ends (median) | R3 volume (median; within 10 % / 3 %) | R4 groups WB / FW / FO / misc; total | R7 numbers read |
+|---|---|---|---|---|---|
+| D1 300 dpi | **0.83** (20 of 24; 21 built) met | **0.008 m** met | **8.3 %** (15 / 1 of 20) met | -19.6 / -5.9 / -10.2 / -17.7 %; **-14.3 %** missed (WB, misc, total) | 0.83 |
+| D1 200 dpi | 0.88 (21) met | 0.009 m met | 9.2 % (12 / 0 of 21) met | -29.2 / -6.0 / -16.8 / -17.5 %; -20.5 % missed | 0.87 |
+| D1 scan variant (200 dpi) | **0.79** (19) missed | 0.004 m met | 11.1 % (9 / 0 of 19) met | -34.7 / -6.1 / -27.2 / -6.2 %; -25.2 % missed | 0.78 |
+| D2 300 dpi | 0.86 (18 of 21; 24 built) met | 0.011 m met | **40.9 %** missed | -44.3 / -21.5 / +488 / +250 %; +201 % missed | 0.79 |
+
+Raster against vector on the Gunnerus tank arrangement (D2, same drawing and truth, R6):
+
+| | Vector (v1, DXF) | Raster (D2, 300 dpi) |
+|---|---|---|
+| Tanks built | 24 of 24 | 24 regions built; 18 of 21 rows with a volume matched |
+| G1 / R2 ends, median abs | 0.019 m | 0.011 m |
+| G2 / R3 volume, median abs rel | 10.2 % | 40.9 % (R6 target <= 13.2 %: **missed**) |
+| T2 / R4 grand total | +4.2 % | +201 % |
+
+R5 (resolution and scan): 200 dpi meets R1 to R3 and its R3 is within 3 points of 300 dpi
+(9.2 against 8.3 %); the scan variant misses R1 by one tank (0.79), so **R5 is missed**.
+
+Causes of the misses (from the reading records):
+
+- D1 R4: the unbuilt tanks count 0 m3 (No 13 sb/p wing tanks, No 11 p, No 4, No 9; small crossed
+  boxes whose cross marks are not found, or labels split over two regions), and every
+  double-bottom tank is about 7 % low. The low bias is a datum: the reader takes the line
+  labelled "Ny BL." as the baseline, which lies 0.09 m above the hull's datum (the solid line just
+  below it). A development run that took that solid line gave R3 0.8 % (16 tanks within 3 %); the
+  rule that picks the labelled line is kept because it follows the drawing, not the truth.
+- D1 R1 on the scan variant: noise opens small gaps, so two more labels fall in the wrong region.
+- D2 R3: the profile's tank-top lines measured from the line labelled "Baseline" (the frame axis
+  on that sheet) lie 0.37 to 0.47 m above the v1 longitudinal-section levels (TANKTOP 1250 AB.BL),
+  so every double-bottom tank is about +40 %; the drawings disagree on the datum. The "Engine
+  room" region holds the label of No 11 sb (the label reaches out of its small box), so one
+  225 m3 "tank" is built (fuel oil +488 %).
+- Hold (D1 -31 %, D2 -32 %): the profile region at "CARGO HOLD" is cut by the sloping hull lines;
+  v1 noted the two printed hold volumes differ by 11 %.
+- G1 No 5 (D1, -2.0 m aft end): the drawn tank starts at frame 28; the table prints 32.
+
+### 5.3 Plausibility (no per-tank truth)
+
+| Check | Saugatuck (sheet 4) | Empire State V (sheets 6 and 8) |
+|---|---|---|
+| Scale from the drawn bar | 25.003 px/ft; printed 1/16 in = 1 ft at 400 dpi = 25.0 px/ft (+0.01 %) | 20.029 px/ft; printed 1/20 in at 400 dpi = 20.0 (+0.15 %) |
+| Labels read | 35 plan labels ("WING TANK NO.6", "CARGO TANK NO.5", "FUEL OIL TANK", ...) | 49 schedule rows; 23 double-bottom labels ("DBL. BOT. TANK NO.3 O.B. PORT", ...) |
+| Plan geometry | 31 tank regions; cargo tank lengths 11.04 to 11.07 m against the printed bay 36 ft 6 in (11.13 m); beam over the wing tanks 20.65 m (T2 tanker, 68 ft) | plan aligned to the profile (+3.8 m, 19 bulkhead bins agree); double-bottom tank top 1.49 m |
+| Heights and volumes | only 3 tanks built: the profile's dashed bulkheads do not close, so the cargo tanks are one region; the built heights (5.4 m) are a cross-mark piece, not the 12 m depth | 23 built (prisms, no hull); fuel/ballast tanks 1,668 m3, of which 845 m3 with the tank-top height; the rest took hold regions of the profile (wrong). HAER report: 13,762 bbl = 2,188 m3 of fuel in all tanks; same order |
+
+Plausibility verdict: the scale, label and plan steps carry over to the HAER sheets; the profile
+step does not yet (dashed bulkheads, hold regions matched to double-bottom tanks).
+
+### 5.4 What is open
+
+1. Profile: dashed bulkheads (close them without closing dashed hull lines), and in a
+   double-bottom plan prefer profile regions on the bottom.
+2. Datum: register the profile baseline to the hull (keel or deck) when a hull is given.
+3. Small crossed boxes whose diagonals do not meet the corners; a label that reaches out of its
+   small box (take the smallest region under the label).
+4. Huddell holdout: write the `arthur_m_huddell` host calibration (sheets 7, 8, 9) blind to the
+   truth, have the truth transcribed independently, then run once by section 4. The reader is
+   frozen by the commit that adds this section.
+
+Commands (outputs git-ignored):
+
+    PYTHONPATH=src:. .venv/bin/python -m benchmarks.tanks.raster_run --case gunnerus_tank_plan \
+        --dpi 300 --sources ../../../work/sources \
+        --hull ../../../work/whole-vessel/final/whole-vessel-draft.glb \
+        --truth work/tanks-raster/truth/d1_tank_plan_rev1.json --out work/tanks-raster/runs/d1-300
+    (--scan for the scan variant; --case gunnerus_tank_arrangement --truth d2 for D2;
+     --case saugatuck or empire_state_v without --hull and --truth)
+
+Checks before each commit: `tests/test_tank_plan_raster.py` and `tests/test_tanks.py`.

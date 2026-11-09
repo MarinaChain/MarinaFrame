@@ -89,7 +89,7 @@ Rules: do not loosen a target after seeing a result. A missed target is reported
   positions. A Huddell run needs a raster reader for the plan outlines and the capacity tables
   (the vision-table reader is a candidate) and imperial units.
 - Protocol (tank set, unit conversion, per-tank and per-group volume targets, what counts as not
-  built): to be fixed and committed in this file before the run.
+  built): fixed in `docs/TANKS_V2.md` section 4 with the raster reader (not run yet).
 
 ## 4. Resume point
 
