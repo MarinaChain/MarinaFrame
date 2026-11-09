@@ -41,6 +41,10 @@ KEEP_MIN_IMPROVEMENT = 0.002
 # ... or when it only fills gaps and no measured cell gets worse by more than
 # this fraction of B/2.
 GAP_FILL_MAX_WORSENING_FRACTION = 0.005
+# ... and an edit is not kept when one measured station cell (body-plan ink)
+# gets worse by more than this fraction of B/2: the end of the cell score's
+# steep part, past which the curve no longer follows that ink.
+LEAVES_INK_FRACTION = FULL_SCORE_FRACTION
 # Residuals of at least this fraction of the group's worst one make its worst range.
 WORST_RANGE_FRACTION = 0.5
 # Lines in the summary's "worst" list.
@@ -218,6 +222,18 @@ def keep_edit(before: dict, after: dict, before_cells: list[dict] | None = None,
             return {"keep": False, "fit_before": old, "fit_after": new,
                     "reason": (f"drawn ink left unexplained: {unexplained_before} -> {unexplained_after} cells "
                                "(the curve left its own line)")}
+    if old is not None and before_cells is not None and after_cells is not None and not gap_fill_only:
+        # A curve that leaves the drawn station ink it followed contradicts the
+        # drawing, whatever else the edit gains (shipd-1-09867-3v-L0 DeepSeek
+        # live: a fixed top cell raised the fit while the curve left its ink
+        # at WL1 by 4.4 m; truth RMS 7 -> 38 % at that station).
+        stations_before = [c for c in before_cells if c.get("target") == "station"]
+        stations_after = [c for c in after_cells if c.get("target") == "station"]
+        worsening = _max_worsening(stations_before, stations_after)
+        if worsening > LEAVES_INK_FRACTION * before["half_beam_m"]:
+            return {"keep": False, "fit_before": old, "fit_after": new, "max_worsening_m": round(worsening, 4),
+                    "reason": (f"the curve left drawn station ink by {worsening:.2f} m at one waterline "
+                               f"(limit {100 * LEAVES_INK_FRACTION:g} % of B/2); follow the ink there")}
     if old is None or (new is not None and new >= old + KEEP_MIN_IMPROVEMENT):
         return {"keep": True, "reason": "combined fit improved", "fit_before": old, "fit_after": new}
     if gap_fill_only and before_cells is not None and after_cells is not None:

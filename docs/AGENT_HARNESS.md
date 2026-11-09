@@ -133,7 +133,21 @@ refuses the subscription login.
   forge a turn; the harness's instructions stay only in the system prompt.
 - Environment: cleared, then HOME, USER, LOGNAME, LANG, LC_ALL, TMPDIR, a fixed PATH,
   `CLAUDE_CODE_MAX_OUTPUT_TOKENS=<max_tokens>` and `DISABLE_AUTOUPDATER=1`. No OpenCode Go key,
-  no `ANTHROPIC_*` variable. Working folder: the system temp folder.
+  no `ANTHROPIC_*` variable. Working folder: a new private folder per request
+  (`marinaframe-claude-*`, mode 0700, removed after the CLI exits), with
+  `--setting-sources user` (no project or local settings or their hooks) and
+  `--settings {"disableAllHooks":true}`. Live check: a hook in a hostile project
+  `.claude/settings.json` runs without these flags and does not run with them; the
+  subscription still answers.
+- Prompt cache: the controller sends the request text as two parts, the stable context first
+  (tools, sheet survey while describing, described views, vessel description:
+  `controller::split_stable_context`), then the changing observation. The transport marks the
+  first part `cache_control {ephemeral, ttl 1h}` (the TTL of the CLI's own marks; the API
+  refuses a 1 h mark after a 5 min one). Live probe: the second request read 22.7k of 23.4k
+  input tokens from the cache.
+- A refused reply (not one valid tool call) returns to the model with the call, the serde
+  contract error (for example "unknown field `points_m`, expected one of `section_id`,
+  `form`, ..."), the tools offered now and, for a tool the phase does not list, its schema.
 - Executable: `MARINAFRAME_CLAUDE_BIN` (absolute path), else `/opt/homebrew/bin/claude`,
   `/usr/local/bin/claude`, `~/.local/bin/claude`, `~/.claude/local/claude`. Route checked
   2026-11-09: `/opt/homebrew/bin/claude` goes straight to the Anthropic API with the keychain

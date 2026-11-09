@@ -121,3 +121,19 @@ def test_keep_rule_rejects_an_edit_that_leaves_more_drawn_ink_unexplained():
     decision = keep_edit(before, after, before_cells, after_cells)
     assert decision["keep"] is False and "unexplained" in decision["reason"]
     assert keep_edit(before, after)["keep"] is True  # without cells, only the fit decides
+
+
+def test_keep_rule_rejects_an_edit_whose_curve_leaves_station_ink_it_followed():
+    # The fit rises (a top cell is fixed) while the curve leaves its ink at w1.
+    before_cells = [_cell("body_plan", "station", -0.1, station_id="s08", waterline_id="w1"),
+                    _cell("profile", "top", 4.0, station_id="s08")]
+    after_cells = [_cell("body_plan", "station", -2.0, station_id="s08", waterline_id="w1"),
+                   _cell("profile", "top", 0.0, station_id="s08"),
+                   _cell("profile", "keel", 0.0, station_id="s08")]
+    before, after = scoreboard(before_cells, HALF_BEAM), scoreboard(after_cells, HALF_BEAM)
+    assert after["combined_fit"] > before["combined_fit"] + 0.002
+    decision = keep_edit(before, after, before_cells, after_cells)
+    assert decision["keep"] is False and "left drawn station ink" in decision["reason"]
+    # Moving within 5 % of B/2 (0.5 m) of the ink it followed is allowed.
+    near = [{**after_cells[0], "residual_m": -0.5}, *after_cells[1:]]
+    assert keep_edit(before, scoreboard(near, HALF_BEAM), before_cells, near)["keep"] is True
