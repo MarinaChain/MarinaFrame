@@ -3032,7 +3032,7 @@ code { font-family: var(--font-mono); }
 .tip-ring-fill { stroke: #8FB4E8; stroke-dasharray: 1; stroke-dashoffset: 1; }
 .tip-ring-run .tip-ring-fill { animation: tip-ring var(--tip-ring-ms) linear forwards; }
 .tip[data-state="detail"] .tip-ring { display: none; }
-.tip-detail { margin: 4px 0 0; color: #C9D5E6; font-weight: 400; }
+.tip-detail { margin: 4px 0 0; color: #C9D5E6; font-weight: 400; white-space: pre-line; }
 .tip-detail:empty { display: none; }
 @keyframes tip-ring { to { stroke-dashoffset: 0; } }
 @media (prefers-reduced-motion: reduce) {
@@ -3210,3 +3210,11 @@ code { font-family: var(--font-mono); }
 .export-issues .badge-glyphchip { margin-left: 2px; }
 .needs-why.chip-row { min-height: 18px; }
 .intake-optional { cursor: help; text-decoration: underline dotted; text-underline-offset: 3px; }
+
+/* Accuracy summary (accuracy.js): a chip per output on the run page, a block on the Export page. */
+.accuracy-chips { display: inline-flex; align-items: center; gap: var(--space-xs); }
+.export-accuracy { display: flex; flex-direction: column; gap: var(--space-xs); font-size: var(--fs-md); }
+.export-accuracy-title { display: flex; align-items: center; gap: var(--space-xs); margin: 0; font-size: var(--fs-md); }
+.export-accuracy-note { margin: 0; color: var(--text-3); }
+.export-accuracy-line { display: flex; align-items: flex-start; gap: var(--space-sm); margin: 0; }
+.export-accuracy-line .badge { flex: none; }

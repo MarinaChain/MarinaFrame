@@ -22,6 +22,7 @@ import { createExport } from './export.js';
 import { createUsage } from './usage.js';
 import { createBatch } from './batch.js';
 import { glyphChip, sourceGlyph, stateGlyph, legendPopover } from './glyphs.js';
+import { accuracyChips } from './accuracy.js';
 import { installTooltips, tipAttributes } from './tooltip.js';
 import * as fmt from './format.js';
 
@@ -936,7 +937,8 @@ function renderDraftSummary() {
   const sections = view?.sections || [];
   const parts = view?.components || [];
   const open = sections.filter(needsCheck).length;
-  if (!counts.length && !warnings.length && !parts.length && !open) {
+  const accuracy = accuracyChips(view);
+  if (!counts.length && !warnings.length && !parts.length && !open && !accuracy) {
     fill($('draft-summary'));
     return;
   }
@@ -945,6 +947,7 @@ function renderDraftSummary() {
     ...counts.map((c) => sourceGlyph(c.label, { count: c.count })),
     warnings.length ? warningsToggle(warnings) : null,
     counts.length ? legendPopover() : null,
+    accuracy,
     parts.length ? partsLink(view, parts.length) : null));
 }
 
