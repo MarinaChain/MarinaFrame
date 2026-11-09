@@ -52,7 +52,9 @@ CPU_POLL_SECONDS = 1.0
 def safe_worker_environment() -> dict[str, str]:
     # Explicit allowlist: provider credentials and unrelated inherited secrets
     # must not enter native worker descendants.
-    env = {key: os.environ[key] for key in ('PATH', 'LANG', 'LC_ALL', 'TZ') if key in os.environ}
+    # MARINAFRAME_HULL_FAIRING is a build setting (fairing.SETTING), not a secret.
+    env = {key: os.environ[key] for key in ('PATH', 'LANG', 'LC_ALL', 'TZ', 'MARINAFRAME_HULL_FAIRING')
+           if key in os.environ}
     env.update(PYTHONPATH=str(Path(__file__).resolve().parent.parent), PYTHONUNBUFFERED='1',
                OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1', OMP_THREAD_LIMIT='1', MKL_NUM_THREADS='1')
     return env
