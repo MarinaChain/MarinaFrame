@@ -417,6 +417,41 @@ Option (not built; for a founder decision):
 Before a build: the truth cell above checked by a person, and one more scanned sheet with
 printed offsets as a holdout (the rule was met on one sheet only).
 
+#### 3.5.7 Round 7: Claude Sonnet 5.5 and Opus 5.5 as Claude Code subagents (fixed before running)
+
+Amendment to section 3.5.5 (founder rule 2026-11-09): Claude models are called only through the
+Claude subscription as Claude Code subagents; never through OpenCode Go or the codex-router (which
+has no route for them, section 3.5.5). A person (the PM) starts the readers. Section 3.5.5's "not
+tested" for these two models is replaced by this round.
+
+Fixed for the run (everything else as sections 3.5.4 and 3.5.5: sheet and SHA-256, host calibration
+and grid, the 151-cell truth file outside the repository, prompt text, merge by waterline, metrics,
+decision rule):
+
+- Readers: Claude Sonnet 5.5 and Claude Opus 5.5, each a Claude Code subagent that reads image files
+  with its file Read tool. 3 repeats per model (6 runs), each a fresh subagent with no earlier answer.
+  Default effort of the subagent definition; no tool except file Read and one file Write.
+- Pack (outside the repository, built by `benchmarks/balclutha/claude_value.py pack`): Claude
+  downsamples an image whose long edge is over 1,568 px, so the tiles are at most 1568 px on the long
+  edge and keep the sheet's own pixels (no resampling, the drawn lines keep the round-6 scale). One
+  waterline per tile, both sides: 1568 x 784 px tiles, three per side and waterline (near: 48 px across
+  the centreline to 1,520 px out; mid: 1,232 to 2,800; far: 2,512 to 4,080; 288 px overlap, past the
+  20 ft buttock at 2,990 px), centred on the waterline row. Thus 2 x 8 x 3 = 48 tiles. Each tile has
+  its 1/4-scale side context image with the red box (as rounds 5 and 6) and a text file with the
+  round-6 prompt text, the tile's calibration (centreline x in tile pixels, 491.48 px per metre) and
+  the grid rows and columns inside the tile. `TASK.md` gives the reading order and the answer form.
+- Answer (one JSON file per run): the round-4 form, per station 0 to 20 a list of 8 half-breadths in
+  metres (waterlines 4 to 32 ft) or null, `source: "ai_inferred"`. The reader converts pixels with the
+  given calibration and takes the mean over overlapping tiles; the scorer is the round-4/6 scorer
+  (`model_value.score`) and the unchanged decision rule (`router_value.decide`): all 3 repeats at least
+  60 % of the 151 cells and median RMS at most 0.15 m. An invalid answer file scores 0 cells.
+- The pack holds no truth value, no score and no earlier answer; readers are told to use only the pack.
+  The truth file is read only by the scorer, after all runs.
+- Scoring: `PYTHONPATH=src python -m benchmarks.balclutha.claude_value score --answers <folder>` with
+  files named `<model>-<repeat>.json`.
+- Report per model and repeat: cells given of 151, RMS, max, share within 0.05 m and 0.15 m, station
+  identity errors; the PM adds subagent tokens and wall time. Controller not changed.
+
 ### 3.6 Effort, checks, resume
 
 Effort: 1-2 weeks (reader, executor change, scoring, Gunnerus run; then raster path and a
