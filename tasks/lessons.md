@@ -112,5 +112,5 @@
 ### Push only after the checks pass in the same command
 - **Date:** 2026-11-09
 - **Trigger:** After a merge, `make test-quick` failed (a stale `marinaframe-app-core` build cache made lint report missing methods), but the same shell line pushed anyway because the push was not chained to the test result. The code was fine; `cargo clean -p marinaframe-app-core` and a rerun passed.
-- **Rule:** Chain the push to the check: `make test-quick && git push ...`. If a Rust error names a symbol that exists in the source after a merge, clean that package and rerun before changing code.
+- **Rule:** Chain the push to the check: `make test-quick && git push ...`. If the check output goes through a pipe (`| tail`), run `set -o pipefail` first: without it the chain sees `tail`'s exit code and pushes after a failure (it happened twice on 2026-11-09). If a Rust error names a symbol that exists in the source after a merge, clean that package and rerun before changing code.
 - **Why:** An unchained push can publish a state that the checks did not pass.
