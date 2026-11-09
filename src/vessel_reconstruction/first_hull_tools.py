@@ -121,9 +121,8 @@ def cut_bottoms_at_keel(anchors: list[Anchor], keels: dict) -> None:
         if keel is None or not anchor.pixels_per_metre or len(points) < 2:
             continue
         points = points[np.argsort(points[:, 1], kind="stable")]
-        # Only discard a centreline tail, not measured off-centre hull cells.
-        below = points[points[:, 1] < keel]
-        if anchor.source == "read" or (len(below) and np.any(below[:, 0] > 1e-6)):
+        # Reader cells are measured evidence; the model path keeps its original cut.
+        if anchor.source == "read":
             continue
         if points[0, 1] < keel - DECK_TOP_TOLERANCE_PX / anchor.pixels_per_metre and points[-1, 1] > keel:
             start = [float(np.interp(keel, points[:, 1], points[:, 0])), keel]
@@ -142,12 +141,11 @@ BOTTOM_EXTENSION_POINTS = 6
 
 
 def extend_bottoms_to_keel(anchors: list[Anchor], keels: dict) -> None:
-    """Fill missing bottoms along their lowest measured segment, without moving ink.
+    """Complete bottoms, preserving the model path's original chord handling.
 
-    The profile supplies the lower height, not a chord to the centreline.
-    A shallow bottom can meet the keel off-centre (a flat/rabbet closure).
-    A steep bottom stops widening inward when it reaches the centreline.
-    Terminal curves keep their drawn ends, including raised transoms.
+    Only scanned body-plan reader anchors (source ``read``) continue their
+    lowest measured segment. Their profile supplies the lower height, not a
+    chord to the centreline. Terminal curves keep their drawn ends.
     """
     import numpy as np
     bottoms = {a.id: min(p[1] for p in a.points_yz_m) for a in anchors if a.points_yz_m}
@@ -168,6 +166,14 @@ def extend_bottoms_to_keel(anchors: list[Anchor], keels: dict) -> None:
         low_y, low_z = float(points[0, 0]), float(points[0, 1])
         if (low_z - keel <= BOTTOM_GAP_PX / anchor.pixels_per_metre
                 or low_y <= BOTTOM_GAP_BREADTH_SHARE * float(points[:, 0].max())):
+            continue
+        if anchor.source != "read":
+            share = np.linspace(0.0, 1.0, BOTTOM_EXTENSION_POINTS, endpoint=False)[:, None]
+            continued = np.array([0.0, keel]) + share * np.array([low_y, low_z - keel])
+            anchor.points_yz_m = np.vstack([continued, points]).tolist()
+            anchor.extended = True
+            anchor.notes.append(f"bottom continued from y {low_y:.2f} m, z {low_z:.3f} m straight to the "
+                                f"profile keel at z {keel:.3f} m on the centreline")
             continue
         higher = points[points[:, 1] > low_z + 1e-6]
         if not len(higher):

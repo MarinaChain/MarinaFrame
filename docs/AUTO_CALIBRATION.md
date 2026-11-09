@@ -247,10 +247,12 @@ first hull's bottom handling at this transom-stern station (open).
 `benchmarks/hull_fairing/replay_bottoms.py` replays stored phase-1 setups and model
 descriptions through `build_first_hull`, including profile handling and CAD export;
 it does not start from already-processed section rows. Baseline: `5a43f4b`;
-fix: `09b06d2`; fairing off, unchanged reader and scorers. Inputs are the main
+fix: `09b06d2`, now scoped to scanned body-plan reader anchors (`source == "read"`).
+Other anchors use the original profile cut, chord coordinates and notes unchanged.
+Fairing is off; reader and scorers are unchanged. Inputs are the main
 checkout's `work/autocal-live-6/bue_girl` and
 `work/round-3view-L{0,1}-sonnet-4f92e9f`. Local detailed results are in this
-worktree's `work/bottom-replay/{before,after}.json`. No sealed evaluation data
+worktree's `work/bottom-replay/{baseline-recheck,reader-only}.json`. No sealed evaluation data
 was used. These are fresh first hulls from the final stored reading, not the
 delivered revision builds scored in HULL_FAIRING.md section 6, so some baselines differ.
 
@@ -262,31 +264,35 @@ created the outlier. Reader output and calibration were not changed.
 
 | Development case | RMS % before | RMS % after |
 |---|---:|---:|
-| dtmb5415-L0 | 5.7864 | 5.8260 |
+| dtmb5415-L0 | 5.7864 | 5.7864 |
 | series60-L0 | 1.3850 | 1.3850 |
-| shipd-1-00679-L0 | 4.0481 | 5.9600 |
-| shipd-1-08158-L0 | 0.7534 | 0.7533 |
-| shipd-1-09867-L0 | 7.4362 | 3.4198 |
-| dtmb5415-L1 | 14.3393 | 14.0253 |
+| shipd-1-00679-L0 | 4.0481 | 4.0481 |
+| shipd-1-08158-L0 | 0.7534 | 0.7534 |
+| shipd-1-09867-L0 | 7.4362 | 7.4362 |
+| dtmb5415-L1 | 14.3393 | 14.3393 |
 | series60-L1 | 3.4919 | 3.4919 |
-| shipd-1-00679-L1 | 4.1220 | 4.2695 |
-| shipd-1-08158-L1 | 1.6406 | 1.5367 |
-| shipd-1-09867-L1 | 1.0045 | 1.6773 |
+| shipd-1-00679-L1 | 4.1218 | 4.1218 |
+| shipd-1-08158-L1 | 1.6406 | 1.6406 |
+| shipd-1-09867-L1 | 1.0045 | 1.0045 |
 
-**The no-regression target is not met:** four dev RMS scores rise, four fall,
-and two are unchanged. Existing gate passes remain 4/10; no anchors were dropped
-in either replay. The largest regression, 00679-L0 (+1.9119 percentage points),
-and 09867-L1 (+0.6728) reproduce exactly when rerun without concurrent builds.
-Thus the BUE GIRL fix is measured, but it is not safe to claim that no dev case
-gets worse. These results do not grant engineering approval.
+**The reader-only no-regression target is met:** all ten dev score dictionaries
+(RMS, volume and gate result) and extracted section lists equal the freshly
+rerun baseline exactly, not just at the table's displayed precision. Gate passes
+remain 4/10. BUE GIRL retains exactly the gain measured before scoping.
+
+Historical result: the unscoped `09b06d2` replay in `158938c` made four dev RMS
+scores worse. Reader-only routing removes those changes from the model path.
+The fresh baseline for 00679-L1 is 4.121764355706063 %, versus the earlier
+4.1219719420204095 %; the reader-only replay matches the fresh baseline exactly.
+These results do not grant engineering approval.
 
 Reproduce from this worktree (baseline source can be extracted with
 `git archive 5a43f4b src`, without switching branches):
 
 ```bash
 set -o pipefail
-PYTHONPATH=work/bottom-replay/baseline-src/src:. .venv/bin/python -m benchmarks.hull_fairing.replay_bottoms --out work/bottom-replay/before.json --tasks work/bottom-replay/before --resume
-PYTHONPATH=src:. .venv/bin/python -m benchmarks.hull_fairing.replay_bottoms --out work/bottom-replay/after.json --tasks work/bottom-replay/after-full --resume
+PYTHONPATH=work/bottom-replay/baseline-src/src:. .venv/bin/python -m benchmarks.hull_fairing.replay_bottoms --out work/bottom-replay/baseline-recheck.json --tasks work/bottom-replay/baseline-recheck --resume
+PYTHONPATH=src:. .venv/bin/python -m benchmarks.hull_fairing.replay_bottoms --out work/bottom-replay/reader-only.json --tasks work/bottom-replay/reader-only --resume
 ```
 
 Omit `--resume` and use new output/task paths for fresh runs. It retains completed
@@ -295,8 +301,8 @@ by fresh tasks. Keep baseline and fix output files separate.
 
 ### 9.6 Open
 
-- The station 10 bottom outlier is reduced (section 9.5), but four dev cases have higher RMS;
-  the no-regression requirement remains open.
+- The station 10 bottom outlier is reduced with reader-only handling (section 9.5);
+  all ten dev cases match the baseline exactly. Engineering review remains required.
 - BUMBLE BEE needs a person: the side flag is right, but the drawing's labels and the truth's
   numbering differ; the review item records "Something is wrong" but does not yet re-run with
   swapped halves or renumbered stations.

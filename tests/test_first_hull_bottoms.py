@@ -17,9 +17,8 @@ def _anchors(source="read"):
     ]
 
 
-@pytest.mark.parametrize("source", ["read", "traced"])
-def test_bottom_completion_keeps_four_measured_waterlines_and_their_direction(source):
-    anchors = _anchors(source)
+def test_reader_bottom_completion_keeps_four_measured_waterlines_and_their_direction():
+    anchors = _anchors("read")
     original = copy.deepcopy(anchors[1].points_yz_m)
     extend_bottoms_to_keel(anchors, {a.id: 0.0 for a in anchors})
     points = np.asarray(anchors[1].points_yz_m)
@@ -32,12 +31,34 @@ def test_bottom_completion_keeps_four_measured_waterlines_and_their_direction(so
     assert all(list(p) in anchors[1].points_yz_m for p in original)
 
 
-@pytest.mark.parametrize("source", ["read", "traced"])
-def test_profile_bottom_handling_does_not_cut_measured_cells(source):
-    anchors = _anchors(source)
+def test_profile_bottom_handling_does_not_cut_reader_cells():
+    anchors = _anchors("read")
     original = copy.deepcopy(anchors[1].points_yz_m)
     cut_bottoms_at_keel(anchors, {"1": 0.0, "2": 1.0, "3": 0.0})
     assert anchors[1].points_yz_m == original
+
+
+def test_model_path_keeps_original_bottom_chord_and_notes():
+    anchors = _anchors("traced")
+    original = copy.deepcopy(anchors[1].points_yz_m)
+    share = np.linspace(0.0, 1.0, 6, endpoint=False)[:, None]
+    continued = np.array([0.0, 0.0]) + share * np.array([0.6, 0.8])
+    expected = np.vstack([continued, original]).tolist()
+    extend_bottoms_to_keel(anchors, {a.id: 0.0 for a in anchors})
+    assert anchors[1].points_yz_m == expected
+    assert anchors[1].extended
+    assert anchors[1].bottom_filled_below_m is None
+    assert anchors[1].notes == [
+        "bottom continued from y 0.60 m, z 0.800 m straight to the "
+        "profile keel at z 0.000 m on the centreline"
+    ]
+
+
+def test_model_path_keeps_original_profile_cut_of_off_centre_points():
+    anchors = _anchors("traced")
+    cut_bottoms_at_keel(anchors, {"1": 0.0, "2": 1.0, "3": 0.0})
+    assert anchors[1].points_yz_m == [[0.9, 1.0], [1.1, 1.2], [1.2, 1.4]]
+    assert anchors[1].notes == ["bottom cut at z 1.000 m: the profile keel line at this station"]
 
 
 def test_transom_curve_end_above_keel_is_not_extended():
