@@ -70,7 +70,7 @@ def _count(labels: dict | None, *names: str) -> int:
 
 
 def _bands(ids: tuple[str, ...]) -> list[Band]:
-    return [band(i) for i in ids]
+    return [band(i) for i in ids if band(i).outcome != "invalid"]
 
 
 def _chip(bands: list[Band]) -> str:
@@ -88,6 +88,7 @@ def _hull(facts: dict) -> OutputSummary:
     hull_type = facts.get("hull_type")
     head_ids = HULL_HEAD_IDS.get((path, hull_type if path == "scanned_body_plan" else None)) or HULL_DETAIL_IDS[path]
     head = _bands(head_ids)
+    head_ids = tuple(b.id for b in head)
     text = "; ".join(b.short for b in head)
     if path == "scanned_body_plan" and hull_type is None:
         text += " (hull type not known)"
@@ -107,15 +108,17 @@ def _hull(facts: dict) -> OutputSummary:
     if fit is not None:
         parts.append(f"fit score {fit:.2f}")
     caution = _weak(head) or bool(to_check) or total > _count(labels, "traced", "repaired")
-    return OutputSummary("hull", True, "; ".join(parts) + ".", _chip(head), caution, head_ids, HULL_DETAIL_IDS[path])
+    return OutputSummary("hull", True, "; ".join(parts) + ".", _chip(head), caution, head_ids,
+                         tuple(b.id for b in _bands(HULL_DETAIL_IDS[path])))
 
 
 def _tanks(facts: dict | None) -> OutputSummary:
-    detail_ids = tuple(b.id for b in bands_for("tanks"))
+    detail_ids = tuple(b.id for b in bands_for("tanks") if b.outcome != "invalid")
     if not facts:
         return OutputSummary("tanks", False, NOT_PRESENT["tanks"], "", False, (), ())
     head_ids = TANK_HEAD_IDS.get(facts.get("path"), TANK_HEAD_IDS[None])
     head = _bands(head_ids)
+    head_ids = tuple(b.id for b in head)
     parts = ["Tanks: " + "; ".join(b.short for b in head)]
     labels = facts.get("volume_labels")
     total = sum(int(v or 0) for v in (labels or {}).values())
@@ -130,7 +133,7 @@ def _tanks(facts: dict | None) -> OutputSummary:
 
 
 def _steel(facts: dict | None) -> OutputSummary:
-    detail_ids = tuple(b.id for b in bands_for("steel"))
+    detail_ids = tuple(b.id for b in bands_for("steel") if b.outcome != "invalid")
     if not facts:
         return OutputSummary("steel", False, NOT_PRESENT["steel"], "", False, (), ())
     head = _bands(STEEL_HEAD_IDS)
@@ -140,7 +143,7 @@ def _steel(facts: dict | None) -> OutputSummary:
     if total:
         printed = _count(labels, "printed")
         parts.append(f"{printed} of {total} thicknesses printed, {total - printed} guessed or missing")
-    return OutputSummary("steel", True, "; ".join(parts) + ".", _chip(head), True, STEEL_HEAD_IDS, detail_ids)
+    return OutputSummary("steel", True, "; ".join(parts) + ".", _chip(head), True, tuple(b.id for b in head), detail_ids)
 
 
 def summarise(facts: dict) -> dict[str, OutputSummary]:

@@ -103,13 +103,12 @@
   },
   "expected": {
    "hull": {
-    "line": "Hull: 1.4 mm RMS on BUE GIRL (holdout, round bilge); 0.11 m RMS on BUMBLE BEE 47 (holdout, round bilge; some station numbers wrong); 14 of 14 sections traced; 1 to check.",
-    "chip": "1.4 mm / 0.11 m",
+    "line": "Hull: 1.4 mm RMS on BUE GIRL (holdout, round bilge); 14 of 14 sections traced; 1 to check.",
+    "chip": "1.4 mm",
     "present": true,
     "caution": true,
     "detail_ids": [
      "hull.scanned_bue_girl",
-     "hull.scanned_bumble_bee",
      "hull.scanned_thayer",
      "hull.scanned_pardon_me"
     ]
@@ -153,7 +152,6 @@
     "caution": true,
     "detail_ids": [
      "hull.scanned_bue_girl",
-     "hull.scanned_bumble_bee",
      "hull.scanned_thayer",
      "hull.scanned_pardon_me"
     ]
@@ -197,7 +195,6 @@
     "caution": true,
     "detail_ids": [
      "hull.scanned_bue_girl",
-     "hull.scanned_bumble_bee",
      "hull.scanned_thayer",
      "hull.scanned_pardon_me"
     ]

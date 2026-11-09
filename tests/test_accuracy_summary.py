@@ -75,6 +75,16 @@ def test_every_quoted_and_listed_band_exists_and_no_text_claims_approval():
             assert "approved" not in summary.line.lower() and "verified" not in summary.line.lower()
 
 
+@pytest.mark.parametrize("hull_type", [None, "round_bilge", "hard_chine"])
+def test_invalid_bands_never_appear_in_a_run_summary(hull_type):
+    invalid = band("hull.scanned_bumble_bee")
+    assert invalid.outcome == "invalid"
+    for summary in summarise({"hull": {"path": "scanned_body_plan", "hull_type": hull_type}}).values():
+        assert invalid.id not in (*summary.head_ids, *summary.detail_ids)
+        assert invalid.short not in summary.line
+        assert invalid.chip not in summary.chip
+
+
 def test_facts_of_a_real_export_fixture():
     build = load_build(EXPORT_TASK, "r3")
     facts = facts_from_build(build)

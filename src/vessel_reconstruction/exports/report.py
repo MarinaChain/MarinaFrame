@@ -206,7 +206,7 @@ def write_summary(writer: PageWriter, facts: ReportFacts) -> None:
 
 def write_accuracy_section(writer: PageWriter, facts: dict) -> None:
     """Accuracy and limits: one line per output, then the measured bands behind the lines."""
-    from ..accuracy_bands import band
+    from ..accuracy_bands import bands_for
     from ..accuracy_summary import DRAFT_NOTE, SCOPE_NOTE, summarise
 
     summaries = summarise(facts)
@@ -214,7 +214,7 @@ def write_accuracy_section(writer: PageWriter, facts: dict) -> None:
     writer.wrapped(SCOPE_NOTE)
     for summary in summaries.values():
         writer.wrapped(summary.line, indent="- ")
-    listed = [band(i) for s in summaries.values() if s.present for i in s.detail_ids]
+    listed = [b for s in summaries.values() if s.present for b in bands_for(s.output)]
     if listed:
         writer.line("")
         writer.line("Measured bands (development: the code was tuned on the case; holdout: read once, protocol fixed first)")

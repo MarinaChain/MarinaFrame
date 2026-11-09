@@ -39,8 +39,8 @@ export const BANDS = [
     "n": "1 sheet, 50 of 54 cells",
     "source": "docs/holdouts/round13-bumble-bee.md",
     "section": "Measured decision and model value",
-    "outcome": "met",
-    "caveat": "Passes the fixed rule, but the rule is loose for a small boat (0.11 m is about 4.5 inches) and station numbering was wrong at several stations.",
+    "outcome": "invalid",
+    "caveat": "Invalid: the sheet calibration swapped bow and stern; not a measure of the reader.",
     "measured": true
   },
   {

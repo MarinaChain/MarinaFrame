@@ -18,7 +18,7 @@ from dataclasses import asdict, dataclass
 
 OUTPUTS = ("hull", "tanks", "steel")
 DATASETS = ("development", "holdout", "none")
-OUTCOMES = ("met", "missed", "mixed", "not measured")
+OUTCOMES = ("met", "missed", "mixed", "not measured", "invalid")
 
 
 @dataclass(frozen=True)
@@ -34,7 +34,7 @@ class Band:
     n: str  # how many sheets, ships or items
     source: str  # repository document
     section: str  # heading of the document section that reports it
-    outcome: str  # "met", "missed", "mixed" or "not measured" (against the doc's own target)
+    outcome: str  # "met", "missed", "mixed", "not measured" or "invalid"
     caveat: str  # the main limit of the number
 
     @property
@@ -65,9 +65,8 @@ BANDS: tuple[Band, ...] = (
         short="0.11 m RMS on BUMBLE BEE 47 (holdout, round bilge; some station numbers wrong)",
         chip="0.11 m", dataset="holdout", n="1 sheet, 50 of 54 cells",
         source="docs/holdouts/round13-bumble-bee.md", section="Measured decision and model value",
-        outcome="met",
-        caveat="Passes the fixed rule, but the rule is loose for a small boat (0.11 m is about 4.5 inches) "
-               "and station numbering was wrong at several stations."),
+        outcome="invalid",
+        caveat="Invalid: the sheet calibration swapped bow and stern; not a measure of the reader."),
     Band(
         id="hull.scanned_thayer", output="hull",
         scope="Hull from a scanned body plan with a printed table",
