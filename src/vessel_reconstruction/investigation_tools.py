@@ -172,6 +172,21 @@ class InvestigationTools:
         image, details = _read_image(self.spec["source"], self.root / "input")
         return image, details, self.state["sources"]["source"]["sha256"]
 
+    def _reading_spec(self) -> dict:
+        """The spec that a phase-1 reading is measured against.
+
+        A sheet-only task's sections come from its own earlier reading
+        (materialize.py), not from a declaration. A later reading is checked
+        against the drawing (captured spec, no sections), never against the
+        earlier reading: otherwise the profile station check is skipped and
+        the earlier stations become "declared" (shipd-1-09867-3v-L0 Sonnet
+        live: a second reading kept 11 stations at x 0-100 m over the
+        profile's 9 station lines at 10-90 m).
+        """
+        if self.state.get("sheet_only") and getattr(self, "captured_spec", None) is not None:
+            return self.captured_spec
+        return self.spec
+
     def _refused(self, error: inv.VerificationError, **values):
         return self._observation(False, "proposal_refused", error_code=error.code, message=str(error),
                                  verifier_evidence=error.evidence, **values)
@@ -343,7 +358,7 @@ class InvestigationTools:
                 proposal = {**setup, "region_px": box, "view_id": member["view_id"]}
                 # Drawing-section calibrations locate repeated panel origins without
                 # pretending that a sheet-wide centreline applies to every panel.
-                section = next((s for s in self.spec.get("sections", []) if
+                section = next((s for s in self._reading_spec().get("sections", []) if
                     box[0] <= s["calibration"]["centerline_px"] <= box[2]
                     and box[1] <= s["calibration"]["baseline_px"] <= box[3]), None)
                 dx, dy = box[0] - setup["region_px"][0], box[1] - setup["region_px"][1]
@@ -361,7 +376,7 @@ class InvestigationTools:
                     for field in ("centreline_px", "baseline_px", "x_origin_px"):
                         if setup.get(field) is not None:
                             proposal[field] = setup[field]
-                record = measure_setup(image, self.spec, proposal)
+                record = measure_setup(image, self._reading_spec(), proposal)
                 record.update(status="open_model_choice", evidence_view_id=evidence_view_id,
                               reason=reason, identity_certified=False, family_id=family,
                               inherited_from=setup.get("view_id"), panel_index=index)
@@ -380,7 +395,7 @@ class InvestigationTools:
         from .vessel_description import measure_description
         image, _, _ = self._source()
         setups = list(self.state.get("sheet_setups", {}).values())
-        measured = measure_description(image, self.spec, description, setups, self.intake_hints())
+        measured = measure_description(image, self._reading_spec(), description, setups, self.intake_hints())
         measured["views"] = copy.deepcopy(self.state.get("described_views", []))
         previous = copy.deepcopy(self.state.get("vessel_description"))
         self.state.update(vessel_description=measured, description_phase="complete", description_next_view=None)

@@ -264,6 +264,7 @@ def body_panels(image, state, hints, warnings) -> list[dict]:
     else:
         warnings.append("No body view was named; the whole sheet is taken as the body plan.")
         panels, source = [{"region_px": [0, 0, width, height], "view_id": None}], "the whole sheet"
+    panels = _join_split_halves(panels, kinds, warnings)
     result = []
     for panel in panels:
         region = _with_intake_region(_clip(panel["region_px"], width, height), hint_regions)
@@ -277,7 +278,9 @@ def body_panels(image, state, hints, warnings) -> list[dict]:
             # line contradicts it (measure_setup already snapped near lines).
             on_grid = measured is None or abs(model - measured) <= DATUM_SNAP_PX if _finite(model) else False
             if _finite(model) and low - 1 <= model <= high + 1 and on_grid:
-                datums[field], how = float(model), "model (snapped to grid)"
+                # Snapped like measure_setup: a drawn line near the model's datum is the datum.
+                snapped = float(measured) if measured is not None else float(model)
+                datums[field], how = snapped, "model (snapped to grid)"
             elif measured is not None:
                 datums[field], how = float(measured), "grid line"
             else:
@@ -291,6 +294,39 @@ def body_panels(image, state, hints, warnings) -> list[dict]:
                        "pixels_per_metre": panel.get("pixels_per_metre"),
                        "grid_spacing_m": panel.get("grid_spacing_m"), **datums})
     return result
+
+
+def _join_split_halves(panels: list[dict], kinds: dict, warnings: list) -> list[dict]:
+    """One panel for two "body" panels that are the halves of one overlaid body plan.
+
+    The halves of an overlaid body plan meet at their shared centreline; the
+    contract names them body_aft/body_fore, and "panels" are separate station
+    panels, each with its own centreline. A reading that splits the halves into
+    two panels at the centreline (shipd-1-00679-3v-L0 live, Sonnet and DeepSeek)
+    would spread the stations over the halves by count and cut every curve
+    that crosses the centreline. Such halves become one panel again; its
+    centreline is then measured on the whole body plan.
+    """
+    if len(panels) != 2 or any(kinds.get(p.get("view_id"), "body") != "body" for p in panels):
+        return panels
+    left, right = sorted(panels, key=lambda p: p["region_px"][0])
+    centres = [p.get("centreline_px") for p in (left, right)]
+    if not all(_finite(c) for c in centres) or abs(centres[0] - centres[1]) > DATUM_SNAP_PX:
+        return panels
+    centre = (centres[0] + centres[1]) / 2
+    seam = (left["region_px"][2] + right["region_px"][0]) / 2
+    top = max(left["region_px"][1], right["region_px"][1])
+    bottom = min(left["region_px"][3], right["region_px"][3])
+    shorter = min(p["region_px"][3] - p["region_px"][1] for p in (left, right))
+    if abs(centre - seam) > DATUM_SNAP_PX or abs(left["region_px"][2] - right["region_px"][0]) > DATUM_SNAP_PX \
+            or bottom - top < 0.5 * shorter:
+        return panels
+    joined = dict(left)
+    joined["region_px"] = [left["region_px"][0], min(left["region_px"][1], right["region_px"][1]),
+                           right["region_px"][2], max(left["region_px"][3], right["region_px"][3])]
+    warnings.append("Two body panels meet at their shared centreline: they are taken as the aft and fore "
+                    "halves of one overlaid body plan.")
+    return [joined]
 
 
 def _with_intake_region(region: list[int], hint_regions: list) -> list[int]:
