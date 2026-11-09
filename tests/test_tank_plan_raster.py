@@ -211,3 +211,20 @@ def test_content_words_match_whole_tokens():
     assert raster.content_of('NO.2 TW TANK') == 'water ballast'
     assert raster.content_of('FO SERVICE') == 'fuel oil'
     assert raster.content_of('FORE PEAK') == 'water ballast'
+
+
+def _stub_view(line_columns, width=400, height=100):
+    from types import SimpleNamespace
+    vertical = np.zeros((height, width), bool)
+    vertical[:, line_columns] = True
+    return SimpleNamespace(ink=SimpleNamespace(vertical=vertical),
+                           axis=SimpleNamespace(x_m=lambda columns: np.asarray(columns, float) / 10))
+
+
+def test_a_weak_alignment_does_not_shift_the_plan():
+    weak_plan, weak_profile = _stub_view([100, 200]), _stub_view([120, 220])
+    shift, _, agreeing = raster.align_to_profile(weak_plan, weak_profile)
+    assert not agreeing and shift == 0.0
+    columns = [50, 100, 150, 200, 250]  # five bulkheads shifted by 2 m agree
+    shift, _, agreeing = raster.align_to_profile(_stub_view(columns), _stub_view([c + 20 for c in columns]))
+    assert agreeing and shift == pytest.approx(2.0)

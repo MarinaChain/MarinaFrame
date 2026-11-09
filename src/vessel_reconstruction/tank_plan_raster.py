@@ -1596,7 +1596,8 @@ def align_to_profile(plan: ReadView, profile: ReadView, search_m: float = None) 
     """Shift (m) of a plan's x that puts its transverse bulkheads on the profile's: the shift
     within ``search_m`` (default ALIGN_SEARCH_M) that best correlates the long vertical lines of both views (0.1 m
     bins). Used when x comes from a scale bar, with no frame numbers to tie the views.
-    Returns the shift, the evidence and whether at least ALIGN_MIN_AGREEING bins agree."""
+    Returns the shift, the evidence and whether at least ALIGN_MIN_AGREEING bins agree; a weak
+    alignment shifts nothing (shift 0)."""
     def presence(view: ReadView) -> tuple[np.ndarray, float]:
         vertical = view.ink.vertical
         long_columns = vertical.sum(axis=0) >= ALIGN_MIN_LINE * vertical.shape[0]
@@ -1616,8 +1617,9 @@ def align_to_profile(plan: ReadView, profile: ReadView, search_m: float = None) 
     scores = {shift: float(np.sum(np.roll(a, shift) & b)) for shift in range(-steps, steps + 1)}
     best = max(scores, key=lambda k: (scores[k], -abs(k)))
     agreeing = scores[best] >= ALIGN_MIN_AGREEING
-    return best * ALIGN_BIN_M, (f'plan shifted {best * ALIGN_BIN_M:+.1f} m: {scores[best]:.0f} vertical-line bins '
-                                f'agree with the profile (at no shift: {scores[0]:.0f})'), agreeing
+    shift_m = best * ALIGN_BIN_M if agreeing else 0.0
+    return shift_m, (f'plan shifted {shift_m:+.1f} m: best {best * ALIGN_BIN_M:+.1f} m has {scores[best]:.0f} '
+                     f'vertical-line bins agree with the profile (at no shift: {scores[0]:.0f})'), agreeing
 
 
 def double_bottom_level(profile: ReadView, xs: np.ndarray) -> float | None:
