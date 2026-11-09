@@ -22,8 +22,11 @@ def current_table(tools):
     if existing:
         table = VesselTable.from_json(existing)
         for row in table.stations:
+            # Only drawn stations can carry the model's own curve (hull-end rows are not drawn stations).
+            if row.id not in tools.state.get("authored_sections", {}) and row.id not in tools.state.get("model_choices", {}):
+                continue
             curve = tools._section_curve(row.id)
-            if curve is not None and (row.id in tools.state.get("authored_sections", {}) or row.id in tools.state.get("model_choices", {})):
+            if curve is not None:
                 row.points_yz_m = curve
                 row.keel_z_m, row.top_z_m = curve[0][1], curve[-1][1]
         return table
@@ -35,8 +38,21 @@ def current_table(tools):
     return VesselTable(rows, waterline_grid(rows)) if rows else None
 
 
+def drawn_stations(table: VesselTable) -> VesselTable | None:
+    """The table's drawn stations: hull-end rows (hull_ends.py, ``inferred``) are not drawn in the body plan.
+
+    The fit compares the table with the drawn body plan; end rows have no
+    curve there, and their stretched shapes would only add fairness penalties.
+    """
+    rows = [row for row in table.stations if row.source != "inferred"]
+    if len(rows) == len(table.stations):
+        return table
+    return VesselTable(rows, list(table.waterlines_z_m), table.trend, table.warnings) if rows else None
+
+
 def score(tools, table=None):
     table = table or current_table(tools)
+    table = drawn_stations(table) if table is not None else None
     if table is None:
         return {"combined_fit": None, "cells": [], "station_ink_fit": {}}
     image, _, _ = tools._source()

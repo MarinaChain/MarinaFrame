@@ -805,8 +805,14 @@ class DomainTools(InvestigationTools):
                                  last_valid_preserved=self.state["last_valid_candidate"] is not None)
 
     def _build_first_hull(self):
-        from .first_hull_tools import build_first_hull
-        return build_first_hull(self)
+        from .first_hull_tools import build_first_hull, start_next_reading
+        observation = build_first_hull(self)
+        if observation.get("ok"):
+            next_reading = start_next_reading(self)
+            if next_reading:
+                observation["next_reading"] = next_reading
+                observation["message"] = (observation.get("message", "") + " " + next_reading["message"])[:600]
+        return observation
 
     def _build_draft(self):
         """Best-effort build: guess where the source is ambiguous, then build.

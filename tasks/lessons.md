@@ -114,3 +114,9 @@
 - **Trigger:** After a merge, `make test-quick` failed (a stale `marinaframe-app-core` build cache made lint report missing methods), but the same shell line pushed anyway because the push was not chained to the test result. The code was fine; `cargo clean -p marinaframe-app-core` and a rerun passed.
 - **Rule:** Chain the push to the check: `make test-quick && git push ...`. If the check output goes through a pipe (`| tail`), run `set -o pipefail` first: without it the chain sees `tail`'s exit code and pushes after a failure (it happened twice on 2026-11-09). If a Rust error names a symbol that exists in the source after a merge, clean that package and rerun before changing code.
 - **Why:** An unchained push can publish a state that the checks did not pass.
+
+### Score the delivered build, not the state you meant to keep (MarinaFrame)
+- **Date:** 2026-11-09
+- **Trigger:** Best-of-2 readings kept the better first hull in the task state (dtmb5415-3v-L0: 13.8 % against 32.6 %), but `build_draft` then reused the set-aside reading's build because build reuse matches generation and revision ids, which do not name the materialized setup. The digest scored 32.6 %.
+- **Rule:** When task state is swapped or restored (a new reading, a rebuilt setup), move the replaced builds out of `builds` (history only) so no later build can reuse them. After a selection change, score every valid build of a live case (`score_builds` pattern) and check that the digest's scored STEP is the one the state names.
+- **Why:** Reuse keys and delivery paths are separate from the state a selection writes; a correct selection can still deliver the wrong hull.

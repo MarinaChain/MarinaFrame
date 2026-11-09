@@ -201,6 +201,28 @@ def cap_at_profile_outline(sections: list[dict], anchors: list[Anchor], heights:
     return sections, anchors
 
 
+def hull_end_extension(image, setups, description, sections, hints):
+    """A first_hull ``extend`` callback that adds the hull ends the profile shows, or None.
+
+    The end places and their outline heights are read once; each fitted table
+    then gets end rows shaped from its own end stations (hull_ends.py).
+    """
+    from . import hull_ends
+    ends = hull_ends.profile_ends(image, setups, description, hints)
+    if ends is None:
+        return None
+    places = hull_ends.end_stations(ends, [s["x_m"] for s in sections])
+    heights = hull_ends.end_heights(image, ends, places) if places else {}
+    if not heights:
+        return None
+    xs = sorted(float(s["x_m"]) for s in sections)
+    tapers = hull_ends.end_tapers(image, setups, ends, places, {"aft": xs[0], "fore": xs[-1]}, hints)
+
+    def extend(table):
+        return hull_ends.extend_to_ends(table, sections, places, heights, tapers)
+    return extend
+
+
 def build_first_hull(tools):
     from .vessel_description import first_hull_spec, describe_table
     description = tools.state.get("vessel_description")
@@ -252,6 +274,8 @@ def build_first_hull(tools):
     outline = station_outline_heights(image, list(tools.state.get("sheet_setups", {}).values()), description,
                                       sections, tools.intake_hints())
     sections, anchors = cap_at_profile_outline(sections, anchors, outline)
+    extend = hull_end_extension(image, list(tools.state.get("sheet_setups", {}).values()), description,
+                                sections, tools.intake_hints())
     built = {}
     retried_builds = []
 
@@ -268,7 +292,7 @@ def build_first_hull(tools):
         return build_failure(outcome)
 
     table, success, left_out = first_hull(sections, anchors, base_spec, build,
-                                          prior=prior_dimensions(base_spec, sections))
+                                          prior=prior_dimensions(base_spec, sections), extend=extend)
     if not success:
         reason = getattr(success, "reason", "build_failed")
         return tools._observation(False, "blocked", error_code=f"first_hull_{reason}",
@@ -295,7 +319,7 @@ def build_first_hull(tools):
     tools.state["last_valid_candidate"] = candidate
     tools.state["best_valid_candidate"] = copy.deepcopy(candidate)
     tools._save()
-    no_ink = all(row.source == "prior" for row in table.stations)
+    no_ink = all(row.source in ("prior", "inferred") for row in table.stations)
     message = ("No usable ink: the first hull is the prior form scaled to the vessel size. Author or correct "
                "sections from the drawing." if no_ink else
                "Anchored first hull ready. Render it, preserve good ink and improve only the weak sections.")
@@ -352,6 +376,86 @@ def setup_changes(old: dict, new: dict) -> list[str]:
     return changes
 
 
+# A sheet-only first hull is read READINGS times: after the first hull the
+# model reads the sheet again (phase 1), and of the first hulls the one with
+# the better drawing fit (fit_feedback.score, combined_fit: drawing only, never
+# truth) is kept. Live runs differ by 1-5 points from the model's reading alone
+# (docs/CONTINUATION_STATUS.md, variance); two readings cost a few model calls.
+READINGS = 2
+# Description state of one reading; a new reading starts it again.
+READING_STATE = {"description_phase": "views", "description_next_view": None, "described_views": [],
+                 "sheet_setups": {}}
+NEXT_READING_MESSAGE = ("Second reading (best of 2 by drawing fit): read the sheet again from the views, as an "
+                        "independent check: describe_views, propose_sheet_setup and describe_vessel. The first "
+                        "hull of the reading that fits the drawing better is kept.")
+
+
+def reading_record(tools, kept: bool | None = None) -> dict:
+    """Summary of one reading's first hull: its drawing fit and stations."""
+    fit = (tools.state.get("fit_score") or {}).get("combined_fit")
+    stations = (tools.state.get("vessel_description") or {}).get("stations") or []
+    record = {"combined_fit": fit, "station_count": len(stations)}
+    if kept is not None:
+        record["kept"] = kept
+    return record
+
+
+def start_next_reading(tools) -> dict | None:
+    """After the first sheet-only first hull, start another phase-1 reading (best of READINGS).
+
+    The built hull stays the task's draft while the model reads again; the
+    new reading's first hull is built by rebuild_if_setup_changed and kept
+    only when it fits the drawing better. Returns the observation part, or
+    None when no further reading is due.
+    """
+    if not tools.state.get("sheet_only") or tools.state.get("phase1_only"):
+        return None
+    readings = tools.state.setdefault("readings", [])
+    if readings:
+        return None  # Only the controller's first build starts the readings.
+    readings.append(reading_record(tools, kept=True))
+    if len(readings) >= READINGS:
+        tools._save()
+        return None
+    tools.state.update(copy.deepcopy(READING_STATE))
+    tools._save()
+    return {"reading": len(readings) + 1, "of": READINGS, "message": NEXT_READING_MESSAGE}
+
+
+def keep_better_reading(tools, snapshot: dict, materialized: bytes | None, observation: dict) -> dict:
+    """Keep the earlier reading's first hull unless the new one fits the drawing better.
+
+    ``snapshot`` is the task state before the rebuild and ``materialized``
+    its materialized spec file. Returns the selection record.
+    """
+    from .agent_tools import MATERIALIZED_SPEC
+    from .schema import load_bounded_json
+    old_fit = (snapshot.get("fit_score") or {}).get("combined_fit")
+    new_fit = (tools.state.get("fit_score") or {}).get("combined_fit") if observation.get("ok") else None
+    # The new reading replaces the earlier one only when it fits the drawing strictly better.
+    keep_old = materialized is not None and old_fit is not None and (new_fit is None or new_fit <= old_fit)
+    readings = copy.deepcopy(tools.state.get("readings") or [])
+    for record in readings:
+        if record.get("kept"):
+            record["kept"] = keep_old
+    readings.append({**reading_record(tools), "combined_fit": new_fit, "kept": not keep_old})
+    selection = {"kept": "earlier" if keep_old else "new", "fit_earlier": old_fit, "fit_new": new_fit}
+    if keep_old:
+        (tools.root / "input" / MATERIALIZED_SPEC).write_bytes(materialized)
+        set_aside = snapshot.get("set_aside_builds", []) + tools.state.get("builds", [])
+        tools.state = copy.deepcopy(snapshot)
+        # The new reading's builds are kept as history only: a build is reused by
+        # its generation and revision ids, which do not name the reading's setup.
+        tools.state["set_aside_builds"] = set_aside
+        tools.spec = load_bounded_json(tools.root / "input" / MATERIALIZED_SPEC)
+        write_json(tools.root / "vessel.json", {"description": tools.state.get("vessel_description"),
+                                                "table": tools.state.get("vessel_table")})
+    tools.state["readings"] = readings
+    tools.state["reading_selection"] = selection
+    tools._save()
+    return selection
+
+
 def rebuild_if_setup_changed(tools, previous_description) -> dict | None:
     """Build the first hull again when a later reading changes its setup (sheet-only happy path).
 
@@ -374,19 +478,37 @@ def rebuild_if_setup_changed(tools, previous_description) -> dict | None:
     changes = setup_changes(old, new)
     if not changes:
         return None
+    snapshot = copy.deepcopy(tools.state)
+    from .agent_tools import MATERIALIZED_SPEC
+    materialized_path = tools.root / "input" / MATERIALIZED_SPEC
+    materialized = materialized_path.read_bytes() if materialized_path.exists() else None
     tools.state.pop("materialized_spec_sha256", None)
     tools.state.update(copy.deepcopy(SECTION_STATE))
+    # Builds of the old setup are history: the new setup must never reuse one
+    # (build reuse matches generation and revision ids, which do not name the setup).
+    tools.state["set_aside_builds"] = tools.state.get("set_aside_builds", []) + tools.state.get("builds", [])
+    tools.state["builds"] = []
     tools.spec = tools.captured_spec
     tools._save()
     observation = build_first_hull(tools)
+    selection = keep_better_reading(tools, snapshot, materialized, observation)
+    if selection["kept"] == "earlier":
+        return tools._observation(True, "earlier_reading_kept", setup_changes=changes[:12],
+                                  reading_selection=selection,
+                                  candidate=copy.deepcopy(tools.state.get("last_valid_candidate")),
+                                  message=(f"The new reading changed the hull setup, but its first hull fits the "
+                                           f"drawing no better (fit {selection['fit_new']} vs "
+                                           f"{selection['fit_earlier']}) or was not built; the earlier reading "
+                                           "and its first hull were kept."))
     observation["setup_changes"] = changes[:12]
+    observation["reading_selection"] = selection
     observation["message"] = ("The corrected reading changed the hull setup; the first hull was built again from it "
                               "and earlier section edits were set aside. " + observation.get("message", ""))[:600]
     return observation
 
 
 # Kinds of table warning that say what happened to the ink (fairness notes stay in the table).
-REPORTED_WARNINGS = ("no_ink", "anchor_dropped", "anchor_left_out")
+REPORTED_WARNINGS = ("no_ink", "anchor_dropped", "anchor_left_out", "inferred_end")
 
 
 def hull_warnings(table, retried_builds: list) -> list[str]:
