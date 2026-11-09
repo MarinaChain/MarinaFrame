@@ -11,7 +11,7 @@ import { createSectionGrowth } from './growth3d.js';
 import { createAnimation } from './animation.js';
 import { placeLabels, steelLegend, steelToken, tankLegend, tankToken } from './tanks.js';
 import { createLighting, createPaintMaterial, createSteelMaterial, createTankMaterial, setUpRenderer, stylePaint } from './look3d.js';
-import { bootTopBand, frameLabel, frameAt, hullReference, nearestFrameX, pointReadout } from './reference3d.js';
+import { bootTopBand, fitDistance, frameLabel, frameAt, hullReference, nearestFrameX, pointReadout, STANDARD_VIEWS, viewOfKey } from './reference3d.js';
 import { createOverlays } from './overlay3d.js';
 import { createSectionCut } from './cut3d.js';
 import { createCutPanel, createToolbar, toolButton } from './controls3d.js';
@@ -22,8 +22,8 @@ const PLANE_MARGIN = 0.25;
 const FRAME_MARGIN = 1.1;
 /** Size of a guessed-range band around the hull, as a fraction of the hull's beam and depth. */
 const GUESS_BAND_MARGIN = 0.04;
-/** Camera direction for the default view: from forward, starboard and above. */
-const HOME_DIRECTION = new THREE.Vector3(1.0, -1.25, 0.75).normalize();
+/** Camera direction for the default view: from forward, starboard and above (the iso view). */
+const HOME_DIRECTION = new THREE.Vector3(...STANDARD_VIEWS.iso.direction).normalize();
 /** A pointer that moves less than this (CSS px) between press and release is a click, not a drag. */
 const CLICK_SLOP_PX = 4;
 /** The CAD worker's GLB is in millimetres. */
@@ -108,13 +108,18 @@ export function createModelView({ host, onPick = null }) {
   host.prepend(renderer.domElement);
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(35, 1, 0.05, 2000);
-  camera.up.set(0, 0, 1);
+  // Two cameras share one place: perspective, and orthographic for true-scale profile, plan and
+  // body plan views. `camera` is the one in use; the orbit controls drive it.
+  const perspective = new THREE.PerspectiveCamera(35, 1, 0.05, 2000);
+  const orthographic = new THREE.OrthographicCamera(-1, 1, 1, -1, -2000, 4000);
+  perspective.up.set(0, 0, 1);
+  orthographic.up.set(0, 0, 1);
+  let camera = perspective;
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = !prefersReducedMotion();
   controls.dampingFactor = 0.12;
-  // Keep the camera above the ground grid.
-  controls.maxPolarAngle = Math.PI * 0.49;
+  // Down to the horizon, so the profile and body plan views are level; never below the ground.
+  controls.maxPolarAngle = Math.PI / 2;
 
   const lighting = createLighting({ renderer, scene });
   /** The section cut: one clipping plane on every model material, with solid cut faces. */
@@ -171,6 +176,17 @@ export function createModelView({ host, onPick = null }) {
   const cutButton = toolButton({ text: 'Section', iconName: 'cut', label: 'Section cut', keyHint: 'C', pressed: false, onClick: () => toggleCutPanel() });
   cutButton.setAttribute('aria-expanded', 'false');
   cutButton.setAttribute('aria-controls', cutPanel.id);
+  const viewButtons = {};
+  for (const [name, view] of Object.entries(STANDARD_VIEWS)) {
+    viewButtons[name] = toolButton({ text: view.name, label: view.label, keyHint: view.key, pressed: name === 'iso', onClick: () => showView(name) });
+  }
+  const orthoButton = toolButton({ text: 'Ortho', label: 'Orthographic camera', keyHint: 'P', pressed: false, onClick: () => setOrthographic(!camera.isOrthographicCamera) });
+  const fitButton = toolButton({ iconName: 'fit', label: 'Fit the selection', keyHint: 'F', onClick: () => fitSelection() });
+  toolbar.add('Views', ...Object.values(viewButtons), orthoButton, fitButton);
+  /** Mark the standard view shown (null: the camera has moved off every one). */
+  function markView(name) {
+    for (const [key, button] of Object.entries(viewButtons)) button.setAttribute('aria-pressed', String(key === name));
+  }
   toolbar.add('Section', cutButton);
   host.append(toolbar.element, cutPanel.element);
 
@@ -245,7 +261,17 @@ export function createModelView({ host, onPick = null }) {
   host.addEventListener('keydown', (event) => {
     if (event.metaKey || event.ctrlKey || event.altKey || event.target.closest('input, select, textarea')) return;
     const overlayKey = OVERLAY_KEYS[event.key.toLowerCase()];
-    if (event.key === 'c' || event.key === 'C') {
+    const view = viewOfKey(event.key);
+    if (view) {
+      showView(view);
+      event.preventDefault();
+    } else if (event.key === 'p' || event.key === 'P') {
+      setOrthographic(!camera.isOrthographicCamera);
+      event.preventDefault();
+    } else if (event.key === 'f' || event.key === 'F') {
+      fitSelection();
+      event.preventDefault();
+    } else if (event.key === 'c' || event.key === 'C') {
       toggleCutPanel();
       event.preventDefault();
     } else if (overlayKey) {
@@ -305,6 +331,7 @@ export function createModelView({ host, onPick = null }) {
   controls.addEventListener('start', () => {
     cameraMove.cancel();
     cameraAtHome = false;
+    markView(null);
   });
 
   function showEmpty(title, text) {
@@ -552,9 +579,10 @@ export function createModelView({ host, onPick = null }) {
     const height = host.clientHeight;
     if (!width || !height) return;
     renderer.setSize(width, height);
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
-    if (cameraAtHome) resetView();
+    perspective.aspect = width / height;
+    perspective.updateProjectionMatrix();
+    setOrthoHeight(orthographic.top);
+    if (cameraAtHome) fitView({ direction: viewDirection });
     requestRender();
   }
   new ResizeObserver(resize).observe(host);
@@ -683,43 +711,164 @@ export function createModelView({ host, onPick = null }) {
     return group;
   }
 
-  function resetView({ animate = false } = {}) {
-    // An older animated move would aim at the old target and overwrite this view.
-    cameraMove.cancel();
-    if (!hull && !frameBox && !wholeVessel) return;
-    cameraAtHome = true;
+  /** What the views frame: the whole vessel, else the hull, else the live section curves. */
+  function modelBox() {
+    if (!hull && !frameBox && !wholeVessel) return null;
     // Frame the hull and the section planes around it, which reach past the hull
     // across and up; the hull alone would leave them against the pane edge.
     const box = wholeVessel ? new THREE.Box3().setFromObject(wholeVessel) : hull ? new THREE.Box3().setFromObject(hull) : frameBox.clone();
     const hullSize = box.getSize(new THREE.Vector3());
     box.expandByVector(new THREE.Vector3(0, hullSize.y * PLANE_MARGIN, hullSize.z * PLANE_MARGIN));
-    const sphere = box.getBoundingSphere(new THREE.Sphere());
-    // Fit the bounding sphere inside the narrower of the vertical and horizontal fields of view.
-    const halfVertical = THREE.MathUtils.degToRad(camera.fov / 2);
-    const halfHorizontal = Math.atan(Math.tan(halfVertical) * camera.aspect);
-    const distance = sphere.radius / Math.sin(Math.min(halfVertical, halfHorizontal)) * FRAME_MARGIN;
-    const target = sphere.center.clone();
-    const position = target.clone().addScaledVector(HOME_DIRECTION, distance);
+    return box;
+  }
+
+  /** The orthographic camera's half height (metres at zoom 1) and its width from the pane. */
+  function setOrthoHeight(halfHeight) {
+    const aspect = perspective.aspect || 1;
+    orthographic.top = halfHeight;
+    orthographic.bottom = -halfHeight;
+    orthographic.left = -halfHeight * aspect;
+    orthographic.right = halfHeight * aspect;
+    orthographic.updateProjectionMatrix();
+  }
+
+  const halfFov = () => THREE.MathUtils.degToRad(perspective.fov / 2);
+
+  /** The perspective distance that shows what the camera in use shows at the target. */
+  function viewDistance() {
+    if (camera.isOrthographicCamera) return orthographic.top / orthographic.zoom / Math.tan(halfFov());
+    return camera.position.distanceTo(controls.target);
+  }
+
+  /**
+   * Put both cameras at `distance` from `target` along `direction`. The orthographic one shows
+   * `orthoHalfHeight` metres above and below the target (by default what the perspective shows there).
+   */
+  function placeCameras(target, direction, distance, orthoHalfHeight = distance * Math.tan(halfFov())) {
+    controls.target.copy(target);
+    perspective.position.copy(target).addScaledVector(direction, distance);
+    orthographic.position.copy(perspective.position);
+    orthographic.zoom = 1;
+    setOrthoHeight(orthoHalfHeight);
+    controls.update();
+  }
+
+  /**
+   * Camera distance that fits a box seen from `direction` (zoom to extents): the box corners are
+   * measured across and up the screen, so a profile or a plan fills the pane, not a sphere.
+   */
+  function boxFitDistance(box, direction) {
+    const centre = box.getCenter(new THREE.Vector3());
+    const worldUp = Math.abs(direction.z) > 0.99 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
+    const up = worldUp.clone().addScaledVector(direction, -worldUp.dot(direction)).normalize();
+    const right = new THREE.Vector3().crossVectors(up, direction).normalize();
+    let halfWidth = 0;
+    let halfHeight = 0;
+    let halfDepth = 0;
+    const corner = new THREE.Vector3();
+    for (let i = 0; i < 8; i += 1) {
+      corner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).sub(centre);
+      halfWidth = Math.max(halfWidth, Math.abs(corner.dot(right)));
+      halfHeight = Math.max(halfHeight, Math.abs(corner.dot(up)));
+      halfDepth = Math.max(halfDepth, Math.abs(corner.dot(direction)));
+    }
+    // The radius that fits both screen extents, as fitDistance takes it (a sphere seen edge on).
+    const aspect = perspective.aspect || 1;
+    const tanHalf = Math.tan(halfFov());
+    const fit = Math.max(halfHeight, halfWidth / aspect) / tanHalf * FRAME_MARGIN;
+    // Perspective stands back by the box depth too; orthographic shows exactly the screen extent.
+    return { distance: Math.max(fit + halfDepth, fitDistance(1e-3, perspective.fov, aspect)), orthoHalfHeight: fit * tanHalf };
+  }
+
+  /** The direction the camera looks from now (target to camera, unit length). */
+  function currentDirection() {
+    return camera.position.clone().sub(controls.target).normalize();
+  }
+
+  /**
+   * Turn and move the camera to look from `direction` at `box` (THREE.Box3; the model by
+   * default), fitted to the pane. Animated unless the person prefers reduced motion. The turn
+   * goes the short way round the sphere; a half turn goes round the vertical.
+   */
+  function fitView({ direction, box = modelBox(), animate = false }) {
+    // An older animated move would aim at the old target and overwrite this view.
+    cameraMove.cancel();
+    if (!box || box.isEmpty()) return;
+    const toDirection = direction.clone().normalize();
+    const centre = box.getCenter(new THREE.Vector3());
+    const { distance, orthoHalfHeight } = boxFitDistance(box, toDirection);
     if (!animate || prefersReducedMotion()) {
-      controls.target.copy(target);
-      camera.position.copy(position);
-      controls.update();
-      requestRender();
+      placeCameras(centre, toDirection, distance, orthoHalfHeight);
+      requestFrame();
       return;
     }
     const fromTarget = controls.target.clone();
-    const fromPosition = camera.position.clone();
+    const fromDirection = currentDirection();
+    const fromDistance = viewDistance();
+    const fromHalfHeight = camera.isOrthographicCamera ? orthographic.top / orthographic.zoom : fromDistance * Math.tan(halfFov());
+    const turn = fromDirection.dot(toDirection) < -0.999
+      ? new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI)
+      : new THREE.Quaternion().setFromUnitVectors(fromDirection, toDirection);
+    const step = new THREE.Quaternion();
+    const target = new THREE.Vector3();
     const began = performance.now();
     cameraMove.start((now) => {
       const t = Math.min(1, (now - began) / HOME_MOVE_MS);
       const eased = 1 - (1 - t) ** 4;
-      controls.target.lerpVectors(fromTarget, target, eased);
-      camera.position.lerpVectors(fromPosition, position, eased);
-      controls.update();
+      step.identity().slerp(turn, eased);
+      target.lerpVectors(fromTarget, centre, eased);
+      const along = t < 1 ? fromDirection.clone().applyQuaternion(step) : toDirection;
+      placeCameras(target, along, fromDistance + (distance - fromDistance) * eased,
+        fromHalfHeight + (orthoHalfHeight - fromHalfHeight) * eased);
       draw();
       return t < 1;
     });
   }
+
+  /** The direction of the last standard view; a resize re-fits it while the camera stays there. */
+  let viewDirection = HOME_DIRECTION.clone();
+
+  function resetView({ animate = false } = {}) {
+    showView('iso', { animate });
+  }
+
+  /** Show a standard view (reference3d.js STANDARD_VIEWS) of the whole model. */
+  function showView(name, { animate = true } = {}) {
+    if (!modelBox()) return;
+    viewDirection = new THREE.Vector3(...STANDARD_VIEWS[name].direction).normalize();
+    cameraAtHome = true;
+    fitView({ direction: viewDirection, animate });
+    markView(name);
+  }
+
+  /** Switch between the perspective and the orthographic camera, keeping the view. */
+  function setOrthographic(on) {
+    if (on === camera.isOrthographicCamera) return;
+    const target = controls.target.clone();
+    const direction = currentDirection();
+    const distance = viewDistance();
+    camera = on ? orthographic : perspective;
+    controls.object = camera;
+    placeCameras(target, direction, distance);
+    orthoButton.setAttribute('aria-pressed', String(on));
+    requestRender();
+  }
+
+  /** Frame the selection (the outlined part, else the tinted part) from the current direction. */
+  function fitSelection() {
+    let box = null;
+    if (highlight) box = new THREE.Box3().setFromObject(highlight);
+    else if (highlightedId && wholeVessel) {
+      box = new THREE.Box3();
+      for (const mesh of [...shellMeshes, ...tankMeshes]) if (mesh.userData.partId === highlightedId) box.expandByObject(mesh);
+    }
+    if (!box || box.isEmpty()) box = modelBox();
+    if (!box) return;
+    cameraAtHome = false;
+    markView(null);
+    fitView({ direction: currentDirection(), box, animate: true });
+  }
+
 
   return {
     /**

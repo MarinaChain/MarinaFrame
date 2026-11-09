@@ -2,7 +2,7 @@
 // Run: npm run test:ui
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { baselineZ, bootTopBand, cutLabel, cutPlane, frameAt, frameLabel, frameLabelStep, hullReference, nearestFrameX, niceAtLeast, niceAtMost, paintZone, pointReadout, referenceLine, scaleBar } from '../ui/js/reference3d.js';
+import { baselineZ, bootTopBand, cutLabel, cutPlane, frameAt, frameLabel, frameLabelStep, hullReference, nearestFrameX, niceAtLeast, niceAtMost, fitDistance, paintZone, pointReadout, referenceLine, scaleBar, STANDARD_VIEWS, viewOfKey } from '../ui/js/reference3d.js';
 
 /** The Gunnerus hull part of the whole-vessel GLB (metres, ship frame; skegs reach below z = 0). */
 const GUNNERUS = { min: [-1, -4.8, -0.517], max: [34, 4.8, 4.287] };
@@ -94,4 +94,23 @@ test('a point reads in metres with its frame, and the reference says its source'
   assert.equal(pointReadout([12.1, -1.2, 2], ref), 'x 12.10 m · y −1.20 m · z 2.00 m · Fr 22');
   assert.equal(referenceLine(ref), 'DWL z 2.57 m (guessed) · frames 0.55 m (guessed)');
   assert.equal(referenceLine(hullReference(GUNNERUS, { designWaterlineZ: 2.7, frameSpacingM: 0.6 })), 'DWL z 2.70 m · frames 0.60 m');
+});
+
+test('profile and plan views put the bow to the right, body plans look along x', () => {
+  // Screen right = view direction (camera to target) x up; up is z, or y in plan.
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const right = (direction, up) => cross(direction.map((v) => -v), up);
+  assert.ok(right(STANDARD_VIEWS.profile.direction, [0, 0, 1])[0] > 0.99);
+  assert.ok(right(STANDARD_VIEWS.plan.direction, [0, 1, 0])[0] > 0.99);
+  assert.deepEqual(STANDARD_VIEWS.bow.direction, [1, 0, 0]);
+  assert.deepEqual(STANDARD_VIEWS.stern.direction, [-1, 0, 0]);
+  assert.equal(viewOfKey('2'), 'profile');
+  assert.equal(viewOfKey('9'), null);
+});
+
+test('the fit distance fits the narrower field of view', () => {
+  // A 45 degree view: a sphere of radius sin(22.5 deg) fits at distance 1 (no margin).
+  assert.ok(Math.abs(fitDistance(Math.sin(Math.PI / 8), 45, 2, 1) - 1) < 1e-9);
+  // A tall, narrow view fits by its width, so it stands further back.
+  assert.ok(fitDistance(1, 45, 0.5) > fitDistance(1, 45, 2));
 });

@@ -170,3 +170,32 @@ export function referenceLine(reference) {
   return `DWL z ${reference.designWaterlineZ.value.toFixed(2)} m${source(reference.designWaterlineZ)}`
     + ` · frames ${reference.frameSpacingM.value.toFixed(2)} m${source(reference.frameSpacingM)}`;
 }
+
+/**
+ * Standard views: the direction from the target to the camera (ship frame, z up) and the key.
+ * Profile looks from starboard and plan from above, both with the bow to the right; the body plan
+ * views look from ahead (bow) and from astern (stern). The plan direction leans a hair to
+ * starboard so "up" on screen is to port, not undefined.
+ */
+export const STANDARD_VIEWS = {
+  iso: { name: 'Iso', label: 'Iso view', key: '1', direction: [1.0, -1.25, 0.75] },
+  profile: { name: 'Profile', label: 'Profile from starboard', key: '2', direction: [0, -1, 0] },
+  plan: { name: 'Plan', label: 'Plan from above', key: '3', direction: [0, -1e-4, 1] },
+  bow: { name: 'Bow', label: 'Body plan from ahead', key: '4', direction: [1, 0, 0] },
+  stern: { name: 'Stern', label: 'Body plan from astern', key: '5', direction: [-1, 0, 0] },
+};
+
+/** The standard view of a key ("1" to "5"), or null. */
+export function viewOfKey(key) {
+  return Object.keys(STANDARD_VIEWS).find((name) => STANDARD_VIEWS[name].key === key) || null;
+}
+
+/**
+ * Camera distance that fits a sphere of `radius` in a view with a vertical field of view
+ * `fovDeg` and an `aspect` (width / height), with `margin` (1.1: 10 % space around it).
+ */
+export function fitDistance(radius, fovDeg, aspect, margin = 1.1) {
+  const halfVertical = (fovDeg * Math.PI) / 360;
+  const halfHorizontal = Math.atan(Math.tan(halfVertical) * aspect);
+  return (radius / Math.sin(Math.min(halfVertical, halfHorizontal))) * margin;
+}
