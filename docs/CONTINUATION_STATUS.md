@@ -662,7 +662,7 @@ Live sheet-only round `work/round-3view-L0-sonnet-217660c` (snapshot `work/snap-
 
 Gates 2 % RMS half-beam, 5 % volume (development truth). 2/5 pass (DeepSeek: 1/5). All 98
 requests answered as `claude-sonnet-5-5`; no rate limit, no switch. 5-15 s per request. Refused
-replies were all `operation_contract` (19 of 98; dtmb and 00679 7 each). List cost is the CLI's
+replies were all `operation_contract` (18 of 98; dtmb and 00679 7 each). List cost is the CLI's
 API-price estimate; the subscription charges no per-request cost (receipt `cost` 0). Prompt
 tokens include cache reads/writes and image tokens. Open: 00679 and 09867 regress against
 DeepSeek (inspect their section edits); `operation_contract` refusals; Linux (the provider
