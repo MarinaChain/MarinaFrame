@@ -1,0 +1,5741 @@
+{
+  "implementation_commit": "4232502",
+  "engineering_approved": false,
+  "method": "One frozen measurement per sheet; join_chine post-processes the same reading; unchanged rank identities and harness scorers.",
+  "cases": [
+    {
+      "sheet": "PARDON ME",
+      "sheet_path": "/Users/jonathanjie/Documents/workspace/MarinaFrame/work/sources/haer/master-pnp-habshaer-ny-ny2300-ny2390-sheet-00004a.tif",
+      "sheet_sha256": "586276fc9563e49edd1a7acf3eb6ab229f70377e424d070dfaa67f2a0c7ebb49",
+      "truth_path": "/private/tmp/claude-501/pardon-me/truth_s4.json",
+      "truth_sha256": "ab33dc13e0c1ffec81fb1e45068788953adb033d6bc9cb29b3e132da03089242",
+      "calibration": {
+        "centre_column": 3270.0,
+        "pixels_per_metre": 984.251968503937,
+        "waterline_rows": {
+          "3-0-0": 4329,
+          "2-0-0": 4629,
+          "1-0-0": 4929,
+          "0-0-0": 5229,
+          "-1-0-0": 5529,
+          "-2-0-0": 5829
+        },
+        "max_offset_px": 1550,
+        "sides": [
+          {
+            "name": "aft",
+            "sign": -1,
+            "stations_outer_first": [
+              6,
+              7,
+              8,
+              9,
+              10,
+              11
+            ],
+            "grid_columns": [
+              2970,
+              2670,
+              2370,
+              2070
+            ]
+          },
+          {
+            "name": "fore",
+            "sign": 1,
+            "stations_outer_first": [
+              5,
+              4,
+              3,
+              2,
+              1
+            ],
+            "grid_columns": [
+              3570,
+              3871,
+              4171,
+              4471
+            ]
+          }
+        ]
+      },
+      "frozen": {
+        "truth_cells": 57,
+        "cells_given": 34,
+        "coverage": 0.5964912280701754,
+        "extra_cells": 1,
+        "rms_m": 0.13469565346898643,
+        "max_abs_m": 0.6371791158495798,
+        "within_0_05": 0.7941176470588235,
+        "within_0_15": 0.9117647058823529,
+        "identity_errors": [
+          6,
+          10,
+          11
+        ],
+        "missing_cells": 23,
+        "fairness_flags": 0,
+        "calls": 0,
+        "missing_cell_keys": [
+          [
+            1,
+            "3-0-0"
+          ],
+          [
+            2,
+            "3-0-0"
+          ],
+          [
+            1,
+            "2-0-0"
+          ],
+          [
+            2,
+            "2-0-0"
+          ],
+          [
+            1,
+            "1-0-0"
+          ],
+          [
+            2,
+            "1-0-0"
+          ],
+          [
+            1,
+            "0-0-0"
+          ],
+          [
+            2,
+            "0-0-0"
+          ],
+          [
+            3,
+            "0-0-0"
+          ],
+          [
+            6,
+            "0-0-0"
+          ],
+          [
+            7,
+            "0-0-0"
+          ],
+          [
+            8,
+            "0-0-0"
+          ],
+          [
+            9,
+            "0-0-0"
+          ],
+          [
+            3,
+            "-1-0-0"
+          ],
+          [
+            4,
+            "-1-0-0"
+          ],
+          [
+            5,
+            "-1-0-0"
+          ],
+          [
+            6,
+            "-1-0-0"
+          ],
+          [
+            7,
+            "-1-0-0"
+          ],
+          [
+            8,
+            "-1-0-0"
+          ],
+          [
+            9,
+            "-1-0-0"
+          ],
+          [
+            10,
+            "-1-0-0"
+          ],
+          [
+            3,
+            "-2-0-0"
+          ],
+          [
+            4,
+            "-2-0-0"
+          ]
+        ],
+        "extra_cell_keys": [
+          [
+            1,
+            "-2-0-0"
+          ]
+        ],
+        "predicted_cells": [
+          {
+            "station": 11,
+            "waterline": "0-0-0",
+            "half_breadth_m": 1.4010081900229665
+          },
+          {
+            "station": 11,
+            "waterline": "1-0-0",
+            "half_breadth_m": 1.3950590149688542
+          },
+          {
+            "station": 11,
+            "waterline": "2-0-0",
+            "half_breadth_m": 1.3256264126908857
+          },
+          {
+            "station": 11,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.1955804754689057
+          },
+          {
+            "station": 10,
+            "waterline": "0-0-0",
+            "half_breadth_m": 1.4010081900229665
+          },
+          {
+            "station": 10,
+            "waterline": "1-0-0",
+            "half_breadth_m": 1.4123584317676279
+          },
+          {
+            "station": 10,
+            "waterline": "2-0-0",
+            "half_breadth_m": 1.386182123121697
+          },
+          {
+            "station": 10,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.315103264931119
+          },
+          {
+            "station": 9,
+            "waterline": "1-0-0",
+            "half_breadth_m": 1.4286083702253811
+          },
+          {
+            "station": 9,
+            "waterline": "2-0-0",
+            "half_breadth_m": 1.386182123121697
+          },
+          {
+            "station": 9,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.315103264931119
+          },
+          {
+            "station": 8,
+            "waterline": "1-0-0",
+            "half_breadth_m": 1.4286083702253811
+          },
+          {
+            "station": 8,
+            "waterline": "2-0-0",
+            "half_breadth_m": 1.4255162881547798
+          },
+          {
+            "station": 8,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.3968821313772106
+          },
+          {
+            "station": 7,
+            "waterline": "1-0-0",
+            "half_breadth_m": 1.440998570457345
+          },
+          {
+            "station": 7,
+            "waterline": "2-0-0",
+            "half_breadth_m": 1.4427240013734246
+          },
+          {
+            "station": 7,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.4437360000000004
+          },
+          {
+            "station": 6,
+            "waterline": "1-0-0",
+            "half_breadth_m": 1.440998570457345
+          },
+          {
+            "station": 6,
+            "waterline": "2-0-0",
+            "half_breadth_m": 1.4427240013734246
+          },
+          {
+            "station": 6,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.4710914626035814
+          },
+          {
+            "station": 1,
+            "waterline": "-2-0-0",
+            "half_breadth_m": 0.12645782840398978
+          },
+          {
+            "station": 1,
+            "waterline": "-1-0-0",
+            "half_breadth_m": 0.7149666158495798
+          },
+          {
+            "station": 2,
+            "waterline": "-2-0-0",
+            "half_breadth_m": 0.13129184971229987
+          },
+          {
+            "station": 2,
+            "waterline": "-1-0-0",
+            "half_breadth_m": 0.7149666158495798
+          },
+          {
+            "station": 3,
+            "waterline": "1-0-0",
+            "half_breadth_m": 1.081486693808259
+          },
+          {
+            "station": 3,
+            "waterline": "2-0-0",
+            "half_breadth_m": 1.1516097016492477
+          },
+          {
+            "station": 3,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.2423355776837595
+          },
+          {
+            "station": 4,
+            "waterline": "0-0-0",
+            "half_breadth_m": 1.205740107926513
+          },
+          {
+            "station": 4,
+            "waterline": "1-0-0",
+            "half_breadth_m": 1.2552780888099844
+          },
+          {
+            "station": 4,
+            "waterline": "2-0-0",
+            "half_breadth_m": 1.310219739305532
+          },
+          {
+            "station": 4,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.382963437307697
+          },
+          {
+            "station": 5,
+            "waterline": "0-0-0",
+            "half_breadth_m": 1.313928051469201
+          },
+          {
+            "station": 5,
+            "waterline": "1-0-0",
+            "half_breadth_m": 1.3589998346638124
+          },
+          {
+            "station": 5,
+            "waterline": "2-0-0",
+            "half_breadth_m": 1.398959878367501
+          },
+          {
+            "station": 5,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.4485201072928282
+          }
+        ],
+        "identities": {
+          "aft": {
+            "0": 6,
+            "1": 7,
+            "2": 8,
+            "3": 9,
+            "4": 10,
+            "5": 11
+          },
+          "fore": {
+            "0": 5,
+            "1": 4,
+            "2": 3,
+            "4": 2,
+            "5": 1
+          }
+        },
+        "measurement": {
+          "aft": {
+            "chains": 13,
+            "one_waterline_chains": 4,
+            "inferred_links": 0,
+            "crossings_by_kind": {
+              "grid": 19,
+              "double": 5,
+              "curve": 23,
+              "shallow": 1
+            }
+          },
+          "fore": {
+            "chains": 14,
+            "one_waterline_chains": 4,
+            "inferred_links": 0,
+            "crossings_by_kind": {
+              "curve": 36,
+              "grid": 29,
+              "double": 1
+            }
+          }
+        }
+      },
+      "chine": {
+        "truth_cells": 57,
+        "cells_given": 34,
+        "coverage": 0.5964912280701754,
+        "extra_cells": 1,
+        "rms_m": 0.13469565346898643,
+        "max_abs_m": 0.6371791158495798,
+        "within_0_05": 0.7941176470588235,
+        "within_0_15": 0.9117647058823529,
+        "identity_errors": [
+          6,
+          10,
+          11
+        ],
+        "missing_cells": 23,
+        "fairness_flags": 0,
+        "calls": 0,
+        "missing_cell_keys": [
+          [
+            1,
+            "3-0-0"
+          ],
+          [
+            2,
+            "3-0-0"
+          ],
+          [
+            1,
+            "2-0-0"
+          ],
+          [
+            2,
+            "2-0-0"
+          ],
+          [
+            1,
+            "1-0-0"
+          ],
+          [
+            2,
+            "1-0-0"
+          ],
+          [
+            1,
+            "0-0-0"
+          ],
+          [
+            2,
+            "0-0-0"
+          ],
+          [
+            3,
+            "0-0-0"
+          ],
+          [
+            6,
+            "0-0-0"
+          ],
+          [
+            7,
+            "0-0-0"
+          ],
+          [
+            8,
+            "0-0-0"
+          ],
+          [
+            9,
+            "0-0-0"
+          ],
+          [
+            3,
+            "-1-0-0"
+          ],
+          [
+            4,
+            "-1-0-0"
+          ],
+          [
+            5,
+            "-1-0-0"
+          ],
+          [
+            6,
+            "-1-0-0"
+          ],
+          [
+            7,
+            "-1-0-0"
+          ],
+          [
+            8,
+            "-1-0-0"
+          ],
+          [
+            9,
+            "-1-0-0"
+          ],
+          [
+            10,
+            "-1-0-0"
+          ],
+          [
+            3,
+            "-2-0-0"
+          ],
+          [
+            4,
+            "-2-0-0"
+          ]
+        ],
+        "extra_cell_keys": [
+          [
+            1,
+            "-2-0-0"
+          ]
+        ],
+        "predicted_cells": [
+          {
+            "station": 11,
+            "waterline": "0-0-0",
+            "half_breadth_m": 1.4010081900229665
+          },
+          {
+            "station": 11,
+            "waterline": "1-0-0",
+            "half_breadth_m": 1.3950590149688542
+          },
+          {
+            "station": 11,
+            "waterline": "2-0-0",
+            "half_breadth_m": 1.3256264126908857
+          },
+          {
+            "station": 11,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.1955804754689057
+          },
+          {
+            "station": 10,
+            "waterline": "0-0-0",
+            "half_breadth_m": 1.4010081900229665
+          },
+          {
+            "station": 10,
+            "waterline": "1-0-0",
+            "half_breadth_m": 1.4123584317676279
+          },
+          {
+            "station": 10,
+            "waterline": "2-0-0",
+            "half_breadth_m": 1.386182123121697
+          },
+          {
+            "station": 10,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.315103264931119
+          },
+          {
+            "station": 9,
+            "waterline": "1-0-0",
+            "half_breadth_m": 1.4286083702253811
+          },
+          {
+            "station": 9,
+            "waterline": "2-0-0",
+            "half_breadth_m": 1.386182123121697
+          },
+          {
+            "station": 9,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.315103264931119
+          },
+          {
+            "station": 8,
+            "waterline": "1-0-0",
+            "half_breadth_m": 1.4286083702253811
+          },
+          {
+            "station": 8,
+            "waterline": "2-0-0",
+            "half_breadth_m": 1.4255162881547798
+          },
+          {
+            "station": 8,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.3968821313772106
+          },
+          {
+            "station": 7,
+            "waterline": "1-0-0",
+            "half_breadth_m": 1.440998570457345
+          },
+          {
+            "station": 7,
+            "waterline": "2-0-0",
+            "half_breadth_m": 1.4427240013734246
+          },
+          {
+            "station": 7,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.4437360000000004
+          },
+          {
+            "station": 6,
+            "waterline": "1-0-0",
+            "half_breadth_m": 1.440998570457345
+          },
+          {
+            "station": 6,
+            "waterline": "2-0-0",
+            "half_breadth_m": 1.4427240013734246
+          },
+          {
+            "station": 6,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.4710914626035814
+          },
+          {
+            "station": 1,
+            "waterline": "-2-0-0",
+            "half_breadth_m": 0.12645782840398978
+          },
+          {
+            "station": 1,
+            "waterline": "-1-0-0",
+            "half_breadth_m": 0.7149666158495798
+          },
+          {
+            "station": 2,
+            "waterline": "-2-0-0",
+            "half_breadth_m": 0.13129184971229987
+          },
+          {
+            "station": 2,
+            "waterline": "-1-0-0",
+            "half_breadth_m": 0.7149666158495798
+          },
+          {
+            "station": 3,
+            "waterline": "1-0-0",
+            "half_breadth_m": 1.081486693808259
+          },
+          {
+            "station": 3,
+            "waterline": "2-0-0",
+            "half_breadth_m": 1.1516097016492477
+          },
+          {
+            "station": 3,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.2423355776837595
+          },
+          {
+            "station": 4,
+            "waterline": "0-0-0",
+            "half_breadth_m": 1.205740107926513
+          },
+          {
+            "station": 4,
+            "waterline": "1-0-0",
+            "half_breadth_m": 1.2552780888099844
+          },
+          {
+            "station": 4,
+            "waterline": "2-0-0",
+            "half_breadth_m": 1.310219739305532
+          },
+          {
+            "station": 4,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.382963437307697
+          },
+          {
+            "station": 5,
+            "waterline": "0-0-0",
+            "half_breadth_m": 1.313928051469201
+          },
+          {
+            "station": 5,
+            "waterline": "1-0-0",
+            "half_breadth_m": 1.3589998346638124
+          },
+          {
+            "station": 5,
+            "waterline": "2-0-0",
+            "half_breadth_m": 1.398959878367501
+          },
+          {
+            "station": 5,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.4485201072928282
+          }
+        ],
+        "identities": {
+          "aft": {
+            "0": 6,
+            "1": 7,
+            "2": 8,
+            "3": 9,
+            "4": 10,
+            "5": 11
+          },
+          "fore": {
+            "0": 5,
+            "1": 4,
+            "2": 3,
+            "4": 2,
+            "5": 1
+          }
+        },
+        "measurement": {
+          "aft": {
+            "chains": 13,
+            "one_waterline_chains": 4,
+            "inferred_links": 0,
+            "crossings_by_kind": {
+              "grid": 19,
+              "double": 5,
+              "curve": 23,
+              "shallow": 1
+            }
+          },
+          "fore": {
+            "chains": 14,
+            "one_waterline_chains": 4,
+            "inferred_links": 0,
+            "crossings_by_kind": {
+              "curve": 36,
+              "grid": 29,
+              "double": 1
+            }
+          }
+        }
+      },
+      "changed_sides": [],
+      "rms_no_regression": true,
+      "coverage_no_regression": true,
+      "seconds": 1.955
+    },
+    {
+      "sheet": "BUE GIRL",
+      "sheet_path": "/Users/jonathanjie/Documents/workspace/MarinaFrame/work/sources/haer/master-pnp-habshaer-or-or0500-or0590-sheet-00002a.tif",
+      "sheet_sha256": "f8950140c4ff2683801363acd7e60c126fa322ad4e571dcceb6e39d9c9f12196",
+      "truth_path": "/private/tmp/claude-501/bue-girl/truth_s2.json",
+      "truth_sha256": "ecc79c7bc52f5001018f3c9e22079f93d285db7e3bc7e3a9b9ebf56c1ce7a5a9",
+      "calibration": {
+        "centre_column": 3266.5,
+        "pixels_per_metre": 1312.3359580052493,
+        "waterline_rows": {
+          "2-6-0": 8081,
+          "3-6-0": 7681,
+          "4-6-0": 7281,
+          "5-6-0": 6880,
+          "6-6-0": 6480
+        },
+        "max_offset_px": 1650,
+        "sides": [
+          {
+            "name": "fore",
+            "sign": -1,
+            "stations_outer_first": [
+              6,
+              5,
+              4,
+              3,
+              2,
+              1
+            ],
+            "grid_columns": [
+              2966,
+              2698,
+              2430,
+              2162,
+              1894,
+              1693
+            ]
+          },
+          {
+            "name": "aft",
+            "sign": 1,
+            "stations_outer_first": [
+              7,
+              8,
+              9,
+              10,
+              11,
+              12
+            ],
+            "grid_columns": [
+              3566,
+              3834,
+              4102,
+              4370,
+              4638
+            ]
+          }
+        ]
+      },
+      "frozen": {
+        "truth_cells": 39,
+        "cells_given": 37,
+        "coverage": 0.9487179487179487,
+        "extra_cells": 7,
+        "rms_m": 0.0014314012559828676,
+        "max_abs_m": 0.005839332636477179,
+        "within_0_05": 1.0,
+        "within_0_15": 1.0,
+        "identity_errors": [],
+        "missing_cells": 2,
+        "fairness_flags": 0,
+        "calls": 0,
+        "missing_cell_keys": [
+          [
+            10,
+            "2-6-0"
+          ],
+          [
+            12,
+            "2-6-0"
+          ]
+        ],
+        "extra_cell_keys": [
+          [
+            2,
+            "6-6-0"
+          ],
+          [
+            3,
+            "6-6-0"
+          ],
+          [
+            4,
+            "6-6-0"
+          ],
+          [
+            5,
+            "5-6-0"
+          ],
+          [
+            5,
+            "6-6-0"
+          ],
+          [
+            6,
+            "5-6-0"
+          ],
+          [
+            6,
+            "6-6-0"
+          ]
+        ],
+        "predicted_cells": [
+          {
+            "station": 1,
+            "waterline": "3-6-0",
+            "half_breadth_m": 0.16174029798808717
+          },
+          {
+            "station": 1,
+            "waterline": "4-6-0",
+            "half_breadth_m": 0.2565748603701791
+          },
+          {
+            "station": 1,
+            "waterline": "5-6-0",
+            "half_breadth_m": 0.3652812561037051
+          },
+          {
+            "station": 1,
+            "waterline": "6-6-0",
+            "half_breadth_m": 0.5274565626133795
+          },
+          {
+            "station": 2,
+            "waterline": "2-6-0",
+            "half_breadth_m": 0.1925655794053844
+          },
+          {
+            "station": 2,
+            "waterline": "3-6-0",
+            "half_breadth_m": 0.4266880117057757
+          },
+          {
+            "station": 2,
+            "waterline": "4-6-0",
+            "half_breadth_m": 0.6237904362350063
+          },
+          {
+            "station": 2,
+            "waterline": "5-6-0",
+            "half_breadth_m": 0.794517703385083
+          },
+          {
+            "station": 2,
+            "waterline": "6-6-0",
+            "half_breadth_m": 0.924918898902478
+          },
+          {
+            "station": 3,
+            "waterline": "2-6-0",
+            "half_breadth_m": 0.32729159277296127
+          },
+          {
+            "station": 3,
+            "waterline": "3-6-0",
+            "half_breadth_m": 0.6967991166715415
+          },
+          {
+            "station": 3,
+            "waterline": "4-6-0",
+            "half_breadth_m": 0.9297678432466807
+          },
+          {
+            "station": 3,
+            "waterline": "5-6-0",
+            "half_breadth_m": 1.053837766051839
+          },
+          {
+            "station": 3,
+            "waterline": "6-6-0",
+            "half_breadth_m": 0.924918898902478
+          },
+          {
+            "station": 4,
+            "waterline": "2-6-0",
+            "half_breadth_m": 0.4319387746891668
+          },
+          {
+            "station": 4,
+            "waterline": "3-6-0",
+            "half_breadth_m": 0.8921044441616226
+          },
+          {
+            "station": 4,
+            "waterline": "4-6-0",
+            "half_breadth_m": 1.067736102031536
+          },
+          {
+            "station": 4,
+            "waterline": "5-6-0",
+            "half_breadth_m": 1.1572027423917641
+          },
+          {
+            "station": 4,
+            "waterline": "6-6-0",
+            "half_breadth_m": 0.924918898902478
+          },
+          {
+            "station": 5,
+            "waterline": "2-6-0",
+            "half_breadth_m": 0.526872280920998
+          },
+          {
+            "station": 5,
+            "waterline": "3-6-0",
+            "half_breadth_m": 1.0029456599649909
+          },
+          {
+            "station": 5,
+            "waterline": "4-6-0",
+            "half_breadth_m": 1.1245330846934096
+          },
+          {
+            "station": 5,
+            "waterline": "5-6-0",
+            "half_breadth_m": 1.194557863164193
+          },
+          {
+            "station": 5,
+            "waterline": "6-6-0",
+            "half_breadth_m": 0.924918898902478
+          },
+          {
+            "station": 6,
+            "waterline": "2-6-0",
+            "half_breadth_m": 0.6250553933499357
+          },
+          {
+            "station": 6,
+            "waterline": "3-6-0",
+            "half_breadth_m": 1.0699077706597635
+          },
+          {
+            "station": 6,
+            "waterline": "4-6-0",
+            "half_breadth_m": 1.1582760119317377
+          },
+          {
+            "station": 6,
+            "waterline": "5-6-0",
+            "half_breadth_m": 1.194557863164193
+          },
+          {
+            "station": 6,
+            "waterline": "6-6-0",
+            "half_breadth_m": 0.924918898902478
+          },
+          {
+            "station": 12,
+            "waterline": "3-6-0",
+            "half_breadth_m": 0.9318614342009998
+          },
+          {
+            "station": 12,
+            "waterline": "4-6-0",
+            "half_breadth_m": 0.8979360561390757
+          },
+          {
+            "station": 11,
+            "waterline": "3-6-0",
+            "half_breadth_m": 1.0002975569115695
+          },
+          {
+            "station": 11,
+            "waterline": "4-6-0",
+            "half_breadth_m": 0.9930232292439579
+          },
+          {
+            "station": 10,
+            "waterline": "3-6-0",
+            "half_breadth_m": 1.0574158854577007
+          },
+          {
+            "station": 10,
+            "waterline": "4-6-0",
+            "half_breadth_m": 1.069565293213945
+          },
+          {
+            "station": 9,
+            "waterline": "2-6-0",
+            "half_breadth_m": 0.5027435387271061
+          },
+          {
+            "station": 9,
+            "waterline": "3-6-0",
+            "half_breadth_m": 1.0913522312380657
+          },
+          {
+            "station": 9,
+            "waterline": "4-6-0",
+            "half_breadth_m": 1.1269314179221759
+          },
+          {
+            "station": 8,
+            "waterline": "2-6-0",
+            "half_breadth_m": 0.6323356673635229
+          },
+          {
+            "station": 8,
+            "waterline": "3-6-0",
+            "half_breadth_m": 1.1137781785947578
+          },
+          {
+            "station": 8,
+            "waterline": "4-6-0",
+            "half_breadth_m": 1.1595440210456143
+          },
+          {
+            "station": 7,
+            "waterline": "2-6-0",
+            "half_breadth_m": 0.6323356673635229
+          },
+          {
+            "station": 7,
+            "waterline": "3-6-0",
+            "half_breadth_m": 1.1137781785947578
+          },
+          {
+            "station": 7,
+            "waterline": "4-6-0",
+            "half_breadth_m": 1.1717588600993323
+          }
+        ],
+        "identities": {
+          "fore": {
+            "0": 6,
+            "1": 5,
+            "2": 4,
+            "3": 3,
+            "4": 2,
+            "5": 1
+          },
+          "aft": {
+            "0": 7,
+            "1": 8,
+            "2": 9,
+            "3": 10,
+            "4": 11,
+            "5": 12
+          }
+        },
+        "measurement": {
+          "fore": {
+            "chains": 6,
+            "one_waterline_chains": 0,
+            "inferred_links": 1,
+            "crossings_by_kind": {
+              "curve": 24,
+              "grid": 27
+            }
+          },
+          "aft": {
+            "chains": 7,
+            "one_waterline_chains": 0,
+            "inferred_links": 0,
+            "crossings_by_kind": {
+              "grid": 7,
+              "shallow": 1,
+              "curve": 15
+            }
+          }
+        }
+      },
+      "chine": {
+        "truth_cells": 39,
+        "cells_given": 37,
+        "coverage": 0.9487179487179487,
+        "extra_cells": 7,
+        "rms_m": 0.0014314012559828676,
+        "max_abs_m": 0.005839332636477179,
+        "within_0_05": 1.0,
+        "within_0_15": 1.0,
+        "identity_errors": [],
+        "missing_cells": 2,
+        "fairness_flags": 0,
+        "calls": 0,
+        "missing_cell_keys": [
+          [
+            10,
+            "2-6-0"
+          ],
+          [
+            12,
+            "2-6-0"
+          ]
+        ],
+        "extra_cell_keys": [
+          [
+            2,
+            "6-6-0"
+          ],
+          [
+            3,
+            "6-6-0"
+          ],
+          [
+            4,
+            "6-6-0"
+          ],
+          [
+            5,
+            "5-6-0"
+          ],
+          [
+            5,
+            "6-6-0"
+          ],
+          [
+            6,
+            "5-6-0"
+          ],
+          [
+            6,
+            "6-6-0"
+          ]
+        ],
+        "predicted_cells": [
+          {
+            "station": 1,
+            "waterline": "3-6-0",
+            "half_breadth_m": 0.16174029798808717
+          },
+          {
+            "station": 1,
+            "waterline": "4-6-0",
+            "half_breadth_m": 0.2565748603701791
+          },
+          {
+            "station": 1,
+            "waterline": "5-6-0",
+            "half_breadth_m": 0.3652812561037051
+          },
+          {
+            "station": 1,
+            "waterline": "6-6-0",
+            "half_breadth_m": 0.5274565626133795
+          },
+          {
+            "station": 2,
+            "waterline": "2-6-0",
+            "half_breadth_m": 0.1925655794053844
+          },
+          {
+            "station": 2,
+            "waterline": "3-6-0",
+            "half_breadth_m": 0.4266880117057757
+          },
+          {
+            "station": 2,
+            "waterline": "4-6-0",
+            "half_breadth_m": 0.6237904362350063
+          },
+          {
+            "station": 2,
+            "waterline": "5-6-0",
+            "half_breadth_m": 0.794517703385083
+          },
+          {
+            "station": 2,
+            "waterline": "6-6-0",
+            "half_breadth_m": 0.924918898902478
+          },
+          {
+            "station": 3,
+            "waterline": "2-6-0",
+            "half_breadth_m": 0.32729159277296127
+          },
+          {
+            "station": 3,
+            "waterline": "3-6-0",
+            "half_breadth_m": 0.6967991166715415
+          },
+          {
+            "station": 3,
+            "waterline": "4-6-0",
+            "half_breadth_m": 0.9297678432466807
+          },
+          {
+            "station": 3,
+            "waterline": "5-6-0",
+            "half_breadth_m": 1.053837766051839
+          },
+          {
+            "station": 3,
+            "waterline": "6-6-0",
+            "half_breadth_m": 0.924918898902478
+          },
+          {
+            "station": 4,
+            "waterline": "2-6-0",
+            "half_breadth_m": 0.4319387746891668
+          },
+          {
+            "station": 4,
+            "waterline": "3-6-0",
+            "half_breadth_m": 0.8921044441616226
+          },
+          {
+            "station": 4,
+            "waterline": "4-6-0",
+            "half_breadth_m": 1.067736102031536
+          },
+          {
+            "station": 4,
+            "waterline": "5-6-0",
+            "half_breadth_m": 1.1572027423917641
+          },
+          {
+            "station": 4,
+            "waterline": "6-6-0",
+            "half_breadth_m": 0.924918898902478
+          },
+          {
+            "station": 5,
+            "waterline": "2-6-0",
+            "half_breadth_m": 0.526872280920998
+          },
+          {
+            "station": 5,
+            "waterline": "3-6-0",
+            "half_breadth_m": 1.0029456599649909
+          },
+          {
+            "station": 5,
+            "waterline": "4-6-0",
+            "half_breadth_m": 1.1245330846934096
+          },
+          {
+            "station": 5,
+            "waterline": "5-6-0",
+            "half_breadth_m": 1.194557863164193
+          },
+          {
+            "station": 5,
+            "waterline": "6-6-0",
+            "half_breadth_m": 0.924918898902478
+          },
+          {
+            "station": 6,
+            "waterline": "2-6-0",
+            "half_breadth_m": 0.6250553933499357
+          },
+          {
+            "station": 6,
+            "waterline": "3-6-0",
+            "half_breadth_m": 1.0699077706597635
+          },
+          {
+            "station": 6,
+            "waterline": "4-6-0",
+            "half_breadth_m": 1.1582760119317377
+          },
+          {
+            "station": 6,
+            "waterline": "5-6-0",
+            "half_breadth_m": 1.194557863164193
+          },
+          {
+            "station": 6,
+            "waterline": "6-6-0",
+            "half_breadth_m": 0.924918898902478
+          },
+          {
+            "station": 12,
+            "waterline": "3-6-0",
+            "half_breadth_m": 0.9318614342009998
+          },
+          {
+            "station": 12,
+            "waterline": "4-6-0",
+            "half_breadth_m": 0.8979360561390757
+          },
+          {
+            "station": 11,
+            "waterline": "3-6-0",
+            "half_breadth_m": 1.0002975569115695
+          },
+          {
+            "station": 11,
+            "waterline": "4-6-0",
+            "half_breadth_m": 0.9930232292439579
+          },
+          {
+            "station": 10,
+            "waterline": "3-6-0",
+            "half_breadth_m": 1.0574158854577007
+          },
+          {
+            "station": 10,
+            "waterline": "4-6-0",
+            "half_breadth_m": 1.069565293213945
+          },
+          {
+            "station": 9,
+            "waterline": "2-6-0",
+            "half_breadth_m": 0.5027435387271061
+          },
+          {
+            "station": 9,
+            "waterline": "3-6-0",
+            "half_breadth_m": 1.0913522312380657
+          },
+          {
+            "station": 9,
+            "waterline": "4-6-0",
+            "half_breadth_m": 1.1269314179221759
+          },
+          {
+            "station": 8,
+            "waterline": "2-6-0",
+            "half_breadth_m": 0.6323356673635229
+          },
+          {
+            "station": 8,
+            "waterline": "3-6-0",
+            "half_breadth_m": 1.1137781785947578
+          },
+          {
+            "station": 8,
+            "waterline": "4-6-0",
+            "half_breadth_m": 1.1595440210456143
+          },
+          {
+            "station": 7,
+            "waterline": "2-6-0",
+            "half_breadth_m": 0.6323356673635229
+          },
+          {
+            "station": 7,
+            "waterline": "3-6-0",
+            "half_breadth_m": 1.1137781785947578
+          },
+          {
+            "station": 7,
+            "waterline": "4-6-0",
+            "half_breadth_m": 1.1717588600993323
+          }
+        ],
+        "identities": {
+          "fore": {
+            "0": 6,
+            "1": 5,
+            "2": 4,
+            "3": 3,
+            "4": 2,
+            "5": 1
+          },
+          "aft": {
+            "0": 7,
+            "1": 8,
+            "2": 9,
+            "3": 10,
+            "4": 11,
+            "5": 12
+          }
+        },
+        "measurement": {
+          "fore": {
+            "chains": 6,
+            "one_waterline_chains": 0,
+            "inferred_links": 1,
+            "crossings_by_kind": {
+              "curve": 24,
+              "grid": 27
+            }
+          },
+          "aft": {
+            "chains": 7,
+            "one_waterline_chains": 0,
+            "inferred_links": 0,
+            "crossings_by_kind": {
+              "grid": 7,
+              "shallow": 1,
+              "curve": 15
+            }
+          }
+        }
+      },
+      "changed_sides": [],
+      "rms_no_regression": true,
+      "coverage_no_regression": true,
+      "seconds": 1.448
+    },
+    {
+      "sheet": "C.A. Thayer",
+      "sheet_path": "/Users/jonathanjie/Documents/workspace/MarinaFrame/work/sources/haer/ca_thayer/loc_ca1506_sheet_04.tif",
+      "sheet_sha256": "94c2f86ac3daf1b4da7478638b4cb4843e8a600fe45c444daa78d3c1628d9b70",
+      "truth_path": "/private/tmp/claude-501/-Users-jonathanjie-Documents-workspace/31a3f286-f3b9-4116-93bc-756e11ead9ee/scratchpad/wv-agent/thayer/truth_s4.json",
+      "truth_sha256": "fde426287b4d1e14baef6a67b8cfa60b6afb40a09b69d27bf8c4ef6924060d75",
+      "calibration": {
+        "centre_column": 8857.5,
+        "pixels_per_metre": 492.1259842519685,
+        "waterline_rows": {
+          "3-7": 5543,
+          "5-7": 5243,
+          "7-7": 4943,
+          "9-7": 4643,
+          "11-7": 4343,
+          "13-7": 4043,
+          "15-7": 3743,
+          "17-7": 3443
+        },
+        "max_offset_px": 3150,
+        "sides": [
+          {
+            "name": "aft",
+            "sign": -1,
+            "stations_outer_first": [
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22
+            ],
+            "grid_columns": [
+              8257.5,
+              7657.5,
+              7057.5,
+              5857.5
+            ]
+          },
+          {
+            "name": "fore",
+            "sign": 1,
+            "stations_outer_first": [
+              11,
+              10,
+              9,
+              8,
+              7,
+              6,
+              5,
+              4,
+              3,
+              2,
+              1
+            ],
+            "grid_columns": [
+              9457.5,
+              10057.5,
+              10657.5,
+              11857.5
+            ]
+          }
+        ]
+      },
+      "frozen": {
+        "truth_cells": 151,
+        "cells_given": 149,
+        "coverage": 0.9867549668874173,
+        "extra_cells": 1,
+        "rms_m": 0.011615860973390688,
+        "max_abs_m": 0.13237900163606753,
+        "within_0_05": 0.9932885906040269,
+        "within_0_15": 1.0,
+        "identity_errors": [],
+        "missing_cells": 2,
+        "fairness_flags": 10,
+        "calls": 0,
+        "missing_cell_keys": [
+          [
+            1,
+            "17-7"
+          ],
+          [
+            11,
+            "17-7"
+          ]
+        ],
+        "extra_cell_keys": [
+          [
+            12,
+            "17-7"
+          ]
+        ],
+        "predicted_cells": [
+          {
+            "station": 22,
+            "waterline": "15-7",
+            "half_breadth_m": 3.2095963775497505
+          },
+          {
+            "station": 22,
+            "waterline": "17-7",
+            "half_breadth_m": 4.169411541709506
+          },
+          {
+            "station": 21,
+            "waterline": "9-7",
+            "half_breadth_m": 0.29109771628292186
+          },
+          {
+            "station": 21,
+            "waterline": "11-7",
+            "half_breadth_m": 1.0565279920296207
+          },
+          {
+            "station": 21,
+            "waterline": "13-7",
+            "half_breadth_m": 3.105390161774775
+          },
+          {
+            "station": 21,
+            "waterline": "15-7",
+            "half_breadth_m": 4.172874176962938
+          },
+          {
+            "station": 21,
+            "waterline": "17-7",
+            "half_breadth_m": 4.517526153993792
+          },
+          {
+            "station": 20,
+            "waterline": "3-7",
+            "half_breadth_m": 0.34252877696724776
+          },
+          {
+            "station": 20,
+            "waterline": "5-7",
+            "half_breadth_m": 0.5227716642761656
+          },
+          {
+            "station": 20,
+            "waterline": "7-7",
+            "half_breadth_m": 0.7977496368804411
+          },
+          {
+            "station": 20,
+            "waterline": "9-7",
+            "half_breadth_m": 1.5017699925507042
+          },
+          {
+            "station": 20,
+            "waterline": "11-7",
+            "half_breadth_m": 3.2566662052997506
+          },
+          {
+            "station": 20,
+            "waterline": "13-7",
+            "half_breadth_m": 4.324457519222118
+          },
+          {
+            "station": 20,
+            "waterline": "15-7",
+            "half_breadth_m": 4.677286477056032
+          },
+          {
+            "station": 20,
+            "waterline": "17-7",
+            "half_breadth_m": 4.839754015024977
+          },
+          {
+            "station": 19,
+            "waterline": "3-7",
+            "half_breadth_m": 0.507835381748253
+          },
+          {
+            "station": 19,
+            "waterline": "5-7",
+            "half_breadth_m": 1.1527344408808904
+          },
+          {
+            "station": 19,
+            "waterline": "7-7",
+            "half_breadth_m": 2.1871026286089976
+          },
+          {
+            "station": 19,
+            "waterline": "9-7",
+            "half_breadth_m": 3.5009537104914066
+          },
+          {
+            "station": 19,
+            "waterline": "11-7",
+            "half_breadth_m": 4.4942375721597365
+          },
+          {
+            "station": 19,
+            "waterline": "13-7",
+            "half_breadth_m": 4.873134761824243
+          },
+          {
+            "station": 19,
+            "waterline": "15-7",
+            "half_breadth_m": 5.015709008994078
+          },
+          {
+            "station": 19,
+            "waterline": "17-7",
+            "half_breadth_m": 5.0459690596330935
+          },
+          {
+            "station": 18,
+            "waterline": "3-7",
+            "half_breadth_m": 0.7736100180702845
+          },
+          {
+            "station": 18,
+            "waterline": "5-7",
+            "half_breadth_m": 1.852213246424549
+          },
+          {
+            "station": 18,
+            "waterline": "7-7",
+            "half_breadth_m": 3.208870475873715
+          },
+          {
+            "station": 18,
+            "waterline": "9-7",
+            "half_breadth_m": 4.283259981726731
+          },
+          {
+            "station": 18,
+            "waterline": "11-7",
+            "half_breadth_m": 4.903105584825367
+          },
+          {
+            "station": 18,
+            "waterline": "13-7",
+            "half_breadth_m": 5.123678200659008
+          },
+          {
+            "station": 18,
+            "waterline": "15-7",
+            "half_breadth_m": 5.195233402485938
+          },
+          {
+            "station": 17,
+            "waterline": "3-7",
+            "half_breadth_m": 1.0574310721431461
+          },
+          {
+            "station": 17,
+            "waterline": "5-7",
+            "half_breadth_m": 2.448690729359189
+          },
+          {
+            "station": 17,
+            "waterline": "7-7",
+            "half_breadth_m": 3.834700374129693
+          },
+          {
+            "station": 17,
+            "waterline": "9-7",
+            "half_breadth_m": 4.748726863190391
+          },
+          {
+            "station": 17,
+            "waterline": "11-7",
+            "half_breadth_m": 5.136465756607021
+          },
+          {
+            "station": 17,
+            "waterline": "13-7",
+            "half_breadth_m": 5.2602104453928336
+          },
+          {
+            "station": 17,
+            "waterline": "15-7",
+            "half_breadth_m": 5.279928037712133
+          },
+          {
+            "station": 16,
+            "waterline": "3-7",
+            "half_breadth_m": 1.5487283996041992
+          },
+          {
+            "station": 16,
+            "waterline": "5-7",
+            "half_breadth_m": 3.5197231310663497
+          },
+          {
+            "station": 16,
+            "waterline": "7-7",
+            "half_breadth_m": 4.756809292633164
+          },
+          {
+            "station": 16,
+            "waterline": "9-7",
+            "half_breadth_m": 5.224479573486204
+          },
+          {
+            "station": 16,
+            "waterline": "11-7",
+            "half_breadth_m": 5.381231685081964
+          },
+          {
+            "station": 16,
+            "waterline": "13-7",
+            "half_breadth_m": 5.420700156720382
+          },
+          {
+            "station": 16,
+            "waterline": "15-7",
+            "half_breadth_m": 5.41856229748908
+          },
+          {
+            "station": 15,
+            "waterline": "3-7",
+            "half_breadth_m": 1.9314574591701028
+          },
+          {
+            "station": 15,
+            "waterline": "5-7",
+            "half_breadth_m": 4.2010520515847025
+          },
+          {
+            "station": 15,
+            "waterline": "7-7",
+            "half_breadth_m": 5.151437242243724
+          },
+          {
+            "station": 15,
+            "waterline": "9-7",
+            "half_breadth_m": 5.372528350094267
+          },
+          {
+            "station": 15,
+            "waterline": "11-7",
+            "half_breadth_m": 5.4670882796782605
+          },
+          {
+            "station": 15,
+            "waterline": "13-7",
+            "half_breadth_m": 5.507462503638087
+          },
+          {
+            "station": 15,
+            "waterline": "15-7",
+            "half_breadth_m": 5.512416133837745
+          },
+          {
+            "station": 14,
+            "waterline": "3-7",
+            "half_breadth_m": 2.083626839925305
+          },
+          {
+            "station": 14,
+            "waterline": "5-7",
+            "half_breadth_m": 4.590256912402352
+          },
+          {
+            "station": 14,
+            "waterline": "7-7",
+            "half_breadth_m": 5.304166886613048
+          },
+          {
+            "station": 14,
+            "waterline": "9-7",
+            "half_breadth_m": 5.481344475978748
+          },
+          {
+            "station": 14,
+            "waterline": "11-7",
+            "half_breadth_m": 5.542441403090531
+          },
+          {
+            "station": 14,
+            "waterline": "13-7",
+            "half_breadth_m": 5.568839942509183
+          },
+          {
+            "station": 14,
+            "waterline": "15-7",
+            "half_breadth_m": 5.5852675253754684
+          },
+          {
+            "station": 13,
+            "waterline": "3-7",
+            "half_breadth_m": 2.4021326517232375
+          },
+          {
+            "station": 13,
+            "waterline": "5-7",
+            "half_breadth_m": 4.720790290152322
+          },
+          {
+            "station": 13,
+            "waterline": "7-7",
+            "half_breadth_m": 5.364208895771448
+          },
+          {
+            "station": 13,
+            "waterline": "9-7",
+            "half_breadth_m": 5.554090047692541
+          },
+          {
+            "station": 13,
+            "waterline": "11-7",
+            "half_breadth_m": 5.628599495166623
+          },
+          {
+            "station": 13,
+            "waterline": "13-7",
+            "half_breadth_m": 5.655597365814507
+          },
+          {
+            "station": 13,
+            "waterline": "15-7",
+            "half_breadth_m": 5.660115169645675
+          },
+          {
+            "station": 12,
+            "waterline": "3-7",
+            "half_breadth_m": 2.4021326517232375
+          },
+          {
+            "station": 12,
+            "waterline": "5-7",
+            "half_breadth_m": 4.720790290152322
+          },
+          {
+            "station": 12,
+            "waterline": "7-7",
+            "half_breadth_m": 5.364208895771448
+          },
+          {
+            "station": 12,
+            "waterline": "9-7",
+            "half_breadth_m": 5.554090047692541
+          },
+          {
+            "station": 12,
+            "waterline": "11-7",
+            "half_breadth_m": 5.628599495166623
+          },
+          {
+            "station": 12,
+            "waterline": "13-7",
+            "half_breadth_m": 5.655597365814507
+          },
+          {
+            "station": 12,
+            "waterline": "15-7",
+            "half_breadth_m": 5.678304359124538
+          },
+          {
+            "station": 12,
+            "waterline": "17-7",
+            "half_breadth_m": 5.68388770016423
+          },
+          {
+            "station": 2,
+            "waterline": "7-7",
+            "half_breadth_m": 0.2554603690822359
+          },
+          {
+            "station": 2,
+            "waterline": "9-7",
+            "half_breadth_m": 0.44688932096254413
+          },
+          {
+            "station": 2,
+            "waterline": "11-7",
+            "half_breadth_m": 0.6601864828368217
+          },
+          {
+            "station": 2,
+            "waterline": "13-7",
+            "half_breadth_m": 0.880232552848516
+          },
+          {
+            "station": 2,
+            "waterline": "15-7",
+            "half_breadth_m": 1.104800130642756
+          },
+          {
+            "station": 2,
+            "waterline": "17-7",
+            "half_breadth_m": 1.3379507842207996
+          },
+          {
+            "station": 3,
+            "waterline": "3-7",
+            "half_breadth_m": 0.2781853436862712
+          },
+          {
+            "station": 3,
+            "waterline": "5-7",
+            "half_breadth_m": 0.5570381121958141
+          },
+          {
+            "station": 3,
+            "waterline": "7-7",
+            "half_breadth_m": 0.8594604035494339
+          },
+          {
+            "station": 3,
+            "waterline": "9-7",
+            "half_breadth_m": 1.1753982339127205
+          },
+          {
+            "station": 3,
+            "waterline": "11-7",
+            "half_breadth_m": 1.514734092935179
+          },
+          {
+            "station": 3,
+            "waterline": "13-7",
+            "half_breadth_m": 1.8332889235031433
+          },
+          {
+            "station": 3,
+            "waterline": "15-7",
+            "half_breadth_m": 2.079916469616032
+          },
+          {
+            "station": 3,
+            "waterline": "17-7",
+            "half_breadth_m": 2.293638960501734
+          },
+          {
+            "station": 4,
+            "waterline": "3-7",
+            "half_breadth_m": 0.5174302251460309
+          },
+          {
+            "station": 4,
+            "waterline": "5-7",
+            "half_breadth_m": 0.98120646952524
+          },
+          {
+            "station": 4,
+            "waterline": "7-7",
+            "half_breadth_m": 1.471157424523335
+          },
+          {
+            "station": 4,
+            "waterline": "9-7",
+            "half_breadth_m": 1.9432450210785637
+          },
+          {
+            "station": 4,
+            "waterline": "11-7",
+            "half_breadth_m": 2.334799906810319
+          },
+          {
+            "station": 4,
+            "waterline": "13-7",
+            "half_breadth_m": 2.6575640926352717
+          },
+          {
+            "station": 4,
+            "waterline": "15-7",
+            "half_breadth_m": 2.898076863212568
+          },
+          {
+            "station": 4,
+            "waterline": "17-7",
+            "half_breadth_m": 3.0799906792919396
+          },
+          {
+            "station": 5,
+            "waterline": "3-7",
+            "half_breadth_m": 0.8212204622038181
+          },
+          {
+            "station": 5,
+            "waterline": "5-7",
+            "half_breadth_m": 1.5770990388212902
+          },
+          {
+            "station": 5,
+            "waterline": "7-7",
+            "half_breadth_m": 2.228727086390741
+          },
+          {
+            "station": 5,
+            "waterline": "9-7",
+            "half_breadth_m": 2.733129821382958
+          },
+          {
+            "station": 5,
+            "waterline": "11-7",
+            "half_breadth_m": 3.1265631047880116
+          },
+          {
+            "station": 5,
+            "waterline": "13-7",
+            "half_breadth_m": 3.4236453985798803
+          },
+          {
+            "station": 5,
+            "waterline": "15-7",
+            "half_breadth_m": 3.629472811198106
+          },
+          {
+            "station": 5,
+            "waterline": "17-7",
+            "half_breadth_m": 3.7786859537027717
+          },
+          {
+            "station": 6,
+            "waterline": "3-7",
+            "half_breadth_m": 1.1861037527956102
+          },
+          {
+            "station": 6,
+            "waterline": "5-7",
+            "half_breadth_m": 2.1611315789940906
+          },
+          {
+            "station": 6,
+            "waterline": "7-7",
+            "half_breadth_m": 2.846930157193293
+          },
+          {
+            "station": 6,
+            "waterline": "9-7",
+            "half_breadth_m": 3.379619701338556
+          },
+          {
+            "station": 6,
+            "waterline": "11-7",
+            "half_breadth_m": 3.7625865780293974
+          },
+          {
+            "station": 6,
+            "waterline": "13-7",
+            "half_breadth_m": 4.020596838107576
+          },
+          {
+            "station": 6,
+            "waterline": "15-7",
+            "half_breadth_m": 4.196901466784653
+          },
+          {
+            "station": 6,
+            "waterline": "17-7",
+            "half_breadth_m": 4.319395104060827
+          },
+          {
+            "station": 7,
+            "waterline": "3-7",
+            "half_breadth_m": 1.537866767570769
+          },
+          {
+            "station": 7,
+            "waterline": "5-7",
+            "half_breadth_m": 2.7341949381740256
+          },
+          {
+            "station": 7,
+            "waterline": "7-7",
+            "half_breadth_m": 3.534449524057573
+          },
+          {
+            "station": 7,
+            "waterline": "9-7",
+            "half_breadth_m": 4.009871510177959
+          },
+          {
+            "station": 7,
+            "waterline": "11-7",
+            "half_breadth_m": 4.319063361906231
+          },
+          {
+            "station": 7,
+            "waterline": "13-7",
+            "half_breadth_m": 4.520027374267933
+          },
+          {
+            "station": 7,
+            "waterline": "15-7",
+            "half_breadth_m": 4.649042093253223
+          },
+          {
+            "station": 7,
+            "waterline": "17-7",
+            "half_breadth_m": 4.737213920699004
+          },
+          {
+            "station": 8,
+            "waterline": "3-7",
+            "half_breadth_m": 2.036046773610867
+          },
+          {
+            "station": 8,
+            "waterline": "5-7",
+            "half_breadth_m": 3.701314727838254
+          },
+          {
+            "station": 8,
+            "waterline": "7-7",
+            "half_breadth_m": 4.502137306910434
+          },
+          {
+            "station": 8,
+            "waterline": "9-7",
+            "half_breadth_m": 4.838574363910305
+          },
+          {
+            "station": 8,
+            "waterline": "11-7",
+            "half_breadth_m": 4.996175475165436
+          },
+          {
+            "station": 8,
+            "waterline": "13-7",
+            "half_breadth_m": 5.094795753725567
+          },
+          {
+            "station": 8,
+            "waterline": "15-7",
+            "half_breadth_m": 5.15447025771347
+          },
+          {
+            "station": 8,
+            "waterline": "17-7",
+            "half_breadth_m": 5.197087440080007
+          },
+          {
+            "station": 9,
+            "waterline": "3-7",
+            "half_breadth_m": 2.347855589044656
+          },
+          {
+            "station": 9,
+            "waterline": "5-7",
+            "half_breadth_m": 4.287914146987962
+          },
+          {
+            "station": 9,
+            "waterline": "7-7",
+            "half_breadth_m": 5.040206878969518
+          },
+          {
+            "station": 9,
+            "waterline": "9-7",
+            "half_breadth_m": 5.291567675765157
+          },
+          {
+            "station": 9,
+            "waterline": "11-7",
+            "half_breadth_m": 5.391065555443559
+          },
+          {
+            "station": 9,
+            "waterline": "13-7",
+            "half_breadth_m": 5.423879467543867
+          },
+          {
+            "station": 9,
+            "waterline": "15-7",
+            "half_breadth_m": 5.42322168280483
+          },
+          {
+            "station": 9,
+            "waterline": "17-7",
+            "half_breadth_m": 5.421182082740371
+          },
+          {
+            "station": 10,
+            "waterline": "3-7",
+            "half_breadth_m": 2.7039285780907316
+          },
+          {
+            "station": 10,
+            "waterline": "5-7",
+            "half_breadth_m": 4.593118986224608
+          },
+          {
+            "station": 10,
+            "waterline": "7-7",
+            "half_breadth_m": 5.251522368405002
+          },
+          {
+            "station": 10,
+            "waterline": "9-7",
+            "half_breadth_m": 5.47803168373202
+          },
+          {
+            "station": 10,
+            "waterline": "11-7",
+            "half_breadth_m": 5.5504064212649284
+          },
+          {
+            "station": 10,
+            "waterline": "13-7",
+            "half_breadth_m": 5.568645568491326
+          },
+          {
+            "station": 10,
+            "waterline": "15-7",
+            "half_breadth_m": 5.564983709895883
+          },
+          {
+            "station": 10,
+            "waterline": "17-7",
+            "half_breadth_m": 5.541591731975383
+          },
+          {
+            "station": 11,
+            "waterline": "3-7",
+            "half_breadth_m": 2.810509485550079
+          },
+          {
+            "station": 11,
+            "waterline": "5-7",
+            "half_breadth_m": 4.693663876797885
+          },
+          {
+            "station": 11,
+            "waterline": "7-7",
+            "half_breadth_m": 5.3895107977187955
+          },
+          {
+            "station": 11,
+            "waterline": "9-7",
+            "half_breadth_m": 5.59203744720596
+          },
+          {
+            "station": 11,
+            "waterline": "11-7",
+            "half_breadth_m": 5.644075739814171
+          },
+          {
+            "station": 11,
+            "waterline": "13-7",
+            "half_breadth_m": 5.637829001636068
+          },
+          {
+            "station": 11,
+            "waterline": "15-7",
+            "half_breadth_m": 5.6022761595152835
+          }
+        ],
+        "identities": {
+          "aft": {
+            "0": 12,
+            "2": 13,
+            "3": 14,
+            "4": 15,
+            "5": 16,
+            "6": 17,
+            "7": 18,
+            "8": 19,
+            "9": 20,
+            "10": 21,
+            "11": 22
+          },
+          "fore": {
+            "0": 11,
+            "1": 10,
+            "2": 9,
+            "3": 8,
+            "4": 7,
+            "5": 6,
+            "6": 5,
+            "7": 4,
+            "8": 3,
+            "9": 2
+          }
+        },
+        "measurement": {
+          "aft": {
+            "chains": 13,
+            "one_waterline_chains": 2,
+            "inferred_links": 0,
+            "crossings_by_kind": {
+              "grid": 37,
+              "curve": 69,
+              "lettering": 2,
+              "shallow": 1
+            }
+          },
+          "fore": {
+            "chains": 11,
+            "one_waterline_chains": 1,
+            "inferred_links": 0,
+            "crossings_by_kind": {
+              "grid": 40,
+              "curve": 77,
+              "double": 1
+            }
+          }
+        }
+      },
+      "chine": {
+        "truth_cells": 151,
+        "cells_given": 149,
+        "coverage": 0.9867549668874173,
+        "extra_cells": 1,
+        "rms_m": 0.011615860973390688,
+        "max_abs_m": 0.13237900163606753,
+        "within_0_05": 0.9932885906040269,
+        "within_0_15": 1.0,
+        "identity_errors": [],
+        "missing_cells": 2,
+        "fairness_flags": 10,
+        "calls": 0,
+        "missing_cell_keys": [
+          [
+            1,
+            "17-7"
+          ],
+          [
+            11,
+            "17-7"
+          ]
+        ],
+        "extra_cell_keys": [
+          [
+            12,
+            "17-7"
+          ]
+        ],
+        "predicted_cells": [
+          {
+            "station": 22,
+            "waterline": "15-7",
+            "half_breadth_m": 3.2095963775497505
+          },
+          {
+            "station": 22,
+            "waterline": "17-7",
+            "half_breadth_m": 4.169411541709506
+          },
+          {
+            "station": 21,
+            "waterline": "9-7",
+            "half_breadth_m": 0.29109771628292186
+          },
+          {
+            "station": 21,
+            "waterline": "11-7",
+            "half_breadth_m": 1.0565279920296207
+          },
+          {
+            "station": 21,
+            "waterline": "13-7",
+            "half_breadth_m": 3.105390161774775
+          },
+          {
+            "station": 21,
+            "waterline": "15-7",
+            "half_breadth_m": 4.172874176962938
+          },
+          {
+            "station": 21,
+            "waterline": "17-7",
+            "half_breadth_m": 4.517526153993792
+          },
+          {
+            "station": 20,
+            "waterline": "3-7",
+            "half_breadth_m": 0.34252877696724776
+          },
+          {
+            "station": 20,
+            "waterline": "5-7",
+            "half_breadth_m": 0.5227716642761656
+          },
+          {
+            "station": 20,
+            "waterline": "7-7",
+            "half_breadth_m": 0.7977496368804411
+          },
+          {
+            "station": 20,
+            "waterline": "9-7",
+            "half_breadth_m": 1.5017699925507042
+          },
+          {
+            "station": 20,
+            "waterline": "11-7",
+            "half_breadth_m": 3.2566662052997506
+          },
+          {
+            "station": 20,
+            "waterline": "13-7",
+            "half_breadth_m": 4.324457519222118
+          },
+          {
+            "station": 20,
+            "waterline": "15-7",
+            "half_breadth_m": 4.677286477056032
+          },
+          {
+            "station": 20,
+            "waterline": "17-7",
+            "half_breadth_m": 4.839754015024977
+          },
+          {
+            "station": 19,
+            "waterline": "3-7",
+            "half_breadth_m": 0.507835381748253
+          },
+          {
+            "station": 19,
+            "waterline": "5-7",
+            "half_breadth_m": 1.1527344408808904
+          },
+          {
+            "station": 19,
+            "waterline": "7-7",
+            "half_breadth_m": 2.1871026286089976
+          },
+          {
+            "station": 19,
+            "waterline": "9-7",
+            "half_breadth_m": 3.5009537104914066
+          },
+          {
+            "station": 19,
+            "waterline": "11-7",
+            "half_breadth_m": 4.4942375721597365
+          },
+          {
+            "station": 19,
+            "waterline": "13-7",
+            "half_breadth_m": 4.873134761824243
+          },
+          {
+            "station": 19,
+            "waterline": "15-7",
+            "half_breadth_m": 5.015709008994078
+          },
+          {
+            "station": 19,
+            "waterline": "17-7",
+            "half_breadth_m": 5.0459690596330935
+          },
+          {
+            "station": 18,
+            "waterline": "3-7",
+            "half_breadth_m": 0.7736100180702845
+          },
+          {
+            "station": 18,
+            "waterline": "5-7",
+            "half_breadth_m": 1.852213246424549
+          },
+          {
+            "station": 18,
+            "waterline": "7-7",
+            "half_breadth_m": 3.208870475873715
+          },
+          {
+            "station": 18,
+            "waterline": "9-7",
+            "half_breadth_m": 4.283259981726731
+          },
+          {
+            "station": 18,
+            "waterline": "11-7",
+            "half_breadth_m": 4.903105584825367
+          },
+          {
+            "station": 18,
+            "waterline": "13-7",
+            "half_breadth_m": 5.123678200659008
+          },
+          {
+            "station": 18,
+            "waterline": "15-7",
+            "half_breadth_m": 5.195233402485938
+          },
+          {
+            "station": 17,
+            "waterline": "3-7",
+            "half_breadth_m": 1.0574310721431461
+          },
+          {
+            "station": 17,
+            "waterline": "5-7",
+            "half_breadth_m": 2.448690729359189
+          },
+          {
+            "station": 17,
+            "waterline": "7-7",
+            "half_breadth_m": 3.834700374129693
+          },
+          {
+            "station": 17,
+            "waterline": "9-7",
+            "half_breadth_m": 4.748726863190391
+          },
+          {
+            "station": 17,
+            "waterline": "11-7",
+            "half_breadth_m": 5.136465756607021
+          },
+          {
+            "station": 17,
+            "waterline": "13-7",
+            "half_breadth_m": 5.2602104453928336
+          },
+          {
+            "station": 17,
+            "waterline": "15-7",
+            "half_breadth_m": 5.279928037712133
+          },
+          {
+            "station": 16,
+            "waterline": "3-7",
+            "half_breadth_m": 1.5487283996041992
+          },
+          {
+            "station": 16,
+            "waterline": "5-7",
+            "half_breadth_m": 3.5197231310663497
+          },
+          {
+            "station": 16,
+            "waterline": "7-7",
+            "half_breadth_m": 4.756809292633164
+          },
+          {
+            "station": 16,
+            "waterline": "9-7",
+            "half_breadth_m": 5.224479573486204
+          },
+          {
+            "station": 16,
+            "waterline": "11-7",
+            "half_breadth_m": 5.381231685081964
+          },
+          {
+            "station": 16,
+            "waterline": "13-7",
+            "half_breadth_m": 5.420700156720382
+          },
+          {
+            "station": 16,
+            "waterline": "15-7",
+            "half_breadth_m": 5.41856229748908
+          },
+          {
+            "station": 15,
+            "waterline": "3-7",
+            "half_breadth_m": 1.9314574591701028
+          },
+          {
+            "station": 15,
+            "waterline": "5-7",
+            "half_breadth_m": 4.2010520515847025
+          },
+          {
+            "station": 15,
+            "waterline": "7-7",
+            "half_breadth_m": 5.151437242243724
+          },
+          {
+            "station": 15,
+            "waterline": "9-7",
+            "half_breadth_m": 5.372528350094267
+          },
+          {
+            "station": 15,
+            "waterline": "11-7",
+            "half_breadth_m": 5.4670882796782605
+          },
+          {
+            "station": 15,
+            "waterline": "13-7",
+            "half_breadth_m": 5.507462503638087
+          },
+          {
+            "station": 15,
+            "waterline": "15-7",
+            "half_breadth_m": 5.512416133837745
+          },
+          {
+            "station": 14,
+            "waterline": "3-7",
+            "half_breadth_m": 2.083626839925305
+          },
+          {
+            "station": 14,
+            "waterline": "5-7",
+            "half_breadth_m": 4.590256912402352
+          },
+          {
+            "station": 14,
+            "waterline": "7-7",
+            "half_breadth_m": 5.304166886613048
+          },
+          {
+            "station": 14,
+            "waterline": "9-7",
+            "half_breadth_m": 5.481344475978748
+          },
+          {
+            "station": 14,
+            "waterline": "11-7",
+            "half_breadth_m": 5.542441403090531
+          },
+          {
+            "station": 14,
+            "waterline": "13-7",
+            "half_breadth_m": 5.568839942509183
+          },
+          {
+            "station": 14,
+            "waterline": "15-7",
+            "half_breadth_m": 5.5852675253754684
+          },
+          {
+            "station": 13,
+            "waterline": "3-7",
+            "half_breadth_m": 2.4021326517232375
+          },
+          {
+            "station": 13,
+            "waterline": "5-7",
+            "half_breadth_m": 4.720790290152322
+          },
+          {
+            "station": 13,
+            "waterline": "7-7",
+            "half_breadth_m": 5.364208895771448
+          },
+          {
+            "station": 13,
+            "waterline": "9-7",
+            "half_breadth_m": 5.554090047692541
+          },
+          {
+            "station": 13,
+            "waterline": "11-7",
+            "half_breadth_m": 5.628599495166623
+          },
+          {
+            "station": 13,
+            "waterline": "13-7",
+            "half_breadth_m": 5.655597365814507
+          },
+          {
+            "station": 13,
+            "waterline": "15-7",
+            "half_breadth_m": 5.660115169645675
+          },
+          {
+            "station": 12,
+            "waterline": "3-7",
+            "half_breadth_m": 2.4021326517232375
+          },
+          {
+            "station": 12,
+            "waterline": "5-7",
+            "half_breadth_m": 4.720790290152322
+          },
+          {
+            "station": 12,
+            "waterline": "7-7",
+            "half_breadth_m": 5.364208895771448
+          },
+          {
+            "station": 12,
+            "waterline": "9-7",
+            "half_breadth_m": 5.554090047692541
+          },
+          {
+            "station": 12,
+            "waterline": "11-7",
+            "half_breadth_m": 5.628599495166623
+          },
+          {
+            "station": 12,
+            "waterline": "13-7",
+            "half_breadth_m": 5.655597365814507
+          },
+          {
+            "station": 12,
+            "waterline": "15-7",
+            "half_breadth_m": 5.678304359124538
+          },
+          {
+            "station": 12,
+            "waterline": "17-7",
+            "half_breadth_m": 5.68388770016423
+          },
+          {
+            "station": 2,
+            "waterline": "7-7",
+            "half_breadth_m": 0.2554603690822359
+          },
+          {
+            "station": 2,
+            "waterline": "9-7",
+            "half_breadth_m": 0.44688932096254413
+          },
+          {
+            "station": 2,
+            "waterline": "11-7",
+            "half_breadth_m": 0.6601864828368217
+          },
+          {
+            "station": 2,
+            "waterline": "13-7",
+            "half_breadth_m": 0.880232552848516
+          },
+          {
+            "station": 2,
+            "waterline": "15-7",
+            "half_breadth_m": 1.104800130642756
+          },
+          {
+            "station": 2,
+            "waterline": "17-7",
+            "half_breadth_m": 1.3379507842207996
+          },
+          {
+            "station": 3,
+            "waterline": "3-7",
+            "half_breadth_m": 0.2781853436862712
+          },
+          {
+            "station": 3,
+            "waterline": "5-7",
+            "half_breadth_m": 0.5570381121958141
+          },
+          {
+            "station": 3,
+            "waterline": "7-7",
+            "half_breadth_m": 0.8594604035494339
+          },
+          {
+            "station": 3,
+            "waterline": "9-7",
+            "half_breadth_m": 1.1753982339127205
+          },
+          {
+            "station": 3,
+            "waterline": "11-7",
+            "half_breadth_m": 1.514734092935179
+          },
+          {
+            "station": 3,
+            "waterline": "13-7",
+            "half_breadth_m": 1.8332889235031433
+          },
+          {
+            "station": 3,
+            "waterline": "15-7",
+            "half_breadth_m": 2.079916469616032
+          },
+          {
+            "station": 3,
+            "waterline": "17-7",
+            "half_breadth_m": 2.293638960501734
+          },
+          {
+            "station": 4,
+            "waterline": "3-7",
+            "half_breadth_m": 0.5174302251460309
+          },
+          {
+            "station": 4,
+            "waterline": "5-7",
+            "half_breadth_m": 0.98120646952524
+          },
+          {
+            "station": 4,
+            "waterline": "7-7",
+            "half_breadth_m": 1.471157424523335
+          },
+          {
+            "station": 4,
+            "waterline": "9-7",
+            "half_breadth_m": 1.9432450210785637
+          },
+          {
+            "station": 4,
+            "waterline": "11-7",
+            "half_breadth_m": 2.334799906810319
+          },
+          {
+            "station": 4,
+            "waterline": "13-7",
+            "half_breadth_m": 2.6575640926352717
+          },
+          {
+            "station": 4,
+            "waterline": "15-7",
+            "half_breadth_m": 2.898076863212568
+          },
+          {
+            "station": 4,
+            "waterline": "17-7",
+            "half_breadth_m": 3.0799906792919396
+          },
+          {
+            "station": 5,
+            "waterline": "3-7",
+            "half_breadth_m": 0.8212204622038181
+          },
+          {
+            "station": 5,
+            "waterline": "5-7",
+            "half_breadth_m": 1.5770990388212902
+          },
+          {
+            "station": 5,
+            "waterline": "7-7",
+            "half_breadth_m": 2.228727086390741
+          },
+          {
+            "station": 5,
+            "waterline": "9-7",
+            "half_breadth_m": 2.733129821382958
+          },
+          {
+            "station": 5,
+            "waterline": "11-7",
+            "half_breadth_m": 3.1265631047880116
+          },
+          {
+            "station": 5,
+            "waterline": "13-7",
+            "half_breadth_m": 3.4236453985798803
+          },
+          {
+            "station": 5,
+            "waterline": "15-7",
+            "half_breadth_m": 3.629472811198106
+          },
+          {
+            "station": 5,
+            "waterline": "17-7",
+            "half_breadth_m": 3.7786859537027717
+          },
+          {
+            "station": 6,
+            "waterline": "3-7",
+            "half_breadth_m": 1.1861037527956102
+          },
+          {
+            "station": 6,
+            "waterline": "5-7",
+            "half_breadth_m": 2.1611315789940906
+          },
+          {
+            "station": 6,
+            "waterline": "7-7",
+            "half_breadth_m": 2.846930157193293
+          },
+          {
+            "station": 6,
+            "waterline": "9-7",
+            "half_breadth_m": 3.379619701338556
+          },
+          {
+            "station": 6,
+            "waterline": "11-7",
+            "half_breadth_m": 3.7625865780293974
+          },
+          {
+            "station": 6,
+            "waterline": "13-7",
+            "half_breadth_m": 4.020596838107576
+          },
+          {
+            "station": 6,
+            "waterline": "15-7",
+            "half_breadth_m": 4.196901466784653
+          },
+          {
+            "station": 6,
+            "waterline": "17-7",
+            "half_breadth_m": 4.319395104060827
+          },
+          {
+            "station": 7,
+            "waterline": "3-7",
+            "half_breadth_m": 1.537866767570769
+          },
+          {
+            "station": 7,
+            "waterline": "5-7",
+            "half_breadth_m": 2.7341949381740256
+          },
+          {
+            "station": 7,
+            "waterline": "7-7",
+            "half_breadth_m": 3.534449524057573
+          },
+          {
+            "station": 7,
+            "waterline": "9-7",
+            "half_breadth_m": 4.009871510177959
+          },
+          {
+            "station": 7,
+            "waterline": "11-7",
+            "half_breadth_m": 4.319063361906231
+          },
+          {
+            "station": 7,
+            "waterline": "13-7",
+            "half_breadth_m": 4.520027374267933
+          },
+          {
+            "station": 7,
+            "waterline": "15-7",
+            "half_breadth_m": 4.649042093253223
+          },
+          {
+            "station": 7,
+            "waterline": "17-7",
+            "half_breadth_m": 4.737213920699004
+          },
+          {
+            "station": 8,
+            "waterline": "3-7",
+            "half_breadth_m": 2.036046773610867
+          },
+          {
+            "station": 8,
+            "waterline": "5-7",
+            "half_breadth_m": 3.701314727838254
+          },
+          {
+            "station": 8,
+            "waterline": "7-7",
+            "half_breadth_m": 4.502137306910434
+          },
+          {
+            "station": 8,
+            "waterline": "9-7",
+            "half_breadth_m": 4.838574363910305
+          },
+          {
+            "station": 8,
+            "waterline": "11-7",
+            "half_breadth_m": 4.996175475165436
+          },
+          {
+            "station": 8,
+            "waterline": "13-7",
+            "half_breadth_m": 5.094795753725567
+          },
+          {
+            "station": 8,
+            "waterline": "15-7",
+            "half_breadth_m": 5.15447025771347
+          },
+          {
+            "station": 8,
+            "waterline": "17-7",
+            "half_breadth_m": 5.197087440080007
+          },
+          {
+            "station": 9,
+            "waterline": "3-7",
+            "half_breadth_m": 2.347855589044656
+          },
+          {
+            "station": 9,
+            "waterline": "5-7",
+            "half_breadth_m": 4.287914146987962
+          },
+          {
+            "station": 9,
+            "waterline": "7-7",
+            "half_breadth_m": 5.040206878969518
+          },
+          {
+            "station": 9,
+            "waterline": "9-7",
+            "half_breadth_m": 5.291567675765157
+          },
+          {
+            "station": 9,
+            "waterline": "11-7",
+            "half_breadth_m": 5.391065555443559
+          },
+          {
+            "station": 9,
+            "waterline": "13-7",
+            "half_breadth_m": 5.423879467543867
+          },
+          {
+            "station": 9,
+            "waterline": "15-7",
+            "half_breadth_m": 5.42322168280483
+          },
+          {
+            "station": 9,
+            "waterline": "17-7",
+            "half_breadth_m": 5.421182082740371
+          },
+          {
+            "station": 10,
+            "waterline": "3-7",
+            "half_breadth_m": 2.7039285780907316
+          },
+          {
+            "station": 10,
+            "waterline": "5-7",
+            "half_breadth_m": 4.593118986224608
+          },
+          {
+            "station": 10,
+            "waterline": "7-7",
+            "half_breadth_m": 5.251522368405002
+          },
+          {
+            "station": 10,
+            "waterline": "9-7",
+            "half_breadth_m": 5.47803168373202
+          },
+          {
+            "station": 10,
+            "waterline": "11-7",
+            "half_breadth_m": 5.5504064212649284
+          },
+          {
+            "station": 10,
+            "waterline": "13-7",
+            "half_breadth_m": 5.568645568491326
+          },
+          {
+            "station": 10,
+            "waterline": "15-7",
+            "half_breadth_m": 5.564983709895883
+          },
+          {
+            "station": 10,
+            "waterline": "17-7",
+            "half_breadth_m": 5.541591731975383
+          },
+          {
+            "station": 11,
+            "waterline": "3-7",
+            "half_breadth_m": 2.810509485550079
+          },
+          {
+            "station": 11,
+            "waterline": "5-7",
+            "half_breadth_m": 4.693663876797885
+          },
+          {
+            "station": 11,
+            "waterline": "7-7",
+            "half_breadth_m": 5.3895107977187955
+          },
+          {
+            "station": 11,
+            "waterline": "9-7",
+            "half_breadth_m": 5.59203744720596
+          },
+          {
+            "station": 11,
+            "waterline": "11-7",
+            "half_breadth_m": 5.644075739814171
+          },
+          {
+            "station": 11,
+            "waterline": "13-7",
+            "half_breadth_m": 5.637829001636068
+          },
+          {
+            "station": 11,
+            "waterline": "15-7",
+            "half_breadth_m": 5.6022761595152835
+          }
+        ],
+        "identities": {
+          "aft": {
+            "0": 12,
+            "2": 13,
+            "3": 14,
+            "4": 15,
+            "5": 16,
+            "6": 17,
+            "7": 18,
+            "8": 19,
+            "9": 20,
+            "10": 21,
+            "11": 22
+          },
+          "fore": {
+            "0": 11,
+            "1": 10,
+            "2": 9,
+            "3": 8,
+            "4": 7,
+            "5": 6,
+            "6": 5,
+            "7": 4,
+            "8": 3,
+            "9": 2
+          }
+        },
+        "measurement": {
+          "aft": {
+            "chains": 13,
+            "one_waterline_chains": 2,
+            "inferred_links": 0,
+            "crossings_by_kind": {
+              "grid": 37,
+              "curve": 69,
+              "lettering": 2,
+              "shallow": 1
+            }
+          },
+          "fore": {
+            "chains": 11,
+            "one_waterline_chains": 1,
+            "inferred_links": 0,
+            "crossings_by_kind": {
+              "grid": 40,
+              "curve": 77,
+              "double": 1
+            }
+          }
+        }
+      },
+      "changed_sides": [],
+      "rms_no_regression": true,
+      "coverage_no_regression": true,
+      "seconds": 4.855
+    },
+    {
+      "sheet": "Balclutha",
+      "sheet_path": "/Users/jonathanjie/Documents/workspace/MarinaFrame/work/sources/balclutha_ca54_s7.tif",
+      "sheet_sha256": "32f09c60a39d5a7f91148eb26148ebb58feea3d0a510e5a9a9da7767c60326a8",
+      "truth_path": "/private/tmp/claude-501/-Users-jonathanjie-Documents-workspace/31a3f286-f3b9-4116-93bc-756e11ead9ee/scratchpad/wv-agent/balclutha/truth_s7.json",
+      "truth_sha256": "cd7de30ae002c22669fc245c86c36870f30fa966098d08de50beb01d9c54832b",
+      "calibration": {
+        "centre_column": 4824,
+        "pixels_per_metre": 491.48,
+        "waterline_rows": {
+          "4": 6261,
+          "8": 5659,
+          "12": 5059,
+          "16": 4459,
+          "20": 3858,
+          "24": 3258,
+          "28": 2662,
+          "32": 2066
+        },
+        "max_offset_px": 3150,
+        "sides": [
+          {
+            "name": "aft",
+            "sign": -1,
+            "stations_outer_first": [
+              10,
+              9,
+              8,
+              7,
+              6,
+              5,
+              4,
+              3,
+              2,
+              1,
+              0
+            ],
+            "grid_columns": [
+              4526,
+              4225,
+              3627,
+              3027,
+              2429,
+              2130,
+              1825
+            ]
+          },
+          {
+            "name": "fore",
+            "sign": 1,
+            "stations_outer_first": [
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20
+            ],
+            "grid_columns": [
+              5124,
+              5421,
+              6020,
+              6618,
+              7216,
+              7517,
+              7814
+            ]
+          }
+        ]
+      },
+      "frozen": {
+        "truth_cells": 151,
+        "cells_given": 151,
+        "coverage": 1.0,
+        "extra_cells": 4,
+        "rms_m": 0.1480119352787029,
+        "max_abs_m": 1.8113248090482368,
+        "within_0_05": 0.9867549668874173,
+        "within_0_15": 0.9933774834437086,
+        "identity_errors": [],
+        "rms_without_doubtful_cell_m": 0.013451125567118152,
+        "missing_cells": 0,
+        "fairness_flags": 0,
+        "calls": 0,
+        "missing_cell_keys": [],
+        "extra_cell_keys": [
+          [
+            14,
+            32
+          ],
+          [
+            13,
+            32
+          ],
+          [
+            12,
+            32
+          ],
+          [
+            11,
+            32
+          ]
+        ],
+        "predicted_cells": [
+          {
+            "station": 0,
+            "waterline": 28,
+            "half_breadth_m": 3.416941182068211
+          },
+          {
+            "station": 0,
+            "waterline": 32,
+            "half_breadth_m": 4.093993820638677
+          },
+          {
+            "station": 1,
+            "waterline": 4,
+            "half_breadth_m": 0.15222445358270895
+          },
+          {
+            "station": 1,
+            "waterline": 8,
+            "half_breadth_m": 0.33219634649042806
+          },
+          {
+            "station": 1,
+            "waterline": 12,
+            "half_breadth_m": 0.5577694769085227
+          },
+          {
+            "station": 1,
+            "waterline": 16,
+            "half_breadth_m": 0.9085492487588048
+          },
+          {
+            "station": 1,
+            "waterline": 20,
+            "half_breadth_m": 1.5541049471110038
+          },
+          {
+            "station": 1,
+            "waterline": 24,
+            "half_breadth_m": 3.0472983946712007
+          },
+          {
+            "station": 1,
+            "waterline": 28,
+            "half_breadth_m": 4.216565828674162
+          },
+          {
+            "station": 1,
+            "waterline": 32,
+            "half_breadth_m": 4.4623861419923525
+          },
+          {
+            "station": 2,
+            "waterline": 4,
+            "half_breadth_m": 0.3543990018811664
+          },
+          {
+            "station": 2,
+            "waterline": 8,
+            "half_breadth_m": 0.7370452575285347
+          },
+          {
+            "station": 2,
+            "waterline": 12,
+            "half_breadth_m": 1.213842595597427
+          },
+          {
+            "station": 2,
+            "waterline": 16,
+            "half_breadth_m": 1.8996218308021409
+          },
+          {
+            "station": 2,
+            "waterline": 20,
+            "half_breadth_m": 2.8871661007279887
+          },
+          {
+            "station": 2,
+            "waterline": 24,
+            "half_breadth_m": 3.9864897869078506
+          },
+          {
+            "station": 2,
+            "waterline": 28,
+            "half_breadth_m": 4.567642532397705
+          },
+          {
+            "station": 2,
+            "waterline": 32,
+            "half_breadth_m": 4.69897672929717
+          },
+          {
+            "station": 3,
+            "waterline": 4,
+            "half_breadth_m": 0.633133121654923
+          },
+          {
+            "station": 3,
+            "waterline": 8,
+            "half_breadth_m": 1.2723649382881839
+          },
+          {
+            "station": 3,
+            "waterline": 12,
+            "half_breadth_m": 1.9979859192268077
+          },
+          {
+            "station": 3,
+            "waterline": 16,
+            "half_breadth_m": 2.8330376720968866
+          },
+          {
+            "station": 3,
+            "waterline": 20,
+            "half_breadth_m": 3.7567540120836993
+          },
+          {
+            "station": 3,
+            "waterline": 24,
+            "half_breadth_m": 4.488642918270687
+          },
+          {
+            "station": 3,
+            "waterline": 28,
+            "half_breadth_m": 4.814698072077201
+          },
+          {
+            "station": 3,
+            "waterline": 32,
+            "half_breadth_m": 4.854275646436831
+          },
+          {
+            "station": 4,
+            "waterline": 4,
+            "half_breadth_m": 1.0299841406590333
+          },
+          {
+            "station": 4,
+            "waterline": 8,
+            "half_breadth_m": 1.920185849038666
+          },
+          {
+            "station": 4,
+            "waterline": 12,
+            "half_breadth_m": 2.783643382894585
+          },
+          {
+            "station": 4,
+            "waterline": 16,
+            "half_breadth_m": 3.60043804011022
+          },
+          {
+            "station": 4,
+            "waterline": 20,
+            "half_breadth_m": 4.307403338130185
+          },
+          {
+            "station": 4,
+            "waterline": 24,
+            "half_breadth_m": 4.821248107758355
+          },
+          {
+            "station": 4,
+            "waterline": 28,
+            "half_breadth_m": 4.987108800436913
+          },
+          {
+            "station": 4,
+            "waterline": 32,
+            "half_breadth_m": 4.997540469137623
+          },
+          {
+            "station": 5,
+            "waterline": 4,
+            "half_breadth_m": 2.0763395418827293
+          },
+          {
+            "station": 5,
+            "waterline": 8,
+            "half_breadth_m": 3.2002369090850125
+          },
+          {
+            "station": 5,
+            "waterline": 12,
+            "half_breadth_m": 3.979179205043662
+          },
+          {
+            "station": 5,
+            "waterline": 16,
+            "half_breadth_m": 4.562404852401852
+          },
+          {
+            "station": 5,
+            "waterline": 20,
+            "half_breadth_m": 4.943910172447682
+          },
+          {
+            "station": 5,
+            "waterline": 24,
+            "half_breadth_m": 5.146456160269978
+          },
+          {
+            "station": 5,
+            "waterline": 28,
+            "half_breadth_m": 5.2103987768620055
+          },
+          {
+            "station": 5,
+            "waterline": 32,
+            "half_breadth_m": 5.21054630034311
+          },
+          {
+            "station": 6,
+            "waterline": 4,
+            "half_breadth_m": 3.198912119598815
+          },
+          {
+            "station": 6,
+            "waterline": 8,
+            "half_breadth_m": 4.237249373468389
+          },
+          {
+            "station": 6,
+            "waterline": 12,
+            "half_breadth_m": 4.835480175300813
+          },
+          {
+            "station": 6,
+            "waterline": 16,
+            "half_breadth_m": 5.138988547803468
+          },
+          {
+            "station": 6,
+            "waterline": 20,
+            "half_breadth_m": 5.273338504313917
+          },
+          {
+            "station": 6,
+            "waterline": 24,
+            "half_breadth_m": 5.321836369949817
+          },
+          {
+            "station": 6,
+            "waterline": 28,
+            "half_breadth_m": 5.3430297927483155
+          },
+          {
+            "station": 6,
+            "waterline": 32,
+            "half_breadth_m": 5.353098194339937
+          },
+          {
+            "station": 7,
+            "waterline": 4,
+            "half_breadth_m": 4.187619676450149
+          },
+          {
+            "station": 7,
+            "waterline": 8,
+            "half_breadth_m": 5.010893191362442
+          },
+          {
+            "station": 7,
+            "waterline": 12,
+            "half_breadth_m": 5.32156253881139
+          },
+          {
+            "station": 7,
+            "waterline": 16,
+            "half_breadth_m": 5.445755520191227
+          },
+          {
+            "station": 7,
+            "waterline": 20,
+            "half_breadth_m": 5.479837844971674
+          },
+          {
+            "station": 7,
+            "waterline": 24,
+            "half_breadth_m": 5.486534075473836
+          },
+          {
+            "station": 7,
+            "waterline": 28,
+            "half_breadth_m": 5.482617560343646
+          },
+          {
+            "station": 7,
+            "waterline": 32,
+            "half_breadth_m": 5.465804840923254
+          },
+          {
+            "station": 8,
+            "waterline": 4,
+            "half_breadth_m": 4.839894983660722
+          },
+          {
+            "station": 8,
+            "waterline": 8,
+            "half_breadth_m": 5.446424167360242
+          },
+          {
+            "station": 8,
+            "waterline": 12,
+            "half_breadth_m": 5.599059788558524
+          },
+          {
+            "station": 8,
+            "waterline": 16,
+            "half_breadth_m": 5.623259830110408
+          },
+          {
+            "station": 8,
+            "waterline": 20,
+            "half_breadth_m": 5.602304774844368
+          },
+          {
+            "station": 8,
+            "waterline": 24,
+            "half_breadth_m": 5.581873079358393
+          },
+          {
+            "station": 8,
+            "waterline": 28,
+            "half_breadth_m": 5.570329254497889
+          },
+          {
+            "station": 8,
+            "waterline": 32,
+            "half_breadth_m": 5.545781964377327
+          },
+          {
+            "station": 9,
+            "waterline": 4,
+            "half_breadth_m": 5.36121681049225
+          },
+          {
+            "station": 9,
+            "waterline": 8,
+            "half_breadth_m": 5.739916550268715
+          },
+          {
+            "station": 9,
+            "waterline": 12,
+            "half_breadth_m": 5.819872242175392
+          },
+          {
+            "station": 9,
+            "waterline": 16,
+            "half_breadth_m": 5.825991228487511
+          },
+          {
+            "station": 9,
+            "waterline": 20,
+            "half_breadth_m": 5.782791343539832
+          },
+          {
+            "station": 9,
+            "waterline": 24,
+            "half_breadth_m": 5.706915264124426
+          },
+          {
+            "station": 9,
+            "waterline": 28,
+            "half_breadth_m": 5.653468735458788
+          },
+          {
+            "station": 9,
+            "waterline": 32,
+            "half_breadth_m": 5.617190701610161
+          },
+          {
+            "station": 10,
+            "waterline": 4,
+            "half_breadth_m": 5.420560723646192
+          },
+          {
+            "station": 10,
+            "waterline": 8,
+            "half_breadth_m": 5.788896787483138
+          },
+          {
+            "station": 10,
+            "waterline": 12,
+            "half_breadth_m": 5.865519181841825
+          },
+          {
+            "station": 10,
+            "waterline": 16,
+            "half_breadth_m": 5.8641398342306035
+          },
+          {
+            "station": 10,
+            "waterline": 20,
+            "half_breadth_m": 5.809484032177792
+          },
+          {
+            "station": 10,
+            "waterline": 24,
+            "half_breadth_m": 5.735762164207244
+          },
+          {
+            "station": 10,
+            "waterline": 28,
+            "half_breadth_m": 5.680548601209461
+          },
+          {
+            "station": 20,
+            "waterline": 28,
+            "half_breadth_m": 0.39959100344664905
+          },
+          {
+            "station": 20,
+            "waterline": 32,
+            "half_breadth_m": 0.8098022407714143
+          },
+          {
+            "station": 19,
+            "waterline": 4,
+            "half_breadth_m": 0.31623159545520924
+          },
+          {
+            "station": 19,
+            "waterline": 8,
+            "half_breadth_m": 0.5045375943800294
+          },
+          {
+            "station": 19,
+            "waterline": 12,
+            "half_breadth_m": 0.6329609702240605
+          },
+          {
+            "station": 19,
+            "waterline": 16,
+            "half_breadth_m": 0.7690155523508324
+          },
+          {
+            "station": 19,
+            "waterline": 20,
+            "half_breadth_m": 0.9564291496953172
+          },
+          {
+            "station": 19,
+            "waterline": 24,
+            "half_breadth_m": 1.228348082338627
+          },
+          {
+            "station": 19,
+            "waterline": 28,
+            "half_breadth_m": 1.6326116203102794
+          },
+          {
+            "station": 19,
+            "waterline": 32,
+            "half_breadth_m": 2.133928674759451
+          },
+          {
+            "station": 18,
+            "waterline": 4,
+            "half_breadth_m": 0.7442494506143198
+          },
+          {
+            "station": 18,
+            "waterline": 8,
+            "half_breadth_m": 1.1392367450082117
+          },
+          {
+            "station": 18,
+            "waterline": 12,
+            "half_breadth_m": 1.4150212930834642
+          },
+          {
+            "station": 18,
+            "waterline": 16,
+            "half_breadth_m": 1.7049518678348683
+          },
+          {
+            "station": 18,
+            "waterline": 20,
+            "half_breadth_m": 2.008993276749725
+          },
+          {
+            "station": 18,
+            "waterline": 24,
+            "half_breadth_m": 2.357424809048237
+          },
+          {
+            "station": 18,
+            "waterline": 28,
+            "half_breadth_m": 2.7811713980827495
+          },
+          {
+            "station": 18,
+            "waterline": 32,
+            "half_breadth_m": 3.2628740035237147
+          },
+          {
+            "station": 17,
+            "waterline": 4,
+            "half_breadth_m": 1.2597201169797299
+          },
+          {
+            "station": 17,
+            "waterline": 8,
+            "half_breadth_m": 1.83552926794909
+          },
+          {
+            "station": 17,
+            "waterline": 12,
+            "half_breadth_m": 2.218246608770683
+          },
+          {
+            "station": 17,
+            "waterline": 16,
+            "half_breadth_m": 2.5980120016481156
+          },
+          {
+            "station": 17,
+            "waterline": 20,
+            "half_breadth_m": 2.9648141215851096
+          },
+          {
+            "station": 17,
+            "waterline": 24,
+            "half_breadth_m": 3.3156222361616616
+          },
+          {
+            "station": 17,
+            "waterline": 28,
+            "half_breadth_m": 3.694225002944348
+          },
+          {
+            "station": 17,
+            "waterline": 32,
+            "half_breadth_m": 4.104567973272574
+          },
+          {
+            "station": 16,
+            "waterline": 4,
+            "half_breadth_m": 1.8045432512429544
+          },
+          {
+            "station": 16,
+            "waterline": 8,
+            "half_breadth_m": 2.5171651868658693
+          },
+          {
+            "station": 16,
+            "waterline": 12,
+            "half_breadth_m": 3.0018490149278554
+          },
+          {
+            "station": 16,
+            "waterline": 16,
+            "half_breadth_m": 3.4071395341071957
+          },
+          {
+            "station": 16,
+            "waterline": 20,
+            "half_breadth_m": 3.7638101383692186
+          },
+          {
+            "station": 16,
+            "waterline": 24,
+            "half_breadth_m": 4.072409293667859
+          },
+          {
+            "station": 16,
+            "waterline": 28,
+            "half_breadth_m": 4.37139004193058
+          },
+          {
+            "station": 16,
+            "waterline": 32,
+            "half_breadth_m": 4.691181427480758
+          },
+          {
+            "station": 15,
+            "waterline": 4,
+            "half_breadth_m": 2.929917492777127
+          },
+          {
+            "station": 15,
+            "waterline": 8,
+            "half_breadth_m": 3.721623504541199
+          },
+          {
+            "station": 15,
+            "waterline": 12,
+            "half_breadth_m": 4.205412315129527
+          },
+          {
+            "station": 15,
+            "waterline": 16,
+            "half_breadth_m": 4.541317427906777
+          },
+          {
+            "station": 15,
+            "waterline": 20,
+            "half_breadth_m": 4.7906452357891
+          },
+          {
+            "station": 15,
+            "waterline": 24,
+            "half_breadth_m": 4.97313598318204
+          },
+          {
+            "station": 15,
+            "waterline": 28,
+            "half_breadth_m": 5.1231587469565625
+          },
+          {
+            "station": 15,
+            "waterline": 32,
+            "half_breadth_m": 5.22457738953472
+          },
+          {
+            "station": 14,
+            "waterline": 4,
+            "half_breadth_m": 3.856057807216196
+          },
+          {
+            "station": 14,
+            "waterline": 8,
+            "half_breadth_m": 4.624991366714721
+          },
+          {
+            "station": 14,
+            "waterline": 12,
+            "half_breadth_m": 4.981599855368392
+          },
+          {
+            "station": 14,
+            "waterline": 16,
+            "half_breadth_m": 5.171180942226539
+          },
+          {
+            "station": 14,
+            "waterline": 20,
+            "half_breadth_m": 5.298227945629014
+          },
+          {
+            "station": 14,
+            "waterline": 24,
+            "half_breadth_m": 5.375191979270863
+          },
+          {
+            "station": 14,
+            "waterline": 28,
+            "half_breadth_m": 5.409792398759876
+          },
+          {
+            "station": 14,
+            "waterline": 32,
+            "half_breadth_m": 5.377425473245962
+          },
+          {
+            "station": 13,
+            "waterline": 4,
+            "half_breadth_m": 4.545564405710044
+          },
+          {
+            "station": 13,
+            "waterline": 8,
+            "half_breadth_m": 5.209662441357992
+          },
+          {
+            "station": 13,
+            "waterline": 12,
+            "half_breadth_m": 5.440445796838682
+          },
+          {
+            "station": 13,
+            "waterline": 16,
+            "half_breadth_m": 5.532877573612388
+          },
+          {
+            "station": 13,
+            "waterline": 20,
+            "half_breadth_m": 5.558937333623442
+          },
+          {
+            "station": 13,
+            "waterline": 24,
+            "half_breadth_m": 5.559822031675292
+          },
+          {
+            "station": 13,
+            "waterline": 28,
+            "half_breadth_m": 5.540237403980039
+          },
+          {
+            "station": 13,
+            "waterline": 32,
+            "half_breadth_m": 5.377425473245962
+          },
+          {
+            "station": 12,
+            "waterline": 4,
+            "half_breadth_m": 5.05107492314614
+          },
+          {
+            "station": 12,
+            "waterline": 8,
+            "half_breadth_m": 5.605230286069558
+          },
+          {
+            "station": 12,
+            "waterline": 12,
+            "half_breadth_m": 5.705799351066985
+          },
+          {
+            "station": 12,
+            "waterline": 16,
+            "half_breadth_m": 5.730675361627046
+          },
+          {
+            "station": 12,
+            "waterline": 20,
+            "half_breadth_m": 5.709360930904154
+          },
+          {
+            "station": 12,
+            "waterline": 24,
+            "half_breadth_m": 5.70220917211879
+          },
+          {
+            "station": 12,
+            "waterline": 28,
+            "half_breadth_m": 5.60939100072111
+          },
+          {
+            "station": 12,
+            "waterline": 32,
+            "half_breadth_m": 5.377425473245962
+          },
+          {
+            "station": 11,
+            "waterline": 4,
+            "half_breadth_m": 5.426535869751344
+          },
+          {
+            "station": 11,
+            "waterline": 8,
+            "half_breadth_m": 5.772568909302901
+          },
+          {
+            "station": 11,
+            "waterline": 12,
+            "half_breadth_m": 5.831513878904368
+          },
+          {
+            "station": 11,
+            "waterline": 16,
+            "half_breadth_m": 5.837629024433988
+          },
+          {
+            "station": 11,
+            "waterline": 20,
+            "half_breadth_m": 5.78856624864691
+          },
+          {
+            "station": 11,
+            "waterline": 24,
+            "half_breadth_m": 5.70220917211879
+          },
+          {
+            "station": 11,
+            "waterline": 28,
+            "half_breadth_m": 5.632743282246282
+          },
+          {
+            "station": 11,
+            "waterline": 32,
+            "half_breadth_m": 5.377425473245962
+          }
+        ],
+        "identities": {
+          "aft": {
+            "0": 10,
+            "1": 9,
+            "2": 8,
+            "3": 7,
+            "4": 6,
+            "5": 5,
+            "6": 4,
+            "7": 3,
+            "8": 2,
+            "9": 1,
+            "10": 0
+          },
+          "fore": {
+            "0": 11,
+            "1": 12,
+            "2": 13,
+            "3": 14,
+            "4": 15,
+            "5": 16,
+            "6": 17,
+            "7": 18,
+            "8": 19,
+            "9": 20
+          }
+        },
+        "measurement": {
+          "aft": {
+            "chains": 11,
+            "one_waterline_chains": 0,
+            "inferred_links": 1,
+            "crossings_by_kind": {
+              "grid": 58,
+              "curve": 81,
+              "straight": 8,
+              "lettering": 1
+            }
+          },
+          "fore": {
+            "chains": 10,
+            "one_waterline_chains": 0,
+            "inferred_links": 1,
+            "crossings_by_kind": {
+              "grid": 59,
+              "curve": 70,
+              "straight": 8,
+              "lettering": 5
+            }
+          }
+        }
+      },
+      "chine": {
+        "truth_cells": 151,
+        "cells_given": 151,
+        "coverage": 1.0,
+        "extra_cells": 4,
+        "rms_m": 0.1480119352787029,
+        "max_abs_m": 1.8113248090482368,
+        "within_0_05": 0.9867549668874173,
+        "within_0_15": 0.9933774834437086,
+        "identity_errors": [],
+        "rms_without_doubtful_cell_m": 0.013451125567118152,
+        "missing_cells": 0,
+        "fairness_flags": 0,
+        "calls": 0,
+        "missing_cell_keys": [],
+        "extra_cell_keys": [
+          [
+            14,
+            32
+          ],
+          [
+            13,
+            32
+          ],
+          [
+            12,
+            32
+          ],
+          [
+            11,
+            32
+          ]
+        ],
+        "predicted_cells": [
+          {
+            "station": 0,
+            "waterline": 28,
+            "half_breadth_m": 3.416941182068211
+          },
+          {
+            "station": 0,
+            "waterline": 32,
+            "half_breadth_m": 4.093993820638677
+          },
+          {
+            "station": 1,
+            "waterline": 4,
+            "half_breadth_m": 0.15222445358270895
+          },
+          {
+            "station": 1,
+            "waterline": 8,
+            "half_breadth_m": 0.33219634649042806
+          },
+          {
+            "station": 1,
+            "waterline": 12,
+            "half_breadth_m": 0.5577694769085227
+          },
+          {
+            "station": 1,
+            "waterline": 16,
+            "half_breadth_m": 0.9085492487588048
+          },
+          {
+            "station": 1,
+            "waterline": 20,
+            "half_breadth_m": 1.5541049471110038
+          },
+          {
+            "station": 1,
+            "waterline": 24,
+            "half_breadth_m": 3.0472983946712007
+          },
+          {
+            "station": 1,
+            "waterline": 28,
+            "half_breadth_m": 4.216565828674162
+          },
+          {
+            "station": 1,
+            "waterline": 32,
+            "half_breadth_m": 4.4623861419923525
+          },
+          {
+            "station": 2,
+            "waterline": 4,
+            "half_breadth_m": 0.3543990018811664
+          },
+          {
+            "station": 2,
+            "waterline": 8,
+            "half_breadth_m": 0.7370452575285347
+          },
+          {
+            "station": 2,
+            "waterline": 12,
+            "half_breadth_m": 1.213842595597427
+          },
+          {
+            "station": 2,
+            "waterline": 16,
+            "half_breadth_m": 1.8996218308021409
+          },
+          {
+            "station": 2,
+            "waterline": 20,
+            "half_breadth_m": 2.8871661007279887
+          },
+          {
+            "station": 2,
+            "waterline": 24,
+            "half_breadth_m": 3.9864897869078506
+          },
+          {
+            "station": 2,
+            "waterline": 28,
+            "half_breadth_m": 4.567642532397705
+          },
+          {
+            "station": 2,
+            "waterline": 32,
+            "half_breadth_m": 4.69897672929717
+          },
+          {
+            "station": 3,
+            "waterline": 4,
+            "half_breadth_m": 0.633133121654923
+          },
+          {
+            "station": 3,
+            "waterline": 8,
+            "half_breadth_m": 1.2723649382881839
+          },
+          {
+            "station": 3,
+            "waterline": 12,
+            "half_breadth_m": 1.9979859192268077
+          },
+          {
+            "station": 3,
+            "waterline": 16,
+            "half_breadth_m": 2.8330376720968866
+          },
+          {
+            "station": 3,
+            "waterline": 20,
+            "half_breadth_m": 3.7567540120836993
+          },
+          {
+            "station": 3,
+            "waterline": 24,
+            "half_breadth_m": 4.488642918270687
+          },
+          {
+            "station": 3,
+            "waterline": 28,
+            "half_breadth_m": 4.814698072077201
+          },
+          {
+            "station": 3,
+            "waterline": 32,
+            "half_breadth_m": 4.854275646436831
+          },
+          {
+            "station": 4,
+            "waterline": 4,
+            "half_breadth_m": 1.0299841406590333
+          },
+          {
+            "station": 4,
+            "waterline": 8,
+            "half_breadth_m": 1.920185849038666
+          },
+          {
+            "station": 4,
+            "waterline": 12,
+            "half_breadth_m": 2.783643382894585
+          },
+          {
+            "station": 4,
+            "waterline": 16,
+            "half_breadth_m": 3.60043804011022
+          },
+          {
+            "station": 4,
+            "waterline": 20,
+            "half_breadth_m": 4.307403338130185
+          },
+          {
+            "station": 4,
+            "waterline": 24,
+            "half_breadth_m": 4.821248107758355
+          },
+          {
+            "station": 4,
+            "waterline": 28,
+            "half_breadth_m": 4.987108800436913
+          },
+          {
+            "station": 4,
+            "waterline": 32,
+            "half_breadth_m": 4.997540469137623
+          },
+          {
+            "station": 5,
+            "waterline": 4,
+            "half_breadth_m": 2.0763395418827293
+          },
+          {
+            "station": 5,
+            "waterline": 8,
+            "half_breadth_m": 3.2002369090850125
+          },
+          {
+            "station": 5,
+            "waterline": 12,
+            "half_breadth_m": 3.979179205043662
+          },
+          {
+            "station": 5,
+            "waterline": 16,
+            "half_breadth_m": 4.562404852401852
+          },
+          {
+            "station": 5,
+            "waterline": 20,
+            "half_breadth_m": 4.943910172447682
+          },
+          {
+            "station": 5,
+            "waterline": 24,
+            "half_breadth_m": 5.146456160269978
+          },
+          {
+            "station": 5,
+            "waterline": 28,
+            "half_breadth_m": 5.2103987768620055
+          },
+          {
+            "station": 5,
+            "waterline": 32,
+            "half_breadth_m": 5.21054630034311
+          },
+          {
+            "station": 6,
+            "waterline": 4,
+            "half_breadth_m": 3.198912119598815
+          },
+          {
+            "station": 6,
+            "waterline": 8,
+            "half_breadth_m": 4.237249373468389
+          },
+          {
+            "station": 6,
+            "waterline": 12,
+            "half_breadth_m": 4.835480175300813
+          },
+          {
+            "station": 6,
+            "waterline": 16,
+            "half_breadth_m": 5.138988547803468
+          },
+          {
+            "station": 6,
+            "waterline": 20,
+            "half_breadth_m": 5.273338504313917
+          },
+          {
+            "station": 6,
+            "waterline": 24,
+            "half_breadth_m": 5.321836369949817
+          },
+          {
+            "station": 6,
+            "waterline": 28,
+            "half_breadth_m": 5.3430297927483155
+          },
+          {
+            "station": 6,
+            "waterline": 32,
+            "half_breadth_m": 5.353098194339937
+          },
+          {
+            "station": 7,
+            "waterline": 4,
+            "half_breadth_m": 4.187619676450149
+          },
+          {
+            "station": 7,
+            "waterline": 8,
+            "half_breadth_m": 5.010893191362442
+          },
+          {
+            "station": 7,
+            "waterline": 12,
+            "half_breadth_m": 5.32156253881139
+          },
+          {
+            "station": 7,
+            "waterline": 16,
+            "half_breadth_m": 5.445755520191227
+          },
+          {
+            "station": 7,
+            "waterline": 20,
+            "half_breadth_m": 5.479837844971674
+          },
+          {
+            "station": 7,
+            "waterline": 24,
+            "half_breadth_m": 5.486534075473836
+          },
+          {
+            "station": 7,
+            "waterline": 28,
+            "half_breadth_m": 5.482617560343646
+          },
+          {
+            "station": 7,
+            "waterline": 32,
+            "half_breadth_m": 5.465804840923254
+          },
+          {
+            "station": 8,
+            "waterline": 4,
+            "half_breadth_m": 4.839894983660722
+          },
+          {
+            "station": 8,
+            "waterline": 8,
+            "half_breadth_m": 5.446424167360242
+          },
+          {
+            "station": 8,
+            "waterline": 12,
+            "half_breadth_m": 5.599059788558524
+          },
+          {
+            "station": 8,
+            "waterline": 16,
+            "half_breadth_m": 5.623259830110408
+          },
+          {
+            "station": 8,
+            "waterline": 20,
+            "half_breadth_m": 5.602304774844368
+          },
+          {
+            "station": 8,
+            "waterline": 24,
+            "half_breadth_m": 5.581873079358393
+          },
+          {
+            "station": 8,
+            "waterline": 28,
+            "half_breadth_m": 5.570329254497889
+          },
+          {
+            "station": 8,
+            "waterline": 32,
+            "half_breadth_m": 5.545781964377327
+          },
+          {
+            "station": 9,
+            "waterline": 4,
+            "half_breadth_m": 5.36121681049225
+          },
+          {
+            "station": 9,
+            "waterline": 8,
+            "half_breadth_m": 5.739916550268715
+          },
+          {
+            "station": 9,
+            "waterline": 12,
+            "half_breadth_m": 5.819872242175392
+          },
+          {
+            "station": 9,
+            "waterline": 16,
+            "half_breadth_m": 5.825991228487511
+          },
+          {
+            "station": 9,
+            "waterline": 20,
+            "half_breadth_m": 5.782791343539832
+          },
+          {
+            "station": 9,
+            "waterline": 24,
+            "half_breadth_m": 5.706915264124426
+          },
+          {
+            "station": 9,
+            "waterline": 28,
+            "half_breadth_m": 5.653468735458788
+          },
+          {
+            "station": 9,
+            "waterline": 32,
+            "half_breadth_m": 5.617190701610161
+          },
+          {
+            "station": 10,
+            "waterline": 4,
+            "half_breadth_m": 5.420560723646192
+          },
+          {
+            "station": 10,
+            "waterline": 8,
+            "half_breadth_m": 5.788896787483138
+          },
+          {
+            "station": 10,
+            "waterline": 12,
+            "half_breadth_m": 5.865519181841825
+          },
+          {
+            "station": 10,
+            "waterline": 16,
+            "half_breadth_m": 5.8641398342306035
+          },
+          {
+            "station": 10,
+            "waterline": 20,
+            "half_breadth_m": 5.809484032177792
+          },
+          {
+            "station": 10,
+            "waterline": 24,
+            "half_breadth_m": 5.735762164207244
+          },
+          {
+            "station": 10,
+            "waterline": 28,
+            "half_breadth_m": 5.680548601209461
+          },
+          {
+            "station": 20,
+            "waterline": 28,
+            "half_breadth_m": 0.39959100344664905
+          },
+          {
+            "station": 20,
+            "waterline": 32,
+            "half_breadth_m": 0.8098022407714143
+          },
+          {
+            "station": 19,
+            "waterline": 4,
+            "half_breadth_m": 0.31623159545520924
+          },
+          {
+            "station": 19,
+            "waterline": 8,
+            "half_breadth_m": 0.5045375943800294
+          },
+          {
+            "station": 19,
+            "waterline": 12,
+            "half_breadth_m": 0.6329609702240605
+          },
+          {
+            "station": 19,
+            "waterline": 16,
+            "half_breadth_m": 0.7690155523508324
+          },
+          {
+            "station": 19,
+            "waterline": 20,
+            "half_breadth_m": 0.9564291496953172
+          },
+          {
+            "station": 19,
+            "waterline": 24,
+            "half_breadth_m": 1.228348082338627
+          },
+          {
+            "station": 19,
+            "waterline": 28,
+            "half_breadth_m": 1.6326116203102794
+          },
+          {
+            "station": 19,
+            "waterline": 32,
+            "half_breadth_m": 2.133928674759451
+          },
+          {
+            "station": 18,
+            "waterline": 4,
+            "half_breadth_m": 0.7442494506143198
+          },
+          {
+            "station": 18,
+            "waterline": 8,
+            "half_breadth_m": 1.1392367450082117
+          },
+          {
+            "station": 18,
+            "waterline": 12,
+            "half_breadth_m": 1.4150212930834642
+          },
+          {
+            "station": 18,
+            "waterline": 16,
+            "half_breadth_m": 1.7049518678348683
+          },
+          {
+            "station": 18,
+            "waterline": 20,
+            "half_breadth_m": 2.008993276749725
+          },
+          {
+            "station": 18,
+            "waterline": 24,
+            "half_breadth_m": 2.357424809048237
+          },
+          {
+            "station": 18,
+            "waterline": 28,
+            "half_breadth_m": 2.7811713980827495
+          },
+          {
+            "station": 18,
+            "waterline": 32,
+            "half_breadth_m": 3.2628740035237147
+          },
+          {
+            "station": 17,
+            "waterline": 4,
+            "half_breadth_m": 1.2597201169797299
+          },
+          {
+            "station": 17,
+            "waterline": 8,
+            "half_breadth_m": 1.83552926794909
+          },
+          {
+            "station": 17,
+            "waterline": 12,
+            "half_breadth_m": 2.218246608770683
+          },
+          {
+            "station": 17,
+            "waterline": 16,
+            "half_breadth_m": 2.5980120016481156
+          },
+          {
+            "station": 17,
+            "waterline": 20,
+            "half_breadth_m": 2.9648141215851096
+          },
+          {
+            "station": 17,
+            "waterline": 24,
+            "half_breadth_m": 3.3156222361616616
+          },
+          {
+            "station": 17,
+            "waterline": 28,
+            "half_breadth_m": 3.694225002944348
+          },
+          {
+            "station": 17,
+            "waterline": 32,
+            "half_breadth_m": 4.104567973272574
+          },
+          {
+            "station": 16,
+            "waterline": 4,
+            "half_breadth_m": 1.8045432512429544
+          },
+          {
+            "station": 16,
+            "waterline": 8,
+            "half_breadth_m": 2.5171651868658693
+          },
+          {
+            "station": 16,
+            "waterline": 12,
+            "half_breadth_m": 3.0018490149278554
+          },
+          {
+            "station": 16,
+            "waterline": 16,
+            "half_breadth_m": 3.4071395341071957
+          },
+          {
+            "station": 16,
+            "waterline": 20,
+            "half_breadth_m": 3.7638101383692186
+          },
+          {
+            "station": 16,
+            "waterline": 24,
+            "half_breadth_m": 4.072409293667859
+          },
+          {
+            "station": 16,
+            "waterline": 28,
+            "half_breadth_m": 4.37139004193058
+          },
+          {
+            "station": 16,
+            "waterline": 32,
+            "half_breadth_m": 4.691181427480758
+          },
+          {
+            "station": 15,
+            "waterline": 4,
+            "half_breadth_m": 2.929917492777127
+          },
+          {
+            "station": 15,
+            "waterline": 8,
+            "half_breadth_m": 3.721623504541199
+          },
+          {
+            "station": 15,
+            "waterline": 12,
+            "half_breadth_m": 4.205412315129527
+          },
+          {
+            "station": 15,
+            "waterline": 16,
+            "half_breadth_m": 4.541317427906777
+          },
+          {
+            "station": 15,
+            "waterline": 20,
+            "half_breadth_m": 4.7906452357891
+          },
+          {
+            "station": 15,
+            "waterline": 24,
+            "half_breadth_m": 4.97313598318204
+          },
+          {
+            "station": 15,
+            "waterline": 28,
+            "half_breadth_m": 5.1231587469565625
+          },
+          {
+            "station": 15,
+            "waterline": 32,
+            "half_breadth_m": 5.22457738953472
+          },
+          {
+            "station": 14,
+            "waterline": 4,
+            "half_breadth_m": 3.856057807216196
+          },
+          {
+            "station": 14,
+            "waterline": 8,
+            "half_breadth_m": 4.624991366714721
+          },
+          {
+            "station": 14,
+            "waterline": 12,
+            "half_breadth_m": 4.981599855368392
+          },
+          {
+            "station": 14,
+            "waterline": 16,
+            "half_breadth_m": 5.171180942226539
+          },
+          {
+            "station": 14,
+            "waterline": 20,
+            "half_breadth_m": 5.298227945629014
+          },
+          {
+            "station": 14,
+            "waterline": 24,
+            "half_breadth_m": 5.375191979270863
+          },
+          {
+            "station": 14,
+            "waterline": 28,
+            "half_breadth_m": 5.409792398759876
+          },
+          {
+            "station": 14,
+            "waterline": 32,
+            "half_breadth_m": 5.377425473245962
+          },
+          {
+            "station": 13,
+            "waterline": 4,
+            "half_breadth_m": 4.545564405710044
+          },
+          {
+            "station": 13,
+            "waterline": 8,
+            "half_breadth_m": 5.209662441357992
+          },
+          {
+            "station": 13,
+            "waterline": 12,
+            "half_breadth_m": 5.440445796838682
+          },
+          {
+            "station": 13,
+            "waterline": 16,
+            "half_breadth_m": 5.532877573612388
+          },
+          {
+            "station": 13,
+            "waterline": 20,
+            "half_breadth_m": 5.558937333623442
+          },
+          {
+            "station": 13,
+            "waterline": 24,
+            "half_breadth_m": 5.559822031675292
+          },
+          {
+            "station": 13,
+            "waterline": 28,
+            "half_breadth_m": 5.540237403980039
+          },
+          {
+            "station": 13,
+            "waterline": 32,
+            "half_breadth_m": 5.377425473245962
+          },
+          {
+            "station": 12,
+            "waterline": 4,
+            "half_breadth_m": 5.05107492314614
+          },
+          {
+            "station": 12,
+            "waterline": 8,
+            "half_breadth_m": 5.605230286069558
+          },
+          {
+            "station": 12,
+            "waterline": 12,
+            "half_breadth_m": 5.705799351066985
+          },
+          {
+            "station": 12,
+            "waterline": 16,
+            "half_breadth_m": 5.730675361627046
+          },
+          {
+            "station": 12,
+            "waterline": 20,
+            "half_breadth_m": 5.709360930904154
+          },
+          {
+            "station": 12,
+            "waterline": 24,
+            "half_breadth_m": 5.70220917211879
+          },
+          {
+            "station": 12,
+            "waterline": 28,
+            "half_breadth_m": 5.60939100072111
+          },
+          {
+            "station": 12,
+            "waterline": 32,
+            "half_breadth_m": 5.377425473245962
+          },
+          {
+            "station": 11,
+            "waterline": 4,
+            "half_breadth_m": 5.426535869751344
+          },
+          {
+            "station": 11,
+            "waterline": 8,
+            "half_breadth_m": 5.772568909302901
+          },
+          {
+            "station": 11,
+            "waterline": 12,
+            "half_breadth_m": 5.831513878904368
+          },
+          {
+            "station": 11,
+            "waterline": 16,
+            "half_breadth_m": 5.837629024433988
+          },
+          {
+            "station": 11,
+            "waterline": 20,
+            "half_breadth_m": 5.78856624864691
+          },
+          {
+            "station": 11,
+            "waterline": 24,
+            "half_breadth_m": 5.70220917211879
+          },
+          {
+            "station": 11,
+            "waterline": 28,
+            "half_breadth_m": 5.632743282246282
+          },
+          {
+            "station": 11,
+            "waterline": 32,
+            "half_breadth_m": 5.377425473245962
+          }
+        ],
+        "identities": {
+          "aft": {
+            "0": 10,
+            "1": 9,
+            "2": 8,
+            "3": 7,
+            "4": 6,
+            "5": 5,
+            "6": 4,
+            "7": 3,
+            "8": 2,
+            "9": 1,
+            "10": 0
+          },
+          "fore": {
+            "0": 11,
+            "1": 12,
+            "2": 13,
+            "3": 14,
+            "4": 15,
+            "5": 16,
+            "6": 17,
+            "7": 18,
+            "8": 19,
+            "9": 20
+          }
+        },
+        "measurement": {
+          "aft": {
+            "chains": 11,
+            "one_waterline_chains": 0,
+            "inferred_links": 1,
+            "crossings_by_kind": {
+              "grid": 58,
+              "curve": 81,
+              "straight": 8,
+              "lettering": 1
+            }
+          },
+          "fore": {
+            "chains": 10,
+            "one_waterline_chains": 0,
+            "inferred_links": 1,
+            "crossings_by_kind": {
+              "grid": 59,
+              "curve": 70,
+              "straight": 8,
+              "lettering": 5
+            }
+          }
+        }
+      },
+      "changed_sides": [],
+      "rms_no_regression": true,
+      "coverage_no_regression": true,
+      "seconds": 8.405
+    },
+    {
+      "sheet": "BUMBLE BEE (corrected sides)",
+      "sheet_path": "/Users/jonathanjie/Documents/workspace/MarinaFrame/work/sources/haer/master-pnp-habshaer-or-or0500-or0589-sheet-00002a.tif",
+      "sheet_sha256": "d1c0830dff9648b8c6967ead14fcaff484a91021eece277fda62725a0002f991",
+      "truth_path": "/private/tmp/claude-501/bumble-bee/truth_s2.json",
+      "truth_sha256": "906c64f44250eeea038f5b6cfbf25e502538ce05ae00ae5cdc750c661b70d679",
+      "calibration": {
+        "centre_column": 3009.0,
+        "pixels_per_metre": 1312.3359580052493,
+        "waterline_rows": {
+          "1-6-0": 8105,
+          "2-3-0": 7805,
+          "3-0-0": 7505,
+          "3-9-0": 7205
+        },
+        "max_offset_px": 1900,
+        "sides": [
+          {
+            "name": "aft",
+            "sign": -1,
+            "stations_outer_first": [
+              9,
+              10,
+              11,
+              12,
+              13,
+              14
+            ],
+            "grid_columns": [
+              2609.0,
+              2209.0,
+              1809.0,
+              1409.0
+            ]
+          },
+          {
+            "name": "fore",
+            "sign": 1,
+            "stations_outer_first": [
+              8,
+              7,
+              6,
+              5,
+              4,
+              3,
+              2,
+              1
+            ],
+            "grid_columns": [
+              3409.0,
+              3809.0,
+              4209.0,
+              4609.0
+            ]
+          }
+        ]
+      },
+      "frozen": {
+        "truth_cells": 54,
+        "cells_given": 50,
+        "coverage": 0.9259259259259259,
+        "extra_cells": 2,
+        "rms_m": 0.14858472096366016,
+        "max_abs_m": 0.4636480915365219,
+        "within_0_05": 0.6,
+        "within_0_15": 0.74,
+        "identity_errors": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "missing_cells": 4,
+        "fairness_flags": 0,
+        "calls": 0,
+        "missing_cell_keys": [
+          [
+            6,
+            "1-6-0"
+          ],
+          [
+            7,
+            "1-6-0"
+          ],
+          [
+            8,
+            "1-6-0"
+          ],
+          [
+            9,
+            "1-6-0"
+          ]
+        ],
+        "extra_cell_keys": [
+          [
+            14,
+            "1-6-0"
+          ],
+          [
+            1,
+            "1-6-0"
+          ]
+        ],
+        "predicted_cells": [
+          {
+            "station": 14,
+            "waterline": "1-6-0",
+            "half_breadth_m": 0.10424411320501178
+          },
+          {
+            "station": 14,
+            "waterline": "2-3-0",
+            "half_breadth_m": 0.17892638548131284
+          },
+          {
+            "station": 14,
+            "waterline": "3-0-0",
+            "half_breadth_m": 0.28907969992397325
+          },
+          {
+            "station": 14,
+            "waterline": "3-9-0",
+            "half_breadth_m": 0.4105416783428537
+          },
+          {
+            "station": 13,
+            "waterline": "1-6-0",
+            "half_breadth_m": 0.1991526001256403
+          },
+          {
+            "station": 13,
+            "waterline": "2-3-0",
+            "half_breadth_m": 0.4974826255640922
+          },
+          {
+            "station": 13,
+            "waterline": "3-0-0",
+            "half_breadth_m": 0.7263729167616718
+          },
+          {
+            "station": 13,
+            "waterline": "3-9-0",
+            "half_breadth_m": 0.8786783330523923
+          },
+          {
+            "station": 12,
+            "waterline": "1-6-0",
+            "half_breadth_m": 0.29552754664119774
+          },
+          {
+            "station": 12,
+            "waterline": "2-3-0",
+            "half_breadth_m": 0.8154011282929476
+          },
+          {
+            "station": 12,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.0271584624908119
+          },
+          {
+            "station": 12,
+            "waterline": "3-9-0",
+            "half_breadth_m": 1.1213150286426739
+          },
+          {
+            "station": 11,
+            "waterline": "1-6-0",
+            "half_breadth_m": 0.458856549068657
+          },
+          {
+            "station": 11,
+            "waterline": "2-3-0",
+            "half_breadth_m": 1.0289306380905852
+          },
+          {
+            "station": 11,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.187175346031903
+          },
+          {
+            "station": 11,
+            "waterline": "3-9-0",
+            "half_breadth_m": 1.2495066990213792
+          },
+          {
+            "station": 10,
+            "waterline": "1-6-0",
+            "half_breadth_m": 0.5832526481028127
+          },
+          {
+            "station": 10,
+            "waterline": "2-3-0",
+            "half_breadth_m": 1.1633413016670962
+          },
+          {
+            "station": 10,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.2814356427327023
+          },
+          {
+            "station": 10,
+            "waterline": "3-9-0",
+            "half_breadth_m": 1.3176187965627824
+          },
+          {
+            "station": 9,
+            "waterline": "2-3-0",
+            "half_breadth_m": 1.2486341457531929
+          },
+          {
+            "station": 9,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.3317267747451336
+          },
+          {
+            "station": 9,
+            "waterline": "3-9-0",
+            "half_breadth_m": 1.350356257218768
+          },
+          {
+            "station": 1,
+            "waterline": "1-6-0",
+            "half_breadth_m": 0.15112278096511722
+          },
+          {
+            "station": 1,
+            "waterline": "2-3-0",
+            "half_breadth_m": 0.32732874316318245
+          },
+          {
+            "station": 1,
+            "waterline": "3-0-0",
+            "half_breadth_m": 0.5056548449694562
+          },
+          {
+            "station": 1,
+            "waterline": "3-9-0",
+            "half_breadth_m": 0.655735591536522
+          },
+          {
+            "station": 2,
+            "waterline": "1-6-0",
+            "half_breadth_m": 0.25004955548662344
+          },
+          {
+            "station": 2,
+            "waterline": "2-3-0",
+            "half_breadth_m": 0.5972794791514467
+          },
+          {
+            "station": 2,
+            "waterline": "3-0-0",
+            "half_breadth_m": 0.8196474651145794
+          },
+          {
+            "station": 2,
+            "waterline": "3-9-0",
+            "half_breadth_m": 0.9590368705543542
+          },
+          {
+            "station": 3,
+            "waterline": "1-6-0",
+            "half_breadth_m": 0.3647576383657293
+          },
+          {
+            "station": 3,
+            "waterline": "2-3-0",
+            "half_breadth_m": 0.8508356212838255
+          },
+          {
+            "station": 3,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.0629098418286569
+          },
+          {
+            "station": 3,
+            "waterline": "3-9-0",
+            "half_breadth_m": 1.1596912397401677
+          },
+          {
+            "station": 4,
+            "waterline": "1-6-0",
+            "half_breadth_m": 0.5251733435698684
+          },
+          {
+            "station": 4,
+            "waterline": "2-3-0",
+            "half_breadth_m": 1.0708385311164152
+          },
+          {
+            "station": 4,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.3100452982766124
+          },
+          {
+            "station": 4,
+            "waterline": "3-9-0",
+            "half_breadth_m": 1.2786864369466442
+          },
+          {
+            "station": 5,
+            "waterline": "1-6-0",
+            "half_breadth_m": 0.6793256480868363
+          },
+          {
+            "station": 5,
+            "waterline": "2-3-0",
+            "half_breadth_m": 1.2030177830088664
+          },
+          {
+            "station": 5,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.3100452982766124
+          },
+          {
+            "station": 5,
+            "waterline": "3-9-0",
+            "half_breadth_m": 1.3338810000000028
+          },
+          {
+            "station": 6,
+            "waterline": "2-3-0",
+            "half_breadth_m": 1.2532351451354282
+          },
+          {
+            "station": 6,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.336604527493073
+          },
+          {
+            "station": 6,
+            "waterline": "3-9-0",
+            "half_breadth_m": 1.3485325096949745
+          },
+          {
+            "station": 7,
+            "waterline": "2-3-0",
+            "half_breadth_m": 1.2532351451354282
+          },
+          {
+            "station": 7,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.336604527493073
+          },
+          {
+            "station": 7,
+            "waterline": "3-9-0",
+            "half_breadth_m": 1.354613137990309
+          },
+          {
+            "station": 8,
+            "waterline": "2-3-0",
+            "half_breadth_m": 1.270145319925305
+          },
+          {
+            "station": 8,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.3440283381547953
+          },
+          {
+            "station": 8,
+            "waterline": "3-9-0",
+            "half_breadth_m": 1.354613137990309
+          }
+        ],
+        "identities": {
+          "aft": {
+            "0": 9,
+            "1": 10,
+            "2": 11,
+            "3": 12,
+            "4": 13,
+            "5": 14
+          },
+          "fore": {
+            "0": 8,
+            "1": 7,
+            "2": 6,
+            "3": 5,
+            "4": 4,
+            "5": 3,
+            "6": 2,
+            "7": 1
+          }
+        },
+        "measurement": {
+          "aft": {
+            "chains": 7,
+            "one_waterline_chains": 0,
+            "inferred_links": 0,
+            "crossings_by_kind": {
+              "shallow": 1,
+              "grid": 18,
+              "curve": 24
+            }
+          },
+          "fore": {
+            "chains": 9,
+            "one_waterline_chains": 0,
+            "inferred_links": 3,
+            "crossings_by_kind": {
+              "grid": 17,
+              "curve": 28,
+              "shallow": 1
+            }
+          }
+        }
+      },
+      "chine": {
+        "truth_cells": 54,
+        "cells_given": 50,
+        "coverage": 0.9259259259259259,
+        "extra_cells": 2,
+        "rms_m": 0.14858472096366016,
+        "max_abs_m": 0.4636480915365219,
+        "within_0_05": 0.6,
+        "within_0_15": 0.74,
+        "identity_errors": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "missing_cells": 4,
+        "fairness_flags": 0,
+        "calls": 0,
+        "missing_cell_keys": [
+          [
+            6,
+            "1-6-0"
+          ],
+          [
+            7,
+            "1-6-0"
+          ],
+          [
+            8,
+            "1-6-0"
+          ],
+          [
+            9,
+            "1-6-0"
+          ]
+        ],
+        "extra_cell_keys": [
+          [
+            14,
+            "1-6-0"
+          ],
+          [
+            1,
+            "1-6-0"
+          ]
+        ],
+        "predicted_cells": [
+          {
+            "station": 14,
+            "waterline": "1-6-0",
+            "half_breadth_m": 0.10424411320501178
+          },
+          {
+            "station": 14,
+            "waterline": "2-3-0",
+            "half_breadth_m": 0.17892638548131284
+          },
+          {
+            "station": 14,
+            "waterline": "3-0-0",
+            "half_breadth_m": 0.28907969992397325
+          },
+          {
+            "station": 14,
+            "waterline": "3-9-0",
+            "half_breadth_m": 0.4105416783428537
+          },
+          {
+            "station": 13,
+            "waterline": "1-6-0",
+            "half_breadth_m": 0.1991526001256403
+          },
+          {
+            "station": 13,
+            "waterline": "2-3-0",
+            "half_breadth_m": 0.4974826255640922
+          },
+          {
+            "station": 13,
+            "waterline": "3-0-0",
+            "half_breadth_m": 0.7263729167616718
+          },
+          {
+            "station": 13,
+            "waterline": "3-9-0",
+            "half_breadth_m": 0.8786783330523923
+          },
+          {
+            "station": 12,
+            "waterline": "1-6-0",
+            "half_breadth_m": 0.29552754664119774
+          },
+          {
+            "station": 12,
+            "waterline": "2-3-0",
+            "half_breadth_m": 0.8154011282929476
+          },
+          {
+            "station": 12,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.0271584624908119
+          },
+          {
+            "station": 12,
+            "waterline": "3-9-0",
+            "half_breadth_m": 1.1213150286426739
+          },
+          {
+            "station": 11,
+            "waterline": "1-6-0",
+            "half_breadth_m": 0.458856549068657
+          },
+          {
+            "station": 11,
+            "waterline": "2-3-0",
+            "half_breadth_m": 1.0289306380905852
+          },
+          {
+            "station": 11,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.187175346031903
+          },
+          {
+            "station": 11,
+            "waterline": "3-9-0",
+            "half_breadth_m": 1.2495066990213792
+          },
+          {
+            "station": 10,
+            "waterline": "1-6-0",
+            "half_breadth_m": 0.5832526481028127
+          },
+          {
+            "station": 10,
+            "waterline": "2-3-0",
+            "half_breadth_m": 1.1633413016670962
+          },
+          {
+            "station": 10,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.2814356427327023
+          },
+          {
+            "station": 10,
+            "waterline": "3-9-0",
+            "half_breadth_m": 1.3176187965627824
+          },
+          {
+            "station": 9,
+            "waterline": "2-3-0",
+            "half_breadth_m": 1.2486341457531929
+          },
+          {
+            "station": 9,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.3317267747451336
+          },
+          {
+            "station": 9,
+            "waterline": "3-9-0",
+            "half_breadth_m": 1.350356257218768
+          },
+          {
+            "station": 1,
+            "waterline": "1-6-0",
+            "half_breadth_m": 0.15112278096511722
+          },
+          {
+            "station": 1,
+            "waterline": "2-3-0",
+            "half_breadth_m": 0.32732874316318245
+          },
+          {
+            "station": 1,
+            "waterline": "3-0-0",
+            "half_breadth_m": 0.5056548449694562
+          },
+          {
+            "station": 1,
+            "waterline": "3-9-0",
+            "half_breadth_m": 0.655735591536522
+          },
+          {
+            "station": 2,
+            "waterline": "1-6-0",
+            "half_breadth_m": 0.25004955548662344
+          },
+          {
+            "station": 2,
+            "waterline": "2-3-0",
+            "half_breadth_m": 0.5972794791514467
+          },
+          {
+            "station": 2,
+            "waterline": "3-0-0",
+            "half_breadth_m": 0.8196474651145794
+          },
+          {
+            "station": 2,
+            "waterline": "3-9-0",
+            "half_breadth_m": 0.9590368705543542
+          },
+          {
+            "station": 3,
+            "waterline": "1-6-0",
+            "half_breadth_m": 0.3647576383657293
+          },
+          {
+            "station": 3,
+            "waterline": "2-3-0",
+            "half_breadth_m": 0.8508356212838255
+          },
+          {
+            "station": 3,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.0629098418286569
+          },
+          {
+            "station": 3,
+            "waterline": "3-9-0",
+            "half_breadth_m": 1.1596912397401677
+          },
+          {
+            "station": 4,
+            "waterline": "1-6-0",
+            "half_breadth_m": 0.5251733435698684
+          },
+          {
+            "station": 4,
+            "waterline": "2-3-0",
+            "half_breadth_m": 1.0708385311164152
+          },
+          {
+            "station": 4,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.3100452982766124
+          },
+          {
+            "station": 4,
+            "waterline": "3-9-0",
+            "half_breadth_m": 1.2786864369466442
+          },
+          {
+            "station": 5,
+            "waterline": "1-6-0",
+            "half_breadth_m": 0.6793256480868363
+          },
+          {
+            "station": 5,
+            "waterline": "2-3-0",
+            "half_breadth_m": 1.2030177830088664
+          },
+          {
+            "station": 5,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.3100452982766124
+          },
+          {
+            "station": 5,
+            "waterline": "3-9-0",
+            "half_breadth_m": 1.3338810000000028
+          },
+          {
+            "station": 6,
+            "waterline": "2-3-0",
+            "half_breadth_m": 1.2532351451354282
+          },
+          {
+            "station": 6,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.336604527493073
+          },
+          {
+            "station": 6,
+            "waterline": "3-9-0",
+            "half_breadth_m": 1.3485325096949745
+          },
+          {
+            "station": 7,
+            "waterline": "2-3-0",
+            "half_breadth_m": 1.2532351451354282
+          },
+          {
+            "station": 7,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.336604527493073
+          },
+          {
+            "station": 7,
+            "waterline": "3-9-0",
+            "half_breadth_m": 1.354613137990309
+          },
+          {
+            "station": 8,
+            "waterline": "2-3-0",
+            "half_breadth_m": 1.270145319925305
+          },
+          {
+            "station": 8,
+            "waterline": "3-0-0",
+            "half_breadth_m": 1.3440283381547953
+          },
+          {
+            "station": 8,
+            "waterline": "3-9-0",
+            "half_breadth_m": 1.354613137990309
+          }
+        ],
+        "identities": {
+          "aft": {
+            "0": 9,
+            "1": 10,
+            "2": 11,
+            "3": 12,
+            "4": 13,
+            "5": 14
+          },
+          "fore": {
+            "0": 8,
+            "1": 7,
+            "2": 6,
+            "3": 5,
+            "4": 4,
+            "5": 3,
+            "6": 2,
+            "7": 1
+          }
+        },
+        "measurement": {
+          "aft": {
+            "chains": 7,
+            "one_waterline_chains": 0,
+            "inferred_links": 0,
+            "crossings_by_kind": {
+              "shallow": 1,
+              "grid": 18,
+              "curve": 24
+            }
+          },
+          "fore": {
+            "chains": 9,
+            "one_waterline_chains": 0,
+            "inferred_links": 3,
+            "crossings_by_kind": {
+              "grid": 17,
+              "curve": 28,
+              "shallow": 1
+            }
+          }
+        }
+      },
+      "changed_sides": [],
+      "rms_no_regression": true,
+      "coverage_no_regression": true,
+      "seconds": 1.58
+    }
+  ]
+}
