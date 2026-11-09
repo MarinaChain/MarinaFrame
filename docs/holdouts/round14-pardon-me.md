@@ -1,6 +1,7 @@
 # Round 14: PARDON ME holdout (fixed before running)
 
-Status: protocol fixed 2026-11-09, before truth freeze and before any reader run. No score exists.
+Status: protocol fixed 2026-11-09, before truth freeze and before any reader run. The original
+runs are complete; section 11 records their results and a diagnosis only. All arms fail the rule.
 Method copied from round 12 (BUE GIRL): `docs/plans/2026-11-09-whole-vessel-scope.md` section
 3.5.11 and `docs/WHOLE_VESSEL_GUNNERUS.md` section 5.9 (including the round 12b addendum).
 
@@ -173,6 +174,112 @@ PYTHONPATH=src:. .venv/bin/python -m benchmarks.pardon_me.holdout_value --arm so
 
 ## 10. Resume point
 
-Done: protocol (this file), then harness and synthetic tests. Next: PM freezes the truth and
-fills section 8; then the three arms run once each in the order above; then the results and
-decision go into a new section 11 of this file.
+Done: protocol (this file), harness and synthetic tests, truth freeze, one run of each arm, and
+the results and diagnosis in section 11. Next: development work listed at the end of section 11,
+in a new round. Do not rerun these arms or change this round.
+
+## 11. Results (one run per arm, 2026-11-09)
+
+Sources: `/private/tmp/claude-501/pardon-me/runs/{code,crouton,sonnet}/summary.json`, and
+`benchmarks/pardon_me/diagnose.py` (read-only; it re-measures the sheet with the frozen reader,
+applies the saved labels, and stops if any score differs from the saved summary). The diagnosis
+is not a scored run. Nothing was rerun and no reader, truth, scoring or rule was changed.
+`engineering_approved` is false for every arm.
+
+### 11.1 Table
+
+All 57 scored cells (of 66); 1 extra cell (W-2, station 1, truth blank) in every repeat; 0
+fairness flags; 0 invalid replies.
+
+| Arm (repeats) | Cells given | Coverage | RMS (m) | Max (m) | Within 0.05 m | Within 0.15 m | Identity errors | Calls | Prompt tokens |
+|---|---|---|---|---|---|---|---|---|---|
+| code (1) | 34 | 59.6 % | 0.1347 | 0.637 | 79 % | 91 % | 6, 10, 11 | 0 | 0 |
+| Crouton (3, all identical) | 34 | 59.6 % | 0.1288 | 0.637 | 91 % | 94 % | 6 | 25 each | about 4,000 each |
+| Sonnet 5.5 (3, all identical) | 34 | 59.6 % | 0.1288 | 0.637 | 91 % | 94 % | 6 | 25 each | about 132,000 each |
+
+Crouton prompt tokens: 4,012. Sonnet 5.5 prompt tokens: 132,029 to 132,036.
+
+### 11.2 Decision
+
+The rule needs every repeat at 60 % or more of the scored cells, and a median RMS of 0.15 m or
+less. Coverage is 34/57 = 59.6 %, 0.4 point below 60 % (one more cell would give 61.4 %). Median RMS
+is within the limit for all three arms (0.1347 m and 0.1288 m). Every arm **fails** the rule on
+coverage, so the reader **does not generalise** to this sheet. The RMS passes only on the cells
+that were given. This is not an engineering pass.
+
+### 11.3 Model value
+
+The model labels changed 2 of the 3 code identity errors: stations 10 and 11 are fixed (RMS
+0.1347 to 0.1288 m; within 0.05 m 79 % to 91 %). The station 6 error stays in every arm. Crouton and
+Sonnet 5.5 give the same table in all six repeats, so Sonnet 5.5 adds no value over Crouton here,
+at about 33 times the prompt tokens. Neither model changes the coverage: the missing cells are
+not label problems (section 11.4). Labels cannot add a cell that no chain holds.
+
+### 11.4 Missing cells (23 of 57; the same 23 in all arms)
+
+Scored cells given per waterline: W3 9/11, W2 9/11, W1 9/11, W0 4/11, W-1 2/10, W-2 1/3 (the
+truth has no value at W-1 for station 11, and none at W-2 for stations 1 and 5 to 11).
+
+| Waterline | Missing stations |
+|---|---|
+| W3, W2, W1 | 1, 2 |
+| W0 | 1, 2, 3, 6, 7, 8, 9 |
+| W-1 | 3, 4, 5, 6, 7, 8, 9, 10 |
+| W-2 | 3, 4 |
+
+Cause per cell (from the crossing and chain record; none is a beyond-maximum-offset case and none
+lacks a crossing on its half):
+
+- 20 cells: a crossing exists within 0 to 5 px of the truth offset, but the chain rule left it
+  out. The rule keeps only chains that cross 2 or more waterlines, then gives stations by
+  nesting rank. Chains that the chine splits into pieces (a topside piece at W1 to W3, and bottom
+  pieces at W0, W-1, W-2) are not joined. The links found 0 inferred links on each half.
+- Fore stations 1 and 2 (W3 to W0 and W-1 to W-2): the first five chains with 2 or more
+  waterlines are used. Chains 4 and 5 are bottom pieces at W-1 and W-2 only, so they take
+  stations 2 and 1, and the chains that span W3 to W0 further in (chains 8 and 9, and later) get no station. Result: stations 1
+  and 2 are missing at W3 to W0.
+- W0 aft, stations 6 to 9: W0 holds merged "double" crossings for stations 6, 8 and 9 (within 1 to 3 px
+  of the truth offset), and the other aft W0 crossings sit in chains of one waterline. This is the
+  protocol prediction (section 3, items 2 and 3).
+- 2 cells (W-1 aft, stations 6 and 7): no crossing within the 8 px link tolerance of the truth
+  offset; the nearest is a double crossing 8 and 10 px away.
+- 1 cell (W-1 aft, station 10): the crossing is classified shallow, so it was rejected. The
+  protocol predicted this (section 3, item 3).
+
+The extra cell (W-2, station 1, 0.126 m) comes from fore chain 5, which is a bottom piece of
+another station.
+
+### 11.5 Largest errors
+
+| Cell | Truth (m) | Given (m) | Error (m) | Arms | Cause |
+|---|---|---|---|---|---|
+| W-1, station 1 | 0.078 | 0.715 | 0.637 | all | fore bottom piece (chain 5) took station 1; 0.715 m is the W-1 crossing at the station 5 truth (0.714 m) |
+| W-1, station 2 | 0.325 | 0.715 | 0.390 | all | fore bottom piece (chain 4) took station 2; it shares the same W-1 crossing |
+| W3, station 11 | 1.033 | 1.196 | 0.162 | code only | aft chain 5 took station 11; the model fixes it |
+| W3, station 10 | 1.195 | 1.315 | 0.120 | code only | aft chain 4 took station 10; the model fixes it |
+| W-2, station 2 | 0.060 | 0.131 | 0.071 | all | fore chain 4 took station 2 |
+
+All other errors are 0.08 m or less. In the Crouton and Sonnet table, the three fore cells
+(W-1 stations 1 and 2, W-2 station 2) hold nearly all of the squared error: their sum is 0.563 m2
+of about 0.564 m2 in total, so the RMS of 0.1288 m is set by them. The two fore W-1 cells alone
+give 0.558 m2.
+The station 6 identity error is flagged by the harness in every arm; its cell errors are small
+(0.03 m at W1). Its cause is not isolated here; protocol section 3 item 4 (tumblehome crossing
+station 7) is the likely one, but this is not proved.
+
+### 11.6 What the reader would need (next development work, not a change to this round)
+
+1. Join the pieces of one station across the chine, so a station has one chain from W3 to W-2.
+   Today a chain is kept only if it has 2 or more waterlines, and no link crosses the chine corner.
+2. Accept station curves that show at one waterline (W0 and W-1 aft) when the neighbours fix the
+   station by position, instead of dropping them.
+3. Split merged double crossings at W0 aft (where 6 curves lie within about 80 px) by using the
+   chain above and below, not only the local crossings.
+4. Handle shallow bottoms at W-1 and W-2: do not reject a bottom crossing as shallow when a chain
+   above it ends at the chine.
+5. Reject bottom pieces and keel or stem structure (within 70 px of the centreline) from the
+   station rank, and the unlabelled bow sections inside station 1.
+6. Add a check that the identity of each given cell is plausible against nesting at the same
+   waterline. The 0.715 m cell at W-1 for both stations 1 and 2 shows a duplicate crossing.
+
+Any of these needs a new round, with the protocol written before the run.
