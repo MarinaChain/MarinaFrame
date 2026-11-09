@@ -882,6 +882,24 @@ Limits and largest error causes (no reader repair in this round):
    stations 2 to 6 at 6-6-0. The fixed scorer reports but does not penalise extra cells in RMS or
    coverage. Zero fairness flags does not make these extra cells reliable.
 
+#### Round 12b addendum: Claude Sonnet 5.5 arm in a correct environment (separate from round 12)
+
+Run by the PM on 2026-11-09 from a normal shell where `claude -p --model claude-sonnet-5-5` answers
+(checked first with a one-line prompt). Same frozen reader (`dabaa13` sources unchanged), harness
+`5248f32`, calibration and truth as round 12; 3 repeats, no other change. Reported apart from round 12
+because round 12's Sonnet arm is recorded as an access failure under its protocol.
+
+| Repeat | Cells (of 39) | RMS | Within 0.05 / 0.15 m | Questions (re-asked) | Invalid | Labels equal to code / null | Identities differ from code | Tokens in / out | Wall |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| R1-1 | 37 | 0.0014 m | 100 % / 100 % | 13 (2) | 0 | 6 / 5 | 0 | 97,996 / 9,883 | 61 s |
+| R1-2 | 37 | 0.0014 m | 100 % / 100 % | 13 (2) | 0 | 7 / 4 | 0 | 85,995 / 9,531 | 69 s |
+| R1-3 | 37 | 0.0014 m | 100 % / 100 % | 13 (1) | 0 | 8 / 5 | 0 | 80,826 / 8,872 | 55 s |
+
+Sonnet passes the rule (median RMS 1.4 mm) and agrees with the code numbering every time; it adds no
+accuracy on this sheet because the code alone already names every station correctly. Its value is as
+a check, not a correction, here; 4 to 5 null labels per repeat (curves whose number it could not see)
+leave the code's nesting order in place.
+
 Run folders and truth remain outside the repository at `/private/tmp/claude-501/bue-girl/`.
 `engineering_approved` stays false. A pass applies only to the fixed 39-cell rule and this one
 holdout sheet, not to a complete usable hull or to all scanned body plans.
