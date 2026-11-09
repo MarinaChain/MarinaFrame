@@ -113,7 +113,7 @@ function soundingBlock(row, sounding) {
   if (sounding.error) return el('div', { class: 'tank-sounding' }, title, el('p', { class: 'form-error', role: 'alert' }, sounding.error));
   const view = soundingView(sounding.table);
   return el('div', { class: 'tank-sounding' }, title,
-    el('p', { class: 'parts-revision-hint' }, 'Sounding from the lowest point of the tank, even keel. The sounding origin is ', sourceChip('guessed'), '.'),
+    el('p', { class: 'parts-revision-hint' }, 'Sounding from the lowest point of the tank, even keel (no sounding pipe position is drawn). Origin: ', sourceChip('guessed')),
     el('div', { class: 'tank-table-scroll' },
       el('table', { class: 'parts-args tank-table' },
         el('caption', { class: 'visually-hidden' }, `Sounding table of ${row.name}`),
