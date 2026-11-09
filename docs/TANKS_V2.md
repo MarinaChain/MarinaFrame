@@ -80,3 +80,67 @@ replayed without new model calls, and a fresh-cache run is reported once at the 
 
 Rules: do not loosen a target after seeing a result. A missed target is reported with its cause.
 No reader code may branch on a ship name.
+
+### 3.1 Notes added during the build (no target changed)
+
+- D1 truth: the table of `Tank Plan Rev1` is drawn as linework, not text (the DXF has no text
+  entities for it and the PDF has no text layer). The scorer's truth was therefore transcribed
+  by hand by this lane from a 75 dpi render into `work/tanks-raster/truth/d1_tank_plan_rev1.json`
+  (24 rows, the printed volume totals). The reader never reads that file. Section 2 said "from
+  the DXF text"; that was not possible.
+- The schedule question asks for tank names and contents only. The reader takes the content of a
+  tank from the schedule row of its tank number; volumes are never asked.
+
+## 4. Holdout protocol: Arthur M. Huddell (fixed 2026-11-09, before any run on Huddell)
+
+Status: not run. Nobody on this lane has opened `liberty_truth/` or looked at the Huddell sheets
+beyond their file names. This section replaces the open points of `docs/TANKS_V1.md` 3.1.
+
+**Reader.** `vessel_reconstruction.tank_plan_raster.read_sheets` as frozen by the commit that
+adds the development results (section 5; its hash is written there). The reader is not changed
+between that commit and the run. Label reading by Claude Sonnet 5.5 through the Claude Code CLI on the
+subscription (`claude_asker`), with a new, empty answer cache. One run. If the run stops on an
+error, only that error may be fixed (no threshold, rule or geometry change), the fix is committed
+and reported, and the run is repeated once.
+
+**Inputs.** HAER VA-132 sheets in `work/sources/tanks-public/arthur_m_huddell_haer_va132/`, raster
+TIFF as downloaded (bilevel, 400 dpi):
+- sheet 7, Inboard Capacity Plan: the profile view;
+- sheet 9, Deep Tank Top and Inner Bottom Capacity Plan: the inner-bottom plan (role
+  `double_bottom`) and the deep-tank-top plan (role `above`);
+- sheet 8, Upper Deck and Second Deck Capacity Plans: plans with role `above` (peaks, deep tanks
+  and settling tanks when they are drawn there).
+Host calibration (a `SheetSpec` per sheet: view windows, view kind and plan role, the graphic
+scale-bar window, the schedule-of-rooms window) is written by the person or agent that runs the
+holdout, from the Huddell sheets only, without access to `liberty_truth/`, and committed to
+`benchmarks/tanks/raster_cases.py` (case `arthur_m_huddell`) before the run. It holds no
+geometry. Scale comes from the drawn scale bar (feet); there is no hull mesh, so each tank is a
+prism of its plan region between its vertical limits (labelled `guessed`; the bilge is not cut).
+
+**Truth.** The US Maritime Commission EC2-S-C1 capacity-plan tables in
+`work/sources/tanks-public/liberty_truth/`, transcribed by an independent agent (not this lane)
+into `liberty_truth/truth.json` before the run: one row per tank with the printed name, the tank
+number, the side (P, S or C), the kind (double bottom, deep tank, peak, settling, other), the
+content (fuel oil, fuel oil or ballast, ballast, fresh water, feed water, other) and the printed
+100 % capacity in cubic feet. Volumes in m3 = cu ft x 0.0283168. Rows without a cubic-foot value
+are left out. Only volume metrics apply (no LCG, VCG or frame limits are printed).
+
+**Matching (scorer, fixed).** A built tank matches a truth row when the tank numbers agree, the
+sides agree (a label without a side matches a centre-line row, or a single row of that number),
+and the kinds agree. The kind of a built tank comes from its label words ("deep", "peak",
+"settling", "D.B." or "double bottom"); without such a word it is the plan role (an inner-bottom
+plan gives "double bottom"). Each row matches at most one tank.
+
+**Metrics and targets (fixed).**
+
+| ID | Metric | Target |
+|---|---|---|
+| H1 | Coverage: truth rows with a matched built tank, share | >= 60 % |
+| H2 | Volume of the matched tanks against the truth, median abs relative error; also the counts within 10 % and within 25 % | <= 20 % |
+| H3 | Totals by content group (fuel oil including "fuel oil or ballast", ballast, fresh and feed water) and the grand total of all truth rows; an unmatched row counts 0 m3 | grand total <= 15 % (groups reported) |
+
+**Decision rule.** The raster reader passes the Huddell holdout when H1, H2 and H3 all meet their
+targets in the one run. Otherwise it fails; the result names the metric(s) missed and the cause
+found in the reading record. The result is reported as measured, in a new section of this file;
+targets are not changed after the run, and any later fix makes a new development round (the
+holdout is then spent).
