@@ -1,5 +1,5 @@
-//! The sample vessel: a small procedural drawing (three body-plan stations on a grid,
-//! made by `examples/make_agent_example.py`) and its run spec, built into the app. A
+//! The sample vessel: a generated drawing (11 station sections of an analytic hull form,
+//! made by `examples/make_sample_ship.py`) and its run spec, built into the app. A
 //! first-time user starts it from Home to watch a whole run without their own drawings.
 //! No licensed data: the drawing is generated, not scanned.
 use crate::error::{AppError, AppResult};
@@ -44,7 +44,7 @@ mod tests {
         let spec: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&spec_path).unwrap()).unwrap();
         assert_eq!(spec["vessel_id"], "sample-hull");
-        assert_eq!(spec["sections"].as_array().unwrap().len(), 3);
+        assert_eq!(spec["sections"].as_array().unwrap().len(), 11);
         let drawing = spec_path.with_file_name(spec["source"]["file"].as_str().unwrap());
         assert!(std::fs::read(drawing).unwrap().starts_with(b"\x89PNG"));
     }
