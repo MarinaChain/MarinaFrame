@@ -266,6 +266,57 @@ arrive. Neither is run until this section names the chosen option and is committ
   half-breadth). Otherwise the scanned-hull path stays code first with the model only as a
   gap filler with low weight.
 
+#### 3.5.4 Round 5: Balclutha sheet 7 on full-resolution tiles (fixed before running)
+
+Why: round 4 sent one 1600 x 1096 px image of the whole body plan and the model read nothing.
+The vision probe (`work/vision-probe/REPORT.md`) shows that the provider makes every side larger
+than about 2,048 px smaller and that 12 px features are marginal. Round 5 is the fair test: the
+model sees the sheet's own pixels, one waterline at a time.
+
+Unchanged from section 3.5.3: sheet `balclutha_ca54_s7.tif` (SHA-256 `32f09c60…a8`); truth
+(the same 151 half-breadth cells, stations 0 to 20 at the 4 to 32 ft waterlines, file outside the
+repository, not checked by a person); metrics (cells given of 151, RMS and maximum error, share
+within 0.05 m and 0.15 m, station identity errors; median and range over repeats); decision rule
+(all 3 repeats give at least 60 % of the truth cells **and** the median RMS is at most 0.15 m).
+The table is not in any image.
+
+- Pixels: the source TIFF at full resolution (9632 x 14442 px, 1-bit, 400 dpi), as greyscale.
+  No resampling of the tiles.
+- Host calibration (the sheet's own grid; it stands in for a person's calibration): centreline
+  column 4824, 491.48 px per metre (section 3.5.3 values times 4). Grid rows and columns measured
+  on the full sheet (darkest row or column within 20 px of the prediction): waterlines 0 to 32 ft
+  at rows 6860, 6261, 5659, 5059, 4459, 3858, 3258, 2662, 2066; buttock lines at 2, 4, 8, 12, 16,
+  18, 20 ft at columns 5124, 5421, 6020, 6618, 7216, 7517, 7814 (forebody, right) and 4526, 4225,
+  3627, 3027, 2429, 2130, 1825 (aftbody, left). All within 6 px (12 mm) of the calibration.
+- Tiles: one per side (aftbody stations 0 to 10 left, forebody 11 to 20 right), per waterline
+  (4 to 32 ft) and per position: inner tile from 48 px across the centreline to 2,000 px out;
+  outer tile from 1,002 px to 3,050 px out (998 px overlap; the outer edge is past the 20 ft
+  buttock). Each tile is 2048 x 1024 px, centred on the waterline row. Thus 2 x 8 x 2 = 32 tiles.
+  A tile cannot isolate one station (the stations are overlaid), so the reading is waterline by
+  waterline.
+- Request per tile (one call; at most 3 turns, turns 2 and 3 only for an invalid reply): image 1,
+  the whole side of the body plan at 1/4 scale (station numbers legible, the tile drawn as a red
+  box) for station identity; image 2, the tile. Text: the side and its stations, the target
+  waterline row in the tile, the centreline column in tile pixels (may lie outside the tile), the
+  pixels per metre, the waterline and buttock rows and columns inside the tile with their values,
+  and what to ignore (half stations 11 1/2 and 12 1/2, diagonals, sheer, rub rail, deck edge,
+  lettering). Reply: JSON, the crossings of station curves with the target waterline inside the
+  tile, each as station number and x pixel, labelled `ai_inferred`. Invalid: a station outside
+  the side, a repeated station, or x outside the tile.
+- Merge (host, deterministic): half-breadth = |x_tile + tile_left - 4824| / 491.48. A cell given
+  by both tiles of its waterline takes the mean; the count of such cells that differ by more than
+  0.15 m is reported.
+- R1: DeepSeek V4.1 Flash, thinking disabled, `max_tokens` 32,000, temperature 0.2, 3 repeats
+  of all 32 tiles. Key 1 only.
+- R0 (code only, same tiles): the existing tracer (`ingest.extract_sections`, one section per
+  tile, z range = the tile rows) where it can run. It needs the centreline inside the panel, so
+  the 16 outer tiles are refused by design. An inner tile that returns a curve gives one value at
+  the waterline row; the tracer gives no station number, so the value is assigned to the station
+  whose truth is nearest (an upper bound for R0). Deterministic, 1 run.
+- Report also: tokens, turns, invalid replies, wall time per repeat. If the model adds value by
+  the rule, the integration plan for the hull path (where tiles go in the agent loop) is written
+  in `docs/WHOLE_VESSEL_GUNNERUS.md`; the controller does not change in this round.
+
 ### 3.6 Effort, checks, resume
 
 Effort: 1-2 weeks (reader, executor change, scoring, Gunnerus run; then raster path and a
