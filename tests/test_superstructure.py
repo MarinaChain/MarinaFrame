@@ -2,7 +2,14 @@
 import numpy as np
 import pytest
 
-from vessel_reconstruction.superstructure import MAX_EXTRAPOLATION_M, HullSide
+from vessel_reconstruction.superstructure import (
+    MAX_EXTRAPOLATION_M,
+    HullSide,
+    PlanShape,
+    build_shaped,
+    outline_extent,
+    planform,
+)
 
 
 def flared_section(x, top_z=5.0, half_breadth_at_deck=4.0, flare=0.2):
@@ -46,14 +53,12 @@ def test_outside_distance_is_lateral_or_longitudinal_whichever_is_smaller():
 
 cq = pytest.importorskip('cadquery')
 
-from vessel_reconstruction.superstructure import build_shaped, outline_extent, planform, PlanShape  # noqa: E402
-
 # A GA deck outline that is 0.3 m wider than the hull and runs 2 m past the bow end.
 WIDE_OUTLINE = [[0.0, -4.3], [16.0, -4.3], [16.0, 4.3], [0.0, 4.3]]
 
 
 def surface_overhang(hull, solid, count=4000):
-    vertices, triangles = solid.tessellate(0.001, 0.2)
+    vertices, _ = solid.tessellate(0.001, 0.2)
     points = np.array([[v.x, v.y, v.z] for v in vertices])
     return float(hull.outside_distance(points[:, 0], points[:, 1], points[:, 2]).max())
 
@@ -100,7 +105,7 @@ def test_bulwark_follows_the_flared_shell_above_the_deck():
 def test_house_reaching_the_hull_side_is_cut_to_it_at_every_height():
     hull = bow_hull()
     values = {'outline': WIDE_OUTLINE, 'height': [3.0, 5.0]}
-    solid, report = build_shaped('house', 'deckhouse', values, hull)
+    solid, _ = build_shaped('house', 'deckhouse', values, hull)
     assert solid.isValid() and surface_overhang(hull, solid) <= 0.02
     plan = planform(PlanShape(WIDE_OUTLINE), hull, 3.0, 50)
     assert plan['x_range'][1] == pytest.approx(14.0)  # the hull end, not the outline end (16 m)

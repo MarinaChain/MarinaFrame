@@ -85,7 +85,11 @@ def bow_half_breadths(top_map: np.ndarray) -> list[float | None]:
 
 def score(run: Path, sources: Path, truth_mesh: Path) -> dict:
     from benchmarks.gunnerus.whole_vessel_detail import hull_sections
-    from benchmarks.gunnerus.whole_vessel_metrics import score_run, step_triangles, top_height_map
+    from benchmarks.gunnerus.whole_vessel_metrics import (
+        score_run,
+        step_triangles,
+        top_height_map,
+    )
     from vessel_reconstruction.superstructure import HullSide
 
     hull = HullSide.from_sections(hull_sections(sources))

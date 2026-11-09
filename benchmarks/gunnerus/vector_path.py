@@ -152,7 +152,7 @@ def run(config_path: Path, out: Path) -> dict:
                    for a in read["abstentions"]])
     (out / "stations.json").write_text(json.dumps(sorted(statuses, key=lambda s: s["x_m"]), indent=2) + "\n")
     summary = {"config": config_path.name, "config_sha256": _sha256(config_path),
-               "dxf_sha256": _sha256(dxf_path), "requested": len(requests),
+               "dxf_sha256": _sha256(dxf_path), "requested": len(config["stations"]),
                "read": len(read["sections"]), "abstained": len(read["abstentions"]),
                "abstention_kinds": sorted({a["kind"] for a in read["abstentions"]}),
                "side_line_extended": extended, "chain_count": read["chain_count"],
