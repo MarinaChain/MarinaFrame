@@ -654,10 +654,27 @@ def profile_setup(setups, hints=None):
     return profile
 
 
+def with_outline_baseline(image, profile):
+    """The profile setup with a baseline: the model's, or the outline's lowest line when none was read.
+
+    z = 0 is the hull's lowest point (the frame these sheets state), drawn as
+    the outline's lowest line; profile_outline_heights snaps a read baseline
+    that is far from it to it as well. A model that read no baseline
+    (dtmb5415-3v-L0 live) otherwise leaves the profile unused. None when the
+    outline has no ink.
+    """
+    if profile.get("baseline_px") is not None:
+        return profile
+    outline, _, top = _profile_outline(image, profile)
+    keel = _bottom_line_centre(outline, view_skew(image, profile["region_px"]))
+    return None if keel is None else {**profile, "baseline_px": top + keel}
+
+
 def station_outline_heights(image, setups, description, stations, hints=None):
     """Deck and keel heights per station from the model's profile setup at its checked scale."""
     profile = profile_setup(setups, hints)
-    if profile is None or profile.get("baseline_px") is None:
+    profile = with_outline_baseline(image, profile) if profile is not None else None
+    if profile is None:
         return {}
     scales = (description or {}).get("checked_scales") or {}
     scale = scales.get(profile.get("view_id", "profile"), profile["pixels_per_metre"])

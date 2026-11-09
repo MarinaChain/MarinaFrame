@@ -22,8 +22,11 @@ def current_table(tools):
     if existing:
         table = VesselTable.from_json(existing)
         for row in table.stations:
+            # Only drawn stations can carry the model's own curve (hull-end rows are not drawn stations).
+            if row.id not in tools.state.get("authored_sections", {}) and row.id not in tools.state.get("model_choices", {}):
+                continue
             curve = tools._section_curve(row.id)
-            if curve is not None and (row.id in tools.state.get("authored_sections", {}) or row.id in tools.state.get("model_choices", {})):
+            if curve is not None:
                 row.points_yz_m = curve
                 row.keel_z_m, row.top_z_m = curve[0][1], curve[-1][1]
         return table

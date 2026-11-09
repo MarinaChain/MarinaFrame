@@ -526,7 +526,7 @@ def suspect_order(anchors: list[Anchor]) -> list[str]:
 
 
 def first_hull(declared: list[dict], anchors: list[Anchor], base_spec: dict, build, *,
-               max_retries: int = FALLBACK_RETRIES, prior: PriorDimensions | None = None):
+               max_retries: int = FALLBACK_RETRIES, prior: PriorDimensions | None = None, extend=None):
     """Fit, compile and build the first hull; a failed build never ends the draft.
 
     ``build(spec)`` builds one draft specification and returns a result that is
@@ -539,6 +539,9 @@ def first_hull(declared: list[dict], anchors: list[Anchor], base_spec: dict, bui
     more builds. When that also fails, the prior form (no anchor) is built.
     Every left-out anchor gets an ``anchor_left_out`` warning in the table with
     the reason of the build that failed with it (timeout or invalid geometry).
+    ``extend(table)``, when given, adds rows beyond the drawn stations (the
+    hull ends, hull_ends.extend_to_ends) to each fitted table and returns their
+    declared sections. A build that fails with them is tried once without them.
     Returns ``(table, result, left_out)``; ``result`` is falsy only when every
     try failed.
     """
@@ -553,7 +556,12 @@ def first_hull(declared: list[dict], anchors: list[Anchor], base_spec: dict, bui
         table = fit_vessel(declared, usable, prior)
         if table is None:
             return None, None
-        result = build(build_spec(table, base_spec, declared))
+        added = extend(table) if extend is not None else []
+        result = build(build_spec(table, base_spec, declared + added))
+        if not result and added:
+            # The ends are inferred: a build that fails with them is tried without them.
+            table = fit_vessel(declared, [copy.deepcopy(a) for a in anchors if a.id not in left_out], prior)
+            result = build(build_spec(table, base_spec, declared))
         if not result and not first_failure:
             first_failure.append(result)
         return table, result

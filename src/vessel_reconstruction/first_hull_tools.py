@@ -201,6 +201,28 @@ def cap_at_profile_outline(sections: list[dict], anchors: list[Anchor], heights:
     return sections, anchors
 
 
+def hull_end_extension(image, setups, description, sections, hints):
+    """A first_hull ``extend`` callback that adds the hull ends the profile shows, or None.
+
+    The end places and their outline heights are read once; each fitted table
+    then gets end rows shaped from its own end stations (hull_ends.py).
+    """
+    from . import hull_ends
+    ends = hull_ends.profile_ends(image, setups, description, hints)
+    if ends is None:
+        return None
+    places = hull_ends.end_stations(ends, [s["x_m"] for s in sections])
+    heights = hull_ends.end_heights(image, ends, places) if places else {}
+    if not heights:
+        return None
+    xs = sorted(float(s["x_m"]) for s in sections)
+    tapers = hull_ends.end_tapers(image, setups, ends, places, {"aft": xs[0], "fore": xs[-1]}, hints)
+
+    def extend(table):
+        return hull_ends.extend_to_ends(table, sections, places, heights, tapers)
+    return extend
+
+
 def build_first_hull(tools):
     from .vessel_description import first_hull_spec, describe_table
     description = tools.state.get("vessel_description")
@@ -252,6 +274,8 @@ def build_first_hull(tools):
     outline = station_outline_heights(image, list(tools.state.get("sheet_setups", {}).values()), description,
                                       sections, tools.intake_hints())
     sections, anchors = cap_at_profile_outline(sections, anchors, outline)
+    extend = hull_end_extension(image, list(tools.state.get("sheet_setups", {}).values()), description,
+                                sections, tools.intake_hints())
     built = {}
     retried_builds = []
 
@@ -268,7 +292,7 @@ def build_first_hull(tools):
         return build_failure(outcome)
 
     table, success, left_out = first_hull(sections, anchors, base_spec, build,
-                                          prior=prior_dimensions(base_spec, sections))
+                                          prior=prior_dimensions(base_spec, sections), extend=extend)
     if not success:
         reason = getattr(success, "reason", "build_failed")
         return tools._observation(False, "blocked", error_code=f"first_hull_{reason}",
@@ -295,7 +319,7 @@ def build_first_hull(tools):
     tools.state["last_valid_candidate"] = candidate
     tools.state["best_valid_candidate"] = copy.deepcopy(candidate)
     tools._save()
-    no_ink = all(row.source == "prior" for row in table.stations)
+    no_ink = all(row.source in ("prior", "inferred") for row in table.stations)
     message = ("No usable ink: the first hull is the prior form scaled to the vessel size. Author or correct "
                "sections from the drawing." if no_ink else
                "Anchored first hull ready. Render it, preserve good ink and improve only the weak sections.")
@@ -386,7 +410,7 @@ def rebuild_if_setup_changed(tools, previous_description) -> dict | None:
 
 
 # Kinds of table warning that say what happened to the ink (fairness notes stay in the table).
-REPORTED_WARNINGS = ("no_ink", "anchor_dropped", "anchor_left_out")
+REPORTED_WARNINGS = ("no_ink", "anchor_dropped", "anchor_left_out", "inferred_end")
 
 
 def hull_warnings(table, retried_builds: list) -> list[str]:
