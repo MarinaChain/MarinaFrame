@@ -1031,7 +1031,18 @@ def resolve_items(text: str, rows: list[dict]) -> str:
     names = {str(row.get('key', '')).strip(): row.get('name', '') for row in rows}
     if not names:
         return text
-    items = [match.group(1) for match in ITEM_TOKEN.finditer(text or '') if names.get(match.group(1))]
+
+    def is_item(match: re.Match) -> bool:
+        """A number is a schedule item when a row has it and it is not a stray number of a label
+        that already names a tank ("NO.3 FUEL OIL TANK 5"); a circled "(5)" is always an item."""
+        if not names.get(match.group(1)):
+            return False
+        if match.group(0).startswith('(') and match.group(0).endswith(')'):
+            return True
+        rest = (text or '')[:match.start()] + ' ' + (text or '')[match.end():]
+        return not (is_tank_label(rest) or tank_key(rest))
+
+    items = [match.group(1) for match in ITEM_TOKEN.finditer(text or '') if is_item(match)]
     tank_items = list(dict.fromkeys(item for item in items if is_tank_label(names[item])))
     if tank_items:
         # The tank the item names; other words in the region are notes ("GIRDER OVER", "VOID").
@@ -1039,7 +1050,7 @@ def resolve_items(text: str, rows: list[dict]) -> str:
 
     def name(match: re.Match) -> str:
         item = match.group(1)
-        return f'#{item} {names[item]}' if names.get(item) else match.group(0)
+        return f'#{item} {names[item]}' if is_item(match) else match.group(0)
 
     return ' '.join(ITEM_TOKEN.sub(name, text or '').split())
 

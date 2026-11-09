@@ -133,6 +133,8 @@ def test_schedule_items_and_rows_by_number_and_kind():
             {'key': '3', 'name': 'DEEP TANK NO.3P DRY CARGO', 'sheet': 0},
             {'key': '8', 'name': 'FUEL OIL OR WATER BALLAST TANK NO.3P', 'sheet': 0}]
     assert raster.resolve_items('5 VOID', rows) == '#5 RESERVE FEED WATER TANK NO.4P'
+    assert raster.resolve_items('NO.3 FUEL OIL TANK 5', rows) == 'NO.3 FUEL OIL TANK 5'  # stray number
+    assert raster.resolve_items('NO.3 FUEL OIL TANK (5)', rows) == '#5 RESERVE FEED WATER TANK NO.4P'  # circled
     assert raster.resolve_items('NO.2 HATCH', rows) == 'NO.2 HATCH'  # a tank number is not an item
     assert raster.schedule_row_for('NO.1 HATCH', rows)['key'] == '12'  # number alone matches ...
     assert not raster.names_tank('NO.1 HATCH', rows)  # ... but a hatch is never a tank
