@@ -38,7 +38,7 @@ test('the tooltip detail is at most three lines, names the set, and carries no d
     }
   }
   const hull = summarise({ hull: { path: 'scanned_body_plan', hull_type: 'round_bilge', labels: { traced: 3 } } }).hull;
-  assert.match(detailText(hull), /\(holdout\)/);
+  assert.match(detailText(hull), /holdout/);
 });
 
 test('no wording of any output claims approval or verification', () => {

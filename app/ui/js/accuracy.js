@@ -120,13 +120,16 @@ export function factsOfView(view) {
 }
 
 /** The tooltip detail: the line, then each band with its set, N and source (limits are in the report). */
-// The tooltip detail stays short (founder: few words): this run's line plus at most two measured bands.
-// Sources and doc sections are in the PDF report's "Accuracy and limits" section, not in the app.
-const DETAIL_BAND_LINES = 2;
+// The tooltip detail stays short (founder: few words). The run's summary line already names the measured
+// band, so the detail is that line alone, broken at its clauses into at most three lines. Sources and doc
+// sections are in the PDF report's "Accuracy and limits" section, not in the app.
+const DETAIL_MAX_LINES = 3;
 
 export function detailText(summary) {
-  const bands = summary.detail_ids.map(band).slice(0, DETAIL_BAND_LINES).map((b) => `${b.short} (${b.dataset})`);
-  return [summary.line, ...bands].join('\n');
+  const clauses = summary.line.split('; ').map((clause) => clause.trim()).filter(Boolean);
+  const head = clauses.slice(0, DETAIL_MAX_LINES - 1);
+  const rest = clauses.slice(DETAIL_MAX_LINES - 1).join('; ');
+  return [...head, ...(rest ? [rest] : [])].join('\n');
 }
 
 /** One compact chip: the output's icon and its band; the line and sources are in the tooltip. */
