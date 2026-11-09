@@ -54,7 +54,9 @@ def main() -> int:
     started = time.monotonic()
     code = 1
     receipt = {}
+    resource = None
     try:
+        resource = posix_resource()  # first: Windows fails closed before any work, with a receipt
         apply_limits(json.loads(args.limits), args.parent)
         from .pipeline import reconstruct
         result = reconstruct(args.spec, args.out, export_cad=not args.no_cad)
@@ -66,14 +68,14 @@ def main() -> int:
         receipt = {'error_code': 'output_exists'}
     except BaseException as exc:
         receipt = {'error_code': 'worker_exception', 'exception_type': type(exc).__name__}
-    resource = posix_resource()
-    usage = resource.getrusage(resource.RUSAGE_SELF)
-    children = resource.getrusage(resource.RUSAGE_CHILDREN)
-    receipt['resources'] = {'wall_seconds': round(time.monotonic() - started, 4),
-                            'cpu_seconds': round(usage.ru_utime + usage.ru_stime + children.ru_utime + children.ru_stime, 4),
-                            'peak_rss_kib': peak_rss_kib(usage.ru_maxrss),
-                            'child_peak_rss_kib': peak_rss_kib(children.ru_maxrss),
-                            'resource_profile': native_resource_profile()}
+    if resource is not None:
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        children = resource.getrusage(resource.RUSAGE_CHILDREN)
+        receipt['resources'] = {'wall_seconds': round(time.monotonic() - started, 4),
+                                'cpu_seconds': round(usage.ru_utime + usage.ru_stime + children.ru_utime + children.ru_stime, 4),
+                                'peak_rss_kib': peak_rss_kib(usage.ru_maxrss),
+                                'child_peak_rss_kib': peak_rss_kib(children.ru_maxrss),
+                                'resource_profile': native_resource_profile()}
     try:
         temporary = args.receipt.with_suffix('.tmp')
         with temporary.open('x', encoding='utf-8') as stream:
