@@ -47,6 +47,13 @@ The patched lock uses PyMuPDF 1.26.7 with the same declared licensing family.
 The [upstream licensing statement](https://pymupdf.readthedocs.io/en/latest/about.html#license-and-copyright)
 describes both AGPL and commercial routes; the owner must assess the actual use.
 
+### Decision 2026-11-09: PyMuPDF commercial licence bought
+
+The founder states that MarinaChain bought an Artifex commercial licence for PyMuPDF (2026-11-09),
+so MarinaFrame may ship PyMuPDF in a closed-source desktop app. The licence document is kept by
+MarinaChain, not in this repository. Still open before distribution: VTK licence check, the GPL
+video codecs in the macOS OpenCV wheel (not used by MarinaFrame), Developer ID signing.
+
 ## Vulnerability scan and scoped unresolved dependency
 
 The initial 55-package OSV query reported msgpack 1.2.1, multidict 6.7.1,
