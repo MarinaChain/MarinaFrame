@@ -166,7 +166,7 @@ def capacity_row(tank: Tank) -> dict:
            "lcg_m": None, "tcg_m": None, "vcg_m": None, "max_free_surface_moment_tm": None,
            "printed_volume_m3": tank.printed_volume_m3, "source_labels": labels,
            "engineering_approved": False, "notes": "; ".join(tank.notes)}
-    if tank.triangles is None:
+    if tank.triangles is None or len(tank.triangles) == 0:  # not built, or an empty mesh
         return row
     triangles = outward(tank.triangles)
     top = float(triangles[:, :, 2].max())

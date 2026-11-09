@@ -121,3 +121,9 @@ def test_sounding_levels_end_at_top():
     assert tanks.sounding_levels(0.0, 0.25, 0.1) == pytest.approx([0.0, 0.1, 0.2, 0.25])
     assert tanks.sounding_levels(1.0, 1.2, 0.1) == pytest.approx([1.0, 1.1, 1.2])
     assert math.isclose(tanks.sounding_levels(0.0, 3.0, 0.1)[-1], 3.0)
+
+
+def test_capacity_row_of_a_tank_with_an_empty_mesh_has_no_volume():
+    tank = tanks.Tank("t4", "No 4", "fuel oil", np.zeros((0, 3, 3)), ("1", "2"))
+    row = tanks.capacity_row(tank)
+    assert row["volume_100_m3"] is None and row["weight_98_t"] is None
