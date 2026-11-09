@@ -30,16 +30,25 @@ BULB_AREA_SHARE = 1.25
 
 @dataclass(frozen=True)
 class Profile:
-    """A stiffener section as printed: name, OCX section kind and its dimensions in mm."""
+    """A stiffener section as printed: name, OCX section kind and its dimensions in mm.
+
+    ``height_mm`` is always the overall height (the OCX ``Height``). ``web_depth_mm`` is the web
+    between the flange and the base; it is left 0 to take the overall height less the flange
+    thickness (equal to the height for a section without a flange)."""
     name: str
     kind: str  # "BulbFlat", "FlatBar" or "TBar" (the OCX section element)
     height_mm: float
     web_mm: float
     flange_width_mm: float = 0.0
     flange_thickness_mm: float = 0.0
+    web_depth_mm: float = 0.0
+
+    def __post_init__(self):
+        if not self.web_depth_mm:
+            object.__setattr__(self, "web_depth_mm", self.height_mm - self.flange_thickness_mm)
 
     def area_m2(self) -> float:
-        web = self.height_mm * self.web_mm
+        web = self.web_depth_mm * self.web_mm  # the flange covers the rest of the height
         if self.kind == "BulbFlat":
             return web * BULB_AREA_SHARE / 1e6
         return (web + self.flange_width_mm * self.flange_thickness_mm) / 1e6
@@ -65,7 +74,7 @@ def parse_profile(text: str) -> Profile | None:
     tee = TEE_PATTERN.search(text)
     if tee:
         height, web, width, flange = (_number(g) for g in tee.groups())
-        return Profile(text, "TBar", height + flange, web, width, flange)
+        return Profile(text, "TBar", height + flange, web, width, flange, web_depth_mm=height)
     for pattern, kind in PROFILE_PATTERNS:
         match = pattern.match(text)
         if match:
@@ -173,12 +182,28 @@ class Seam:
 
 
 def split_at_seams(points: list[tuple[float, float]], seams: list[Seam]) -> list[list[tuple[float, float]]]:
-    """Cut a shell line (keel first) at each seam in order; returns len(seams) + 1 pieces."""
+    """Cut a shell line (keel first) at each seam in order; returns len(seams) + 1 pieces.
+
+    A seam the line has already passed at its first point cuts nothing: the strake below it is an
+    empty piece. Seams must be listed in the order the line crosses them; a later seam crossed
+    before an earlier one raises ValueError rather than silently merging strakes."""
     pieces, current, index = [], [points[0]], 0
+    while index < len(seams) and seams[index].reached(points[0]) >= 0:
+        pieces.append([])
+        index += 1
     for a, b in zip(points, points[1:]):
+        crossed_early = [seam.label for seam in seams[index + 1:] if seam.reached(b) >= 0 > seam.reached(a)]
+        if index < len(seams) and crossed_early and not seams[index].reached(b) >= 0:
+            raise ValueError(f"Seams are not in crossing order: {crossed_early[0]!r} is crossed "
+                             f"before {seams[index].label!r}.")
+        last_t = 0.0
         while index < len(seams) and seams[index].reached(b) >= 0 > seams[index].reached(a):
             da, db = seams[index].reached(a), seams[index].reached(b)
             t = da / (da - db)
+            if t < last_t:
+                raise ValueError(f"Seams are not in crossing order: {seams[index].label!r} is crossed "
+                                 f"before {seams[index - 1].label!r}.")
+            last_t = t
             cut = (a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]))
             current.append(cut)
             pieces.append(current)

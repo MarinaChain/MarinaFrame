@@ -133,6 +133,8 @@ def test_schedule_items_and_rows_by_number_and_kind():
             {'key': '3', 'name': 'DEEP TANK NO.3P DRY CARGO', 'sheet': 0},
             {'key': '8', 'name': 'FUEL OIL OR WATER BALLAST TANK NO.3P', 'sheet': 0}]
     assert raster.resolve_items('5 VOID', rows) == '#5 RESERVE FEED WATER TANK NO.4P'
+    assert raster.resolve_items('NO.3 FUEL OIL TANK 5', rows) == 'NO.3 FUEL OIL TANK 5'  # stray number
+    assert raster.resolve_items('NO.3 FUEL OIL TANK (5)', rows) == '#5 RESERVE FEED WATER TANK NO.4P'  # circled
     assert raster.resolve_items('NO.2 HATCH', rows) == 'NO.2 HATCH'  # a tank number is not an item
     assert raster.schedule_row_for('NO.1 HATCH', rows)['key'] == '12'  # number alone matches ...
     assert not raster.names_tank('NO.1 HATCH', rows)  # ... but a hatch is never a tank
@@ -171,3 +173,58 @@ def test_reading_order_and_sides_of_a_plan_region():
     room_low = raster.RegionLabel(8, -1, [block(90, 0, 'room')], 'room')
     merged = raster.resolve_sides([room, room_low])
     assert len(merged) == 1 and merged[0].side is None and merged[0].text == 'Engine room'
+
+
+def test_claude_asker_never_caches_a_failed_call(tmp_path):
+    calls = []
+
+    def failing_call(messages, receipts):
+        calls.append(1)
+        return '', {'state': 'failed'}
+
+    ask = raster.claude_asker(tmp_path, call=failing_call)
+    image = np.zeros((4, 4), np.uint8)
+    with pytest.raises(RuntimeError):
+        ask(image, 'prompt')
+    assert not list(tmp_path.glob('*.json'))
+
+    ask = raster.claude_asker(tmp_path, call=lambda messages, receipts: ('{"1": "FO"}', {'state': 'completed'}))
+    assert ask(image, 'prompt') == {'1': 'FO'}
+
+
+def test_scale_bar_fit_drops_a_misread_number():
+    ticks = [raster.Tick(1000.0 + 25 * value, i, str(value)) for i, value in enumerate(range(0, 100, 10))]
+    ticks[5] = raster.Tick(ticks[5].column, 5, '5')  # "50" misread as "5"
+    axis = raster.fit_scale_bar(0.0, ticks, raster.FEET_M)
+    assert axis.px_per_m == pytest.approx(25 / raster.FEET_M)
+    x = axis.x_m(np.arange(1000, 1250, 5))
+    assert np.all(np.diff(x) > 0)
+
+
+def test_content_words_match_whole_tokens():
+    assert raster.content_of('FWD PEAK') == 'water ballast'  # not fresh water through "fw"
+    assert raster.content_of("'TWEEN DECK") is None  # not ballast through "tw"
+    assert not raster.is_tank_label("'TWEEN DECK")
+    assert raster.content_of('FUEL OIL TANK TWIN SCREW') == 'fuel oil'  # not dual-use through "tw"
+    assert raster.content_of('FUEL OIL TANK PEAKED') == 'fuel oil'  # not dual-use through "peak"
+    assert raster.content_of('F.W. TANK') == 'fresh water'
+    assert raster.content_of('NO.2 TW TANK') == 'water ballast'
+    assert raster.content_of('FO SERVICE') == 'fuel oil'
+    assert raster.content_of('FORE PEAK') == 'water ballast'
+
+
+def _stub_view(line_columns, width=400, height=100):
+    from types import SimpleNamespace
+    vertical = np.zeros((height, width), bool)
+    vertical[:, line_columns] = True
+    return SimpleNamespace(ink=SimpleNamespace(vertical=vertical),
+                           axis=SimpleNamespace(x_m=lambda columns: np.asarray(columns, float) / 10))
+
+
+def test_a_weak_alignment_does_not_shift_the_plan():
+    weak_plan, weak_profile = _stub_view([100, 200]), _stub_view([120, 220])
+    shift, _, agreeing = raster.align_to_profile(weak_plan, weak_profile)
+    assert not agreeing and shift == 0.0
+    columns = [50, 100, 150, 200, 250]  # five bulkheads shifted by 2 m agree
+    shift, _, agreeing = raster.align_to_profile(_stub_view(columns), _stub_view([c + 20 for c in columns]))
+    assert agreeing and shift == pytest.approx(2.0)

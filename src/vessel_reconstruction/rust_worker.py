@@ -138,11 +138,13 @@ def main(argv=None):
     signal.signal(signal.SIGINT, lambda *_: cancel.set())
     started = time.monotonic()
     request = None
+    resource = None
     envelope = {"protocol": PROTOCOL, "request_id": None, "operation": None,
                 "execution_state": "failed", "result": None, "domain": None,
                 "domain_checkpoint_sha256": None,
                 "implementation_sha256": implementation_identity(), "error_code": None}
     try:
+        resource = posix_resource()  # first: Windows fails closed before any work, with a receipt
         request = parse_request(sys.stdin.buffer.read(98_305))
         envelope.update(request_id=request["request_id"], operation=request["operation"])
         envelope.update(execute(request, args.task_root, args.source_spec, cancel))
@@ -153,16 +155,16 @@ def main(argv=None):
         # Native data and exceptions can include arbitrary source text/paths.
         # Preserve a bounded category, never a raw exception or environment.
         envelope["error_code"] = "worker_boundary_" + type(exc).__name__.lower()
-    resource = posix_resource()
-    usage = resource.getrusage(resource.RUSAGE_SELF)
-    children = resource.getrusage(resource.RUSAGE_CHILDREN)
-    envelope["resources"] = {
-        "wall_seconds": time.monotonic() - started,
-        "worker_cpu_seconds": usage.ru_utime + usage.ru_stime,
-        "children_cpu_seconds": children.ru_utime + children.ru_stime,
-        "worker_peak_rss_kib": peak_rss_kib(usage.ru_maxrss),
-        "children_peak_rss_kib": peak_rss_kib(children.ru_maxrss),
-        "rss_interpretation": "separate process maxima; not summed process-tree peak"}
+    if resource is not None:
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        children = resource.getrusage(resource.RUSAGE_CHILDREN)
+        envelope["resources"] = {
+            "wall_seconds": time.monotonic() - started,
+            "worker_cpu_seconds": usage.ru_utime + usage.ru_stime,
+            "children_cpu_seconds": children.ru_utime + children.ru_stime,
+            "worker_peak_rss_kib": peak_rss_kib(usage.ru_maxrss),
+            "children_peak_rss_kib": peak_rss_kib(children.ru_maxrss),
+            "rss_interpretation": "separate process maxima; not summed process-tree peak"}
     args.response.parent.mkdir(parents=True, exist_ok=True)
     if args.response.exists() or args.response.is_symlink():
         raise SystemExit("Refusing to replace a worker receipt")

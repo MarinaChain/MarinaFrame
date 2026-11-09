@@ -108,3 +108,22 @@ def test_ocx_writes_stiffeners_and_round_trips(tmp_path):
         pytest.skip("OCX XSD or xmllint not available")
     result = ocx.validate(path, folder)
     assert result.valid, result.errors
+
+
+def test_split_at_seams_skips_a_passed_seam_and_rejects_unordered_seams():
+    line = [(1.0, 1.0), (3.0, 3.0)]
+    passed, ahead = extrude.Seam("y", 0.5, "passed"), extrude.Seam("y", 2.0, "ahead")
+    pieces = extrude.split_at_seams(line, [passed, ahead])
+    assert len(pieces) == 3 and pieces[0] == []
+    assert pieces[1][-1] == pytest.approx((2.0, 2.0)) and pieces[2][0] == pytest.approx((2.0, 2.0))
+    with pytest.raises(ValueError):
+        extrude.split_at_seams(line, [ahead, extrude.Seam("y", 1.5, "earlier")])
+
+
+def test_tee_area_does_not_count_the_flange_overlap_and_height_is_overall():
+    tee = extrude.parse_profile("W:200x8 / FL:150x10")
+    assert (tee.height_mm, tee.web_depth_mm) == (210, 200)
+    assert tee.area_m2() == pytest.approx((200 * 8 + 150 * 10) / 1e6)
+    assert extrude.parse_profile("FB 100x8").web_depth_mm == 100
+    from vessel_reconstruction.structure import ocx
+    assert 'Height numericvalue="0.210000"' in ocx._section_xml(tee.as_dict(), "S1")

@@ -32,3 +32,46 @@ def test_worker_limits_fail_closed_on_windows(monkeypatch):
     monkeypatch.setattr(process_limits.os, 'name', 'nt')
     with pytest.raises(RuntimeError, match='Windows'):
         process_limits.posix_resource()
+
+
+def _windows_file_lock(monkeypatch, tmp_path):
+    """The module as Windows loads it, with an msvcrt stub that refuses to unlock a free byte."""
+    import importlib.util
+    import sys
+    import types
+
+    held = set()
+
+    def locking(descriptor, mode, count):
+        if mode == stub.LK_UNLCK:
+            if descriptor not in held:
+                raise OSError('not locked')
+            held.discard(descriptor)
+        elif descriptor in held:
+            raise OSError('locked')
+        else:
+            held.add(descriptor)
+
+    stub = types.SimpleNamespace(LK_NBLCK=2, LK_UNLCK=0, locking=locking)
+    monkeypatch.setitem(sys.modules, 'msvcrt', stub)
+    spec = importlib.util.spec_from_file_location('file_lock_windows', process_limits.__file__.replace(
+        'process_limits.py', 'file_lock.py'))
+    module = importlib.util.module_from_spec(spec)
+    with monkeypatch.context() as patch:
+        patch.setattr(os, 'name', 'nt')
+        spec.loader.exec_module(module)
+    return module
+
+
+def test_windows_unlock_of_a_lock_never_taken_is_harmless(monkeypatch, tmp_path):
+    lock = _windows_file_lock(monkeypatch, tmp_path)
+    descriptor = os.open(tmp_path / 'lock', os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        lock.unlock(descriptor)  # not held: must not raise
+        lock.try_lock_exclusive(descriptor)
+        with pytest.raises(BlockingIOError):
+            lock.try_lock_exclusive(descriptor)
+        lock.unlock(descriptor)
+        lock.try_lock_exclusive(descriptor)
+    finally:
+        os.close(descriptor)

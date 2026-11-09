@@ -79,6 +79,7 @@ def test_plate_corners_and_area():
     assert ocx.polygon_area(corners) == pytest.approx(88.0)
     assert ocx.grade_of("ASTM A131 - AB/A") == "A"
     assert ocx.grade_of("AH36") == "A36"
+    assert ocx.grade_of("ASTM A36") == "A"  # 250 MPa mild steel, not the 355 MPa AH36 class grade
     assert ocx.grade_of("E") == "A"  # not an OCX grade name: written as grade A
     assert ocx.grade_of(None) == "A"
 

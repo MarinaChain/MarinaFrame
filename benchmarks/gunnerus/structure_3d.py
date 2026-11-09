@@ -293,7 +293,7 @@ def side_frame_profile(ctx: Context, s: Station) -> tuple[Profile, str, str]:
     if key and key["plate_mm"]:
         mm = key["plate_mm"]
         profile = Profile(f"PL {WEB_FRAME_DEPTH_MM:g}x{mm:g} KN.FL {WEB_FRAME_FLANGE_MM:g}", "TBar",
-                          WEB_FRAME_DEPTH_MM, mm, WEB_FRAME_FLANGE_MM, mm)
+                          WEB_FRAME_DEPTH_MM + mm, mm, WEB_FRAME_FLANGE_MM, mm, web_depth_mm=WEB_FRAME_DEPTH_MM)
         return profile, "printed", (f"side-frame key '{key['key']}' prints PL {mm:g} KN.FL. 50; "
                                     f"depth {WEB_FRAME_DEPTH_MM:g} mm guessed (section #A web)")
     return extrude.parse_profile(GUESSED_SIDE_FRAME), "guessed", f"frame {s.label} not in the side-frame key"
@@ -499,7 +499,7 @@ def g7_thickness(members: list[dict], r: reading.GunnerusReading) -> dict:
                       "sheet_b": f"#I label {girder['label']}", "agree": width == girder["web_mm"]})
         if tee:
             pairs.append({"member": f"deck girder y {girder['y_m']:+.3f} m: web", "sheet_a": f"#I label {girder['label']}",
-                          "sheet_b": f"plan note '{note}'", "agree": tee.web_mm == mm and tee.height_mm - tee.flange_thickness_mm == width})
+                          "sheet_b": f"plan note '{note}'", "agree": tee.web_mm == mm and tee.web_depth_mm == width})
     pairs.append({"member": "floor plate", "sheet_a": f"#I PL {r.section_i.floor_plate['mm']:g}",
                   "sheet_b": f"#G PL {r.section_g.floor_plate['mm']:g}",
                   "agree": r.section_i.floor_plate["mm"] == r.section_g.floor_plate["mm"]})

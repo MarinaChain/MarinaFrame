@@ -139,7 +139,7 @@ CONTENT_WORDS = (
     ('dry ballast', 'dry'),  # solid ballast, not a liquid
     ('lub', 'lube oil'), ('l.o', 'lube oil'),
     ('fuel', 'fuel oil'), ('f.o', 'fuel oil'), ('diesel', 'fuel oil'), ('d.o', 'fuel oil'),
-    ('fo ', 'fuel oil'), ('settling', 'fuel oil'),
+    ('fo', 'fuel oil'), ('settling', 'fuel oil'),
     ('ballast', 'water ballast'), ('technical water', 'water ballast'), ('tw', 'water ballast'),
     ('roll damp', 'water ballast'),
     ('fresh', 'fresh water'), ('f.w', 'fresh water'), ('culinary', 'fresh water'), ('potable', 'fresh water'), ('drinking', 'fresh water'),
@@ -150,6 +150,22 @@ CONTENT_WORDS = (
     ('dry', 'dry'), ('void', 'dry'), ('cofferdam', 'dry'), ('hold', 'dry'), ('cargo', 'dry'),
     ('peak', 'water ballast'),  # a peak tank without a content word
 )
+# A content word must start a token ("fw" is not in "fwd"). A code of at most this many letters
+# ("fw", "tw", "f.o", "dry") and the word "peak" must also end a token, so "'TWEEN DECK" is not
+# "tw" and "PEAKED" is not a peak; longer words may be cut short ("lub" in "lubricating").
+CONTENT_CODE_MAX_LETTERS = 3
+
+
+def _content_pattern(word: str) -> re.Pattern:
+    letters = word.replace('.', '')
+    start = r'(?<![a-z0-9])'
+    if word == 'peak':  # also "fore peak" written as one word
+        return re.compile(start + r'(?:fore|after|aft)?peak(?![a-z0-9])')
+    end = r'(?![a-z0-9])' if len(letters) <= CONTENT_CODE_MAX_LETTERS else ''
+    return re.compile(start + re.escape(word) + end)
+
+
+CONTENT_PATTERNS = tuple((_content_pattern(word), group) for word, group in CONTENT_WORDS)
 # Words that do not tell two tanks apart when a plan label is matched to a profile label.
 STOP_WORDS = {'no', 'tank', 'tanks', 'tk', 'new', 'dbb', 'dbl', 'bot', 'the', 'and', 'or', 'p', 'sb',
               's', 'port', 'stbd', 'ps'}
@@ -775,18 +791,41 @@ def fit_frame_axis(row: float, ticks: list[Tick], frame_spacing_m: float) -> Axi
     return Axis(row, ticks, frame_spacing_m * frames_per_tick, zero_ordinal, 'read', evidence)
 
 
+# A numbered tick is an outlier (a misread number) when it is further than this fraction of the
+# value spacing between neighbouring numbers from the robust line: a quarter keeps every honest
+# tick (reading noise is far below one spacing) and rejects any misread number, which is off by
+# at least one spacing.
+SCALE_BAR_OUTLIER_SPACINGS = 0.25
+
+
 def fit_scale_bar(row: float, ticks: list[Tick], unit_m: float) -> Axis | None:
-    """A scale bar: value = a + b * column from the numbered ticks (least squares)."""
+    """A scale bar: value = a + b * column from the numbered ticks.
+
+    The line is fitted robustly (median pairwise slope), ticks whose number does not fit the line
+    are dropped as misreads, and the axis is built from the remaining ticks only, so one wrong
+    number can neither tilt the scale nor make x non-monotonic."""
     numbered = [(t.column, value) for t in ticks for kind, value in [parse_axis_label(t.label)]
                 if kind == 'number']
     if len(numbered) < 2:
         return None
+    numbered.sort()
     columns, values = np.array(numbered, float).T
-    slope, intercept = np.polyfit(columns, values, 1)  # units per pixel
+    if np.ptp(columns) == 0:
+        return None
+    pairs = np.triu_indices(len(columns), k=1)
+    separation = columns[pairs[1]] - columns[pairs[0]]
+    usable = separation > 0
+    slope = float(np.median(((values[pairs[1]] - values[pairs[0]])[usable]) / separation[usable]))
+    intercept = float(np.median(values - slope * columns))
+    spacing = float(np.median(np.abs(np.diff(values)))) or 1.0
+    keep = np.abs(values - (intercept + slope * columns)) <= SCALE_BAR_OUTLIER_SPACINGS * spacing
+    if keep.sum() < 2:
+        return None
+    columns, values = columns[keep], values[keep]
     # Store the fit as ticks one unit apart in value (ordinal = value).
     rebuilt = [Tick(float(c), int(v)) for c, v in zip(columns, values)]
     return Axis(row, rebuilt, unit_m, 0.0, 'read',
-                f'scale bar: {len(numbered)} numbers read, {1 / abs(slope):.3f} px per unit '
+                f'scale bar: {len(columns)} of {len(numbered)} numbers fit, {1 / abs(slope):.3f} px per unit '
                 f'(unit {unit_m} m)')
 
 
@@ -896,12 +935,18 @@ def claude_asker(cache_dir: Path, model: str = 'claude-sonnet-5-5', call=None) -
         messages = [{'role': 'user', 'content': [
             {'type': 'text', 'text': prompt},
             {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + base64.b64encode(data).decode()}}]}]
-        answer = {}
+        answer, completed = {}, False
         for _ in range(2):
             text, receipt = call(messages, cache_dir / 'receipts')
+            if receipt.get('state') != 'completed':
+                continue  # timeout, rate limit or error: the text is not an answer
+            completed = True
             answer = _json_object(text)
             if answer is not None:
                 break
+        if not completed:
+            # Never cache a failed call: a replay would return {} as if the model had said so.
+            raise RuntimeError(f'model call failed twice (receipts in {cache_dir / "receipts"})')
         answer = answer or {}
         cached.write_text(json.dumps({'prompt': prompt, 'model': model, 'answer': answer}, indent=1))
         return answer
@@ -928,16 +973,15 @@ DUAL_USE = 'fuel oil or water ballast'
 
 
 def content_of(*texts: str) -> str | None:
-    """Content group from label or schedule words (first word match in CONTENT_WORDS). A tank
+    """Content group from label or schedule words (first word match in CONTENT_WORDS, on word boundaries). A tank
     named for fuel oil and for ballast ("F.O. OR WATER BALLAST TANK") is dual-use."""
     for text in texts:
-        lower = f' {(text or "").lower()} '
-        groups = {group for word, group in CONTENT_WORDS if word in lower}
-        if {'fuel oil', 'water ballast'} <= groups:
+        lower = (text or '').lower()
+        matched = [group for pattern, group in CONTENT_PATTERNS if pattern.search(lower)]
+        if {'fuel oil', 'water ballast'} <= set(matched):
             return DUAL_USE
-        for word, group in CONTENT_WORDS:
-            if word in lower:
-                return group
+        if matched:
+            return matched[0]
     return None
 
 
@@ -987,7 +1031,18 @@ def resolve_items(text: str, rows: list[dict]) -> str:
     names = {str(row.get('key', '')).strip(): row.get('name', '') for row in rows}
     if not names:
         return text
-    items = [match.group(1) for match in ITEM_TOKEN.finditer(text or '') if names.get(match.group(1))]
+
+    def is_item(match: re.Match) -> bool:
+        """A number is a schedule item when a row has it and it is not a stray number of a label
+        that already names a tank ("NO.3 FUEL OIL TANK 5"); a circled "(5)" is always an item."""
+        if not names.get(match.group(1)):
+            return False
+        if match.group(0).startswith('(') and match.group(0).endswith(')'):
+            return True
+        rest = (text or '')[:match.start()] + ' ' + (text or '')[match.end():]
+        return not (is_tank_label(rest) or tank_key(rest))
+
+    items = [match.group(1) for match in ITEM_TOKEN.finditer(text or '') if is_item(match)]
     tank_items = list(dict.fromkeys(item for item in items if is_tank_label(names[item])))
     if tank_items:
         # The tank the item names; other words in the region are notes ("GIRDER OVER", "VOID").
@@ -995,7 +1050,7 @@ def resolve_items(text: str, rows: list[dict]) -> str:
 
     def name(match: re.Match) -> str:
         item = match.group(1)
-        return f'#{item} {names[item]}' if names.get(item) else match.group(0)
+        return f'#{item} {names[item]}' if is_item(match) else match.group(0)
 
     return ' '.join(ITEM_TOKEN.sub(name, text or '').split())
 
@@ -1541,7 +1596,8 @@ def align_to_profile(plan: ReadView, profile: ReadView, search_m: float = None) 
     """Shift (m) of a plan's x that puts its transverse bulkheads on the profile's: the shift
     within ``search_m`` (default ALIGN_SEARCH_M) that best correlates the long vertical lines of both views (0.1 m
     bins). Used when x comes from a scale bar, with no frame numbers to tie the views.
-    Returns the shift, the evidence and whether at least ALIGN_MIN_AGREEING bins agree."""
+    Returns the shift, the evidence and whether at least ALIGN_MIN_AGREEING bins agree; a weak
+    alignment shifts nothing (shift 0)."""
     def presence(view: ReadView) -> tuple[np.ndarray, float]:
         vertical = view.ink.vertical
         long_columns = vertical.sum(axis=0) >= ALIGN_MIN_LINE * vertical.shape[0]
@@ -1561,8 +1617,9 @@ def align_to_profile(plan: ReadView, profile: ReadView, search_m: float = None) 
     scores = {shift: float(np.sum(np.roll(a, shift) & b)) for shift in range(-steps, steps + 1)}
     best = max(scores, key=lambda k: (scores[k], -abs(k)))
     agreeing = scores[best] >= ALIGN_MIN_AGREEING
-    return best * ALIGN_BIN_M, (f'plan shifted {best * ALIGN_BIN_M:+.1f} m: {scores[best]:.0f} vertical-line bins '
-                                f'agree with the profile (at no shift: {scores[0]:.0f})'), agreeing
+    shift_m = best * ALIGN_BIN_M if agreeing else 0.0
+    return shift_m, (f'plan shifted {shift_m:+.1f} m: best {best * ALIGN_BIN_M:+.1f} m has {scores[best]:.0f} '
+                     f'vertical-line bins agree with the profile (at no shift: {scores[0]:.0f})'), agreeing
 
 
 def double_bottom_level(profile: ReadView, xs: np.ndarray) -> float | None:
