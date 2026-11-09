@@ -15,6 +15,38 @@ pub const CHECK_FILE: &str = "domain/body-plan-check.json";
 pub const REVIEW_ID: &str = "body_plan_calibration";
 const CHECK_MAX_BYTES: usize = 256 * 1024;
 
+/// Structured correction stored in the existing review note. Plain legacy notes are not repairs.
+pub fn correction(note: Option<&str>) -> crate::error::AppResult<Option<Value>> {
+    let Some(value) = note.and_then(|note| serde_json::from_str::<Value>(note).ok()) else {
+        return Ok(None);
+    };
+    let Some(fix) = value.get("calibration_correction") else {
+        return Ok(None);
+    };
+    let valid = fix
+        .as_object()
+        .is_some_and(|object| match fix["kind"].as_str() {
+            Some("swap_sides") => object.len() == 1,
+            Some("reverse_order") => {
+                object.len() == 2 && matches!(fix["half"].as_str(), Some("fore" | "aft"))
+            }
+            Some("other") => {
+                object.len() == 2
+                    && fix["text"]
+                        .as_str()
+                        .is_some_and(|text| !text.trim().is_empty() && text.chars().count() <= 400)
+            }
+            _ => false,
+        });
+    if !valid {
+        return Err(crate::error::AppError::new(
+            "calibration_correction",
+            "Choose a known calibration problem and the half, or add a short note.",
+        ));
+    }
+    Ok(Some(fix.clone()))
+}
+
 fn strings(value: &Value) -> Vec<String> {
     value
         .as_array()
@@ -99,6 +131,22 @@ mod tests {
         assert_eq!(view.flags, vec!["sides: checks disagree"]);
         assert_eq!(view.review.unwrap().decision, "accepted");
         assert!(exists(task.path()));
+    }
+
+    #[test]
+    fn correction_notes_are_strict_and_legacy_notes_still_work() {
+        assert!(correction(Some("old review note")).unwrap().is_none());
+        assert_eq!(
+            correction(Some(r#"{"calibration_correction":{"kind":"swap_sides"}}"#)).unwrap(),
+            Some(serde_json::json!({"kind":"swap_sides"}))
+        );
+        for note in [
+            r#"{"calibration_correction":{"kind":"reverse_order","half":"both"}}"#,
+            r#"{"calibration_correction":{"kind":"other","text":""}}"#,
+            r#"{"calibration_correction":{"kind":"execute"}}"#,
+        ] {
+            assert!(correction(Some(note)).is_err());
+        }
     }
 
     #[test]

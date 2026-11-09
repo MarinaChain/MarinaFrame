@@ -1,7 +1,6 @@
 """Person corrections use synthetic ink, no model calls or source drawings."""
 import copy
 import json
-from types import SimpleNamespace
 
 import pytest
 

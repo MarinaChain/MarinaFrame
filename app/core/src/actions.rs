@@ -229,6 +229,44 @@ pub fn resume_task(registry: &ActionRegistry, task: &Path) -> AppResult<()> {
     )
 }
 
+/// Apply an explicit person's calibration choice using the authoritative worker receipt path.
+pub fn correct_calibration(
+    registry: &ActionRegistry,
+    task: &Path,
+    correction: serde_json::Value,
+) -> AppResult<()> {
+    let location = task.to_path_buf();
+    spawn_with_store(
+        registry,
+        task,
+        move || Store::open(&location),
+        move |mut store| {
+            if !controller::call_worker(
+                &mut store,
+                "correct_calibration",
+                json!({"correction": correction}),
+            )? {
+                return Err("calibration_correction_failed".into());
+            }
+            if store.state.last_observation["ok"] != true {
+                return Err("calibration_correction_failed".into());
+            }
+            let message = store.state.last_observation["message"].clone();
+            store.append(
+                "calibration_corrected",
+                json!({"message": message, "actor": "person", "engineering_approved": false}),
+            )?;
+            // A corrected hull is a new draft, not a completed engineering review.
+            store.state.status = marinaframe_control::types::Status::Paused;
+            store.state.termination_reason = Some("calibration_corrected_review_required".into());
+            store.append(
+                "calibration_review_required",
+                json!({"engineering_approved": false}),
+            )
+        },
+    )
+}
+
 /// Pick `candidate_id` for `section_id` as an operator, then rebuild, render and
 /// validate through the controller's deterministic loop.
 pub fn choose_line(
