@@ -20,7 +20,8 @@ Steps for one view (a window of the sheet):
 A tank is the plan region at its label; its vertical limits come from the profile region of
 the same tank (matched by x overlap and label words) or, for a double-bottom plan, from the
 lowest horizontal line above the baseline. Solids are clipped to the hull when a hull mesh is
-given (``tanks.tank_slabs_in_hull``); without a hull a tank is a prism of its plan region.
+given (lofted through hull sections, ``tanks.tank_loft_in_hull``); without a hull a tank is a
+prism of its plan region.
 
 Labels are tied to a sheet's schedule: a circled item number in a view takes the name of its
 schedule row ("5" -> "RESERVE FEED WATER TANK NO.4P"). A region becomes a tank only with a tank
@@ -130,7 +131,7 @@ QUESTION_WIDTH_PX = 2000
 # Text blocks of one region closer than this many character heights are read as one label.
 CLUSTER_CHARS = 2.0
 QUESTION_MAX_HEIGHT_PX = 2000
-# Slab steps of the solid (as v1): 0.10 m in x, rows of 0.02 m.
+# Steps of the solid: hull sections (or slabs without a hull) 0.10 m apart in x, rows of 0.02 m.
 TANK_SLAB_M = 0.10
 TANK_ROW_DZ_M = 0.02
 
@@ -1679,20 +1680,19 @@ def build_tank(tank: PlanTank, plan_role: str, profile: ReadView | None, regions
     else:
         return None, 'guessed', 'no profile to give the tank height', None
     if slicer is not None:
-        slabs = tanks.tank_slabs_in_hull(slicer, tank.x_range, y_of_x, z_of_x, TANK_SLAB_M, TANK_ROW_DZ_M)
-    else:
-        slabs = []
-        edges = list(np.arange(tank.x_range[0], tank.x_range[1], TANK_SLAB_M)) + [tank.x_range[1]]
-        for xa, xb in zip(edges, edges[1:]):
-            middle = (xa + xb) / 2
-            y_range, z_range = y_of_x(middle), z_of_x(middle)
-            if y_range and z_range and z_range[1] > z_range[0] and y_range[1] > y_range[0]:
-                (ya, yb), (za, zb) = y_range, z_range
-                slabs.append((float(xa), float(xb), [[ya, za], [yb, za], [yb, zb], [ya, zb]]))
-        basis += '; no hull given: prism of the plan region (bilge not cut, guessed)'
-        source = 'guessed'
+        loft = tanks.tank_loft_in_hull(slicer, tank.x_range, y_of_x, z_of_x, TANK_SLAB_M, TANK_ROW_DZ_M)
+        return loft.triangles(), source, basis, matched.label if matched else None
+    slabs = []
+    edges = list(np.arange(tank.x_range[0], tank.x_range[1], TANK_SLAB_M)) + [tank.x_range[1]]
+    for xa, xb in zip(edges, edges[1:]):
+        middle = (xa + xb) / 2
+        y_range, z_range = y_of_x(middle), z_of_x(middle)
+        if y_range and z_range and z_range[1] > z_range[0] and y_range[1] > y_range[0]:
+            (ya, yb), (za, zb) = y_range, z_range
+            slabs.append((float(xa), float(xb), [[ya, za], [yb, za], [yb, zb], [ya, zb]]))
+    basis += '; no hull given: prism of the plan region (bilge not cut, guessed)'
     triangles = tanks.slabs_triangles(slabs) if slabs else None
-    return triangles, source, basis, matched.label if matched else None
+    return triangles, 'guessed', basis, matched.label if matched else None
 
 
 def half_breadths(view: ReadView, x_m: float) -> tuple[float, float] | None:

@@ -455,7 +455,8 @@ def precise_volume_mm3(shape: cq.Shape) -> float:
     return properties.Mass()
 
 
-def _one_face_solid(profiles: list[np.ndarray], prismatoid_m3: float) -> tuple[cq.Solid, float] | None:
+def _one_face_solid(profiles: list[np.ndarray], prismatoid_m3: float,
+                    audit_tolerance: float = _BSPLINE_VOLUME_AUDIT_TOLERANCE) -> tuple[cq.Solid, float] | None:
     """The run piece side as one B-spline face, or None when that solid is not good.
 
     Happy path: the caller then builds the piece from ruled panels (the same geometry,
@@ -480,9 +481,32 @@ def _one_face_solid(profiles: list[np.ndarray], prismatoid_m3: float) -> tuple[c
         volume = precise_volume_mm3(solid) / 1e9
     except Exception:
         return None
-    if not solid.isValid() or abs(volume - prismatoid_m3) > _BSPLINE_VOLUME_AUDIT_TOLERANCE * max(prismatoid_m3, 1e-12):
+    if not solid.isValid() or abs(volume - prismatoid_m3) > audit_tolerance * max(prismatoid_m3, 1e-12):
         return None
     return solid, volume
+
+
+# Volume audit of a tank loft (relative). A tank ring meets itself at the bottom of a V section
+# (zero breadth there); the kernel's integration over those patches is about 3e-5 off the exact
+# prismatoid, so the hull's 1e-5 would refuse good solids. 1e-4 is far inside the 0.5 % of the
+# sounding-table check T1 (docs/TANKS_V1.md).
+_LOFT_VOLUME_AUDIT_TOLERANCE = 1e-4
+
+
+def ruled_loft_solid(rings_m: np.ndarray) -> cq.Solid | None:
+    """A closed solid through rings of equal point count at increasing x, or None.
+
+    ``rings_m`` is (stations, ring points, 3) in metres, each ring in one plane x = const (a
+    tank loft, ``tanks.TankLoft``). The side is one degree-1 B-spline face through the rings
+    and the ends are planar caps, as a hull run piece; the solid is in millimetres. None when
+    the kernel cannot build it or its volume fails the audit against the polygon prismatoid.
+    """
+    xs = rings_m[:, 0, 0]
+    sections = rings_m[:, :, 1:]
+    prismatoid = sum((x1 - x0) / 6 * (_shoelace(a) + 4 * _shoelace((a + b) / 2) + _shoelace(b))
+                     for a, b, x0, x1 in zip(sections, sections[1:], xs, xs[1:]))
+    built = _one_face_solid([ring * 1000 for ring in rings_m], prismatoid, _LOFT_VOLUME_AUDIT_TOLERANCE)
+    return built[0] if built else None
 
 
 def _closed_solid(faces: list[cq.Face], label: str) -> cq.Solid:

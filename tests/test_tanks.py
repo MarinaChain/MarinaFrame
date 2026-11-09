@@ -127,3 +127,85 @@ def test_capacity_row_of_a_tank_with_an_empty_mesh_has_no_volume():
     tank = tanks.Tank("t4", "No 4", "fuel oil", np.zeros((0, 3, 3)), ("1", "2"))
     row = tanks.capacity_row(tank)
     assert row["volume_100_m3"] is None and row["weight_98_t"] is None
+
+
+# --- Lofted tank solids (a curved hull with a closed-form section area) ---
+
+def cone_hull_triangles(length=10.0, radius_aft=2.0, taper=0.1, segments=720, stations=101) -> np.ndarray:
+    """A closed hull of circular sections, radius ``radius_aft - taper * x``, centred on y = z = 0."""
+    xs = np.linspace(0.0, length, stations)
+    angles = np.linspace(0.0, 2 * np.pi, segments, endpoint=False)
+    rings = [np.column_stack([np.full(segments, x), (radius_aft - taper * x) * np.cos(angles),
+                              (radius_aft - taper * x) * np.sin(angles)]) for x in xs]
+    return tanks.outward(tanks.loft_run_triangles(np.stack(rings)))
+
+
+def segment_area_below(radius: float, level: float) -> float:
+    """Area of a circle of ``radius`` (centred at 0) below z = ``level`` (level < 0)."""
+    depth = -level
+    return radius ** 2 * math.acos(depth / radius) - depth * math.sqrt(radius ** 2 - depth ** 2)
+
+
+def bottom_tank_volume(x0, x1, level, radius_aft=2.0, taper=0.1) -> float:
+    xs = np.linspace(x0, x1, 2001)
+    areas = [segment_area_below(radius_aft - taper * x, level) for x in xs]
+    return float(np.trapezoid(areas, xs))
+
+
+def test_lofted_tank_matches_the_integrated_section_volume():
+    slicer = tanks.HullSlicer(cone_hull_triangles())
+    loft = tanks.tank_loft_in_hull(slicer, (1.0, 5.0), lambda x: (-10.0, 10.0), lambda x: (-3.0, -0.5),
+                                   station_m=0.10, row_dz_m=0.02)
+    assert len(loft.runs) == 1
+    triangles = loft.triangles()
+    volume = tanks.fill_state(triangles, float(triangles[:, :, 2].max())).volume_m3
+    # The same 0.5 % as the sounding-table check T1 (docs/TANKS_V1.md section 3).
+    assert volume == pytest.approx(bottom_tank_volume(1.0, 5.0, -0.5), rel=0.005)
+    # The loft is no worse than the stack of fine slabs it replaces.
+    slabs = tanks.tank_slabs_in_hull(slicer, (1.0, 5.0), lambda x: (-10.0, 10.0), lambda x: (-3.0, -0.5),
+                                     slab_m=0.10, row_dz_m=0.02)
+    slab_volume = tanks.fill_state(tanks.slabs_triangles(slabs), -0.5).volume_m3
+    exact = bottom_tank_volume(1.0, 5.0, -0.5)
+    assert abs(volume - exact) <= abs(slab_volume - exact) + 1e-3 * exact
+
+
+def test_lofted_tank_is_closed_and_smooth():
+    slicer = tanks.HullSlicer(cone_hull_triangles())
+    triangles = tanks.tank_loft_in_hull(slicer, (1.0, 5.0), lambda x: (-10.0, 10.0), lambda x: (-3.0, -0.5),
+                                        station_m=0.25, row_dz_m=0.05).triangles()
+    # A closed mesh has the same volume wherever the origin is (an open one does not).
+    shifted = triangles + np.array([5.0, 7.0, -3.0])
+    assert tanks.signed_volume(shifted) == pytest.approx(tanks.signed_volume(triangles), rel=1e-9)
+    # Points of the side lie on the hull circle within one row (no stair steps of a slab stack).
+    points = triangles.reshape(-1, 3)
+    radius = np.hypot(points[:, 1], points[:, 2])
+    on_side = points[:, 2] < -0.5 - 1e-9
+    hull_radius = 2.0 - 0.1 * points[on_side, 0]
+    assert np.all(np.abs(radius[on_side] - hull_radius) <= 0.05)
+
+
+def test_loft_splits_where_the_tank_has_no_section():
+    slicer = tanks.HullSlicer(box_triangles((0, -4, 0), (10, 4, 5)))
+    loft = tanks.tank_loft_in_hull(slicer, (2.0, 6.0), lambda x: (0.0, 10.0),
+                                   lambda x: None if 3.4 < x < 4.6 else (1.0, 3.0), station_m=0.5, row_dz_m=0.1)
+    assert len(loft.runs) == 2
+    triangles = loft.triangles()
+    # Runs x 2.0..3.0 and 5.0..6.0 (stations every 0.5 m): 2 m long in all, 4 m wide, 2 m high.
+    assert tanks.fill_state(triangles, 3.0).volume_m3 == pytest.approx(2 * 4 * 2)
+
+
+def test_loft_display_mesh_and_step_solid_hold_the_same_volume():
+    from vessel_reconstruction.display_mesh import loft_mesh, mesh_volume_mm3
+    from vessel_reconstruction.geometry import precise_volume_mm3, ruled_loft_solid
+
+    slicer = tanks.HullSlicer(cone_hull_triangles())
+    loft = tanks.tank_loft_in_hull(slicer, (1.0, 3.0), lambda x: (-1.0, 10.0), lambda x: (-3.0, -0.5),
+                                   station_m=0.25, row_dz_m=0.05)
+    volume = tanks.signed_volume(loft.triangles())
+    vertices, faces = loft_mesh(loft.runs, tanks.cap_triangles, tolerance_mm=1.0)
+    assert mesh_volume_mm3(vertices, faces) / 1e9 == pytest.approx(volume, rel=1e-3)
+    # The ring turns sharply at the y limit and the top: those edges get their own vertices.
+    assert len(vertices) > len(np.unique(vertices.round(6), axis=0))
+    solid = ruled_loft_solid(loft.runs[0])
+    assert solid is not None
+    assert precise_volume_mm3(solid) / 1e9 == pytest.approx(volume, rel=1e-3)

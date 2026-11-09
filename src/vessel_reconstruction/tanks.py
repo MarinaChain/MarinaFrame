@@ -325,33 +325,60 @@ class HullSlicer:
         return result
 
 
-def clipped_outline(slicer: HullSlicer, x: float, y_range, z_range, dz: float):
-    """Area of the hull section at x inside the y and z ranges, and its outline [[y, z], ...].
+@dataclass
+class SectionChains:
+    """The hull section at one x inside a y and a z range, as two chains from bottom to top.
 
-    Rows of height ``dz`` (a thin plate is one row); per row the outline spans the leftmost to the
-    rightmost inside piece. The outline is closed at the row ends so it covers the whole z range.
+    ``z`` holds the bottom, the row centres and the top; ``left`` and ``right`` the outermost
+    inside y at those heights (the bottom and top take the first and last row). ``area`` is the
+    inside area of the rows (gaps between pieces left out).
+    """
+    z: np.ndarray
+    left: np.ndarray
+    right: np.ndarray
+    area: float
+
+    def outline(self) -> list[list[float]]:
+        """Closed outline [[y, z], ...]: up the left chain, down the right chain."""
+        return ([[float(y), float(z)] for y, z in zip(self.left, self.z)]
+                + [[float(y), float(z)] for y, z in zip(self.right[::-1], self.z[::-1])])
+
+
+def section_chains(slicer: HullSlicer, x: float, y_range, z_range, dz: float) -> SectionChains | None:
+    """The hull section at x inside the y and z ranges, sampled in rows of height ``dz``.
+
+    A thin plate is one row. Per row the section spans the leftmost to the rightmost inside piece.
+    Returns None when no row is inside the hull.
     """
     height = z_range[1] - z_range[0]
     if height <= 0:
-        return 0.0, None
+        return None
     rows = max(1, int(np.ceil(height / dz - 1e-9)))
     step = height / rows
     zs = z_range[0] + (np.arange(rows) + 0.5) * step
-    left, right, area = [], [], 0.0
+    centres, left, right, area = [], [], [], 0.0
     for z, intervals in zip(zs, slicer.intervals(x, zs)):
         pieces = [(max(a, y_range[0]), min(b, y_range[1])) for a, b in intervals]
         pieces = [p for p in pieces if p[1] > p[0]]
         if not pieces:
             continue
         area += sum(b - a for a, b in pieces) * step
-        left.append([min(p[0] for p in pieces), float(z)])
-        right.append([max(p[1] for p in pieces), float(z)])
-    if not left:
-        return area, None
-    bottom, top = left[0][1] - step / 2, left[-1][1] + step / 2
-    outline = ([[left[0][0], bottom]] + left + [[left[-1][0], top], [right[-1][0], top]]
-               + right[::-1] + [[right[0][0], bottom]])
-    return area, outline
+        centres.append(float(z))
+        left.append(min(p[0] for p in pieces))
+        right.append(max(p[1] for p in pieces))
+    if not centres:
+        return None
+    z = np.array([centres[0] - step / 2, *centres, centres[-1] + step / 2])
+    return SectionChains(z, np.array([left[0], *left, left[-1]]), np.array([right[0], *right, right[-1]]), area)
+
+
+def clipped_outline(slicer: HullSlicer, x: float, y_range, z_range, dz: float):
+    """Area of the hull section at x inside the y and z ranges, and its outline [[y, z], ...]
+    (``section_chains``; None when nothing is inside)."""
+    chains = section_chains(slicer, x, y_range, z_range, dz)
+    if chains is None:
+        return 0.0, None
+    return chains.area, chains.outline()
 
 
 def tank_slabs_in_hull(slicer: HullSlicer, x_range, y_of_x, z_of_x, slab_m: float, row_dz_m: float):
@@ -370,6 +397,95 @@ def tank_slabs_in_hull(slicer: HullSlicer, x_range, y_of_x, z_of_x, slab_m: floa
         if outline:
             slabs.append((float(xa), float(xb), outline))
     return slabs
+
+
+# The most levels per chain of a lofted tank section (a 4 m tank at 0.02 m rows needs 202).
+MAX_LOFT_LEVELS = 400
+
+
+@dataclass
+class TankLoft:
+    """A tank solid lofted through hull sections: one or more runs of rings.
+
+    Each run is an array (stations, ring points, 3) in ship metres. A ring is the section at one
+    x resampled at the same share of its height on both chains (up the left chain, down the
+    right chain), so ring point k of one station joins ring point k of the next by a straight
+    line. The side between two stations is ruled; the solid has no steps.
+    """
+    runs: list[np.ndarray]
+
+    def triangles(self) -> np.ndarray | None:
+        """Closed outward triangle mesh of all runs (None when there is no run)."""
+        pieces = [loft_run_triangles(run) for run in self.runs]
+        return outward(np.concatenate(pieces)) if pieces else None
+
+
+def _ring(x: float, chains: SectionChains, levels: int) -> np.ndarray:
+    """Ring of 2 x ``levels`` points: the chains resampled at equal shares of the section height."""
+    z = np.linspace(chains.z[0], chains.z[-1], levels)
+    left = np.interp(z, chains.z, chains.left)
+    right = np.interp(z, chains.z, chains.right)
+    ring_y = np.concatenate([left, right[::-1]])
+    ring_z = np.concatenate([z, z[::-1]])
+    return np.column_stack([np.full(2 * levels, x), ring_y, ring_z])
+
+
+def cap_triangles(ring_size: int) -> np.ndarray:
+    """Ring indices of a cap: a strip of quads between the left and the right chain, in ring order."""
+    levels = ring_size // 2
+    k = np.arange(levels - 1)
+    left_low, left_high = k, k + 1
+    right_low, right_high = 2 * levels - 1 - k, 2 * levels - 2 - k
+    return np.concatenate([np.column_stack([left_low, left_high, right_high]),
+                           np.column_stack([left_low, right_high, right_low])])
+
+
+def loft_run_triangles(run: np.ndarray) -> np.ndarray:
+    """Closed mesh of one run (stations x ring x 3): ruled sides and two flat end caps.
+
+    The side triangles hold each ring edge in ring order at the lower station and reversed at the
+    higher one, so the first cap is reversed and the last cap keeps the ring order.
+    """
+    stations, ring_size = run.shape[:2]
+    j = np.arange(ring_size)
+    j_next = (j + 1) % ring_size
+    sides = []
+    for i in range(stations - 1):
+        a, b = run[i], run[i + 1]
+        sides.append(np.stack([a[j], a[j_next], b[j_next]], axis=1))
+        sides.append(np.stack([a[j], b[j_next], b[j]], axis=1))
+    cap = cap_triangles(ring_size)
+    first = run[0][cap][:, ::-1]
+    last = run[-1][cap]
+    return np.concatenate([*sides, first, last])
+
+
+def tank_loft_in_hull(slicer: HullSlicer, x_range, y_of_x, z_of_x, station_m: float,
+                      row_dz_m: float) -> TankLoft:
+    """Tank solid lofted through hull sections: plan extent ``y_of_x(x)`` and vertical limits
+    ``z_of_x(x)`` (each a (low, high) pair or None), clipped to the hull.
+
+    Sections are taken at both ends of ``x_range`` and at most ``station_m`` apart, each sampled in
+    rows of ``row_dz_m``. Stations with no section split the tank into runs; a run needs two
+    stations. Compared with slabs (``tank_slabs_in_hull``), the side is smooth in x and the
+    section is not stepped in z.
+    """
+    count = max(1, int(np.ceil((x_range[1] - x_range[0]) / station_m - 1e-9)))
+    stations = []
+    for x in np.linspace(x_range[0], x_range[1], count + 1):
+        y_range, z_range = y_of_x(x), z_of_x(x)
+        chains = section_chains(slicer, x, y_range, z_range, row_dz_m) if (y_range and z_range) else None
+        stations.append((float(x), chains))
+    runs, current = [], []
+    for x, chains in stations + [(None, None)]:
+        if chains is not None:
+            current.append((x, chains))
+            continue
+        if len(current) >= 2:
+            levels = min(MAX_LOFT_LEVELS, max(len(c.z) for _, c in current))
+            runs.append(np.stack([_ring(x_i, c, levels) for x_i, c in current]))
+        current = []
+    return TankLoft(runs)
 
 
 # ---------------------------------------------------------------------------
