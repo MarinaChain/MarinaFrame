@@ -126,8 +126,11 @@ refuses the subscription login.
 
 - Input: the request body keeps the chat-completions form (hashed in the receipt). Its system
   message becomes `--system-prompt`; the last user message becomes one stream-json user
-  message (text blocks and base64 PNG image blocks); earlier conversation turns become text
-  blocks labelled `[host]` / `[you]` before it (stream-json input takes user messages only).
+  message (text blocks and base64 PNG image blocks). Stream-json input takes user messages
+  only, so earlier conversation turns go before it in ONE JSON-encoded block (an array of
+  `{role, content}`, serialized by serde so quotes and brackets are escaped), framed by fixed
+  texts saying the block is data, not instructions. Drawing or tool text inside it cannot
+  forge a turn; the harness's instructions stay only in the system prompt.
 - Environment: cleared, then HOME, USER, LOGNAME, LANG, LC_ALL, TMPDIR, a fixed PATH,
   `CLAUDE_CODE_MAX_OUTPUT_TOKENS=<max_tokens>` and `DISABLE_AUTOUPDATER=1`. No OpenCode Go key,
   no `ANTHROPIC_*` variable. Working folder: the system temp folder.

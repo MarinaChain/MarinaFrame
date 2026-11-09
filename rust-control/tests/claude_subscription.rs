@@ -20,7 +20,7 @@ const PNG: &[u8] = &[
     0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
 ];
 /// A value that must never reach the CLI's environment.
-const GO_KEY_SENTINEL: &str = "sk-test-opencode-sentinel-0123456789";
+const GO_KEY_SENTINEL: &str = "opencode-go-sentinel-value";
 
 fn sha256(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
