@@ -127,7 +127,17 @@
   --focus: rgba(6, 68, 142, 0.55);
   --shadow-sheet: 0 32px 64px -24px rgba(10, 31, 61, 0.25), 0 0 0 1px rgba(0, 69, 87, 0.12);
   --model-bg: var(--paper);
-  --model-hull: #E4E8EE; /* matte "drafting resin" */
+  --model-hull: #E4E8EE; /* matte "drafting resin"; also the topside paint of the 3D hull */
+  /* Hull paint below the topside in the 3D view (js/look3d.js): antifouling under the boot top
+     and the boot-top band at the design waterline. Paint colours, so they do not switch. */
+  --paint-antifouling: #96402F;
+  --paint-boottop: #2A2D33;
+  /* Design waterline plane of the 3D view (sea blue, both themes). */
+  --model-water: #2F7FC1;
+  /* Axis triad of the 3D view: x, y, z (each axis also has its letter). */
+  --axis-x: #C2413A;
+  --axis-y: #2E8B4E;
+  --axis-z: #2F6FC1;
   /* Tank colours by content, as on a capacity plan (docs/TANKS_V1.md section 6). The same
      values colour the GLB materials (vessel_reconstruction.tanks CONTENT_CLASSES); they do not
      switch with the theme, so a tank reads the same in both. */
@@ -1182,11 +1192,21 @@ code { font-family: var(--font-mono); }
 .model-label.is-strong { border-color: var(--ink); font-weight: 600; }
 .model-swatch { flex: none; width: 10px; height: 10px; border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(16, 29, 48, 0.35); }
 .model-legend {
-  position: absolute; left: 12px; bottom: 12px; max-width: 240px; padding: 8px 10px;
+  position: absolute; left: 12px; bottom: 12px; max-width: 260px; padding: 5px 6px;
   border-radius: var(--radius-md); border: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface) 92%, transparent); color: var(--ink); font-size: 12px; cursor: default;
 }
-.model-legend-head { display: flex; gap: 12px; }
+.model-legend-head { display: flex; flex-wrap: wrap; gap: 6px; }
+.model-chip { display: inline-flex; align-items: stretch; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.model-chip button { border: 0; background: transparent; color: var(--ink-2); font: inherit; font-size: 12px; cursor: pointer; }
+.model-chip-toggle { padding: 2px 9px; font-weight: 600; }
+.model-chip-toggle[aria-pressed="true"] { background: var(--selected); color: var(--ink); }
+.model-chip-open { display: inline-flex; align-items: center; padding: 0 6px 0 4px; border-left: 1px solid var(--line) !important; }
+.model-chip-open .icon { width: 12px; height: 12px; transform: rotate(90deg); transition: transform 120ms var(--ease-out); }
+.model-chip-open[aria-expanded="true"] .icon { transform: rotate(-90deg); }
+.model-chip button:hover { background: var(--hover); color: var(--ink); }
+.model-chip button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) { .model-chip-open .icon { transition: none; } }
 .model-switch { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer; }
 .model-legend-rows { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; }
 .model-legend-rows li { display: flex; align-items: center; gap: 6px; }
@@ -3091,3 +3111,89 @@ code { font-family: var(--font-mono); }
 .thought-sub { color: var(--ink-2); font-size: var(--fs-sm); }
 .narration > .icon { color: var(--brand); width: 12px; height: 12px; }
 .strip-head { width: auto; }
+
+/* ---- 3D view tools (js/controls3d.js): the tool bar at the top left and the section cut panel. */
+.model-controls {
+  position: absolute; top: var(--space-sm); left: var(--space-sm); max-width: calc(100% - 120px);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  pointer-events: none;
+}
+.model-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+.model-tools-group {
+  display: inline-flex; gap: 1px; padding: 2px;
+  border-radius: var(--radius-md); border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  pointer-events: auto;
+}
+.model-tool {
+  display: inline-flex; align-items: center; gap: 5px; min-height: 28px; min-width: 28px;
+  padding: 0 7px; border: 0; border-radius: var(--radius-sm); background: transparent;
+  color: var(--ink-2); font: inherit; font-size: 12px; font-weight: 500; white-space: nowrap; cursor: pointer;
+}
+.model-tool:hover { background: var(--hover); color: var(--ink); }
+.model-tool[aria-pressed="true"] { background: var(--selected); color: var(--ink); box-shadow: inset 0 0 0 1px var(--accent); }
+.model-tool:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.model-tool .icon { width: 15px; height: 15px; }
+.model-cut {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; max-width: 100%; padding: 3px 4px 3px 6px;
+  border-radius: var(--radius-md); border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 95%, transparent); color: var(--ink); font-size: 12px;
+  cursor: default; pointer-events: auto;
+}
+.model-cut[hidden] { display: none; }
+.model-cut-axes { display: inline-flex; padding: 1px; border-radius: var(--radius-sm); background: var(--hover); }
+.model-cut-choice { padding: 2px 7px; border-radius: var(--radius-sm); color: var(--ink-2); cursor: pointer; white-space: nowrap; }
+.model-cut-choice:has(input:checked) { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--line-strong); }
+.model-cut-choice:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 1px; }
+.model-cut-slider { flex: 1 1 110px; min-width: 90px; accent-color: var(--accent); }
+.model-cut-readout { min-width: 9.5ch; font-family: var(--font-mono); font-size: 11px; color: var(--ink-2); white-space: nowrap; }
+
+/* ---- 3D overlays (js/overlay3d.js): frame numbers, pointer readout, scale, axes and stamp. */
+.model-frame-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.model-frame-label {
+  position: absolute; transform: translate(-50%, 2px);
+  color: var(--ink-2); font-family: var(--font-mono); font-size: 10px; line-height: 12px;
+  text-shadow: 0 0 2px var(--model-bg), 0 0 2px var(--model-bg);
+  white-space: nowrap;
+}
+.model-readout {
+  position: absolute; top: 48px; right: var(--space-sm); max-width: calc(100% - 2 * var(--space-sm));
+  padding: 2px 8px; border-radius: var(--radius-sm); border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 92%, transparent); color: var(--ink);
+  font-family: var(--font-mono); font-size: 11px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  pointer-events: none;
+}
+.model-readout[hidden], .model-corner[hidden] { display: none; }
+.pane-model:has(.fit-dial:not([hidden])) .model-readout { top: 108px; }
+.model-corner {
+  position: absolute; right: var(--space-sm); bottom: var(--space-sm);
+  display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
+  padding: 4px 6px; border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--model-bg) 82%, transparent);
+  color: var(--ink-2); font-size: 11px; pointer-events: none; text-align: right;
+}
+/* With no model the empty-state text is alone: no tools, overlays or stamp. */
+.pane-model:has(.pane-empty:not([hidden])) :is(.model-controls, .model-corner, .model-readout, .model-frame-labels) { display: none; }
+.model-corner-row { display: flex; align-items: flex-end; gap: 10px; }
+.model-scale { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-family: var(--font-mono); }
+.model-scale-bar { display: block; height: 6px; border: 1.5px solid var(--ink-2); border-top: 0; }
+.model-triad { overflow: visible; }
+.model-triad line { stroke-width: 2; stroke-linecap: round; }
+.model-triad text { font-family: var(--font-mono); font-size: 10px; font-weight: 700; }
+.model-triad .model-triad-x { stroke: var(--axis-x); fill: var(--axis-x); }
+.model-triad .model-triad-y { stroke: var(--axis-y); fill: var(--axis-y); }
+.model-triad .model-triad-z { stroke: var(--axis-z); fill: var(--axis-z); }
+.model-triad text { stroke: none; }
+.model-reference { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 10px; }
+.model-badge {
+  display: inline-block; padding: 0 5px; border-radius: 999px; border: 1px solid currentColor;
+  font-family: var(--font-ui); font-size: 10px; font-weight: 600; line-height: 15px; pointer-events: auto;
+}
+.model-badge[hidden] { display: none; }
+.model-badge[data-tone="guess"] { color: var(--guess-text); border-style: dashed; }
+.model-badge[data-tone="draft"] { color: var(--guess-text); }
+@container pane (max-width: 560px) {
+  /* A narrow pane keeps the scale, axes and stamp; the reference line is in the readout title. */
+  .model-reference-text { display: none; }
+  .model-tool { padding: 0 5px; }
+}

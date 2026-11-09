@@ -101,7 +101,12 @@ function tube(points, radius) {
   return new THREE.TubeGeometry(path, Math.max(1, points.length - 1), radius, 6, false);
 }
 
-export function createSectionGrowth({ scene, hullMaterial, renderer, requestRender, colours, onFirstSections }) {
+/**
+ * `setSkinClip(planes)` sets the skin's clipping planes (null: none); the 3D view adds its section
+ * cut to them. Without it the planes go on the hull material as they are.
+ */
+export function createSectionGrowth({ scene, hullMaterial, renderer, requestRender, colours, onFirstSections,
+  setSkinClip = (planes) => { hullMaterial.clippingPlanes = planes; } }) {
   const group = new THREE.Group();
   group.renderOrder = 10;
   scene.add(group);
@@ -158,9 +163,9 @@ export function createSectionGrowth({ scene, hullMaterial, renderer, requestRend
     if (clip) {
       clipLow.constant = -clip[0];
       clipHigh.constant = clip[1];
-      hullMaterial.clippingPlanes = [clipLow, clipHigh];
+      setSkinClip([clipLow, clipHigh]);
     } else {
-      hullMaterial.clippingPlanes = null;
+      setSkinClip(null);
     }
   }
 
@@ -320,7 +325,7 @@ export function createSectionGrowth({ scene, hullMaterial, renderer, requestRend
         drawCurve(curve);
         if (t < 1) return;
         // The skin now reaches this station; after the last one it is whole.
-        if (index === sections.length - 1) hullMaterial.clippingPlanes = null;
+        if (index === sections.length - 1) setSkinClip(null);
         else clipHigh.constant = section.x_m;
       }, index * STAGGER_MS);
     });
