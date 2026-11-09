@@ -96,11 +96,11 @@ def _kinds(reading: bpr.SideReading) -> dict:
 
 # ---------------------------------------------------------------- R0 (code only)
 
-def run_code(readings: dict, layout: bpr.SheetLayout, truth: dict) -> dict:
+def run_code(readings: dict, layout: bpr.SheetLayout, truth: dict, scorer=None) -> dict:
     identities = {name: bpr.identities_by_rank(r.chains, r.layout.stations_outer_first)
                   for name, r in readings.items()}
     table, flags = table_and_flags(readings, identities, layout)
-    result = score(table, truth)
+    result = (scorer or score)(table, truth)
     result.update(fairness_flags=len(flags), calls=0)
     return result
 
@@ -173,7 +173,7 @@ def build_questions(sheet_pixels: np.ndarray, readings: dict, layout: bpr.SheetL
 
 
 def run_repeat(readings: dict, questions: list[dict], layout: bpr.SheetLayout, truth: dict, folder: Path,
-               call) -> dict:
+               call, scorer=None) -> dict:
     folder.mkdir()
     started = time.time()
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
@@ -192,7 +192,7 @@ def run_repeat(readings: dict, questions: list[dict], layout: bpr.SheetLayout, t
             labels[name][question['chain']] = second['label']
         identities[name], summaries[name] = bpi.identities_from_labels(reading, labels[name])
     table, flags = table_and_flags(readings, identities, layout)
-    result = score(table, truth)
+    result = (scorer or score)(table, truth)
     rank = {name: bpr.identities_by_rank(r.chains, r.layout.stations_outer_first) for name, r in readings.items()}
     every = answers + reasked
     turns = [turn for answer in every for turn in answer['turns']]
