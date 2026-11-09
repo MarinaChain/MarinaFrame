@@ -235,3 +235,29 @@ def test_crouton_falls_back_to_deepseek_after_a_failed_retry(tmp_path, monkeypat
     question = {'id': 'q', 'stations': (5, 6), 'messages': []}
     answer = cv.ask_label(question, tmp_path, call)
     assert answer['label'] == 5 and answer['valid']
+
+
+@pytest.mark.parametrize('compression', ['group4', 'raw'])
+def test_load_ink_reads_a_bilevel_scan_without_changing_a_pixel(tmp_path, drawing, compression):
+    # 1,700 columns is not a whole number of bytes, so the row padding of the packed bits is tested.
+    path = tmp_path / 'sheet.tif'
+    Image.fromarray(drawing).convert('1', dither=Image.Dither.NONE).save(path, compression=compression)
+    with Image.open(path) as image:
+        expected = np.asarray(image.convert('L')) < bpc.INK_THRESHOLD
+    ink = bpc.load_ink(path)
+    assert ink.dtype == bool and ink.shape == drawing.shape
+    assert np.array_equal(ink, expected)
+
+
+def test_load_ink_thresholds_a_grey_scan(tmp_path, drawing):
+    path = tmp_path / 'sheet.png'
+    Image.fromarray(drawing).save(path)
+    assert np.array_equal(bpc.load_ink(path), drawing < bpc.INK_THRESHOLD)
+
+
+def test_question_image_from_the_ink_mask_equals_the_one_from_the_bilevel_sheet(drawing, reading):
+    bilevel = np.where(drawing < bpc.INK_THRESHOLD, np.uint8(0), np.uint8(255))
+    limits = (CENTRE - 40, WIDTH)
+    from_grey = bpi.question_image(bilevel, reading.chains[2], limits)
+    from_ink = bpi.question_image(bilevel < bpc.INK_THRESHOLD, reading.chains[2], limits)
+    assert from_ink == from_grey
