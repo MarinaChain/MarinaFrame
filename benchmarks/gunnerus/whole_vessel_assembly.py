@@ -28,6 +28,11 @@ RENDER_SIZE = (1600, 900)
 # the mesh volume within 0.01 % of the solid on Gunnerus and the GLB under 1 MB.
 DISPLAY_TOLERANCE_MM = 1.0
 DISPLAY_ANGULAR_RAD = 0.5
+# Smooth B-spline walls (parts that follow the hull) are meshed on their own parameter grid
+# (``display_mesh``): 2 mm chord tolerance, spans also split where the normal turns more than
+# 0.1 rad (display_mesh.SMOOTH_ANGULAR_RAD); vertices are shared, so the GLB normals are
+# smooth. At 1 mm tier 1 and the forward rail take 75,000 triangles, at 2 mm 37,000.
+DISPLAY_SMOOTH_TOLERANCE_MM = 2.0
 # Truth STEP volume (hull and first tier; docs/SHIP_CAD_LANGUAGE.md).
 TRUTH_VOLUME_M3 = 1302.280
 
@@ -189,13 +194,15 @@ def export_all(shapes: dict, out: Path) -> tuple[dict, dict]:
     step = out / 'whole-vessel-draft.step'
     cq.exporters.export(cq.Compound.makeCompound(list(shapes.values())), str(step), opt={'write_pcurves': False})
     sizes[step.name] = step.stat().st_size
-    meshes = {name: shape_mesh(shape, DISPLAY_TOLERANCE_MM, DISPLAY_ANGULAR_RAD) for name, shape in shapes.items()}
+    meshes = {name: shape_mesh(shape, DISPLAY_TOLERANCE_MM, DISPLAY_ANGULAR_RAD, DISPLAY_SMOOTH_TOLERANCE_MM)
+              for name, shape in shapes.items()}
     mesh = out / 'whole-vessel-draft.glb'
     write_glb(meshes, mesh)
     sizes[mesh.name] = mesh.stat().st_size
     mesh_volumes = {name: mesh_volume_mm3(*meshes[name]) / 1e9 for name in meshes}
     return {'bytes': sizes, 'assembly_step_sha256': hashlib.sha256(step.read_bytes()).hexdigest(),
-            'display_tolerance_mm': DISPLAY_TOLERANCE_MM, 'display_mesh_volumes_m3': mesh_volumes}, meshes
+            'display_tolerance_mm': DISPLAY_TOLERANCE_MM, 'display_smooth_tolerance_mm': DISPLAY_SMOOTH_TOLERANCE_MM,
+            'display_mesh_volumes_m3': mesh_volumes}, meshes
 
 
 LABELS = {'hull': 'Hull (to the deck at side)', 'aft_deck': 'Aft working deck', 'main_deck': '1-deck',
@@ -306,7 +313,8 @@ def main() -> None:
         path = parts / f'{part}.step'
         if path.is_file():
             shapes[part] = read_shape(path)
-            volumes[part] = shapes[part].Volume() / 1e9
+            # Smooth B-spline walls need the adaptive integration too.
+            volumes[part] = precise_volume_mm3(shapes[part]) / 1e9
     record.update(volumes_m3=volumes, sum_of_parts_m3=sum(volumes.values()))
     if 'hull' in volumes and 'house_t1' in volumes:
         # The truth STEP holds the hull and the first tier only (docs/plans/...-scope.md, 3.3).

@@ -2,8 +2,8 @@
 
 Tolerance: ``superstructure.CHECK_TOLERANCE_M`` (0.02 m, two deck plate thicknesses; plan
 section 3.8). The distance of a surface point is its plan distance outside the hull side at its
-own height (``HullSide.outside_distance``), checked at every tessellation vertex and triangle
-centre of each built part.
+own height (``HullSide.outside_distance``), checked at every vertex and triangle centre of a
+1 mm (absolute) mesh of each built part.
 
 The synthetic case has a flared bow, a stem that rakes forward, and GA outlines that are wider
 and longer than the hull. Set ``MARINAFRAME_GUNNERUS_SOURCES`` to a Gunnerus source folder
@@ -50,11 +50,29 @@ def component(cid, op, outline, height, thickness=None):
 
 
 def surface_points(path: Path) -> np.ndarray:
+    """Mesh vertices and triangle centres (metres) within 1 mm of the part surface.
+
+    The deflection is absolute: CadQuery's ``tessellate`` uses a relative one, whose triangles
+    are centimetres off a smooth B-spline wall.
+    """
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepMesh import BRepMesh_IncrementalMesh
+    from OCP.TopLoc import TopLoc_Location
+
     shape = cq.importers.importStep(str(path)).val()
-    vertices, triangles = shape.tessellate(1.0, 0.2)  # STEP files are in millimetres
-    points = np.array([[v.x, v.y, v.z] for v in vertices]) / 1000.0
-    centres = points[np.asarray(triangles)].mean(axis=1)
-    return np.concatenate([points, centres])
+    BRepMesh_IncrementalMesh(shape.wrapped, 1.0, False, 0.1, True)  # STEP files are in millimetres
+    points, centres = [], []
+    for face in shape.Faces():
+        location = TopLoc_Location()
+        mesh = BRep_Tool.Triangulation_s(face.wrapped, location)
+        if mesh is None:
+            continue
+        nodes = np.array([mesh.Node(i).Transformed(location.Transformation()).Coord()
+                          for i in range(1, mesh.NbNodes() + 1)]) / 1000.0
+        corners = np.array([[t.Value(k) for k in (1, 2, 3)] for t in mesh.Triangles()]) - 1
+        points.append(nodes)
+        centres.append(nodes[corners].mean(axis=1))
+    return np.concatenate(points + centres)
 
 
 def assert_contained(hull, result, folder):

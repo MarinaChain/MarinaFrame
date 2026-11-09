@@ -14,6 +14,7 @@ Y-up (glTF), one node per part named by its id.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import pairwise
 from pathlib import Path
 
 import numpy as np
@@ -48,8 +49,8 @@ def _decimated_columns(grid: np.ndarray, tolerance_mm: float) -> list[int]:
 def _bspline_grid(face):
     """Poles of a degree-1 B-spline face (ring x stations x 3) and whether the ring is periodic."""
     from OCP.BRep import BRep_Tool
-    from OCP.GeomAdaptor import GeomAdaptor_Surface
     from OCP.GeomAbs import GeomAbs_BSplineSurface
+    from OCP.GeomAdaptor import GeomAdaptor_Surface
 
     surface = BRep_Tool.Surface_s(face.wrapped)
     adaptor = GeomAdaptor_Surface(surface)
@@ -114,20 +115,159 @@ def _polygon_cap(face):
     return cq.Face.makeFromWires(cq.Wire.makePolygon([cq.Vector(*p) for p in clean], close=True))
 
 
-def shape_mesh(shape, tolerance_mm: float, angular_rad: float) -> tuple[np.ndarray, np.ndarray]:
-    """One display mesh (vertices in mm, triangles) for a CadQuery shape, faces oriented outward."""
+# Smooth B-spline faces (degree above 1: the smooth walls of the parts above the hull) are
+# meshed on a grid of their own parameters, not by the kernel mesher, which gives such long,
+# many-span faces up to hundreds of thousands of triangles and slivers with flipped normals.
+# Grid lines start at the knots; a span is halved while its middle is further than the chord
+# tolerance from the chord, or the surface normal turns more than this across it.
+SMOOTH_ANGULAR_RAD = 0.1
+# At most this many halvings of one knot span.
+MAX_SPAN_HALVINGS = 6
+
+
+def _smooth_bspline(face):
+    """The B-spline surface of an untrimmed face of degree above 1, else None."""
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepTools import BRepTools
+    from OCP.GeomAbs import GeomAbs_BSplineSurface
+    from OCP.GeomAdaptor import GeomAdaptor_Surface
+
+    adaptor = GeomAdaptor_Surface(BRep_Tool.Surface_s(face.wrapped))
+    if adaptor.GetType() != GeomAbs_BSplineSurface:
+        return None
+    spline = adaptor.BSpline()
+    if spline.UDegree() < 2 and spline.VDegree() < 2:
+        return None
+    u0, u1, v0, v1 = BRepTools.UVBounds_s(face.wrapped)
+    first_u, last_u, first_v, last_v = spline.Bounds()
+    untrimmed = np.allclose([u0, u1, v0, v1], [first_u, last_u, first_v, last_v], atol=1e-9)
+    return spline if untrimmed else None
+
+
+def _grid_params(spline, along_u: bool, tolerance_mm: float, angular_rad: float) -> np.ndarray:
+    """Grid lines in one parameter direction: the knots, spans halved where they are not flat."""
+    from OCP.gp import gp_Pnt, gp_Vec
+
+    first_u, last_u, first_v, last_v = spline.Bounds()
+    knots = [spline.UKnot(i) for i in range(1, spline.NbUKnots() + 1)] if along_u else \
+        [spline.VKnot(i) for i in range(1, spline.NbVKnots() + 1)]
+    across = np.linspace(*((first_v, last_v) if along_u else (first_u, last_u)), 9)
+
+    def point_and_normal(t, s):
+        u, v = (t, s) if along_u else (s, t)
+        point, du, dv = gp_Pnt(), gp_Vec(), gp_Vec()
+        spline.D1(u, v, point, du, dv)
+        normal = np.cross(du.Coord(), dv.Coord())
+        length = np.linalg.norm(normal)
+        return np.array(point.Coord()), normal / length if length > 0 else normal
+
+    def flat(a, b):
+        for s in across:
+            (pa, na), (pm, _), (pb, nb) = (point_and_normal(t, s) for t in (a, (a + b) / 2, b))
+            if np.linalg.norm(pm - (pa + pb) / 2) > tolerance_mm:
+                return False
+            # A zero normal (a degenerate edge) gives a dot of 0: only a real turn counts.
+            if np.linalg.norm(na) and np.linalg.norm(nb) and np.dot(na, nb) < np.cos(angular_rad):
+                return False
+        return True
+
+    params = [knots[0]]
+    for a, b in pairwise(knots):
+        stack = [(a, b, 0)]
+        while stack:
+            low, high, depth = stack.pop()
+            if depth < MAX_SPAN_HALVINGS and not flat(low, high):
+                middle = (low + high) / 2
+                stack += [(middle, high, depth + 1), (low, middle, depth + 1)]
+                continue
+            params.append(high)
+    return np.array(params)
+
+
+def _smooth_grid_triangles(face, spline, tolerance_mm: float, angular_rad: float):
+    """Grid mesh of a smooth B-spline face: shared vertices, so it shades smooth.
+
+    The grid is evaluated densely (``_grid_params``), then rows and columns that stay within
+    the tolerance of their neighbours' chords are left out in both directions.
+    """
+    import cadquery as cq
+
+    angular = min(angular_rad, SMOOTH_ANGULAR_RAD)
+    us = _grid_params(spline, True, tolerance_mm, angular)
+    vs = _grid_params(spline, False, tolerance_mm, angular)
+    grid = np.array([[spline.Value(u, v).Coord() for v in vs] for u in us])
+    rows = _decimated_columns(np.transpose(grid, (1, 0, 2)), tolerance_mm)
+    vertices, triangles = _grid_triangles(grid[:, rows], False, tolerance_mm)
+    if len(triangles):
+        # Outward as the face is oriented in its solid.
+        p = vertices[triangles[len(triangles) // 2]]
+        outward = face.normalAt(cq.Vector(*p.mean(axis=0))).toTuple()
+        if np.dot(np.cross(p[1] - p[0], p[2] - p[0]), outward) < 0:
+            triangles = triangles[:, ::-1]
+    return vertices, triangles
+
+
+def _discretised_cap(face, tolerance_mm: float):
+    """A planar face with smooth B-spline edges as a polygon face (holes kept), or None.
+
+    Its edges are cut into straight pieces within the tolerance, so the kernel meshes it
+    exactly and the cap meets the grid-meshed sides to within the tolerance.
+    """
+    import cadquery as cq
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.BRepTools import BRepTools_WireExplorer
+    from OCP.GCPnts import GCPnts_QuasiUniformDeflection
+    from OCP.GeomAbs import GeomAbs_BSplineCurve
+    from OCP.TopAbs import TopAbs_REVERSED
+
+    if face.geomType() != 'PLANE':
+        return None
+    curves = [BRepAdaptor_Curve(edge.wrapped) for edge in face.Edges()]
+    if not any(c.GetType() == GeomAbs_BSplineCurve and c.BSpline().Degree() > 1 for c in curves):
+        return None
+
+    def polygon(wire):
+        points = []
+        # The wire explorer gives the edges in their order along the wire.
+        explorer = BRepTools_WireExplorer(wire.wrapped)
+        while explorer.More():
+            edge = explorer.Current()
+            sampler = GCPnts_QuasiUniformDeflection(BRepAdaptor_Curve(edge), tolerance_mm)
+            run = [sampler.Value(i).Coord() for i in range(1, sampler.NbPoints() + 1)]
+            if edge.Orientation() == TopAbs_REVERSED:
+                run = run[::-1]
+            points += run[:-1]
+            explorer.Next()
+        return cq.Wire.makePolygon([cq.Vector(*p) for p in points], close=True)
+
+    outer = face.outerWire()
+    inner = [polygon(wire) for wire in face.innerWires()]
+    return cq.Face.makeFromWires(polygon(outer), inner)
+
+
+def shape_mesh(shape, tolerance_mm: float, angular_rad: float,
+               smooth_tolerance_mm: float | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """One display mesh (vertices in mm, triangles) for a CadQuery shape, faces oriented outward.
+
+    ``smooth_tolerance_mm`` (default ``tolerance_mm``) is the chord tolerance of smooth B-spline
+    faces, whose shared-vertex grid shades smooth at a coarser tolerance than flat facets need.
+    """
     from OCP.TopAbs import TopAbs_REVERSED
 
     all_vertices, all_triangles, offset = [], [], 0
     for face in shape.Faces():
         bspline = _bspline_grid(face)
+        smooth = _smooth_bspline(face) if bspline is None else None
         if bspline is not None:
             vertices, triangles = _grid_triangles(*bspline, tolerance_mm)
             if face.wrapped.Orientation() == TopAbs_REVERSED:
                 triangles = triangles[:, ::-1]
+        elif smooth is not None:
+            vertices, triangles = _smooth_grid_triangles(face, smooth, smooth_tolerance_mm or tolerance_mm, angular_rad)
         else:
-            vertices, triangles = _face_triangles(_polygon_cap(face) or face, tolerance_mm, angular_rad)
-            if _polygon_cap(face) is not None and len(triangles):
+            cap = _polygon_cap(face) or _discretised_cap(face, tolerance_mm)
+            vertices, triangles = _face_triangles(cap or face, tolerance_mm, angular_rad)
+            if cap is not None and len(triangles):
                 # Keep the outward side of the original cap face.
                 p = vertices[triangles[0]]
                 if np.dot(np.cross(p[1] - p[0], p[2] - p[0]), face.normalAt().toTuple()) < 0:

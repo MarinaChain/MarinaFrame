@@ -21,6 +21,7 @@ Coordinates: x from frame 0 (positive forward), y to port, z from the baseline, 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from itertools import pairwise
 
 import numpy as np
 
@@ -64,6 +65,31 @@ REFINE_TOLERANCE_M = 0.01
 MIN_BAND_M = 0.005
 # Heights (as fractions of a band) where the ruled loft is checked against the hull side.
 CHORD_CHECK_FRACTIONS = (0.1, 0.3, 0.5, 0.7, 0.9)
+# A plan side is on the hull where the hull side is narrower than the GA outline by more than
+# this; a part with such a side gets smooth walls (``smooth_body``), others stay ruled and flat.
+ON_HULL_M = 0.001
+# How a part's walls are made (``build_shaped`` reports it): smooth B-spline surfaces through
+# the hull side, ruled bands between plan sections, or flat (a deck plate).
+SMOOTH_WALLS = 'smooth_bspline'
+RULED_WALLS = 'ruled_bands'
+PLANAR_WALLS = 'planar'
+# Smooth walls: section heights at most this far apart (a cubic through the hull side's
+# rows; the flare of Gunnerus bends over about 1 m of height).
+SMOOTH_LEVEL_STEP_M = 0.3
+# Rounds of adding a section height in each band whose surface leaves the hull side by more
+# than REFINE_TOLERANCE_M; after that the part is built from ruled bands (``smooth_fallback``).
+SMOOTH_REFINE_ROUNDS = 6
+# Surface points per lateral face for that check (along the side, up the side).
+SURFACE_CHECK_SAMPLES = (240, 48)
+# Smooth ends: x as a polynomial of this degree in z, fitted to plans with this many points.
+END_FIT_DEGREE = 3
+END_FIT_SAMPLES = 8
+# Faces of a smooth bulwark wall are sewn at this tolerance (metres; their edges are shared
+# copies of the same curves).
+SEWING_TOLERANCE_M = 1e-6
+# A sewn wall's volume must be within this share of (outer loft - inner loft); a wrongly sewn
+# shell is off by whole parts.
+WALL_VOLUME_TOLERANCE = 0.001
 
 
 class HullSide:
@@ -260,8 +286,11 @@ def _chord_excess(xs, ys, dense_x, dense_y) -> np.ndarray:
     return np.maximum(np.concatenate([[0.0], per_edge]), np.concatenate([per_edge, [0.0]]))
 
 
-def planform(shape: PlanShape, hull: HullSide | None, z: float, samples: int, *, inset: float = 0.0) -> dict | None:
+def planform(shape: PlanShape, hull: HullSide | None, z: float, samples: int, *, inset: float = 0.0,
+             x_limits: tuple[float, float] | None = None) -> dict | None:
     """The plan polygon at height z with ``samples`` points per side, or None when nothing is left.
+
+    ``x_limits`` (aft, forward) shortens the plan to that x range (smooth ends, ``EndCurves``).
 
     Also returns how far the GA outline is outside the hull side at this height (``excess_m``,
     lateral) and how much of its x range the hull cuts off (``cut_m``, aft and forward).
@@ -292,6 +321,10 @@ def planform(shape: PlanShape, hull: HullSide | None, z: float, samples: int, *,
     if run is None:
         return None
     x0, x1 = dense[run[0]], dense[run[1]]
+    if x_limits is not None:
+        x0, x1 = max(x0, x_limits[0]), min(x1, x_limits[1])
+        if x1 - x0 < MIN_WIDTH_M:
+            return None
     worst = int(np.argmax(excess))
     # Cosine spacing: points crowd towards both ends, where a hull end narrows fastest (a chord
     # between two far-apart points there would cut outside the stem). Mid-length spacing is
@@ -304,7 +337,14 @@ def planform(shape: PlanShape, hull: HullSide | None, z: float, samples: int, *,
     low = low + _chord_excess(xs, -low, dense[inside], -dense_low)
     low, high = _round_corners(xs, low, high, shape.corner_radius_m)
     polygon = np.concatenate([np.column_stack([xs, high]), np.column_stack([xs, low])[::-1]])
+    on_hull = False
+    if hull is not None:
+        sample_low, sample_high, sample_ga_low, sample_ga_high = extent(xs)
+        with np.errstate(invalid='ignore'):
+            on_hull = bool(np.any(sample_high < sample_ga_high - ON_HULL_M)
+                           or np.any(sample_low > sample_ga_low + ON_HULL_M))
     return {'polygon': polygon, 'x': xs, 'low': low, 'high': high, 'x_range': [float(x0), float(x1)],
+            'on_hull': on_hull,
             'excess_m': float(excess[worst]), 'excess_x_m': float(dense[worst]),
             'cut_m': [float(x0 - x_aft), float(x_fwd - x1)]}
 
@@ -315,8 +355,8 @@ def sample_count(shape: PlanShape, levels) -> int:
     return max(8, int(np.ceil(np.pi / 2 * length / PLAN_SPACING_M)) + 1)
 
 
-def loft_heights(low: float, high: float, breakpoints=()) -> list[float]:
-    count = max(1, int(np.ceil((high - low) / LEVEL_STEP_M)))
+def loft_heights(low: float, high: float, breakpoints=(), step: float = LEVEL_STEP_M) -> list[float]:
+    count = max(1, int(np.ceil((high - low) / step)))
     heights = list(np.linspace(low, high, count + 1)) + [z for z in breakpoints if low < z < high]
     result = []
     for z in sorted(heights):
@@ -379,11 +419,15 @@ def loft_plans(levels: list[tuple[float, np.ndarray]]):
     return cq.Solid.makeLoft(wires, True)
 
 
-def _plans(shape, hull, placements, samples, inset=0.0):
-    """Plan polygons at each (placed z, read z); None when a level has no shape."""
+def _plans(shape, hull, placements, samples, inset=0.0, ends=None):
+    """Plan polygons at each (placed z, read z); None when a level has no shape.
+
+    ``ends`` (an ``EndCurves``) gives each level's x range.
+    """
     plans = []
     for placed, read in placements:
-        plan = planform(shape, hull, read, samples, inset=inset)
+        limits = ends.at(read) if ends is not None else None
+        plan = planform(shape, hull, read, samples, inset=inset, x_limits=limits)
         if plan is None:
             return None
         plans.append((placed, plan))
@@ -428,6 +472,157 @@ def _chord_outside(shape, hull, a, b, samples, inset) -> float:
     return worst
 
 
+def follows_hull(plans) -> bool:
+    """True when the hull side shapes the plan of the part at any of its levels."""
+    return any(plan['on_hull'] for _, plan in plans)
+
+
+def _side_edge(xs, ys, z, parameters):
+    import cadquery as cq
+
+    return cq.Edge.makeSpline([cq.Vector(float(x), float(y), z) for x, y in zip(xs, ys)],
+                              parameters=list(parameters), scale=False)
+
+
+def smooth_section(plan: dict, z: float):
+    """The plan at height z as four edges: port and starboard sides as cubic B-splines through
+    the plan points, the ends as straight lines.
+
+    Every level uses the same spline parameters (the point index, scaled to 0..1), so all side
+    curves share one knot vector and the loft keeps one B-spline face per side.
+    """
+    import cadquery as cq
+
+    xs, low, high = plan['x'], plan['low'], plan['high']
+    parameters = np.linspace(0.0, 1.0, len(xs))
+    port = _side_edge(xs, high, z, parameters)
+    starboard = _side_edge(xs[::-1], low[::-1], z, parameters)
+    fwd = cq.Edge.makeLine(cq.Vector(float(xs[-1]), float(high[-1]), z), cq.Vector(float(xs[-1]), float(low[-1]), z))
+    aft = cq.Edge.makeLine(cq.Vector(float(xs[0]), float(low[0]), z), cq.Vector(float(xs[0]), float(high[0]), z))
+    return cq.Wire.assembleEdges([port, fwd, starboard, aft])
+
+
+def smooth_loft(levels: list[tuple[float, dict]]):
+    """A solid through the plan sections ``[(z, plan)]``, smooth (not ruled) between them.
+
+    Each side is one B-spline surface through all sections; the base and top are planar.
+    """
+    import cadquery as cq
+
+    return cq.Solid.makeLoft([smooth_section(plan, z) for z, plan in levels], False)
+
+
+def surface_outside(solid, hull: HullSide, inset: float = 0.0) -> tuple[np.ndarray, np.ndarray]:
+    """Heights and distances outside the hull side (less ``inset``) of points on every curved
+    face of the solid (planar faces lie in a checked plan section): lateral, or past the hull's
+    end stations in x."""
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+
+    points = []
+    for face in solid.Faces():
+        if face.geomType() == 'PLANE':
+            continue
+        surface = BRepAdaptor_Surface(face.wrapped)
+        us = np.linspace(surface.FirstUParameter(), surface.LastUParameter(), SURFACE_CHECK_SAMPLES[0])
+        vs = np.linspace(surface.FirstVParameter(), surface.LastVParameter(), SURFACE_CHECK_SAMPLES[1])
+        points += [surface.Value(u, v).Coord() for u in us for v in vs]
+    if not points:
+        return np.zeros(0), np.zeros(0)
+    points = np.array(points)
+    side = hull.half_breadth(points[:, 0], points[:, 2]) - inset
+    lateral = np.abs(points[:, 1]) - side
+    # Beyond the hull's end stations there is no side: the distance is how far past the end.
+    first, last = hull.x_range
+    beyond = np.maximum(first - points[:, 0], points[:, 0] - last)
+    return points[:, 2], np.where(beyond > 0, beyond, lateral)
+
+
+class SmoothLoftError(ValueError):
+    """The smooth walls could not be kept inside the hull side (the ruled bands are used)."""
+
+
+class EndCurves:
+    """Smooth ends of a part where the hull cuts them: x as a cubic in z, inside the plan.
+
+    Where the hull cuts a part's end (a raked stem), the end of the plan jumps between heights
+    (the station rows and the stem bar), and a smooth loft through such ends swings outside the
+    hull between its sections. The cubic is fitted to the plan's ends at heights
+    ``HULL_GRID_M`` apart and moved inwards until it is inside all of them. An end that the
+    hull does not cut keeps its drawn position (no limit).
+    """
+
+    def __init__(self, shape, hull, low: float, high: float, inset: float = 0.0):
+        heights = np.linspace(low, high, max(END_FIT_DEGREE + 1, int(np.ceil((high - low) / HULL_GRID_M)) + 1))
+        plans = [planform(shape, hull, z, END_FIT_SAMPLES, inset=inset) for z in heights]
+        if any(plan is None for plan in plans):
+            raise SmoothLoftError('a height has no plan for the end curves')
+        ranges = np.array([plan['x_range'] for plan in plans])
+        cut = np.array([plan['cut_m'] for plan in plans])
+        self.low, self.high = low, high
+        self.aft = self._fit(heights, ranges[:, 0], inside_is_larger=True) if cut[:, 0].max() > ON_HULL_M else None
+        self.fwd = self._fit(heights, ranges[:, 1], inside_is_larger=False) if cut[:, 1].max() > ON_HULL_M else None
+
+    @staticmethod
+    def _fit(heights, ends, *, inside_is_larger: bool) -> np.polynomial.Polynomial:
+        curve = np.polynomial.Polynomial.fit(heights, ends, END_FIT_DEGREE)
+        outside = curve(heights) - ends
+        shift = outside.min() if inside_is_larger else outside.max()
+        return curve - shift
+
+    def at(self, z: float) -> tuple[float, float]:
+        z = float(np.clip(z, self.low, self.high))
+        aft = float(self.aft(z)) if self.aft is not None else -np.inf
+        fwd = float(self.fwd(z)) if self.fwd is not None else np.inf
+        return aft, fwd
+
+
+def smooth_body(shape, hull, placements, samples, inset=0.0, check_inset=None):
+    """Smooth-walled solid through plans read at ``placements`` [(placed z, read z)].
+
+    A band whose surface leaves the hull side by more than ``REFINE_TOLERANCE_M`` gets a section
+    at its middle, for at most ``SMOOTH_REFINE_ROUNDS`` rounds. Only heights between the lowest
+    and highest read height are checked (a cut body may reach past them). ``check_inset``
+    (default ``inset``) is the inset the check holds the surface to. Returns (solid, plans).
+    """
+    check_inset = inset if check_inset is None else check_inset
+    from .geometry import precise_volume_mm3
+
+    placements = sorted(placements)
+    reads = [read for _, read in placements]
+    ends = EndCurves(shape, hull, min(reads), max(reads), inset)
+    for _ in range(SMOOTH_REFINE_ROUNDS + 1):
+        plans = _plans(shape, hull, placements, samples, inset, ends)
+        if plans is None:
+            raise SmoothLoftError('a section has no width inside the hull side')
+        solid = smooth_loft(plans)
+        if not solid.isValid() or precise_volume_mm3(solid) <= 0:
+            raise SmoothLoftError('the smooth loft is not a valid solid')
+        if hull is None:
+            return solid, plans
+        z, excess = surface_outside(solid, hull, check_inset)
+        checked = (z >= min(reads)) & (z <= max(reads))
+        z, excess = z[checked], excess[checked]
+        bad = z[excess > REFINE_TOLERANCE_M]
+        if not len(bad):
+            return solid, plans
+        added = []
+        for (placed_a, read_a), (placed_b, read_b) in pairwise(placements):
+            if np.any((bad >= placed_a) & (bad <= placed_b)):
+                added.append(((placed_a + placed_b) / 2, (read_a + read_b) / 2))
+        placements = sorted(placements + added)
+    raise SmoothLoftError(f'the smooth walls stay {float(excess.max()):.3f} m outside the hull side')
+
+
+def smooth_heights(low: float, high: float, breakpoints=()) -> list[float]:
+    return loft_heights(low, high, breakpoints, SMOOTH_LEVEL_STEP_M)
+
+
+def _fallback_item(part_id, error) -> dict:
+    return {'kind': 'smooth_fallback', 'part': part_id,
+            'note': f'Smooth side walls not built ({error}); the walls are ruled bands cut to the hull at '
+                    'each height (stepped).'}
+
+
 def _check_items(part_id, plans, kind='ga_outline_outside_hull') -> list[dict]:
     """GA/hull disagreement with its distance (the geometry follows the hull instead)."""
     worst = max(plans, key=lambda item: item[1]['excess_m'])
@@ -468,32 +663,128 @@ def deck_plate(part_id, shape, hull, low, high, camber_m=0.0):
     return cq.Solid.makeLoft(sections, True), checks
 
 
+def _bulwark_placements(heights, margin):
+    """Outer placements, and inner ones that reach past both ends so the cut leaves no skin."""
+    outer = [(z, z) for z in heights]
+    inner = [(heights[0] - margin, heights[0])] + outer[1:-1] + [(heights[-1] + margin, heights[-1])]
+    return outer, inner
+
+
+# The inner (cut) body of a bulwark reaches this far past its base and top.
+BULWARK_CUT_MARGIN_M = 0.01
+
+
+def _side_and_cap_faces(solid):
+    """A loft's curved side faces and its two planar caps (base first)."""
+    sides = [face for face in solid.Faces() if face.geomType() != 'PLANE']
+    caps = sorted((face for face in solid.Faces() if face.geomType() == 'PLANE'), key=lambda face: face.Center().z)
+    if len(caps) != 2:
+        raise SmoothLoftError(f'a smooth loft has {len(caps)} planar caps, not 2')
+    return sides, caps
+
+
+def wall_between(outer, inner):
+    """The solid between two smooth lofts with the same base and top heights (a bulwark).
+
+    Sewn from both lofts' side faces and two planar ring caps. A Boolean cut of two such
+    lofts is not reliable here (on the Gunnerus rail it kept most of the inner body).
+    """
+    import cadquery as cq
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeSolid, BRepBuilderAPI_Sewing
+    from OCP.ShapeFix import ShapeFix_Solid
+    from OCP.TopoDS import TopoDS
+
+    from .geometry import precise_volume_mm3
+
+    outer_sides, outer_caps = _side_and_cap_faces(outer)
+    inner_sides, inner_caps = _side_and_cap_faces(inner)
+    rings = [cq.Face.makeFromWires(o.outerWire(), [i.outerWire()]) for o, i in zip(outer_caps, inner_caps)]
+    sewing = BRepBuilderAPI_Sewing(SEWING_TOLERANCE_M)
+    for face in outer_sides + inner_sides + rings:
+        sewing.Add(face.wrapped)
+    sewing.Perform()
+    solid = BRepBuilderAPI_MakeSolid(TopoDS.Shell_s(sewing.SewedShape())).Solid()
+    fix = ShapeFix_Solid(solid)
+    fix.Perform()
+    wall = cq.Solid(fix.Solid())
+    # The default volume integration is about 1 % off on these B-spline faces.
+    expected = precise_volume_mm3(outer) - precise_volume_mm3(inner)
+    if not wall.isValid() or abs(precise_volume_mm3(wall) - expected) > WALL_VOLUME_TOLERANCE * expected:
+        raise SmoothLoftError('the smooth bulwark wall is not a valid closed solid')
+    return wall
+
+
+def _smooth_bulwark(shape, hull, low, high, thickness, samples):
+    """Smooth bulwark walls, or None when the hull side does not shape the bulwark."""
+    placements = [(z, z) for z in smooth_heights(low, high, shape.end_breakpoints())]
+    outer = _plans(shape, hull, placements, samples)
+    if outer is None or not follows_hull(outer):
+        return None
+    outer_solid, outer = smooth_body(shape, hull, placements, samples)
+    # The inner surface only thins the wall where it leaves its inset, so it is held to half
+    # the thickness (the wall keeps at least that).
+    inner_solid, _ = smooth_body(shape, hull, placements, samples, inset=thickness, check_inset=thickness / 2)
+    return wall_between(outer_solid, inner_solid), outer
+
+
 def bulwark_wall(part_id, shape, hull, low, high, thickness):
-    """A wall on the hull side from the deck to the bulwark top; it follows the drawn shell."""
+    """A wall on the hull side from the deck to the bulwark top; it follows the drawn shell.
+
+    Where the hull side shapes it, its walls are smooth B-spline surfaces (``smooth_body``);
+    if those cannot be built inside the hull side, ruled bands are used with a check item.
+    """
     heights = loft_heights(low, high, shape.end_breakpoints())
     samples = sample_count(shape, heights)
+    fallback = []
+    if hull is not None:
+        try:
+            smooth = _smooth_bulwark(shape, hull, low, high, thickness, samples)
+            if smooth is not None:
+                return smooth[0], _check_items(part_id, smooth[1]), SMOOTH_WALLS
+        except Exception as exc:  # noqa: BLE001 - the ruled bands are the fallback
+            fallback.append(_fallback_item(part_id, exc))
     heights = refine_heights(shape, hull, heights, samples)
-    outer = _plans(shape, hull, [(z, z) for z in heights], samples)
-    # The inner (cut) body reaches past both ends of the wall so the cut leaves no skin.
-    margin = 0.01
-    inner_placements = [(low - margin, low)] + [(z, z) for z in heights[1:-1]] + [(high + margin, high)]
-    inner = _plans(shape, hull, inner_placements, samples, inset=thickness)
+    outer_at, inner_at = _bulwark_placements(heights, BULWARK_CUT_MARGIN_M)
+    outer = _plans(shape, hull, outer_at, samples)
+    inner = _plans(shape, hull, inner_at, samples, inset=thickness)
     if outer is None or inner is None:
         raise ValueError('bulwark has no width inside the hull side')
     solid = loft_plans([(z, plan['polygon']) for z, plan in outer]).cut(
         loft_plans([(z, plan['polygon']) for z, plan in inner]))
-    return solid, _check_items(part_id, outer)
+    return solid, _check_items(part_id, outer) + fallback, RULED_WALLS
+
+
+def _smooth_house(shape, hull, low, high, samples):
+    """Smooth deckhouse walls, or None when the hull side does not shape the deckhouse."""
+    placements = [(z, z) for z in smooth_heights(low, high, shape.end_breakpoints())]
+    plans = _plans(shape, hull, placements, samples)
+    if plans is None or not follows_hull(plans):
+        return None
+    return smooth_body(shape, hull, placements, samples)
 
 
 def house_body(part_id, shape, hull, low, high):
-    """A deckhouse: base on the deck, sides on the hull where it reaches it, drawn end contours."""
+    """A deckhouse: base on the deck, sides on the hull where it reaches it, drawn end contours.
+
+    A deckhouse that reaches the hull side gets smooth B-spline side walls (``smooth_body``);
+    one inside the hull side keeps flat (ruled, planar) walls.
+    """
     heights = loft_heights(low, high, shape.end_breakpoints())
     samples = sample_count(shape, heights)
+    fallback = []
+    if hull is not None:
+        try:
+            smooth = _smooth_house(shape, hull, low, high, samples)
+            if smooth is not None:
+                return smooth[0], _check_items(part_id, smooth[1]), SMOOTH_WALLS
+        except Exception as exc:  # noqa: BLE001 - the ruled bands are the fallback
+            fallback.append(_fallback_item(part_id, exc))
     heights = refine_heights(shape, hull, heights, samples)
     plans = _plans(shape, hull, [(z, z) for z in heights], samples)
     if plans is None:
         raise ValueError('deckhouse has no width inside the hull side')
-    return loft_plans([(z, plan['polygon']) for z, plan in plans]), _check_items(part_id, plans)
+    solid = loft_plans([(z, plan['polygon']) for z, plan in plans])
+    return solid, _check_items(part_id, plans) + fallback, RULED_WALLS
 
 
 def window_recesses(solid, shape, hull, windows, depth):
@@ -528,7 +819,8 @@ def build_shaped(part_id: str, op: str, values: dict, hull: HullSide | None, det
     ``camber_m`` (decks); ``end_aft`` and ``end_fwd`` (``[[z, x], ...]`` end contours) and
     ``corner_radius_m`` (``{'aft': r, 'fwd': r}``) for the plan shape; ``windows``
     (``[[x0, x1, z0, z1], ...]``) and ``window_recess_m`` for deckhouses.
-    The report lists the detail values used and the check items.
+    The report lists the detail values used, the check items and how the walls are made
+    (``walls``: smooth B-spline surfaces, ruled bands or planar).
     """
     detail = detail or {}
 
@@ -542,13 +834,16 @@ def build_shaped(part_id: str, op: str, values: dict, hull: HullSide | None, det
     low, high = values['height']
     used = [key for key in ('end_aft', 'end_fwd', 'corner_radius_m') if key in detail]
     cut = []
+    walls = PLANAR_WALLS
     if op == 'deck':
-        solid, checks = deck_plate(part_id, shape, hull, low, high, float(value('camber_m', 0.0)))
+        camber = float(value('camber_m', 0.0))
+        solid, checks = deck_plate(part_id, shape, hull, low, high, camber)
+        walls = PLANAR_WALLS if camber <= 0 else RULED_WALLS
         used += ['camber_m'] if 'camber_m' in detail else []
     elif op == 'bulwark':
-        solid, checks = bulwark_wall(part_id, shape, hull, low, high, values['thickness'])
+        solid, checks, walls = bulwark_wall(part_id, shape, hull, low, high, values['thickness'])
     elif op == 'deckhouse':
-        solid, checks = house_body(part_id, shape, hull, low, high)
+        solid, checks, walls = house_body(part_id, shape, hull, low, high)
         windows = value('windows', [])
         if windows:
             solid, cut = window_recesses(solid, shape, hull, windows,
@@ -557,4 +852,4 @@ def build_shaped(part_id: str, op: str, values: dict, hull: HullSide | None, det
                 used += [key for key in ('windows', 'window_recess_m') if key in detail]
     else:
         raise ValueError(f'{op} is not a part above the hull')
-    return solid, {'detail_used': used, 'check_items': checks, 'windows_cut': cut}
+    return solid, {'detail_used': used, 'check_items': checks, 'windows_cut': cut, 'walls': walls}
