@@ -408,6 +408,41 @@ explains the low prompt-token counts of rounds 1 to 3 and why the model copied t
 A new test needs tiles (one waterline band or a few stations per image, at full resolution) and
 must check the image size the provider accepts; fix its protocol first.
 
+### 5.1 Round 5: full-resolution tiles (protocol 3.5.4)
+
+Protocol committed first (`6336d72`), then the harness `benchmarks/balclutha/tiled_value.py`
+(`9e38369`, tests `tests/test_balclutha_tiled_value.py`, no model call). Run 2026-11-09, key 1,
+`deepseek-v4.1-flash`, thinking disabled, 32,000 tokens, temperature 0.2. 32 tiles per repeat
+(2048 x 1024 px, sheet pixels, one waterline per tile, inner and outer tile per side), each with
+a 1/4-scale context image of that side (station numbers, red box). About 2,170 prompt tokens per
+call, so the two images reached the model at the resolution the probe found (about 1,000 tokens
+for a 2,048 px image). One addition to the prompt beyond the protocol list: one sentence on the
+nesting order of the stations at a waterline (general body-plan knowledge, no value).
+
+| Arm | Cells given (of 151) | RMS | Max | Within 0.05 / 0.15 m | Identity errors | Tile pairs > 0.15 m apart | Invalid replies | Tokens in / out | Wall |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| R1-1 | 98 (65 %) | 1.56 m | 5.09 m | 10 % / 24 % | 11 | 38 | 0 | 69,590 / 2,880 | 57 s |
+| R1-2 | 100 (66 %) | 1.68 m | 5.22 m | 11 % / 20 % | 12 | 48 | 0 | 69,606 / 3,014 | 170 s |
+| R1-3 | 98 (65 %) | 2.13 m | 5.66 m | 8 % / 22 % | 15 | 41 | 0 | 69,618 / 2,857 | 237 s |
+| R0 (tracer per tile) | 0 | - | - | - | - | - | - | - | - |
+
+Median RMS 1.68 m (rule: at most 0.15 m). Coverage passes (at least 60 % in all repeats), RMS
+fails by a factor of 11. **Decision by the fixed rule: the model adds no value on this scanned
+body plan, also at full resolution.** No integration plan for the hull path is written; the
+scanned-hull path stays code first, with the model as a gap filler with low weight.
+
+R0: the tracer needs the centreline inside the panel, so the 16 outer tiles are refused
+(`invalid_calibration`); of the 16 inner tiles, 13 abstain `resource_limit` (too many runs per
+row: overlaid stations, diagonals, lettering) and 3 `missing_curve`. No cell read.
+
+Failure mode (checked by hand on tile `fore-wl16-inner`, where the stations 19, 18, 17, 16 cross
+the 16 ft waterline near x = 425, 885, 1325, 1715 px): the three repeats gave 4 crossings with
+the wrong stations (15 to 18 at x 1430 to 1870), and twice 6 crossings (stations 14 to 19, x 410
+to 1620) where the tile has 4. The model counts curves it cannot see and spreads them evenly. The
+two tiles of one waterline disagree by more than 0.15 m on 38 to 48 cells. The limit is the
+model's localisation of thin lines, not the image size. Run outputs (not in the repository):
+the session scratchpad `r5/round5-001`.
+
 ## 6. Resume point
 
 1. Done: tier aft-end rule (section 1.1), raster code path (section 3), assembly and hull volume
@@ -417,10 +452,8 @@ must check the image size the provider accepts; fix its protocol first.
 2. Appendages: thruster as pod, strut and propeller disc; fins from the x where the twin skeg of
    the built hull starts; bow-thruster tunnel as an opening in the hull. Then check A2 again.
 3. Openings (hatches) in step 1 (not started).
-4. Balclutha: option B run (section 5), no model value at whole-image resolution. Next: a tiled
-   reading protocol, and option A when a person downloads the profile and deck sheets. Image
-   limit (vision probe, `work/vision-probe/REPORT.md`): the provider ignores `"detail"` and makes
-   images smaller when a side is more than about 2,048 px (12 px text at 3,000 px is not
-   readable). A new model-reading round must send tiles of at most 2,048 px per side, with
-   features of at least 16 px. Put this in its protocol before the run.
+4. Balclutha: option B run (section 5) and the tiled round 5 (section 5.1): no model value at
+   whole-image resolution or on full-resolution tiles (median RMS 1.68 m). Do not repeat a
+   reading round with this model; next is option A when a person downloads the profile and deck
+   sheets, or a deterministic waterline-crossing reader for overlaid body plans.
 5. Rust `ship_cad` vision schema: accept labelled inline values (Python accepts them now).
