@@ -220,3 +220,37 @@ This is luck of one sheet, not a method: a station curve read as a grid line can
 - Vertical frame lines inside a grown box are not buttocks and bound the reader's search.
 - The worker reads at most 16 Mpx; a full HAER scan is 138 Mpx and stopped the run at
   survey_sheet. Intake now gives the worker a reduced page and keeps the original for the reader.
+
+### 9.4 Live app path, BUE GIRL from intake (no hand steps)
+
+`scripts/run_round.py --sheet-only --policy live --on-ambiguity draft --model claude-sonnet-5-5`
+with `MARINAFRAME_BODY_PLAN_READER=1`, the full-size sheet dropped as is. Six rounds were needed;
+each failure was fixed and committed (sections 9.3 and the commits after it). Final round
+(`work/autocal-live-6`, main checkout, outside git): ends `draft_not_verified`
+(`open_guesses_block_review`), 18 model decisions, list cost about $3.85 for the controller's model
+reading plus 6 calibration questions at intake.
+
+| Stage | Cells / 39 | RMS m | Max m | Within 0.05 m |
+|---|---:|---:|---:|---:|
+| Holdout result (round 12, hand calibration) | 37 | 0.0014 | 0.0058 | 100 % |
+| Intake: auto calibration + frozen reader | 37 | 0.0014 | 0.0059 | 100 % |
+| First hull and final draft (all 12 stations `read`) | 38 | 0.0326 | 0.2006 | 97 % |
+| Same, without the one outlier cell | 37 | 0.0023 | 0.0094 | 100 % |
+
+The calibration had no open flag (note: baseline unlabelled), so the hull path used the reader for
+all 12 stations; station x positions came from the model's reading. The outlier is station 10 at
+the lowest waterline (2-6-0): the reader's cell is right; the built row differs there after the
+first hull's bottom handling at this transom-stern station (open).
+
+### 9.5 Open
+
+- The hull's bottom handling near the keel moves one reader cell by 0.2 m (station 10, 2-6-0).
+- BUMBLE BEE needs a person: the side flag is right, but the drawing's labels and the truth's
+  numbering differ; the review item records "Something is wrong" but does not yet re-run with
+  swapped halves or renumbered stations.
+- The model still reads station x positions and the scale it compares with (warnings when its body
+  view scale differs by more than 2 % from the automatic one; 453-487 vs 442 px/m on the reduced page
+  in the live runs).
+- The setting is off by default; the review item was tested with unit tests, not in the running app.
+- `make test-quick`: one Rust test fails on this machine both here and on the base commit
+  (`part_revise_worker::re_run_a_marked_part_then_undo_and_keep`, worker JSONDecodeError).
