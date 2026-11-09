@@ -62,11 +62,11 @@ def test_faired_build_is_valid_and_names_the_bad_cell(tmp_path, monkeypatch):
     faired = {s["id"]: s for s in record["sections"]}
     assert faired["s2"]["source_label"] == "traced"
     assert faired["s2"]["fairing"]["input_points_yz_m"] == observed[2]["points_yz_m"]
-    # The bad cell (+0.3 m) is mostly not followed.
+    # The bad cell (+0.3 m) is followed less than in full (docs/HULL_FAIRING.md 6).
     fair = _sections(spec)[2]["points_yz_m"][15]
     middle = faired["s2"]["points_yz_m"][15]
     assert middle[1] == fair[1] == 1.5
-    assert middle[0] - fair[0] < 0.25 * 0.3
+    assert middle[0] - fair[0] < 0.9 * 0.3
 
 
 def test_fit_failure_falls_back_with_a_check_item(tmp_path, monkeypatch):

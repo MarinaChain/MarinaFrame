@@ -30,10 +30,11 @@ transom) and are kept as given. A faired station that is a hull terminal is held
 (TERMINAL_WEIGHT). Each station's keel point and deck-edge point are fitted strongly
 (EDGE_POINT_WEIGHT); points on the centreline (y = 0) stay on it.
 
-Robust loss. Huber weights with a rejection distance: a half-breadth further than the Huber scale
-(HUBER_FRACTION of the half-beam) outside the range of its two neighbouring stations on the same
-waterline gets the weight scale / excess; from REJECT_FRACTION on it gets no weight and the
-surface there comes from the neighbours. One bad cell therefore cannot bend the hull. The weights are judged against the neighbours, not against the
+Robust loss. Huber weights: a half-breadth further than the Huber scale (HUBER_FRACTION of the
+half-beam) outside the range of its two neighbouring stations on the same waterline gets the
+weight scale / excess, so its pull is bounded. Limit (docs/HULL_FAIRING.md 6): a bad value inside
+its neighbours' range is not recognised, and at a ten-station spacing the hull itself changes by
+1-4 % of the half-beam between stations, so most single bad cells of that size are not. The weights are judged against the neighbours, not against the
 fit: a fit residual would also down-weight a fair shoulder of the parallel middle body that the
 spline cannot follow exactly, and the spline would then overshoot there.
 
@@ -75,10 +76,9 @@ EDGE_POINT_WEIGHT = 10.0
 FAIRING_LENGTH_SPACINGS = 0.2
 # Huber scale as a fraction of the half-beam: 1 %, half the RMS gate.
 HUBER_FRACTION = 0.01
-# A half-breadth further than this fraction of the half-beam (2 %, the RMS gate) outside the range
-# of its neighbouring stations is not used at all: the surface there comes from its neighbours.
-# A fair hull is that far outside its neighbours only at a feature no station spacing can show.
-REJECT_FRACTION = 0.02
+# A rejection distance (no weight from 2 % of half-beam outside the neighbours' range) was tried
+# on the development replay and not kept: it moved fair traced points by metres where the hull
+# changes faster than the station spacing (shipd-1-09867-3v-L0 3.25 -> 4.27 % RMS).
 # A point moved further than this fraction of the half-beam gets a check item. Traced and read
 # points are measured evidence (1 %, half the RMS gate); the others may move more (5 %).
 TOLERANCE_FRACTION = {"traced": 0.01, "read": 0.01}
@@ -163,17 +163,15 @@ def neighbour_excess(values: np.ndarray, present: np.ndarray) -> np.ndarray:
 
 
 def robust_smooth(u: np.ndarray, values: np.ndarray, weights: np.ndarray, present: np.ndarray,
-                  lam: float, scale: float, reject: float, held: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Robustly weighted smoothing splines of all waterlines at once.
+                  lam: float, scale: float, held: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Huber-weighted smoothing splines of all waterlines at once.
 
     ``values``, ``weights`` and ``present`` are (rows, stations); absent stations have no
     weight. A value more than ``scale`` outside its neighbours' range gets the Huber weight
-    scale / excess; from ``reject`` on it gets none. Returns the fitted values (absent and thin
-    rows unchanged) and the robust weights.
+    scale / excess. Returns the fitted values (absent and thin rows unchanged) and the weights.
     """
     excess = neighbour_excess(values, present)
     huber = np.where(excess > scale, scale / np.maximum(excess, 1e-300), 1.0)
-    huber[excess >= reject] = 0.0
     huber[:, held] = 1.0
     w = np.where(present, weights * huber, 0.0)
     system = lam * bending_matrix(u)[None, :, :] + (w + RIDGE)[:, :, None] * np.eye(len(u))[None, :, :]
@@ -253,8 +251,7 @@ def fair_sections(sections: list[dict], *, fairing_length_spacings: float = FAIR
     for k, s in enumerate(fitted_stations):
         edges = np.searchsorted(rows, np.round([s["z"][0], s["z"][-1]], ROW_DECIMALS))
         weights[edges, k] *= EDGE_POINT_WEIGHT
-    fitted, huber = robust_smooth(u, values, weights, present, lam, HUBER_FRACTION * half_beam,
-                                  REJECT_FRACTION * half_beam, held)
+    fitted, huber = robust_smooth(u, values, weights, present, lam, HUBER_FRACTION * half_beam, held)
 
     faired, moves = [], []
     for j, station in enumerate(stations):
@@ -277,8 +274,7 @@ def fair_sections(sections: list[dict], *, fairing_length_spacings: float = FAIR
     report = {
         "method": METHOD, "applied": True,
         "parameters": {"fairing_length_spacings": fairing_length_spacings, "lambda": lam,
-                       "huber_scale_m": HUBER_FRACTION * half_beam, "reject_m": REJECT_FRACTION * half_beam,
-                       "half_beam_m": half_beam,
+                       "huber_scale_m": HUBER_FRACTION * half_beam, "half_beam_m": half_beam,
                        "label_weights": LABEL_WEIGHTS, "terminal_weight": TERMINAL_WEIGHT,
                        "edge_point_weight": EDGE_POINT_WEIGHT, "waterlines": len(rows),
                        "faired_stations": [s["section"].get("id") for s in fitted_stations],
