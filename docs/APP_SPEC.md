@@ -8,7 +8,7 @@ Windows next. This file is the contract between the Rust backend (`app/src-tauri
 
 A person who is not a naval architect can watch a reconstruction run and understand it:
 what drawing went in, which line the system chose on each section and why, what 3D shape came
-out, how it was checked, and what the model (DeepSeek) saw and answered.
+out, how it was checked, and what the model (Claude Sonnet 5.5 by default) saw and answered.
 
 ## Non-goals (v1)
 
@@ -50,8 +50,8 @@ another user.
 ## Screens
 
 1. **Library (left sidebar).** Tasks found under the configured runs folder, newest first:
-   name, status chip, time. A "New run" button (pick a spec file). With AI drafting on (the default) and a model key
-   found, the run uses the live policy in draft mode; otherwise the deterministic draft.
+   name, status chip, time. A "New run" button (pick a spec file). With AI drafting on (the default) and a model route
+   found (the `claude` CLI or an OpenCode Go key), the run uses the live policy in draft mode; otherwise the deterministic draft.
    Section "Datasets" lists `work/sources/*` folders read-only (v1: name and size only).
 2. **Workspace (centre).** Drawing and 3D model side by side, resizable split.
    - Drawing: the source page image with the section regions. For the selected section,
@@ -255,14 +255,19 @@ agent builds a real `TaskView` from a real task and checks it against the same s
 - Keys: the environment (`OPENCODE_API_KEY`, `_2`, `_3`) or the key file
   `~/.config/marinaframe/opencode-go-keys.txt` (one key per line, mode 600; the same file as
   `scripts/load_opencode_keys.sh`). The app never shows or logs a key; `get_ai_status` returns only
-  `enabled`, `key_found`, `active`, the key file path and `key_count` (key slots a new run can use, 0 to 3; never the keys).
-- Without a key, or with AI drafting off, runs use the deterministic draft and the New run sheet
+  `enabled`, `key_found`, `claude_found` (the `claude` CLI was found), `active` (enabled and
+  `claude_found` or `key_found`), the key file path and `key_count` (key slots a new run can use, 0
+  to 3; never the keys). The Claude subscription needs no key: the `claude` CLI uses its own login.
+- Without the `claude` CLI and without a key, or with AI drafting off, runs use the deterministic draft and the New run sheet
   says so.
 - The controller runs each model request in a child process of its own executable
   (`provider-worker`); the desktop app handles that call in `main` before any window starts.
-- Model: the app drafts with DeepSeek V4.1 Flash only (run config `model`, no
-  `fallback_models`) until the founder decides otherwise. Development rounds use Crouton Alpha
-  Free first and DeepSeek when Crouton is rate limited (`docs/AGENT_HARNESS.md`, "Drafting model").
+- Model (founder decision 2026-11-09): the app drafts with Claude Sonnet 5.5 through the Claude
+  subscription (the `claude` CLI in print mode; run config `model` = `claude-sonnet-5-5`,
+  `fallback_models` = `crouton-alpha-free`, `deepseek-v4.1-flash`). Only a subscription rate-limit
+  or usage-limit answer moves a run to Crouton, then DeepSeek, through OpenCode Go (a
+  `model_switched` event). A model choice in Settings may come later; for now the default is
+  fixed. Details: `docs/AGENT_HARNESS.md`, "Drafting model".
 
 ## Exports
 
