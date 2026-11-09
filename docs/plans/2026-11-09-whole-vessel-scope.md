@@ -589,6 +589,20 @@ have equal offsets at 3'-7" to 13'-7" (drawn as one curve, labelled "13,12"); st
 inside station 10 at 13'-7" only; the sternpost and stem are drawn about 100 px from the
 centreline (round 8 treats verticals within 70 px as stem).
 
+#### 3.5.10 Round 11: ALMA holdout (stopped at the eligibility check, not run)
+
+Planned: the round-10 reader, unchanged, on the ALMA "Lines drawing and offsets" sheet, with the
+round 4 to 9 metrics and decision rule, arms code only (1 run), Crouton (3 repeats, DeepSeek
+fallback) and Claude Sonnet 5.5 through `claude -p` on the subscription (3 repeats), and only the
+sheet calibration (centreline, base, scale) set by a person.
+
+Stopped before the protocol was fixed, before any truth and before any run: the sheet has no body
+plan with station curves (its "half breadth view" is an end view of a hard-chine scow, with no
+drawn waterlines), and its table gives sheer and chine heights and the sheer half-breadth only (45
+cells, no half-breadth at a waterline). No cell can score the reader. Details:
+`docs/WHOLE_VESSEL_GUNNERUS.md` section 5.8. The next holdout uses a sheet from section 5.7 of
+that document with this same protocol.
+
 
 ### 3.6 Effort, checks, resume
 

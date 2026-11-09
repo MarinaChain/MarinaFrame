@@ -773,10 +773,37 @@ curves, and the table gives half-breadths at waterlines.
 | Au Sable River boat, South Haven MI | HAER MI-409 | 1, Plans and offsets table | https://www.loc.gov/pictures/resource/hhh.mi0723.sheet.00001a/ |
 
 Best first choice: the gillnet boats (round-bilge hulls with a stem and a transom, like Thayer, at a
-smaller scale). On disk already: the ALMA "Lines drawing and offsets" sheet (NPS Gallery) has a
-table, but provider transfer is not cleared, so it can serve only a code-only holdout. The
-Smithsonian HAMMS (1936-37) survey sheets also carry offsets, but they are not on loc.gov; their
-rights need a separate check.
+smaller scale). The ALMA "Lines drawing and offsets" sheet on disk is not a candidate: it fails the
+check above (section 5.8). The Smithsonian HAMMS (1936-37) survey sheets also carry offsets, but
+they are not on loc.gov; their rights need a separate check.
+
+### 5.8 Round 11: ALMA holdout not run (sheet fails the eligibility check)
+
+Checked 2026-11-09, before any protocol, truth file or reader run. Sheet: scow schooner ALMA,
+"Lines drawing and offsets" (B. Doll, May 1987; NPS Gallery asset `ae350cc8-8195-4fe4-9fa0-65faca9400d7`,
+SHA-256 `b7423f85…12d65f4`, 10,752 x 7,265 px, 300 dpi), `work/sources/alma/`. Rights are not the
+blocker: the commercial data licence (docs/DEPENDENCIES_AND_RIGHTS.md, 2026-11-09) clears provider
+transfer.
+
+The sheet fails both conditions of section 5.7:
+
+1. No body plan with station curves. ALMA is a flat-bottomed, hard-chine scow. The view labelled
+   "HALF BREADTH VIEW" is an end view of the raked bow and stern: straight sides, chine and sheer
+   lines, rails and the stem post. It has no numbered station curves and no drawn waterlines, so
+   the reader has no curve crossings to measure and no station numbers to name.
+2. No half-breadths at waterlines. The printed table has three rows for stations 1 to 15: sheer
+   height and chine height above the base, and half-breadth at the sheer (45 cells). The reader
+   gives half-breadths of station curves at waterlines; no cell of this table is such a value.
+
+Thus a run would measure nothing that this table can score, and a calibration (centreline, base,
+scale) cannot supply the missing waterlines without inventing them. No truth was transcribed, no
+protocol was committed and no model was called; plan section 3.5.10 records the stop. The other
+ALMA sheets on disk (sail plan, deck plan and outboard profile, hold plan and inboard profile,
+cross sections) have no body plan either.
+
+**Result: there is no new evidence on generalisation.** The status of section 5.6 is unchanged: 0
+station errors on the two development sheets, not yet tested on a holdout. A holdout still needs a
+round-bilge sheet from section 5.7, downloaded by a person. `engineering_approved` stays false.
 
 
 ## 6. Step 2: internals (development case, metrics G1 to G5 of plan section 4.3.2)
@@ -837,4 +864,6 @@ no internal structure). G1 to G3 compare printed sources with each other.
    reader names every station correctly on both development sheets (Thayer 0.0116 m, Balclutha
    0.1480 m, 0 station errors, all arms). Next: a person downloads a sheet from section 5.7 and
    checks the Thayer cell station 11 at 13'-7"; then a holdout round with the reader unchanged.
+   Round 11 (section 5.8): the ALMA sheet on disk is not eligible (scow end view, no station
+   curves; table without waterline half-breadths); not run.
 5. Rust `ship_cad` vision schema: accept labelled inline values (Python accepts them now).
