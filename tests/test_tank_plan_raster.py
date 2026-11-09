@@ -105,10 +105,40 @@ def test_tank_keys_contents_and_labels():
     assert raster.tank_key('Cargo hold') is None
     assert raster.content_of('Dbb fuel oil settling') == 'fuel oil'
     assert raster.content_of('technical water') == 'water ballast'
-    assert raster.content_of('F.O. OR S.W. BALLAST TANK NO. 2') == 'fuel oil'
+    assert raster.content_of('F.O. OR S.W. BALLAST TANK NO. 2') == 'fuel oil or water ballast'
+    assert raster.content_of('DEEP DRY BALLAST') == 'dry'
     assert raster.is_tank_label('Cargo hold')
     assert not raster.is_tank_label('Void')
     assert not raster.is_tank_label('Engine room')
+
+
+def test_tank_words_features_kinds_and_sides():
+    # A number alone, or a feature beside a tank word, is not a tank.
+    assert not raster.is_tank_label('NO.1 HATCH')
+    assert not raster.is_tank_label('DEEP TANK HATCH')
+    assert not raster.is_tank_label('GIRDER OVER WEB NO.2 HATCH')
+    assert not raster.is_tank_label('No 5')
+    assert raster.is_tank_label('FORE PEAK TANK') and raster.is_tank_label('F.W. TANK P/S')
+    assert raster.label_kind('DEEP TANK NO.3P') == 'deep tank' and raster.label_kind('F.O SETTLING TANK') == 'settling'
+    assert raster.label_kind('NO.1 HATCH') is None
+    # "P/S" names both sides: no side in the key; a whole-region label splits into two tanks.
+    assert raster.tank_key('F.O. OR WATER BALLAST TANK NO.2 P/S') == 'no 2'
+    assert raster.split_both_sides('TANK NO.2 P/S', None, True) == [(1, 'TANK NO.2 P'), (-1, 'TANK NO.2 S')]
+    assert raster.split_both_sides('TANK NO.2 P/S', 1, True) == [(1, 'TANK NO.2 P/S')]
+
+
+def test_schedule_items_and_rows_by_number_and_kind():
+    rows = [{'key': '5', 'name': 'RESERVE FEED WATER TANK NO.4P', 'sheet': 0},
+            {'key': '12', 'name': 'FUEL OIL OR WATER BALLAST TANK NO.1', 'sheet': 0},
+            {'key': '3', 'name': 'DEEP TANK NO.3P DRY CARGO', 'sheet': 0},
+            {'key': '8', 'name': 'FUEL OIL OR WATER BALLAST TANK NO.3P', 'sheet': 0}]
+    assert raster.resolve_items('5 VOID', rows) == '#5 RESERVE FEED WATER TANK NO.4P'
+    assert raster.resolve_items('NO.2 HATCH', rows) == 'NO.2 HATCH'  # a tank number is not an item
+    assert raster.schedule_row_for('NO.1 HATCH', rows)['key'] == '12'  # number alone matches ...
+    assert not raster.names_tank('NO.1 HATCH', rows)  # ... but a hatch is never a tank
+    assert raster.names_tank('No 1', rows)  # a schedule tank row makes a bare number a tank
+    assert raster.schedule_row_for('DEEP TANK NO.3P', rows)['key'] == '3'
+    assert raster.schedule_row_for('D.B. TANK NO.3P', rows)['key'] == '8'
 
 
 def test_read_crops_pages_and_numbers_the_cells():

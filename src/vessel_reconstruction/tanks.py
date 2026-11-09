@@ -39,6 +39,7 @@ DEFAULT_DENSITY_T_M3 = {
     "water ballast": 1.025,  # sea water
     "fresh water": 1.000,
     "fuel oil": 0.85,  # marine gas oil, typical
+    "fuel oil or water ballast": 1.025,  # dual-use tank: the heavier use (sea water)
     "lube oil": 0.90,
     "sewage": 1.00,
     "sludge": 0.90,

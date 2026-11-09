@@ -22,6 +22,13 @@ the same tank (matched by x overlap and label words) or, for a double-bottom pla
 lowest horizontal line above the baseline. Solids are clipped to the hull when a hull mesh is
 given (``tanks.tank_slabs_in_hull``); without a hull a tank is a prism of its plan region.
 
+Labels are tied to a sheet's schedule: a circled item number in a view takes the name of its
+schedule row ("5" -> "RESERVE FEED WATER TANK NO.4P"). A region becomes a tank only with a tank
+word or a schedule tank row (a hatch or a girder never does). A tank that only the profile names
+(a deep tank, a peak) is built from its profile region, with the plan outlines' breadth at the
+same frames (``profile_tanks``). Plans without frame numbers are aligned to the profile by their
+bulkheads.
+
 Every value carries a source label (``traced``, ``read`` or ``guessed``). ``engineering_approved``
 is false for every result.
 """
@@ -84,6 +91,9 @@ MERGE_ANGLE_DEG = 2.0
 AXIS_ANGLE_DEG = 4.0
 # Share of the view width that an axis line (frame axis, centre line, baseline) covers.
 AXIS_COVER = 0.35
+# A region at most this many character heights larger than its label (in height and in width) is
+# the label's enclosure (a circled item number), not a compartment.
+ENCLOSURE_CHARS = 1.5
 # A region that covers more than this share of the view is the background, not a tank.
 MAX_REGION_SHARE = 0.25
 # Profile: a region whose bottom is this close to the baseline sits on the bottom shell.
@@ -99,10 +109,17 @@ MIN_TANK_HEIGHT_M = 1.0
 ALIGN_SEARCH_M = 6.0
 ALIGN_BIN_M = 0.1
 ALIGN_MIN_LINE = 0.15
+# An alignment counts as read from the drawing when at least this many bulkhead bins agree.
+ALIGN_MIN_AGREEING = 5
+# A plan's centre line is a long horizontal line within this distance (mm) of the outline's middle.
+CENTRE_SNAP_MM = 3.0
 # A baseline label lies within this many character heights of its line.
 BASELINE_REACH = 4
 # Double-bottom plans: the tank top is the lowest horizontal line at least this far above base.
 MIN_DOUBLE_BOTTOM_M = 0.35
+# A profile tank on the bottom no higher than this (m) is a double-bottom tank (deep double
+# bottoms of large ships stay under about 2.5 m).
+MAX_DOUBLE_BOTTOM_M = 2.5
 # Text height in the question images (px): small print is enlarged to this.
 QUESTION_TEXT_PX = 30
 # Margin around a label block in its question crop (shares of the character height: above and
@@ -110,6 +127,8 @@ QUESTION_TEXT_PX = 30
 # from the block.
 LABEL_MARGIN = (0.4, 1.2)
 QUESTION_WIDTH_PX = 2000
+# Text blocks of one region closer than this many character heights are read as one label.
+CLUSTER_CHARS = 2.0
 QUESTION_MAX_HEIGHT_PX = 2000
 # Slab steps of the solid (as v1): 0.10 m in x, rows of 0.02 m.
 TANK_SLAB_M = 0.10
@@ -117,21 +136,43 @@ TANK_ROW_DZ_M = 0.02
 
 # Content words (lower case, in order: the first match wins) -> capacity-plan content group.
 CONTENT_WORDS = (
+    ('dry ballast', 'dry'),  # solid ballast, not a liquid
     ('lub', 'lube oil'), ('l.o', 'lube oil'),
     ('fuel', 'fuel oil'), ('f.o', 'fuel oil'), ('diesel', 'fuel oil'), ('d.o', 'fuel oil'),
     ('fo ', 'fuel oil'), ('settling', 'fuel oil'),
     ('ballast', 'water ballast'), ('technical water', 'water ballast'), ('tw', 'water ballast'),
-    ('roll damp', 'water ballast'), ('peak', 'water ballast'),
-    ('fresh', 'fresh water'), ('potable', 'fresh water'), ('drinking', 'fresh water'),
+    ('roll damp', 'water ballast'),
+    ('fresh', 'fresh water'), ('f.w', 'fresh water'), ('culinary', 'fresh water'), ('potable', 'fresh water'), ('drinking', 'fresh water'),
     ('distill', 'fresh water'), ('feed', 'fresh water'), ('fw', 'fresh water'),
     ('sewage', 'misc'), ('sew', 'misc'), ('sludge', 'misc'), ('bilge', 'misc'), ('waste', 'misc'),
     ('grey', 'misc'), ('gray', 'misc'), ('black', 'misc'), ('misc', 'misc'),
     ('cargo tank', 'cargo oil'), ('cargo oil', 'cargo oil'),
     ('dry', 'dry'), ('void', 'dry'), ('cofferdam', 'dry'), ('hold', 'dry'), ('cargo', 'dry'),
+    ('peak', 'water ballast'),  # a peak tank without a content word
 )
 # Words that do not tell two tanks apart when a plan label is matched to a profile label.
 STOP_WORDS = {'no', 'tank', 'tanks', 'tk', 'new', 'dbb', 'dbl', 'bot', 'the', 'and', 'or', 'p', 'sb',
               's', 'port', 'stbd', 'ps'}
+# A tank or compartment: one of these words, or a liquid content word (CONTENT_WORDS).
+TANK_WORDS = re.compile(r'\b(tanks?|tk|deep\s*tank|peak|dbb|d\.\s*b\.?|double\s+bottom|hold)\b')
+# Features drawn in plans that are never a tank, even beside a tank word ("DEEP TANK HATCH",
+# "F.W. TANK COFFERDAM UNDER", "GIRDER OVER WEB NO.2 HATCH").
+FEATURE_WORDS = re.compile(r'\b(hatch|girders?|cofferdam|trunk|escape|casing|winch|locker|web|companion|swash'
+                           r'|recess|tunnel)\b')
+# Rooms and spaces of a profile ("MACHINERY SPACE", "NO.7D BETWEEN DECKS", "HOLD"): a profile region
+# whose label has one of these is not a tank, even when a tank's label leaked into it.
+ROOM_WORDS = re.compile(r'\b(machinery|spaces?|holds?|between|decks?|stores|rooms?|flat|engine|boiler)\b')
+# Words that give a tank its kind (first match wins), as a capacity plan names them.
+KIND_PATTERNS = (
+    ('deep tank', re.compile(r'\bdeep\s*tanks?\b|\bdeep\b')),
+    ('peak', re.compile(r'\bpeak\b')),
+    ('settling', re.compile(r'\bsettling\b')),
+    ('double bottom', re.compile(r'\bd\.\s*b\b|\bdbb\b|\bdouble\s+bottom\b')),
+)
+# A tank on both sides of the centre line, named once ("NO.2 P/S", "P & S").
+BOTH_SIDES = re.compile(r'\bp\s*[/&]\s*s\b', re.IGNORECASE)
+# A schedule item number written alone in a view (often circled): one or two digits not after "No".
+ITEM_TOKEN = re.compile(r'(?<![\w.])(?<!no )(?<!no\. )\(?(\d{1,2})\)?(?![\w\'"./-])', re.IGNORECASE)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -883,10 +924,17 @@ def _json_object(text: str) -> dict | None:
 # Labels, content and schedule
 
 
+DUAL_USE = 'fuel oil or water ballast'
+
+
 def content_of(*texts: str) -> str | None:
-    """Content group from label or schedule words (first word match in CONTENT_WORDS)."""
+    """Content group from label or schedule words (first word match in CONTENT_WORDS). A tank
+    named for fuel oil and for ballast ("F.O. OR WATER BALLAST TANK") is dual-use."""
     for text in texts:
         lower = f' {(text or "").lower()} '
+        groups = {group for word, group in CONTENT_WORDS if word in lower}
+        if {'fuel oil', 'water ballast'} <= groups:
+            return DUAL_USE
         for word, group in CONTENT_WORDS:
             if word in lower:
                 return group
@@ -897,8 +945,11 @@ def tank_key(text: str) -> str | None:
     """Normalised tank number of a label: 'no 3 sb', 'no 11p' -> 'no 11 p', 'no. 2' -> 'no 2'.
     When a label repeats its number, the form with a side wins ("No 3 No 3 p" is "no 3 p")."""
     keys = []
-    for match in re.finditer(r'\bno\.?\s*(\d{1,2})\s*(sb|ps|p|s|port|stbd)?\b', (text or '').lower()):
-        side = {'port': 'p', 'ps': 'p', 'stbd': 'sb', 's': 'sb'}.get(match.group(2) or '', match.group(2) or '')
+    pattern = r'\bno\.?\s*(\d{1,2})\s*(p\s*[/&]\s*s|sb|ps|p|s|port|stbd)?\b'
+    for match in re.finditer(pattern, (text or '').lower()):
+        written = match.group(2) or ''
+        side = '' if BOTH_SIDES.fullmatch(written) else {'port': 'p', 'ps': 'p', 'stbd': 'sb', 's': 'sb'}.get(
+            written, written)
         keys.append(f'no {match.group(1)} {side}'.strip())
     if not keys:
         return None
@@ -911,13 +962,42 @@ def words(text: str) -> set[str]:
 
 
 def is_tank_label(text: str) -> bool:
-    """A label that names a tank: a tank number, or a content word (not a room or a void)."""
-    if tank_key(text):
-        return True
-    lower = f' {(text or "").lower()} '
-    if 'void' in lower:
+    """A label that names a tank or a compartment: a tank word ("tank", "peak", "D.B.", "hold")
+    or a liquid content word, and no feature word (a hatch, a girder or a trunk is never a tank,
+    even with a number: "NO.1 HATCH"). A tank number alone does not make a tank; a schedule row
+    of that number may (``resolve_items``, ``schedule_row_for``)."""
+    lower = (text or '').lower()
+    if FEATURE_WORDS.search(lower):
         return False
-    return content_of(text) is not None or ' tank' in lower or ' tk' in lower
+    return bool(TANK_WORDS.search(lower)) or content_of(text) not in (None, 'dry')
+
+
+def label_kind(text: str) -> str | None:
+    """'deep tank', 'peak', 'settling' or 'double bottom' from the label words, else None."""
+    lower = (text or '').lower()
+    return next((kind for kind, pattern in KIND_PATTERNS if pattern.search(lower)), None)
+
+
+def resolve_items(text: str, rows: list[dict]) -> str:
+    """A label with schedule item numbers (a circled "5" that the sheet's schedule names
+    "RESERVE FEED WATER TANK NO.4P") with each item number replaced by "#5 <name of row 5>".
+    When an item names a tank, the label is that tank only (the region's other words are notes
+    such as "GIRDER OVER"). ``rows`` are the schedule rows of the same sheet; a number without a
+    row stays as it is."""
+    names = {str(row.get('key', '')).strip(): row.get('name', '') for row in rows}
+    if not names:
+        return text
+    items = [match.group(1) for match in ITEM_TOKEN.finditer(text or '') if names.get(match.group(1))]
+    tank_items = list(dict.fromkeys(item for item in items if is_tank_label(names[item])))
+    if tank_items:
+        # The tank the item names; other words in the region are notes ("GIRDER OVER", "VOID").
+        return ' '.join(f'#{item} {names[item]}' for item in tank_items)
+
+    def name(match: re.Match) -> str:
+        item = match.group(1)
+        return f'#{item} {names[item]}' if names.get(item) else match.group(0)
+
+    return ' '.join(ITEM_TOKEN.sub(name, text or '').split())
 
 
 # ---------------------------------------------------------------------------------------------
@@ -931,6 +1011,11 @@ class ReadView:
     centre_row: float | None = None  # plans: centre line
     baseline_row: float | None = None  # profiles
     notes: list[str] = field(default_factory=list)
+    name: str = ''  # the view's name in the reading record (with the sheet prefix of a case)
+
+    @property
+    def record_name(self) -> str:
+        return self.name or self.ink.spec.name
 
     @property
     def px_per_m(self) -> float:
@@ -946,6 +1031,13 @@ class PlanTank:
     columns: dict[float, tuple[float, float]]  # ship x (m) -> (y min, y max) (m)
     x_range: tuple[float, float]
     side: int | None = None
+    role: str | None = None  # the plan role of its view; None for a tank found in the profile
+
+    @property
+    def kind(self) -> str | None:
+        """Kind from the label words; a tank of a double-bottom plan without one is a double
+        bottom; else None (not known)."""
+        return label_kind(self.label) or ('double bottom' if self.role == 'double_bottom' else None)
 
 
 def read_view(ink: np.ndarray, spec: ViewSpec, px_per_mm: float, sheet: 'SheetSpec', ask: Asker,
@@ -984,14 +1076,37 @@ def read_view(ink: np.ndarray, spec: ViewSpec, px_per_mm: float, sheet: 'SheetSp
     if spec.kind == 'plan':
         # The centre line is the frame axis (plans draw it on the centre line), else the
         # longest horizontal line nearest the middle of the view.
+        symmetry = symmetry_row(parsed)
+        near = [r for r in rows if symmetry is not None and abs(r - symmetry) <= CENTRE_SNAP_MM * px_per_mm]
         if best:
             view.centre_row = best[2]
+        elif near:
+            view.centre_row = min(near, key=lambda r: abs(r - symmetry))
         elif rows:
             middle = parsed.ink.shape[0] / 2
             view.centre_row = min(rows, key=lambda r: abs(r - middle))
+        else:
+            # A dash-dot centre line that is not found as a line: the outline's middle row.
+            view.centre_row = symmetry
+            if symmetry is not None:
+                view.notes.append('centre line taken as the middle of the plan outline (symmetry)')
         if view.centre_row is not None:
             view.ink = parse_view(view_ink, spec, (r0, c0), px_per_mm, view.centre_row)
     return view
+
+
+def symmetry_row(view: ViewInk) -> float | None:
+    """Middle row of a plan's outline: the median, over the columns where the line ink spans at
+    least a third of the view height, of the mean of the first and last inked rows."""
+    lines = view.boundary
+    inked = lines.any(axis=0)
+    columns = np.flatnonzero(inked)[::max(1, lines.shape[1] // 400)]
+    middles = []
+    for column in columns:
+        rows = np.flatnonzero(lines[:, column])
+        if rows[-1] - rows[0] >= lines.shape[0] / 3:
+            middles.append((rows[0] + rows[-1]) / 2)
+    return float(np.median(middles)) if middles else None
 
 
 def _char_px(view: ViewInk) -> float:
@@ -999,10 +1114,11 @@ def _char_px(view: ViewInk) -> float:
     return heights[0] if heights else 20.0
 
 
-def read_labels(view: ReadView, ask: Asker) -> tuple[list['RegionLabel'], list[TextBlock]]:
+def read_labels(view: ReadView, ask: Asker, schedule: list[dict] = ()) -> tuple[list['RegionLabel'], list[TextBlock]]:
     """Labels of the view's regions, and the text blocks outside any region (frame-axis labels
     left out). Code groups the blocks of a region (each side of a plan's centre line apart) and
-    cuts one crop around them; the model reads each crop."""
+    cuts one crop around them; the model reads each crop. Item numbers of the sheet's schedule
+    are replaced by their row names (``resolve_items``) before a region's sides are resolved."""
     parsed = view.ink
     blocks = parsed.blocks
     if view.axis is not None and view.axis.label_rows is not None:
@@ -1011,11 +1127,49 @@ def read_labels(view: ReadView, ask: Asker) -> tuple[list['RegionLabel'], list[T
         bottom = max(view.axis.label_rows[1], view.axis.row)
         blocks = [b for b in blocks if not top <= b.centre[0] <= bottom]
     groups, free = label_groups(parsed, blocks, view.centre_row)
-    crops = [label_crop(parsed, group.blocks) for group in groups] + [label_crop(parsed, [b]) for b in free]
-    texts = read_crops(crops, _char_px(parsed), LABEL_PROMPT, ask)
-    for item, text in zip(list(groups) + list(free), texts):
-        item.text = ' '.join(text.split())
+    # One crop per cluster of nearby blocks: a region's label and a note far from it (a circled
+    # item number and "GIRDER OVER" in one leaky region) are read apart, then joined.
+    clusters = [cluster_blocks(group.blocks) for group in groups]
+    crops = [label_crop(parsed, cluster) for parts in clusters for cluster in parts]
+    crops += [label_crop(parsed, [b]) for b in free]
+    texts = iter(read_crops(crops, _char_px(parsed), LABEL_PROMPT, ask))
+    for group, parts in zip(groups, clusters):
+        group.text = ' '.join(' '.join(next(texts).split()) for _ in parts).strip()
+        group.text = ' '.join(group.text.split())
+    for block in free:
+        block.text = ' '.join(next(texts).split())
+    for group in groups:
+        group.text = normalise_label(resolve_items(group.text, list(schedule)))
     return resolve_sides(groups), [b for b in free if b.text]
+
+
+def normalise_label(text: str) -> str:
+    """A label as read, with run-together words of a capacity plan split ("DEEPTANK")."""
+    return re.sub(r'\b(deep)(tanks?)\b', r'\1 \2', text, flags=re.IGNORECASE)
+
+
+def cluster_blocks(blocks: list[TextBlock]) -> list[list[TextBlock]]:
+    """Blocks in clusters: blocks whose boxes, grown by CLUSTER_CHARS character heights, touch
+    are one cluster (the lines of one label). Clusters in reading order (top, then left)."""
+    reach = CLUSTER_CHARS * blocks[0].char_height_px
+    parent = list(range(len(blocks)))
+
+    def root(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for i, a in enumerate(blocks):
+        for j in range(i + 1, len(blocks)):
+            b = blocks[j]
+            if (a.box[0] - reach <= b.box[2] and b.box[0] - reach <= a.box[2]
+                    and a.box[1] - reach <= b.box[3] and b.box[1] - reach <= a.box[3]):
+                parent[root(i)] = root(j)
+    clusters: dict[int, list[TextBlock]] = {}
+    for i, block in enumerate(blocks):
+        clusters.setdefault(root(i), []).append(block)
+    return sorted(clusters.values(), key=lambda c: (min(b.box[0] for b in c), min(b.box[1] for b in c)))
 
 
 def label_crop(view: ViewInk, blocks: list[TextBlock]) -> np.ndarray:
@@ -1044,6 +1198,29 @@ def region_at(view: ViewInk, block: TextBlock) -> int:
     return int(values[np.argmax(counts)])
 
 
+def outside_enclosure(view: ViewInk, block: TextBlock, region: int, boxes: list) -> int:
+    """The region around a label's enclosure: an item number drawn in a circle or a small box
+    (no larger than ENCLOSURE_CHARS character heights beyond the text) labels the region the
+    circle sits in, not the inside of the circle. Returns ``region`` for any other label."""
+    if not region or boxes[region - 1] is None:
+        return region
+    rows, cols = boxes[region - 1]
+    reach = ENCLOSURE_CHARS * block.char_height_px
+    text_height, text_width = block.box[2] - block.box[0], block.box[3] - block.box[1]
+    if rows.stop - rows.start > text_height + reach or cols.stop - cols.start > text_width + reach:
+        return region
+    step = int(2 * view.line_width_px) + 3  # across the enclosing line
+    r0, c0 = max(0, rows.start - step), max(0, cols.start - step)
+    r1, c1 = min(view.regions.shape[0] - 1, rows.stop + step), min(view.regions.shape[1] - 1, cols.stop + step)
+    ring = np.concatenate([view.regions[r0, c0:c1 + 1], view.regions[r1, c0:c1 + 1],
+                           view.regions[r0:r1 + 1, c0], view.regions[r0:r1 + 1, c1]])
+    ring = ring[(ring > 0) & (ring != region)]
+    if not len(ring):
+        return region
+    values, counts = np.unique(ring, return_counts=True)
+    return int(values[np.argmax(counts)])
+
+
 def border_regions(regions: np.ndarray) -> set[int]:
     return set(np.unique(np.concatenate([regions[0], regions[-1], regions[:, 0], regions[:, -1]]))) - {0}
 
@@ -1061,13 +1238,16 @@ def label_groups(view: ViewInk, blocks: list[TextBlock], centre_row: float | Non
     """Text blocks grouped by the closed region under them (and, in a plan, by the side of the
     centre line), and the blocks outside any closed region. Regions open to the view edge or
     larger than MAX_REGION_SHARE of the view are not closed (the linework leaks into a room)."""
+    from scipy import ndimage
+
     border = border_regions(view.regions)
     sizes = np.bincount(view.regions.ravel())
     limit = MAX_REGION_SHARE * view.regions.size
+    boxes = ndimage.find_objects(view.regions)
     grouped: dict[tuple[int, int | None], list[TextBlock]] = {}
     free = []
     for block in blocks:
-        region = region_at(view, block)
+        region = outside_enclosure(view, block, region_at(view, block), boxes)
         if region and region not in border and sizes[region] <= limit:
             side = None if centre_row is None else (1 if block.centre[0] < centre_row else -1)
             grouped.setdefault((region, side), []).append(block)
@@ -1089,9 +1269,19 @@ def resolve_sides(groups: list[RegionLabel]) -> list[RegionLabel]:
         if len(parts) == 2 and all(_names_a_tank(p.text) for p in parts):
             resolved.extend(parts)
             continue
-        text = ' '.join(p.text for p in parts if p.text)
+        # Notes on a side ("GIRDER OVER") are not part of the tank's name.
+        named = [p for p in parts if p.text and not _is_note(p.text)] or parts
+        text = ' '.join(p.text for p in named if p.text)
         resolved.append(RegionLabel(region, None, [b for p in parts for b in p.blocks], text))
     return resolved
+
+
+def _is_note(text: str) -> bool:
+    """A structural note ("GIRDER OVER", "WEB"): a feature word with no tank word, no tank
+    number and no schedule item."""
+    lower = text.lower()
+    return bool(FEATURE_WORDS.search(lower)) and not TANK_WORDS.search(lower) and not tank_key(text) \
+        and '#' not in text
 
 
 def _names_a_tank(text: str) -> bool:
@@ -1105,18 +1295,40 @@ def _several_tanks(text: str) -> bool:
     return len(numbers) > 1
 
 
-def plan_tanks(view: ReadView, labels: list[RegionLabel]) -> list[PlanTank]:
-    """Tank regions of a plan: labelled regions whose label names a tank."""
+def plan_tanks(view: ReadView, labels: list[RegionLabel], schedule: list[dict] = ()) -> list[PlanTank]:
+    """Tank regions of a plan: labelled regions whose label names a tank, or whose tank number
+    has a schedule row that names a tank (of the same kind). A label for both sides ("NO.2 P/S")
+    on a region across the centre line gives a port and a starboard tank."""
     found: list[PlanTank] = []
     for label in labels:
-        if not is_tank_label(label.text) or _several_tanks(label.text):
+        if _several_tanks(label.text) or not names_tank(label.text, schedule):
             continue
-        tank = PlanTank(view.ink.spec.name, label.text, tank_key(label.text), label.region, {}, (0.0, 0.0),
-                        label.side)
-        _restrict(view, tank)
-        if tank.columns:
-            found.append(tank)
+        for side, text in split_both_sides(label.text, label.side, view.centre_row is not None):
+            tank = PlanTank(view.record_name, text, tank_key(text), label.region, {}, (0.0, 0.0), side,
+                            view.ink.spec.role)
+            _restrict(view, tank)
+            if tank.columns:
+                found.append(tank)
     return found
+
+
+def names_tank(text: str, schedule: list[dict]) -> bool:
+    """A label names a tank by its own words, or by a tank number whose schedule row (same
+    number and kind) names a tank."""
+    if is_tank_label(text):
+        return True
+    if FEATURE_WORDS.search((text or '').lower()) or not tank_key(text):
+        return False
+    row = schedule_row_for(text, list(schedule))
+    return row is not None and is_tank_label(f"{row.get('name', '')} {row.get('content', '')}")
+
+
+def split_both_sides(text: str, side: int | None, has_centre_line: bool) -> list[tuple[int | None, str]]:
+    """(side, label) of the tanks a label names: a label for both sides ("NO.2 P/S") on a whole
+    region gives a port tank ("NO.2 P") and a starboard tank ("NO.2 S"); else the label itself."""
+    if side is not None or not has_centre_line or not BOTH_SIDES.search(text):
+        return [(side, text)]
+    return [(1, BOTH_SIDES.sub('P', text)), (-1, BOTH_SIDES.sub('S', text))]
 
 
 def _restrict(view: ReadView, tank: PlanTank) -> None:
@@ -1181,7 +1393,10 @@ def find_baseline(view: ReadView, blocks: list[TextBlock]) -> tuple[float, str]:
     parsed = view.ink
     # A baseline is often drawn dashed: dash gaps are closed here.
     horizontal, _ = axis_line_masks(parsed.ink & ~parsed.text, parsed.px_per_mm, close_dashes=True)
-    axis_row = view.axis.row if view.axis is not None else float(horizontal.shape[0])
+    # Only a frame axis with read numbers lies below the hull; ticks without numbers (frame marks
+    # on a tank-top line) or a scale-bar sheet give no such row: then the lowest long line counts.
+    has_frame_axis = view.axis is not None and view.axis.source == 'read'
+    axis_row = view.axis.row if has_frame_axis else float(horizontal.shape[0])
     for block in blocks:
         text = block.text.lower().replace('.', ' ')
         if not re.search(r'\bb\s*l\b|base\s*line|baseline', text):
@@ -1206,7 +1421,8 @@ def find_baseline(view: ReadView, blocks: list[TextBlock]) -> tuple[float, str]:
     bands = np.split(long_rows, np.flatnonzero(np.diff(long_rows) > 1) + 1) if len(long_rows) else []
     lines = [float(b.mean()) for b in bands if len(b) and b.mean() < axis_row - 2]
     if lines:
-        return max(lines), 'lowest long horizontal line above the frame axis (no baseline label read)'
+        where = 'above the frame axis' if has_frame_axis else 'of the view'
+        return max(lines), f'lowest long horizontal line {where} (no baseline label read)'
     return float(parsed.ink.shape[0]), 'view bottom (no baseline found)'
 
 
@@ -1253,11 +1469,17 @@ def deck_above(profile: ReadView, xs: np.ndarray, low_m: float) -> float | None:
     """Height (m) of the first deck line above ``low_m`` over a tank: a horizontal profile line
     at least DECK_MIN_COVER of the view wide, at least MIN_TANK_HEIGHT_M above ``low_m``, at the
     tank's middle."""
+    from scipy import ndimage
+
     horizontal = profile.ink.horizontal
-    wide = horizontal.sum(axis=1) >= DECK_MIN_COVER * horizontal.shape[1]
+    # A deck line with sheer steps from row to row: its connected pieces span the width.
+    pieces, _ = ndimage.label(horizontal, structure=np.ones((3, 3)))
+    spans = [0] + [box[1].stop - box[1].start for box in ndimage.find_objects(pieces)]
     columns = np.arange(horizontal.shape[1]) + 0.5
     column = int(np.argmin(np.abs(profile.axis.x_m(columns) - float(np.median(xs)))))
-    rows = np.flatnonzero(horizontal[:, column] & wide)
+    rows = np.flatnonzero(horizontal[:, column])
+    rows = rows[[spans[pieces[row, column]] >= DECK_MIN_COVER * horizontal.shape[1] for row in rows]] \
+        if len(rows) else rows
     heights = (profile.baseline_row - rows) / profile.px_per_m
     heights = heights[heights >= low_m + MIN_TANK_HEIGHT_M]
     return float(heights.min()) if len(heights) else None
@@ -1281,11 +1503,12 @@ class RasterTank:
     notes: list[str] = field(default_factory=list)
 
 
-def match_profile(tank: PlanTank, regions: list[ProfileRegion]) -> ProfileRegion | None:
+def match_profile(tank: PlanTank, regions: list[ProfileRegion], on_bottom: bool = False) -> ProfileRegion | None:
     """The profile region of a plan tank: the two x extents overlap over at least
     MIN_PROFILE_COVER of the longer one (a piece of the tank, or a room over several tanks, is
     not the tank), and the labels share a word (content words, not numbers or sides); the
-    largest overlap wins."""
+    largest overlap wins. With ``on_bottom`` (a tank of a double-bottom plan) only regions on the
+    bottom shell count."""
     best, best_overlap = None, 0.0
     plan_words = words(tank.label)
     for region in regions:
@@ -1293,8 +1516,12 @@ def match_profile(tank: PlanTank, regions: list[ProfileRegion]) -> ProfileRegion
         longer = max(tank.x_range[1] - tank.x_range[0], region.x_range[1] - region.x_range[0])
         if longer <= 0 or overlap < MIN_PROFILE_COVER * longer:
             continue
+        if on_bottom and min(low for low, _ in region.columns.values()) > ON_BOTTOM_M:
+            continue  # a double-bottom tank's profile region sits on the bottom shell
         shared = plan_words & words(region.label)
-        same_number = _number(tank.key) is not None and _number(tank.key) == _number(tank_key(region.label))
+        # A tank number names the same tank only on a tank label ("HOLD NO.2" is not tank No. 2).
+        same_number = (_number(tank.key) is not None and _number(tank.key) == _number(tank_key(region.label))
+                       and content_of(region.label) not in (None, 'dry'))
         # A shortened word counts ("FRESH W." names "Fresh water").
         prefixed = any(a.startswith(b) or b.startswith(a) for a in plan_words for b in words(region.label)
                        if min(len(a), len(b)) >= 3)
@@ -1310,10 +1537,11 @@ def _number(key: str | None) -> str | None:
     return match.group(1) if match else None
 
 
-def align_to_profile(plan: ReadView, profile: ReadView, search_m: float = None) -> tuple[float, str]:
+def align_to_profile(plan: ReadView, profile: ReadView, search_m: float = None) -> tuple[float, str, bool]:
     """Shift (m) of a plan's x that puts its transverse bulkheads on the profile's: the shift
     within ``search_m`` (default ALIGN_SEARCH_M) that best correlates the long vertical lines of both views (0.1 m
-    bins). Used when x comes from a scale bar, with no frame numbers to tie the views."""
+    bins). Used when x comes from a scale bar, with no frame numbers to tie the views.
+    Returns the shift, the evidence and whether at least ALIGN_MIN_AGREEING bins agree."""
     def presence(view: ReadView) -> tuple[np.ndarray, float]:
         vertical = view.ink.vertical
         long_columns = vertical.sum(axis=0) >= ALIGN_MIN_LINE * vertical.shape[0]
@@ -1324,7 +1552,7 @@ def align_to_profile(plan: ReadView, profile: ReadView, search_m: float = None) 
     plan_xs, _ = presence(plan)
     profile_xs, _ = presence(profile)
     if not len(plan_xs) or not len(profile_xs):
-        return 0.0, 'no long vertical lines to align on; views taken as drawn one above the other'
+        return 0.0, 'no long vertical lines to align on; views taken as drawn one above the other', False
     low = min(plan_xs.min(), profile_xs.min()) - search_m
     bins = np.arange(low, max(plan_xs.max(), profile_xs.max()) + search_m, ALIGN_BIN_M)
     a = np.histogram(plan_xs, bins)[0] > 0
@@ -1332,8 +1560,9 @@ def align_to_profile(plan: ReadView, profile: ReadView, search_m: float = None) 
     steps = int(search_m / ALIGN_BIN_M)
     scores = {shift: float(np.sum(np.roll(a, shift) & b)) for shift in range(-steps, steps + 1)}
     best = max(scores, key=lambda k: (scores[k], -abs(k)))
+    agreeing = scores[best] >= ALIGN_MIN_AGREEING
     return best * ALIGN_BIN_M, (f'plan shifted {best * ALIGN_BIN_M:+.1f} m: {scores[best]:.0f} vertical-line bins '
-                                f'agree with the profile (at no shift: {scores[0]:.0f})')
+                                f'agree with the profile (at no shift: {scores[0]:.0f})'), agreeing
 
 
 def double_bottom_level(profile: ReadView, xs: np.ndarray) -> float | None:
@@ -1345,8 +1574,10 @@ def double_bottom_level(profile: ReadView, xs: np.ndarray) -> float | None:
 
 
 def build_tank(tank: PlanTank, plan_role: str, profile: ReadView | None, regions: list[ProfileRegion],
-               slicer: tanks.HullSlicer | None) -> tuple[np.ndarray | None, str, str, str | None]:
-    """Solid of a plan tank: (triangles, z source, z basis, matched profile label)."""
+               slicer: tanks.HullSlicer | None, region: ProfileRegion | None = None
+               ) -> tuple[np.ndarray | None, str, str, str | None]:
+    """Solid of a plan tank: (triangles, z source, z basis, matched profile label). ``region``
+    gives the profile region directly (a tank named in the profile only)."""
     xs = np.array(sorted(tank.columns))
     step = abs(xs[1] - xs[0]) if len(xs) > 1 else 0.05
 
@@ -1354,7 +1585,9 @@ def build_tank(tank: PlanTank, plan_role: str, profile: ReadView | None, regions
         nearest = xs[np.argmin(np.abs(xs - x))]
         return tank.columns[float(nearest)] if abs(nearest - x) <= 1.5 * step else None
 
-    matched = match_profile(tank, regions) if profile is not None else None
+    if plan_role == 'double_bottom' and label_kind(tank.label) in ('deep tank', 'settling', 'peak'):
+        plan_role = 'above'  # drawn in the inner-bottom plan, but standing on the tank top
+    matched = region or (match_profile(tank, regions, plan_role == 'double_bottom') if profile is not None else None)
     bottom = -1.0 if slicer is not None else 0.0
     tank_top = double_bottom_level(profile, xs) if plan_role == 'double_bottom' and profile is not None else None
     if matched is not None:
@@ -1405,6 +1638,82 @@ def build_tank(tank: PlanTank, plan_role: str, profile: ReadView | None, regions
     return triangles, source, basis, matched.label if matched else None
 
 
+def half_breadths(view: ReadView, x_m: float) -> tuple[float, float] | None:
+    """Port and starboard half-breadths (m) of a plan's outline at ship x: the outermost
+    boundary ink above and below the centre line in that pixel column; None outside the plan."""
+    if view.centre_row is None:
+        return None
+    boundary = view.ink.boundary
+    xs = view.axis.x_m(np.arange(boundary.shape[1]) + 0.5)
+    if not min(xs[0], xs[-1]) <= x_m <= max(xs[0], xs[-1]):
+        return None
+    column = int(np.argmin(np.abs(xs - x_m)))
+    rows = np.flatnonzero(boundary[:, column])
+    clear = 2 * view.ink.line_width_px  # the centre line itself
+    port = rows[rows < view.centre_row - clear]
+    starboard = rows[rows > view.centre_row + clear]
+    if not len(port) or not len(starboard):
+        return None
+    return (view.centre_row - port.min()) / view.px_per_m, (starboard.max() - view.centre_row) / view.px_per_m
+
+
+def profile_tanks(profile: ReadView, labels: list[RegionLabel], regions: list[ProfileRegion],
+                  plans: list[ReadView], plan_tanks_found: list[PlanTank]) -> list[tuple[PlanTank, ProfileRegion]]:
+    """Tanks that the profile names but no plan draws (deep tanks, peaks, a fresh water tank
+    over the shaft): a labelled profile region that names a liquid tank, with no plan tank of
+    the same number or name words over the same frames. Its breadth at each x is the median of
+    the plan outlines there (port half, starboard half, or both for a centre tank); its height
+    is the profile region. A label for both sides ("NO.2 P/S") gives two tanks."""
+    by_region = {region.region: region for region in regions}
+    found = []
+    for label in labels:
+        region = by_region.get(label.region)
+        if region is None or not is_tank_label(label.text) or content_of(label.text) in (None, 'dry'):
+            continue
+        if ROOM_WORDS.search(label.text.lower()):
+            continue  # a room's label run together with a tank's: the region is the room
+        if _several_tanks(label.text) or any(_same_tank(label.text, region, tank) for tank in plan_tanks_found):
+            continue
+        both = bool(BOTH_SIDES.search(label.text))
+        # A tank on the bottom shell no higher than a double bottom takes the double-bottom
+        # plan's breadth; any other tank the plans above it (all plans when none has that role).
+        in_double_bottom = (min(low for low, _ in region.columns.values()) <= ON_BOTTOM_M
+                            and max(high for _, high in region.columns.values()) <= MAX_DOUBLE_BOTTOM_M)
+        role = 'double_bottom' if in_double_bottom else 'above'
+        breadth_plans = [plan for plan in plans if plan.ink.spec.role == role] or plans
+        for side, text in ([(1, BOTH_SIDES.sub('P', label.text)), (-1, BOTH_SIDES.sub('S', label.text))]
+                           if both else [(None, label.text)]):
+            columns = {}
+            for x in np.arange(region.x_range[0], region.x_range[1], TANK_SLAB_M / 2):
+                widths = [w for w in (half_breadths(plan, float(x)) for plan in breadth_plans) if w is not None]
+                if not widths:
+                    continue
+                # The hull is symmetric: the smaller side leaves out ink drawn outside the hull.
+                half = float(np.median([min(w) for w in widths]))
+                columns[float(x)] = (0.0 if side == 1 else -half, 0.0 if side == -1 else half)
+            if len(columns) < 2:
+                continue
+            xs = sorted(columns)
+            tank = PlanTank(profile.record_name, text, tank_key(text), -1, columns, (xs[0], xs[-1]), side)
+            found.append((tank, region))
+    return found
+
+
+def _same_tank(text: str, region: ProfileRegion, tank: PlanTank) -> bool:
+    """A plan tank is the tank of a profile label when their x extents overlap over half the
+    shorter one, their kinds do not differ (a deep tank over double-bottom tank No. 1 is another
+    tank) and they share the tank number or a name word."""
+    profile_kind = label_kind(text)
+    if profile_kind and tank.kind and profile_kind != tank.kind:
+        return False
+    overlap = min(tank.x_range[1], region.x_range[1]) - max(tank.x_range[0], region.x_range[0])
+    shorter = min(tank.x_range[1] - tank.x_range[0], region.x_range[1] - region.x_range[0])
+    if shorter <= 0 or overlap < 0.5 * shorter:
+        return False
+    number = _number(tank_key(text))
+    return (number is not None and number == _number(tank.key)) or bool(words(text) & words(tank.label))
+
+
 def read_schedule(ink: np.ndarray, window, ask: Asker) -> list[dict]:
     """Rows (key, name, content) of a printed tank schedule; volumes are never asked."""
     import cv2
@@ -1422,11 +1731,20 @@ def read_schedule(ink: np.ndarray, window, ask: Asker) -> list[dict]:
     return [r for r in rows if isinstance(r, dict) and (r.get('key') or r.get('name'))]
 
 
-def schedule_row_for(label: str, rows: list[dict]) -> dict | None:
+def schedule_row_for(label: str, rows: list[dict], sheet: int | None = None) -> dict | None:
+    """The schedule row of a label: the same tank number and a kind that does not differ (a
+    "NO.1 HATCH" is not fuel oil tank No. 1; a deep tank No. 3 is not double-bottom tank No. 3),
+    rows of the label's own sheet first; else the row that shares the most name words (two or
+    more)."""
     key = tank_key(label)
+    kind = label_kind(label)
     if key:
-        for row in rows:
-            if tank_key(row.get('key', '')) == key or tank_key(row.get('name', '')) == key:
+        same_sheet = sorted(rows, key=lambda row: row.get('sheet') != sheet)
+        for row in same_sheet:
+            if tank_key(row.get('key', '')) != key and tank_key(row.get('name', '')) != key:
+                continue
+            row_kind = label_kind(row.get('name', ''))
+            if kind is None or row_kind is None or kind == row_kind:
                 return row
     label_words = words(label)
     best, best_score = None, 0
@@ -1452,8 +1770,9 @@ class _SheetViews:
 
 
 def _read_views(ink: np.ndarray, dpi: float, sheet: SheetSpec, ask: Asker, prefix: str,
-                reading: dict) -> _SheetViews:
-    """All views of one sheet with their axes and labels, and its tank schedule."""
+                reading: dict, number: int = 0) -> _SheetViews:
+    """All views of one sheet with their axes and labels, and its tank schedule (rows tagged
+    with the sheet ``number``: item numbers refer to the schedule of their own sheet)."""
     px_per_mm = dpi / MM_PER_INCH
     ink, angle = deskew(ink, px_per_mm)
     reading.setdefault('sheets', []).append({'dpi': dpi, 'skew_removed_deg': round(angle, 3)})
@@ -1462,19 +1781,25 @@ def _read_views(ink: np.ndarray, dpi: float, sheet: SheetSpec, ask: Asker, prefi
         bar_axis = read_scale_bar(ink, sheet.scale_bar, px_per_mm, sheet.scale_bar_unit_m, ask)
         reading['sheets'][-1]['scale_bar'] = None if bar_axis is None else {
             'px_per_m': bar_axis.px_per_m, 'evidence': bar_axis.evidence}
-    found = _SheetViews({}, {}, {}, read_schedule(ink, sheet.schedule, ask) if sheet.schedule else [])
+    schedule = read_schedule(ink, sheet.schedule, ask) if sheet.schedule else []
+    found = _SheetViews({}, {}, {}, [{**row, 'sheet': number} for row in schedule])
     for spec in sheet.views:
         name = prefix + spec.name
         view = read_view(ink, spec, px_per_mm, sheet, ask, bar_axis)
+        view.name = name
         if view.axis is None:
             reading['views'][name] = {'error': 'no axis or scale', 'notes': view.notes}
             continue
-        found.labels[name], found.free[name] = read_labels(view, ask)
+        found.labels[name], found.free[name] = read_labels(view, ask, found.schedule)
         found.views[name] = view
         reading['views'][name] = {
             'kind': spec.kind, 'px_per_m': round(view.px_per_m, 3), 'axis': view.axis.evidence,
             'axis_source': view.axis.source, 'ticks': len(view.axis.ticks),
             'labels': [label.text for label in found.labels[name]],
+            'label_places': [{'text': label.text, 'region': label.region, 'side': label.side,
+                              'box': list(_box_of(label.blocks)), 'x_m': [round(float(v), 2) for v in view.axis.x_m(
+                                  [_box_of(label.blocks)[1], _box_of(label.blocks)[3]])]}
+                             for label in found.labels[name] if label.blocks],
             'free_text': [b.text for b in found.free[name]],
             'cross_marks': len(view.ink.crosses), 'notes': view.notes}
     return found
@@ -1494,7 +1819,7 @@ def read_sheets(sheets: list[tuple[np.ndarray, float, SheetSpec]], ask: Asker,
     sheet_of: dict[str, int] = {}
     for number, (ink, dpi, sheet) in enumerate(sheets):
         prefix = f'sheet{number + 1}_' if len(sheets) > 1 else ''
-        found = _read_views(ink, dpi, sheet, ask, prefix, reading)
+        found = _read_views(ink, dpi, sheet, ask, prefix, reading, number)
         views.update(found.views)
         labels.update(found.labels)
         free.update(found.free)
@@ -1508,11 +1833,15 @@ def read_sheets(sheets: list[tuple[np.ndarray, float, SheetSpec]], ask: Asker,
         for name, view in views.items():
             if view.ink.spec.kind == 'plan' and view.axis.source == 'guessed':
                 search = ALIGN_SEARCH_M if sheet_of[name] == sheet_of[profile_name] else profile_length / 2
-                shift, evidence = align_to_profile(view, profile, search)
+                shift, evidence, agreeing = align_to_profile(view, profile, search)
                 shift_px = shift * view.px_per_m  # before the ticks move (the scale reads them)
                 for tick in view.axis.ticks:
                     tick.column -= shift_px
-                reading['views'][name]['alignment'] = evidence
+                if agreeing:
+                    view.axis.source = 'aligned'
+                    view.axis.evidence += '; x aligned to the profile by its bulkheads'
+                reading['views'][name].update(alignment=evidence, axis_source=view.axis.source,
+                                              axis=view.axis.evidence)
         profile.baseline_row, basis = find_baseline(profile, free[profile_name] + [
             TextBlock(_box_of(label.blocks), label.blocks[0].char_height_px, label.text)
             for label in labels[profile_name]])
@@ -1523,8 +1852,8 @@ def read_sheets(sheets: list[tuple[np.ndarray, float, SheetSpec]], ask: Asker,
     for name, view in views.items():
         if view.ink.spec.kind != 'plan':
             continue
-        for tank in plan_tanks(view, labels[name]):
-            row = schedule_row_for(tank.label, schedule) if schedule else None
+        for tank in plan_tanks(view, labels[name], schedule):
+            row = schedule_row_for(tank.label, schedule, sheet_of[name]) if schedule else None
             content = content_of(row.get('content', '') if row else '', row.get('name', '') if row else '',
                                  tank.label) or 'misc'
             tank_name = row.get('name') if row else tank.label
@@ -1533,6 +1862,18 @@ def read_sheets(sheets: list[tuple[np.ndarray, float, SheetSpec]], ask: Asker,
                 if triangles is not None else 0.0
             results.append(RasterTank(tank, content, tank_name or tank.label, row.get('key') if row else None,
                                       z_source, z_basis, profile_label, triangles, volume))
+    if profile is not None:
+        plans = [view for view in views.values() if view.ink.spec.kind == 'plan']
+        for tank, region in profile_tanks(profile, labels[profile_name], regions, plans,
+                                          [t.plan for t in results]):
+            row = schedule_row_for(tank.label, schedule, sheet_of[profile_name]) if schedule else None
+            content = content_of(row.get('content', '') if row else '', tank.label) or 'misc'
+            triangles, z_source, z_basis, profile_label = build_tank(tank, 'above', profile, regions, slicer, region)
+            volume = tanks.fill_state(tanks.outward(triangles), float(triangles[:, :, 2].max())).volume_m3 \
+                if triangles is not None else 0.0
+            z_basis += '; breadth from the plan outlines at each x (guessed)'
+            results.append(RasterTank(tank, content, tank.label, row.get('key') if row else None, 'guessed',
+                                      z_basis, profile_label, triangles, volume))
     reading['tanks'] = [tank_record(t) for t in results]
     return results, reading
 

@@ -364,3 +364,112 @@ Causes found in the reading record (`work/tanks-raster/runs/huddell/reading.json
 Next development round (new data; Huddell is no longer a holdout): frame axis from the drawn frame
 numbers on scanned plans; tie profile labels to plan regions by frame range; require a tank word (or a
 schedule tank row) before a plan region becomes a tank; match the schedule by number and kind.
+
+## 7. Round 2: scanned capacity plans of other ships (metrics fixed 2026-11-09, before the build)
+
+Branch `feature/tanks-r2` from `continue/v0.5` at `80d5fa5`. Huddell is a development case now (the
+holdout is spent, section 6). The section 4 targets and decision stay as written; nothing in this
+section changes them, and no round 2 result is a holdout result.
+
+**Data.**
+- Huddell (development): sheets 7, 8 and 9 and the host calibration of section 4 (unchanged unless a
+  change is listed in the result); truth `liberty_truth/truth.json` (22 rows); scored with the
+  section 4.1 scorer, unchanged (`--scorer holdout`).
+- Gunnerus D1 (Tank Plan Rev1, 300 dpi) and D2 (Tank Arrangement Rev0, 300 dpi), truth as section 3.
+  The D1 truth file of round 1 was in the git-ignored `work/` of a removed worktree; it is
+  transcribed again the same way (by hand, from a render of the printed table) before the D1 run.
+- Empire State V and Saugatuck: plausibility as section 5.3.
+
+**Metrics (development targets, not gates).**
+
+| ID | Metric | Target |
+|---|---|---|
+| N1 | Huddell x origin: share of views whose x comes from drawn evidence (frame numbers, or alignment to the profile by drawn bulkheads with an agreement count), not from the sheet edge | 100 % |
+| N2 | Huddell coverage with the section 4.1 scorer (H1 as measured; 16 of 22 rows have a number) | >= 50 % (11 of 22) |
+| N3 | Huddell volume of matched tanks, median abs relative error (H2 as measured) | <= 25 % |
+| N4 | Huddell grand total (H3 as measured; unmatched rows 0 m3) | within 25 % |
+| N5 | False tanks: built tanks on Huddell whose label and schedule row name no tank (hatch, girder, store, void, casing) | 0 |
+| N6 | Gunnerus no regression against section 5.2: D1 and D2 R1 not lower by more than one tank, R2 <= 0.5 m, R3 median not higher by more than 2 points | met on D1 and D2 |
+| N7 | Plausibility: Empire State V and Saugatuck scale within 2 % of the printed scale; tanks built not fewer than section 5.3 (23 and 3) | met |
+
+Rules: as section 3 (no target loosened after a result; no reader code branches on a ship name; a
+miss is reported with its cause). The model reads text only (Claude Sonnet 5.5 through the Claude
+Code CLI on the subscription); answers are cached per crop image in `work/`.
+
+### 7.1 Round 2 result (2026-11-09; reader `d1aeaf7`)
+
+What changed in the reader (no ship names in the code; host calibration unchanged):
+- Schedule item numbers: a circled "5" in a view takes the name of row 5 of its own sheet's
+  schedule; a schedule row matches a label by tank number and kind ("NO.1 HATCH" is not tank No. 1).
+- Tank test: a tank word or a schedule tank row is needed; hatches, girders, trunks, cofferdams
+  and casings are never tanks; structural notes ("GIRDER OVER") do not join a tank label.
+- A label inside a circle labels the region around the circle; far-apart text in one region is
+  read as separate crops (clusters) and joined.
+- Plan centre line from the symmetry of the outline when no line is found; "P/S" splits a tank.
+- Tanks that only the profile names (deep tanks, peaks, F.W. tank) are built from the profile
+  region with the plan outlines' breadth at the same x (frame-range link; `guessed`).
+- A double-bottom plan tank takes only profile regions on the bottom; "HOLD NO.2" is not tank
+  No. 2; deck lines with sheer are found by connected pieces; without a numbered frame axis the
+  baseline is the lowest long profile line (round 1 took the tick line at the tank top).
+- Dual-use content "fuel oil or water ballast" (density default 1.025 t/m3, guessed).
+- Reading records name views with their sheet prefix. Round 1 records did not, so the section 4
+  scorer could not give any inner-bottom tank its plan role (kind "double bottom"): a second
+  cause of the 0 of 22 result, not found in section 6.
+
+Frame axis (cause 1): the Huddell sheets print no frame numbers, only unnumbered frame ticks on
+the tank-top line and spacing notes. x therefore comes from the profile (reference) and each plan
+is aligned to it by its bulkheads; every plan reports the agreement count.
+
+Metrics (last runs with the code of `d1aeaf7`; model answers cached in `work/`):
+
+| ID | Round 1 | Round 2 | Target |
+|---|---|---|---|
+| N1 x from drawn evidence (Huddell plans) | 0 of 4 (all "sheet edge") | 4 of 4 aligned (inner bottom +6.1 m, 12 bins; decks 16 and 17 bins; deep-tank top 6 bins, doubtful); profile is the reference | 100 %: met for plans |
+| N2 Huddell H1 coverage | 0 of 22 | **14 of 22 (63.6 %)** | >= 50 %: met |
+| N3 Huddell H2 median | n/a | **28.9 %** (3 within 10 %, 5 within 25 %) | <= 25 %: missed |
+| N4 Huddell H3 grand total | -100 % | **-42.6 %** (fuel oil -50 %, ballast -33 %, fresh and feed -21 %) | within 25 %: missed |
+| N5 false tanks on Huddell | 7 hatch and girder "tanks" | 0 | 0: met |
+| N6 D1 300 dpi (R1 / R2 / R3; R4 total) | 0.83 (20) / 0.008 m / 8.3 % (15 within 10 %); -3.2 % | 0.83 (20) / 0.008 m / 9.3 % (13 within 10 %); +1.6 % | met |
+| N6 D2 300 dpi | 0.86 (18) / 0.011 m / 40.9 %; +201 % | 0.81 (17) / 0.011 m / 40.3 %; +9.3 % | met (one tank fewer: the false 226 m3 "Engine room No 11sb" is gone) |
+| N7 Empire State V | scale +0.15 %; 23 built | scale +0.15 %; 25 built; fuel/ballast 1,892 m3 (HAER 2,188 m3 of fuel) | met |
+| N7 Saugatuck | scale +0.01 %; 3 built (5.4 m high) | scale +0.01 %; 4 built (cargo and wing tanks 12.1 m high; depth 12 m) | met |
+
+Round 1 baselines were rerun on this branch with fresh caches (the round 1 `work/` was removed
+with its worktree; the D1 truth was transcribed again from a 110 dpi render).
+
+Causes of the Huddell misses (reading record `work/tanks-raster/runs/huddell-r9/`):
+- Deep tanks No. 3 P/S (753 m3, 24 % of the truth total) are not built: their profile region
+  leaks into the machinery space (dashed cross mark in a narrow space), and the deck above them
+  is dashed, so no height is found.
+- Starboard double-bottom regions are cut by the dashed "girder over" lines (drawn solid so that
+  dashed tank boundaries close): No. 2 S -57 %, No. 5 S -76 %, No. 6 -71 %. The port sides are
+  +26 %, -6 %; prisms without a hull are high by the bilge (No. 1 +38 %, No. 3 +23 %).
+- Reserve feed No. 4 P/S (+103 %): the plan region also holds the void and cofferdam.
+- Deep tanks No. 2 P/S -29 %: the breadth is the median of the plan outlines, not the hull at
+  that height. Deep tanks No. 1 P/S +3 %.
+- Rows without a number (peaks, fresh water, settling tanks; 6 of 22) cannot match by 4.1.
+
+Open for round 3: treat dashed lines that cross a labelled tank as girders (close only dashed
+lines that end on solid lines); dashed deck lines for heights; regions bounded by a cross mark;
+a hull from the Liberty lines (sheet 19) to clip the prisms; the peaks and settling tanks have no
+number, so they need a name-and-kind match rule fixed before they can be scored.
+
+## 8. What a new holdout ship needs (Huddell is spent)
+
+A new holdout must be a ship that no development run has read. Before any run, commit a protocol
+like section 4 (reader commit, metrics, targets, decision rule, scorer) and then:
+
+1. **Inputs.** The scanned sheets that draw the tanks: an inboard or capacity profile, the inner
+   bottom (tank top) plan, and any plan that draws deep tanks, peaks or settling tanks; with a
+   drawn frame axis or a graphic scale bar on each sheet, and the tank schedule if one is printed.
+   Raster as downloaded (TIFF or PDF page), resolution known, public or licensed for this use.
+2. **Host calibration.** A `SheetSpec` per sheet (view windows, view kind, plan role, scale-bar
+   and schedule windows), written by a person or agent without access to the truth, committed
+   before the run.
+3. **Per-tank truth** from a source other than the sheets the reader reads (a capacity-plan
+   table, a tank-calibration book, a stability booklet), transcribed by an independent agent into
+   the section 4.1 format: name, tank number, side (P, S, C), kind, content, printed 100 %
+   capacity and unit, one row per physical tank (dual-use tanks once). Two independent
+   transcriptions that agree, and printed totals that equal the column sums.
+4. **Optional:** a hull (lines plan or offsets) so tanks are clipped to the hull instead of
+   prisms; printed frame limits or LCG/VCG per tank, which allow the x-end and centroid metrics.
