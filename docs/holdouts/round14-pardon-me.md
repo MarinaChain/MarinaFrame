@@ -152,10 +152,13 @@ establish correct identities or engineering use. `engineering_approved` stays fa
 
 ## 8. Truth freeze record (PM fills before the first run)
 
-- Frozen truth path: `...`
-- SHA-256: `...`
-- Scored nonblank cells (of 66): `...`
-- Transcriptions agree on: `...` cells; differences resolved: `...`
+- Frozen truth path: `/private/tmp/claude-501/pardon-me/truth_s4.json` (converted from
+  `truth-frozen/table_as_printed.json`, sha256 0d394abb58306b80556c77d97b4e5475e40b4d740f4cd8bcb10bed6a24a4cdf2;
+  only the Halfbreadths From Centerline rows WL 3-0-0 to -2-0-0, stations 1 to 11)
+- SHA-256: `ab33dc13e0c1ffec81fb1e45068788953adb033d6bc9cb29b3e132da03089242`
+- Scored nonblank cells (of 66): `57`
+- Transcriptions agree on: `162` station cells (all; pass A Sonnet 5.5 row crops, pass B Opus 5.5
+  column crops) and the six transom values; differences resolved: `0` (none needed)
 
 ## 9. Run commands (from the worktree root, in a shell without `ANTHROPIC_BASE_URL`)
 
