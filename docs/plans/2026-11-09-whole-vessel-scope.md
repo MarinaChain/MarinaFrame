@@ -433,3 +433,6 @@ the data it needs.
 Step 1 on Gunnerus: see `docs/WHOLE_VESSEL_GUNNERUS.md`. Next actions in order: (a) appendage shapes (first run: section 4.6 of that document)
 and openings in step 1; (b) model pass on Balclutha HAER sheets for a like-for-like comparison;
 (c) step 2 plan (`docs/STRUCTURE_V2.md`) with metrics.
+
+Step 2 (2026-11-09): MiDShip 3D block results in `docs/STRUCTURE_V2.md`; Gunnerus internals in
+`docs/WHOLE_VESSEL_GUNNERUS.md` section 6. OCX export (section 4.3.3) not started.
