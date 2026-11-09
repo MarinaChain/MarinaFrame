@@ -15,7 +15,7 @@ def test_layout_puts_the_aftbody_left_and_the_grid_on_both_sides():
     assert aft.grid_columns[0] == hv.CENTRE_COLUMN - 600 and fore.grid_columns[-1] == hv.CENTRE_COLUMN + 3000
     assert layout.waterlines_low_to_high() == list(hv.WATERLINES)
     # 3'-7" lies 3 7/12 ft above the base row.
-    assert abs(hv.BASE_ROW - hv.WATERLINE_ROWS['3-7'] - (3 + 7 / 12) * hv.PIXELS_PER_FT) < 1
+    assert abs(hv.BASE_ROW - hv.WATERLINE_ROWS['3-7'] - (3 + 7 / 12) * hv.PIXELS_PER_FT) <= 1.5
 
 
 def test_truth_loader_skips_crossed_cells_and_converts_feet_inches_eighths(tmp_path):

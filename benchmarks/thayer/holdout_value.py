@@ -34,9 +34,10 @@ CENTRE_COLUMN = 8857.5
 BASE_ROW = 6081.5
 PIXELS_PER_FT = 150.0
 PIXELS_PER_M = PIXELS_PER_FT / FEET_M
-# Waterline label (feet-inches above base, as printed) -> image row.
-WATERLINE_ROWS = {'3-7': 5543.5, '5-7': 5243.5, '7-7': 4943.5, '9-7': 4643.5, '11-7': 4343.5,
-                  '13-7': 4043.5, '15-7': 3743.5, '17-7': 3443.5}
+# Waterline label (feet-inches above base, as printed) -> image row (whole pixels; the drawn line
+# is 4 px wide, centred half a pixel lower).
+WATERLINE_ROWS = {'3-7': 5543, '5-7': 5243, '7-7': 4943, '9-7': 4643, '11-7': 4343,
+                  '13-7': 4043, '15-7': 3743, '17-7': 3443}
 WATERLINES = tuple(WATERLINE_ROWS)
 # Vertical grid lines: buttocks at 4, 8 and 12 ft and the 20 ft frame of the body-plan grid.
 GRID_OFFSETS_FT = (4, 8, 12, 20)
