@@ -32,9 +32,15 @@ if os.name == 'nt':
             raise BlockingIOError(str(exc)) from exc
 
     def unlock(target: FileOrDescriptor) -> None:
+        """Release the lock. Unlocking a lock that is not held is harmless, as with flock: msvcrt
+        raises OSError for it, and a cleanup path that unlocks after a refused lock must still
+        close its file."""
         descriptor = _descriptor(target)
         os.lseek(descriptor, 0, os.SEEK_SET)
-        msvcrt.locking(descriptor, msvcrt.LK_UNLCK, _LOCKED_BYTES)
+        try:
+            msvcrt.locking(descriptor, msvcrt.LK_UNLCK, _LOCKED_BYTES)
+        except OSError:
+            pass
 else:
     import fcntl
 

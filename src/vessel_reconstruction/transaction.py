@@ -145,6 +145,7 @@ def quarantine_interrupted(output_dir: str | Path) -> dict:
     if not lock_path.exists():
         return {"recovered": False, "reason": "final_output_exists" if os.path.lexists(out) else "no_transaction", "run_dir": str(out)}
     descriptor = os.open(lock_path, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
+    locked = False  # only a lock this call took is released
     try:
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             raise ValueError("Transaction reservation is not an ordinary file.")
@@ -152,6 +153,7 @@ def quarantine_interrupted(output_dir: str | Path) -> dict:
             try_lock_exclusive(descriptor)
         except BlockingIOError:
             return {"recovered": False, "reason": "active_transaction", "run_dir": str(out)}
+        locked = True
         try:
             record = load_bounded_json(lock_path, max_bytes=16_384, max_nodes=100)
         except (OSError, ValueError):
@@ -186,5 +188,6 @@ def quarantine_interrupted(output_dir: str | Path) -> dict:
                 "last_phase": record.get("phase", "unknown"),
                 "quarantine": str(quarantined) if quarantined else None}
     finally:
-        unlock(descriptor)
+        if locked:
+            unlock(descriptor)
         os.close(descriptor)
