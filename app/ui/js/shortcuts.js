@@ -29,6 +29,13 @@ const GROUPS = [
     ['+ − 0', 'Zoom the drawing in, out, to fit (click the drawing first)'],
     ['← → ↑ ↓', 'Pan the drawing (click the drawing first)'],
   ]],
+  ['3D model (click the model first)', [
+    ['1 2 3 4 5', 'Iso, profile, plan, body plan from ahead, from astern'],
+    ['P', 'Orthographic or perspective camera'],
+    ['F', 'Fit the selected part'],
+    ['C', 'Section cut panel (Esc ends the cut)'],
+    ['G W E', 'Grid, design waterline plane, feature edges'],
+  ]],
   ['Review parts (Parts tab)', [
     ['A', 'Accept the part as a draft part'],
     ['M', 'Mark the part and say what to change'],

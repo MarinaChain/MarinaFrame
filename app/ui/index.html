@@ -46,6 +46,17 @@
     <symbol id="i-table" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1" /><path d="M2 6.5h12M2 9.8h12M6 3v10" /></symbol>
     <symbol id="i-waterline" viewBox="0 0 16 16"><path d="M2.5 5h11l-1.6 5.5H4.1z" /><path d="M1.5 12.5c1.1-.8 2.2-.8 3.3 0s2.2.8 3.2 0 2.2-.8 3.3 0 2.1.8 3.2 0" /></symbol>
     <symbol id="i-mesh" viewBox="0 0 16 16"><path d="M2.5 12.5L8 3l5.5 9.5z" /><path d="M5.2 7.8h5.6M8 12.5L5.2 7.8M8 12.5l2.8-4.7" /></symbol>
+    <symbol id="i-cut" viewBox="0 0 16 16"><path d="M2.5 5.5L8 2.5l5.5 3v5L8 13.5l-5.5-3z" /><path d="M8 1v14" stroke-dasharray="1.6 1.4" /></symbol>
+    <symbol id="i-view-iso" viewBox="0 0 16 16"><path d="M2 9.5l6-3 6 3-6 3z" /><path d="M2 9.5v1.5l6 3 6-3V9.5" /><path d="M6 7.5V4.5h4v3" /></symbol>
+    <symbol id="i-view-profile" viewBox="0 0 16 16"><path d="M1.5 8h13l-1.5 3.5H3.5z" /><path d="M5.5 8V5.5h4V8" /></symbol>
+    <symbol id="i-view-plan" viewBox="0 0 16 16"><path d="M1.5 5h9.5c2 0 3.5 1.5 3.5 3s-1.5 3-3.5 3H1.5z" /><path d="M8 8h.1" /></symbol>
+    <symbol id="i-view-bow" viewBox="0 0 16 16"><path d="M2.5 4c0 5 2.5 8.5 5.5 8.5s5.5-3.5 5.5-8.5" /><path d="M8 12.5V4" /><path d="M5.5 7.5l2.5 2 2.5-2" /></symbol>
+    <symbol id="i-view-stern" viewBox="0 0 16 16"><path d="M2.5 4c0 4 1 7 3 8h5c2-1 3-4 3-8" /><path d="M2.5 4h11" /></symbol>
+    <symbol id="i-ortho" viewBox="0 0 16 16"><rect x="2.5" y="4.5" width="7" height="7" /><path d="M2.5 4.5l4-2.5h7l-4 2.5M13.5 2v7l-4 2.5" /></symbol>
+    <symbol id="i-grid" viewBox="0 0 16 16"><path d="M2 5.5h12M2 10.5h12M5.5 2v12M10.5 2v12" /></symbol>
+    <symbol id="i-frames" viewBox="0 0 16 16"><path d="M1.5 10h13" /><path d="M3 10V6M6 10V8M9 10V6M12 10V8" /></symbol>
+    <symbol id="i-edges" viewBox="0 0 16 16"><path d="M3 5.5L8 3l5 2.5v5L8 13l-5-2.5z" /><path d="M3 5.5L8 8l5-2.5M8 8v5" stroke-dasharray="1.4 1.2" /></symbol>
+    <symbol id="i-flip" viewBox="0 0 16 16"><path d="M8 2v12" stroke-dasharray="1.6 1.4" /><path d="M5.5 5L2.5 8l3 3M10.5 5l3 3-3 3" /></symbol>
     <symbol id="i-package" viewBox="0 0 16 16"><path d="M2 2.8h12v3.2H2z" /><path d="M3 6v7.2h10V6" /><path d="M6.4 8.6h3.2" /></symbol>
     <!-- Source-label glyphs: colour is never the only signal (visual language, lane C). -->
     <symbol id="i-src-traced" viewBox="0 0 16 16"><circle class="glyph-fill" cx="8" cy="8" r="3.2" /></symbol>
@@ -218,7 +229,7 @@
                   <button class="btn btn-ghost btn-icon" id="model-reset" type="button" title="Reset view (R)" aria-label="Reset view"><svg class="icon"><use href="#i-reset" /></svg></button>
                 </div>
               </div>
-              <div class="model-host" id="model-host" tabindex="0" role="region" aria-label="3D model. Drag to rotate, scroll to zoom, click a section plane to pick it."></div>
+              <div class="model-host" id="model-host" tabindex="0" role="region" aria-label="3D model. Drag to rotate, scroll to zoom, click a section plane to pick it. Keys: 1 to 5 standard views, P orthographic, F fit, C section cut, G grid, W waterline, E edges."></div>
               <!-- HOOK(M3 live): fit dial and a one-line caption over the 3D view. -->
               <div class="fit-dial" id="fit-dial" role="img" aria-label="Fit" hidden>
                 <svg viewBox="0 0 48 48" aria-hidden="true">
