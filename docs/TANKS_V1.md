@@ -255,3 +255,33 @@ word gave it, else `guessed`) and `engineering_approved` false. The app colours 
 tokens, draws their edges, shows the hull and the other parts translucent while tanks show, and
 has a legend with switches for the tanks and for all tank names (by default only the tank under
 the pointer and the selected tank are named; overlapping names are left out).
+
+## 7. OCX compartments (2026-11-09, branch `feature/ocx-compartments`)
+
+Plan. Goal: one OCX 3.0.1 file carries the steel structure (`Plate`, `Stiffener`) and the tanks
+(`Compartment`), so class-society tools and shipbuilding CAD (NAPA, AVEVA, Cadmatic) read both. The
+writer is `structure/ocx.py` (`export_ocx(block, path, tanks=...)`); a tanks-only file (no block) is
+also valid. Compartments go in one `ocx:Arrangement` under `ocx:Vessel`, before the plates (schema
+order). The sample models (`D-VLCC_1-HOLD-OCX-simple_v3.3docx`, 5 compartments; `NAPA-OCX_M9.3docx`,
+2) set the form.
+
+### 7.1 Field mapping
+
+| MarinaFrame (`tanks.Tank`, capacity row) | OCX 3.0.1 |
+|---|---|
+| `id` | `Compartment/@name` (the key of the round trip); `id` and `GUIDRef` derive from it |
+| `name`, `content`, `frames` | `Description` text: `name=...; content=...; frames=...` |
+| content class (`tanks.content_class`: name words first, then content) | `ocx:compartmentPurpose` (required enumeration): fuel_oil, diesel_oil -> `Fuel`; lube_oil -> `Lube`; water_ballast -> `Ballast`; fresh_water, feed_water -> `Freshwater`; cargo -> `Cargo`; void -> `Void`; oily_residue, sewage, other -> `Other` |
+| volume at 100 % (moulded, from the closed mesh) | `CompartmentProperties/Volume` (`Um3`). The 98 % working volume has no OCX field. |
+| LCG, TCG, VCG at 100 % | `CompartmentProperties/CenterOfGravity` (`Um`) |
+| density (printed, else content default) | `LiquidCargo/Density` (`UKgOverm3`); a tank without density, and every void, is written as `UnitCargo` (the schema requires one of the cargo elements) |
+| content | `LiquidCargo/@liquidCargoType` from the schema list: fuel oil and diesel -> `fuel oil`, lube -> `lubricating oil`, ballast -> `water ballast`, fresh and feed water -> `fresh water`, sludge/bilge -> `sludge`, sewage -> `sullage`, else `unspecified` |
+| solid (closed mesh) | one `CompartmentFace` per planar face: adjacent coplanar triangles are merged; the face is a degree-1 `NURBSSurface` over its in-plane bounding rectangle (as in the samples) and a `FaceBoundaryCurve` with a closed `PolyLine3D` loop (outer loop first, then any holes) |
+| source labels (`traced`/`read`/`guessed` per name, content, frames, geometry, density) | in the `Description` text; OCX has no field for them. Also `engineering_approved=false` |
+| tank not built (no mesh) | not written (a compartment needs faces, volume and centre) |
+| sounding tables, free-surface moments, air-pipe and filling heights, 98 % fill | not written (`FillingHeight`, `AirPipeHeight` are optional and not known) |
+
+Reader: `ocx.read_compartments` streams every `Compartment` (name, purpose, volume, centre, density,
+cargo type, face count). Tests: schema check with `xmllint`, round trip on synthetic box tanks,
+reader on the two sample files. Export path: `exports.package` writes the compartments into an OCX
+file of the package when the run has a tank model.
