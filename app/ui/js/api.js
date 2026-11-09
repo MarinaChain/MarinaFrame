@@ -325,6 +325,30 @@ const MOCK_COMPONENTS = (() => {
   ];
 })();
 
+/**
+ * With ?mocktanks the survey launch has one tank part and a capacity plan (made-up values in the
+ * shape of app/core run_tables.rs), so the tank tables can be checked on the mock.
+ */
+const MOCK_TANK_PART = {
+  id: 'tank_fw1', op: 'tank', label: 'No 1 fresh water', status: 'draft_guess', built: true, view: 'plan',
+  reason: 'height: guessed: the tank height is not drawn', bbox_m: { min: [4, -1.5, 0.2], max: [7, 1.5, 1.4] },
+  volume_m3: 4.2, step_path: 'whole_vessel/tank_fw1.step', review: 'open',
+  arguments: [{ name: 'outline', value: '4 points', source: 'traced', basis: 'Tank plan region' }, { name: 'height', value: '0.20 to 1.40 m', source: 'guessed', basis: 'Tank height not drawn' }],
+};
+const MOCK_CAPACITY_PLAN = {
+  file: 'tank_tables/Survey_launch_r0003_DRAFT_capacity_plan.csv',
+  stamp: ['Draft hull model from MarinaFrame. Not for construction.'],
+  engineering_approved: false,
+  rows: [
+    { id: 'tank_fw1', name: 'No 1 fresh water', content: 'fresh water', frames: '6...10', built: true, volume_100_m3: 4.2, volume_98_m3: 4.116, density_t_m3: 1, weight_98_t: 4.116, lcg_m: 5.5, tcg_m: 0, vcg_m: 0.83, max_free_surface_moment_tm: 2.1, printed_volume_m3: 4, sources: { name: 'read', content: 'read', frames: 'read', volume: 'guessed', density: 'read', centroid: 'guessed', weight: 'guessed' }, notes: '', has_sounding: true },
+    { id: 'tank_fo1', name: 'No 1 fuel oil', content: 'fuel oil', frames: '10...12', built: false, volume_100_m3: null, volume_98_m3: null, density_t_m3: 0.85, weight_98_t: null, lcg_m: null, tcg_m: null, vcg_m: null, max_free_surface_moment_tm: null, printed_volume_m3: 2, sources: { name: 'read', content: 'read', frames: 'read', volume: 'guessed', density: 'guessed', centroid: 'guessed', weight: 'guessed' }, notes: 'no plan region holds its label: not built', has_sounding: false },
+  ],
+  groups: [
+    { content: 'fresh water', tanks: 1, built: 1, volume_100_m3: 4.2, weight_98_t: 4.116 },
+    { content: 'fuel oil', tanks: 1, built: 0, volume_100_m3: 0, weight_98_t: 0 },
+  ],
+};
+
 /** File suffixes and sizes (bytes) the mock "writes" for each export. */
 const MOCK_EXPORT_FILES = {
   step: [['model.step', 4_812_330]],
@@ -332,6 +356,7 @@ const MOCK_EXPORT_FILES = {
   offsets: [['offsets.csv', 3_912]],
   hydrostatics: [['hydrostatics.json', 1_731], ['hydrostatics.csv', 1_452]],
   report: [['report.pdf', 486_220]],
+  tanks: [['capacity_plan.csv', 1_204], ['sounding_tank_fw1.csv', 2_310]],
   package: [['package.zip', 6_903_118]],
 };
 
@@ -491,7 +516,7 @@ function mockTransport() {
   const mockExports = new Map();
   const mockRevision = (revision) => `r${String(revision).replace(/^r/, '').padStart(4, '0')}`;
   function mockExportResult(task, revision) {
-    const order = ['step', 'stl', 'offsets', 'hydrostatics', 'report', 'package', 'manifest'];
+    const order = ['step', 'stl', 'offsets', 'hydrostatics', 'report', 'tanks', 'structure', 'package', 'manifest'];
     const folderRevision = mockRevision(revision);
     const files = [...(mockExports.get(`${task}|${folderRevision}`) || [])]
       .sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
@@ -585,6 +610,11 @@ function mockTransport() {
         ? clone(localParts || MOCK_COMPONENTS).map(mockPart)
         : null;
       view.sign_off = task.endsWith('survey-launch') ? clone(mockSignOff) : null;
+      const mockTanks = task.endsWith('survey-launch') && new URLSearchParams(location.search).has('mocktanks');
+      if (mockTanks) view.components.push(mockPart(MOCK_TANK_PART));
+      view.capacity_plan = mockTanks ? clone(MOCK_CAPACITY_PLAN) : null;
+      view.tank_model = mockTanks;
+      view.structure_files = [];
       // With ?mockglb (and a GLB placed in mock/files for a local check; none is shipped) the
       // survey launch has a whole-vessel model; ?mockglbbig makes it too large to load.
       const glbParam = new URLSearchParams(location.search);
@@ -935,6 +965,16 @@ function mockTransport() {
     },
     async list_datasets(data) {
       return data.datasets;
+    },
+    async sounding_table(data, { task, tank_id }) {
+      requireTask(data, task);
+      if (tank_id !== 'tank_fw1') throw new BackendError('sounding_not_found', 'This run has no sounding table for that tank.');
+      const levels = [0, 0.3, 0.6, 0.9, 1.2];
+      return {
+        tank_id, file: 'tank_tables/Survey_launch_r0003_DRAFT_sounding_tank_fw1.csv', stamp: [], engineering_approved: false,
+        columns: ['sounding_m', 'ullage_m', 'volume_m3', 'fill_pct'],
+        rows: levels.map((level) => [level, 1.2 - level, 3.5 * level, (100 * level) / 1.2]),
+      };
     },
     async list_exports(data, { task, revision }) {
       requireTask(data, task);

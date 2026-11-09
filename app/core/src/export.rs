@@ -19,13 +19,17 @@ use std::time::{Duration, Instant};
 
 /// Folder inside the task that holds the exports, one subfolder per revision.
 pub const EXPORTS_FOLDER: &str = "exports";
-/// The outputs a person can choose, in display order.
-pub const OUTPUTS: [&str; 6] = [
+/// The outputs a person can choose, in display order. `tanks` (capacity plan and sounding
+/// tables) and `structure` (steel tables and OCX file) need the run's tank model or structure
+/// folder (`run_tables`); without them they are listed as not built.
+pub const OUTPUTS: [&str; 8] = [
     "step",
     "stl",
     "offsets",
     "hydrostatics",
     "report",
+    "tanks",
+    "structure",
     "package",
 ];
 /// Kind of the manifest file. It is not a choice: every export keeps it.
@@ -121,6 +125,15 @@ pub fn kind_of_file(name: &str) -> Option<&'static str> {
     if name.contains(['/', '\\']) || name.starts_with('.') {
         return None;
     }
+    // A sounding table first: a tank id can end like another kind ("_sounding_offsets.csv").
+    let tank_table = (name.contains("_DRAFT_sounding_") && name.ends_with(".csv"))
+        || name.ends_with("_capacity_plan.csv");
+    if tank_table {
+        return Some("tanks");
+    }
+    if crate::run_tables::structure_role(name).is_some() {
+        return Some("structure");
+    }
     SUFFIXES
         .iter()
         .find(|(suffix, _)| name.ends_with(suffix))
@@ -134,6 +147,18 @@ fn not_built_kind(role: &str) -> Option<&'static str> {
         "stl_mesh" => Some("stl"),
         _ => None,
     }
+}
+
+/// Chosen `tanks` or `structure` outputs the run has no input for.
+fn missing_run_tables(task: &Path, chosen: &[&str]) -> Vec<String> {
+    let mut missing = vec![];
+    if chosen.contains(&"tanks") && crate::run_tables::tank_model_path(task).is_none() {
+        missing.push("tanks".to_string());
+    }
+    if chosen.contains(&"structure") && crate::run_tables::structure_files(task).is_empty() {
+        missing.push("structure".to_string());
+    }
+    missing
 }
 
 fn exports_folder(task: &Path, revision: &str) -> PathBuf {
@@ -170,7 +195,8 @@ pub fn export_run(
     });
     // The staging folder is ours alone; remove it whether the export worked or not.
     let _ = std::fs::remove_dir_all(&staging);
-    let not_built = outcome?;
+    let mut not_built = outcome?;
+    not_built.extend(missing_run_tables(task, &chosen));
     let mut result = list_exports(task, &revision)?;
     result.not_built = not_built;
     Ok(result)
@@ -266,6 +292,7 @@ fn run_worker(
         .args([OsStr::new("--task"), task.as_os_str()])
         .args(["--revision", revision])
         .args([OsStr::new("--out"), out.as_os_str()])
+        .args(run_table_arguments(task))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -300,6 +327,19 @@ fn run_worker(
             "The export worker gave no readable answer.",
         )
     })
+}
+
+/// Worker arguments for the run's tank model and structure folder, when the run has them.
+fn run_table_arguments(task: &Path) -> Vec<std::ffi::OsString> {
+    let mut arguments = vec![];
+    if let Some(model) = crate::run_tables::tank_model_path(task) {
+        arguments.extend(["--tanks".into(), model.into_os_string()]);
+    }
+    if !crate::run_tables::structure_files(task).is_empty() {
+        let folder = task.join(crate::run_tables::STRUCTURE_FOLDER);
+        arguments.extend(["--structure".into(), folder.into_os_string()]);
+    }
+    arguments
 }
 
 /// A worker process that finished in time: its exit status and output.

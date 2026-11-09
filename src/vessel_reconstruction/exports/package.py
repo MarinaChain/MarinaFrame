@@ -9,6 +9,9 @@ Files (``<stem>`` is ``<vessel>_<revision>_DRAFT``):
   <stem>_model.stl          the build's STL, binary header stamped as a draft
   <stem>_capacity_plan.csv  capacity plan, when a tank model is given (``tanks``)
   <stem>_sounding_<id>.csv  sounding table of each built tank, when a tank model is given
+  <stem>_<name>             steel tables (*_steel_members.csv, *_steel_totals.csv) and OCX
+                            files (*.3docx) of a structure folder, when one is given
+                            (``structure_dir``); copied unchanged, they carry their own draft stamp
   <stem>_manifest.json      file list with SHA-256 hashes and the source build identity
   <stem>_package.zip        all of the above
 
@@ -39,6 +42,10 @@ ZIP_DATE_TIME = (2026, 1, 1, 0, 0, 0)
 STEP_DESCRIPTION = re.compile(r"FILE_DESCRIPTION\(\(.*?\),'2;1'\);", re.DOTALL)
 STEP_HEADER_BYTES = 4096
 STL_HEADER_BYTES = 80
+# Files of a structure folder (``structure.steel.write_steel_tables`` and ``structure.ocx.export_ocx``)
+# that go into the package, by name suffix, with their manifest role.
+STRUCTURE_FILE_ROLES = (("_steel_members.csv", "steel_members"), ("_steel_totals.csv", "steel_totals"),
+                        (".3docx", "ocx_structure"))
 
 
 def stamp_lines(build: DraftBuild) -> list[str]:
@@ -118,6 +125,19 @@ def write_hydrostatics(hydrostatics: Hydrostatics | None, error: str | None, bui
             writer.writerow([key, "" if value is None else value])
 
 
+def copy_structure_files(structure_dir: Path, out_dir: Path, stem: str) -> list[tuple[Path, str, dict]]:
+    """Copy the steel tables and OCX files of ``structure_dir`` as ``<stem>_<name>``; return their entries."""
+    entries = []
+    for source in sorted(Path(structure_dir).iterdir()):
+        role = next((role for suffix, role in STRUCTURE_FILE_ROLES if source.name.endswith(suffix)), None)
+        if role is None or not source.is_file() or source.is_symlink():
+            continue
+        target = out_dir / f"{stem}_{source.name}"
+        target.write_bytes(source.read_bytes())
+        entries.append((target, role, {"source_file": source.name}))
+    return entries
+
+
 def file_entry(path: Path, role: str, **extra) -> dict:
     return {"file": path.name, "role": role, "bytes": path.stat().st_size, "sha256": digest_file(path), **extra}
 
@@ -133,10 +153,11 @@ def write_zip(files: list[Path], path: Path) -> None:
 
 def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float | None = None,
                  waterline_intervals: int = DEFAULT_WATERLINE_INTERVALS, vessel: str | None = None,
-                 tanks: list | None = None) -> dict:
+                 tanks: list | None = None, structure_dir: Path | None = None) -> dict:
     """Write all exports of one revision into ``out_dir``; return the manifest.
 
-    ``tanks`` (``vessel_reconstruction.tanks.Tank`` list) adds the capacity plan and sounding tables.
+    ``tanks`` (``vessel_reconstruction.tanks.Tank`` list) adds the capacity plan and sounding tables;
+    ``structure_dir`` adds the steel tables and OCX files found in that folder.
     """
     build = load_build(Path(task_dir), revision, vessel)
     out_dir = Path(out_dir)
@@ -158,6 +179,8 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
     if tanks:
         capacity_rows, tank_entries = write_tank_tables(tanks, out_dir, stem, stamp_lines(build))
         entries += tank_entries
+    if structure_dir is not None:
+        entries += copy_structure_files(Path(structure_dir), out_dir, stem)
 
     report = out_dir / f"{stem}_report.pdf"
     write_report(ReportFacts(build, hydrostatics, error, f"MarinaFrame {__version__}", capacity_rows), report)

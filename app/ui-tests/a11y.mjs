@@ -63,6 +63,11 @@ async function prepare({ vessel, tab, vesselTab, open }) {
     button('Re-run with this note').click();
     await wait(open === 'part-rerun' ? 500 : 4000);
   }
+  if (open === 'tank') {
+    // Select the mock tank: its capacity plan row and its sounding table show.
+    [...document.querySelectorAll('.parts-page .parts-row')].find((b) => b.textContent.includes('fresh water')).click();
+    await wait(400);
+  }
   if (open === 'shortcuts') { document.body.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true })); await wait(300); }
 }
 
@@ -85,6 +90,8 @@ const SCREENS = [
   { name: 'parts', path: '/#home', steps: { vessel: 'Survey', vesselTab: 'parts' } },
   { name: 'parts (re-run)', path: '/#home', steps: { vessel: 'Survey', vesselTab: 'parts', open: 'part-rerun' } },
   { name: 'parts (new revision)', path: '/#home', steps: { vessel: 'Survey', vesselTab: 'parts', open: 'part-revision' } },
+  { name: 'parts (tank tables)', path: '/?mocktanks#home', steps: { vessel: 'Survey', vesselTab: 'parts', open: 'tank' } },
+  { name: 'export (tank tables)', path: '/?mocktanks#home', steps: { vessel: 'Survey', vesselTab: 'export' } },
   { name: 'palette', path: '/#home', steps: { vessel: 'Survey', open: 'palette' } },
   { name: 'shortcuts', path: '/#queue', steps: { open: 'shortcuts' } },
 ];

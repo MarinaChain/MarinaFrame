@@ -277,7 +277,7 @@ P0-9, P0-11). Package `src/vessel_reconstruction/exports/`; it only reads the ta
 In the app (`app/core/src/export.rs`, `js/export.js`):
 
 - `export_run(task, revision, outputs)` with `outputs` a subset of `step`, `stl`, `offsets`,
-  `hydrostatics`, `report`, `package`. The backend runs the command below (arguments, no shell;
+  `hydrostatics`, `report`, `tanks`, `structure`, `package`. The backend runs the command below (arguments, no shell;
   at most 300 s, then the worker is stopped: `export_timeout`) into a staging folder, moves the
   chosen files and the manifest into `<task>/exports/<rNNNN>/` and removes the staging folder.
   Refused while an action runs on the task. Returns `{ folder, revision, files: [{ kind, file,
@@ -285,6 +285,13 @@ In the app (`app/core/src/export.rs`, `js/export.js`):
   outputs the build does not have (`step`, `stl`). Worker refusal: `export_worker` with the
   worker's reason.
 - `list_exports(task, revision)`: the same shape for the files already in the folder.
+- `tanks` (capacity plan and sounding tables, CSV) and `structure` (steel tables, CSV, and the
+  OCX file, `.3docx`) need the run's tank model or structure folder (layout fixed in
+  `app/core/src/run_tables.rs`: `<task>/tanks.npz`, `<task>/tank_tables/`, `<task>/structure/`).
+  The backend passes `--tanks <task>/tanks.npz` and `--structure <task>/structure` to the
+  worker when they exist; otherwise a chosen `tanks` or `structure` is listed in `not_built`.
+  The UI offers these two rows only when the run has them (`TaskView.tank_model`,
+  `TaskView.structure_files`).
 - `reveal_export(task, path)`: shows a file or folder inside `<task>/exports/` in Finder
   (`open -R`; `explorer /select,` on Windows; `xdg-open` of the folder on Linux). Other paths:
   `export_reveal`.
@@ -602,6 +609,16 @@ Keep or Undo. A kept revision shows "Revision n, from the note …".
 The Parts tab groups parts by op, draws a profile and a plan sketch of the boxes (the selected
 part in the selection blue, parts with guesses dashed amber), lists each value with its source
 label and basis, and offers Accept (A), Mark (M), Next (N), Show in 3D and Copy part list.
+
+Tanks (`op` `tank`) form their own group. `TaskView.capacity_plan` (read by
+`app/core/src/run_tables.rs` from `<task>/tank_tables/*_capacity_plan.csv`; `null` without one)
+holds `{ file, stamp, rows, groups, engineering_approved: false }`; each row keeps the source
+label of each value (`traced`, `read`, `guessed`; the weight takes the weaker label of volume and
+density). A selected tank shows its row; below the parts, a Capacity plan panel lists every tank
+with totals per content group and the sounding table of the selected tank
+(`sounding_table { task, tank_id }` → `{ tank_id, file, stamp, columns, rows,
+engineering_approved: false }`; only a tank of the capacity plan, else `sounding_not_found`).
+The app does not compute tank values.
 
 3D: `TaskView.whole_vessel_model: { glb_path, bytes, loadable } | null` names the run's
 tessellated model (`whole-vessel-draft.glb`, one node per part named by its id). The app loads

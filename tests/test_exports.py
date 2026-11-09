@@ -330,3 +330,27 @@ def test_export_with_tanks_writes_capacity_plan_and_sounding_tables(tmp_path, ca
                  "--tanks", str(tank_file)]) == 0
     printed = json.loads(capsys.readouterr().out)
     assert any(entry["role"] == "capacity_plan" for entry in printed["files"])
+
+
+def test_export_with_structure_folder_copies_steel_tables_and_ocx(tmp_path, capsys):
+    structure = tmp_path / "structure"
+    structure.mkdir()
+    (structure / "block_DRAFT_steel_members.csv").write_text("# DRAFT\nmember_id,weight_t\nm1,1.0\n")
+    (structure / "block_DRAFT_steel_totals.csv").write_text("# DRAFT\ngroup_by,key\nall,all\n")
+    (structure / "block_DRAFT.3docx").write_text("<ocx/>")
+    (structure / "notes.txt").write_text("not exported")
+    task = make_box_task(tmp_path)
+    manifest = export_draft(task, "r1", tmp_path / "out", structure_dir=structure)
+    stem = "Test-Box-1_r0001_DRAFT"
+    roles = {entry["file"]: entry["role"] for entry in manifest["files"]}
+    assert roles[f"{stem}_block_DRAFT_steel_members.csv"] == "steel_members"
+    assert roles[f"{stem}_block_DRAFT_steel_totals.csv"] == "steel_totals"
+    assert roles[f"{stem}_block_DRAFT.3docx"] == "ocx_structure"
+    assert not any("notes" in name for name in roles)
+    assert (tmp_path / "out" / f"{stem}_block_DRAFT.3docx").read_text() == "<ocx/>"
+    with zipfile.ZipFile(tmp_path / "out" / f"{stem}_package.zip") as archive:
+        assert f"{stem}_block_DRAFT_steel_members.csv" in archive.namelist()
+    assert main(["--task", str(task), "--revision", "r1", "--out", str(tmp_path / "cli"),
+                 "--structure", str(structure)]) == 0
+    printed = json.loads(capsys.readouterr().out)
+    assert any(entry["role"] == "ocx_structure" for entry in printed["files"])

@@ -13,8 +13,33 @@ const OUTPUTS = [
   { kind: 'offsets', name: 'Offsets', glyph: 'table', hint: 'Half-breadths at each station and waterline, CSV for Excel.' },
   { kind: 'hydrostatics', name: 'Hydrostatics', glyph: 'waterline', hint: 'Volume, displacement, centres and coefficients at the design waterline (JSON and CSV).' },
   { kind: 'report', name: 'Report', glyph: 'file', hint: 'PDF review report with station overlays and source labels.' },
+  // Only for a run with a tank model or a structure folder (`ofRun`): see app/core run_tables.rs.
+  { kind: 'tanks', name: 'Tank tables', glyph: 'table', hint: 'Capacity plan and one sounding table per built tank, CSV with source labels.', ofRun: (view) => Boolean(view?.tank_model) },
+  { kind: 'structure', name: 'Steel and OCX', glyph: 'cube', hint: 'Steel weight tables (CSV) and the OCX 3.0.1 structure file, as the run wrote them.', ofRun: (view) => Boolean(view?.structure_files?.length) },
   { kind: 'package', name: 'Package', glyph: 'package', hint: 'One ZIP with all files and the manifest.' },
 ];
+
+/** What the files of a multi-file output are: "Capacity plan and 3 sounding tables". */
+export function filesSummary(kind, files) {
+  const count = (test) => files.filter((f) => test(f.file)).length;
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  if (kind === 'tanks') {
+    const plans = count((name) => name.endsWith('_capacity_plan.csv'));
+    const soundings = count((name) => name.includes('_sounding_'));
+    return [plans ? 'Capacity plan' : null, soundings ? plural(soundings, 'sounding table') : null].filter(Boolean).join(' and ');
+  }
+  if (kind === 'structure') {
+    const steel = count((name) => name.endsWith('.csv'));
+    const ocx = count((name) => name.endsWith('.3docx'));
+    return [steel ? plural(steel, 'steel table') : null, ocx ? plural(ocx, 'OCX file') : null].filter(Boolean).join(' and ');
+  }
+  return '';
+}
+
+/** The outputs this run offers: every hull output, tank and steel outputs when the run has them. */
+export function outputsOf(view, files = []) {
+  return OUTPUTS.filter((o) => !o.ofRun || o.ofRun(view) || files.some((f) => f.kind === o.kind));
+}
 
 /** Statuses whose runs can have a build to export. A running run is still changing. */
 export function canExport(view) {
@@ -81,7 +106,8 @@ export function createExport({ host, invoke }) {
       icon(output.glyph),
       el('span', { class: 'export-text' },
         el('span', { class: 'export-name' }, output.name),
-        el('span', { class: 'export-hint' }, output.hint))),
+        el('span', { class: 'export-hint' }, output.hint),
+        filesSummary(output.kind, written) ? el('span', { class: 'export-hint' }, `Written: ${filesSummary(output.kind, written)}.`) : null)),
       state,
       finder);
   }
@@ -116,7 +142,7 @@ export function createExport({ host, invoke }) {
     const exportButton = el('button', {
       class: 'btn btn-primary btn-large',
       type: 'button',
-      disabled: busy || chosen.size === 0,
+      disabled: busy || !outputsOf(view, files).some((o) => chosen.has(o.kind)),
       onclick: () => runExport(),
     }, busy ? 'Exporting…' : 'Export');
     const folderButton = el('button', {
@@ -133,7 +159,7 @@ export function createExport({ host, invoke }) {
       issuesLine(),
       // A person's sign-off of the parts goes with the files as a note; the files stay drafts.
       view?.sign_off ? el('p', { class: 'export-signoff' }, el('strong', {}, `Signed off by ${view.sign_off.name}, ${new Date(view.sign_off.time_ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}: `), `${view.sign_off.statement}. The files stay drafts.`) : null,
-      el('div', { class: 'export-list', role: 'group', 'aria-label': 'Outputs to export' }, ...OUTPUTS.map(outputRow)),
+      el('div', { class: 'export-list', role: 'group', 'aria-label': 'Outputs to export' }, ...outputsOf(view, files).map(outputRow)),
       error ? el('p', { class: 'form-error', role: 'alert' }, error) : null,
       el('div', { class: 'export-actions' }, folderButton, el('span', { class: 'export-actions-spacer' }), exportButton)));
   }
@@ -145,12 +171,12 @@ export function createExport({ host, invoke }) {
   }
 
   async function runExport() {
-    if (busy || !chosen.size) return;
+    if (busy || !outputsOf(view, files).some((o) => chosen.has(o.kind))) return;
     busy = true;
     error = '';
     render();
     try {
-      const outputs = OUTPUTS.map((o) => o.kind).filter((kind) => chosen.has(kind));
+      const outputs = outputsOf(view, files).map((o) => o.kind).filter((kind) => chosen.has(kind));
       apply(await invoke('export_run', { task, revision, outputs }));
     } catch (failure) {
       error = failure?.message || 'The export did not finish.';
