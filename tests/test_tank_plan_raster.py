@@ -197,3 +197,15 @@ def test_scale_bar_fit_drops_a_misread_number():
     assert axis.px_per_m == pytest.approx(25 / raster.FEET_M)
     x = axis.x_m(np.arange(1000, 1250, 5))
     assert np.all(np.diff(x) > 0)
+
+
+def test_content_words_match_whole_tokens():
+    assert raster.content_of('FWD PEAK') == 'water ballast'  # not fresh water through "fw"
+    assert raster.content_of("'TWEEN DECK") is None  # not ballast through "tw"
+    assert not raster.is_tank_label("'TWEEN DECK")
+    assert raster.content_of('FUEL OIL TANK TWIN SCREW') == 'fuel oil'  # not dual-use through "tw"
+    assert raster.content_of('FUEL OIL TANK PEAKED') == 'fuel oil'  # not dual-use through "peak"
+    assert raster.content_of('F.W. TANK') == 'fresh water'
+    assert raster.content_of('NO.2 TW TANK') == 'water ballast'
+    assert raster.content_of('FO SERVICE') == 'fuel oil'
+    assert raster.content_of('FORE PEAK') == 'water ballast'

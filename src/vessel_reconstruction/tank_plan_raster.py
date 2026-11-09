@@ -139,7 +139,7 @@ CONTENT_WORDS = (
     ('dry ballast', 'dry'),  # solid ballast, not a liquid
     ('lub', 'lube oil'), ('l.o', 'lube oil'),
     ('fuel', 'fuel oil'), ('f.o', 'fuel oil'), ('diesel', 'fuel oil'), ('d.o', 'fuel oil'),
-    ('fo ', 'fuel oil'), ('settling', 'fuel oil'),
+    ('fo', 'fuel oil'), ('settling', 'fuel oil'),
     ('ballast', 'water ballast'), ('technical water', 'water ballast'), ('tw', 'water ballast'),
     ('roll damp', 'water ballast'),
     ('fresh', 'fresh water'), ('f.w', 'fresh water'), ('culinary', 'fresh water'), ('potable', 'fresh water'), ('drinking', 'fresh water'),
@@ -150,6 +150,22 @@ CONTENT_WORDS = (
     ('dry', 'dry'), ('void', 'dry'), ('cofferdam', 'dry'), ('hold', 'dry'), ('cargo', 'dry'),
     ('peak', 'water ballast'),  # a peak tank without a content word
 )
+# A content word must start a token ("fw" is not in "fwd"). A code of at most this many letters
+# ("fw", "tw", "f.o", "dry") and the word "peak" must also end a token, so "'TWEEN DECK" is not
+# "tw" and "PEAKED" is not a peak; longer words may be cut short ("lub" in "lubricating").
+CONTENT_CODE_MAX_LETTERS = 3
+
+
+def _content_pattern(word: str) -> re.Pattern:
+    letters = word.replace('.', '')
+    start = r'(?<![a-z0-9])'
+    if word == 'peak':  # also "fore peak" written as one word
+        return re.compile(start + r'(?:fore|after|aft)?peak(?![a-z0-9])')
+    end = r'(?![a-z0-9])' if len(letters) <= CONTENT_CODE_MAX_LETTERS else ''
+    return re.compile(start + re.escape(word) + end)
+
+
+CONTENT_PATTERNS = tuple((_content_pattern(word), group) for word, group in CONTENT_WORDS)
 # Words that do not tell two tanks apart when a plan label is matched to a profile label.
 STOP_WORDS = {'no', 'tank', 'tanks', 'tk', 'new', 'dbb', 'dbl', 'bot', 'the', 'and', 'or', 'p', 'sb',
               's', 'port', 'stbd', 'ps'}
@@ -957,16 +973,15 @@ DUAL_USE = 'fuel oil or water ballast'
 
 
 def content_of(*texts: str) -> str | None:
-    """Content group from label or schedule words (first word match in CONTENT_WORDS). A tank
+    """Content group from label or schedule words (first word match in CONTENT_WORDS, on word boundaries). A tank
     named for fuel oil and for ballast ("F.O. OR WATER BALLAST TANK") is dual-use."""
     for text in texts:
-        lower = f' {(text or "").lower()} '
-        groups = {group for word, group in CONTENT_WORDS if word in lower}
-        if {'fuel oil', 'water ballast'} <= groups:
+        lower = (text or '').lower()
+        matched = [group for pattern, group in CONTENT_PATTERNS if pattern.search(lower)]
+        if {'fuel oil', 'water ballast'} <= set(matched):
             return DUAL_USE
-        for word, group in CONTENT_WORDS:
-            if word in lower:
-                return group
+        if matched:
+            return matched[0]
     return None
 
 
