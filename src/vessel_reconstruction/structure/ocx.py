@@ -9,8 +9,12 @@ material, section from the ``XSectionCatalogue``, web direction); the MiDShip bl
 no trace, so their stiffener webs and flanges stay plates. The member ID is the ``name``; the source
 labels go in ``Description``.
 
-Reader: streams ``Plate`` and ``Stiffener`` elements (name, thickness, area; section and length),
-so a large model such as the 22 MB D-VLCC sample reads in flat memory.
+Tanks (``tanks`` input, docs/TANKS_V1.md section 7): one ``ocx:Compartment`` per built tank in an
+``ocx:Arrangement`` before the plates. A file may hold tanks only (``block`` is None).
+
+Reader: streams ``Plate``, ``Stiffener`` and ``Compartment`` elements (name, thickness, area;
+section and length; purpose, volume, centre), so a large model such as the 22 MB D-VLCC sample
+reads in flat memory.
 
 Schema check: ``validate`` runs ``xmllint`` against the local OCX 3.0.1 XSD. The XSD imports UnitsML
 and the W3C ``xml.xsd`` by URL; the check copies the schema to a temporary folder and points both
@@ -29,7 +33,11 @@ import uuid
 import xml.etree.ElementTree as ElementTree
 from xml.sax.saxutils import escape, quoteattr
 
+import numpy as np
+
+from .. import tanks as tank_model
 from .steel import STEEL_DENSITY_T_M3
+from .tank_faces import patch_corners, planar_faces
 
 OCX_NAMESPACE = "https://3docx.org/fileadmin//ocx_schema//V301//OCX_Schema.xsd"
 UNITSML_NAMESPACE = "urn:oasis:names:tc:unitsml:schema:xsd:UnitsMLSchema_lite-0.9.18"
@@ -47,7 +55,8 @@ YOUNGS_MODULUS_N_MM2 = 206000
 POISSON_RATIO = 0.3
 # Units the export uses: xml:id -> (symbol, root unit, power, prefix). The OCX unit attributes are
 # IDREFs to these UnitsML entries.
-UNITS = {"Um": ("m", "meter", 1, None), "Um2": ("m2", "meter", 2, None), "Umm": ("mm", "meter", 1, "m"),
+UNITS = {"Um": ("m", "meter", 1, None), "Um2": ("m2", "meter", 2, None), "Um3": ("m3", "meter", 3, None),
+         "Umm": ("mm", "meter", 1, "m"),
          "UKg": ("kg", "gram", 1, "k"), "URad": ("rad", "radian", 1, None),
          "UKgOverm3": ("kg/m3", None, None, None), "UNOvermm2": ("N/mm2", None, None, None),
          "UDimless": ("", None, None, None)}
@@ -55,6 +64,15 @@ UNITS = {"Um": ("m", "meter", 1, None), "Um2": ("m2", "meter", 2, None), "Umm": 
 # MiDShip generator (docs/RULES_V1.md). It is not a class assignment.
 CLASS_SOCIETY = "ABS"
 GUID_NAMESPACE = uuid.UUID("6f1c1d0e-6a53-4c8e-9a64-6d1a0c2f3b10")  # fixed: stable GUIDs per ID
+# Tank content class (tanks.CONTENT_CLASSES) -> OCX compartmentPurpose (schema enumeration).
+COMPARTMENT_PURPOSE = {"fuel_oil": "Fuel", "diesel_oil": "Fuel", "lube_oil": "Lube", "water_ballast": "Ballast",
+                       "fresh_water": "Freshwater", "feed_water": "Freshwater", "cargo": "Cargo", "void": "Void",
+                       "oily_residue": "Other", "sewage": "Other", "other": "Other"}
+# Tank content class -> OCX liquidCargoType (schema enumeration); other classes are "unspecified".
+LIQUID_CARGO_TYPE = {"fuel_oil": "fuel oil", "diesel_oil": "fuel oil", "lube_oil": "lubricating oil",
+                     "water_ballast": "water ballast", "fresh_water": "fresh water", "feed_water": "fresh water",
+                     "oily_residue": "sludge", "sewage": "sullage"}
+KG_PER_TONNE = 1000
 
 
 def _guid(key: str) -> str:
@@ -259,6 +277,104 @@ def _stiffener_xml(number: int, member: dict, material_id: str, grade: str, sect
     </ocx:Stiffener>"""
 
 
+def writable_tanks(tanks) -> list:
+    """The tanks an OCX file can hold: those with a mesh (a compartment needs faces, volume and centre)."""
+    return [t for t in tanks or [] if t.triangles is not None and len(t.triangles) > 0]
+
+
+def _compartment_description(tank, row: dict, content_class: str) -> str:
+    labels = " ".join(f"{k}={v}" for k, v in sorted(row["source_labels"].items()) if v)
+    frames = f"; frames={row['frames']}" if row["frames"] else ""
+    return (f"name={tank.name}; content={tank.content}; content_class={content_class}{frames}; "
+            f"volume at 100 % fill (moulded); source labels: {labels}; engineering_approved=false")
+
+
+def _polyline_loop_xml(key: str, suffix: str, loop, indent: str) -> str:
+    """A closed ``CompositeCurve3D`` with one ``PolyLine3D`` through the loop points.
+
+    ``key`` makes the GUIDs (any text); ``suffix`` makes the xml IDs (letters, digits, underscore).
+    """
+    closed = list(loop) + [loop[0]]
+    length = sum(math.dist(a, b) for a, b in zip(closed, closed[1:]))
+    points = "\n".join(f'{indent}    <ocx:Point3D coordinates="{_coords(p)}" unit="Um"/>' for p in closed)
+    return f"""{indent}<ocx:CompositeCurve3D id="loop{suffix}" ocx:GUIDRef="{_guid('loop/' + key)}">
+{indent}  <ocx:CurveLength numericvalue="{length:.{COORDINATE_DIGITS}f}" unit="Um"/>
+{indent}  <ocx:PolyLine3D id="loopline{suffix}" ocx:GUIDRef="{_guid('polyline/' + key)}">
+{indent}    <ocx:CurveLength numericvalue="{length:.{COORDINATE_DIGITS}f}" unit="Um"/>
+{points}
+{indent}  </ocx:PolyLine3D>
+{indent}</ocx:CompositeCurve3D>"""
+
+
+def _face_xml(tank_id: str, tank_number: int, number: int, face) -> str:
+    """One planar ``CompartmentFace``: a bilinear NURBS patch (as in the sample models) trimmed by the loops."""
+    key = f"{tank_id}/{number}"
+    name = f"{tank_id}_{number}"
+    suffix = f"{tank_number}_{number}"  # xml IDs come from numbers: a tank ID may hold any character
+    patch = "\n".join(f'                <ocx:ControlPoint coordinates="{_coords(p)}" unit="Um" weight="1"/>'
+                      for p in patch_corners(face))
+    loops = "\n".join(_polyline_loop_xml(f"{key}/{k}", f"{suffix}_{k}", loop, "            ")
+                      for k, loop in enumerate(face.loops))
+    return f"""        <ocx:CompartmentFace id="face{suffix}" name={quoteattr(name)} ocx:GUIDRef="{_guid('face/' + key)}">
+          <ocx:UnboundedGeometry>
+            <ocx:NURBSSurface id="surface{suffix}" ocx:GUIDRef="{_guid('surface/' + key)}">
+              <ocx:U_NURBSproperties degree="1" numCtrlPts="2" numKnots="4" isRational="false"/>
+              <ocx:UknotVector value="0 0 1 1"/>
+              <ocx:V_NURBSproperties degree="1" numCtrlPts="2" numKnots="4" isRational="false"/>
+              <ocx:VknotVector value="0 0 1 1"/>
+              <ocx:ControlPtList>
+{patch}
+              </ocx:ControlPtList>
+            </ocx:NURBSSurface>
+          </ocx:UnboundedGeometry>
+          <ocx:FaceBoundaryCurve>
+{loops}
+          </ocx:FaceBoundaryCurve>
+        </ocx:CompartmentFace>"""
+
+
+def _cargo_xml(tank, content_class: str, density_t_m3: float | None) -> str:
+    """``LiquidCargo`` when the tank has a density and holds something; else ``UnitCargo`` (the schema
+    requires one cargo element, and a void or an unknown content has no liquid)."""
+    if density_t_m3 is None or content_class == "void":
+        return "        <ocx:UnitCargo/>"
+    cargo_type = LIQUID_CARGO_TYPE.get(content_class, "unspecified")
+    return (f'        <ocx:LiquidCargo ocx:liquidCargoType="{cargo_type}">\n'
+            f'          <ocx:Density numericvalue="{density_t_m3 * KG_PER_TONNE:.3f}" unit="UKgOverm3"/>\n'
+            "        </ocx:LiquidCargo>")
+
+
+def _compartment_xml(number: int, tank) -> str:
+    row = tank_model.capacity_row(tank)
+    content_class = tank_model.content_class(tank.content, tank.name)
+    faces = planar_faces(tank_model.outward(tank.triangles))
+    centre = (row["lcg_m"], row["tcg_m"], row["vcg_m"])
+    face_text = "\n".join(_face_xml(tank.id, number, n, face) for n, face in enumerate(faces))
+    return f"""      <ocx:Compartment id="{_xml_id('compartment', number)}" name={quoteattr(tank.id)} ocx:GUIDRef="{_guid('compartment/' + tank.id)}" ocx:compartmentPurpose="{COMPARTMENT_PURPOSE[content_class]}">
+        <ocx:Description>{escape(_compartment_description(tank, row, content_class))}</ocx:Description>
+        <ocx:CompartmentProperties>
+          <ocx:CenterOfGravity coordinates="{_coords(centre)}" unit="Um"/>
+          <ocx:Volume numericvalue="{row['volume_100_m3']:.{COORDINATE_DIGITS}f}" unit="Um3"/>
+        </ocx:CompartmentProperties>
+{face_text}
+{_cargo_xml(tank, content_class, row['density_t_m3'])}
+      </ocx:Compartment>"""
+
+
+def _arrangement_xml(tanks: list) -> str:
+    if not tanks:
+        return ""
+    return ('    <ocx:Arrangement id="arrangement" name="tanks">\n'
+            + "\n".join(_compartment_xml(n, t) for n, t in enumerate(tanks)) + "\n    </ocx:Arrangement>")
+
+
+def _tank_extent(tanks: list) -> tuple[float, float, float]:
+    """Length, breadth and height (top z) of the tanks' bounding box (principal particulars of a tanks-only file)."""
+    corners = np.concatenate([t.triangles.reshape(-1, 3) for t in tanks])
+    low, high = corners.min(axis=0), corners.max(axis=0)
+    return float(high[0] - low[0]), float(high[1] - low[1]), float(high[2])
+
+
 def _frame_planes_xml(block: dict, name: str) -> str:
     """X reference planes: the block's bulkhead, web-frame and ordinary-frame stations (x = 0 if none)."""
     stations = block.get("stations") or {}
@@ -276,13 +392,25 @@ def is_stiffener(member: dict) -> bool:
     return bool(member.get("trace")) and bool(member.get("profile"))
 
 
-def export_ocx(block: dict, path: Path, name: str = "MarinaFrame structure block") -> int:
-    """Write the block as an OCX 3.0.1 file; return the number of parts (plates and stiffeners)."""
+def export_ocx(block: dict | None, path: Path, name: str = "MarinaFrame structure block",
+               tanks: list | None = None) -> int:
+    """Write the block and the tanks as an OCX 3.0.1 file.
+
+    ``block`` is a structure block (plates and stiffeners), or None for a tanks-only file; ``tanks`` is a
+    ``tanks.Tank`` list (tanks without a mesh are left out). Returns the number of parts: members plus
+    compartments.
+    """
+    block = block or {"members": []}
+    compartment_tanks = writable_tanks(tanks)
     members = block["members"]
-    grades = sorted({grade_of(m.get("material")) for m in members})
+    # The schema needs one material in the catalogue: a tanks-only file carries grade A, used by nothing.
+    grades = sorted({grade_of(m.get("material")) for m in members}) or [grade_of(None)]
     material_ids = {grade: _xml_id("material", k) for k, grade in enumerate(grades)}
     breadth, depth = block.get("breadth_m") or 0.0, block.get("depth_m") or 0.0
     length = (block.get("guesses") or {}).get("block_length_m") or block.get("length_m") or 0.0
+    if not members and compartment_tanks:  # tanks only: the tanks' bounding box stands in for the block
+        length, full_breadth, depth = _tank_extent(compartment_tanks)
+        breadth = full_breadth / 2  # the particulars below write 2 x breadth
     plate_members = [m for m in members if not is_stiffener(m)]
     stiffener_members = [m for m in members if is_stiffener(m)]
     profiles = {section_name(m["profile"]): m["profile"] for m in stiffener_members}
@@ -292,7 +420,8 @@ def export_ocx(block: dict, path: Path, name: str = "MarinaFrame structure block
     parts += [_stiffener_xml(n, m, material_ids[grade_of(m.get("material"))], grade_of(m.get("material")),
                              section_ids[section_name(m["profile"])])
               for n, m in enumerate(stiffener_members)]
-    plates = "\n".join(parts)
+    arrangement = [_arrangement_xml(compartment_tanks)] if compartment_tanks else []  # schema order: before plates
+    vessel_parts = "\n".join(arrangement + parts)
     sections = "\n".join(_section_xml(profiles[key], section_ids[key]) for key in sorted(profiles))
     text = f"""<?xml version="1.0" encoding="utf-8"?>
 <ocx:ocxXML xmlns:ocx="{OCX_NAMESPACE}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" schemaVersion="{SCHEMA_VERSION}">
@@ -324,14 +453,39 @@ def export_ocx(block: dict, path: Path, name: str = "MarinaFrame structure block
         <ocx:AP_Pos numericvalue="0" unit="Um"/>
       </ocx:PrincipalParticulars>
     </ocx:ClassificationData>
-{plates}
+{vessel_parts}
   </ocx:Vessel>
 {_material_xml(material_ids, sections)}
 {_units_xml()}
 </ocx:ocxXML>
 """
     Path(path).write_text(text, encoding="utf-8")
-    return len(members)
+    return len(members) + len(compartment_tanks)
+
+
+# Units a compartment refers to; a file written before compartments existed may lack ``Um3``.
+COMPARTMENT_UNIT_IDS = ("Um", "Um3", "UKgOverm3")
+# Vessel children that follow ``Arrangement`` in the schema sequence: the compartments go before the first.
+AFTER_ARRANGEMENT = re.compile(r"^ *<ocx:(ReferenceSurfaces|Panel|Plate|Stiffener|Bracket|Member)\b", re.MULTILINE)
+
+
+def add_compartments(source: Path, target: Path, tanks: list) -> bool:
+    """Write ``target``: the OCX file ``source`` (made by ``export_ocx``) with the tanks added as compartments.
+
+    Returns False, and writes nothing, when there is nothing to add or the file cannot take them: it has
+    an ``Arrangement`` already, is not in the ``ocx:`` prefix form of ``export_ocx``, or lacks a unit
+    the compartments need. The caller then keeps ``source`` as it is.
+    """
+    written = writable_tanks(tanks)
+    text = Path(source).read_text(encoding="utf-8")
+    has_units = all(f'xml:id="{unit}"' in text for unit in COMPARTMENT_UNIT_IDS)
+    if not written or "<ocx:Vessel " not in text or "<ocx:Arrangement" in text or not has_units:
+        return False
+    arrangement = _arrangement_xml(written) + "\n"
+    first_part = AFTER_ARRANGEMENT.search(text)
+    position = first_part.start() if first_part else text.index("  </ocx:Vessel>")
+    Path(target).write_text(text[:position] + arrangement + text[position:], encoding="utf-8")
+    return True
 
 
 # --- reader ------------------------------------------------------------------------------
@@ -344,6 +498,9 @@ class OcxPlate:
     net_area_m2: float | None
 
 
+UNIT_TO_METRES = {"Umm": 1e-3, "Umm2": 1e-6, "Umm3": 1e-9, "Ucm": 1e-2, "Ucm2": 1e-4, "Ucm3": 1e-6}
+
+
 def _tag(element) -> str:
     return element.tag.split("}")[-1]
 
@@ -353,13 +510,11 @@ def _child(element, name):
 
 
 def _metres(quantity) -> float | None:
-    """A length or area quantity in metres (OCX files use Um or Umm, Um2 or Umm2)."""
+    """A length, area or volume quantity in metres, square or cubic metres (OCX files use Um, Umm, Ucm and
+    their square and cube units)."""
     if quantity is None:
         return None
-    value = float(quantity.get("numericvalue"))
-    unit = quantity.get("unit", "Um")
-    scale = {"Umm": 1e-3, "Umm2": 1e-6, "Ucm": 1e-2, "Ucm2": 1e-4}.get(unit, 1.0)
-    return value * scale
+    return float(quantity.get("numericvalue")) * UNIT_TO_METRES.get(quantity.get("unit", "Um"), 1.0)
 
 
 def _contour_area(contour) -> float | None:
@@ -423,6 +578,58 @@ def read_plates(path: Path) -> list[OcxPlate]:
     return plates
 
 
+@dataclass(frozen=True)
+class OcxCompartment:
+    name: str | None
+    purpose: str | None  # compartmentPurpose
+    volume_m3: float | None
+    centre_m: tuple[float, float, float] | None  # CenterOfGravity
+    density_kg_m3: float | None  # LiquidCargo density; None for a unit or bulk cargo
+    cargo_type: str | None  # liquidCargoType
+    face_count: int
+
+
+def _compartment_from(element) -> OcxCompartment:
+    properties = _child(element, "CompartmentProperties")
+    centre = _child(properties, "CenterOfGravity") if properties is not None else None
+    point = None
+    if centre is not None:
+        scale = UNIT_TO_METRES.get(centre.get("unit", "Um"), 1.0)
+        point = tuple(float(v) * scale for v in centre.get("coordinates").split())
+    liquid = _child(element, "LiquidCargo")
+    density = _child(liquid, "Density") if liquid is not None else None
+    return OcxCompartment(
+        element.get("name"), _attribute(element, "compartmentPurpose"),
+        _metres(_child(properties, "Volume")) if properties is not None else None, point,
+        float(density.get("numericvalue")) if density is not None else None,
+        _attribute(liquid, "liquidCargoType") if liquid is not None else None,
+        sum(1 for child in element if _tag(child) == "CompartmentFace"))
+
+
+def _attribute(element, name: str) -> str | None:
+    """An attribute by local name (OCX writes ``ocx:compartmentPurpose`` as a namespaced attribute)."""
+    return next((value for key, value in element.attrib.items() if key.split("}")[-1] == name), None)
+
+
+def read_compartments(path: Path) -> list[OcxCompartment]:
+    """All ``Compartment`` elements of an OCX file (streamed; other elements are dropped as read)."""
+    compartments = []
+    depth = 0
+    for event, element in ElementTree.iterparse(path, events=("start", "end")):
+        tag = _tag(element)
+        if event == "start":
+            if tag == "Compartment":
+                depth += 1
+            continue
+        if tag == "Compartment":
+            depth -= 1
+            compartments.append(_compartment_from(element))
+            element.clear()
+        elif depth == 0 and tag not in ("ocxXML", "Vessel", "Arrangement"):
+            element.clear()
+    return compartments
+
+
 # --- schema check ------------------------------------------------------------------------
 
 MINIMAL_XML_XSD = """<?xml version="1.0"?>
@@ -464,17 +671,40 @@ def validate(path: Path, schema_dir: Path, max_errors: int = 20) -> SchemaCheck:
     return SchemaCheck(result.returncode == 0, errors)
 
 
-def round_trip(block: dict, path: Path) -> dict:
+def round_trip(block: dict | None, path: Path, tanks: list | None = None) -> dict:
     """Compare a written export with the block: plate count, thickness and area per plate; and
-    stiffener count, section name and trace length per stiffener."""
-    plates = {p.name: p for p in read_plates(path)}
-    members = [m for m in block["members"] if not is_stiffener(m)]
-    result = _plate_round_trip(members, plates)
-    stiffener_members = [m for m in block["members"] if is_stiffener(m)]
-    if stiffener_members:
-        result["stiffeners"] = _stiffener_round_trip(stiffener_members, path)
-        result["all_equal"] = result["all_equal"] and result["stiffeners"]["all_equal"]
+    stiffener count, section name and trace length per stiffener. With ``tanks``, also compartment
+    count, name, purpose, volume and centre of gravity per tank."""
+    result = {"all_equal": True}
+    if block is not None:
+        plates = {p.name: p for p in read_plates(path)}
+        members = [m for m in block["members"] if not is_stiffener(m)]
+        result = _plate_round_trip(members, plates)
+        stiffener_members = [m for m in block["members"] if is_stiffener(m)]
+        if stiffener_members:
+            result["stiffeners"] = _stiffener_round_trip(stiffener_members, path)
+            result["all_equal"] = result["all_equal"] and result["stiffeners"]["all_equal"]
+    if tanks is not None:
+        result["compartments"] = _compartment_round_trip(writable_tanks(tanks), path)
+        result["all_equal"] = result["all_equal"] and result["compartments"]["all_equal"]
     return result
+
+
+def _compartment_round_trip(tanks: list, path: Path) -> dict:
+    read = {c.name: c for c in read_compartments(path)}
+    purpose_equal = volume_equal = centre_equal = 0
+    for tank in tanks:
+        found = read.get(tank.id)
+        if found is None:
+            continue
+        row = tank_model.capacity_row(tank)
+        purpose_equal += found.purpose == COMPARTMENT_PURPOSE[tank_model.content_class(tank.content, tank.name)]
+        volume_equal += found.volume_m3 is not None and abs(found.volume_m3 - row["volume_100_m3"]) <= 1e-6
+        expected = (row["lcg_m"], row["tcg_m"], row["vcg_m"])
+        centre_equal += found.centre_m is not None and all(abs(a - b) <= 1e-6 for a, b in zip(found.centre_m, expected))
+    return {"tanks": len(tanks), "compartments_read": len(read), "count_equal": len(read) == len(tanks),
+            "purpose_equal": purpose_equal, "volume_equal": volume_equal, "centre_equal": centre_equal,
+            "all_equal": len(read) == len(tanks) == purpose_equal == volume_equal == centre_equal}
 
 
 def _stiffener_round_trip(members: list[dict], path: Path) -> dict:

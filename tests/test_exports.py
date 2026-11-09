@@ -354,3 +354,60 @@ def test_export_with_structure_folder_copies_steel_tables_and_ocx(tmp_path, caps
                  "--structure", str(structure)]) == 0
     printed = json.loads(capsys.readouterr().out)
     assert any(entry["role"] == "ocx_structure" for entry in printed["files"])
+
+
+def box_tank_model():
+    from vessel_reconstruction import tanks
+
+    box = tanks.prism_triangles(2.0, 4.0, [(-1.0, 0.0), (1.0, 0.0), (1.0, 1.0), (-1.0, 1.0)])
+    return [tanks.Tank("db1", "No 1 water ballast", "water ballast", box, ("4", "8"), 1.025),
+            tanks.Tank("hold", "Hold", "dry", None, notes=["not built"])]
+
+
+def test_export_with_tanks_alone_writes_an_ocx_file_of_compartments(tmp_path):
+    from vessel_reconstruction.structure import ocx
+
+    manifest = export_draft(make_box_task(tmp_path), "r1", tmp_path / "out", tanks=box_tank_model())
+    stem = "Test-Box-1_r0001_DRAFT"
+    entries = {entry["file"]: entry for entry in manifest["files"]}
+    assert entries[f"{stem}_tanks.3docx"]["role"] == "ocx_tanks" and entries[f"{stem}_tanks.3docx"]["compartments"] == 1
+    compartments = ocx.read_compartments(tmp_path / "out" / f"{stem}_tanks.3docx")
+    assert [(c.name, c.purpose, c.volume_m3) for c in compartments] == [("db1", "Ballast", pytest.approx(4.0))]
+    with zipfile.ZipFile(tmp_path / "out" / f"{stem}_package.zip") as archive:
+        assert f"{stem}_tanks.3docx" in archive.namelist()
+
+
+def test_export_adds_tanks_to_the_one_structure_ocx_file(tmp_path, capsys):
+    from vessel_reconstruction.structure import ocx
+    from test_structure_export import synthetic_block
+
+    structure = tmp_path / "structure"
+    structure.mkdir()
+    ocx.export_ocx(synthetic_block(), structure / "block_DRAFT.3docx")
+    task = make_box_task(tmp_path)
+    manifest = export_draft(task, "r1", tmp_path / "out", tanks=box_tank_model(), structure_dir=structure)
+    stem = "Test-Box-1_r0001_DRAFT"
+    entries = {entry["file"]: entry for entry in manifest["files"]}
+    merged = entries[f"{stem}_block_DRAFT.3docx"]
+    assert merged["role"] == "ocx_structure_tanks" and merged["compartments"] == 1
+    assert f"{stem}_tanks.3docx" not in entries  # one file carries both
+    path = tmp_path / "out" / merged["file"]
+    assert len(ocx.read_plates(path)) == 4 and [c.name for c in ocx.read_compartments(path)] == ["db1"]
+
+    # A structure folder with two OCX files keeps its files unchanged and the tanks get their own file.
+    ocx.export_ocx(synthetic_block(), structure / "block_two_DRAFT.3docx")
+    manifest = export_draft(task, "r1", tmp_path / "two", tanks=box_tank_model(), structure_dir=structure)
+    roles = {entry["file"]: entry["role"] for entry in manifest["files"]}
+    assert roles[f"{stem}_block_DRAFT.3docx"] == "ocx_structure" and roles[f"{stem}_tanks.3docx"] == "ocx_tanks"
+    assert main(["--task", str(task), "--revision", "r1", "--out", str(tmp_path / "cli"),
+                 "--tanks", str(save_box_tanks(tmp_path)), "--structure", str(structure)]) == 0
+    printed = json.loads(capsys.readouterr().out)
+    assert any(entry["role"] == "ocx_tanks" for entry in printed["files"])
+
+
+def save_box_tanks(folder: Path) -> Path:
+    from vessel_reconstruction import tanks
+
+    path = folder / "box_tanks.npz"
+    tanks.save_tanks(box_tank_model(), path)
+    return path

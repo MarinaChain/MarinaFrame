@@ -33,7 +33,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--vessel", default=None, help="vessel name for file names (default: from the build)")
     parser.add_argument("--tanks", default=None,
                         help="tank model file (.npz from vessel_reconstruction.tanks.save_tanks): adds the "
-                             "capacity plan and sounding tables")
+                             "capacity plan, sounding tables and OCX compartments")
     parser.add_argument("--structure", default=None,
                         help="folder with steel tables (*_steel_members.csv, *_steel_totals.csv) and OCX "
                              "files (*.3docx): copied into the package")

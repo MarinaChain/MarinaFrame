@@ -11,7 +11,11 @@ Files (``<stem>`` is ``<vessel>_<revision>_DRAFT``):
   <stem>_sounding_<id>.csv  sounding table of each built tank, when a tank model is given
   <stem>_<name>             steel tables (*_steel_members.csv, *_steel_totals.csv) and OCX
                             files (*.3docx) of a structure folder, when one is given
-                            (``structure_dir``); copied unchanged, they carry their own draft stamp
+                            (``structure_dir``); copied, they carry their own draft stamp. With a tank
+                            model, the tanks are added as OCX compartments to the one OCX file of the
+                            structure folder (role ocx_structure_tanks)
+  <stem>_tanks.3docx        tanks only, as OCX compartments: written when there is a tank model and no
+                            single structure OCX file to hold them (role ocx_tanks)
   <stem>_manifest.json      file list with SHA-256 hashes and the source build identity
   <stem>_package.zip        all of the above
 
@@ -27,6 +31,8 @@ import re
 import zipfile
 
 from .. import __version__
+# The module, not its names: ``structure.ocx`` imports ``tanks``, which imports this package.
+from ..structure import ocx
 from ..provenance import digest_file
 from .csv_safety import safe_text_cell
 from .hydrostatics import Hydrostatics, design_draft, mesh_hydrostatics, read_stl, table_hydrostatics
@@ -125,17 +131,36 @@ def write_hydrostatics(hydrostatics: Hydrostatics | None, error: str | None, bui
             writer.writerow([key, "" if value is None else value])
 
 
-def copy_structure_files(structure_dir: Path, out_dir: Path, stem: str) -> list[tuple[Path, str, dict]]:
-    """Copy the steel tables and OCX files of ``structure_dir`` as ``<stem>_<name>``; return their entries."""
-    entries = []
+def copy_structure_files(structure_dir: Path, out_dir: Path, stem: str,
+                         tanks: list | None = None) -> list[tuple[Path, str, dict]]:
+    """Copy the steel tables and OCX files of ``structure_dir`` as ``<stem>_<name>``; return their entries.
+
+    When ``tanks`` hold built tanks and the folder has exactly one OCX file, that file gets the tanks as
+    compartments (one OCX file with steel and tanks).
+    """
+    sources = []
     for source in sorted(Path(structure_dir).iterdir()):
         role = next((role for suffix, role in STRUCTURE_FILE_ROLES if source.name.endswith(suffix)), None)
-        if role is None or not source.is_file() or source.is_symlink():
-            continue
+        if role is not None and source.is_file() and not source.is_symlink():
+            sources.append((source, role))
+    ocx_sources = [source for source, role in sources if role == "ocx_structure"]
+    entries = []
+    for source, role in sources:
         target = out_dir / f"{stem}_{source.name}"
-        target.write_bytes(source.read_bytes())
-        entries.append((target, role, {"source_file": source.name}))
+        extra = {"source_file": source.name}
+        if ocx_sources == [source] and ocx.add_compartments(source, target, tanks):
+            role, extra["compartments"] = "ocx_structure_tanks", len(ocx.writable_tanks(tanks))
+        else:
+            target.write_bytes(source.read_bytes())
+        entries.append((target, role, extra))
     return entries
+
+
+def write_tanks_ocx(tanks: list, out_dir: Path, stem: str, vessel: str) -> tuple[Path, str, dict]:
+    """Write the tanks as an OCX file of compartments only."""
+    path = out_dir / f"{stem}_tanks.3docx"
+    count = ocx.export_ocx(None, path, name=f"{vessel} tanks", tanks=tanks)
+    return path, "ocx_tanks", {"compartments": count}
 
 
 def file_entry(path: Path, role: str, **extra) -> dict:
@@ -156,8 +181,9 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
                  tanks: list | None = None, structure_dir: Path | None = None) -> dict:
     """Write all exports of one revision into ``out_dir``; return the manifest.
 
-    ``tanks`` (``vessel_reconstruction.tanks.Tank`` list) adds the capacity plan and sounding tables;
-    ``structure_dir`` adds the steel tables and OCX files found in that folder.
+    ``tanks`` (``vessel_reconstruction.tanks.Tank`` list) adds the capacity plan, the sounding tables and
+    the tanks as OCX compartments; ``structure_dir`` adds the steel tables and OCX files found in that
+    folder.
     """
     build = load_build(Path(task_dir), revision, vessel)
     out_dir = Path(out_dir)
@@ -179,8 +205,10 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
     if tanks:
         capacity_rows, tank_entries = write_tank_tables(tanks, out_dir, stem, stamp_lines(build))
         entries += tank_entries
-    if structure_dir is not None:
-        entries += copy_structure_files(Path(structure_dir), out_dir, stem)
+    structure_entries = copy_structure_files(Path(structure_dir), out_dir, stem, tanks) if structure_dir else []
+    entries += structure_entries
+    if ocx.writable_tanks(tanks) and not any(role == "ocx_structure_tanks" for _, role, _ in structure_entries):
+        entries.append(write_tanks_ocx(tanks, out_dir, stem, build.vessel))
 
     report = out_dir / f"{stem}_report.pdf"
     write_report(ReportFacts(build, hydrostatics, error, f"MarinaFrame {__version__}", capacity_rows), report)
