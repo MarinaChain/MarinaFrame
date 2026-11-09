@@ -467,7 +467,7 @@ cells), prompt, merge, metrics and decision rule as round 5.
   16 tiles; effective resolution 5,120 px by the probe).
 - Crouton Alpha Free: OpenCode Go, key 1, `reasoning_effort: high`, temperature 0.2, round-5
   tiles (2048 x 1024 px, 32 tiles; effective resolution about 2,048 px by the probe).
-- **Claude Sonnet 5.5 and Claude Opus 5.5: not tested.** The router has no route for them, and
+- **Claude Sonnet 5.5 and Claude Opus 5.5: not tested in this round (tested in round 7, section 5.4).** The router has no route for them, and
   OpenCode Go lists only `claude-haiku-5-5`. No personal account was used.
 
 | Model, repeat | Cells (of 151) | RMS | Max | Within 0.05 / 0.15 m | Identity errors | Tile pairs > 0.15 m | Invalid | Tokens in / out (reasoning) | Cost | Wall |
@@ -495,7 +495,7 @@ Decision by the fixed rule (all 3 repeats at least 60 % of the cells and median 
 | GPT-6 Astra | 0.1489 m | 99 % | **adds value** (passes) |
 | GPT 6.1 Sol | 0.15004 m | 95 % | **no value by the rule** (misses by 0.04 mm) |
 | Crouton Alpha Free | 0.2907 m | 97 % | **no value by the rule** (RMS twice the limit) |
-| Claude Sonnet 5.5, Claude Opus 5.5 | - | - | not tested (no route) |
+| Claude Sonnet 5.5, Claude Opus 5.5 | - | - | not tested here (no route); see section 5.4 |
 
 The margin is set by one cell. For Sol and Astra, the only cell more than 0.15 m off is 24 ft
 waterline, station 18 (error 1.81 m in all 6 repeats); without it the RMS is 13 mm in every repeat
@@ -509,6 +509,66 @@ better than the rule. Crouton fails also without that cell (RMS 0.24 to 0.28 m; 
 
 Integration option: plan section 3.5.6 (Astra reads, Sol is the second reader; the controller
 is not changed). Run outputs (not in the repository): the session scratchpad `r6/`.
+
+### 5.4 Round 7: Claude Sonnet 5.5 and Opus 5.5 (subagents on the Claude subscription)
+
+Protocol: plan section 3.5.7, committed first (`ba6e04c`). Scorer and pack builder:
+`benchmarks/balclutha/claude_value.py` (`d2f4277`; tests `tests/test_balclutha_claude_value.py`,
+synthetic data). Run 2026-11-09. This replaces the "not tested" line for the two Claude models in
+section 5.2. Each reader is a Claude Code subagent on the Claude subscription (not the router, not
+OpenCode Go). It reads image files of a tile pack with its file Read tool and writes one answer JSON.
+Pack (outside the repository): 48 tiles of 1568 x 784 px at the sheet's own pixels (three per side
+and waterline, 288 px overlap, because Claude downsamples a long edge over 1568 px), each with its
+1/4-scale context image and a text file (round-6 prompt text, calibration, grid). Same sheet, truth
+(151 cells), metrics and decision rule as rounds 4 to 6. 3 repeats per model, a fresh subagent each.
+Scores: the scorer output was saved by the coordinator (session scratchpad `claude-scores.json`).
+
+| Model, repeat | Cells (of 151) | RMS | Max | Within 0.05 / 0.15 m | Identity errors |
+|---|---:|---:|---:|---:|---:|
+| Claude Sonnet 5.5 R1-1 | 151 (100 %) | 0.14785 m | 1.81 m | 98.7 % / 99.3 % | 0 |
+| Claude Sonnet 5.5 R1-2 | 151 (100 %) | 0.14799 m | 1.81 m | 97.4 % / 99.3 % | 0 |
+| Claude Sonnet 5.5 R1-3 | 151 (100 %) | 0.14787 m | 1.81 m | 98.7 % / 99.3 % | 0 |
+| Claude Opus 5.5 R1-1 | 151 (100 %) | 0.14787 m | 1.81 m | 98.7 % / 99.3 % | 0 |
+| Claude Opus 5.5 R1-2 | 151 (100 %) | 0.14845 m | 1.81 m | 97.4 % / 99.3 % | 0 |
+| Claude Opus 5.5 R1-3 | 151 (100 %) | 0.14795 m | 1.81 m | 98.7 % / 99.3 % | 0 |
+
+Each run gave one extra cell that is not in the truth. Reader token use was about 176k to 191k
+per run (from the subagent reports; wall time and a split into input and output tokens were not
+recorded). Cost: the Claude subscription.
+
+Decision by the fixed rule (all 3 repeats at least 60 % of the cells and median RMS at most 0.15 m):
+
+| Model | Median RMS | Coverage (min) | Decision |
+|---|---:|---:|---|
+| Claude Sonnet 5.5 | 0.14787 m | 100 % | **adds value** (passes) |
+| Claude Opus 5.5 | 0.14795 m | 100 % | **adds value** (passes) |
+
+As for Sol and Astra, the margin is set by one cell: the maximum error 1.81 m (1.8079 m) is the
+same doubtful truth cell (24 ft waterline, station 18; truth 1-9-4, probably a transcription error
+for 7-9-4, section 5.2) in every run of both models. It is the only cell more than 0.15 m off in
+every run (99.3 % within 0.15 m = 150 of 151). Without it the RMS is about 15 mm (computed from the
+RMS above). The truth and the decisions are not changed; a person still has to check the printed cell.
+
+Comparison of all models on this task (same 151-cell truth; rounds 4 to 7):
+
+| Round | Model (access) | Image / tiles | Cells (of 151) | Median RMS | Max | Within 0.15 m | Identity errors | Decision |
+|---|---|---|---:|---:|---:|---:|---|---|
+| 4 | DeepSeek V4.1 Flash (OpenCode Go) | whole body plan, 1600 px | 0 or 151 (all null or all 0) | 1.68 m | 4.35 m or no value | - | 17 or none | no value |
+| 5 | DeepSeek V4.1 Flash (OpenCode Go) | 2048 x 1024 tiles, 32 | 98 to 100 | 1.68 m | 5.09 to 5.66 m | 20 to 24 % | 11 to 15 | no value |
+| 5 | Code only (R0 tracer) | same tiles | 0 | - | - | - | - | abstains |
+| 6 | Crouton Alpha Free (OpenCode Go) | 2048 x 1024 tiles, 32 | 147 to 150 | 0.2907 m | 1.82 to 1.84 m | 70 to 72 % | 1 to 3 | no value |
+| 6 | GPT 6.1 Sol (router) | 4096 x 2048 tiles, 16 | 143 to 151 | 0.15004 m | 1.81 m | 99 % | 0 | no value (misses by 0.04 mm) |
+| 6 | GPT-6 Astra (router) | 4096 x 2048 tiles, 16 | 149 to 151 | 0.1489 m | 1.81 m | 99 % | 0 | **adds value** |
+| 7 | Claude Sonnet 5.5 (subagent) | 1568 x 784 tiles, 48 | 151 | 0.14787 m | 1.81 m | 99.3 % | 0 | **adds value** |
+| 7 | Claude Opus 5.5 (subagent) | 1568 x 784 tiles, 48 | 151 | 0.14795 m | 1.81 m | 99.3 % | 0 | **adds value** |
+
+Result: all four models that read the curves well (Astra, Sol, Sonnet, Opus) are within about
+2 mm of each other in median RMS (0.1479 to 0.1500 m) and have the same 1.81 m maximum at the one
+doubtful cell; the pass or miss of the rule depends on that cell and the rounding, not on reading
+quality. The Claude models are the only ones with all 151 cells in every repeat and no identity
+error. Integration (plan section 3.5.6) is not changed by this round; a holdout sheet with printed
+offsets and a person's check of the cell are still needed before a build. `engineering_approved`
+stays false.
 
 ## 6. Step 2: internals (development case, metrics G1 to G5 of plan section 4.3.2)
 
