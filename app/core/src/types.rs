@@ -388,11 +388,15 @@ fn ai_drafting_default() -> bool {
 }
 
 /// Whether new runs use the AI. `active` is false when AI drafting is off or no
-/// model key was found; runs then use the deterministic draft.
+/// model route was found (neither the `claude` CLI for the default Claude
+/// Sonnet 5.5 nor an OpenCode Go key); runs then use the deterministic draft.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AiStatus {
     pub enabled: bool,
     pub key_found: bool,
+    /// The `claude` CLI (Claude subscription login) was found.
+    #[serde(default)]
+    pub claude_found: bool,
     pub active: bool,
     /// Where the app looks for keys (never the keys themselves).
     pub key_file: String,

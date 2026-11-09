@@ -46,7 +46,7 @@ export function createWelcome({ host, invoke, pickFile, pickFolder, canPickPaths
     const keys = ai.key_count > 1 ? ` ${ai.key_count} model keys; each run uses the one with the most room.` : '';
     let message = `The AI reads the drawing and builds the draft.${keys}`;
     if (!ai.enabled) message = 'AI drafting is off. New runs use the deterministic draft.';
-    else if (!ai.key_found) message = 'No model key found. Without a key, new runs use the deterministic draft.';
+    else if (!ai.key_found && !ai.claude_found) message = 'No model route found (no claude command, no model key). New runs use the deterministic draft.';
     return row({
       ok: ai.active,
       title: 'AI',

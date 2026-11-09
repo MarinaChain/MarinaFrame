@@ -89,14 +89,14 @@ def test_round_runs_cases_writes_results_and_digest(tmp_path, monkeypatch):
     assert tail["--worker-source"] == str(tmp_path / "src")
     assert tail["--policy"] == "live" and tail["--context"] == "conversation"
     assert tail["--provider-transfer-basis"] == "authorized for tests"
-    # Development rounds: Crouton first, DeepSeek when Crouton is rate limited.
-    assert tail["--model"] == "crouton-alpha-free,deepseek-v4.1-flash"
-    assert (out / "digest.md").read_text().startswith("Models (in fallback order): crouton-alpha-free,deepseek")
+    # Development rounds: Sonnet first; Crouton, then DeepSeek, when rate limited.
+    assert tail["--model"] == "claude-sonnet-5-5,crouton-alpha-free,deepseek-v4.1-flash"
+    assert (out / "digest.md").read_text().startswith("Models (in fallback order): claude-sonnet-5-5,crouton")
     assert "## c1" in (out / "digest.md").read_text() and "## c2" in (out / "digest.md").read_text()
     assert (out / "round.log").read_text()
     meta = read(out / "round.json")
     assert meta["cases"] == ["c1", "c2"] and meta["jobs"] == 2
-    assert meta["models"] == ["crouton-alpha-free", "deepseek-v4.1-flash"]
+    assert meta["models"] == ["claude-sonnet-5-5", "crouton-alpha-free", "deepseek-v4.1-flash"]
     assert "marinaframe-native-admission" in meta["native_admission_lock"]
     for path in out.rglob("*"):  # never read, print or log key material
         if path.is_file():
@@ -127,6 +127,14 @@ def test_live_policy_without_key_fails_before_any_run(tmp_path, monkeypatch):
     with pytest.raises(SystemExit, match="load_opencode_keys"):
         run_round.main(argv)
     assert not out.exists()
+
+
+def test_a_claude_only_live_round_needs_no_opencode_key(tmp_path, monkeypatch):
+    # Claude models use the claude CLI's subscription login, never an OpenCode Go key.
+    argv, out, _ = setup_round(tmp_path, monkeypatch, ["c1"],
+                               flags=[*LIVE_FLAGS, "--model", "claude-sonnet-5-5"])
+    assert run_round.main(argv) == 0
+    assert read(out / "round.json")["models"] == ["claude-sonnet-5-5"]
 
 
 def test_live_policy_without_basis_fails(tmp_path, monkeypatch):

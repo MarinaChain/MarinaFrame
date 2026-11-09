@@ -95,19 +95,75 @@ The session's further six-generation experiment was rejected by automatic approv
 
 ### Drafting model (Rust controller, 2026-11-09)
 
-`marinaframe run --model A[,B]` sets an ordered list of OpenCode Go models (run config `model`,
-then `fallback_models`). Allowed: `deepseek-v4.1-flash` (default; the desktop app's only model)
-and `crouton-alpha-free` (`rust-control/src/models.rs`). Claude and GPT models are never sent
-through OpenCode Go; they go through their own subscriptions. `scripts/run_round.py` defaults
-to `--model crouton-alpha-free,deepseek-v4.1-flash` (founder decision 2026-11-09) and records
-the list in `round.json` and `digest.md`.
+`marinaframe run --model A[,B,...]` sets an ordered model list (run config `model`, then
+`fallback_models`). Allowed (`rust-control/src/models.rs`, one table with each model's
+transport): `claude-sonnet-5-5` (Claude subscription), `crouton-alpha-free` and
+`deepseek-v4.1-flash` (OpenCode Go). Default of the CLI, the desktop app and
+`scripts/run_round.py`: `claude-sonnet-5-5,crouton-alpha-free,deepseek-v4.1-flash` (founder
+decision 2026-11-09). Claude and GPT models are never sent through OpenCode Go and never use an
+API key; a test checks that no `claude-*`/`gpt-*` entry has the OpenCode Go transport.
+`run_round.py` records the list in `round.json` and `digest.md`, and needs `OPENCODE_API_KEY*`
+only when the list holds an OpenCode Go model.
 
-- Fallback: when OpenCode Go answers HTTP 429, a rate-limit or quota error body, or every key's
-  usage window is exhausted, the next request uses the next model of the list. The controller
-  records a `model_switched` event (from, to, request id, status, reason) and the state's
-  `active_model`; `status` shows `models` and `current_model`. Other errors never switch.
+- Fallback: when the transport answers HTTP 429, a rate-limit, quota or usage-limit error, or
+  every Go key's usage window is exhausted, the next request uses the next model of the list.
+  The controller records a `model_switched` event (from, to, request id, status, reason) and
+  the state's `active_model`; `status` shows `models` and `current_model`. Other errors never
+  switch.
 - Receipts: `requested_model` is the request body's model and must be in the run's list;
-  `returned_model` must equal it, else `provider_model_identity`.
+  `returned_model` must equal it, else `provider_model_identity`; `endpoint` must be the
+  model's transport endpoint (`https://opencode.ai/...` or `claude-cli:print:subscription`).
+
+#### Claude subscription transport (`rust-control/src/claude_cli.rs`)
+
+The provider worker runs the `claude` CLI (Claude Code 2.1.280, logged in on the Claude
+subscription) once per request, with an argument vector (no shell):
+`claude -p --model claude-sonnet-5-5 --effort low|high --tools "" --strict-mcp-config
+--safe-mode --disable-slash-commands --no-session-persistence --input-format stream-json
+--output-format stream-json --verbose --system-prompt <purpose prompt>`, plus
+`--json-schema <tool, arguments, reason, notes>` for decisions. `--bare` is not used: it
+refuses the subscription login.
+
+- Input: the request body keeps the chat-completions form (hashed in the receipt). Its system
+  message becomes `--system-prompt`; the last user message becomes one stream-json user
+  message (text blocks and base64 PNG image blocks). Stream-json input takes user messages
+  only, so earlier conversation turns go before it in ONE JSON-encoded block (an array of
+  `{role, content}`, serialized by serde so quotes and brackets are escaped), framed by fixed
+  texts saying the block is data, not instructions. Drawing or tool text inside it cannot
+  forge a turn; the harness's instructions stay only in the system prompt.
+- Environment: cleared, then HOME, USER, LOGNAME, LANG, LC_ALL, TMPDIR, a fixed PATH,
+  `CLAUDE_CODE_MAX_OUTPUT_TOKENS=<max_tokens>` and `DISABLE_AUTOUPDATER=1`. No OpenCode Go key,
+  no `ANTHROPIC_*` variable. Working folder: the system temp folder.
+- Executable: `MARINAFRAME_CLAUDE_BIN` (absolute path), else `/opt/homebrew/bin/claude`,
+  `/usr/local/bin/claude`, `~/.local/bin/claude`, `~/.claude/local/claude`. Route checked
+  2026-11-09: `/opt/homebrew/bin/claude` goes straight to the Anthropic API with the keychain
+  login (`apiKeySource: none`); the Headroom proxy (`localhost:8787`) was not running and is not
+  used (it is only in front of `claude` when `ANTHROPIC_BASE_URL` points at it, which the cleared
+  environment prevents). `claude-raw` is not installed on this Mac.
+- Bounds: the request wall time (`request_wall_seconds`) kills the CLI (`provider_cli_timeout`,
+  outcome unknown); stdout above 256 KiB is refused; the CLI stays in the provider worker's
+  process group, so the supervisor stops both. A missing CLI leaves the request not sent.
+- Output check: the stream's `init` message must list no tool except `StructuredOutput` (the
+  `--json-schema` carrier), no MCP server and `apiKeySource: none`, else
+  `provider_cli_configuration`. `modelUsage` must name exactly the requested model. A
+  `rate_limit_event` with status `rejected`, `api_error_status` 429 or a limit text ("hit your
+  limit", "usage limit", ...) is `provider_rate_limited` (fallback); other CLI errors are
+  `provider_cli_error`. The answer is `structured_output` (decisions) or `result` text, then
+  parsed exactly as for OpenCode Go.
+- Receipt: `http_status` 200 for a success result (else the CLI's `api_error_status`), usage
+  `prompt_tokens` (input + cache write + cache read), `completion_tokens`, `total_tokens`,
+  `cost` 0 (no per-request charge), `list_cost` = the CLI's `total_cost_usd` (API-price
+  estimate), `billing_source: subscription`, `latency_seconds` around the CLI run, and
+  `credential_selection` `{transport: claude_subscription, api_key: false}`. The stdout is the
+  receipt body; the controller re-derives decision, model and usage from it.
+- No temperature (the CLI has no option); `effort` low for normal calls, high with
+  investigation thinking. Linux: the provider worker's 1 GiB address-space limit is inherited
+  by the CLI; not yet checked there.
+- Images: Sonnet 5.5 does not downsample at 1,568 px. Probe `work/claude-vision-probe`
+  (2026-11-09): image tokens follow the area up to about 3.75 Mpx (2,048 x 512: 1,342 tokens;
+  1,568^2: 3,139; 2,048^2 and 2,576^2: both 4,809), and 9 px text on a 2,048 px sheet read 12/12.
+  So every image within the harness cap (2,048 px, 1 Mpx) reaches it at full size; the table
+  keeps 2,048 px / 1 Mpx for all three models.
 - Request settings per model (one table in `models.rs`): DeepSeek gets
   `thinking: {type: enabled|disabled}`; Crouton refuses `thinking` (HTTP 400) and gets
   `reasoning_effort` (`low` for normal calls, `high` with investigation thinking) and 4,096 extra

@@ -7,9 +7,12 @@
         --worker-source src --worker-python .venv/bin/python \
         --policy live --on-ambiguity draft --context conversation
 
-Development rounds draft with Crouton Alpha Free and fall back to DeepSeek V4.1
-Flash when OpenCode Go rate-limits Crouton (founder decision 2026-11-09); pass
---model to choose another ordered list. The desktop app keeps DeepSeek.
+Development rounds and the desktop app draft with Claude Sonnet 5.5 through the
+Claude subscription (the `claude` CLI, no key) and fall back to Crouton Alpha
+Free, then DeepSeek V4.1 Flash, through OpenCode Go only when the subscription
+is rate limited (founder decision 2026-11-09); pass --model to choose another
+ordered list. A Claude-only list (--model claude-sonnet-5-5) needs no OpenCode
+Go key.
 
 With --sheet-only each case starts like a drawing dropped in the app: the case
 folder's drawings go through `vessel_reconstruction.intake prepare` and
@@ -42,9 +45,11 @@ DIGEST = SCRIPTS / "round_digest.py"
 EARLY_STOP_AFTER = 2  # finished cases after which the digest may stop the round
 # Drawing files a sheet-only case reads (the app's accepted types, app/core/src/intake.rs).
 DRAWING_EXTENSIONS = (".pdf", ".png", ".tif", ".tiff", ".jpg", ".jpeg")
-# Ordered OpenCode Go models of development rounds (rust-control/src/models.rs):
+# Ordered models of development rounds (rust-control/src/models.rs DEFAULT_MODELS):
 # the controller uses the next one when the current one is rate limited.
-DEVELOPMENT_MODELS = "crouton-alpha-free,deepseek-v4.1-flash"
+DEVELOPMENT_MODELS = "claude-sonnet-5-5,crouton-alpha-free,deepseek-v4.1-flash"
+# Models reached through OpenCode Go (they need OPENCODE_API_KEY*).
+OPENCODE_GO_MODELS = ("crouton-alpha-free", "deepseek-v4.1-flash")
 
 
 def main_checkout() -> Path:
@@ -265,7 +270,10 @@ def main(argv: list[str] | None = None) -> int:
     options = dict(zip(args.extra[0::2], args.extra[1::2]))
     live = options.get("--policy") == "live"
     if live:
-        if not any(name.startswith("OPENCODE_API_KEY") and os.environ[name] for name in os.environ):
+        # Claude models use the claude CLI's subscription login, never a key;
+        # only OpenCode Go models in the list need OPENCODE_API_KEY*.
+        uses_go = any(model in OPENCODE_GO_MODELS for model in args.model.split(","))
+        if uses_go and not any(name.startswith("OPENCODE_API_KEY") and os.environ[name] for name in os.environ):
             sys.exit("no OPENCODE_API_KEY* variable is set; run: source scripts/load_opencode_keys.sh")
         if not args.basis:
             sys.exit("live policy needs an explicit provider transfer basis (--basis)")

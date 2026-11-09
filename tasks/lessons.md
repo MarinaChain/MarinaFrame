@@ -120,3 +120,9 @@
 - **Trigger:** Best-of-2 readings kept the better first hull in the task state (dtmb5415-3v-L0: 13.8 % against 32.6 %), but `build_draft` then reused the set-aside reading's build because build reuse matches generation and revision ids, which do not name the materialized setup. The digest scored 32.6 %.
 - **Rule:** When task state is swapped or restored (a new reading, a rebuilt setup), move the replaced builds out of `builds` (history only) so no later build can reuse them. After a selection change, score every valid build of a live case (`score_builds` pattern) and check that the digest's scored STEP is the one the state names.
 - **Why:** Reuse keys and delivery paths are separate from the state a selection writes; a correct selection can still deliver the wrong hull.
+
+### Measure a model's image limit before you size images for it (MarinaFrame)
+- **Date:** 2026-11-09
+- **Trigger:** The plan for Claude Sonnet 5.5 assumed Claude downsamples images above about 1,568 px. A token probe through the `claude` CLI (`work/claude-vision-probe`) showed image tokens growing with the area up to about 3.75 Mpx (2,048^2 and 2,576^2 both 4,809 tokens) and 9 px text readable at 2,048 px, so a 1,568 px cap would have thrown away detail.
+- **Rule:** Before a per-model image cap, send square and wide test images of several sizes and read the input-token count: a flat count marks the downsampling size. Also read small text at each size. Record the numbers beside the model's entry in `rust-control/src/models.rs`.
+- **Why:** Published limits change between model generations; the token count is the model's own statement of what it received.

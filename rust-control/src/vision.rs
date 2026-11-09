@@ -734,7 +734,6 @@ pub fn payload(
 pub fn check_receipt(receipt: &Receipt, input: &ProviderInput) -> Result<()> {
     if receipt.protocol != provider::PROTOCOL
         || receipt.request_id != input.request_id
-        || receipt.endpoint != GO_ENDPOINT
         || !provider::model_bound(receipt, input)
         || receipt.purpose != input.purpose
         || receipt.decision.is_some()
