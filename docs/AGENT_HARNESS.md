@@ -93,6 +93,31 @@ The default provider mode requires a verified applicable zero-cash account budge
 
 The session's further six-generation experiment was rejected by automatic approval review because it would exceed the documented eight-call pilot and a hard zero-dollar account cap was unverified. No retry was made. One follow-up policy call was durably reserved without a provider response/usage receipt, so transmission and cost for that interrupted call are unconfirmed. Do not count it as a completed generation or successful CAD trial. The independently recorded completed calls are two capability smokes and four decisions in the first live harness attempt; all six returned Go billing and observed cost 0. Additional live work needs approval of a concrete bounded experiment or a verified applicable zero-cash guard.
 
+### Drafting model (Rust controller, 2026-11-09)
+
+`marinaframe run --model A[,B]` sets an ordered list of OpenCode Go models (run config `model`,
+then `fallback_models`). Allowed: `deepseek-v4.1-flash` (default; the desktop app's only model)
+and `crouton-alpha-free` (`rust-control/src/models.rs`). Claude and GPT models are never sent
+through OpenCode Go; they go through their own subscriptions. `scripts/run_round.py` defaults
+to `--model crouton-alpha-free,deepseek-v4.1-flash` (founder decision 2026-11-09) and records
+the list in `round.json` and `digest.md`.
+
+- Fallback: when OpenCode Go answers HTTP 429, a rate-limit or quota error body, or every key's
+  usage window is exhausted, the next request uses the next model of the list. The controller
+  records a `model_switched` event (from, to, request id, status, reason) and the state's
+  `active_model`; `status` shows `models` and `current_model`. Other errors never switch.
+- Receipts: `requested_model` is the request body's model and must be in the run's list;
+  `returned_model` must equal it, else `provider_model_identity`.
+- Request settings per model (one table in `models.rs`): DeepSeek gets
+  `thinking: {type: enabled|disabled}`; Crouton refuses `thinking` (HTTP 400) and gets
+  `reasoning_effort` (`low` for normal calls, `high` with investigation thinking) and 4,096 extra
+  `max_tokens` for its hidden reasoning (a 200-token probe without `reasoning_effort` returned no
+  content). Both accept `response_format` json_object, temperature 0 and 32,768 `max_tokens`.
+- Crouton notes: it reads images up to about 2,048 px per side (the controller caps images at
+  2,048 px / 1 Mpx); it is slow; OpenCode Go does not count its image tokens and reports cost 0
+  and no reasoning tokens. Sheet-setup and table-reading requests (`vision-request`,
+  `read-table`) use the default model; build reviews inside a run use the run's current model.
+
 ## Replay and mocks
 
 ```bash
