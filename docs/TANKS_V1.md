@@ -285,3 +285,39 @@ Reader: `ocx.read_compartments` streams every `Compartment` (name, purpose, volu
 cargo type, face count). Tests: schema check with `xmllint`, round trip on synthetic box tanks,
 reader on the two sample files. Export path: `exports.package` writes the compartments into an OCX
 file of the package when the run has a tank model.
+
+### 7.2 Built (same date)
+
+- `structure/tank_faces.py`: closed mesh to planar faces (coplanar triangles merged, boundary loops
+  with collinear points removed, bounding patch of the face).
+- `structure/ocx.py`: `export_ocx(block, path, name, tanks=...)` (`block` None for tanks only),
+  `add_compartments(source, target, tanks)` (tanks into a structure OCX file written by this
+  writer), `read_compartments`, `round_trip(block, path, tanks)`. A tanks-only file carries one
+  unused material (grade A): the schema requires a material catalogue.
+- `exports/package.py`: with a tank model, a structure folder holding exactly one OCX file gives one
+  package file with steel and tanks (`*.3docx`, role `ocx_structure_tanks`); otherwise
+  `<stem>_tanks.3docx` (role `ocx_tanks`) is written, and the structure files are copied unchanged.
+- Tests: `tests/test_ocx_compartments.py` (faces, schema with `xmllint`, round trip of count, name,
+  purpose, volume and centroid, the VLCC and NAPA sample compartments), `tests/test_exports.py`.
+
+### 7.3 What a NAPA, AVEVA or Cadmatic user gets
+
+One `.3docx` file with the hull structure (plates, stiffeners, materials) and every built tank as a
+compartment: ID, purpose (`Ballast`, `Fuel`, `Freshwater`, `Lube`, `Cargo`, `Void`, `Other`),
+planar bounding faces, volume at 100 % fill, centre of gravity, cargo type and density, and a
+description with the name, frames and source labels. The user imports it as an OCX model and gets
+the compartments in the arrangement. The values are a draft: `engineering_approved` is false, and
+no field says "approved" or "verified".
+
+Still missing in OCX compartments (the format, or this writer):
+- No field for source labels, the 98 % working volume, sounding tables, free-surface data or the
+  tank's frame range: they stay in the description text and in the CSV files.
+- Faces are planar. A lofted (curved) tank becomes many small planar faces, not a smooth surface.
+- A face with holes writes the loops in one `FaceBoundaryCurve` (outer first); the schema does not
+  say which loop is a hole.
+- The compartment is not tied to the bounding plates: OCX compartments carry their own faces and
+  have no reference to the plates that enclose them.
+- `FillingHeight`, `AirPipeHeight`, `ReliefValvePressure` are not known and not written.
+- Merging needs a structure OCX file from this writer (same prefix and unit set); other files get a
+  separate tanks file.
+- Not tried in NAPA, AVEVA or Cadmatic themselves: only the 3.0.1 XSD and the reader.
