@@ -1,11 +1,14 @@
-"""Balclutha sheet 7 model-value test with stronger vision models through codex-router (round 6).
+"""Balclutha sheet 7 model-value test with stronger vision models (round 6).
 
 Protocol (fixed before running): docs/plans/2026-11-09-whole-vessel-scope.md, section 3.5.5.
 Same task, prompt, merge, metrics and decision rule as round 5 (`tiled_value`); only the model,
 the tile size (4096 x 2048 px, one tile per side and waterline) and the request settings change.
 
-The models are called through the local codex-router (OpenAI Responses API). The router's caller
-secret is read into this process's environment only; it is never printed, logged or stored.
+GPT 6.1 Sol and GPT-6 Astra are called through the local codex-router (OpenAI Responses API);
+the router's caller secret is read into this process's environment only. Crouton Alpha Free is
+called on OpenCode Go as DeepSeek was in round 5 (key 1, OPENCODE_API_KEY, loaded by the caller
+with scripts/load_opencode_keys.sh, or read from the same keys file into the environment here).
+No secret is printed, logged or stored.
 
 Usage (outputs stay out of the repository)::
 
@@ -27,11 +30,15 @@ import numpy as np
 
 from benchmarks.balclutha import model_value as round4
 from benchmarks.balclutha import tiled_value as round5
+from benchmarks.gunnerus import whole_vessel_ab as ab
 
 ROUTER_PORT = 4202
 CALLER_SECRET_FILE = Path.home() / '.codex' / 'codex-router' / 'caller-secret'
 SECRET_ENV = 'CODEX_ROUTER_CALLER_SECRET'
-MODELS = ('gpt-6.1-sol', 'gpt-6-astra')
+ROUTER_MODELS = ('gpt-6.1-sol', 'gpt-6-astra')
+GO_MODELS = ('crouton-alpha-free',)
+MODELS = ROUTER_MODELS + GO_MODELS
+GO_KEYS_FILE = Path.home() / '.config' / 'marinaframe' / 'opencode-go-keys.txt'
 REASONING_EFFORT = 'high'
 MAX_OUTPUT_TOKENS = 32_000
 REQUEST_TIMEOUT_S = 1800
@@ -39,12 +46,26 @@ REQUEST_TIMEOUT_S = 1800
 # 3.5.5); one 4096 px tile spans the whole half-breadth, from 48 px across the centreline to
 # 4,048 px out (past the 20 ft buttock at 2,990 px).
 ROUND6_LAYOUT = {'width': 4096, 'height': 2048, 'spans': {'whole': (-48, 4048)}}
+# Crouton reads 8 px text only up to about 2,048 px (amendment to 3.5.5): round-5 layout.
+LAYOUTS = {'gpt-6.1-sol': ROUND6_LAYOUT, 'gpt-6-astra': ROUND6_LAYOUT, 'crouton-alpha-free': round5.ROUND5_LAYOUT}
 
 
 def load_caller_secret() -> None:
     """Put the router caller secret into this process's environment (never printed)."""
     if not os.environ.get(SECRET_ENV):
         os.environ[SECRET_ENV] = CALLER_SECRET_FILE.read_text().strip()
+
+
+def load_go_key1() -> None:
+    """Key 1 of the OpenCode Go keys file into this process's environment (file order, as the script)."""
+    if os.environ.get('OPENCODE_API_KEY'):
+        return
+    for line in GO_KEYS_FILE.read_text().splitlines():
+        line = ''.join(line.split())
+        if line and '@' not in line:
+            os.environ['OPENCODE_API_KEY'] = line
+            return
+    raise RuntimeError(f'no key in {GO_KEYS_FILE}')
 
 
 def router_url() -> str:
@@ -140,6 +161,49 @@ def make_call(model: str, opener=urllib.request.urlopen):
     return call
 
 
+def go_request_body(model: str, messages: list) -> dict:
+    """Round-5 settings; the thinking object is refused by Crouton, reasoning_effort is accepted."""
+    return {'model': model, 'messages': messages, 'max_tokens': MAX_OUTPUT_TOKENS, 'temperature': ab.TEMPERATURE,
+            'reasoning_effort': REASONING_EFFORT, 'stream': False}
+
+
+def make_go_call(model: str, opener=urllib.request.urlopen):
+    """A `call(messages, receipts, settings)` on OpenCode Go with key 1; settings are fixed here."""
+
+    def call(messages: list, receipts: Path, _settings: dict) -> tuple[str, dict]:
+        key = os.environ['OPENCODE_API_KEY']
+        body = json.dumps(go_request_body(model, messages)).encode()
+        request_id = uuid.uuid4().hex
+        receipt = {'request_id': request_id, 'model': model, 'reasoning_effort': REASONING_EFFORT,
+                   'request_sha256': hashlib.sha256(body).hexdigest(), 'request_bytes': len(body)}
+        started = time.time()
+        try:
+            request = urllib.request.Request(ab.GO_ENDPOINT, data=body, method='POST', headers={
+                'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': f'Bearer {key}',
+                'User-Agent': 'MarinaFrame/0.5 balclutha round 6', 'x-opencode-session': f'mf-{request_id}'})
+            with opener(request, timeout=REQUEST_TIMEOUT_S) as response:
+                reply = json.loads(response.read())
+            text = reply['choices'][0]['message'].get('content') or ''
+            usage = reply.get('usage') or {}
+            receipt.update(state='completed', returned_model=reply.get('model'),
+                           finish_reason=reply['choices'][0].get('finish_reason'),
+                           usage={'prompt_tokens': usage.get('prompt_tokens'),
+                                  'completion_tokens': usage.get('completion_tokens'),
+                                  'reasoning_tokens': (usage.get('completion_tokens_details') or {}).get(
+                                      'reasoning_tokens'),
+                                  'cost': usage.get('cost')},
+                           reply_sha256=hashlib.sha256(text.encode()).hexdigest())
+        except Exception as exc:  # noqa: BLE001 - a failed request is recorded, not hidden
+            message = f'{type(exc).__name__}: {exc}'.replace(key, '<secret>')
+            text, receipt['state'], receipt['error'] = '', 'failed', message[:500]
+        receipt['seconds'] = time.time() - started
+        receipts.mkdir(parents=True, exist_ok=True)
+        (receipts / f'{request_id}.json').write_text(json.dumps(receipt, indent=2) + '\n')
+        return text, receipt
+
+    return call
+
+
 def decide(results: list[dict], repeats: int = round4.REPEATS) -> tuple[float | None, bool]:
     """Median RMS and the fixed decision rule (section 3.5.3, unchanged)."""
     rms = [r['rms_m'] for r in results if 'rms_m' in r]
@@ -153,10 +217,10 @@ def run(model: str, sheet_path: Path, truth_path: Path, out: Path, call=None, re
     out.mkdir(parents=True, exist_ok=False)
     truth = round4.load_truth(truth_path)
     sheet = round5.load_sheet(sheet_path)
-    tiles = round5.tile_boxes(ROUND6_LAYOUT)
+    tiles = round5.tile_boxes(LAYOUTS[model])
     images = {tile['id']: (round5.context_image(sheet, tile), round5.png_bytes(round5.tile_pixels(sheet, tile)))
               for tile in tiles}
-    call = call or make_call(model)
+    call = call or (make_go_call(model) if model in GO_MODELS else make_call(model))
     results = []
     for repeat in range(1, repeats + 1):
         result = round5.run_repeat(tiles, images, truth, out / f'R1-{repeat}', call)
@@ -167,7 +231,7 @@ def run(model: str, sheet_path: Path, truth_path: Path, out: Path, call=None, re
         print(json.dumps(result), flush=True)
     median, adds_value = decide(results, repeats)
     summary = {'protocol': 'docs/plans/2026-11-09-whole-vessel-scope.md 3.5.5', 'model': model,
-               'reasoning_effort': REASONING_EFFORT, 'layout': ROUND6_LAYOUT, 'repeats': results,
+               'reasoning_effort': REASONING_EFFORT, 'layout': LAYOUTS[model], 'repeats': results,
                'median_rms_m': median, 'model_adds_value': adds_value, 'engineering_approved': False}
     (out / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
     return summary
@@ -180,7 +244,10 @@ def main() -> None:
     parser.add_argument('--truth', type=Path, required=True)
     parser.add_argument('--out', type=Path, required=True)
     args = parser.parse_args()
-    load_caller_secret()
+    if args.model in GO_MODELS:
+        load_go_key1()
+    else:
+        load_caller_secret()
     summary = run(args.model, args.sheet, args.truth, args.out.resolve())
     print(json.dumps({key: value for key, value in summary.items() if key != 'repeats'}, indent=2))
 

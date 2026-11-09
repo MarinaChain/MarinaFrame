@@ -99,6 +99,26 @@ def test_failed_call_redacts_the_secret_from_the_error(tmp_path, monkeypatch):
     assert FAKE_SECRET not in ''.join(path.read_text() for path in tmp_path.glob('*.json'))
 
 
+def test_crouton_uses_the_round5_layout_and_settings_and_never_writes_the_key(tmp_path, monkeypatch):
+    assert len(tv.tile_boxes(rv.LAYOUTS['crouton-alpha-free'])) == 32
+    monkeypatch.setenv('OPENCODE_API_KEY', FAKE_SECRET)
+    seen = {}
+
+    def opener(request, timeout):
+        seen['headers'] = dict(request.header_items())
+        seen['body'] = json.loads(request.data)
+        return FakeResponse(json.dumps({'model': 'crouton-alpha-free', 'choices': [
+            {'message': {'content': '{"crossings": []}'}, 'finish_reason': 'stop'}],
+            'usage': {'prompt_tokens': 30, 'completion_tokens': 9, 'cost': 0}}).encode())
+
+    text, receipt = rv.make_go_call('crouton-alpha-free', opener)([{'role': 'user', 'content': 'x'}], tmp_path, {})
+    assert text == '{"crossings": []}' and receipt['usage']['cost'] == 0
+    body = seen['body']
+    assert body['temperature'] == 0.2 and body['max_tokens'] == 32_000 and 'thinking' not in body
+    assert body['reasoning_effort'] == 'high' and 'X-opencode-session' in seen['headers']
+    assert FAKE_SECRET not in ''.join(path.read_text() for path in tmp_path.glob('*.json'))
+
+
 def test_decision_rule_needs_coverage_in_every_repeat_and_median_rms():
     good = {'coverage': 0.7, 'rms_m': 0.1}
     assert rv.decide([good, good, {'coverage': 0.7, 'rms_m': 0.5}]) == (0.1, True)
