@@ -45,6 +45,10 @@ def test_a_view_scale_that_disagrees_with_the_printed_scale_gets_the_printed_val
     assert abs(scales["profile"] - PPM) < 0.1 and warnings
     # An agreeing view has no warning.
     assert vd.checked_scales(image, [setup], {"dimension_text": "SCALE 1 m = 4 px"}) == ({"profile": 4.0}, [])
+    # A 1 % grid estimate (19.2 against a printed 19.0) takes the printed scale.
+    scales, warnings = vd.checked_scales(image, [{**setup, "pixels_per_metre": 19.2}],
+                                         {"dimension_text": "SCALE 1 m = 19.000 px"})
+    assert scales["profile"] == 19.0 and warnings
 
 
 def test_profile_and_plan_lengths_are_compared():
@@ -65,10 +69,15 @@ def test_sheet_only_sections_use_the_printed_scale_over_a_disagreeing_setup():
     scale, basis = read_scale(image, setups, [], [], {"dimension_text": "SCALE 1 m = 19.000 px"}, [10, 10, 450, 160],
                               warnings)
     assert scale == 19.0 and "printed" in basis and warnings
-    # An agreeing setup (within 2 %) keeps the model's reading.
-    scale, _ = read_scale(image, [{"pixels_per_metre": 18.9}], [], [], {"dimension_text": "SCALE 1 m = 19 px"},
+    # An agreeing setup (within 0.2 %) keeps the model's reading ...
+    scale, _ = read_scale(image, [{"pixels_per_metre": 18.99}], [], [], {"dimension_text": "SCALE 1 m = 19 px"},
                           [10, 10, 450, 160], [])
-    assert scale == 18.9
+    assert scale == 18.99
+    # ... but a 0.4-1 % grid estimate is a misreading of an exact printed scale
+    # (shipd-1-00679-3v-L1 live: 19.0 against a printed 18.930).
+    scale, basis = read_scale(image, [{"pixels_per_metre": 19.0}], [], [], {"dimension_text": "SCALE 1 m = 18.930 px"},
+                              [10, 10, 450, 160], [])
+    assert scale == 18.93 and "printed" in basis
     # No scale read (1 px/m "provisional" on a "100 m grid"): the printed scale, not the grid.
     scale, basis = read_scale(image, [{"pixels_per_metre": 1.0, "grid_spacing_m": 100.0}], [], [],
                               {"dimension_text": "SCALE 1 m = 19.009 px"}, [10, 10, 450, 160], [])
@@ -286,3 +295,4 @@ def test_a_deck_line_that_disagrees_with_most_tops_is_not_used():
     sections = [{"id": "1", "z_min_m": 0.0, "z_max_m": 12.0}, {"id": "2", "z_min_m": 0.0, "z_max_m": 12.0}]
     assert cap_tops_at_deck(sections, anchors, {"1": 4.0, "2": 4.2}) == sections
     assert max(p[1] for p in anchors[1].points_yz_m) == 9.6
+

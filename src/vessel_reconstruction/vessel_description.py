@@ -332,6 +332,15 @@ def printed_dimensions(description):
     return readings
 
 
+# A scale printed on the sheet ("SCALE 1 m = 19.000 px") is exact; a view
+# scale that differs from it by more than this share is a misreading, not
+# rounding. DIMENSION_TOLERANCE (2 %) let a 19.2 px/m grid estimate stand
+# against a printed 19.0 (shipd-1-09867-3v-L0 Sonnet live, round 81d3047):
+# the profile deck came out 0.13 m (2-3 truth cells) low at every station,
+# 11 % RMS each.
+PRINTED_SCALE_TOLERANCE = .002
+
+
 def printed_scale(description):
     """Pixels per metre printed on the sheet ("SCALE 1 m = 19.000 px"), or None."""
     text = description.get("dimension_text", "")
@@ -370,7 +379,8 @@ def checked_scales(image, setups, description):
         own = float(setup["pixels_per_metre"])
         implied = sheet or _implied_scale(image, setup, printed)
         likely[view_id] = own
-        if implied is None or not _different(own, implied):
+        tolerance = PRINTED_SCALE_TOLERANCE if sheet else DIMENSION_TOLERANCE
+        if implied is None or not _different(own, implied, tolerance):
             continue
         basis = (f"the sheet prints SCALE 1 m = {sheet:g} px" if sheet else
                  "the view's ink length over the printed LOA/beam gives " f"{implied:.2f} px/m")

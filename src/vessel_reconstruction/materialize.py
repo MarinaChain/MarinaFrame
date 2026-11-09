@@ -203,9 +203,9 @@ def read_scale(image, setups, described, hints, description, body_region, warnin
     """Pixels per metre: the model's body scale, else code measurement with a read dimension."""
     read = [float(s["pixels_per_metre"]) for s in setups
             if _finite(s.get("pixels_per_metre")) and s["pixels_per_metre"] >= MIN_READ_PPM]
-    from .vessel_description import _different, printed_scale
+    from .vessel_description import PRINTED_SCALE_TOLERANCE, _different, printed_scale
     printed = printed_scale(description or {})
-    if printed and read and _different(float(np.median(read)), printed):
+    if printed and read and _different(float(np.median(read)), printed, PRINTED_SCALE_TOLERANCE):
         # The scale printed on the sheet outranks a scale read off the grid.
         warnings.append(f"The body-plan setup uses {float(np.median(read)):g} px/m but the sheet prints "
                         f"SCALE 1 m = {printed:g} px; the printed scale is used.")
