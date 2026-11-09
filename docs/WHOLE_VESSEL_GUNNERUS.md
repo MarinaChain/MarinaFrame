@@ -1003,6 +1003,37 @@ calibration); no doors, rails as stanchions, funnel, mast, crane or A-frame; the
 lofted parts is cut where the hull is narrower than 0.3 m; part STEP size grew with the
 refined stem heights (one B-spline face per side, as for the hull, would shrink it).
 
+### 7.1 Smooth side walls: metrics (fixed before the build)
+
+Date 2026-11-10. Aim: the walls of the parts that follow the curved hull (tier 1, forward
+rail) become smooth B-spline surfaces, as ship CAD models them, in place of stacked ruled bands.
+Scorer: `benchmarks/gunnerus/whole_vessel_surface_metrics.py` (`whole-vessel-surfaces/v1`,
+test `tests/test_surface_metrics.py`). Outputs in the git-ignored `work/spline-surfaces/`.
+
+- F1 smoothness: vertical cuts through the port wall of each deckhouse and bulwark (5 cuts per
+  part, plus the 4 bow stations of S4 for tier 1). Every 0.01 m a ray from port hits the wall
+  and reads the exact surface normal. Reported: largest turn of the normal between neighbouring
+  samples, kinks (turns above 2 degrees; a 0.3 m flare radius turns 1.9 degrees per step) and
+  the most B-rep faces that one cut crosses. Wheelhouse kinks are its window recesses and raked
+  faces (real edges), not steps.
+- F2 containment: S1 (largest distance outside the hull side). Target <= 0.02 m.
+- F3 accuracy, must not get worse: tier-1 IoU >= 0.997, tier-1 volume error <= +3.1 %, hull +
+  tier 1 vs truth <= +1.6 %.
+- F4 cost: STEP faces per part, whole-vessel STEP and GLB size, build time.
+
+Baseline (current code, rebuilt 2026-11-10; step 1 in process 32 s, assembly 154 s):
+
+| Metric | house_t1 | fwd_rail | aft_bulwark | house_t2 | wheelhouse |
+|---|---|---|---|---|---|
+| F1 max normal turn (deg) | 56.1 | 15.2 | 0.0 | 0.0 | 69.9 (windows) |
+| F1 kinks on the cuts | 101 | 4 | 0 | 0 | 23 (windows) |
+| F1 most faces on one cut | 59 | 9 | 2 | 6 | 26 |
+| F4 STEP faces | 4,732 | 1,038 | 18 | 86 | 250 |
+| F2 outside the hull (m) | 0.011 | 0.015 | 0.000 | 0.000 | 0.000 |
+
+F3: tier-1 IoU 0.9968, volume +3.12 %, hull + tier 1 +1.59 %. F4: whole-vessel STEP 25.7 MB,
+GLB 2.24 MB (tier-1 STEP 7.4 MB, forward rail 1.7 MB).
+
 ## 8. Resume point
 
 0. Step 2 internals (section 6): region leaks, tank heights and G4 are fixed in
