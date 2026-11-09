@@ -70,7 +70,7 @@ def profile_ends(image, setups, description, hints=None) -> dict | None:
     """
     from .vessel_description import (_profile_outline, _value, checked_x_origin, printed_dimensions,
                                       profile_setup, with_outline_baseline)
-    profile = profile_setup(setups, hints)
+    profile = profile_setup(setups, hints, image)
     if profile is None:
         return None
     scales = (description or {}).get("checked_scales") or {}

@@ -590,7 +590,7 @@ def check_station_positions(image, setups, description, warnings, hints=None):
     Returns the (possibly new) station list; a warning names the change.
     """
     stations = description.get("stations") or []
-    profile = profile_setup(setups, hints)
+    profile = profile_setup(setups, hints, image)
     if profile is None:
         return stations
     profile = {**profile, "x_origin_px": checked_x_origin(image, profile)}
@@ -669,31 +669,50 @@ def intake_profile_setup(setups, hints=None):
             "baseline_px": None, "x_direction": 1, "region_source": "intake profile (no model profile setup)"}
 
 
-def profile_setup(setups, hints=None):
-    """The model's profile setup, on the intake's profile region when the model's region disagrees, or None."""
+def profile_setup(setups, hints=None, image=None):
+    """The model's profile setup, on the intake's profile region when the model's region disagrees, or None.
+
+    With ``image``, the region's columns are widened to the profile outline's
+    full length (draft_fit.view_outline): the intake and the model can both
+    box only part of a long view (shipd-1-09867-3v-L0 Sonnet live, round
+    81d3047: x 918-2094 px of a profile drawn from 153 px). A cut region put
+    x = 0 at its edge and the hull ends were not found.
+    """
     profile = next((s for s in setups if s.get("view") == "profile" and s.get("x_origin_px") is not None), None) \
         or next((s for s in setups if s.get("view") == "profile" and s.get("region_px")), None) \
         or intake_profile_setup(setups, hints)
     if profile is None:
         return None
-    if profile.get("x_origin_px") is None:
-        # No origin read (shipd-1-09867-3v-L1 live): the region's edge, which
-        # checked_x_origin takes as unread (x = 0 at the hull's aft end).
-        profile = {**profile, "x_origin_px": float(profile["region_px"][0])}
+    origin = profile.get("x_origin_px")
+    region, source = list(profile["region_px"]), profile.get("region_source")
     proposed = next((h["region_px"] for h in hints or [] if h.get("label") == "profile" and h.get("region_px")),
                     None)
-    if proposed and _iou(profile["region_px"], proposed) < PROFILE_REGION_AGREEMENT:
-        return {**profile, "region_px": list(proposed), "region_source": "intake proposal"}
-    if proposed:
+    if proposed and _iou(region, proposed) < PROFILE_REGION_AGREEMENT:
+        region, source = list(proposed), "intake proposal"
+    elif proposed:
         # The intake's rows are measured on the ink. A taller model box adds
         # paper and labels that hide the station lines' full height
         # (series60-3v-L1 live: 100 px above a 175 px profile); a shorter one
         # cuts the keel off (another run: bottom 302 px over a keel at 303 px).
         # Columns are the union: an intake region can hold only part of a long
         # view (shipd-1-09867-3v-L0: the fore half of the profile).
-        left, _, right, _ = profile["region_px"]
-        return {**profile, "region_px": [min(left, proposed[0]), proposed[1], max(right, proposed[2]), proposed[3]],
-                "region_source": "the intake's rows"}
+        region = [min(region[0], proposed[0]), proposed[1], max(region[2], proposed[2]), proposed[3]]
+        source = "the intake's rows"
+    if image is not None:
+        from .draft_fit import view_outline
+        _, outline_box = view_outline(image, region)
+        if outline_box[0] < region[0] or outline_box[2] > region[2]:
+            if origin is not None and abs(float(origin) - region[0]) <= ORIGIN_EDGE_PX:
+                origin = None  # the cut region's edge, not a datum read on the sheet
+            region = [outline_box[0], region[1], outline_box[2], region[3]]
+            source = "widened to the profile outline"
+    if origin is None:
+        # No origin read (shipd-1-09867-3v-L1 live): the region's edge, which
+        # checked_x_origin takes as unread (x = 0 at the hull's aft end).
+        origin = float(region[0])
+    profile = {**profile, "x_origin_px": origin, "region_px": region}
+    if source is not None:
+        profile["region_source"] = source
     return profile
 
 
@@ -715,7 +734,7 @@ def with_outline_baseline(image, profile):
 
 def station_outline_heights(image, setups, description, stations, hints=None):
     """Deck and keel heights per station from the model's profile setup at its checked scale."""
-    profile = profile_setup(setups, hints)
+    profile = profile_setup(setups, hints, image)
     profile = with_outline_baseline(image, profile) if profile is not None else None
     if profile is None:
         return {}

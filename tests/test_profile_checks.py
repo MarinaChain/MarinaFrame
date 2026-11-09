@@ -296,3 +296,16 @@ def test_a_deck_line_that_disagrees_with_most_tops_is_not_used():
     assert cap_tops_at_deck(sections, anchors, {"1": 4.0, "2": 4.2}) == sections
     assert max(p[1] for p in anchors[1].points_yz_m) == 9.6
 
+
+def test_a_profile_region_that_holds_part_of_the_outline_is_widened_to_it():
+    # shipd-1-09867-3v-L0 Sonnet live: the model and the intake boxed the fore 60 % of the profile only.
+    image, setup = profile_sheet()
+    cut = {**setup, "region_px": [250, 10, 450, 160], "x_origin_px": None}
+    widened = vd.profile_setup([cut], None, image)
+    assert widened["region_px"][0] <= X0 and widened["region_source"] == "widened to the profile outline"
+    assert abs(vd.checked_x_origin(image, widened) - X0) <= 1.5
+    # An origin read at the cut region's edge is that edge, not a datum.
+    assert vd.profile_setup([{**cut, "x_origin_px": 250.0}], None, image)["x_origin_px"] == widened["x_origin_px"]
+    # A whole region stays as it is, and so does a read origin.
+    assert vd.profile_setup([setup], None, image)["region_px"] == setup["region_px"]
+    assert vd.profile_setup([setup], None, image)["x_origin_px"] == X0
