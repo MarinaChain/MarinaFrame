@@ -63,6 +63,12 @@ def _curve_m(chain: bpr.Chain, cal: sc.Calibration) -> list[list[float]]:
     return [[round(y, 4), round(z, 4)] for y, z in points]
 
 
+def waterline_spacing_m(cal: sc.Calibration) -> float:
+    heights = sorted(w['height_ft'] for w in cal.waterlines)
+    gaps = np.diff(heights)
+    return float(np.median(gaps)) * sc.FEET_M if len(gaps) else sc.FEET_M
+
+
 def read_body_plan(ink: np.ndarray, reading, dpi: float | None) -> tuple[dict, sc.Calibration]:
     """Calibrate and read one sheet; returns (record, calibration)."""
     cal = sc.calibrate(ink, reading, dpi=dpi)
@@ -81,8 +87,16 @@ def read_body_plan(ink: np.ndarray, reading, dpi: float | None) -> tuple[dict, s
         for index, station in sorted(identities.items(), key=lambda item: item[1]):
             cells = sorted([[round(heights[w], 4), round(value, 4)] for (s, w), value in table.items()
                             if s == station and w in heights])
+            curve = _curve_m(side_reading.chains[index], cal)
+            if cells:
+                # The followed ink beyond the waterlines can run onto rails, deck lines or a
+                # neighbour; keep one waterline spacing past the measured cells (the first hull
+                # continues the curve to the keel and deck from the profile).
+                margin = waterline_spacing_m(cal)
+                low, high = cells[0][0] - margin, cells[-1][0] + margin
+                curve = [p for p in curve if low <= p[1] <= high]
             record['stations'].append({'station': station, 'side': side.name, 'cells_z_y_m': cells,
-                                       'curve_y_z_m': _curve_m(side_reading.chains[index], cal)})
+                                       'curve_y_z_m': curve})
         flags = bpr.fairness_flags(table, side.stations_outer_first, layout.waterlines_low_to_high())
         record.setdefault('fairness_flags', []).extend(dict(flag, side=side.name) for flag in flags)
     record['stations'].sort(key=lambda s: s['station'])

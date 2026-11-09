@@ -39,8 +39,8 @@ ROW_SOURCES = ("traced", "read", "fitted", "prior", "inferred")
 # The label each row source has in a draft build (section_authoring.SOURCE_LABELS).
 # A ``prior`` row is the prior form of a hull with no usable ink (form_fit.prior_hull):
 # nothing was measured or interpolated, so it is ``ai_inferred``.
-# A "read" row (body-plan reader, code-measured ink) builds as an authored curve labelled traced.
-BUILD_LABELS = {"traced": "traced", "read": "traced", "fitted": "interpolated", "prior": "ai_inferred", "inferred": "ai_inferred"}
+# A "read" row (body-plan reader, code-measured ink) builds as an authored curve labelled read.
+BUILD_LABELS = {"traced": "traced", "read": "read", "fitted": "interpolated", "prior": "ai_inferred", "inferred": "ai_inferred"}
 # Waterlines of the cell matrix. The rows keep full resolution for the build;
 # the cells are the table that views and scores compare.
 DEFAULT_WATERLINES = 21

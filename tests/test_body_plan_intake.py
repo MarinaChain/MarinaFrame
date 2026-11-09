@@ -83,7 +83,9 @@ def test_read_rows_build_as_traced_authored_curves():
     assert any(row.source == 'read' for row in table.stations)
     spec = build_spec(table, {'sections': sections}, sections)
     read = [s for s in spec['sections'] if s['authored']['basis'].startswith(bpi_basis())]
-    assert read and all(s['authored']['source_label'] == 'traced' for s in read)
+    assert read and all(s['authored']['source_label'] == 'read' for s in read)
+    from vessel_reconstruction.section_authoring import check_authored
+    assert all(check_authored(s['authored']) for s in read)
     assert all('contour_selection' not in s for s in read)
 
 
