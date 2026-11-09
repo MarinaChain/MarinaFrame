@@ -48,6 +48,12 @@ LEVEL_STEP_M = 0.6
 CAMBER_POINTS = 21
 # A GA outline outside the hull side by more than this becomes a check item.
 CHECK_TOLERANCE_M = 0.02
+# A window recess when the drawings give no depth (a window set into its frame).
+DEFAULT_WINDOW_RECESS_M = 0.05
+# A window is cut only this far or more from the ends of the wall at its height.
+WINDOW_END_MARGIN_M = 0.1
+# The cutting box reaches this far outside the wall, past any flare.
+WINDOW_TOOL_REACH_M = 1.0
 # Two loft levels closer than this are one level.
 SAME_LEVEL_M = 0.001
 # A level band is split while its ruled surface is further than this outside the hull side at
@@ -199,7 +205,8 @@ class PlanShape:
     # End wall position by height: {'aft': [[z, x], ...], 'fwd': [[z, x], ...]}; a missing end is
     # vertical at the outline's end.
     ends: dict = field(default_factory=dict)
-    corner_radius_m: float = 0.0
+    # Plan corner radius at each end: {'aft': r, 'fwd': r} (metres; 0 is a square corner).
+    corner_radius_m: dict = field(default_factory=dict)
 
     def end_x(self, side: str, z: float) -> float:
         contour = self.ends.get(side)
@@ -225,14 +232,13 @@ def _longest_run(mask: np.ndarray) -> tuple[int, int] | None:
     return best
 
 
-def _round_corners(xs, low, high, radius):
-    """Pull the plan in near both ends along a quarter circle of the given radius."""
-    if radius <= 0:
-        return low, high
-    distance = np.minimum(xs - xs[0], xs[-1] - xs)
-    near = distance < radius
+def _round_corners(xs, low, high, radius: dict):
+    """Pull the plan in near each end along a quarter circle of that end's radius."""
     pull = np.zeros_like(xs)
-    pull[near] = radius - np.sqrt(radius ** 2 - (radius - distance[near]) ** 2)
+    for side, distance in (('aft', xs - xs[0]), ('fwd', xs[-1] - xs)):
+        r = float(radius.get(side, 0.0))
+        near = distance < r
+        pull[near] = np.maximum(pull[near], r - np.sqrt(r ** 2 - (r - distance[near]) ** 2))
     pull = np.minimum(pull, np.maximum((high - low - MIN_WIDTH_M) / 2, 0.0))
     return low + pull, high - pull
 
@@ -446,14 +452,41 @@ def house_body(part_id, shape, hull, low, high):
     plans = _plans(shape, hull, [(z, z) for z in heights], samples)
     if plans is None:
         raise ValueError('deckhouse has no width inside the hull side')
-    return loft_plans([(z, plan['polygon']) for z, plan in plans]), _check_items(part_id, plans), plans
+    return loft_plans([(z, plan['polygon']) for z, plan in plans]), _check_items(part_id, plans)
+
+
+def window_recesses(solid, shape, hull, windows, depth):
+    """Cut each side window as a shallow recess into both side walls. Returns (solid, windows cut).
+
+    A window is ``[x0, x1, z0, z1]`` from the side profile. It is cut only where it lies on a
+    side wall at both its sill and its head (not across a raked end, which would cut a corner).
+    """
+    import cadquery as cq
+
+    cut = []
+    for x0, x1, z0, z1 in windows:
+        plans = [planform(shape, hull, z, sample_count(shape, [z])) for z in (z0, (z0 + z1) / 2, z1)]
+        if not all(plans) or any(not (p['x_range'][0] + WINDOW_END_MARGIN_M <= x0
+                                      and x1 <= p['x_range'][1] - WINDOW_END_MARGIN_M) for p in plans):
+            continue
+        middle = plans[1]
+        port = float(np.interp([x0, x1], middle['x'], middle['high']).min())
+        starboard = float(np.interp([x0, x1], middle['x'], middle['low']).max())
+        reach = WINDOW_TOOL_REACH_M
+        for y0 in (port - depth, starboard - reach):
+            tool = cq.Solid.makeBox(x1 - x0, depth + reach, z1 - z0, cq.Vector(x0, y0, z0))
+            solid = solid.cut(tool)
+        cut.append([x0, x1, z0, z1])
+    return solid, cut
 
 
 def build_shaped(part_id: str, op: str, values: dict, hull: HullSide | None, detail: dict | None = None):
     """Build a deck, bulwark or deckhouse that follows the hull. Returns (solid, report).
 
     ``detail`` holds this part's labelled detail values, each ``{'value', 'source', 'basis'}``:
-    ``camber_m`` (decks), ``ends`` and ``corner_radius_m`` (plan shape), ``windows``.
+    ``camber_m`` (decks); ``end_aft`` and ``end_fwd`` (``[[z, x], ...]`` end contours) and
+    ``corner_radius_m`` (``{'aft': r, 'fwd': r}``) for the plan shape; ``windows``
+    (``[[x0, x1, z0, z1], ...]``) and ``window_recess_m`` for deckhouses.
     The report lists the detail values used and the check items.
     """
     detail = detail or {}
@@ -462,17 +495,24 @@ def build_shaped(part_id: str, op: str, values: dict, hull: HullSide | None, det
         item = detail.get(key)
         return item['value'] if isinstance(item, dict) and 'value' in item else default
 
-    shape = PlanShape(values['outline'], ends=value('ends', {}) or {},
-                      corner_radius_m=float(value('corner_radius_m', 0.0)))
+    ends = {side: value(f'end_{side}', None) for side in ('aft', 'fwd')}
+    shape = PlanShape(values['outline'], ends={side: points for side, points in ends.items() if points},
+                      corner_radius_m=value('corner_radius_m', {}) or {})
     low, high = values['height']
-    used = [key for key in ('ends', 'corner_radius_m') if key in detail]
+    used = [key for key in ('end_aft', 'end_fwd', 'corner_radius_m') if key in detail]
     if op == 'deck':
         solid, checks = deck_plate(part_id, shape, hull, low, high, float(value('camber_m', 0.0)))
         used += ['camber_m'] if 'camber_m' in detail else []
     elif op == 'bulwark':
         solid, checks = bulwark_wall(part_id, shape, hull, low, high, values['thickness'])
     elif op == 'deckhouse':
-        solid, checks, plans = house_body(part_id, shape, hull, low, high)
+        solid, checks = house_body(part_id, shape, hull, low, high)
+        windows = value('windows', [])
+        if windows:
+            solid, cut = window_recesses(solid, shape, hull, windows,
+                                         float(value('window_recess_m', DEFAULT_WINDOW_RECESS_M)))
+            if cut:
+                used += [key for key in ('windows', 'window_recess_m') if key in detail]
     else:
         raise ValueError(f'{op} is not a part above the hull')
     return solid, {'detail_used': used, 'check_items': checks}

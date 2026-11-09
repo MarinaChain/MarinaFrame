@@ -435,3 +435,100 @@ def section_deck_camber(path, label: str = '1-DECK', layers=('S0CO5',), metres_p
         return None
     return {'camber_m': round(float(np.median(rises)), 4), 'sections': len(rises), 'entity_ids': entity_ids,
             'rises_m': [round(r, 4) for r in rises]}
+
+
+# Profile end contours: a drawn end line continues where a segment starts within this distance
+# of the current point (line ends meet to round-off; curves are flattened at 1 drawing unit).
+END_CONTOUR_TOLERANCE_M = 0.03
+# An end wall leans at most this far in x from the roof end (a raked front about 1.5:1 over a
+# 2.4 m tier is 1.6 m); further, the walk has left the end wall.
+END_CONTOUR_MAX_RUN_M = 3.0
+# Contour points that a straight line between their neighbours covers within this are dropped.
+END_CONTOUR_SIMPLIFY_M = 0.02
+# Profile windows: closed outlines inside a tier, between these sizes (doors are taller).
+WINDOW_SIZE_M = (0.25, 2.5)
+WINDOW_MAX_HEIGHT_M = 1.5
+
+
+def _profile_segments(entities, view: View):
+    segments = []
+    for entity in _view_entities(entities, view):
+        points = view.to_ship(entity['points'])
+        segments += [(a, b, entity['id']) for a, b in zip(points[:-1], points[1:])]
+    return segments
+
+
+def _simplify(points: np.ndarray, tolerance: float) -> np.ndarray:
+    """Douglas-Peucker simplification of a polyline."""
+    if len(points) <= 2:
+        return points
+    start, end = points[0], points[-1]
+    direction = end - start
+    length = np.hypot(*direction) or 1.0
+    distance = np.abs(direction[0] * (points[:, 1] - start[1]) - direction[1] * (points[:, 0] - start[0])) / length
+    index = int(np.argmax(distance))
+    if distance[index] <= tolerance:
+        return np.array([start, end])
+    left = _simplify(points[:index + 1], tolerance)
+    return np.concatenate([left[:-1], _simplify(points[index:], tolerance)])
+
+
+def end_contour(entities, view: View, start_x: float, z_high: float, z_low: float) -> dict | None:
+    """The drawn end line of a deckhouse tier in the profile, from its roof end down to its base.
+
+    Starting at the roof end (start_x, z_high), the walk follows drawn segments that go down
+    (a raked front, a curved front, the two faces of a raked wheelhouse front) until it reaches
+    the base. Returns ``{'points': [[z, x], ...] (z up), 'reached_base', 'entity_ids'}``; None
+    when no drawn line starts at the roof end. Where the line stops above the base, the wall is
+    continued vertically down (``reached_base`` False).
+    """
+    segments = _profile_segments(entities, view)
+    current = np.array([start_x, z_high])
+    path, ids = [current.copy()], []
+    while current[1] > z_low + END_CONTOUR_TOLERANCE_M:
+        best = None
+        for a, b, entity_id in segments:
+            for here, there in ((a, b), (b, a)):
+                if (np.hypot(*(here - current)) <= END_CONTOUR_TOLERANCE_M and there[1] < current[1] - 1e-3
+                        and there[1] >= z_low - END_CONTOUR_TOLERANCE_M
+                        and abs(there[0] - start_x) <= END_CONTOUR_MAX_RUN_M
+                        and (best is None or there[1] < best[0][1])):
+                    best = (there, entity_id)
+        if best is None:
+            break
+        current = best[0].copy()
+        path.append(current)
+        if best[1] not in ids:
+            ids.append(best[1])
+    if len(path) == 1:
+        return None
+    reached = current[1] <= z_low + END_CONTOUR_TOLERANCE_M
+    path[-1] = np.array([current[0], z_low]) if reached else current
+    if not reached:
+        path.append(np.array([current[0], z_low]))
+    points = _simplify(np.array(path), END_CONTOUR_SIMPLIFY_M)
+    return {'points': [[round(float(z), 4), round(float(x), 4)] for x, z in points[::-1]],
+            'reached_base': bool(reached), 'entity_ids': ids}
+
+
+def profile_windows(entities, view: View, x_range, z_range) -> list[dict]:
+    """Window outlines drawn in the profile inside a tier: closed, window sized, not nested."""
+    found = []
+    for entity in _view_entities(entities, view):
+        if not entity.get('closed'):
+            continue
+        points = view.to_ship(entity['points'])
+        low, high = points.min(axis=0), points.max(axis=0)
+        width, height = high - low
+        if (x_range[0] <= low[0] and high[0] <= x_range[1] and z_range[0] <= low[1] and high[1] <= z_range[1]
+                and WINDOW_SIZE_M[0] <= width <= WINDOW_SIZE_M[1]
+                and WINDOW_SIZE_M[0] <= height <= WINDOW_MAX_HEIGHT_M):
+            found.append({'x_m': [round(float(low[0]), 3), round(float(high[0]), 3)],
+                          'z_m': [round(float(low[1]), 3), round(float(high[1]), 3)], 'entity_id': entity['id']})
+
+    def inside(a, b):
+        return (a is not b and b['x_m'][0] <= a['x_m'][0] and a['x_m'][1] <= b['x_m'][1]
+                and b['z_m'][0] <= a['z_m'][0] and a['z_m'][1] <= b['z_m'][1])
+
+    # A window frame is drawn as two nested outlines; keep the outer one.
+    return sorted([w for w in found if not any(inside(w, other) for other in found)], key=lambda w: w['x_m'])

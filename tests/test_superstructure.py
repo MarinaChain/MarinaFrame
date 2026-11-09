@@ -64,6 +64,7 @@ def test_outline_extent_reads_port_and_starboard_edges():
     assert np.isnan(low[2])
 
 
+@pytest.mark.cad
 def test_deck_edge_follows_the_hull_and_the_disagreement_is_a_check_item():
     hull = bow_hull()
     solid, report = build_shaped('deck', 'deck', {'outline': WIDE_OUTLINE, 'height': [2.99, 3.0]}, hull)
@@ -74,6 +75,7 @@ def test_deck_edge_follows_the_hull_and_the_disagreement_is_a_check_item():
     assert kinds['part_end_beyond_hull']['distance_m'] == pytest.approx(2.0, abs=0.05)
 
 
+@pytest.mark.cad
 def test_camber_raises_the_deck_centre_only():
     hull = bow_hull()
     detail = {'camber_m': {'value': 0.2, 'source': 'guessed', 'basis': 'B/50'}}
@@ -83,6 +85,7 @@ def test_camber_raises_the_deck_centre_only():
     assert report['detail_used'] == ['camber_m']
 
 
+@pytest.mark.cad
 def test_bulwark_follows_the_flared_shell_above_the_deck():
     hull = bow_hull()
     values = {'outline': WIDE_OUTLINE, 'height': [3.0, 4.0], 'thickness': 0.05}
@@ -93,6 +96,7 @@ def test_bulwark_follows_the_flared_shell_above_the_deck():
     assert section.BoundingBox().ymax == pytest.approx(4.2, abs=0.01)
 
 
+@pytest.mark.cad
 def test_house_reaching_the_hull_side_is_cut_to_it_at_every_height():
     hull = bow_hull()
     values = {'outline': WIDE_OUTLINE, 'height': [3.0, 5.0]}
@@ -110,6 +114,7 @@ def deck_program():
          'args': {'outline': labelled(WIDE_OUTLINE), 'height': labelled([2.99, 3.0])}}]}
 
 
+@pytest.mark.cad
 def test_execute_builds_hull_following_parts_and_labels_detail_values(tmp_path):
     from vessel_reconstruction.ship_cad import execute
 
@@ -158,3 +163,56 @@ def test_no_deck_line_gives_no_camber_reading(tmp_path):
     document.modelspace().add_text('1-DECK', dxfattribs={'height': 100, 'insert': (0, 4374)})
     document.saveas(tmp_path / 'empty.dxf')
     assert section_deck_camber(tmp_path / 'empty.dxf') is None
+
+
+def profile_view():
+    from vessel_reconstruction.ga_reader import View
+
+    return View('profile', 'profile', [0, 0, 50000, 20000], [0, 0])
+
+
+def test_end_contour_follows_a_raked_wheelhouse_front_down_to_the_base():
+    from vessel_reconstruction.ga_reader import end_contour
+
+    # Lower face leans aft (x 21.0 -> 20.3 m), upper face leans forward (to 21.3 m): drawn in mm.
+    entities = [{'id': 'upper', 'points': [[20300, 10150], [21300, 11500]]},
+                {'id': 'lower', 'points': [[21000, 9100], [20300, 10150]]},
+                {'id': 'roof', 'points': [[13500, 11500], [21300, 11500]]}]
+    contour = end_contour(entities, profile_view(), 21.3, 11.5, 9.1)
+    assert contour['points'] == [[9.1, 21.0], [10.15, 20.3], [11.5, 21.3]]
+    assert contour['reached_base'] and contour['entity_ids'] == ['upper', 'lower']
+    assert end_contour(entities, profile_view(), 13.0, 11.5, 9.1) is None
+
+
+def test_profile_windows_keep_the_outer_frame_only():
+    from vessel_reconstruction.ga_reader import profile_windows
+
+    def box(name, x0, z0, x1, z1):
+        return {'id': name, 'closed': True, 'points': [[x0, z0], [x1, z0], [x1, z1], [x0, z1], [x0, z0]]}
+
+    entities = [box('outer', 14100, 10300, 15300, 11200), box('inner', 14150, 10350, 15250, 11150),
+                box('door', 16000, 9100, 16800, 11100), box('tiny', 17000, 10500, 17100, 10600)]
+    windows = profile_windows(entities, profile_view(), [13.0, 22.0], [9.0, 11.5])
+    assert [w['entity_id'] for w in windows] == ['outer']
+
+
+@pytest.mark.cad
+def test_raked_end_rounded_corners_and_window_recesses_shape_a_deckhouse():
+    box_outline = [[14.0, -3.5], [21.0, -3.5], [21.0, 3.5], [14.0, 3.5]]
+    values = {'outline': box_outline, 'height': [9.0, 11.5]}
+    plain, _ = build_shaped('wh', 'deckhouse', values, None)
+    detail = {'end_fwd': {'value': [[9.0, 21.0], [11.5, 20.0]], 'source': 'traced', 'basis': 'profile'},
+              'corner_radius_m': {'value': {'fwd': 1.0}, 'source': 'guessed', 'basis': 'test'},
+              'windows': {'value': [[15.0, 16.0, 10.2, 11.1]], 'source': 'traced', 'basis': 'profile'},
+              'window_recess_m': {'value': 0.05, 'source': 'guessed', 'basis': 'test'}}
+    shaped, report = build_shaped('wh', 'deckhouse', values, None, detail)
+    assert shaped.isValid()
+    top = shaped.intersect(cq.Solid.makeBox(10, 10, 0.05, cq.Vector(12, -5, 11.4))).BoundingBox()
+    assert top.xmax == pytest.approx(20.0, abs=0.05)  # the front leans aft by 1 m at the roof
+    window = shaped.intersect(cq.Solid.makeBox(0.2, 0.2, 0.2, cq.Vector(15.4, 3.4, 10.5)))
+    # The probe spans y 3.4 to 3.6 m; the wall face is at 3.5 m, recessed 0.05 m to 3.45 m.
+    assert window.Volume() == pytest.approx(0.2 * 0.05 * 0.2, rel=0.02)
+    corner = shaped.intersect(cq.Solid.makeBox(0.1, 0.5, 0.5, cq.Vector(20.85, 3.0, 9.0)))
+    assert corner.Volume() < 0.1 * 0.5 * 0.5 * 0.5  # the forward corner is rounded off
+    assert set(report['detail_used']) == {'end_fwd', 'corner_radius_m', 'windows', 'window_recess_m'}
+    assert shaped.Volume() < plain.Volume()
