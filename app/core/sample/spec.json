@@ -3,65 +3,210 @@
   "vessel_id": "sample-hull",
   "units": "m",
   "symmetry": "port_starboard",
-  "symmetry_evidence": "Explicit generated fixture assumption.",
+  "symmetry_evidence": "Each station is drawn as one half; port-starboard symmetry is assumed.",
   "end_closure": "flat_at_terminal_stations",
   "source": {
-    "file": "drawing.png"
+    "file": "drawing.png",
+    "description": "Sample hull (generated): station sections of an analytic hull form drawn by examples/make_sample_ship.py. No third-party data."
   },
   "sections": [
     {
-      "id": "s0",
+      "id": "st00",
       "x_m": 0.0,
       "roi_px": [
-        10,
-        20,
-        195,
-        220
+        50,
+        84,
+        282,
+        348
       ],
       "calibration": {
-        "centerline_px": 20,
-        "baseline_px": 210,
-        "pixels_per_metre": 60
+        "centerline_px": 60,
+        "baseline_px": 342,
+        "pixels_per_metre": 36
       },
       "z_min_m": 0.0,
-      "z_max_m": 3.0,
-      "evidence": "Declared calibration for a generated development drawing."
+      "z_max_m": 6.0,
+      "evidence": "Generated drawing (examples/make_sample_ship.py). Station position from the station spacing; scale, centreline and baseline from the panel's 1 m grid. One station per panel, drawn as the half right of its centreline."
     },
     {
-      "id": "s1",
-      "x_m": 2.0,
+      "id": "st01",
+      "x_m": 6.0,
       "roi_px": [
-        210,
-        20,
-        395,
-        220
+        340,
+        84,
+        572,
+        348
       ],
       "calibration": {
-        "centerline_px": 220,
-        "baseline_px": 210,
-        "pixels_per_metre": 60
+        "centerline_px": 350,
+        "baseline_px": 342,
+        "pixels_per_metre": 36
       },
       "z_min_m": 0.0,
-      "z_max_m": 3.0,
-      "evidence": "Declared calibration for a generated development drawing."
+      "z_max_m": 6.0,
+      "evidence": "Generated drawing (examples/make_sample_ship.py). Station position from the station spacing; scale, centreline and baseline from the panel's 1 m grid. One station per panel, drawn as the half right of its centreline."
     },
     {
-      "id": "s2",
-      "x_m": 4.0,
+      "id": "st02",
+      "x_m": 12.0,
       "roi_px": [
-        410,
-        20,
-        595,
-        220
+        630,
+        84,
+        862,
+        348
       ],
       "calibration": {
-        "centerline_px": 420,
-        "baseline_px": 210,
-        "pixels_per_metre": 60
+        "centerline_px": 640,
+        "baseline_px": 342,
+        "pixels_per_metre": 36
       },
       "z_min_m": 0.0,
-      "z_max_m": 3.0,
-      "evidence": "Declared calibration for a generated development drawing."
+      "z_max_m": 6.0,
+      "evidence": "Generated drawing (examples/make_sample_ship.py). Station position from the station spacing; scale, centreline and baseline from the panel's 1 m grid. One station per panel, drawn as the half right of its centreline."
+    },
+    {
+      "id": "st03",
+      "x_m": 18.0,
+      "roi_px": [
+        920,
+        84,
+        1152,
+        348
+      ],
+      "calibration": {
+        "centerline_px": 930,
+        "baseline_px": 342,
+        "pixels_per_metre": 36
+      },
+      "z_min_m": 0.0,
+      "z_max_m": 6.0,
+      "evidence": "Generated drawing (examples/make_sample_ship.py). Station position from the station spacing; scale, centreline and baseline from the panel's 1 m grid. One station per panel, drawn as the half right of its centreline."
+    },
+    {
+      "id": "st04",
+      "x_m": 24.0,
+      "roi_px": [
+        1210,
+        84,
+        1442,
+        348
+      ],
+      "calibration": {
+        "centerline_px": 1220,
+        "baseline_px": 342,
+        "pixels_per_metre": 36
+      },
+      "z_min_m": 0.0,
+      "z_max_m": 6.0,
+      "evidence": "Generated drawing (examples/make_sample_ship.py). Station position from the station spacing; scale, centreline and baseline from the panel's 1 m grid. One station per panel, drawn as the half right of its centreline."
+    },
+    {
+      "id": "st05",
+      "x_m": 30.0,
+      "roi_px": [
+        1500,
+        84,
+        1732,
+        348
+      ],
+      "calibration": {
+        "centerline_px": 1510,
+        "baseline_px": 342,
+        "pixels_per_metre": 36
+      },
+      "z_min_m": 0.0,
+      "z_max_m": 6.0,
+      "evidence": "Generated drawing (examples/make_sample_ship.py). Station position from the station spacing; scale, centreline and baseline from the panel's 1 m grid. One station per panel, drawn as the half right of its centreline."
+    },
+    {
+      "id": "st06",
+      "x_m": 36.0,
+      "roi_px": [
+        50,
+        464,
+        282,
+        728
+      ],
+      "calibration": {
+        "centerline_px": 60,
+        "baseline_px": 722,
+        "pixels_per_metre": 36
+      },
+      "z_min_m": 0.0,
+      "z_max_m": 6.0,
+      "evidence": "Generated drawing (examples/make_sample_ship.py). Station position from the station spacing; scale, centreline and baseline from the panel's 1 m grid. One station per panel, drawn as the half right of its centreline."
+    },
+    {
+      "id": "st07",
+      "x_m": 42.0,
+      "roi_px": [
+        340,
+        464,
+        572,
+        728
+      ],
+      "calibration": {
+        "centerline_px": 350,
+        "baseline_px": 722,
+        "pixels_per_metre": 36
+      },
+      "z_min_m": 0.0,
+      "z_max_m": 6.0,
+      "evidence": "Generated drawing (examples/make_sample_ship.py). Station position from the station spacing; scale, centreline and baseline from the panel's 1 m grid. One station per panel, drawn as the half right of its centreline."
+    },
+    {
+      "id": "st08",
+      "x_m": 48.0,
+      "roi_px": [
+        630,
+        464,
+        862,
+        728
+      ],
+      "calibration": {
+        "centerline_px": 640,
+        "baseline_px": 722,
+        "pixels_per_metre": 36
+      },
+      "z_min_m": 0.0,
+      "z_max_m": 6.0,
+      "evidence": "Generated drawing (examples/make_sample_ship.py). Station position from the station spacing; scale, centreline and baseline from the panel's 1 m grid. One station per panel, drawn as the half right of its centreline."
+    },
+    {
+      "id": "st09",
+      "x_m": 54.0,
+      "roi_px": [
+        920,
+        464,
+        1152,
+        728
+      ],
+      "calibration": {
+        "centerline_px": 930,
+        "baseline_px": 722,
+        "pixels_per_metre": 36
+      },
+      "z_min_m": 0.0,
+      "z_max_m": 6.0,
+      "evidence": "Generated drawing (examples/make_sample_ship.py). Station position from the station spacing; scale, centreline and baseline from the panel's 1 m grid. One station per panel, drawn as the half right of its centreline."
+    },
+    {
+      "id": "st10",
+      "x_m": 60.0,
+      "roi_px": [
+        1210,
+        464,
+        1442,
+        728
+      ],
+      "calibration": {
+        "centerline_px": 1220,
+        "baseline_px": 722,
+        "pixels_per_metre": 36
+      },
+      "z_min_m": 0.0,
+      "z_max_m": 6.0,
+      "evidence": "Generated drawing (examples/make_sample_ship.py). Station position from the station spacing; scale, centreline and baseline from the panel's 1 m grid. One station per panel, drawn as the half right of its centreline."
     }
   ]
 }
