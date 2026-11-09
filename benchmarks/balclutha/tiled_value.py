@@ -40,6 +40,8 @@ SIDE_STATIONS = {'aft': tuple(range(0, 11)), 'fore': tuple(range(11, 21))}
 TILE_WIDTH = 2048
 TILE_HEIGHT = 1024
 TILE_SPANS = {'inner': (-48, 2000), 'outer': (1002, 3050)}
+# Round 5 layout; a later round may pass another (same fields) to tile_boxes.
+ROUND5_LAYOUT = {'width': TILE_WIDTH, 'height': TILE_HEIGHT, 'spans': TILE_SPANS}
 # Context image: one side of the body plan at 1/4 scale (columns from the centreline, rows).
 QUARTER = 4
 CONTEXT_OUT_PX = 800
@@ -48,18 +50,26 @@ WORKERS = 4
 DISAGREEMENT_M = 0.15
 
 
-def tile_boxes() -> list[dict]:
-    """The 32 tiles: (side, waterline, position) with their full-sheet box (left, top, right, bottom)."""
+def tile_boxes(layout: dict = ROUND5_LAYOUT) -> list[dict]:
+    """Tiles per (side, waterline, position) with their full-sheet box (left, top, right, bottom).
+
+    The round-5 layout gives 32 tiles; each span (near, far) must be layout['width'] px wide.
+    """
     tiles = []
     for side, sign in (('aft', -1), ('fore', 1)):
         for waterline in round4.WATERLINES_FT:
             row = WATERLINE_ROWS[waterline]
-            top = row - TILE_HEIGHT // 2
-            for position, (near, far) in TILE_SPANS.items():
+            top = row - layout['height'] // 2
+            for position, (near, far) in layout['spans'].items():
                 columns = sorted((CENTRE_COLUMN + sign * near, CENTRE_COLUMN + sign * far))
                 tiles.append({'id': f'{side}-wl{waterline:02d}-{position}', 'side': side, 'waterline': waterline,
-                              'position': position, 'box': (columns[0], top, columns[1], top + TILE_HEIGHT)})
+                              'position': position, 'box': (columns[0], top, columns[1], top + layout['height'])})
     return tiles
+
+
+def tile_size(tile: dict) -> tuple[int, int]:
+    left, top, right, bottom = tile['box']
+    return right - left, bottom - top
 
 
 def tile_grid(tile: dict) -> dict:
@@ -105,8 +115,9 @@ def tile_prompt(tile: dict) -> str:
     waterlines = ', '.join(f'{ft} ft at y = {row}' for ft, row in grid['waterlines'].items()) or 'none'
     buttocks = ', '.join(f'{ft} ft ({ft * round4.FEET_M:.3f} m) at x = {column}'
                          for ft, column in grid['buttocks'].items()) or 'none'
-    return PROMPT.format(side_name=side_name, first=stations[0], last=stations[-1], width=TILE_WIDTH,
-                         height=TILE_HEIGHT, waterline=tile['waterline'], row=grid['target_row'],
+    width, height = tile_size(tile)
+    return PROMPT.format(side_name=side_name, first=stations[0], last=stations[-1], width=width,
+                         height=height, waterline=tile['waterline'], row=grid['target_row'],
                          cx=grid['centreline_x'], ppm=PIXELS_PER_M, waterlines=waterlines, buttocks=buttocks,
                          order=order)
 
@@ -126,7 +137,7 @@ def parse_crossings(text: str, tile: dict) -> dict:
             raise ValueError(f'station {station!r} is not in this half')
         if station in reading:
             raise ValueError(f'station {station} is given twice')
-        if isinstance(x_px, bool) or not isinstance(x_px, (int, float)) or not 0 <= x_px <= TILE_WIDTH:
+        if isinstance(x_px, bool) or not isinstance(x_px, (int, float)) or not 0 <= x_px <= tile_size(tile)[0]:
             raise ValueError(f'station {station}: x_px {x_px!r} is outside the tile')
         reading[station] = float(x_px)
     return reading
@@ -243,12 +254,13 @@ def run_repeat(tiles: list[dict], images: dict, truth: dict, folder: Path, call)
 
 def r0_spec(tile: dict) -> dict:
     left, top, _, _ = tile['box']
+    width, height = tile_size(tile)
     baseline = BASE_ROW - top
     return {'units': 'm', 'source': {'file': 'tile.png'},
-            'sections': [{'id': tile['id'], 'x_m': 0.0, 'roi_px': [0, 0, TILE_WIDTH, TILE_HEIGHT],
+            'sections': [{'id': tile['id'], 'x_m': 0.0, 'roi_px': [0, 0, width, height],
                           'calibration': {'pixels_per_metre': PIXELS_PER_M,
                                           'centerline_px': CENTRE_COLUMN - left, 'baseline_px': baseline},
-                          'z_min_m': (baseline - (TILE_HEIGHT - 1)) / PIXELS_PER_M,
+                          'z_min_m': (baseline - (height - 1)) / PIXELS_PER_M,
                           'z_max_m': baseline / PIXELS_PER_M}]}
 
 
