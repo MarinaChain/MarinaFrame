@@ -48,6 +48,14 @@ const WORKSPACE_PREFIX: &str = "marinaframe-claude-";
 /// tool and its arguments strictly.
 pub const DECISION_SCHEMA: &str = r#"{"type":"object","properties":{"tool":{"type":"string"},"arguments":{"type":"object"},"reason":{"type":"string"},"notes":{"type":"string"}},"required":["tool","arguments","reason"],"additionalProperties":false}"#;
 
+/// Added to the system prompt of every decision request. With `--json-schema`
+/// the CLI gives the model one tool, StructuredOutput; the harness's action
+/// list reads like callable functions, and Sonnet 5.5 called propose_section
+/// directly, got "No such tool available" and then wrote in its notes that the
+/// action was unavailable (rounds 7ac5e2b, b5a9dac, e445d52, ab7af21: sections
+/// left unrepaired, "propose_section is unavailable").
+pub const DECISION_ANSWER_NOTE: &str = "How to answer in this session: give each decision through the StructuredOutput tool as {tool, arguments, reason, notes}. The actions listed under \"tools\" in the request are values for that tool field, not functions you can call: a direct call to one fails with \"No such tool available\", and that error never means the action is unavailable. Every action listed under \"tools\" is available in the current phase.";
+
 /// Stream-json input takes user messages only, so earlier turns go in one
 /// JSON-encoded data block. These fixed texts frame it; the harness's own
 /// instructions stay in the system prompt.
@@ -133,6 +141,11 @@ pub fn build(payload: &Value, purpose: Purpose) -> Result<CliRequest> {
     let system = system["content"]
         .as_str()
         .ok_or("provider_message_contract")?;
+    let system = if purpose.is_decision() {
+        format!("{system}\n\n{DECISION_ANSWER_NOTE}")
+    } else {
+        system.to_string()
+    };
     let mut content = vec![];
     if !earlier.is_empty() {
         // One JSON-encoded block: serde escapes quotes and brackets, so text
@@ -193,7 +206,7 @@ pub fn build(payload: &Value, purpose: Purpose) -> Result<CliRequest> {
         "stream-json",
         "--verbose",
         "--system-prompt",
-        system,
+        &system,
     ]
     .iter()
     .map(|a| a.to_string())
@@ -447,7 +460,10 @@ mod tests {
         assert_eq!(after("--tools"), "");
         assert_eq!(after("--model"), "claude-sonnet-5-5");
         assert_eq!(after("--effort"), "low");
-        assert_eq!(after("--system-prompt"), "SYSTEM");
+        assert_eq!(
+            after("--system-prompt"),
+            &format!("SYSTEM\n\n{DECISION_ANSWER_NOTE}")
+        );
         assert_eq!(after("--input-format"), "stream-json");
         assert_eq!(after("--json-schema"), DECISION_SCHEMA);
         for flag in [
@@ -524,7 +540,7 @@ mod tests {
                 .position(|a| a == "--system-prompt")
                 .unwrap()
                 + 1],
-            "S"
+            format!("S\n\n{DECISION_ANSWER_NOTE}")
         );
         let external = json!({"model":"claude-sonnet-5-5","max_tokens":64,"effort":"low",
             "messages":[{"role":"system","content":"S"},{"role":"user","content":[
