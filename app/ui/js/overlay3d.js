@@ -50,7 +50,11 @@ export function createOverlays({ scene, host, clip }) {
   group.add(parts.grid, parts.waterline, parts.frames);
   /** Which overlays show (the tool bar switches them). */
   const shown = { grid: true, waterline: false, frames: true, edges: true };
-  let edges = [];
+  /**
+   * Feature edges, one merged line set per kind of part ("hull", "shell", "steel", "tanks"), in
+   * world space: one draw call each, however many parts. key -> { lines, layer, always, ranges }.
+   */
+  const edgeSets = new Map();
   let frameLine = null; // { reference, y, z, first, last }
 
   // ---- Screen overlays.
@@ -159,7 +163,7 @@ export function createOverlays({ scene, host, clip }) {
     parts.grid.visible = shown.grid;
     parts.waterline.visible = shown.waterline;
     parts.frames.visible = shown.frames;
-    for (const edge of edges) edge.visible = shown.edges;
+    for (const set of edgeSets.values()) set.lines.visible = set.layer && (set.always || shown.edges);
     if (!shown.frames) frameLabels.replaceChildren();
   }
 
@@ -222,26 +226,68 @@ export function createOverlays({ scene, host, clip }) {
     get shown() {
       return { ...shown };
     },
-    /** Draw feature edges on a mesh (a child line set, cut like the mesh). */
-    addEdges(mesh, angle = FEATURE_EDGE_ANGLE_DEG) {
-      const edge = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, angle), edgeMaterial);
-      edge.visible = shown.edges;
-      edge.raycast = () => {};
-      mesh.add(edge);
-      edges.push(edge);
-      return edge;
+    /**
+     * Draw the feature edges of `meshes` as one line set under `key` (replacing the old one).
+     * Meshes keep their place (world matrices are read now; models do not move). With
+     * `colourOf(mesh)` each part's edges take that colour; `always` keeps them on when the
+     * Edges switch is off (tank outlines belong to the capacity-plan look).
+     */
+    setEdges(key, meshes, { colourOf = null, always = false } = {}) {
+      this.removeEdges(key);
+      if (!meshes.length) return;
+      const positions = [];
+      const ranges = [];
+      for (const mesh of meshes) {
+        mesh.updateWorldMatrix(true, false);
+        const edges = new THREE.EdgesGeometry(mesh.geometry, FEATURE_EDGE_ANGLE_DEG);
+        edges.applyMatrix4(mesh.matrixWorld);
+        const array = edges.getAttribute('position').array;
+        ranges.push({ mesh, start: positions.length / 3, count: array.length / 3 });
+        for (let i = 0; i < array.length; i += 1) positions.push(array[i]);
+        edges.dispose();
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      let material = edgeMaterial;
+      if (colourOf) {
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(positions.length), 3));
+        material = clip(new THREE.LineBasicMaterial({ vertexColors: true }));
+      }
+      const lines = new THREE.LineSegments(geometry, material);
+      lines.raycast = () => {};
+      // Edges of a part lie on its faces: draw them after the faces, so they win the depth tie.
+      lines.renderOrder = 1;
+      group.add(lines);
+      const set = { lines, layer: true, always, ranges, colourOf };
+      edgeSets.set(key, set);
+      if (colourOf) this.recolourEdges(key);
+      applyVisibility();
     },
-    /** Forget the edges under `root` (it leaves the scene). */
-    removeEdges(root) {
-      edges = edges.filter((edge) => {
-        let inside = false;
-        edge.traverseAncestors((node) => { if (node === root) inside = true; });
-        if (inside) {
-          edge.parent?.remove(edge);
-          edge.geometry.dispose();
-        }
-        return !inside;
-      });
+    /** Colour a coloured edge set again (after a theme change). */
+    recolourEdges(key) {
+      const set = edgeSets.get(key);
+      if (!set?.colourOf) return;
+      const colours = set.lines.geometry.getAttribute('color');
+      for (const { mesh, start, count } of set.ranges) {
+        const colour = set.colourOf(mesh);
+        for (let i = start; i < start + count; i += 1) colours.setXYZ(i, colour.r, colour.g, colour.b);
+      }
+      colours.needsUpdate = true;
+    },
+    /** Show or hide one edge set with its layer (tanks, steel). */
+    setEdgesLayer(key, visible) {
+      const set = edgeSets.get(key);
+      if (!set) return;
+      set.layer = visible;
+      applyVisibility();
+    },
+    removeEdges(key) {
+      const set = edgeSets.get(key);
+      if (!set) return;
+      group.remove(set.lines);
+      set.lines.geometry.dispose();
+      if (set.lines.material !== edgeMaterial) set.lines.material.dispose();
+      edgeSets.delete(key);
     },
     /** Move the screen overlays with the camera. `metresPerPixel` is at the orbit target. */
     update(camera, width, height, metresPerPixel) {

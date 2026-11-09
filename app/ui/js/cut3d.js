@@ -61,7 +61,9 @@ export function createSectionCut({ scene }) {
     const on = Boolean(state.axis);
     capGroup.visible = on;
     for (const solid of solids) {
-      const show = on && solid.mesh.visible && solid.capped();
+      let shown = solid.mesh.visible;
+      solid.mesh.traverseAncestors((node) => { if (!node.visible) shown = false; });
+      const show = on && shown && solid.capped();
       solid.back.visible = show;
       solid.front.visible = show;
       solid.cap.visible = show;
@@ -119,17 +121,27 @@ export function createSectionCut({ scene }) {
       placeCaps();
     },
     /**
-     * Cap a closed solid mesh. `colour()` gives its colour (THREE.Color); `capped()` says whether
-     * it shows a cut face now (a see-through shell does not, or its face would hide the inside).
+     * Cap a closed solid mesh, placed where it is now (its world matrix; models do not move).
+     * `colour()` gives its colour (THREE.Color); `capped()` says whether it shows a cut face now
+     * (a see-through shell does not, or its face would hide the inside). The solid shows a cap
+     * only while the mesh is visible (a layer switched off hides it).
      */
     addSolid(mesh, { colour, capped = () => true }) {
       const order = CAP_ORDER_START + solids.length * CAP_ORDER_STEP;
-      const back = new THREE.Mesh(mesh.geometry, backMaterial);
-      const front = new THREE.Mesh(mesh.geometry, frontMaterial);
-      back.renderOrder = order;
-      front.renderOrder = order;
-      // The stencil passes follow the solid's place; they never cast or take shadows.
-      mesh.add(back, front);
+      mesh.updateWorldMatrix(true, false);
+      const pass = (material) => {
+        const helper = new THREE.Mesh(mesh.geometry, material);
+        helper.matrixAutoUpdate = false;
+        helper.matrix.copy(mesh.matrixWorld);
+        helper.renderOrder = order;
+        helper.raycast = () => {};
+        // The stencil passes never cast or take shadows, and are outside the model's tree, so
+        // they still draw when the model draws its solid another way (a batch).
+        capGroup.add(helper);
+        return helper;
+      };
+      const back = pass(backMaterial);
+      const front = pass(frontMaterial);
       const cap = makeCap(order);
       capGroup.add(cap);
       solids.push({ mesh, back, front, cap, colour, capped });
@@ -147,8 +159,7 @@ export function createSectionCut({ scene }) {
           keep.push(solid);
           continue;
         }
-        solid.mesh.remove(solid.back, solid.front);
-        capGroup.remove(solid.cap);
+        capGroup.remove(solid.back, solid.front, solid.cap);
         solid.cap.geometry.dispose();
         solid.cap.material.dispose();
       }

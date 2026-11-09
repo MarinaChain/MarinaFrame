@@ -13,6 +13,7 @@ import { placeLabels, steelLegend, steelToken, tankLegend, tankToken } from './t
 import { createLighting, createPaintMaterial, createSteelMaterial, createTankMaterial, setUpRenderer, stylePaint } from './look3d.js';
 import { bootTopBand, fitDistance, frameLabel, frameAt, hullReference, nearestFrameX, pointReadout, STANDARD_VIEWS, viewOfKey } from './reference3d.js';
 import { createOverlays } from './overlay3d.js';
+import { createBatch, HIDDEN_MATERIAL } from './batch3d.js';
 import { createSectionCut } from './cut3d.js';
 import { createCutPanel, createToolbar, toolButton } from './controls3d.js';
 
@@ -24,6 +25,8 @@ const FRAME_MARGIN = 1.1;
 const GUESS_BAND_MARGIN = 0.04;
 /** Camera direction for the default view: from forward, starboard and above (the iso view). */
 const HOME_DIRECTION = new THREE.Vector3(...STANDARD_VIEWS.iso.direction).normalize();
+/** Highest pixel ratio the view draws at. */
+const MAX_PIXEL_RATIO = 2;
 /** A pointer that moves less than this (CSS px) between press and release is a click, not a drag. */
 const CLICK_SLOP_PX = 4;
 /** The CAD worker's GLB is in millimetres. */
@@ -34,8 +37,6 @@ const HOME_MOVE_MS = 360;
 const SHELL_OPACITY_WITH_TANKS = 0.22;
 /** Steel shell plating is see-through, so the frames and floors behind it show. */
 const STEEL_SHELL_OPACITY = 0.35;
-/** Tank edges: a face angle above this (degrees) draws an edge line, as on a compartment view. */
-const TANK_EDGE_ANGLE_DEG = 30;
 /** Tank edge lines are the tank colour darkened to this share. */
 const TANK_EDGE_SHADE = 0.55;
 /** Size of a tank name label (CSS px) for the overlap test; long names are cut in CSS. */
@@ -102,7 +103,8 @@ export function createModelView({ host, onPick = null }) {
     showEmpty('3D view not available', 'This computer did not allow a WebGL view.');
     return { setModel() {}, setSelected() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, showsWholeVessel: false, hasTanks: false };
   }
-  renderer.setPixelRatio(window.devicePixelRatio);
+  /** Pixel ratio cap: a 3x screen draws at 2x, which looks the same and costs 2.25 times less. */
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
   setUpRenderer(renderer);
   renderer.domElement.setAttribute('aria-hidden', 'true');
   host.prepend(renderer.domElement);
@@ -149,6 +151,8 @@ export function createModelView({ host, onPick = null }) {
   /** Meshes of the whole vessel: tanks (GLB extras kind "tank") and the other parts (the shell). */
   let tankMeshes = [];
   let shellMeshes = [];
+  /** The tanks drawn as one batch (batch3d.js), or null. */
+  let tankBatch = null;
   /** Steel structure (a second GLB, one mesh per member group), or null. */
   let structure = null;
   let steelMeshes = [];
@@ -493,12 +497,14 @@ export function createModelView({ host, onPick = null }) {
     for (const mesh of tankMeshes) {
       mesh.visible = layers.tanks;
       const colour = colours.tank(mesh.userData.content_class);
-      mesh.material.color = colour;
-      // A selected tank keeps its content colour and glows in the selection blue.
-      mesh.material.emissive = mesh.userData.partId === highlightedId ? colours.accent.clone().multiplyScalar(0.5) : new THREE.Color(0x000000);
-      const edges = mesh.children.find((child) => child.isLineSegments);
-      if (edges) edges.material.color = colour.clone().multiplyScalar(TANK_EDGE_SHADE);
+      // A selected tank keeps a share of its content colour and turns toward the selection blue.
+      if (mesh.userData.partId === highlightedId) colour.lerp(colours.accent, 0.45);
+      tankBatch.setColour(mesh, colour);
     }
+    if (tankBatch) tankBatch.mesh.visible = layers.tanks;
+    overlays.setEdgesLayer('tanks', layers.tanks);
+    overlays.recolourEdges('tanks');
+    overlays.setEdgesLayer('steel', layers.structure);
     for (const mesh of steelMeshes) {
       mesh.visible = layers.structure;
       mesh.material.color = colours.steel(mesh.userData.group);
@@ -668,7 +674,7 @@ export function createModelView({ host, onPick = null }) {
     guessBands = [];
     if (hull) {
       cut.removeSolids(hull);
-      overlays.removeEdges(hull);
+      overlays.removeEdges('hull');
       hull.geometry.dispose();
     }
     for (const plane of planes.values()) {
@@ -908,7 +914,8 @@ export function createModelView({ host, onPick = null }) {
       const box = new THREE.Box3().setFromObject(hull);
       const size = box.getSize(new THREE.Vector3());
       dims = size;
-      overlays.addEdges(hull);
+      overlays.setEdges('hull', [hull]);
+      overlays.setEdgesLayer('hull', !wholeVessel);
       // With the whole vessel shown, the overlays stay on the whole vessel.
       if (!wholeVessel) setHullBox(box);
       else buildGrid();
@@ -942,12 +949,17 @@ export function createModelView({ host, onPick = null }) {
       const showedWholeVessel = Boolean(wholeVessel);
       if (wholeVessel) {
         cut.removeSolids(wholeVessel);
-        overlays.removeEdges(wholeVessel);
+        for (const key of ['tanks', 'shell', 'steel']) overlays.removeEdges(key);
+        if (tankBatch) {
+          scene.remove(tankBatch.mesh);
+          tankBatch.dispose();
+          tankBatch = null;
+        }
         scene.remove(wholeVessel);
         wholeVessel.traverse((o) => {
           if (o.isMesh || o.isLineSegments) {
             o.geometry.dispose();
-            o.material.dispose();
+            if (o.material !== HIDDEN_MATERIAL) o.material.dispose();
           }
         });
         wholeVessel = null;
@@ -960,6 +972,7 @@ export function createModelView({ host, onPick = null }) {
         updateLabels();
       }
       if (hull) hull.visible = true;
+      overlays.setEdgesLayer('hull', true);
       if (!buffer) {
         // Back to the hull: move to its home view. With no whole vessel shown, the view
         // is already the hull's (and a run that is closing must not start a move).
@@ -976,32 +989,41 @@ export function createModelView({ host, onPick = null }) {
           group.scale.setScalar(MM_TO_M);
           // Each top node is one part; its meshes carry the part id for highlighting.
           const root = gltf.scene.children.length === 1 && !gltf.scene.children[0].isMesh ? gltf.scene.children[0] : gltf.scene;
-          // Collect the meshes first: styling adds child meshes (cut stencil passes) to each.
           const parts = [];
           for (const node of root.children) node.traverse((o) => { if (o.isMesh) parts.push([node, o]); });
           for (const [node, o] of parts) {
             o.userData.partId = node.name;
             // Tanks carry their name and content class as GLB extras (display_mesh.tank_style).
-            const isTank = o.userData.kind === 'tank';
-            o.material = clip(isTank ? createTankMaterial() : createPaintMaterial());
-            o.castShadow = true;
-            o.receiveShadow = true;
-            if (isTank) {
-              const edges = new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry, TANK_EDGE_ANGLE_DEG), clip(new THREE.LineBasicMaterial()));
-              o.add(edges);
+            if (o.userData.kind === 'tank') {
+              // The tank batch draws the tanks; each tank mesh stays for picking and its cut face.
+              o.material = HIDDEN_MATERIAL;
               tankMeshes.push(o);
-              cut.addSolid(o, { colour: () => colours.tank(o.userData.content_class) });
             } else {
+              o.material = clip(createPaintMaterial());
+              o.castShadow = true;
+              o.receiveShadow = true;
               shellMeshes.push(o);
-              overlays.addEdges(o);
-              // A see-through shell shows no cut face, or the face would hide what is inside.
-              cut.addSolid(o, { colour: () => colours.hull, capped: () => !shellSeeThrough() });
             }
           }
           scene.add(group);
           wholeVessel = group;
-          // Tank labels sit on the middle of the tank top (world coordinates, metres).
           group.updateMatrixWorld(true);
+          if (tankMeshes.length) {
+            tankBatch = createBatch(tankMeshes, clip(createTankMaterial()));
+            tankBatch.mesh.castShadow = true;
+            tankBatch.mesh.receiveShadow = true;
+            scene.add(tankBatch.mesh);
+          }
+          for (const mesh of tankMeshes) cut.addSolid(mesh, { colour: () => colours.tank(mesh.userData.content_class) });
+          // A see-through shell shows no cut face, or the face would hide what is inside.
+          for (const mesh of shellMeshes) cut.addSolid(mesh, { colour: () => colours.hull, capped: () => !shellSeeThrough() });
+          overlays.setEdges('shell', shellMeshes);
+          overlays.setEdges('tanks', tankMeshes, {
+            colourOf: (mesh) => colours.tank(mesh.userData.content_class).multiplyScalar(TANK_EDGE_SHADE),
+            always: true,
+          });
+          overlays.setEdgesLayer('hull', false);
+          // Tank labels sit on the middle of the tank top (world coordinates, metres).
           // The paint and the frame numbers follow the hull part (else every part that is not a tank).
           const hullParts = shellMeshes.filter((mesh) => /(^|_)hull($|_)/.test(mesh.userData.partId || ''));
           const hullBox = new THREE.Box3();
@@ -1040,7 +1062,7 @@ export function createModelView({ host, onPick = null }) {
     setStructure(buffer) {
       if (structure) {
         cut.removeSolids(structure);
-        overlays.removeEdges(structure);
+        overlays.removeEdges('steel');
         structure.parent?.remove(structure);
         structure.traverse((o) => {
           if (o.isMesh) {
@@ -1069,13 +1091,14 @@ export function createModelView({ host, onPick = null }) {
             o.castShadow = true;
             o.receiveShadow = true;
             steelMeshes.push(o);
-            overlays.addEdges(o);
-            // See-through shell plating shows no cut face; the other members are solid plate.
-            cut.addSolid(o, { colour: () => colours.steel(o.userData.group), capped: () => o.userData.group !== 'shell' });
           });
           structure = gltf.scene;
           // The whole-vessel group turns glTF Y-up into the app's Z-up and scales mm to m.
           wholeVessel.add(structure);
+          wholeVessel.updateMatrixWorld(true);
+          // See-through shell plating shows no cut face; the other members are solid plate.
+          for (const o of members) cut.addSolid(o, { colour: () => colours.steel(o.userData.group), capped: () => o.userData.group !== 'shell' });
+          overlays.setEdges('steel', members);
           lighting.fit(new THREE.Box3().setFromObject(wholeVessel));
           styleWholeVessel();
           requestRender();
