@@ -324,6 +324,8 @@ class DomainTools(InvestigationTools):
                 "described_views": copy.deepcopy(self.state.get("described_views", [])),
                 "vessel_description": copy.deepcopy(self.state.get("vessel_description")),
                 "phase1_only": self.state.get("phase1_only", False),
+                # A repeat reading of a sheet-only first hull is open (first_hull_tools.begin_reading).
+                "repeat_reading": self.state.get("reading_open") is not None,
                 "view_count": len(self.state.get("views", [])),
                 "non_improving_edits": self.state.get("non_improving_edits", 0),
                 "best_valid_candidate": copy.deepcopy(self.state.get("best_valid_candidate")),

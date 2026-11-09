@@ -571,7 +571,35 @@ const SHEET_ONLY_INSTRUCTIONS: &str = "This sheet came from intake with NO decla
 
 /// Said while a sheet-only task reads the sheet again (best of N readings,
 /// `first_hull_tools.READINGS`).
-const SECOND_READING_NOTE: &str = "Repeat reading: the best first hull so far is built and kept as the draft. Read the sheet again as an independent check with the listed tool (describe_views, then propose_sheet_setup, then describe_vessel); the reading whose first hull fits the drawing best is kept. Section edits (propose_section), build_draft and finish are offered again after the last reading's describe_vessel.";
+const SECOND_READING_NOTE: &str = "Repeat reading: the best first hull so far is built and kept as the draft. Read the sheet again as an independent check with the listed tool (describe_views, then propose_sheet_setup, then describe_vessel); the reading whose first hull fits the drawing best is kept. The earlier reading's views, setups, stations and notes are hidden on purpose: read every value again from the pixels and the title block, not from memory. Section edits (propose_section), build_draft and finish are offered again after the last reading's describe_vessel.";
+
+/// Index of the first event that a repeat reading's observation shows: the
+/// event after the one that opened the reading (its result has
+/// `next_reading`). Zero when no repeat reading is open.
+///
+/// A repeat reading that saw the earlier reading's history, notes and
+/// description copied it: 11 of 15 second readings of the Sonnet repeat
+/// rounds gave the same setup, so best of two had one hull to choose from
+/// (docs/HULL_SELECTION.md).
+fn repeat_reading_start(store: &Store) -> usize {
+    if store.state.domain["repeat_reading"] != true || !description_pending(store) {
+        return 0;
+    }
+    store
+        .events
+        .iter()
+        .rposition(|event| event.payload["response"]["result"]["next_reading"].is_object())
+        .map_or(0, |index| index + 1)
+}
+
+/// Fields of the result that opened a repeat reading which state the earlier
+/// reading's setup (stations, sections, fits); the reading must not copy them.
+const EARLIER_READING_KEYS: [&str; 4] = [
+    "materialized_sections",
+    "candidate",
+    "description",
+    "warnings",
+];
 
 fn description_instructions(phase: &Value) -> &'static str {
     match phase.as_str() {
@@ -701,8 +729,9 @@ fn investigation_observation(store: &Store) -> Result<Value> {
         }
     }
     let candidate = &d["current_candidate"];
-    let history = store
-        .events
+    // A repeat reading sees only its own events (repeat_reading_start).
+    let reading_events = &store.events[repeat_reading_start(store)..];
+    let history = reading_events
         .iter()
         .rev()
         .filter(|e| {
@@ -715,8 +744,7 @@ fn investigation_observation(store: &Store) -> Result<Value> {
                 "reason":e.payload["decision"].get("reason").unwrap_or(&e.payload["reason"])})
         })
         .collect::<Vec<_>>();
-    let notes = store
-        .events
+    let notes = reading_events
         .iter()
         .rev()
         .filter(|event| event.kind == "decision" && event.payload["actor"] == "live_model")
@@ -750,6 +778,7 @@ fn investigation_observation(store: &Store) -> Result<Value> {
                 value["reading_note"] = json!(SECOND_READING_NOTE);
             }
         }
+        let repeat_reading = repeat_reading_start(store) > 0;
         value["description_next_view"] = d["description_next_view"].clone();
         value["described_views"] = d["described_views"].clone();
         value["sheet_setups"] = json!(d["sheet_setups"].as_array().map(|setups| setups
@@ -777,7 +806,22 @@ fn investigation_observation(store: &Store) -> Result<Value> {
                 Value::Object(summary)
             })
             .collect::<Vec<_>>()));
-        value["vessel_description"] = d["vessel_description"].clone();
+        // The kept reading's description stays in the task state for the
+        // setup comparison; a repeat reading reads the sheet without it.
+        value["vessel_description"] = if repeat_reading {
+            Value::Null
+        } else {
+            d["vessel_description"].clone()
+        };
+        if repeat_reading {
+            if let Some(last) = value["last_observation"].as_object_mut() {
+                if last.contains_key("next_reading") {
+                    for key in EARLIER_READING_KEYS {
+                        last.remove(key);
+                    }
+                }
+            }
+        }
         value["phase1_only"] =
             json!(store.state.config.limits.phase1_only || d["phase1_only"] == true);
         // The survey serves the reading of the views. Once the vessel is
@@ -2908,6 +2952,61 @@ mod tests {
         let observation = investigation_observation(&store).unwrap();
         assert!(observation.get("sheet_only_instructions").is_none());
         assert!(!sheet_only(&store));
+    }
+
+    #[test]
+    fn repeat_reading_hides_the_earlier_reading() {
+        let (_tmp, mut store) = fixture();
+        store.state.config.on_ambiguity = OnAmbiguity::Draft;
+        let decision = |tool: &str, notes: &str| json!({"actor":"live_model","decision":{"tool":tool,"arguments":{},"reason":"r","notes":notes}});
+        store
+            .append(
+                "decision",
+                decision("describe_vessel", "first reading: 10 m stations"),
+            )
+            .unwrap();
+        store
+            .append(
+                "worker_result",
+                json!({"response":{"result":{"ok":true,
+            "next_reading":{"reading":2,"of":2}}}}),
+            )
+            .unwrap();
+        store
+            .append("decision", decision("describe_views", "second reading"))
+            .unwrap();
+        store.state.last_observation = json!({"ok":true,"next_reading":{"reading":2},
+            "materialized_sections":[{"id":"1","x_m":10.0}],"message":"Reading 2 of 2"});
+        store.state.domain = json!({"description_phase":"views","sheet_only":true,"described_views":[],
+            "repeat_reading":true,"last_valid_candidate":{"valid":true},
+            "vessel_description":{"stations":[{"id":"1","x_m":10.0}]}});
+        let observation = investigation_observation(&store).unwrap();
+        let notes = observation["your_notes_newest_first"].as_array().unwrap();
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0]["claim"], "second reading");
+        assert_eq!(
+            observation["recent_history_newest_first"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert!(observation["vessel_description"].is_null());
+        assert!(observation["last_observation"]
+            .get("materialized_sections")
+            .is_none());
+        assert_eq!(observation["last_observation"]["message"], "Reading 2 of 2");
+        // Once the reading is described, the whole task is shown again.
+        store.state.domain["repeat_reading"] = json!(false);
+        let observation = investigation_observation(&store).unwrap();
+        assert_eq!(
+            observation["your_notes_newest_first"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+        assert!(observation["vessel_description"].is_object());
     }
 
     #[test]
