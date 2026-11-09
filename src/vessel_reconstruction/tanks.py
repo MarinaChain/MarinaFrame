@@ -477,6 +477,22 @@ class TankLoft:
         pieces = [loft_run_triangles(run) for run in self.runs]
         return outward(np.concatenate(pieces)) if pieces else None
 
+    def outlines(self, digits: int = 3) -> dict[str, list[list[list[float]]]]:
+        """Profile and plan outlines for 2D views: per run, the lowest and highest point of each
+        station section (profile [[x, z], ...]) and its outermost breadths (plan [[x, y], ...]),
+        as closed polygons going forward along the bottom (or starboard) edge and back along the
+        top (or port) edge. Rounded to ``digits`` decimals (mm by default)."""
+        def polygon(xs, low, high):
+            points = list(zip(xs, low)) + list(zip(xs[::-1], high[::-1]))
+            return [[round(float(a), digits), round(float(b), digits)] for a, b in points]
+
+        profile, plan = [], []
+        for run in self.runs:
+            xs = run[:, 0, 0]
+            profile.append(polygon(xs, run[:, :, 2].min(axis=1), run[:, :, 2].max(axis=1)))
+            plan.append(polygon(xs, run[:, :, 1].min(axis=1), run[:, :, 1].max(axis=1)))
+        return {"profile_m": profile, "plan_m": plan}
+
 
 def _ring(x: float, chains: SectionChains, levels: int) -> np.ndarray:
     """Ring of 2 x ``levels`` points: the chains resampled at equal shares of the section height."""

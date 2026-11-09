@@ -5,7 +5,7 @@
 use crate::error::{AppError, AppResult};
 use crate::storage::{self, AppPaths};
 use crate::types::{
-    ComponentArgument, ComponentBox, ComponentChange, ComponentView, WholeVesselModel,
+    ComponentArgument, ComponentBox, ComponentChange, ComponentView, PartDisplay, WholeVesselModel,
 };
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
@@ -196,6 +196,45 @@ fn has_previous(entry: &Value) -> bool {
         .is_some_and(|history| !history.is_empty())
 }
 
+/// Most points of one sketch polygon the app accepts (a tank outline has a few hundred).
+const MAX_OUTLINE_POINTS: usize = 4000;
+
+/// Polygons [[a, b], ...] of the worker's `display` entry; a polygon with a point that is not two
+/// finite numbers, or with too few or too many points, is left out.
+fn polygons(value: &Value) -> Vec<Vec<[f64; 2]>> {
+    let Some(items) = value.as_array() else {
+        return vec![];
+    };
+    items
+        .iter()
+        .filter_map(|polygon| {
+            let points = polygon.as_array()?;
+            if points.len() < 3 || points.len() > MAX_OUTLINE_POINTS {
+                return None;
+            }
+            points
+                .iter()
+                .map(|point| {
+                    let pair = point.as_array().filter(|p| p.len() == 2)?;
+                    let (a, b) = (pair[0].as_f64()?, pair[1].as_f64()?);
+                    (a.is_finite() && b.is_finite()).then_some([a, b])
+                })
+                .collect()
+        })
+        .collect()
+}
+
+/// The sketch outlines of a built part, or None when the worker wrote none.
+fn display_of(entry: &Value, built: bool) -> Option<PartDisplay> {
+    let display = entry.get("display").filter(|d| d.is_object() && built)?;
+    let view = PartDisplay {
+        profile_m: polygons(&display["profile_m"]),
+        plan_m: polygons(&display["plan_m"]),
+        content_class: display["content_class"].as_str().map(String::from),
+    };
+    (!view.profile_m.is_empty() || !view.plan_m.is_empty()).then_some(view)
+}
+
 fn component_view(entry: &Value, reviews: &HashMap<String, PartReview>) -> Option<ComponentView> {
     let id = entry["id"].as_str()?.to_string();
     let built = entry["built"].as_bool().unwrap_or(false);
@@ -245,6 +284,7 @@ fn component_view(entry: &Value, reviews: &HashMap<String, PartReview>) -> Optio
             && !entry["revision_kept"].as_bool().unwrap_or(false)
             && has_previous(entry),
         changes,
+        display: display_of(entry, built),
         id,
     })
 }
@@ -372,6 +412,12 @@ mod tests {
              "geometry": {"top": 3.4, "thickness": 0.01, "outline": [[0, 0], [1, 0], [1, 1]]},
              "provenance": {"thickness": {"source": "guessed", "basis": "typical plate"}},
              "bbox_m": {"min": [0, -3.6, 3.39], "max": [9, 3.6, 3.4]}, "volume_m3": 0.65},
+            {"id": "tank_fw1", "label": "No 1 fresh water", "op": "tank", "status": "measured_draft", "built": true,
+             "reason": "", "source": {"view": "plan", "region": "tank_fw1", "method": "reader"},
+             "source_labels": {"outline": "traced"}, "geometry": {}, "provenance": {},
+             "bbox_m": {"min": [4, -1.5, 0.2], "max": [7, 1.5, 1.4]}, "volume_m3": 4.2,
+             "display": {"profile_m": [[[4, 0.2], [7, 0.2], [7, 1.4], [4, 1.4]], [[0, 0], [1, "x"], [2, 2]]],
+                         "plan_m": [[[4, -1.5], [7, -1.2], [7, 1.2], [4, 1.5]]], "content_class": "fresh_water"}},
             {"id": "rudder", "label": "Rudder blade", "op": "appendage", "status": "draft_guess", "built": false,
              "reason": "ValueError: no view", "source": {"view": "profile", "region": "r2", "method": "label"},
              "source_labels": {}, "geometry": null, "provenance": {}}
@@ -385,8 +431,9 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let task = task_with_parts(&tmp);
         let parts = read_components(&task, &HashMap::new()).unwrap();
-        assert_eq!(parts.len(), 2);
+        assert_eq!(parts.len(), 3);
         let deck = &parts[0];
+        assert!(deck.display.is_none());
         assert_eq!(
             (deck.label.as_str(), deck.op.as_str(), deck.review.as_str()),
             ("Aft deck", "deck", "open")
@@ -418,7 +465,13 @@ mod tests {
                 .as_deref(),
             Some("3 points, 0.00 to 1.00 m by 0.00 to 1.00 m")
         );
-        let rudder = &parts[1];
+        // A tank's sketch outlines; a polygon with a point that is not a number is left out.
+        let tank = parts[1].display.as_ref().unwrap();
+        assert_eq!(tank.profile_m.len(), 1);
+        assert_eq!(tank.profile_m[0][2], [7.0, 1.4]);
+        assert_eq!(tank.plan_m[0].len(), 4);
+        assert_eq!(tank.content_class.as_deref(), Some("fresh_water"));
+        let rudder = &parts[2];
         assert_eq!(rudder.label, "Rudder blade");
         assert!(
             !rudder.built

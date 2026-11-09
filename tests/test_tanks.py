@@ -260,3 +260,19 @@ def test_glb_tank_has_its_content_material_and_extras(tmp_path):
     assert extras["source_labels"] == {"outline": "traced", "height": "guessed", "content_class": "read"}
     assert extras["engineering_approved"] is False
     assert "tank_no_7sb" in [node.get("name") for node in gltf["nodes"]]
+
+
+def test_loft_outlines_follow_the_hull_in_profile_and_plan():
+    slicer = tanks.HullSlicer(cone_hull_triangles())
+    loft = tanks.tank_loft_in_hull(slicer, (1.0, 5.0), lambda x: (-10.0, 10.0), lambda x: (-3.0, -0.5),
+                                   station_m=0.5, row_dz_m=0.02)
+    outlines = loft.outlines()
+    profile, plan = outlines["profile_m"][0], outlines["plan_m"][0]
+    assert len(profile) == len(plan) == 2 * 9  # 9 stations: bottom edge forward, top edge back
+    # The bottom follows the tapering keel (radius 2 - 0.1 x) within a row; the top is the limit.
+    for x, z in profile[:9]:
+        assert z == pytest.approx(-(2.0 - 0.1 * x), abs=0.02)
+    assert all(z == pytest.approx(-0.5, abs=0.02) for _, z in profile[9:])
+    # In plan the breadth is the hull chord at z = -0.5.
+    x, y = plan[-1]
+    assert y == pytest.approx(math.sqrt((2.0 - 0.1 * x) ** 2 - 0.25), abs=0.02)

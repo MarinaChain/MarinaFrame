@@ -2845,6 +2845,10 @@ code { font-family: var(--font-mono); }
 .parts-sketch svg { display: block; width: 100%; height: auto; overflow: visible; } /* the focus ring may pass the edge */
 .parts-box { fill: color-mix(in srgb, var(--ink-3) 10%, transparent); stroke: color-mix(in srgb, var(--ink-3) 65%, var(--surface)); /* muted: in dark, ink-3 is close to the brand blue of the selected part */ stroke-width: 1.2; vector-effect: non-scaling-stroke; cursor: pointer; }
 .parts-box[data-status="draft_guess"] { stroke: var(--guess-ink); stroke-dasharray: 5 3; fill: color-mix(in srgb, var(--guess-ink) 10%, transparent); }
+/* A tank's real outline: filled with its capacity-plan colour; a guessed value keeps the dashed amber edge. */
+.parts-outline polygon { fill: color-mix(in srgb, var(--tank-fill) 78%, transparent); stroke: color-mix(in srgb, var(--tank-fill) 55%, var(--ink)); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-linejoin: round; cursor: pointer; }
+.parts-outline[data-status="draft_guess"] polygon { stroke: var(--guess-ink); stroke-dasharray: 5 3; }
+.parts-outline.selected polygon { stroke: var(--brand); stroke-width: 3; stroke-dasharray: none; }
 .parts-focus { fill: none; stroke: var(--brand); stroke-width: 2; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; pointer-events: none; }
 .parts-box.selected { stroke: var(--brand); stroke-width: 3.2; stroke-dasharray: none; fill: color-mix(in srgb, var(--brand) 16%, transparent); }
 .parts-detail { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-lg); border: 1px solid var(--rule); border-radius: var(--radius-lg); background: var(--surface); }

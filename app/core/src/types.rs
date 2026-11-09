@@ -303,6 +303,18 @@ pub struct ComponentView {
     /// What the last re-run changed: each value that differs, before and after.
     #[serde(default)]
     pub changes: Vec<ComponentChange>,
+    /// Outlines for the profile and plan sketches (tanks), when the worker wrote them.
+    #[serde(default)]
+    pub display: Option<PartDisplay>,
+}
+
+/// Outlines of a part for the 2D sketches, in metres: polygons [[x, z], ...] in the profile and
+/// [[x, y], ...] in the plan, and a tank's content class (the capacity-plan colour token).
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct PartDisplay {
+    pub profile_m: Vec<Vec<[f64; 2]>>,
+    pub plan_m: Vec<Vec<[f64; 2]>>,
+    pub content_class: Option<String>,
 }
 
 /// One value a re-run changed. `before` and `after` are value texts ("3.400 to 5.800 m").

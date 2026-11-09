@@ -334,6 +334,12 @@ const MOCK_TANK_PART = {
   reason: 'height: guessed: the tank height is not drawn', bbox_m: { min: [4, -1.5, 0.2], max: [7, 1.5, 1.4] },
   volume_m3: 4.2, step_path: 'whole_vessel/tank_fw1.step', review: 'open',
   arguments: [{ name: 'outline', value: '4 points', source: 'traced', basis: 'Tank plan region' }, { name: 'height', value: '0.20 to 1.40 m', source: 'guessed', basis: 'Tank height not drawn' }],
+  // Sketch outlines as the worker writes them (made-up): the bottom follows the hull, rising aft.
+  display: {
+    profile_m: [[[4, 0.42], [5, 0.3], [6, 0.23], [7, 0.2], [7, 1.4], [6, 1.4], [5, 1.4], [4, 1.4]]],
+    plan_m: [[[4, -1.1], [5, -1.32], [6, -1.45], [7, -1.5], [7, 1.5], [6, 1.45], [5, 1.32], [4, 1.1]]],
+    content_class: 'fresh_water',
+  },
 };
 const MOCK_CAPACITY_PLAN = {
   file: 'tank_tables/Survey_launch_r0003_DRAFT_capacity_plan.csv',

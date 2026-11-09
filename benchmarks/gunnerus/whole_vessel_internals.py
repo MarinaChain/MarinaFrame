@@ -849,6 +849,16 @@ def part_styles(parts: list[Part]) -> dict:
             for part in parts if part.op == 'tank'}
 
 
+def part_display(part: Part) -> dict | None:
+    """Outlines of a tank for the app's profile and plan sketches, with its content class
+    (APP_SPEC "Whole-vessel parts"; the app colours the outline by that class)."""
+    from vessel_reconstruction.tanks import content_class
+
+    if part.loft is None:
+        return None
+    return {**part.loft.outlines(), 'content_class': content_class(part.geometry.get('group'), part.label)}
+
+
 def component_entry(part: Part, solid) -> dict:
     built = solid is not None
     guessed = any(v == 'guessed' for v in part.source_labels.values())
@@ -867,6 +877,7 @@ def component_entry(part: Part, solid) -> dict:
             'source_labels': part.source_labels, 'provenance': part.provenance,
             'args': {name: f'{part.id}_{name}' for name in part.source_labels},
             'geometry': part.geometry, 'bbox_m': box, 'volume_m3': volume,
+            'display': part_display(part) if built else None,
             'engineering_approved': False}
 
 

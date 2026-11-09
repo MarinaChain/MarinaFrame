@@ -4,7 +4,7 @@
 // hull; the person can accept it as a draft part. Nothing here is "approved".
 
 import { el, svg, icon, fill } from './dom.js';
-import { capacityPanel, capacityRowOf, tankDetailBlock } from './tanks.js';
+import { capacityPanel, capacityRowOf, tankDetailBlock, tankToken } from './tanks.js';
 
 /** Tree groups (ship-cad ops) in the order a naval architect reads a general arrangement. */
 const GROUPS = [
@@ -34,6 +34,16 @@ const SKETCH = { unitsPerMetre: 30, pad: 10 };
  */
 const SMALL_PART_SHARE = 0.08;
 const RING_RADIUS_SHARE = 0.05;
+
+/**
+ * The outline polygons of a part for a sketch: `vertical` 2 is the profile ([x, z] points), 1 the
+ * plan ([x, y] points). Null when the run gave none (the sketch then draws the part's box).
+ */
+export function outlinePolygons(part, vertical) {
+  const polygons = vertical === 2 ? part?.display?.profile_m : part?.display?.plan_m;
+  const usable = (polygons || []).filter((points) => Array.isArray(points) && points.length >= 3);
+  return usable.length ? usable : null;
+}
 
 /** One state word per part: the review wins, then what the build could do. */
 /** "house_height" or "height" -> "Height": the argument word of a ship-cad name. */
@@ -179,6 +189,8 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
       el('figcaption', {}, title),
       svg('svg', { viewBox: `0 0 ${width.toFixed(0)} ${height.toFixed(0)}`, role: 'img', 'aria-label': `${title} sketch of the parts` },
         ...order.map((p) => {
+          const outline = sketchOutline(p, vertical, px, py);
+          if (outline) return outline;
           const { min, max } = p.bbox_m;
           const rect = svg('rect', {
             class: `parts-box${p.id === selectedId ? ' selected' : ''}`,
@@ -192,6 +204,26 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
           return rect;
         }),
         focusRing(order.find((p) => p.id === selectedId), { px, py, vertical, scale, sketchWidth: width })));
+  }
+
+  /**
+   * A part's real outline in the sketch (a tank: its profile or plan polygons from the run,
+   * filled with its capacity-plan colour), or null to draw its box.
+   */
+  function sketchOutline(part, vertical, px, py) {
+    const polygons = outlinePolygons(part, vertical);
+    if (!polygons) return null;
+    const selected = part.id === selectedId;
+    const group = svg('g', {
+      class: `parts-outline${selected ? ' selected' : ''}`,
+      'data-status': part.status,
+      style: { '--tank-fill': `var(${tankToken(part.display.content_class)})` },
+    }, ...polygons.map((points) => svg('polygon', {
+      points: points.map(([x, v]) => `${px(x).toFixed(1)},${py(v).toFixed(1)}`).join(' '),
+    })));
+    group.append(svg('title', {}, part.label));
+    group.addEventListener('click', () => select(part.id));
+    return group;
   }
 
   /** A ring around the selected part when it is too small to see at once in the sketch. */

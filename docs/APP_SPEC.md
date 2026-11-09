@@ -561,7 +561,10 @@ ComponentView {
   revision_pending: boolean,         // the last re-run waits for Keep or Undo
   changes: { name: string,           // what the last re-run changed ("volume" is the last row)
              before: string|null, after: string|null,
-             before_source: string|null, after_source: string|null }[]
+             before_source: string|null, after_source: string|null }[],
+  display: { profile_m: [x, z][][],  // sketch outlines (a tank: from its loft), metres; from the
+             plan_m: [x, y][][],     // worker's component "display"; null when none was written
+             content_class: string|null } | null   // tank colour token --tank-<class> (TANKS_V1 section 6)
 }
 ```
 
