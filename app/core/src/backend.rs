@@ -99,7 +99,17 @@ impl Backend {
         note: Option<&str>,
     ) -> AppResult<()> {
         let path = self.task_path(task)?;
+        let correction =
+            if component_id == crate::body_plan_check::REVIEW_ID && decision == "marked" {
+                crate::body_plan_check::correction(note)?
+            } else {
+                None
+            };
         parts::review_component(&self.paths, &path, component_id, decision, note)?;
+        if let Some(correction) = correction {
+            crate::actions::correct_calibration(&self.registry, &path, correction)?;
+            signoff::withdraw(&self.paths, &path)?;
+        }
         // A part open again means the parts are no longer all reviewed: the sign-off ends.
         if decision == "open" {
             signoff::withdraw(&self.paths, &path)?;

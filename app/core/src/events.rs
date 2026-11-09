@@ -229,6 +229,7 @@ fn describe(event: &Value, context: &Context) -> Option<(String, EventKind)> {
     let status_after = event["state_after"]["status"].as_str().unwrap_or("");
     match event["kind"].as_str()? {
         "task_created" => Some(("Run created".into(), EventKind::Other)),
+        "calibration_corrected" => Some((payload["message"].as_str()?.into(), EventKind::Build)),
         "decision" => describe_decision(payload, context),
         "draft_built" => {
             let count = payload["guesses"].as_array().map_or(0, Vec::len);

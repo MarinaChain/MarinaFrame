@@ -15,6 +15,7 @@ import { createWelcome } from './welcome.js';
 import { createPalette } from './palette.js';
 import { buildChanges, renderChanges } from './changes.js';
 import { createAreas } from './areas.js';
+import { calibrationChoice } from './calibration.js';
 import { createEvidenceCard } from './evidence.js';
 import { createShortcutSheet } from './shortcuts.js';
 import { createParts, partState } from './parts.js';
@@ -1390,6 +1391,12 @@ function bodyPlanCheckCard(check) {
   cachedArtifact('image', state.task, check.overlay_path).then((url) => { image.src = url; }, () => { image.alt = 'Overlay not readable'; });
   const save = (value, note = null) => invoke('review_component', { task: state.task, component_id: BODY_PLAN_REVIEW_ID, decision: value, note })
     .then(afterPartsChange, (error) => { showError(error); });
+  const choice = el('div');
+  const choose = () => fill(choice, calibrationChoice({
+    check,
+    onSave: (correction) => save('marked', JSON.stringify({ calibration_correction: correction })),
+    onCancel: () => fill(choice),
+  }));
   return el('section', { class: 'body-plan-check', 'aria-label': 'Body-plan calibration' },
     el('div', { class: 'body-plan-check-head' },
       el('strong', {}, 'Body-plan calibration'),
@@ -1400,8 +1407,9 @@ function bodyPlanCheckCard(check) {
     image,
     el('p', { class: 'chip-row' },
       el('button', { type: 'button', class: 'btn', onclick: () => save('accepted') }, 'Calibration is right'),
-      el('button', { type: 'button', class: 'btn', onclick: () => save('marked', 'The body-plan calibration overlay is wrong (marked in review).') }, 'Something is wrong'),
-      decision !== 'open' ? el('button', { type: 'button', class: 'btn', onclick: () => save('open') }, 'Undo') : null));
+      el('button', { type: 'button', class: 'btn', onclick: choose }, 'Something is wrong'),
+      decision !== 'open' ? el('button', { type: 'button', class: 'btn', onclick: () => save('open') }, 'Undo') : null),
+    choice);
 }
 
 function renderChecks() {
