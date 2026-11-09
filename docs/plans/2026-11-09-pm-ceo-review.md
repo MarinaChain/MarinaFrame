@@ -91,3 +91,12 @@ Ranked by how much each blocks a first paying user.
 | 4 | Windows build and worker isolation; signing; fix what the pilot set breaks | Pilot delivery and price feedback |
 
 Resume point: section 2 item 1 and section 3 item 1 are the two first actions.
+
+## 5. Parked for the marketing and visuals work
+
+- **vork** (github.com/voyager-so/vork): an agent-driven GPU renderer for offline stills and films.
+  Use it for pitch-deck, website and pilot-proposal renders from our own GLB models (for example
+  Gunnerus with coloured tanks, a cut steel block, a "drawing to ship" film). Not for the app's 3D
+  view (Three.js stays): its preview licence forbids selling, sublicensing or hosting it, but allows
+  commercial renders delivered to clients. Research preview; later versions may be paid. Decided by
+  the founder on 2026-11-09: wait for the marketing work.
