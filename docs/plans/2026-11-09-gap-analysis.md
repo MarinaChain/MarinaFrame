@@ -26,6 +26,8 @@ conversions, class work and digital twins. Today a person rebuilds that model by
 - **Whole vessel, then the ship's life.** Hull first, then decks, superstructure, appendages and
   structure; later thickness gauging, wastage against class rules and drydock work packages.
 
+**Model strategy (founder, 2026-11-09).** The harness must work well with low-cost models that can run locally or cheaply (DeepSeek V4.1 Flash, Crouton Alpha Free and similar). GPT and Claude models are a bonus path, not the base: they show what is possible (GPT-6 Astra reads the 1886 Balclutha body plan within the 0.15 m rule) and set the target the harness must reach with the base models. Development runs use Crouton while it is free and fall back to DeepSeek when Crouton is rate limited.
+
 **Founder rules that shape it.** Accuracy and coverage over model cost; the AI writes geometry and
 fills gaps; happy path first (builds do not fail on bad data); a person signs a draft off as "usable
 as a starting model"; engineering approval stays outside the app.
