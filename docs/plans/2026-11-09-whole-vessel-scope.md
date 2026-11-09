@@ -527,6 +527,68 @@ truth file was not opened before the scoring run. There is no holdout sheet, so 
 on the development sheet only; a second scanned sheet with printed offsets is needed before a
 build decision.
 
+#### 3.5.9 Round 9: holdout sheet for the round-8 reader (fixed before running)
+
+Why: round 8 (section 3.5.8) passed on the sheet that the reader was developed on. This round
+tests the same reader, without changes, on a second scanned body plan with a printed offset table.
+
+Sheet: Schooner C.A. Thayer, HAER CA-61, sheet 4 of 38 ("Body Plan" and "Table of Offsets", drawn
+2004 from William Doll's lines), `work/sources/haer/ca_thayer/loc_ca1506_sheet_04.tif`, SHA-256
+`94c2f86a…8d9b70`, 17,618 x 13,617 px, 1 bit, 400 dpi, scale 3/8 in = 1 ft. US public domain (HAER,
+Library of Congress). Chosen because it is the only sheet on disk with a body plan and a printed
+offset table that may be sent to a provider: Wapama (HAER CA-67) has lines but no printed table;
+the ALMA "Lines drawing and offsets" sheet has a table, but provider transfer is not cleared
+(docs/CONTINUATION_STATUS.md); Balclutha sheet 7 is the development sheet.
+
+Truth (made before any reader run, outside the repository, next to the Balclutha truth:
+session scratchpad `wv-agent/thayer/truth_s4.json`): the printed half-breadths (feet-inches-eighths,
+outside of planking) of stations 1 to 22 at the 3'-7" to 17'-7" waterlines (8 rows). Crossed cells
+and the transom column (not a station curve) are left out: 151 cells. Two reads by Claude from
+different high-resolution crops agreed on every cell (0 dropped); not checked by a person.
+
+Host calibration (the inputs a person gives once per sheet; measured from the drawn grid, not from
+the station curves): centreline column 8857.5; base row 6081.5; the grid is 600 px per 4 ft, so
+150 px per ft = 492.13 px per metre; waterline rows 3'-7" 5543.5, 5'-7" 5243.5, 7'-7" 4943.5,
+9'-7" 4643.5, 11'-7" 4343.5, 13'-7" 4043.5, 15'-7" 3743.5, 17'-7" 3443.5; grid columns at 4, 8,
+12 ft and the 20 ft frame each side (centreline ± 600, 1200, 1800, 3000 px). Halves: aftbody left
+of the centreline, stations 12 to 22 (outermost first 12, 13, ..., 22); forebody right, stations
+11 to 1 (outermost first 11, 10, ..., 1). Unchanged from round 8: `MAX_OFFSET_PX` 3150,
+`CROP_ACROSS_CENTRE_PX` 40, every threshold in `body_plan_crossings.py`, `body_plan_reader.py` and
+`body_plan_identity.py`, the label prompt and the question image.
+
+No change to the reader before scoring. The harness (`benchmarks/thayer/holdout_value.py`) only
+adds this sheet's calibration, the truth loader, a scorer with this sheet's stations and
+waterlines, and the Claude call. A failure is reported with its causes; fixes are a later round.
+
+Arms (one shared measurement):
+
+- R0, code only: deterministic, 1 run (identity by nesting order, as round 8).
+- R1, Crouton: `crouton-alpha-free` on OpenCode Go, key 1, as round 8 (reasoning effort high,
+  temperature 0.2, at most 3 turns per question, 4 in parallel, re-ask on disagreement); a failed
+  request is retried once after 5 s, then sent to `deepseek-v4.1-flash`. 3 repeats.
+- R1, Claude Sonnet 5.5: the same questions through the Claude subscription with the Claude Code
+  CLI in print mode: `claude -p --model claude-sonnet-5-5 --tools "" --input-format stream-json
+  --output-format stream-json --no-session-persistence --strict-mcp-config` and a fixed one-line
+  system prompt; one image and the question in, no tools, default effort; `ANTHROPIC_API_KEY`
+  removed from the environment (never an API key, never OpenCode Go). 3 repeats.
+
+Metrics and decision rule (unchanged from rounds 4 to 8): cells given of 151, RMS and maximum
+error, share within 0.05 m and 0.15 m, station identity errors (a station whose values fit a
+neighbouring station's truth better), median and range over repeats; an arm passes if every
+repeat gives at least 60 % of the cells **and** the median RMS is at most 0.15 m (R0: its one
+run). Also reported: chains per half, questions, re-asks, invalid replies, answers per model,
+labels equal to the code's count, fairness flags, tokens, wall time.
+
+Reading of the result, fixed now: the reader **generalises** if R0 and the Crouton arm both pass
+(the product path needs no strong model); it generalises **only with a strong identifier** if only
+the Sonnet arm passes; otherwise it **does not generalise**, and the failure causes found on the
+sheet are listed (no reader change in this round).
+
+Known from the printed table before running (not used to change anything): stations 12 and 13
+have equal offsets at 3'-7" to 13'-7" (drawn as one curve, labelled "13,12"); station 11 lies
+inside station 10 at 13'-7" only; the sternpost and stem are drawn about 100 px from the
+centreline (round 8 treats verticals within 70 px as stem).
+
 
 ### 3.6 Effort, checks, resume
 
