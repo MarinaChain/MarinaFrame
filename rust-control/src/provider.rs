@@ -687,6 +687,50 @@ fn send_opencode_go(
     util::atomic_json(response_path, &*receipt, true)
 }
 
+/// The longest `reason` inside tool arguments (the argument bound in types.rs).
+const MAX_ARGUMENT_REASON_CHARS: usize = 300;
+/// The longest contract error text returned to the model.
+const MAX_CONTRACT_ERROR_CHARS: usize = 400;
+
+/// The tool call of a refused decision reply and the argument contract error it
+/// broke (for example "missing field `form`"), read again from the receipt's
+/// response body. It goes back to the model, so it can correct the call.
+/// None when the reply holds no readable tool call.
+pub fn refused_call(receipt: &Receipt, body: &[u8]) -> Option<Value> {
+    let transport = models::settings(&receipt.requested_model).ok()?.transport;
+    let content = if transport == models::Transport::ClaudeSubscription {
+        claude_cli::interpret(&mut receipt.clone(), body).ok()?
+    } else {
+        let result = util::strict_value(body, 262_144).ok()?;
+        result["choices"][0]["message"]["content"]
+            .as_str()?
+            .to_string()
+    };
+    call_contract_feedback(&content)
+}
+
+/// The tool, arguments and contract error of one decision reply text.
+fn call_contract_feedback(content: &str) -> Option<Value> {
+    let decision = parse_decision_content(content).ok()?;
+    let error = match decision.operation() {
+        Ok(_) => None,
+        Err(code) if code == "operation_contract" => {
+            serde_json::from_value::<crate::types::Operation>(
+                json!({"tool":decision.tool,"arguments":decision.arguments}),
+            )
+            .err()
+            .map(|e| e.to_string())
+        }
+        Err(code) => Some(code),
+    };
+    let error = error.map(|text| {
+        text.chars()
+            .take(MAX_CONTRACT_ERROR_CHARS)
+            .collect::<String>()
+    });
+    Some(json!({"tool":decision.tool,"arguments":decision.arguments,"contract_error":error}))
+}
+
 fn parse_decision_content(content: &str) -> Result<Decision> {
     let mut value: Value = util::parse(content.as_bytes(), 32_768)?;
     let object = value.as_object_mut().ok_or("provider_content_type")?;
@@ -720,6 +764,14 @@ fn parse_decision_content(content: &str) -> Result<Decision> {
         .as_str()
         .map(String::from)
         .unwrap_or_else(|| reason.to_string());
+    // These tools repeat the reason inside their arguments. The decision's own
+    // reason is the same claim, so a reply that gives it once still passes.
+    if matches!(tool.as_str(), "assign_station" | "propose_sheet_setup")
+        && !args.contains_key("reason")
+    {
+        let bounded: String = reason.chars().take(MAX_ARGUMENT_REASON_CHARS).collect();
+        args.insert("reason".into(), json!(bounded));
+    }
     let mut notes = object
         .remove("notes")
         .or(nested_notes)
@@ -784,6 +836,36 @@ mod tests {
         assert!(d.operation().is_ok());
         let empty = parse_decision_content(r#"{"tool":"survey_sheet","notes":["read"]}"#).unwrap();
         assert!(empty.operation().is_ok());
+    }
+    #[test]
+    fn a_setup_reason_given_once_passes_and_contract_errors_name_the_field() {
+        // Sonnet 5.5 gave the reason only at the top level (3 of 18 refusals).
+        let setup = parse_decision_content(
+            r#"{"tool":"propose_sheet_setup","arguments":{"view":"profile","region_px":[150,135,2070,438],
+            "pixels_per_metre":19.004,"grid_spacing_m":2,"evidence_view_id":"view-d407a82df18735b2",
+            "scale_claim":"1 m = 19.004 px"},"reason":"Register the profile setup."}"#,
+        )
+        .unwrap();
+        assert_eq!(setup.arguments["reason"], "Register the profile setup.");
+        assert!(setup.operation().is_ok());
+        // A propose_section with guessed argument names (15 of 18 refusals)
+        // comes back with the serde error that names the field.
+        let feedback = call_contract_feedback(
+            r#"{"tool":"propose_section","arguments":{"section_id":"5","source":"ai_inferred",
+            "points_m":[[0,0],[4.5,0],[8.6,6]]},"reason":"U form"}"#,
+        )
+        .unwrap();
+        assert_eq!(feedback["tool"], "propose_section");
+        let error = feedback["contract_error"].as_str().unwrap();
+        assert!(
+            error.starts_with("unknown field `") && error.contains("`offsets_m`"),
+            "{error}"
+        );
+        let valid = call_contract_feedback(
+            r#"{"tool":"propose_section","arguments":{"section_id":"5","form":"blend","basis":"neighbours"},"reason":"r"}"#,
+        )
+        .unwrap();
+        assert!(valid["contract_error"].is_null());
     }
     #[test]
     fn unknown_cost_stays_unknown() {

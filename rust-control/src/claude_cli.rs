@@ -33,6 +33,9 @@ pub const STRUCTURED_OUTPUT_TOOL: &str = "StructuredOutput";
 const SETTING_SOURCES: &str = "user";
 /// Extra settings for every request: no hook runs, not even a user one.
 const REQUEST_SETTINGS: &str = r#"{"disableAllHooks":true}"#;
+/// Prompt-cache lifetime of the stable context block (the CLI marks its own
+/// blocks with 1 h on the subscription; live probe 2026-11-09).
+const CACHE_TTL: &str = "1h";
 /// Name prefix of the private folder that each CLI request runs in.
 const WORKSPACE_PREFIX: &str = "marinaframe-claude-";
 
@@ -147,7 +150,19 @@ pub fn build(payload: &Value, purpose: Purpose) -> Result<CliRequest> {
         content.push(json!({"type":"text","text":encoded}));
         content.push(json!({"type":"text","text":CURRENT_TURN}));
     }
-    content.extend(blocks(&current["content"])?);
+    let mut current_blocks = blocks(&current["content"])?;
+    let text_blocks = current_blocks
+        .iter()
+        .filter(|b| b["type"] == "text")
+        .count();
+    if earlier.is_empty() && text_blocks >= 2 {
+        // The controller sends the stable context as the first text part
+        // (controller::split_stable_context). Marking it lets the next request
+        // read it from the prompt cache. The TTL must match the CLI's own
+        // breakpoints (1 h); the API refuses a 1 h mark after a 5 min one.
+        current_blocks[0]["cache_control"] = json!({"type":"ephemeral","ttl":CACHE_TTL});
+    }
+    content.extend(current_blocks);
     let message = json!({"type":"user","message":{"role":"user","content":content}});
     let mut stdin = util::json_bytes(&message)?;
     stdin.push(b'\n');
@@ -433,6 +448,22 @@ mod tests {
         assert_eq!(content[1]["source"]["media_type"], "image/png");
         assert_eq!(content[1]["source"]["data"], "iVBORw0KGgo=");
         assert_eq!(request.max_tokens, 4096);
+        assert!(content[0].get("cache_control").is_none());
+        // With a stable context part first, that part is marked for the prompt cache.
+        let split = json!({"model":"claude-sonnet-5-5","max_tokens":64,"effort":"low",
+            "messages":[{"role":"system","content":"S"},{"role":"user","content":[
+                {"type":"text","text":"stable"},{"type":"text","text":"changing"},
+                {"type":"image_url","image_url":{"url":png_url()}}]}]});
+        let line: Value =
+            serde_json::from_slice(&build(&split, Purpose::Investigation).unwrap().stdin).unwrap();
+        let blocks = &line["message"]["content"];
+        assert_eq!(
+            blocks[0]["cache_control"],
+            json!({"type":"ephemeral","ttl":"1h"})
+        );
+        assert!(
+            blocks[1].get("cache_control").is_none() && blocks[2].get("cache_control").is_none()
+        );
         // Table and vision requests have their own reply shapes: no schema.
         let table = build(&payload, Purpose::TableTranscription).unwrap();
         assert!(!table.args.iter().any(|a| a == "--json-schema"));

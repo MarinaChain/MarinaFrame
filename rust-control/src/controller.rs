@@ -567,7 +567,7 @@ fn description_pending(store: &Store) -> bool {
 
 /// Added to the description instructions when the spec is a sheet-only intake:
 /// the harness declares the sections from this reading before the first hull.
-const SHEET_ONLY_INSTRUCTIONS: &str = "This sheet came from intake with NO declared stations or calibration. The survey's intake_regions are code-measured view regions in ORIGINAL sheet pixels (label body_plan, profile, half_breadth, title_block); use their region_px boxes, corrected only where you see an error, never 0-1000 coordinates. Your reading declares the sections: the harness builds one section per station you list, on the body view and setup you give. In describe_views give the body plan its own kind (body, or body_fore/body_aft halves) and, for separate station panels, panels in reading order; give each non-body view its own family_id. In propose_sheet_setup for the body read pixels_per_metre from labelled grid lines (pixel distance between two labelled lines divided by their metre difference), and give centreline_px and baseline_px. In describe_vessel list EVERY station drawn in the body plan in order as {id, x_m, side}: x_m in metres from the aft end forward, read from the profile/plan station marks and LOA; when positions are not printed, space stations evenly over LOA and say so in a note; side 'fore' or 'aft' only for halves of an overlaid body plan. Give loa, beam and depth when readable. Missing values become labelled guesses, never a stop.";
+const SHEET_ONLY_INSTRUCTIONS: &str = "This sheet came from intake with NO declared stations or calibration. The survey's intake_regions are code-measured view regions in ORIGINAL sheet pixels (label body_plan, profile, half_breadth, title_block); use their region_px boxes, corrected only where you see an error, never 0-1000 coordinates. Your reading declares the sections: the harness builds one section per station you list, on the body view and setup you give. In describe_views give the body plan its own kind (body, or body_fore/body_aft halves) and, for separate station panels, panels in reading order; give each non-body view its own family_id. In propose_sheet_setup for the body read pixels_per_metre from labelled grid lines (pixel distance between two labelled lines divided by their metre difference), and give centreline_px and baseline_px. In describe_vessel list EVERY station drawn in the body plan in order as {id, x_m, side}: x_m in metres from the aft end forward, read from the profile/plan station marks and LOA; when positions are not printed, space stations evenly over LOA and say so in a note; the hull ends (x 0 and LOA) are stations only when the body plan draws a curve for them, because the harness makes the ends from the profile outline; side 'fore' or 'aft' only for halves of an overlaid body plan. The two halves of one overlaid body plan share one centreline: describe them as one body view (or body_aft and body_fore), never as two panels. Give loa, beam and depth when readable. Missing values become labelled guesses, never a stop.";
 
 fn description_instructions(phase: &Value) -> &'static str {
     match phase.as_str() {
@@ -619,6 +619,48 @@ fn compact_survey(value: &Value, depth: usize) -> Value {
     }
 }
 
+/// Observation fields that change rarely within a task (on a new reading or
+/// phase). They go first in the request, so that a cached prefix covers them.
+const STABLE_OBSERVATION_KEYS: [&str; 9] = [
+    "task_id",
+    "current_policy",
+    "engineering_approved",
+    "source_truth",
+    "notes_warning",
+    "sheet_only_instructions",
+    "sheet_survey",
+    "described_views",
+    "vessel_description",
+];
+/// Split an observation into its stable fields and the rest.
+fn split_stable_context(observation: &Value) -> (Value, Value) {
+    let mut current = observation.clone();
+    let mut stable = serde_json::Map::new();
+    if let Some(object) = current.as_object_mut() {
+        for key in STABLE_OBSERVATION_KEYS {
+            if let Some(value) = object.remove(key) {
+                stable.insert(key.into(), value);
+            }
+        }
+    }
+    (Value::Object(stable), current)
+}
+
+/// The largest arguments (JSON bytes) that one history entry repeats. Larger
+/// arguments (describe_views, describe_vessel) are already in the observation
+/// as described_views and vessel_description.
+const HISTORY_ARGUMENTS_BYTES: usize = 800;
+fn bounded_history_arguments(arguments: &Value) -> Value {
+    match util::json_bytes(arguments) {
+        Ok(bytes) if bytes.len() <= HISTORY_ARGUMENTS_BYTES => arguments.clone(),
+        Ok(bytes) => json!(format!(
+            "(omitted: {} bytes; the result is in the current observation)",
+            bytes.len()
+        )),
+        Err(_) => Value::Null,
+    }
+}
+
 fn investigation_observation(store: &Store) -> Result<Value> {
     let d = &store.state.domain;
     let guesses = d["open_guesses"]
@@ -665,7 +707,7 @@ fn investigation_observation(store: &Store) -> Result<Value> {
         .take(12)
         .map(|e| {
             json!({"kind":e.kind,"tool":e.payload["decision"]["tool"],
-                "arguments":e.payload["decision"]["arguments"],
+                "arguments":bounded_history_arguments(&e.payload["decision"]["arguments"]),
                 "reason":e.payload["decision"].get("reason").unwrap_or(&e.payload["reason"])})
         })
         .collect::<Vec<_>>();
@@ -696,7 +738,7 @@ fn investigation_observation(store: &Store) -> Result<Value> {
         value["description_phase"] = d["description_phase"].clone();
         value["description_instructions"] =
             json!(description_instructions(&d["description_phase"]));
-        if d["sheet_only"] == true {
+        if d["sheet_only"] == true && description_pending(store) {
             value["sheet_only_instructions"] = json!(SHEET_ONLY_INSTRUCTIONS);
         }
         value["description_next_view"] = d["description_next_view"].clone();
@@ -729,7 +771,12 @@ fn investigation_observation(store: &Store) -> Result<Value> {
         value["vessel_description"] = d["vessel_description"].clone();
         value["phase1_only"] =
             json!(store.state.config.limits.phase1_only || d["phase1_only"] == true);
-        value["sheet_survey"] = compact_survey(&d["sheet_survey"], 0);
+        // The survey serves the reading of the views. Once the vessel is
+        // described, the description and setups carry what was read from it
+        // (about 11 kB of every later request in the Sonnet round 217660c).
+        if description_pending(store) {
+            value["sheet_survey"] = compact_survey(&d["sheet_survey"], 0);
+        }
         if let Some(last) = value["last_observation"].as_object_mut() {
             for key in ["sheet_survey", "survey"] {
                 if let Some(survey) = last.get_mut(key) {
@@ -1014,11 +1061,18 @@ fn live_decision(store: &mut Store) -> Result<bool> {
     let observation = model_observation(store)?;
     let images = collect_images(store)?;
     let metas = images.iter().map(|x| x.0.clone()).collect::<Vec<_>>();
-    let prompt =
-        json!({"observation":observation,"tools":phase_tool_catalog(store),"images":metas});
-    let mut content = vec![
-        json!({"type":"text","text":String::from_utf8(util::json_bytes(&prompt)?).map_err(|_|"prompt_encoding")?}),
-    ];
+    // Two text parts: first what stays the same from request to request (tools,
+    // survey, vessel description), then what changes. A transport that caches
+    // a prompt prefix can reuse the first part (claude_cli::build marks it).
+    let (stable, current) = split_stable_context(&observation);
+    let stable = json!({"tools":phase_tool_catalog(store),"stable_context":stable});
+    let prompt = json!({"observation":observation,"tools":stable["tools"],"images":metas});
+    let changing = json!({"observation":current,"images":metas});
+    let text = |value: &Value| -> Result<Value> {
+        let text = String::from_utf8(util::json_bytes(value)?).map_err(|_| "prompt_encoding")?;
+        Ok(json!({"type":"text","text":text}))
+    };
+    let mut content = vec![text(&stable)?, text(&changing)?];
     for (_, pixels) in images {
         content.push(json!({"type":"image_url","image_url":{"url":format!("data:image/png;base64,{pixels}"),"detail":"original"}}));
     }
@@ -1146,12 +1200,18 @@ fn live_decision(store: &mut Store) -> Result<bool> {
         if purpose == provider::Purpose::Investigation && model_output_refused(&receipt) {
             // The model answered, but not with one valid tool call. The reason
             // goes back to it as an observation; repeated refusals stop.
+            let refused = refused_call_feedback(store, &pending, &receipt);
             store.state.last_observation = json!({"ok":false,"status":"rejected",
                 "error_code":receipt.error_code,"message":"Your reply was not one valid tool call within the argument bounds. Reply with one JSON object: tool, arguments, reason.",
+                "refused_call":refused,
                 "engineering_approved":false,"human_semantic_review_required":true});
+            // The history shows the refused tool and its contract error, not only the code.
+            let decision = refused
+                .as_ref()
+                .map(|r| json!({"tool":r["tool"],"contract_error":r["contract_error"]}));
             store.append(
                 "model_output_rejected",
-                json!({"request_id":id,"reason":receipt.error_code}),
+                json!({"request_id":id,"reason":receipt.error_code,"decision":decision}),
             )?;
             if consecutive_refusals(store) > refusal_limit(store) {
                 stop(store, Status::NoProgress, "repeated_refused_model_output")?;
@@ -1199,6 +1259,39 @@ fn live_decision(store: &mut Store) -> Result<bool> {
     }
     Ok(false)
 }
+
+/// What the model is told about its refused tool call: the call, the contract
+/// error, the tools offered now and, for a tool that the current phase does not
+/// list, that tool's argument schema, so that a valid intent passes next time.
+/// None when the reply held no readable tool call.
+fn refused_call_feedback(store: &Store, pending: &Pending, receipt: &Receipt) -> Option<Value> {
+    let body = std::fs::read(store.path.join(provider::body_path(&pending.response_path))).ok()?;
+    let mut refused = provider::refused_call(receipt, &body)?;
+    // The arguments were the model's own; only a bounded copy returns.
+    if util::json_bytes(&refused["arguments"]).map_or(true, |b| b.len() > REFUSED_ARGUMENTS_BYTES) {
+        refused["arguments"] = json!("(omitted: too long)");
+    }
+    let offered = phase_tool_catalog(store);
+    let names: Vec<Value> = offered
+        .as_array()
+        .map(|tools| tools.iter().map(|t| t["name"].clone()).collect())
+        .unwrap_or_default();
+    let tool = refused["tool"].clone();
+    refused["tools_offered_now"] = json!(names);
+    if !names.contains(&tool) {
+        let catalog = tool_catalog(&store.state.config.on_ambiguity);
+        if let Some(schema) = catalog
+            .as_array()
+            .and_then(|tools| tools.iter().find(|t| t["name"] == tool))
+        {
+            refused["schema_of_this_tool"] = schema["parameters"].clone();
+            refused["phase_note"] = json!("This tool is not listed in the current phase. Finish the listed step first, or send the call again with these exact argument names.");
+        }
+    }
+    Some(refused)
+}
+/// The largest refused-arguments copy (JSON bytes) that goes back to the model.
+const REFUSED_ARGUMENTS_BYTES: usize = 4096;
 
 /// A completed HTTP exchange whose content was not one valid tool call (bad
 /// JSON, unknown tool, arguments out of bounds). Transport, identity and
