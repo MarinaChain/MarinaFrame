@@ -2,7 +2,8 @@
 
 G1 tank x extents against the tank-table frame range; G2 tank volume against the table net
 volume; G3 bulkhead x (tank arrangement profile) against the longitudinal-section bulkheads;
-G4 share of built internal volume outside the truth solid; G5 parts built by source label.
+G4 share of built internal volume outside the truth solid; G5 parts built by source label;
+T2 capacity plan totals per tank group against the printed group totals (docs/TANKS_V1.md).
 
 G4 uses the cached truth mesh (read only): a point is inside the truth when it lies between the
 lowest and the highest truth surface on its vertical line (cells of 0.05 m, as step 1).
@@ -21,6 +22,9 @@ G1_TARGET_M = 0.5
 G2_TARGET = 0.15
 G3_TARGET_M = 0.25
 G4_TARGET = 0.05
+T2_TARGET = 0.10
+# Liquid groups of the Gunnerus tank table (T2); the dry/cargo group prints no total.
+T2_GROUPS = ('water ballast', 'fresh water', 'fuel oil', 'misc')
 
 
 def _median_abs(values):
@@ -43,8 +47,10 @@ def tank_metrics(parts) -> tuple[dict, dict]:
     ends = [e for v in g1.values() for e in (v['aft_error_m'], v['fwd_error_m'])]
     g1_summary = {'per_tank': g1, 'median_abs_end_error_m': _median_abs(ends), 'n_tanks': len(g1),
                   'target_m': G1_TARGET_M}
-    g2_summary = {'per_tank': g2, 'median_abs_rel_error': _median_abs([v['rel_error'] for v in g2.values()]),
-                  'n_tanks': len(g2), 'target': G2_TARGET}
+    errors = [abs(v['rel_error']) for v in g2.values()]
+    g2_summary = {'per_tank': g2, 'median_abs_rel_error': _median_abs(errors), 'n_tanks': len(g2),
+                  'within_10pct': sum(e <= 0.10 for e in errors), 'within_3pct': sum(e <= 0.03 for e in errors),
+                  'target': G2_TARGET}
     return g1_summary, g2_summary
 
 
@@ -108,7 +114,38 @@ def containment(parts, triangles: np.ndarray) -> dict:
             'per_part_outside_share': per_part, 'target': G4_TARGET}
 
 
-def score(parts, reading: dict, truth_triangles: np.ndarray) -> dict:
+def capacity_totals(capacity_rows: list[dict], printed: dict) -> dict:
+    """T2: built volume (100 %) and weight per group against the printed group totals.
+
+    A tank that is not built counts as 0 m3. The built weight is the built volume at 100 % times
+    the density read for the tank (the printed mass is the printed net volume times the density).
+    """
+    from vessel_reconstruction.tanks import group_totals
+
+    built = group_totals(capacity_rows)
+    per_group, sums = {}, {'built_m3': 0.0, 'printed_m3': 0.0}
+    for group in T2_GROUPS:
+        table = printed.get(group) or {}
+        rows = [r for r in capacity_rows if r['content'] == group and r['built']]
+        volume = built.get(group, {}).get('volume_100_m3', 0.0)
+        mass = sum(r['volume_100_m3'] * r['density_t_m3'] for r in rows if r['density_t_m3'])
+        entry = {'built_m3': round(volume, 3), 'printed_m3': table.get('volume_m3'),
+                 'built_t': round(mass, 3), 'printed_t': table.get('mass_t'),
+                 'tanks_built': built.get(group, {}).get('built', 0), 'tanks': built.get(group, {}).get('tanks', 0)}
+        if table.get('volume_m3'):
+            entry['rel_error'] = round(volume / table['volume_m3'] - 1, 4)
+            sums['built_m3'] += volume
+            sums['printed_m3'] += table['volume_m3']
+        if table.get('mass_t'):
+            entry['mass_rel_error'] = round(mass / table['mass_t'] - 1, 4)
+        per_group[group] = entry
+    grand = sums['built_m3'] / sums['printed_m3'] - 1 if sums['printed_m3'] else None
+    met = all(abs(e.get('rel_error', 1.0)) <= T2_TARGET for e in per_group.values())
+    return {'per_group': per_group, 'grand_total_rel_error': None if grand is None else round(grand, 4),
+            'all_groups_within_target': met, 'target': T2_TARGET}
+
+
+def score(parts, reading: dict, truth_triangles: np.ndarray, capacity_rows: list[dict] | None = None) -> dict:
     g1, g2 = tank_metrics(parts)
     labels: dict[str, int] = {}
     for part in parts:
@@ -122,4 +159,6 @@ def score(parts, reading: dict, truth_triangles: np.ndarray) -> dict:
             'G1_tank_x_extents': g1, 'G2_tank_volume': g2, 'G3_bulkheads': bulkhead_metrics(reading),
             'G4_containment': containment(parts, truth_triangles),
             'G5_parts': {'built_by_label': labels, 'plates_with_id_and_thickness': len(plates),
-                         'plate_thickness_source': 'guessed'}}
+                         'plate_thickness_source': 'guessed'},
+            'T2_capacity_totals': capacity_totals(capacity_rows, reading['tank_plan'].get('table_totals', {}))
+            if capacity_rows is not None else None}

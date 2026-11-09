@@ -7,6 +7,8 @@ Files (``<stem>`` is ``<vessel>_<revision>_DRAFT``):
   <stem>_report.pdf         review report with station overlays
   <stem>_model.step         the build's STEP, header stamped as a draft
   <stem>_model.stl          the build's STL, binary header stamped as a draft
+  <stem>_capacity_plan.csv  capacity plan, when a tank model is given (``tanks``)
+  <stem>_sounding_<id>.csv  sounding table of each built tank, when a tank model is given
   <stem>_manifest.json      file list with SHA-256 hashes and the source build identity
   <stem>_package.zip        all of the above
 
@@ -28,6 +30,7 @@ from .hydrostatics import Hydrostatics, design_draft, mesh_hydrostatics, read_st
 from .offsets import DEFAULT_WATERLINE_INTERVALS, offsets_table, write_offsets_csv
 from .report import FOOTER, ReportFacts, write_report
 from .source import DraftBuild, load_build
+from .tank_tables import write_tank_tables
 
 STAMP = "Draft hull model from MarinaFrame. Not approved for construction."
 DATUM = "Units metres (STEP and STL in millimetres); x along the length as drawn; z up from the baseline (z = 0)."
@@ -129,8 +132,12 @@ def write_zip(files: list[Path], path: Path) -> None:
 
 
 def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float | None = None,
-                 waterline_intervals: int = DEFAULT_WATERLINE_INTERVALS, vessel: str | None = None) -> dict:
-    """Write all exports of one revision into ``out_dir``; return the manifest."""
+                 waterline_intervals: int = DEFAULT_WATERLINE_INTERVALS, vessel: str | None = None,
+                 tanks: list | None = None) -> dict:
+    """Write all exports of one revision into ``out_dir``; return the manifest.
+
+    ``tanks`` (``vessel_reconstruction.tanks.Tank`` list) adds the capacity plan and sounding tables.
+    """
     build = load_build(Path(task_dir), revision, vessel)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -147,8 +154,13 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
     write_hydrostatics(hydrostatics, error, build, hydro_json, hydro_csv)
     entries += [(hydro_json, "hydrostatics", {}), (hydro_csv, "hydrostatics_table", {})]
 
+    capacity_rows = None
+    if tanks:
+        capacity_rows, tank_entries = write_tank_tables(tanks, out_dir, stem, stamp_lines(build))
+        entries += tank_entries
+
     report = out_dir / f"{stem}_report.pdf"
-    write_report(ReportFacts(build, hydrostatics, error, f"MarinaFrame {__version__}"), report)
+    write_report(ReportFacts(build, hydrostatics, error, f"MarinaFrame {__version__}", capacity_rows), report)
     entries.append((report, "review_report", {}))
 
     missing = []

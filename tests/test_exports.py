@@ -291,3 +291,42 @@ def test_csv_text_cells_cannot_become_spreadsheet_formulas():
     assert safe_text_cell("+1") == "'+1" and safe_text_cell("@sum") == "'@sum"
     assert safe_text_cell("-cmd") == "'-cmd" and safe_text_cell("\tx") == "'\tx"
     assert safe_text_cell("s01") == "s01" and safe_text_cell(None) == ""
+
+
+def test_export_with_tanks_writes_capacity_plan_and_sounding_tables(tmp_path, capsys):
+    from vessel_reconstruction import tanks
+
+    box = tanks.prism_triangles(2.0, 4.0, [(-1.0, 0.0), (1.0, 0.0), (1.0, 1.0), (-1.0, 1.0)])
+    model = [tanks.Tank("db1", "No 1 water ballast", "water ballast", box, ("4", "8"), 1.025,
+                        {"geometry": "traced", "density": "read"}, 4.1),
+             tanks.Tank("=evil", "Hold", "dry", None, notes=["not built"])]
+    task = make_box_task(tmp_path)
+    manifest = export_draft(task, "r1", tmp_path / "out", tanks=model)
+    stem = "Test-Box-1_r0001_DRAFT"
+    roles = {entry["file"]: entry["role"] for entry in manifest["files"]}
+    assert roles[f"{stem}_capacity_plan.csv"] == "capacity_plan"
+    assert roles[f"{stem}_sounding_db1.csv"] == "sounding_table"
+    out = tmp_path / "out"
+    rows = list(csv.reader((out / f"{stem}_capacity_plan.csv").read_text().splitlines()))
+    assert rows[0][0].startswith("# Draft hull model from MarinaFrame")
+    header = next(r for r in rows if r and r[0] == "id")
+    body = {r[0]: dict(zip(header, r)) for r in rows[rows.index(header) + 1:]}
+    assert body["db1"]["volume_100_m3"] == "4.000" and body["db1"]["weight_98_t"] == "4.018"
+    assert body["db1"]["source_density"] == "read" and body["db1"]["lcg_m"] == "3.000"
+    assert "'=evil" in body and body["'=evil"]["built"] == "False"
+    sounding = list(csv.reader((out / f"{stem}_sounding_db1.csv").read_text().splitlines()))
+    header = next(r for r in sounding if r and r[0] == "sounding_m")
+    levels = sounding[sounding.index(header) + 1:]
+    assert len(levels) == 11 and levels[-1][:3] == ["1.000", "0.000", "4.000"]
+    with zipfile.ZipFile(out / f"{stem}_package.zip") as archive:
+        assert f"{stem}_capacity_plan.csv" in archive.namelist()
+    assert "Capacity plan (draft tank model)" in pdf_text(out / f"{stem}_report.pdf")
+
+    tank_file = tmp_path / "tanks.npz"
+    tanks.save_tanks(model, tank_file)
+    loaded = tanks.load_tanks(tank_file)
+    assert [t.id for t in loaded] == ["db1", "=evil"] and loaded[1].triangles is None
+    assert main(["--task", str(task), "--revision", "r1", "--out", str(tmp_path / "cli"),
+                 "--tanks", str(tank_file)]) == 0
+    printed = json.loads(capsys.readouterr().out)
+    assert any(entry["role"] == "capacity_plan" for entry in printed["files"])
