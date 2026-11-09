@@ -281,7 +281,19 @@ def latest_valid_draft_step(events: list[dict], case_dir: Path) -> Path | None:
                 if step.is_file():
                     return step
     # Builds made by other operations (for example the vessel-table first hull) record no
-    # build_draft result: fall back to the newest draft STEP in the task's builds.
+    # build_draft result: the task's last valid candidate is its draft. A newer STEP can
+    # belong to a reading the task set aside (first_hull_tools.keep_better_reading).
+    state = case_dir / "task" / "domain" / "state.json"
+    try:
+        candidate = as_dict(json.loads(state.read_text()).get("last_valid_candidate"))
+    except (OSError, ValueError):
+        candidate = {}
+    if candidate.get("valid") is True and isinstance(candidate.get("path"), str):
+        for name in ("model-draft.step", "model.step"):
+            step = case_dir / "task" / candidate["path"] / name
+            if step.is_file():
+                return step
+    # No state names a candidate: the newest draft STEP in the task's builds.
     steps = sorted((case_dir / "task").glob("domain/builds/*/model-draft.step"), key=lambda p: p.stat().st_mtime)
     return steps[-1] if steps else None
 

@@ -150,6 +150,18 @@ def test_latest_valid_draft_step_and_sealed_guard(tmp_path):
         round_digest.main([str(case), "--factory", str(sealed)])
 
 
+def test_without_a_build_draft_the_states_last_valid_candidate_is_scored(tmp_path):
+    case = make_case(tmp_path, "c", [decision("build_first_hull")], stdout={"status": "draft_not_verified"})
+    builds = case / "task" / "domain" / "builds"
+    for name in ("first-kept", "first-set-aside"):  # the set-aside reading is built last
+        (builds / name).mkdir(parents=True)
+        (builds / name / "model-draft.step").write_text("ISO-10303-21;")
+    state = {"last_valid_candidate": {"valid": True, "path": "domain/builds/first-kept"}}
+    (case / "task" / "domain" / "state.json").write_text(json.dumps(state))
+    step = round_digest.latest_valid_draft_step(round_digest.load_events(case), case)
+    assert step == builds / "first-kept" / "model-draft.step"
+
+
 def test_truth_hull_name_drops_level_and_three_view_marker():
     assert round_digest.truth_hull_name("dtmb5415-3v-L0") == "dtmb5415"
     assert round_digest.truth_hull_name("shipd-1-00679-L2") == "shipd-1-00679"

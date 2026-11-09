@@ -577,3 +577,34 @@ shipd-1-08158-L0 0.75 / 0.73 % plus two runs lost to bugs fixed in df2faa7. Best
 Open: dtmb5415-L1 fore-half identity (curve 9 weak, a mixed contour takes the outermost slot;
 filtering mixed strokes broke the aft half, reverted); dtmb5415 top-cell residual; aft/fore ends
 beyond the terminal stations are not modelled.
+
+## 2026-11-09 12:15 SGT: hull-accuracy lane (hull ends, readings best of 2; commits 8870405..)
+
+| Case | Before (live ba8114c) | Replay same reading: HEAD -> ends | Live 7f25122 (delivered draft) |
+|---|---|---|---|
+| dtmb5415-L0 | 5.4-9.3 % | 9.32 / +2.1 -> 6.00 / +0.8 | 5.06 % / +0.6 % |
+| series60-L0 | 1.4 % (pass) | 1.40 / +0.6 -> 1.40 / +1.3 | 4.62 % / -0.8 % (s04 trace dip) |
+| shipd-1-00679-L0 | 6.8 % | 6.81 / -1.5 -> 6.71 / -1.3 | 6.17 % / -0.4 % |
+| shipd-1-08158-L0 | 0.75-2.8 % | 0.75 / -1.6 -> 0.75 / -2.1 | 0.74 % / -1.9 % (pass) |
+| shipd-1-09867-L0 | 3.4 % | 3.42 / -2.6 -> 3.42 / +0.6 | 10.39 % / -3.0 % (first hull 3.42 %) |
+| dtmb5415-L1 | 18.5 % | 18.51 / +14.0 -> 14.92 / +13.4 | 14.92 % / +13.4 % |
+| series60-L1 | 34.9 % (df2faa7) | 4.34 / -0.1 -> 4.34 / +0.5 | 4.32 % / -1.5 % |
+| shipd-1-00679-L1 | 8.9 % | 8.86 / -2.7 -> 8.73 / -2.8 | 8.72 % / -2.6 % |
+| shipd-1-08158-L1 | 2.1 % | 2.09 / -3.1 -> 2.09 / -3.0 | 2.94 % / -2.8 % |
+| shipd-1-09867-L1 | 12.5 % | 12.45 / +1.0 -> 12.45 / +5.5 | 14.12 % / +6.6 % |
+
+RMS half-beam / in-range volume, development truth; gates unchanged. Rounds:
+`work/round-3view-L{0,1}-7f25122` (snapshot `work/snap-7f25122`), 173 requests, list $0.86, key 1
+meter 59 %. Changes: (1) hull ends: end sections from the end stations to the profile outline's
+ends (checked against LOA), keel/deck from the profile outline, breadth taper from the half-breadth
+plan outline, shape from the end station, labelled ai_inferred; full-length volume error now equals
+in-range error (09867-L0 -12.7 -> +0.6 %). A profile with no read baseline uses the outline's lowest
+line (dtmb deck cut: 9.3 -> 6.0 % on replay); a reading with no profile setup uses the intake's profile.
+(2) dtmb L0 stations 5/6 shared only the top of one stroke; the deck cut removes it. L1 fore identity
+(7<-6, 8<-7, 9<-8 shift) is open: description waterline heights are unreliable, so a plan-crossing
+identity check was not added. (3) best of 2 readings by drawing fit (ties keep the earlier one): it
+chose the better first hull in 3 of 4 differing cases (dtmb-L0 13.8 vs 32.6 %, 00679-L0 6.7 vs 22.3 %).
+Fixed on the way: set-aside readings' builds were reused by build_draft (equal generation ids), and
+the digest scored the newest STEP instead of the task's last valid candidate.
+Open: model section edits that the fit keep rule accepts but that worsen truth (09867-L0 s08 7 -> 30 %);
+series60 midship trace dips; dtmb top-cell residual (deck within 1 px still costs one 0.05 m sample).

@@ -108,3 +108,9 @@
 - **Trigger:** A reader change helped one case and broke another (shipd-1-09867-3v-L0: the intake's half-width profile region, 3.4 -> 19 %); only a replay of all ten earlier live readings showed it.
 - **Rule:** After each reader change, replay the model's earlier phase-1 readings through `build_first_hull` (copy the task's `domain/input` and the reading state, re-run `_describe_vessel` on `model_description`, score the first-hull STEP) for every L0 and L1 dev case. Run live rounds only after the replay shows no regression.
 - **Why:** Live runs vary by 1-5 points from the model alone; replays isolate the code change.
+
+### Score the delivered build, not the state you meant to keep (MarinaFrame)
+- **Date:** 2026-11-09
+- **Trigger:** Best-of-2 readings kept the better first hull in the task state (dtmb5415-3v-L0: 13.8 % against 32.6 %), but `build_draft` then reused the set-aside reading's build because build reuse matches generation and revision ids, which do not name the materialized setup. The digest scored 32.6 %.
+- **Rule:** When task state is swapped or restored (a new reading, a rebuilt setup), move the replaced builds out of `builds` (history only) so no later build can reuse them. After a selection change, score every valid build of a live case (`score_builds` pattern) and check that the digest's scored STEP is the one the state names.
+- **Why:** Reuse keys and delivery paths are separate from the state a selection writes; a correct selection can still deliver the wrong hull.
