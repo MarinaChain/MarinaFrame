@@ -632,3 +632,38 @@ length, about 16-18k tokens of repeated text; `provider_incomplete_or_unexpected
 kept its last valid draft. Image tokens are not counted by OpenCode Go (input tokens are text only).
 No further rounds: the founder moved the happy path to Claude Sonnet 5.5 (subscription `claude` CLI);
 that provider will plug into the same model list and settings table.
+
+## 2026-11-09 13:40 SGT: Claude Sonnet 5.5 happy path through the Claude subscription (commits 217660c..)
+
+New transport `claude-subscription` (`rust-control/src/claude_cli.rs`): the provider worker runs
+`/opt/homebrew/bin/claude -p` (Claude Code 2.1.280, subscription login, `apiKeySource: none`;
+no Headroom proxy, no API key, no OpenCode Go key) with stream-json in/out, `--tools ""`, no MCP,
+`--safe-mode`, `--no-session-persistence`, the purpose prompt as `--system-prompt` and the
+decision `--json-schema`; cleared environment; request wall time and a 256 KiB output bound.
+`models.rs` holds `claude-sonnet-5-5` with this transport; a test keeps every Claude/GPT entry
+off OpenCode Go. Default list of the CLI, the app and `run_round.py`:
+`claude-sonnet-5-5,crouton-alpha-free,deepseek-v4.1-flash`; only a subscription rate or usage
+limit switches (`model_switched`). Earlier conversation turns go to the CLI as one JSON data
+block (no forged turns). Image probe (`work/claude-vision-probe`): Sonnet 5.5 keeps full
+resolution up to about 3.75 Mpx, so the 2,048 px / 1 Mpx harness cap is kept for all models.
+Details: `docs/AGENT_HARNESS.md`, "Claude subscription transport".
+
+Live sheet-only round `work/round-3view-L0-sonnet-217660c` (snapshot `work/snap-217660c`,
+`--model claude-sonnet-5-5` only, 3 jobs, no OpenCode key in the environment); scored digest
+`digest-scored.md`:
+
+| Case | Sonnet 5.5: RMS / volume | DeepSeek latest (7f25122) | Wall (model time) | Requests (completed) | Tokens in / out | List cost |
+|---|---|---|---|---|---|---|
+| dtmb5415-3v-L0 | 5.61 % / +0.9 % | 5.06 % / +0.6 % | 558 s (197 s) | 21 (14) | 480,329 / 18,967 | $3.33 |
+| series60-3v-L0 | 1.38 % / +1.3 % (pass) | 4.62 % / -0.8 % | 279 s (163 s) | 17 (16) | 469,190 / 14,513 | $3.08 |
+| shipd-1-00679-3v-L0 | 14.05 % / +13.6 % | 6.17 % / -0.4 % | 430 s (261 s) | 27 (20) | 768,085 / 22,613 | $4.81 |
+| shipd-1-08158-3v-L0 | 0.75 % / -2.1 % (pass) | 0.74 % / -1.9 % (pass) | 310 s (156 s) | 19 (17) | 412,143 / 13,572 | $2.66 |
+| shipd-1-09867-3v-L0 | 16.22 % / +11.3 % | 10.39 % / -3.0 % | 301 s (126 s) | 14 (13) | 396,956 / 10,976 | $2.47 |
+
+Gates 2 % RMS half-beam, 5 % volume (development truth). 2/5 pass (DeepSeek: 1/5). All 98
+requests answered as `claude-sonnet-5-5`; no rate limit, no switch. 5-15 s per request. Refused
+replies were all `operation_contract` (19 of 98; dtmb and 00679 7 each). List cost is the CLI's
+API-price estimate; the subscription charges no per-request cost (receipt `cost` 0). Prompt
+tokens include cache reads/writes and image tokens. Open: 00679 and 09867 regress against
+DeepSeek (inspect their section edits); `operation_contract` refusals; Linux (the provider
+worker's 1 GiB address-space limit is inherited by the CLI, not checked); a Settings model choice.
