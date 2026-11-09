@@ -117,9 +117,8 @@ def _build_regions(sections: list[dict], out: Path) -> dict:
     return {"status": "blocked", "build_error": error}
 
 
-def run(config_path: Path, out: Path) -> dict:
-    config = json.loads(config_path.read_text())
-    dxf_path = (config_path.parent / config["dxf"]).resolve()
+def read_sections(config: dict, dxf_path: Path) -> dict:
+    """Read the configured station curves (no CAD): ``lines_dxf.read_stations`` output."""
     view_fields = dict(config["view"])
     view_fields["bounds"] = tuple(view_fields["bounds"])
     view_fields["layers"] = tuple(view_fields["layers"])
@@ -132,12 +131,18 @@ def run(config_path: Path, out: Path) -> dict:
         fields["extra_picks"] = tuple(tuple(p) for p in fields.get("extra_picks", ()))
         requests.append(lines_dxf.StationRequest(**fields))
     side_line = lines_dxf.SideLine(**config["side_line"]) if config.get("side_line") else None
+    return lines_dxf.read_stations(dxf_path, view, requests,
+                                   pick_tolerance=config.get("pick_tolerance", 5.0), side_line=side_line,
+                                   regions=bool(config.get("regions", False)),
+                                   centreline_closure_m=config.get("centreline_closure_m", 0.002))
+
+
+def run(config_path: Path, out: Path) -> dict:
+    config = json.loads(config_path.read_text())
+    dxf_path = (config_path.parent / config["dxf"]).resolve()
     use_regions = bool(config.get("regions", False))
     started = time.perf_counter()
-    read = lines_dxf.read_stations(dxf_path, view, requests,
-                                   pick_tolerance=config.get("pick_tolerance", 5.0), side_line=side_line,
-                                   regions=use_regions,
-                                   centreline_closure_m=config.get("centreline_closure_m", 0.002))
+    read = read_sections(config, dxf_path)
     extended = [s["id"] for s in read["sections"] if s["evidence"]["side_line_followed"]]
     out.mkdir(parents=True, exist_ok=False)
     (out / "sections.json").write_text(json.dumps(read["sections"]) + "\n")
@@ -147,7 +152,7 @@ def run(config_path: Path, out: Path) -> dict:
                    for a in read["abstentions"]])
     (out / "stations.json").write_text(json.dumps(sorted(statuses, key=lambda s: s["x_m"]), indent=2) + "\n")
     summary = {"config": config_path.name, "config_sha256": _sha256(config_path),
-               "dxf_sha256": _sha256(dxf_path), "requested": len(requests),
+               "dxf_sha256": _sha256(dxf_path), "requested": len(config["stations"]),
                "read": len(read["sections"]), "abstained": len(read["abstentions"]),
                "abstention_kinds": sorted({a["kind"] for a in read["abstentions"]}),
                "side_line_extended": extended, "chain_count": read["chain_count"],

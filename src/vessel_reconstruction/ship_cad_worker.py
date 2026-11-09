@@ -101,7 +101,7 @@ def read_worker_json(root: Path, relative: Path) -> dict | None:
 
 
 def run(program: dict, measurements: dict, task: Path, *, audit=None, limits=DEFAULT_LIMITS,
-        guesses: dict | None = None) -> dict:
+        guesses: dict | None = None, detail: dict | None = None) -> dict:
     from .ship_cad import triage_program
 
     triage_program(program)  # Header strict; a bad component is reported, not fatal.
@@ -113,7 +113,7 @@ def run(program: dict, measurements: dict, task: Path, *, audit=None, limits=DEF
     task = task.resolve()
     (task/'work').mkdir()
     (task/'input.json').write_text(json.dumps({'program': program, 'measurements': measurements, 'audit': audit,
-                                               'guesses': guesses or {}}))
+                                               'guesses': guesses or {}, 'detail': detail}))
     profile = task/'worker.sb'
     profile.write_text(sandbox_profile(task, runtime_paths()))
     env = safe_worker_environment()
@@ -140,7 +140,7 @@ def main(argv=None):
     from .ship_cad import execute
     data = json.loads((args.task/'input.json').read_text())
     execute(data['program'], data['measurements'], args.task/'work'/'output', audit=data.get('audit'),
-            guesses=data.get('guesses'))
+            guesses=data.get('guesses'), detail=data.get('detail'))
     return 0
 
 

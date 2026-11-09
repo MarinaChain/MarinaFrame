@@ -940,7 +940,70 @@ bulkheads, 22 of 24 tanks. Not built: No 11sb (its label lies in the engine-room
 Not measurable against the truth: positions and thicknesses of the internals (the truth STEP has
 no internal structure). G1 to G3 compare printed sources with each other.
 
-## 7. Resume point
+## 7. Superstructure detail (development case, plan section 3.8)
+
+Date 2026-11-10. Metrics fixed in `5f10828` before the build. Code:
+`src/vessel_reconstruction/superstructure.py` (hull side, plan shapes, lofts),
+`ship_cad.execute(..., detail=...)` (host detail: labelled hull side and per-part values),
+`ga_reader.section_deck_camber`, `ga_reader.end_contour`, `ga_reader.profile_windows`,
+`benchmarks/gunnerus/whole_vessel_detail.py` (Gunnerus selectors),
+`benchmarks/gunnerus/whole_vessel_superstructure_metrics.py` (scorer). `whole_vessel.py
+--no-detail` builds the old straight parts. Outputs in the git-ignored `work/superstructure/`.
+
+How each part is built now:
+
+- Hull side: the lines-plan station envelope, not cut at the deck (70 stations). Forward of
+  x 22 m the station curves run up to the forecastle top; the GA plan outline is that top line,
+  so at the deck it was up to 3.3 m outside the hull.
+- Decks: the edge is the hull half-breadth at the deck (the deck at side of the built hull).
+  Camber: read 0 from 7 labelled `1-DECK` moulded lines of the midship section (all straight
+  and level), `traced`. The truth deck is flat too.
+- Bulwarks: a 0.05 m (`guessed`) wall from the deck to the read top (aft 5.114 m), on the drawn
+  shell; above the drawn station top the top-row flare continues (forward rail).
+- Deckhouses: the base on the deck, the sides cut to the hull side at each height (tier 1
+  follows the bow flare), ends from the profile end lines: tier-2 front curve from x 24.13 m at
+  the roof to 26.71 m (`traced`); wheelhouse front lower face -0.70, upper face +0.70 (dx/dz),
+  aft upper face -0.70 (`traced`). Ends without a drawn line at the roof end are vertical
+  (`guessed`: tier 1 both ends, tier 2 aft). Wheelhouse forward plan corners rounded 1.2 m
+  (`guessed`: its plan view is not calibrated). Window recesses 0.05 m deep (`guessed`) where
+  the profile draws windows: 4 read on the wheelhouse, 2 cut (the other 2 cross a raked end).
+- GA/hull disagreement: a check item per part with the distance (aft deck and aft bulwark
+  0.16 m, main deck 1.70 m, tier 1 3.33 m and its end 1.98 m past the hull at the deck, forward
+  rail 1.45 m and 0.52 m), not geometry.
+- Loft: ruled through plan polygons at heights 0.6 m apart, with extra heights where a ruled
+  band would leave the hull side by more than 0.01 m (the stem); points that are straight at
+  every height are left out (STEP size).
+
+| ID | Metric | Before (run 2) | After | Target | Met |
+|---|---|---|---|---|---|
+| S1 | Max overhang (share of area > 0.02 m) | 3.33 m tier 1 (32 %); main deck 1.71 m (8 %); fwd rail 1.01 m (54 %); aft deck, aft bulwark 0.16 m (2 %, 55 %) | max 0.015 m (fwd rail); tier 1 0.011, main deck 0.009, others 0.000; share 0 for all | <= 0.02 m, share 0 | yes |
+| S2 | Check items | none | 5 parts, 7 items (distances above) | each disagreement reported | yes |
+| S3 | M2 footprint IoU | 0.940 | **0.997** | >= 0.940 | yes |
+| S3 | M4 tier-1 volume | +9.4 % | **+3.1 %** (389.6 vs 377.9 m3) | abs <= 9.4 % | yes |
+| S3 | M5 x ends; M1; M3 | 0.00 / +0.05 m; +0.065 m (cov 0.955); +0.065 m | unchanged | not worse | yes |
+| S4 | Tier-1 half-breadth at x 28, 31, 33, 34 m | +0.20, +0.60, +0.85, +1.15 m | 0.00, +0.05, +0.05, +0.10 m | abs <= 0.10 m | yes |
+| S5 | Camber; wheelhouse rakes; tier-2 front; bulwark top | not read | 0 (drawn 0); -0.700, +0.700, -0.700 (drawn same to 0.001); 26.71 m vs the 26.6 m estimate of section 3.8 (that estimate was read from a coarse plot; the drawn end line is at 26.715 m); 5.114 m (GA) | camber exact; rake 0.05; end 0.10 m | yes; yes; no (estimate); yes |
+| S6 | Values by label (all parts) | 15 traced, 9 guessed | 28 traced, 14 guessed, 0 ai_inferred | report | |
+| S7 | Hull + tier 1 vs truth 1,302.3 m3 | +5.9 % | **+1.6 %** (1,323.0 m3) | report | |
+
+Containment test (plan item 3): `tests/test_superstructure_containment.py`, tolerance 0.02 m,
+synthetic flared bow (always) and Gunnerus (with `MARINAFRAME_GUNNERUS_SOURCES`): both pass.
+
+Sizes and time: assembly STEP 16.1 -> 25.7 MB (tier 1 7.4 MB, forward rail 1.7 MB: the refined
+stem heights); GLB 1.5 -> 2.2 MB; step 1 build 34 s in process; assembly 141 s. Renders (git-ignored):
+`work/superstructure/renders/` (before/after: iso aft starboard, iso forward port, bow close-up,
+side). The app UI mock fixture is synthetic (`app/ui/mock/make_mock.py`) and does not use this
+builder; the app parts list shows the new labels (`hull_side`, `camber_m`, `end_*`, `windows`)
+with their basis through the existing `source_labels` path.
+
+Still not realistic: tier-1 and tier-2 aft walls stay vertical (no profile line at the roof end);
+side walls have no tumblehome (no calibrated transverse view); windows are recesses on the
+wheelhouse only (tier 1 portholes and tier 2 windows are in the outboard profile, which has no
+calibration); no doors, rails as stanchions, funnel, mast, crane or A-frame; the stem tip of the
+lofted parts is cut where the hull is narrower than 0.3 m; part STEP size grew with the
+refined stem heights (one B-spline face per side, as for the hull, would shrink it).
+
+## 8. Resume point
 
 0. Step 2 internals (section 6): region leaks, tank heights and G4 are fixed in
    `docs/TANKS_V1.md` (24 of 24 tanks, G4 2.4 %; capacity plan and sounding tables). Next:
@@ -965,3 +1028,7 @@ no internal structure). G1 to G3 compare printed sources with each other.
    Round 11 (section 5.8): the ALMA sheet on disk is not eligible (scow end view, no station
    curves; table without waterline half-breadths); not run.
 5. Rust `ship_cad` vision schema: accept labelled inline values (Python accepts them now).
+6. Superstructure detail (section 7): calibrate the outboard profile (tier windows,
+   portholes) and a transverse view (tumblehome); one B-spline face per side for shaped parts.
+   A part re-run from a mark uses `whole_vessel/detail.json` (written by the assembly); an older
+   run has none, and its rebuilt part is a straight extrusion as before.

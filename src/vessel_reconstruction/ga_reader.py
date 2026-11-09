@@ -375,3 +375,160 @@ def box_outline(x_range, half_breadth) -> list[list[float]]:
 
 def y_extent(points) -> float:
     return float(np.max(np.abs(np.asarray(points, dtype=float)[:, 1])))
+
+
+# Midship section deck lines: a deck line starts at most this far (drawing units) left of its
+# label's insert point, or this far to the right (the label sits beside the section).
+DECK_LABEL_REACH_UNITS = (500.0, 3000.0)
+# A deck line lies within this many label heights of its label, and is at least this long.
+DECK_LABEL_BAND_HEIGHTS = 3.0
+DECK_LINE_MIN_UNITS = 1500.0
+# A deck line rises at most this much per unit length (a camber is about B/50 over B/2: 0.04).
+DECK_LINE_MAX_SLOPE = 0.1
+
+
+def _segments_of(entity) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    if entity.dxftype() == 'LINE':
+        return [((entity.dxf.start.x, entity.dxf.start.y), (entity.dxf.end.x, entity.dxf.end.y))]
+    if entity.dxftype() == 'LWPOLYLINE':
+        points = [(p[0], p[1]) for p in entity.get_points()]
+        return list(zip(points[:-1], points[1:]))
+    return []
+
+
+def section_deck_camber(path, label: str = '1-DECK', layers=('S0CO5',), metres_per_unit: float = 0.001) -> dict | None:
+    """Deck camber from the deck lines that a midship-section drawing labels (None: no line).
+
+    For each printed deck label, the longest moulded deck line beside it; its camber is the rise
+    of its highest point above its lowest end (0 for a straight level line). Blocks are exploded
+    first (section drawings keep their views in blocks). The result is the median over sections.
+    """
+    import ezdxf
+    from ezdxf.disassemble import recursive_decompose
+
+    entities = list(recursive_decompose(ezdxf.readfile(str(path)).modelspace()))
+    labels = []
+    for entity in entities:
+        if entity.dxftype() in ('TEXT', 'MTEXT'):
+            text = entity.dxf.text if entity.dxftype() == 'TEXT' else entity.plain_text()
+            if text.strip() == label:
+                labels.append((entity.dxf.insert.x, entity.dxf.insert.y, entity.dxf.get('height', 100.0) or 100.0))
+    lines = [(entity, _segments_of(entity)) for entity in entities
+             if entity.dxf.layer in layers and _segments_of(entity)]
+    rises, entity_ids = [], []
+    for x, y, height in labels:
+        candidates = []
+        for entity, segments in lines:
+            points = np.array([p for segment in segments for p in segment])
+            span = points[:, 0].max() - points[:, 0].min()
+            rise = points[:, 1].max() - points[:, 1].min()
+            near_y = np.abs(points[:, 1] - y).min() <= DECK_LABEL_BAND_HEIGHTS * height
+            beside = x - DECK_LABEL_REACH_UNITS[0] <= points[:, 0].min() <= x + DECK_LABEL_REACH_UNITS[1]
+            if span >= DECK_LINE_MIN_UNITS and rise <= DECK_LINE_MAX_SLOPE * span and near_y and beside:
+                # Exploded block entities have no handle of their own.
+                candidates.append((span, rise, entity.dxf.handle or f'block-line-{points[0][0]:.0f}-{points[0][1]:.0f}'))
+        if candidates:
+            _, rise, handle = max(candidates)
+            rises.append(float(rise) * metres_per_unit)
+            entity_ids.append(handle)
+    if not rises:
+        return None
+    return {'camber_m': round(float(np.median(rises)), 4), 'sections': len(rises), 'entity_ids': entity_ids,
+            'rises_m': [round(r, 4) for r in rises]}
+
+
+# Profile end contours: a drawn end line continues where a segment starts within this distance
+# of the current point (line ends meet to round-off; curves are flattened at 1 drawing unit).
+END_CONTOUR_TOLERANCE_M = 0.03
+# An end wall leans at most this far in x from the roof end (a raked front about 1.5:1 over a
+# 2.4 m tier is 1.6 m); further, the walk has left the end wall.
+END_CONTOUR_MAX_RUN_M = 3.0
+# Contour points that a straight line between their neighbours covers within this are dropped.
+END_CONTOUR_SIMPLIFY_M = 0.02
+# Profile windows: closed outlines inside a tier, between these sizes (doors are taller).
+WINDOW_SIZE_M = (0.25, 2.5)
+WINDOW_MAX_HEIGHT_M = 1.5
+
+
+def _profile_segments(entities, view: View):
+    segments = []
+    for entity in _view_entities(entities, view):
+        points = view.to_ship(entity['points'])
+        segments += [(a, b, entity['id']) for a, b in zip(points[:-1], points[1:])]
+    return segments
+
+
+def _simplify(points: np.ndarray, tolerance: float) -> np.ndarray:
+    """Douglas-Peucker simplification of a polyline."""
+    if len(points) <= 2:
+        return points
+    start, end = points[0], points[-1]
+    direction = end - start
+    length = np.hypot(*direction) or 1.0
+    distance = np.abs(direction[0] * (points[:, 1] - start[1]) - direction[1] * (points[:, 0] - start[0])) / length
+    index = int(np.argmax(distance))
+    if distance[index] <= tolerance:
+        return np.array([start, end])
+    left = _simplify(points[:index + 1], tolerance)
+    return np.concatenate([left[:-1], _simplify(points[index:], tolerance)])
+
+
+def end_contour(entities, view: View, start_x: float, z_high: float, z_low: float) -> dict | None:
+    """The drawn end line of a deckhouse tier in the profile, from its roof end down to its base.
+
+    Starting at the roof end (start_x, z_high), the walk follows drawn segments that go down
+    (a raked front, a curved front, the two faces of a raked wheelhouse front) until it reaches
+    the base. Returns ``{'points': [[z, x], ...] (z up), 'reached_base', 'entity_ids'}``; None
+    when no drawn line starts at the roof end. Where the line stops above the base, the wall is
+    continued vertically down (``reached_base`` False).
+    """
+    segments = _profile_segments(entities, view)
+    current = np.array([start_x, z_high])
+    path, ids = [current.copy()], []
+    while current[1] > z_low + END_CONTOUR_TOLERANCE_M:
+        best = None
+        for a, b, entity_id in segments:
+            for here, there in ((a, b), (b, a)):
+                if (np.hypot(*(here - current)) <= END_CONTOUR_TOLERANCE_M and there[1] < current[1] - 1e-3
+                        and there[1] >= z_low - END_CONTOUR_TOLERANCE_M
+                        and abs(there[0] - start_x) <= END_CONTOUR_MAX_RUN_M
+                        and (best is None or there[1] < best[0][1])):
+                    best = (there, entity_id)
+        if best is None:
+            break
+        current = best[0].copy()
+        path.append(current)
+        if best[1] not in ids:
+            ids.append(best[1])
+    if len(path) == 1:
+        return None
+    reached = current[1] <= z_low + END_CONTOUR_TOLERANCE_M
+    path[-1] = np.array([current[0], z_low]) if reached else current
+    if not reached:
+        path.append(np.array([current[0], z_low]))
+    points = _simplify(np.array(path), END_CONTOUR_SIMPLIFY_M)
+    return {'points': [[round(float(z), 4), round(float(x), 4)] for x, z in points[::-1]],
+            'reached_base': bool(reached), 'entity_ids': ids}
+
+
+def profile_windows(entities, view: View, x_range, z_range) -> list[dict]:
+    """Window outlines drawn in the profile inside a tier: closed, window sized, not nested."""
+    found = []
+    for entity in _view_entities(entities, view):
+        if not entity.get('closed'):
+            continue
+        points = view.to_ship(entity['points'])
+        low, high = points.min(axis=0), points.max(axis=0)
+        width, height = high - low
+        if (x_range[0] <= low[0] and high[0] <= x_range[1] and z_range[0] <= low[1] and high[1] <= z_range[1]
+                and WINDOW_SIZE_M[0] <= width <= WINDOW_SIZE_M[1]
+                and WINDOW_SIZE_M[0] <= height <= WINDOW_MAX_HEIGHT_M):
+            found.append({'x_m': [round(float(low[0]), 3), round(float(high[0]), 3)],
+                          'z_m': [round(float(low[1]), 3), round(float(high[1]), 3)], 'entity_id': entity['id']})
+
+    def inside(a, b):
+        return (a is not b and b['x_m'][0] <= a['x_m'][0] and a['x_m'][1] <= b['x_m'][1]
+                and b['z_m'][0] <= a['z_m'][0] and a['z_m'][1] <= b['z_m'][1])
+
+    # A window frame is drawn as two nested outlines; keep the outer one.
+    return sorted([w for w in found if not any(inside(w, other) for other in found)], key=lambda w: w['x_m'])
