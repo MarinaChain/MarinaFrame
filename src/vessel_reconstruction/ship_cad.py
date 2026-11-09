@@ -370,18 +370,21 @@ def _shaped_part(component, values, hull, detail):
 
     Happy path: when the shaped build fails, the straight part is built and the reason is kept.
     """
+    from .geometry import precise_volume_mm3
     from .superstructure import build_shaped
 
     part_detail = (detail.get('parts') or {}).get(component['id'], {})
     try:
         shape, report = build_shaped(component['id'], component['op'], values, hull, part_detail)
-        if not shape.isValid() or shape.Volume() <= 0:
+        # The default volume integration can even be negative on smooth B-spline walls.
+        if not shape.isValid() or precise_volume_mm3(shape) <= 0:
             raise ValueError('invalid shaped solid')
     except Exception as exc:  # noqa: BLE001 - the straight part is the fallback
         component['shape'] = 'straight_extrusion'
         component['reason'] = f'{component["reason"]}; hull-following shape not built ({type(exc).__name__}: {exc})'
         return _straight_part(component['op'], values)
     component['shape'] = 'follows_hull_side'
+    component['walls'] = report['walls']
     component['check_items'] = report['check_items']
     if report['windows_cut']:
         component['windows_cut'] = report['windows_cut']
@@ -408,6 +411,8 @@ def execute(program: dict, measurements: dict, out: Path, *, audit=None, veto=Fa
     and deckhouses follow the hull; without it they are straight extrusions.
     """
     import cadquery as cq
+
+    from .geometry import precise_volume_mm3
 
     hull = _hull_side(detail)
     buildable, unbuilt, source_notes = triage_program(program)
@@ -451,7 +456,7 @@ def execute(program: dict, measurements: dict, out: Path, *, audit=None, veto=Fa
                         raise ValueError('opening leaves an empty or invalid target')
                     shapes[target] = changed
                     component['role'] = 'subtraction_tool_not_material'
-            if not shape.isValid() or not shape.Solids() or shape.Volume() <= 0:
+            if not shape.isValid() or not shape.Solids() or precise_volume_mm3(shape) <= 0:
                 raise ValueError('invalid or empty CAD solid')
             shapes[component['id']] = shape
             component['built'] = True
@@ -463,8 +468,9 @@ def execute(program: dict, measurements: dict, out: Path, *, audit=None, veto=Fa
             continue
         shape = shapes[component['id']]
         box = shape.BoundingBox()
+        # Adaptive integration: the default volume is about 1 % off on smooth B-spline walls.
         component.update(bbox_m={'min': [box.xmin, box.ymin, box.zmin], 'max': [box.xmax, box.ymax, box.zmax]},
-                         volume_m3=shape.Volume())
+                         volume_m3=precise_volume_mm3(shape))
         # Language coordinates and the kernel are metres here. STEP records those
         # model units as mm, so export a scaled copy for interoperable SI geometry.
         cq.exporters.export(shape.scale(1000), str(out / f'{component["id"]}.step'))

@@ -243,3 +243,53 @@ def test_part_revise_reads_the_run_detail_when_it_is_there(tmp_path):
     assert load_detail(tmp_path) == {'hull_side': {'value': {}}}
     (tmp_path / DETAIL_FILE).write_text('not json')
     assert load_detail(tmp_path) is None
+
+
+@pytest.mark.cad
+def test_walls_on_a_flared_bow_are_one_smooth_surface_per_side():
+    from vessel_reconstruction.superstructure import SMOOTH_WALLS
+
+    hull = bow_hull()
+    values = {'outline': WIDE_OUTLINE, 'height': [3.0, 5.0]}
+    solid, report = build_shaped('house', 'deckhouse', values, hull)
+    assert report['walls'] == SMOOTH_WALLS
+    curved = [face for face in solid.Faces() if face.geomType() != 'PLANE']
+    # Port, starboard and two ends; the base and the roof stay planar.
+    assert len(curved) == 4 and len(solid.Faces()) == 6
+    assert surface_overhang(hull, solid) <= 0.02
+
+
+@pytest.mark.cad
+def test_a_house_inside_the_hull_side_keeps_flat_walls():
+    from vessel_reconstruction.superstructure import RULED_WALLS
+
+    narrow = [[2.0, -2.0], [8.0, -2.0], [8.0, 2.0], [2.0, 2.0]]
+    solid, report = build_shaped('house', 'deckhouse', {'outline': narrow, 'height': [3.0, 5.0]}, bow_hull())
+    assert report['walls'] == RULED_WALLS
+    assert all(face.geomType() == 'PLANE' for face in solid.Faces())
+
+
+@pytest.mark.cad
+def test_smooth_bulwark_is_a_sewn_wall_of_the_given_thickness():
+    from vessel_reconstruction.geometry import precise_volume_mm3
+    from vessel_reconstruction.superstructure import SMOOTH_WALLS
+
+    hull = bow_hull()
+    values = {'outline': WIDE_OUTLINE, 'height': [3.0, 4.0], 'thickness': 0.05}
+    solid, report = build_shaped('wall', 'bulwark', values, hull)
+    assert report['walls'] == SMOOTH_WALLS and solid.isValid() and len(solid.Solids()) == 1
+    # About perimeter x thickness x height (perimeter about 38 m in plan).
+    assert 1.7 < precise_volume_mm3(solid) < 2.1
+
+
+@pytest.mark.cad
+def test_a_failed_smooth_loft_falls_back_to_ruled_bands_with_a_check_item(monkeypatch):
+    from vessel_reconstruction import superstructure
+
+    def fail(*args, **kwargs):
+        raise superstructure.SmoothLoftError('test failure')
+
+    monkeypatch.setattr(superstructure, 'smooth_body', fail)
+    solid, report = build_shaped('house', 'deckhouse', {'outline': WIDE_OUTLINE, 'height': [3.0, 5.0]}, bow_hull())
+    assert solid.isValid() and report['walls'] == superstructure.RULED_WALLS
+    assert any(item['kind'] == 'smooth_fallback' and 'test failure' in item['note'] for item in report['check_items'])

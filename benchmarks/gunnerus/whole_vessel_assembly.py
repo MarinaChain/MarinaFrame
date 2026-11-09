@@ -306,7 +306,8 @@ def main() -> None:
         path = parts / f'{part}.step'
         if path.is_file():
             shapes[part] = read_shape(path)
-            volumes[part] = shapes[part].Volume() / 1e9
+            # Smooth B-spline walls need the adaptive integration too.
+            volumes[part] = precise_volume_mm3(shapes[part]) / 1e9
     record.update(volumes_m3=volumes, sum_of_parts_m3=sum(volumes.values()))
     if 'hull' in volumes and 'house_t1' in volumes:
         # The truth STEP holds the hull and the first tier only (docs/plans/...-scope.md, 3.3).
