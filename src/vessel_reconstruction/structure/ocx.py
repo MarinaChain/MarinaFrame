@@ -70,7 +70,11 @@ def grade_of(material: str | None) -> str:
     if not material:
         return "A"
     tail = re.split(r"[/\s-]+", material.strip())[-1].upper()
-    tail = re.sub(r"^([ADEF])H(\d\d)$", r"\1\2", tail)  # "AH36" -> "A36"
+    higher_strength = re.fullmatch(r"([ADEF])H(\d\d)", tail)  # a class-society name: "AH36" -> "A36"
+    if higher_strength:
+        tail = higher_strength.group(1) + higher_strength.group(2)
+    elif re.fullmatch(r"[ADEF]\d\d", tail):
+        return "A"  # "ASTM A36" is a 250 MPa structural steel, not the 355 MPa class grade AH36
     return tail if tail in GRADE_STRENGTH else "A"
 
 
