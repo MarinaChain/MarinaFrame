@@ -235,7 +235,7 @@ step does not yet (dashed bulkheads, hold regions matched to double-bottom tanks
    small box (take the smallest region under the label).
 4. Huddell holdout: write the `arthur_m_huddell` host calibration (sheets 7, 8, 9) blind to the
    truth, have the truth transcribed independently, then run once by section 4. The reader is
-   frozen by the commit that adds this section.
+   frozen at commit `53f35c4` (the commit that added this section).
 
 Commands (outputs git-ignored):
 
