@@ -1,4 +1,8 @@
-//! A bounded Rust HTTP worker. It cannot execute CAD, modify a task or approve it.
+//! A bounded Rust provider worker. It sends one model request through the
+//! model's transport (OpenCode Go over HTTPS, or the `claude` CLI on the
+//! Claude subscription). It cannot execute CAD, modify a task or approve it.
+#[path = "claude_cli.rs"]
+pub mod claude_cli;
 #[path = "credentials.rs"]
 pub mod credentials;
 #[path = "transcription.rs"]
@@ -216,7 +220,7 @@ pub fn check_input(input: &ProviderInput) -> Result<Vec<u8>> {
         return Err("provider_input_contract".into());
     }
     let p = &input.payload;
-    models::check_payload(p)?;
+    let model = models::check_payload(p)?;
     if p["stream"] != false
         || p["max_tokens"]
             .as_u64()
@@ -275,11 +279,15 @@ pub fn check_input(input: &ProviderInput) -> Result<Vec<u8>> {
             return Err("image_identity_mismatch".into());
         }
         check_png(&pixels)?;
-        if meta
-            .pixel_size
-            .is_some_and(|size| size != png_size(&pixels))
-        {
+        let [width, height] = png_size(&pixels);
+        if meta.pixel_size.is_some_and(|size| size != [width, height]) {
             return Err("image_identity_mismatch".into());
+        }
+        // The model's own image limit (models::MODELS), inside the harness cap.
+        if width.max(height) > model.max_image_side_px
+            || width as u64 * height as u64 > model.max_image_pixels
+        {
+            return Err("image_dimension_limit".into());
         }
     }
     let bytes = util::json_bytes(p)?;
@@ -386,10 +394,10 @@ fn read_usage(client: &reqwest::blocking::Client, key: &str) -> Result<Value> {
 }
 
 /// True when the receipt's requested model is the request body's model and an
-/// allowed one.
+/// allowed one, and the receipt names that model's transport endpoint.
 pub fn model_bound(receipt: &Receipt, input: &ProviderInput) -> bool {
     input.payload["model"] == receipt.requested_model.as_str()
-        && models::settings(&receipt.requested_model).is_ok()
+        && models::endpoint(&receipt.requested_model).is_ok_and(|e| e == receipt.endpoint)
 }
 
 /// True when the provider answered with the model the receipt requested.
@@ -397,11 +405,17 @@ pub fn returned_requested_model(receipt: &Receipt) -> bool {
     receipt.returned_model.as_deref() == Some(receipt.requested_model.as_str())
 }
 
-/// Interpret an HTTP 200 response body. On success the receipt holds a
+/// Interpret a response body: an HTTP 200 body of OpenCode Go, or the
+/// stream-json output of the `claude` CLI. On success the receipt holds a
 /// validated decision or table transcription and the completed state; on
 /// error it stays failed. Usage and model identity are recorded either way.
 pub fn interpret_completion(receipt: &mut Receipt, bytes: &[u8], key: &str) -> Result<()> {
     receipt.state = RequestState::Failed;
+    let transport = models::settings(&receipt.requested_model)?.transport;
+    if transport == models::Transport::ClaudeSubscription {
+        let content = claude_cli::interpret(receipt, bytes)?;
+        return interpret_content(receipt, &content);
+    }
     if bytes.len() > 262_144 {
         return Err("provider_response_limit".into());
     }
@@ -431,6 +445,12 @@ pub fn interpret_completion(receipt: &mut Receipt, bytes: &[u8], key: &str) -> R
     let content = choices[0]["message"]["content"]
         .as_str()
         .ok_or("provider_content_type")?;
+    interpret_content(receipt, content)
+}
+
+/// Validate the model's answer text for the receipt's purpose and complete
+/// the receipt.
+fn interpret_content(receipt: &mut Receipt, content: &str) -> Result<()> {
     match receipt.purpose {
         Purpose::ModelDecision | Purpose::Investigation => {
             let mut decision = parse_decision_content(content)?;
@@ -465,11 +485,19 @@ pub fn provider_worker(response_path: &Path, timeout: u64) -> Result<()> {
         .map_err(|_| "provider_input_read")?;
     let input: ProviderInput = util::parse(&raw, 2 * 1024 * 1024)?;
     let body = check_input(&input)?;
+    // check_input accepted the model, so its settings exist.
+    let transport = models::check_payload(&input.payload)?.transport;
+    let cli_request = match transport {
+        models::Transport::ClaudeSubscription => {
+            Some(claude_cli::build(&input.payload, input.purpose)?)
+        }
+        models::Transport::OpencodeGo => None,
+    };
     let mut receipt = Receipt {
         protocol: PROTOCOL.into(),
         request_id: input.request_id.clone(),
         state: RequestState::NotSent,
-        endpoint: GO_ENDPOINT.into(),
+        endpoint: transport.endpoint().into(),
         // check_input accepted this as an allowed model.
         requested_model: input.payload["model"].as_str().unwrap_or_default().into(),
         returned_model: None,
@@ -502,6 +530,72 @@ pub fn provider_worker(response_path: &Path, timeout: u64) -> Result<()> {
         vision: None,
     };
     util::atomic_json(response_path, &receipt, false)?;
+    match cli_request {
+        Some(request) => send_claude_subscription(&mut receipt, response_path, &request, timeout)?,
+        None => send_opencode_go(&mut receipt, response_path, body, timeout)?,
+    }
+    let summary = json!({"request_id":receipt.request_id,"state":receipt.state,"http_status":receipt.http_status});
+    std::io::stdout()
+        .write_all(&util::json_bytes(&summary)?)
+        .map_err(|_| "provider_summary_write")?;
+    Ok(())
+}
+
+/// Send one request through the `claude` CLI on the Claude subscription. The
+/// CLI gets no OpenCode Go key and no API key: it uses its own login. Its
+/// stdout is stored as the response body.
+fn send_claude_subscription(
+    receipt: &mut Receipt,
+    response_path: &Path,
+    request: &claude_cli::CliRequest,
+    timeout: u64,
+) -> Result<()> {
+    let binary = match claude_cli::binary() {
+        Ok(path) => path,
+        Err(code) => {
+            receipt.error_code = Some(code.clone());
+            util::atomic_json(response_path, &*receipt, true)?;
+            return Err(code);
+        }
+    };
+    receipt.credential_selection = Some(json!({"transport":"claude_subscription",
+        "authentication":"claude_cli_login","api_key":false}));
+    receipt.state = RequestState::TransmissionOrCompletionUnknown;
+    util::atomic_json(response_path, &*receipt, true)?;
+    let started = Instant::now();
+    let output = claude_cli::run(&binary, request, Duration::from_secs(timeout));
+    receipt.latency_seconds = started.elapsed().as_secs_f64();
+    match output {
+        Ok(bytes) => {
+            receipt.response_sha256 = Some(util::hash(&bytes));
+            std::fs::write(response_path.with_extension("body"), &bytes)
+                .map_err(|_| "provider_body_write")?;
+            if let Err(code) = interpret_completion(receipt, &bytes, "") {
+                receipt.error_code = Some(code);
+            }
+        }
+        Err(claude_cli::RunError::NotStarted) => {
+            receipt.state = RequestState::NotSent;
+            receipt.error_code = Some("provider_cli_start".into());
+        }
+        Err(claude_cli::RunError::TimedOut) => {
+            receipt.error_code = Some("provider_cli_timeout".into());
+        }
+        Err(claude_cli::RunError::OutputLimit) => {
+            receipt.state = RequestState::Failed;
+            receipt.error_code = Some("provider_response_limit".into());
+        }
+    }
+    util::atomic_json(response_path, &*receipt, true)
+}
+
+/// Send one request to OpenCode Go with the selected account's key.
+fn send_opencode_go(
+    receipt: &mut Receipt,
+    response_path: &Path,
+    body: Vec<u8>,
+    timeout: u64,
+) -> Result<()> {
     let credentials = credentials::load(|name| std::env::var(name).ok())?;
     if credentials
         .iter()
@@ -522,14 +616,14 @@ pub fn provider_worker(response_path: &Path, timeout: u64) -> Result<()> {
             Ok(choice) => choice,
             Err(code) => {
                 receipt.error_code = Some(code.clone());
-                util::atomic_json(response_path, &receipt, true)?;
+                util::atomic_json(response_path, &*receipt, true)?;
                 return Err(code);
             }
         };
     let key = &credentials[chosen].key;
     receipt.credential_selection = Some(selection);
     receipt.state = RequestState::TransmissionOrCompletionUnknown;
-    util::atomic_json(response_path, &receipt, true)?;
+    util::atomic_json(response_path, &*receipt, true)?;
     let started = Instant::now();
     let outcome = (|| -> Result<()> {
         let response = client
@@ -584,18 +678,13 @@ pub fn provider_worker(response_path: &Path, timeout: u64) -> Result<()> {
             }
             .into());
         }
-        interpret_completion(&mut receipt, &bytes, key)
+        interpret_completion(receipt, &bytes, key)
     })();
     receipt.latency_seconds = started.elapsed().as_secs_f64();
     if let Err(e) = outcome {
         receipt.error_code = Some(e);
     }
-    util::atomic_json(response_path, &receipt, true)?;
-    let summary = json!({"request_id":receipt.request_id,"state":receipt.state,"http_status":receipt.http_status});
-    std::io::stdout()
-        .write_all(&util::json_bytes(&summary)?)
-        .map_err(|_| "provider_summary_write")?;
-    Ok(())
+    util::atomic_json(response_path, &*receipt, true)
 }
 
 fn parse_decision_content(content: &str) -> Result<Decision> {

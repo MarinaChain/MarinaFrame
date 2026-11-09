@@ -1668,11 +1668,15 @@ $('theme-toggle').addEventListener('click', () => {
 function aiStatusText(status) {
   if (!status) return 'The AI reads the drawing and builds the draft.';
   if (!status.enabled) return 'Off: new runs use the deterministic draft and do not call the model.';
-  if (!status.key_found) {
-    return `No model key found, so new runs use the deterministic draft. Put your OpenCode Go key in ${status.key_file} (one key per line, chmod 600).`;
+  if (!status.key_found && !status.claude_found) {
+    return `No model route found, so new runs use the deterministic draft. Install and log in to Claude Code (the claude command), or put your OpenCode Go key in ${status.key_file} (one key per line, chmod 600).`;
   }
   const keys = status.key_count > 1 ? ` ${status.key_count} model keys found.` : '';
-  return `On: the AI (DeepSeek through OpenCode Go) reads the drawing and builds the draft.${keys}`;
+  if (!status.claude_found) {
+    return `On: the claude command was not found, so the AI (Crouton, then DeepSeek, through OpenCode Go) reads the drawing and builds the draft.${keys}`;
+  }
+  const fallback = status.key_found ? ' If the Claude subscription is rate limited, Crouton, then DeepSeek, take over through OpenCode Go.' : '';
+  return `On: the AI (Claude Sonnet 5.5 through your Claude subscription) reads the drawing and builds the draft.${fallback}${keys}`;
 }
 
 /** Show `text` in the chip `node` with a badge tone, and `title` as its tooltip. */
@@ -1686,7 +1690,7 @@ function setChip(node, text, tone, title) {
 /** AI drafting setting: On, Off or No key. */
 function showAiStatus(node, status) {
   if (status && !status.enabled) setChip(node, 'Off', null, aiStatusText(status));
-  else if (status && !status.key_found) setChip(node, 'No key', 'warn', aiStatusText(status));
+  else if (status && !status.key_found && !status.claude_found) setChip(node, 'No model', 'warn', aiStatusText(status));
   else setChip(node, 'On', 'ai', aiStatusText(status));
 }
 

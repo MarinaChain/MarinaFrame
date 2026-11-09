@@ -4,10 +4,9 @@
 use crate::error::{AppError, AppResult};
 use marinaframe_control::controller::revision::{self, RevisionRequest};
 use marinaframe_control::controller::{self, Intervention};
+use marinaframe_control::models::DEFAULT_MODELS;
 use marinaframe_control::store::Store;
-use marinaframe_control::types::{
-    Config, Decision, OnAmbiguity, OperationalLimits, Policy, GO_MODEL,
-};
+use marinaframe_control::types::{Config, Decision, OnAmbiguity, OperationalLimits, Policy};
 use marinaframe_control::util;
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
@@ -110,7 +109,7 @@ fn spawn_with_store(
 /// Why an AI run may send the drawing to the model. The person enabled AI
 /// drafting in Settings; the founder made AI drafting the default (2026-11-08).
 pub const AI_DRAFTING_BASIS: &str =
-    "AI drafting is enabled in MarinaFrame settings: the drawing goes to DeepSeek through OpenCode Go to build a draft.";
+    "AI drafting is enabled in MarinaFrame settings: the drawing goes to Claude Sonnet 5.5 through the Claude subscription (the claude CLI) to build a draft; only when the subscription is rate limited does it go to Crouton, then DeepSeek, through OpenCode Go.";
 
 /// Configuration of a run started from the app: always draft on ambiguity (a draft
 /// is never review-ready). With `use_model` the AI reads the drawing (live policy,
@@ -139,11 +138,13 @@ fn app_run_config(
         } else {
             String::new()
         },
-        model: GO_MODEL.into(),
+        model: DEFAULT_MODELS[0].into(),
         binary_sha256,
         on_ambiguity: OnAmbiguity::Draft,
-        // The app uses DeepSeek only, with no fallback, until the founder decides otherwise.
-        fallback_models: vec![],
+        // Claude Sonnet 5.5 drafts; a subscription rate-limit or usage-limit
+        // answer moves the run to Crouton, then DeepSeek (founder decision
+        // 2026-11-09). Settings may choose models later.
+        fallback_models: DEFAULT_MODELS[1..].iter().map(|m| m.to_string()).collect(),
     }
 }
 
@@ -336,6 +337,8 @@ mod tests {
         assert_eq!(ai.policy, Policy::Live);
         assert!(ai.provider_transfer_authorized);
         assert_eq!(ai.authorization_basis, AI_DRAFTING_BASIS);
+        assert_eq!(ai.models(), DEFAULT_MODELS);
+        assert_eq!(ai.model, "claude-sonnet-5-5");
         let fallback = app_run_config(
             "python".into(),
             None,

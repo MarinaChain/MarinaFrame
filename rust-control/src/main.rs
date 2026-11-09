@@ -200,11 +200,11 @@ fn execute() -> Result<serde_json::Value> {
             limits.max_context_tokens = value.parse().map_err(|_| "invalid_context_budget")?;
         }
         limits.validate()?;
-        // Ordered OpenCode Go models: the first is used until it is rate
-        // limited, then the next. The default is the desktop app's model.
+        // Ordered models: the first is used until it is rate limited, then the
+        // next. The default is the desktop app's list (models::DEFAULT_MODELS).
         let mut models = match args.remove("model") {
             Some(list) => models::parse_list(&list)?,
-            None => vec![GO_MODEL.to_string()],
+            None => models::DEFAULT_MODELS.map(String::from).to_vec(),
         };
         let model = models.remove(0);
         let count = steps(&mut args)?;

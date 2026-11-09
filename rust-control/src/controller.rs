@@ -884,7 +884,6 @@ fn apply_provider(
     )?;
     if receipt.protocol != provider::PROTOCOL
         || receipt.request_id != pending.id
-        || receipt.endpoint != GO_ENDPOINT
         || !provider::model_bound(&receipt, &input)
         || !store.state.config.models().contains(&receipt.requested_model.as_str())
         || receipt.evidence_mode != "live"
@@ -937,10 +936,9 @@ fn apply_provider(
                 }
             }
             "billing_source" => {
-                if !value
-                    .as_str()
-                    .is_some_and(|s| ["go", "go-plus", "free", "balance", "byok"].contains(&s))
-                {
+                if !value.as_str().is_some_and(|s| {
+                    ["go", "go-plus", "free", "balance", "byok", "subscription"].contains(&s)
+                }) {
                     return Err("provider_billing_source".into());
                 }
             }
@@ -2962,15 +2960,20 @@ mod tests {
         };
         util::atomic_json(&store.path.join(&pending.request_path), &input, false).unwrap();
         let decision = json!({"tool":"view_region","arguments":{"region_px":[0,0,400,300]},"reason":"Look at the body plan."});
-        let body = util::json_bytes(&json!({"id":"completion-1","model":model,
+        let transport = models::settings(model).unwrap().transport;
+        let body = if transport == models::Transport::ClaudeSubscription {
+            claude_cli_body(model, &decision, false)
+        } else {
+            util::json_bytes(&json!({"id":"completion-1","model":model,
             "choices":[{"finish_reason":"stop","message":{"content":decision.to_string()}}],
             "usage":{"prompt_tokens":30,"completion_tokens":5,"total_tokens":35,"cost":0.0,"opencode":{"billing_source":"go"}}}))
-        .unwrap();
+            .unwrap()
+        };
         let mut receipt = Receipt {
             protocol: provider::PROTOCOL.into(),
             request_id: pending.id.clone(),
             state: RequestState::NotSent,
-            endpoint: GO_ENDPOINT.into(),
+            endpoint: transport.endpoint().into(),
             requested_model: model.into(),
             returned_model: None,
             completion_id: None,
@@ -3004,6 +3007,92 @@ mod tests {
         provider::interpret_completion(&mut receipt, &body, "").unwrap();
         store.state.pending = Some(pending.clone());
         (tmp, store, pending, receipt, body)
+    }
+    /// The stream-json stdout of the `claude` CLI for one answer, or for a
+    /// subscription usage-limit error.
+    fn claude_cli_body(model: &str, answer: &Value, limit_reached: bool) -> Vec<u8> {
+        let init = json!({"type":"system","subtype":"init","tools":["StructuredOutput"],
+            "mcp_servers":[],"apiKeySource":"none","model":model});
+        let result = if limit_reached {
+            json!({"type":"result","subtype":"success","is_error":true,"api_error_status":null,
+                "result":"You've hit your limit · resets 3pm","uuid":"result-limit",
+                "usage":{"input_tokens":0,"output_tokens":0},"modelUsage":{}})
+        } else {
+            json!({"type":"result","subtype":"success","is_error":false,"api_error_status":null,
+                "stop_reason":"tool_use","result":answer.to_string(),"structured_output":answer,
+                "uuid":"result-1","total_cost_usd":0.0125,
+                "usage":{"input_tokens":2,"cache_creation_input_tokens":20,"cache_read_input_tokens":8,"output_tokens":5},
+                "modelUsage":{model:{"inputTokens":2,"outputTokens":5}}})
+        };
+        let mut bytes = vec![];
+        for line in [init, result] {
+            bytes.extend(util::json_bytes(&line).unwrap());
+            bytes.push(b'\n');
+        }
+        bytes
+    }
+    #[test]
+    fn claude_subscription_receipts_are_accepted_and_reread_from_the_body() {
+        use crate::models::{CLAUDE_CLI_ENDPOINT, CLAUDE_SONNET_5_5};
+        let (_tmp, mut store, pending, receipt, body) =
+            investigation_receipt_fixture_for(CLAUDE_SONNET_5_5);
+        use_models(&mut store, &crate::models::DEFAULT_MODELS);
+        assert_eq!(receipt.state, RequestState::Completed);
+        assert_eq!(receipt.endpoint, CLAUDE_CLI_ENDPOINT);
+        assert_eq!(receipt.usage["prompt_tokens"], 30);
+        assert_eq!(receipt.usage["total_tokens"], 35);
+        assert_eq!(receipt.usage["list_cost"], 0.0125);
+        assert_eq!(receipt.usage["billing_source"], "subscription");
+        let applied = apply_forged(&mut store, &pending, &receipt, Some(&body))
+            .unwrap()
+            .unwrap();
+        assert_eq!(applied.decision.unwrap().tool, "view_region");
+        // An edited decision no longer matches the stored CLI output.
+        let (_tmp, mut store, pending, mut receipt, body) =
+            investigation_receipt_fixture_for(CLAUDE_SONNET_5_5);
+        use_models(&mut store, &crate::models::DEFAULT_MODELS);
+        receipt.decision.as_mut().unwrap().reason = "edited".into();
+        assert_eq!(
+            apply_forged(&mut store, &pending, &receipt, Some(&body)).unwrap_err(),
+            "provider_receipt_body_mismatch"
+        );
+        // A Claude receipt that claims the OpenCode Go endpoint is refused.
+        let (_tmp, mut store, pending, mut receipt, body) =
+            investigation_receipt_fixture_for(CLAUDE_SONNET_5_5);
+        use_models(&mut store, &crate::models::DEFAULT_MODELS);
+        receipt.endpoint = GO_ENDPOINT.into();
+        assert_eq!(
+            apply_forged(&mut store, &pending, &receipt, Some(&body)).unwrap_err(),
+            "provider_receipt_identity"
+        );
+    }
+    #[test]
+    fn a_subscription_usage_limit_moves_sonnet_to_crouton() {
+        use crate::models::{CLAUDE_SONNET_5_5, CROUTON_ALPHA_FREE, DEFAULT_MODELS};
+        let (_tmp, mut store, _pending, mut receipt, _body) =
+            investigation_receipt_fixture_for(CLAUDE_SONNET_5_5);
+        use_models(&mut store, &DEFAULT_MODELS);
+        store.state.pending = None;
+        receipt.decision = None;
+        let limited = claude_cli_body(CLAUDE_SONNET_5_5, &json!({}), true);
+        assert_eq!(
+            provider::interpret_completion(&mut receipt, &limited, "").unwrap_err(),
+            "provider_rate_limited"
+        );
+        receipt.error_code = Some("provider_rate_limited".into());
+        assert!(models::rate_limited(&receipt));
+        assert!(switch_model(&mut store, &receipt).unwrap());
+        assert_eq!(store.state.current_model(), CROUTON_ALPHA_FREE);
+        let event = store.events.last().unwrap();
+        assert_eq!(event.kind, "model_switched");
+        assert_eq!(event.payload["from"], CLAUDE_SONNET_5_5);
+        assert_eq!(event.payload["to"], CROUTON_ALPHA_FREE);
+        assert_eq!(event.payload["reason"], "provider_rate_limited");
+        // Another CLI failure is not a reason to switch.
+        let mut other = receipt.clone();
+        other.error_code = Some("provider_cli_error".into());
+        other.http_status = Some(500);
+        assert!(!models::rate_limited(&other));
     }
     fn apply_forged(
         store: &mut Store,
