@@ -708,6 +708,46 @@ Next in step 1: appendages from the profile (rudder, skeg, thrusters) and the li
 (hatches) from the plan views; model pass (DeepSeek, now authorized for Gunnerus) to name tiers
 and fill gaps on drawings without vector layers (HAER Balclutha, C.A. Thayer).
 
+### 3.8 Superstructure detail: metrics (fixed before the build, 2026-11-10)
+
+Problem (founder review): decks, bulwarks and deckhouses are their GA plan outline extruded
+straight up (`ship_cad._prism`). The GA plan outline is the outermost drawn line (rail, forecastle
+top), so at the bow and the stern the parts stand out past the hull side at the deck. Nothing reads
+sheer, flare, camber, end rake or windows.
+
+Change (development case Gunnerus; results in `docs/WHOLE_VESSEL_GUNNERUS.md` section 7):
+
+1. Decks and bulwarks from the hull: the deck edge is the hull half-breadth at the deck (the
+   built hull's deck at side); a bulwark is that edge carried up to the read bulwark top with the
+   drawn shell above the deck, and above the drawn top with the flare of the top rows continued.
+   Deck camber from the midship section when the deck line is drawn there, else B/50 labelled
+   `guessed`. A GA outline outside the hull is a check item with its distance, not geometry.
+2. Deckhouses: the base on the deck; the sides follow the hull where the tier reaches it (the
+   forecastle tier at the bow); end walls follow the drawn end contour in the profile (rake, raked
+   wheelhouse windows); window recesses where the profile draws windows; rounded plan corners where
+   the plan is not read (labelled `guessed`).
+3. A containment test: no shaped part is outside the hull side by more than the tolerance.
+
+Hull side reference: the lines-plan station envelope (`superstructure.HullSide`): half-breadth
+at (x, z) from the station rows; above a station's drawn top, the top offset plus the flare of the
+last 0.5 m of rows, for at most 1.5 m. Overhang tolerance: **0.02 m** (two deck plate thicknesses).
+Scorer: `benchmarks/gunnerus/whole_vessel_superstructure_metrics.py` (20,000 area samples per part
+plus every tessellation vertex).
+
+| ID | Metric | Before (run 2, `work/whole-vessel/step1`) | Development target (not a gate) |
+|---|---|---|---|
+| S1 | Overhang of each deck, bulwark and deckhouse: max plan distance outside the hull side at its own height; share of area outside by more than 0.02 m | max 3.33 m (house_t1 at x 32.8 m, z 4.287 m); main_deck 1.71 m, fwd_rail 1.01 m, aft_deck and aft_bulwark 0.16 m; share up to 55 % (bulwarks) | max <= 0.02 m for every part; share 0 |
+| S2 | GA/hull disagreement as check items: count and largest distance per part | none recorded | every part whose GA outline is outside the hull has a check item with the distance |
+| S3 | Step 1 metrics M1 to M7 (section 3.4) | M2 0.940, M3 +0.065 m, M4 +9.4 %, M5 0.00 / +0.05 m, M1 +0.065 m (coverage 0.955) | not worse: M2 >= 0.940, abs M4 <= 9.4 %, abs M5 <= 0.05 m, M1 and M3 unchanged |
+| S4 | Tier-1 half-breadth at the bow (x 28, 31, 33, 34 m) from its top map against the truth tier-1 region | +0.20, +0.60, +0.85, +1.15 m | abs <= 0.10 m at each station |
+| S5 | Read values against the drawing: camber against the midship section deck lines; end rake (dx/dz) against the profile end lines as a person measures them (wheelhouse front: lower -0.70, upper +0.70; aft upper -0.70; tier-2 front curve from x 24.13 m at the roof to about 26.6 m at z 7.67 m); bulwark top against the GA (5.114 m) | not read | camber exact (0 when the deck line is straight); rake within 0.05; end x within 0.10 m |
+| S6 | Count of values by source label (`traced`, `ai_inferred`, `guessed`), including the new detail values | 15 traced, 9 guessed (all parts incl. appendages) | report; every value has a label |
+| S7 | Hull + tier 1 volume against the truth solid (section 4.1 of the results) | +5.9 % | report; expected closer to 0 |
+
+Not measurable (no truth): the bulwarks (truth has none), tier 2, wheelhouse, forward rail, window
+recesses. The truth deck is flat (top map: 4.049 m across the aft deck at every station), which a
+camber of 0 must not change (M1).
+
 ## 4. Step 2: 3D structure
 
 ### 4.1 Scope
