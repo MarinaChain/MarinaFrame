@@ -81,6 +81,24 @@ function revisionLabel(id) {
   return match ? `r${match[1]}` : id || 'build';
 }
 
+/** A tool result longer than this shows two lines until opened. */
+const LONG_RESULT_CHARS = 90;
+/**
+ * Long text shown on one line (`lines` lines) until a click opens it in full. The full text
+ * stays in the DOM, so a screen reader reads it all; aria-expanded tells the state.
+ */
+function clampedText(className, text, { lines = 1, quote = false } = {}) {
+  const shown = quote ? `“${text}”` : text;
+  const node = el('button', {
+    class: `${className} clamped`,
+    type: 'button',
+    'aria-expanded': 'false',
+    dataset: { lines: String(lines) },
+    onclick: () => node.setAttribute('aria-expanded', String(node.getAttribute('aria-expanded') !== 'true')),
+  }, shown);
+  return node;
+}
+
 function truncate(text, max) {
   return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 }
@@ -655,11 +673,14 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
     } else {
       time = `${clockDuration(step.time_ms)} / ${clockDuration(finished ? elapsedMs : elapsedMs + (Date.now() - fetchedAt))}`;
     }
+    const [heading, rest] = fmt.splitStepTitle(step, stepTitle(step));
+    const stopped = step.kind === 'finish' && step.actor === 'code';
     fill(strip,
-      el('span', { class: 'narration-dot', 'aria-hidden': 'true', title: working ? 'Working' : null }),
-      el('span', { class: 'narration-text', title: quote ? `${stepTitle(step)}. “${quote}”` : stepTitle(step) },
-        el('span', { class: 'narration-title' }, stepTitle(step)),
-        quote ? el('span', { class: 'narration-quote' }, `“${quote}”`) : null),
+      stopped ? icon('stop') : el('span', { class: 'narration-dot', 'aria-hidden': 'true', title: working ? 'Working' : null }),
+      el('span', { class: 'narration-text', title: [stepTitle(step), quote ? `“${quote}”` : null].filter(Boolean).join('. ') },
+        el('span', { class: 'narration-title' }, heading),
+        rest && !stopped ? el('span', { class: 'narration-quote' }, rest) : null,
+        quote && !rest ? el('span', { class: 'narration-quote' }, `“${quote}”`) : null),
       el('span', { class: 'narration-time' }, time));
   }
 
@@ -685,7 +706,9 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
         el('code', { class: 'tool-name' }, tool.tool),
         ...targetChips(step),
         tool.duration_ms !== null ? el('span', { class: 'tool-duration' }, toolDuration(tool.duration_ms)) : null),
-      el('p', { class: 'tool-result' }, tone === 'working' ? 'Working…' : tool.text));
+      tone !== 'working' && tool.text.length > LONG_RESULT_CHARS
+        ? clampedText('tool-result', tool.text, { lines: 2 })
+        : el('p', { class: 'tool-result' }, tone === 'working' ? 'Working…' : tool.text));
   }
 
   function imagesBlock(step) {
@@ -712,22 +735,24 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
       return el('li', { class: 'thought thought-quiet', dataset: { category, sequence: String(step.sequence) } },
         el('span', { class: 'thought-dot', 'aria-hidden': 'true' }),
         el('button', { class: 'thought-line', type: 'button', onclick: seekHere, title: step.text },
-          el('span', { class: 'thought-line-title' }, stepTitle(step)),
+          el('span', { class: 'thought-line-title' }, fmt.splitStepTitle(step, stepTitle(step))[0]),
           step.tool?.text && step.kind !== 'repeat_collapsed' ? el('span', { class: 'thought-line-result' }, placesIn(step.tool.text)) : null,
           el('time', { class: 'thought-time' }, clockDuration(step.time_ms))));
     }
     const previousNotes = steps.slice(0, index).reverse().find((s) => s.notes)?.notes || null;
     const notes = step.notes && step.notes !== previousNotes ? step.notes : null;
+    const [heading, rest] = fmt.splitStepTitle(step, stepTitle(step));
     return el('li', { class: 'thought', dataset: { category, sequence: String(step.sequence) } },
       el('span', { class: 'thought-dot', 'aria-hidden': 'true' }),
       el('article', { class: 'thought-card' },
         el('header', { class: 'thought-head' },
           el('button', { class: 'thought-title', type: 'button', onclick: seekHere, title: 'Show this step' },
-            step.actor === 'person' ? el('span', { class: 'thought-who' }, 'You') : null, stepTitle(step)),
+            step.actor === 'person' ? el('span', { class: 'thought-who' }, 'You') : null, heading),
           el('span', { class: 'thought-meta' },
             el('time', {}, clockDuration(step.time_ms)),
             step.cost_usd ? el('span', { title: 'List cost of this model answer' }, fmt.usd(step.cost_usd)) : null)),
-        step.text ? el('blockquote', { class: 'thought-quote selectable-text' }, `“${step.text}”`) : null,
+        rest ? clampedText('thought-sub', rest) : null,
+        step.text ? clampedText('thought-quote', step.text, { quote: true }) : null,
         toolCard(step),
         notes ? el('details', { class: 'thought-more' },
           el('summary', {}, icon('chevron'), 'Why'),

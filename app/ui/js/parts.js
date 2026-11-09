@@ -4,6 +4,8 @@
 // hull; the person can accept it as a draft part. Nothing here is "approved".
 
 import { el, svg, icon, fill } from './dom.js';
+import { glyphChip } from './glyphs.js';
+import { tipAttributes } from './tooltip.js';
 import { capacityPanel, capacityRowOf, tankDetailBlock, tankToken } from './tanks.js';
 
 /** Tree groups (ship-cad ops) in the order a naval architect reads a general arrangement. */
@@ -19,6 +21,8 @@ const GROUPS = [
 const KNOWN_OPS = new Set(GROUPS.map(([op]) => op));
 const SOURCE_WORD = { traced: 'Read', ai_inferred: 'AI read', guessed: 'Guessed' };
 const SOURCE_TONE = { traced: '', ai_inferred: 'ai', guessed: 'draft' };
+/** Icons of the value sources and the part states (index.html sprite). */
+const SOURCE_ICON = { traced: 'read', ai_inferred: 'src-ai_inferred', guessed: 'st-guessed' };
 /** Longest mark note (the same limit as Mark and revise). */
 const MAX_NOTE = 500;
 /** Ops the worker can re-run from a mark (vessel_reconstruction.part_revise REVISABLE_OPS). */
@@ -90,12 +94,12 @@ export function plainReason(reason) {
 }
 
 export function partState(part) {
-  if (part.revision_pending) return { word: 'New revision', tone: 'ai', title: 'Re-run from your mark. Keep it or undo it.' };
-  if (part.review === 'accepted') return { word: 'Accepted', tone: 'brand', title: 'You accepted this part as a draft part.' };
-  if (part.review === 'marked') return { word: 'Marked', tone: 'brand', title: `You marked it: ${part.review_note || ''}` };
-  if (!part.built) return { word: 'Not built', tone: 'warn', title: plainReason(part.reason) };
-  if (part.status === 'draft_guess') return { word: 'Guessed', tone: 'draft', title: 'One or more values were guessed. Check them.' };
-  return { word: 'To check', tone: '', title: 'Every value was read from the drawing. Check what the part is.' };
+  if (part.revision_pending) return { word: 'New revision', tone: 'ai', icon: 'reset', title: 'Re-run from your mark. Keep it or undo it.' };
+  if (part.review === 'accepted') return { word: 'Accepted', tone: 'brand', icon: 'st-chosen', title: 'You accepted this part as a draft part.' };
+  if (part.review === 'marked') return { word: 'Marked', tone: 'brand', icon: 'drawing', title: `You marked it: ${part.review_note || ''}` };
+  if (!part.built) return { word: 'Not built', tone: 'warn', icon: 'not-built', title: plainReason(part.reason) };
+  if (part.status === 'draft_guess') return { word: 'Guessed', tone: 'draft', icon: 'st-guessed', title: 'One or more values were guessed. Check them.' };
+  return { word: 'To check', tone: '', icon: 'flag', title: 'Every value was read from the drawing. Check what the part is.' };
 }
 
 /**
@@ -136,6 +140,18 @@ export function partTableText(parts, signOff = null) {
 
 function chip(text, tone, title) {
   return el('span', { class: 'badge badge-small', dataset: { tone }, title }, el('span', { class: 'badge-text' }, text));
+}
+
+/** A part state as an icon chip: the word is its name and tooltip title. */
+function stateChip(state, options = {}) {
+  return glyphChip(state.icon, state.word, { tone: state.tone || null, detail: state.title || null, ...options });
+}
+
+/** A value source (Read, AI read, Guessed) as an icon chip; the basis is the tooltip detail. */
+function sourceChip(source, basis = '') {
+  return glyphChip(SOURCE_ICON[source] || 'info', SOURCE_WORD[source] || source, {
+    tone: SOURCE_TONE[source] || null, detail: basis ? withoutHandles(basis) : null, focusable: false,
+  });
 }
 
 /** Whether "Re-run with this note" is offered: a marked part with a note, of an op the worker revises. */
@@ -247,7 +263,7 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
     return el('li', {},
       el('button', { class: 'parts-row', type: 'button', 'aria-pressed': String(part.id === selectedId), onclick: () => select(part.id) },
         el('span', { class: 'parts-name' }, part.label),
-        chip(state.word, state.tone, state.title)));
+        stateChip(state, { focusable: false })));
   }
 
   async function decide(part, decision, note = null) {
@@ -407,8 +423,8 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
               el('th', { scope: 'col' }, 'Item'), el('th', { scope: 'col' }, 'Before'), el('th', { scope: 'col' }, 'After'))),
             el('tbody', {}, ...part.changes.map((c) => el('tr', {},
               el('th', { scope: 'row' }, c.name),
-              el('td', { class: 'parts-value' }, c.before || '—', c.before_source ? [' ', chip(SOURCE_WORD[c.before_source] || c.before_source, SOURCE_TONE[c.before_source] || '', '')] : null),
-              el('td', { class: 'parts-value' }, c.after || '—', c.after_source ? [' ', chip(SOURCE_WORD[c.after_source] || c.after_source, SOURCE_TONE[c.after_source] || '', '')] : null)))))
+              el('td', { class: 'parts-value' }, c.before || '—', c.before_source ? [' ', sourceChip(c.before_source)] : null),
+              el('td', { class: 'parts-value' }, c.after || '—', c.after_source ? [' ', sourceChip(c.after_source)] : null)))))
           : el('p', {}, 'No value changed.'),
         el('p', { class: 'parts-revision-hint' }, 'AI values are drafts. Keep the new part, or undo to put back the old part and its STEP file.'),
         el('div', { class: 'decision-bar' },
@@ -430,13 +446,12 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
   function detail(part) {
     if (!part) return el('p', { class: 'panel-empty' }, 'Pick a part.');
     const state = partState(part);
-    const guessed = part.arguments.filter((a) => a.source === 'guessed').length;
     const box = part.bbox_m;
     return el('section', { class: 'parts-detail', 'aria-labelledby': 'parts-detail-title' },
       el('header', { class: 'parts-detail-head' },
         el('h2', { id: 'parts-detail-title' }, part.label),
-        chip(state.word, state.tone, state.title),
-        part.view ? chip(`From the ${part.view}`, '', 'The drawing view this part was read from') : null),
+        stateChip(state, { small: false }),
+        part.view ? chip(part.view, '', 'The drawing view this part was read from') : null),
       actions(part),
       marking ? markForm(part) : null,
       part.review === 'marked' && part.review_note
@@ -457,10 +472,9 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
           el('tbody', {}, ...part.arguments.map((a) => el('tr', { dataset: { source: a.source } },
             el('th', { scope: 'row' }, a.name),
             el('td', { class: 'parts-value' }, a.value || '—'),
-            el('td', {}, chip(SOURCE_WORD[a.source] || a.source, SOURCE_TONE[a.source] || '', a.basis || '')),
+            el('td', {}, sourceChip(a.source)),
             el('td', { class: 'parts-basis', title: a.basis || '' }, withoutHandles(a.basis || ''))))))
-        : null,
-      guessed ? el('p', { class: 'parts-note' }, icon('warn'), `${guessed} ${guessed === 1 ? 'value is' : 'values are'} guessed. ${guessed === 1 ? 'Check it' : 'Check them'} before you use this part.`) : null);
+        : null);
   }
 
 
@@ -491,10 +505,8 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
         el('p', {}, el('strong', {}, `Signed off by ${signedOff.name}, ${date}: `), signedOff.statement, '. ', draftLine),
         el('button', { class: 'btn', type: 'button', disabled: busy, onclick: () => submitSignOff('') }, 'Withdraw'));
     }
-    if (open) {
-      return el('section', { class: 'parts-signoff', 'aria-label': 'Sign-off' },
-        el('p', {}, `Sign-off opens when every part is reviewed: ${open} still open.`));
-    }
+    // Until every part is reviewed, the review progress in the head says so (its tooltip).
+    if (open) return null;
     const name = el('input', { type: 'text', maxlength: '80', placeholder: 'Your name', 'aria-label': 'Your name for the sign-off', value: nameDraft ?? lastName(), oninput: (event) => { nameDraft = event.target.value; } });
     const form = el('form', {
       class: 'parts-signoff',
@@ -546,9 +558,17 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
   function progress() {
     const reviewed = parts.filter((p) => p.review === 'accepted' || p.review === 'marked').length;
     const next = nextToReview();
-    const copy = el('button', { class: 'btn', type: 'button', title: 'Copy the part list as a table (paste into a spreadsheet)', onclick: (event) => copyTable(event.currentTarget) }, 'Copy part list');
+    const copy = el('button', {
+      class: 'btn btn-icon',
+      type: 'button',
+      ...tipAttributes('Copy part list', 'A table to paste into a spreadsheet.').attrs,
+      onclick: (event) => copyTable(event.currentTarget),
+    }, icon('table'));
+    const open = parts.length - reviewed;
+    const progressTip = tipAttributes(`${reviewed} of ${parts.length} parts reviewed`,
+      open ? `Sign-off opens when every part is reviewed: ${open} still open.` : null, { label: false });
     return el('div', { class: 'parts-progress' },
-      el('span', { class: 'parts-progress-text' }, el('strong', {}, String(reviewed)), ` of ${parts.length} reviewed`),
+      el('span', { class: 'parts-progress-text', tabindex: '0', ...progressTip.attrs }, el('strong', {}, String(reviewed)), `/${parts.length} reviewed`, progressTip.describer),
       el('span', { class: 'parts-progress-bar', role: 'img', 'aria-label': `${reviewed} of ${parts.length} parts reviewed` },
         el('span', { style: { width: `${parts.length ? (reviewed / parts.length) * 100 : 0}%` } })),
       el('button', { class: 'btn', type: 'button', disabled: !next, title: 'Go to the next part to review (N)', onclick: () => next && select(next.id) }, 'Next', el('kbd', { class: 'key-hint' }, 'N')),
@@ -570,7 +590,10 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
     fill(host, el('div', { class: 'page-body parts-page' },
       el('header', { class: 'page-head parts-head' },
         el('h1', { id: 'parts-title' }, 'Parts'),
-        el('span', { class: 'page-head-meta' }, `${built} of ${parts.length} built · ${accepted} accepted · ${marked} marked`),
+        el('span', { class: 'page-head-meta chip-row' },
+          glyphChip('cube', 'built', { count: `${built}/${parts.length}`, countedName: `${built} of ${parts.length} parts built` }),
+          accepted ? glyphChip('st-chosen', 'accepted', { count: accepted, tone: 'brand' }) : null,
+          marked ? glyphChip('drawing', 'marked', { count: marked, tone: 'brand' }) : null),
         progress()),
       signOffBlock(),
       el('div', { class: 'parts-layout' },

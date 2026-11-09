@@ -137,3 +137,23 @@ export function relativeTime(ms) {
   if (sameDay(now, then)) return `today at ${clock(ms)}`;
   return `on ${then.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} at ${clock(ms)}`;
 }
+
+/** "2 lines found; took the best-supported one (score 0.62)." -> "2 lines · best 0.62". */
+export function reasonFacts(reason) {
+  const match = /^(\d+) lines? found\b.*\bscore ([\d.]+)/.exec(reason || '');
+  return match ? `${plural(Number(match[1]), 'line')} · best ${match[2].replace(/\.$/, '')}` : null;
+}
+
+/** A heading before a colon that is at most this long becomes the card title on its own. */
+const SHORT_HEADING_MAX = 24;
+
+/**
+ * A step title as a short heading and the rest: "Finished: Draft built from ..." gives
+ * ["Finished", "Draft built from ..."]; the run's own stop step gives ["Stopped", its title].
+ */
+export function splitStepTitle(step, title) {
+  if (step.kind === 'finish' && step.actor === 'code') return ['Stopped', title];
+  const colon = title.indexOf(': ');
+  if (colon > 0 && colon <= SHORT_HEADING_MAX) return [title.slice(0, colon), title.slice(colon + 2)];
+  return [title, null];
+}

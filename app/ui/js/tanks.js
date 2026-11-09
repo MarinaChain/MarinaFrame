@@ -4,15 +4,16 @@
 // computes tank data. Every value keeps its source label; the tables are drafts.
 
 import { el } from './dom.js';
+import { glyphChip } from './glyphs.js';
 
 /**
  * Source labels of the tank model (vessel_reconstruction.tanks SOURCE_LABELS). Tones are the
  * app's existing label styles: plain for drawing values, dashed amber for guesses.
  */
 const TANK_SOURCES = {
-  traced: { word: 'Traced', tone: '', title: 'Measured from the drawing linework.' },
-  read: { word: 'Read', tone: '', title: 'Read from printed text on the drawing.' },
-  guessed: { word: 'Guessed', tone: 'draft', title: 'A default or a convention. Check it.' },
+  traced: { word: 'Traced', tone: '', icon: 'src-traced', title: 'Measured from the drawing linework.' },
+  read: { word: 'Read', tone: '', icon: 'read', title: 'Read from printed text on the drawing.' },
+  guessed: { word: 'Guessed', tone: 'draft', icon: 'st-guessed', title: 'A default or a convention. Check it.' },
 };
 
 /** The fields of one capacity plan row, in the order of the capacity plan CSV. */
@@ -162,8 +163,11 @@ export function soundingView(table) {
 function sourceChip(label) {
   if (!label) return null;
   const source = tankSource(label);
-  return el('span', { class: 'badge badge-small', dataset: { tone: source.tone }, title: source.title },
-    el('span', { class: 'badge-text' }, source.word));
+  if (!source.icon) {
+    return el('span', { class: 'badge badge-small', dataset: { tone: source.tone }, title: source.title },
+      el('span', { class: 'badge-text' }, source.word));
+  }
+  return glyphChip(source.icon, source.word, { tone: source.tone || null, detail: source.title, focusable: false });
 }
 
 /** The capacity plan row of the selected tank, inside the part detail. */

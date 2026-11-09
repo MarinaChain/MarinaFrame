@@ -51,9 +51,9 @@ export function svg(tag, attrs = {}, ...children) {
   return append(node, children);
 }
 
-/** An icon from the sprite in index.html. */
-export function icon(name) {
-  return svg('svg', { class: 'icon', 'aria-hidden': 'true' }, svg('use', { href: `#i-${name}` }));
+/** An icon from the sprite in index.html. `extraClass` adds classes after "icon". */
+export function icon(name, extraClass = '') {
+  return svg('svg', { class: extraClass ? `icon ${extraClass}` : 'icon', 'aria-hidden': 'true' }, svg('use', { href: `#i-${name}` }));
 }
 
 export function prefersReducedMotion() {

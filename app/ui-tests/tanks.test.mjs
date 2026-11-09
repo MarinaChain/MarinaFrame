@@ -93,7 +93,11 @@ test('the tank detail block lists each value with its label chip', () => {
   const block = tankDetailBlock(ROW);
   const rows = block.findAll((n) => n.tag === 'tr' && n.dataset.source !== undefined && n.children[0]?.tag === 'th' && n.children.length === 3);
   assert.equal(rows.length, 10);
-  assert.match(rows[3].textContent, /^Volume 100 %2\.00 m³Traced$/);
+  // The source is an icon chip: its word is the accessible name, its meaning the description.
+  assert.match(rows[3].textContent, /^Volume 100 %2\.00 m³/);
+  const sourceChip = rows[3].findAll((n) => n.attributes.role === 'img')[0];
+  assert.equal(sourceChip.attributes['aria-label'], 'Traced');
+  assert.equal(sourceChip.attributes['data-tip-detail'], 'Measured from the drawing linework.');
   assert.match(tankDetailBlock(null).textContent, /not in the run's capacity plan/);
 });
 
@@ -128,7 +132,8 @@ test('a tank part shows its capacity plan row, and the Parts page the capacity p
   assert.deepEqual(asked, ['tank_db1']);
   const text = host.textContent;
   assert.match(text, /Tanks/);
-  assert.match(text, /Volume 98 %1\.96 m³Traced/);
+  assert.match(text, /Volume 98 %1\.96 m³/);
+  assert.ok(host.findAll((n) => n.attributes['aria-label'] === 'Traced').length > 0);
   assert.match(text, /Capacity plan/);
   assert.match(text, /0\.250/);
 });

@@ -2977,3 +2977,117 @@ code { font-family: var(--font-mono); }
 .mark-keep { border-color: var(--warn-ink); color: var(--warn); }
 .mark-forced { margin: var(--space-xs) 0 0; font-size: var(--fs-sm); color: var(--warn); }
 .mk-box.tone-person, .mk-line.tone-person { stroke: var(--brand); stroke-width: calc(var(--u) * 2px); stroke-dasharray: calc(var(--u) * 8px) calc(var(--u) * 5px); }
+
+/* ================================================================== Icon chips and tooltips
+   (js/glyphs.js, js/tooltip.js). An icon (and a count) stands for a word; the word is the
+   accessible name and the tooltip title, the explanation is the tooltip detail. */
+
+.badge-glyphchip { gap: 3px; padding: 0 5px; }
+.badge-glyphchip.badge-small { padding: 0 4px; }
+.badge-glyphchip .badge-glyph { width: 12px; height: 12px; }
+.badge-glyphchip:not(.badge-small) .badge-glyph { width: 14px; height: 14px; }
+.badge-count { font: 600 var(--fs-xs)/1 var(--font-mono); }
+.badge-glyphchip[tabindex] { cursor: help; }
+.badge-glyphchip[data-tone="draft"] .badge-glyph { stroke-width: 1.7; }
+
+/* Shared tooltip: title first, a ring fills, then the detail. Fixed, so no pane clips it. */
+.tip {
+  --tip-ring-ms: 1000ms; /* tooltip.js RING_MS */
+  position: fixed;
+  z-index: 60;
+  max-width: 260px;
+  pointer-events: auto;
+  cursor: default;
+}
+.tip-head { display: flex; align-items: center; gap: var(--space-sm); font-weight: 600; }
+.tip-ring { flex: none; width: 12px; height: 12px; transform: rotate(-90deg); }
+.tip-ring circle { fill: none; stroke-width: 1.6; }
+.tip-ring-track { stroke: rgba(230, 237, 247, 0.25); }
+.tip-ring-fill { stroke: #8FB4E8; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.tip-ring-run .tip-ring-fill { animation: tip-ring var(--tip-ring-ms) linear forwards; }
+.tip[data-state="detail"] .tip-ring { display: none; }
+.tip-detail { margin: 4px 0 0; color: #C9D5E6; font-weight: 400; }
+.tip-detail:empty { display: none; }
+@keyframes tip-ring { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .tip-ring-run .tip-ring-fill { animation: none; }
+}
+
+/* Icon legend: one popover with every glyph, its word and what it means. */
+.legend-pop { position: relative; }
+.legend-pop summary { list-style: none; cursor: pointer; }
+.legend-pop summary::-webkit-details-marker { display: none; }
+.legend-list {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  right: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px var(--space-md);
+  width: max-content;
+  max-width: 340px;
+  margin: 0;
+  padding: var(--space-md);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-md);
+  background: var(--raised);
+  box-shadow: 0 6px 20px rgba(10, 31, 61, 0.18);
+  font-size: var(--fs-sm);
+}
+.legend-list dt { display: flex; align-items: center; gap: var(--space-sm); font-weight: 600; color: var(--ink); white-space: nowrap; }
+.legend-list dd { margin: 0; color: var(--ink-2); }
+
+/* Run summary row: the one review status, then icon-and-count facts. */
+.review-status {
+  display: inline-flex; align-items: center; gap: var(--space-sm);
+  margin-right: var(--space-sm); padding: 2px 4px 2px 8px;
+  border: 1px dashed var(--guess-ink); border-radius: var(--radius-lg);
+  background: var(--guess-soft); color: var(--guess-text);
+}
+.review-count { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: help; }
+.review-count strong { font: 600 var(--fs-lg)/1 var(--font-mono); }
+.review-status .btn { gap: 6px; }
+.source-counts .legend-pop { margin-left: 2px; }
+.parts-link .icon { width: 14px; height: 14px; }
+.parts-link-check { display: inline-flex; align-items: center; gap: 2px; margin-left: 4px; color: var(--warn); }
+.draft-warnings > summary.badge { cursor: pointer; }
+
+/* Strip head: flag, open count, total. */
+.strip-head .strip-count { display: inline-flex; align-items: center; gap: 4px; cursor: help; }
+.strip-count[data-open="true"] .icon { color: var(--warn); }
+
+/* Tiles: state and source as icons beside the place. */
+.tile-head .badge-glyphchip { flex: none; }
+
+/* Section explanations on demand. */
+.selection-source summary .icon:not(.chevron) { width: 14px; height: 14px; color: var(--ink-3); }
+.selection-fact { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-2); font-family: var(--font-mono); font-size: var(--fs-xs); }
+.selection-why-word { margin-left: var(--space-xs); color: var(--ink-3); }
+.selection-source summary { max-width: 100%; }
+.selection-why { display: flex; flex-direction: column; gap: var(--space-xs); margin-top: var(--space-xs); }
+.selection-why p { margin: 0; }
+.why-lines { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px var(--space-sm); margin: 0; }
+.why-lines dt { font-weight: 600; color: var(--ink); }
+.why-lines dd { margin: 0; }
+.cand-key { cursor: help; color: var(--ink-3); }
+.cand-label[data-tip-detail] { cursor: help; text-decoration: underline dotted var(--rule-strong); text-underline-offset: 3px; }
+
+/* Thinking cards: long quotes and results show one (or two) lines until clicked open. */
+.clamped {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.clamped[data-lines="2"] { -webkit-line-clamp: 2; }
+.clamped[aria-expanded="true"] { display: block; -webkit-line-clamp: unset; cursor: text; user-select: text; -webkit-user-select: text; }
+.thought-sub { color: var(--ink-2); font-size: var(--fs-sm); }
+.narration > .icon { color: var(--brand); width: 12px; height: 12px; }
+.strip-head { width: auto; }

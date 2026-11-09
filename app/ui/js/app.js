@@ -21,6 +21,8 @@ import { createParts, partState } from './parts.js';
 import { createExport } from './export.js';
 import { createUsage } from './usage.js';
 import { createBatch } from './batch.js';
+import { glyphChip, sourceGlyph, stateGlyph, legendPopover } from './glyphs.js';
+import { installTooltips, tipAttributes } from './tooltip.js';
 import * as fmt from './format.js';
 
 const $ = (id) => document.getElementById(id);
@@ -224,21 +226,6 @@ function chip(text, { tone = null, status = null, title = null, dot = true, smal
   if (status) dataset.status = status;
   // The inner span lets the text end in an ellipsis when the chip is squeezed.
   return el('span', { class: classes.join(' '), dataset, title: title || text }, el('span', { class: 'badge-text' }, text));
-}
-
-/**
- * Chip for a section source label: tinted fill in the label's colour with its glyph, so the
- * label does not depend on colour alone. `text` replaces the label name (for counts).
- */
-function sourceChip(label, { text = null, title = null, small = true } = {}) {
-  const name = fmt.sourceLabel(label);
-  const glyph = icon(`src-${label}`);
-  glyph.classList.add('badge-glyph');
-  return el('span', {
-    class: small ? 'badge badge-source badge-small' : 'badge badge-source',
-    dataset: { source: label },
-    title: title || name,
-  }, glyph, el('span', { class: 'badge-text' }, text || name));
 }
 
 function debounce(fn, ms) {
@@ -792,8 +779,8 @@ function renderStatusbar() {
 /** Run mode chip: "AI draft" for the live policy, else "Deterministic". */
 function policyChip(policy) {
   return policy === 'live'
-    ? chip('AI draft', { tone: 'ai', dot: false, small: true, title: 'The AI read the drawing and built the draft (live model).' })
-    : chip('No AI', { dot: false, small: true, title: 'Deterministic draft: no model calls.' });
+    ? glyphChip('src-ai_inferred', 'AI draft', { tone: 'ai', detail: 'The AI read the drawing and built the draft (live model).' })
+    : glyphChip('gear', 'No AI', { detail: 'Deterministic draft: no model calls.' });
 }
 
 // ---------------------------------------------------------------- run view: hooks for the live lane
@@ -839,7 +826,8 @@ function renderRevisionStrip() {
   fill($('revision-facts'),
     chip('Draft only', { dot: false, small: true, title: 'Engineering approval is never automatic. A naval architect signs off outside this app.' }),
     policyChip(view.summary.policy),
-    activity ? el('span', { class: 'rev-fact', title: 'Requests to the model, list cost' }, `${fmt.plural(activity.requests, 'request')} · ${cost}`) : null,
+    activity ? el('span', { class: 'rev-fact', ...tipAttributes(`${fmt.plural(activity.requests, 'model request')}, ${cost}`, 'List cost of the model requests.', { label: false }).attrs },
+      `${activity.requests} · ${cost}`) : null,
     el('span', { class: 'rev-fact', title: `Updated ${fmt.fullTime(view.summary.updated_ms)}` }, fmt.relativeTime(view.summary.updated_ms)));
 }
 setInterval(() => {
@@ -883,9 +871,15 @@ function renderThinking() {
  * every run, so it shows as the "Draft only" chip in the revision strip, not as a bar.
  */
 const ENGINEERING_NOTICE_ID = 'engineering-approval';
+/**
+ * The backend's draft banner ("Draft: 2 guesses to check. ..."). The review status in the
+ * summary row says the same thing once, with this text as its tooltip detail.
+ */
+const DRAFT_NOTICE_PREFIX = 'draft-guesses:';
 
 function renderNotices() {
-  const notices = (state.view?.notices || []).filter((n) => n.id !== ENGINEERING_NOTICE_ID);
+  const notices = (state.view?.notices || [])
+    .filter((n) => n.id !== ENGINEERING_NOTICE_ID && !n.id.startsWith(DRAFT_NOTICE_PREFIX));
   fill($('notices'), ...notices.map((notice) => {
     const row = el('div', { class: 'notice', dataset: { tone: notice.tone, notice: notice.id } },
       icon(notice.tone === 'warning' ? 'warn' : 'info'),
@@ -932,35 +926,66 @@ function chevron() {
   return node;
 }
 
-/** Sections per source label, and the build's warnings (shown as warnings, not errors). */
+/**
+ * The run's one review status, then compact facts: sections per source label, the build's
+ * warnings and the parts. Each fact is an icon and a count; the words are in its tooltip.
+ */
 function renderDraftSummary() {
   const view = state.view;
   const counts = view?.source_counts || [];
   const warnings = view?.warnings || [];
-  if (!counts.length && !warnings.length && !view?.components?.length) {
+  const sections = view?.sections || [];
+  const parts = view?.components || [];
+  const open = sections.filter(needsCheck).length;
+  if (!counts.length && !warnings.length && !parts.length && !open) {
     fill($('draft-summary'));
     return;
   }
-  const chips = counts.map((c) => sourceChip(c.label, {
-    text: `${c.count} ${fmt.sourceLabel(c.label)}`,
-    title: `${fmt.plural(c.count, 'section')}: ${fmt.sourceLabel(c.label)}`,
-  }));
-  const warningList = warnings.length ? el('details', { class: 'draft-warnings' },
-    el('summary', { title: 'Warnings of the draft build. Click to show them.' }, chevron(),
-      chip(fmt.plural(warnings.length, 'warning'), { tone: 'warn', dot: false, small: true })),
-    el('ul', { class: 'selectable-text' }, ...warnings.map((w) => el('li', {}, w)))) : null;
-  // Whole-vessel parts: one button to the Parts tab with what still needs a look.
-  const parts = view?.components || [];
-  const partsOpen = partsToCheck(view);
-  const partsLink = parts.length ? el('button', {
+  fill($('draft-summary'), el('div', { class: 'source-counts' },
+    reviewStatus(view, open, sections.length),
+    ...counts.map((c) => sourceGlyph(c.label, { count: c.count })),
+    warnings.length ? warningsToggle(warnings) : null,
+    counts.length ? legendPopover() : null,
+    parts.length ? partsLink(view, parts.length) : null));
+}
+
+/** "2 to check" and Next: the one place the run says what waits for a person. */
+function reviewStatus(view, open, total) {
+  if (!open) return null;
+  const banner = (view.notices || []).find((n) => n.id.startsWith(DRAFT_NOTICE_PREFIX));
+  const tip = tipAttributes(`${open} of ${fmt.plural(total, 'section')} to check`, banner?.text || null);
+  return el('span', { class: 'review-status' },
+    el('span', { class: 'review-count', role: 'img', tabindex: '0', ...tip.attrs },
+      icon('flag'), el('strong', { 'aria-hidden': 'true' }, String(open)), el('span', { 'aria-hidden': 'true' }, 'to check'), tip.describer),
+    el('button', {
+      class: 'btn btn-small',
+      type: 'button',
+      disabled: isRunning(),
+      ...tipAttributes('Next section to check (N)', null, { label: false }).attrs,
+      onclick: nextToCheck,
+    }, 'Next', el('kbd', { class: 'key-hint' }, 'N')));
+}
+
+/** Warnings of the draft build: an icon and a count; the list opens below the row. */
+function warningsToggle(warnings) {
+  const name = fmt.plural(warnings.length, 'warning');
+  return el('details', { class: 'draft-warnings' },
+    el('summary', { class: 'badge badge-small badge-glyphchip', dataset: { tone: 'warn' }, ...tipAttributes(name, 'Warnings of the draft build. Click to list them.').attrs },
+      icon('warn'), el('span', { class: 'badge-count', 'aria-hidden': 'true' }, String(warnings.length))),
+    el('ul', { class: 'selectable-text' }, ...warnings.map((w) => el('li', {}, w))));
+}
+
+/** Whole-vessel parts: one button to the Parts tab, with how many still need a look. */
+function partsLink(view, count) {
+  const toCheck = partsToCheck(view);
+  const title = `${fmt.plural(count, 'part')}${toCheck ? `, ${toCheck} to check` : ''}`;
+  return el('button', {
     class: 'btn btn-ghost btn-small parts-link',
     type: 'button',
-    title: 'Open the Parts tab: hull, decks, deckhouses and appendages',
+    ...tipAttributes(title, 'Open the Parts tab: hull, decks, deckhouses and appendages.').attrs,
     onclick: () => setVesselTab('parts'),
-  }, `${fmt.plural(parts.length, 'part')}`, partsOpen ? chip(`${partsOpen} to check`, { tone: 'draft', dot: false, small: true }) : null) : null;
-  // One row: the source chips, then the warnings toggle; its list opens below the row.
-  fill($('draft-summary'), el('div', { class: 'source-counts' },
-    chips.length ? el('span', { class: 'source-counts-title' }, 'Sources') : null, ...chips, warningList, partsLink));
+  }, icon('cube'), el('span', { 'aria-hidden': 'true' }, String(count)),
+  toCheck ? el('span', { class: 'parts-link-check', 'aria-hidden': 'true' }, icon('flag'), String(toCheck)) : null);
 }
 
 // ---------------------------------------------------------------- section strip
@@ -1014,31 +1039,16 @@ function nextToCheck() {
   }
 }
 
-/** The review counter left of the tiles: how many sections still need a person, and Next. */
+/** The review count left of the tiles, as an icon and "open/total" (the status row has Next). */
 function renderStripHead() {
   const sections = state.view?.sections || [];
   const open = sections.filter(needsCheck).length;
   const head = $('strip-head');
   head.hidden = !sections.length;
   if (!sections.length) return;
-  if (!open) {
-    // Nothing waits for a person: the count only, without a button that cannot act.
-    fill(head,
-      el('span', { class: 'strip-count' }, el('strong', {}, '0'), ` of ${sections.length}`),
-      el('span', { class: 'strip-count-label' }, 'to check'));
-    return;
-  }
-  fill(head,
-    el('span', { class: 'strip-count', dataset: { open: String(open > 0) } },
-      el('strong', {}, String(open)), ` of ${sections.length}`),
-    el('span', { class: 'strip-count-label' }, 'to check'),
-    el('button', {
-      class: 'btn btn-small',
-      type: 'button',
-      disabled: !open,
-      title: 'Go to the next section to check (N)',
-      onclick: nextToCheck,
-    }, 'Next'));
+  const tip = tipAttributes(`${open} of ${fmt.plural(sections.length, 'section')} to check`);
+  fill(head, el('span', { class: 'strip-count', role: 'img', tabindex: '0', dataset: { open: String(open > 0) }, ...tip.attrs },
+    icon('flag'), el('strong', { 'aria-hidden': 'true' }, String(open)), el('span', { 'aria-hidden': 'true' }, `/${sections.length}`)));
 }
 
 function renderStrip() {
@@ -1078,9 +1088,9 @@ function renderStrip() {
       }) : null),
     el('span', { class: 'tile-head' },
       el('span', { class: 'tile-x' }, section.x_m.toFixed(1), el('small', {}, ' m')),
-      el('span', { class: 'tile-state' }, fmt.sectionStateLabel(section.state))),
+      stateGlyph(section.state, { focusable: false, hoverTip: false }),
+      section.source ? sourceGlyph(section.source.label, { focusable: false, hoverTip: false }) : null),
     el('span', { class: 'tile-chips' },
-      section.source ? sourceChip(section.source.label, { title: section.source.basis || null }) : null,
       Number.isFinite(ink.get(section.id))
         ? el('span', { class: 'tile-ink', title: 'Distance of the built section from the ink on the drawing (RMS), newest scored revision' }, fmt.millimetres(ink.get(section.id)))
         : null));
@@ -1127,11 +1137,10 @@ function renderSelection() {
     return;
   }
 
-  const tone = { chosen: 'brand', declined: 'warn', guessed: 'draft' }[section.state];
   fill(head,
-    el('h2', { title: `Section at ${fmt.metres(section.x_m)}` }, `Section at ${fmt.metres(section.x_m)}`),
-    chip(fmt.sectionStateLabel(section.state), { tone }),
-    section.source ? sourceChip(section.source.label, { title: section.source.basis || null, small: false }) : null,
+    el('h2', {}, el('span', { class: 'visually-hidden' }, 'Section at '), fmt.metres(section.x_m)),
+    stateGlyph(section.state, { small: false }),
+    section.source ? sourceGlyph(section.source.label, { detail: section.source.basis || null, small: false }) : null,
   );
 
   const canChoose = !state.busy && !isRunning();
@@ -1151,10 +1160,11 @@ function renderSelection() {
     // own button only when the bar does not cover it (one way to decide each line).
     const coveredByBar = candidate === otherCandidate(section) && needsCheck(section);
     if (guessedLine) {
-      trailing = chip('Guessed', { tone: 'draft', small: true });
-    } else if (candidate.chosen) trailing = chip('In use', { tone: 'brand', small: true });
+      trailing = stateGlyph('guessed');
+    } else if (candidate.chosen) trailing = glyphChip('st-chosen', 'In use', { tone: 'brand' });
     else if (candidate.selectable && coveredByBar) {
-      trailing = chip('Other line', { dot: false, small: true, title: 'Use it with Other line (O) above' });
+      const tip = tipAttributes('Other line (O)', 'Use it with Other line above.');
+      trailing = el('kbd', { class: 'key-hint cand-key', role: 'img', tabindex: '0', ...tip.attrs }, 'O', tip.describer);
     } else if (candidate.selectable) {
       const label = guessedSection ? 'Use instead' : 'Use';
       if (guessedSection) action = chooseButton(section, candidate, label, canChoose, false);
@@ -1168,19 +1178,36 @@ function renderSelection() {
       onmouseleave: () => drawing.highlightCandidate(null),
       onfocusin: () => drawing.highlightCandidate(candidate.id),
       onfocusout: () => drawing.highlightCandidate(null),
-    }, swatch, el('span', { class: 'cand-label', title: candidate.label }, candidate.label), trailing || el('span'),
-    el('span', { class: 'cand-why' }, candidate.why),
+    }, swatch, el('span', { class: 'cand-label', 'data-tip-title': candidate.label, 'data-tip-detail': candidate.why || null }, candidate.label), trailing || el('span'),
     action ? el('div', { class: 'cand-actions' }, action) : null);
   });
 
   fill(body,
     decisionBar(section),
-    el('p', { class: 'selection-reason selectable-text' }, section.reason),
-    section.source?.basis ? el('details', { class: 'selection-source' },
-      el('summary', {}, chevron(), `Why ${fmt.sourceLabel(section.source.label)}`),
-      el('p', { class: 'selectable-text' }, section.source.basis)) : null,
     rows.length ? el('div', { class: 'cand-list', role: 'list', 'aria-label': 'Lines found in this section' }, ...rows) : null,
+    selectionWhy(section),
   );
+}
+
+/**
+ * The section's explanations on demand: a one-line fact in the summary ("2 lines · best
+ * 0.62", else the reason cut to one line), and inside, the reason, the source's basis and
+ * why each line was read as it was.
+ */
+function selectionWhy(section) {
+  const facts = fmt.reasonFacts(section.reason);
+  const lines = section.candidates.filter((c) => c.why);
+  if (!section.reason && !section.source?.basis && !lines.length) return null;
+  return el('details', { class: 'selection-source' },
+    el('summary', {},
+      chevron(),
+      icon(facts ? 'lines' : 'info'),
+      el('span', { class: 'selection-fact' }, facts || section.reason || 'Why'),
+      el('span', { class: 'selection-why-word' }, 'Why')),
+    el('div', { class: 'selection-why selectable-text' },
+      facts || !section.reason ? (section.reason ? el('p', {}, section.reason) : null) : null,
+      section.source?.basis ? el('p', {}, el('strong', {}, `${fmt.sourceLabel(section.source.label)}: `), section.source.basis) : null,
+      lines.length ? el('dl', { class: 'why-lines' }, ...lines.flatMap((c) => [el('dt', {}, c.label), el('dd', {}, c.why)])) : null));
 }
 
 // ---- One decision per section, with keys (research finding 2): Accept (A) the guessed line,
@@ -2496,6 +2523,7 @@ async function openRememberedTask() {
 }
 
 async function start() {
+  installTooltips();
   setLayout(prefs.get('layout', 'split'));
   setSplit(prefs.get('split', 0.56));
   selectTab(prefs.get('tab', 'thinking'));
