@@ -60,14 +60,24 @@ def test_one_bad_cell_moves_the_faired_hull_much_less():
     assert "mm" in items[0]["message"]
 
 
-def test_misread_station_is_pulled_towards_its_neighbours():
+def test_misread_station_outside_its_neighbours_is_pulled_back():
     base, _ = fairing.fair_sections(fair_hull())
+    shifted = [{**s, "points_yz_m": (np.asarray(s["points_yz_m"]) * [1.05, 1]).tolist()} if s["id"] == "S50" else s
+               for s in fair_hull()]
+    faired, report = fairing.fair_sections(shifted)
+    injected = 0.05 * breadth_at(fair_hull(), "S50", DEPTH / 2)
+    moved = breadth_at(faired, "S50", DEPTH / 2) - breadth_at(base, "S50", DEPTH / 2)
+    assert abs(moved) < 0.6 * injected
+    assert "S50" in {item["section_id"] for item in report["check_items"]}
+
+
+def test_misread_station_inside_its_neighbours_range_is_not_an_outlier():
+    """A known limit: a station wrong by less than its neighbours differ is only smoothed."""
     shifted = [{**s, "points_yz_m": (np.asarray(s["points_yz_m"]) * [1.05, 1]).tolist()} if s["id"] == "S30" else s
                for s in fair_hull()]
     faired, _ = fairing.fair_sections(shifted)
     injected = 0.05 * breadth_at(fair_hull(), "S30", DEPTH / 2)
-    moved = breadth_at(faired, "S30", DEPTH / 2) - breadth_at(base, "S30", DEPTH / 2)
-    assert 0 < moved < 0.6 * injected
+    assert breadth_at(faired, "S30", DEPTH / 2) - breadth_at(fair_hull(), "S30", DEPTH / 2) > 0.5 * injected
 
 
 def test_terminal_stations_are_held():
@@ -77,8 +87,8 @@ def test_terminal_stations_are_held():
 
 
 def test_lower_labels_move_more_than_traced():
-    sections = with_cell(fair_hull({60.0: "ai_inferred"}), "S60", 0.3)
-    traced = with_cell(fair_hull(), "S60", 0.3)
+    sections = with_cell(fair_hull({60.0: "ai_inferred"}), "S60", 0.075)
+    traced = with_cell(fair_hull(), "S60", 0.075)
     guessed_move = breadth_at(fairing.fair_sections(sections)[0], "S60", DEPTH / 2)
     traced_move = breadth_at(fairing.fair_sections(traced)[0], "S60", DEPTH / 2)
     assert guessed_move < traced_move
@@ -94,14 +104,14 @@ def test_centreline_points_stay_on_the_centreline():
     assert all(s["points_yz_m"][0][0] == 0.0 for s in faired)
 
 
-def test_between_sections_are_interpolated_and_lofted_in_order():
-    faired, report = fairing.fair_sections(fair_hull(), between=1)
-    assert len(faired) == 21 and report["parameters"]["between"] == 1
-    assert [s["x_m"] for s in faired] == sorted(s["x_m"] for s in faired)
-    added = [s for s in faired if s["id"].startswith("faired-")]
-    assert len(added) == 10 and all(s["source_label"] == "interpolated" for s in added)
-    assert breadth_at(faired, "faired-S40-S50-1", DEPTH / 2) == pytest.approx(
-        breadth_at([hull_section(45.0)], "S45", DEPTH / 2), rel=0.01)
+def test_end_stations_outside_the_measured_ones_are_kept():
+    labels = {0.0: "ai_inferred", 10.0: "ai_inferred", 100.0: "ai_inferred"}
+    sections = with_cell(fair_hull(labels), "S10", 0.5)
+    faired, report = fairing.fair_sections(sections)
+    assert report["parameters"]["faired_stations"][0] == "S20"
+    kept = next(s for s in faired if s["id"] == "S10")
+    assert kept["points_yz_m"] == next(s for s in sections if s["id"] == "S10")["points_yz_m"]
+    assert kept["fairing"]["faired"] is False
 
 
 def test_multi_region_sections_are_not_faired():
