@@ -48,6 +48,9 @@ from pathlib import Path
 
 EXECUTION_FILE = Path('whole_vessel') / 'execution.json'
 VIEWS_FILE = Path('whole_vessel') / 'views.json'
+# Host detail of the parts above the hull (hull side, end contours, windows): with it a rebuilt
+# deck, bulwark or deckhouse follows the hull as the first build did (ship_cad.execute).
+DETAIL_FILE = Path('whole_vessel') / 'detail.json'
 VIEWS_SCHEMA = 'whole-vessel-views/v1'
 REVISIONS_FOLDER = Path('whole_vessel') / 'revisions'
 EXECUTION_MAX_BYTES = 8 * 1024 * 1024  # the same limit as the app reader (app/core/src/parts.rs)
@@ -93,6 +96,15 @@ def _write_json_atomic(path: Path, value: dict) -> None:
     temporary = path.with_name(f'.{path.name}.{uuid.uuid4().hex}.tmp')
     temporary.write_text(json.dumps(value, indent=2) + '\n')
     os.replace(temporary, path)
+
+
+def load_detail(task: Path) -> dict | None:
+    """The run's host detail, or None (an older run: parts are rebuilt straight)."""
+    path = task / DETAIL_FILE
+    try:
+        return json.loads(path.read_text()) if path.is_file() else None
+    except (OSError, ValueError):
+        return None
 
 
 def load_execution(task: Path) -> dict:
@@ -501,7 +513,7 @@ def revise_part(task: Path, part_id: str, note: str, *, call=None, pack: dict | 
             program['components'] = [c for c in program.get('components', []) if c.get('id') == part_id][:1]
             triage_program(program)
             (work / f'program-{turn}.json').write_text(json.dumps(program, indent=2) + '\n')
-            execution = run_worker(program, {}, work / f'task-{turn}')
+            execution = run_worker(program, {}, work / f'task-{turn}', detail=load_detail(task))
             result = (execution.get('result') or {}).get('components', [])
             built = next((c for c in result if c['id'] == part_id and c.get('built')), None)
             problem = None if built else (result[0].get('reason') if result else execution.get('error'))

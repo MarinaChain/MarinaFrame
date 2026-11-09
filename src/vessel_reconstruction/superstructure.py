@@ -541,6 +541,7 @@ def build_shaped(part_id: str, op: str, values: dict, hull: HullSide | None, det
                       corner_radius_m=value('corner_radius_m', {}) or {})
     low, high = values['height']
     used = [key for key in ('end_aft', 'end_fwd', 'corner_radius_m') if key in detail]
+    cut = []
     if op == 'deck':
         solid, checks = deck_plate(part_id, shape, hull, low, high, float(value('camber_m', 0.0)))
         used += ['camber_m'] if 'camber_m' in detail else []
@@ -556,4 +557,4 @@ def build_shaped(part_id: str, op: str, values: dict, hull: HullSide | None, det
                 used += [key for key in ('windows', 'window_recess_m') if key in detail]
     else:
         raise ValueError(f'{op} is not a part above the hull')
-    return solid, {'detail_used': used, 'check_items': checks}
+    return solid, {'detail_used': used, 'check_items': checks, 'windows_cut': cut}

@@ -249,6 +249,9 @@ def write_app_parts(step1: Path, inputs: dict, out: Path, hull: dict | None) -> 
     record = {'exit_code': 0, 'result': {'schema': 'ship-cad-result/v1', 'status': 'draft_only',
                                          'engineering_approved': False, 'components': components}}
     (folder / 'execution.json').write_text(json.dumps(record, indent=2) + '\n')
+    if inputs.get('detail'):
+        # A part re-run from a mark follows the hull as this build did (part_revise.DETAIL_FILE).
+        (folder / 'detail.json').write_text(json.dumps(inputs['detail']) + '\n')
     return folder
 
 

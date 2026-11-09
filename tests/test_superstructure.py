@@ -232,3 +232,14 @@ def test_shared_points_drop_only_points_that_are_straight_at_every_level():
     assert shared_points([straight, straight]).tolist() == [0, 3, 4, 7]
     # Point 2 is then 0.1 m off the edge from point 1 to point 3 at that level: it stays too.
     assert shared_points([straight, bent]).tolist() == [0, 1, 2, 3, 4, 7]
+
+
+def test_part_revise_reads_the_run_detail_when_it_is_there(tmp_path):
+    from vessel_reconstruction.part_revise import DETAIL_FILE, load_detail
+
+    assert load_detail(tmp_path) is None
+    (tmp_path / DETAIL_FILE).parent.mkdir(parents=True)
+    (tmp_path / DETAIL_FILE).write_text('{"hull_side": {"value": {}}}')
+    assert load_detail(tmp_path) == {'hull_side': {'value': {}}}
+    (tmp_path / DETAIL_FILE).write_text('not json')
+    assert load_detail(tmp_path) is None

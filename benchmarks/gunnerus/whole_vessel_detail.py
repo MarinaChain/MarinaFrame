@@ -91,7 +91,8 @@ def deckhouse_detail(inputs: dict, sources: Path) -> dict:
                                                                 max(xs) + WINDOW_SEARCH_MARGIN_M], [low, high])
         if windows:
             part['windows'] = labelled([w['x_m'] + w['z_m'] for w in windows], 'traced',
-                                       f'{len(windows)} closed window outlines in the profile, cut on both sides')
+                                       f'{len(windows)} closed window outlines in the profile; each is cut into both '
+                                       'side walls where it lies on them (not across a raked end)')
             part['window_recess_m'] = labelled(0.05, 'guessed', 'recess depth not drawn; 0.05 m')
         if component['id'] == 'wheelhouse' and inputs['guesses'].get(args['outline']):
             part['corner_radius_m'] = labelled({'aft': 0.0, 'fwd': WHEELHOUSE_FWD_CORNER_RADIUS_M}, 'guessed',

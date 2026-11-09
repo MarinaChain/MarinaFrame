@@ -383,6 +383,8 @@ def _shaped_part(component, values, hull, detail):
         return _straight_part(component['op'], values)
     component['shape'] = 'follows_hull_side'
     component['check_items'] = report['check_items']
+    if report['windows_cut']:
+        component['windows_cut'] = report['windows_cut']
     used = {'hull_side': detail['hull_side']} | {key: part_detail[key] for key in report['detail_used']}
     guessed = []
     for key, item in used.items():
