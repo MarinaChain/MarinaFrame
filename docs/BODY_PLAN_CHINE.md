@@ -96,3 +96,107 @@ The truth paths under `--truth-root` are `pardon-me/truth_s4.json`, `bue-girl/tr
 - `PYTHONPATH=src:. .venv/bin/python -m pytest tests/test_body_plan_chine.py tests/test_body_plan_reader.py tests/test_body_plan_intake.py -q`: **40 passed** (7.13 s).
 - All five protected SHA-256 values above remain unchanged.
 - `body_plan_intake.py`, the chine module, and its tests are unchanged from `4232502`. No product integration, push, merge, branch switch, or other-lane edits were made.
+
+### Why no joins: measured rejection gates (`4232502`)
+
+This is diagnosis of the unchanged detector, not a threshold search. Chain indices are the frozen reader indices used by `benchmarks/pardon_me/diagnose.py`. The saved-arm diagnosis was reconstructed and checked against its saved scores. No new station identities are inferred from proximity.
+
+Enumeration includes **every ordered pair searched by `join_chine`** (upper lowest waterline exactly one level above lower highest), plus vertically ordered pairs with ends within one waterline spacing (300 px) even if the level gate excludes them. Thus distant search candidates are retained, not filtered away. Δx and Δy are upper-piece bottom end minus lower-piece top end, in image coordinates. Gap is Euclidean. Reach is the greatest distance from either endpoint to the fitted line intersection. Both gap and reach must meet the same tolerance; small gap alone is insufficient.
+
+#### aft
+
+Waterline spacing = 300.0 px; endpoint fit window = 30.0 px (skip first 3 px, at least 5 samples and 15 px row span). Gap and intersection reach ≤ **11.970 px** = min(2 × median station width, 0.05 × spacing). Angle ≥ **20°**. Level step = **1**.
+
+| Lower → upper chain | Level step (=1) | Δx / Δy px | Gap px (≤ 11.970) | Angle ° (≥20) | Reach px (≤ 11.970) | First rejection; other failed local gates |
+|---|---:|---:|---:|---:|---:|---|
+| 7 → 0 | 2 | -24.00 / -255.00 | 256.13 | 68.64 | 253.33 | adjacent levels; gap; intersection reach |
+| 7 → 1 | 2 | -24.00 / -255.00 | 256.13 | 68.64 | 253.33 | adjacent levels; gap; intersection reach |
+| 7 → 2 | 2 | -15.00 / -255.00 | 255.44 | 69.14 | 255.53 | adjacent levels; gap; intersection reach |
+| 7 → 3 | 2 | -15.00 / -255.00 | 255.44 | 69.14 | 255.53 | adjacent levels; gap; intersection reach |
+| 7 → 4 | 1 | 34.50 / 56.00 | 65.77 | 64.56 | 44.27 | gap; intersection reach |
+| 7 → 5 | 1 | 34.50 / 56.00 | 65.77 | 64.56 | 44.27 | gap; intersection reach |
+| 7 → 6 | 1 | 83.50 / 67.00 | 107.06 | 59.04 | 80.12 | gap; intersection reach |
+| 7 → 10 | 1 | 16.50 / 63.00 | 65.12 | 73.48 | 54.36 | gap; intersection reach |
+| 7 → 11 | 1 | 64.50 / 63.00 | 90.16 | 61.98 | 61.91 | gap; intersection reach |
+| 8 → 0 | 2 | -24.00 / -255.00 | 256.13 | 68.64 | 253.33 | adjacent levels; gap; intersection reach |
+| 8 → 1 | 2 | -24.00 / -255.00 | 256.13 | 68.64 | 253.33 | adjacent levels; gap; intersection reach |
+| 8 → 2 | 2 | -15.00 / -255.00 | 255.44 | 69.14 | 255.53 | adjacent levels; gap; intersection reach |
+| 8 → 3 | 2 | -15.00 / -255.00 | 255.44 | 69.14 | 255.53 | adjacent levels; gap; intersection reach |
+| 8 → 4 | 1 | 34.50 / 56.00 | 65.77 | 64.56 | 44.27 | gap; intersection reach |
+| 8 → 5 | 1 | 34.50 / 56.00 | 65.77 | 64.56 | 44.27 | gap; intersection reach |
+| 8 → 6 | 1 | 83.50 / 67.00 | 107.06 | 59.04 | 80.12 | gap; intersection reach |
+| 8 → 10 | 1 | 16.50 / 63.00 | 65.12 | 73.48 | 54.36 | gap; intersection reach |
+| 8 → 11 | 1 | 64.50 / 63.00 | 90.16 | 61.98 | 61.91 | gap; intersection reach |
+| 9 → 0 | 1 | -8.00 / -74.00 | 74.43 | 1.99 | 127.35 | gap; angle; intersection reach |
+| 9 → 1 | 1 | -8.00 / -74.00 | 74.43 | 1.99 | 127.35 | gap; angle; intersection reach |
+| 9 → 2 | 1 | 1.00 / -74.00 | 74.01 | 2.49 | 161.57 | gap; angle; intersection reach |
+| 9 → 3 | 1 | 1.00 / -74.00 | 74.01 | 2.49 | 161.57 | gap; angle; intersection reach |
+| 10 → 0 | 1 | -17.50 / -74.00 | 76.04 | 3.61 | 223.32 | gap; angle; intersection reach |
+| 10 → 1 | 1 | -17.50 / -74.00 | 76.04 | 3.61 | 223.32 | gap; angle; intersection reach |
+| 10 → 2 | 1 | -8.50 / -74.00 | 74.49 | 4.11 | 81.42 | gap; angle; intersection reach |
+| 10 → 3 | 1 | -8.50 / -74.00 | 74.49 | 4.11 | 81.42 | gap; angle; intersection reach |
+| 12 → 4 | 1 | -1314.50 / -119.00 | 1319.88 | 6.71 | 11251.18 | gap; angle; intersection reach |
+| 12 → 5 | 1 | -1314.50 / -119.00 | 1319.88 | 6.71 | 11251.18 | gap; angle; intersection reach |
+| 12 → 6 | 1 | -1265.50 / -108.00 | 1270.10 | 12.23 | 5973.00 | gap; angle; intersection reach |
+| 12 → 10 | 1 | -1332.50 / -112.00 | 1337.20 | 2.22 | 34546.58 | gap; angle; intersection reach |
+| 12 → 11 | 1 | -1284.50 / -112.00 | 1289.37 | 9.28 | 7961.96 | gap; angle; intersection reach |
+
+Series gates (after local gates): each lower and upper endpoint must have **exactly 1** candidate; **at least 3** unique pairs; strict nesting at shared waterlines; column span **>15 px**; maximum straight-series row residual **≤12 px**.
+
+Actual local-pass groups: `[]`.
+
+#### fore
+
+Waterline spacing = 300.0 px; endpoint fit window = 30.0 px (skip first 3 px, at least 5 samples and 15 px row span). Gap and intersection reach ≤ **11.738 px** = min(2 × median station width, 0.05 × spacing). Angle ≥ **20°**. Level step = **1**.
+
+| Lower → upper chain | Level step (=1) | Δx / Δy px | Gap px (≤ 11.738) | Angle ° (≥20) | Reach px (≤ 11.738) | First rejection; other failed local gates |
+|---|---:|---:|---:|---:|---:|---|
+| 3 → 2 | 1 | 1013.50 / 126.00 | 1021.30 | 93.35 | 1022.47 | gap; intersection reach |
+| 3 → 11 | 1 | 43.50 / 868.00 | 869.09 | 84.32 | 862.27 | gap; intersection reach |
+| 4 → 0 | 1 | 1.50 / -7.00 | 7.16 | 66.30 | 11.56 | local pass; series gate |
+| 4 → 1 | 1 | -100.50 / -45.00 | 110.11 | 64.76 | 120.23 | gap; intersection reach |
+| 4 → 2 | 2 | -270.50 / -90.00 | 285.08 | 64.94 | 312.46 | adjacent levels; gap; intersection reach |
+| 4 → 3 | 1 | 13.50 / 10.00 | 16.80 | 141.01 | 10.57 | gap |
+| 4 → 10 | 1 | -1240.50 / 652.00 | 1401.41 | 73.97 | 1291.93 | gap; intersection reach |
+| 5 → 0 | 1 | 1.50 / -7.00 | 7.16 | 66.30 | 11.56 | local pass; series gate |
+| 5 → 1 | 1 | -100.50 / -45.00 | 110.11 | 64.76 | 120.23 | gap; intersection reach |
+| 5 → 2 | 2 | -270.50 / -90.00 | 285.08 | 64.94 | 312.46 | adjacent levels; gap; intersection reach |
+| 5 → 3 | 1 | 13.50 / 10.00 | 16.80 | 141.01 | 10.57 | gap |
+| 5 → 10 | 1 | -1240.50 / 652.00 | 1401.41 | 73.97 | 1291.93 | gap; intersection reach |
+| 6 → 0 | 1 | 84.50 / 38.00 | 92.65 | 63.81 | 97.93 | gap; intersection reach |
+| 6 → 1 | 1 | -17.50 / 0.00 | 17.50 | 62.27 | 21.37 | gap; intersection reach |
+| 6 → 2 | 2 | -187.50 / -45.00 | 192.82 | 62.44 | 217.97 | adjacent levels; gap; intersection reach |
+| 6 → 3 | 1 | 96.50 / 55.00 | 111.07 | 138.52 | 117.49 | gap; intersection reach |
+| 6 → 10 | 1 | -1157.50 / 697.00 | 1351.15 | 71.48 | 1221.51 | gap; intersection reach |
+| 7 → 2 | 1 | 12.00 / -11.00 | 16.28 | 61.85 | 11.82 | gap; intersection reach |
+| 7 → 11 | 1 | -958.00 / 731.00 | 1205.04 | 70.88 | 1013.78 | gap; intersection reach |
+
+Series gates (after local gates): each lower and upper endpoint must have **exactly 1** candidate; **at least 3** unique pairs; strict nesting at shared waterlines; column span **>15 px**; maximum straight-series row residual **≤12 px**.
+
+Actual local-pass groups: `[{"level": 1, "candidates": [[4, 0], [5, 0]], "unique": [], "accepted": []}]`.
+
+
+#### Interpretation and change decision
+
+- **Aft: no local pair passes.** The nearest searched bottom-to-top pair is 7/8 → 10 (65.12 px gap, 54.36 px reach), far above 11.970 px. Chains 7 and 8 have the same followed upper endpoint, and chains 4 and 5 have the same lower endpoint. Raising tolerance to 66 px would admit several ambiguous alternatives; it would not establish station identity. The 74 px gaps to chains 0–3 also have only 1.99–4.11° turns, so lowering the angle gate would confuse a same-direction continuation with a knuckle.
+- **Fore: two local passes, zero unique pairs.** 4 → 0 and 5 → 0 both pass the existing geometric gates, but share the same upper chain. The uniqueness rule removes both; therefore the three-pair series rule sees zero unique pairs. These lower chains share their W-1 crossing but have different W-2 nodes. They are not interchangeable station identities.
+- **Two plausible fore joins just miss proximity gates.** 6 → 1 needs 17.50 px gap and 21.37 px reach; 7 → 2 needs 16.28 px gap and 11.82 px reach. An approximately 22 px tolerance would admit them. It would also admit 4/5 → 3, whose 141.01° direction change and shared bottom geometry are not evidence of a valid station continuation. Even after resolving that ambiguity, only two unique neighbouring joins would remain, below the three-station requirement. A tolerance increase alone cannot recover the full series.
+- **Path ends are not necessarily chine endpoints.** Fore chain 3 ends at x=3270 (centreline) on its upper extension, while its W0 crossing is far out; its pair with chain 2 has a 1021.30 px gap. The frozen `chain_path` follows up to 1200 rows beyond measured crossings and can follow another line. A large endpoint gap can therefore be a wrong path branch, not a physical gap in the drawing. It is not safe to bridge it by raising a tolerance.
+
+**No detector or threshold change is justified by this endpoint table alone.** It supports a specific next investigation: re-trace locally from the measured crossings toward the chine, distinguish shared/merged paths, and validate branch choice and nesting before assigning each short bottom piece. That is more than a threshold adjustment. It needs additional ink evidence and synthetic tests for the shared endpoints and branch changes. Do not use truth proximity as the production pairing rule.
+
+The current result remains **34/57, RMS 0.1346956535 m**, not an improvement. No detection change is made in this diagnostic commit, so the five-sheet results above remain the current measurements. Do not integrate this unchanged detector into the product path.
+
+Reproduce the diagnostic table:
+
+```bash
+set -o pipefail
+PYTHONPATH=src:. .venv/bin/python scripts/diagnose_body_plan_chine.py \
+  --sheet /Users/jonathanjie/Documents/workspace/MarinaFrame/work/sources/haer/master-pnp-habshaer-ny-ny2300-ny2390-sheet-00004a.tif \
+  --truth /private/tmp/claude-501/pardon-me/truth_s4.json \
+  --runs /private/tmp/claude-501/pardon-me/runs \
+  --out outputs/body_plan_chine_diagnosis.json \
+  --markdown work/chine/why-no-joins.md
+```
+
+The JSON includes full-precision endpoints, fitted directions, intersections, failed gates and chain-crossing records. The script calls the module's `_end`, `_meeting`, and `_series` and independently lists each rejected gate; it also calls the existing saved-run diagnosis and requires its scores to match. All local-pass candidates were checked against the module's actual candidate search. The production module, its constants, the frozen files, and the intake path are unchanged.
