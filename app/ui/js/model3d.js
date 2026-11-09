@@ -11,7 +11,9 @@ import { createSectionGrowth } from './growth3d.js';
 import { createAnimation } from './animation.js';
 import { placeLabels, steelLegend, steelToken, tankLegend, tankToken } from './tanks.js';
 import { createLighting, createPaintMaterial, createSteelMaterial, createTankMaterial, setUpRenderer, stylePaint } from './look3d.js';
-import { bootTopBand, hullReference } from './reference3d.js';
+import { bootTopBand, frameLabel, frameAt, hullReference, nearestFrameX } from './reference3d.js';
+import { createSectionCut } from './cut3d.js';
+import { createCutPanel, createToolbar, toolButton } from './controls3d.js';
 
 /** Extra size of a section plane around the hull, as a fraction of beam and depth. */
 const PLANE_MARGIN = 0.25;
@@ -91,7 +93,8 @@ export function createModelView({ host, onPick = null }) {
 
   let renderer;
   try {
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+    // The stencil buffer draws the cut faces of a section cut (cut3d.js).
+    renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true });
   } catch {
     showEmpty('3D view not available', 'This computer did not allow a WebGL view.');
     return { setModel() {}, setSelected() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, showsWholeVessel: false, hasTanks: false };
@@ -111,8 +114,23 @@ export function createModelView({ host, onPick = null }) {
   controls.maxPolarAngle = Math.PI * 0.49;
 
   const lighting = createLighting({ renderer, scene });
+  /** The section cut: one clipping plane on every model material, with solid cut faces. */
+  const cut = createSectionCut({ scene });
   /** Paint of the hull: antifouling, boot top and topside by height (look3d.js). */
   const hullMaterial = createPaintMaterial();
+  /** Clipping planes of the live growth's skin; the hull material has them and the cut plane. */
+  let skinPlanes = [];
+  function clipHull() {
+    hullMaterial.clippingPlanes = [...skinPlanes, ...cut.planes];
+  }
+  clipHull();
+  hullMaterial.clipShadows = true;
+  /** Put the section cut on a model material (and on its shadow). */
+  function clip(material) {
+    material.clippingPlanes = cut.planes;
+    material.clipShadows = true;
+    return material;
+  }
   /** Design waterline, baseline and frame numbering of the model shown (reference3d.js). */
   let reference = null;
   const content = new THREE.Group();
@@ -136,6 +154,82 @@ export function createModelView({ host, onPick = null }) {
   const legend = el('div', { class: 'model-legend', role: 'group', 'aria-label': 'Tanks by content' });
   legend.hidden = true;
   host.append(labelLayer, legend);
+
+  // ---- Tool bar and section cut. The cut panel opens under the tool bar.
+  const toolbar = createToolbar();
+  const cutPanel = createCutPanel({
+    onChange: (state) => {
+      cut.set(state);
+      cutButton.setAttribute('aria-pressed', String(Boolean(state.axis)));
+      requestRender();
+    },
+    onCutAtSelection: () => cutAtSelection(),
+  });
+  const cutButton = toolButton({ text: 'Section', iconName: 'cut', label: 'Section cut', keyHint: 'C', pressed: false, onClick: () => toggleCutPanel() });
+  cutButton.setAttribute('aria-expanded', 'false');
+  cutButton.setAttribute('aria-controls', cutPanel.id);
+  toolbar.add('Section', cutButton);
+  host.append(toolbar.element, cutPanel.element);
+  /** The x of the selected part's middle (Parts tab), or null. */
+  let selectionX = null;
+
+  function toggleCutPanel(open = cutPanel.element.hidden) {
+    cutPanel.element.hidden = !open;
+    cutButton.setAttribute('aria-expanded', String(open));
+    // Opening the panel with no cut starts a frame cut, so the panel shows something at once.
+    if (open && !cut.active) cutPanel.set({ axis: 'x' });
+  }
+
+  /** Slider ranges of the cut panel for a model box: x by frames, y and z by centimetres. */
+  function updateCutRanges(box) {
+    if (!box || box.isEmpty()) return;
+    const spacing = reference?.frameSpacingM.value || 0.01;
+    const zero = reference?.frameZeroX.value || 0;
+    const firstFrame = nearestFrameX(box.min.x, spacing, zero);
+    cutPanel.setRanges({
+      x: [firstFrame, nearestFrameX(box.max.x, spacing, zero), spacing],
+      y: [Number(box.min.y.toFixed(2)), Number(box.max.y.toFixed(2)), 0.01],
+      z: [Number(box.min.z.toFixed(2)), Number(box.max.z.toFixed(2)), 0.01],
+    }, reference);
+    if (cut.active) cutPanel.set({});
+  }
+
+  /** The x a quick cut uses: the selected part's middle, else the selected section's station. */
+  function selectedCutX() {
+    if (selectionX !== null) return selectionX;
+    const plane = selectedId ? planes.get(selectedId) : null;
+    return plane ? plane.position.x : null;
+  }
+
+  function offerCutAtSelection() {
+    const x = selectedCutX();
+    if (x === null || !reference) {
+      cutPanel.setSelection(null);
+      return;
+    }
+    const frame = frameAt(x, reference.frameSpacingM.value, reference.frameZeroX.value);
+    cutPanel.setSelection(`Cut at ${frameLabel(Math.round(frame))}`);
+  }
+
+  /** Cut at the frame nearest the selection (a part, else a section station). */
+  function cutAtSelection() {
+    const x = selectedCutX();
+    if (x === null || !reference) return;
+    toggleCutPanel(true);
+    cutPanel.set({ axis: 'x', value: nearestFrameX(x, reference.frameSpacingM.value, reference.frameZeroX.value) });
+  }
+
+  host.addEventListener('keydown', (event) => {
+    if (event.metaKey || event.ctrlKey || event.altKey || event.target.closest('input, select, textarea')) return;
+    if (event.key === 'c' || event.key === 'C') {
+      toggleCutPanel();
+      event.preventDefault();
+    } else if (event.key === 'Escape' && !cutPanel.element.hidden) {
+      cutPanel.set({ axis: null });
+      toggleCutPanel(false);
+      event.preventDefault();
+    }
+  });
   scene.add(content);
   // Live section curves stay outside `content`, so a new STL does not remove them.
   const growth = createSectionGrowth({
@@ -144,6 +238,10 @@ export function createModelView({ host, onPick = null }) {
     renderer,
     requestRender: () => requestRender(),
     colours: () => colours,
+    setSkinClip: (planes) => {
+      skinPlanes = planes || [];
+      clipHull();
+    },
     onFirstSections: (box) => {
       if (hull) return;
       // No hull yet: show the curves on their own and frame them.
@@ -226,7 +324,7 @@ export function createModelView({ host, onPick = null }) {
       group.children[0].userData.sectionId = id;
       return group.children[0];
     });
-    const hit = raycaster.intersectObjects(faces, false)[0];
+    const hit = raycaster.intersectObjects(faces, false).find((h) => cut.keeps(h.point));
     return hit ? hit.object.userData.sectionId : null;
   }
   renderer.domElement.addEventListener('pointerdown', (event) => { pressedAt = [event.clientX, event.clientY]; });
@@ -260,7 +358,7 @@ export function createModelView({ host, onPick = null }) {
       ((event.clientX - rect.left) / rect.width) * 2 - 1,
       -((event.clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
-    const hit = raycaster.intersectObjects(tankMeshes, false)[0];
+    const hit = raycaster.intersectObjects(tankMeshes, false).find((h) => cut.keeps(h.point));
     return hit ? hit.object.userData.partId : null;
   }
 
@@ -270,7 +368,7 @@ export function createModelView({ host, onPick = null }) {
    * while tanks show, the highlighted part in the selection blue. */
   function styleWholeVessel() {
     // The shell turns translucent while tanks or steel inside it show.
-    const seeInside = (layers.tanks && tankMeshes.length > 0) || (layers.structure && steelMeshes.length > 0);
+    const seeInside = shellSeeThrough();
     for (const mesh of shellMeshes) {
       const material = mesh.material;
       paintHull(material);
@@ -301,7 +399,13 @@ export function createModelView({ host, onPick = null }) {
       mesh.material.opacity = shell ? STEEL_SHELL_OPACITY : 1;
       mesh.material.depthWrite = !shell;
     }
+    cut.refresh();
     renderLegend();
+  }
+
+  /** True while the whole-vessel shell is see-through (tanks or steel show inside it). */
+  function shellSeeThrough() {
+    return (layers.tanks && tankMeshes.length > 0) || (layers.structure && steelMeshes.length > 0);
   }
 
   /** The legend of the tank colours and the switches for tanks and names (hidden without tanks). */
@@ -387,6 +491,8 @@ export function createModelView({ host, onPick = null }) {
   function setHullBox(hullBox, sceneBox = hullBox) {
     reference = hullBox ? hullReference({ min: hullBox.min.toArray(), max: hullBox.max.toArray() }) : null;
     lighting.fit(sceneBox);
+    cut.fit(sceneBox);
+    updateCutRanges(sceneBox);
     paintHull(hullMaterial);
     for (const mesh of shellMeshes) paintHull(mesh.material);
   }
@@ -400,6 +506,7 @@ export function createModelView({ host, onPick = null }) {
     if (grid) buildGrid();
     growth.refreshColours();
     if (wholeVessel) styleWholeVessel();
+    cut.refresh();
     requestRender();
   }
 
@@ -447,7 +554,10 @@ export function createModelView({ host, onPick = null }) {
       }
     }
     guessBands = [];
-    if (hull) hull.geometry.dispose();
+    if (hull) {
+      cut.removeSolids(hull);
+      hull.geometry.dispose();
+    }
     for (const plane of planes.values()) {
       for (const child of plane.children) {
         child.geometry.dispose();
@@ -570,6 +680,7 @@ export function createModelView({ host, onPick = null }) {
       hull.castShadow = true;
       hull.receiveShadow = true;
       content.add(hull);
+      cut.addSolid(hull, { colour: () => colours.hull });
 
       const box = new THREE.Box3().setFromObject(hull);
       const size = box.getSize(new THREE.Vector3());
@@ -606,6 +717,7 @@ export function createModelView({ host, onPick = null }) {
     setWholeVessel(buffer) {
       const showedWholeVessel = Boolean(wholeVessel);
       if (wholeVessel) {
+        cut.removeSolids(wholeVessel);
         scene.remove(wholeVessel);
         wholeVessel.traverse((o) => {
           if (o.isMesh || o.isLineSegments) {
@@ -639,23 +751,26 @@ export function createModelView({ host, onPick = null }) {
           group.scale.setScalar(MM_TO_M);
           // Each top node is one part; its meshes carry the part id for highlighting.
           const root = gltf.scene.children.length === 1 && !gltf.scene.children[0].isMesh ? gltf.scene.children[0] : gltf.scene;
-          for (const node of root.children) {
-            node.traverse((o) => {
-              if (!o.isMesh) return;
-              o.userData.partId = node.name;
-              // Tanks carry their name and content class as GLB extras (display_mesh.tank_style).
-              const isTank = o.userData.kind === 'tank';
-              o.material = isTank ? createTankMaterial() : createPaintMaterial();
-              o.castShadow = true;
-              o.receiveShadow = true;
-              if (isTank) {
-                const edges = new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry, TANK_EDGE_ANGLE_DEG), new THREE.LineBasicMaterial());
-                o.add(edges);
-                tankMeshes.push(o);
-              } else {
-                shellMeshes.push(o);
-              }
-            });
+          // Collect the meshes first: styling adds child meshes (cut stencil passes) to each.
+          const parts = [];
+          for (const node of root.children) node.traverse((o) => { if (o.isMesh) parts.push([node, o]); });
+          for (const [node, o] of parts) {
+            o.userData.partId = node.name;
+            // Tanks carry their name and content class as GLB extras (display_mesh.tank_style).
+            const isTank = o.userData.kind === 'tank';
+            o.material = clip(isTank ? createTankMaterial() : createPaintMaterial());
+            o.castShadow = true;
+            o.receiveShadow = true;
+            if (isTank) {
+              const edges = new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry, TANK_EDGE_ANGLE_DEG), clip(new THREE.LineBasicMaterial()));
+              o.add(edges);
+              tankMeshes.push(o);
+              cut.addSolid(o, { colour: () => colours.tank(o.userData.content_class) });
+            } else {
+              shellMeshes.push(o);
+              // A see-through shell shows no cut face, or the face would hide what is inside.
+              cut.addSolid(o, { colour: () => colours.hull, capped: () => !shellSeeThrough() });
+            }
           }
           scene.add(group);
           wholeVessel = group;
@@ -698,6 +813,7 @@ export function createModelView({ host, onPick = null }) {
      */
     setStructure(buffer) {
       if (structure) {
+        cut.removeSolids(structure);
         structure.parent?.remove(structure);
         structure.traverse((o) => {
           if (o.isMesh) {
@@ -719,12 +835,15 @@ export function createModelView({ host, onPick = null }) {
             resolve();
             return;
           }
-          gltf.scene.traverse((o) => {
-            if (!o.isMesh || o.userData.kind !== 'structure') return;
-            o.material = createSteelMaterial();
+          const members = [];
+          gltf.scene.traverse((o) => { if (o.isMesh && o.userData.kind === 'structure') members.push(o); });
+          members.forEach((o) => {
+            o.material = clip(createSteelMaterial());
             o.castShadow = true;
             o.receiveShadow = true;
             steelMeshes.push(o);
+            // See-through shell plating shows no cut face; the other members are solid plate.
+            cut.addSolid(o, { colour: () => colours.steel(o.userData.group), capped: () => o.userData.group !== 'shell' });
           });
           structure = gltf.scene;
           // The whole-vessel group turns glTF Y-up into the app's Z-up and scales mm to m.
@@ -741,6 +860,8 @@ export function createModelView({ host, onPick = null }) {
       return Boolean(wholeVessel) && tankMeshes.length > 0;
     },
     setHighlightBox(bbox) {
+      selectionX = bbox ? (bbox.min[0] + bbox.max[0]) / 2 : null;
+      offerCutAtSelection();
       if (highlight) {
         content.remove(highlight);
         highlight.geometry.dispose();
@@ -757,6 +878,7 @@ export function createModelView({ host, onPick = null }) {
     },
     setSelected(id) {
       selectedId = id;
+      offerCutAtSelection();
       for (const [planeId, plane] of planes) styleSectionPlane(plane, planeId === id);
       requestRender();
     },

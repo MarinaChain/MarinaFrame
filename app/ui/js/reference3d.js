@@ -68,3 +68,50 @@ export function paintZone(z, band) {
   if (z <= band[1]) return 'boottop';
   return 'topside';
 }
+
+/** The frame number (a decimal) at x, for a spacing and the x of frame 0 (metres). */
+export function frameAt(x, spacing, zeroX) {
+  return (x - zeroX) / spacing;
+}
+
+/** The x of the frame nearest to x (metres). */
+export function nearestFrameX(x, spacing, zeroX) {
+  return zeroX + Math.round(frameAt(x, spacing, zeroX)) * spacing;
+}
+
+/** "Fr 12", or "Fr 12.4" between frames (one decimal; -0 reads as 0). */
+export function frameLabel(frame) {
+  const rounded = Math.round(frame * 10) / 10;
+  const text = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  return `Fr ${text === '-0' ? '0' : text}`;
+}
+
+/**
+ * Section cut planes: x is a frame (transverse) cut, y a buttock (longitudinal) cut, z a
+ * waterline (horizontal) cut. `keep` is the side the cut keeps when not flipped: aft of a frame
+ * cut, port of a buttock cut (the home view looks from starboard), below a waterline cut.
+ */
+export const CUT_AXES = {
+  x: { index: 0, name: 'Frame', keep: -1, word: 'x' },
+  y: { index: 1, name: 'Buttock', keep: 1, word: 'y' },
+  z: { index: 2, name: 'Waterline', keep: -1, word: 'z' },
+};
+
+/**
+ * The clipping plane of a cut as { normal: [x, y, z], constant }: the points p kept are those
+ * with normal · p + constant >= 0 (the three.js Plane rule).
+ */
+export function cutPlane(axis, value, flipped = false) {
+  const spec = CUT_AXES[axis];
+  const sign = flipped ? -spec.keep : spec.keep;
+  const normal = [0, 0, 0];
+  normal[spec.index] = sign;
+  return { normal, constant: -sign * value };
+}
+
+/** The readout of a cut position: "Fr 24 · x 13.20 m" for a frame cut, "z 2.57 m" otherwise. */
+export function cutLabel(axis, value, reference) {
+  const metres = `${CUT_AXES[axis].word} ${value.toFixed(2)} m`;
+  if (axis !== 'x' || !reference) return metres;
+  return `${frameLabel(frameAt(value, reference.frameSpacingM.value, reference.frameZeroX.value))} · ${metres}`;
+}

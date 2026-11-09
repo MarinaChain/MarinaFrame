@@ -2981,3 +2981,37 @@ code { font-family: var(--font-mono); }
 .mark-keep { border-color: var(--warn-ink); color: var(--warn); }
 .mark-forced { margin: var(--space-xs) 0 0; font-size: var(--fs-sm); color: var(--warn); }
 .mk-box.tone-person, .mk-line.tone-person { stroke: var(--brand); stroke-width: calc(var(--u) * 2px); stroke-dasharray: calc(var(--u) * 8px) calc(var(--u) * 5px); }
+
+/* ---- 3D view tools (js/controls3d.js): the tool bar at the top left and the section cut panel. */
+.model-tools {
+  position: absolute; top: var(--space-sm); left: var(--space-sm);
+  display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 120px);
+  pointer-events: none;
+}
+.model-tools-group {
+  display: inline-flex; gap: 1px; padding: 2px;
+  border-radius: var(--radius-md); border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  pointer-events: auto;
+}
+.model-tool {
+  display: inline-flex; align-items: center; gap: 5px; min-height: 28px; min-width: 28px;
+  padding: 0 7px; border: 0; border-radius: var(--radius-sm); background: transparent;
+  color: var(--ink-2); font: inherit; font-size: 12px; font-weight: 500; cursor: pointer;
+}
+.model-tool:hover { background: var(--hover); color: var(--ink); }
+.model-tool[aria-pressed="true"] { background: var(--selected); color: var(--ink); box-shadow: inset 0 0 0 1px var(--accent); }
+.model-tool:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.model-tool .icon { width: 15px; height: 15px; }
+.model-cut {
+  position: absolute; top: 48px; left: var(--space-sm); width: 280px; padding: 8px 10px;
+  border-radius: var(--radius-md); border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 95%, transparent); color: var(--ink); font-size: 12px; cursor: default;
+}
+.model-cut[hidden] { display: none; }
+.model-cut-axes { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0; border: 0; }
+.model-cut-axes legend { padding: 0; margin-bottom: 4px; font-weight: 600; }
+.model-cut-choice { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.model-cut-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.model-cut-slider { flex: 1; min-width: 0; accent-color: var(--accent); }
+.model-cut-readout { min-width: 104px; text-align: right; font-family: var(--font-mono); font-size: 11px; color: var(--ink-2); }

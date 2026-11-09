@@ -2,7 +2,7 @@
 // Run: npm run test:ui
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { baselineZ, bootTopBand, hullReference, paintZone } from '../ui/js/reference3d.js';
+import { baselineZ, bootTopBand, cutLabel, cutPlane, frameAt, frameLabel, hullReference, nearestFrameX, paintZone } from '../ui/js/reference3d.js';
 
 /** The Gunnerus hull part of the whole-vessel GLB (metres, ship frame; skegs reach below z = 0). */
 const GUNNERUS = { min: [-1, -4.8, -0.517], max: [34, 4.8, 4.287] };
@@ -39,4 +39,32 @@ test('the boot top straddles the waterline and the paint zones follow height', (
   // A small hull still gets a visible band.
   const small = bootTopBand(0.6, 1);
   assert.ok(small[1] - small[0] >= 0.12 - 1e-9);
+});
+
+test('frame numbers count from frame 0 at the spacing', () => {
+  assert.equal(frameAt(5.5, 0.55, 0), 10);
+  assert.equal(nearestFrameX(5.7, 0.55, 0).toFixed(2), '5.50');
+  assert.equal(frameLabel(10), 'Fr 10');
+  assert.equal(frameLabel(10.04), 'Fr 10');
+  assert.equal(frameLabel(10.44), 'Fr 10.4');
+  assert.equal(frameLabel(-0.02), 'Fr 0');
+  assert.equal(frameLabel(-3), 'Fr -3');
+});
+
+test('a cut keeps aft of a frame, port of a buttock and below a waterline, and flips', () => {
+  const keeps = (plane, point) => plane.normal.reduce((sum, n, i) => sum + n * point[i], 0) + plane.constant >= 0;
+  const frame = cutPlane('x', 10);
+  assert.ok(keeps(frame, [9, 0, 0]));
+  assert.ok(!keeps(frame, [11, 0, 0]));
+  assert.ok(keeps(cutPlane('x', 10, true), [11, 0, 0]));
+  assert.ok(keeps(cutPlane('y', 0), [0, 1, 0]));
+  assert.ok(!keeps(cutPlane('y', 0), [0, -1, 0]));
+  assert.ok(keeps(cutPlane('z', 2), [0, 0, 1]));
+  assert.ok(!keeps(cutPlane('z', 2), [0, 0, 3]));
+});
+
+test('a frame cut reads its frame number and its x', () => {
+  const ref = hullReference(GUNNERUS);
+  assert.equal(cutLabel('x', 5.5, ref), 'Fr 10 · x 5.50 m');
+  assert.equal(cutLabel('z', 2.571, ref), 'z 2.57 m');
 });
