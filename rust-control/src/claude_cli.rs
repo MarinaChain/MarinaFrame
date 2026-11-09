@@ -218,6 +218,11 @@ fn child_environment(max_tokens: u64) -> Vec<(String, String)> {
         max_tokens.to_string(),
     ));
     environment.push(("DISABLE_AUTOUPDATER".into(), "1".into()));
+    // The CLI's own cache marks (system, tool, last block) plus the stable
+    // context mark are five; the API takes at most four (live 2026-11-09:
+    // HTTP 400 on every request). Without the CLI's marks the one stable
+    // context mark caches the whole prefix: system, tools and stable context.
+    environment.push(("DISABLE_PROMPT_CACHING".into(), "1".into()));
     environment
 }
 
@@ -530,11 +535,14 @@ mod tests {
             "PATH",
             "CLAUDE_CODE_MAX_OUTPUT_TOKENS",
             "DISABLE_AUTOUPDATER",
+            "DISABLE_PROMPT_CACHING",
         ];
         assert!(environment
             .iter()
             .all(|(k, _)| allowed.contains(&k.as_str())));
         assert!(environment.contains(&("CLAUDE_CODE_MAX_OUTPUT_TOKENS".into(), "100".into())));
+        // Only the stable context mark of the request is a cache mark.
+        assert!(environment.contains(&("DISABLE_PROMPT_CACHING".into(), "1".into())));
     }
 
     /// A stand-in for `claude` that reports where it ran and with what.
