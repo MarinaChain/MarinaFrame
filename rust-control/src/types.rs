@@ -647,11 +647,14 @@ fn is_zero(value: &f64) -> bool {
 impl Default for OperationalLimits {
     fn default() -> Self {
         Self {
-            worker_wall_seconds: 210,
+            // build_first_hull took 100-208 s in the Sonnet rounds of 2026-11-09
+            // and was cut off at the old 210 s limit on a loaded machine
+            // (worker_receipt_missing: the run ended with no draft).
+            worker_wall_seconds: 600,
             // Generous: thinking requests took up to 45 s and the old 90 s limit cut them off.
             request_wall_seconds: 300,
             worker_memory_bytes: 5 * 1024 * 1024 * 1024,
-            worker_cpu_seconds: 180,
+            worker_cpu_seconds: 480,
             task_disk_bytes: 2 * 1024 * 1024 * 1024,
             // Thinking spends output tokens on reasoning before the answer.
             max_output_tokens_per_request: 16_384,

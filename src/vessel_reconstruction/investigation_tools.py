@@ -401,12 +401,17 @@ class InvestigationTools:
         self.state.update(vessel_description=measured, description_phase="complete", description_next_view=None)
         write_json(self.root / "vessel.json", {"description": measured})
         self._save()
-        from .first_hull_tools import rebuild_if_setup_changed
-        rebuilt = rebuild_if_setup_changed(self, previous)
-        if rebuilt is not None:
-            return rebuilt
-        return self._observation(True, "vessel_described", description=measured, warnings=measured["warnings"],
-                                 message="Description recorded; warnings name doubtful fields. Continue with the first hull.")
+        from .first_hull_tools import finish_reading, rebuild_if_setup_changed
+        observation = rebuild_if_setup_changed(self, previous)
+        if observation is None:
+            observation = self._observation(
+                True, "vessel_described", description=measured, warnings=measured["warnings"],
+                message="Description recorded; warnings name doubtful fields. Continue with the first hull.")
+        following = finish_reading(self)
+        if following:
+            observation["next_reading"] = following
+            observation["message"] = (observation.get("message", "") + " " + following["message"])[:600]
+        return observation
 
     # ------------------------------------------------------------ views
     def _view_region(self, region_px, max_side_px=None, *, kind="region_view", subject=None):
