@@ -87,3 +87,29 @@ readings with different setups have different frames.
 - 00679 flat-bottom trace near the baseline (s3-s5).
 - 09867 readings that describe the overlaid body plan as one view with wrong sides.
 - Model section edits are still kept by the body-plan keep rule only.
+
+## 6. Final live rounds (snapshot 3b7c1c3)
+
+`work/round-3view-L{0,1}-sonnet-3b7c1c3-r2`, one pass each. The first attempt (`...-3b7c1c3`)
+ended with `provider_rate_limited` on all 10 cases (subscription limit). None of those runs was
+complete, so all 10 were run again.
+
+| Case | Before (b5a9dac L0 / e445d52 L1) | After 3b7c1c3 | Tokens in / out | Requests |
+|---|---|---|---|---|
+| dtmb5415-L0 | 5.07 / +0.6 | 6.00 / +0.9 | 296k / 9k | 16 |
+| series60-L0 | 1.39 / +1.0 (pass) | 1.39 / +1.0 (pass) | 445k / 16k | 17 |
+| shipd-1-00679-L0 | 6.17 / -0.4 | 6.27 / -0.3 | 419k / 12k | 18 |
+| shipd-1-08158-L0 | 1.13 / -2.1 (pass) | 0.75 / -2.1 (pass) | 408k / 13k | 18 |
+| shipd-1-09867-L0 | 3.63 / +1.7 | 2.99 / +0.7 | 523k / 15k | 24 |
+| dtmb5415-L1 | 18.22 / +14.0 | 14.34 / +13.2 | 466k / 14k | 19 |
+| series60-L1 | 3.49 / -0.5 | 3.49 / -0.5 | 271k / 9k | 14 |
+| shipd-1-00679-L1 | 8.59 / -3.3 | 8.75 / -3.1 | 332k / 10k | 16 |
+| shipd-1-08158-L1 | 11.92 / +0.7 | 1.96 / -2.8 (pass) | 515k / 16k | 20 |
+| shipd-1-09867-L1 | 2.06 / +1.8 | 2.09 / +1.3 | 487k / 11k | 24 |
+
+RMS % of half-beam / in-range volume, development truth. Passes: L0 2 -> 2 (series60 is now
+the reading-independent 1.39 %, not a lucky reading), L1 0 -> 1. In every case the second
+reading repeated the first setup (`same_setup`), so the draft fit did not choose between hulls
+in this round; the 08158-L1 gain comes from that run's reading. No "No such tool available"
+replies (0 receipts; earlier rounds: 1-4 cases a round). Mean input 416k tokens a case (L0 418k,
+L1 414k).
