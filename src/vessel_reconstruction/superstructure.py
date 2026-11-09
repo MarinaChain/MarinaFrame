@@ -54,11 +54,13 @@ DEFAULT_WINDOW_RECESS_M = 0.05
 WINDOW_END_MARGIN_M = 0.1
 # The cutting box reaches this far outside the wall, past any flare.
 WINDOW_TOOL_REACH_M = 1.0
+# Plan points that lie this close to a straight edge at every level are left out of the loft.
+SIMPLIFY_TOLERANCE_M = 0.005
 # Two loft levels closer than this are one level.
 SAME_LEVEL_M = 0.001
 # A level band is split while its ruled surface is further than this outside the hull side at
 # heights inside it (a quarter of the containment tolerance), down to bands of 2 x MIN_BAND_M.
-REFINE_TOLERANCE_M = 0.005
+REFINE_TOLERANCE_M = 0.01
 MIN_BAND_M = 0.005
 # Heights (as fractions of a band) where the ruled loft is checked against the hull side.
 CHORD_CHECK_FRACTIONS = (0.1, 0.3, 0.5, 0.7, 0.9)
@@ -330,11 +332,50 @@ def _wire(points3d):
     return cq.Wire.makePolygon([cq.Vector(*p) for p in points3d], close=True)
 
 
+def shared_points(polygons: list[np.ndarray], tolerance: float = SIMPLIFY_TOLERANCE_M) -> np.ndarray:
+    """Indices of the points to keep in every polygon (the same in all, so the rulings match).
+
+    A point is left out when, at every level, the straight edge between the points kept on each
+    side of it passes within ``tolerance`` of it (Douglas-Peucker over all levels at once). The
+    polygons are two chains, port then starboard; the four end points always stay.
+    """
+    stack = np.stack(polygons)  # levels x points x 2
+    count = stack.shape[1]
+    half = count // 2
+    keep = {0, half - 1, half, count - 1}
+
+    def split(first, last):
+        if last - first < 2:
+            return
+        start, end = stack[:, first:first + 1], stack[:, last:last + 1]
+        direction = end - start
+        length = np.linalg.norm(direction, axis=2, keepdims=True)
+        length = np.where(length > 0, length, 1.0)
+        offset = stack[:, first + 1:last] - start
+        distance = np.abs(direction[..., 0] * offset[..., 1] - direction[..., 1] * offset[..., 0]) / length[..., 0]
+        worst = distance.max(axis=0)
+        index = int(np.argmax(worst))
+        if worst[index] > tolerance:
+            middle = first + 1 + index
+            keep.add(middle)
+            split(first, middle)
+            split(middle, last)
+
+    split(0, half - 1)
+    split(half, count - 1)
+    return np.array(sorted(keep))
+
+
 def loft_plans(levels: list[tuple[float, np.ndarray]]):
-    """Ruled solid through plan polygons ``[(z, polygon)]`` of equal point count."""
+    """Ruled solid through plan polygons ``[(z, polygon)]`` of equal point count.
+
+    Points that every level has on a straight edge are left out first: a parallel body then
+    gives one ruled face per band instead of one per point (the STEP is about ten times smaller).
+    """
     import cadquery as cq
 
-    wires = [_wire([(x, y, z) for x, y in polygon]) for z, polygon in levels]
+    kept = shared_points([polygon for _, polygon in levels])
+    wires = [_wire([(x, y, z) for x, y in polygon[kept]]) for z, polygon in levels]
     return cq.Solid.makeLoft(wires, True)
 
 

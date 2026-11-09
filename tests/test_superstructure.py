@@ -221,3 +221,14 @@ def test_raked_end_rounded_corners_and_window_recesses_shape_a_deckhouse():
     assert corner.Volume() < 0.1 * 0.5 * 0.5 * 0.5  # the forward corner is rounded off
     assert set(report['detail_used']) == {'end_fwd', 'corner_radius_m', 'windows', 'window_recess_m'}
     assert shaped.Volume() < plain.Volume()
+
+
+def test_shared_points_drop_only_points_that_are_straight_at_every_level():
+    from vessel_reconstruction.superstructure import shared_points
+
+    straight = np.array([[0, 1], [1, 1], [2, 1], [3, 1], [3, -1], [2, -1], [1, -1], [0, -1]], dtype=float)
+    bent = straight.copy()
+    bent[1, 1] = 1.2  # one level bends at point 1: that point stays in every level
+    assert shared_points([straight, straight]).tolist() == [0, 3, 4, 7]
+    # Point 2 is then 0.1 m off the edge from point 1 to point 3 at that level: it stays too.
+    assert shared_points([straight, bent]).tolist() == [0, 1, 2, 3, 4, 7]
