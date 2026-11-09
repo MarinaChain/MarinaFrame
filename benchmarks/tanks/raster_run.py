@@ -6,6 +6,9 @@ Usage (outputs are drawing derivatives: keep them in the git-ignored ``work/``):
         --sources ../../../work/sources --hull ../../../work/whole-vessel/final/whole-vessel-draft.glb \\
         --truth work/tanks-raster/truth/d1_tank_plan_rev1.json --out work/tanks-raster/runs/d1-300
 
+Huddell holdout (section 4): ``--scorer holdout --truth <liberty_truth/truth.json>`` scores with
+``benchmarks.tanks.holdout_score`` (H1 to H3, decision rule) and writes ``holdout_score.json``.
+
 The model (Claude Sonnet 5.5, Claude Code CLI on the subscription) reads text only; its answers
 are cached per question image in ``--cache`` so a code change replays without new calls.
 """
@@ -18,6 +21,7 @@ import re
 import statistics
 import time
 
+from benchmarks.tanks import holdout_score
 from benchmarks.tanks.raster_cases import load_case
 from vessel_reconstruction import tank_plan_raster as raster
 from vessel_reconstruction import tanks
@@ -140,6 +144,15 @@ def score(truth: dict, records: list[dict]) -> dict:
 
 # --------------------------------------------------------------------------- run
 
+def plan_view_roles(specs: list) -> dict[str, str]:
+    """Plan view name (as ``read_sheets`` names it in the tank records) -> plan role."""
+    roles = {}
+    for number, sheet in enumerate(specs):
+        prefix = f'sheet{number + 1}_' if len(specs) > 1 else ''
+        roles.update({prefix + view.name: view.role for view in sheet.views if view.kind == 'plan'})
+    return roles
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--case', required=True)
@@ -148,6 +161,8 @@ def main() -> None:
     parser.add_argument('--scan', action='store_true', help='the simulated bilevel scan variant')
     parser.add_argument('--hull', type=Path, help='whole-vessel GLB with a "hull" node (clip)')
     parser.add_argument('--truth', help='truth JSON, or "d2" for the v1 vector table')
+    parser.add_argument('--scorer', choices=('dev', 'holdout'), default='dev',
+                        help='dev: R1 to R7 (section 3); holdout: H1 to H3 (section 4, Huddell truth.json)')
     parser.add_argument('--cache', type=Path, default=Path('work/tanks-raster/cache'))
     parser.add_argument('--out', type=Path, required=True)
     args = parser.parse_args()
@@ -155,6 +170,7 @@ def main() -> None:
     started = time.time()
     args.out.mkdir(parents=True, exist_ok=True)
     sheets = load_case(args.sources, args.case, args.dpi, args.scan)
+    view_roles = plan_view_roles([sheet for _, _, sheet in sheets])
     slicer = None
     if args.hull:
         from benchmarks.gunnerus.whole_vessel_internals import hull_triangles_from_glb
@@ -169,6 +185,17 @@ def main() -> None:
     stamp = [f'Draft tank model from a raster tank plan ({args.case}). Not approved for construction.',
              'Units metres; x forward from frame 0, y to port, z up from the baseline.']
     write_tank_tables(model, args.out / 'tank_tables', f'{args.case}_DRAFT', stamp)
+    if args.scorer == 'holdout':
+        if not args.truth:
+            parser.error('--scorer holdout needs --truth (liberty_truth/truth.json)')
+        result = holdout_score.score(holdout_score.load_truth(Path(args.truth)), reading['tanks'], view_roles)
+        (args.out / 'holdout_score.json').write_text(json.dumps(result, indent=1) + '\n')
+        (args.out / 'reading.json').write_text(json.dumps(reading, indent=1, default=str) + '\n')
+        print(json.dumps({'H1': result['H1_coverage']['value'], 'H2': result['H2_volume_median_abs_rel']['value'],
+                          'H3_total': result['H3_totals']['grand_total_rel_error'],
+                          'decision': result['decision'], 'tanks_built': result['H1_coverage']['built_tanks'],
+                          'seconds': reading['seconds']}, indent=1))
+        return
     if args.truth:
         truth = truth_d2(args.sources) if args.truth == 'd2' else truth_d1(Path(args.truth))
         reading['metrics'] = score(truth, reading['tanks'])

@@ -145,6 +145,69 @@ found in the reading record. The result is reported as measured, in a new sectio
 targets are not changed after the run, and any later fix makes a new development round (the
 holdout is then spent).
 
+### 4.1 Truth file format and scorer (written before the truth file and before the run)
+
+The independent agent writes `liberty_truth/truth.json` as one JSON object:
+
+```json
+{
+  "source": "EC2-S-C1 capacity plan tables: file names and pages",
+  "rows": [
+    {"name": "No. 3 D.B. Tank", "number": 3, "side": "P", "kind": "double bottom",
+     "content": "fuel oil or ballast", "printed_value": 1234.5, "printed_unit": "cu ft", "note": null}
+  ]
+}
+```
+
+| Field | Type and values |
+|---|---|
+| `name` | string, the printed name, as printed |
+| `number` | positive integer, the printed tank number; `null` when none is printed |
+| `side` | `"P"`, `"S"` or `"C"` (centre line, or one tank across the ship) |
+| `kind` | `"double bottom"`, `"deep tank"`, `"peak"`, `"settling"`, `"other"` |
+| `content` | `"fuel oil"`, `"fuel oil or ballast"`, `"ballast"`, `"fresh water"`, `"feed water"`, `"other"` |
+| `printed_value` | positive number, the printed 100 % capacity as printed; `null` when none is printed |
+| `printed_unit` | `"cu ft"` or `"US gal"` (section 4.2), the unit of `printed_value` |
+| `note` | optional string or `null` (for example "printed 5P") |
+
+All fields except `note` are required in each row; another field or a value outside the lists
+stops the scorer (`ValueError`). Rows with `printed_value` `null` are left out (and counted).
+`source` is free text. The scorer converts to m3 (section 4.2).
+
+Scorer: `benchmarks/tanks/holdout_score.py`, run as
+`python -m benchmarks.tanks.raster_run --case arthur_m_huddell --scorer holdout --truth <truth.json> ...`;
+it writes `holdout_score.json` (H1 to H3, the decision, the per-row match table, unmatched tanks).
+How it applies the matching rule above, fixed now:
+- Tank number: the reader's `tank_key` of the built tank's label ("No 3 P" is number 3, side P;
+  "S" or "SB" is side S). A row or a tank without a number does not match.
+- Side: equal sides; a tank without a side matches a `"C"` row, or the single row with that
+  number and that kind.
+- Kind: from the label as read: "deep" gives deep tank, "peak" peak, "settling" settling,
+  "D.B." or "double bottom" double bottom (first of these in that order). Without such a word, a
+  tank of an inner-bottom plan (role `double_bottom`) is a double bottom; any other tank is
+  `"other"`.
+- Order: rows in file order; each row takes the first unused built tank (reader order) that
+  matches. Each row and each tank is used at most once.
+- H2 uses the matched rows only (`built / truth - 1`). H3 groups: fuel oil = "fuel oil" and
+  "fuel oil or ballast"; ballast; fresh and feed water. The grand total is over all truth rows,
+  "other" included; an unmatched row counts 0 m3. Targets are met at equality.
+
+### 4.2 Amendment before the run, 2026-11-09
+
+Made after the units of the truth tables were known (from the coordinator, without opening
+`liberty_truth/` on this lane) and before any Huddell run. No target and no matching rule is
+changed.
+
+1. Units. The water ballast table (fore and after peaks included) prints cubic feet; the fresh
+   water and fuel oil tables (settling and deep tanks included) print US gallons only. As first
+   written, section 4 would have left out every gallon row. A row printed in US gallons is
+   converted exactly: 1 US gal = 231 in3 = 231/1728 ft3 = 0.1336805556 ft3, then m3 = ft3 x
+   0.0283168 as before. The truth file keeps the printed value and unit (`printed_value`,
+   `printed_unit`); the scorer converts.
+2. Repeated "No.5P". The water ballast table prints "No.5P" twice (on both the John W. Brown and
+   the Peter Minuit tables). In the P/S order of that table the second occurrence is No. 5 S: the
+   truth file records `"side": "S"` for it, with `"note": "printed 5P"`.
+
 ## 5. Development results (2026-11-09)
 
 Code: `src/vessel_reconstruction/tank_plan_raster.py` (reader), `benchmarks/tanks/raster_cases.py`
