@@ -102,11 +102,19 @@ def calibration_record(cal: sc.Calibration) -> dict:
     return data
 
 
-def calibration_from_record(data: dict) -> sc.Calibration:
-    fields = {key: data.get(key) for key in ('box', 'centre_column', 'baseline_row', 'pixels_per_ft',
-                                             'max_offset_px')}
-    cal = sc.Calibration(**fields, waterlines=list(data.get('waterlines') or []),
-                         sides=list(data.get('sides') or []), grid_rows=list(data.get('grid_rows') or []),
+def calibration_from_record(data: dict, scale: float = 1.0) -> sc.Calibration:
+    """The calibration of a record, its pixel values multiplied by `scale` (the worker's page may be
+    a reduced copy of the sheet the intake read)."""
+    def scaled(value):
+        return None if value is None else value * scale
+
+    sides = [dict(side, grid_columns=[c * scale for c in side.get('grid_columns', [])])
+             for side in data.get('sides') or []]
+    waterlines = [dict(w, row=w['row'] * scale) for w in data.get('waterlines') or []]
+    cal = sc.Calibration(box=[int(round(v * scale)) for v in data.get('box') or []],
+                         centre_column=scaled(data.get('centre_column')), baseline_row=scaled(data.get('baseline_row')),
+                         pixels_per_ft=scaled(data.get('pixels_per_ft')), max_offset_px=scaled(data.get('max_offset_px')),
+                         waterlines=waterlines, sides=sides, grid_rows=[r * scale for r in data.get('grid_rows') or []],
                          sources=dict(data.get('sources') or {}), notes=list(data.get('notes') or []))
     cal.flags = [sc.Flag(f['field'], f['message']) for f in data.get('flags') or []]
     return cal
@@ -150,7 +158,8 @@ def reader_anchors(sections: list[dict], anchors: list, record: dict | None) -> 
     if not record.get('usable_for_build'):
         return anchors, {'used': False, 'reason': record.get('reason', 'calibration not usable')}
     curves = {s['station']: s for s in record.get('stations', [])}
-    per_metre = record['calibration']['pixels_per_ft'] / sc.FEET_M
+    # px per metre on the worker's page (a reduced copy of the read sheet, when it was too large)
+    per_metre = record['calibration']['pixels_per_ft'] / sc.FEET_M * record.get('spec_page_scale', 1.0)
     replaced, warnings = [], []
     kept = {a.id: a for a in anchors}
     for section in sections:
@@ -179,7 +188,7 @@ def write_check(task_root: Path, image: np.ndarray, record: dict | None, report:
     """The review item: overlay PNG and summary JSON in the task's domain folder."""
     if not record or not record.get('calibration', {}).get('box'):
         return
-    cal = calibration_from_record(record['calibration'])
+    cal = calibration_from_record(record['calibration'], record.get('spec_page_scale', 1.0))
     gray = image.mean(axis=2) if image.ndim == 3 else image
     (task_root / CHECK_PNG).write_bytes(cr.overlay_png(gray < 128, cal))
     summary = {'schema': SCHEMA, 'overlay': CHECK_PNG, 'used': report.get('used', False),

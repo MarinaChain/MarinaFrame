@@ -102,3 +102,22 @@ def test_write_check_writes_overlay_and_summary(tmp_path):
     assert (tmp_path / bpi.CHECK_PNG).read_bytes().startswith(b'\x89PNG')
     bpi.write_check(tmp_path / 'none', image, None, {'used': False})
     assert not (tmp_path / 'none').exists()
+
+
+def test_a_raster_above_the_worker_budget_gets_a_reduced_spec_page(tmp_path, monkeypatch):
+    from PIL import Image
+    monkeypatch.setattr(intake, '_worker_pixel_budget', lambda: 10_000)
+    (tmp_path / 'sources').mkdir()
+    Image.new('L', (400, 200), 255).save(tmp_path / 'sources' / 'sheet.png')
+    source = intake._spec_source({'kind': 'raster', 'file': 'x'}, {'x': 'sheet.png'}, tmp_path)
+    assert source['file'] == 'sources/sheet-reduced.png' and 'reduced' in source['transformation']
+    with Image.open(tmp_path / source['file']) as reduced:
+        assert reduced.width * reduced.height <= 10_000 and reduced.width == 2 * reduced.height
+
+
+def test_calibration_record_scales_to_a_reduced_page():
+    record, _ = bpi.read_body_plan(synthetic_sheet(), FakeReading(), dpi=100.0)
+    cal = bpi.calibration_from_record(record['calibration'], 0.5)
+    assert cal.centre_column == pytest.approx(record['calibration']['centre_column'] / 2)
+    assert cal.pixels_per_ft == pytest.approx(record['calibration']['pixels_per_ft'] / 2)
+    assert cal.box == [round(v / 2) for v in record['calibration']['box']]
