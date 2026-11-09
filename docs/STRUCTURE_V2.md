@@ -2,7 +2,7 @@
 
 Plan: `docs/plans/2026-11-09-whole-vessel-scope.md` section 4; metrics S1 to S6 fixed in section
 4.3.1 before the build (commit `7225a67`). Development figures only: there is no sealed 3D split.
-Every output has `engineering_approved=false`. Resume point: section 6.5 (round 2).
+Every output has `engineering_approved=false`. Resume point: section 7.5 (after round 2).
 
 ## 1. Method
 
@@ -107,8 +107,9 @@ Written before the round 2 code (branch `feature/structure-3d`). Sections 1 to 5
    `guessed`: the drawings print a grade, not a density). Totals per scoring label, per group
    (longitudinal / transverse) and per thickness source, and a grand total. Export as CSV with the
    draft stamp lines (same rules as `exports/tank_tables.py`: formula-safe text cells).
-3. OCX 3.0.1 export of a block: one `Panel` per member host or transverse station zone, one
-   `Plate` per member (stiffener webs and flanges are written as plates: the block model holds
+3. OCX 3.0.1 export of a block: one `Plate` per member (as built: plates sit directly under
+   `Vessel`, which the schema allows; a block zone holds members in several planes, so it is not
+   one OCX `Panel`, and a panel per member would only repeat the plate) (stiffener webs and flanges are written as plates: the block model holds
    them as flat parts; an OCX `Stiffener` with a section catalogue is later work). Each plate has
    its outer contour (closed polyline of the mid-plane rectangle), `PlateMaterial` with thickness
    and a material catalogue entry, net area and dry weight. The ID goes in `name`; source labels
@@ -157,3 +158,91 @@ then results in section 7. Command for the scored run:
     PYTHONPATH=src:. .venv/bin/python -m vessel_reconstruction.structure.block_eval \
         --root ../../../work/sources/midship --out work/step2/round2.json \
         --ocx-dir work/step2/ocx --steel-dir work/step2/steel
+
+## 7. Results, round 2 (2026-11-09)
+
+Commands (outputs in git-ignored `work/step2/`; 20 s and 8 s):
+
+    PYTHONPATH=src:. .venv/bin/python -m vessel_reconstruction.structure.block_eval \
+        --root ../../../work/sources/midship --out work/step2/round2.json \
+        --ocx-dir work/step2/ocx --steel-dir work/step2/steel \
+        --ocx-schema ../../../work/sources/ocx_schema/ocx/ocx_301
+    PYTHONPATH=src:. .venv/bin/python -m benchmarks.gunnerus.structure_plates \
+        --sources ../../../work/sources/gunnerus --assembly ../../../work/whole-vessel/final \
+        --out work/step2/gunnerus --ocx-schema ../../../work/sources/ocx_schema/ocx/ocx_301
+
+### 7.1 What is built
+
+- `structure/block3d.py`: material read from the material column of the plate and stiffener
+  tables; every member has a thickness and a material, each labelled `printed` or `guessed`
+  (`label_thickness_and_material`). On the 12 designs no member was left without a thickness
+  before the guess (the guesses are the ordinary frames and their flanges, as in round 1).
+- `structure/steel.py`: steel weight per member (area x thickness x 7.85 t/m3, density `guessed`)
+  and totals by label, group, thickness source and in all; two CSV files per block with the draft
+  stamp.
+- `structure/ocx.py`: OCX 3.0.1 writer (plates with closed polyline contour, thickness, material
+  catalogue with OCX grade names, net area, dry weight, centre of gravity, x reference planes at
+  the block stations, UnitsML units), streaming plate reader, offline `xmllint` schema check, round
+  trip. `block_eval` gains `--ocx-dir`, `--steel-dir`, `--ocx-schema`.
+- `benchmarks/gunnerus/structure_plates.py`: Gunnerus tank tops and main bulkheads (hull-clipped by
+  the existing internals reader) as block members, with steel table and OCX export.
+- Tests: `tests/test_structure_export.py` (steel arithmetic, draft stamp, labels, contour area,
+  grade names, OCX round trip, schema pass and a broken file that fails).
+
+### 7.2 S1 to S6 (12 development designs, 18,244 truth members)
+
+Unchanged from round 1 (section 2): round 2 adds attributes, not geometry.
+
+| Metric | Result | Target |
+|---|---|---|
+| S1 detection P / R / F1 | 0.480 / 0.474 / **0.477** | F1 >= 0.80: **missed** |
+| S1 longitudinal recall (precision) | 0.997 (1.000) | >= 0.95: met |
+| S1 transverse recall (precision) | 0.346 (0.350) | >= 0.60: **missed** |
+| S2 typed macro F1 | 0.779 | report |
+| S3 centre error median / p95 (mm) | 10.4 / 197 | median <= 50: met |
+| S4 printed thickness exact, longitudinal / transverse | 0.695 (0.997 cut to mm) / 0.999 | report |
+| S5 steel volume, median abs relative error | 4.1 % (all 12 low: -0.6 % to -11.1 %) | <= 10 %: met |
+| S6 members by placement source | 4,773 traced; 13,256 use a guess | report |
+
+The causes of the two misses are in section 2 (block length and frame spaces per web space are
+not printed). Steel weight per block: 772 t to 1,185 t (12 designs; 40 m block). The steel table
+total divided by the density equals the S5 built volume (same members, same area x thickness).
+
+### 7.3 OCX (plan section 4.3.3)
+
+| Check | Result |
+|---|---|
+| Schema (OCX 3.0.1 XSD, `xmllint`) on every export | **12 / 12 MiDShip blocks valid** (18,029 plates); Gunnerus internals export valid |
+| Round trip of our own export: plate count, thickness, area per plate | **all equal on 12 / 12** (and on Gunnerus, 12 plates) |
+| VLCC sample `D-VLCC_1-HOLD-OCX-simple_v3.3docx` read by the same reader | 523 plates, all with thickness and area, no error (1.4 s); most common thicknesses 10, 12, 20, 15, 30 mm |
+
+The first schema run of the unit test found a real error: OCX grade names are `A36`, not `AH36`
+(the writer now maps them).
+
+### 7.4 Gunnerus (development, G5)
+
+G1 to G4 are the tanks lane's (`docs/TANKS_V1.md` section 5), not re-measured.
+
+| G5 item | Result |
+|---|---|
+| Internal parts built / requested | 36 / 36 (24 tanks, 7 main transverse bulkheads, 5 tank-top runs) |
+| Source labels over the parts' arguments | 64 `traced`, 20 `guessed` |
+| Plates with an ID and a thickness | 12 / 12; thickness source: 12 `guessed` (10 mm) |
+| Steel weight of these plates | 29.5 t (draft; 10 mm guessed) |
+
+The Gunnerus construction plans print profile sizes (for example HP 100x7, HP 140x8) and a few
+plate thicknesses (PL. 8,0, PL. 12,0, PL. 15,0), but no printed plate thickness is tied to a tank
+top or bulkhead by text this reader follows; so the thickness stays `guessed`.
+
+### 7.5 Open (resume point after round 2)
+
+1. Gunnerus 3D structure from its midship section (DXF): extrude the section members (shell,
+   tank top, girders, frames with the printed HP sizes) along the parallel body at the 500 mm frame
+   spacing and clip them to the built hull at the ends (`tanks.HullSlicer` does the hull section).
+   Not built in round 2.
+2. Plate thickness from construction-plan labels (leaders to plates) for Gunnerus.
+3. OCX `Stiffener` elements with a section catalogue (today webs and flanges are plates), and
+   `Panel` grouping by surface.
+4. Transverse recall on MiDShip (block length and frame-space guesses; brackets, openings), as
+   section 5.
+5. A sealed 3D split from the next MiDShip tranche.
