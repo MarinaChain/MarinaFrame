@@ -229,7 +229,8 @@ pub fn run(
             .arg("--response")
             .arg(&response);
         c.env_clear();
-        for key in ["PATH", "LANG", "LC_ALL", "TZ"] {
+        // MARINAFRAME_HULL_FAIRING is a hull build setting (Python fairing.SETTING), not a secret.
+        for key in ["PATH", "LANG", "LC_ALL", "TZ", "MARINAFRAME_HULL_FAIRING"] {
             if let Ok(v) = std::env::var(key) {
                 c.env(key, v);
             }

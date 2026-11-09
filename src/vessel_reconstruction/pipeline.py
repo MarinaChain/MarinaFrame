@@ -45,6 +45,30 @@ def _complexity_fit_warnings(normalized: list[dict]) -> list[dict]:
     return warnings
 
 
+def hull_fairing_enabled() -> bool:
+    from .fairing import enabled
+    return enabled()
+
+
+def _faired_sections(sections: list[dict], result: dict) -> list[dict]:
+    """Sections from the faired hull surface, or the sections as given when the fit fails.
+
+    The fairing report (without the input points) goes to the run diagnostics; its check
+    items (points moved beyond their tolerance, with the distance) become warnings.
+    """
+    from .fairing import METHOD, fair_sections
+    try:
+        faired, report = fair_sections(sections)
+    except Exception as exc:  # happy path: a fit failure keeps the current hull
+        faired, report = sections, {"method": METHOD, "applied": False, "reason": f"fit failed ({type(exc).__name__})",
+                                    "check_items": [gap("fairing_fallback", f"Hull fairing failed ({type(exc).__name__}); "
+                                                        "the hull goes through the sections as observed.", severity="warning")]}
+    result.setdefault("diagnostics", {})["hull_fairing"] = {key: value for key, value in report.items()
+                                                          if key != "check_items"}
+    result["gaps"].extend(report["check_items"])
+    return faired
+
+
 def build_region_hull(*args, **kwargs):
     from .geometry import build_region_hull as build
     return build(*args, **kwargs)
@@ -368,15 +392,28 @@ def reconstruct(spec_path: str | Path, output_dir: str | Path, *, export_cad: bo
                 fairness = check_fairness([s for s in result["sections"] if s.get("source_label") != "interpolated"])
                 result.setdefault("diagnostics", {})["fairness"] = fairness
                 result["gaps"].extend(fairness_warnings(fairness))
-            for section in result["sections"]:
-                section.setdefault("evidence", {}).update(source_id="source-1", source_sha256=result["sources"][0]["sha256"],
-                    assistance=assistance)
-                if len(result["sources"]) > 1:
-                    section["evidence"]["station_source_id"] = "source-2"
-            extracted["sections"] = result["sections"]
-            write_json(stage / "extracted_sections.json", extracted)
-            result["provenance"].update(extraction_complete=True, extracted_geometry_sha256=digest_object([
-                observed_geometry(section) for section in result["sections"]]))
+            # Hull fairing (setting, off by default): sections taken from one fair surface
+            # fitted to all stations at once. The sections as observed are kept for the
+            # fallback below.
+            observed_sections = None
+            if hull_fairing_enabled() and result["sections"] and not has_regions(result["sections"]):
+                observed_sections = result["sections"]
+                result["sections"] = _faired_sections(observed_sections, result)
+
+            def bind_evidence(sections):
+                for section in sections:
+                    section.setdefault("evidence", {}).update(source_id="source-1", source_sha256=result["sources"][0]["sha256"],
+                        assistance=assistance)
+                    if len(result["sources"]) > 1:
+                        section["evidence"]["station_source_id"] = "source-2"
+            bind_evidence(result["sections"])
+
+            def record_extraction():
+                extracted["sections"] = result["sections"]
+                write_json(stage / "extracted_sections.json", extracted)
+                result["provenance"].update(extraction_complete=True, extracted_geometry_sha256=digest_object([
+                    observed_geometry(section) for section in result["sections"]]))
+            record_extraction()
             if not _has_block(result):
                 phase = "cad_construction"
                 transaction.checkpoint(phase)
@@ -391,7 +428,20 @@ def reconstruct(spec_path: str | Path, output_dir: str | Path, *, export_cad: bo
                 else:
                     # A draft simplifies over-complex curves to fit the CAD
                     # limits; a strict run still rejects them.
-                    shape, normalized = build_hull(result["sections"], fit_complexity="draft" in result)
+                    try:
+                        shape, normalized = build_hull(result["sections"], fit_complexity="draft" in result)
+                    except GeometryError as exc:
+                        if observed_sections is None:
+                            raise
+                        # Happy path: a faired hull that cannot be built falls back to the
+                        # hull through the sections as observed, with a check item.
+                        result["sections"] = observed_sections
+                        bind_evidence(result["sections"])
+                        result["gaps"].append(gap("fairing_fallback", f"The faired hull could not be built ({exc}); "
+                                                  "the hull goes through the sections as observed.", severity="warning"))
+                        result["diagnostics"]["hull_fairing"]["applied"] = False
+                        record_extraction()
+                        shape, normalized = build_hull(result["sections"], fit_complexity="draft" in result)
                     result["gaps"].extend(_complexity_fit_warnings(normalized))
                 provisional = metrics_for(shape)
                 constraints = input_spec.get("constraints", {})
