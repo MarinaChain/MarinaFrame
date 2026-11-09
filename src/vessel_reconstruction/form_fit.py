@@ -126,6 +126,8 @@ class Anchor:
     # "traced": rebuilt from its contour selection; "read": code-measured by the body-plan reader
     # (body_plan_intake), built from its points.
     source: str = "traced"
+    # Points below this height fill missing bottom ink; original points stay measured.
+    bottom_filled_below_m: float | None = None
 
 
 @dataclass
@@ -485,11 +487,19 @@ def fit_vessel(declared: list[dict], anchors: list[Anchor],
         sid, sx = section["id"], float(section["x_m"])
         anchor = by_id.get(sid)
         if anchor is not None:
-            # A reader row stays "read" when its top was continued; the row notes say so.
-            source = "read" if anchor.source == "read" else ("fitted" if anchor.extended else "traced")
+            # Completed bottoms build as interpolated curves, but retain the
+            # measured source of each original point in the vessel table.
+            source = anchor.source
+            point_sources = []
+            if anchor.bottom_filled_below_m is not None:
+                source = "fitted"
+                point_sources = ["interpolated" if p[1] < anchor.bottom_filled_below_m else anchor.source
+                                 for p in anchor.points_yz_m]
+            elif anchor.extended and source != "read":
+                source = "fitted"
             rows.append(StationRow(id=sid, x_m=sx, points_yz_m=anchor.points_yz_m, source=source,
                                    locked=not anchor.extended, selection_section=anchor.selection_section,
-                                   notes=list(anchor.notes)))
+                                   notes=list(anchor.notes), point_sources=point_sources))
             continue
         trend = trend_at(coefficients, sx, x_range)
         keel_shift, top_shift = _interpolate_residual(x, residual_heights, sx)

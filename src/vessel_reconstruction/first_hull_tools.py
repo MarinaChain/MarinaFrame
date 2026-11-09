@@ -121,6 +121,9 @@ def cut_bottoms_at_keel(anchors: list[Anchor], keels: dict) -> None:
         if keel is None or not anchor.pixels_per_metre or len(points) < 2:
             continue
         points = points[np.argsort(points[:, 1], kind="stable")]
+        # Reader cells are measured evidence; the model path keeps its original cut.
+        if anchor.source == "read":
+            continue
         if points[0, 1] < keel - DECK_TOP_TOLERANCE_PX / anchor.pixels_per_metre and points[-1, 1] > keel:
             start = [float(np.interp(keel, points[:, 1], points[:, 0])), keel]
             anchor.points_yz_m = np.vstack([start, points[points[:, 1] > keel]]).tolist()
@@ -138,15 +141,11 @@ BOTTOM_EXTENSION_POINTS = 6
 
 
 def extend_bottoms_to_keel(anchors: list[Anchor], keels: dict) -> None:
-    """Continue traced bottoms that stop above the keel, off the centreline, straight down to the keel.
+    """Complete bottoms, preserving the model path's original chord handling.
 
-    Near the baseline a shallow bottom runs close to the baseline and to the
-    other stations' bottoms, and the trace can lose it: shipd-1-00679-3v-L0
-    stations 3-4 stopped at y 6.0 m, z 0.82 m over a keel at 0.06 m, and the
-    build closed them flat at 0.82 m (9.5 % RMS each). The bottom is continued
-    in a straight line from the lowest traced point to the profile keel on the
-    centreline. Used only when the keel agrees with most traced bottoms;
-    changes ``anchors`` in place and marks them extended (built as curves).
+    Only scanned body-plan reader anchors (source ``read``) continue their
+    lowest measured segment. Their profile supplies the lower height, not a
+    chord to the centreline. Terminal curves keep their drawn ends.
     """
     import numpy as np
     bottoms = {a.id: min(p[1] for p in a.points_yz_m) for a in anchors if a.points_yz_m}
@@ -168,12 +167,32 @@ def extend_bottoms_to_keel(anchors: list[Anchor], keels: dict) -> None:
         if (low_z - keel <= BOTTOM_GAP_PX / anchor.pixels_per_metre
                 or low_y <= BOTTOM_GAP_BREADTH_SHARE * float(points[:, 0].max())):
             continue
-        share = np.linspace(0.0, 1.0, BOTTOM_EXTENSION_POINTS, endpoint=False)[:, None]
-        continued = np.array([0.0, keel]) + share * np.array([low_y, low_z - keel])
+        if anchor.source != "read":
+            share = np.linspace(0.0, 1.0, BOTTOM_EXTENSION_POINTS, endpoint=False)[:, None]
+            continued = np.array([0.0, keel]) + share * np.array([low_y, low_z - keel])
+            anchor.points_yz_m = np.vstack([continued, points]).tolist()
+            anchor.extended = True
+            anchor.notes.append(f"bottom continued from y {low_y:.2f} m, z {low_z:.3f} m straight to the "
+                                f"profile keel at z {keel:.3f} m on the centreline")
+            continue
+        higher = points[points[:, 1] > low_z + 1e-6]
+        if not len(higher):
+            continue
+        slope = max(0.0, float((higher[0, 0] - low_y) / (higher[0, 1] - low_z)))
+        heights = np.linspace(float(keel), low_z, BOTTOM_EXTENSION_POINTS, endpoint=False)
+        # Retain the centreline intersection as a knot: clamping samples alone
+        # would change the tangent in the last segment below the measured curve.
+        if slope > 0:
+            crossing = low_z - low_y / slope
+            if keel < crossing < low_z:
+                heights = np.unique(np.append(heights, crossing))
+        breadths = np.maximum(0.0, low_y + slope * (heights - low_z))
+        continued = np.column_stack([breadths, heights])
         anchor.points_yz_m = np.vstack([continued, points]).tolist()
+        anchor.bottom_filled_below_m = low_z
         anchor.extended = True
-        anchor.notes.append(f"bottom continued from y {low_y:.2f} m, z {low_z:.3f} m straight to the "
-                            f"profile keel at z {keel:.3f} m on the centreline")
+        anchor.notes.append(f"bottom interpolated below y {low_y:.2f} m, z {low_z:.3f} m along the "
+                            f"lowest measured segment to the profile keel at z {keel:.3f} m")
 
 
 def short_of_deck(anchors: list[Anchor], decks: dict) -> list[str]:

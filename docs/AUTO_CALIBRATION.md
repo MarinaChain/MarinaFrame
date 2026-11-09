@@ -242,9 +242,67 @@ all 12 stations; station x positions came from the model's reading. The outlier 
 the lowest waterline (2-6-0): the reader's cell is right; the built row differs there after the
 first hull's bottom handling at this transom-stern station (open).
 
-### 9.5 Open
+### 9.5 Bottom-handling replay (2026-11-10)
 
-- The hull's bottom handling near the keel moves one reader cell by 0.2 m (station 10, 2-6-0).
+`benchmarks/hull_fairing/replay_bottoms.py` replays stored phase-1 setups and model
+descriptions through `build_first_hull`, including profile handling and CAD export;
+it does not start from already-processed section rows. Baseline: `5a43f4b`;
+fix: `09b06d2`, now scoped to scanned body-plan reader anchors (`source == "read"`).
+Other anchors use the original profile cut, chord coordinates and notes unchanged.
+Fairing is off; reader and scorers are unchanged. Inputs are the main
+checkout's `work/autocal-live-6/bue_girl` and
+`work/round-3view-L{0,1}-sonnet-4f92e9f`. Local detailed results are in this
+worktree's `work/bottom-replay/{baseline-recheck,reader-only}.json`. No sealed evaluation data
+was used. These are fresh first hulls from the final stored reading, not the
+delivered revision builds scored in HULL_FAIRING.md section 6, so some baselines differ.
+
+BUE GIRL: **32.626 → 4.145 mm RMS**, maximum error **200.638 → 21.414 mm**;
+coverage stays **38/39 truth cells**, including station 10 at 2-6-0. All 38 built
+cells are now within 50 mm. The new lower segment is interpolated, not a newly
+read cell. The stored reader curve starts above that waterline; the old chord
+created the outlier. Reader output and calibration were not changed.
+
+| Development case | RMS % before | RMS % after |
+|---|---:|---:|
+| dtmb5415-L0 | 5.7864 | 5.7864 |
+| series60-L0 | 1.3850 | 1.3850 |
+| shipd-1-00679-L0 | 4.0481 | 4.0481 |
+| shipd-1-08158-L0 | 0.7534 | 0.7534 |
+| shipd-1-09867-L0 | 7.4362 | 7.4362 |
+| dtmb5415-L1 | 14.3393 | 14.3393 |
+| series60-L1 | 3.4919 | 3.4919 |
+| shipd-1-00679-L1 | 4.1218 | 4.1218 |
+| shipd-1-08158-L1 | 1.6406 | 1.6406 |
+| shipd-1-09867-L1 | 1.0045 | 1.0045 |
+
+**The reader-only no-regression target is met:** all ten dev score dictionaries
+(RMS, volume and gate result) and extracted section lists equal the freshly
+rerun baseline exactly, not just at the table's displayed precision. Gate passes
+remain 4/10. BUE GIRL retains exactly the gain measured before scoping.
+
+Historical result: the unscoped `09b06d2` replay in `158938c` made four dev RMS
+scores worse. Reader-only routing removes those changes from the model path.
+The fresh baseline for 00679-L1 is 4.121764355706063 %, versus the earlier
+4.1219719420204095 %; the reader-only replay matches the fresh baseline exactly.
+These results do not grant engineering approval.
+
+Reproduce from this worktree (baseline source can be extracted with
+`git archive 5a43f4b src`, without switching branches):
+
+```bash
+set -o pipefail
+PYTHONPATH=work/bottom-replay/baseline-src/src:. .venv/bin/python -m benchmarks.hull_fairing.replay_bottoms --out work/bottom-replay/baseline-recheck.json --tasks work/bottom-replay/baseline-recheck --resume
+PYTHONPATH=src:. .venv/bin/python -m benchmarks.hull_fairing.replay_bottoms --out work/bottom-replay/reader-only.json --tasks work/bottom-replay/reader-only --resume
+```
+
+Omit `--resume` and use new output/task paths for fresh runs. It retains completed
+case results after an interruption; incomplete tasks are preserved and replaced
+by fresh tasks. Keep baseline and fix output files separate.
+
+### 9.6 Open
+
+- The station 10 bottom outlier is reduced with reader-only handling (section 9.5);
+  all ten dev cases match the baseline exactly. Engineering review remains required.
 - BUMBLE BEE needs a person: the side flag is right, but the drawing's labels and the truth's
   numbering differ; the review item records "Something is wrong" but does not yet re-run with
   swapped halves or renumbered stations.
