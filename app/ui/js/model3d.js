@@ -163,7 +163,7 @@ export function createModelView({ host, onPick = null }) {
   const layers = { tanks: true, names: false, structure: true };
   /** Overlays: tank name labels, and the legend with the layer switches. */
   const labelLayer = el('div', { class: 'model-labels', 'aria-hidden': 'true' });
-  const legend = el('div', { class: 'model-legend', role: 'group', 'aria-label': 'Tanks by content' });
+  const legend = el('div', { class: 'model-legend', id: `legend-${Math.random().toString(36).slice(2, 8)}`, role: 'group', 'aria-label': 'Tanks and steel' });
   legend.hidden = true;
   host.append(labelLayer, legend);
 
@@ -176,15 +176,16 @@ export function createModelView({ host, onPick = null }) {
       requestRender();
     },
     onCutAtSelection: () => cutAtSelection(),
+    onClose: () => toggleCutPanel(false),
   });
   const cutButton = toolButton({ text: 'Section', iconName: 'cut', label: 'Section cut', keyHint: 'C', pressed: false, onClick: () => toggleCutPanel() });
   cutButton.setAttribute('aria-expanded', 'false');
   cutButton.setAttribute('aria-controls', cutPanel.id);
   const viewButtons = {};
   for (const [name, view] of Object.entries(STANDARD_VIEWS)) {
-    viewButtons[name] = toolButton({ text: view.name, label: view.label, keyHint: view.key, pressed: name === 'iso', onClick: () => showView(name) });
+    viewButtons[name] = toolButton({ iconName: view.icon, label: view.label, keyHint: view.key, pressed: name === 'iso', onClick: () => showView(name) });
   }
-  const orthoButton = toolButton({ text: 'Ortho', label: 'Orthographic camera', keyHint: 'P', pressed: false, onClick: () => setOrthographic(!camera.isOrthographicCamera) });
+  const orthoButton = toolButton({ iconName: 'ortho', label: 'Orthographic camera', keyHint: 'P', pressed: false, onClick: () => setOrthographic(!camera.isOrthographicCamera) });
   const fitButton = toolButton({ iconName: 'fit', label: 'Fit the selection', keyHint: 'F', onClick: () => fitSelection() });
   toolbar.add('Views', ...Object.values(viewButtons), orthoButton, fitButton);
   /** Mark the standard view shown (null: the camera has moved off every one). */
@@ -192,13 +193,14 @@ export function createModelView({ host, onPick = null }) {
     for (const [key, button] of Object.entries(viewButtons)) button.setAttribute('aria-pressed', String(key === name));
   }
   toolbar.add('Section', cutButton);
-  host.append(toolbar.element, cutPanel.element);
+  // The cut panel opens under the tool bar, however many rows the tool bar wraps to.
+  host.append(el('div', { class: 'model-controls' }, toolbar.element, cutPanel.element));
 
   // ---- Engineering overlays and the switches for them.
   const overlays = createOverlays({ scene, host, clip });
   const overlaySwitches = {};
-  function overlaySwitch(key, text, label, keyHint) {
-    const button = toolButton({ text, label, keyHint, pressed: overlays.shown[key], onClick: () => setOverlay(key, !overlays.shown[key]) });
+  function overlaySwitch(key, iconName, label, keyHint) {
+    const button = toolButton({ iconName, label, keyHint, pressed: overlays.shown[key], onClick: () => setOverlay(key, !overlays.shown[key]) });
     overlaySwitches[key] = button;
     return button;
   }
@@ -208,19 +210,20 @@ export function createModelView({ host, onPick = null }) {
     requestRender();
   }
   toolbar.add('Show',
-    overlaySwitch('grid', 'Grid', 'Reference grid', 'G'),
-    overlaySwitch('waterline', 'DWL', 'Design waterline plane', 'W'),
-    overlaySwitch('frames', 'Frames', 'Frame numbers', null),
-    overlaySwitch('edges', 'Edges', 'Feature edges', 'E'));
+    overlaySwitch('grid', 'grid', 'Reference grid', 'G'),
+    overlaySwitch('waterline', 'waterline', 'Design waterline plane', 'W'),
+    overlaySwitch('frames', 'frames', 'Frame numbers', null),
+    overlaySwitch('edges', 'edges', 'Feature edges', 'E'));
   const OVERLAY_KEYS = { g: 'grid', w: 'waterline', e: 'edges' };
   /** The x of the selected part's middle (Parts tab), or null. */
   let selectionX = null;
 
+  /** Open the section strip with a cut (a frame cut first), or close it and end the cut. */
   function toggleCutPanel(open = cutPanel.element.hidden) {
     cutPanel.element.hidden = !open;
     cutButton.setAttribute('aria-expanded', String(open));
-    // Opening the panel with no cut starts a frame cut, so the panel shows something at once.
     if (open && !cut.active) cutPanel.set({ axis: 'x' });
+    if (!open && cut.active) cutPanel.set({ axis: null });
   }
 
   /** Slider ranges of the cut panel for a model box: x by frames, y and z by centimetres. */
@@ -251,7 +254,7 @@ export function createModelView({ host, onPick = null }) {
       return;
     }
     const frame = frameAt(x, reference.frameSpacingM.value, reference.frameZeroX.value);
-    cutPanel.setSelection(`Cut at ${frameLabel(Math.round(frame))}`);
+    cutPanel.setSelection(frameLabel(Math.round(frame)));
   }
 
   /** Cut at the frame nearest the selection (a part, else a section station). */
@@ -282,7 +285,6 @@ export function createModelView({ host, onPick = null }) {
       setOverlay(overlayKey, !overlays.shown[overlayKey]);
       event.preventDefault();
     } else if (event.key === 'Escape' && !cutPanel.element.hidden) {
-      cutPanel.set({ axis: null });
       toggleCutPanel(false);
       event.preventDefault();
     }
@@ -522,25 +524,49 @@ export function createModelView({ host, onPick = null }) {
     return (layers.tanks && tankMeshes.length > 0) || (layers.structure && steelMeshes.length > 0);
   }
 
-  /** The legend of the tank colours and the switches for tanks and names (hidden without tanks). */
+  /** Which colour keys of the legend are open (the legend starts as one row of chips). */
+  const legendOpen = { tanks: false, structure: false };
+  const LEGEND_NOTE = 'Tanks by content (capacity plan), steel by member group. Draft, not for construction.';
+
+  /**
+   * The legend: one row of chips (Tanks, Steel: show or hide the layer; ▾ opens its colour key;
+   * Names), hidden without tanks or steel. The colour keys and the note show only when opened.
+   */
   function renderLegend() {
     legend.hidden = !wholeVessel || (!tankMeshes.length && !steelMeshes.length);
     if (legend.hidden) return;
-    const toggle = (key, text) => el('label', { class: 'model-switch' },
-      el('input', { type: 'checkbox', checked: layers[key], onchange: (event) => setLayer(key, event.target.checked) }),
-      text);
-    const list = (rows) => el('ul', { class: 'model-legend-rows' }, ...rows.map((row) => el('li', {},
+    // A chip press redraws the legend; the focus stays on the same control.
+    const focusKey = legend.contains(document.activeElement) ? document.activeElement.dataset.legendKey : null;
+    const listId = (key) => `${legend.id}-${key}`;
+    const chip = (key, text, keyLabel) => el('span', { class: 'model-chip' },
+      el('button', {
+        type: 'button', class: 'model-chip-toggle', dataset: { legendKey: `${key}-toggle` },
+        'aria-pressed': String(layers[key]), title: `Show or hide the ${keyLabel}`, onclick: () => setLayer(key, !layers[key]),
+      }, text),
+      key in legendOpen ? el('button', {
+        type: 'button', class: 'model-chip-open', dataset: { legendKey: `${key}-open` },
+        'aria-expanded': String(legendOpen[key]), 'aria-controls': listId(key), 'aria-label': `Colour key of the ${keyLabel}`, title: `Colour key of the ${keyLabel}`,
+        onclick: () => { legendOpen[key] = !legendOpen[key]; renderLegend(); },
+      }, icon('chevron')) : null);
+    const list = (key, rows) => el('ul', { class: 'model-legend-rows', id: listId(key) }, ...rows.map((row) => el('li', {},
       el('span', { class: 'model-swatch', style: { background: `var(${row.token})` } }),
       el('span', {}, row.label), el('span', { class: 'model-legend-count' }, String(row.count)))));
     const steelRows = steelLegend(steelMeshes.map((mesh) => mesh.userData));
     const steelCount = steelRows.reduce((sum, row) => sum + row.count, 0);
+    const tanksOpen = tankMeshes.length && legendOpen.tanks;
+    const steelOpen = steelMeshes.length && legendOpen.structure;
     fillNode(legend,
-      tankMeshes.length ? el('div', { class: 'model-legend-head' }, toggle('tanks', `Tanks (${tankMeshes.length})`), toggle('names', 'Names')) : null,
-      tankMeshes.length && layers.tanks ? list(tankLegend(tankMeshes.map((mesh) => mesh.userData))) : null,
-      steelMeshes.length ? el('div', { class: 'model-legend-head' }, toggle('structure', `Steel (${steelCount} members)`)) : null,
-      steelMeshes.length && layers.structure ? list(steelRows) : null,
-      el('p', { class: 'model-legend-note' }, 'Tanks by content (capacity plan), steel by member group. Draft, not for construction.'));
+      el('div', { class: 'model-legend-head' },
+        tankMeshes.length ? chip('tanks', `Tanks ${tankMeshes.length}`, 'tanks') : null,
+        steelMeshes.length ? chip('structure', `Steel ${steelCount}`, 'steel members') : null,
+        tankMeshes.length ? chip('names', 'Names', 'tank names') : null),
+      tanksOpen ? list('tanks', tankLegend(tankMeshes.map((mesh) => mesh.userData))) : null,
+      steelOpen ? list('structure', steelRows) : null,
+      tanksOpen || steelOpen ? el('p', { class: 'model-legend-note' }, LEGEND_NOTE) : null);
+    legend.title = LEGEND_NOTE;
+    if (focusKey) legend.querySelector(`[data-legend-key="${focusKey}"]`)?.focus();
   }
+
 
   function setLayer(key, on) {
     layers[key] = on;

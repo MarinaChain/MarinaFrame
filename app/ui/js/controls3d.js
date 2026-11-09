@@ -35,7 +35,7 @@ export function toolButton({ text, iconName = null, label, keyHint = null, onCli
  * `onCutAtSelection()` cuts at the frame of the selected part. `setRanges({ x, y, z })` takes
  * [min, max, step] per axis (metres) and the hull reference, for the frame readout.
  */
-export function createCutPanel({ onChange, onCutAtSelection }) {
+export function createCutPanel({ onChange, onCutAtSelection, onClose }) {
   let state = { axis: null, value: 0, flipped: false };
   let ranges = { x: [0, 1, 0.01], y: [-1, 1, 0.01], z: [0, 1, 0.01] };
   let reference = null;
@@ -43,17 +43,18 @@ export function createCutPanel({ onChange, onCutAtSelection }) {
   const lastValue = {};
   const id = `cut-${Math.random().toString(36).slice(2, 8)}`;
 
-  const radios = [['', 'Off'], ...Object.entries(CUT_AXES).map(([axis, spec]) => [axis, `${spec.name} (${axis})`])]
-    .map(([axis, text]) => el('label', { class: 'model-cut-choice' },
-      el('input', { type: 'radio', name: `${id}-axis`, value: axis, onchange: () => choose(axis || null) }), text));
+  // A segmented control of native radio inputs (arrow keys move between them).
+  const radios = Object.entries(CUT_AXES).map(([axis, spec]) => el('label', { class: 'model-cut-choice', title: `${spec.name} cut (${axis})` },
+    el('input', { type: 'radio', class: 'visually-hidden', name: `${id}-axis`, value: axis, 'aria-label': `${spec.name} cut`, onchange: () => choose(axis) }),
+    el('span', { 'aria-hidden': 'true' }, spec.short)));
   const slider = el('input', { type: 'range', class: 'model-cut-slider', 'aria-label': 'Cut position', oninput: () => move(Number(slider.value)) });
-  const readout = el('output', { class: 'model-cut-readout', 'aria-live': 'polite' });
-  const flip = el('button', { type: 'button', class: 'btn btn-ghost btn-small', 'aria-pressed': 'false', onclick: () => apply({ ...state, flipped: !state.flipped }) }, 'Flip side');
-  const atSelection = el('button', { type: 'button', class: 'btn btn-ghost btn-small', hidden: true, onclick: () => onCutAtSelection() }, 'Cut at selection');
+  const readout = el('output', { class: 'model-cut-readout' });
+  const flip = toolButton({ iconName: 'flip', label: 'Flip the kept side', pressed: false, onClick: () => apply({ ...state, flipped: !state.flipped }) });
+  const atSelection = el('button', { type: 'button', class: 'model-tool', hidden: true, onclick: () => onCutAtSelection() });
+  const close = toolButton({ iconName: 'close', label: 'End the section cut', keyHint: 'Esc', onClick: () => onClose() });
   const element = el('div', { class: 'model-cut', id, role: 'group', 'aria-label': 'Section cut', hidden: true },
-    el('fieldset', { class: 'model-cut-axes' }, el('legend', {}, 'Section cut'), ...radios),
-    el('div', { class: 'model-cut-row' }, slider, readout),
-    el('div', { class: 'model-cut-row' }, flip, atSelection));
+    el('div', { class: 'model-cut-axes', role: 'radiogroup', 'aria-label': 'Cut plane' }, ...radios),
+    slider, readout, flip, atSelection, close);
 
   function defaultValue(axis) {
     if (lastValue[axis] !== undefined) return lastValue[axis];
@@ -85,7 +86,6 @@ export function createCutPanel({ onChange, onCutAtSelection }) {
     }
     const on = Boolean(state.axis);
     slider.disabled = !on;
-    flip.disabled = !on;
     flip.setAttribute('aria-pressed', String(state.flipped));
     if (on) {
       const [min, max, step] = ranges[state.axis];
@@ -97,7 +97,7 @@ export function createCutPanel({ onChange, onCutAtSelection }) {
       slider.setAttribute('aria-valuetext', text);
       readout.textContent = text;
     } else {
-      readout.textContent = 'No cut';
+      readout.textContent = '';
       slider.removeAttribute('aria-valuetext');
     }
   }
@@ -122,10 +122,13 @@ export function createCutPanel({ onChange, onCutAtSelection }) {
       const value = next.value ?? (axis && axis !== state.axis ? defaultValue(axis) : state.value);
       apply({ ...state, ...next, axis, value });
     },
-    /** Offer "Cut at …" for a selection (text such as "Cut at Fr 12"), or hide it with null. */
-    setSelection(text) {
-      atSelection.hidden = !text;
-      if (text) atSelection.textContent = text;
+    /** Offer a quick cut at a selection (a frame label such as "Fr 12"), or hide it with null. */
+    setSelection(frame) {
+      atSelection.hidden = !frame;
+      if (!frame) return;
+      atSelection.textContent = `At ${frame}`;
+      atSelection.title = `Cut at ${frame}, the frame of the selected part`;
+      atSelection.setAttribute('aria-label', `Cut at ${frame}, the frame of the selected part`);
     },
   };
 }

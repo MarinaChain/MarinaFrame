@@ -92,9 +92,9 @@ export function frameLabel(frame) {
  * cut, port of a buttock cut (the home view looks from starboard), below a waterline cut.
  */
 export const CUT_AXES = {
-  x: { index: 0, name: 'Frame', keep: -1, word: 'x' },
-  y: { index: 1, name: 'Buttock', keep: 1, word: 'y' },
-  z: { index: 2, name: 'Waterline', keep: -1, word: 'z' },
+  x: { index: 0, name: 'Frame', short: 'Frame', keep: -1, word: 'x' },
+  y: { index: 1, name: 'Buttock', short: 'Buttock', keep: 1, word: 'y' },
+  z: { index: 2, name: 'Waterline', short: 'WL', keep: -1, word: 'z' },
 };
 
 /**
@@ -109,11 +109,10 @@ export function cutPlane(axis, value, flipped = false) {
   return { normal, constant: -sign * value };
 }
 
-/** The readout of a cut position: "Fr 24 · x 13.20 m" for a frame cut, "z 2.57 m" otherwise. */
+/** The readout of a cut position: "Fr 24 · 13.20 m" for a frame cut, "z 2.57 m" otherwise. */
 export function cutLabel(axis, value, reference) {
-  const metres = `${CUT_AXES[axis].word} ${value.toFixed(2)} m`;
-  if (axis !== 'x' || !reference) return metres;
-  return `${frameLabel(frameAt(value, reference.frameSpacingM.value, reference.frameZeroX.value))} · ${metres}`;
+  if (axis !== 'x' || !reference) return `${CUT_AXES[axis].word} ${value.toFixed(2)} m`;
+  return `${frameLabel(frameAt(value, reference.frameSpacingM.value, reference.frameZeroX.value))} · ${value.toFixed(2)} m`;
 }
 
 /** Steps of a 1-2-5 sequence, for frame label steps and scale bar lengths. */
@@ -164,11 +163,16 @@ export function pointReadout(point, reference) {
   return parts.join(' · ');
 }
 
-/** The source line of the reference values: "DWL z 2.57 m (guessed) · frames 0.55 m (guessed)". */
+/** The reference line of the 3D view: "DWL 2.57 m · frames 0.55 m". */
 export function referenceLine(reference) {
-  const source = (value) => (value.source === 'given' ? '' : ` (${value.source})`);
-  return `DWL z ${reference.designWaterlineZ.value.toFixed(2)} m${source(reference.designWaterlineZ)}`
-    + ` · frames ${reference.frameSpacingM.value.toFixed(2)} m${source(reference.frameSpacingM)}`;
+  return `DWL ${reference.designWaterlineZ.value.toFixed(2)} m · frames ${reference.frameSpacingM.value.toFixed(2)} m`;
+}
+
+/** The reference values that were guessed (not given by the run), by name; empty when none. */
+export function guessedReferences(reference) {
+  return [['design waterline', reference.designWaterlineZ], ['frame spacing', reference.frameSpacingM]]
+    .filter(([, value]) => value.source === 'guessed')
+    .map(([name]) => name);
 }
 
 /**
@@ -178,11 +182,11 @@ export function referenceLine(reference) {
  * starboard so "up" on screen is to port, not undefined.
  */
 export const STANDARD_VIEWS = {
-  iso: { name: 'Iso', label: 'Iso view', key: '1', direction: [1.0, -1.25, 0.75] },
-  profile: { name: 'Profile', label: 'Profile from starboard', key: '2', direction: [0, -1, 0] },
-  plan: { name: 'Plan', label: 'Plan from above', key: '3', direction: [0, -1e-4, 1] },
-  bow: { name: 'Bow', label: 'Body plan from ahead', key: '4', direction: [1, 0, 0] },
-  stern: { name: 'Stern', label: 'Body plan from astern', key: '5', direction: [-1, 0, 0] },
+  iso: { name: 'Iso', icon: 'view-iso', label: 'Iso view', key: '1', direction: [1.0, -1.25, 0.75] },
+  profile: { name: 'Profile', icon: 'view-profile', label: 'Profile from starboard', key: '2', direction: [0, -1, 0] },
+  plan: { name: 'Plan', icon: 'view-plan', label: 'Plan from above', key: '3', direction: [0, -1e-4, 1] },
+  bow: { name: 'Bow', icon: 'view-bow', label: 'Body plan from ahead', key: '4', direction: [1, 0, 0] },
+  stern: { name: 'Stern', icon: 'view-stern', label: 'Body plan from astern', key: '5', direction: [-1, 0, 0] },
 };
 
 /** The standard view of a key ("1" to "5"), or null. */

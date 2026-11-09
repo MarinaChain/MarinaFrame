@@ -6,7 +6,7 @@
 
 import * as THREE from '../vendor/three/three.module.min.js';
 import { el, svg } from './dom.js';
-import { frameAt, frameLabel, frameLabelStep, niceAtLeast, referenceLine, scaleBar } from './reference3d.js';
+import { frameAt, frameLabel, frameLabelStep, guessedReferences, niceAtLeast, referenceLine, scaleBar } from './reference3d.js';
 
 /** The grid reaches this share of the hull size past the hull on each side. */
 const GRID_MARGIN = 0.15;
@@ -71,11 +71,13 @@ export function createOverlays({ scene, host, clip }) {
   const scaleLine = el('span', { class: 'model-scale-bar' });
   const scaleText = el('span', { class: 'model-scale-text' });
   const scale = el('div', { class: 'model-scale', role: 'img', 'aria-label': 'Scale' }, scaleLine, scaleText);
-  const referenceText = el('span', { class: 'model-reference' });
+  const referenceText = el('span', { class: 'model-reference-text' });
+  const guessedMark = el('span', { class: 'model-badge', dataset: { tone: 'guess' }, hidden: true }, 'guessed');
   const corner = el('div', { class: 'model-corner' },
     el('div', { class: 'model-corner-row' }, scale, triad),
-    referenceText,
-    el('span', { class: 'model-stamp' }, 'Draft, not for construction'));
+    el('div', { class: 'model-corner-row' },
+      el('span', { class: 'model-reference' }, referenceText, guessedMark),
+      el('span', { class: 'model-badge', dataset: { tone: 'draft' }, title: 'Draft, not for construction', 'aria-label': 'Draft, not for construction' }, 'Draft')));
   corner.hidden = true;
   host.append(frameLabels, readout, corner);
 
@@ -151,9 +153,13 @@ export function createOverlays({ scene, host, clip }) {
       parts.frames.add(lines(ticks, majorMaterial));
       frameLine = { reference, y: y - hullSize.y * MAJOR_TICK_SHARE * 1.6, z: z0, first, last };
       referenceText.textContent = referenceLine(reference);
-      referenceText.title = 'Design waterline and frame spacing of the 3D view. "guessed": from the hull size; the run does not give them.';
+      const guessed = guessedReferences(reference);
+      guessedMark.hidden = !guessed.length;
+      guessedMark.title = guessed.length ? `Guessed from the hull size (the run does not give it): ${guessed.join(' and ')}.` : '';
+      guessedMark.setAttribute('aria-label', guessedMark.title);
     } else {
       referenceText.textContent = '';
+      guessedMark.hidden = true;
     }
     corner.hidden = false;
     applyVisibility();

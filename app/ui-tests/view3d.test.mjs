@@ -2,7 +2,7 @@
 // Run: npm run test:ui
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { baselineZ, bootTopBand, cutLabel, cutPlane, frameAt, frameLabel, frameLabelStep, hullReference, nearestFrameX, niceAtLeast, niceAtMost, fitDistance, paintZone, pointReadout, referenceLine, scaleBar, STANDARD_VIEWS, viewOfKey } from '../ui/js/reference3d.js';
+import { baselineZ, bootTopBand, cutLabel, cutPlane, frameAt, frameLabel, frameLabelStep, guessedReferences, hullReference, nearestFrameX, niceAtLeast, niceAtMost, fitDistance, paintZone, pointReadout, referenceLine, scaleBar, STANDARD_VIEWS, viewOfKey } from '../ui/js/reference3d.js';
 
 /** The Gunnerus hull part of the whole-vessel GLB (metres, ship frame; skegs reach below z = 0). */
 const GUNNERUS = { min: [-1, -4.8, -0.517], max: [34, 4.8, 4.287] };
@@ -65,7 +65,7 @@ test('a cut keeps aft of a frame, port of a buttock and below a waterline, and f
 
 test('a frame cut reads its frame number and its x', () => {
   const ref = hullReference(GUNNERUS);
-  assert.equal(cutLabel('x', 5.5, ref), 'Fr 10 · x 5.50 m');
+  assert.equal(cutLabel('x', 5.5, ref), 'Fr 10 · 5.50 m');
   assert.equal(cutLabel('z', 2.571, ref), 'z 2.57 m');
 });
 
@@ -92,8 +92,11 @@ test('the scale bar is a round length that fits', () => {
 test('a point reads in metres with its frame, and the reference says its source', () => {
   const ref = hullReference(GUNNERUS);
   assert.equal(pointReadout([12.1, -1.2, 2], ref), 'x 12.10 m · y −1.20 m · z 2.00 m · Fr 22');
-  assert.equal(referenceLine(ref), 'DWL z 2.57 m (guessed) · frames 0.55 m (guessed)');
-  assert.equal(referenceLine(hullReference(GUNNERUS, { designWaterlineZ: 2.7, frameSpacingM: 0.6 })), 'DWL z 2.70 m · frames 0.60 m');
+  assert.equal(referenceLine(ref), 'DWL 2.57 m · frames 0.55 m');
+  assert.deepEqual(guessedReferences(ref), ['design waterline', 'frame spacing']);
+  const given = hullReference(GUNNERUS, { designWaterlineZ: 2.7, frameSpacingM: 0.6 });
+  assert.equal(referenceLine(given), 'DWL 2.70 m · frames 0.60 m');
+  assert.deepEqual(guessedReferences(given), []);
 });
 
 test('profile and plan views put the bow to the right, body plans look along x', () => {
