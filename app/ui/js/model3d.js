@@ -10,6 +10,8 @@ import { el, fill as fillNode, icon, prefersReducedMotion } from './dom.js';
 import { createSectionGrowth } from './growth3d.js';
 import { createAnimation } from './animation.js';
 import { placeLabels, steelLegend, steelToken, tankLegend, tankToken } from './tanks.js';
+import { createLighting, createPaintMaterial, createSteelMaterial, createTankMaterial, setUpRenderer, stylePaint } from './look3d.js';
+import { bootTopBand, hullReference } from './reference3d.js';
 
 /** Extra size of a section plane around the hull, as a fraction of beam and depth. */
 const PLANE_MARGIN = 0.25;
@@ -55,6 +57,8 @@ function themeColours() {
     grid: read('--line-strong'),
     gridMinor: read('--line'),
     hull: read('--model-hull'),
+    antifouling: read('--paint-antifouling'),
+    bootTop: read('--paint-boottop'),
     plane: read('--text-3'),
     accent: read('--accent'),
     guess: read('--guess-ink'),
@@ -93,6 +97,7 @@ export function createModelView({ host, onPick = null }) {
     return { setModel() {}, setSelected() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, showsWholeVessel: false, hasTanks: false };
   }
   renderer.setPixelRatio(window.devicePixelRatio);
+  setUpRenderer(renderer);
   renderer.domElement.setAttribute('aria-hidden', 'true');
   host.prepend(renderer.domElement);
 
@@ -105,14 +110,11 @@ export function createModelView({ host, onPick = null }) {
   // Keep the camera above the ground grid.
   controls.maxPolarAngle = Math.PI * 0.49;
 
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8478, 1.6));
-  const key = new THREE.DirectionalLight(0xffffff, 1.6);
-  key.position.set(1, -1.4, 2);
-  const fill = new THREE.DirectionalLight(0xffffff, 0.5);
-  fill.position.set(-1.5, 1, 0.6);
-  scene.add(key, fill);
-
-  const hullMaterial = new THREE.MeshStandardMaterial({ roughness: 0.62, metalness: 0.0, side: THREE.DoubleSide });
+  const lighting = createLighting({ renderer, scene });
+  /** Paint of the hull: antifouling, boot top and topside by height (look3d.js). */
+  const hullMaterial = createPaintMaterial();
+  /** Design waterline, baseline and frame numbering of the model shown (reference3d.js). */
+  let reference = null;
   const content = new THREE.Group();
   /** The outline of a whole-vessel part picked on the Parts tab, or null. */
   let highlight = null;
@@ -149,6 +151,7 @@ export function createModelView({ host, onPick = null }) {
       renderer.domElement.hidden = false;
       frameBox = box;
       gridBox = box;
+      setHullBox(box);
       buildGrid();
       resize();
       resetView();
@@ -188,16 +191,23 @@ export function createModelView({ host, onPick = null }) {
     updateLabels();
   }
 
-  function requestRender() {
+  /** Draw the next frame for a camera move (the shadows stay as they are). */
+  function requestFrame() {
     if (frame) return;
     frame = requestAnimationFrame(() => {
       frame = 0;
       // Damping keeps moving after the pointer stops; update() reports when it is still moving.
-      if (controls.update()) requestRender();
+      if (controls.update()) requestFrame();
       draw();
     });
   }
-  controls.addEventListener('change', requestRender);
+
+  /** Draw the next frame after a scene change: the shadows are drawn again too. */
+  function requestRender() {
+    lighting.markShadows();
+    requestFrame();
+  }
+  controls.addEventListener('change', requestFrame);
 
   // ---- Picking: a click (not a drag) on a section plane picks that section. A pointer over
   // a plane shows the hand cursor. A drag still rotates the view.
@@ -232,14 +242,14 @@ export function createModelView({ host, onPick = null }) {
     const tank = tankAt(event);
     if (tank !== hoveredTankId) {
       hoveredTankId = tank;
-      requestRender();
+      requestFrame();
     }
     if (onPick) renderer.domElement.style.cursor = planeAt(event) ? 'pointer' : '';
   });
   renderer.domElement.addEventListener('pointerleave', () => {
     if (!hoveredTankId) return;
     hoveredTankId = null;
-    requestRender();
+    requestFrame();
   });
 
   /** The part id of the shown tank under the pointer, or null. */
@@ -263,11 +273,16 @@ export function createModelView({ host, onPick = null }) {
     const seeInside = (layers.tanks && tankMeshes.length > 0) || (layers.structure && steelMeshes.length > 0);
     for (const mesh of shellMeshes) {
       const material = mesh.material;
-      material.color = mesh.userData.partId === highlightedId ? colours.accent : colours.hull;
+      paintHull(material);
+      // A selected part keeps its paint and glows in the selection blue.
+      material.emissive = mesh.userData.partId === highlightedId ? colours.accent.clone().multiplyScalar(0.45) : new THREE.Color(0x000000);
       if (material.transparent !== seeInside) material.needsUpdate = true;
       material.transparent = seeInside;
       material.opacity = seeInside ? SHELL_OPACITY_WITH_TANKS : 1;
       material.depthWrite = !seeInside;
+      // A see-through shell casts no shadow, or the tanks and steel inside it would be dark.
+      mesh.castShadow = !seeInside;
+      mesh.receiveShadow = !seeInside;
     }
     for (const mesh of tankMeshes) {
       mesh.visible = layers.tanks;
@@ -359,9 +374,27 @@ export function createModelView({ host, onPick = null }) {
   }
   new ResizeObserver(resize).observe(host);
 
+  /** Paint a hull material: topside in the theme's hull colour, the boot top at the design waterline. */
+  function paintHull(material) {
+    const band = reference ? bootTopBand(reference.designWaterlineZ.value, reference.depth) : [-1e6, -1e6];
+    stylePaint(material, { band, antifouling: colours.antifouling, bootTop: colours.bootTop, topside: colours.hull });
+  }
+
+  /**
+   * The model's hull box sets the design waterline (paint) and the frame numbering; the box of
+   * everything shown sets the lights and the ground shadow. Both are THREE.Box3 in metres.
+   */
+  function setHullBox(hullBox, sceneBox = hullBox) {
+    reference = hullBox ? hullReference({ min: hullBox.min.toArray(), max: hullBox.max.toArray() }) : null;
+    lighting.fit(sceneBox);
+    paintHull(hullMaterial);
+    for (const mesh of shellMeshes) paintHull(mesh.material);
+  }
+
   function applyColours() {
     scene.background = colours.background;
-    hullMaterial.color = colours.hull;
+    lighting.setTheme(colours.background.getHSL({}).l < 0.5);
+    paintHull(hullMaterial);
     for (const [id, plane] of planes) styleSectionPlane(plane, id === selectedId);
     for (const band of guessBands) styleGuessBand(band);
     if (grid) buildGrid();
@@ -534,12 +567,15 @@ export function createModelView({ host, onPick = null }) {
       scaleToMetres(geometry, lengthM);
       geometry.computeVertexNormals();
       hull = new THREE.Mesh(geometry, hullMaterial);
+      hull.castShadow = true;
+      hull.receiveShadow = true;
       content.add(hull);
 
       const box = new THREE.Box3().setFromObject(hull);
       const size = box.getSize(new THREE.Vector3());
       dims = size;
       gridBox = box;
+      if (!wholeVessel) setHullBox(box);
       buildGrid();
 
       for (const station of stations) {
@@ -590,6 +626,7 @@ export function createModelView({ host, onPick = null }) {
       if (!buffer) {
         // Back to the hull: move to its home view. With no whole vessel shown, the view
         // is already the hull's (and a run that is closing must not start a move).
+        if (hull) setHullBox(new THREE.Box3().setFromObject(hull));
         if (showedWholeVessel) resetView({ animate: true });
         requestRender();
         return Promise.resolve();
@@ -606,9 +643,12 @@ export function createModelView({ host, onPick = null }) {
             node.traverse((o) => {
               if (!o.isMesh) return;
               o.userData.partId = node.name;
-              o.material = new THREE.MeshStandardMaterial({ color: colours.hull, roughness: 0.62, metalness: 0, side: THREE.DoubleSide });
               // Tanks carry their name and content class as GLB extras (display_mesh.tank_style).
-              if (o.userData.kind === 'tank') {
+              const isTank = o.userData.kind === 'tank';
+              o.material = isTank ? createTankMaterial() : createPaintMaterial();
+              o.castShadow = true;
+              o.receiveShadow = true;
+              if (isTank) {
                 const edges = new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry, TANK_EDGE_ANGLE_DEG), new THREE.LineBasicMaterial());
                 o.add(edges);
                 tankMeshes.push(o);
@@ -621,6 +661,11 @@ export function createModelView({ host, onPick = null }) {
           wholeVessel = group;
           // Tank labels sit on the middle of the tank top (world coordinates, metres).
           group.updateMatrixWorld(true);
+          // The paint and the frame numbers follow the hull part (else every part that is not a tank).
+          const hullParts = shellMeshes.filter((mesh) => /(^|_)hull($|_)/.test(mesh.userData.partId || ''));
+          const hullBox = new THREE.Box3();
+          for (const mesh of hullParts.length ? hullParts : shellMeshes) hullBox.expandByObject(mesh);
+          setHullBox(hullBox.isEmpty() ? null : hullBox, new THREE.Box3().setFromObject(group));
           for (const mesh of tankMeshes) {
             const box = new THREE.Box3().setFromObject(mesh);
             mesh.userData.labelAnchor = new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.max.z);
@@ -676,12 +721,15 @@ export function createModelView({ host, onPick = null }) {
           }
           gltf.scene.traverse((o) => {
             if (!o.isMesh || o.userData.kind !== 'structure') return;
-            o.material = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.1, side: THREE.DoubleSide });
+            o.material = createSteelMaterial();
+            o.castShadow = true;
+            o.receiveShadow = true;
             steelMeshes.push(o);
           });
           structure = gltf.scene;
           // The whole-vessel group turns glTF Y-up into the app's Z-up and scales mm to m.
           wholeVessel.add(structure);
+          lighting.fit(new THREE.Box3().setFromObject(wholeVessel));
           styleWholeVessel();
           requestRender();
           resolve();

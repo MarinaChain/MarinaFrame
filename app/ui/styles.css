@@ -127,7 +127,11 @@
   --focus: rgba(6, 68, 142, 0.55);
   --shadow-sheet: 0 32px 64px -24px rgba(10, 31, 61, 0.25), 0 0 0 1px rgba(0, 69, 87, 0.12);
   --model-bg: var(--paper);
-  --model-hull: #E4E8EE; /* matte "drafting resin" */
+  --model-hull: #E4E8EE; /* matte "drafting resin"; also the topside paint of the 3D hull */
+  /* Hull paint below the topside in the 3D view (js/look3d.js): antifouling under the boot top
+     and the boot-top band at the design waterline. Paint colours, so they do not switch. */
+  --paint-antifouling: #96402F;
+  --paint-boottop: #2A2D33;
   /* Tank colours by content, as on a capacity plan (docs/TANKS_V1.md section 6). The same
      values colour the GLB materials (vessel_reconstruction.tanks CONTENT_CLASSES); they do not
      switch with the theme, so a tank reads the same in both. */
