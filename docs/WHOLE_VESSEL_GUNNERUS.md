@@ -1034,6 +1034,57 @@ Baseline (current code, rebuilt 2026-11-10; step 1 in process 32 s, assembly 154
 F3: tier-1 IoU 0.9968, volume +3.12 %, hull + tier 1 +1.59 %. F4: whole-vessel STEP 25.7 MB,
 GLB 2.24 MB (tier-1 STEP 7.4 MB, forward rail 1.7 MB).
 
+### 7.2 Smooth side walls: result
+
+Code: `superstructure.smooth_body` (smooth loft, refinement, fallback), `EndCurves`,
+`wall_between` (bulwark), `display_mesh._smooth_grid_triangles`. Metric version
+`whole-vessel-surfaces/v2` (section 7.1 plus F2 exact: CadQuery's `tessellate` deflection is
+relative, so S1 triangles are up to about 0.04 m off a smooth B-spline wall; v2 meshes at 1 mm
+absolute deflection). Outputs in the git-ignored `work/spline-surfaces/`.
+
+How: a deckhouse or bulwark whose plan the hull side cuts is lofted smoothly (not ruled)
+through plan sections 0.3 m apart. Each side is one B-spline face (cubic plan curves with one
+shared parametrisation, smooth in height); base and roof stay planar; parts inside the hull side
+(tier 2, wheelhouse) and decks keep their flat walls. An end that the hull cuts (the stem) is a
+cubic in z kept inside the plan. A band whose surface leaves the hull side by more than 0.01 m
+gets a section at its middle (at most 6 rounds; tier 1 needed 32 sections, the rail 12). A
+bulwark is sewn from its outer and inner lofts and two ring caps. If any of this fails, the part
+is built from ruled bands as before, with a `smooth_fallback` check item; the component's
+`walls` says which (`smooth_bspline`, `ruled_bands`, `planar`). Volumes use adaptive
+integration: the default kernel volume was 1 % off, and negative for the sewn rail.
+
+Display mesh: a smooth face is evaluated on its own parameter grid (knots, spans halved while
+the chord is off by more than the tolerance or the normal turns more than 0.1 rad), then rows
+and columns within the chord tolerance are left out; vertices are shared, so the GLB normals are
+smooth. Chord tolerance 2 mm for smooth walls (1 mm: 75,000 triangles for tier 1 and the rail;
+2 mm: 37,000), 1 mm and 0.5 rad for flat faces as before. The kernel mesher gave these faces up to
+500,000 triangles with flipped slivers.
+
+| Metric | Before | After | Target | Met |
+|---|---|---|---|---|
+| F1 tier 1: STEP faces; most faces on one cut | 4,732; 59 | **6; 1** | | |
+| F1 tier 1: kinks (> 2 deg per 0.01 m); max turn | 101; 56.1 deg | **6; 7.5 deg** (all at x 33-34 m, the stem) | | |
+| F1 forward rail: faces; most on one cut; kinks; max turn | 1,038; 9; 4; 15.2 deg | **10; 1; 16; 6.1 deg** (x >= 32.5 m) | | |
+| F1 aft bulwark: faces | 18 | 10 | | |
+| F2 exact max outside the hull side | 0.016 m (tier 1) | **0.0145 m** (rail; tier 1 0.0115) | <= 0.02 m | yes |
+| F2 v1 (relative mesh, not the surface) | 0.015 m | 0.063 m | | (mesh error) |
+| F3 tier-1 IoU | 0.9968 | 0.9967 | >= 0.997 | yes at 3 decimals (-0.0001) |
+| F3 tier-1 volume | +3.12 % | **+2.93 %** | <= +3.1 % | yes |
+| F3 hull + tier 1 vs truth | +1.59 % | +1.57 % | <= +1.6 % | yes |
+| F4 whole-vessel STEP | 25.7 MB | **18.4 MB** (tier 1 7.4 -> 1.2 MB, rail 1.7 -> 0.5 MB) | | |
+| F4 GLB | 2.24 MB | 2.46 MB | | |
+| F4 time: step 1 in process | 32 s | 38 s | | |
+| F4 time: assembly | 154 s (alone) | 253 s while the full test suite ran beside it; 101 s with the hull reused (not measured alone) | | |
+
+Renders (git-ignored): `work/spline-surfaces/renders/{before,after}_{bow,bow_port,iso}.png`.
+
+Still not smooth: at the stem (x 32.5 to 34.6 m) the hull side itself jumps between heights
+(each bow station starts at a higher row; the side is linear between stations 0.5 m apart),
+and the refined sections make the smooth surface ripple there (F1 kinks, visible as a wavy
+forward edge). Fixing that needs a smooth hull surface (the hull is still ruled between
+stations) or a stem curve read from the profile. The hull, decks and flat deckhouse walls are
+unchanged; the wheelhouse kinks are its window recesses and raked faces.
+
 ## 8. Resume point
 
 0. Step 2 internals (section 6): region leaks, tank heights and G4 are fixed in
@@ -1062,4 +1113,6 @@ GLB 2.24 MB (tier-1 STEP 7.4 MB, forward rail 1.7 MB).
 6. Superstructure detail (section 7): calibrate the outboard profile (tier windows,
    portholes) and a transverse view (tumblehome); one B-spline face per side for shaped parts.
    A part re-run from a mark uses `whole_vessel/detail.json` (written by the assembly); an older
-   run has none, and its rebuilt part is a straight extrusion as before.
+   run has none, and its rebuilt part is a straight extrusion as before. Smooth B-spline walls
+   are done (section 7.2); next there: the stem ripple (smooth hull surface or a profile stem
+   curve).
