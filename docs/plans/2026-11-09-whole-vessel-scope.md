@@ -317,6 +317,58 @@ The table is not in any image.
   the rule, the integration plan for the hull path (where tiles go in the agent loop) is written
   in `docs/WHOLE_VESSEL_GUNNERUS.md`; the controller does not change in this round.
 
+#### 3.5.5 Round 6: stronger vision models on the round-5 task (fixed before running)
+
+Founder decision 2026-11-09: test GPT 6.1 Sol, GPT-6 Astra, Claude Sonnet 5.5 and Claude Opus 5.5
+on the round-5 task where DeepSeek V4.1 Flash failed. Accuracy over cost.
+
+Access (checked 2026-11-09, before this section): the models are called only through the local
+codex-router (OpenAI Responses API, `/v1/responses`; caller secret read into the process
+environment, never printed or stored). The router lists `gpt-6.1-sol` and `gpt-6-astra` (input
+modalities text and image). It has **no route for Claude Sonnet 5.5 or Claude Opus 5.5**
+(`claude-sonnet-5.5`, `claude-opus-5.5` and `openrouter/anthropic/claude-opus-5.5` are refused:
+not in the ChatGPT model list, no OpenRouter route). These two models are **not tested**; no
+personal account or browser is used instead.
+
+Image size probe (synthetic images, same design as `work/vision-probe`, reasoning effort low;
+both models gave identical numbers):
+
+| Square PNG | `detail: high` tokens | `detail: original` tokens | 8 px text read of 12 (high / original) |
+|---:|---:|---:|---:|
+| 1,024 | 1,229 | 1,229 | - |
+| 2,048 | 3,001 | 4,916 | Sol 11 / 12, Astra 12 / 12 |
+| 3,072 | 3,001 | 11,060 | 6 / 12, 5 / 12 |
+| 4,096 | 3,001 | 19,661 | 0 / 12, 12 / 12 |
+| 5,120 | 3,001 | 30,734 | 0 / 12, 12 / 12 |
+| 6,000 and larger | - | refused | - |
+
+`detail: high` downscales to about 2,048 px; `detail: original` keeps the pixels (token cost
+linear in the pixel count, 8 px text read 12 of 12 at 5,120 px). Effective resolution with
+`original`: 5,120 px per side for both models.
+
+Fixed for the run (everything else as section 3.5.4: sheet and SHA-256, host calibration and grid,
+truth of 151 cells outside the repository, context image, prompt text, reply form and validity,
+merge, metrics, decision rule; R0 is not run again, its round-5 result is 0 cells):
+
+- Tile size per model (at most the effective resolution): **4096 x 2048 px for both models**,
+  one tile per side and waterline, from 48 px across the centreline to 4,048 px out (past the
+  20 ft buttock at 2,990 px), centred on the waterline row. Thus 2 x 8 = 16 tiles; no tile pair
+  overlaps, so "tile pairs > 0.15 m apart" is not applicable. The prompt names the tile size.
+- Both images are sent with `detail: original` (no resampling by the provider).
+- Models: `gpt-6.1-sol` and `gpt-6-astra` through the router. Reasoning effort **high** for both
+  (the user's Codex default `model_reasoning_effort = "high"`; the catalog defaults are low for
+  Sol and medium for Astra). `max_output_tokens` 32,000. No temperature (the reasoning models
+  do not take one). At most 3 turns per tile (turns 2 and 3 only for an invalid reply).
+- 3 repeats of all 16 tiles per model, 4 tiles in parallel.
+- Report per model and repeat: cells given of 151, RMS, max, share within 0.05 m and 0.15 m,
+  station identity errors, invalid replies, input / output (reasoning) tokens, cost, wall time;
+  DeepSeek round 5 for comparison. Cost: both models run on the ChatGPT subscription through the
+  router (no per-call charge); the report gives tokens.
+- Decision rule per model (unchanged): the model adds value on scanned body plans if all 3 repeats
+  give at least 60 % of the truth cells and the median RMS is at most 0.15 m. If a model passes,
+  the integration option for the hull path is written in this plan; the controller does not
+  change in this round.
+
 ### 3.6 Effort, checks, resume
 
 Effort: 1-2 weeks (reader, executor change, scoring, Gunnerus run; then raster path and a
