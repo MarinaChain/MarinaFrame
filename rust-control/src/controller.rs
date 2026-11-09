@@ -1212,6 +1212,11 @@ fn live_decision(store: &mut Store) -> Result<bool> {
             store.state.last_observation = json!({"ok":false,"status":"rejected",
                 "error_code":receipt.error_code,"message":"Your reply was not one valid tool call within the argument bounds. Reply with one JSON object: tool, arguments, reason.",
                 "refused_call":refused,
+                "hint":if receipt.error_code.as_deref() == Some(provider::claude_cli::INVALID_STRUCTURED_OUTPUT) {
+                    "Your answer was not valid JSON: its brackets did not match. Send the same call again with balanced braces; keep long arguments shallow and short."
+                } else {
+                    "Correct the call with the contract error and schema in refused_call, or choose a listed tool."
+                },
                 "engineering_approved":false,"human_semantic_review_required":true});
             // The history shows the refused tool and its contract error, not only the code.
             let decision = refused

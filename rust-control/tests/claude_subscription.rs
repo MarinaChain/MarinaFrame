@@ -207,6 +207,27 @@ fn a_subscription_limit_is_a_rate_limit() {
 }
 
 #[test]
+fn invalid_structured_output_is_a_refused_reply_not_a_transport_failure() {
+    // Sonnet 5.5 live: five structured-output attempts with unbalanced braces.
+    let tmp = tempfile::tempdir().unwrap();
+    let exhausted = json!({"type":"result","subtype":"error_max_structured_output_retries",
+        "is_error":true,"api_error_status":null,"terminal_reason":"structured_output_retry_exhausted",
+        "uuid":"result-3","usage":{"input_tokens":35060,"output_tokens":1800},
+        "modelUsage":{CLAUDE_SONNET_5_5:{"inputTokens":35060,"outputTokens":1800}}});
+    let claude = fake_claude(tmp.path(), &stream(&["StructuredOutput"], exhausted));
+    let receipt = run_worker(tmp.path(), &claude, &input(Purpose::Investigation));
+    assert_eq!(receipt.state, RequestState::Failed);
+    assert_eq!(
+        receipt.error_code.as_deref(),
+        Some(claude_cli::INVALID_STRUCTURED_OUTPUT)
+    );
+    // HTTP 200 from the requested model: the controller returns it to the model.
+    assert_eq!(receipt.http_status, Some(200));
+    assert!(provider::returned_requested_model(&receipt));
+    assert!(!models::rate_limited(&receipt));
+}
+
+#[test]
 fn a_cli_that_offers_tools_is_refused() {
     let tmp = tempfile::tempdir().unwrap();
     let claude = fake_claude(

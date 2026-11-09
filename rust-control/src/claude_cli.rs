@@ -33,6 +33,10 @@ pub const STRUCTURED_OUTPUT_TOOL: &str = "StructuredOutput";
 const SETTING_SOURCES: &str = "user";
 /// Extra settings for every request: no hook runs, not even a user one.
 const REQUEST_SETTINGS: &str = r#"{"disableAllHooks":true}"#;
+/// The CLI's result subtype when every structured-output attempt was invalid.
+const STRUCTURED_OUTPUT_RETRIES_EXHAUSTED: &str = "error_max_structured_output_retries";
+/// The receipt error of such a reply: a refused model output.
+pub const INVALID_STRUCTURED_OUTPUT: &str = "structured_output_invalid_json";
 /// Prompt-cache lifetime of the stable context block (the CLI marks its own
 /// blocks with 1 h on the subscription; live probe 2026-11-09).
 const CACHE_TTL: &str = "1h";
@@ -368,7 +372,13 @@ pub fn interpret(receipt: &mut Receipt, bytes: &[u8]) -> Result<String> {
         return Err("provider_cli_configuration".into());
     }
     let success = result["subtype"] == "success" && result["is_error"] == false;
-    receipt.http_status = if success {
+    // The model answered, but every structured-output attempt was invalid JSON
+    // (Sonnet 5.5 live, round e445d52: a nested describe_vessel with one brace
+    // too few, five times). That is a refused reply, not a transport failure:
+    // the controller tells the model and asks again.
+    let invalid_structured_output = result["subtype"] == STRUCTURED_OUTPUT_RETRIES_EXHAUSTED
+        && result["api_error_status"].is_null();
+    receipt.http_status = if success || invalid_structured_output {
         Some(200)
     } else {
         result["api_error_status"]
@@ -391,6 +401,9 @@ pub fn interpret(receipt: &mut Receipt, bytes: &[u8]) -> Result<String> {
         || (!success && crate::models::rate_limit_text(error_text.as_bytes()))
     {
         return Err("provider_rate_limited".into());
+    }
+    if invalid_structured_output {
+        return Err(INVALID_STRUCTURED_OUTPUT.into());
     }
     if !success {
         return Err("provider_cli_error".into());
