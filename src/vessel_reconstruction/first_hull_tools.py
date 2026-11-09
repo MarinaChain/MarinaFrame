@@ -381,7 +381,10 @@ def build_first_hull(tools):
     tools.state["first_hull_spec"] = built["spec"]
     tools.state["guesses"] = built["spec"].get("draft", {}).get("guesses", guesses)
     candidate = {"id":tools.generation_id,"generation_id":tools.generation_id,"revision_id":tools.revision_id,
-        "path":built["out"].relative_to(tools.task_dir).as_posix(),"status":"review_required","valid":True,"draft":True,
+        "path":built["out"].relative_to(tools.task_dir).as_posix(),"status":"review_required","valid":True,
+        # The export is tagged a draft only when the build has open guesses (run_record._cad_names);
+        # a first hull read entirely by the body-plan reader has none.
+        "draft":"draft" in built["record"],
         "run_id":built["record"]["run_id"],"gaps":built["record"]["gaps"],"metrics":built["record"]["metrics"],
         "engineering_approved":False,"human_semantic_review_required":True,"identity_certified":False,
         "warnings":warnings}
