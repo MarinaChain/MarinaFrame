@@ -6,7 +6,8 @@ pub mod transcription;
 #[path = "vision.rs"]
 pub mod vision;
 
-use crate::types::{Decision, GO_ENDPOINT, GO_MODEL};
+use crate::models;
+use crate::types::{Decision, GO_ENDPOINT};
 use crate::util::{self, Result};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
@@ -215,8 +216,8 @@ pub fn check_input(input: &ProviderInput) -> Result<Vec<u8>> {
         return Err("provider_input_contract".into());
     }
     let p = &input.payload;
-    if p["model"] != GO_MODEL
-        || p["stream"] != false
+    models::check_payload(p)?;
+    if p["stream"] != false
         || p["max_tokens"]
             .as_u64()
             .is_none_or(|n| !(16..=crate::types::MAX_OUTPUT_TOKENS_PER_REQUEST).contains(&n))
@@ -384,6 +385,18 @@ fn read_usage(client: &reqwest::blocking::Client, key: &str) -> Result<Value> {
     util::strict_value(&bytes, MAX_USAGE_RESPONSE_BYTES)
 }
 
+/// True when the receipt's requested model is the request body's model and an
+/// allowed one.
+pub fn model_bound(receipt: &Receipt, input: &ProviderInput) -> bool {
+    input.payload["model"] == receipt.requested_model.as_str()
+        && models::settings(&receipt.requested_model).is_ok()
+}
+
+/// True when the provider answered with the model the receipt requested.
+pub fn returned_requested_model(receipt: &Receipt) -> bool {
+    receipt.returned_model.as_deref() == Some(receipt.requested_model.as_str())
+}
+
 /// Interpret an HTTP 200 response body. On success the receipt holds a
 /// validated decision or table transcription and the completed state; on
 /// error it stays failed. Usage and model identity are recorded either way.
@@ -399,7 +412,7 @@ pub fn interpret_completion(receipt: &mut Receipt, bytes: &[u8], key: &str) -> R
     receipt.usage = usage(&result);
     receipt.observed_cost_usd = receipt.usage["cost"].as_f64();
     receipt.returned_model = result["model"].as_str().map(String::from);
-    if receipt.returned_model.as_deref() != Some(GO_MODEL) {
+    if !returned_requested_model(receipt) {
         return Err("provider_model_identity".into());
     }
     receipt.completion_id = result["id"]
@@ -457,7 +470,8 @@ pub fn provider_worker(response_path: &Path, timeout: u64) -> Result<()> {
         request_id: input.request_id.clone(),
         state: RequestState::NotSent,
         endpoint: GO_ENDPOINT.into(),
-        requested_model: GO_MODEL.into(),
+        // check_input accepted this as an allowed model.
+        requested_model: input.payload["model"].as_str().unwrap_or_default().into(),
         returned_model: None,
         completion_id: None,
         provider_request_id: None,
@@ -561,8 +575,10 @@ pub fn provider_worker(response_path: &Path, timeout: u64) -> Result<()> {
             }
             return Err(match status {
                 401 => "provider_unauthorized",
-                403 => "provider_forbidden",
                 429 => "provider_rate_limited",
+                // Some upstream rate or usage limits arrive with other statuses.
+                400..=599 if models::rate_limit_text(&bytes) => "provider_rate_limited",
+                403 => "provider_forbidden",
                 300..=399 => "provider_redirect_rejected",
                 _ => "provider_http_failure",
             }

@@ -197,6 +197,20 @@ def receipt_list_cost(case_dir: Path) -> float | None:
     return total if found else None
 
 
+def receipt_models(case_dir: Path) -> dict:
+    """Requests per model (requested -> returned) from the request receipts."""
+    counts: Counter = Counter()
+    for path in sorted(case_dir.glob("task/receipts/request-*.json")):
+        try:
+            receipt = as_dict(json.loads(path.read_text()))
+        except (OSError, ValueError):
+            continue
+        requested = receipt.get("requested_model") or "?"
+        returned = receipt.get("returned_model") or "none"
+        counts[requested if requested == returned else f"{requested} -> {returned}"] += 1
+    return dict(counts)
+
+
 def digest_case(case_dir: Path) -> dict:
     events = load_events(case_dir)
     stdout = as_dict(read_json(case_dir / "stdout.log") or read_json(case_dir / "stdout.json"))
@@ -209,6 +223,8 @@ def digest_case(case_dir: Path) -> dict:
     ]
     tools = [d.get("tool") or "?" for d in decisions]
     requests, cost = request_stats(events, stdout, result, case_dir)
+    counters = as_dict(stdout.get("counters"))
+    switches = [as_dict(e.get("payload")) for e in events if e.get("kind") == "model_switched"]
     return {
         "case": case_dir.name,
         "status": stdout.get("status") or result.get("controller_status") or ("terminated" if terminated else "unknown"),
@@ -222,6 +238,10 @@ def digest_case(case_dir: Path) -> dict:
         "draft": draft_state(events, case_dir, stdout),
         "requests": requests,
         "list_cost_usd": cost,
+        "models": receipt_models(case_dir),
+        "model_switches": [f"{w.get('from')} -> {w.get('to')} ({w.get('reason')})" for w in switches],
+        "prompt_tokens": counters.get("prompt_tokens"),
+        "completion_tokens": counters.get("completion_tokens"),
     }
 
 
@@ -348,6 +368,10 @@ def render_markdown(cases: list[dict], summary: dict) -> str:
             out.append(f"  - model{f' (x{repeats})' if repeats > 1 else ''}: {reason}")
         cost = "n/a" if not c["list_cost_usd"] else f"${c['list_cost_usd']:.4f}"
         out.append(f"- {c['draft']}; requests {c['requests']}; list cost {cost}")
+        models = ", ".join(f"{m} x{n}" for m, n in c.get("models", {}).items()) or "none"
+        out.append(f"- models: {models}; tokens in/out {c.get('prompt_tokens')}/{c.get('completion_tokens')}")
+        for switch in c.get("model_switches", []):
+            out.append(f"  - model switch: {switch}")
         score = c.get("score")
         if score and "correct" in score:
             rms = "n/a" if score["rms_pct_half_beam"] is None else f"{score['rms_pct_half_beam']:.2f}%"

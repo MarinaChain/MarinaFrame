@@ -2,6 +2,7 @@
 //! desktop app both call the same controller functions, so every check applies
 //! to both.
 pub mod controller;
+pub mod models;
 pub mod provider;
 pub mod store;
 pub mod table_reading;

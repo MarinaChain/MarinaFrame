@@ -5,7 +5,7 @@ use crate::provider::transcription::{CELL_EVIDENCE_KIND, TABLE_PROMPT};
 use crate::provider::{self, ImageReceipt, ProviderInput, Purpose, Receipt, RequestState};
 use crate::types::*;
 use crate::util::{self, Result};
-use crate::worker;
+use crate::{models, worker};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -135,6 +135,7 @@ pub fn load_crops(
 
 /// Build the provider payload for one batch of cells.
 pub fn batch_payload(
+    model: &str,
     cells: &[&CropCell],
     crops: &[&Vec<u8>],
 ) -> Result<(Value, Value, Vec<ImageReceipt>)> {
@@ -167,8 +168,9 @@ pub fn batch_payload(
             pixel_size: None,
         });
     }
-    let payload = json!({"model":GO_MODEL,"max_tokens":MAX_OUTPUT_TOKENS,"stream":false,"thinking":{"type":"disabled"},"temperature":0,
-        "response_format":{"type":"json_object"},"messages":[{"role":"system","content":TABLE_PROMPT},{"role":"user","content":content}]});
+    let messages =
+        json!([{"role":"system","content":TABLE_PROMPT},{"role":"user","content":content}]);
+    let payload = models::payload(model, MAX_OUTPUT_TOKENS, false, 0., messages)?;
     Ok((payload, prompt, images))
 }
 
@@ -177,7 +179,7 @@ pub fn check_receipt(receipt: &Receipt, input: &ProviderInput) -> Result<()> {
     if receipt.protocol != provider::PROTOCOL
         || receipt.request_id != input.request_id
         || receipt.endpoint != GO_ENDPOINT
-        || receipt.requested_model != GO_MODEL
+        || !provider::model_bound(receipt, input)
         || receipt.purpose != Purpose::TableTranscription
         || receipt.decision.is_some()
         || receipt.request_sha256 != util::hash_json(&input.payload)?
@@ -192,7 +194,7 @@ pub fn check_receipt(receipt: &Receipt, input: &ProviderInput) -> Result<()> {
         != (receipt.transcription.is_some()
             && receipt.http_status == Some(200)
             && receipt.error_code.is_none()
-            && receipt.returned_model.as_deref() == Some(GO_MODEL))
+            && provider::returned_requested_model(receipt))
     {
         return Err("table_receipt_state_contradiction".into());
     }
@@ -228,7 +230,7 @@ struct Run<'a> {
 
 impl Run<'_> {
     fn send(&mut self, cells: &[&CropCell], crops: &[&Vec<u8>]) -> Result<BatchOutcome> {
-        let (payload, prompt, images) = batch_payload(cells, crops)?;
+        let (payload, prompt, images) = batch_payload(&self.config.model, cells, crops)?;
         let mut retry_of = None;
         for attempt in 1..=3u32 {
             if worker::cancelled(self.out) {
@@ -360,6 +362,7 @@ pub fn read_table(crops_dir: &Path, out: &Path, basis: &str) -> Result<Value> {
         model: GO_MODEL.into(),
         binary_sha256: util::file_hash(&std::env::current_exe().map_err(|_| "binary_path")?)?,
         on_ambiguity: OnAmbiguity::Abstain,
+        fallback_models: vec![],
     };
     let mut run = Run {
         out,
@@ -491,7 +494,7 @@ mod tests {
         let (manifest, sha, crops) = load_crops(dir, &OperationalLimits::default()).unwrap();
         let cells = manifest.cells.iter().collect::<Vec<_>>();
         let bytes = crops.iter().collect::<Vec<_>>();
-        let (payload, prompt, images) = batch_payload(&cells, &bytes).unwrap();
+        let (payload, prompt, images) = batch_payload(GO_MODEL, &cells, &bytes).unwrap();
         ProviderInput {
             protocol: provider::PROTOCOL.into(),
             request_id: "table-test".into(),

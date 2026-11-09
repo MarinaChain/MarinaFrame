@@ -2,7 +2,7 @@ use crate::provider::{self, ImageReceipt, ProviderInput, Receipt, RequestState};
 use crate::store::{self, Store};
 use crate::types::*;
 use crate::util::{self, Result};
-use crate::{validation, worker};
+use crate::{models, validation, worker};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -60,6 +60,7 @@ pub fn new_state(config: Config) -> State {
         engineering_approved: false,
         action_fingerprints: BTreeMap::new(),
         created_ms: util::now_ms(),
+        active_model: None,
     }
 }
 fn stop(store: &mut Store, status: Status, reason: &str) -> Result<()> {
@@ -884,7 +885,8 @@ fn apply_provider(
     if receipt.protocol != provider::PROTOCOL
         || receipt.request_id != pending.id
         || receipt.endpoint != GO_ENDPOINT
-        || receipt.requested_model != GO_MODEL
+        || !provider::model_bound(&receipt, &input)
+        || !store.state.config.models().contains(&receipt.requested_model.as_str())
         || receipt.evidence_mode != "live"
         // The controller loop accepts only decision receipts of the task's
         // mode; a table transcription receipt can never stage a decision here.
@@ -971,7 +973,7 @@ fn apply_provider(
     }
     match receipt.state {
         RequestState::Completed => {
-            if receipt.returned_model.as_deref() != Some(GO_MODEL) || receipt.decision.is_none() {
+            if !provider::returned_requested_model(&receipt) || receipt.decision.is_none() {
                 return Err("provider_completion_incomplete".into());
             }
             receipt.decision.as_ref().unwrap().operation()?;
@@ -1023,12 +1025,7 @@ fn live_decision(store: &mut Store) -> Result<bool> {
         content.push(json!({"type":"image_url","image_url":{"url":format!("data:image/png;base64,{pixels}"),"detail":"original"}}));
     }
     let purpose = decision_purpose(store);
-    let thinking = if investigation_mode(store) && store.state.config.limits.investigation_thinking
-    {
-        "enabled"
-    } else {
-        "disabled"
-    };
+    let thinking = investigation_mode(store) && store.state.config.limits.investigation_thinking;
     let temperature = if investigation_mode(store) {
         store.state.config.limits.investigation_temperature
     } else {
@@ -1069,10 +1066,19 @@ fn live_decision(store: &mut Store) -> Result<bool> {
         }
         messages = transcript.messages;
     }
-    let payload = json!({"model":GO_MODEL,"max_tokens":store.state.config.limits.max_output_tokens_per_request,"stream":false,"thinking":{"type":thinking},"temperature":temperature,
-        "response_format":{"type":"json_object"},"messages":messages});
+    let messages = json!(messages);
     let mut retry_of = None;
-    for attempt in 1..=3 {
+    let mut attempt = 0;
+    while attempt < 3 {
+        attempt += 1;
+        // Built per attempt: a rate-limit switch changes the model.
+        let payload = models::payload(
+            store.state.current_model(),
+            store.state.config.limits.max_output_tokens_per_request,
+            thinking,
+            temperature,
+            messages.clone(),
+        )?;
         budget_admission(store)?;
         current_binary(store)?;
         let id = format!("request-{}", util::nonce());
@@ -1155,6 +1161,12 @@ fn live_decision(store: &mut Store) -> Result<bool> {
             }
             return Ok(true);
         }
+        if models::rate_limited(&receipt) && switch_model(store, &receipt)? {
+            // A new model starts a new request chain.
+            attempt = 0;
+            retry_of = None;
+            continue;
+        }
         let retryable = receipt.state == RequestState::Failed
             && matches!(receipt.http_status, Some(429 | 502 | 503 | 504))
             && receipt.error_code.as_deref()
@@ -1196,7 +1208,7 @@ fn live_decision(store: &mut Store) -> Result<bool> {
 fn model_output_refused(receipt: &Receipt) -> bool {
     receipt.state == RequestState::Failed
         && receipt.http_status == Some(200)
-        && receipt.returned_model.as_deref() == Some(GO_MODEL)
+        && provider::returned_requested_model(receipt)
         && !matches!(
             receipt.error_code.as_deref(),
             None | Some(
@@ -1206,6 +1218,23 @@ fn model_output_refused(receipt: &Receipt) -> bool {
                     | "provider_incomplete_or_unexpected_choice"
             )
         )
+}
+/// After a rate-limit or usage-exhausted answer, move the run to the next
+/// model of its list and record the switch. False when no model is left.
+fn switch_model(store: &mut Store, receipt: &Receipt) -> Result<bool> {
+    let models = store.state.config.models();
+    let Some(next) = models::next(&models, &receipt.requested_model) else {
+        return Ok(false);
+    };
+    let next = next.to_string();
+    store.state.active_model = Some(next.clone());
+    store.append(
+        "model_switched",
+        json!({"from":receipt.requested_model,"to":next,"request_id":receipt.request_id,
+            "returned_model":receipt.returned_model,"http_status":receipt.http_status,
+            "reason":receipt.error_code.as_deref().unwrap_or("provider_rate_limited")}),
+    )?;
+    Ok(true)
 }
 /// Refused proposals and refused outputs since the model's last accepted action.
 fn consecutive_refusals(store: &Store) -> u64 {
@@ -1768,7 +1797,9 @@ fn live_visual_coverage(store: &Store, step_hash: &str) -> bool {
         let r = &event.payload["receipt"];
         if r["state"] != "completed"
             || r["evidence_mode"] != "live"
-            || r["returned_model"] != GO_MODEL
+            || !r["returned_model"]
+                .as_str()
+                .is_some_and(|m| store.state.config.models().contains(&m))
         {
             continue;
         }
@@ -2426,7 +2457,8 @@ pub fn summary(store: &Store) -> Value {
     "current_candidate":store.state.domain.get("current_candidate"),
     "last_valid_candidate":store.state.domain.get("last_valid_candidate"),
     "counters":store.state.counters,"head_sha256":store.head,
-    "engineering_approved":false,"semantic_review":"required","pending":store.state.pending,"policy":store.state.config.policy})
+    "engineering_approved":false,"semantic_review":"required","pending":store.state.pending,"policy":store.state.config.policy,
+    "models":store.state.config.models(),"current_model":store.state.current_model()})
 }
 
 #[cfg(test)]
@@ -2611,6 +2643,7 @@ mod tests {
             model: GO_MODEL.into(),
             binary_sha256: "a".repeat(64),
             on_ambiguity: OnAmbiguity::Abstain,
+            fallback_models: vec![],
         };
         let store = Store::create(&tmp.path().join("task"), new_state(config)).unwrap();
         (tmp, store)
@@ -2895,6 +2928,11 @@ mod tests {
     /// A live draft-mode task with one pending investigation request, its
     /// honest response body on disk and the honest receipt for it.
     fn investigation_receipt_fixture() -> (tempfile::TempDir, Store, Pending, Receipt, Vec<u8>) {
+        investigation_receipt_fixture_for(GO_MODEL)
+    }
+    fn investigation_receipt_fixture_for(
+        model: &str,
+    ) -> (tempfile::TempDir, Store, Pending, Receipt, Vec<u8>) {
         let (tmp, mut store) = fixture();
         store.state.config.on_ambiguity = OnAmbiguity::Draft;
         store.state.source_manifest_sha256 = Some("a".repeat(64));
@@ -2917,14 +2955,14 @@ mod tests {
             revision_id: "r0001".into(),
             observation_sha256: "c".repeat(64),
             images: vec![],
-            payload: json!({"model":GO_MODEL,"messages":[{"role":"system","content":provider::INVESTIGATION_PROMPT}]}),
+            payload: json!({"model":model,"messages":[{"role":"system","content":provider::INVESTIGATION_PROMPT}]}),
             attempt: 1,
             retry_of: None,
             purpose: provider::Purpose::Investigation,
         };
         util::atomic_json(&store.path.join(&pending.request_path), &input, false).unwrap();
         let decision = json!({"tool":"view_region","arguments":{"region_px":[0,0,400,300]},"reason":"Look at the body plan."});
-        let body = util::json_bytes(&json!({"id":"completion-1","model":GO_MODEL,
+        let body = util::json_bytes(&json!({"id":"completion-1","model":model,
             "choices":[{"finish_reason":"stop","message":{"content":decision.to_string()}}],
             "usage":{"prompt_tokens":30,"completion_tokens":5,"total_tokens":35,"cost":0.0,"opencode":{"billing_source":"go"}}}))
         .unwrap();
@@ -2933,7 +2971,7 @@ mod tests {
             request_id: pending.id.clone(),
             state: RequestState::NotSent,
             endpoint: GO_ENDPOINT.into(),
-            requested_model: GO_MODEL.into(),
+            requested_model: model.into(),
             returned_model: None,
             completion_id: None,
             provider_request_id: None,
@@ -3261,5 +3299,93 @@ mod tests {
         store.append("worker_result", json!({})).unwrap();
         assert_eq!(consecutive_refusals(&store), 0);
         assert_eq!(refusal_limit(&store), 6);
+    }
+    fn use_models(store: &mut Store, models: &[&str]) {
+        store.state.config.model = models[0].into();
+        store.state.config.fallback_models = models[1..].iter().map(|m| m.to_string()).collect();
+    }
+    #[test]
+    fn receipts_must_name_a_model_of_the_run() {
+        use crate::models::{CROUTON_ALPHA_FREE, DEEPSEEK_V4_1_FLASH};
+        // A Crouton receipt is accepted when Crouton is in the run's list.
+        let (_tmp, mut store, pending, receipt, body) =
+            investigation_receipt_fixture_for(CROUTON_ALPHA_FREE);
+        use_models(&mut store, &[CROUTON_ALPHA_FREE, DEEPSEEK_V4_1_FLASH]);
+        let applied = apply_forged(&mut store, &pending, &receipt, Some(&body)).unwrap();
+        assert_eq!(
+            applied.unwrap().returned_model.as_deref(),
+            Some(CROUTON_ALPHA_FREE)
+        );
+        // The same receipt on a DeepSeek-only run is refused.
+        let (_tmp, mut store, pending, receipt, body) =
+            investigation_receipt_fixture_for(CROUTON_ALPHA_FREE);
+        assert_eq!(store.state.config.models(), [DEEPSEEK_V4_1_FLASH]);
+        let error = apply_forged(&mut store, &pending, &receipt, Some(&body)).unwrap_err();
+        assert_eq!(error, "provider_receipt_identity");
+        // A completion from another model than the requested one is refused.
+        let (_tmp, _store, _pending, mut receipt, body) =
+            investigation_receipt_fixture_for(CROUTON_ALPHA_FREE);
+        let other = String::from_utf8(body)
+            .unwrap()
+            .replace(CROUTON_ALPHA_FREE, DEEPSEEK_V4_1_FLASH);
+        let error = provider::interpret_completion(&mut receipt, other.as_bytes(), "").unwrap_err();
+        assert_eq!(error, "provider_model_identity");
+    }
+    #[test]
+    fn run_state_refuses_models_outside_the_allow_list() {
+        let (_tmp, mut store) = fixture();
+        for list in [
+            ["claude-haiku-5-5"].as_slice(),
+            &["gpt-6.1-sol"],
+            &[GO_MODEL, GO_MODEL],
+        ] {
+            use_models(&mut store, list);
+            assert_eq!(
+                store.state.validate().unwrap_err(),
+                "invalid_state_contract"
+            );
+        }
+        use_models(&mut store, &[GO_MODEL]);
+        store.state.active_model = Some(crate::models::CROUTON_ALPHA_FREE.into());
+        assert_eq!(
+            store.state.validate().unwrap_err(),
+            "invalid_state_contract"
+        );
+    }
+    #[test]
+    fn rate_limit_moves_the_run_to_the_next_model_once() {
+        use crate::models::{CROUTON_ALPHA_FREE, DEEPSEEK_V4_1_FLASH};
+        let (_tmp, mut store, _pending, mut receipt, _body) =
+            investigation_receipt_fixture_for(CROUTON_ALPHA_FREE);
+        use_models(&mut store, &[CROUTON_ALPHA_FREE, DEEPSEEK_V4_1_FLASH]);
+        store.state.pending = None;
+        // Another failure (a server error) is not a reason to switch.
+        receipt.state = RequestState::Failed;
+        receipt.decision = None;
+        receipt.returned_model = None;
+        receipt.http_status = Some(500);
+        receipt.error_code = Some("provider_http_failure".into());
+        assert!(!models::rate_limited(&receipt));
+        // HTTP 429 moves the run to DeepSeek and records the switch.
+        receipt.http_status = Some(429);
+        receipt.error_code = Some("provider_rate_limited".into());
+        assert!(models::rate_limited(&receipt));
+        assert!(switch_model(&mut store, &receipt).unwrap());
+        assert_eq!(store.state.current_model(), DEEPSEEK_V4_1_FLASH);
+        let event = store.events.last().unwrap();
+        assert_eq!(event.kind, "model_switched");
+        assert_eq!(event.payload["from"], CROUTON_ALPHA_FREE);
+        assert_eq!(event.payload["to"], DEEPSEEK_V4_1_FLASH);
+        assert_eq!(event.payload["reason"], "provider_rate_limited");
+        assert_eq!(event.payload["http_status"], 429);
+        assert_eq!(summary(&store)["current_model"], DEEPSEEK_V4_1_FLASH);
+        // An exhausted usage window on the last model leaves nothing to switch to.
+        receipt.requested_model = DEEPSEEK_V4_1_FLASH.into();
+        receipt.state = RequestState::NotSent;
+        receipt.http_status = None;
+        receipt.error_code = Some("provider_all_credentials_unavailable".into());
+        assert!(models::rate_limited(&receipt));
+        assert!(!switch_model(&mut store, &receipt).unwrap());
+        assert_eq!(store.state.current_model(), DEEPSEEK_V4_1_FLASH);
     }
 }

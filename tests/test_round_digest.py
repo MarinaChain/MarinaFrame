@@ -99,6 +99,25 @@ def test_blocked_build_is_not_a_draft_and_receipt_cost_is_summed(tmp_path):
     assert digest["list_cost_usd"] == 0.75
 
 
+def test_models_tokens_and_switches_are_reported(tmp_path):
+    events = [decision("build_draft"),
+              ("model_switched", {"from": "crouton-alpha-free", "to": "deepseek-v4.1-flash",
+                                  "reason": "provider_rate_limited"})]
+    case = make_case(tmp_path, "c", events,
+                     stdout={"status": "completed", "counters": {"prompt_tokens": 120, "completion_tokens": 30}})
+    receipts = case / "task" / "receipts"
+    receipts.mkdir()
+    for index, (requested, returned) in enumerate((("crouton-alpha-free", None),
+                                                    ("deepseek-v4.1-flash", "deepseek-v4.1-flash"))):
+        (receipts / f"request-{index}.json").write_text(
+            json.dumps({"requested_model": requested, "returned_model": returned, "usage": {}}))
+    digest = round_digest.digest_case(case)
+    assert digest["models"] == {"crouton-alpha-free -> none": 1, "deepseek-v4.1-flash": 1}
+    assert digest["model_switches"] == ["crouton-alpha-free -> deepseek-v4.1-flash (provider_rate_limited)"]
+    text = round_digest.render_markdown([digest], round_digest.summarize([digest]))
+    assert "tokens in/out 120/30" in text and "model switch: crouton-alpha-free -> deepseek" in text
+
+
 def test_missing_files_do_not_crash(tmp_path):
     (tmp_path / "empty").mkdir()
     digest = round_digest.digest_case(tmp_path / "empty")

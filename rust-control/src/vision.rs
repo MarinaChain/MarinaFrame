@@ -662,6 +662,7 @@ fn response_schema(purpose: Purpose, view: &str) -> Value {
 
 /// Build the provider payload of a prepared request.
 pub fn payload(
+    model: &str,
     manifest: &RequestManifest,
     images: &[Vec<u8>],
 ) -> Result<(Value, Value, Vec<ImageReceipt>)> {
@@ -723,8 +724,9 @@ pub fn payload(
     } else {
         SETUP_OUTPUT_TOKENS
     };
-    let payload = json!({"model":GO_MODEL,"max_tokens":tokens,"stream":false,"thinking":{"type":"disabled"},"temperature":0,
-        "response_format":{"type":"json_object"},"messages":[{"role":"system","content":purpose.prompt()},{"role":"user","content":content}]});
+    let messages =
+        json!([{"role":"system","content":purpose.prompt()},{"role":"user","content":content}]);
+    let payload = crate::models::payload(model, tokens, false, 0., messages)?;
     Ok((payload, prompt, receipts))
 }
 
@@ -733,7 +735,7 @@ pub fn check_receipt(receipt: &Receipt, input: &ProviderInput) -> Result<()> {
     if receipt.protocol != provider::PROTOCOL
         || receipt.request_id != input.request_id
         || receipt.endpoint != GO_ENDPOINT
-        || receipt.requested_model != GO_MODEL
+        || !provider::model_bound(receipt, input)
         || receipt.purpose != input.purpose
         || receipt.decision.is_some()
         || receipt.transcription.is_some()
@@ -749,7 +751,7 @@ pub fn check_receipt(receipt: &Receipt, input: &ProviderInput) -> Result<()> {
         != (receipt.vision.is_some()
             && receipt.http_status == Some(200)
             && receipt.error_code.is_none()
-            && receipt.returned_model.as_deref() == Some(GO_MODEL))
+            && provider::returned_requested_model(receipt))
     {
         return Err("vision_receipt_state_contradiction".into());
     }
@@ -820,6 +822,7 @@ pub fn standalone_config(basis: &str, source: &Path) -> Result<Config> {
         model: GO_MODEL.into(),
         binary_sha256: util::file_hash(&std::env::current_exe().map_err(|_| "binary_path")?)?,
         on_ambiguity: OnAmbiguity::Abstain,
+        fallback_models: vec![],
     })
 }
 
@@ -842,7 +845,7 @@ fn stubbed_receipt(out: &Path, response_path: &str, input: &ProviderInput) -> Re
         request_id: input.request_id.clone(),
         state: RequestState::Failed,
         endpoint: GO_ENDPOINT.into(),
-        requested_model: GO_MODEL.into(),
+        requested_model: input.payload["model"].as_str().unwrap_or_default().into(),
         returned_model: None,
         completion_id: None,
         provider_request_id: None,
@@ -998,12 +1001,13 @@ pub fn send(
 
 /// The request template of a prepared manifest (id and attempt are set per send).
 pub fn template(
+    model: &str,
     manifest: &RequestManifest,
     manifest_sha256: &str,
     images: &[Vec<u8>],
     generation_id: &str,
 ) -> Result<ProviderInput> {
-    let (payload, prompt, receipts) = payload(manifest, images)?;
+    let (payload, prompt, receipts) = payload(model, manifest, images)?;
     Ok(ProviderInput {
         protocol: provider::PROTOCOL.into(),
         request_id: "template".into(),
@@ -1057,7 +1061,13 @@ pub fn vision_request(request_dir: &Path, out: &Path, basis: &str) -> Result<Val
     }
     let config = standalone_config(basis, &request_dir.join("request.json"))?;
     let started_ms = util::now_ms();
-    let template = template(&manifest, &manifest_sha256, &images, "vision_request")?;
+    let template = template(
+        &config.model,
+        &manifest,
+        &manifest_sha256,
+        &images,
+        "vision_request",
+    )?;
     let mut usage = Usage::default();
     let sent = send(out, "", &config, &template, &mut usage)?;
     let stop_reason = sent.stop.clone().or_else(|| {
@@ -1074,7 +1084,7 @@ pub fn vision_request(request_dir: &Path, out: &Path, basis: &str) -> Result<Val
         request_images: manifest.images.clone(),
         source_sha256: manifest.source_sha256.clone(),
         endpoint: GO_ENDPOINT.into(),
-        requested_model: GO_MODEL.into(),
+        requested_model: config.model.clone(),
         prompt_sha256: util::hash(manifest.purpose.prompt().as_bytes()),
         authorization_basis: basis.into(),
         receipts: sent.receipts,

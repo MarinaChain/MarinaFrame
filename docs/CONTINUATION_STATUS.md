@@ -608,3 +608,27 @@ Fixed on the way: set-aside readings' builds were reused by build_draft (equal g
 the digest scored the newest STEP instead of the task's last valid candidate.
 Open: model section edits that the fit keep rule accepts but that worsen truth (09867-L0 s08 7 -> 30 %);
 series60 midship trace dips; dtmb top-cell residual (deck within 1 px still costs one 0.05 m sample).
+
+## 2026-11-09 12:55 SGT: drafting model setting; Crouton development round (commit 66cf8f8)
+
+`marinaframe run --model` takes an ordered OpenCode Go list (allow-list DeepSeek V4.1 Flash,
+Crouton Alpha Free; never Claude or GPT). On a rate-limit or usage-exhausted answer the run moves
+to the next model (`model_switched` event). The per-model request table is in
+`rust-control/src/models.rs`. The app default stays DeepSeek. `run_round.py` defaults to
+`crouton-alpha-free,deepseek-v4.1-flash`. Details: `docs/AGENT_HARNESS.md`, "Drafting model".
+
+Live sheet-only round `work/round-3view-L0-crouton-66cf8f8` (snapshot `work/snap-66cf8f8`, key 1):
+
+| Case | Crouton: RMS / volume | DeepSeek latest | Wall (model time) | Requests (completed) | Tokens in / out | Cost / list cost | End |
+|---|---|---|---|---|---|---|---|
+| series60-3v-L0 | 3.95 % / +0.5 % (fails) | 1.4-4.6 % | 203 s (102 s) | 16 (10) | 169,933 / 21,873 | 0 / 0 | runaway reply |
+| shipd-1-08158-3v-L0 | 15.60 % / +19.4 % (fails) | 0.74 % / -1.9 % | 295 s (127 s) | 19 (11) | 176,974 / 20,794 | 0 / 0 | runaway reply |
+
+RMS of half-beam, development truth. All requests went to Crouton and it answered as Crouton; no
+rate limit, so no switch. Crouton was fast here (5-15 s per request). Its replies were often
+refused: 4 of 16 and 6 of 19 broke the tool contract (invalid JSON, out-of-bounds arguments,
+operation contract). Both runs ended when one reply ran to the token limit (`finish_reason`
+length, about 16-18k tokens of repeated text; `provider_incomplete_or_unexpected_choice`), and each
+kept its last valid draft. Image tokens are not counted by OpenCode Go (input tokens are text only).
+No further rounds: the founder moved the happy path to Claude Sonnet 5.5 (subscription `claude` CLI);
+that provider will plug into the same model list and settings table.

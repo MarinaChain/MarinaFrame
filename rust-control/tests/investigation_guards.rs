@@ -11,6 +11,8 @@
 #![allow(dead_code)]
 #[path = "../src/controller.rs"]
 mod controller;
+#[path = "../src/models.rs"]
+mod models;
 #[path = "../src/provider.rs"]
 mod provider;
 #[path = "../src/store.rs"]
@@ -92,6 +94,7 @@ fn config(directory: &Path, on_ambiguity: OnAmbiguity) -> Config {
         provider_transfer_authorized: true,
         authorization_basis: "Investigation guard fixture; no provider call is made".into(),
         model: GO_MODEL.into(),
+        fallback_models: vec![],
         binary_sha256: util::file_hash(&std::env::current_exe().unwrap()).unwrap(),
         on_ambiguity,
     }

@@ -260,6 +260,9 @@ agent builds a real `TaskView` from a real task and checks it against the same s
   says so.
 - The controller runs each model request in a child process of its own executable
   (`provider-worker`); the desktop app handles that call in `main` before any window starts.
+- Model: the app drafts with DeepSeek V4.1 Flash only (run config `model`, no
+  `fallback_models`) until the founder decides otherwise. Development rounds use Crouton Alpha
+  Free first and DeepSeek when Crouton is rate limited (`docs/AGENT_HARNESS.md`, "Drafting model").
 
 ## Exports
 
