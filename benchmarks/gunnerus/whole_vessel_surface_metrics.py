@@ -11,7 +11,10 @@ Reported per part: the largest turn between two neighbouring samples (degrees), 
 neighbouring samples with a turn above ``KINK_DEG`` and the number of distinct B-rep faces
 that the cuts cross (one for a single surface).
 F2 containment: S1 of ``whole_vessel_superstructure_metrics`` (largest distance outside the
-hull side, tolerance 0.02 m).
+hull side, tolerance 0.02 m). S1 meshes the parts with CadQuery's ``tessellate``, whose
+deflection is relative to the edge size: exact for flat and ruled faces, but on a curved
+B-spline face its triangles are up to about 0.04 m off the surface. v2 adds F2 exact: the same
+S1 sampling on a mesh with an absolute deflection of ``EXACT_DEFLECTION_MM``.
 F3 accuracy: M2 and M4 of ``whole_vessel_metrics`` (tier-1 footprint IoU and volume) and the
 hull + tier-1 volume against the truth (from the assembly record).
 F4 cost: face count of each part STEP, whole-vessel STEP and GLB size, build time.
@@ -31,7 +34,10 @@ from pathlib import Path
 
 import numpy as np
 
-METRIC_VERSION = 'whole-vessel-surfaces/v1'
+METRIC_VERSION = 'whole-vessel-surfaces/v2'
+# v2: F2 exact. A mesh of the part STEP (millimetres) at this absolute deflection and angle.
+EXACT_DEFLECTION_MM = 1.0
+EXACT_ANGLE_RAD = 0.1
 WALL_OPS = ('bulwark', 'deckhouse')
 # Normal samples on a cut are this far apart in z (a quarter of the thinnest refined band
 # spacing that is visible at 1 m viewing distance; finer than any loft level spacing).
@@ -46,7 +52,7 @@ BOW_STATIONS_M = (28.0, 31.0, 33.0, 34.0)
 END_MARGIN_M = 0.02
 # The ray starts this far to port of the centreline (outside every part).
 RAY_START_Y_M = 20.0
-TARGETS = {'F2_max_outside_m': 0.02, 'F3_tier1_iou_min': 0.997, 'F3_tier1_volume_error_abs_max': 0.031,
+TARGETS = {'F2_exact_max_outside_m': 0.02, 'F3_tier1_iou_min': 0.997, 'F3_tier1_volume_error_abs_max': 0.031,
            'F3_hull_tier1_error_abs_max': 0.016}
 
 
@@ -61,8 +67,8 @@ def wall_normals(shape, x_m: float, z_values_m) -> list[tuple[float, np.ndarray,
 
     The shape is in millimetres (part STEP files); x and z are metres.
     """
-    from OCP.BRepLProp import BRepLProp_SLProps
     from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.BRepLProp import BRepLProp_SLProps
     from OCP.gp import gp_Dir, gp_Lin, gp_Pnt
     from OCP.IntCurvesFace import IntCurvesFace_ShapeIntersector
     from OCP.TopAbs import TopAbs_REVERSED
@@ -90,6 +96,27 @@ def wall_normals(shape, x_m: float, z_values_m) -> list[tuple[float, np.ndarray,
         index = next((i for i, f in enumerate(faces) if f.IsSame(face)), -1)
         results.append((intersector.Pnt(first).Y() / 1000, normal, index))
     return results
+
+
+def exact_triangles(path: Path) -> np.ndarray:
+    """Triangles (metres) within ``EXACT_DEFLECTION_MM`` of the part surface (absolute deflection)."""
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepMesh import BRepMesh_IncrementalMesh
+    from OCP.TopLoc import TopLoc_Location
+
+    shape = read_step(path)
+    BRepMesh_IncrementalMesh(shape.wrapped, EXACT_DEFLECTION_MM, False, EXACT_ANGLE_RAD, True)
+    triangles = []
+    for face in shape.Faces():
+        location = TopLoc_Location()
+        mesh = BRep_Tool.Triangulation_s(face.wrapped, location)
+        if mesh is None:
+            continue
+        nodes = np.array([mesh.Node(i).Transformed(location.Transformation()).Coord()
+                          for i in range(1, mesh.NbNodes() + 1)])
+        corners = np.array([[t.Value(k) for k in (1, 2, 3)] for t in mesh.Triangles()]) - 1
+        triangles.append(nodes[corners])
+    return np.concatenate(triangles) / 1000.0
 
 
 def cut_smoothness(shape, x_m: float, z_low: float, z_high: float) -> dict | None:
@@ -121,7 +148,9 @@ def part_smoothness(path: Path, component: dict) -> dict:
 
 
 def score(run: Path, assembly: Path | None, sources: Path, truth_mesh: Path) -> dict:
-    from benchmarks.gunnerus.whole_vessel_superstructure_metrics import score as superstructure_score
+    from benchmarks.gunnerus.whole_vessel_superstructure_metrics import (
+        score as superstructure_score,
+    )
 
     execution = json.loads((run / 'execution.json').read_text())
     components = (execution.get('result') or {}).get('components', [])
@@ -132,12 +161,20 @@ def score(run: Path, assembly: Path | None, sources: Path, truth_mesh: Path) -> 
         if component.get('op') in WALL_OPS and component.get('built') and path.is_file():
             smoothness[component['id']] = part_smoothness(path, component)
     containment = superstructure_score(run, sources, truth_mesh)
+    from benchmarks.gunnerus.whole_vessel_detail import hull_sections
+    from benchmarks.gunnerus.whole_vessel_superstructure_metrics import overhang
+    from vessel_reconstruction.superstructure import HullSide
+
+    hull = HullSide.from_sections(hull_sections(sources))
+    exact = {part: overhang(hull, exact_triangles(output / f'{part}.step'))['max_m']
+             for part in containment['S1_overhang']}
     step1 = containment['step1_metrics']
     report = {'metric_version': METRIC_VERSION, 'engineering_approved': False, 'case': 'gunnerus development',
               'metrics_file_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               'targets': TARGETS, 'F1_smoothness': smoothness,
               'F2_outside_m': {part: item['max_m'] for part, item in containment['S1_overhang'].items()},
               'F2_max_outside_m': containment['S1_max_overhang_m'],
+              'F2_exact_outside_m': exact, 'F2_exact_max_outside_m': max(exact.values(), default=None),
               'F3_tier1_iou': step1.get('M2_footprint_iou'), 'F3_tier1_volume_error': step1.get('M4_volume_error'),
               'F4_part_step_faces': {part: item['step_faces'] for part, item in smoothness.items()}}
     if assembly is not None:

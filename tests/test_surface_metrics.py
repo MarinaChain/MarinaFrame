@@ -3,7 +3,7 @@ import pytest
 
 cq = pytest.importorskip('cadquery')
 
-from benchmarks.gunnerus.whole_vessel_surface_metrics import cut_smoothness  # noqa: E402
+from benchmarks.gunnerus.whole_vessel_surface_metrics import cut_smoothness
 
 
 def _section(z_m: float, half_breadth_m: float):
