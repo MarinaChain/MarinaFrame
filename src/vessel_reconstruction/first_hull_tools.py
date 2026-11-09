@@ -239,7 +239,9 @@ def cap_at_profile_outline(sections: list[dict], anchors: list[Anchor], heights:
     deck are left to the form fit. Returns (sections, anchors).
     """
     decks = {sid: h["deck"] for sid, h in heights.items()}
-    short = set(short_of_deck(anchors, decks))
+    # A body-plan reader curve is measured at every waterline it crosses; one that ends below the
+    # deck (a transom, a curve ending at a label) keeps its cells and is continued, not dropped.
+    short = set(short_of_deck(anchors, decks)) - {a.id for a in anchors if a.source == "read"}
     anchors = [a for a in anchors if a.id not in short]
     # A keel read at the deck (an outline broken at that station) is no keel:
     # a station section is never that shallow.

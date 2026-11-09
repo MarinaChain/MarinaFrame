@@ -121,3 +121,16 @@ def test_calibration_record_scales_to_a_reduced_page():
     assert cal.centre_column == pytest.approx(record['calibration']['centre_column'] / 2)
     assert cal.pixels_per_ft == pytest.approx(record['calibration']['pixels_per_ft'] / 2)
     assert cal.box == [round(v / 2) for v in record['calibration']['box']]
+
+
+def test_a_reader_curve_short_of_the_deck_is_kept_and_continued():
+    from vessel_reconstruction.first_hull_tools import cap_at_profile_outline
+    sections = [{'id': f'S{i}', 'x_m': float(i), 'z_max_m': 3.0} for i in range(1, 5)]
+    full = [[0.1, 0.0], [0.8, 1.0], [1.0, 2.0], [1.05, 3.0]]
+    anchors = [Anchor(f'S{i}', float(i), [list(p) for p in full], {'id': f'S{i}'}) for i in range(1, 4)]
+    short = [[0.1, 0.0], [0.8, 1.0], [0.9, 1.4]]
+    anchors.append(Anchor('S4', 4.0, short, {'id': 'S4'}, source='read'))
+    heights = {f'S{i}': {'deck': 3.0, 'keel': 0.0} for i in range(1, 5)}
+    _, kept = cap_at_profile_outline(sections, anchors, heights)
+    reader = next(a for a in kept if a.id == 'S4')
+    assert reader.source == 'read' and max(p[1] for p in reader.points_yz_m) >= 1.4

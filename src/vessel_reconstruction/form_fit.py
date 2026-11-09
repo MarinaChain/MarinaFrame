@@ -485,7 +485,8 @@ def fit_vessel(declared: list[dict], anchors: list[Anchor],
         sid, sx = section["id"], float(section["x_m"])
         anchor = by_id.get(sid)
         if anchor is not None:
-            source = "fitted" if anchor.extended else anchor.source
+            # A reader row stays "read" when its top was continued; the row notes say so.
+            source = "read" if anchor.source == "read" else ("fitted" if anchor.extended else "traced")
             rows.append(StationRow(id=sid, x_m=sx, points_yz_m=anchor.points_yz_m, source=source,
                                    locked=not anchor.extended, selection_section=anchor.selection_section,
                                    notes=list(anchor.notes)))
