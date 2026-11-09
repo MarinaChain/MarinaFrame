@@ -5,12 +5,12 @@ import argparse
 import ctypes
 import json
 import os
-import resource
 import signal
 import sys
 import time
 from pathlib import Path
 
+from .process_limits import posix_resource
 from .resources import native_resource_profile, peak_rss_kib
 
 
@@ -28,6 +28,7 @@ def apply_limits(limits: dict, parent_pid: int) -> None:
             raise RuntimeError('Worker parent identity could not be established.')
     if os.getppid() != parent_pid:
         raise RuntimeError('Worker parent identity could not be established.')
+    resource = posix_resource()
     cpu_seconds = int(limits['cpu_seconds'])
     resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds + 1))
     # On macOS RLIMIT_AS is an alias of RLIMIT_RSS: the kernel rejects lowering
@@ -65,6 +66,7 @@ def main() -> int:
         receipt = {'error_code': 'output_exists'}
     except BaseException as exc:
         receipt = {'error_code': 'worker_exception', 'exception_type': type(exc).__name__}
+    resource = posix_resource()
     usage = resource.getrusage(resource.RUSAGE_SELF)
     children = resource.getrusage(resource.RUSAGE_CHILDREN)
     receipt['resources'] = {'wall_seconds': round(time.monotonic() - started, 4),

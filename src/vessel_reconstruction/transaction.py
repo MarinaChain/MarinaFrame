@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import ctypes
 import errno
-import fcntl
 import os
 import re
 import stat
@@ -11,6 +10,7 @@ import sys
 import uuid
 from pathlib import Path
 
+from .file_lock import try_lock_exclusive, unlock
 from .provenance import sync_directory, write_json
 from .schema import load_bounded_json
 
@@ -71,7 +71,7 @@ class RunTransaction:
         except FileExistsError as exc:
             raise FileExistsError("A transaction already reserves this output; recover the interrupted run or use another directory.") from exc
         try:
-            fcntl.flock(self.lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            try_lock_exclusive(self.lock_fd)
             if os.path.lexists(self.out):
                 raise FileExistsError("Run output already exists.")
             self.stage.mkdir(mode=0o700)
@@ -128,7 +128,7 @@ class RunTransaction:
                         # it and explicit recovery removes unpublished exports.
                         pass
             finally:
-                fcntl.flock(self.lock_fd, fcntl.LOCK_UN)
+                unlock(self.lock_fd)
                 os.close(self.lock_fd)
                 self.lock_fd = None
 
@@ -149,7 +149,7 @@ def quarantine_interrupted(output_dir: str | Path) -> dict:
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             raise ValueError("Transaction reservation is not an ordinary file.")
         try:
-            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            try_lock_exclusive(descriptor)
         except BlockingIOError:
             return {"recovered": False, "reason": "active_transaction", "run_dir": str(out)}
         try:
@@ -186,5 +186,5 @@ def quarantine_interrupted(output_dir: str | Path) -> dict:
                 "last_phase": record.get("phase", "unknown"),
                 "quarantine": str(quarantined) if quarantined else None}
     finally:
-        fcntl.flock(descriptor, fcntl.LOCK_UN)
+        unlock(descriptor)
         os.close(descriptor)

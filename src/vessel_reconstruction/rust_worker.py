@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import resource
 import shutil
 import signal
 import sys
@@ -20,6 +19,7 @@ from pathlib import Path
 
 from .agent_tools import DomainTools, _artifact, _model_observation_image
 from .provenance import digest_file, digest_object, write_json
+from .process_limits import posix_resource
 from .resources import peak_rss_kib
 from .schema import loads_bounded_json
 from .validation_contract import implementation_identity as audit_implementation_identity
@@ -153,6 +153,7 @@ def main(argv=None):
         # Native data and exceptions can include arbitrary source text/paths.
         # Preserve a bounded category, never a raw exception or environment.
         envelope["error_code"] = "worker_boundary_" + type(exc).__name__.lower()
+    resource = posix_resource()
     usage = resource.getrusage(resource.RUSAGE_SELF)
     children = resource.getrusage(resource.RUSAGE_CHILDREN)
     envelope["resources"] = {

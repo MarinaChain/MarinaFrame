@@ -9,9 +9,9 @@ import argparse
 import json
 import os
 from pathlib import Path
-import resource
 import time
 
+from .process_limits import posix_resource
 from .resources import native_resource_profile, peak_rss_kib
 
 # A region run (geometry.build_region_hull) is a compound whose solids end on
@@ -321,6 +321,7 @@ def main():
             result = (render_step(Path(request["run_dir"]), request["view"], args.out,
                                   request.get("station_overlay"))
                       if args.operation == "render" else audit_step(Path(request["run_dir"]), args.out))
+        resource = posix_resource()
         usage = resource.getrusage(resource.RUSAGE_SELF)
         result["resources"] = {"wall_seconds": round(time.monotonic() - started, 4),
                                "cpu_seconds": round(usage.ru_utime + usage.ru_stime, 4),

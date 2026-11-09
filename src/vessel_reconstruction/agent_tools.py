@@ -12,7 +12,6 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import asdict, replace
 import copy
-import fcntl
 import json
 import math
 import os
@@ -24,6 +23,7 @@ from uuid import uuid4
 
 import numpy as np
 
+from .file_lock import try_lock_exclusive
 from .draft import (DRAFT_STATUS, guessed_choices, make_guesses, model_authored_guess, model_choice_guess,
                     section_sources)
 from .investigation_tools import (INVESTIGATION_ARGUMENTS, InvestigationTools, ToolArgumentError,
@@ -413,7 +413,7 @@ class DomainTools(InvestigationTools):
         try:
             with (self.root / "lock").open("a") as lock:
                 try:
-                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    try_lock_exclusive(lock)
                 except BlockingIOError as exc:
                     raise ToolInputError("Another domain action is already running.") from exc
                 self.state = load_bounded_json(self.state_path, max_bytes=MAX_INSPECTION_BYTES,
@@ -1120,7 +1120,7 @@ class DomainTools(InvestigationTools):
         A snapshot returned after releasing this guard is not an atomic finish.
         """
         with (self.root / "lock").open("a") as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            try_lock_exclusive(lock)
             self.state = load_bounded_json(self.state_path, max_bytes=MAX_INSPECTION_BYTES,
                                            max_nodes=600_000)
             self._verify_inputs()

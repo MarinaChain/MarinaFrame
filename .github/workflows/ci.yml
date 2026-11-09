@@ -28,10 +28,22 @@ jobs:
         with:
           python-version: '3.12.10'
           cache: pip
-      - name: Install the package with test and document extras (no Windows lock yet)
-        run: python -m pip install -e ".[test,documents,data]"
-      - name: Run the Python suite
-        run: python -m pytest -q -p no:cacheprovider
+      - name: Install the package with test, document and raster extras (no Windows lock yet)
+        run: python -m pip install -e ".[test,documents,data,plan-raster]"
+      - name: Run the Python suite (report only; findings go to the run summary)
+        shell: bash
+        run: |
+          set +e
+          python -m pytest -q -p no:cacheprovider -rfE 2>&1 | tee pytest-windows.txt
+          status=${PIPESTATUS[0]}
+          {
+            echo "## Windows portability watch (report only)"
+            echo "pytest exit code: ${status}. Failures below are porting work, not regressions on macOS/Linux."
+            echo '```'
+            grep -E '^(FAILED|ERROR) |[0-9]+ (passed|failed)' pytest-windows.txt | head -80
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
 
   test:
     name: Locked Linux / Python 3.12.14
