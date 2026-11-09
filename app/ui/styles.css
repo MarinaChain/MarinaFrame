@@ -3197,3 +3197,10 @@ code { font-family: var(--font-mono); }
   .model-reference-text { display: none; }
   .model-tool { padding: 0 5px; }
 }
+
+/* History and export: icon facts in a line of text. */
+.change-what { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px; }
+.change-ink { font-family: var(--font-mono); font-size: var(--fs-xs); }
+.export-issues .badge-glyphchip { margin-left: 2px; }
+.needs-why.chip-row { min-height: 18px; }
+.intake-optional { cursor: help; text-decoration: underline dotted; text-underline-offset: 3px; }

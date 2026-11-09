@@ -77,7 +77,7 @@ export function createOverlays({ scene, host, clip }) {
     el('div', { class: 'model-corner-row' }, scale, triad),
     el('div', { class: 'model-corner-row' },
       el('span', { class: 'model-reference' }, referenceText, guessedMark),
-      el('span', { class: 'model-badge', dataset: { tone: 'draft' }, title: 'Draft, not for construction', 'aria-label': 'Draft, not for construction' }, 'Draft')));
+      el('span', { class: 'model-badge', dataset: { tone: 'draft' }, 'data-tip-title': 'Draft, not for construction', 'aria-label': 'Draft, not for construction' }, 'Draft')));
   corner.hidden = true;
   host.append(frameLabels, readout, corner);
 

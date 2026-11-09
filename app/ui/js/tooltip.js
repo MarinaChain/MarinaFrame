@@ -153,7 +153,8 @@ export function installTooltips() {
       fill(detailText, state === 'detail' ? detail : '');
       node.dataset.state = state;
       node.dataset.ring = String(ringOn);
-      ring.hidden = !(state === 'ringing' || (state === 'title' && detail));
+      // An SVG element has no `hidden` property; the attribute works through [hidden] in CSS.
+      ring.toggleAttribute('hidden', !(state === 'ringing' || (state === 'title' && detail)));
       // Restart the ring animation for each new owner.
       ring.classList.remove('tip-ring-run');
       if (ringOn) {

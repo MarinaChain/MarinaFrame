@@ -4,6 +4,7 @@
 // happens outside MarinaFrame).
 
 import { el, icon, fill } from './dom.js';
+import { glyphChip } from './glyphs.js';
 import * as fmt from './format.js';
 
 /** The outputs in display order. `kind` matches the backend; `name` is the one-word chip. */
@@ -120,13 +121,19 @@ export function createExport({ host, invoke }) {
     return null;
   }
 
+  /** What is still open, as icon counts; the files show the draft as it is now. */
   function issuesLine() {
-    const lines = [];
-    if (openIssues) lines.push(`${openIssues} ${openIssues === 1 ? 'section is' : 'sections are'} still a guess or declined.`);
-    if (openParts) lines.push(`${openParts} ${openParts === 1 ? 'part is' : 'parts are'} guessed or not built.`);
-    if (!lines.length) return null;
+    if (!openIssues && !openParts) return null;
     return el('p', { class: 'export-issues', role: 'note' }, icon('warn'),
-      el('span', {}, `${lines.join(' ')} The files show the draft as it is now.`));
+      el('span', {}, 'Still open:'),
+      openIssues ? glyphChip('flag', 'sections', {
+        count: openIssues, countedName: `${fmt.plural(openIssues, 'section')} still a guess or declined`, tone: 'warn',
+        detail: 'The files show the draft as it is now.',
+      }) : null,
+      openParts ? glyphChip('cube', 'parts', {
+        count: openParts, countedName: `${fmt.plural(openParts, 'part')} guessed or not built`, tone: 'warn',
+        detail: 'The files show the draft as it is now.',
+      }) : null);
   }
 
   function render() {

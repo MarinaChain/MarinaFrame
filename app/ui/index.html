@@ -74,7 +74,7 @@
     <symbol id="i-st-not_read" viewBox="0 0 16 16"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z" /><path d="M3 13L13 3" /></symbol>
     <symbol id="i-read" viewBox="0 0 16 16"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z" /><circle class="glyph-fill" cx="8" cy="8" r="2" /></symbol>
     <symbol id="i-flag" viewBox="0 0 16 16"><path d="M3.5 14.5V2" /><path d="M3.5 2.5h8.8l-2.2 3 2.2 3H3.5" /></symbol>
-    <symbol id="i-not-built" viewBox="0 0 16 16"><path d="M8 1.8l5.5 3v6.4L8 14.2l-5.5-3V4.8z" stroke-dasharray="2.2 1.6" /></symbol>
+    <symbol id="i-not-built" viewBox="0 0 16 16"><path d="M8 1.8l5.5 3v6.4L8 14.2l-5.5-3V4.8z" /><path d="M1.8 14.2L14.2 1.8" /></symbol>
     <symbol id="i-lines" viewBox="0 0 16 16"><path d="M2 13.5C6.5 13.5 9.5 10 10.5 3M5.5 13.5C10 13 12.5 10 14 4" /></symbol>
     <symbol id="i-legend" viewBox="0 0 16 16"><path d="M2.5 4h2M2.5 8h2M2.5 12h2M7 4h6.5M7 8h6.5M7 12h6.5" /></symbol>
     <symbol id="i-stop" viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1" /></symbol>
@@ -112,9 +112,9 @@
       <button class="btn btn-ghost palette-open" id="open-palette" type="button" title="Go to a vessel, a station or an action (⌘K)">Go to…<kbd class="key-hint">⌘K</kbd></button>
       <div class="titlebar-actions" id="run-actions" hidden>
         <div class="segmented" role="radiogroup" aria-label="Layout" id="view-switch">
-          <button type="button" role="radio" data-view="drawing" title="Drawing (⌘1)" aria-label="Drawing only"><svg class="icon"><use href="#i-drawing" /></svg></button>
-          <button type="button" role="radio" data-view="split" title="Drawing and model (⌘2)" aria-label="Drawing and model"><svg class="icon"><use href="#i-split" /></svg></button>
-          <button type="button" role="radio" data-view="model" title="Model (⌘3)" aria-label="Model only"><svg class="icon"><use href="#i-cube" /></svg></button>
+          <button type="button" role="radio" data-view="drawing" data-tip-title="Drawing (⌘1)" aria-label="Drawing only"><svg class="icon"><use href="#i-drawing" /></svg></button>
+          <button type="button" role="radio" data-view="split" data-tip-title="Drawing and model (⌘2)" aria-label="Drawing and model"><svg class="icon"><use href="#i-split" /></svg></button>
+          <button type="button" role="radio" data-view="model" data-tip-title="Model (⌘3)" aria-label="Model only"><svg class="icon"><use href="#i-cube" /></svg></button>
         </div>
         <button class="btn" id="resume-task" type="button" hidden>Resume</button>
         <button class="btn btn-danger-quiet" id="cancel-task" type="button" hidden>Stop</button>
@@ -150,7 +150,7 @@
               <button class="btn btn-primary btn-large" id="new-vessel" type="button" title="Choose the drawing set of a new vessel (⌘N)">New vessel</button>
               <!-- Developers: start a run from a run spec file. -->
               <details class="menu" id="home-more">
-                <summary class="btn btn-large btn-icon" title="More" aria-label="More ways to start"><svg class="icon"><use href="#i-more" /></svg></summary>
+                <summary class="btn btn-large btn-icon" data-tip-title="More" aria-label="More ways to start"><svg class="icon"><use href="#i-more" /></svg></summary>
                 <div class="menu-list">
                   <button class="menu-item" id="new-folder" type="button" title="A folder of drawing sets: each PDF and each subfolder becomes one run">New vessels from a folder…</button>
                   <button class="menu-item" id="new-run" type="button" title="Start a run from a run spec file (.json, .toml, .yaml)">New run from a spec file…<kbd>⇧⌘N</kbd></button>
@@ -221,10 +221,10 @@
                 <div class="pane-tools">
                   <!-- HOOK(M3 live): the camera follows the AI's attention until the person pans or zooms. -->
                   <button class="btn btn-ghost btn-small live-follow" id="live-follow" type="button" aria-pressed="true" hidden><svg class="icon"><use href="#i-follow" /></svg>Follow</button>
-                  <button class="btn btn-ghost btn-icon" id="zoom-out" type="button" title="Zoom out (−)" aria-label="Zoom out"><svg class="icon"><use href="#i-zoom-out" /></svg></button>
+                  <button class="btn btn-ghost btn-icon" id="zoom-out" type="button" data-tip-title="Zoom out (−)" aria-label="Zoom out"><svg class="icon"><use href="#i-zoom-out" /></svg></button>
                   <span class="zoom-readout" id="zoom-readout" aria-live="off">100%</span>
-                  <button class="btn btn-ghost btn-icon" id="zoom-in" type="button" title="Zoom in (+)" aria-label="Zoom in"><svg class="icon"><use href="#i-zoom-in" /></svg></button>
-                  <button class="btn btn-ghost btn-icon" id="zoom-fit" type="button" title="Fit page (0)" aria-label="Fit page"><svg class="icon"><use href="#i-fit" /></svg></button>
+                  <button class="btn btn-ghost btn-icon" id="zoom-in" type="button" data-tip-title="Zoom in (+)" aria-label="Zoom in"><svg class="icon"><use href="#i-zoom-in" /></svg></button>
+                  <button class="btn btn-ghost btn-icon" id="zoom-fit" type="button" data-tip-title="Fit page (0)" aria-label="Fit page"><svg class="icon"><use href="#i-fit" /></svg></button>
                 </div>
               </div>
               <div class="drawing-host" id="drawing-host" tabindex="0" role="region" aria-label="Drawing. Drag to pan, scroll to zoom."></div>
@@ -240,7 +240,7 @@
                 <div class="pane-tools">
                   <button class="btn btn-ghost btn-small" id="hull-only" type="button" title="Show the hull without the other parts" hidden>Hull only</button>
                   <button class="btn btn-ghost btn-small" id="clear-outline" type="button" hidden>Hide outline</button>
-                  <button class="btn btn-ghost btn-icon" id="model-reset" type="button" title="Reset view (R)" aria-label="Reset view"><svg class="icon"><use href="#i-reset" /></svg></button>
+                  <button class="btn btn-ghost btn-icon" id="model-reset" type="button" data-tip-title="Reset view (R)" aria-label="Reset view"><svg class="icon"><use href="#i-reset" /></svg></button>
                 </div>
               </div>
               <div class="model-host" id="model-host" tabindex="0" role="region" aria-label="3D model. Drag to rotate, scroll to zoom, click a section plane to pick it. Keys: 1 to 5 standard views, P orthographic, F fit, C section cut, G grid, W waterline, E edges."></div>

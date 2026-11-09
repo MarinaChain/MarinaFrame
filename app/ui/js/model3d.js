@@ -541,11 +541,11 @@ export function createModelView({ host, onPick = null }) {
     const chip = (key, text, keyLabel) => el('span', { class: 'model-chip' },
       el('button', {
         type: 'button', class: 'model-chip-toggle', dataset: { legendKey: `${key}-toggle` },
-        'aria-pressed': String(layers[key]), title: `Show or hide the ${keyLabel}`, onclick: () => setLayer(key, !layers[key]),
+        'aria-pressed': String(layers[key]), 'data-tip-title': `Show or hide the ${keyLabel}`, 'data-tip-detail': LEGEND_NOTE, onclick: () => setLayer(key, !layers[key]),
       }, text),
       key in legendOpen ? el('button', {
         type: 'button', class: 'model-chip-open', dataset: { legendKey: `${key}-open` },
-        'aria-expanded': String(legendOpen[key]), 'aria-controls': listId(key), 'aria-label': `Colour key of the ${keyLabel}`, title: `Colour key of the ${keyLabel}`,
+        'aria-expanded': String(legendOpen[key]), 'aria-controls': listId(key), 'aria-label': `Colour key of the ${keyLabel}`, 'data-tip-title': `Colour key of the ${keyLabel}`,
         onclick: () => { legendOpen[key] = !legendOpen[key]; renderLegend(); },
       }, icon('chevron')) : null);
     const list = (key, rows) => el('ul', { class: 'model-legend-rows', id: listId(key) }, ...rows.map((row) => el('li', {},
@@ -563,7 +563,6 @@ export function createModelView({ host, onPick = null }) {
       tanksOpen ? list('tanks', tankLegend(tankMeshes.map((mesh) => mesh.userData))) : null,
       steelOpen ? list('structure', steelRows) : null,
       tanksOpen || steelOpen ? el('p', { class: 'model-legend-note' }, LEGEND_NOTE) : null);
-    legend.title = LEGEND_NOTE;
     if (focusKey) legend.querySelector(`[data-legend-key="${focusKey}"]`)?.focus();
   }
 

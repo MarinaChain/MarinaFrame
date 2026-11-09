@@ -2,6 +2,7 @@
 // radio inputs and a range slider, so every control works from the keyboard and has a name.
 
 import { el, icon } from './dom.js';
+import { tipAttributes } from './tooltip.js';
 import { CUT_AXES, cutLabel } from './reference3d.js';
 
 /** The tool bar: a row of button groups. `add(...nodes)` appends a group. */
@@ -17,16 +18,20 @@ export function createToolbar() {
   };
 }
 
-/** A tool bar button: an icon or short text, a name, a title with its key, and a click action. */
-export function toolButton({ text, iconName = null, label, keyHint = null, onClick, pressed = null }) {
+/**
+ * A tool bar button: an icon or short text, a name, a tooltip title with its key (tooltip.js),
+ * an optional tooltip detail, and a click action.
+ */
+export function toolButton({ text, iconName = null, label, keyHint = null, detail = null, onClick, pressed = null }) {
+  const tip = tipAttributes(keyHint ? `${label} (${keyHint})` : label, detail, { label: false });
   const button = el('button', {
     class: 'model-tool',
     type: 'button',
     'aria-label': label,
-    title: keyHint ? `${label} (${keyHint})` : label,
+    ...tip.attrs,
     'aria-pressed': pressed === null ? null : String(pressed),
     onclick: onClick,
-  }, iconName ? icon(iconName) : null, text ? el('span', {}, text) : null);
+  }, iconName ? icon(iconName) : null, text ? el('span', {}, text) : null, tip.describer);
   return button;
 }
 
@@ -44,7 +49,7 @@ export function createCutPanel({ onChange, onCutAtSelection, onClose }) {
   const id = `cut-${Math.random().toString(36).slice(2, 8)}`;
 
   // A segmented control of native radio inputs (arrow keys move between them).
-  const radios = Object.entries(CUT_AXES).map(([axis, spec]) => el('label', { class: 'model-cut-choice', title: `${spec.name} cut (${axis})` },
+  const radios = Object.entries(CUT_AXES).map(([axis, spec]) => el('label', { class: 'model-cut-choice', 'data-tip-title': `${spec.name} cut (${axis})` },
     el('input', { type: 'radio', class: 'visually-hidden', name: `${id}-axis`, value: axis, 'aria-label': `${spec.name} cut`, onchange: () => choose(axis) }),
     el('span', { 'aria-hidden': 'true' }, spec.short)));
   const slider = el('input', { type: 'range', class: 'model-cut-slider', 'aria-label': 'Cut position', oninput: () => move(Number(slider.value)) });
@@ -127,7 +132,7 @@ export function createCutPanel({ onChange, onCutAtSelection, onClose }) {
       atSelection.hidden = !frame;
       if (!frame) return;
       atSelection.textContent = `At ${frame}`;
-      atSelection.title = `Cut at ${frame}, the frame of the selected part`;
+      atSelection.dataset.tipTitle = `Cut at ${frame}, the frame of the selected part`;
       atSelection.setAttribute('aria-label', `Cut at ${frame}, the frame of the selected part`);
     },
   };

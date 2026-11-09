@@ -332,25 +332,24 @@ function partsToCheck(view) {
   return (view?.components || []).filter((p) => p.review !== 'accepted' && (p.status === 'draft_guess' || !p.built)).length;
 }
 
-function needsReason(run, view) {
-  const things = [];
+/** What waits for a person, as icon counts (the status chip already says the run's state). */
+function needsReason(view) {
   const sections = toCheckCount(view);
   const parts = partsToCheck(view);
-  if (sections) things.push(fmt.plural(sections, 'section'));
-  if (parts) things.push(fmt.plural(parts, 'part'));
-  if (things.length) return `${things.join(', ')} to check`;
-  if (NEEDS_ATTENTION.has(run.status)) return 'The run stopped. Open it to see why.';
-  return 'Ready for your review';
+  return [
+    sections ? glyphChip('flag', 'sections', { count: sections, countedName: `${fmt.plural(sections, 'section')} to check`, tone: 'warn', focusable: false }) : null,
+    parts ? glyphChip('cube', 'parts', { count: parts, countedName: `${fmt.plural(parts, 'part')} to check`, tone: 'warn', focusable: false }) : null,
+  ];
 }
 
 function needsCard(vessel) {
   const run = vessel.latest;
   const chips = el('span', { class: 'chip-row' }, statusBadge(run.status));
   const art = el('span', { class: 'needs-icon' }, icon('sheet'));
-  const reason = el('span', { class: 'needs-why' }, '');
+  const reason = el('span', { class: 'needs-why chip-row' });
   runPreview(run).then((view) => {
     if (view?.revision) chips.append(chip(view.revision, { dot: false, title: `Revision ${view.revision}` }));
-    reason.textContent = needsReason(run, view);
+    fill(reason, ...needsReason(view));
     // The built sections, as a small body plan, say more than a file icon.
     const hull = view?.model ? hullThumb(view) : null;
     if (hull) fill(art, hull);

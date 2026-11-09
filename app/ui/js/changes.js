@@ -5,6 +5,7 @@
 // "good" or "approved": the numbers are for a person to read.
 
 import { el, icon } from './dom.js';
+import { sourceGlyph } from './glyphs.js';
 import * as fmt from './format.js';
 
 /** Step kinds that change the model; the newest one before a build is its cause. */
@@ -100,15 +101,19 @@ function fitLine(entry) {
       `${sign}${Math.abs(delta).toFixed(2)}`));
 }
 
+/** One section's change: its source as icons (from → to), then its distance from the ink. */
 function sectionChange(change) {
-  const parts = [];
-  if (change.from !== change.to) parts.push(`${fmt.sourceLabel(change.from)} → ${fmt.sourceLabel(change.to)}`);
-  if (change.inkFrom !== null && change.inkTo !== null && change.inkFrom !== change.inkTo) {
-    parts.push(`off the ink ${fmt.millimetres(change.inkFrom)} → ${fmt.millimetres(change.inkTo)}`);
-  }
+  const source = change.from !== change.to
+    ? [sourceGlyph(change.from), el('span', { 'aria-hidden': 'true' }, ' → '), sourceGlyph(change.to)]
+    : null;
+  const inkChanged = change.inkFrom !== null && change.inkTo !== null && change.inkFrom !== change.inkTo;
+  const ink = inkChanged
+    ? el('span', { class: 'change-ink', 'data-tip-title': 'Distance from the ink (RMS)' },
+      `${fmt.millimetres(change.inkFrom)} → ${fmt.millimetres(change.inkTo)}`)
+    : null;
   return el('li', { class: 'change-section' },
     el('span', { class: 'change-x' }, fmt.metres(change.x_m)),
-    el('span', {}, parts.join(' · ')));
+    el('span', { class: 'change-what' }, source, source && ink ? el('span', { 'aria-hidden': 'true' }, ' · ') : null, ink));
 }
 
 /** Thumbnail box around a mark (sheet pixels): its points, else the area the pass looked at. */

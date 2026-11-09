@@ -455,7 +455,10 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
           oninput: (event) => { form.vessel_name = event.target.value; },
         })),
       el('fieldset', { class: 'field intake-known' },
-        el('legend', { class: 'field-label' }, 'Known particulars ', el('span', { class: 'intake-optional' }, 'optional')),
+        el('legend', { class: 'field-label' }, 'Known particulars ', el('span', {
+          class: 'intake-optional', tabindex: '0',
+          'data-tip-title': 'Optional', 'data-tip-detail': 'The AI reads these from the sheets. Type them only when you know them.',
+        }, 'optional')),
         el('div', { class: 'intake-number-grid' },
           ...PARTICULAR_FIELDS.map(([key, label]) => numberField(key, label, 'm')),
           el('label', { class: 'intake-number' },
@@ -467,7 +470,7 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
                 placeholder: '—', 'aria-invalid': Number.isNaN(readPositive(form.scale)) ? 'true' : null, disabled: starting,
                 'aria-label': 'Scale, 1 to', oninput: (event) => onNumberInput('scale', event.target),
               })))),
-        el('p', { class: 'field-help' }, 'The AI reads these from the sheets. Type them only when you know them.')),
+        ),
       el('div', { class: 'intake-mode' },
         el('span', { class: 'field-label' }, 'Mode'),
         aiStatus?.active
