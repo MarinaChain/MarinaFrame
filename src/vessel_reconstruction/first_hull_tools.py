@@ -325,6 +325,10 @@ def build_first_hull(tools):
     body_plan = tools.body_plan_reading()
     anchors, body_plan_report = reader_anchors(sections, anchors, body_plan)
     write_check(tools.root, image, body_plan, body_plan_report)
+    if body_plan_report["used"]:
+        # A station the reader measured has no open candidate choice: its guess is dropped.
+        read = set(body_plan_report["stations"])
+        guesses = [g for g in guesses if g["section_id"] not in read]
     from .vessel_description import station_outline_heights
     outline = station_outline_heights(image, list(tools.state.get("sheet_setups", {}).values()), description,
                                       sections, tools.intake_hints())

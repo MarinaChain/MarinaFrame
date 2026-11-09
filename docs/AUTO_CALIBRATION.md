@@ -172,3 +172,51 @@ the `claude` CLI on the subscription (API key variables removed). Never print ke
   like a part review (`review_component`, id `body_plan_calibration`), in app state, not in the run.
 - Open: a person's "Something is wrong" does not yet re-run the build with a corrected calibration
   (for example swapped halves); it records the decision only.
+
+## 9. Results (step 4, 2026-11-10)
+
+Measured with `benchmarks/auto_calibration/measure.py`; two independent sets of model answers
+(repeat 1 and repeat 2, each 4 to 6 `claude -p` calls per sheet on Claude Sonnet 5.5, subscription);
+both repeats give the same table below. Outputs and truth stay outside the repository.
+
+### 9.1 Per field, auto vs hand
+
+| Sheet | Centreline px | Baseline px | Waterline rows max px | px/ft % | Side | Station order | Open flags |
+|---|---:|---:|---:|---:|---|---|---|
+| Balclutha | -0.8 / +0.5 | +4.5 / +0.8 | 5 / 2 | +0.13 | exact | exact | none |
+| Thayer | 0.0 | -0.5 | 1 | 0.00 | exact | exact | none |
+| BUE GIRL | 0.0 | 0.0 | 0 | 0.00 | exact | exact | none (note: baseline unlabelled) |
+| BUMBLE BEE (sides corrected) | 0.0 | 0.0 | 9 (a) | 0.00 | wrong, **flagged** | differs (b) | sides: labels say fore left, shapes say fore right |
+| PARDON ME | 0.0 | 0.0 | 0 | 0.00 | exact | exact | none |
+
+(a) The 1-6-0 row is put on the drawn line 9 px below the nominal row; the reader searches +-20 rows
+and snaps there in both calibrations. (b) The drawing labels STA 1-6 left; the truth's numbering
+puts 9-14 left and 1-8 right (section 4). The automatic calibration cannot renumber; it flags.
+
+Targets met: centreline <= 3 px, px/ft <= 0.5 %, side never wrong and unflagged, station order
+exact on 4 of 5 (miss flagged). Missed: waterline rows <= 4 px on Balclutha repeat 1 (5 px; scale
+from the printed 3/8" ratio, 0.13 % above the drawn grid) and BUMBLE BEE (9 px, see (a)).
+
+### 9.2 End to end, frozen reader with code-only identity
+
+| Sheet | Hand: cells, RMS m | Auto: cells, RMS m | Auto geometry + corrected sides |
+|---|---|---|---|
+| Balclutha | 151, 0.1480 | 151, 0.1480 / 0.1479 | same |
+| Thayer | 149, 0.0116 | 149, 0.0116 | same |
+| BUE GIRL | 37, 0.0014 | 37, 0.0014 | same |
+| BUMBLE BEE | 50, 0.1486 (corrected sides) | 51, 0.1273 (provisional, flagged, not used for a build) | 51, 0.0129 (c) |
+| PARDON ME | 34, 0.1347 | 34, 0.1347 | same |
+
+(c) Better than the hand calibration because the automatic grid includes a near-vertical stretch of
+the outer aft curves at column 4786 as a grid column; the reader then skips one duplicated chain.
+This is luck of one sheet, not a method: a station curve read as a grid line can also lose cells.
+
+### 9.3 Fixes found on the way (all in new modules, the reader is unchanged)
+
+- A model-tagged centreline can be a keel or post edge next to it (BUE GIRL live: 66 px off, 5 cm
+  RMS). Without a symmetric grid the longest vertical line next to the tag is used, with a note.
+- Unlabelled waterlines: only the evenly spaced lattice is read (a painted waterline or another
+  view's lines changed the nesting order: 0.24 m RMS in the first live intake).
+- Vertical frame lines inside a grown box are not buttocks and bound the reader's search.
+- The worker reads at most 16 Mpx; a full HAER scan is 138 Mpx and stopped the run at
+  survey_sheet. Intake now gives the worker a reduced page and keeps the original for the reader.

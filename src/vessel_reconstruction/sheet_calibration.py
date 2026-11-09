@@ -44,6 +44,12 @@ SCALE_AGREEMENT = 0.01
 MAX_OFFSET_MARGIN_PX = 120
 # A waterline row lies on a drawn horizontal line within this many rows (the reader searches as far).
 SNAP_ROWS = 20
+# A line is on the waterline lattice within this share of the grid spacing.
+LATTICE_TOLERANCE = 0.03
+# A vertical line through this share of the body-plan box is a frame, not a buttock.
+VERTICAL_FRAME_FILL = 0.9
+# The reader's search stops this far inside a frame line (px).
+FRAME_CLEARANCE_PX = 20
 # Gaps of a dashed or dash-dot line, in rows.
 DASH_GAP_ROWS = 40
 # Rows below the baseline where the centreline's own ink may stop (dash-dot lines have gaps).
@@ -215,20 +221,31 @@ def choose_centreline(verticals: list[Line], box: list, tagged: Line | None) -> 
             return axis, axis_source + ' (model tagged a neighbouring line)', evidence
         evidence['disagreement'] = (f'tagged centreline {tagged.position} but the grid mirrors best about {axis} '
                                     f'({evidence["pairs"]} pairs vs {len(pairs)})')
+        return tagged.position, source, evidence
+    if len(pairs) < MIN_AXIS_PAIRS:
+        # No symmetric grid to confirm it (a grid on one half only): the centreline is the longest
+        # vertical line among the tagged line and its close neighbours (keel and post edges).
+        near = [line for line in verticals if abs(line.position - tagged.position) <= GRID_MIN_OFFSET_SHARE * width]
+        longest = max(near, key=lambda line: line.fill)
+        if longest is not tagged:
+            evidence['note'] = (f'model tagged {tagged.position}; the longest line next to it is {longest.position} '
+                                f'(fill {longest.fill} vs {tagged.fill})')
+            return longest.position, 'code:longest vertical line next to the model-tagged line', evidence
     return tagged.position, source, evidence
 
 
 def grid_lines(verticals: list[Line], centre: float, box: list) -> dict:
     """Vertical grid lines (buttocks) of each half, nearest the centreline first: {-1: [...], 1: [...]}.
 
-    Lines within GRID_MIN_OFFSET_SHARE of the box width are keel or post structure. A grid may be
-    drawn on one half only.
+    Lines within GRID_MIN_OFFSET_SHARE of the box width are keel or post structure; lines that
+    run through almost the whole box are frames (sheet or view borders). A grid may be drawn on
+    one half only.
     """
     width = box[2] - box[0]
     sides = {-1: [], 1: []}
     for line in verticals:
         offset = line.position - centre
-        if abs(offset) >= GRID_MIN_OFFSET_SHARE * width:
+        if abs(offset) >= GRID_MIN_OFFSET_SHARE * width and line.fill < VERTICAL_FRAME_FILL:
             sides[1 if offset > 0 else -1].append(line)
     for sign in sides:
         sides[sign].sort(key=lambda line: abs(line.position - centre))
@@ -322,6 +339,21 @@ def common_spacing(positions: list[float], tolerance: float = 0.015) -> float | 
         if len(close) >= 2 and (best is None or len(close) > len(best)):
             best = close
     return float(np.mean(best)) if best is not None else None
+
+
+def waterline_lattice(lines: list[Line]) -> list[Line]:
+    """The lines on the largest evenly spaced lattice (at least three), else all lines."""
+    rows = [line.position for line in lines]
+    step = common_spacing(rows)
+    if not step:
+        return lines
+    best = []
+    for anchor in rows:
+        on = [line for line in lines
+              if abs((line.position - anchor) / step - round((line.position - anchor) / step)) <= LATTICE_TOLERANCE]
+        if len(on) > len(best):
+            best = on
+    return best if len(best) >= 3 else lines
 
 
 def scale_from_ticks(ticks: list[tuple[float, float]], unit_ft: float) -> float | None:
@@ -499,6 +531,10 @@ def calibrate(ink: np.ndarray, reading, dpi: float | None = None) -> Calibration
     if len(labelled_rows) >= MIN_LABELLED_FOR_FIT:
         # The sheet labels its waterlines: read at those, not at frames, rails or table rules.
         candidates = [line for line in horizontals if id(line) in labelled_rows]
+    else:
+        # Unlabelled: the waterline grid is the largest set of evenly spaced lines; a painted
+        # waterline, rails and other views' lines off that lattice are not read.
+        candidates = waterline_lattice(candidates)
     for line in candidates:
         height = (cal.baseline_row - line.position) / cal.pixels_per_ft
         if abs(line.position - cal.baseline_row) < 3 and id(line) not in labelled_rows:
@@ -538,14 +574,19 @@ def calibrate(ink: np.ndarray, reading, dpi: float | None = None) -> Calibration
     cal.sources['sides'] = side_source
 
     # reader search half-span: outermost station crossing + margin
-    cal.max_offset_px = search_half_span(ink, cal)
+    frame_lines = [line for line in verticals if line.fill >= VERTICAL_FRAME_FILL
+                   and abs(line.position - centre) >= GRID_MIN_OFFSET_SHARE * (cal.box[2] - cal.box[0])]
+    cal.max_offset_px = search_half_span(ink, cal, frame_lines)
     cal.sources['max_offset_px'] = f'code:outermost station crossing + {MAX_OFFSET_MARGIN_PX} px'
     return cal
 
 
-def search_half_span(ink: np.ndarray, cal: Calibration) -> int:
+def search_half_span(ink: np.ndarray, cal: Calibration, frame_lines: list[Line] = ()) -> int:
     """Outermost station-curve crossing at the found waterlines (reader, first pass) + margin."""
     limit = int(min(cal.centre_column - cal.box[0], cal.box[2] - cal.centre_column))
+    frames = [abs(line.position - cal.centre_column) for line in frame_lines]
+    if frames:
+        limit = int(min([limit] + frames)) - FRAME_CLEARANCE_PX  # stop inside the nearest frame line
     if not cal.waterlines:
         return limit
     cal.max_offset_px = limit

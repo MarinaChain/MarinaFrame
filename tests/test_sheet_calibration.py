@@ -207,3 +207,23 @@ def test_reader_modules_are_not_changed_by_this_work():
     root = Path(__file__).resolve().parents[1]
     for name, digest in frozen.items():
         assert hashlib.sha256((root / name).read_bytes()).hexdigest() == digest
+
+
+def test_longest_line_next_to_a_mistagged_centreline_is_used():
+    keel_edge = sc.Line(1000.0 - 15, 3, 0.2)  # within 2 % of the box width
+    centre = sc.Line(1000.0, 3, 0.9)
+    one_sided = [sc.Line(1000.0 - 100 * k, 3, 0.4) for k in range(1, 5)]
+    column, source, evidence = sc.choose_centreline([keel_edge, centre] + one_sided, [500, 0, 1500, 1000], keel_edge)
+    assert column == 1000.0 and 'longest' in source and 'note' in evidence
+
+
+def test_waterline_lattice_drops_lines_off_the_grid():
+    lines = [sc.Line(r, 3, 0.4) for r in (6095, 6480, 6880, 7281, 7681, 7887, 8081)]
+    kept = [line.position for line in sc.waterline_lattice(lines)]
+    assert kept == [6480, 6880, 7281, 7681, 8081]
+
+
+def test_frame_lines_are_not_buttocks():
+    lines = [sc.Line(900.0, 3, 0.4), sc.Line(600.0, 6, 0.97), sc.Line(1100.0, 3, 0.4)]
+    grid = sc.grid_lines(lines, 1000.0, [500, 0, 1500, 1000])
+    assert [l.position for l in grid[-1]] == [900.0] and [l.position for l in grid[1]] == [1100.0]
