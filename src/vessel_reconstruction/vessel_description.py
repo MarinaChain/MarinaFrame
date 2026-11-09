@@ -627,10 +627,29 @@ def _iou(first, second) -> float:
     return overlap / union if union > 0 else 0.0
 
 
+def intake_profile_setup(setups, hints=None):
+    """A profile setup on the intake's profile region when the model set up no profile, or None.
+
+    A reading can name the profile as another view (series60-3v-L0 live: the
+    profile region set up as a body view). The intake measured the profile
+    region on the ink; the scale is the sheet's (the median of the model's
+    setups: a lines plan is drawn at one scale), the x origin and the baseline
+    are left unread (the outline's aft end and lowest line), bow to the right.
+    """
+    region = next((h["region_px"] for h in hints or [] if h.get("label") == "profile" and h.get("region_px")), None)
+    scales = [float(s["pixels_per_metre"]) for s in setups if (_number(s.get("pixels_per_metre")) or 0) > 0]
+    if region is None or not scales:
+        return None
+    return {"view": "profile", "view_id": "profile", "region_px": list(region),
+            "pixels_per_metre": float(np.median(scales)), "x_origin_px": float(region[0]),
+            "baseline_px": None, "x_direction": 1, "region_source": "intake profile (no model profile setup)"}
+
+
 def profile_setup(setups, hints=None):
     """The model's profile setup, on the intake's profile region when the model's region disagrees, or None."""
     profile = next((s for s in setups if s.get("view") == "profile" and s.get("x_origin_px") is not None), None) \
-        or next((s for s in setups if s.get("view") == "profile" and s.get("region_px")), None)
+        or next((s for s in setups if s.get("view") == "profile" and s.get("region_px")), None) \
+        or intake_profile_setup(setups, hints)
     if profile is None:
         return None
     if profile.get("x_origin_px") is None:

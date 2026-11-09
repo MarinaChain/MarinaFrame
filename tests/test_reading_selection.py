@@ -53,7 +53,9 @@ def test_the_earlier_reading_is_kept_when_the_new_hull_fits_worse(tmp_path):
     selection = T.keep_better_reading(tools, earlier, materialized, {"ok": True})
     assert selection == {"kept": "earlier", "fit_earlier": 0.8, "fit_new": 0.6}
     assert tools.state["last_valid_candidate"] == {"id": "first"}
-    assert [b["id"] for b in tools.state["builds"]] == ["first", "second"]
+    # The set-aside reading's builds are history only: a later build must never reuse one.
+    assert [b["id"] for b in tools.state["builds"]] == ["first"]
+    assert [b["id"] for b in tools.state["set_aside_builds"]] == ["first", "second"]
     assert tools.spec == {"sections": [{"id": "old"}]}
     assert [r["kept"] for r in tools.state["readings"]] == [True, False]
 
@@ -65,6 +67,11 @@ def test_the_new_reading_is_kept_when_it_fits_better_or_the_old_failed(tmp_path)
     selection = T.keep_better_reading(tools, earlier, b"{}", {"ok": True})
     assert selection["kept"] == "new" and tools.state["last_valid_candidate"] == {"id": "second"}
     assert [r["kept"] for r in tools.state["readings"]] == [False, True]
+
+
+def test_an_equal_fit_keeps_the_earlier_reading(tmp_path):
+    tools = FakeTools(tmp_path, {**first_hull_state(0.8), "last_valid_candidate": {"id": "second"}})
+    assert T.keep_better_reading(tools, first_hull_state(0.8), b"{}", {"ok": True})["kept"] == "earlier"
 
 
 def test_a_failed_new_build_keeps_the_earlier_reading(tmp_path):

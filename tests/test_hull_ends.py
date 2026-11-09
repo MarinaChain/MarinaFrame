@@ -78,6 +78,28 @@ def test_first_hull_without_its_ends_when_the_build_with_them_fails():
     assert all(row.source != "inferred" for row in table.stations)
 
 
+def test_the_drawing_fit_leaves_out_the_end_rows():
+    from vessel_reconstruction.fit_feedback import drawn_stations
+    sections = declared()
+    table = F.fit_vessel(sections, synthetic_anchors())
+    places = H.end_stations(ENDS, STATIONS)
+    H.extend_to_ends(table, sections, places, {p["id"]: {"keel": 1.0, "deck": DEPTH} for p in places},
+                     {p["id"]: 0.5 for p in places})
+    drawn = drawn_stations(table)
+    assert [row.id for row in drawn.stations] == [s["id"] for s in sections]
+
+
+def test_profile_from_the_intake_when_the_model_set_up_none():
+    from vessel_reconstruction.vessel_description import profile_setup
+    setups = [{"view": "body", "region_px": [2172, 138, 2475, 333], "pixels_per_metre": 19.0},
+              {"view": "body", "region_px": [153, 135, 2073, 312], "pixels_per_metre": 19.0}]
+    hints = [{"label": "profile", "region_px": [150, 140, 2080, 310]}]
+    profile = profile_setup(setups, hints)
+    assert profile["view"] == "profile" and profile["region_px"] == [150, 140, 2080, 310]
+    assert profile["pixels_per_metre"] == 19.0 and profile["baseline_px"] is None
+    assert profile_setup(setups, []) is None
+
+
 def plan_image(fore_px: int = 900) -> np.ndarray:
     """A half-breadth plan: centreline at row 200, one waterline full amidships, closing to the ends."""
     image = np.full((260, 1000, 3), 255, dtype=np.uint8)

@@ -423,7 +423,7 @@ def start_next_reading(tools) -> dict | None:
 
 
 def keep_better_reading(tools, snapshot: dict, materialized: bytes | None, observation: dict) -> dict:
-    """Keep the earlier reading's first hull when the new one fits the drawing worse or failed.
+    """Keep the earlier reading's first hull unless the new one fits the drawing better.
 
     ``snapshot`` is the task state before the rebuild and ``materialized``
     its materialized spec file. Returns the selection record.
@@ -432,7 +432,8 @@ def keep_better_reading(tools, snapshot: dict, materialized: bytes | None, obser
     from .schema import load_bounded_json
     old_fit = (snapshot.get("fit_score") or {}).get("combined_fit")
     new_fit = (tools.state.get("fit_score") or {}).get("combined_fit") if observation.get("ok") else None
-    keep_old = materialized is not None and old_fit is not None and (new_fit is None or new_fit < old_fit)
+    # The new reading replaces the earlier one only when it fits the drawing strictly better.
+    keep_old = materialized is not None and old_fit is not None and (new_fit is None or new_fit <= old_fit)
     readings = copy.deepcopy(tools.state.get("readings") or [])
     for record in readings:
         if record.get("kept"):
@@ -441,10 +442,11 @@ def keep_better_reading(tools, snapshot: dict, materialized: bytes | None, obser
     selection = {"kept": "earlier" if keep_old else "new", "fit_earlier": old_fit, "fit_new": new_fit}
     if keep_old:
         (tools.root / "input" / MATERIALIZED_SPEC).write_bytes(materialized)
-        builds = tools.state.get("builds", [])
+        set_aside = snapshot.get("set_aside_builds", []) + tools.state.get("builds", [])
         tools.state = copy.deepcopy(snapshot)
-        # The new reading's builds stay in the history; its hull is set aside.
-        tools.state["builds"] = builds
+        # The new reading's builds are kept as history only: a build is reused by
+        # its generation and revision ids, which do not name the reading's setup.
+        tools.state["set_aside_builds"] = set_aside
         tools.spec = load_bounded_json(tools.root / "input" / MATERIALIZED_SPEC)
         write_json(tools.root / "vessel.json", {"description": tools.state.get("vessel_description"),
                                                 "table": tools.state.get("vessel_table")})
@@ -482,6 +484,10 @@ def rebuild_if_setup_changed(tools, previous_description) -> dict | None:
     materialized = materialized_path.read_bytes() if materialized_path.exists() else None
     tools.state.pop("materialized_spec_sha256", None)
     tools.state.update(copy.deepcopy(SECTION_STATE))
+    # Builds of the old setup are history: the new setup must never reuse one
+    # (build reuse matches generation and revision ids, which do not name the setup).
+    tools.state["set_aside_builds"] = tools.state.get("set_aside_builds", []) + tools.state.get("builds", [])
+    tools.state["builds"] = []
     tools.spec = tools.captured_spec
     tools._save()
     observation = build_first_hull(tools)
@@ -491,7 +497,7 @@ def rebuild_if_setup_changed(tools, previous_description) -> dict | None:
                                   reading_selection=selection,
                                   candidate=copy.deepcopy(tools.state.get("last_valid_candidate")),
                                   message=(f"The new reading changed the hull setup, but its first hull fits the "
-                                           f"drawing worse (fit {selection['fit_new']} vs "
+                                           f"drawing no better (fit {selection['fit_new']} vs "
                                            f"{selection['fit_earlier']}) or was not built; the earlier reading "
                                            "and its first hull were kept."))
     observation["setup_changes"] = changes[:12]

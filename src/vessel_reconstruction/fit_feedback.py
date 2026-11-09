@@ -38,8 +38,21 @@ def current_table(tools):
     return VesselTable(rows, waterline_grid(rows)) if rows else None
 
 
+def drawn_stations(table: VesselTable) -> VesselTable | None:
+    """The table's drawn stations: hull-end rows (hull_ends.py, ``inferred``) are not drawn in the body plan.
+
+    The fit compares the table with the drawn body plan; end rows have no
+    curve there, and their stretched shapes would only add fairness penalties.
+    """
+    rows = [row for row in table.stations if row.source != "inferred"]
+    if len(rows) == len(table.stations):
+        return table
+    return VesselTable(rows, list(table.waterlines_z_m), table.trend, table.warnings) if rows else None
+
+
 def score(tools, table=None):
     table = table or current_table(tools)
+    table = drawn_stations(table) if table is not None else None
     if table is None:
         return {"combined_fit": None, "cells": [], "station_ink_fit": {}}
     image, _, _ = tools._source()
