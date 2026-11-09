@@ -132,3 +132,9 @@
 - **Trigger:** The Gunnerus shell expansion and profile-and-plan sheets showed dozens of `PL` labels in the PDF, but a model-space text scan found almost none: the drawings sit in anonymous `A$C...` blocks, and plate thicknesses are `ATTRIB` values (tag `XX.X`) of `PLDIM2` inserts.
 - **Rule:** Read DXF construction sheets with `ezdxf.disassemble.recursive_decompose` (positions in world coordinates) and classify labels by attribute tag (`XX.X` plate, `FL.ST` flat bar). Compare the found label count with the rendered PDF before concluding a value is not printed.
 - **Why:** Round 2 reported Gunnerus plate thickness as not printed; round 3 found 77 % of the steel weight printed once blocks were exploded.
+
+### Check the body-plan side assignment twice before a holdout protocol (MarinaFrame)
+- **Date:** 2026-11-09
+- **Trigger:** Round 13 (BUMBLE BEE 47): the operator agent read the station labels and set the forebody (1-6) left and the aftbody (7-14) right; the chains fit the opposite halves within 2-6 mm. Code misnamed 10 of 14 stations and the models could not fix it, because each half's candidate stations were wrong. The round had to be reported as run.
+- **Rule:** Before a holdout protocol commit, have a second, independent check of which half is bow and which is stern (a different agent reading the labels in its own crops, or the profile's stem/stern position against the body plan), and record both readings in the protocol. If they disagree, stop and resolve before any run.
+- **Why:** One agent's reading of small station labels is a single point of failure, and a side swap turns a good reading into a systematic naming error that no later step can see.
