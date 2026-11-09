@@ -43,3 +43,12 @@ test('Keep anyway marks the last pass as forced', () => {
   assert.equal(entries.length, 1);
   assert.equal(entries[0].forced, true);
 });
+
+test('bare-number section ids never change dimensions in free text', () => {
+  const places = new Map([['5', '50.1 m'], ['7', '70.1 m'], ['8', '80.1 m']]);
+  assert.equal(withPlaces('LOA 99.76 m, beam 12.72 m, depth 7.63 m', places), 'LOA 99.76 m, beam 12.72 m, depth 7.63 m');
+  assert.equal(withPlaces('Stations 3-8 carry authored sections', places), 'Stations 3-8 carry authored sections');
+  assert.equal(withPlaces('Drew the section at 5', places), 'Drew the section at 50.1 m');
+  assert.equal(withPlaces('Picked the line for 8', places), 'Picked the line for 80.1 m');
+  assert.equal(withPlaces('Drew the section at 7.5 m', places), 'Drew the section at 7.5 m');
+});

@@ -52,13 +52,27 @@ export function metres(value, digits = 1) {
  * Put the place of each section in place of its id in a step text: the backend titles name
  * sections by id ("Drew the section at st12"), and the rest of the app names them by place
  * ("12.0 m"). `places` maps id to place. Only whole ids are replaced, longest first.
+ *
+ * Sheet-only runs number their sections "1", "2", ... A bare number in free text is usually a
+ * dimension ("depth 7.63 m"), so an id made only of digits is replaced only right after the
+ * backend's own words "section at" or "line for", and never inside a decimal number.
  */
 export function withPlaces(text, places) {
   if (!text || !places?.size) return text;
   const escape = (id) => id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const ids = [...places.keys()].sort((a, b) => b.length - a.length).map(escape);
-  const pattern = new RegExp(`(?<![\\w-])(${ids.join('|')})(?![\\w-])`, 'g');
-  return text.replace(pattern, (id) => places.get(id));
+  const byLength = (a, b) => b.length - a.length;
+  const named = [...places.keys()].filter((id) => !/^\d+$/.test(id)).sort(byLength).map(escape);
+  const numbered = [...places.keys()].filter((id) => /^\d+$/.test(id)).sort(byLength);
+  let result = text;
+  if (named.length) {
+    const pattern = new RegExp(`(?<![\\w-])(${named.join('|')})(?![\\w-])`, 'g');
+    result = result.replace(pattern, (id) => places.get(id));
+  }
+  if (numbered.length) {
+    const pattern = new RegExp(`(?<=\\b(?:section at|line for) )(${numbered.join('|')})(?![\\w.-])`, 'g');
+    result = result.replace(pattern, (id) => places.get(id));
+  }
+  return result;
 }
 
 /** A small length given in metres, shown in whole millimetres (ink distances). */
