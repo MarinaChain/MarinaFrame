@@ -455,6 +455,61 @@ two tiles of one waterline disagree by more than 0.15 m on 38 to 48 cells. The l
 model's localisation of thin lines, not the image size. Run outputs (not in the repository):
 the session scratchpad `r5/round5-001`.
 
+### 5.2 Round 6: stronger vision models (protocol 3.5.5 and its amendment)
+
+Protocol committed first (`fb254b5`; Crouton amendment `a2e44f3`), harness
+`benchmarks/balclutha/router_value.py` (`0258bee`, `d5a999e`; tests
+`tests/test_balclutha_router_value.py`, no model call). Run 2026-11-09. Same sheet, truth (151
+cells), prompt, merge, metrics and decision rule as round 5.
+
+- GPT 6.1 Sol and GPT-6 Astra: local codex-router (Responses API, ChatGPT subscription),
+  reasoning effort high, `detail: original`, 4096 x 2048 px tiles (one per side and waterline,
+  16 tiles; effective resolution 5,120 px by the probe).
+- Crouton Alpha Free: OpenCode Go, key 1, `reasoning_effort: high`, temperature 0.2, round-5
+  tiles (2048 x 1024 px, 32 tiles; effective resolution about 2,048 px by the probe).
+- **Claude Sonnet 5.5 and Claude Opus 5.5: not tested.** The router has no route for them, and
+  OpenCode Go lists only `claude-haiku-5-5`. No personal account was used.
+
+| Model, repeat | Cells (of 151) | RMS | Max | Within 0.05 / 0.15 m | Identity errors | Tile pairs > 0.15 m | Invalid | Tokens in / out (reasoning) | Cost | Wall |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| GPT 6.1 Sol R1-1 | 147 (97 %) | 0.1500 m | 1.81 m | 99 % / 99 % | 0 | - | 0 | 187,566 / 22,388 (20,550) | subscription | 217 s |
+| GPT 6.1 Sol R1-2 | 143 (95 %) | 0.1521 m | 1.81 m | 99 % / 99 % | 0 | - | 0 | 187,566 / 22,646 (20,848) | subscription | 267 s |
+| GPT 6.1 Sol R1-3 | 151 (100 %) | 0.1481 m | 1.81 m | 99 % / 99 % | 0 | - | 0 | 187,566 / 21,421 (19,543) | subscription | 200 s |
+| GPT-6 Astra R1-1 | 151 (100 %) | 0.1481 m | 1.81 m | 99 % / 99 % | 0 | - | 0 | 187,566 / 8,194 (6,316) | subscription | 97 s |
+| GPT-6 Astra R1-2 | 149 (99 %) | 0.1489 m | 1.81 m | 99 % / 99 % | 0 | - | 0 | 187,566 / 8,852 (6,994) | subscription | 113 s |
+| GPT-6 Astra R1-3 | 149 (99 %) | 0.1490 m | 1.81 m | 99 % / 99 % | 0 | - | 0 | 187,566 / 8,679 (6,821) | subscription | 95 s |
+| Crouton Alpha Free R1-1 | 148 (98 %) | 0.2824 m | 1.83 m | 37 % / 70 % | 3 | 13 | 0 | 10,922 / 2,190 (0) * | free (0) | 797 s |
+| Crouton Alpha Free R1-2 | 150 (99 %) | 0.3163 m | 1.84 m | 45 % / 72 % | 2 | 10 | 0 | 10,922 / 2,165 (0) * | free (0) | 648 s |
+| Crouton Alpha Free R1-3 | 147 (97 %) | 0.2907 m | 1.82 m | 40 % / 70 % | 1 | 8 | 0 | 10,922 / 2,171 (0) * | free (0) | 752 s |
+| DeepSeek V4.1 Flash (round 5), median | 98 to 100 (65 %) | 1.68 m | 5.09 to 5.66 m | 8 to 11 % / 20 to 24 % | 11 to 15 | 38 to 48 | 0 | 69,600 / 2,900 | not reported | 57 to 237 s |
+
+\* The Go usage for Crouton does not count image tokens (28 prompt tokens with or without an image
+in the probe), so its input tokens are text only. Sol and Astra have no tile pairs (one tile per
+side and waterline).
+
+Decision by the fixed rule (all 3 repeats at least 60 % of the cells and median RMS at most
+0.15 m):
+
+| Model | Median RMS | Coverage (min) | Decision |
+|---|---:|---:|---|
+| GPT-6 Astra | 0.1489 m | 99 % | **adds value** (passes) |
+| GPT 6.1 Sol | 0.15004 m | 95 % | **no value by the rule** (misses by 0.04 mm) |
+| Crouton Alpha Free | 0.2907 m | 97 % | **no value by the rule** (RMS twice the limit) |
+| Claude Sonnet 5.5, Claude Opus 5.5 | - | - | not tested (no route) |
+
+The margin is set by one cell. For Sol and Astra, the only cell more than 0.15 m off is 24 ft
+waterline, station 18 (error 1.81 m in all 6 repeats); without it the RMS is 13 mm in every repeat
+(12.7 to 13.3 mm). The truth has 1-9-4 (0.556 m) there, already flagged in section 5 as out of line
+with its neighbours (10-11-0 and 4-1-0); both models read 2.368 to 2.370 m, which is 7-9-4
+(2.375 m) within 7 mm. The cell is probably a transcription error (1 for 7); the fixed truth and
+the decisions above are not changed. Sol gave fewer cells in two repeats (it left out stations 11 and 12, next to the half stations
+at 4 to 28 ft), so the one bad cell weighs more in its RMS. A person should check the printed
+cell. With the cell corrected, Sol and Astra would both pass with about 13 mm RMS, ten times
+better than the rule. Crouton fails also without that cell (RMS 0.24 to 0.28 m; 37 to 45 % within 0.05 m; identity errors at stations 11 to 13), but it reads far better than DeepSeek (1.68 m).
+
+Integration option: plan section 3.5.6 (Astra reads, Sol is the second reader; the controller
+is not changed). Run outputs (not in the repository): the session scratchpad `r6/`.
+
 ## 6. Step 2: internals (development case, metrics G1 to G5 of plan section 4.3.2)
 
 Code: `benchmarks/gunnerus/whole_vessel_internals.py` (reader and build) and
@@ -506,6 +561,8 @@ no internal structure). G1 to G3 compare printed sources with each other.
 3. Openings (hatches) in step 1 (not started).
 4. Balclutha: option B run (section 5) and the tiled round 5 (section 5.1): no model value at
    whole-image resolution or on full-resolution tiles (median RMS 1.68 m). Do not repeat a
-   reading round with this model; next is option A when a person downloads the profile and deck
-   sheets, or a deterministic waterline-crossing reader for overlaid body plans.
+   reading round with this model. Round 6 (section 5.2): GPT-6 Astra passes (median RMS 0.149 m;
+   13 mm without one probably mistranscribed truth cell), GPT 6.1 Sol misses by 0.04 mm with the
+   same quality. Next: a person checks truth cell 24 ft / station 18, a holdout sheet, then the
+   founder decides on the integration option (plan section 3.5.6).
 5. Rust `ship_cad` vision schema: accept labelled inline values (Python accepts them now).

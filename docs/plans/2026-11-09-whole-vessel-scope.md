@@ -393,6 +393,30 @@ Effective resolution about 2,048 px, so Crouton uses the **round-5 layout unchan
 (its high-quality setting; no measurable change on a probe). Cost: free model (the Go usage
 reports cost 0). Metrics, decision rule and report as above.
 
+#### 3.5.6 Integration option for the scanned-hull path (round 6 result; controller not changed)
+
+Round 6 (`docs/WHOLE_VESSEL_GUNNERUS.md` section 5.2): GPT-6 Astra passes the fixed rule (median
+RMS 0.149 m); GPT 6.1 Sol misses it by 0.04 mm (0.15004 m) with the same reading quality. For both,
+every error above 0.15 m is one truth cell (24 ft, station 18), which is probably a transcription
+error (the models read 2.37 m = 7-9-4; the truth has 1-9-4). Without it both read at 13 mm RMS.
+Option (not built; for a founder decision):
+
+1. Code: calibrate the sheet from its own grid (centreline, base, waterline rows, buttock columns),
+   and cut one 4096 x 2048 px tile per side and waterline at full resolution, plus the 1/4-scale
+   context image with the red box. A person confirms the calibration (one check per sheet).
+2. Model, step "read station crossings": **GPT-6 Astra**, reasoning effort high, `detail:
+   original`, the round-5 prompt. About 190k input and 9k output tokens and 100 s per sheet.
+3. Model, step "second reader": **GPT 6.1 Sol** on the same tiles (same accuracy, 2.5x the output
+   tokens and 2x the time). A cell where the two readers differ by more than 0.05 m, or that only
+   one gives, is flagged for a person; the rest is taken as the mean.
+4. Code: merge to the offset-table form, every value labelled `ai_inferred`, then the existing
+   fairing and validation. `engineering_approved` stays false.
+5. Not used for reading: DeepSeek V4.1 Flash (round 5) and Crouton Alpha Free (section 5.2).
+   The deterministic tracer stays first for clean, non-overlaid drawings.
+
+Before a build: the truth cell above checked by a person, and one more scanned sheet with
+printed offsets as a holdout (the rule was met on one sheet only).
+
 ### 3.6 Effort, checks, resume
 
 Effort: 1-2 weeks (reader, executor change, scoring, Gunnerus run; then raster path and a
