@@ -41,10 +41,12 @@ KEEP_MIN_IMPROVEMENT = 0.002
 # ... or when it only fills gaps and no measured cell gets worse by more than
 # this fraction of B/2.
 GAP_FILL_MAX_WORSENING_FRACTION = 0.005
-# ... and an edit is not kept when one measured station cell (body-plan ink)
-# gets worse by more than this fraction of B/2: the end of the cell score's
-# steep part, past which the curve no longer follows that ink.
-LEAVES_INK_FRACTION = FULL_SCORE_FRACTION
+# ... and an edit is not kept when it abandons drawn station ink: a body-plan
+# station cell that the old curve followed (within the score's steep part,
+# FULL_SCORE_FRACTION of B/2) ends past the score's zero point
+# (TAIL_ZERO_FRACTION of B/2), where the cell no longer relates to that ink.
+# A smaller move can be the repair of a trace that sat on another line
+# (shipd-1-09867-3v-L0 Sonnet live: off a grid ruler by 0.75 m, truth 7.6 -> 3.9 %).
 # Residuals of at least this fraction of the group's worst one make its worst range.
 WORST_RANGE_FRACTION = 0.5
 # Lines in the summary's "worst" list.
@@ -227,13 +229,12 @@ def keep_edit(before: dict, after: dict, before_cells: list[dict] | None = None,
         # drawing, whatever else the edit gains (shipd-1-09867-3v-L0 DeepSeek
         # live: a fixed top cell raised the fit while the curve left its ink
         # at WL1 by 4.4 m; truth RMS 7 -> 38 % at that station).
-        stations_before = [c for c in before_cells if c.get("target") == "station"]
-        stations_after = [c for c in after_cells if c.get("target") == "station"]
-        worsening = _max_worsening(stations_before, stations_after)
-        if worsening > LEAVES_INK_FRACTION * before["half_beam_m"]:
-            return {"keep": False, "fit_before": old, "fit_after": new, "max_worsening_m": round(worsening, 4),
-                    "reason": (f"the curve left drawn station ink by {worsening:.2f} m at one waterline "
-                               f"(limit {100 * LEAVES_INK_FRACTION:g} % of B/2); follow the ink there")}
+        abandoned = _abandoned_station_ink(before_cells, after_cells, before["half_beam_m"])
+        if abandoned:
+            where, residual = abandoned
+            return {"keep": False, "fit_before": old, "fit_after": new, "abandoned_cell": where,
+                    "reason": (f"the curve left the station ink it followed at {where} ({residual:+.2f} m, past "
+                               f"{100 * TAIL_ZERO_FRACTION:g} % of B/2); follow the ink there")}
     if old is None or (new is not None and new >= old + KEEP_MIN_IMPROVEMENT):
         return {"keep": True, "reason": "combined fit improved", "fit_before": old, "fit_after": new}
     if gap_fill_only and before_cells is not None and after_cells is not None:
@@ -244,6 +245,23 @@ def keep_edit(before: dict, after: dict, before_cells: list[dict] | None = None,
                     "fit_before": old, "fit_after": new, "max_worsening_m": round(worsening, 4)}
     return {"keep": False, "reason": f"combined fit {old} -> {new}: needs +{KEEP_MIN_IMPROVEMENT}",
             "fit_before": old, "fit_after": new}
+
+
+def _abandoned_station_ink(before_cells: list[dict], after_cells: list[dict], half_beam_m: float):
+    """The first body-plan station cell that the old curve followed and the new one abandons.
+
+    Returns ``("<station> <waterline>", new residual)`` or None.
+    """
+    def key(cell):
+        return cell.get("station_id"), cell.get("waterline_id")
+
+    followed = {key(c) for c in before_cells if c.get("target") == "station" and c.get("status") == "measured"
+                and abs(c["residual_m"]) <= FULL_SCORE_FRACTION * half_beam_m}
+    for cell in after_cells:
+        if (cell.get("target") == "station" and cell.get("status") == "measured" and key(cell) in followed
+                and abs(cell["residual_m"]) > TAIL_ZERO_FRACTION * half_beam_m):
+            return f"{cell.get('station_id')} {cell.get('waterline_id')}", cell["residual_m"]
+    return None
 
 
 def _unexplained_count(cells: list[dict]) -> int:
