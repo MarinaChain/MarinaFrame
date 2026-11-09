@@ -49,6 +49,7 @@ class ReportFacts:
     hydrostatics: Hydrostatics | None
     hydrostatics_error: str | None
     generated_by: str
+    capacity_rows: list[dict] | None = None  # capacity plan (tanks.capacity_plan), when tanks are given
 
 
 def label_text(label: str) -> str:
@@ -202,6 +203,21 @@ def write_summary(writer: PageWriter, facts: ReportFacts) -> None:
         writer.wrapped("No station overlay was rendered for this build.")
 
 
+def write_capacity_plan(writer: PageWriter, rows: list[dict]) -> None:
+    writer.heading("Capacity plan (draft tank model)")
+    writer.wrapped("Moulded volumes of the built tank solids; weight at 98 % fill; centre of gravity at 100 %. "
+                   "Source of each volume: From ink (traced) or guessed. Sounding tables are in the CSV files.")
+    table_rows = []
+    for row in rows:
+        volume_source = (row.get("source_labels") or {}).get("volume") or ""
+        table_rows.append([row["id"], row["content"], row["frames"], fmt(row["volume_100_m3"], 2),
+                           fmt(row["volume_98_m3"], 2), fmt(row["weight_98_t"], 2), fmt(row["lcg_m"], 2),
+                           fmt(row["tcg_m"], 2), fmt(row["vcg_m"], 2),
+                           label_text(volume_source) if row["built"] else "not built"])
+    writer.table(["Tank", "Content", "Frames", "V100 m3", "V98 m3", "W98 t", "LCG m", "TCG m", "VCG m", "Volume"],
+                 table_rows, [22, 13, 7, 8, 8, 8, 7, 7, 7, 12])
+
+
 def write_overlay_pages(writer: PageWriter, build: DraftBuild) -> None:
     for path in build.overlay_images:
         figure = writer.new_page()
@@ -227,6 +243,8 @@ def write_report(facts: ReportFacts, path: Path) -> Path:
     with rc_context({"pdf.fonttype": 42}), PdfPages(path, metadata=metadata) as pdf:
         writer = PageWriter(pdf, title)
         write_summary(writer, facts)
+        if facts.capacity_rows:
+            write_capacity_plan(writer, facts.capacity_rows)
         write_overlay_pages(writer, facts.build)
         writer.finish_page()
     return path

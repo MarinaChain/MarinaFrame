@@ -32,12 +32,40 @@ def test_frame_calibration_snaps_the_label_estimate_to_the_line_grid():
 
 def test_hull_slicer_area_of_a_box_inside_ranges():
     slicer = internals.HullSlicer(box_mesh(0, 10, -2, 2, 0, 3))
-    area, outline = internals.clipped_area_and_outline(slicer, 5.0, (-1.0, 5.0), (0.5, 2.5))
+    area, outline = internals.clipped_outline(slicer, 5.0, (-1.0, 5.0), (0.5, 2.5), internals.OUTLINE_DZ_M)
     assert area == pytest.approx(3.0 * 2.0, rel=1e-3)
     assert outline is not None
-    volume, slabs = internals.slab_part(slicer, (2.0, 4.0), lambda x: (-5.0, 5.0), lambda x: (0.0, 1.0))
-    assert volume == pytest.approx(2.0 * 4.0 * 1.0, rel=1e-3)
-    assert slabs[0][0] == pytest.approx(2.0) and slabs[-1][1] == pytest.approx(4.0)
+    plate = internals.plate_part(slicer, 5.0, (0.0, 3.0), 0.01)
+    assert plate[0][0] == pytest.approx(4.995) and plate[0][1] == pytest.approx(5.005)
+
+
+def test_cross_marks_give_boxes_and_tell_rectangles_from_curved_sides():
+    def line(a, b):
+        return {'layer': 'S0PH1', 'points': [list(a), list(b)], 'id': 'x'}
+    entities = [line((0, 0), (1000, 500)), line((0, 500), (1000, 0)),  # rectangle
+                line((2000, 0), (3000, 600)), line((2000, 500), (3000, 100)),  # one corner on a curve
+                line((5000, 0), (5100, 900))]  # too narrow to be a cross diagonal
+    boxes = internals.cross_boxes(entities, (-10, -10, 9000, 9000))
+    assert boxes == [(0, 0, 1000, 500, True), (2000, 0, 3000, 600, False)]
+
+
+def test_tank_top_gap_between_equal_levels_is_bridged_as_a_guess():
+    tops = [{'z_m': 1.8, 'x_m': [21.0, 26.5], 'source': 'traced', 'evidence': 'a'},
+            {'z_m': 1.8, 'x_m': [29.0, 30.5], 'source': 'traced', 'evidence': 'b'},
+            {'z_m': 1.25, 'x_m': [8.0, 17.0], 'source': 'traced', 'evidence': 'c'},
+            {'z_m': 1.45, 'x_m': [17.0, 21.0], 'source': 'traced', 'evidence': 'd'}]
+    bridged = internals.bridge_tank_top_gaps(tops)
+    gap = [t for t in bridged if t['source'] == 'guessed']
+    assert len(gap) == 1 and gap[0]['x_m'] == [26.5, 29.0] and gap[0]['z_m'] == 1.8
+
+
+def test_profile_floor_is_measured_from_the_deck_line():
+    profile = internals.Profile(frame0_x=0.0, deck_runs=[(0.0, 20000.0, 10000.0)],
+                                floors=[(8500.0, 4000.0, 5500.0, 'a'), (7000.0, 4000.0, 6000.0, 'b'),
+                                        (9900.0, 4000.0, 6000.0, 'too close to the deck')])
+    assert profile.floor_z(4.5, 4.2) == pytest.approx(2.7)
+    assert profile.floor_z(5.8, 4.2) == pytest.approx(1.2)
+    assert profile.floor_z(7.0, 4.2) is None
 
 
 def test_bulkhead_lines_need_a_low_foot_and_the_deck():
@@ -62,11 +90,21 @@ def test_label_matches_numbers_names_and_spelling():
 
 def test_tank_table_rows_by_column():
     texts = [(100, 1000, 'No'), (300, 1000, 'Name'), (600, 1010, 'Area of location, fr.'),
-             (900, 1000, 'Net volume, m³'),
+             (900, 1000, 'Net volume, m³'), (1200, 1000, 'Mass, t'),
+             (100, 750, 'Water ballast ρ = 1.025 t/m³'),
              (100, 500, 'No 1'), (300, 500, 'Dbb water ballast'), (600, 500, '48...51'), (900, 500, '5.64'),
-             (300, 0, 'Total water ballast'), (900, 0, '62.30'),
-             (300, -500, 'New fuel oil tank'), (600, -500, 'A...I'), (900, -500, '8.00')]
+             (1200, 500, '5.78'),
+             (300, 0, 'Total water ballast'), (900, 0, '62.30'), (1200, 0, '64.73'),
+             (100, -250, 'MISC'),
+             (300, -500, 'New fuel oil tank'), (600, -500, 'A...I'), (900, -500, '8.00'), (1200, -500, '7.20')]
     rows = internals.read_tank_table(texts)
-    assert ('No 1', ('48', '51'), 5.64) in [(r.number, r.frames, r.volume_m3) for r in rows]
-    assert (None, ('A', 'I'), 8.0) in [(r.number, r.frames, r.volume_m3) for r in rows]
-    assert len(rows) == 2
+    assert [(r.number, r.frames, r.volume_m3, r.group, r.density_t_m3) for r in rows] == [
+        ('No 1', ('48', '51'), 5.64, 'water ballast', 1.025), (None, ('A', 'I'), 8.0, 'misc', 0.9)]
+    totals = internals.read_table_totals(texts)
+    assert totals == {'water ballast': {'volume_m3': 62.3, 'mass_t': 64.73}}
+
+
+def test_full_label_match_wins_over_a_shortened_name():
+    row = internals.TankRow(None, 'Black water new', ('A', 'E'), None)
+    assert internals.label_match_quality('Black water New', row) == 2
+    assert internals.label_match_quality('Black water', row) == 1

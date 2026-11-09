@@ -1,6 +1,6 @@
 """Command line: write the exports of one task revision.
 
-    python -m vessel_reconstruction.exports --task DIR --revision rN --out DIR [--draft-m T]
+    python -m vessel_reconstruction.exports --task DIR --revision rN --out DIR [--draft-m T] [--tanks FILE]
 
 Prints the manifest as JSON on stdout. Exit code 2 when the task has no usable
 build for the revision.
@@ -11,6 +11,7 @@ import argparse
 import json
 import sys
 
+from ..tanks import load_tanks
 from .offsets import DEFAULT_WATERLINE_INTERVALS
 from .package import export_draft
 from .source import ExportError
@@ -29,10 +30,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--waterlines", type=int, default=DEFAULT_WATERLINE_INTERVALS,
                         help="equal waterline intervals when the spec gives no waterlines_m")
     parser.add_argument("--vessel", default=None, help="vessel name for file names (default: from the build)")
+    parser.add_argument("--tanks", default=None,
+                        help="tank model file (.npz from vessel_reconstruction.tanks.save_tanks): adds the "
+                             "capacity plan and sounding tables")
     args = parser.parse_args(argv)
+    tanks = load_tanks(args.tanks) if args.tanks else None
     try:
         manifest = export_draft(args.task, args.revision, args.out, draft_m=args.draft_m,
-                                waterline_intervals=args.waterlines, vessel=args.vessel)
+                                waterline_intervals=args.waterlines, vessel=args.vessel, tanks=tanks)
     except ExportError as error:
         print(json.dumps({"error": str(error)}), file=sys.stderr)
         return 2
