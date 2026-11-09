@@ -775,18 +775,41 @@ def fit_frame_axis(row: float, ticks: list[Tick], frame_spacing_m: float) -> Axi
     return Axis(row, ticks, frame_spacing_m * frames_per_tick, zero_ordinal, 'read', evidence)
 
 
+# A numbered tick is an outlier (a misread number) when it is further than this fraction of the
+# value spacing between neighbouring numbers from the robust line: a quarter keeps every honest
+# tick (reading noise is far below one spacing) and rejects any misread number, which is off by
+# at least one spacing.
+SCALE_BAR_OUTLIER_SPACINGS = 0.25
+
+
 def fit_scale_bar(row: float, ticks: list[Tick], unit_m: float) -> Axis | None:
-    """A scale bar: value = a + b * column from the numbered ticks (least squares)."""
+    """A scale bar: value = a + b * column from the numbered ticks.
+
+    The line is fitted robustly (median pairwise slope), ticks whose number does not fit the line
+    are dropped as misreads, and the axis is built from the remaining ticks only, so one wrong
+    number can neither tilt the scale nor make x non-monotonic."""
     numbered = [(t.column, value) for t in ticks for kind, value in [parse_axis_label(t.label)]
                 if kind == 'number']
     if len(numbered) < 2:
         return None
+    numbered.sort()
     columns, values = np.array(numbered, float).T
-    slope, intercept = np.polyfit(columns, values, 1)  # units per pixel
+    if np.ptp(columns) == 0:
+        return None
+    pairs = np.triu_indices(len(columns), k=1)
+    separation = columns[pairs[1]] - columns[pairs[0]]
+    usable = separation > 0
+    slope = float(np.median(((values[pairs[1]] - values[pairs[0]])[usable]) / separation[usable]))
+    intercept = float(np.median(values - slope * columns))
+    spacing = float(np.median(np.abs(np.diff(values)))) or 1.0
+    keep = np.abs(values - (intercept + slope * columns)) <= SCALE_BAR_OUTLIER_SPACINGS * spacing
+    if keep.sum() < 2:
+        return None
+    columns, values = columns[keep], values[keep]
     # Store the fit as ticks one unit apart in value (ordinal = value).
     rebuilt = [Tick(float(c), int(v)) for c, v in zip(columns, values)]
     return Axis(row, rebuilt, unit_m, 0.0, 'read',
-                f'scale bar: {len(numbered)} numbers read, {1 / abs(slope):.3f} px per unit '
+                f'scale bar: {len(columns)} of {len(numbered)} numbers fit, {1 / abs(slope):.3f} px per unit '
                 f'(unit {unit_m} m)')
 
 

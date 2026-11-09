@@ -188,3 +188,12 @@ def test_claude_asker_never_caches_a_failed_call(tmp_path):
 
     ask = raster.claude_asker(tmp_path, call=lambda messages, receipts: ('{"1": "FO"}', {'state': 'completed'}))
     assert ask(image, 'prompt') == {'1': 'FO'}
+
+
+def test_scale_bar_fit_drops_a_misread_number():
+    ticks = [raster.Tick(1000.0 + 25 * value, i, str(value)) for i, value in enumerate(range(0, 100, 10))]
+    ticks[5] = raster.Tick(ticks[5].column, 5, '5')  # "50" misread as "5"
+    axis = raster.fit_scale_bar(0.0, ticks, raster.FEET_M)
+    assert axis.px_per_m == pytest.approx(25 / raster.FEET_M)
+    x = axis.x_m(np.arange(1000, 1250, 5))
+    assert np.all(np.diff(x) > 0)
