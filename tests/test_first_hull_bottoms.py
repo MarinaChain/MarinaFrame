@@ -48,3 +48,27 @@ def test_transom_curve_end_above_keel_is_not_extended():
     extend_bottoms_to_keel(anchors, {a.id: 0.0 for a in anchors})
     assert anchors[0].points_yz_m == original
     assert not anchors[0].extended
+
+
+def test_completed_bottom_has_interpolated_labels_but_cells_keep_their_sources():
+    from vessel_reconstruction.form_fit import fit_vessel
+    from vessel_reconstruction.vessel_model import VesselTable, build_spec
+
+    anchors = _anchors()
+    for anchor in anchors:
+        anchor.source = "read"
+    original = copy.deepcopy(anchors[1].points_yz_m)
+    extend_bottoms_to_keel(anchors, {a.id: 0.0 for a in anchors})
+    sections = [{"id": a.id, "x_m": a.x_m, "z_min_m": 0.0, "z_max_m": 1.4} for a in anchors]
+    table = fit_vessel(sections, anchors)
+    row = next(r for r in table.stations if r.id == "2")
+    assert row.point_sources
+    for point, source in zip(row.points_yz_m, row.point_sources):
+        assert source == ("read" if point in original else "interpolated")
+    restored = VesselTable.from_json(table.to_json())
+    assert restored.stations[1].point_sources == row.point_sources
+    spec = build_spec(table, {"sections": sections}, sections)
+    section = next(s for s in spec["sections"] if s["id"] == "2")
+    assert section["authored"]["source_label"] == "interpolated"
+    for point in original:
+        assert point in section["authored"]["points_yz_m"]

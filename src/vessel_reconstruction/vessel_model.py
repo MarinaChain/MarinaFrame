@@ -68,6 +68,8 @@ class StationRow:
     # Traced rows only: the declared section with the candidate's contour selection.
     selection_section: dict | None = None
     notes: list = field(default_factory=list)
+    # Per-point evidence for rows that contain a completed bottom as well as ink.
+    point_sources: list = field(default_factory=list)
 
     def __post_init__(self):
         if self.source not in ROW_SOURCES:

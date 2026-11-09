@@ -168,8 +168,11 @@ def test_a_bottom_that_stops_above_the_keel_is_continued_to_it():
     fore_end = Anchor("10", 100.0, [[2.2, 1.45], [2.5, 6.0]], {}, pixels_per_metre=19.0)
     T.extend_bottoms_to_keel([aft_end, lost, kept, on_centreline, fore_end],
                              {"1": 0.0, "3": 0.06, "7": 0.06, "9": 1.0, "10": 1.0})
-    assert lost.extended and lost.points_yz_m[0] == [0.0, 0.06] and lost.points_yz_m[-3] == [6.0, 0.82]
-    assert lost.points_yz_m[1][0] == 1.0 and abs(lost.points_yz_m[1][1] - (0.06 + 0.76 / 6)) < 1e-9
+    assert lost.extended and lost.points_yz_m[0][1] == 0.06 and lost.points_yz_m[-3] == [6.0, 0.82]
+    # Continue the lower segment, rather than drawing a chord to the centreline.
+    slope = (7.0 - 6.0) / (1.5 - 0.82)
+    assert abs(lost.points_yz_m[0][0] - (6.0 - slope * 0.76)) < 1e-9
+    assert abs(lost.points_yz_m[1][1] - (0.06 + 0.76 / 6)) < 1e-9
     assert not kept.extended and len(kept.points_yz_m) == 3
     assert not on_centreline.extended  # the lowest point is on the centreline: nothing was lost
     assert not fore_end.extended  # the end stations shape the hull ends: left as traced
