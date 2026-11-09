@@ -375,3 +375,63 @@ def box_outline(x_range, half_breadth) -> list[list[float]]:
 
 def y_extent(points) -> float:
     return float(np.max(np.abs(np.asarray(points, dtype=float)[:, 1])))
+
+
+# Midship section deck lines: a deck line starts at most this far (drawing units) left of its
+# label's insert point, or this far to the right (the label sits beside the section).
+DECK_LABEL_REACH_UNITS = (500.0, 3000.0)
+# A deck line lies within this many label heights of its label, and is at least this long.
+DECK_LABEL_BAND_HEIGHTS = 3.0
+DECK_LINE_MIN_UNITS = 1500.0
+# A deck line rises at most this much per unit length (a camber is about B/50 over B/2: 0.04).
+DECK_LINE_MAX_SLOPE = 0.1
+
+
+def _segments_of(entity) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    if entity.dxftype() == 'LINE':
+        return [((entity.dxf.start.x, entity.dxf.start.y), (entity.dxf.end.x, entity.dxf.end.y))]
+    if entity.dxftype() == 'LWPOLYLINE':
+        points = [(p[0], p[1]) for p in entity.get_points()]
+        return list(zip(points[:-1], points[1:]))
+    return []
+
+
+def section_deck_camber(path, label: str = '1-DECK', layers=('S0CO5',), metres_per_unit: float = 0.001) -> dict | None:
+    """Deck camber from the deck lines that a midship-section drawing labels (None: no line).
+
+    For each printed deck label, the longest moulded deck line beside it; its camber is the rise
+    of its highest point above its lowest end (0 for a straight level line). Blocks are exploded
+    first (section drawings keep their views in blocks). The result is the median over sections.
+    """
+    import ezdxf
+    from ezdxf.disassemble import recursive_decompose
+
+    entities = list(recursive_decompose(ezdxf.readfile(str(path)).modelspace()))
+    labels = []
+    for entity in entities:
+        if entity.dxftype() in ('TEXT', 'MTEXT'):
+            text = entity.dxf.text if entity.dxftype() == 'TEXT' else entity.plain_text()
+            if text.strip() == label:
+                labels.append((entity.dxf.insert.x, entity.dxf.insert.y, entity.dxf.get('height', 100.0) or 100.0))
+    lines = [(entity, _segments_of(entity)) for entity in entities
+             if entity.dxf.layer in layers and _segments_of(entity)]
+    rises, entity_ids = [], []
+    for x, y, height in labels:
+        candidates = []
+        for entity, segments in lines:
+            points = np.array([p for segment in segments for p in segment])
+            span = points[:, 0].max() - points[:, 0].min()
+            rise = points[:, 1].max() - points[:, 1].min()
+            near_y = np.abs(points[:, 1] - y).min() <= DECK_LABEL_BAND_HEIGHTS * height
+            beside = x - DECK_LABEL_REACH_UNITS[0] <= points[:, 0].min() <= x + DECK_LABEL_REACH_UNITS[1]
+            if span >= DECK_LINE_MIN_UNITS and rise <= DECK_LINE_MAX_SLOPE * span and near_y and beside:
+                # Exploded block entities have no handle of their own.
+                candidates.append((span, rise, entity.dxf.handle or f'block-line-{points[0][0]:.0f}-{points[0][1]:.0f}'))
+        if candidates:
+            _, rise, handle = max(candidates)
+            rises.append(float(rise) * metres_per_unit)
+            entity_ids.append(handle)
+    if not rises:
+        return None
+    return {'camber_m': round(float(np.median(rises)), 4), 'sections': len(rises), 'entity_ids': entity_ids,
+            'rises_m': [round(r, 4) for r in rises]}

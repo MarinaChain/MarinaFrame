@@ -271,6 +271,8 @@ def main() -> None:
                         help='Run the trusted executor in this process (development only; no OS sandbox).')
     parser.add_argument('--no-appendages', action='store_true',
                         help='Leave out the appendages (thrusters, skeg) of whole_vessel_appendages.py.')
+    parser.add_argument('--no-detail', action='store_true',
+                        help='Straight extruded parts (no hull side, camber, end contours or windows).')
     args = parser.parse_args()
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -278,15 +280,19 @@ def main() -> None:
     if not args.no_appendages:
         from benchmarks.gunnerus.whole_vessel_appendages import add_appendages
         add_appendages(inputs, args.sources, GA_FILE)
+    if not args.no_detail:
+        from benchmarks.gunnerus.whole_vessel_detail import add_detail
+        add_detail(inputs, args.sources)
     (out / 'inputs.json').write_text(json.dumps(inputs, indent=2) + '\n')
     if args.in_process:
         from vessel_reconstruction.ship_cad import execute
         result = execute(inputs['program'], inputs['measurements'], out / 'task' / 'work' / 'output',
-                         guesses=inputs['guesses'])
+                         guesses=inputs['guesses'], detail=inputs.get('detail'))
         execution = {'exit_code': 0, 'result': result, 'sandbox': 'none (development, --in-process)'}
     else:
         from vessel_reconstruction.ship_cad_worker import run
-        execution = run(inputs['program'], inputs['measurements'], out / 'task', guesses=inputs['guesses'])
+        execution = run(inputs['program'], inputs['measurements'], out / 'task', guesses=inputs['guesses'],
+                        detail=inputs.get('detail'))
     (out / 'execution.json').write_text(json.dumps(execution, indent=2, default=str) + '\n')
     for component in (execution.get('result') or {}).get('components', []):
         print(component['id'], component['status'], component.get('built'), component.get('source_labels'),

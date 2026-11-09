@@ -335,11 +335,79 @@ def _prism(outline, interval, plane='XY'):
     return shape.translate((0, 0, low) if plane == 'XY' else (0, high, 0))
 
 
-def execute(program: dict, measurements: dict, out: Path, *, audit=None, veto=False,
-            guesses: dict | None = None) -> dict:
-    """Trusted worker entry. ``out`` is host-selected, never program-selected."""
+def _straight_part(op, values):
+    """A part as its plan outline extruded straight up (used when no hull side is given)."""
     import cadquery as cq
 
+    if op != 'bulwark':
+        return _prism(values['outline'], values['height'])
+    low, high = values['height']
+    outer = cq.Workplane('XY').polyline(values['outline']).close().extrude(high - low).val().translate((0, 0, low))
+    inner = (cq.Workplane('XY').polyline(values['outline']).close()
+             .offset2D(-values['thickness']).extrude(high - low).val().translate((0, 0, low)))
+    return outer.cut(inner)
+
+
+# Parts above the hull that follow the hull side when the host gives one (superstructure.py).
+SHAPED_OPS = ('deck', 'bulwark', 'deckhouse')
+
+
+def _hull_side(detail):
+    """The host's hull side, or None (then parts are straight extrusions, as before)."""
+    from .superstructure import HullSide
+
+    item = (detail or {}).get('hull_side')
+    if not isinstance(item, dict) or not isinstance(item.get('value'), dict):
+        return None
+    try:
+        return HullSide.from_dict(item['value'])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _shaped_part(component, values, hull, detail):
+    """Build a part that follows the hull; label every detail value it used.
+
+    Happy path: when the shaped build fails, the straight part is built and the reason is kept.
+    """
+    from .superstructure import build_shaped
+
+    part_detail = (detail.get('parts') or {}).get(component['id'], {})
+    try:
+        shape, report = build_shaped(component['id'], component['op'], values, hull, part_detail)
+        if not shape.isValid() or shape.Volume() <= 0:
+            raise ValueError('invalid shaped solid')
+    except Exception as exc:  # noqa: BLE001 - the straight part is the fallback
+        component['shape'] = 'straight_extrusion'
+        component['reason'] = f'{component["reason"]}; hull-following shape not built ({type(exc).__name__}: {exc})'
+        return _straight_part(component['op'], values)
+    component['shape'] = 'follows_hull_side'
+    component['check_items'] = report['check_items']
+    used = {'hull_side': detail['hull_side']} | {key: part_detail[key] for key in report['detail_used']}
+    guessed = []
+    for key, item in used.items():
+        source = item.get('source', 'guessed')
+        component['source_labels'][key] = source
+        component['provenance'][key] = {'source': source, 'basis': str(item.get('basis', ''))[:MAX_BASIS_CHARS]}
+        if source in FILLED_SOURCES:
+            guessed.append(f'{key}: {source}: {item.get("basis", "")}')
+    if guessed:
+        reason = component['reason'] if component['status'] == 'draft_guess' else ''
+        component.update(status='draft_guess', reason='; '.join([r for r in [reason] if r] + guessed))
+    return shape
+
+
+def execute(program: dict, measurements: dict, out: Path, *, audit=None, veto=False,
+            guesses: dict | None = None, detail: dict | None = None) -> dict:
+    """Trusted worker entry. ``out`` is host-selected, never program-selected.
+
+    ``detail`` (optional, host data): ``hull_side`` (a labelled ``superstructure.HullSide`` grid)
+    and ``parts`` (labelled detail values by component id). With a hull side, decks, bulwarks
+    and deckhouses follow the hull; without it they are straight extrusions.
+    """
+    import cadquery as cq
+
+    hull = _hull_side(detail)
     buildable, unbuilt, source_notes = triage_program(program)
     components = resolve_program(buildable, measurements, guesses)
     arguments = {c['id']: c['args'] for c in buildable['components']}
@@ -366,13 +434,10 @@ def execute(program: dict, measurements: dict, out: Path, *, audit=None, veto=Fa
                 shape = shape.scale(0.001)  # Existing hull pipeline uses millimetres.
             elif op == 'appendage':
                 shape = _prism(values['outline'], values['span'], 'XZ')
+            elif op in SHAPED_OPS and hull is not None:
+                shape = _shaped_part(component, values, hull, detail)
             elif op == 'bulwark':
-                low, high = values['height']
-                wire = cq.Workplane('XY').polyline(values['outline']).close()
-                outer = wire.extrude(high - low).val().translate((0, 0, low))
-                inner = (cq.Workplane('XY').polyline(values['outline']).close()
-                         .offset2D(-values['thickness']).extrude(high - low).val().translate((0, 0, low)))
-                shape = outer.cut(inner)
+                shape = _straight_part(op, values)
             else:
                 shape = _prism(values['outline'], values['height'])
                 if op == 'opening':
