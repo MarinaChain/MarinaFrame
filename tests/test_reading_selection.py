@@ -125,3 +125,62 @@ def test_two_readings_end_after_the_second(tmp_path):
     T.start_next_reading(tools)
     tools.state["readings"].append({"draft_fit": None, "kept": False})
     assert T.finish_reading(tools) is None and len(tools.state["readings"]) == T.READINGS == 2
+
+
+def test_profile_and_plan_setups_count_as_setup_changes():
+    old = {"a": {"view": "body", "baseline_px": 398.0},
+           "b": {"view": "profile", "pixels_per_metre": 19.0, "baseline_px": 398.0, "x_origin_px": 170.0},
+           "c": {"view": "plan", "pixels_per_metre": 19.0, "baseline_px": 595.0, "x_origin_px": 170.0}}
+    same = {key: {**value} for key, value in old.items()}
+    same["b"]["baseline_px"] = 399.0  # within SETUP_DATUM_PX
+    assert T.view_setup_changes(old, same) == []
+    moved = {key: {**value} for key, value in old.items()}
+    moved["b"]["baseline_px"] = 359.5
+    moved["c"]["x_direction"] = -1
+    assert T.view_setup_changes(old, moved) == ["profile: baseline_px 398 -> 359.5", "plan: x direction None -> -1"]
+    # A view read in one reading only is no change.
+    assert T.view_setup_changes({"a": old["a"]}, moved) == []
+
+
+def test_a_repeat_reading_keeps_the_kept_readings_setups_and_restores_them(tmp_path):
+    tools = FakeTools(tmp_path, first_hull_state(0.8, draft_fit=0.7))
+    T.start_next_reading(tools)
+    assert tools.state["kept_reading"]["sheet_setups"] == {"setup-1": {}}
+    # Reading 2 reads other setups and builds a worse hull: the earlier one stays, with its setups.
+    tools.state.update(sheet_setups={"setup-2": {"view": "profile"}}, vessel_description={"stations": []},
+                       draft_fit={"draft_fit": 0.6}, last_valid_candidate={"id": "second"})
+    snapshot = json.loads(json.dumps(tools.state))
+    snapshot["draft_fit"] = {"draft_fit": 0.7}
+    (tmp_path / "input" / MATERIALIZED_SPEC).write_text("{}")
+    selection = T.keep_better_reading(tools, snapshot, b'{"sections": []}', {"ok": True})
+    assert selection["kept"] == "earlier"
+    assert tools.state["sheet_setups"] == {"setup-1": {}}
+    assert tools.state["vessel_description"] == {"stations": [{"id": "1"}, {"id": "2"}]}
+
+
+def test_a_bottom_that_stops_above_the_keel_is_continued_to_it():
+    from vessel_reconstruction.form_fit import Anchor
+    # shipd-1-00679-3v-L0: the trace lost a shallow bottom and stopped at y 6.0 m, z 0.82 m.
+    lost = Anchor("3", 30.0, [[6.0, 0.82], [7.0, 1.5], [8.5, 6.0]], {}, pixels_per_metre=19.0)
+    kept = Anchor("7", 70.0, [[0.4, 0.06], [5.0, 0.5], [8.0, 6.0]], {}, pixels_per_metre=19.0)
+    on_centreline = Anchor("9", 90.0, [[0.1, 1.4], [2.0, 3.0], [2.5, 6.0]], {}, pixels_per_metre=19.0)
+    aft_end = Anchor("1", 10.0, [[0.8, 0.0], [5.0, 6.0]], {}, pixels_per_metre=19.0)
+    fore_end = Anchor("10", 100.0, [[2.2, 1.45], [2.5, 6.0]], {}, pixels_per_metre=19.0)
+    T.extend_bottoms_to_keel([aft_end, lost, kept, on_centreline, fore_end],
+                             {"1": 0.0, "3": 0.06, "7": 0.06, "9": 1.0, "10": 1.0})
+    assert lost.extended and lost.points_yz_m[0] == [0.0, 0.06] and lost.points_yz_m[-3] == [6.0, 0.82]
+    assert lost.points_yz_m[1][0] == 1.0 and abs(lost.points_yz_m[1][1] - (0.06 + 0.76 / 6)) < 1e-9
+    assert not kept.extended and len(kept.points_yz_m) == 3
+    assert not on_centreline.extended  # the lowest point is on the centreline: nothing was lost
+    assert not fore_end.extended  # the end stations shape the hull ends: left as traced
+
+
+def test_readings_are_counted_by_reading_not_by_record(tmp_path, monkeypatch):
+    monkeypatch.setattr(T, "READINGS", 3)
+    tools = FakeTools(tmp_path, first_hull_state(0.8, draft_fit=0.7))
+    T.start_next_reading(tools)
+    # Reading 2 rebuilt twice (body setup, then describe_vessel): two records, one reading.
+    tools.state["readings"] += [{"draft_fit": 0.6, "kept": False}, {"draft_fit": 0.65, "kept": False}]
+    following = T.finish_reading(tools)
+    assert following is not None and following["reading"] == 3
+    assert T.finish_reading(tools) is None

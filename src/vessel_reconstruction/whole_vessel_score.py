@@ -207,8 +207,14 @@ def summary_line(board: dict) -> str:
 
 
 def keep_edit(before: dict, after: dict, before_cells: list[dict] | None = None,
-              after_cells: list[dict] | None = None, *, gap_fill_only: bool = False) -> dict:
-    """F4 keep rule: keep an edit when the combined fit improves, or when it only fills gaps.
+              after_cells: list[dict] | None = None, *, gap_fill_only: bool = False,
+              fit_key: str = "combined_fit") -> dict:
+    """F4 keep rule: keep an edit when the fit improves, or when it only fills gaps.
+
+    ``fit_key`` names the fit in ``before`` and ``after`` that must rise:
+    ``combined_fit`` (body plan) or ``draft_fit`` (draft_fit.py, all three
+    views in one frame measured by code). The cell checks below always use the
+    body-plan cells.
 
     With the cells of both scoreboards, an edit that leaves more drawn ink
     unexplained (more ``ink_unexplained`` cells) is not kept even when the fit
@@ -217,7 +223,7 @@ def keep_edit(before: dict, after: dict, before_cells: list[dict] | None = None,
 
     A rejected edit is not a refusal: the decision says why, with the numbers.
     """
-    old, new = before.get("combined_fit"), after.get("combined_fit")
+    old, new = before.get(fit_key), after.get(fit_key)
     if old is not None and before_cells is not None and after_cells is not None:
         unexplained_before, unexplained_after = _unexplained_count(before_cells), _unexplained_count(after_cells)
         if unexplained_after > unexplained_before:
@@ -236,15 +242,16 @@ def keep_edit(before: dict, after: dict, before_cells: list[dict] | None = None,
                     "reason": (f"the curve left the station ink it followed at {where} ({residual:+.2f} m, past "
                                f"{100 * TAIL_ZERO_FRACTION:g} % of B/2); follow the ink there")}
     if old is None or (new is not None and new >= old + KEEP_MIN_IMPROVEMENT):
-        return {"keep": True, "reason": "combined fit improved", "fit_before": old, "fit_after": new}
+        return {"keep": True, "reason": f"{fit_key.replace('_', ' ')} improved", "fit_before": old,
+                "fit_after": new, "fit_key": fit_key}
     if gap_fill_only and before_cells is not None and after_cells is not None:
         limit = GAP_FILL_MAX_WORSENING_FRACTION * before["half_beam_m"]
         worsening = _max_worsening(before_cells, after_cells)
         if worsening <= limit:
             return {"keep": True, "reason": "gap fill; no measured cell worse by more than 0.5 % B/2",
                     "fit_before": old, "fit_after": new, "max_worsening_m": round(worsening, 4)}
-    return {"keep": False, "reason": f"combined fit {old} -> {new}: needs +{KEEP_MIN_IMPROVEMENT}",
-            "fit_before": old, "fit_after": new}
+    return {"keep": False, "reason": f"{fit_key.replace('_', ' ')} {old} -> {new}: needs +{KEEP_MIN_IMPROVEMENT}",
+            "fit_before": old, "fit_after": new, "fit_key": fit_key}
 
 
 def _abandoned_station_ink(before_cells: list[dict], after_cells: list[dict], half_beam_m: float):

@@ -127,6 +127,55 @@ def cut_bottoms_at_keel(anchors: list[Anchor], keels: dict) -> None:
             anchor.notes.append(f"bottom cut at z {keel:.3f} m: the profile keel line at this station")
 
 
+# A traced bottom that stops more than this many body-plan pixels above the
+# profile keel, away from the centreline, lost its lowest ink.
+BOTTOM_GAP_PX = 6.0
+# ... and "away from the centreline" means a lowest half-breadth above this
+# share of the widest traced half-breadth.
+BOTTOM_GAP_BREADTH_SHARE = 0.1
+# Points of a continued bottom between the lowest traced point and the keel.
+BOTTOM_EXTENSION_POINTS = 6
+
+
+def extend_bottoms_to_keel(anchors: list[Anchor], keels: dict) -> None:
+    """Continue traced bottoms that stop above the keel, off the centreline, straight down to the keel.
+
+    Near the baseline a shallow bottom runs close to the baseline and to the
+    other stations' bottoms, and the trace can lose it: shipd-1-00679-3v-L0
+    stations 3-4 stopped at y 6.0 m, z 0.82 m over a keel at 0.06 m, and the
+    build closed them flat at 0.82 m (9.5 % RMS each). The bottom is continued
+    in a straight line from the lowest traced point to the profile keel on the
+    centreline. Used only when the keel agrees with most traced bottoms;
+    changes ``anchors`` in place and marks them extended (built as curves).
+    """
+    import numpy as np
+    bottoms = {a.id: min(p[1] for p in a.points_yz_m) for a in anchors if a.points_yz_m}
+    differences = [abs(bottoms[sid] - keel) for sid, keel in keels.items() if sid in bottoms]
+    if not differences or float(np.median(differences)) > DECK_AGREEMENT_M:
+        return
+    # The hull ends are shaped from the end stations (hull_ends.end_row). With
+    # a continued end station the build with ends stopped without a result in
+    # both shipd-1-00679-3v-L0 replays, and the hull was built without ends.
+    ordered = sorted(anchors, key=lambda a: a.x_m)
+    ends = {ordered[0].id, ordered[-1].id} if ordered else set()
+    for anchor in anchors:
+        keel = keels.get(anchor.id)
+        points = np.asarray(anchor.points_yz_m, dtype=float)
+        if keel is None or anchor.id in ends or not anchor.pixels_per_metre or len(points) < 2:
+            continue
+        points = points[np.argsort(points[:, 1], kind="stable")]
+        low_y, low_z = float(points[0, 0]), float(points[0, 1])
+        if (low_z - keel <= BOTTOM_GAP_PX / anchor.pixels_per_metre
+                or low_y <= BOTTOM_GAP_BREADTH_SHARE * float(points[:, 0].max())):
+            continue
+        share = np.linspace(0.0, 1.0, BOTTOM_EXTENSION_POINTS, endpoint=False)[:, None]
+        continued = np.array([0.0, keel]) + share * np.array([low_y, low_z - keel])
+        anchor.points_yz_m = np.vstack([continued, points]).tolist()
+        anchor.extended = True
+        anchor.notes.append(f"bottom continued from y {low_y:.2f} m, z {low_z:.3f} m straight to the "
+                            f"profile keel at z {keel:.3f} m on the centreline")
+
+
 def short_of_deck(anchors: list[Anchor], decks: dict) -> list[str]:
     """Ids of traced anchors that end far below the profile deck line (a trace broken by noise).
 
@@ -196,6 +245,7 @@ def cap_at_profile_outline(sections: list[dict], anchors: list[Anchor], heights:
     # a station section is never that shallow.
     keels = {sid: h["keel"] for sid, h in heights.items() if h["keel"] < (1 - SHORT_TOP_SHARE) * h["deck"]}
     cut_bottoms_at_keel(anchors, keels)
+    extend_bottoms_to_keel(anchors, keels)
     sections = cap_tops_at_deck(sections, anchors, decks)
     extend_tops_to_deck(anchors, decks)
     return sections, anchors
@@ -379,6 +429,62 @@ def setup_changes(old: dict, new: dict) -> list[str]:
     return changes
 
 
+# Views other than the body plan whose setup shapes the first hull: the
+# profile gives the keel, deck and hull ends, the plan the waterline ends
+# (vessel_description.station_outline_heights, hull_ends).
+OUTLINE_VIEWS = ("profile", "plan")
+# Fields of a view setup that place it on the sheet; SETUP_DATUM_PX and
+# SETUP_SCALE_SHARE say how much they may differ.
+VIEW_DATUM_KEYS = ("baseline_px", "centreline_px", "x_origin_px")
+
+
+def view_setup_changes(old_setups: dict, new_setups: dict) -> list[str]:
+    """What differs between two readings' profile and plan setups (scale, datums, direction).
+
+    ``old_setups`` and ``new_setups`` are task ``sheet_setups`` maps. A view
+    set up in one reading only is no change: the first hull then uses the
+    code-measured view. Returns one short line per change.
+
+    Sonnet 5.5 live (round 81d3047, dtmb5415-3v-L0): an independent second
+    reading put the profile baseline at 360 px against 398 px, but its body
+    setup matched, so no second hull was built and the best of two had one
+    hull to choose from.
+    """
+    def by_view(setups):
+        # The record the hull uses: the first with an x origin, else the first
+        # (vessel_description.profile_setup).
+        records = {}
+        for record in (setups or {}).values():
+            if isinstance(record, dict) and record.get("view") in OUTLINE_VIEWS:
+                held = records.get(record["view"])
+                if held is None or (held.get("x_origin_px") is None and record.get("x_origin_px") is not None):
+                    records[record["view"]] = record
+        return records
+
+    old, new = by_view(old_setups), by_view(new_setups)
+    changes = []
+    for view in OUTLINE_VIEWS:
+        before, after = old.get(view), new.get(view)
+        if before is None or after is None:
+            continue
+        a, b = before.get("pixels_per_metre"), after.get("pixels_per_metre")
+        if a and b and abs(float(a) - float(b)) / float(b) > SETUP_SCALE_SHARE:
+            changes.append(f"{view}: scale {a:g} -> {b:g} px/m")
+        for key in VIEW_DATUM_KEYS:
+            a, b = before.get(key), after.get(key)
+            if a is not None and b is not None and abs(float(a) - float(b)) > SETUP_DATUM_PX:
+                changes.append(f"{view}: {key} {a:g} -> {b:g}")
+        if (before.get("x_direction") or 1) != (after.get("x_direction") or 1):
+            changes.append(f"{view}: x direction {before.get('x_direction')} -> {after.get('x_direction')}")
+    return changes
+
+
+# What a reading wrote to the task state beside its first hull; a repeat
+# reading starts these again, and the kept reading's values come back when
+# the earlier first hull is kept.
+READING_RECORD_KEYS = ("sheet_setups", "described_views", "vessel_description")
+
+
 # A sheet-only first hull is read READINGS times: after the first hull the
 # model reads the sheet again (phase 1), and of the first hulls the one with
 # the best drawing fit is kept (draft_fit.task_score: all three views in one
@@ -431,12 +537,20 @@ def begin_reading(tools) -> dict:
 
     ``reading_open`` holds the number of reading records before this reading,
     so finish_reading can tell whether the reading built a first hull.
+    ``reading_number`` counts the readings themselves: one reading can add
+    several records (a rebuild at propose_sheet_setup for the body and
+    another at describe_vessel).
     """
     readings = tools.state["readings"]
+    number = tools.state.get("reading_number", len(readings)) + 1
+    # The kept reading's setups and description: compared with the new
+    # reading's (rebuild_if_setup_changed) and restored when its hull is kept.
+    tools.state["kept_reading"] = {key: copy.deepcopy(tools.state.get(key)) for key in READING_RECORD_KEYS}
     tools.state.update(copy.deepcopy(READING_STATE))
     tools.state["reading_open"] = len(readings)
+    tools.state["reading_number"] = number
     tools._save()
-    return {"reading": len(readings) + 1, "of": READINGS, "message": next_reading_message(len(readings) + 1)}
+    return {"reading": number, "of": READINGS, "message": next_reading_message(number)}
 
 
 def start_next_reading(tools) -> dict | None:
@@ -453,6 +567,7 @@ def start_next_reading(tools) -> dict | None:
     if readings:
         return None  # Only the controller's first build starts the readings.
     readings.append(reading_record(tools, kept=True))
+    tools.state["reading_number"] = 1
     if len(readings) >= READINGS:
         tools._save()
         return None
@@ -474,7 +589,7 @@ def finish_reading(tools) -> dict | None:
         stations = (tools.state.get("vessel_description") or {}).get("stations") or []
         readings.append({"draft_fit": None, "combined_fit": None, "station_count": len(stations),
                          "same_setup": True, "kept": False})
-    if len(readings) >= READINGS:
+    if tools.state.get("reading_number", len(readings)) >= READINGS:
         tools._save()
         return None
     return begin_reading(tools)
@@ -505,6 +620,9 @@ def keep_better_reading(tools, snapshot: dict, materialized: bytes | None, obser
         (tools.root / "input" / MATERIALIZED_SPEC).write_bytes(materialized)
         set_aside = snapshot.get("set_aside_builds", []) + tools.state.get("builds", [])
         tools.state = copy.deepcopy(snapshot)
+        # The snapshot holds the new reading's setups and description; the
+        # earlier hull was built from the kept reading's.
+        tools.state.update(copy.deepcopy(snapshot.get("kept_reading") or {}))
         # The new reading's builds are kept as history only: a build is reused by
         # its generation and revision ids, which do not name the reading's setup.
         tools.state["set_aside_builds"] = set_aside
@@ -537,6 +655,10 @@ def rebuild_if_setup_changed(tools, previous_description) -> dict | None:
     old = first_hull_spec(tools.spec, previous_description)
     new = first_hull_spec({**tools.captured_spec, "sections": made["sections"]}, tools.state.get("vessel_description"))
     changes = setup_changes(old, new)
+    if tools.state.get("reading_open") is not None:
+        # A repeat reading also changes the hull through its profile and plan setups.
+        kept = (tools.state.get("kept_reading") or {}).get("sheet_setups")
+        changes += view_setup_changes(kept, tools.state.get("sheet_setups"))
     if not changes:
         return None
     snapshot = copy.deepcopy(tools.state)

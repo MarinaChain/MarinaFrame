@@ -113,3 +113,45 @@ reading repeated the first setup (`same_setup`), so the draft fit did not choose
 in this round; the 08158-L1 gain comes from that run's reading. No "No such tool available"
 replies (0 receipts; earlier rounds: 1-4 cases a round). Mean input 416k tokens a case (L0 418k,
 L1 414k).
+
+## 7. Hull accuracy lane (branch `feature/hull-accuracy`, 2026-11-09)
+
+| Commit | Fix | Check |
+|---|---|---|
+| 81d3047 | repeat reading hides the earlier reading (history, notes, description, setup) | live L0 81d3047: 2 of 5 second readings differ (was 0-4 of 15) |
+| 9322fb2 | profile and plan setups count as setup changes; kept reading's setups and description restored | unit tests; live 4f92e9f: 10 of 10 second readings built a second hull |
+| 14c869c | section edits kept or refused by the three-view draft fit | replay of 61 recorded Sonnet edits (16 cases): same decisions, same RMS |
+| 04ca8c3 | traced bottom stopping above the profile keel continued to it (not end stations) | replay: 00679-L0 6.27 -> 4.50, 00679-L1 8.85 -> 5.05, 09867-L1 2.09 -> 1.13, others unchanged |
+| 2a4adcb | readings counted by reading, not record | unit test |
+| 44c8231 | printed sheet scale outranks a view scale off by > 0.2 % | replay 09867-L0 at 19.2 px/m: 13.03 -> 7.58; 00679-L1: 4.51 -> 5.05 |
+| 4f92e9f | profile region widened to the profile outline | replay 09867-L0 (81d3047 reading 2): 21.94 -> 7.58; no other stored reading changes |
+
+Not committed (fix 5, DTMB deck): the deck tops are within 1 px but in the wrong 0.05 m truth cell.
+Snapping every top to the profile deck line (bias -0.006 m against -0.065 m for the body-plan
+tops, 19 dtmb L0/L1 stations) gave dtmb5415-L0 6.00 -> 5.65 but series60-L0 1.39 -> 3.37 (deck
+line 1-2 px low at s2/s9); a sub-pixel cap-edge measurement was not reliable. Open.
+
+Final live rounds (snapshot 4f92e9f, `work/round-3view-L{0,1}-sonnet-4f92e9f`, one pass each,
+no rate limit): RMS % half-beam (pass), tokens in / out.
+
+| Case | Before (3b7c1c3-r2) | After 4f92e9f | Tokens | Reading 1 / 2 first hulls (kept) |
+|---|---|---|---|---|
+| dtmb5415-L0 | 6.00 | 8.09 | 305k / 10k | 4.12 / **8.09** |
+| series60-L0 | 1.39 pass | 1.38 pass | 393k / 13k | **1.38** / 22.27 |
+| shipd-1-00679-L0 | 6.27 | 4.05 | 507k / 16k | **4.05** / 5.78 |
+| shipd-1-08158-L0 | 0.75 pass | 0.76 pass | 425k / 13k | 0.75 / **0.76** |
+| shipd-1-09867-L0 | 2.99 | 3.25 | 392k / 13k | **7.44** / 27.17 (edit 7.44 -> 3.25) |
+| dtmb5415-L1 | 14.34 | 14.34 | 342k / 10k | **14.34** / 15.59 |
+| series60-L1 | 3.49 | 3.49 | 218k / 10k | **3.49** / 3.49 |
+| shipd-1-00679-L1 | 8.75 | 5.47 | 474k / 14k | 3.89 / **5.47** |
+| shipd-1-08158-L1 | 1.96 pass | 1.64 pass | 437k / 12k | 1.87 / **1.64** |
+| shipd-1-09867-L1 | 2.09 | 1.00 pass | 413k / 13k | **1.00** / 1.12 |
+
+Passes L0 2 -> 2, L1 1 -> 2. Mean input 404k (L0) and 377k (L1) tokens a case. Every second
+reading now builds its own hull; the draft fit picked the better of two in 6 of 8 pairs that
+differ by more than 0.05 points, and set aside the two worst hulls (22.3 %, 27.2 %). Its two
+wrong picks (dtmb5415-L0 4.12 kept 8.09; 00679-L1 3.89 kept 5.47) cost more than the other
+picks gained: against reading 1 alone the mean RMS is 0.5 points worse in this round.
+
+Open: draft-fit ranking errors (dtmb5415-L0, 00679-L1); dtmb5415 top cells; dtmb5415-L1
+readings (14 %); 09867 body-plan curve identity at the overlaid stations 5-7.

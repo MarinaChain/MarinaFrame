@@ -61,6 +61,16 @@ def test_keep_rule_keeps_an_improving_edit_and_rejects_a_worsening_one():
     assert rejected["keep"] is False and "0.6667 -> 0.5" in rejected["reason"]
 
 
+def test_keep_rule_can_judge_by_the_three_view_draft_fit():
+    # The body-plan fit rises but the three-view fit falls: the draft fit decides.
+    before = {"combined_fit": 0.80, "draft_fit": 0.70}
+    after = {"combined_fit": 0.85, "draft_fit": 0.68}
+    assert keep_edit(before, after)["keep"] is True
+    decision = keep_edit(before, after, fit_key="draft_fit")
+    assert decision["keep"] is False and decision["fit_key"] == "draft_fit" and "draft fit 0.7 -> 0.68" in decision["reason"]
+    assert keep_edit(before, {"combined_fit": 0.79, "draft_fit": 0.71}, fit_key="draft_fit")["keep"] is True
+
+
 def test_keep_rule_accepts_a_gap_fill_that_leaves_measured_cells_unchanged():
     cells = [_cell("body_plan", "station", 0.2, station_id="s01", waterline_id="w1")]
     board = scoreboard(cells, HALF_BEAM)

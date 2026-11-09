@@ -55,6 +55,12 @@ INSPECTION_CPU_SECONDS_PER_MEGAPIXEL = 1.0
 # than the measured one still finish inside the unchanged limit.
 INSPECTION_BUDGET_SHARE = 0.5
 MAX_INSPECTION_BYTES = 24 * 1024 * 1024
+# The fit that judges a model's section edit (keep or refuse) and ranks its
+# builds: "draft_fit" (draft_fit.py: body plan, profile and half-breadth plan
+# in one frame measured by code) when the task has one, else "combined_fit"
+# (body plan only, in the reading's own frame). The body-plan fit ranked 75 %
+# of L0 draft pairs as truth does, the three-view fit 85 % (docs/HULL_SELECTION.md).
+EDIT_KEEP_FIT = "draft_fit"
 SEMANTIC_FLAGS = {"human_semantic_review_required": True, "engineering_approved": False,
                   "identity_certified": False}
 # Mark and revise: an edit of a section a person asked to revise is kept only
@@ -324,6 +330,8 @@ class DomainTools(InvestigationTools):
                 "described_views": copy.deepcopy(self.state.get("described_views", [])),
                 "vessel_description": copy.deepcopy(self.state.get("vessel_description")),
                 "phase1_only": self.state.get("phase1_only", False),
+                # A repeat reading of a sheet-only first hull is open (first_hull_tools.begin_reading).
+                "repeat_reading": self.state.get("reading_open") is not None,
                 "view_count": len(self.state.get("views", [])),
                 "non_improving_edits": self.state.get("non_improving_edits", 0),
                 "best_valid_candidate": copy.deepcopy(self.state.get("best_valid_candidate")),
@@ -492,7 +500,17 @@ class DomainTools(InvestigationTools):
             old_ink = (before.get("station_ink_fit") or {}).get(sid) or {}
             new_ink = (after.get("station_ink_fit") or {}).get(sid) or {}
             protected_ink = old_ink.get("near_fraction", 0) >= .9 and old_ink.get("rms_m") is not None
-            decision = keep_edit(before, after, before.get("cells"), after.get("cells"), gap_fill_only=old_curve is None)
+            fit_key, draft_after = "combined_fit", None
+            draft_before = incumbent.get("draft_fit") or {}
+            if EDIT_KEEP_FIT == "draft_fit" and draft_before.get("draft_fit") is not None:
+                from .draft_fit import task_score
+                draft_after = task_score(self, current_table(self))
+                if draft_after.get("draft_fit") is not None:
+                    fit_key = "draft_fit"
+            decision = keep_edit({**before, "draft_fit": draft_before.get("draft_fit")},
+                                 {**after, "draft_fit": (draft_after or {}).get("draft_fit")},
+                                 before.get("cells"), after.get("cells"), gap_fill_only=old_curve is None,
+                                 fit_key=fit_key)
             if protected_ink and new_ink.get("rms_m", float("inf")) > old_ink["rms_m"] + 1e-6:
                 decision = {**decision, "keep": False, "reason": "Kept supported ink; proposed curve has worse ink RMS.",
                             "ink_rms_before_m": old_ink["rms_m"], "ink_rms_after_m": new_ink.get("rms_m")}
@@ -508,10 +526,12 @@ class DomainTools(InvestigationTools):
                 self._save()
                 result = self._observation(True, "kept_previous_curve", fit_comparison=decision,
                     repeated_proposal=identical,
-                    message=f"Kept previous curve: combined fit {before.get('combined_fit')} vs proposed {after.get('combined_fit')}. Finish the best draft or try a different section.")
+                    message=f"Kept previous curve: {fit_key.replace('_', ' ')} {decision.get('fit_before')} vs proposed {decision.get('fit_after')}. Finish the best draft or try a different section.")
             else:
                 self.state["vessel_table"] = current_table(self).to_json()
                 self.state["fit_score"] = after
+                if draft_after is not None:
+                    self.state["draft_fit"] = draft_after
                 self.state["non_improving_edits"] = 0
                 self._save()
                 result["fit_comparison"] = decision
@@ -782,10 +802,14 @@ class DomainTools(InvestigationTools):
         if valid and not self.state.get("vessel_table"):
             self.state["last_valid_candidate"] = candidate
         if valid and self.state.get("vessel_table"):
-            fit = self.state.get("fit_score", {}).get("combined_fit")
-            candidate["combined_fit"] = fit
+            candidate["combined_fit"] = self.state.get("fit_score", {}).get("combined_fit")
+            candidate["draft_fit"] = (self.state.get("draft_fit") or {}).get("draft_fit")
             best = self.state.get("best_valid_candidate")
-            if best is None or fit is None or best.get("combined_fit") is None or fit >= best["combined_fit"]:
+            # The same fit as the keep rule (EDIT_KEEP_FIT) ranks the builds.
+            key = ("draft_fit" if EDIT_KEEP_FIT == "draft_fit" and candidate["draft_fit"] is not None
+                   and (best or {}).get("draft_fit") is not None else "combined_fit")
+            fit = candidate[key]
+            if best is None or fit is None or best.get(key) is None or fit >= best[key]:
                 self.state["best_valid_candidate"] = copy.deepcopy(candidate)
             self.state["last_valid_candidate"] = copy.deepcopy(self.state.get("best_valid_candidate") or candidate)
         self.state.update(validation=None, rendered_views=[])

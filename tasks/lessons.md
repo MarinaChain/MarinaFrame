@@ -138,3 +138,9 @@
 - **Trigger:** Round 13 (BUMBLE BEE 47): the operator agent read the station labels and set the forebody (1-6) left and the aftbody (7-14) right; the chains fit the opposite halves within 2-6 mm. Code misnamed 10 of 14 stations and the models could not fix it, because each half's candidate stations were wrong. The round had to be reported as run.
 - **Rule:** Before a holdout protocol commit, have a second, independent check of which half is bow and which is stern (a different agent reading the labels in its own crops, or the profile's stem/stern position against the body plan), and record both readings in the protocol. If they disagree, stop and resolve before any run.
 - **Why:** One agent's reading of small station labels is a single point of failure, and a side swap turns a good reading into a systematic naming error that no later step can see.
+
+### A wait loop must not match itself (MarinaFrame)
+- **Date:** 2026-11-09
+- **Trigger:** `until ! pgrep -f "replay_edits" ...` waited forever: the waiter's own command line contained the pattern.
+- **Rule:** Wait on a PID (`kill -0 $pid`), a result-file count, or a done marker, not on `pgrep -f` with a pattern that the waiting command contains.
+- **Why:** Silent waits hide finished work and block the lane.
