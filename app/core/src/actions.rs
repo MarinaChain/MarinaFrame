@@ -142,6 +142,8 @@ fn app_run_config(
         model: GO_MODEL.into(),
         binary_sha256,
         on_ambiguity: OnAmbiguity::Draft,
+        // The app uses DeepSeek only, with no fallback, until the founder decides otherwise.
+        fallback_models: vec![],
     }
 }
 

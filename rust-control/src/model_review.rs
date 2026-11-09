@@ -269,6 +269,7 @@ fn review(store: &Store, step_sha256: &str, relative: &str) -> Result<(Review, V
                 .collect(),
         };
         let template = vision::template(
+            store.state.current_model(),
             &request,
             &util::hash_json(&manifest)?,
             data,

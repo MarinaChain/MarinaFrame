@@ -7,6 +7,10 @@
         --worker-source src --worker-python .venv/bin/python \
         --policy live --on-ambiguity draft --context conversation
 
+Development rounds draft with Crouton Alpha Free and fall back to DeepSeek V4.1
+Flash when OpenCode Go rate-limits Crouton (founder decision 2026-11-09); pass
+--model to choose another ordered list. The desktop app keeps DeepSeek.
+
 With --sheet-only each case starts like a drawing dropped in the app: the case
 folder's drawings go through `vessel_reconstruction.intake prepare` and
 `write-spec` (app/core/src/intake.rs), and the controller runs on that
@@ -38,6 +42,9 @@ DIGEST = SCRIPTS / "round_digest.py"
 EARLY_STOP_AFTER = 2  # finished cases after which the digest may stop the round
 # Drawing files a sheet-only case reads (the app's accepted types, app/core/src/intake.rs).
 DRAWING_EXTENSIONS = (".pdf", ".png", ".tif", ".tiff", ".jpg", ".jpeg")
+# Ordered OpenCode Go models of development rounds (rust-control/src/models.rs):
+# the controller uses the next one when the current one is rate limited.
+DEVELOPMENT_MODELS = "crouton-alpha-free,deepseek-v4.1-flash"
 
 
 def main_checkout() -> Path:
@@ -201,7 +208,8 @@ def build_command(args: argparse.Namespace, case: str, source: Path | None = Non
                # absolute(), not resolve(): a venv python is a symlink to the base interpreter,
                # and resolving it would leave the venv (no CAD packages).
                "--worker-python", str(args.worker_python.absolute()),
-               "--worker-source", str(args.worker_source.resolve())]
+               "--worker-source", str(args.worker_source.resolve()),
+               "--model", args.model]
     if args.basis:
         command += ["--provider-transfer-basis", args.basis]
     return command + args.extra
@@ -221,11 +229,15 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--max-cases", type=int, default=4)
     parser.add_argument("--basis", help="provider transfer basis text (required for --policy live)")
     parser.add_argument("--no-early-stop", action="store_true")
+    parser.add_argument("--model", default=DEVELOPMENT_MODELS,
+                        help="ordered OpenCode Go models, comma-separated (default: %(default)s)")
     parser.add_argument("--sheet-only", action="store_true",
                         help="start each case from its drawing files through the app's intake, not its spec.json")
     args, extra = parser.parse_known_args(argv)
     if not 1 <= args.jobs <= MAX_JOBS:
         sys.exit(f"--jobs must be 1 to {MAX_JOBS}")
+    if "--model" in extra:
+        sys.exit("give --model once")
     if extra and (len(extra) % 2 or any(not flag.startswith("--") for flag in extra[0::2])):
         sys.exit(f"extra options must be --option value pairs: {extra}")
     args.extra = extra
@@ -265,10 +277,10 @@ def main(argv: list[str] | None = None) -> int:
     admission_lock = (Path(os.environ.get("TMPDIR") or "/tmp")
                       / f"marinaframe-native-admission-{os.geteuid()}.lock").resolve()
     meta = {"started": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "cases": cases, "jobs": args.jobs,
-            "sheet_only": args.sheet_only,
+            "sheet_only": args.sheet_only, "models": args.model.split(","),
             "native_admission_lock": str(admission_lock), "binary": str(args.binary)}
     (args.out / "round.json").write_text(json.dumps(meta, indent=2) + "\n")
-    log.write(f"round of {len(cases)} case(s), jobs {args.jobs}, out {args.out}")
+    log.write(f"round of {len(cases)} case(s), jobs {args.jobs}, models {args.model}, out {args.out}")
 
     # The first EARLY_STOP_AFTER cases run first; if they fail the same way, the round stops.
     # The rest then run in a pool: a new case starts as soon as any case ends.
@@ -287,7 +299,7 @@ def main(argv: list[str] | None = None) -> int:
         meta["early_stop_hint"] = hint
     elif rest:
         run_all(rest)
-    (args.out / "digest.md").write_text(run_digest(finished))
+    (args.out / "digest.md").write_text(f"Models (in fallback order): {args.model}\n\n" + run_digest(finished))
     meta["finished"] = [path.name for path in finished]
     (args.out / "round.json").write_text(json.dumps(meta, indent=2) + "\n")
     log.write(f"digest written for {len(finished)} case(s): {args.out / 'digest.md'}")

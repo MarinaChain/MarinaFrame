@@ -4,6 +4,8 @@
 
 #[path = "../src/controller.rs"]
 mod controller;
+#[path = "../src/models.rs"]
+mod models;
 #[path = "../src/provider.rs"]
 mod provider;
 #[path = "../src/store.rs"]
@@ -31,6 +33,7 @@ fn controlled_config() -> Config {
         provider_transfer_authorized: true,
         authorization_basis: "Explicit no-network protocol fixture".into(),
         model: GO_MODEL.into(),
+        fallback_models: vec![],
         binary_sha256: util::file_hash(&std::env::current_exe().unwrap()).unwrap(),
         on_ambiguity: OnAmbiguity::Abstain,
     }

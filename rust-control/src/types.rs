@@ -5,7 +5,8 @@ use std::collections::BTreeSet;
 
 pub const CONTROL_VERSION: &str = "marinaframe.control.v1";
 pub const WORKER_VERSION: &str = "marinaframe.worker.v1";
-pub const GO_MODEL: &str = "deepseek-v4.1-flash";
+/// The default model (the desktop app's); `models` holds the allow-list.
+pub const GO_MODEL: &str = crate::models::DEEPSEEK_V4_1_FLASH;
 pub const GO_ENDPOINT: &str = "https://opencode.ai/inference/go/openai/v1/chat/completions";
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -702,12 +703,26 @@ pub struct Config {
     pub limits: OperationalLimits,
     pub provider_transfer_authorized: bool,
     pub authorization_basis: String,
+    /// The first model of the run's ordered model list.
     pub model: String,
     pub binary_sha256: String,
     /// Not serialized when `abstain`, so the hashes of older ledger events and
     /// their configurations stay unchanged.
     #[serde(default, skip_serializing_if = "OnAmbiguity::is_abstain")]
     pub on_ambiguity: OnAmbiguity,
+    /// The models after `model`, used in order when OpenCode Go rate-limits
+    /// the current one. Not serialized when empty, so older configurations
+    /// keep their hashes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fallback_models: Vec<String>,
+}
+impl Config {
+    /// The ordered model list: `model`, then `fallback_models`.
+    pub fn models(&self) -> Vec<&str> {
+        std::iter::once(self.model.as_str())
+            .chain(self.fallback_models.iter().map(String::as_str))
+            .collect()
+    }
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -763,13 +778,22 @@ pub struct State {
     pub engineering_approved: bool,
     pub action_fingerprints: std::collections::BTreeMap<String, u64>,
     pub created_ms: u64,
+    /// The model in use after a rate-limit switch (`model_switched` event);
+    /// absent while the run uses its first model.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_model: Option<String>,
 }
 impl State {
+    /// The model the next request uses.
+    pub fn current_model(&self) -> &str {
+        self.active_model.as_deref().unwrap_or(&self.config.model)
+    }
     pub fn validate(&self) -> Result<()> {
         if self.schema_version != CONTROL_VERSION
             || self.engineering_approved
             || !util::valid_id(&self.task_id, 128)
-            || self.config.model != GO_MODEL
+            || crate::models::check_list(&self.config.models()).is_err()
+            || !self.config.models().contains(&self.current_model())
             || !util::valid_hash(&self.config.binary_sha256)
             || !self.counters.observed_cost_usd.is_finite()
             || self.counters.observed_cost_usd < 0.

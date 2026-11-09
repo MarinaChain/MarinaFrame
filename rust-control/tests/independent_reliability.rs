@@ -4,6 +4,8 @@
 
 #[path = "../src/controller.rs"]
 mod controller;
+#[path = "../src/models.rs"]
+mod models;
 #[path = "../src/provider.rs"]
 mod provider;
 #[path = "../src/store.rs"]
@@ -41,6 +43,7 @@ fn config() -> Config {
         provider_transfer_authorized: false,
         authorization_basis: "Controlled local reliability fixture; no transfer".into(),
         model: GO_MODEL.into(),
+        fallback_models: vec![],
         binary_sha256: util::file_hash(&std::env::current_exe().unwrap()).unwrap(),
         on_ambiguity: OnAmbiguity::Abstain,
     }
