@@ -455,7 +455,47 @@ two tiles of one waterline disagree by more than 0.15 m on 38 to 48 cells. The l
 model's localisation of thin lines, not the image size. Run outputs (not in the repository):
 the session scratchpad `r5/round5-001`.
 
-## 6. Resume point
+## 6. Step 2: internals (development case, metrics G1 to G5 of plan section 4.3.2)
+
+Code: `benchmarks/gunnerus/whole_vessel_internals.py` (reader and build) and
+`benchmarks/gunnerus/whole_vessel_internals_metrics.py` (G1 to G5; metrics fixed in `7225a67`
+before the build). No model call. Run 2026-11-09, 340 s, one process; output in the git-ignored
+`work/whole-vessel/internals-002` (the step 1 `final` assembly plus the internals).
+
+Reading:
+
+- Frame axis: the frame-0 line is the frame-grid line (phase of the structure lines mod 500 mm)
+  nearest to the axis-label estimate; lettered frames A to J follow frame 27.
+- Longitudinal-section construction plan: baseline, 1-deck level, tank-top runs (lines at each
+  "TANKTOP nnnn AB.BL" level), main bulkheads (moulded lines from at most 2 m above the base up to
+  the deck).
+- Tank arrangement: tank table (number, name, frame range, net volume); tank outlines as enclosed
+  regions of the "below tank top" and "below 1-deck" plans at each label (a region with a port
+  and a starboard label is split at the centre line); bulkheads in the profile.
+- Clip to the built hull: plane sections of the hull display mesh (a CAD Boolean took minutes on
+  this hull). Tank volume by integration (0.05 m in x, 0.01 m in z); solids are 0.25 m slabs.
+
+Built and added to `whole_vessel/execution.json` (op `deck`, `bulkhead`, `tank`; `kind`
+`structure`), one STEP per part and one GLB node per part (GLB 5.8 MB): 4 tank-top runs, 7 main
+bulkheads, 22 of 24 tanks. Not built: No 11sb (its label lies in the engine-room region) and No 4
+(its outline is not closed off from No 3sb).
+
+| ID | Metric | Result | Target |
+|---|---|---|---|
+| G1 | Tank end x vs table frame range, median abs (22 tanks) | **0.04 m**; 18 tanks within 0.05 m; misses: No 6sb/6p forward end -5.0 m, No 11p -2.5/+7.5 m (region leaks into the engine room), black water new -1.0/-2.0 m | <= 0.5 m: met |
+| G2 | Tank volume vs table net volume, median abs relative error (20 tanks) | **8.2 %**; 12 of 20 within 10 %; misses: No 12 roll damping +102 % (height to the deck guessed), No 11p +757 % (leak), No 2sb/2p -54 %, No 3sb +23 % (holds No 4) | <= 15 %: met |
+| G3 | Profile bulkheads vs longitudinal-section bulkheads | 7 of 7 at 0.00 m; the section's aft-peak bulkhead at x 1.0 m is not in the profile | <= 0.25 m: met |
+| G4 | Built internal volume outside the truth solid | **13.1 %** (282,127 points); tanks and tank tops mostly below 1 %; aft parts high: cargo hold 31 %, No 12 21 %, bulkhead x 4.0 m 22 % (heights guessed to the 1-deck level where the truth deck is lower, and the aft hull shape) | <= 5 %: **missed** |
+| G5 | Parts by label | 17 traced, 16 with a guessed value, 2 not built; 11 plates with an ID and a thickness (thickness guessed 10 mm: no plate label read) | all built: no (33 of 35) |
+
+Not measurable against the truth: positions and thicknesses of the internals (the truth STEP has
+no internal structure). G1 to G3 compare printed sources with each other.
+
+## 7. Resume point
+
+0. Step 2 internals (section 6): next fix the region leaks (No 11, No 4) with the drawn
+   partitions on other layers, tank heights from the profile (No 12, hold), plate thickness from
+   construction-plan labels, then G4 again.
 
 1. Done: tier aft-end rule (section 1.1), raster code path (section 3), assembly and hull volume
    fix (section 4), app parts folder (section 4.2), happy path for invalid metadata (section 4.3),
