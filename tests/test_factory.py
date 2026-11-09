@@ -7,6 +7,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+pytest.importorskip('cv2', reason='the factory renderer needs the plan-raster extra (OpenCV)')
+
 from benchmarks.factory import hulls as H
 from benchmarks.factory import render as R
 from benchmarks.factory import splits as S

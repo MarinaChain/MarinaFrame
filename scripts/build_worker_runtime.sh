@@ -168,7 +168,11 @@ build_runtime() {
     write_manifest "$wheel"
     trim_runtime
     "$RUNTIME/bin/python3" -I -c \
-        'import cadquery, OCP, cv2, fitz, ezdxf, scipy, vessel_reconstruction.rust_worker'
+        'import cadquery, OCP, fitz, ezdxf, scipy, vessel_reconstruction.rust_worker'
+    # OpenCV is left out on purpose (its macOS wheel vendors GPL video codecs).
+    if "$RUNTIME/bin/python3" -I -c 'import cv2' 2> /dev/null; then
+        fail "cv2 is importable in the runtime; it must not be bundled"
+    fi
     rm -rf "$OUT/dist"
     echo "worker runtime: $RUNTIME ($(du -sh "$RUNTIME" | cut -f1))"
 }

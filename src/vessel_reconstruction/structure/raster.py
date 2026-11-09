@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from ..raster_morphology import connected_components_with_stats, dilation, opening
 from .model import SheetInput, Stroke, Word
 
 INK_THRESHOLD = 160  # grey level below which a pixel is ink (0 black, 255 white)
@@ -24,15 +25,13 @@ MIN_COMPONENT_PIXELS = 3
 
 
 def sheet_from_pixels(gray: np.ndarray, dpi: float, words: tuple[Word, ...] = ()) -> SheetInput:
-    import cv2
-
     mm_per_px = 25.4 / dpi
     height_px, width_px = gray.shape
     ink = (gray < INK_THRESHOLD).astype(np.uint8)
     run = max(3, int(round(MIN_RUN_MM / mm_per_px)))
-    horizontal = cv2.morphologyEx(ink, cv2.MORPH_OPEN, np.ones((1, run), np.uint8))
-    vertical = cv2.morphologyEx(ink, cv2.MORPH_OPEN, np.ones((run, 1), np.uint8))
-    straight = cv2.dilate(np.maximum(horizontal, vertical), np.ones((3, 3), np.uint8))
+    horizontal = opening(ink, (1, run))
+    vertical = opening(ink, (run, 1))
+    straight = dilation(np.maximum(horizontal, vertical), (3, 3))
     rest = ink * (1 - straight)
 
     def to_mm(px: float, py: float) -> tuple[float, float]:
@@ -44,7 +43,7 @@ def sheet_from_pixels(gray: np.ndarray, dpi: float, words: tuple[Word, ...] = ()
         strokes.append(Stroke(len(strokes), tuple(points), source))
 
     for name, mask, axis in (("h", horizontal, 0), ("v", vertical, 1)):
-        count, _labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+        count, _labels, stats = connected_components_with_stats(mask)
         for label in range(1, count):
             x, y, w, h, area = stats[label]
             if area < MIN_COMPONENT_PIXELS:
@@ -56,7 +55,7 @@ def sheet_from_pixels(gray: np.ndarray, dpi: float, words: tuple[Word, ...] = ()
                 centre = x + (w - 1) / 2
                 add([to_mm(centre, y + h - 1), to_mm(centre, y)], f"raster:{name}{label}")
 
-    count, labels, stats, _ = cv2.connectedComponentsWithStats(rest, connectivity=8)
+    count, labels, stats = connected_components_with_stats(rest)
     for label in range(1, count):
         x, y, w, h, area = stats[label]
         if area < MIN_COMPONENT_PIXELS:

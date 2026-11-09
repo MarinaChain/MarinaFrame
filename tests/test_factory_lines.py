@@ -4,6 +4,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+pytest.importorskip('cv2', reason='the factory renderer needs the plan-raster extra (OpenCV)')
+
 from benchmarks.factory import hulls as H
 from benchmarks.factory import lines as L
 from benchmarks.factory import render as R

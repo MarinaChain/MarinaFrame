@@ -16,18 +16,31 @@ import json
 import sys
 from pathlib import Path
 
-# Packages that need an owner decision before any distribution (docs/DEPENDENCIES_AND_RIGHTS.md).
+# Owner decisions and reviews recorded in docs/DEPENDENCIES_AND_RIGHTS.md.
 OWNER_DECISION = {
-    'pymupdf': 'AGPL-3.0 or Artifex commercial licence: distribution needs an owner decision.',
-    'vtk': 'Scoped OSV exclusion for VTK 9.3.1 (GLTF loader); review before distribution.',
+    'pymupdf': 'Used under the Artifex commercial licence that MarinaChain bought (2026-11-09), '
+               'not under the AGPL.',
+    'vtk': 'Required at run time (OCP links VTK). BSD-3-Clause; the bundled third-party '
+           'libraries were reviewed (2026-11-09): permissive, or dual-licensed with a '
+           'permissive option (gl2ps: GL2PS licence; FreeType: FreeType licence). Scoped OSV '
+           'exclusion for the GLTF loader.',
 }
 # Facts about packages whose metadata says too little; checked by hand against each
 # package's own licence files in the runtime.
 KNOWN = {
     'cadquery-ocp': 'Bindings for Open CASCADE Technology (libTK*), LGPL-2.1 with the OCCT '
-                    'exception; the metadata declares no licence.',
-    'opencv-python-headless': 'Vendors FFmpeg and codec libraries; see LICENSE-3RD-PARTY.txt '
-                              'in its dist-info.',
+                    'exception; the metadata declares no licence. LGPL libraries are '
+                    'dynamically linked; FreeImage is used under the FreeImage Public '
+                    'License and LibRaw under the LGPL option.',
+    'casadi': 'Its own folder holds dynamically loaded libraries (not in .dylibs): CasADi '
+              '(LGPL-3.0+), COIN-OR Ipopt, Cbc, Clp, Bonmin (EPL-2.0), MUMPS (CeCILL-C), '
+              'fatrop and sleqp (LGPL-3.0), GCC runtime libraries (runtime exception). Each '
+              'is a separate, replaceable file: keep notices and point to the sources.',
+    'nlopt': 'The metadata says MIT, but _nlopt.so statically contains the LGPL-2.1+ Luksan '
+             'routines, so the file is LGPL-2.1+ as a whole (dist-info LICENSE). It is a '
+             'separate, replaceable extension module: keep notices and point to the source.',
+    'scipy': 'GCC runtime libraries: the GCC runtime exception applies; libquadmath is LGPL, '
+             'dynamically linked.',
 }
 # Licences with obligations that a distributor must meet (copyleft or notice terms).
 COPYLEFT_WORDS = ('GPL', 'AFFERO', 'LGPL', 'MPL')
@@ -47,6 +60,8 @@ COPYLEFT_LIBRARIES = {
     'libgfortran': 'GPL-3.0+ with GCC runtime exception',
     'libgcc_s': 'GPL-3.0+ with GCC runtime exception', 'libquadmath': 'LGPL-2.1+',
     'libTK': 'LGPL-2.1 with OCCT exception',
+    'libvtkgl2ps': 'LGPL-2.0+ or GL2PS licence', 'libvtkfreetype': 'FreeType licence or GPL-2.0',
+    'libfreetype': 'FreeType licence or GPL-2.0',
 }
 
 

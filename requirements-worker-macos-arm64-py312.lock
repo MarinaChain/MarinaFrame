@@ -1,7 +1,8 @@
 # macOS arm64 (wheel tags up to macosx_13_0) / CPython 3.12: the worker runtime that the app
 # bundles (scripts/build_worker_runtime.sh). The run-time closure of vessel-reconstruction with
-# the documents extra (CadQuery, NumPy, SciPy, Pillow, OpenCV, PyMuPDF, ezdxf); the versions
-# are those of requirements-linux-py312.lock. One exact wheel per distribution.
+# the documents extra (CadQuery, NumPy, SciPy, Pillow, PyMuPDF, ezdxf); the versions are those
+# of requirements-linux-py312.lock. One exact wheel per distribution. No OpenCV: its macOS wheel
+# vendors GPL video codecs; the worker uses SciPy (raster_morphology.py) instead.
 # Re-hash with `scripts/build_worker_runtime.sh lock` after an explicit dependency review.
 aiohappyeyeballs==2.7.1 --hash=sha256:9243213661e29250eb41368e5daa826fc017156c3b8a11440826b2e3ed376472
 aiohttp==3.14.4 --hash=sha256:bf734016932d68e1324cfb638cac7a0866a83933a33badf15e836a7e24efb8c0
@@ -24,7 +25,6 @@ multidict==6.9.1 --hash=sha256:6ed30be8918e18c8bed0a2e8b70639ecf02feb61ed00ca2e4
 multimethod==1.12 --hash=sha256:fd0c473c43558908d97cc06e4d68e8f69202f167db46f7b4e4058893e7dbdf60
 nlopt==2.11.0 --hash=sha256:251b51a6b4ee761945211c9213c97d2c6a6d444138fa15547dd77b83f6bbe1e6
 numpy==2.3.5 --hash=sha256:ee3888d9ff7c14604052b2ca5535a30216aa0a58e948cdd3eeb8d3415f638769
-opencv-python-headless==4.14.0.94 --hash=sha256:bc7db37dc234f7bb3190a158fd9dd750357246fc7d8adb23698843ef721a993b
 packaging==26.3 --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
 path==17.1.1 --hash=sha256:ec7e136df29172e5030dd07e037d55f676bdb29d15bfa09b80da29d07d3b9303
 pillow==13.0.0 --hash=sha256:fc481f742ccda20e9ed760b8f978dff50f2a4e9bc253ac167fb0a05b0783ef52

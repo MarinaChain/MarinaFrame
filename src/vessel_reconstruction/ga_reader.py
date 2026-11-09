@@ -15,12 +15,18 @@ When the ink does not give a value, the reader writes a labelled guess
 
 Coordinates: x from frame 0 (positive forward), y positive to port, z from the
 baseline, metres. Drawing units convert with ``metres_per_unit`` from the view origin.
+
+``PlanRaster`` draws and traces outlines with OpenCV, which is an optional dependency (the
+``plan-raster`` extra): the app's worker runtime does not bundle it, and no app path uses
+``PlanRaster`` (docs/DEPENDENCIES_AND_RIGHTS.md).
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
 import numpy as np
+
+from .raster_morphology import opening
 
 # Profile lines shorter than this are details (doors, windows, furniture), not deck levels.
 MIN_LEVEL_LENGTH_M = 1.5
@@ -170,10 +176,8 @@ def _runs(line: np.ndarray) -> list[tuple[int, int]]:
 
 def raster_levels(ink: np.ndarray, x_of_column, z_of_row, pixel_m: float) -> list[Level]:
     """Horizontal drawn levels in a raster profile: ink runs at least MIN_LEVEL_LENGTH_M long."""
-    import cv2
-
     length = max(3, int(round(MIN_LEVEL_LENGTH_M / pixel_m))) | 1  # odd: an even kernel shifts by one pixel
-    long_runs = cv2.morphologyEx(ink, cv2.MORPH_OPEN, np.ones((1, length), np.uint8)) > 0
+    long_runs = opening(ink, (1, length)) > 0
     levels = []
     for top, bottom in _row_clusters(long_runs):
         band = long_runs[top:bottom + 1].any(axis=0)
@@ -187,10 +191,8 @@ def raster_levels(ink: np.ndarray, x_of_column, z_of_row, pixel_m: float) -> lis
 def raster_transverse_walls(ink: np.ndarray, x_of_column, x_range, min_length_m: float,
                             pixel_m: float) -> list[dict]:
     """Ink runs across the ship (constant x) at least min_length_m long, in a raster plan."""
-    import cv2
-
     length = max(3, int(round(min_length_m / pixel_m))) | 1  # odd: an even kernel shifts by one pixel
-    long_runs = cv2.morphologyEx(ink, cv2.MORPH_OPEN, np.ones((length, 1), np.uint8)) > 0
+    long_runs = opening(ink, (length, 1)) > 0
     walls = []
     for left, right in _row_clusters(long_runs.T):
         x = float(x_of_column((left + right) / 2))
