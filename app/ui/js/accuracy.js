@@ -36,8 +36,9 @@ export const OUTPUT_ICONS = { hull: 'waterline', tanks: 'drop', steel: 'frames' 
 export const OUTPUT_NAMES = { hull: 'Hull', tanks: 'Tanks', steel: 'Steel' };
 
 export const band = (id) => BANDS.find((b) => b.id === id);
-const bandsOf = (ids) => ids.map(band);
-const bandsFor = (output) => BANDS.filter((b) => b.output === output).map((b) => b.id);
+const validIds = (ids) => ids.filter((id) => band(id).outcome !== 'invalid');
+const bandsOf = (ids) => validIds(ids).map(band);
+const bandsFor = (output) => BANDS.filter((b) => b.output === output && b.outcome !== 'invalid').map((b) => b.id);
 const count = (labels, ...names) => names.reduce((sum, name) => sum + Number(labels?.[name] || 0), 0);
 const total = (labels) => Object.values(labels || {}).reduce((sum, n) => sum + Number(n || 0), 0);
 const chipOf = (bands) => bands.map((b) => b.chip).join(' / ');
@@ -46,7 +47,7 @@ const weak = (bands) => bands.some((b) => WEAK.has(b.outcome));
 function hull(facts) {
   const path = HULL_DETAIL_IDS[facts.path] ? facts.path : 'model_reading';
   const hullType = path === 'scanned_body_plan' ? facts.hull_type || null : null;
-  const headIds = path === 'scanned_body_plan' ? SCANNED_HEAD_IDS[hullType || 'unknown'] : HULL_DETAIL_IDS[path];
+  const headIds = validIds(path === 'scanned_body_plan' ? SCANNED_HEAD_IDS[hullType || 'unknown'] : HULL_DETAIL_IDS[path]);
   const head = bandsOf(headIds);
   let text = head.map((b) => b.short).join('; ');
   if (path === 'scanned_body_plan' && !hullType) text += ' (hull type not known)';
@@ -63,13 +64,13 @@ function hull(facts) {
   if (facts.fit !== undefined && facts.fit !== null) parts.push(`fit score ${facts.fit.toFixed(2)}`);
   return {
     output: 'hull', present: true, line: `${parts.join('; ')}.`, chip: chipOf(head),
-    caution: weak(head) || Boolean(toCheck) || all > traced, head_ids: headIds, detail_ids: HULL_DETAIL_IDS[path],
+    caution: weak(head) || Boolean(toCheck) || all > traced, head_ids: headIds, detail_ids: validIds(HULL_DETAIL_IDS[path]),
   };
 }
 
 function tanks(facts) {
   if (!facts) return { output: 'tanks', present: false, line: NOT_PRESENT.tanks, chip: '', caution: false, head_ids: [], detail_ids: [] };
-  const headIds = TANK_HEAD_IDS[facts.path || 'unknown'] || TANK_HEAD_IDS.unknown;
+  const headIds = validIds(TANK_HEAD_IDS[facts.path || 'unknown'] || TANK_HEAD_IDS.unknown);
   const head = bandsOf(headIds);
   const parts = [`Tanks: ${head.map((b) => b.short).join('; ')}`];
   const all = total(facts.volume_labels);
@@ -92,7 +93,7 @@ function steel(facts) {
     const printed = count(facts.thickness_labels, 'printed');
     parts.push(`${printed} of ${all} thicknesses printed, ${all - printed} guessed or missing`);
   }
-  return { output: 'steel', present: true, line: `${parts.join('; ')}.`, chip: chipOf(head), caution: true, head_ids: STEEL_HEAD_IDS, detail_ids: bandsFor('steel') };
+  return { output: 'steel', present: true, line: `${parts.join('; ')}.`, chip: chipOf(head), caution: true, head_ids: validIds(STEEL_HEAD_IDS), detail_ids: bandsFor('steel') };
 }
 
 /** The summary of every output from a run's facts (see accuracy_summary.py for the shape). */
@@ -119,9 +120,13 @@ export function factsOfView(view) {
 }
 
 /** The tooltip detail: the line, then each band with its set, N and source (limits are in the report). */
+// The tooltip detail stays short (founder: few words): this run's line plus at most two measured bands.
+// Sources and doc sections are in the PDF report's "Accuracy and limits" section, not in the app.
+const DETAIL_BAND_LINES = 2;
+
 export function detailText(summary) {
-  const bands = summary.detail_ids.map(band).map((b) => `- ${b.short} (${b.dataset}; ${b.n}; ${b.source} s.${b.section})`);
-  return [summary.line, 'Measured on other ships, not on this run:', ...bands, DRAFT_NOTE].join('\n');
+  const bands = summary.detail_ids.map(band).slice(0, DETAIL_BAND_LINES).map((b) => `${b.short} (${b.dataset})`);
+  return [summary.line, ...bands].join('\n');
 }
 
 /** One compact chip: the output's icon and its band; the line and sources are in the tooltip. */

@@ -28,13 +28,17 @@ test('every band has a source, a set and an N; the unmeasured one says so', () =
   assert.deepEqual(BANDS.filter((b) => !b.measured).map((b) => b.id), ['steel.weight']);
 });
 
-test('the tooltip detail lists each band with its set, N and source, and keeps the draft note', () => {
+test('the tooltip detail is at most three lines, names the set, and carries no doc paths', () => {
+  for (const testCase of CASES) {
+    for (const summary of Object.values(summarise(testCase.facts)).filter((s) => s.present)) {
+      const lines = detailText(summary).split('\n');
+      assert.ok(lines.length <= 3, `${summary.output}: ${lines.length} lines`);
+      assert.doesNotMatch(detailText(summary), /docs\/|\.md|s\.\d/);
+      assert.doesNotMatch(detailText(summary), /verified|approved for/i);
+    }
+  }
   const hull = summarise({ hull: { path: 'scanned_body_plan', hull_type: 'round_bilge', labels: { traced: 3 } } }).hull;
-  const text = detailText(hull);
-  assert.match(text, /holdout; 1 sheet, 37 of 39 cells; docs\/WHOLE_VESSEL_GUNNERUS\.md s\.5\.9/);
-  assert.match(text, /PARDON ME/);
-  assert.match(text, /engineering_approved stays false/);
-  assert.doesNotMatch(text, /verified|approved for/i);
+  assert.match(detailText(hull), /\(holdout\)/);
 });
 
 test('no wording of any output claims approval or verification', () => {
@@ -63,6 +67,19 @@ test('facts come from a task view: source counts, sections to check, tanks and s
   assert.equal(bare.tanks, null);
   assert.equal(bare.steel, null);
   assert.equal(bare.hull.path, 'model_reading');
+});
+
+test('invalid bands never appear in run summaries or chips', () => {
+  const invalid = band('hull.scanned_bumble_bee');
+  assert.equal(invalid.outcome, 'invalid');
+  for (const hull_type of [null, 'round_bilge', 'hard_chine']) {
+    for (const summary of Object.values(summarise({ hull: { path: 'scanned_body_plan', hull_type } }))) {
+      assert.ok(![...summary.head_ids, ...summary.detail_ids].includes(invalid.id));
+      assert.ok(!summary.line.includes(invalid.short));
+      assert.ok(!summary.chip.includes(invalid.chip));
+      assert.ok(!detailText(summary).includes(invalid.short));
+    }
+  }
 });
 
 test('each output has a chip icon and a band', () => {
