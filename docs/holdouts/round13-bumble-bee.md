@@ -189,3 +189,233 @@ The harness checks the sheet SHA-256 before measuring and stops on a mismatch.
 Protocol committed first, then harness and synthetic tests. Next: the PM freezes the truth in the
 section 6 format, then runs the three arms once each with the commands of section 7, then records
 results in a new section below without changing sections 1 to 7.
+
+### Truth record (completed 2026-11-09)
+
+The PM freeze record at `/private/tmp/claude-501/bumble-bee/truth-frozen/README.md` records
+independent row-crop and column-crop transcriptions: 182 nonempty printed cells agreed, with zero
+whitespace-normalised differences and no doubtful cells. The full printed table
+`truth-frozen/table_as_printed.json` has SHA-256
+`d127f9ac3d7c05369e0f0abfbf20314884e3fa96cdd949a4d532a985203c8fb1`.
+The derived scoring input `/private/tmp/claude-501/bumble-bee/truth_s2.json` has SHA-256
+`906c64f44250eeea038f5b6cfbf25e502538ce05ae00ae5cdc750c661b70d679`.
+It has **54 scored cells**, `excluded: []`, and two blank scored-block positions: stations 1 and
+14 at 1-6-0. Station 0 remains outside the scoring block. The undefined printed `+` retains the
+fixed parser interpretation in section 3. These files remain outside the repository.
+
+## 9. Results (one run per arm, 2026-11-09)
+
+### Measured decision and model value
+
+The fixed code arm ran once. Each fixed model arm ran once with its three prescribed repeats.
+Sources are `/private/tmp/claude-501/bumble-bee/runs/{code,crouton,sonnet}/summary.json`, with
+saved final labels and replies in the model repeat folders. No arm was rerun, and no calibration,
+reader, scoring, truth, threshold, prompt, or decision rule was changed for this diagnosis.
+`engineering_approved=false` throughout.
+
+| Arm / repeat | Cells / 54 | Extra | RMS m | Max m | Within 0.05 m | Within 0.15 m | Identity flags |
+|---|---:|---:|---:|---:|---:|---:|---|
+| Code / 1 | 50 (92.59%) | 2 | 0.114051 | 0.249336 | 42.00% | 76.00% | 2–8, 10, 11, 14 |
+| Crouton / 1 | 51 (94.44%) | 1 | 0.127246 | 0.227803 | 37.25% | 64.71% | 2–8, 11, 12 |
+| Crouton / 2 | 51 (94.44%) | 1 | 0.127246 | 0.227803 | 37.25% | 64.71% | 2–8, 11, 12 |
+| Crouton / 3 | 51 (94.44%) | 1 | 0.127206 | 0.227803 | 37.25% | 64.71% | 2–6, 8, 11, 12 |
+| Sonnet / 1 | 51 (94.44%) | 1 | 0.127246 | 0.227803 | 37.25% | 64.71% | 2–8, 11, 12 |
+| Sonnet / 2 | 51 (94.44%) | 1 | 0.127246 | 0.227803 | 37.25% | 64.71% | 2–8, 11, 12 |
+| Sonnet / 3 | 51 (94.44%) | 1 | 0.127246 | 0.227803 | 37.25% | 64.71% | 2–8, 11, 12 |
+
+Within-tolerance percentages use the returned nonblank truth cells, not all 54. Extra cells are
+not penalised. Identity flags are the frozen scorer's **immediate-neighbour fit heuristic**:
+a station is flagged if its emitted values fit station s−1 or s+1 better, using at least three
+shared rows. Fits can use different row subsets. These flags are not a complete count of wrong
+identities: they cannot detect a distant station match, and an unflagged station need not be
+correct. The wider chain-fit diagnosis below is separate from that metric.
+
+**All three arms pass the fixed rule.** Every repeat returns at least 60% of the cells; median
+RMS is 0.114051 m for code and 0.127246 m for each model arm. RMS ranges are a single value for
+code, 0.127206–0.127246 m for Crouton, and a single value for Sonnet. The declared section-5
+reading is therefore **“generalises” under this rule**, not “generalises only with a strong
+identifier”. This rule is loose for a small boat: 0.114 m RMS is about 4.5 inches, against measured
+maximum half-breadths near 1.36 m, and systematic station errors still pass. The rule was **not
+changed after the run**. This result does not establish correct station numbering or suitability
+for engineering use.
+
+Models changed **6–8 final chain identities** relative to code, but did not fix the systematic
+numbering. All three Sonnet tables equal Crouton repeat 1, cell for cell (Crouton repeat 2 also
+equals it). Crouton repeat 3 changes only the near-outer right-side assignments, with negligible
+RMS change. Models add one scored lowest-row cell, but worsen RMS and tolerance shares. There is
+no measured accuracy gain from the stronger identifier here. The constrained candidate station
+sets prevent either model from naming the opposite half's stations.
+
+| Arm / repeat | Questions / re-asks / calls | Final labels equal code / null | Changed identities | Prompt / completion tokens | Repeat seconds |
+|---|---:|---:|---:|---:|---:|
+| Crouton / 1 | 16 / 3 / 19 | 6 / 3 | 6 | 4,022 / 365 | 302.1 |
+| Crouton / 2 | 16 / 2 / 18 | 6 / 3 | 6 | 2,869 / 346 | 160.7 |
+| Crouton / 3 | 16 / 2 / 18 | 5 / 6 | 8 | 2,869 / 367 | 267.0 |
+| Sonnet / 1 | 16 / 1 / 17 | 8 / 1 | 6 | 107,220 / 7,878 | 50.3 |
+| Sonnet / 2 | 16 / 1 / 17 | 8 / 1 | 6 | 102,344 / 8,101 | 49.4 |
+| Sonnet / 3 | 16 / 2 / 18 | 8 / 1 | 6 | 108,201 / 9,758 | 72.0 |
+
+All repeats record zero invalid replies, unanswered questions, failed final requests, and fairness
+flags. Crouton repeat 1 records 18 answers from Crouton and one from DeepSeek fallback; the other
+Crouton repeats record 18 Crouton answers each. The final-request failure count does not count
+failed attempts hidden inside the fallback wrapper. Sonnet answers are all `claude-sonnet-5-5`.
+Sonnet uses about **106k prompt tokens per repeat** (mean 105,922), with no better table.
+Code makes zero calls. Deterministic measurement takes 1.5 / 1.7 / 1.7 seconds for the code /
+Crouton / Sonnet arms, separate from repeat wall time. All arms have the same 7 left and 9 right
+chains, no one-waterline chains, and 0 / 3 inferred links on the left / right. The fairness checks
+produce no flags despite the identity errors.
+
+### Main diagnosis: the calibrated halves are reversed relative to the truth
+
+The numerical evidence strongly contradicts the section-2 assignment **fore 1–6 left, aft 7–14
+right**. Left chains fit the truth's aft stations 10–14 to a few millimetres, and right chains
+fit fore stations 1–6 to a few millimetres. This is a calibration finding of this round, not a
+calibration correction. Sections 1–7 and the as-run results remain unchanged. No images were
+viewed for this diagnosis; station fits below are numerical evidence, not a new visual reading
+of the labels.
+
+Chain indices are zero-based and retain the frozen reader's `fore` (left) / `aft` (right) names.
+Each fit searches all stations independently, requires two shared nonblank rows, and uses the
+chain's **unchanged** half-breadths. It does not enforce a one-to-one assignment. Near-midship
+stations have very similar breadths; those fits are ambiguous. No remapped score is reported.
+
+| Calibrated half / chain | Code station | Best truth station | Fit RMS mm / shared rows | Final model station, except Crouton 3 |
+|---|---:|---:|---:|---:|
+| Left / 0 | 6 | 7 (9 next at 3.4 mm) | 2.1 / 3 | 6 |
+| Left / 1 | 5 | 10 | 4.0 / 4 | 5 |
+| Left / 2 | 4 | 11 | 5.2 / 4 | 4 |
+| Left / 3 | 3 | 12 | 5.9 / 4 | 3 |
+| Left / 4 | 2 | 13 | 5.5 / 4 | 2 |
+| Left / 5 | 1 | 14 | 3.4 / 3 | 1 |
+| Left / 6 | none | 2, poor fit | 188.2 / 2 | none |
+| Right / 0 | 7 | 8 | 2.9 / 3 | 7 |
+| Right / 1 | 8 | 7 | 4.5 / 3 | 8 |
+| Right / 2 | 9 | 7 | 3.3 / 3 | none |
+| Right / 3 | 10 | 6 | 4.0 / 4 | 9 |
+| Right / 4 | 11 | 5, with a bad shared node | 43.3 / 4 | 10 |
+| Right / 5 | 12 | 4 | 5.3 / 4 | 11 |
+| Right / 6 | 13 | 3 | 5.2 / 4 | 12 |
+| Right / 7 | 14 | 2 | 4.5 / 4 | 13 |
+| Right / 8 | none | 1 | 2.3 / 3 | 14 |
+
+Crouton repeat 3 leaves right chain 0 unassigned and assigns right chains 1 and 2 to 7 and 8;
+all remaining assignments match the last column. Raw model labels differ more than the final
+tables: for example Crouton labels left chain 0 null, but the assignment still gives it station
+6; Sonnet labels right chain 4 as 9, but the nesting solver assigns it 10. The diagnostic script
+prints both raw labels and final assignments for every repeat.
+
+Examples of the side mismatch, low to high waterline, in metres:
+
+- Left chain 1, code station 5: **0.5833, 1.1633, 1.2814, 1.3176**; best fits station 10
+  (4.0 mm RMS), not station 5 (68.3 mm).
+- Left chain 4, code station 2: **0.1992, 0.4975, 0.7264, 0.8787**; best fits station 13
+  (5.5 mm), not station 2 (184.5 mm).
+- Right chain 7, code station 14: **0.1511, 0.3273, 0.5057, 0.6557**; best fits station 2
+  (4.5 mm), not station 14 (210.8 mm over its three nonblank rows).
+- Right chain 8, discarded by code's rank zip after eight stations: upper-row values
+  **0.0765, 0.1326, 0.1948** fit station 1 (2.3 mm). Models admit it, but name it 14.
+
+Thus this is not just an off-by-one shift, station-0 inclusion, or transom convention. The
+innermost curves independently fit station 14 on the left and station 1 on the right; station 0
+was never scored or offered as a candidate. The double-ended boat's station 14 is a real scored
+station, not a transom. Close-curve loss and chain duplication add local numbering shifts to the
+larger half-assignment error. A simple swap alone would not account for all duplicated/missing
+midship traces.
+
+### Missing-cell map, extras, and measurement evidence
+
+All omissions are at the lowest row. The protocol's risks correctly predicted shallow rejection,
+close curves, and nominal rows without drawn waterlines. **The latter two do not produce missing
+scored cells at the upper rows in these as-run tables**; they affect trace identity and fidelity.
+A full table is not evidence that each cell comes from a distinct, correct curve.
+
+| Waterline | Truth nonblank | Code missing stations | Each model repeat missing stations | Recorded evidence |
+|---|---:|---|---|---|
+| 1-6-0 | 12 | 6, 7, 8, 9 | 6, 7, 8 | All assigned chains lack this row; shallow rejections on both halves; models rename right chain 3 from 10 to 9, which fills 9 without tracing new ink |
+| 2-3-0 | 14 | none | none | No drawn horizontal line; nominal row 7805 used; right chains 1 and 2 share one crossing |
+| 3-0-0 | 14 | none | none | No drawn horizontal line; nominal row 7505 used; right chains 1/2 and 3/4 each share a crossing |
+| 3-9-0 | 14 | none | none | No drawn horizontal line; nominal row 7205 used; right chains 0 and 1 share one crossing |
+
+At 1-6-0 both halves locate row **8114**, 9 px below nominal 8105 (6.9 mm in height). The left
+crossing at **904.9 px / 0.6895 m**, slope **+7.33**, and right crossing at **969.3 px / 0.7386 m**,
+slope **−6.67**, are explicitly rejected as `shallow` (threshold magnitude 6). These lie near
+the calibrated truth-offset queries for missing stations 6 and 7/8, respectively. That is
+proximity evidence, not proof of their physical station identity: the calibrated halves are
+already suspect. A single rejected crossing cannot establish separate traces for both 7 and 8.
+Code station 9 is assigned right chain 2, which starts at 2-3-0; an accepted crossing at
+**891.5 px / 0.6793 m** is on right chain 3 instead. Models rename that chain 9, filling the cell
+by identity change rather than recovery of a lost crossing. No missing cell has truth offset
+beyond the **1900 px** search limit. No missing cell has a recorded `double` classification;
+`double` would in any event be an accepted station candidate, not a rejection.
+
+Close curves cause **shared chain nodes**, not just large-width `double` records. On the right,
+chains 1/2 share **1.253235 m at 2-3-0** and **1.336605 m at 3-0-0**; chains 0/1 share
+**1.354613 m at 3-9-0**. More seriously, chains 3/4 share **1.310045 m at 3-0-0**.
+Right chain 4 has two inferred links and breadths **0.525173, 1.070839, 1.310045, 1.278686 m**:
+the third value is a local bulge from sharing the outer neighbour's crossing. This chain best
+fits station 5 but only at 43.3 mm RMS, unlike the other well-separated fore-station fits near
+5 mm. The measurement record supports loss of distinct curve paths in the close 5–9 region;
+it does not prove which invisible stroke was merged at every row.
+
+Extras are **station 1 / 1-6-0 = 0.104244 m** in every table, plus **station 14 / 1-6-0 =
+0.151123 m** in code only. Those truth positions are blank, not failed scored cells. They are
+consistent with the left station-14-like curve being named 1 and the right station-2-like curve
+being named 14. Models move the right inner assignments and remove the second extra.
+
+### Per-cell code error map and largest errors
+
+Signed error is given minus truth, rounded to millimetres. `M` is missing; `E` is an extra cell
+at a truth blank. The diagnostic script lists truth-present, cell-given, and signed error for
+**all 56 positions in each of the seven tables**, plus the exact assignment gap and nearby
+classified crossings for every missing cell. Model tables cannot be inferred from the code
+error map alone; their final chain assignments are given above.
+
+| Waterline / station | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1-6-0 | E | +48 | +46 | +95 | +59 | M | M | M | M | +97 | +68 | +69 | +52 | E |
+| 2-3-0 | +104 | +175 | +226 | +188 | +101 | +53 | +22 | −12 | +10 | +47 | +52 | +46 | +108 | +151 |
+| 3-0-0 | +159 | +226 | +213 | +128 | +57 | +24 | +9 | −6 | +6 | +31 | +126 | +41 | +99 | +220 |
+| 3-9-0 | +218 | +228 | +166 | +92 | +40 | +17 | +5 | 0 | −1 | +16 | +31 | +41 | +84 | +249 |
+
+The largest code error is **station 14 / 3-9-0, +249.34 mm**: right chain 7 emits 0.655736 m
+against station-14 truth 0.406400 m, although it fits station 2. The largest model error is
+**station 2 / 3-9-0, +227.80 mm**: unchanged left chain 4 emits 0.878678 m against 0.650875 m,
+although it fits station 13. Other large errors shared by all arms are **station 3 / 2-3-0,
++226.44 mm**, **station 2 / 3-0-0, +226.31 mm**, and **station 1 / 3-9-0, +218.45 mm**.
+These are primarily wrong station identities, not a metre/foot scale failure. Models also make
+**station 13 / 3-9-0, −218.98 mm** by renaming right chain 7 as 13. The shared-node bulge on right
+chain 4 gives code station 11 / 3-0-0 **+125.77 mm**; models rename it 10 rather than correct the
+trace. Upper-row completeness and zero fairness flags conceal these defects.
+
+### Reproduce the diagnosis only / next development work
+
+`benchmarks/bumble_bee/diagnose.py` loads the sheet with the frozen hash check, calls the same
+measurement functions, and reconstructs tables from code rank and saved final `labels.json`.
+It checks every reconstructed score field against the saved repeat, prints actual waterline
+rows, per-chain truth fits and model assignments, classified crossings and shared nodes, then
+per-cell records, missing evidence, extras, and largest errors. All reconstructed metrics match
+the seven saved results. It never calls `run`, builds model questions, invokes a model, writes
+run files, changes assignments using truth, or applies a new decision rule. Output goes only to
+stdout; the local capture is temporary diagnostic work, not a new scored run.
+
+```bash
+PYTHONPATH=src:. .venv/bin/python -m benchmarks.bumble_bee.diagnose \
+  --sheet /Users/jonathanjie/Documents/workspace/MarinaFrame/work/sources/haer/master-pnp-habshaer-or-or0500-or0589-sheet-00002a.tif \
+  --truth /private/tmp/claude-501/bumble-bee/truth_s2.json \
+  --runs /private/tmp/claude-501/bumble-bee/runs
+```
+
+**What the reader would need — next development work, not changes to this round:**
+
+1. Independent checks of body-plan side orientation and station labels before fixing candidate
+   sets. Include double-ended hulls, station-0 exclusion, and both innermost stations in tests.
+2. Retain distinct close-curve alternatives and record shared-node ambiguity rather than count
+   duplicated paths as separate complete station measurements. Review the inferred-link bulge.
+3. Support shallow intersections and sampling at nominal waterline heights without a drawn line;
+   distinguish the drawn 1-ft grid and the 9-px row ambiguity from the table waterlines.
+4. For a future protocol fixed before testing, use boat-scale error limits and explicit identity
+   checks. Coverage, absolute RMS, and fairness alone did not detect this failure. Do not rescore
+   this round under a new rule.
+
+Resume point: diagnosis complete; retain the as-run decision and inputs. Any reader or calibration
+development belongs to a later round with its own fixed protocol.
