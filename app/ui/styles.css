@@ -1089,6 +1089,10 @@ code { font-family: var(--font-mono); }
 .stage[data-view="drawing"] .splitter,
 .stage[data-view="model"] .pane-drawing,
 .stage[data-view="model"] .splitter { display: none; }
+/* A pane alone fills the stage. Its split share is a flex-grow below 1, and flex items whose
+   grow factors sum below 1 take only that fraction of the free space. */
+.stage[data-view="drawing"] .pane-drawing,
+.stage[data-view="model"] .pane-model { flex: 1 1 0; }
 
 .stage.stacked { flex-direction: column; }
 

@@ -8,6 +8,7 @@ import { STLLoader } from '../vendor/three/STLLoader.js';
 import { GLTFLoader } from '../vendor/three/GLTFLoader.js';
 import { el, icon, prefersReducedMotion } from './dom.js';
 import { createSectionGrowth } from './growth3d.js';
+import { createAnimation } from './animation.js';
 
 /** Extra size of a section plane around the hull, as a fraction of beam and depth. */
 const PLANE_MARGIN = 0.25;
@@ -21,6 +22,8 @@ const HOME_DIRECTION = new THREE.Vector3(1.0, -1.25, 0.75).normalize();
 const CLICK_SLOP_PX = 4;
 /** The CAD worker's GLB is in millimetres. */
 const MM_TO_M = 0.001;
+/** Duration of an animated move to the home view. */
+const HOME_MOVE_MS = 360;
 
 /** Convert any CSS colour (including oklch) to a THREE.Color by painting one pixel. */
 const colourProbe = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
@@ -138,7 +141,12 @@ export function createModelView({ host, onPick = null }) {
   let frame = 0;
   /** True until the user moves the camera; a resize then re-fits the default view. */
   let cameraAtHome = true;
-  controls.addEventListener('start', () => { cameraAtHome = false; });
+  /** The animated move to the home view. A new home view or a person's drag stops it. */
+  const cameraMove = createAnimation();
+  controls.addEventListener('start', () => {
+    cameraMove.cancel();
+    cameraAtHome = false;
+  });
 
   function showEmpty(title, text) {
     empty.replaceChildren(icon('cube'), el('strong', {}, title), el('p', {}, text));
@@ -307,6 +315,8 @@ export function createModelView({ host, onPick = null }) {
   }
 
   function resetView({ animate = false } = {}) {
+    // An older animated move would aim at the old target and overwrite this view.
+    cameraMove.cancel();
     if (!hull && !frameBox && !wholeVessel) return;
     cameraAtHome = true;
     // Frame the hull and the section planes around it, which reach past the hull
@@ -331,16 +341,15 @@ export function createModelView({ host, onPick = null }) {
     const fromTarget = controls.target.clone();
     const fromPosition = camera.position.clone();
     const began = performance.now();
-    const step = (now) => {
-      const t = Math.min(1, (now - began) / 360);
+    cameraMove.start((now) => {
+      const t = Math.min(1, (now - began) / HOME_MOVE_MS);
       const eased = 1 - (1 - t) ** 4;
       controls.target.lerpVectors(fromTarget, target, eased);
       camera.position.lerpVectors(fromPosition, position, eased);
       controls.update();
       renderer.render(scene, camera);
-      if (t < 1) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
+      return t < 1;
+    });
   }
 
   return {
@@ -352,6 +361,8 @@ export function createModelView({ host, onPick = null }) {
      * `guessedRanges` is [[x0_m, x1_m]], the x ranges a draft guessed; each is shaded amber.
      */
     setModel(buffer, stations, { keepCamera = false, lengthM = null, guessedRanges = [], emptyTitle, emptyText } = {}) {
+      // A move toward the previous model must not finish over this one.
+      if (!keepCamera) cameraMove.cancel();
       clearModel();
       if (!buffer) {
         frameBox = growth.bounds();
@@ -406,6 +417,7 @@ export function createModelView({ host, onPick = null }) {
      * and scaled. Resolves when it shows; rejects when the file cannot be read.
      */
     setWholeVessel(buffer) {
+      const showedWholeVessel = Boolean(wholeVessel);
       if (wholeVessel) {
         scene.remove(wholeVessel);
         wholeVessel.traverse((o) => {
@@ -418,7 +430,9 @@ export function createModelView({ host, onPick = null }) {
       }
       if (hull) hull.visible = true;
       if (!buffer) {
-        resetView({ animate: true });
+        // Back to the hull: move to its home view. With no whole vessel shown, the view
+        // is already the hull's (and a run that is closing must not start a move).
+        if (showedWholeVessel) resetView({ animate: true });
         requestRender();
         return Promise.resolve();
       }

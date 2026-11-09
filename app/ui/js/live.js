@@ -106,7 +106,8 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
   let inFlight = null;
   let fetchedAt = 0;
   let pollTimer = 0;
-  let polling = false;
+  /** The task token of the step request in flight, or null. One request per task at a time. */
+  let polling = null;
 
   let cursor = -1;
   let playing = false;
@@ -167,6 +168,8 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
     thinkingFollow = true;
     pinnedRevision = null;
     shownRevision = null;
+    // A hull request of the previous task that answers later must not show.
+    revisionToken += 1;
     dialValue = null;
     hullCache.clear();
     cards.clear();
@@ -198,9 +201,10 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
   }
 
   async function fetchSteps() {
-    if (!task || polling) return;
-    polling = true;
+    // A request of the previous task may still be in flight; it does not block this task.
+    if (!task || polling === token) return;
     const asked = token;
+    polling = asked;
     try {
       const answer = await invoke('get_live_steps', { task, after_sequence: lastSequence });
       if (asked !== token) return;
@@ -216,7 +220,7 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
       // the M1 views still show the run.
       if (error?.code !== 'unknown_command') console.warn('get_live_steps', error);
     } finally {
-      polling = false;
+      if (polling === asked) polling = null;
     }
   }
 
