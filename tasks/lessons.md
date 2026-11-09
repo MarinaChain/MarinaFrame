@@ -126,3 +126,9 @@
 - **Trigger:** The plan for Claude Sonnet 5.5 assumed Claude downsamples images above about 1,568 px. A token probe through the `claude` CLI (`work/claude-vision-probe`) showed image tokens growing with the area up to about 3.75 Mpx (2,048^2 and 2,576^2 both 4,809 tokens) and 9 px text readable at 2,048 px, so a 1,568 px cap would have thrown away detail.
 - **Rule:** Before a per-model image cap, send square and wide test images of several sizes and read the input-token count: a flat count marks the downsampling size. Also read small text at each size. Record the numbers beside the model's entry in `rust-control/src/models.rs`.
 - **Why:** Published limits change between model generations; the token count is the model's own statement of what it received.
+
+### Explode DXF blocks before reading construction labels (MarinaFrame)
+- **Date:** 2026-11-09
+- **Trigger:** The Gunnerus shell expansion and profile-and-plan sheets showed dozens of `PL` labels in the PDF, but a model-space text scan found almost none: the drawings sit in anonymous `A$C...` blocks, and plate thicknesses are `ATTRIB` values (tag `XX.X`) of `PLDIM2` inserts.
+- **Rule:** Read DXF construction sheets with `ezdxf.disassemble.recursive_decompose` (positions in world coordinates) and classify labels by attribute tag (`XX.X` plate, `FL.ST` flat bar). Compare the found label count with the rendered PDF before concluding a value is not printed.
+- **Why:** Round 2 reported Gunnerus plate thickness as not printed; round 3 found 77 % of the steel weight printed once blocks were exploded.

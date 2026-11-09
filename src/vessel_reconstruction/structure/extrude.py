@@ -20,6 +20,7 @@ from ..tanks import HullSlicer, clipped_outline
 
 ROW_DZ_M = 0.005  # vertical sampling step of the hull sections
 INSIDE_TOLERANCE_M = 0.010  # a point this close to the hull section counts as inside (G11)
+DECK_EDGE_REACH_M = 0.020  # breadth at a height just above the hull mesh: the row this far below
 # Bulb-flat (HP) section area as a share of its web area (height x thickness). The drawings print
 # the HP name only; standard HP tables give about 1.2 to 1.35 for these sizes (guessed value).
 BULB_AREA_SHARE = 1.25
@@ -104,7 +105,13 @@ class HullSections:
 
     def half_breadth(self, x: float, z: float, side: int) -> float | None:
         """Outer y of the hull at height z on one side (+1 starboard, -1 port), or None."""
-        row = self.rows(x)[self._row_index(z)]
+        rows = self.rows(x)
+        index = self._row_index(z)
+        # At the deck edge the row at z can fall just above the mesh: use the nearest row below.
+        lowest = max(0, index - int(math.ceil(DECK_EDGE_REACH_M / self.dz)))
+        while index > lowest and not rows[index]:
+            index -= 1
+        row = rows[index]
         if not row:
             return None
         return max(b for _, b in row) if side > 0 else min(a for a, _ in row)
@@ -134,6 +141,14 @@ class HullSections:
         if top is not None:
             points.append((top, z_top))
         return points
+
+    def top_z(self, x: float) -> float | None:
+        """Highest hull height at x (the deck line of a hull built to the deck)."""
+        filled = [z for z, row in zip(self.zs, self.rows(x)) if row]
+        if not filled:
+            return None
+        segments = self.slicer.segments(x)
+        return float(segments[:, :, 1].max()) if len(segments) else float(filled[-1])
 
     def inside(self, x: float, y: float, z: float, tolerance: float = INSIDE_TOLERANCE_M) -> bool:
         """True when (y, z) lies in the hull section at x or within ``tolerance`` of it."""
@@ -243,11 +258,15 @@ def vertical_plate(sections: HullSections, xs: list[float], y: float, z_top: flo
 
 
 def shell_strake(sections: HullSections, xs: list[float], side: int, seams: list[Seam], index: int,
-                 z_top: float):
-    """Contour and area of strake ``index`` (between seams index-1 and index) on one side."""
+                 z_top):
+    """Contour and area of strake ``index`` (between seams index-1 and index) on one side.
+
+    ``z_top`` is the deck height: a number or a function of x (a deck with a step).
+    """
     pieces = []
     for x in xs:
-        piece = split_at_seams(sections.outer_contour(x, side, z_top), seams)[index]
+        top = z_top(x) if callable(z_top) else z_top
+        piece = split_at_seams(sections.outer_contour(x, side, top), seams)[index]
         if len(piece) < 2:
             return None
         pieces.append(piece)

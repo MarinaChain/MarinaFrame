@@ -2,7 +2,7 @@
 
 Plan: `docs/plans/2026-11-09-whole-vessel-scope.md` section 4; metrics S1 to S6 fixed in section
 4.3.1 before the build (commit `7225a67`). Development figures only: there is no sealed 3D split.
-Every output has `engineering_approved=false`. Resume point: section 7.5 (after round 2).
+Every output has `engineering_approved=false`. Resume point: section 9.5 (after round 3).
 
 ## 1. Method
 
@@ -316,3 +316,99 @@ git-ignored `work/step3/`):
     PYTHONPATH=src:. .venv/bin/python -m benchmarks.gunnerus.structure_3d \
         --sources ../../../work/sources/gunnerus --assembly ../../../work/whole-vessel/final \
         --out work/step3/gunnerus --ocx-schema ../../../work/sources/ocx_schema/ocx/ocx_301
+
+## 9. Results, round 3 (2026-11-09): Gunnerus parallel-body structure
+
+Command (7 s, one process, no model call; outputs in git-ignored `work/step3/gunnerus`: steel
+tables, `gunnerus_structure_DRAFT.3docx` 2.9 MB, `structure_3d.json` with every member):
+
+    PYTHONPATH=src:. .venv/bin/python -m benchmarks.gunnerus.structure_3d \
+        --sources ../../../work/sources/gunnerus --assembly ../../../work/whole-vessel/final \
+        --out work/step3/gunnerus --ocx-schema ../../../work/sources/ocx_schema/ocx/ocx_301
+
+### 9.1 What is built
+
+- `structure/extrude.py` (product code): hull section queries on the built-hull mesh (breadth,
+  bottom, top, shell line, inside test), shell seams, and builders for flat plates along x,
+  longitudinal plates down to the bottom shell, shell strakes between seams, transverse plates and
+  stiffeners. Every outline is cut to the hull section at each frame.
+- `structure/ocx.py`: plates are written with their real outline (`contour`); members with a
+  trace and a profile are `ocx:Stiffener` elements (trace polyline, `MaterialRef`, `SectionRef` to
+  an `XSectionCatalogue` with `BulbFlat`, `FlatBar` and `TBar`, web direction). Reader and round
+  trip cover stiffeners. `steel.py` takes a stiffener's own volume (section area x length; HP bulb
+  area guessed as 1.25 x web area).
+- `benchmarks/gunnerus/structure_3d_reading.py`: reader of the three polarkonsult sheets (blocks
+  exploded; `PL` labels from the `XX.X` attribute, flat bars from `FL.ST`).
+- `benchmarks/gunnerus/structure_3d.py`: build, steel table, OCX and metrics.
+
+Parallel body: frames 26 to 30 (x 13.0 to 20.0 m, 15 frames at 500 mm): the new part A to J and
+the neighbours with a one-piece section within 3 % of the new-part mean area (37.3 m2). Members:
+310 (51 plates, 259 stiffeners): 8 shell strakes (keel to 1875 FCL PL 10; to 3525 FCL PL 8; to
+T.T. 1075 OBL PL 8; to the deck PL 7), 3 deck plates (two levels and the step), 12 tank-top panels
+and the tank-top step (1075 O/BL aft of frame G, 1250 O/BL forward, from the plan `STEP`),
+10 double-bottom girders (CL PL 7.5, 1875 FCL PL 8, 3525 FCL PL 9 from the girder elevations),
+4 deck-girder runs (FB 150x8), 15 floors (PL 8), 180 floor stiffeners (FB 100x8), 26 side frames
+(side-frame key; HP 100x6 guessed where the key does not list the frame), 13 deck beams
+(HP140x8), 2 main bulkheads at frames A and G (from the step 2 longitudinal-section reader;
+PL 8 and 18 HP 100x7 stiffeners each, from section #G).
+
+Steel weight (draft, density 7.85 t/m3 guessed): **33.3 t** for the parallel body; printed
+thickness 25.8 t, guessed 7.5 t. By label: floor 8.1, bottom shell 4.7, inner bottom 4.6, deck
+3.8, bulkhead 3.6, side shell 2.4, girder 2.2, deck beam 1.4, floor stiffener 1.1, bulkhead
+stiffener 0.7, frame 0.6, deck girder 0.1.
+
+### 9.2 Metrics (printed vs printed; development figures)
+
+| ID | Result | Target |
+|---|---|---|
+| G6a girder, stiffener and seam y vs printed FCL values (35 pairs) | median **0.0 mm**, max 0.0 mm | <= 10 mm: met |
+| G6b levels (7 checks) | tank top 1250 O/BL 0.0 mm; deck 4200 O/BL 0.0 mm; deck vs printed depth 4.287 m 0.5 mm; deck vs built hull frames D to 30 0.5 mm. Misses: built-hull deck frames 26 to D at 4.114 m (**172.5 mm** below section #I); step 2 internals tank top **113.5 mm** (frame I) and **88.5 mm** (frame C) above ours | <= 25 mm: **missed** |
+| G6c drawn section #I shell vs built hull at frame I (44 points) | median **13.5 mm**, p95 36.5 mm, max 39.1 mm | median <= 30 mm: met |
+| G7a steel weight with a printed thickness | **77.6 %** | >= 70 %: met |
+| G7b members printed on two sheets | 4 of 8 pairs agree (floor plate, floor stiffener, deck-girder web on port, tank-top level). Disagree: deck girder `8.0x150` (port) vs `8.0x100` (starboard) with both drawn 150 deep; plan note `W:200x8 / FL:150x10` vs section `8.0x150`; deck beam plan `HP140x8` vs section #I `HP 80x8` (marked EXIST) | report |
+| G8 frame spacing from three drawn frame axes (51 label pairs) | median abs error **0.0 mm** (median 500.0 mm on every axis); max 28 mm, where a letter label sits off its frame (`A`, `I`) and between labels 20 and 25 (484 mm per frame) | <= 5 mm: met |
+| G9 steel weight vs a printed lightweight or steel weight | **not found** (three construction sheets and the GA metadata: deadweight 164 t only) | compare if printed |
+| G10 OCX | schema **valid** (OCX 3.0.1, `xmllint`); round trip 51/51 plates (count, thickness, area) and 259/259 stiffeners (count, section, length) equal | met |
+| G11 member outline and trace points inside the built hull (10 mm) | **100 %** of 30,104 points; 0 members outside | 100 %: met |
+
+Findings:
+
+- The section linework and its labels agree exactly (G6a): the sheets are CAD drawings at full
+  size, so positions read from the moulded lines need no tolerance.
+- The built hull (whole-vessel step 1) has its 1-deck at 4.114 m aft of frame D and 4.287 m
+  forward. Section #A prints 4113.5 there, so the step is in the drawings too; the members follow
+  the built hull at every frame (deck in two levels with a step plate). The 86.51 mm offset between
+  the old and new baselines is read at section #I and used for every frame; whether it changes
+  aft of frame D is not read (open).
+- The step 2 internals reader puts the tank top at the longitudinal section's `TANKTOP 1250` and
+  `1450 AB.BL` levels; the polarkonsult sheets print 1075 and 1250 above the old baseline (1161.5
+  and 1336.5 mm above the new). The two sources differ by 88 to 114 mm; the cause (another
+  baseline or a revised tank top) is open. This lane does not edit the tank code.
+- Thickness labels conflict between sheets in 4 of 8 pairs; each member keeps the label of the
+  sheet named in its `thickness_basis`.
+
+### 9.3 Labelled guesses
+
+Density 7.85 t/m3; HP bulb area 1.25 x web area; web-frame depth 200 mm for the key's "PL 8.0
+KN.FL. 50" frames; HP 100x6 for frames not in the side-frame key; tank-top thickness of the
+outboard panel (no label: most common plan label, 10 mm); bulkhead at frame A takes section #G;
+section #I scantlings carried to frames 26, 27, 28 to 30 outside the new part (labelled guessed);
+floors at every frame; the section view is taken as seen from aft (starboard on the right).
+
+### 9.4 Checks
+
+`tests/test_structure_extrude.py` (box and V-bottom hulls, profiles, seams, OCX stiffener schema
+and round trip), `tests/test_gunnerus_structure_3d.py` (frame labels, level runs, reader on the
+licensed sheets: skipped when absent).
+
+### 9.5 Open (resume point after round 3)
+
+1. Frames outside the parallel body: extrude the old-part sections (#22, #23, #32) and the
+   transverse sections of the C-JOB construction plan towards the ends.
+2. The tank-top level difference to the step 2 internals (G6b) and the baseline offset aft of
+   frame D.
+3. Lightening holes in floors (drawn circles and slots), brackets (Det. B, C), the deck transverse
+   girders `W:150x8 / FL:120x10` and the flat bar `FL. 100x8` of the side-frame key: not built.
+4. OCX `Panel` grouping (plates and stiffeners by surface) and `ConnectionConfiguration`.
+5. Section 7.5: items 1 and 2 are done for the parallel body; item 3 is done for Gunnerus (the
+   MiDShip blocks still write stiffener webs as plates); items 4 and 5 stay open.
