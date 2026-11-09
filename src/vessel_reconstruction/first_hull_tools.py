@@ -379,6 +379,62 @@ def setup_changes(old: dict, new: dict) -> list[str]:
     return changes
 
 
+# Views other than the body plan whose setup shapes the first hull: the
+# profile gives the keel, deck and hull ends, the plan the waterline ends
+# (vessel_description.station_outline_heights, hull_ends).
+OUTLINE_VIEWS = ("profile", "plan")
+# Fields of a view setup that place it on the sheet; SETUP_DATUM_PX and
+# SETUP_SCALE_SHARE say how much they may differ.
+VIEW_DATUM_KEYS = ("baseline_px", "centreline_px", "x_origin_px")
+
+
+def view_setup_changes(old_setups: dict, new_setups: dict) -> list[str]:
+    """What differs between two readings' profile and plan setups (scale, datums, direction).
+
+    ``old_setups`` and ``new_setups`` are task ``sheet_setups`` maps. A view
+    set up in one reading only is no change: the first hull then uses the
+    code-measured view. Returns one short line per change.
+
+    Sonnet 5.5 live (round 81d3047, dtmb5415-3v-L0): an independent second
+    reading put the profile baseline at 360 px against 398 px, but its body
+    setup matched, so no second hull was built and the best of two had one
+    hull to choose from.
+    """
+    def by_view(setups):
+        # The record the hull uses: the first with an x origin, else the first
+        # (vessel_description.profile_setup).
+        records = {}
+        for record in (setups or {}).values():
+            if isinstance(record, dict) and record.get("view") in OUTLINE_VIEWS:
+                held = records.get(record["view"])
+                if held is None or (held.get("x_origin_px") is None and record.get("x_origin_px") is not None):
+                    records[record["view"]] = record
+        return records
+
+    old, new = by_view(old_setups), by_view(new_setups)
+    changes = []
+    for view in OUTLINE_VIEWS:
+        before, after = old.get(view), new.get(view)
+        if before is None or after is None:
+            continue
+        a, b = before.get("pixels_per_metre"), after.get("pixels_per_metre")
+        if a and b and abs(float(a) - float(b)) / float(b) > SETUP_SCALE_SHARE:
+            changes.append(f"{view}: scale {a:g} -> {b:g} px/m")
+        for key in VIEW_DATUM_KEYS:
+            a, b = before.get(key), after.get(key)
+            if a is not None and b is not None and abs(float(a) - float(b)) > SETUP_DATUM_PX:
+                changes.append(f"{view}: {key} {a:g} -> {b:g}")
+        if (before.get("x_direction") or 1) != (after.get("x_direction") or 1):
+            changes.append(f"{view}: x direction {before.get('x_direction')} -> {after.get('x_direction')}")
+    return changes
+
+
+# What a reading wrote to the task state beside its first hull; a repeat
+# reading starts these again, and the kept reading's values come back when
+# the earlier first hull is kept.
+READING_RECORD_KEYS = ("sheet_setups", "described_views", "vessel_description")
+
+
 # A sheet-only first hull is read READINGS times: after the first hull the
 # model reads the sheet again (phase 1), and of the first hulls the one with
 # the best drawing fit is kept (draft_fit.task_score: all three views in one
@@ -433,6 +489,9 @@ def begin_reading(tools) -> dict:
     so finish_reading can tell whether the reading built a first hull.
     """
     readings = tools.state["readings"]
+    # The kept reading's setups and description: compared with the new
+    # reading's (rebuild_if_setup_changed) and restored when its hull is kept.
+    tools.state["kept_reading"] = {key: copy.deepcopy(tools.state.get(key)) for key in READING_RECORD_KEYS}
     tools.state.update(copy.deepcopy(READING_STATE))
     tools.state["reading_open"] = len(readings)
     tools._save()
@@ -505,6 +564,9 @@ def keep_better_reading(tools, snapshot: dict, materialized: bytes | None, obser
         (tools.root / "input" / MATERIALIZED_SPEC).write_bytes(materialized)
         set_aside = snapshot.get("set_aside_builds", []) + tools.state.get("builds", [])
         tools.state = copy.deepcopy(snapshot)
+        # The snapshot holds the new reading's setups and description; the
+        # earlier hull was built from the kept reading's.
+        tools.state.update(copy.deepcopy(snapshot.get("kept_reading") or {}))
         # The new reading's builds are kept as history only: a build is reused by
         # its generation and revision ids, which do not name the reading's setup.
         tools.state["set_aside_builds"] = set_aside
@@ -537,6 +599,10 @@ def rebuild_if_setup_changed(tools, previous_description) -> dict | None:
     old = first_hull_spec(tools.spec, previous_description)
     new = first_hull_spec({**tools.captured_spec, "sections": made["sections"]}, tools.state.get("vessel_description"))
     changes = setup_changes(old, new)
+    if tools.state.get("reading_open") is not None:
+        # A repeat reading also changes the hull through its profile and plan setups.
+        kept = (tools.state.get("kept_reading") or {}).get("sheet_setups")
+        changes += view_setup_changes(kept, tools.state.get("sheet_setups"))
     if not changes:
         return None
     snapshot = copy.deepcopy(tools.state)

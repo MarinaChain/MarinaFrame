@@ -125,3 +125,34 @@ def test_two_readings_end_after_the_second(tmp_path):
     T.start_next_reading(tools)
     tools.state["readings"].append({"draft_fit": None, "kept": False})
     assert T.finish_reading(tools) is None and len(tools.state["readings"]) == T.READINGS == 2
+
+
+def test_profile_and_plan_setups_count_as_setup_changes():
+    old = {"a": {"view": "body", "baseline_px": 398.0},
+           "b": {"view": "profile", "pixels_per_metre": 19.0, "baseline_px": 398.0, "x_origin_px": 170.0},
+           "c": {"view": "plan", "pixels_per_metre": 19.0, "baseline_px": 595.0, "x_origin_px": 170.0}}
+    same = {key: {**value} for key, value in old.items()}
+    same["b"]["baseline_px"] = 399.0  # within SETUP_DATUM_PX
+    assert T.view_setup_changes(old, same) == []
+    moved = {key: {**value} for key, value in old.items()}
+    moved["b"]["baseline_px"] = 359.5
+    moved["c"]["x_direction"] = -1
+    assert T.view_setup_changes(old, moved) == ["profile: baseline_px 398 -> 359.5", "plan: x direction None -> -1"]
+    # A view read in one reading only is no change.
+    assert T.view_setup_changes({"a": old["a"]}, moved) == []
+
+
+def test_a_repeat_reading_keeps_the_kept_readings_setups_and_restores_them(tmp_path):
+    tools = FakeTools(tmp_path, first_hull_state(0.8, draft_fit=0.7))
+    T.start_next_reading(tools)
+    assert tools.state["kept_reading"]["sheet_setups"] == {"setup-1": {}}
+    # Reading 2 reads other setups and builds a worse hull: the earlier one stays, with its setups.
+    tools.state.update(sheet_setups={"setup-2": {"view": "profile"}}, vessel_description={"stations": []},
+                       draft_fit={"draft_fit": 0.6}, last_valid_candidate={"id": "second"})
+    snapshot = json.loads(json.dumps(tools.state))
+    snapshot["draft_fit"] = {"draft_fit": 0.7}
+    (tmp_path / "input" / MATERIALIZED_SPEC).write_text("{}")
+    selection = T.keep_better_reading(tools, snapshot, b'{"sections": []}', {"ok": True})
+    assert selection["kept"] == "earlier"
+    assert tools.state["sheet_setups"] == {"setup-1": {}}
+    assert tools.state["vessel_description"] == {"stations": [{"id": "1"}, {"id": "2"}]}
