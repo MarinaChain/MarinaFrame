@@ -59,8 +59,8 @@ fn export_a_draft_revision_with_the_real_worker() {
             "manifest"
         ]
     );
-    // The fixture has no CAD files.
-    assert_eq!(result.not_built, ["step", "stl"]);
+    // The fixture has no CAD files, no tank tables and no structure (steel/OCX) files.
+    assert_eq!(result.not_built, ["step", "stl", "tanks", "structure"]);
     assert!(result.files.iter().all(|f| f.bytes > 0));
     assert!(!result.engineering_approved);
     let manifest = result.files.iter().find(|f| f.kind == "manifest").unwrap();
