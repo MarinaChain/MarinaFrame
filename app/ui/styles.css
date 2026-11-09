@@ -128,6 +128,20 @@
   --shadow-sheet: 0 32px 64px -24px rgba(10, 31, 61, 0.25), 0 0 0 1px rgba(0, 69, 87, 0.12);
   --model-bg: var(--paper);
   --model-hull: #E4E8EE; /* matte "drafting resin" */
+  /* Tank colours by content, as on a capacity plan (docs/TANKS_V1.md section 6). The same
+     values colour the GLB materials (vessel_reconstruction.tanks CONTENT_CLASSES); they do not
+     switch with the theme, so a tank reads the same in both. */
+  --tank-fuel_oil: #B8742A;
+  --tank-diesel_oil: #E3C440;
+  --tank-lube_oil: #EE8A2C;
+  --tank-oily_residue: #6E4B36;
+  --tank-water_ballast: #4E9F57;
+  --tank-fresh_water: #3E7FD0;
+  --tank-feed_water: #93C8EC;
+  --tank-sewage: #8C7FAE;
+  --tank-cargo: #C9CDD3;
+  --tank-void: #EEF0F2;
+  --tank-other: #A3A7AD;
 
   /* Drawing overlays sit on the paper page image in both themes, so they do not switch. */
   --ink-chosen: #06448E;
@@ -1150,6 +1164,28 @@ code { font-family: var(--font-mono); }
 .drawing-host svg { display: block; width: 100%; height: 100%; }
 .model-host { background: var(--model-bg); cursor: grab; }
 .model-host canvas { display: block; }
+/* Whole-vessel tanks: name labels over the 3D view and the legend with its layer switches. */
+.model-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.model-label {
+  position: absolute; transform: translate(-50%, calc(-100% - 4px));
+  display: inline-flex; align-items: center; gap: 5px; max-width: 180px;
+  padding: 1px 7px; border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface) 88%, transparent); border: 1px solid var(--line);
+  color: var(--ink); font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.model-label.is-strong { border-color: var(--ink); font-weight: 600; }
+.model-swatch { flex: none; width: 10px; height: 10px; border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(16, 29, 48, 0.35); }
+.model-legend {
+  position: absolute; left: 12px; bottom: 12px; max-width: 240px; padding: 8px 10px;
+  border-radius: var(--radius-md); border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 92%, transparent); color: var(--ink); font-size: 12px; cursor: default;
+}
+.model-legend-head { display: flex; gap: 12px; }
+.model-switch { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: pointer; }
+.model-legend-rows { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; }
+.model-legend-rows li { display: flex; align-items: center; gap: 6px; }
+.model-legend-count { margin-left: auto; padding-left: 10px; color: var(--text-3); font-family: var(--font-mono); font-size: 11px; }
+.model-legend-note { margin: 6px 0 0; color: var(--text-3); font-size: 11px; }
 
 .page-frame { fill: #FBFBF9; stroke: rgba(16, 29, 48, 0.18); }
 

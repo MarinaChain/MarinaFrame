@@ -37,6 +37,59 @@ const SOUNDING_COLUMNS = [
   { key: 'fill_pct', name: 'Fill (%)', digits: 1 },
 ];
 
+/**
+ * Tank content classes in legend order (vessel_reconstruction.tanks CONTENT_CLASSES), with their
+ * legend words. Each colours a tank with the design token `--tank-<class>` (styles.css), the same
+ * capacity-plan colour the GLB material has.
+ */
+export const TANK_CONTENT_CLASSES = [
+  ['fuel_oil', 'Fuel oil'],
+  ['diesel_oil', 'Diesel / gas oil'],
+  ['lube_oil', 'Lube oil'],
+  ['oily_residue', 'Sludge, bilge, waste oil'],
+  ['water_ballast', 'Water ballast'],
+  ['fresh_water', 'Fresh water'],
+  ['feed_water', 'Feed / distilled water'],
+  ['sewage', 'Sewage, grey, black water'],
+  ['cargo', 'Cargo'],
+  ['void', 'Void / dry'],
+  ['other', 'Other'],
+];
+const KNOWN_CLASSES = new Map(TANK_CONTENT_CLASSES);
+
+/** The design token of a content class ("--tank-fresh_water"); an unknown class is "other". */
+export function tankToken(contentClass) {
+  return `--tank-${KNOWN_CLASSES.has(contentClass) ? contentClass : 'other'}`;
+}
+
+/** Legend rows for tanks [{ content_class }]: one per class present, in legend order, with counts. */
+export function tankLegend(tanks) {
+  const counts = new Map();
+  for (const tank of tanks) {
+    const cls = KNOWN_CLASSES.has(tank.content_class) ? tank.content_class : 'other';
+    counts.set(cls, (counts.get(cls) || 0) + 1);
+  }
+  return TANK_CONTENT_CLASSES
+    .filter(([cls]) => counts.has(cls))
+    .map(([cls, label]) => ({ cls, label, count: counts.get(cls), token: tankToken(cls) }));
+}
+
+/**
+ * Screen labels that do not overlap: `labels` are { id, x, y, width, height, priority } (a box
+ * centred on x, y; higher priority first, then the given order). Returns the ids to show.
+ */
+export function placeLabels(labels) {
+  const placed = [];
+  const order = labels.map((label, index) => ({ label, index }))
+    .sort((a, b) => (b.label.priority || 0) - (a.label.priority || 0) || a.index - b.index);
+  for (const { label } of order) {
+    const box = { left: label.x - label.width / 2, right: label.x + label.width / 2, top: label.y - label.height / 2, bottom: label.y + label.height / 2 };
+    const overlaps = placed.some((other) => box.left < other.right && box.right > other.left && box.top < other.bottom && box.bottom > other.top);
+    if (!overlaps) placed.push({ ...box, id: label.id });
+  }
+  return new Set(placed.map((box) => box.id));
+}
+
 /** Word, tone and title of a source label; an unknown label shows as it is. */
 export function tankSource(label) {
   return TANK_SOURCES[label] || { word: label || '—', tone: '', title: '' };

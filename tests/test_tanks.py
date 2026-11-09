@@ -209,3 +209,54 @@ def test_loft_display_mesh_and_step_solid_hold_the_same_volume():
     solid = ruled_loft_solid(loft.runs[0])
     assert solid is not None
     assert precise_volume_mm3(solid) / 1e9 == pytest.approx(volume, rel=1e-3)
+
+
+# --- Colours by content ---
+
+@pytest.mark.parametrize("content, name, expected", [
+    ("fuel oil", "No 6sb fuel oil", "fuel_oil"),
+    ("fuel oil", "No 1 MGO day tank", "diesel_oil"),
+    ("misc", "No 7sb Black water", "sewage"),
+    ("misc", "Grey water new", "sewage"),
+    ("misc", "Sludge", "oily_residue"),
+    ("lube oil", "", "lube_oil"),
+    ("water ballast", "No 3p", "water_ballast"),
+    ("fresh water", "No 5", "fresh_water"),
+    ("fresh water", "Reserve feed water tank", "feed_water"),
+    ("dry", "Hold", "cargo"),
+    ("dry", "Cofferdam", "void"),
+    ("misc", "No 9", "other"),
+    (None, None, "other"),
+])
+def test_content_class_reads_the_name_first(content, name, expected):
+    assert tanks.content_class(content, name) == expected
+
+
+def test_app_tokens_use_the_same_tank_palette():
+    from pathlib import Path
+
+    css = (Path(__file__).resolve().parents[1] / "app/ui/styles.css").read_text()
+    for cls, (_, colour) in tanks.CONTENT_CLASSES.items():
+        assert f"--tank-{cls}: {colour};" in css, cls
+
+
+def test_glb_tank_has_its_content_material_and_extras(tmp_path):
+    import json
+    import struct
+
+    from vessel_reconstruction.display_mesh import tank_style, write_glb
+
+    mesh = trimesh.creation.box(extents=(1000, 1000, 1000))
+    style = tank_style("No 7sb Black water", "misc", {"outline": "traced", "height": "guessed"})
+    write_glb({"tank_no_7sb": (mesh.vertices, mesh.faces)}, tmp_path / "t.glb", {"tank_no_7sb": style})
+    data = (tmp_path / "t.glb").read_bytes()
+    length = struct.unpack_from("<I", data, 12)[0]
+    gltf = json.loads(data[20:20 + length])
+    material = gltf["materials"][gltf["meshes"][0]["primitives"][0]["material"]]
+    assert material["name"] == "tank_sewage"
+    assert material["pbrMetallicRoughness"]["baseColorFactor"][:3] == pytest.approx(tanks.content_colour("sewage"), abs=1e-3)
+    extras = gltf["meshes"][0]["extras"]
+    assert (extras["kind"], extras["label"], extras["content_class"]) == ("tank", "No 7sb Black water", "sewage")
+    assert extras["source_labels"] == {"outline": "traced", "height": "guessed", "content_class": "read"}
+    assert extras["engineering_approved"] is False
+    assert "tank_no_7sb" in [node.get("name") for node in gltf["nodes"]]

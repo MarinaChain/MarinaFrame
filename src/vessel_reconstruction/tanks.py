@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import math
+import re
 
 import numpy as np
 
@@ -46,6 +47,63 @@ DEFAULT_DENSITY_T_M3 = {
     "bilge": 1.00,
     "misc": 1.00,
 }
+
+
+# ---------------------------------------------------------------------------
+# Colours by content (capacity-plan convention; docs/TANKS_V1.md section 6)
+
+# One palette for the GLB materials, the app's 3D view and its 2D sketches. There is no single
+# standard; this follows common capacity-plan practice (NAPA and Maxsurf compartment views use
+# the same families): oils warm (fuel brown-amber, diesel yellow, lube orange, residues dark
+# brown), waters cool (ballast green, fresh blue, feed light blue), sewage grey-violet, void and
+# cargo spaces light grey. The app keeps the same values as tokens in app/ui/styles.css
+# (``--tank-<class>``); a test checks that they agree.
+CONTENT_CLASSES = {
+    "fuel_oil": ("Fuel oil", "#B8742A"),
+    "diesel_oil": ("Diesel / gas oil", "#E3C440"),
+    "lube_oil": ("Lube oil", "#EE8A2C"),
+    "oily_residue": ("Sludge, bilge, waste oil", "#6E4B36"),
+    "water_ballast": ("Water ballast", "#4E9F57"),
+    "fresh_water": ("Fresh water", "#3E7FD0"),
+    "feed_water": ("Feed / distilled water", "#93C8EC"),
+    "sewage": ("Sewage, grey, black water", "#8C7FAE"),
+    "cargo": ("Cargo", "#C9CDD3"),
+    "void": ("Void / dry", "#EEF0F2"),
+    "other": ("Other", "#A3A7AD"),
+}
+# Words of a tank name or content (lower case; first match wins) -> content class. The name is
+# read first: a "misc" tank named "Black water" is sewage.
+CONTENT_CLASS_WORDS = (
+    ("diesel", "diesel_oil"), ("gas oil", "diesel_oil"), ("gasoil", "diesel_oil"), ("mgo", "diesel_oil"),
+    ("mdo", "diesel_oil"), ("d.o", "diesel_oil"),
+    ("lub", "lube_oil"), ("l.o", "lube_oil"),
+    ("sludge", "oily_residue"), ("bilge", "oily_residue"), ("waste oil", "oily_residue"),
+    ("dirty oil", "oily_residue"), ("oily", "oily_residue"),
+    ("sewage", "sewage"), ("grey", "sewage"), ("gray", "sewage"), ("black water", "sewage"),
+    ("sanitary", "sewage"),
+    ("feed", "feed_water"), ("distill", "feed_water"), ("boiler water", "feed_water"),
+    ("ballast", "water_ballast"),
+    ("fresh water", "fresh_water"), ("drinking", "fresh_water"), ("potable", "fresh_water"),
+    ("fuel", "fuel_oil"), ("f.o", "fuel_oil"),
+    ("cargo", "cargo"), ("hold", "cargo"),
+    ("void", "void"), ("cofferdam", "void"), ("dry", "void"), ("empty", "void"),
+)
+
+
+def content_class(content: str | None, name: str | None = None) -> str:
+    """Content class of a tank (a key of CONTENT_CLASSES) from its name, else its content."""
+    for text in (name, content):
+        lower = (text or "").lower()
+        for word, cls in CONTENT_CLASS_WORDS:
+            if re.search(r"(?<![a-z0-9])" + re.escape(word), lower):
+                return cls
+    return "other"
+
+
+def content_colour(cls: str) -> tuple[float, float, float]:
+    """sRGB colour (0 to 1) of a content class."""
+    hex_colour = CONTENT_CLASSES.get(cls, CONTENT_CLASSES["other"])[1]
+    return tuple(int(hex_colour[i:i + 2], 16) / 255 for i in (1, 3, 5))
 
 
 # ---------------------------------------------------------------------------

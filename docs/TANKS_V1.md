@@ -226,3 +226,32 @@ T1 and T3 use the exact OCX solids, not this code, and do not change.
   `test_whole_vessel_step1.py::test_revise_rebuilds_only_the_marked_part`) fail in this agent
   session: `sandbox-exec` exits with code 71 inside the session sandbox. They fail the same way on
   the base commit. All other tests pass (1,137).
+
+## 6. Colours by content and tank labels (2026-11-09, branch `feature/realistic-visuals`)
+
+One palette colours the GLB materials, the app's 3D view and its 2D sketches. No single standard
+exists; this one follows common capacity-plan practice (oils warm, waters cool, dry spaces light
+grey). The values are `tanks.CONTENT_CLASSES` and the app tokens `--tank-<class>` in
+`app/ui/styles.css` (a test checks that they agree).
+
+| Class | Colour | Content or name words |
+|---|---|---|
+| `fuel_oil` | brown-amber `#B8742A` | fuel, F.O |
+| `diesel_oil` | yellow `#E3C440` | diesel, gas oil, MGO, MDO, D.O |
+| `lube_oil` | orange `#EE8A2C` | lub, L.O |
+| `oily_residue` | dark brown `#6E4B36` | sludge, bilge, waste oil, dirty oil |
+| `water_ballast` | green `#4E9F57` | ballast |
+| `fresh_water` | blue `#3E7FD0` | fresh water, drinking, potable |
+| `feed_water` | light blue `#93C8EC` | feed, distilled, boiler water |
+| `sewage` | grey-violet `#8C7FAE` | sewage, grey/gray, black water, sanitary |
+| `cargo` | light grey `#C9CDD3` | cargo, hold |
+| `void` | near white `#EEF0F2` | void, cofferdam, dry, empty |
+| `other` | grey `#A3A7AD` | anything else |
+
+The tank name is read before the content group ("misc" tank "Black sewage" is sewage). Each GLB
+tank mesh has a material `tank_<class>` and extras: `kind` "tank", `label` (tank name),
+`content`, `content_class`, `content_label`, `source_labels` (`content_class` is `read` when a
+word gave it, else `guessed`) and `engineering_approved` false. The app colours tanks from the
+tokens, draws their edges, shows the hull and the other parts translucent while tanks show, and
+has a legend with switches for the tanks and for all tank names (by default only the tank under
+the pointer and the selected tank are named; overlapping names are left out).

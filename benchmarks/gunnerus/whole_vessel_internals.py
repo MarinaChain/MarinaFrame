@@ -840,6 +840,15 @@ def part_mesh(part: Part, solid) -> tuple[np.ndarray, np.ndarray]:
     return shape_mesh(solid, 1.0, 0.5)
 
 
+def part_styles(parts: list[Part]) -> dict:
+    """GLB styles of the tanks: capacity-plan colour by content, name and content as extras."""
+    from vessel_reconstruction.display_mesh import tank_style
+
+    return {part.id: tank_style(part.label, part.geometry.get('group'),
+                                {'name': 'read', 'content': 'read', **part.source_labels})
+            for part in parts if part.op == 'tank'}
+
+
 def component_entry(part: Part, solid) -> dict:
     built = solid is not None
     guessed = any(v == 'guessed' for v in part.source_labels.values())
@@ -870,6 +879,8 @@ def main() -> None:
     args = parser.parse_args()
     import cadquery as cq
 
+    from vessel_reconstruction.display_mesh import write_glb
+
     started = time.time()
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -889,7 +900,7 @@ def main() -> None:
         components.append(component_entry(part, solid))
     record['result']['components'] = components
     (folder / 'execution.json').write_text(json.dumps(record, indent=2) + '\n')
-    write_glb_with_existing(glb, meshes, out / 'whole-vessel-draft.glb')
+    write_glb(meshes, out / 'whole-vessel-draft.glb', part_styles(parts), base=glb)
     capacity = write_tank_outputs(parts, out)
     summary = {'engineering_approved': False, 'status': 'draft_only', 'reading': reading,
                'capacity_plan': capacity,
@@ -900,18 +911,6 @@ def main() -> None:
         summary['metrics'] = score(parts, reading, np.load(args.truth_mesh)['triangles'], capacity)
     (out / 'internals.json').write_text(json.dumps(summary, indent=2, default=str) + '\n')
     print(json.dumps(summary.get('metrics', {}), indent=2, default=str))
-
-
-def write_glb_with_existing(existing: Path, meshes: dict, path: Path) -> None:
-    """The step 1 GLB with one more node per internal part (same Y-up, millimetres)."""
-    import trimesh
-
-    scene = trimesh.load(existing, force='scene')
-    for name, (vertices, triangles) in meshes.items():
-        y_up = np.column_stack([vertices[:, 0], vertices[:, 2], -vertices[:, 1]])
-        scene.add_geometry(trimesh.Trimesh(vertices=y_up, faces=triangles, process=False),
-                           node_name=name, geom_name=name)
-    path.write_bytes(scene.export(file_type='glb', include_normals=True))
 
 
 if __name__ == '__main__':
