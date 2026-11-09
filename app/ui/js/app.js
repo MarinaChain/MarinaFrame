@@ -2213,6 +2213,8 @@ const parts = createParts({
   // The selected part is the one outlined (and, with the whole vessel shown, tinted) in 3D.
   onSelect: (part) => setPartOutline(part),
   showWholeVessel: (part) => showWholeVessel(part),
+  // The sounding table of one tank of the run's capacity plan (read from the run's CSV file).
+  loadSounding: (tankId) => invoke('sounding_table', { task: state.task, tank_id: tankId }),
 });
 
 /** Above this the app does not load a whole-vessel GLB (the same limit as the backend). */

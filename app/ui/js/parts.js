@@ -4,6 +4,7 @@
 // hull; the person can accept it as a draft part. Nothing here is "approved".
 
 import { el, svg, icon, fill } from './dom.js';
+import { capacityPanel, capacityRowOf, tankDetailBlock } from './tanks.js';
 
 /** Tree groups (ship-cad ops) in the order a naval architect reads a general arrangement. */
 const GROUPS = [
@@ -12,6 +13,7 @@ const GROUPS = [
   ['deckhouse', 'Deckhouses'],
   ['bulwark', 'Bulwarks'],
   ['appendage', 'Appendages'],
+  ['tank', 'Tanks'],
   ['other', 'Other'],
 ];
 const KNOWN_OPS = new Set(GROUPS.map(([op]) => op));
@@ -143,8 +145,11 @@ export function elapsedText(ms) {
  * `keepRevision(id)` and `undoRevision(id)` re-run a marked part and settle its new revision;
  * each resolves with the part (ComponentView) and rejects after the app showed the error.
  */
-export function createParts({ host, review, showIn3d, signOff, revisePart = null, keepRevision = null, undoRevision = null, onSelect = () => {}, showWholeVessel = () => {} }) {
+export function createParts({ host, review, showIn3d, signOff, revisePart = null, keepRevision = null, undoRevision = null, loadSounding = null, onSelect = () => {}, showWholeVessel = () => {} }) {
   let wholeModel = null; // TaskView.whole_vessel_model, or null
+  let capacityPlan = null; // TaskView.capacity_plan, or null
+  let selectedTankId = null; // the tank whose sounding table shows
+  let soundings = new Map(); // tank id -> { loading } | { table } | { error }
   let parts = [];
   let selectedId = null;
   let busy = false;
@@ -407,6 +412,7 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
         : null,
       revisionBlock(part),
       el('p', { class: 'parts-reason', title: part.reason }, plainReason(part.reason)),
+      part.op === 'tank' && capacityPlan ? tankDetailBlock(capacityRowOf(capacityPlan, part.id)) : null,
       box ? el('p', { class: 'parts-box-line' },
         `x ${box.min[0].toFixed(2)} to ${box.max[0].toFixed(2)} m · breadth ${(box.max[1] - box.min[1]).toFixed(2)} m · `
         + `z ${box.min[2].toFixed(2)} to ${box.max[2].toFixed(2)} m`
@@ -543,12 +549,41 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
           })),
         el('div', { class: 'parts-main' },
           el('div', { class: 'parts-sketches' }, sketch(2, 'Profile'), sketch(1, 'Plan')),
-          detail(selected)))));
+          detail(selected))),
+      capacityPanel({ plan: capacityPlan, selectedId: selectedTankId, sounding: soundings.get(selectedTankId), onPick: pickTank })));
+  }
+
+  /** Show a tank in the capacity plan (and as the selected part, when it is one). */
+  function pickTank(id) {
+    if (parts.some((p) => p.id === id)) {
+      select(id);
+      return;
+    }
+    selectedTankId = id;
+    loadTankSounding(id);
+    render();
+  }
+
+  /** Read the sounding table of a tank once; the panel shows it when it arrives. */
+  async function loadTankSounding(id) {
+    const row = capacityRowOf(capacityPlan, id);
+    if (!row?.has_sounding || !loadSounding || soundings.has(id)) return;
+    soundings.set(id, { loading: true });
+    try {
+      soundings.set(id, { table: await loadSounding(id) });
+    } catch (failure) {
+      soundings.set(id, { error: failure?.message || 'The sounding table could not be read.' });
+    }
+    if (selectedTankId === id) render();
   }
 
   function select(id) {
     marking = false;
     selectedId = id;
+    if (capacityRowOf(capacityPlan, id)) {
+      selectedTankId = id;
+      loadTankSounding(id);
+    }
     onSelect(parts.find((p) => p.id === id) || null);
     render();
   }
@@ -559,9 +594,15 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
       parts = view?.components || [];
       signedOff = view?.sign_off || null;
       wholeModel = view?.whole_vessel_model || null;
+      const plan = view?.capacity_plan || null;
+      // A new capacity plan file can hold new sounding tables: read them again.
+      if (plan?.file !== capacityPlan?.file) soundings = new Map();
+      capacityPlan = plan;
+      if (!capacityRowOf(capacityPlan, selectedTankId)) selectedTankId = capacityPlan?.rows?.[0]?.id || null;
       if (!parts.some((p) => p.id === selectedId)) {
         selectedId = (parts.find((p) => p.built && p.status === 'draft_guess') || parts[0])?.id || null;
       }
+      loadTankSounding(selectedTankId);
       // While the person types (a mark or a name), a reload of the run waits: re-drawing now
       // would move the caret. The data is kept and shows with the next render.
       const typing = host.contains(document.activeElement) && document.activeElement.matches('input, textarea');

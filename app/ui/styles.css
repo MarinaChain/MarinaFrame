@@ -2847,6 +2847,19 @@ code { font-family: var(--font-mono); }
 .parts-signoff.is-signed { border-style: solid; border-color: var(--pass); background: var(--pass-soft); color: var(--ink); }
 .parts-signoff.is-signed > .icon { flex: none; width: 20px; height: 20px; color: var(--pass); stroke-width: 2; }
 .parts-signoff-note { color: var(--ink-3); }
+/* Tank tables (js/tanks.js): capacity plan, group totals, sounding table. Drafts with source labels. */
+.tank-detail h3, .tank-sounding h3 { font-size: var(--fs-lg); font-weight: 600; }
+.tank-detail { display: flex; flex-direction: column; gap: var(--space-xs); }
+.tank-plan { display: flex; flex-direction: column; gap: var(--space-sm); margin-top: var(--space-xl); padding: var(--space-lg); border: 1px solid var(--rule); border-radius: var(--radius-lg); background: var(--surface); }
+.tank-plan h2 { font-size: var(--fs-xl); font-weight: 600; }
+.tank-groups { display: flex; flex-wrap: wrap; gap: var(--space-xs) var(--space-lg); color: var(--ink-2); font: var(--fs-sm) var(--font-mono); }
+.tank-table-scroll { max-height: 420px; overflow: auto; }
+.tank-table thead th { position: sticky; top: 0; background: var(--surface); }
+.tank-table tr[data-source="guessed"] { background: var(--guess-soft); }
+.tank-table tr.is-selected { box-shadow: inset 3px 0 0 var(--brand); background: var(--brand-soft); }
+.tank-pick { padding: 0; border: 0; background: none; color: var(--brand); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.tank-pick:hover { text-decoration: underline; }
+.tank-sounding { display: flex; flex-direction: column; gap: var(--space-xs); margin-top: var(--space-md); }
 @media (max-width: 900px) {
   .parts-layout { grid-template-columns: minmax(0, 1fr); }
   .parts-sketches { grid-template-columns: minmax(0, 1fr); }
