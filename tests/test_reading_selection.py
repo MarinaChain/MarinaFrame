@@ -173,3 +173,14 @@ def test_a_bottom_that_stops_above_the_keel_is_continued_to_it():
     assert not kept.extended and len(kept.points_yz_m) == 3
     assert not on_centreline.extended  # the lowest point is on the centreline: nothing was lost
     assert not fore_end.extended  # the end stations shape the hull ends: left as traced
+
+
+def test_readings_are_counted_by_reading_not_by_record(tmp_path, monkeypatch):
+    monkeypatch.setattr(T, "READINGS", 3)
+    tools = FakeTools(tmp_path, first_hull_state(0.8, draft_fit=0.7))
+    T.start_next_reading(tools)
+    # Reading 2 rebuilt twice (body setup, then describe_vessel): two records, one reading.
+    tools.state["readings"] += [{"draft_fit": 0.6, "kept": False}, {"draft_fit": 0.65, "kept": False}]
+    following = T.finish_reading(tools)
+    assert following is not None and following["reading"] == 3
+    assert T.finish_reading(tools) is None

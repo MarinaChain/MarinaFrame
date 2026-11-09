@@ -537,15 +537,20 @@ def begin_reading(tools) -> dict:
 
     ``reading_open`` holds the number of reading records before this reading,
     so finish_reading can tell whether the reading built a first hull.
+    ``reading_number`` counts the readings themselves: one reading can add
+    several records (a rebuild at propose_sheet_setup for the body and
+    another at describe_vessel).
     """
     readings = tools.state["readings"]
+    number = tools.state.get("reading_number", len(readings)) + 1
     # The kept reading's setups and description: compared with the new
     # reading's (rebuild_if_setup_changed) and restored when its hull is kept.
     tools.state["kept_reading"] = {key: copy.deepcopy(tools.state.get(key)) for key in READING_RECORD_KEYS}
     tools.state.update(copy.deepcopy(READING_STATE))
     tools.state["reading_open"] = len(readings)
+    tools.state["reading_number"] = number
     tools._save()
-    return {"reading": len(readings) + 1, "of": READINGS, "message": next_reading_message(len(readings) + 1)}
+    return {"reading": number, "of": READINGS, "message": next_reading_message(number)}
 
 
 def start_next_reading(tools) -> dict | None:
@@ -562,6 +567,7 @@ def start_next_reading(tools) -> dict | None:
     if readings:
         return None  # Only the controller's first build starts the readings.
     readings.append(reading_record(tools, kept=True))
+    tools.state["reading_number"] = 1
     if len(readings) >= READINGS:
         tools._save()
         return None
@@ -583,7 +589,7 @@ def finish_reading(tools) -> dict | None:
         stations = (tools.state.get("vessel_description") or {}).get("stations") or []
         readings.append({"draft_fit": None, "combined_fit": None, "station_count": len(stations),
                          "same_setup": True, "kept": False})
-    if len(readings) >= READINGS:
+    if tools.state.get("reading_number", len(readings)) >= READINGS:
         tools._save()
         return None
     return begin_reading(tools)
