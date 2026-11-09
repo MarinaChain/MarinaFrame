@@ -667,3 +667,45 @@ API-price estimate; the subscription charges no per-request cost (receipt `cost`
 tokens include cache reads/writes and image tokens. Open: 00679 and 09867 regress against
 DeepSeek (inspect their section edits); `operation_contract` refusals; Linux (the provider
 worker's 1 GiB address-space limit is inherited by the CLI, not checked); a Settings model choice.
+
+## 2026-11-09 15:40 SGT: Sonnet 5.5 hull tuning (commits 148d80d..b5a9dac)
+
+Causes (round 217660c ledgers, replayed through the first-hull code):
+- shipd-1-00679-L0: the reading, not edits. The overlaid body plan was split into two panels at a
+  centreline 6 px off the drawn one; stations were spread over the halves by count. DeepSeek's
+  second reading did the same (13.1 %). Fix: two body panels meeting at a shared centreline are one
+  panel; a datum within the snap distance takes the drawn line. Replay 14.05 -> 6.17 %.
+- shipd-1-09867-L0: the second reading was measured against the first reading's sections, so the
+  profile station check was skipped (11 stations at 0-100 m over 9 lines). Fix: a sheet-only
+  reading is measured against the captured spec. Replay 13.62 -> 3.84 %. Then a station-10 blend
+  with a fake end station was kept by the keep rule (s09 31 -> 41 %).
+- Keep rule: an edit is refused when a station cell that the old curve followed (within 5 % of
+  B/2) ends past 30 % of B/2 (DeepSeek 09867 s08: WL1 left by 4.46 m, s08 7 -> 38 %). A 5 % limit
+  also refused a good repair (Sonnet 09867 s08 off a grid ruler, 7.61 -> 3.89 %), so it was not kept.
+- A profile region narrower than 0.9 LOA no longer replaces the read stations (intake gave the fore
+  62 m of the 09867 profile).
+- Refusals: 3 of 18 `operation_contract` were propose_sheet_setup with the reason only at the top
+  (now copied); 15 were propose_section with guessed argument names during the second reading. A
+  refusal now returns the serde error, the tools offered and the refused tool's schema; the second
+  reading says so. Invalid structured-output JSON (CLI retries exhausted) is a refused reply, not
+  provider_failed.
+- Tokens: survey only while describing; history arguments <= 800 B; stable context first with one
+  cache mark (`DISABLE_PROMPT_CACHING=1` removes the CLI's own marks: five marks were HTTP 400).
+
+| Case | 217660c RMS / vol | b5a9dac (L0) / e445d52 (L1) | DeepSeek 7f25122 | Tokens in before -> after |
+|---|---|---|---|---|
+| dtmb5415-L0 | 5.61 / +0.9 | 5.07 / +0.6 | 5.06 | 480k -> 370k |
+| series60-L0 | 1.38 / +1.3 | 1.39 / +1.0 (pass) | 4.62 | 469k -> 281k |
+| shipd-1-00679-L0 | 14.05 / +13.6 | 6.17 / -0.4 | 6.17 | 768k -> 456k |
+| shipd-1-08158-L0 | 0.75 / -2.1 | 1.13 / -2.1 (pass) | 0.74 | 412k -> 508k |
+| shipd-1-09867-L0 | 16.22 / +11.3 | 3.63 / +1.7 | 10.39 | 397k -> 503k |
+| dtmb5415-L1 | - | 18.22 / +14.0 | 14.92 | 364k |
+| series60-L1 | - | 3.49 / -0.5 | 4.32 | 236k |
+| shipd-1-00679-L1 | - | 8.59 / -3.3 | 8.72 | 179k |
+| shipd-1-08158-L1 | - | 11.92 / +0.7 | 2.94 | 320k |
+| shipd-1-09867-L1 | - | 2.06 / +1.8 | 14.12 | 463k |
+
+L0 total input 2.53M -> 2.12M; cache writes (2x price at 1 h) 1.82M -> 0.36M. Refusals 18/98 -> 1/88
+(L0). Intermediate L1 round ab7af21: 14.56 / 3.49 / 8.60 / 2.00 (pass) / 2.09 %. Run-to-run
+variance stays large. Open: best-of-2 by drawing fit picked the worse reading in 08158-L1 (fit
+0.919, 11.9 % vs 0.872, 5.3 %); a partial intake profile also sets the outline caps; dtmb-L1.
