@@ -127,6 +127,55 @@ def cut_bottoms_at_keel(anchors: list[Anchor], keels: dict) -> None:
             anchor.notes.append(f"bottom cut at z {keel:.3f} m: the profile keel line at this station")
 
 
+# A traced bottom that stops more than this many body-plan pixels above the
+# profile keel, away from the centreline, lost its lowest ink.
+BOTTOM_GAP_PX = 6.0
+# ... and "away from the centreline" means a lowest half-breadth above this
+# share of the widest traced half-breadth.
+BOTTOM_GAP_BREADTH_SHARE = 0.1
+# Points of a continued bottom between the lowest traced point and the keel.
+BOTTOM_EXTENSION_POINTS = 6
+
+
+def extend_bottoms_to_keel(anchors: list[Anchor], keels: dict) -> None:
+    """Continue traced bottoms that stop above the keel, off the centreline, straight down to the keel.
+
+    Near the baseline a shallow bottom runs close to the baseline and to the
+    other stations' bottoms, and the trace can lose it: shipd-1-00679-3v-L0
+    stations 3-4 stopped at y 6.0 m, z 0.82 m over a keel at 0.06 m, and the
+    build closed them flat at 0.82 m (9.5 % RMS each). The bottom is continued
+    in a straight line from the lowest traced point to the profile keel on the
+    centreline. Used only when the keel agrees with most traced bottoms;
+    changes ``anchors`` in place and marks them extended (built as curves).
+    """
+    import numpy as np
+    bottoms = {a.id: min(p[1] for p in a.points_yz_m) for a in anchors if a.points_yz_m}
+    differences = [abs(bottoms[sid] - keel) for sid, keel in keels.items() if sid in bottoms]
+    if not differences or float(np.median(differences)) > DECK_AGREEMENT_M:
+        return
+    # The hull ends are shaped from the end stations (hull_ends.end_row). With
+    # a continued end station the build with ends stopped without a result in
+    # both shipd-1-00679-3v-L0 replays, and the hull was built without ends.
+    ordered = sorted(anchors, key=lambda a: a.x_m)
+    ends = {ordered[0].id, ordered[-1].id} if ordered else set()
+    for anchor in anchors:
+        keel = keels.get(anchor.id)
+        points = np.asarray(anchor.points_yz_m, dtype=float)
+        if keel is None or anchor.id in ends or not anchor.pixels_per_metre or len(points) < 2:
+            continue
+        points = points[np.argsort(points[:, 1], kind="stable")]
+        low_y, low_z = float(points[0, 0]), float(points[0, 1])
+        if (low_z - keel <= BOTTOM_GAP_PX / anchor.pixels_per_metre
+                or low_y <= BOTTOM_GAP_BREADTH_SHARE * float(points[:, 0].max())):
+            continue
+        share = np.linspace(0.0, 1.0, BOTTOM_EXTENSION_POINTS, endpoint=False)[:, None]
+        continued = np.array([0.0, keel]) + share * np.array([low_y, low_z - keel])
+        anchor.points_yz_m = np.vstack([continued, points]).tolist()
+        anchor.extended = True
+        anchor.notes.append(f"bottom continued from y {low_y:.2f} m, z {low_z:.3f} m straight to the "
+                            f"profile keel at z {keel:.3f} m on the centreline")
+
+
 def short_of_deck(anchors: list[Anchor], decks: dict) -> list[str]:
     """Ids of traced anchors that end far below the profile deck line (a trace broken by noise).
 
@@ -196,6 +245,7 @@ def cap_at_profile_outline(sections: list[dict], anchors: list[Anchor], heights:
     # a station section is never that shallow.
     keels = {sid: h["keel"] for sid, h in heights.items() if h["keel"] < (1 - SHORT_TOP_SHARE) * h["deck"]}
     cut_bottoms_at_keel(anchors, keels)
+    extend_bottoms_to_keel(anchors, keels)
     sections = cap_tops_at_deck(sections, anchors, decks)
     extend_tops_to_deck(anchors, decks)
     return sections, anchors

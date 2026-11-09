@@ -156,3 +156,20 @@ def test_a_repeat_reading_keeps_the_kept_readings_setups_and_restores_them(tmp_p
     assert selection["kept"] == "earlier"
     assert tools.state["sheet_setups"] == {"setup-1": {}}
     assert tools.state["vessel_description"] == {"stations": [{"id": "1"}, {"id": "2"}]}
+
+
+def test_a_bottom_that_stops_above_the_keel_is_continued_to_it():
+    from vessel_reconstruction.form_fit import Anchor
+    # shipd-1-00679-3v-L0: the trace lost a shallow bottom and stopped at y 6.0 m, z 0.82 m.
+    lost = Anchor("3", 30.0, [[6.0, 0.82], [7.0, 1.5], [8.5, 6.0]], {}, pixels_per_metre=19.0)
+    kept = Anchor("7", 70.0, [[0.4, 0.06], [5.0, 0.5], [8.0, 6.0]], {}, pixels_per_metre=19.0)
+    on_centreline = Anchor("9", 90.0, [[0.1, 1.4], [2.0, 3.0], [2.5, 6.0]], {}, pixels_per_metre=19.0)
+    aft_end = Anchor("1", 10.0, [[0.8, 0.0], [5.0, 6.0]], {}, pixels_per_metre=19.0)
+    fore_end = Anchor("10", 100.0, [[2.2, 1.45], [2.5, 6.0]], {}, pixels_per_metre=19.0)
+    T.extend_bottoms_to_keel([aft_end, lost, kept, on_centreline, fore_end],
+                             {"1": 0.0, "3": 0.06, "7": 0.06, "9": 1.0, "10": 1.0})
+    assert lost.extended and lost.points_yz_m[0] == [0.0, 0.06] and lost.points_yz_m[-3] == [6.0, 0.82]
+    assert lost.points_yz_m[1][0] == 1.0 and abs(lost.points_yz_m[1][1] - (0.06 + 0.76 / 6)) < 1e-9
+    assert not kept.extended and len(kept.points_yz_m) == 3
+    assert not on_centreline.extended  # the lowest point is on the centreline: nothing was lost
+    assert not fore_end.extended  # the end stations shape the hull ends: left as traced
