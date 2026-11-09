@@ -4,7 +4,10 @@ Truth: the design's full IGES (one surface per CAD object, named by the BOM ``st
 and the BOM. Development designs only: the W3 sealed designs are refused.
 
     python -m vessel_reconstruction.structure.block_eval --root work/sources/midship \\
-        --out work/step2/block_dev.json [--designs 379 37]
+        --out work/step2/block_dev.json [--designs 379 37] [--ocx-dir DIR --steel-dir DIR]
+
+With ``--ocx-dir`` each block is also exported to OCX 3.0.1, checked with the schema and read back
+(round trip); with ``--steel-dir`` its steel tables are written (docs/STRUCTURE_V2.md section 6).
 """
 from __future__ import annotations
 
@@ -18,10 +21,12 @@ import sys
 
 import numpy as np
 
+from . import ocx, steel
 from .block3d import VIEWS, build_block
 from .midship_eval import SPLIT, truth_label
 
 SUBSET_DIR = "SGLD_Gen_Structures"
+OCX_SCHEMA_DIR = Path("work/sources/ocx_schema/ocx/ocx_301")
 # Fixed in plan section 4.3.1: SGLD designs with 3D on disk, minus the W3 sealed ones.
 DEVELOPMENT_3D = (107, 168, 292, 379, 391, 37, 66, 80, 191, 60, 230, 445)
 SEALED_W3 = {design for subset, design in SPLIT["test"] if subset == "SGLD"}
@@ -243,8 +248,28 @@ def truth_guesses(bom_csv: Path) -> tuple[float, int]:
     return length, round((webs[1] - webs[0]) / (frames[1] - frames[0]))
 
 
-def evaluate(root: Path, designs, oracle_guesses: bool = False) -> dict:
-    per_design, errors = {}, {}
+def export_checks(block: dict, design: int, ocx_dir: Path | None, steel_dir: Path | None,
+                  schema_dir: Path) -> dict:
+    """OCX export, schema check and round trip; steel tables. Returns the check record."""
+    record: dict = {}
+    if steel_dir is not None:
+        rows = steel.member_weights(block["members"])
+        steel.write_steel_tables(block, steel_dir, f"sgld_{design}_DRAFT")
+        record["steel_weight_t"] = round(sum(r["weight_t"] for r in rows), 3)
+        record["steel_volume_m3"] = round(sum(r["volume_m3"] for r in rows), 5)
+    if ocx_dir is not None:
+        ocx_dir.mkdir(parents=True, exist_ok=True)
+        path = ocx_dir / f"sgld_{design}_DRAFT.3docx"
+        ocx.export_ocx(block, path, name=f"SGLD {design} cargo-hold block (draft)")
+        check = ocx.validate(path, schema_dir)
+        record["ocx"] = {"schema_valid": check.valid, "schema_errors": check.errors[:5],
+                         "round_trip": ocx.round_trip(block, path)}
+    return record
+
+
+def evaluate(root: Path, designs, oracle_guesses: bool = False, ocx_dir: Path | None = None,
+             steel_dir: Path | None = None, schema_dir: Path = OCX_SCHEMA_DIR) -> dict:
+    per_design, errors, exports = {}, {}, {}
     for design in designs:
         if design in SEALED_W3:
             raise SystemExit(f"SGLD {design} is a W3 sealed design; it is not scored (plan section 4.3.1)")
@@ -260,12 +285,15 @@ def evaluate(root: Path, designs, oracle_guesses: bool = False) -> dict:
             continue
         record = score_design(block, load_truth(igs, bom))
         per_design[str(design)] = record
+        if ocx_dir is not None or steel_dir is not None:
+            exports[str(design)] = export_checks(block, design, ocx_dir, steel_dir, schema_dir)
         d = _prf(record["tp"], record["n_pred"], record["n_true"])
         print(f"SGLD {design}: pred {record['n_pred']} true {record['n_true']} F1 {d['f1']} "
               f"volume {record['volume_rel_error']:+.3f}", file=sys.stderr)
     report = {"engineering_approved": False, "designs": list(designs), "build_errors": errors,
               "oracle_guesses": oracle_guesses,
               "summary": summarise(per_design) if per_design else None,
+              "exports": exports,
               "per_design": {k: {key: v[key] for key in ("n_pred", "n_true", "tp", "longitudinal", "transverse",
                                                          "volume_rel_error", "labels")}
                              for k, v in per_design.items()}}
@@ -277,10 +305,13 @@ def main(argv=None) -> int:
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--designs", type=int, nargs="*", default=list(DEVELOPMENT_3D))
+    parser.add_argument("--ocx-dir", type=Path, help="write, validate and read back an OCX file per design")
+    parser.add_argument("--steel-dir", type=Path, help="write the steel tables (CSV) per design")
+    parser.add_argument("--ocx-schema", type=Path, default=OCX_SCHEMA_DIR, help="folder of the OCX 3.0.1 XSD")
     parser.add_argument("--oracle-guesses", action="store_true",
                         help="diagnostic: take block length and frame spacing from the truth BOM")
     args = parser.parse_args(argv)
-    report = evaluate(args.root, args.designs, args.oracle_guesses)
+    report = evaluate(args.root, args.designs, args.oracle_guesses, args.ocx_dir, args.steel_dir, args.ocx_schema)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=1))
     print(json.dumps(report["summary"], indent=1))

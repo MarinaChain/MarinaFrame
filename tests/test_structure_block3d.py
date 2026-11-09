@@ -33,7 +33,8 @@ def reading():
         "Bot. Stiff.": block3d.PrintedRow("Bot. Stiff.", 38, 0.2, "T", 0.3, 0.05, 8.0),
     }
     plates = {"Trans. BLKHD": 25.0, "Lower Bracket": 14.0, "Upper Bracket": 12.0}
-    return block3d.BlockReading(section, plates, rows, 8.0, 11.0, 2.0, 2.0)
+    materials = {"Trans. BLKHD": "AH36", "Webframe": "A", "Floor": "A", "Side Shell Stiff.": "A"}
+    return block3d.BlockReading(section, plates, rows, materials, 8.0, 11.0, 2.0, 2.0)
 
 
 def test_stations_centre_three_holds_in_the_block():

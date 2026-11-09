@@ -12,14 +12,16 @@ separate value. Every output has ``engineering_approved=false``.
 """
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import asdict, dataclass, field
 import math
+import statistics
 from pathlib import Path
 import re
 
 from . import read_section_pdf
 from .model import SectionResult
-from .tables import STIFFENER_HEADER, _table_rows, read_plate_table, text_lines
+from .tables import PLATE_HEADER, STIFFENER_HEADER, _table_rows, text_lines
 from .vector import read_pdf_words
 
 VIEWS = {"bulkhead": "Transverse Bulkhead", "web_frame": "Midship Section IWO of Web Frame",
@@ -36,6 +38,7 @@ GUESS_FRAME_SPACES_PER_WEB = 5  # 269 designs; 4 in 204, 3 in 15
 GUESS_LOWER_BRACKET_LEG = 0.6
 GUESS_UPPER_BRACKET_LEG = 0.5
 
+THICKNESS_PATTERN = re.compile(r"^(\d+(?:\.\d+)?)\s*mm$")
 SPACING_PATTERN = re.compile(r"^(\d+(?:\.\d+)?)\s*m$")
 DIMS_PATTERN = re.compile(
     r"^([TLI])-\s*(\d+(?:\.\d+)?)\s*m\s*x\s*(\d+(?:\.\d+)?)\s*m\s*x\s*(\d+(?:\.\d+)?)\s*mm$")
@@ -59,6 +62,7 @@ class PrintedRow:
     height_m: float | None
     width_m: float | None
     thickness_mm: float | None
+    material: str | None = None
 
 
 @dataclass
@@ -72,6 +76,9 @@ class BlockMember:
     thickness_source: str  # "printed" or "guessed"
     sources: dict[str, str] = field(default_factory=dict)  # argument -> traced | guessed
     basis: str = ""
+    table_row: str | None = None  # printed table row that gives the scantling (or the guessed one)
+    material: str | None = None
+    material_source: str = "none"  # "printed" or "guessed" once labelled
 
     def as_dict(self) -> dict:
         record = asdict(self)
@@ -86,6 +93,7 @@ class BlockReading:
     section: SectionResult
     plate_mm: dict[str, float]
     rows: dict[str, PrintedRow]
+    materials: dict[str, str]  # table row name -> printed material (plate and stiffener tables)
     breadth_m: float
     depth_m: float
     side_bottom_m: float
@@ -94,7 +102,7 @@ class BlockReading:
 
 def read_rows(words) -> dict[str, PrintedRow]:
     rows = {}
-    for name, count, spacing, dims, *_ in _table_rows(text_lines(words), STIFFENER_HEADER):
+    for name, count, spacing, dims, material, *_ in _table_rows(text_lines(words), STIFFENER_HEADER):
         spacing_match = SPACING_PATTERN.match(spacing.strip())
         dims_match = DIMS_PATTERN.match(dims.strip())
         shape = height = width = thickness = None
@@ -103,7 +111,17 @@ def read_rows(words) -> dict[str, PrintedRow]:
             height, width, thickness = (float(dims_match.group(i)) for i in (2, 3, 4))
         rows[name.strip()] = PrintedRow(
             name.strip(), int(count) if count.strip().isdigit() else None,
-            float(spacing_match.group(1)) if spacing_match else None, shape, height, width, thickness)
+            float(spacing_match.group(1)) if spacing_match else None, shape, height, width, thickness,
+            material.strip() or None)
+    return rows
+
+
+def read_plate_rows(words) -> dict[str, tuple[float | None, str | None]]:
+    """Plate table rows: name -> (thickness in mm or None, material or None)."""
+    rows = {}
+    for name, thickness, material, *_ in _table_rows(text_lines(words), PLATE_HEADER):
+        match = THICKNESS_PATTERN.match(thickness.strip())
+        rows[name.strip()] = (float(match.group(1)) if match else None, material.strip() or None)
     return rows
 
 
@@ -112,13 +130,18 @@ def read_sheets(sheets: dict[str, Path]) -> BlockReading:
     section = read_section_pdf(sheets["longitudinal"], mode="vector")
     plate_mm: dict[str, float] = {}
     rows: dict[str, PrintedRow] = {}
+    materials: dict[str, str] = {}
     for key in ("longitudinal", "web_frame", "bulkhead"):
         words = read_pdf_words(sheets[key])
-        for row in read_plate_table(words):
-            if row.thickness_mm is not None:
-                plate_mm.setdefault(row.name, row.thickness_mm)
+        for name, (thickness, material) in read_plate_rows(words).items():
+            if thickness is not None:
+                plate_mm.setdefault(name, thickness)
+            if material:
+                materials.setdefault(name, material)
         for name, row in read_rows(words).items():
             rows.setdefault(name, row)
+            if row.material:
+                materials.setdefault(name, row.material)
     plates = [m for m in section.members if m.role in ("bottom_shell", "side_shell", "shell_strake", "deck",
                                                        "longitudinal_bulkhead", "hopper_plate")]
     if not plates:
@@ -129,7 +152,7 @@ def read_sheets(sheets: dict[str, Path]) -> BlockReading:
     side_bottom = min(m.ship_bbox_mm[1] for m in side) / 1000 if side else 0.0
     inner = [m for m in section.members if m.role == "deck" and m.host == "Inner_Bottom"]
     inner_bottom = inner[0].ship_bbox_mm[1] / 1000 if inner else None
-    return BlockReading(section, plate_mm, rows, breadth, depth, side_bottom, inner_bottom)
+    return BlockReading(section, plate_mm, rows, materials, breadth, depth, side_bottom, inner_bottom)
 
 
 def _polyline_length_m(points_mm) -> float:
@@ -151,7 +174,8 @@ def longitudinal_members(reading: BlockReading, length_m: float) -> list[BlockMe
             thickness_mm=member.thickness_mm,
             thickness_source="printed" if member.thickness_mm is not None else "none",
             sources={"section": "traced", "length": "guessed"},
-            basis=f"view 3 stroke {member.stroke.index}, swept over the guessed block length"))
+            basis=f"view 3 stroke {member.stroke.index}, swept over the guessed block length",
+            table_row=member.plate_row or member.stiffener_row))
     return members
 
 
@@ -192,9 +216,9 @@ def transverse_members(reading: BlockReading, st: Stations) -> list[BlockMember]
     members: list[BlockMember] = []
     x_sources = {"x": "traced", "block_length": "guessed"}
 
-    def add(member_id, label, box, area, thickness, thickness_source, extra_sources, basis):
+    def add(member_id, label, box, area, thickness, thickness_source, extra_sources, basis, row=None):
         members.append(BlockMember(member_id, label, "transverse", box, area, thickness, thickness_source,
-                                   {**x_sources, **extra_sources}, basis))
+                                   {**x_sources, **extra_sources}, basis, table_row=row))
 
     def frame_no(x: float) -> int:
         return round((x - st.bulkheads[0]) / st.frame_spacing_m)
@@ -206,20 +230,20 @@ def transverse_members(reading: BlockReading, st: Stations) -> list[BlockMember]
         zone = f"BH{number + 1}"
         add(f"{zone}/plate", "transverse_bulkhead", _plane_x(x, 0.0, 0.0, breadth, depth), breadth * depth,
             plate_mm.get("Trans. BLKHD"), "printed" if "Trans. BLKHD" in plate_mm else "none",
-            {"extent": "traced"}, "plate row 'Trans. BLKHD'; extent from the view 3 section")
+            {"extent": "traced"}, "plate row 'Trans. BLKHD'; extent from the view 3 section", row="Trans. BLKHD")
         if vertical and vertical.count and vertical.spacing_m and vertical.height_m:
             for k in range(vertical.count):
                 y = k * vertical.spacing_m
                 add(f"{zone}/vstiff/{k:02d}", "bulkhead_stiffener", (x, y, 0.0, x + vertical.height_m, y, depth),
                     vertical.height_m * depth, vertical.thickness_mm, "printed", {"side": "guessed"},
-                    "row 'Vert. BLKHD Stiff.' count and spacing; web on the +x side (guess)")
+                    "row 'Vert. BLKHD Stiff.' count and spacing; web on the +x side (guess)", row=vertical.name)
                 if vertical.shape in ("T", "L") and vertical.width_m:
                     xf = x + vertical.height_m
                     y_lo, y_hi = (y - vertical.width_m / 2, y + vertical.width_m / 2) if vertical.shape == "T" \
                         else (y, y + vertical.width_m)
                     add(f"{zone}/vstiff/{k:02d}/flange", "flange", (xf, max(0.0, y_lo), 0.0, xf, y_hi, depth),
                         vertical.width_m * depth, vertical.thickness_mm, "printed", {"side": "guessed"},
-                        "flange of the row 'Vert. BLKHD Stiff.'")
+                        "flange of the row 'Vert. BLKHD Stiff.'", row=vertical.name)
         if horizontal and horizontal.count and horizontal.spacing_m and horizontal.height_m:
             for k in range(1, horizontal.count + 1):
                 z = k * horizontal.spacing_m
@@ -227,14 +251,14 @@ def transverse_members(reading: BlockReading, st: Stations) -> list[BlockMember]
                     break
                 add(f"{zone}/hstiff/{k:02d}", "bulkhead_stiffener", (x, 0.0, z, x + horizontal.height_m, breadth, z),
                     horizontal.height_m * breadth, horizontal.thickness_mm, "printed", {"side": "guessed"},
-                    "row 'Trans. BLKHD Stiff.' count and spacing; web on the +x side (guess)")
+                    "row 'Trans. BLKHD Stiff.' count and spacing; web on the +x side (guess)", row=horizontal.name)
                 if horizontal.shape in ("T", "L") and horizontal.width_m:
                     xf = x + horizontal.height_m
                     z_lo, z_hi = (z - horizontal.width_m / 2, z + horizontal.width_m / 2) \
                         if horizontal.shape == "T" else (z - horizontal.width_m, z)
                     add(f"{zone}/hstiff/{k:02d}/flange", "flange", (xf, 0.0, z_lo, xf, breadth, z_hi),
                         horizontal.width_m * breadth, horizontal.thickness_mm, "printed", {"side": "guessed"},
-                        "flange of the row 'Trans. BLKHD Stiff.'")
+                        "flange of the row 'Trans. BLKHD Stiff.'", row=horizontal.name)
 
     # Web-frame stations (view 2 tables).
     web = rows.get("Webframe")
@@ -244,37 +268,37 @@ def transverse_members(reading: BlockReading, st: Stations) -> list[BlockMember]
         zone = f"FR{frame_no(x):03d}"
         if floor and inner:
             add(f"{zone}/floor", "floor", _plane_x(x, 0.0, 0.0, breadth, inner), breadth * inner,
-                floor.thickness_mm, "printed", {"extent": "traced"}, "row 'Floor'; inner bottom from view 3")
+                floor.thickness_mm, "printed", {"extent": "traced"}, "row 'Floor'; inner bottom from view 3", row=floor.name)
         if web and web.height_m:
             z0 = reading.side_bottom_m
             add(f"{zone}/web", "web_frame", _plane_x(x, breadth - web.height_m, z0, breadth, depth),
                 web.height_m * (depth - z0), web.thickness_mm, "printed", {"extent": "traced"},
-                "row 'Webframe' depth on the side shell span of view 3")
+                "row 'Webframe' depth on the side shell span of view 3", row=web.name)
             if web.shape in ("T", "L") and web.width_m:
                 x_lo, x_hi = (x - web.width_m / 2, x + web.width_m / 2) if web.shape == "T" else (x, x + web.width_m)
                 yf = breadth - web.height_m
                 add(f"{zone}/web/flange", "flange", (x_lo, yf, z0, x_hi, yf, depth), web.width_m * (depth - z0),
-                    web.thickness_mm, "printed", {}, "flange of the row 'Webframe'")
+                    web.thickness_mm, "printed", {}, "flange of the row 'Webframe'", row=web.name)
             leg_low = GUESS_LOWER_BRACKET_LEG * web.height_m
             leg_up = GUESS_UPPER_BRACKET_LEG * web.height_m
             y_in = breadth - web.height_m
             if "Lower Bracket" in plate_mm and inner:
                 add(f"{zone}/bracket_low", "bracket", _plane_x(x, y_in - leg_low, inner, y_in, inner + leg_low),
                     leg_low ** 2 / 2, plate_mm["Lower Bracket"], "printed", {"size": "guessed"},
-                    "plate row 'Lower Bracket'; legs guessed from the web depth")
+                    "plate row 'Lower Bracket'; legs guessed from the web depth", row="Lower Bracket")
             if "Upper Bracket" in plate_mm:
                 top = depth - (beam.height_m if beam and beam.height_m else 0.0)
                 add(f"{zone}/bracket_up", "bracket", _plane_x(x, y_in - leg_up, top - leg_up, y_in, top),
                     leg_up ** 2 / 2, plate_mm["Upper Bracket"], "printed", {"size": "guessed"},
-                    "plate row 'Upper Bracket'; legs guessed from the web depth")
+                    "plate row 'Upper Bracket'; legs guessed from the web depth", row="Upper Bracket")
         if beam and beam.height_m:
             z_low = depth - beam.height_m
             add(f"{zone}/deck_beam", "deck_beam", _plane_x(x, 0.0, z_low, breadth, depth), beam.height_m * breadth,
-                beam.thickness_mm, "printed", {"extent": "traced"}, "row 'Deck_Transvere_Beam'")
+                beam.thickness_mm, "printed", {"extent": "traced"}, "row 'Deck_Transvere_Beam'", row=beam.name)
             if beam.shape in ("T", "L") and beam.width_m:
                 x_lo, x_hi = (x - beam.width_m / 2, x + beam.width_m / 2) if beam.shape == "T" else (x, x + beam.width_m)
                 add(f"{zone}/deck_beam/flange", "flange", (x_lo, 0.0, z_low, x_hi, breadth, z_low),
-                    beam.width_m * breadth, beam.thickness_mm, "printed", {}, "flange of the row 'Deck_Transvere_Beam'")
+                    beam.width_m * breadth, beam.thickness_mm, "printed", {}, "flange of the row 'Deck_Transvere_Beam'", row=beam.name)
 
     # Ordinary frames: one per stiffened plate host, scantling of that host's longitudinal row.
     hosts = _stiffened_plate_spans(reading)
@@ -310,11 +334,11 @@ def transverse_members(reading: BlockReading, st: Stations) -> list[BlockMember]
                     flange_box = (x - row.width_m / 2, yf, a0, x + row.width_m / 2, yf, a1)
             add(f"{zone}/frame/{host}", "frame", box, h * (a1 - a0), row.thickness_mm, "guessed",
                 {"frame_spacing": "guessed", "scantling": "guessed"},
-                f"ordinary frame on {host}; scantling of the row '{row.name}' (guess)")
+                f"ordinary frame on {host}; scantling of the row '{row.name}' (guess)", row=row.name)
             if flange_box:
                 add(f"{zone}/frame/{host}/flange", "flange", flange_box, row.width_m * (a1 - a0),
                     row.thickness_mm, "guessed", {"frame_spacing": "guessed", "scantling": "guessed"},
-                    f"flange of the ordinary frame on {host} (guess)")
+                    f"flange of the ordinary frame on {host} (guess)", row=row.name)
     return members
 
 
@@ -338,6 +362,34 @@ def _stiffened_plate_spans(reading: BlockReading) -> dict[str, tuple[tuple[tuple
     return spans
 
 
+def label_thickness_and_material(members: list[BlockMember], materials: dict[str, str]) -> None:
+    """Give every member a thickness and a material, each with a source label.
+
+    A member without a printed thickness takes the median printed thickness of its label in this
+    design (else of all printed members), labelled ``guessed``. The material is printed when the
+    member's table row prints one and the member's scantling is printed; otherwise it is the most
+    common printed material of the design, labelled ``guessed``.
+    """
+    printed = [m for m in members if m.thickness_mm is not None and m.thickness_source == "printed"]
+    by_label: dict[str, list[float]] = {}
+    for m in printed:
+        by_label.setdefault(m.label, []).append(m.thickness_mm)
+    overall = statistics.median(m.thickness_mm for m in printed) if printed else None
+    common = Counter(materials.values()).most_common(1)
+    common_material = common[0][0] if common else None
+    for m in members:
+        if m.thickness_mm is None:
+            values = by_label.get(m.label)
+            m.thickness_mm = statistics.median(values) if values else overall
+            m.thickness_source = "guessed"
+            m.basis += "; thickness guessed: median printed thickness of the label in this design"
+        own = materials.get(m.table_row) if m.table_row else None
+        if own and m.thickness_source == "printed":
+            m.material, m.material_source = own, "printed"
+        else:
+            m.material, m.material_source = own or common_material, "guessed"
+
+
 def build_block(sheets: dict[str, Path], length_m: float = GUESS_BLOCK_LENGTH_M,
                 frames_per_web: int = GUESS_FRAME_SPACES_PER_WEB) -> dict:
     """Read the three sheets and lay out the block. Returns the member list and the reading.
@@ -351,6 +403,7 @@ def build_block(sheets: dict[str, Path], length_m: float = GUESS_BLOCK_LENGTH_M,
         raise ValueError("no printed web-frame spacing (rows 'Webframe' and 'Floor')")
     st = stations(web.spacing_m, length_m=length_m, frames_per_web=frames_per_web)
     members = longitudinal_members(reading, length_m) + transverse_members(reading, st)
+    label_thickness_and_material(members, reading.materials)
     return {
         "schema": "marinaframe.structure_block.v1",
         "engineering_approved": False,
@@ -360,7 +413,7 @@ def build_block(sheets: dict[str, Path], length_m: float = GUESS_BLOCK_LENGTH_M,
                     "web_spaces_per_hold": GUESS_WEB_SPACES_PER_HOLD,
                     "frame_spaces_per_web": frames_per_web,
                     "bracket_legs": [GUESS_LOWER_BRACKET_LEG, GUESS_UPPER_BRACKET_LEG]},
-        "printed": {"web_spacing_m": web.spacing_m, "plates_mm": reading.plate_mm,
+        "printed": {"web_spacing_m": web.spacing_m, "plates_mm": reading.plate_mm, "materials": reading.materials,
                     "rows": {name: asdict(row) for name, row in reading.rows.items()}},
         "stations": asdict(st),
         "members": [m.as_dict() for m in members],
