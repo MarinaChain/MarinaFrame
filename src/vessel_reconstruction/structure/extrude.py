@@ -173,12 +173,28 @@ class Seam:
 
 
 def split_at_seams(points: list[tuple[float, float]], seams: list[Seam]) -> list[list[tuple[float, float]]]:
-    """Cut a shell line (keel first) at each seam in order; returns len(seams) + 1 pieces."""
+    """Cut a shell line (keel first) at each seam in order; returns len(seams) + 1 pieces.
+
+    A seam the line has already passed at its first point cuts nothing: the strake below it is an
+    empty piece. Seams must be listed in the order the line crosses them; a later seam crossed
+    before an earlier one raises ValueError rather than silently merging strakes."""
     pieces, current, index = [], [points[0]], 0
+    while index < len(seams) and seams[index].reached(points[0]) >= 0:
+        pieces.append([])
+        index += 1
     for a, b in zip(points, points[1:]):
+        crossed_early = [seam.label for seam in seams[index + 1:] if seam.reached(b) >= 0 > seam.reached(a)]
+        if index < len(seams) and crossed_early and not seams[index].reached(b) >= 0:
+            raise ValueError(f"Seams are not in crossing order: {crossed_early[0]!r} is crossed "
+                             f"before {seams[index].label!r}.")
+        last_t = 0.0
         while index < len(seams) and seams[index].reached(b) >= 0 > seams[index].reached(a):
             da, db = seams[index].reached(a), seams[index].reached(b)
             t = da / (da - db)
+            if t < last_t:
+                raise ValueError(f"Seams are not in crossing order: {seams[index].label!r} is crossed "
+                                 f"before {seams[index - 1].label!r}.")
+            last_t = t
             cut = (a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]))
             current.append(cut)
             pieces.append(current)

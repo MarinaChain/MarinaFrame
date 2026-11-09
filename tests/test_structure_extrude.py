@@ -108,3 +108,13 @@ def test_ocx_writes_stiffeners_and_round_trips(tmp_path):
         pytest.skip("OCX XSD or xmllint not available")
     result = ocx.validate(path, folder)
     assert result.valid, result.errors
+
+
+def test_split_at_seams_skips_a_passed_seam_and_rejects_unordered_seams():
+    line = [(1.0, 1.0), (3.0, 3.0)]
+    passed, ahead = extrude.Seam("y", 0.5, "passed"), extrude.Seam("y", 2.0, "ahead")
+    pieces = extrude.split_at_seams(line, [passed, ahead])
+    assert len(pieces) == 3 and pieces[0] == []
+    assert pieces[1][-1] == pytest.approx((2.0, 2.0)) and pieces[2][0] == pytest.approx((2.0, 2.0))
+    with pytest.raises(ValueError):
+        extrude.split_at_seams(line, [ahead, extrude.Seam("y", 1.5, "earlier")])
