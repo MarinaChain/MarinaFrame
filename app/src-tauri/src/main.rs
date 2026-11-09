@@ -290,6 +290,34 @@ async fn sign_off(
     run(backend, move |b| b.sign_off(&task, &name)).await
 }
 
+/// Re-run one part from its saved mark note (takes minutes; runs on a blocking thread).
+#[tauri::command(rename_all = "snake_case")]
+async fn revise_part(
+    backend: Shared<'_>,
+    task: String,
+    component_id: String,
+) -> Result<ComponentView, AppError> {
+    run(backend, move |b| b.revise_part(&task, &component_id)).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+async fn keep_part_revision(
+    backend: Shared<'_>,
+    task: String,
+    component_id: String,
+) -> Result<ComponentView, AppError> {
+    run(backend, move |b| b.keep_part_revision(&task, &component_id)).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+async fn undo_part_revision(
+    backend: Shared<'_>,
+    task: String,
+    component_id: String,
+) -> Result<ComponentView, AppError> {
+    run(backend, move |b| b.undo_part_revision(&task, &component_id)).await
+}
+
 #[tauri::command(rename_all = "snake_case")]
 async fn review_component(
     backend: Shared<'_>,
@@ -430,6 +458,9 @@ fn main() {
             remove_queued,
             move_queued,
             review_component,
+            revise_part,
+            keep_part_revision,
+            undo_part_revision,
             sign_off,
             dismiss_notice,
             reset_notices,

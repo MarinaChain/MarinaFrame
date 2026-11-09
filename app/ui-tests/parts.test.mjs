@@ -1,7 +1,29 @@
 // Part list copy (js/parts.js): no spreadsheet formulas from labels or notes. Run: npm run test:ui
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { safeTextCell, partTableText, plainReason, withoutHandles } from '../ui/js/parts.js';
+import { safeTextCell, partTableText, plainReason, withoutHandles, canRerun, elapsedText, partState } from '../ui/js/parts.js';
+
+test('a marked part with a note can be re-run; a hull or a pending revision cannot', () => {
+  const marked = { op: 'deckhouse', review: 'marked', review_note: 'Too high', revision_pending: false };
+  assert.equal(canRerun(marked), true);
+  assert.equal(canRerun({ ...marked, review: 'accepted' }), false);
+  assert.equal(canRerun({ ...marked, review_note: null }), false);
+  assert.equal(canRerun({ ...marked, op: 'hull' }), false);
+  assert.equal(canRerun({ ...marked, revision_pending: true }), false);
+});
+
+test('a new revision waits for Keep or Undo, in AI teal and never as approved', () => {
+  const state = partState({ review: 'marked', review_note: 'x', revision_pending: true, built: true });
+  assert.equal(state.word, 'New revision');
+  assert.equal(state.tone, 'ai');
+  assert.doesNotMatch(`${state.word} ${state.title}`, /approved|verified/i);
+});
+
+test('the re-run clock reads minutes and seconds', () => {
+  assert.equal(elapsedText(0), '0:00');
+  assert.equal(elapsedText(65_400), '1:05');
+  assert.equal(elapsedText(-5), '0:00');
+});
 
 test('CAD entity handles are left out of shown text', () => {
   // Made-up handles in the shape of DXF ones.

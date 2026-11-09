@@ -2198,6 +2198,10 @@ const parts = createParts({
   review: (id, decision, note = null) => invoke('review_component', { task: state.task, component_id: id, decision, note }).then(afterPartsChange, (error) => { showError(error); throw error; }),
   // Sign off the parts (a person's record, the run stays a draft); an empty name withdraws it.
   signOff: (name) => invoke('sign_off', { task: state.task, name }).then(afterPartsChange, (error) => { showError(error); throw error; }),
+  // Re-run one part from its mark note (minutes), then keep or undo the new revision.
+  revisePart: (id) => invoke('revise_part', { task: state.task, component_id: id }).then(afterPartsChange, (error) => { showError(error); throw error; }),
+  keepRevision: (id) => invoke('keep_part_revision', { task: state.task, component_id: id }).then(afterPartsChange, (error) => { showError(error); throw error; }),
+  undoRevision: (id) => invoke('undo_part_revision', { task: state.task, component_id: id }).then(afterPartsChange, (error) => { showError(error); throw error; }),
   showIn3d: (part) => {
     setVesselTab('run');
     setPartOutline(part);

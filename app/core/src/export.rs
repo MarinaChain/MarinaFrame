@@ -275,7 +275,15 @@ fn run_worker(
     let child = command
         .spawn()
         .map_err(|_| AppError::new("export_worker", "The export worker could not start."))?;
-    let finished = wait_bounded(child, timeout)?;
+    let Some(finished) = wait_bounded(child, timeout) else {
+        return Err(AppError::new(
+            "export_timeout",
+            &format!(
+                "The export took longer than {} s and was stopped.",
+                timeout.as_secs()
+            ),
+        ));
+    };
     if !finished.success {
         let reason: Option<String> = serde_json::from_slice::<serde_json::Value>(&finished.stderr)
             .ok()
@@ -294,15 +302,16 @@ fn run_worker(
     })
 }
 
-struct Finished {
-    success: bool,
-    stdout: Vec<u8>,
-    stderr: Vec<u8>,
+/// A worker process that finished in time: its exit status and output.
+pub(crate) struct Finished {
+    pub success: bool,
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
 }
 
-/// Wait for `child` at most `timeout`; kill it when the time is up. The pipes are
+/// Wait for `child` at most `timeout`; kill it when the time is up (None). The pipes are
 /// read on their own threads so that a full pipe cannot block the worker.
-fn wait_bounded(mut child: Child, timeout: Duration) -> AppResult<Finished> {
+pub(crate) fn wait_bounded(mut child: Child, timeout: Duration) -> Option<Finished> {
     let read_pipe = |pipe: Option<Box<dyn Read + Send>>| {
         std::thread::spawn(move || {
             let mut bytes = vec![];
@@ -332,17 +341,11 @@ fn wait_bounded(mut child: Child, timeout: Duration) -> AppResult<Finished> {
             _ => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(AppError::new(
-                    "export_timeout",
-                    &format!(
-                        "The export took longer than {} s and was stopped.",
-                        timeout.as_secs()
-                    ),
-                ));
+                return None;
             }
         }
     };
-    Ok(Finished {
+    Some(Finished {
         success: status.success(),
         stdout: stdout.join().unwrap_or_default(),
         stderr: stderr.join().unwrap_or_default(),
