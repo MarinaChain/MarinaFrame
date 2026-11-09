@@ -24,7 +24,7 @@ from pathlib import Path
 from benchmarks.balclutha import crossing_value as round8
 from benchmarks.balclutha import model_value as round4
 from benchmarks.balclutha import router_value as round6
-from benchmarks.balclutha import tiled_value as round5
+from vessel_reconstruction import body_plan_crossings as bpc
 from vessel_reconstruction import body_plan_reader as bpr
 
 PROTOCOL = 'docs/plans/2026-11-09-whole-vessel-scope.md 3.5.9'
@@ -135,7 +135,7 @@ def claude_call(model: str = SONNET, runner=subprocess.run):
 def run(arm: str, sheet_path: Path, truth_path: Path, out: Path, call=None) -> dict:
     out.mkdir(parents=True, exist_ok=False)
     truth = load_truth(truth_path)
-    sheet_pixels = round5.load_sheet(sheet_path)
+    sheet_pixels = bpc.load_ink(sheet_path)
     layout = sheet_layout()
     started = time.time()
     readings = round8.measure(sheet_pixels, layout)

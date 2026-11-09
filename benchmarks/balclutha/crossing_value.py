@@ -28,6 +28,7 @@ from benchmarks.balclutha import model_value as round4
 from benchmarks.balclutha import router_value as round6
 from benchmarks.balclutha import tiled_value as round5
 from benchmarks.gunnerus import whole_vessel_ab as ab
+from vessel_reconstruction import body_plan_crossings as bpc
 from vessel_reconstruction import body_plan_identity as bpi
 from vessel_reconstruction import body_plan_reader as bpr
 
@@ -57,7 +58,8 @@ SIDE_NAMES = {'aft': 'aftbody (stern half, left of the centreline)',
 
 
 def measure(sheet_pixels: np.ndarray, layout: bpr.SheetLayout) -> dict[str, bpr.SideReading]:
-    ink = sheet_pixels < 128
+    """sheet_pixels: the ink mask from `bpc.load_ink`, or a grey sheet."""
+    ink = sheet_pixels if sheet_pixels.dtype == bool else sheet_pixels < bpc.INK_THRESHOLD
     return {side.name: bpr.measure_side(ink, layout, side) for side in layout.sides}
 
 
@@ -224,7 +226,7 @@ def run_repeat(readings: dict, questions: list[dict], layout: bpr.SheetLayout, t
 def run(arm: str, sheet_path: Path, truth_path: Path, out: Path, call=None, repeats: int = round4.REPEATS) -> dict:
     out.mkdir(parents=True, exist_ok=False)
     truth = round4.load_truth(truth_path)
-    sheet_pixels = round5.load_sheet(sheet_path)
+    sheet_pixels = bpc.load_ink(sheet_path)
     layout = sheet_layout()
     started = time.time()
     readings = measure(sheet_pixels, layout)

@@ -15,7 +15,11 @@ import re
 
 import numpy as np
 
-from vessel_reconstruction.body_plan_reader import Chain, SideReading, station_candidates
+from vessel_reconstruction.body_plan_reader import (
+    Chain,
+    SideReading,
+    station_candidates,
+)
 
 # Crop: the curve's path plus this margin (px of the sheet), scaled so that its longer side is at
 # most QUESTION_MAX_SIDE_PX. Low-cost models read 16 px text at 2,048 px images (plan 3.5.5);
@@ -49,7 +53,8 @@ def question_image(sheet: np.ndarray, chain: Chain,
     """PNG crop around one chain's curve with the curve traced in red, and the crop geometry.
 
     column_limits keeps the crop inside one half of the body plan (the other half's labels would
-    only add confusion).
+    only add confusion). sheet is the grey sheet, or the ink mask of a bilevel scan
+    (`body_plan_crossings.load_ink`), which gives the same black-and-white crop.
     """
     from PIL import Image, ImageDraw
 
@@ -64,7 +69,10 @@ def question_image(sheet: np.ndarray, chain: Chain,
         left, right = max(left, column_limits[0]), min(right, column_limits[1])
     scale = min(1.0, QUESTION_MAX_SIDE_PX / max(bottom - top, right - left))
     size = (max(1, round((right - left) * scale)), max(1, round((bottom - top) * scale)))
-    crop = Image.fromarray(np.ascontiguousarray(sheet[top:bottom, left:right])).convert('L')
+    pixels = sheet[top:bottom, left:right]
+    if pixels.dtype == bool:
+        pixels = np.where(pixels, np.uint8(0), np.uint8(255))  # ink black, paper white; 1 byte per pixel
+    crop = Image.fromarray(np.ascontiguousarray(pixels)).convert('L')
     image = crop.resize(size, Image.LANCZOS).convert('RGBA')
     overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
     points = [((column - left) * scale, (row - top) * scale) for row, column in chain.path]

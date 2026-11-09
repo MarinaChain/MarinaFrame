@@ -17,9 +17,12 @@ Image convention: a 2D array, row 0 at the top; `ink` is True where the drawing 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 
+# A grey pixel darker than this is ink (the scans are near black and white; 128 splits them).
+INK_THRESHOLD = 128
 # Rows above and below the waterline that the tracer reads.
 BAND_ROWS = 40
 # The drawn waterline is searched this many rows either side of its nominal row, in blocks of
@@ -83,6 +86,29 @@ KIND_LETTERING = 'lettering'
 KIND_STRAIGHT = 'straight'
 KIND_SHALLOW = 'shallow'
 STATION_KINDS = (KIND_CURVE, KIND_DOUBLE)
+
+
+def load_ink(sheet: Path) -> np.ndarray:
+    """Ink mask of a scanned sheet: a 2D bool array, True where the drawing has ink.
+
+    A bilevel (1-bit) scan is read straight into the mask: its pixels are only black or white, so
+    the mask holds all of the sheet's data. The image's packed bits (1 bit per pixel) are copied
+    out, the image is closed, and the bits are unpacked in place; this halves peak memory against
+    converting to grey first (a 240 Mpx HAER sheet: about 0.6 GB instead of 1.3 GB). Any other scan
+    is thresholded at INK_THRESHOLD. `body_plan_identity.question_image` accepts this mask in place
+    of the grey sheet.
+    """
+    from PIL import Image
+
+    Image.MAX_IMAGE_PIXELS = None  # HAER sheets are up to about 240 Mpx
+    with Image.open(sheet) as image:
+        if image.mode != '1':
+            return np.asarray(image.convert('L')) < INK_THRESHOLD
+        width, height = image.size
+        # Raw mode '1' bytes: each row packed to whole bytes, first pixel in the high bit, 1 = white.
+        packed = np.frombuffer(image.tobytes(), dtype=np.uint8).reshape(height, -1)
+    white = np.unpackbits(packed, axis=1, count=width).view(bool)
+    return np.logical_not(white, out=white)
 
 
 @dataclass
