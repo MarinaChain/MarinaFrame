@@ -806,6 +806,104 @@ station errors on the two development sheets, not yet tested on a holdout. A hol
 round-bilge sheet from section 5.7, downloaded by a person. `engineering_approved` stays false.
 
 
+### 5.9 Round 12: BUE GIRL holdout (protocol 3.5.11)
+
+Protocol committed before scoring (`1a8f971`), then harness and synthetic tests (`5248f32`):
+`benchmarks/bue_girl/holdout_value.py`, `tests/test_bue_girl_holdout_value.py`. Run 2026-11-09.
+The reader is the source at `dabaa13` (including the round-10 development changes); all protected
+reader files and the round-8 harness are unchanged. This is a fresh holdout, not a replay of the
+historical pre-round-10 reader.
+
+Sheet: BUE GIRL, HAER OR-166 sheet 2, 14,400 x 9,600 px, 1-bit, SHA-256
+`f8950140c4ff2683801363acd7e60c126fa322ad4e571dcceb6e39d9c9f12196`. PM-frozen truth: independent
+Sonnet row-crop and Opus column-crop transcriptions agree on 175 non-empty printed cells. Only
+39 nonblank numbered-station half-breadths at waterlines 2-6-0 to 6-6-0 are scored. Transom,
+Sheer, Rabbet/Keel, ditto and blank cells remain listed outside the repository, not silently
+removed. Leading dash is interpreted as magnitude/sign convention and trailing `+` adds 1/16 inch,
+as fixed in the protocol. No earlier withdrawn transcription is used.
+
+Independent host calibration, accepted unchanged: centreline 3266.5, 400 px/ft, whole-pixel
+waterline rows 8081, 7681, 7281, 6880, 6480; fore left (6 to 1), aft right (7 to 12), span 1650 px.
+Waterline and feet-bar scales agree within 0.06 %; the discrepant centimetre bar is not used.
+Disclosure: the calibration agent saw a low-resolution table overview but used no offset values.
+No aft-row shift, painted-waterline masking or reader fix after scoring. Harness-only additions:
+printed-value parser, calibration, scorer dimensions and orchestration using existing transports.
+
+Measurement: fore 6 chains (1 inferred link), aft 7 chains (0 inferred links); no one-waterline
+chains. Code takes six aft chains and leaves the innermost unlabelled/transom chain out.
+
+| Arm, repeat | Cells (of 39) | RMS | Within 0.05 / 0.15 m | Identity errors | Questions | Invalid replies | Wall |
+|---|---:|---:|---:|---|---:|---:|---:|
+| R0 code only (1 run) | 37 (95 %) | **0.0014 m** | 100 % / 100 % | 0 | 0 | - | - |
+| Crouton Alpha Free R1-1 | 37 | 0.0014 m | 100 % / 100 % | 0 | 13 | 0 | 179 s |
+| Crouton Alpha Free R1-2 | 36 | 0.0278 m | 86 % / 100 % | 0 reported (see cause 1) | 13 | 0 | 362 s (resumed part) |
+| Crouton Alpha Free R1-3 | 37 | 0.0014 m | 100 % / 100 % | 0 | 13 | 0 | 472 s |
+| Claude Sonnet 5.5 R1-1 to R1-3 | access failure (see below) | - | - | - | 13 each | 39 each | - |
+
+**Decision (rule of 3.5.9: every repeat >= 60 % of cells and median RMS <= 0.15 m):** R0 code only
+passes (one run, RMS 1.4 mm). Crouton passes (median RMS 1.4 mm; every repeat >= 92 % of cells), but
+adds no value over code: two repeats equal code only and one is worse. The Sonnet arm is not scored
+in round 12 (access failure); see the round 12b addendum.
+
+Interruption disclosure: the first Crouton job ended when the session closed, after repeat 1
+and eight replies in repeat 2. Repeat 1 was not rerun. Repeat 2 was completed by replaying those
+eight exact replies with their matching completed receipts into the unchanged round-8 function;
+only its five missing initial questions and the fixed disagreement re-asks made new requests.
+The original partial folder is retained, with completion work in `R1-2-resumed`. Repeat 3 was run
+once. This completes the fixed repeats, not a retry selected to improve scores. Repeat 2's listed
+wall time covers the resumed active portion only; the pre-interruption wall interval is unknown.
+Its token counts include the eight saved replies once, with no duplicated token charge.
+
+Claude access limitation: all three fixed Sonnet repeats returned no usable response: 39 failed
+attempts per repeat, 117 total, 13 unanswered questions per repeat, 0 token usage reported.
+The PM diagnosed the cause: `claude -p` inherited this session's router endpoint, which refused
+`claude-sonnet-5-5` with "There's an issue with the selected model (claude-sonnet-5-5)".
+This is an **access failure**, not a scored Sonnet result. No Sonnet geometry fallback scores
+are included in the results table. No transport change or additional Sonnet repeat was made.
+**Round 12b placeholder:** the PM will run Sonnet from a normal shell as a separately labelled
+addendum with the same frozen code; no round-12b result is available here. The raw summary's
+`answered_by` field counts attempted model names even on failure; here it does **not** mean
+Sonnet answered. The unchanged assignment falls back to nesting order when every label is null,
+so the numerical Sonnet-arm result is code fallback, not evidence of Sonnet identification.
+
+Limits and largest error causes (no reader repair in this round):
+
+1. Wrong aft alignment in Crouton repeat 2: the final labels cause chain 2 (the code's station 9)
+   to be skipped and chains 3 to 6 to be named 9 to 12. Largest errors: station 11 at 4-6-0
+   -94.25 mm, station 10 there -76.95 mm, station 11 at 3-6-0 -68.26 mm. The neighbouring-station
+   identity metric reports zero: this is an imperfect detector, not proof of correct naming.
+   Code-only's two largest errors instead come from merged crossings at 2-6-0: stations 7 and 8
+   share column 4096.34, giving -5.84 mm and +5.27 mm.
+2. Shallow/absent low-waterline crossings: stations 10 and 12 at 2-6-0 are missing (37/39 cells).
+   One nearby aft crossing at column 3649.47 is rejected as shallow (slope -8.1 columns/row);
+   the inner aft curves approach the keel near that waterline. No rule is relaxed to recover them.
+3. False continuation at the fore sheer: chains merge onto the same upper crossing even where
+   the printed table is blank. Seven extra cells are emitted: stations 5 and 6 at 5-6-0 and
+   stations 2 to 6 at 6-6-0. The fixed scorer reports but does not penalise extra cells in RMS or
+   coverage. Zero fairness flags does not make these extra cells reliable.
+
+#### Round 12b addendum: Claude Sonnet 5.5 arm in a correct environment (separate from round 12)
+
+Run by the PM on 2026-11-09 from a normal shell where `claude -p --model claude-sonnet-5-5` answers
+(checked first with a one-line prompt). Same frozen reader (`dabaa13` sources unchanged), harness
+`5248f32`, calibration and truth as round 12; 3 repeats, no other change. Reported apart from round 12
+because round 12's Sonnet arm is recorded as an access failure under its protocol.
+
+| Repeat | Cells (of 39) | RMS | Within 0.05 / 0.15 m | Questions (re-asked) | Invalid | Labels equal to code / null | Identities differ from code | Tokens in / out | Wall |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| R1-1 | 37 | 0.0014 m | 100 % / 100 % | 13 (2) | 0 | 6 / 5 | 0 | 97,996 / 9,883 | 61 s |
+| R1-2 | 37 | 0.0014 m | 100 % / 100 % | 13 (2) | 0 | 7 / 4 | 0 | 85,995 / 9,531 | 69 s |
+| R1-3 | 37 | 0.0014 m | 100 % / 100 % | 13 (1) | 0 | 8 / 5 | 0 | 80,826 / 8,872 | 55 s |
+
+Sonnet passes the rule (median RMS 1.4 mm) and agrees with the code numbering every time; it adds no
+accuracy on this sheet because the code alone already names every station correctly. Its value is as
+a check, not a correction, here; 4 to 5 null labels per repeat (curves whose number it could not see)
+leave the code's nesting order in place.
+
+Run folders and truth remain outside the repository at `/private/tmp/claude-501/bue-girl/`.
+`engineering_approved` stays false. A pass applies only to the fixed 39-cell rule and this one
+holdout sheet, not to a complete usable hull or to all scanned body plans.
+
 ## 6. Step 2: internals (development case, metrics G1 to G5 of plan section 4.3.2)
 
 Code: `benchmarks/gunnerus/whole_vessel_internals.py` (reader and build) and

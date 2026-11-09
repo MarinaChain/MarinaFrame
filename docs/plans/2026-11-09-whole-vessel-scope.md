@@ -604,6 +604,75 @@ cells, no half-breadth at a waterline). No cell can score the reader. Details:
 that document with this same protocol.
 
 
+#### 3.5.11 Round 12: BUE GIRL holdout (fixed before running)
+
+Sheet: gillnet boat BUE GIRL (1957), HAER OR-166 sheet 2, "Lines and table of offsets",
+US public domain. Source outside this worktree:
+`work/sources/haer/master-pnp-habshaer-or-or0500-or0590-sheet-00002a.tif` in the main checkout,
+14,400 x 9,600 px, 1-bit, SHA-256
+`f8950140c4ff2683801363acd7e60c126fa322ad4e571dcceb6e39d9c9f12196`.
+
+Truth fixed before any run: PM supplied two independent Claude transcriptions (Sonnet 5.5 row
+crops; Opus 5.5 column crops, different scripts), agreeing on all 175 non-empty printed cells
+(0 differences after whitespace normalisation). Frozen source:
+`/private/tmp/claude-501/bue-girl/truth-frozen/table_as_printed.json`, SHA-256
+`355138afccaf13a1bad1bca2d801b13e5f386cba1f92027918586ad712a6c30c`.
+The earlier session's pass1/pass2 reads were withdrawn and are not used. No new transcription.
+Only the **Half Breadths From CL** block, stations 1 to 12, waterlines 2-6-0, 3-6-0 (designed
+waterline), 4-6-0, 5-6-0 and 6-6-0 is scored: **39 nonblank cells**. Heights key the truth in
+`/private/tmp/claude-501/bue-girl/truth_s2.json`. Feet-inches-eighths: trailing `+` adds 1/16 inch
+(PM interpretation; the sheet does not define it). Leading `-` is treated as a sign/separator
+convention, with magnitude used as half-breadth: the Transom column prints the same quantity
+without that leading mark. This interpretation and a parser accepting `+` are harness-only.
+Excluded cells remain listed with their printed contents and reasons: blank station/waterline
+cells; all Transom cells (innermost unlabelled aft curve assumed transom, not a numbered station);
+Sheer and Rabbet/Keel rows (not waterline half-breadths), including the doubtful Sheer station 12
+font/sign and Keel ditto cells at 11, 12 and Transom. The Heights From Baseline block is not used
+and remains intact in the frozen source. No nonblank numbered-station waterline cell is removed.
+
+Host calibration supplied by an independent agent without truth/transcription access, from drawn
+ink, grid and labels only; constants accepted as given, not re-derived here. Disclosure: its first
+low-resolution overview included the table; it did not use table values. Calibration evidence:
+`/private/tmp/claude-501/bue-girl/calibration/calibration.json`, README and crops beside it.
+Centreline column **3266.5**, baseline row **9082**, **400.0 px/ft** (1312.335958 px/m).
+Two independent drawn spacings: waterlines 400.25 px/ft and feet scale bar 400.0 px/ft agree
+within 0.06 %. The centimetre scale bar is 2.5 % off and is not used. Whole-pixel waterline rows:
+2-6-0 **8081**, 3-6-0 **7681**, 4-6-0 **7281**, 5-6-0 **6880**, 6-6-0 **6480**. There are no
+printed waterline labels on the body plan; heights follow from baseline and scale. Fore half is
+**left**, sign -1, stations outermost first **6, 5, 4, 3, 2, 1**, grid columns **2966, 2698, 2430,
+2162, 1894**, plus dashed projection column **1693**. Aft half is **right**, sign +1, stations
+outermost first **7, 8, 9, 10, 11, 12**, grid columns **3566, 3834, 4102, 4370, 4638**.
+Maximum search half-span **1650 px** is sheet calibration, replacing Balclutha's 3150 px.
+Aft curves cross only the lowest three waterlines. Short aft horizontals at 7349/7749 are not
+waterlines. Use the same fixed waterline rows on both halves: no alternate aft-row run, no masking
+of those segments or painted waterline, and no image preprocessing beyond `bpc.load_ink`.
+
+Frozen reader: the source at **dabaa13**, including round-10 development changes already present
+there; no claim that this is the historical pre-round-10 implementation. No changes to
+`src/vessel_reconstruction/body_plan_*` or `benchmarks/balclutha/crossing_value.py`. All reader
+thresholds, prompts, question images, candidate rules and naming remain unchanged. Harness adds
+only calibration, truth conversion/parser, scorer and run orchestration; reuses round-8 functions
+and Thayer's `claude_call`. A frozen-source guard test is included with this protocol so the
+required pre-commit test command can run before the harness exists. No scores before protocol
+and harness commits. A failure is reported, not repaired in this round.
+
+Arms: R0 code only, **1 run**; R1 Crouton Alpha Free via `round8.crouton_with_fallback`, **3 repeats**
+(one failed-request retry after 5 s, then DeepSeek V4.1 Flash); R1 Claude Sonnet 5.5 via Thayer
+`claude_call`, **3 repeats**, `claude -p` subscription, no tools or API key, never OpenCode Go.
+Four question workers, temperature/effort, invalid-reply retries and disagreement re-asks unchanged.
+Each arm measures the same fixed sheet/layout deterministically. Outputs outside the repository:
+`/private/tmp/claude-501/bue-girl/runs/<arm>`. No repeat to improve a score. If access/quota fails,
+record it and continue the other arms.
+
+Metrics and decision rule copied from 3.5.9: cells given of 39, RMS and maximum error, share within
+0.05 m and 0.15 m, station identity errors (values fitting a neighbouring station better), median
+and range over repeats. An arm passes if **every repeat gives at least 60 % of cells and median
+RMS is at most 0.15 m** (R0: its one run). Also report chains per half, questions, re-asks, invalid
+replies, answers per model, labels equal to code, fairness flags, tokens and wall time.
+The reader **generalises** if R0 and Crouton both pass; **only with a strong identifier** if only
+Sonnet passes; otherwise **does not generalise**. Do not widen this rule after results. A metrics
+pass does not establish correct identities or engineering use. `engineering_approved` stays false.
+
 ### 3.6 Effort, checks, resume
 
 Effort: 1-2 weeks (reader, executor change, scoring, Gunnerus run; then raster path and a
