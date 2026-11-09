@@ -364,3 +364,54 @@ Causes found in the reading record (`work/tanks-raster/runs/huddell/reading.json
 Next development round (new data; Huddell is no longer a holdout): frame axis from the drawn frame
 numbers on scanned plans; tie profile labels to plan regions by frame range; require a tank word (or a
 schedule tank row) before a plan region becomes a tank; match the schedule by number and kind.
+
+## 7. Round 2: scanned capacity plans of other ships (metrics fixed 2026-11-09, before the build)
+
+Branch `feature/tanks-r2` from `continue/v0.5` at `80d5fa5`. Huddell is a development case now (the
+holdout is spent, section 6). The section 4 targets and decision stay as written; nothing in this
+section changes them, and no round 2 result is a holdout result.
+
+**Data.**
+- Huddell (development): sheets 7, 8 and 9 and the host calibration of section 4 (unchanged unless a
+  change is listed in the result); truth `liberty_truth/truth.json` (22 rows); scored with the
+  section 4.1 scorer, unchanged (`--scorer holdout`).
+- Gunnerus D1 (Tank Plan Rev1, 300 dpi) and D2 (Tank Arrangement Rev0, 300 dpi), truth as section 3.
+  The D1 truth file of round 1 was in the git-ignored `work/` of a removed worktree; it is
+  transcribed again the same way (by hand, from a render of the printed table) before the D1 run.
+- Empire State V and Saugatuck: plausibility as section 5.3.
+
+**Metrics (development targets, not gates).**
+
+| ID | Metric | Target |
+|---|---|---|
+| N1 | Huddell x origin: share of views whose x comes from drawn evidence (frame numbers, or alignment to the profile by drawn bulkheads with an agreement count), not from the sheet edge | 100 % |
+| N2 | Huddell coverage with the section 4.1 scorer (H1 as measured; 16 of 22 rows have a number) | >= 50 % (11 of 22) |
+| N3 | Huddell volume of matched tanks, median abs relative error (H2 as measured) | <= 25 % |
+| N4 | Huddell grand total (H3 as measured; unmatched rows 0 m3) | within 25 % |
+| N5 | False tanks: built tanks on Huddell whose label and schedule row name no tank (hatch, girder, store, void, casing) | 0 |
+| N6 | Gunnerus no regression against section 5.2: D1 and D2 R1 not lower by more than one tank, R2 <= 0.5 m, R3 median not higher by more than 2 points | met on D1 and D2 |
+| N7 | Plausibility: Empire State V and Saugatuck scale within 2 % of the printed scale; tanks built not fewer than section 5.3 (23 and 3) | met |
+
+Rules: as section 3 (no target loosened after a result; no reader code branches on a ship name; a
+miss is reported with its cause). The model reads text only (Claude Sonnet 5.5 through the Claude
+Code CLI on the subscription); answers are cached per crop image in `work/`.
+
+## 8. What a new holdout ship needs (Huddell is spent)
+
+A new holdout must be a ship that no development run has read. Before any run, commit a protocol
+like section 4 (reader commit, metrics, targets, decision rule, scorer) and then:
+
+1. **Inputs.** The scanned sheets that draw the tanks: an inboard or capacity profile, the inner
+   bottom (tank top) plan, and any plan that draws deep tanks, peaks or settling tanks; with a
+   drawn frame axis or a graphic scale bar on each sheet, and the tank schedule if one is printed.
+   Raster as downloaded (TIFF or PDF page), resolution known, public or licensed for this use.
+2. **Host calibration.** A `SheetSpec` per sheet (view windows, view kind, plan role, scale-bar
+   and schedule windows), written by a person or agent without access to the truth, committed
+   before the run.
+3. **Per-tank truth** from a source other than the sheets the reader reads (a capacity-plan
+   table, a tank-calibration book, a stability booklet), transcribed by an independent agent into
+   the section 4.1 format: name, tank number, side (P, S, C), kind, content, printed 100 %
+   capacity and unit, one row per physical tank (dual-use tanks once). Two independent
+   transcriptions that agree, and printed totals that equal the column sums.
+4. **Optional:** a hull (lines plan or offsets) so tanks are clipped to the hull instead of
+   prisms; printed frame limits or LCG/VCG per tank, which allow the x-end and centroid metrics.
