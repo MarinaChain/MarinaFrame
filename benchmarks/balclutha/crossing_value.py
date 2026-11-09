@@ -165,7 +165,8 @@ def build_questions(sheet_pixels: np.ndarray, readings: dict, layout: bpr.SheetL
         limits = sorted((int(layout.centre_column - side.sign * CROP_ACROSS_CENTRE_PX),
                          int(layout.centre_column + side.sign * layout.max_offset_px * 1.2)))
         prompt = bpi.label_prompt(SIDE_NAMES[name], side.stations_outer_first)
-        for index, chain in enumerate(reading.chains):
+        for index in bpr.station_candidates(reading):
+            chain = reading.chains[index]
             png, geometry = bpi.question_image(sheet_pixels, chain, (limits[0], limits[1]))
             questions.append({'id': f'{name}-chain{index:02d}', 'side': name, 'chain': index, 'geometry': geometry,
                               'stations': side.stations_outer_first, 'messages': question_messages(prompt, png)})

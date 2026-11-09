@@ -147,12 +147,74 @@ def test_numbering_follows_the_labels_and_flags_the_odd_one(reading):
     # Labels say the outermost chain is station 6, not 5; one label is wrong; the last is unread.
     labels = {0: 6, 1: 7, 2: 9, 3: 9, 4: None}
     identities, summary = bpi.identities_from_labels(reading, labels)
-    assert summary['offset'] == 1 and summary['labels_agreeing'] == 3
+    assert summary['labels_agreeing'] == 3
     assert identities == {0: 6, 1: 7, 2: 8, 3: 9}
-    assert summary['disagreeing_chains'] == [2]
+    assert summary['disagreeing_chains'] == [2] and summary['chains_left_out'] == [4]
     # No labels at all: the code's own nesting count.
     identities, summary = bpi.identities_from_labels(reading, {})
-    assert summary['offset'] == 0 and identities[0] == 5
+    assert identities == dict(enumerate(STATIONS_OUTER_FIRST)) and summary['chains_left_out'] == []
+
+
+def test_assignment_keeps_the_nesting_count_against_one_wrong_label():
+    stations = (1, 2, 3, 4, 5, 6)
+    chains = [0, 1, 2, 3, 4, 5]
+    identities = bpi.assign_stations({2: 4}, chains, set(chains), stations)
+    assert identities == dict(zip(chains, stations))
+
+
+def test_assignment_leaves_out_a_false_chain_that_the_labels_step_over():
+    # Chain 2 is a leader line between stations 2 and 3: the labels on both sides name the curves,
+    # and no single shift of the numbering fits both sides.
+    stations = (1, 2, 3, 4, 5, 6)
+    chains = [0, 1, 2, 3, 4, 5, 6]
+    labels = {0: 1, 1: 2, 2: None, 3: 3, 4: 4, 5: 5, 6: 6}
+    identities = bpi.assign_stations(labels, chains, set(chains), stations)
+    assert identities == {0: 1, 1: 2, 3: 3, 4: 4, 5: 5, 6: 6}
+
+
+def test_assignment_numbers_a_one_waterline_chain_only_by_its_label():
+    stations = (1, 2, 3)
+    identities = bpi.assign_stations({2: 3}, [0, 1, 2], {0, 1}, stations)
+    assert identities == {0: 1, 1: 2, 2: 3}
+    identities = bpi.assign_stations({}, [0, 1, 2], {0, 1}, stations)
+    assert identities == {0: 1, 1: 2}
+
+
+def _vertical_drawing(lines: list[tuple[int, int, int, int, int]]) -> np.ndarray:
+    """Waterlines every 250 rows and the given lines (x0, y0, x1, y1, width), as ink."""
+    image = Image.new('L', (1700, 2300), 255)
+    draw = ImageDraw.Draw(image)
+    for row in WATERLINE_ROWS.values():
+        draw.line([(0, row), (1699, row)], fill=0, width=5)
+    for x0, y0, x1, y1, width in lines:
+        draw.line([(x0, y0), (x1, y1)], fill=0, width=width)
+    return np.asarray(image) < 128
+
+
+def test_a_post_off_the_centreline_and_a_digit_stroke_are_not_station_curves():
+    row = WATERLINE_ROWS[3]
+    post = (CENTRE + 120, 300, CENTRE + 120, 2050, 9)  # sternpost drawn 120 px out
+    flat_side = (CENTRE + 1400, 600, CENTRE + 1400, 2000, 5)  # flat of the side: straight, but far out
+    digit = (CENTRE + 800, row - 35, CENTRE + 815, row + 35, 5)  # one stroke of a station number
+    ink = _vertical_drawing([post, flat_side, digit])
+    crossings = bpc.find_crossings(ink, row, (CENTRE + 10, CENTRE + 1550))
+    bpc.classify(ink, crossings, 5.0, CENTRE, waterline_spacing_px=250.0, max_offset_px=1550)
+    kinds = {round(c.x_px - CENTRE, -1): c.kind for c in crossings}
+    assert kinds[120] == bpc.KIND_GRID  # stem or sternpost
+    assert kinds[1400] == bpc.KIND_CURVE
+    assert kinds[810] == bpc.KIND_LETTERING
+    # Without the sheet's waterline spacing the shape rules are off (the round-8 behaviour).
+    bpc.classify(ink, crossings, 5.0, CENTRE)
+    assert {round(c.x_px - CENTRE, -1): c.kind for c in crossings}[810] != bpc.KIND_LETTERING
+
+
+def test_a_low_one_waterline_line_is_not_a_station_candidate(reading):
+    rail = bpr.Chain('fore', {6: 0}, path=[(590.0, 900.0), (560.0, 1200.0)])  # 30 rows tall
+    tall = bpr.Chain('fore', {6: 0}, path=[(590.0, 300.0), (200.0, 400.0)])  # 390 rows tall
+    extended = bpr.SideReading(reading.layout, reading.crossings, reading.stations, reading.links,
+                               reading.chains + [rail, tall], reading.waterline_spacing_px)
+    assert reading.waterline_spacing_px == 250.0
+    assert bpr.station_candidates(extended) == list(range(len(reading.chains))) + [len(reading.chains) + 1]
 
 
 def test_crouton_falls_back_to_deepseek_after_a_failed_retry(tmp_path, monkeypatch):

@@ -15,7 +15,7 @@ import re
 
 import numpy as np
 
-from vessel_reconstruction.body_plan_reader import Chain, SideReading
+from vessel_reconstruction.body_plan_reader import Chain, SideReading, station_candidates
 
 # Crop: the curve's path plus this margin (px of the sheet), scaled so that its longer side is at
 # most QUESTION_MAX_SIDE_PX. Low-cost models read 16 px text at 2,048 px images (plan 3.5.5);
@@ -24,6 +24,13 @@ QUESTION_MARGIN_PX = 300
 QUESTION_MAX_SIDE_PX = 1536
 TRACE_COLOUR = (230, 0, 0, 170)  # semi-transparent red, so the digits under it stay readable
 TRACE_WIDTH_PX = 4
+# Station assignment: a chain given the station its label names gains MATCH_SCORE; a chain that
+# crosses two or more waterlines left without a station, and a station skipped between numbered
+# chains (or before the first), each cost GAP_COST. Moving the numbering away from the code's
+# nesting count needs more labels that agree with the move than gaps it opens (ties keep the
+# count), so one misread label in a crowded area never moves it.
+MATCH_SCORE = 1
+GAP_COST = 1
 
 LABEL_PROMPT = """This image is part of the BODY PLAN of a ship: a scanned line drawing of the {side_name}.
 Each station curve is labelled with its station number, written on or right next to the curve,
@@ -89,34 +96,61 @@ def parse_label(text: str, stations: tuple[int, ...]) -> int | None:
     return station
 
 
-def best_offset(labels: dict[int, int | None], kept: list[int], stations_outer_first: tuple[int, ...]) -> tuple[int, int]:
-    """Numbering offset that agrees with the most labels, and how many agree.
+def assign_stations(labels: dict[int, int | None], candidates: list[int], multi_waterline: set[int],
+                    stations_outer_first: tuple[int, ...]) -> dict[int, int]:
+    """Chain index -> station: the numbering in nesting order that agrees best with the labels.
 
-    Chain kept[r] gets station stations_outer_first[r + offset]. Ties prefer the smallest |offset|
-    (the code's own nesting count).
+    Code proposes the chains (candidates, outermost first) and their order; the model's labels
+    name them. The assignment keeps the nesting order (a chain further in gets a station further
+    in), and it may leave out a chain (not a station curve: a leader line, a merged curve, an
+    outline) or a station (not drawn as its own curve). Each departure from the plain nesting count
+    costs GAP_COST, each label followed gains MATCH_SCORE; ties keep the nesting count. A
+    one-waterline chain is numbered only with the station its label names.
     """
-    best = (0, -1)
-    for offset in sorted(range(-len(kept) + 1, len(stations_outer_first)), key=abs):
-        agree = sum(1 for r, chain in enumerate(kept) if 0 <= r + offset < len(stations_outer_first)
-                    and labels.get(chain) == stations_outer_first[r + offset])
-        if agree > best[1]:
-            best = (offset, agree)
-    return best
+    count = len(stations_outer_first)
+    multi_in_order = [chain for chain in candidates if chain in multi_waterline]
+    rank_position = {chain: position for position, chain in enumerate(multi_in_order)}
+    memo: dict = {}
+
+    def solve(i: int, p: int) -> tuple:
+        """Best ((score, agreement with the nesting count), choices) for candidates[i:], positions p.."""
+        if i == len(candidates):
+            return (0, 0), ()
+        if (i, p) not in memo:
+            chain = candidates[i]
+            (score, agree), rest = solve(i + 1, p)
+            options = [((score - (GAP_COST if chain in multi_waterline else 0), agree), rest)]
+            for q in range(p, count):
+                matches = labels.get(chain) == stations_outer_first[q]
+                if chain not in multi_waterline and not matches:
+                    continue
+                (score, agree), rest = solve(i + 1, q + 1)
+                gained = MATCH_SCORE * matches - GAP_COST * (q - p)
+                options.append(((score + gained, agree + (rank_position.get(chain) == q)), ((chain, q),) + rest))
+            memo[(i, p)] = max(options, key=lambda option: option[0])
+        return memo[(i, p)]
+
+    _, choices = solve(0, 0)
+    return {chain: stations_outer_first[position] for chain, position in choices}
 
 
 def identities_from_labels(reading: SideReading, labels: dict[int, int | None]) -> tuple[dict[int, int], dict]:
-    """Chain index -> station from the model's labels and the nesting order.
+    """Chain index -> station from the model's labels, checked against the nesting order.
 
-    Kept chains: every chain that crosses two or more waterlines, and a one-waterline chain only
-    when the model gave it a station number. The numbering is the nesting order shifted by the
-    offset that agrees with the most labels. Returns the identities and a summary (offset,
-    agreeing labels, chains whose label disagrees).
+    Candidates are the code's station candidates (`station_candidates`); a one-waterline chain
+    also needs a label. Returns the identities and a summary: labels followed, chains whose label
+    disagrees (to ask again), chains left out, and stations left without a chain between numbered
+    ones (a person or a second question should confirm these).
     """
     stations = reading.layout.stations_outer_first
-    kept = [k for k, chain in enumerate(reading.chains) if len(chain.nodes) >= 2 or labels.get(k) is not None]
-    offset, agree = best_offset(labels, kept, stations)
-    identities = {chain: stations[r + offset] for r, chain in enumerate(kept) if 0 <= r + offset < len(stations)}
+    candidates = [k for k in station_candidates(reading)
+                  if len(reading.chains[k].nodes) >= 2 or labels.get(k) is not None]
+    multi = {k for k in candidates if len(reading.chains[k].nodes) >= 2}
+    identities = assign_stations(labels, candidates, multi, stations)
     disagree = [k for k, station in identities.items() if labels.get(k) is not None and labels[k] != station]
-    labelled = sum(1 for k in kept if labels.get(k) is not None)
-    return identities, {'offset': offset, 'labels_agreeing': agree, 'labels_given': labelled,
-                        'chains_kept': len(kept), 'disagreeing_chains': disagree}
+    used = {stations.index(station) for station in identities.values()}
+    missing = [stations[q] for q in range(min(used), max(used)) if q not in used] if used else []
+    return identities, {'labels_agreeing': sum(1 for k, station in identities.items() if labels.get(k) == station),
+                        'labels_given': sum(1 for k in candidates if labels.get(k) is not None),
+                        'chains_kept': len(identities), 'chains_left_out': [k for k in candidates if k not in identities],
+                        'stations_without_chain': missing, 'disagreeing_chains': disagree}
