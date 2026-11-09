@@ -126,3 +126,9 @@
 - **Trigger:** The plan for Claude Sonnet 5.5 assumed Claude downsamples images above about 1,568 px. A token probe through the `claude` CLI (`work/claude-vision-probe`) showed image tokens growing with the area up to about 3.75 Mpx (2,048^2 and 2,576^2 both 4,809 tokens) and 9 px text readable at 2,048 px, so a 1,568 px cap would have thrown away detail.
 - **Rule:** Before a per-model image cap, send square and wide test images of several sizes and read the input-token count: a flat count marks the downsampling size. Also read small text at each size. Record the numbers beside the model's entry in `rust-control/src/models.rs`.
 - **Why:** Published limits change between model generations; the token count is the model's own statement of what it received.
+
+### A wait loop must not match itself (MarinaFrame)
+- **Date:** 2026-11-09
+- **Trigger:** `until ! pgrep -f "replay_edits" ...` waited forever: the waiter's own command line contained the pattern.
+- **Rule:** Wait on a PID (`kill -0 $pid`), a result-file count, or a done marker, not on `pgrep -f` with a pattern that the waiting command contains.
+- **Why:** Silent waits hide finished work and block the lane.
