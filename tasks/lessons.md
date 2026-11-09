@@ -108,3 +108,9 @@
 - **Trigger:** A reader change helped one case and broke another (shipd-1-09867-3v-L0: the intake's half-width profile region, 3.4 -> 19 %); only a replay of all ten earlier live readings showed it.
 - **Rule:** After each reader change, replay the model's earlier phase-1 readings through `build_first_hull` (copy the task's `domain/input` and the reading state, re-run `_describe_vessel` on `model_description`, score the first-hull STEP) for every L0 and L1 dev case. Run live rounds only after the replay shows no regression.
 - **Why:** Live runs vary by 1-5 points from the model alone; replays isolate the code change.
+
+### Push only after the checks pass in the same command
+- **Date:** 2026-11-09
+- **Trigger:** After a merge, `make test-quick` failed (a stale `marinaframe-app-core` build cache made lint report missing methods), but the same shell line pushed anyway because the push was not chained to the test result. The code was fine; `cargo clean -p marinaframe-app-core` and a rerun passed.
+- **Rule:** Chain the push to the check: `make test-quick && git push ...`. If a Rust error names a symbol that exists in the source after a merge, clean that package and rerun before changing code.
+- **Why:** An unchained push can publish a state that the checks did not pass.
