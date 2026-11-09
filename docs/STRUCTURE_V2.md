@@ -246,3 +246,73 @@ top or bulkhead by text this reader follows; so the thickness stays `guessed`.
 4. Transverse recall on MiDShip (block length and frame-space guesses; brackets, openings), as
    section 5.
 5. A sealed 3D split from the next MiDShip tranche.
+
+## 8. Round 3 plan (2026-11-09): Gunnerus 3D internal structure from its own drawings
+
+Written before the round 3 code (branch `feature/gunnerus-structure` from `continue/v0.5`
+`80d5fa5`). Sections 1 to 7 are rounds 1 and 2; their numbers stay as their record. Development
+case only: the Gunnerus truth STEP has no internals, so every metric compares printed sources with
+each other (as G1 to G3 in `docs/WHOLE_VESSEL_GUNNERUS.md` section 6). No model call.
+
+### 8.1 Sources (licensed, `work/sources/gunnerus/polarkonsult`, never committed)
+
+- `Midship Section Rev0.dxf`: section `#I` (a plain frame of the 5,000 mm new part, frames A to J
+  between frames 27 and 28) is the section to extrude. Moulded lines (layer `S0CO5`): 1-deck,
+  tank top, shell contour, centre girder, double-bottom girders and deck girders. Labels: `PL`
+  blocks with thickness attributes, flat-bar and HP profile labels, `nnnn FCL.` stiffener
+  positions, `1250 O/BL.` tank-top level. Section `#G` (a bulkhead in the new part) gives the
+  bulkhead plate and its stiffeners.
+- `Shell Expansion Rev0.dxf`: shell strake thickness of the new part between the printed seams
+  (`1875 FCL.`, `3525 FCL.`, `T.T. 1075 OBL.`, `1-DECK`); the side-frame key (`SECTION FRAME:`
+  lists with their profiles).
+- `Profile and Plan Rev0.dxf`: frame axes (frame spacing), tank-top plate labels, deck plate label,
+  the new-part note (`LONG. GIRDERS ... DECK BEAMS: HP140x8`), girder elevations
+  (`SECTION 3525 FCL ...`).
+- The built hull (`work/whole-vessel/final/whole-vessel-draft.glb`) and the step 2 internals
+  reader (`benchmarks/gunnerus/whole_vessel_internals.py`: main bulkheads and tank-top runs).
+
+### 8.2 Build
+
+1. Read section `#I`: members in the section plane (y from the centre line, z above the new
+   baseline: old baseline from the `1250 O/BL.` tank-top line, new baseline 86.51 mm below it as
+   printed). Thickness and profile of each member from the nearest label of its kind; a member
+   with no label gets a labelled guess.
+2. Parallel body: the frames (drawn frame axis, 500 mm, lettered frames A to J after 27) around the
+   new part whose built-hull section is one piece (no skeg) with area within 3 % of the new-part
+   mean. The members run over these frames.
+3. Longitudinal members (one per plate panel and run): 1-deck, tank-top panels between girders,
+   centre and side girders of the double bottom, deck girders (stiffener), shell strakes between
+   the printed seams. Every outline is cut to the built-hull section at each frame (clip at the
+   ends and wherever the hull narrows).
+4. Transverse members at each frame: floor (hull section below the tank top), floor stiffeners,
+   side frames, deck beam; at a bulkhead station of the internals reader the bulkhead plate (hull
+   section from the tank top to the deck) and its vertical stiffeners replace frame and beam.
+5. Thickness per member labelled `printed` (with the sheet and label) or `guessed`; IDs
+   `G/<zone>/<member>/<frame>` stable across runs.
+6. Steel table (round 2 writer) and OCX 3.0.1: plates with their real outline (not a box) and,
+   where feasible, `ocx:Stiffener` elements (trace line, material, section from an
+   `XSectionCatalogue` with `FlatBar` / `BulbFlat`), schema-checked against the local XSD.
+
+### 8.3 Metrics and targets (printed vs printed; development figures)
+
+| ID | Metric | Target |
+|---|---|---|
+| G6a | Girder and seam y positions: midship section linework vs printed FCL labels (midship, shell expansion, profile and plan), median abs | <= 10 mm |
+| G6b | Tank-top and deck z: midship linework vs printed levels (`1250 O/BL`, `4200 AB.BL`, depth 4.287 m) and vs the internals reader's tank-top run at the same x | <= 25 mm |
+| G6c | Drawn section `#I` shell vs built-hull section at frame I, median (p95) abs normal offset | median <= 30 mm |
+| G7a | Steel weight with a printed thickness, share | >= 70 % |
+| G7b | Members printed on two sheets: agreement of the values (list every pair) | report |
+| G8 | Frame spacing from the drawn frame axes vs printed `FRAME DISTANCE 500` | median abs <= 5 mm |
+| G9 | Steel weight vs a printed lightweight or steel weight | compare if printed, else "not found" |
+| G10 | OCX: schema valid; round trip of plates (count, thickness, area) and stiffeners (count, section, length) | all valid and equal |
+| G11 | Members inside the built hull (outline points within 10 mm of the hull section) | 100 % |
+
+### 8.4 Checks and resume point
+
+Unit tests on synthetic data: extrusion and clipping on a box hull, stiffener OCX validates and
+round-trips. Order: 8.2 items 1 to 6, then the run and section 9 (results). Command (outputs in
+git-ignored `work/step3/`):
+
+    PYTHONPATH=src:. .venv/bin/python -m benchmarks.gunnerus.structure_3d \
+        --sources ../../../work/sources/gunnerus --assembly ../../../work/whole-vessel/final \
+        --out work/step3/gunnerus --ocx-schema ../../../work/sources/ocx_schema/ocx/ocx_301
