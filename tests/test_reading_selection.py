@@ -21,8 +21,10 @@ class FakeTools:
         self.saved += 1
 
 
-def first_hull_state(fit: float) -> dict:
-    return {"sheet_only": True, "fit_score": {"combined_fit": fit}, "description_phase": "complete",
+def first_hull_state(fit: float, draft_fit: float | None = None) -> dict:
+    """State after a first hull: body-plan fit ``fit``; three-view draft fit ``draft_fit`` (None: not scored)."""
+    return {"sheet_only": True, "fit_score": {"combined_fit": fit}, "draft_fit": {"draft_fit": draft_fit},
+            "description_phase": "complete",
             "vessel_description": {"stations": [{"id": "1"}, {"id": "2"}]},
             "described_views": [{"view_id": "body"}], "sheet_setups": {"setup-1": {}},
             "vessel_table": {"stations": []}, "last_valid_candidate": {"id": "first"}, "builds": [{"id": "first"}]}
@@ -34,7 +36,7 @@ def test_first_hull_starts_a_second_reading_and_keeps_the_hull(tmp_path):
     assert started["reading"] == 2 and started["of"] == T.READINGS
     assert tools.state["description_phase"] == "views" and tools.state["sheet_setups"] == {}
     assert tools.state["vessel_table"] == {"stations": []}  # the first hull stays the draft
-    assert tools.state["readings"] == [{"combined_fit": 0.8, "station_count": 2, "kept": True}]
+    assert tools.state["readings"] == [{"draft_fit": None, "combined_fit": 0.8, "station_count": 2, "kept": True}]
     assert T.start_next_reading(tools) is None  # only once
 
 
@@ -51,7 +53,8 @@ def test_the_earlier_reading_is_kept_when_the_new_hull_fits_worse(tmp_path):
     (tmp_path / "input" / MATERIALIZED_SPEC).write_text("{}")
     materialized = json.dumps({"sections": [{"id": "old"}]}).encode()
     selection = T.keep_better_reading(tools, earlier, materialized, {"ok": True})
-    assert selection == {"kept": "earlier", "fit_earlier": 0.8, "fit_new": 0.6}
+    assert selection == {"kept": "earlier", "fit_earlier": None, "fit_new": None,
+                         "body_fit_earlier": 0.8, "body_fit_new": 0.6}
     assert tools.state["last_valid_candidate"] == {"id": "first"}
     # The set-aside reading's builds are history only: a later build must never reuse one.
     assert [b["id"] for b in tools.state["builds"]] == ["first"]
@@ -79,3 +82,46 @@ def test_a_failed_new_build_keeps_the_earlier_reading(tmp_path):
     tools = FakeTools(tmp_path, {**first_hull_state(0.9), "last_valid_candidate": {"id": "second"}})
     selection = T.keep_better_reading(tools, earlier, b'{"sections": []}', {"ok": False})
     assert selection["kept"] == "earlier" and tools.state["last_valid_candidate"] == {"id": "first"}
+
+
+def test_the_draft_fit_ranks_readings_before_the_body_plan_fit(tmp_path):
+    # shipd-1-08158-3v-L1 Sonnet live: the first reading put x = 0 3 m forward of
+    # the aft end; its body plan fit its own frame better (0.919 against 0.872)
+    # but its hull was 11.9 % RMS against 5.3 %. The three-view fit in the
+    # code-measured frame ranks them the other way.
+    earlier = first_hull_state(0.919, draft_fit=0.70)
+    tools = FakeTools(tmp_path, {**first_hull_state(0.872, draft_fit=0.78), "last_valid_candidate": {"id": "second"}})
+    selection = T.keep_better_reading(tools, earlier, b"{}", {"ok": True})
+    assert selection["kept"] == "new" and tools.state["last_valid_candidate"] == {"id": "second"}
+    assert selection["fit_earlier"] == 0.70 and selection["body_fit_earlier"] == 0.919
+
+
+def test_better_reading_compares_like_with_like():
+    assert T.better_reading({"draft_fit": 0.7, "combined_fit": 0.9}, {"draft_fit": 0.8, "combined_fit": 0.5})
+    # One reading without a draft fit: both are compared on the body-plan fit.
+    assert not T.better_reading({"draft_fit": None, "combined_fit": 0.9}, {"draft_fit": 0.8, "combined_fit": 0.5})
+    assert not T.better_reading({"draft_fit": 0.7, "combined_fit": 0.9}, {"draft_fit": None, "combined_fit": None})
+
+
+def test_a_reading_with_the_same_setup_is_recorded_and_the_next_one_starts(tmp_path, monkeypatch):
+    monkeypatch.setattr(T, "READINGS", 3)
+    tools = FakeTools(tmp_path, first_hull_state(0.8, draft_fit=0.7))
+    assert T.start_next_reading(tools)["reading"] == 2 and tools.state["reading_open"] == 1
+    # Reading 2 gave the kept setup again: no first hull was built, so no record yet.
+    tools.state.update(description_phase="complete", vessel_description={"stations": [{"id": "1"}]})
+    following = T.finish_reading(tools)
+    assert following["reading"] == 3 and following["of"] == 3
+    assert tools.state["readings"][1] == {"draft_fit": None, "combined_fit": None, "station_count": 1,
+                                          "same_setup": True, "kept": False}
+    assert tools.state["description_phase"] == "views" and tools.state["reading_open"] == 2
+    # Reading 3 built a first hull (keep_better_reading added its record): the readings end.
+    tools.state["readings"].append({"draft_fit": 0.6, "kept": False})
+    assert T.finish_reading(tools) is None and "reading_open" not in tools.state
+    assert T.finish_reading(tools) is None  # nothing open
+
+
+def test_two_readings_end_after_the_second(tmp_path):
+    tools = FakeTools(tmp_path, first_hull_state(0.8))
+    T.start_next_reading(tools)
+    tools.state["readings"].append({"draft_fit": None, "kept": False})
+    assert T.finish_reading(tools) is None and len(tools.state["readings"]) == T.READINGS == 2

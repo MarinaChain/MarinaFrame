@@ -307,6 +307,8 @@ def build_first_hull(tools):
     write_json(tools.root / "vessel.json", {"description": description, "table": table.to_json()})
     from .fit_feedback import score
     tools.state["fit_score"] = score(tools, table)
+    from .draft_fit import task_score
+    tools.state["draft_fit"] = task_score(tools, table)
     tools.state["first_hull_spec"] = built["spec"]
     tools.state["guesses"] = built["spec"].get("draft", {}).get("guesses", guesses)
     candidate = {"id":tools.generation_id,"generation_id":tools.generation_id,"revision_id":tools.revision_id,
@@ -316,6 +318,7 @@ def build_first_hull(tools):
         "warnings":warnings}
     tools.state["builds"].append(candidate)
     candidate["combined_fit"] = tools.state["fit_score"].get("combined_fit")
+    candidate["draft_fit"] = tools.state["draft_fit"].get("draft_fit")
     tools.state["last_valid_candidate"] = candidate
     tools.state["best_valid_candidate"] = copy.deepcopy(candidate)
     tools._save()
@@ -378,26 +381,62 @@ def setup_changes(old: dict, new: dict) -> list[str]:
 
 # A sheet-only first hull is read READINGS times: after the first hull the
 # model reads the sheet again (phase 1), and of the first hulls the one with
-# the better drawing fit (fit_feedback.score, combined_fit: drawing only, never
-# truth) is kept. Live runs differ by 1-5 points from the model's reading alone
-# (docs/CONTINUATION_STATUS.md, variance); two readings cost a few model calls.
+# the best drawing fit is kept (draft_fit.task_score: all three views in one
+# frame measured by code; drawing only, never truth). Live runs differ by 1-5
+# points from the model's reading alone (docs/HULL_SELECTION.md); each further
+# reading costs a few model calls.
 READINGS = 2
 # Description state of one reading; a new reading starts it again.
 READING_STATE = {"description_phase": "views", "description_next_view": None, "described_views": [],
                  "sheet_setups": {}}
-NEXT_READING_MESSAGE = ("Second reading (best of 2 by drawing fit): read the sheet again from the views, as an "
-                        "independent check: describe_views, propose_sheet_setup and describe_vessel. The first "
-                        "hull of the reading that fits the drawing better is kept.")
+
+
+def next_reading_message(number: int) -> str:
+    return (f"Reading {number} of {READINGS} (best of {READINGS} by drawing fit): read the sheet again from the "
+            "views, as an independent check: describe_views, propose_sheet_setup and describe_vessel. The first "
+            "hull of the reading that fits the drawing best is kept.")
+
+
+def reading_fits(state: dict) -> dict:
+    """Drawing fits of a task state's first hull: draft_fit (three views, code frame) and the body-plan fit."""
+    return {"draft_fit": (state.get("draft_fit") or {}).get("draft_fit"),
+            "combined_fit": (state.get("fit_score") or {}).get("combined_fit")}
+
+
+def better_reading(old: dict, new: dict) -> bool:
+    """True when the new reading's fits (reading_fits) beat the old ones; ties keep the old reading.
+
+    Both readings are compared on draft_fit when both have it. The body-plan
+    fit alone measures each reading in its own frame: it kept a reading with x
+    = 0 3 m off the hull's aft end (shipd-1-08158-3v-L1 Sonnet live: fit 0.919
+    and 11.9 % RMS against 0.872 and 5.3 %).
+    """
+    key = "draft_fit" if old.get("draft_fit") is not None and new.get("draft_fit") is not None else "combined_fit"
+    if new.get(key) is None:
+        return False
+    return old.get(key) is None or new[key] > old[key]
 
 
 def reading_record(tools, kept: bool | None = None) -> dict:
-    """Summary of one reading's first hull: its drawing fit and stations."""
-    fit = (tools.state.get("fit_score") or {}).get("combined_fit")
+    """Summary of one reading's first hull: its drawing fits and stations."""
     stations = (tools.state.get("vessel_description") or {}).get("stations") or []
-    record = {"combined_fit": fit, "station_count": len(stations)}
+    record = {**reading_fits(tools.state), "station_count": len(stations)}
     if kept is not None:
         record["kept"] = kept
     return record
+
+
+def begin_reading(tools) -> dict:
+    """Start one more phase-1 reading; returns the observation part that says so.
+
+    ``reading_open`` holds the number of reading records before this reading,
+    so finish_reading can tell whether the reading built a first hull.
+    """
+    readings = tools.state["readings"]
+    tools.state.update(copy.deepcopy(READING_STATE))
+    tools.state["reading_open"] = len(readings)
+    tools._save()
+    return {"reading": len(readings) + 1, "of": READINGS, "message": next_reading_message(len(readings) + 1)}
 
 
 def start_next_reading(tools) -> dict | None:
@@ -417,9 +456,28 @@ def start_next_reading(tools) -> dict | None:
     if len(readings) >= READINGS:
         tools._save()
         return None
-    tools.state.update(copy.deepcopy(READING_STATE))
-    tools._save()
-    return {"reading": len(readings) + 1, "of": READINGS, "message": NEXT_READING_MESSAGE}
+    return begin_reading(tools)
+
+
+def finish_reading(tools) -> dict | None:
+    """End a repeat reading after its describe_vessel; start the next one when due.
+
+    A reading whose setup equals the kept one builds no first hull
+    (rebuild_if_setup_changed): it is recorded as ``same_setup``. Returns the
+    next reading's observation part, or None.
+    """
+    opened = tools.state.pop("reading_open", None)
+    if opened is None:
+        return None
+    readings = tools.state.setdefault("readings", [])
+    if len(readings) == opened:
+        stations = (tools.state.get("vessel_description") or {}).get("stations") or []
+        readings.append({"draft_fit": None, "combined_fit": None, "station_count": len(stations),
+                         "same_setup": True, "kept": False})
+    if len(readings) >= READINGS:
+        tools._save()
+        return None
+    return begin_reading(tools)
 
 
 def keep_better_reading(tools, snapshot: dict, materialized: bytes | None, observation: dict) -> dict:
@@ -430,16 +488,19 @@ def keep_better_reading(tools, snapshot: dict, materialized: bytes | None, obser
     """
     from .agent_tools import MATERIALIZED_SPEC
     from .schema import load_bounded_json
-    old_fit = (snapshot.get("fit_score") or {}).get("combined_fit")
-    new_fit = (tools.state.get("fit_score") or {}).get("combined_fit") if observation.get("ok") else None
+    old_fits = reading_fits(snapshot)
+    new_fits = reading_fits(tools.state) if observation.get("ok") else {"draft_fit": None, "combined_fit": None}
     # The new reading replaces the earlier one only when it fits the drawing strictly better.
-    keep_old = materialized is not None and old_fit is not None and (new_fit is None or new_fit <= old_fit)
+    has_old = materialized is not None and any(value is not None for value in old_fits.values())
+    keep_old = has_old and not better_reading(old_fits, new_fits)
     readings = copy.deepcopy(tools.state.get("readings") or [])
     for record in readings:
         if record.get("kept"):
             record["kept"] = keep_old
-    readings.append({**reading_record(tools), "combined_fit": new_fit, "kept": not keep_old})
-    selection = {"kept": "earlier" if keep_old else "new", "fit_earlier": old_fit, "fit_new": new_fit}
+    readings.append({**reading_record(tools), **new_fits, "kept": not keep_old})
+    selection = {"kept": "earlier" if keep_old else "new", "fit_earlier": old_fits["draft_fit"],
+                 "fit_new": new_fits["draft_fit"], "body_fit_earlier": old_fits["combined_fit"],
+                 "body_fit_new": new_fits["combined_fit"]}
     if keep_old:
         (tools.root / "input" / MATERIALIZED_SPEC).write_bytes(materialized)
         set_aside = snapshot.get("set_aside_builds", []) + tools.state.get("builds", [])
