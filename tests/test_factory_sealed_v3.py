@@ -3,6 +3,9 @@ import json
 from collections import Counter
 
 import numpy as np
+import pytest
+
+pytest.importorskip('cv2', reason='the factory renderer needs the plan-raster extra (OpenCV)')
 
 from benchmarks.factory import report
 from benchmarks.factory import sealed_v2 as V2

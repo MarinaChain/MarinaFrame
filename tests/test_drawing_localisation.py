@@ -1,6 +1,9 @@
 import numpy as np
 import pytest
 
+# benchmarks.localisation imports the factory renderer, which needs OpenCV (plan-raster extra).
+pytest.importorskip('cv2', reason='the factory renderer needs the plan-raster extra (OpenCV)')
+
 
 def test_crossing_interpolates_polyline_without_extrapolation():
     from benchmarks.localisation.drawings import crossing

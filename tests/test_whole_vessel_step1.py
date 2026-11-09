@@ -76,6 +76,7 @@ def rectangle(entity_id, x0, y0, x1, y1):
 
 
 def test_plan_footprint_outer_and_inner():
+    pytest.importorskip('cv2', reason='PlanRaster needs the plan-raster extra (OpenCV)')
     view = ga_reader.View('plan', 'plan', [-1000, -6000, 31000, 6000], [0, 0])
     deck = rectangle('deck', 0, -5000, 30000, 5000)
     house = rectangle('house', 10000, -3000, 20000, 3000)
@@ -191,6 +192,7 @@ def test_raster_levels_and_walls():
 
 
 def test_plan_raster_from_ink_footprint():
+    pytest.importorskip('cv2', reason='PlanRaster needs the plan-raster extra (OpenCV)')
     ink = np.zeros((120, 220), np.uint8)
     ink[10:12, 10:210] = 255
     ink[108:110, 10:210] = 255
