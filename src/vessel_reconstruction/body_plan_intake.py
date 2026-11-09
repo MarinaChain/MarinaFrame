@@ -72,12 +72,17 @@ def waterline_spacing_m(cal: sc.Calibration) -> float:
 def read_body_plan(ink: np.ndarray, reading, dpi: float | None) -> tuple[dict, sc.Calibration]:
     """Calibrate and read one sheet; returns (record, calibration)."""
     cal = sc.calibrate(ink, reading, dpi=dpi)
+    return read_with_calibration(ink, cal), cal
+
+
+def read_with_calibration(ink: np.ndarray, cal: sc.Calibration) -> dict:
+    """Run the same frozen reader with an existing calibration, including person corrections."""
     record = {'schema': SCHEMA, 'calibration': calibration_record(cal), 'stations': [],
               'engineering_approved': False, 'identity': 'code: nesting order (outermost chain first)'}
     if not cal.usable:
         record['usable_for_build'] = False
         record['reason'] = 'calibration incomplete'
-        return record, cal
+        return record
     layout = cal.layout()
     for side in layout.sides:
         side_reading = bpr.measure_side(ink, layout, side)
@@ -103,7 +108,7 @@ def read_body_plan(ink: np.ndarray, reading, dpi: float | None) -> tuple[dict, s
     record['usable_for_build'] = not cal.flags and bool(record['stations'])
     if cal.flags:
         record['reason'] = 'calibration has open flags; a person must confirm it first'
-    return record, cal
+    return record
 
 
 def calibration_record(cal: sc.Calibration) -> dict:

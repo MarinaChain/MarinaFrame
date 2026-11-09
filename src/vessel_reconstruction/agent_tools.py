@@ -248,6 +248,8 @@ class DomainTools(InvestigationTools):
 
     def body_plan_reading(self) -> dict | None:
         """The intake's automatic body-plan reading (body_plan_intake), if the setting made one."""
+        if isinstance(self.state.get("body_plan_reading_override"), dict):
+            return self.state["body_plan_reading_override"]
         if not self.state.get("intake"):
             return None
         record = load_bounded_json(self.root / "input" / self.state["intake"]["file"])
@@ -372,7 +374,8 @@ class DomainTools(InvestigationTools):
         if not isinstance(arguments, dict) or len(json.dumps(arguments, allow_nan=False)) > 65536:
             raise ToolInputError("Tool arguments must be a bounded JSON object.")
         expected = {"inspect_source": {"section_ids"}, "select_contours": {"selections"},
-                    "build_provisional": set(), "build_draft": set(), "build_first_hull": set(), "render_candidate": {"view"},
+                    "build_provisional": set(), "build_draft": set(), "build_first_hull": set(),
+                    "correct_calibration": {"correction"}, "render_candidate": {"view"},
                     "validate_candidate": set(), "propose_section": PROPOSE_SECTION_ARGUMENTS,
                     **INVESTIGATION_ARGUMENTS}
         if name not in expected:
@@ -835,6 +838,10 @@ class DomainTools(InvestigationTools):
                                  validation_errors=candidate["gaps"], artifacts=artifacts,
                                  resources=outcome.get("resources", {}), changed=True,
                                  last_valid_preserved=self.state["last_valid_candidate"] is not None)
+
+    def _correct_calibration(self, correction):
+        from .calibration_correction import rebuild
+        return rebuild(self, correction)
 
     def _build_first_hull(self):
         from .first_hull_tools import build_first_hull, start_next_reading
