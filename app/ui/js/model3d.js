@@ -6,10 +6,10 @@ import * as THREE from '../vendor/three/three.module.min.js';
 import { OrbitControls } from '../vendor/three/OrbitControls.js';
 import { STLLoader } from '../vendor/three/STLLoader.js';
 import { GLTFLoader } from '../vendor/three/GLTFLoader.js';
-import { el, icon, prefersReducedMotion } from './dom.js';
+import { el, fill as fillNode, icon, prefersReducedMotion } from './dom.js';
 import { createSectionGrowth } from './growth3d.js';
 import { createAnimation } from './animation.js';
-import { placeLabels, tankLegend, tankToken } from './tanks.js';
+import { placeLabels, steelLegend, steelToken, tankLegend, tankToken } from './tanks.js';
 
 /** Extra size of a section plane around the hull, as a fraction of beam and depth. */
 const PLANE_MARGIN = 0.25;
@@ -25,8 +25,10 @@ const CLICK_SLOP_PX = 4;
 const MM_TO_M = 0.001;
 /** Duration of an animated move to the home view. */
 const HOME_MOVE_MS = 360;
-/** Opacity of the hull and the other parts while tanks show, so the tanks inside are seen. */
+/** Opacity of the hull and the other parts while tanks or steel show, so what is inside is seen. */
 const SHELL_OPACITY_WITH_TANKS = 0.22;
+/** Steel shell plating is see-through, so the frames and floors behind it show. */
+const STEEL_SHELL_OPACITY = 0.35;
 /** Tank edges: a face angle above this (degrees) draws an edge line, as on a compartment view. */
 const TANK_EDGE_ANGLE_DEG = 30;
 /** Tank edge lines are the tank colour darkened to this share. */
@@ -57,6 +59,7 @@ function themeColours() {
     accent: read('--accent'),
     guess: read('--guess-ink'),
     tank: (contentClass) => read(tankToken(contentClass)),
+    steel: (group) => read(steelToken(group)),
     // Section source labels, the same palette as the drawing and the section strip.
     source: {
       traced: read('--src-traced'),
@@ -87,7 +90,7 @@ export function createModelView({ host, onPick = null }) {
     renderer = new THREE.WebGLRenderer({ antialias: true });
   } catch {
     showEmpty('3D view not available', 'This computer did not allow a WebGL view.');
-    return { setModel() {}, setSelected() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), highlightPart() {}, showsWholeVessel: false, hasTanks: false };
+    return { setModel() {}, setSelected() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, showsWholeVessel: false, hasTanks: false };
   }
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.domElement.setAttribute('aria-hidden', 'true');
@@ -118,11 +121,14 @@ export function createModelView({ host, onPick = null }) {
   /** Meshes of the whole vessel: tanks (GLB extras kind "tank") and the other parts (the shell). */
   let tankMeshes = [];
   let shellMeshes = [];
+  /** Steel structure (a second GLB, one mesh per member group), or null. */
+  let structure = null;
+  let steelMeshes = [];
   /** The part tinted in the selection blue, and the tank under the pointer (part ids). */
   let highlightedId = null;
   let hoveredTankId = null;
   /** Layer switches of the whole-vessel view (the legend panel holds them). */
-  const layers = { tanks: true, names: false };
+  const layers = { tanks: true, names: false, structure: true };
   /** Overlays: tank name labels, and the legend with the layer switches. */
   const labelLayer = el('div', { class: 'model-labels', 'aria-hidden': 'true' });
   const legend = el('div', { class: 'model-legend', role: 'group', 'aria-label': 'Tanks by content' });
@@ -253,14 +259,15 @@ export function createModelView({ host, onPick = null }) {
   /** Colour the whole vessel: tanks by content (capacity-plan tokens), the shell translucent
    * while tanks show, the highlighted part in the selection blue. */
   function styleWholeVessel() {
-    const showTanks = layers.tanks && tankMeshes.length > 0;
+    // The shell turns translucent while tanks or steel inside it show.
+    const seeInside = (layers.tanks && tankMeshes.length > 0) || (layers.structure && steelMeshes.length > 0);
     for (const mesh of shellMeshes) {
       const material = mesh.material;
       material.color = mesh.userData.partId === highlightedId ? colours.accent : colours.hull;
-      if (material.transparent !== showTanks) material.needsUpdate = true;
-      material.transparent = showTanks;
-      material.opacity = showTanks ? SHELL_OPACITY_WITH_TANKS : 1;
-      material.depthWrite = !showTanks;
+      if (material.transparent !== seeInside) material.needsUpdate = true;
+      material.transparent = seeInside;
+      material.opacity = seeInside ? SHELL_OPACITY_WITH_TANKS : 1;
+      material.depthWrite = !seeInside;
     }
     for (const mesh of tankMeshes) {
       mesh.visible = layers.tanks;
@@ -271,23 +278,35 @@ export function createModelView({ host, onPick = null }) {
       const edges = mesh.children.find((child) => child.isLineSegments);
       if (edges) edges.material.color = colour.clone().multiplyScalar(TANK_EDGE_SHADE);
     }
+    for (const mesh of steelMeshes) {
+      mesh.visible = layers.structure;
+      mesh.material.color = colours.steel(mesh.userData.group);
+      const shell = mesh.userData.group === 'shell';
+      mesh.material.transparent = shell;
+      mesh.material.opacity = shell ? STEEL_SHELL_OPACITY : 1;
+      mesh.material.depthWrite = !shell;
+    }
     renderLegend();
   }
 
   /** The legend of the tank colours and the switches for tanks and names (hidden without tanks). */
   function renderLegend() {
-    legend.hidden = !wholeVessel || !tankMeshes.length;
+    legend.hidden = !wholeVessel || (!tankMeshes.length && !steelMeshes.length);
     if (legend.hidden) return;
     const toggle = (key, text) => el('label', { class: 'model-switch' },
       el('input', { type: 'checkbox', checked: layers[key], onchange: (event) => setLayer(key, event.target.checked) }),
       text);
-    const rows = tankLegend(tankMeshes.map((mesh) => mesh.userData));
-    legend.replaceChildren(
-      el('div', { class: 'model-legend-head' }, toggle('tanks', `Tanks (${tankMeshes.length})`), toggle('names', 'Names')),
-      layers.tanks ? el('ul', { class: 'model-legend-rows' }, ...rows.map((row) => el('li', {},
-        el('span', { class: 'model-swatch', style: { background: `var(${row.token})` } }),
-        el('span', {}, row.label), el('span', { class: 'model-legend-count' }, String(row.count))))) : null,
-      el('p', { class: 'model-legend-note' }, 'Capacity-plan colours. Draft, not for construction.'));
+    const list = (rows) => el('ul', { class: 'model-legend-rows' }, ...rows.map((row) => el('li', {},
+      el('span', { class: 'model-swatch', style: { background: `var(${row.token})` } }),
+      el('span', {}, row.label), el('span', { class: 'model-legend-count' }, String(row.count)))));
+    const steelRows = steelLegend(steelMeshes.map((mesh) => mesh.userData));
+    const steelCount = steelRows.reduce((sum, row) => sum + row.count, 0);
+    fillNode(legend,
+      tankMeshes.length ? el('div', { class: 'model-legend-head' }, toggle('tanks', `Tanks (${tankMeshes.length})`), toggle('names', 'Names')) : null,
+      tankMeshes.length && layers.tanks ? list(tankLegend(tankMeshes.map((mesh) => mesh.userData))) : null,
+      steelMeshes.length ? el('div', { class: 'model-legend-head' }, toggle('structure', `Steel (${steelCount} members)`)) : null,
+      steelMeshes.length && layers.structure ? list(steelRows) : null,
+      el('p', { class: 'model-legend-note' }, 'Tanks by content (capacity plan), steel by member group. Draft, not for construction.'));
   }
 
   function setLayer(key, on) {
@@ -559,8 +578,10 @@ export function createModelView({ host, onPick = null }) {
           }
         });
         wholeVessel = null;
+        structure = null;
         tankMeshes = [];
         shellMeshes = [];
+        steelMeshes = [];
         hoveredTankId = null;
         renderLegend();
         updateLabels();
@@ -624,6 +645,48 @@ export function createModelView({ host, onPick = null }) {
     },
     get showsWholeVessel() {
       return Boolean(wholeVessel);
+    },
+    /**
+     * Add the run's steel structure (a GLB from structure/display.py: one mesh per member group,
+     * extras kind "structure") to the whole vessel shown, or remove it with null. Same axes and
+     * units as the whole vessel. Resolves when it shows.
+     */
+    setStructure(buffer) {
+      if (structure) {
+        structure.parent?.remove(structure);
+        structure.traverse((o) => {
+          if (o.isMesh) {
+            o.geometry.dispose();
+            o.material.dispose();
+          }
+        });
+        structure = null;
+        steelMeshes = [];
+      }
+      if (!buffer || !wholeVessel) {
+        if (wholeVessel) styleWholeVessel();
+        requestRender();
+        return Promise.resolve();
+      }
+      return new Promise((resolve, reject) => {
+        new GLTFLoader().parse(buffer, '', (gltf) => {
+          if (!wholeVessel) {
+            resolve();
+            return;
+          }
+          gltf.scene.traverse((o) => {
+            if (!o.isMesh || o.userData.kind !== 'structure') return;
+            o.material = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.1, side: THREE.DoubleSide });
+            steelMeshes.push(o);
+          });
+          structure = gltf.scene;
+          // The whole-vessel group turns glTF Y-up into the app's Z-up and scales mm to m.
+          wholeVessel.add(structure);
+          styleWholeVessel();
+          requestRender();
+          resolve();
+        }, reject);
+      });
     },
     /** True when the whole vessel shown has tanks (its legend shows). */
     get hasTanks() {

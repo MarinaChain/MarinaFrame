@@ -74,6 +74,33 @@ export function tankLegend(tanks) {
     .map(([cls, label]) => ({ cls, label, count: counts.get(cls), token: tankToken(cls) }));
 }
 
+/** Steel member groups in legend order (vessel_reconstruction.structure.display MEMBER_GROUPS). */
+export const STEEL_GROUPS = [
+  ['shell', 'Shell plating'],
+  ['deck', 'Decks and inner bottom'],
+  ['bulkhead', 'Bulkheads'],
+  ['primary', 'Floors, girders, web frames'],
+  ['stiffener', 'Frames, beams, stiffeners'],
+];
+const KNOWN_STEEL = new Map(STEEL_GROUPS);
+
+/** The design token of a steel member group ("--steel-shell"); an unknown group is "primary". */
+export function steelToken(group) {
+  return `--steel-${KNOWN_STEEL.has(group) ? group : 'primary'}`;
+}
+
+/** Legend rows for structure meshes [{ group, members }]: member counts per group, in legend order. */
+export function steelLegend(meshes) {
+  const counts = new Map();
+  for (const mesh of meshes) {
+    const group = KNOWN_STEEL.has(mesh.group) ? mesh.group : 'primary';
+    counts.set(group, (counts.get(group) || 0) + (mesh.members?.length || 0));
+  }
+  return STEEL_GROUPS
+    .filter(([group]) => counts.has(group))
+    .map(([group, label]) => ({ cls: group, label, count: counts.get(group), token: steelToken(group) }));
+}
+
 /**
  * Screen labels that do not overlap: `labels` are { id, x, y, width, height, priority } (a box
  * centred on x, y; higher priority first, then the given order). Returns the ids to show.

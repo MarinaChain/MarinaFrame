@@ -142,6 +142,12 @@
   --tank-cargo: #C9CDD3;
   --tank-void: #EEF0F2;
   --tank-other: #A3A7AD;
+  /* Steel structure by member group (vessel_reconstruction.structure.display MEMBER_GROUPS). */
+  --steel-shell: #7F96AE;
+  --steel-deck: #C9B47E;
+  --steel-bulkhead: #A58BB5;
+  --steel-primary: #CF8562;
+  --steel-stiffener: #4F7A64;
 
   /* Drawing overlays sit on the paper page image in both themes, so they do not switch. */
   --ink-chosen: #06448E;

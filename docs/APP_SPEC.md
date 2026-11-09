@@ -285,8 +285,9 @@ In the app (`app/core/src/export.rs`, `js/export.js`):
   outputs the build does not have (`step`, `stl`). Worker refusal: `export_worker` with the
   worker's reason.
 - `list_exports(task, revision)`: the same shape for the files already in the folder.
-- `tanks` (capacity plan and sounding tables, CSV) and `structure` (steel tables, CSV, and the
-  OCX file, `.3docx`) need the run's tank model or structure folder (layout fixed in
+- `tanks` (capacity plan and sounding tables, CSV) and `structure` (steel tables, CSV, the
+  OCX file, `.3docx`, and the display GLB `<stem>_structure.glb`, role `structure_model`, which the
+  3D view adds to the whole vessel with a Steel switch; `structure/display.py`) need the run's tank model or structure folder (layout fixed in
   `app/core/src/run_tables.rs`: `<task>/tanks.npz`, `<task>/tank_tables/`, `<task>/structure/`).
   The backend passes `--tanks <task>/tanks.npz` and `--structure <task>/structure` to the
   worker when they exist; otherwise a chosen `tanks` or `structure` is listed in `not_built`.

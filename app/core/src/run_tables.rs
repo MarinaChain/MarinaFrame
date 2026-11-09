@@ -29,10 +29,12 @@ pub const STRUCTURE_FOLDER: &str = "structure";
 const CAPACITY_SUFFIX: &str = "_capacity_plan.csv";
 const SOUNDING_INFIX: &str = "_sounding_";
 /// Structure files by name suffix, with their role.
-const STRUCTURE_ROLES: [(&str, &str); 3] = [
+const STRUCTURE_ROLES: [(&str, &str); 4] = [
     ("_steel_members.csv", "steel_members"),
     ("_steel_totals.csv", "steel_totals"),
     (".3docx", "ocx_structure"),
+    // Display meshes of the members for the 3D view (`structure/display.py`).
+    ("_structure.glb", "structure_model"),
 ];
 /// Largest table file the app reads. A capacity plan or a sounding table is a few kB.
 const TABLE_MAX_BYTES: usize = 4 * 1024 * 1024;
@@ -106,7 +108,7 @@ pub struct SoundingTableView {
 /// One steel table or OCX file of the run's structure folder.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StructureFile {
-    /// "steel_members", "steel_totals" or "ocx_structure".
+    /// "steel_members", "steel_totals", "ocx_structure" or "structure_model" (display GLB).
     pub role: String,
     pub file: String,
     /// Task-relative path.

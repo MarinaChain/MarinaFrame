@@ -620,7 +620,11 @@ function mockTransport() {
       if (mockTanks) view.components.push(mockPart(MOCK_TANK_PART));
       view.capacity_plan = mockTanks ? clone(MOCK_CAPACITY_PLAN) : null;
       view.tank_model = mockTanks;
-      view.structure_files = [];
+      // ?mockstructure (with a structure GLB placed in mock/files; none is shipped): the survey
+      // launch has a steel structure for the 3D view.
+      view.structure_files = task.endsWith('survey-launch') && new URLSearchParams(location.search).has('mockstructure')
+        ? [{ role: 'structure_model', file: 'mock_structure.glb', path: 'structure/mock_structure.glb', bytes: 1_000_000 }]
+        : [];
       // With ?mockglb (and a GLB placed in mock/files for a local check; none is shipped) the
       // survey launch has a whole-vessel model; ?mockglbbig makes it too large to load.
       const glbParam = new URLSearchParams(location.search);

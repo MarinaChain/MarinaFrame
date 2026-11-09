@@ -1,7 +1,7 @@
 // Tank tables (js/tanks.js) and the tank and steel export rows (js/export.js). Run: npm run test:ui
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { tankSource, tankNumber, capacityFields, capacityRowOf, groupLine, soundingView, tankDetailBlock, capacityPanel, tankToken, tankLegend, placeLabels } from '../ui/js/tanks.js';
+import { tankSource, tankNumber, capacityFields, capacityRowOf, groupLine, soundingView, tankDetailBlock, capacityPanel, tankToken, tankLegend, placeLabels, steelToken, steelLegend } from '../ui/js/tanks.js';
 import { filesSummary, outputsOf } from '../ui/js/export.js';
 import { createParts } from '../ui/js/parts.js';
 
@@ -155,4 +155,11 @@ test('tank name labels never overlap; the hovered one wins', () => {
     { id: 'hover', x: 110, y: 100, priority: 1, ...box },
   ]);
   assert.deepEqual([...shown].sort(), ['c', 'hover']);
+});
+
+test('steel groups have one token each and the legend counts their members', () => {
+  assert.equal(steelToken('shell'), '--steel-shell');
+  assert.equal(steelToken('odd'), '--steel-primary');
+  const legend = steelLegend([{ group: 'stiffener', members: [{}, {}] }, { group: 'shell', members: [{}] }]);
+  assert.deepEqual(legend.map((row) => [row.cls, row.count]), [['shell', 1], ['stiffener', 2]]);
 });
