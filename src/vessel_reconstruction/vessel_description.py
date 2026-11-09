@@ -547,6 +547,10 @@ def _bottom_line_centre(outline, slope=0.0):
 STATION_LINE_SHARE = 0.6
 STATION_TOLERANCE_M = 0.5
 MIN_STATION_LINES = 3
+# A profile region narrower than this share of LOA holds only part of the
+# profile (a profile view shows the whole hull length; 0.9 leaves room for a
+# box drawn just inside the stem and stern).
+PROFILE_LENGTH_SHARE = 0.9
 # Station lines are evenly spaced: every gap within this share of the median gap.
 STATION_SPACING_SPREAD = 0.15
 
@@ -582,6 +586,16 @@ def check_station_positions(image, setups, description, warnings, hints=None):
     profile = {**profile, "x_origin_px": checked_x_origin(image, profile)}
     scale = (description.get("checked_scales") or {}).get(profile.get("view_id", "profile"),
                                                          profile["pixels_per_metre"])
+    length = _value((description.get("principal") or {}).get("loa"))
+    region = _region(profile["region_px"], image.shape)
+    if length and (region[2] - region[0]) / float(scale) < PROFILE_LENGTH_SHARE * length:
+        # The region holds part of the profile only, so not every station line
+        # (shipd-1-09867-3v-L0 Sonnet live: a 62 m wide region of a 100 m hull
+        # gave six lines from its own edge; nine stations were replaced by six).
+        warnings.append(warning("stations", None, None,
+            f"The profile region is {(region[2] - region[0]) / float(scale):.0f} m wide, shorter than LOA "
+            f"{length:g} m; the stations were not checked against its station lines. Give the whole profile."))
+        return stations
     measured = sorted(x for x in profile_station_lines(image, profile, float(scale)) if x > -STATION_TOLERANCE_M)
     spacing = np.diff(measured)
     if len(measured) < MIN_STATION_LINES or np.max(np.abs(spacing - np.median(spacing))) > \

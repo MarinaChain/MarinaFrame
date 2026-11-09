@@ -105,6 +105,23 @@ def test_model_station_positions_are_checked_against_the_profile_station_lines()
     assert [s["side"] for s in fixed] == ["aft"] * 4 + ["fore"] * 5
 
 
+def test_a_profile_region_shorter_than_loa_does_not_replace_the_stations():
+    # shipd-1-09867-3v-L0 Sonnet live: the fore 62 m of a 100 m profile gave six
+    # lines measured from the region's edge, and nine stations became six.
+    image, setup = profile_sheet()
+    picture = Image.fromarray(image)
+    draw = ImageDraw.Draw(picture)
+    for x in range(10, 100, 10):
+        draw.line([(X0 + x * PPM, 10), (X0 + x * PPM, 159)], fill=(205,) * 3, width=1)
+    image = np.array(picture)
+    fore_part = {**setup, "region_px": [X0 + 45 * PPM, 10, 450, 160], "x_origin_px": X0 + 45 * PPM}
+    stations = [{"id": str(i), "x_m": 10.0 * i} for i in range(1, 10)]
+    warnings = []
+    description = {"stations": stations, "principal": {"loa": {"value": 100.0}}}
+    assert vd.check_station_positions(image, [fore_part], description, warnings) == stations
+    assert warnings and "shorter than LOA" in warnings[0]["suggested_fix"]
+
+
 def test_deck_heights_follow_the_sheer_and_skip_the_label():
     image, setup = profile_sheet()
     stations = [{"id": str(i), "x_m": 10.0 * i} for i in range(1, 10)]
