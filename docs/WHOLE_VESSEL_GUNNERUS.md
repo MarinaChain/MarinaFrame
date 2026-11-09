@@ -844,9 +844,9 @@ no internal structure). G1 to G3 compare printed sources with each other.
 
 ## 7. Resume point
 
-0. Step 2 internals (section 6): next fix the region leaks (No 11, No 4) with the drawn
-   partitions on other layers, tank heights from the profile (No 12, hold), plate thickness from
-   construction-plan labels, then G4 again.
+0. Step 2 internals (section 6): region leaks, tank heights and G4 are fixed in
+   `docs/TANKS_V1.md` (24 of 24 tanks, G4 2.4 %; capacity plan and sounding tables). Next:
+   plate thickness from construction-plan labels, then the items in `docs/TANKS_V1.md` section 4.
 
 1. Done: tier aft-end rule (section 1.1), raster code path (section 3), assembly and hull volume
    fix (section 4), app parts folder (section 4.2), happy path for invalid metadata (section 4.3),
