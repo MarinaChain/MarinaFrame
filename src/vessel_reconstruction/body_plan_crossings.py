@@ -47,6 +47,21 @@ DIAGONAL_MAX_DEVIATION_PX = 5.0
 DIAGONAL_CENTRE_REACH_PX = 60
 # Vertical lines this close to the centreline are the stem, keel or sternpost outline.
 CENTRELINE_STRUCTURE_PX = 70
+# A stem or sternpost may be drawn further out (its siding, or the outside of the planking): it is
+# then a long, straight, near-vertical line (|columns per row| below POST_MAX_SLOPE) that runs for
+# at least POST_MIN_SPACINGS waterline spacings within DIAGONAL_MAX_DEVIATION_PX of one straight
+# line (a post is drawn thick, and station curves join it), in the inner POST_INNER_FRACTION of the
+# half body plan. A station curve on the flat of the side can be as straight and vertical, but it lies at
+# the outer edge of the plan, never near the centreline.
+POST_MAX_SLOPE = 0.05
+POST_MIN_SPACINGS = 2.5
+POST_INNER_FRACTION = 0.25
+# A line that ends within SHORT_STROKE_SPACINGS waterline spacings both above and below its
+# crossing is a stroke of lettering or a short leader line, not a station curve (a station curve
+# runs on to a neighbouring waterline, the keel or the sheer). A digit stroke ends within about
+# 0.15 spacings of a waterline it crosses (C.A. Thayer sheet 4); a station curve that ends at the
+# deck edge just above a waterline still runs 0.3 spacings or more below it (Balclutha sheet 7).
+SHORT_STROKE_SPACINGS = 0.25
 # Following a curve from one waterline to the next: rows left out at the start and before the
 # target (waterline ink), rows in the moving line fit, rows without ink allowed, rows passed on the
 # prediction where another line crosses (a run wider than FOLLOW_WIDE_RUN_RATIO line widths).
@@ -382,12 +397,75 @@ def typical_width(crossings: list[Crossing]) -> float:
     return float(np.median(widths)) if widths else 5.0
 
 
+def is_post(ink: np.ndarray, crossing: Crossing, centre_column: float, waterline_spacing_px: float,
+            max_offset_px: float) -> bool:
+    """A stem or sternpost outline: a long, straight, near-vertical line in the inner part of the plan."""
+    if abs(crossing.slope) >= POST_MAX_SLOPE:
+        return False
+    if abs(crossing.x_px - centre_column) > POST_INNER_FRACTION * max_offset_px:
+        return False
+    top, bottom, deviation = straight_line_rows(ink, crossing)
+    return bottom - top >= POST_MIN_SPACINGS * waterline_spacing_px and deviation <= DIAGONAL_MAX_DEVIATION_PX
+
+
+def straight_line_rows(ink: np.ndarray, crossing: Crossing, step: int = 4,
+                       max_gap_steps: int = 1) -> tuple[float, float, float]:
+    """First and last row of the near-vertical straight ink line through a crossing, and its straightness.
+
+    Like `straight_ends`, but measured in rows (a vertical line has no extent in columns).
+    """
+    height, width = ink.shape
+    start_row = int(round(crossing.row))
+    found = [(float(start_row), crossing.x_px)]
+    reach = []
+    for direction in (-1, 1):
+        r, misses = start_row, 0
+        line = (crossing.slope, crossing.x_px - crossing.slope * crossing.row)
+        last_row = float(start_row)
+        while True:
+            r += direction * step
+            x = line[0] * r + line[1]
+            if not (0 <= r < height and 0 <= x < width):
+                break
+            low = max(0, int(np.floor(x - STRAIGHT_MAX_DEVIATION_PX)))
+            high = min(width, int(np.ceil(x + STRAIGHT_MAX_DEVIATION_PX)) + 1)
+            columns = np.flatnonzero(ink[r, low:high])
+            if not columns.size:
+                misses += 1
+                if misses > max_gap_steps:
+                    break
+                continue
+            misses = 0
+            found.append((float(r), low + float(np.mean(columns))))
+            last_row = float(r)
+            if len(found) >= 3:
+                rows, xs = np.array(found).T
+                line = tuple(np.polyfit(rows, xs, 1))
+        reach.append(last_row)
+    rows, xs = np.array(found).T
+    deviation = float(np.max(np.abs(np.polyval(np.polyfit(rows, xs, 1), rows) - xs))) if len(found) >= 3 else 0.0
+    return reach[0], reach[1], deviation
+
+
+def is_short_stroke(ink: np.ndarray, crossing: Crossing, curve_width: float, waterline_spacing_px: float) -> bool:
+    """A line that ends close above and close below its crossing (lettering or a short leader)."""
+    distance = SHORT_STROKE_SPACINGS * waterline_spacing_px
+    for target in (crossing.row - distance, crossing.row + distance):
+        if follow_curve(ink, crossing, target, curve_width, stop_margin=0) is not None:
+            return False
+    return True
+
+
 def classify(ink: np.ndarray, crossings: list[Crossing], curve_width: float, centre_column: float,
-             grid_columns: tuple[float, ...] = ()) -> None:
+             grid_columns: tuple[float, ...] = (), waterline_spacing_px: float | None = None,
+             max_offset_px: float | None = None) -> None:
     """Set each crossing's kind in place.
 
     grid_columns: known vertical grid lines (buttocks); a thin, vertical crossing on one is `grid`.
+    waterline_spacing_px and max_offset_px (both or neither) turn on the shape rules for a stem or
+    sternpost drawn away from the centreline and for short strokes (lettering, leader lines).
     """
+    shape_rules = waterline_spacing_px is not None and max_offset_px is not None
     for crossing in crossings:
         ratio = crossing.width_px / curve_width
         on_grid = any(abs(crossing.x_px - column) <= 6 for column in grid_columns)
@@ -397,12 +475,16 @@ def classify(ink: np.ndarray, crossings: list[Crossing], curve_width: float, cen
             crossing.kind, crossing.notes = KIND_GRID, ['thin line' if not on_grid else 'on a grid column']
         elif on_grid and abs(crossing.slope) < 0.05:
             crossing.kind, crossing.notes = KIND_CURVE, ['on a grid column: a curve along the grid line?']
+        elif shape_rules and is_post(ink, crossing, centre_column, waterline_spacing_px, max_offset_px):
+            crossing.kind, crossing.notes = KIND_GRID, ['long straight vertical line (stem or sternpost)']
         elif ratio >= LETTERING_MIN_WIDTH_RATIO:
             crossing.kind, crossing.notes = KIND_LETTERING, [f'width {crossing.width_px:.1f} px']
         elif abs(crossing.slope) > SHALLOW_SLOPE:
             crossing.kind, crossing.notes = KIND_SHALLOW, [f'slope {crossing.slope:.1f} columns per row']
         elif is_diagonal(ink, crossing, centre_column):
             crossing.kind, crossing.notes = KIND_STRAIGHT, ['straight line to the centreline (diagonal)']
+        elif shape_rules and is_short_stroke(ink, crossing, curve_width, waterline_spacing_px):
+            crossing.kind, crossing.notes = KIND_LETTERING, ['short stroke (lettering or leader line)']
         elif ratio >= DOUBLE_MIN_WIDTH_RATIO:
             crossing.kind, crossing.notes = KIND_DOUBLE, [f'width {crossing.width_px:.1f} px, two curves?']
         else:

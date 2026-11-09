@@ -701,6 +701,110 @@ must run on a third sheet, because this sheet is no longer a holdout. Run output
 repository): session scratchpad `wv-agent/thayer/runs/` (`code2`, `crouton`, `sonnet`; `code` is
 the empty folder of the run that hit the row type error). `engineering_approved` stays false.
 
+### 5.6 Round 10: station naming fixed on two development sheets
+
+C.A. Thayer sheet 4 is now a development sheet (its holdout result above is spent). Balclutha
+sheet 7 stays the other development sheet. Run 2026-11-09, 1 run per arm (development, not a
+decision round). Same truths, scorers and calibrations as rounds 8 and 9.
+
+Changes to the reader (`body_plan_crossings.py`, `body_plan_reader.py`, `body_plan_identity.py`):
+
+1. Short strokes (cause 1). A crossing whose line ends within 0.25 waterline spacings both above
+   and below it is lettering or a short leader line, not a station curve. On Thayer, the two
+   false aft chains came from the strokes of the label "15", which crosses the 5'-7" waterline;
+   inferred links joined them to curves. Both strokes are now lettering; both false chains go.
+2. Stem and sternpost by shape (cause 2). Besides the 70 px rule, a near-vertical line
+   (|slope| < 0.05) that is straight within 5 px for at least 2.5 waterline spacings, in the inner
+   quarter of the half plan, is the stem or sternpost. Station curves that lie on the post (the
+   lower parts of stations 1, 2 and 21) give no cells there; the truth has none.
+3. Merged curves (cause 3). The chains already fork where 12 and 13 part (15'-7"). The naming
+   step now keeps both: Sonnet labelled the curve of 13 as "12" twice (label "13,12"); the code
+   kept 13 by nesting order and flagged the label.
+4. One-waterline chains (cause 4). Such a chain is asked about only when its drawn curve is at
+   least one waterline spacing tall (rail and bulwark lines are low; station 1 near the stem is
+   tall). Code-only numbering still leaves all one-waterline chains out.
+5. Naming. Code proposes the chains and their nesting order; the model names them; code assigns
+   stations by the best monotone alignment of chains to stations (dynamic programming). A label
+   followed gains 1; a chain left out or a station skipped costs 1; ties keep the nesting count.
+   One misread label cannot move the numbering, but a false chain stepped over by labels on both
+   sides is left out. The summary lists chains left out, stations without a chain and labels that
+   disagree (these are asked again).
+
+| Sheet | Arm | Cells | RMS | Max | Within 0.05 m | Station errors | Questions (re-asked) | Labels null | Tokens in / out | Wall |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Thayer | code only | 149 of 151 | 0.0116 m | 0.13 m | 99.3 % | 0 | 0 | - | 0 | 3 s |
+| Thayer | Crouton Alpha Free | 150 of 151 | 0.0116 m | 0.13 m | 99.3 % | 0 | 23 (0) | 4 | 3,644 / 390 * | 106 s |
+| Thayer | Claude Sonnet 5.5 (`claude -p`) | 150 of 151 | 0.0116 m | 0.13 m | 99.3 % | 0 | 23 (1) | 1 | 148,216 / 5,500 | 47 s |
+| Balclutha | code only | 151 of 151 | 0.1480 m | 1.81 m | 98.7 % | 0 | 0 | - | 0 | 6 s |
+| Balclutha | Crouton Alpha Free | 151 of 151 | 0.1480 m | 1.81 m | 98.7 % | 0 | 21 (2) | 5 | 3,644 / 389 * | 176 s |
+| Balclutha | Claude Sonnet 5.5 (`claude -p`) | 151 of 151 | 0.1480 m | 1.81 m | 98.7 % | 0 | 21 (0) | 1 | 110,553 / 5,061 | 41 s |
+
+\* The Go usage does not count image tokens. Crouton answered every request (DeepSeek not used).
+0 failed requests and 0 invalid replies in all runs.
+
+Before this round, Thayer gave 0.676 m with 16 to 21 station errors (code only) and 0.0864 m with
+3 station errors (Crouton, Sonnet). Balclutha is unchanged: the same table as round 8 (13.5 mm
+without the doubtful 24 ft / station 18 cell); the saved round-8 Crouton and Astra labels give the
+same table with the new naming step. The Thayer maximum (0.13 m) is the doubtful cell station 11
+at 13'-7" (cause 5); a person should still check it. The cell that the model arms add is station
+1 at 17'-7" (one waterline; code only leaves it out). Station 11 at 17'-7" is not read by any
+arm (its chain has no crossing at that waterline; not investigated).
+
+Limits: both sheets were used to develop these rules, so this is not evidence of generalisation.
+A third sheet with a printed offset table is needed as a holdout (candidates in section 5.7). Run
+outputs (not in the repository): session scratchpad `sn/runs/`. `engineering_approved` stays false.
+
+### 5.7 Holdout candidates for the next round
+
+loc.gov answers HTTP 403 to automated requests, so a person downloads these in a browser (largest
+TIFF of the sheet). Each is a HAER measured drawing (US public domain) whose title names a lines
+plan with a table of offsets. Check before use: the sheet has a body plan with numbered station
+curves, and the table gives half-breadths at waterlines.
+
+| Vessel | Survey | Sheet | URL |
+|---|---|---|---|
+| Gillnet fishing vessel BUE GIRL, Astoria OR | HAER OR-166 | 2, Lines and table of offsets | https://www.loc.gov/resource/hhh.or0590.sheet/?sp=2 |
+| Gillnet fishing vessel BUMBLE BEE 47, Astoria OR | HAER OR-165 | 2, Lines and table of offsets | https://www.loc.gov/resource/hhh.or0589.sheet/?sp=2 |
+| Gillnet fishing vessel ENDEAVOR, Astoria OR | HAER OR-168 | lines sheet (number to confirm) | https://www.loc.gov/item/or0592 |
+| 19' 6" Mukilteo boat, Seattle WA | HAER WA-224 | 1, Lines and offsets table | https://www.loc.gov/resource/hhh.wa0921.sheet |
+| Runabout launch PARDON ME, Clayton NY | HAER NY-547 | 4, Lines and offsets table | https://www.loc.gov/resource/hhh.ny2390.sheet/?sp=4 |
+| St. Lawrence River skiff 1964.006, Clayton NY | HAER NY-559 | 1, Lines plan with table of offsets | https://www.loc.gov/resource/hhh.ny2431.sheet/?sp=1 |
+| St. Lawrence River skiff 1964.011, Clayton NY | HAER NY-560 | 1, Lines plan with table of offsets | https://www.loc.gov/resource/hhh.ny2432.sheet |
+| Au Sable River boat, South Haven MI | HAER MI-409 | 1, Plans and offsets table | https://www.loc.gov/pictures/resource/hhh.mi0723.sheet.00001a/ |
+
+Best first choice: the gillnet boats (round-bilge hulls with a stem and a transom, like Thayer, at a
+smaller scale). The ALMA "Lines drawing and offsets" sheet on disk is not a candidate: it fails the
+check above (section 5.8). The Smithsonian HAMMS (1936-37) survey sheets also carry offsets, but
+they are not on loc.gov; their rights need a separate check.
+
+### 5.8 Round 11: ALMA holdout not run (sheet fails the eligibility check)
+
+Checked 2026-11-09, before any protocol, truth file or reader run. Sheet: scow schooner ALMA,
+"Lines drawing and offsets" (B. Doll, May 1987; NPS Gallery asset `ae350cc8-8195-4fe4-9fa0-65faca9400d7`,
+SHA-256 `b7423f85…12d65f4`, 10,752 x 7,265 px, 300 dpi), `work/sources/alma/`. Rights are not the
+blocker: the commercial data licence (docs/DEPENDENCIES_AND_RIGHTS.md, 2026-11-09) clears provider
+transfer.
+
+The sheet fails both conditions of section 5.7:
+
+1. No body plan with station curves. ALMA is a flat-bottomed, hard-chine scow. The view labelled
+   "HALF BREADTH VIEW" is an end view of the raked bow and stern: straight sides, chine and sheer
+   lines, rails and the stem post. It has no numbered station curves and no drawn waterlines, so
+   the reader has no curve crossings to measure and no station numbers to name.
+2. No half-breadths at waterlines. The printed table has three rows for stations 1 to 15: sheer
+   height and chine height above the base, and half-breadth at the sheer (45 cells). The reader
+   gives half-breadths of station curves at waterlines; no cell of this table is such a value.
+
+Thus a run would measure nothing that this table can score, and a calibration (centreline, base,
+scale) cannot supply the missing waterlines without inventing them. No truth was transcribed, no
+protocol was committed and no model was called; plan section 3.5.10 records the stop. The other
+ALMA sheets on disk (sail plan, deck plan and outboard profile, hold plan and inboard profile,
+cross sections) have no body plan either.
+
+**Result: there is no new evidence on generalisation.** The status of section 5.6 is unchanged: 0
+station errors on the two development sheets, not yet tested on a holdout. A holdout still needs a
+round-bilge sheet from section 5.7, downloaded by a person. `engineering_approved` stays false.
+
 
 ## 6. Step 2: internals (development case, metrics G1 to G5 of plan section 4.3.2)
 
@@ -756,5 +860,10 @@ no internal structure). G1 to G3 compare printed sources with each other.
    reading round with this model. Round 6 (section 5.2): GPT-6 Astra passes (median RMS 0.149 m;
    13 mm without one probably mistranscribed truth cell), GPT 6.1 Sol misses by 0.04 mm with the
    same quality. Next: a person checks truth cell 24 ft / station 18, a holdout sheet, then the
-   founder decides on the integration option (plan section 3.5.6).
+   founder decides on the integration option (plan section 3.5.6). Round 10 (section 5.6): the
+   reader names every station correctly on both development sheets (Thayer 0.0116 m, Balclutha
+   0.1480 m, 0 station errors, all arms). Next: a person downloads a sheet from section 5.7 and
+   checks the Thayer cell station 11 at 13'-7"; then a holdout round with the reader unchanged.
+   Round 11 (section 5.8): the ALMA sheet on disk is not eligible (scow end view, no station
+   curves; table without waterline half-breadths); not run.
 5. Rust `ship_cad` vision schema: accept labelled inline values (Python accepts them now).

@@ -29,6 +29,11 @@ PATH_EXTENSION_ROWS = 1200
 # these flag only bends larger than a hull makes there; they are a prompt to look, not a gate.
 HEIGHT_SMOOTHNESS_M = 1.0
 LENGTH_SMOOTHNESS_M = 0.60
+# A chain that crosses only one waterline is a station candidate only when its drawn curve spans at
+# least this many waterline spacings in height. A station that crosses one waterline (near the
+# stem, under the counter) runs on to the keel or the sheer; the rail, bulwark and deck lines above
+# the top waterline are low, nearly level curves.
+ONE_WATERLINE_MIN_SPACINGS = 1.0
 
 
 @dataclass(frozen=True)
@@ -72,6 +77,7 @@ class SideReading:
     stations: dict  # waterline -> station-kind crossings, outermost first
     links: dict  # (lower waterline, upper waterline) -> [(lower index, upper index, error px or None)]
     chains: list  # Chain, outermost first
+    waterline_spacing_px: float = 0.0
 
 
 # ---------------------------------------------------------------- measuring
@@ -85,8 +91,10 @@ def measure_side(ink: np.ndarray, sheet: SheetLayout, side: SideLayout,
     crossings = {w: bpc.find_crossings(ink, sheet.waterline_rows[w], (span[0], span[1])) for w in waterlines}
     if curve_width is None:
         curve_width = bpc.typical_width([c for found in crossings.values() for c in found])
+    spacing = waterline_spacing(sheet)
     for found in crossings.values():
-        bpc.classify(ink, found, curve_width, centre, grid_columns=side.grid_columns)
+        bpc.classify(ink, found, curve_width, centre, grid_columns=side.grid_columns,
+                     waterline_spacing_px=spacing, max_offset_px=sheet.max_offset_px)
     stations = {w: bpc.station_crossings(crossings[w], centre, side.sign) for w in waterlines}
     links = {}
     for lower, upper in zip(waterlines, waterlines[1:]):
@@ -96,7 +104,13 @@ def measure_side(ink: np.ndarray, sheet: SheetLayout, side: SideLayout,
     chains = order_chains(chains, stations, centre, side.sign)
     for chain in chains:
         chain.path = chain_path(ink, chain, stations, waterlines, curve_width)
-    return SideReading(side, crossings, stations, links, chains)
+    return SideReading(side, crossings, stations, links, chains, spacing)
+
+
+def waterline_spacing(sheet: SheetLayout) -> float:
+    """Median row distance between neighbouring waterlines (the sheet's own length scale)."""
+    rows = sorted(sheet.waterline_rows.values())
+    return float(np.median(np.diff(rows))) if len(rows) >= 2 else float(bpc.BAND_ROWS * 8)
 
 
 def infer_enclosed_links(links: list, lower: list, upper: list) -> list:
@@ -226,6 +240,24 @@ def chain_path(ink: np.ndarray, chain: Chain, stations: dict, waterlines: list, 
 
 
 # ---------------------------------------------------------------- identity and table
+
+def rows_spanned(chain: Chain) -> float:
+    """Height (rows) of a chain's drawn curve, from its path."""
+    rows = [point[0] for point in chain.path]
+    return float(max(rows) - min(rows)) if rows else 0.0
+
+
+def station_candidates(reading: SideReading) -> list[int]:
+    """Indices of the chains that may be station curves, outermost first.
+
+    Every chain that crosses two or more waterlines; a one-waterline chain only when its drawn
+    curve is tall enough (ONE_WATERLINE_MIN_SPACINGS), so that rail, bulwark and deck lines are
+    not asked about. Code-only numbering still leaves all one-waterline chains out.
+    """
+    minimum = ONE_WATERLINE_MIN_SPACINGS * reading.waterline_spacing_px
+    return [index for index, chain in enumerate(reading.chains)
+            if len(chain.nodes) >= 2 or rows_spanned(chain) >= minimum]
+
 
 def identities_by_rank(chains: list[Chain], stations_outer_first: tuple[int, ...]) -> dict[int, int]:
     """Code-only identity: chain index -> station, by nesting order (the outermost chain is the

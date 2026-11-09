@@ -542,7 +542,7 @@ mod tests {
         [ -e .claude/settings.json ] && echo 'saw:project-settings'\n\
         [ -e CLAUDE.md ] && echo 'saw:claude-md'\n\
         printf 'entries:%s\\n' \"$(ls -A | wc -l | tr -d ' ')\"\n\
-        printf 'mode:%s\\n' \"$(stat -f %Lp . 2>/dev/null || stat -c %a .)\"\n\
+        printf 'mode:%s\\n' \"$(stat -c %a . 2>/dev/null || stat -f %Lp .)\"\n\
         for a in \"$@\"; do printf 'arg:%s\\n' \"$a\"; done\n";
 
     #[test]
