@@ -1,5 +1,5 @@
-// 3D view: the build's STL in an orbit view, with a ground grid and a thin plane at each
-// section's x position. The hull frame is x along the length, y across, z up (metres).
+// 3D view: the build's STL in an orbit view, with an engineering grid (overlay3d.js) and a thin
+// plane at each section's x position. The hull frame is x along the length, y across, z up (metres).
 // The scene renders only when something changes, so an idle window costs no GPU time.
 
 import * as THREE from '../vendor/three/three.module.min.js';
@@ -11,7 +11,8 @@ import { createSectionGrowth } from './growth3d.js';
 import { createAnimation } from './animation.js';
 import { placeLabels, steelLegend, steelToken, tankLegend, tankToken } from './tanks.js';
 import { createLighting, createPaintMaterial, createSteelMaterial, createTankMaterial, setUpRenderer, stylePaint } from './look3d.js';
-import { bootTopBand, frameLabel, frameAt, hullReference, nearestFrameX } from './reference3d.js';
+import { bootTopBand, frameLabel, frameAt, hullReference, nearestFrameX, pointReadout } from './reference3d.js';
+import { createOverlays } from './overlay3d.js';
 import { createSectionCut } from './cut3d.js';
 import { createCutPanel, createToolbar, toolButton } from './controls3d.js';
 
@@ -58,6 +59,8 @@ function themeColours() {
     background: read('--model-bg'),
     grid: read('--line-strong'),
     gridMinor: read('--line'),
+    water: read('--model-water'),
+    edge: read('--ink'),
     hull: read('--model-hull'),
     antifouling: read('--paint-antifouling'),
     bootTop: read('--paint-boottop'),
@@ -170,6 +173,26 @@ export function createModelView({ host, onPick = null }) {
   cutButton.setAttribute('aria-controls', cutPanel.id);
   toolbar.add('Section', cutButton);
   host.append(toolbar.element, cutPanel.element);
+
+  // ---- Engineering overlays and the switches for them.
+  const overlays = createOverlays({ scene, host, clip });
+  const overlaySwitches = {};
+  function overlaySwitch(key, text, label, keyHint) {
+    const button = toolButton({ text, label, keyHint, pressed: overlays.shown[key], onClick: () => setOverlay(key, !overlays.shown[key]) });
+    overlaySwitches[key] = button;
+    return button;
+  }
+  function setOverlay(key, on) {
+    overlays.set({ [key]: on });
+    overlaySwitches[key].setAttribute('aria-pressed', String(on));
+    requestRender();
+  }
+  toolbar.add('Show',
+    overlaySwitch('grid', 'Grid', 'Reference grid', 'G'),
+    overlaySwitch('waterline', 'DWL', 'Design waterline plane', 'W'),
+    overlaySwitch('frames', 'Frames', 'Frame numbers', null),
+    overlaySwitch('edges', 'Edges', 'Feature edges', 'E'));
+  const OVERLAY_KEYS = { g: 'grid', w: 'waterline', e: 'edges' };
   /** The x of the selected part's middle (Parts tab), or null. */
   let selectionX = null;
 
@@ -221,8 +244,12 @@ export function createModelView({ host, onPick = null }) {
 
   host.addEventListener('keydown', (event) => {
     if (event.metaKey || event.ctrlKey || event.altKey || event.target.closest('input, select, textarea')) return;
+    const overlayKey = OVERLAY_KEYS[event.key.toLowerCase()];
     if (event.key === 'c' || event.key === 'C') {
       toggleCutPanel();
+      event.preventDefault();
+    } else if (overlayKey) {
+      setOverlay(overlayKey, !overlays.shown[overlayKey]);
       event.preventDefault();
     } else if (event.key === 'Escape' && !cutPanel.element.hidden) {
       cutPanel.set({ axis: null });
@@ -259,8 +286,10 @@ export function createModelView({ host, onPick = null }) {
   let frameBox = null;
 
   let hull = null;
+  /** True while the overlays are built; the box they are built for and the hull box in it. */
   let grid = null;
   let gridBox = null;
+  let hullBoxShown = null;
   let planes = new Map();
   let guessBands = [];
   /** Review overlays (guessed ranges) show only for the run's current state, not mid-replay. */
@@ -287,6 +316,16 @@ export function createModelView({ host, onPick = null }) {
   function draw() {
     renderer.render(scene, camera);
     updateLabels();
+    overlays.update(camera, renderer.domElement.clientWidth, renderer.domElement.clientHeight, metresPerPixel());
+  }
+
+  /** Metres per CSS pixel at the orbit target (the scale bar's length). */
+  function metresPerPixel() {
+    const height = renderer.domElement.clientHeight;
+    if (!height) return 0;
+    if (camera.isOrthographicCamera) return (camera.top - camera.bottom) / camera.zoom / height;
+    const distance = camera.position.distanceTo(controls.target);
+    return 2 * distance * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / height;
   }
 
   /** Draw the next frame for a camera move (the shadows stay as they are). */
@@ -343,6 +382,48 @@ export function createModelView({ host, onPick = null }) {
       requestFrame();
     }
     if (onPick) renderer.domElement.style.cursor = planeAt(event) ? 'pointer' : '';
+  });
+  // ---- Pointer readout: x, y, z and the frame of the model point under the pointer, once a frame.
+  let readoutEvent = null;
+  renderer.domElement.addEventListener('pointermove', (event) => {
+    if (event.buttons) return;
+    if (!readoutEvent) requestAnimationFrame(updateReadout);
+    readoutEvent = event;
+  });
+  function updateReadout() {
+    const event = readoutEvent;
+    readoutEvent = null;
+    if (!event) return;
+    const targets = pickTargets();
+    if (!targets.length) {
+      overlays.setReadout(null);
+      return;
+    }
+    const rect = renderer.domElement.getBoundingClientRect();
+    raycaster.setFromCamera(new THREE.Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1), camera);
+    const hit = raycaster.intersectObjects(targets, false).find((h) => cut.keeps(h.point));
+    if (!hit) {
+      overlays.setReadout(null);
+      return;
+    }
+    const name = hit.object.userData.label || hit.object.userData.group_label || hit.object.userData.partId;
+    overlays.setReadout(`${pointReadout(hit.point.toArray(), reference)}${name ? ` · ${name}` : ''}`);
+  }
+  /** The model meshes the readout can point at: what shows now. */
+  function pickTargets() {
+    if (wholeVessel) {
+      const meshes = [...shellMeshes];
+      if (layers.tanks) meshes.push(...tankMeshes);
+      if (layers.structure) meshes.push(...steelMeshes);
+      return meshes;
+    }
+    return hull && hull.visible && hullMaterial.visible ? [hull] : [];
+  }
+  renderer.domElement.addEventListener('pointerleave', () => {
+    readoutEvent = null;
+    overlays.setReadout(null);
   });
   renderer.domElement.addEventListener('pointerleave', () => {
     if (!hoveredTankId) return;
@@ -490,6 +571,9 @@ export function createModelView({ host, onPick = null }) {
    */
   function setHullBox(hullBox, sceneBox = hullBox) {
     reference = hullBox ? hullReference({ min: hullBox.min.toArray(), max: hullBox.max.toArray() }) : null;
+    hullBoxShown = hullBox;
+    gridBox = sceneBox;
+    buildGrid();
     lighting.fit(sceneBox);
     cut.fit(sceneBox);
     updateCutRanges(sceneBox);
@@ -503,7 +587,7 @@ export function createModelView({ host, onPick = null }) {
     paintHull(hullMaterial);
     for (const [id, plane] of planes) styleSectionPlane(plane, id === selectedId);
     for (const band of guessBands) styleGuessBand(band);
-    if (grid) buildGrid();
+    overlays.setColours({ grid: colours.grid, gridMinor: colours.gridMinor, water: colours.water, edge: colours.edge, dark: colours.background.getHSL({}).l < 0.5 });
     growth.refreshColours();
     if (wholeVessel) styleWholeVessel();
     cut.refresh();
@@ -556,6 +640,7 @@ export function createModelView({ host, onPick = null }) {
     guessBands = [];
     if (hull) {
       cut.removeSolids(hull);
+      overlays.removeEdges(hull);
       hull.geometry.dispose();
     }
     for (const plane of planes.values()) {
@@ -571,25 +656,15 @@ export function createModelView({ host, onPick = null }) {
   }
 
   function disposeGrid() {
-    if (!grid) return;
-    content.remove(grid);
-    grid.geometry.dispose();
-    grid.material.dispose();
+    overlays.hide();
     grid = null;
   }
 
-  /** Ground grid with 1 m cells under the hull, in the current theme colours. */
+  /** The engineering overlays for the box shown (overlay3d.js), in the current theme colours. */
   function buildGrid() {
-    disposeGrid();
-    const size = gridBox.getSize(new THREE.Vector3());
-    const centre = gridBox.getCenter(new THREE.Vector3());
-    const span = Math.ceil(Math.max(size.x, size.y) * 1.6);
-    grid = new THREE.GridHelper(span, span, colours.grid, colours.gridMinor);
-    grid.rotation.x = Math.PI / 2; // GridHelper lies in XZ; the hull frame is z up.
-    grid.position.set(centre.x, centre.y, gridBox.min.z - 0.001);
-    grid.material.transparent = true;
-    grid.material.opacity = 0.55;
-    content.add(grid);
+    if (!gridBox) return;
+    overlays.build(gridBox, reference, hullBoxShown || gridBox);
+    grid = true;
   }
 
   function buildSectionPlane(xMid, box) {
@@ -662,8 +737,7 @@ export function createModelView({ host, onPick = null }) {
         frameBox = growth.bounds();
         if (frameBox) {
           // Live section curves are on screen: keep them, on their grid.
-          gridBox = frameBox;
-          buildGrid();
+          setHullBox(frameBox);
           requestRender();
           return;
         }
@@ -685,9 +759,10 @@ export function createModelView({ host, onPick = null }) {
       const box = new THREE.Box3().setFromObject(hull);
       const size = box.getSize(new THREE.Vector3());
       dims = size;
-      gridBox = box;
+      overlays.addEdges(hull);
+      // With the whole vessel shown, the overlays stay on the whole vessel.
       if (!wholeVessel) setHullBox(box);
-      buildGrid();
+      else buildGrid();
 
       for (const station of stations) {
         const plane = buildSectionPlane(station.x_m, box);
@@ -718,6 +793,7 @@ export function createModelView({ host, onPick = null }) {
       const showedWholeVessel = Boolean(wholeVessel);
       if (wholeVessel) {
         cut.removeSolids(wholeVessel);
+        overlays.removeEdges(wholeVessel);
         scene.remove(wholeVessel);
         wholeVessel.traverse((o) => {
           if (o.isMesh || o.isLineSegments) {
@@ -768,6 +844,7 @@ export function createModelView({ host, onPick = null }) {
               cut.addSolid(o, { colour: () => colours.tank(o.userData.content_class) });
             } else {
               shellMeshes.push(o);
+              overlays.addEdges(o);
               // A see-through shell shows no cut face, or the face would hide what is inside.
               cut.addSolid(o, { colour: () => colours.hull, capped: () => !shellSeeThrough() });
             }
@@ -814,6 +891,7 @@ export function createModelView({ host, onPick = null }) {
     setStructure(buffer) {
       if (structure) {
         cut.removeSolids(structure);
+        overlays.removeEdges(structure);
         structure.parent?.remove(structure);
         structure.traverse((o) => {
           if (o.isMesh) {
@@ -842,6 +920,7 @@ export function createModelView({ host, onPick = null }) {
             o.castShadow = true;
             o.receiveShadow = true;
             steelMeshes.push(o);
+            overlays.addEdges(o);
             // See-through shell plating shows no cut face; the other members are solid plate.
             cut.addSolid(o, { colour: () => colours.steel(o.userData.group), capped: () => o.userData.group !== 'shell' });
           });

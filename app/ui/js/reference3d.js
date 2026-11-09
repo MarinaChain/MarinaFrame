@@ -115,3 +115,58 @@ export function cutLabel(axis, value, reference) {
   if (axis !== 'x' || !reference) return metres;
   return `${frameLabel(frameAt(value, reference.frameSpacingM.value, reference.frameZeroX.value))} · ${metres}`;
 }
+
+/** Steps of a 1-2-5 sequence, for frame label steps and scale bar lengths. */
+const NICE_STEPS = [1, 2, 5];
+
+/** The smallest 1-2-5 number (times a power of ten) that is at least `value`. */
+export function niceAtLeast(value) {
+  if (!(value > 0)) return 1;
+  let power = 10 ** Math.floor(Math.log10(value));
+  for (;;) {
+    for (const step of NICE_STEPS) if (step * power >= value - 1e-12) return step * power;
+    power *= 10;
+  }
+}
+
+/** The largest 1-2-5 number (times a power of ten) that is at most `value`. */
+export function niceAtMost(value) {
+  if (!(value > 0)) return 0;
+  const power = 10 ** Math.floor(Math.log10(value));
+  for (const step of [...NICE_STEPS].reverse()) if (step * power <= value + 1e-12) return step * power;
+  return power;
+}
+
+/**
+ * Every how many frames a frame number is printed, so printed numbers are at least `minPx`
+ * apart on screen when one frame spacing is `pxPerFrame` pixels long (1, 2, 5, 10, 20, ...).
+ */
+export function frameLabelStep(pxPerFrame, minPx = 44) {
+  if (!(pxPerFrame > 0)) return Infinity;
+  return Math.max(1, niceAtLeast(minPx / pxPerFrame));
+}
+
+/**
+ * A scale bar for `metresPerPixel` that is at most `maxPx` long: { metres, px, text }.
+ * The length is a 1-2-5 number of metres (or centimetres under 1 m).
+ */
+export function scaleBar(metresPerPixel, maxPx = 120) {
+  const metres = niceAtMost(metresPerPixel * maxPx);
+  const text = metres >= 1 ? `${metres} m` : `${Math.round(metres * 100)} cm`;
+  return { metres, px: metres / metresPerPixel, text };
+}
+
+/** "x 12.34 m · y −1.20 m · z 2.10 m · Fr 22.4": a point in the ship frame, with its frame. */
+export function pointReadout(point, reference) {
+  const coordinate = (word, value) => `${word} ${value < 0 ? '−' : ''}${Math.abs(value).toFixed(2)} m`;
+  const parts = [coordinate('x', point[0]), coordinate('y', point[1]), coordinate('z', point[2])];
+  if (reference) parts.push(frameLabel(frameAt(point[0], reference.frameSpacingM.value, reference.frameZeroX.value)));
+  return parts.join(' · ');
+}
+
+/** The source line of the reference values: "DWL z 2.57 m (guessed) · frames 0.55 m (guessed)". */
+export function referenceLine(reference) {
+  const source = (value) => (value.source === 'given' ? '' : ` (${value.source})`);
+  return `DWL z ${reference.designWaterlineZ.value.toFixed(2)} m${source(reference.designWaterlineZ)}`
+    + ` · frames ${reference.frameSpacingM.value.toFixed(2)} m${source(reference.frameSpacingM)}`;
+}

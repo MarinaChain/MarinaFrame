@@ -132,6 +132,12 @@
      and the boot-top band at the design waterline. Paint colours, so they do not switch. */
   --paint-antifouling: #96402F;
   --paint-boottop: #2A2D33;
+  /* Design waterline plane of the 3D view (sea blue, both themes). */
+  --model-water: #2F7FC1;
+  /* Axis triad of the 3D view: x, y, z (each axis also has its letter). */
+  --axis-x: #C2413A;
+  --axis-y: #2E8B4E;
+  --axis-z: #2F6FC1;
   /* Tank colours by content, as on a capacity plan (docs/TANKS_V1.md section 6). The same
      values colour the GLB materials (vessel_reconstruction.tanks CONTENT_CLASSES); they do not
      switch with the theme, so a tank reads the same in both. */
@@ -3015,3 +3021,38 @@ code { font-family: var(--font-mono); }
 .model-cut-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .model-cut-slider { flex: 1; min-width: 0; accent-color: var(--accent); }
 .model-cut-readout { min-width: 104px; text-align: right; font-family: var(--font-mono); font-size: 11px; color: var(--ink-2); }
+
+/* ---- 3D overlays (js/overlay3d.js): frame numbers, pointer readout, scale, axes and stamp. */
+.model-frame-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.model-frame-label {
+  position: absolute; transform: translate(-50%, 2px);
+  color: var(--ink-2); font-family: var(--font-mono); font-size: 10px; line-height: 12px;
+  text-shadow: 0 0 2px var(--model-bg), 0 0 2px var(--model-bg);
+  white-space: nowrap;
+}
+.model-readout {
+  position: absolute; top: 48px; right: var(--space-sm); max-width: calc(100% - 2 * var(--space-sm));
+  padding: 2px 8px; border-radius: var(--radius-sm); border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 92%, transparent); color: var(--ink);
+  font-family: var(--font-mono); font-size: 11px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  pointer-events: none;
+}
+.model-readout[hidden], .model-corner[hidden] { display: none; }
+.pane-model:has(.fit-dial:not([hidden])) .model-readout { top: 108px; }
+.model-corner {
+  position: absolute; right: var(--space-sm); bottom: var(--space-sm);
+  display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
+  color: var(--ink-2); font-size: 11px; pointer-events: none; text-align: right;
+}
+.model-corner-row { display: flex; align-items: flex-end; gap: 10px; }
+.model-scale { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font-family: var(--font-mono); }
+.model-scale-bar { display: block; height: 6px; border: 1.5px solid var(--ink-2); border-top: 0; }
+.model-triad { overflow: visible; }
+.model-triad line { stroke-width: 2; stroke-linecap: round; }
+.model-triad text { font-family: var(--font-mono); font-size: 10px; font-weight: 700; }
+.model-triad .model-triad-x { stroke: var(--axis-x); fill: var(--axis-x); }
+.model-triad .model-triad-y { stroke: var(--axis-y); fill: var(--axis-y); }
+.model-triad .model-triad-z { stroke: var(--axis-z); fill: var(--axis-z); }
+.model-triad text { stroke: none; }
+.model-reference { font-family: var(--font-mono); font-size: 10px; text-shadow: 0 0 2px var(--model-bg); }
+.model-stamp { font-weight: 600; color: var(--guess-text); text-shadow: 0 0 2px var(--model-bg); }
