@@ -72,8 +72,9 @@ Replay set:
   the end rows): half-breadth at every station; second divided differences over x; inflection count
   = sign changes of that second difference, ignoring values whose magnitude is below a noise floor
   (0.2 % of half-beam per station spacing squared).
-- Per section: half-breadth at 50 heights evenly spaced between its keel and top; inflection count
-  as above with the same floor.
+- Per section: half-breadth at 21 heights evenly spaced between its keel and top (a step of 5 %
+  of its height, about one waterline spacing, so pixel noise of a trace is not counted); inflection
+  count = sign changes of the plain second difference above 0.2 % of half-beam.
 - Max curvature jump: the largest change of the second divided difference between neighbouring
   stations along a waterline, as a fraction of half-beam per station spacing squared.
 
