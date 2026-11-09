@@ -55,6 +55,28 @@ EMPIRE_STATE_V_SHEET8 = SheetSpec(
 ESV_DIR = 'tanks-public/empire_state_v_haer_va131/'
 ESV_SUFFIX = '_-_Empire_State_V,_James_River_Reserve_Fleet,_Newport_News,_Newport_News,_VA_HAER_VA-131_'
 
+# Arthur M. Huddell (HAER VA-132), the holdout (docs/TANKS_V2.md section 4). Written from the
+# sheets only, without access to the truth. Windows measured on 1/8 previews (1800 x 1200 px).
+# All three sheets print the same 1/16 in = 1 ft graphic bar (feet above, metres below).
+HUDDELL_PREVIEW = (1800, 1200)
+HUDDELL_SHEET7 = SheetSpec(  # Inboard Capacity Plan: profile, deck line to baseline
+    views=[ViewSpec('profile', 'profile', _share(220, 335, 1615, 528, *HUDDELL_PREVIEW))],
+    scale_bar=_share(228, 700, 1638, 778, *HUDDELL_PREVIEW), scale_bar_unit_m=FEET_M,
+    schedule=_share(612, 810, 1252, 987, *HUDDELL_PREVIEW))
+HUDDELL_SHEET8 = SheetSpec(  # Upper Deck and Second Deck Capacity Plans
+    views=[ViewSpec('upper_deck', 'plan', _share(218, 272, 1606, 462, *HUDDELL_PREVIEW), role='above'),
+           ViewSpec('second_deck', 'plan', _share(215, 515, 1616, 708, *HUDDELL_PREVIEW), role='above')],
+    scale_bar=_share(228, 765, 1638, 843, *HUDDELL_PREVIEW), scale_bar_unit_m=FEET_M,
+    schedule=_share(505, 893, 1360, 1072, *HUDDELL_PREVIEW),
+    notes=['The small "Flat between 2nd and upper decks" view (bow stores) is not given.'])
+HUDDELL_SHEET9 = SheetSpec(  # Inner Bottom Capacity Plan and Deep Tank Top (a part plan)
+    views=[ViewSpec('inner_bottom', 'plan', _share(240, 380, 1460, 592, *HUDDELL_PREVIEW), role='double_bottom'),
+           ViewSpec('deep_tank_top', 'plan', _share(1190, 170, 1425, 325, *HUDDELL_PREVIEW), role='above')],
+    scale_bar=_share(228, 668, 1638, 746, *HUDDELL_PREVIEW), scale_bar_unit_m=FEET_M,
+    schedule=_share(505, 785, 1360, 1045, *HUDDELL_PREVIEW))
+HUDDELL_DIR = 'tanks-public/arthur_m_huddell_haer_va132/'
+HUDDELL_SUFFIX = '_-_Arthur_M._Huddell,_James_River_Reserve_Fleet,_Newport_News,_Newport_News,_VA_HAER_VA-132_'
+
 # Case -> sheets (path under the sources folder, sheet description). A case may span sheets
 # (a profile on one sheet, plans on others).
 CASES = {
@@ -66,6 +88,12 @@ CASES = {
     'empire_state_v': [
         (ESV_DIR + 'Capacity_Plan_Inboard_Profile' + ESV_SUFFIX + '(sheet_6_of_13).tif', EMPIRE_STATE_V_SHEET6),
         (ESV_DIR + 'Capacity_Plan_Double_Bottom' + ESV_SUFFIX + '(sheet_8_of_13).tif', EMPIRE_STATE_V_SHEET8)],
+    'arthur_m_huddell': [
+        (HUDDELL_DIR + 'Inboard_Capacity_Plan' + HUDDELL_SUFFIX + '(sheet_7_of_20).tif', HUDDELL_SHEET7),
+        (HUDDELL_DIR + 'Deep_Tank_Top,_Inner_Bottom_Capacity_Plan' + HUDDELL_SUFFIX + '(sheet_9_of_20).tif',
+         HUDDELL_SHEET9),
+        (HUDDELL_DIR + 'Upper_Deck_Capacity_Plan,_Second_Deck_Capacity_Plan' + HUDDELL_SUFFIX
+         + '(sheet_8_of_20).tif', HUDDELL_SHEET8)],
 }
 
 # Scan variant (docs/TANKS_V2.md section 2): skew, blur, grey noise, 1-bit threshold, flips.

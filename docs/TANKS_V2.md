@@ -145,6 +145,89 @@ found in the reading record. The result is reported as measured, in a new sectio
 targets are not changed after the run, and any later fix makes a new development round (the
 holdout is then spent).
 
+### 4.1 Truth file format and scorer (written before the truth file and before the run)
+
+The independent agent writes `liberty_truth/truth.json` as one JSON object:
+
+```json
+{
+  "source": "EC2-S-C1 capacity plan tables: file names and pages",
+  "rows": [
+    {"name": "No. 3 D.B. Tank", "number": 3, "side": "P", "kind": "double bottom",
+     "content": "fuel oil or ballast", "printed_value": 1234.5, "printed_unit": "cu ft", "note": null}
+  ]
+}
+```
+
+| Field | Type and values |
+|---|---|
+| `name` | string, the printed name, as printed |
+| `number` | positive integer, the printed tank number; `null` when none is printed |
+| `side` | `"P"`, `"S"` or `"C"` (centre line, or one tank across the ship) |
+| `kind` | `"double bottom"`, `"deep tank"`, `"peak"`, `"settling"`, `"other"` |
+| `content` | `"fuel oil"`, `"fuel oil or ballast"`, `"ballast"`, `"fresh water"`, `"feed water"`, `"other"` |
+| `printed_value` | positive number, the printed 100 % capacity as printed; `null` when none is printed |
+| `printed_unit` | `"cu ft"` or `"US gal"` (section 4.2), the unit of `printed_value` |
+| `note` | optional string or `null` (for example "printed 5P") |
+
+All fields except `note` are required in each row; another field or a value outside the lists
+stops the scorer (`ValueError`). Rows with `printed_value` `null` are left out (and counted).
+`source` is free text. The scorer converts to m3 (section 4.2).
+
+Scorer: `benchmarks/tanks/holdout_score.py`, run as
+`python -m benchmarks.tanks.raster_run --case arthur_m_huddell --scorer holdout --truth <truth.json> ...`;
+it writes `holdout_score.json` (H1 to H3, the decision, the per-row match table, unmatched tanks).
+How it applies the matching rule above, fixed now:
+- Tank number: the reader's `tank_key` of the built tank's label ("No 3 P" is number 3, side P;
+  "S" or "SB" is side S). A row or a tank without a number does not match.
+- Side: equal sides; a tank without a side matches a `"C"` row, or the single row with that
+  number and that kind.
+- Kind: from the label as read: "deep" gives deep tank, "peak" peak, "settling" settling,
+  "D.B." or "double bottom" double bottom (first of these in that order). Without such a word, a
+  tank of an inner-bottom plan (role `double_bottom`) is a double bottom; any other tank is
+  `"other"`.
+- Order: rows in file order; each row takes the first unused built tank (reader order) that
+  matches. Each row and each tank is used at most once.
+- H2 uses the matched rows only (`built / truth - 1`). H3 groups: fuel oil = "fuel oil" and
+  "fuel oil or ballast"; ballast; fresh and feed water. The grand total is over all truth rows,
+  "other" included; an unmatched row counts 0 m3. Targets are met at equality.
+
+### 4.2 Amendment before the run, 2026-11-09
+
+Made after the units of the truth tables were known (from the coordinator, without opening
+`liberty_truth/` on this lane) and before any Huddell run. No target and no matching rule is
+changed.
+
+1. Units. The water ballast table (fore and after peaks included) prints cubic feet; the fresh
+   water and fuel oil tables (settling and deep tanks included) print US gallons only. As first
+   written, section 4 would have left out every gallon row. A row printed in US gallons is
+   converted exactly: 1 US gal = 231 in3 = 231/1728 ft3 = 0.1336805556 ft3, then m3 = ft3 x
+   0.0283168 as before. The truth file keeps the printed value and unit (`printed_value`,
+   `printed_unit`); the scorer converts.
+2. Repeated "No.5P". The water ballast table prints "No.5P" twice (on both the John W. Brown and
+   the Peter Minuit tables). In the P/S order of that table the second occurrence is No. 5 S: the
+   truth file records `"side": "S"` for it, with `"note": "printed 5P"`.
+
+### 4.3 Truth conversion (PM, 2026-11-09, before the run)
+
+Source: two independent transcriptions of the SS John W. Brown EC2-S-C1 capacity plan (Sonnet 5.5,
+row crops; Opus 5.5, column crops) agree on every quantity cell; all 13 printed totals equal their
+column sums; the Peter Minuit plan prints the same quantities (standard design). Frozen file and
+hash: `liberty_truth/frozen/` (git-ignored). Conversion code: `benchmarks/tanks/huddell_truth.py`.
+
+Rules, fixed before the run:
+- One row per physical tank. Double-bottom tanks 1 to 6 and deep tanks 3 P/S are printed in both
+  WATER BALLAST (cu ft) and FUEL OIL (US gal): they are one dual-use tank each, content `fuel oil or
+  ballast`, value = the cu ft figure (the protocol's 100 % capacity unit); the gallons go in `note`.
+- Reserve feed 4 P/S: kind `double bottom`, content `feed water` (US gal). Fresh water P/S: kind
+  `other`. Settling tanks P/S: kind `settling`, content `fuel oil` (US gal). Fore peak: `peak`,
+  `ballast`. After peak (culinary water): `peak`, `fresh water`. Rows printed without a side: `C`.
+- The scorer is not changed: rows without a printed number (2 peaks, 2 fresh water, 2 settling;
+  6 of 22) cannot match under 4.1, so coverage is at most 16/22 (73 %). This makes the holdout
+  harder, not easier, and is stated here before the run.
+
+Truth file: 22 rows, sha256 d780c3e82d32075c919013f1c62a160703e7d641dd7fd4d6326332e6155965a7.
+
 ## 5. Development results (2026-11-09)
 
 Code: `src/vessel_reconstruction/tank_plan_raster.py` (reader), `benchmarks/tanks/raster_cases.py`
@@ -247,3 +330,37 @@ Commands (outputs git-ignored):
      --case saugatuck or empire_state_v without --hull and --truth)
 
 Checks before each commit: `tests/test_tank_plan_raster.py` and `tests/test_tanks.py`.
+
+## 6. Huddell holdout result (one run, 2026-11-09)
+
+Reader frozen at `96af891` (unchanged; `git diff 96af891 -- src/vessel_reconstruction/tank_plan_raster.py`
+is empty). Host calibration `20f1617`, scorer `5c7544d`, truth conversion `5fc2cb2`, all before the run.
+Label reading: Claude Sonnet 5.5 via the CLI subscription, empty cache. Run time 197 s. No error, so no repeat.
+
+| ID | Result | Target |
+|---|---|---|
+| H1 coverage | **0 of 22 rows (0 %)** | >= 60 %: missed |
+| H2 volume, median abs rel | not measurable (no matches) | <= 20 %: missed |
+| H3 grand total | -100 % (unmatched rows count 0 m3) | <= 15 %: missed |
+
+**Decision: the raster reader fails the Huddell holdout.** The holdout is spent; any fix is a new
+development round.
+
+Causes found in the reading record (`work/tanks-raster/runs/huddell/reading.json`, git-ignored):
+1. **Frame axis not found on any view.** Every view reports "x from the sheet edge (guessed origin)",
+   so plan and profile x positions do not line up. The one double-bottom tank linked to a plan region
+   (No. 6, label "FUEL OIL OR WATER BALLAST TANK NO.6") got no height from the profile and was not
+   built (0 m3).
+2. **Tank labels read but not tied to regions.** The profile labels include F.O. or water ballast
+   tanks No. 2, 3, 5 P/S and 6, deep tanks No. 1 and 2 P/S, fore and after peaks; none became a
+   built tank. The inner-bottom plan read 22 labels, mostly girders and voids.
+3. **Hatches built as tanks.** In the deck plans (role `above`) the reader built closed outlines with
+   hatch and girder labels (No. 1, 2, 4 HATCH; "GIRDER OVER WEB NO.2 HATCH") as tanks; a label needs
+   no tank word to become a tank. Schedule matching by number alone then linked "NO.1 HATCH" to fuel
+   oil tank No. 1.
+4. The two settling tanks were built (77 and 88 m3) but carry no number, so they cannot match under
+   4.1 (as stated in 4.3).
+
+Next development round (new data; Huddell is no longer a holdout): frame axis from the drawn frame
+numbers on scanned plans; tie profile labels to plan regions by frame range; require a tank word (or a
+schedule tank row) before a plan region becomes a tank; match the schedule by number and kind.
