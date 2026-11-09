@@ -17,6 +17,7 @@ pub mod live;
 pub mod model_keys;
 pub mod model_usage;
 pub mod notify;
+pub mod part_revise;
 pub mod parts;
 pub mod provider_view;
 pub mod release_ui;

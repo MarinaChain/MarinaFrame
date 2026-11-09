@@ -419,6 +419,48 @@ function mockTransport() {
   const componentReviews = new Map();
   // The sign-off of the mock survey launch's parts (SignOffView or null).
   let mockSignOff = null;
+  // Parts re-run from a mark in this page session: id -> { part, previous } (ComponentViews).
+  const componentRevisions = new Map();
+
+  /** A whole-vessel part as get_task gives it: base or re-run values, plus the review. */
+  function mockPart(base) {
+    const revised = componentRevisions.get(base.id)?.part;
+    return {
+      revision: 0, revision_note: null, revision_pending: false, changes: [],
+      ...clone(revised || base),
+      review: componentReviews.get(base.id)?.decision || 'open',
+      review_note: componentReviews.get(base.id)?.note || null,
+    };
+  }
+
+  /**
+   * What a re-run from a mark gives in the mock: the guessed values (else the first value) come
+   * back as AI values, a height range 0.2 m lower at the top, and the box and volume to match.
+   */
+  function mockPartRevision(part, note) {
+    const next = clone(part);
+    next.revision = (part.revision || 0) + 1;
+    next.revision_note = note;
+    next.revision_pending = true;
+    const targets = part.arguments.some((a) => a.source === 'guessed')
+      ? part.arguments.filter((a) => a.source === 'guessed') : part.arguments.slice(0, 1);
+    const changes = [];
+    next.arguments = part.arguments.map((a) => {
+      if (!targets.includes(a)) return a;
+      const range = /^(-?\d+\.\d+) to (-?\d+\.\d+) m$/.exec(a.value || '');
+      const value = range ? `${range[1]} to ${(Number(range[2]) - 0.2).toFixed(3)} m` : (a.value?.endsWith(' m') ? `${(parseFloat(a.value) * 0.9).toFixed(3)} m` : '4 points, 11.00 to 15.50 m by -1.80 to 1.80 m');
+      changes.push({ name: a.name, before: a.value, after: value, before_source: a.source, after_source: 'ai_inferred' });
+      return { ...a, value, source: 'ai_inferred', basis: `Revised from your mark: ${note}` };
+    });
+    if (next.bbox_m) {
+      next.bbox_m.max[2] = Number((next.bbox_m.max[2] - 0.2).toFixed(3));
+      next.volume_m3 = Number((part.volume_m3 * 0.93).toFixed(1));
+      changes.push({ name: 'volume', before: `${part.volume_m3.toFixed(2)} m³`, after: `${next.volume_m3.toFixed(2)} m³`, before_source: null, after_source: null });
+    }
+    next.status = 'draft_guess';
+    next.changes = changes;
+    return next;
+  }
 
   /** Steps of the task's live run that exist "now", and whether the run is still going. */
   function liveSnapshot(data, task) {
@@ -540,11 +582,7 @@ function mockTransport() {
         ? await fetch('mock/files/parts-local.json').then((r) => (r.ok ? r.json() : null)).catch(() => null)
         : null;
       view.components = task.endsWith('survey-launch')
-        ? clone(localParts || MOCK_COMPONENTS).map((c) => ({
-          ...c,
-          review: componentReviews.get(c.id)?.decision || 'open',
-          review_note: componentReviews.get(c.id)?.note || null,
-        }))
+        ? clone(localParts || MOCK_COMPONENTS).map(mockPart)
         : null;
       view.sign_off = task.endsWith('survey-launch') ? clone(mockSignOff) : null;
       // With ?mockglb (and a GLB placed in mock/files for a local check; none is shipped) the
@@ -848,6 +886,42 @@ function mockTransport() {
       componentReviews.set(id, { decision, note: decision === 'marked' ? text : null });
       if (decision === 'open') mockSignOff = null;
       return { ok: true };
+    },
+    // Re-run one part from its mark (APP_SPEC "Whole-vessel parts"). ?mockrevisefail: the
+    // model's replies do not build, as the worker reports it.
+    async revise_part(data, { task, component_id: id }) {
+      requireTask(data, task);
+      const base = MOCK_COMPONENTS.find((c) => c.id === id);
+      if (!base) throw new BackendError('component_not_found', 'This run has no such part.');
+      const review = componentReviews.get(id);
+      if (review?.decision !== 'marked' || !review.note) throw new BackendError('revise_needs_mark', 'Mark the part and say what to change first.');
+      await pause(3000);
+      if (new URLSearchParams(location.search).has('mockrevisefail')) {
+        throw new BackendError('part_revise_worker', 'The part was not rebuilt (outline self-intersects); the old part stays.');
+      }
+      const current = mockPart(base);
+      componentRevisions.set(id, { part: mockPartRevision(current, review.note), previous: componentRevisions.get(id) || null });
+      mockSignOff = null;
+      return mockPart(base);
+    },
+    async keep_part_revision(data, { task, component_id: id }) {
+      requireTask(data, task);
+      const revised = componentRevisions.get(id);
+      if (!revised?.part.revision_pending) throw new BackendError('part_revise_worker', 'This part has no new revision to keep or undo.');
+      await pause(300);
+      revised.part.revision_pending = false;
+      componentReviews.set(id, { decision: 'open', note: null });
+      mockSignOff = null;
+      return mockPart(MOCK_COMPONENTS.find((c) => c.id === id));
+    },
+    async undo_part_revision(data, { task, component_id: id }) {
+      requireTask(data, task);
+      const revised = componentRevisions.get(id);
+      if (!revised?.part.revision_pending) throw new BackendError('part_revise_worker', 'This part has no new revision to keep or undo.');
+      await pause(300);
+      if (revised.previous) componentRevisions.set(id, revised.previous);
+      else componentRevisions.delete(id);
+      return mockPart(MOCK_COMPONENTS.find((c) => c.id === id));
     },
     async dismiss_notice(_data, { id }) {
       const dismissed = new Set(readStored(MOCK_DISMISSED_KEY, []));

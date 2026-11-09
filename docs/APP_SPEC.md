@@ -536,18 +536,60 @@ ComponentView {
   bbox_m: { min: [x, y, z], max: [x, y, z] } | null,   // hull frame, metres; null when not built
   volume_m3: number | null,
   step_path: string | null,          // "whole_vessel/<id>.step" relative to the task folder (mm)
-  arguments: { name: string, value: string|null,       // value as text with its unit, when known
+  arguments: { name: string, value: string|null,       // value as text with its unit, when known; an outline: "4 points, 13.57 to 21.27 m by -3.00 to 3.00 m"
                source: "traced"|"ai_inferred"|"guessed",  // ship-cad source_labels[name]
                basis: string|null }[],                  // ship-cad provenance[name].basis
   review: "open"|"accepted"|"marked", // the person's review of this part (app state)
-  review_note: string | null        // what to change, when "marked"
+  review_note: string | null,       // what to change, when "marked"
+  revision: number,                  // 0 as the run built it; +1 for each re-run from a mark
+  revision_note: string | null,      // the mark note the last re-run followed
+  revision_pending: boolean,         // the last re-run waits for Keep or Undo
+  changes: { name: string,           // what the last re-run changed ("volume" is the last row)
+             before: string|null, after: string|null,
+             before_source: string|null, after_source: string|null }[]
 }
 ```
 
 Command: `review_component { task, component_id, decision: "accepted"|"marked"|"open", note?: string }` →
 `{ ok: true }`; saved in the app config folder (`part_reviews.json`), not in the run folder. A part with guessed values can be accepted as a draft part; nothing is ever
-"approved" (`engineering_approved` stays false). "marked" needs a note of 1 to 500 characters (what to change); it is saved with the review for the whole-vessel pass to read. Re-running one part from a mark through Mark and revise
-with `target_component_ids` (later).
+"approved" (`engineering_approved` stays false). "marked" needs a note of 1 to 500 characters (what to change).
+
+### Re-run one part from a mark (2026-11-09)
+
+Commands (each returns the part as a `ComponentView`):
+
+- `revise_part { task, component_id }`: re-run the part from its saved mark note. Refused when
+  the part has no mark note (`revise_needs_mark`), while another action runs on the run
+  (`action_in_progress`), when AI drafting is off (`ai_drafting_off`) or no model key is found
+  (`model_key_missing`). Takes up to 20 minutes (then it is stopped and the old part stays).
+  Any sign-off of the parts ends (the part changed).
+- `keep_part_revision { task, component_id }`: keep the new revision. The mark has been acted
+  on, so the review of the part opens again; any sign-off ends.
+- `undo_part_revision { task, component_id }`: put back the previous entry and STEP file. The
+  mark stays, so the person can change the note and re-run.
+
+The app runs the worker `python -m vessel_reconstruction.part_revise --task <task> --part <id>
+--note=<note>` (or `--keep`, `--undo`) with the worker Python of the other workers
+(`worker_python.rs`), arguments only (no shell). The model key comes from the app's key lookup
+(`model_keys.rs`) into the worker's environment only; it is never an argument or printed. The
+worker crops the run's drawings around the part (at most 3 crops, profile and plan first, at most
+1,000,000 pixels each) from `<task>/whole_vessel/views.json` (each view: drawing file, kind,
+bounds, origin, metres per unit; DXF, PNG or JPEG; schema in the module docstring). It gives
+DeepSeek the crops with their pixel-to-metre calibration, the part's current values with their
+source labels, and the note (ship-cad JSON, thinking disabled, at most 3 turns; a reply that does
+not build goes back with the reason). Only that part is rebuilt in the ship-cad worker. Its entry
+in `whole_vessel/execution.json` gets the new values (source `ai_inferred`; a value the model
+gives back unchanged keeps its old label and evidence, so a traced value stays traced), `revision`,
+`revision_note`, `revision_kept: false`, `revision_history` (the whole previous entries) and the
+request receipts; the old STEP stays as `<id>.r<previous revision>.step`. Crops, replies and
+receipts stay in `whole_vessel/revisions/<id>-r<n>-<time>/`. The other parts do not change, and
+`engineering_approved` stays false. Hull parts cannot be re-run this way (the hull is a loft).
+The whole-vessel GLB is not rebuilt: the 3D view shows the run's model until the next full run.
+
+Parts tab: on a marked part with a note, "Re-run with this note". While it runs, a status line
+with the elapsed time (other actions wait). Then the part's state is "New revision" (AI teal),
+with "Revision n: what changed" (each changed value before and after, with its source label) and
+Keep or Undo. A kept revision shows "Revision n, from the note …".
 
 The Parts tab groups parts by op, draws a profile and a plan sketch of the boxes (the selected
 part in the selection blue, parts with guesses dashed amber), lists each value with its source

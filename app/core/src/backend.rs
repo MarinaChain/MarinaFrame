@@ -9,7 +9,7 @@ use crate::live::{HullSections, LiveSteps, LiveStore};
 use crate::storage::{self, AppPaths};
 use crate::types::*;
 use crate::view::{self, ViewContext};
-use crate::{artifact, events, files, intake, model_keys, parts, sample, signoff};
+use crate::{artifact, events, files, intake, model_keys, part_revise, parts, sample, signoff};
 use marinaframe_control::util;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -105,6 +105,68 @@ impl Backend {
             signoff::withdraw(&self.paths, &path)?;
         }
         Ok(())
+    }
+
+    /// Re-run one whole-vessel part from its saved mark note (the model reads crops of the
+    /// run's drawings and the note; only that part is rebuilt). Needs AI drafting on and a
+    /// model key; refused while another action runs on the run. Takes up to
+    /// `part_revise::REVISE_TIMEOUT`.
+    pub fn revise_part(&self, task: &str, component_id: &str) -> AppResult<ComponentView> {
+        let path = self.task_path(task)?;
+        let settings = self.run_settings();
+        if !settings.ai_drafting {
+            return Err(AppError::new(
+                "ai_drafting_off",
+                "AI drafting is off in Settings. Turn it on to re-run a part.",
+            ));
+        }
+        // The first key of the app's key lookup; it goes to the worker's environment only.
+        let Some((_, key)) = model_keys::configured_keys().1.into_iter().next() else {
+            return Err(AppError::new(
+                "model_key_missing",
+                "No model key was found. See Settings.",
+            ));
+        };
+        let view = part_revise::revise_part(
+            &self.registry,
+            &self.paths,
+            &path,
+            component_id,
+            &self.intake_worker(&settings),
+            &part_revise::Model::Key(key),
+            part_revise::REVISE_TIMEOUT,
+        )?;
+        // The part changed: a sign-off of the parts no longer holds.
+        signoff::withdraw(&self.paths, &path)?;
+        Ok(view)
+    }
+
+    /// Keep the new revision of a re-run part; its review opens again.
+    pub fn keep_part_revision(&self, task: &str, component_id: &str) -> AppResult<ComponentView> {
+        let path = self.task_path(task)?;
+        let settings = self.run_settings();
+        let view = part_revise::keep_revision(
+            &self.registry,
+            &self.paths,
+            &path,
+            component_id,
+            &self.intake_worker(&settings),
+        )?;
+        signoff::withdraw(&self.paths, &path)?;
+        Ok(view)
+    }
+
+    /// Undo the new revision of a re-run part: the previous part and STEP come back.
+    pub fn undo_part_revision(&self, task: &str, component_id: &str) -> AppResult<ComponentView> {
+        let path = self.task_path(task)?;
+        let settings = self.run_settings();
+        part_revise::undo_revision(
+            &self.registry,
+            &self.paths,
+            &path,
+            component_id,
+            &self.intake_worker(&settings),
+        )
     }
 
     /// Record a person's sign-off of a run's parts: "usable as a starting model". The run

@@ -4,7 +4,9 @@
 //! state, kept in the app config folder (`part_reviews.json`), never in the run folder.
 use crate::error::{AppError, AppResult};
 use crate::storage::{self, AppPaths};
-use crate::types::{ComponentArgument, ComponentBox, ComponentView, WholeVesselModel};
+use crate::types::{
+    ComponentArgument, ComponentBox, ComponentChange, ComponentView, WholeVesselModel,
+};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
@@ -28,7 +30,8 @@ fn label_of(id: &str) -> String {
     }
 }
 
-/// A short text for a ship-cad argument value: a number in metres, a range, or a point count.
+/// A short text for a ship-cad argument value: a number in metres, a range, or a polygon's
+/// point count with its extent (so a changed outline shows what changed).
 fn value_text(value: &Value) -> Option<String> {
     match value {
         Value::Number(n) => n.as_f64().map(|v| format!("{v:.3} m")),
@@ -38,11 +41,39 @@ fn value_text(value: &Value) -> Option<String> {
             Some(format!("{a:.3} to {b:.3} m"))
         }
         Value::Array(items) if items.iter().all(Value::is_array) => {
-            Some(format!("{} points", items.len()))
+            Some(match polygon_extent(items) {
+                Some([a0, a1, b0, b1]) => format!(
+                    "{} points, {a0:.2} to {a1:.2} m by {b0:.2} to {b1:.2} m",
+                    items.len()
+                ),
+                None => format!("{} points", items.len()),
+            })
         }
         Value::String(text) => Some(text.clone()),
         _ => None,
     }
+}
+
+/// [first low, first high, second low, second high] of [[a, b], ...] points (x and y for a
+/// plan outline, x and z for an appendage), or None when a point is not two numbers.
+fn polygon_extent(points: &[Value]) -> Option<[f64; 4]> {
+    let mut extent = [
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+    ];
+    for point in points {
+        let pair = point.as_array().filter(|p| p.len() == 2)?;
+        let (a, b) = (pair[0].as_f64()?, pair[1].as_f64()?);
+        extent = [
+            extent[0].min(a),
+            extent[1].max(a),
+            extent[2].min(b),
+            extent[3].max(b),
+        ];
+    }
+    (!points.is_empty()).then_some(extent)
 }
 
 fn point(value: &Value) -> Option<[f64; 3]> {
@@ -95,18 +126,89 @@ fn argument_view(entry: &Value, name: &str, source: &str) -> Option<ComponentArg
     })
 }
 
-fn component_view(entry: &Value, reviews: &HashMap<String, PartReview>) -> Option<ComponentView> {
-    let id = entry["id"].as_str()?.to_string();
-    let built = entry["built"].as_bool().unwrap_or(false);
-    let labels = entry["source_labels"].as_object();
-    let arguments = labels
+fn arguments_of(entry: &Value) -> Vec<ComponentArgument> {
+    entry["source_labels"]
+        .as_object()
         .map(|labels| {
             labels
                 .iter()
                 .filter_map(|(name, label)| argument_view(entry, name, label.as_str()?))
                 .collect()
         })
-        .unwrap_or_default();
+        .unwrap_or_default()
+}
+
+fn volume_text(entry: &Value) -> Option<String> {
+    entry["volume_m3"].as_f64().map(|v| format!("{v:.2} m³"))
+}
+
+/// What the last re-run from a mark changed: the entry against the previous one
+/// (`revision_history`, written by `vessel_reconstruction.part_revise`). Values that did not
+/// change are left out; the volume is the last row.
+fn changes_of(entry: &Value, arguments: &[ComponentArgument]) -> Vec<ComponentChange> {
+    let Some(previous) = entry["revision_history"].as_array().and_then(|h| h.last()) else {
+        return vec![];
+    };
+    let before = arguments_of(previous);
+    let mut names: Vec<&str> = before.iter().map(|a| a.name.as_str()).collect();
+    for argument in arguments {
+        if !names.contains(&argument.name.as_str()) {
+            names.push(&argument.name);
+        }
+    }
+    let find = |list: &[ComponentArgument], name: &str| -> (Option<String>, Option<String>) {
+        list.iter()
+            .find(|a| a.name == name)
+            .map(|a| (a.value.clone(), Some(a.source.clone())))
+            .unwrap_or_default()
+    };
+    let mut changes: Vec<ComponentChange> = names
+        .into_iter()
+        .filter_map(|name| {
+            let (before, before_source) = find(&before, name);
+            let (after, after_source) = find(arguments, name);
+            (before != after || before_source != after_source).then(|| ComponentChange {
+                name: name.to_string(),
+                before,
+                after,
+                before_source,
+                after_source,
+            })
+        })
+        .collect();
+    let (before, after) = (volume_text(previous), volume_text(entry));
+    if before != after {
+        changes.push(ComponentChange {
+            name: "volume".into(),
+            before,
+            after,
+            before_source: None,
+            after_source: None,
+        });
+    }
+    changes
+}
+
+/// True when the entry keeps the previous revision (needed for Undo).
+fn has_previous(entry: &Value) -> bool {
+    entry["revision_history"]
+        .as_array()
+        .is_some_and(|history| !history.is_empty())
+}
+
+fn component_view(entry: &Value, reviews: &HashMap<String, PartReview>) -> Option<ComponentView> {
+    let id = entry["id"].as_str()?.to_string();
+    let built = entry["built"].as_bool().unwrap_or(false);
+    let arguments = arguments_of(entry);
+    let revision = entry["revision"]
+        .as_u64()
+        .and_then(|r| u32::try_from(r).ok())
+        .unwrap_or(0);
+    let changes = if revision > 0 {
+        changes_of(entry, &arguments)
+    } else {
+        vec![]
+    };
     let bbox_m = match (
         point(&entry["bbox_m"]["min"]),
         point(&entry["bbox_m"]["max"]),
@@ -137,6 +239,12 @@ fn component_view(entry: &Value, reviews: &HashMap<String, PartReview>) -> Optio
             .map(|r| r.decision.clone())
             .unwrap_or_else(|| "open".into()),
         review_note: reviews.get(&id).and_then(|r| r.note.clone()),
+        revision,
+        revision_note: entry["revision_note"].as_str().map(String::from),
+        revision_pending: revision > 0
+            && !entry["revision_kept"].as_bool().unwrap_or(false)
+            && has_previous(entry),
+        changes,
         id,
     })
 }
@@ -308,7 +416,7 @@ mod tests {
                 .unwrap()
                 .value
                 .as_deref(),
-            Some("3 points")
+            Some("3 points, 0.00 to 1.00 m by 0.00 to 1.00 m")
         );
         let rudder = &parts[1];
         assert_eq!(rudder.label, "Rudder blade");
@@ -353,7 +461,10 @@ mod tests {
             .iter()
             .find(|a| a.name == "outline")
             .unwrap();
-        assert_eq!(outline.value.as_deref(), Some("4 points"));
+        assert_eq!(
+            outline.value.as_deref(),
+            Some("4 points, 9.00 to 17.00 m by -2.60 to 2.60 m")
+        );
         let mast = &parts[1];
         assert!(!mast.built && mast.arguments.is_empty() && mast.bbox_m.is_none());
         assert!(mast.reason.contains("missing or invalid measurement"));

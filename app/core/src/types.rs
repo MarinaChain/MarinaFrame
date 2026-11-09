@@ -282,6 +282,29 @@ pub struct ComponentView {
     /// What the person wants changed, when the review is "marked".
     #[serde(default)]
     pub review_note: Option<String>,
+    /// 0 as the run built the part; each re-run from a mark adds one.
+    #[serde(default)]
+    pub revision: u32,
+    /// The mark note the last re-run followed.
+    #[serde(default)]
+    pub revision_note: Option<String>,
+    /// True while the person has not chosen Keep or Undo for the last re-run.
+    #[serde(default)]
+    pub revision_pending: bool,
+    /// What the last re-run changed: each value that differs, before and after.
+    #[serde(default)]
+    pub changes: Vec<ComponentChange>,
+}
+
+/// One value a re-run changed. `before` and `after` are value texts ("3.400 to 5.800 m").
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ComponentChange {
+    pub name: String,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    /// Source labels before and after ("traced", "ai_inferred" or "guessed").
+    pub before_source: Option<String>,
+    pub after_source: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

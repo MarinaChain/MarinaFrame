@@ -320,6 +320,9 @@ def main() -> None:
                   if 'hull' in volumes else None)
     inputs = json.loads((step1 / 'inputs.json').read_text())
     write_app_parts(step1, inputs, out, hull_entry)
+    # The drawing views, so one part can be re-run later from a mark (vessel_reconstruction.part_revise).
+    from benchmarks.gunnerus.whole_vessel_revise import write_views
+    write_views(out, args.sources)
     render(meshes, out / 'whole-vessel-draft.png')
     record.update(render='whole-vessel-draft.png', seconds=time.time() - started)
     (out / 'assembly.json').write_text(json.dumps(record, indent=2) + '\n')

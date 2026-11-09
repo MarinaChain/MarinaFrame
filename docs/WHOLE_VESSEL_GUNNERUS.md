@@ -263,7 +263,11 @@ caught.
 
 ### 4.4 Re-run one part from a mark (CLI)
 
-`benchmarks/gunnerus/whole_vessel_revise.py --folder <run> --pack <pack.json> --part <id> --note "..."`
+The worker is now in the product: `python -m vessel_reconstruction.part_revise --task <run> --part
+<id> --note=<text>` (the app's "Re-run with this note" runs it; it makes its own crops from
+`whole_vessel/views.json`, see docs/APP_SPEC.md "Whole-vessel parts").
+`benchmarks/gunnerus/whole_vessel_revise.py --folder <run> --sources <gunnerus sources> --part <id>
+--note "..."` is a thin wrapper that writes `views.json` for an older Gunnerus run first. It
 takes a person's mark (part id and note, 1 to 500 characters, as the app saves it), gives DeepSeek
 the drawing crops, the part's current values with their source labels and the note (ship-cad JSON,
 thinking disabled, at most 3 turns), rebuilds only that part in the ship-cad worker, and rewrites its
@@ -278,6 +282,14 @@ code guess (tier-2 breadth). Read its breadth and both ends from the drawings; i
 same outline (x 13.57 to 21.27 m, y ±3.54 m) and height (9.087 to 11.487 m). The path works end to
 end; the model again kept the values it was given (as in sections 2 and 3). A note with a number
 ("make it 5.2 m wide") is the useful case.
+
+Second live check, 2026-11-09, through the app path (`part_revise.rs`, key from `model_keys.rs`,
+product worker with its own crops: profile, 1-deck plan and A-deck plan around the wheelhouse), on
+a copy of `work/whole-vessel/final`: note "Make it 6.0 m wide (y from -3.0 to 3.0 m); keep its
+length and its height." Revision 1 built in 1 turn, 23 s: y ±3.00 m (was ±3.54), x and height
+unchanged, volume 130.88 → 110.92 m³. Undo put back the entry and the STEP byte for byte. The
+model had labelled the unchanged height `ai_inferred`; the worker now keeps the old label and
+evidence of a value given back unchanged.
 
 ### 4.5 Lighter hull: reached
 

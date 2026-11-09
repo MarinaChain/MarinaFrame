@@ -19,6 +19,8 @@ const SOURCE_WORD = { traced: 'Read', ai_inferred: 'AI read', guessed: 'Guessed'
 const SOURCE_TONE = { traced: '', ai_inferred: 'ai', guessed: 'draft' };
 /** Longest mark note (the same limit as Mark and revise). */
 const MAX_NOTE = 500;
+/** Ops the worker can re-run from a mark (vessel_reconstruction.part_revise REVISABLE_OPS). */
+const REVISABLE_OPS = new Set(['deck', 'deckhouse', 'bulwark', 'appendage']);
 /** Phrases that start a mark note: one tap, then the person adds the numbers. */
 const MARK_CHIPS = ['Too high', 'Too low', 'Too long', 'Too short', 'Wrong place', 'Not a part', 'Missing part'];
 /** Sketch scale (SVG units per metre) and margin; the SVG scales to its column width. */
@@ -76,6 +78,7 @@ export function plainReason(reason) {
 }
 
 export function partState(part) {
+  if (part.revision_pending) return { word: 'New revision', tone: 'ai', title: 'Re-run from your mark. Keep it or undo it.' };
   if (part.review === 'accepted') return { word: 'Accepted', tone: 'brand', title: 'You accepted this part as a draft part.' };
   if (part.review === 'marked') return { word: 'Marked', tone: 'brand', title: `You marked it: ${part.review_note || ''}` };
   if (!part.built) return { word: 'Not built', tone: 'warn', title: plainReason(part.reason) };
@@ -123,15 +126,30 @@ function chip(text, tone, title) {
   return el('span', { class: 'badge badge-small', dataset: { tone }, title }, el('span', { class: 'badge-text' }, text));
 }
 
+/** Whether "Re-run with this note" is offered: a marked part with a note, of an op the worker revises. */
+export function canRerun(part) {
+  return part.review === 'marked' && Boolean(part.review_note) && !part.revision_pending && REVISABLE_OPS.has(part.op);
+}
+
+/** "1:05" from milliseconds. */
+export function elapsedText(ms) {
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
 /**
  * `review(id, decision)` saves a review (review_component) and resolves when done;
- * `showIn3d(part)` switches to the Run tab with the part outlined.
+ * `showIn3d(part)` switches to the Run tab with the part outlined. `revisePart(id)`,
+ * `keepRevision(id)` and `undoRevision(id)` re-run a marked part and settle its new revision;
+ * each resolves with the part (ComponentView) and rejects after the app showed the error.
  */
-export function createParts({ host, review, showIn3d, signOff, onSelect = () => {}, showWholeVessel = () => {} }) {
+export function createParts({ host, review, showIn3d, signOff, revisePart = null, keepRevision = null, undoRevision = null, onSelect = () => {}, showWholeVessel = () => {} }) {
   let wholeModel = null; // TaskView.whole_vessel_model, or null
   let parts = [];
   let selectedId = null;
   let busy = false;
+  let rerun = null; // { id, startedMs } while a part is re-run from its mark
+  let rerunTimer = null;
   let marking = false; // the mark form is open on the selected part
   let signedOff = null; // SignOffView of this run, or null
   // Typed text kept across re-renders (a reload of the run must not wipe what the person typed).
@@ -284,6 +302,94 @@ export function createParts({ host, review, showIn3d, signOff, onSelect = () => 
     return form;
   }
 
+  /** Put a part the backend returned in place of the old one. */
+  function replacePart(updated) {
+    const index = parts.findIndex((p) => p.id === updated.id);
+    if (index >= 0) parts[index] = updated;
+  }
+
+  /** Re-run the part from its saved mark note; the work takes minutes. */
+  async function rerunPart(part) {
+    if (busy || !revisePart) return;
+    busy = true;
+    rerun = { id: part.id, startedMs: Date.now() };
+    // Only the clock text changes each second; the rest of the page stays as it is.
+    rerunTimer = setInterval(() => {
+      const clock = host.querySelector('.parts-rerun-time');
+      if (clock && rerun) clock.textContent = elapsedText(Date.now() - rerun.startedMs);
+    }, 1000);
+    render();
+    try {
+      replacePart(await revisePart(part.id));
+      signedOff = null; // the part changed: the backend withdrew any sign-off
+    } catch {
+      // The app showed the error; the old part stays.
+    } finally {
+      clearInterval(rerunTimer);
+      rerun = null;
+      busy = false;
+      render();
+    }
+  }
+
+  /** Keep or undo the new revision of a part. */
+  async function settleRevision(part, keep) {
+    const call = keep ? keepRevision : undoRevision;
+    if (busy || !call) return;
+    busy = true;
+    render();
+    try {
+      replacePart(await call(part.id));
+      if (keep) signedOff = null;
+    } catch {
+      // The app showed the error; the part keeps its revision.
+    } finally {
+      busy = false;
+      render();
+    }
+  }
+
+  /** Re-run offer, progress, or the new revision with what changed and Keep / Undo. */
+  function revisionBlock(part) {
+    if (rerun?.id === part.id) {
+      return el('section', { class: 'parts-rerun', role: 'status', 'aria-label': 'Re-run in progress' },
+        el('span', { class: 'spinner', 'aria-hidden': 'true' }),
+        el('p', {},
+          el('strong', {}, 'Re-running this part from your note. '),
+          'The AI reads the drawing around the part and your note; then only this part is rebuilt. This takes 1 to 5 minutes. ',
+          el('span', { class: 'parts-rerun-time', 'aria-hidden': 'true' }, elapsedText(Date.now() - rerun.startedMs))));
+    }
+    if (part.revision_pending) {
+      return el('section', { class: 'parts-revision', 'aria-labelledby': 'parts-revision-title' },
+        el('h3', { id: 'parts-revision-title' }, `Revision ${part.revision}: what changed`),
+        part.revision_note ? el('p', { class: 'parts-revision-note' }, 'From your note: ', el('q', {}, part.revision_note)) : null,
+        part.changes?.length
+          ? el('table', { class: 'parts-args parts-changes' },
+            el('caption', { class: 'visually-hidden' }, `Values of ${part.label} before and after the re-run`),
+            el('thead', {}, el('tr', {},
+              el('th', { scope: 'col' }, 'Item'), el('th', { scope: 'col' }, 'Before'), el('th', { scope: 'col' }, 'After'))),
+            el('tbody', {}, ...part.changes.map((c) => el('tr', {},
+              el('th', { scope: 'row' }, c.name),
+              el('td', { class: 'parts-value' }, c.before || '—', c.before_source ? [' ', chip(SOURCE_WORD[c.before_source] || c.before_source, SOURCE_TONE[c.before_source] || '', '')] : null),
+              el('td', { class: 'parts-value' }, c.after || '—', c.after_source ? [' ', chip(SOURCE_WORD[c.after_source] || c.after_source, SOURCE_TONE[c.after_source] || '', '')] : null)))))
+          : el('p', {}, 'No value changed.'),
+        el('p', { class: 'parts-revision-hint' }, 'AI values are drafts. Keep the new part, or undo to put back the old part and its STEP file.'),
+        el('div', { class: 'decision-bar' },
+          el('button', { class: 'btn btn-primary', type: 'button', disabled: busy, onclick: () => settleRevision(part, true) }, 'Keep'),
+          el('button', { class: 'btn', type: 'button', disabled: busy, onclick: () => settleRevision(part, false) }, 'Undo')));
+    }
+    if (canRerun(part) && revisePart) {
+      return el('div', { class: 'parts-rerun-offer' },
+        el('button', { class: 'btn btn-primary', type: 'button', disabled: busy, onclick: () => rerunPart(part) }, 'Re-run with this note'),
+        el('span', { class: 'parts-revision-hint' }, 'The AI rebuilds only this part from your note (1 to 5 minutes).'));
+    }
+    if (part.revision > 0) {
+      return el('p', { class: 'parts-revision-hint' }, `Revision ${part.revision}`,
+        part.revision_note ? [', from the note ', el('q', {}, part.revision_note)] : null, '.');
+    }
+    return null;
+  }
+
   function detail(part) {
     if (!part) return el('p', { class: 'panel-empty' }, 'Pick a part.');
     const state = partState(part);
@@ -299,6 +405,7 @@ export function createParts({ host, review, showIn3d, signOff, onSelect = () => 
       part.review === 'marked' && part.review_note
         ? el('p', { class: 'parts-marked' }, el('strong', {}, 'You marked: '), part.review_note, ' Saved with the review of this run.')
         : null,
+      revisionBlock(part),
       el('p', { class: 'parts-reason', title: part.reason }, plainReason(part.reason)),
       box ? el('p', { class: 'parts-box-line' },
         `x ${box.min[0].toFixed(2)} to ${box.max[0].toFixed(2)} m · breadth ${(box.max[1] - box.min[1]).toFixed(2)} m · `
