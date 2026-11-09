@@ -208,6 +208,26 @@ changed.
    the Peter Minuit tables). In the P/S order of that table the second occurrence is No. 5 S: the
    truth file records `"side": "S"` for it, with `"note": "printed 5P"`.
 
+### 4.3 Truth conversion (PM, 2026-11-09, before the run)
+
+Source: two independent transcriptions of the SS John W. Brown EC2-S-C1 capacity plan (Sonnet 5.5,
+row crops; Opus 5.5, column crops) agree on every quantity cell; all 13 printed totals equal their
+column sums; the Peter Minuit plan prints the same quantities (standard design). Frozen file and
+hash: `liberty_truth/frozen/` (git-ignored). Conversion code: `benchmarks/tanks/huddell_truth.py`.
+
+Rules, fixed before the run:
+- One row per physical tank. Double-bottom tanks 1 to 6 and deep tanks 3 P/S are printed in both
+  WATER BALLAST (cu ft) and FUEL OIL (US gal): they are one dual-use tank each, content `fuel oil or
+  ballast`, value = the cu ft figure (the protocol's 100 % capacity unit); the gallons go in `note`.
+- Reserve feed 4 P/S: kind `double bottom`, content `feed water` (US gal). Fresh water P/S: kind
+  `other`. Settling tanks P/S: kind `settling`, content `fuel oil` (US gal). Fore peak: `peak`,
+  `ballast`. After peak (culinary water): `peak`, `fresh water`. Rows printed without a side: `C`.
+- The scorer is not changed: rows without a printed number (2 peaks, 2 fresh water, 2 settling;
+  6 of 22) cannot match under 4.1, so coverage is at most 16/22 (73 %). This makes the holdout
+  harder, not easier, and is stated here before the run.
+
+Truth file: 22 rows, sha256 d780c3e82d32075c919013f1c62a160703e7d641dd7fd4d6326332e6155965a7.
+
 ## 5. Development results (2026-11-09)
 
 Code: `src/vessel_reconstruction/tank_plan_raster.py` (reader), `benchmarks/tanks/raster_cases.py`
