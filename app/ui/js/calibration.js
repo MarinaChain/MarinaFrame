@@ -2,12 +2,14 @@
 import { el } from './dom.js';
 import { tipAttributes } from './tooltip.js';
 
-export function calibrationChoice({ onSave, onCancel }) {
+export function calibrationChoice({ check = {}, onSave, onCancel }) {
+  const suggested = (check.flags || []).some((flag) => /^sides:.*disagree/i.test(flag));
   const kind = el('select', { 'aria-label': 'What is wrong', onchange: update },
     el('option', { value: '' }, 'Choose a problem'),
     el('option', { value: 'swap_sides' }, 'Bow/stern swapped'),
     el('option', { value: 'reverse_order' }, 'Station order'),
     el('option', { value: 'other' }, 'Other'));
+  kind.value = suggested ? 'swap_sides' : '';
   const half = el('select', { 'aria-label': 'Half' },
     el('option', { value: 'fore' }, 'Bow half'), el('option', { value: 'aft' }, 'Stern half'));
   half.value = 'fore';
@@ -27,6 +29,7 @@ export function calibrationChoice({ onSave, onCancel }) {
   }
   update();
   return el('div', { class: 'calibration-choice', 'aria-label': 'Calibration correction' },
+    suggested ? el('span', { ...tipAttributes('Suggested: swap halves', 'The automatic side checks disagree. Apply only if the bow and stern halves are swapped.', { label: false }).attrs }, '↔ Suggested') : null,
     kind, half, note, apply,
     el('button', { type: 'button', class: 'btn', onclick: onCancel }, 'Cancel'));
 }

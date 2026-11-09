@@ -15,6 +15,24 @@ globalThis.Node = FakeNode;
 globalThis.document = { createElement: (tag) => new FakeNode(tag) };
 const named = (root, name) => root.findAll((n) => n.attributes['aria-label'] === name)[0];
 
+test('a side disagreement suggests a swap but waits for the person', async () => {
+  const saved = [];
+  const choice = calibrationChoice({ check: { flags: ['sides: side checks disagree or are missing: labels say fore left, shapes say fore right'] },
+    onSave: async (fix) => saved.push(fix), onCancel() {} });
+  assert.equal(named(choice, 'What is wrong').value, 'swap_sides');
+  assert.equal(saved.length, 0);
+  assert.match(choice.textContent, /Suggested/);
+  await named(choice, 'Apply correction').listeners.click();
+  assert.deepEqual(saved, [{ kind: 'swap_sides' }]);
+});
+
+test('other flags do not suggest a side swap', () => {
+  for (const flags of [[], ['scale: measures disagree'], ['sides: labels are missing']]) {
+    const choice = calibrationChoice({ check: { flags }, onSave() { assert.fail('No automatic correction'); }, onCancel() {} });
+    assert.equal(named(choice, 'What is wrong').value, '');
+  }
+});
+
 test('the small choice records a swap only after Apply', async () => {
   const saved = [];
   const choice = calibrationChoice({ onSave: async (fix) => saved.push(fix), onCancel() {} });

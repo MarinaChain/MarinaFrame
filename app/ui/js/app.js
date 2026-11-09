@@ -1393,6 +1393,7 @@ function bodyPlanCheckCard(check) {
     .then(afterPartsChange, (error) => { showError(error); });
   const choice = el('div');
   const choose = () => fill(choice, calibrationChoice({
+    check,
     onSave: (correction) => save('marked', JSON.stringify({ calibration_correction: correction })),
     onCancel: () => fill(choice),
   }));
