@@ -330,3 +330,37 @@ Commands (outputs git-ignored):
      --case saugatuck or empire_state_v without --hull and --truth)
 
 Checks before each commit: `tests/test_tank_plan_raster.py` and `tests/test_tanks.py`.
+
+## 6. Huddell holdout result (one run, 2026-11-09)
+
+Reader frozen at `96af891` (unchanged; `git diff 96af891 -- src/vessel_reconstruction/tank_plan_raster.py`
+is empty). Host calibration `20f1617`, scorer `5c7544d`, truth conversion `5fc2cb2`, all before the run.
+Label reading: Claude Sonnet 5.5 via the CLI subscription, empty cache. Run time 197 s. No error, so no repeat.
+
+| ID | Result | Target |
+|---|---|---|
+| H1 coverage | **0 of 22 rows (0 %)** | >= 60 %: missed |
+| H2 volume, median abs rel | not measurable (no matches) | <= 20 %: missed |
+| H3 grand total | -100 % (unmatched rows count 0 m3) | <= 15 %: missed |
+
+**Decision: the raster reader fails the Huddell holdout.** The holdout is spent; any fix is a new
+development round.
+
+Causes found in the reading record (`work/tanks-raster/runs/huddell/reading.json`, git-ignored):
+1. **Frame axis not found on any view.** Every view reports "x from the sheet edge (guessed origin)",
+   so plan and profile x positions do not line up. The one double-bottom tank linked to a plan region
+   (No. 6, label "FUEL OIL OR WATER BALLAST TANK NO.6") got no height from the profile and was not
+   built (0 m3).
+2. **Tank labels read but not tied to regions.** The profile labels include F.O. or water ballast
+   tanks No. 2, 3, 5 P/S and 6, deep tanks No. 1 and 2 P/S, fore and after peaks; none became a
+   built tank. The inner-bottom plan read 22 labels, mostly girders and voids.
+3. **Hatches built as tanks.** In the deck plans (role `above`) the reader built closed outlines with
+   hatch and girder labels (No. 1, 2, 4 HATCH; "GIRDER OVER WEB NO.2 HATCH") as tanks; a label needs
+   no tank word to become a tank. Schedule matching by number alone then linked "NO.1 HATCH" to fuel
+   oil tank No. 1.
+4. The two settling tanks were built (77 and 88 m3) but carry no number, so they cannot match under
+   4.1 (as stated in 4.3).
+
+Next development round (new data; Huddell is no longer a holdout): frame axis from the drawn frame
+numbers on scanned plans; tie profile labels to plan regions by frame range; require a tank word (or a
+schedule tank row) before a plan region becomes a tank; match the schedule by number and kind.
