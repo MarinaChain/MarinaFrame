@@ -30,16 +30,25 @@ BULB_AREA_SHARE = 1.25
 
 @dataclass(frozen=True)
 class Profile:
-    """A stiffener section as printed: name, OCX section kind and its dimensions in mm."""
+    """A stiffener section as printed: name, OCX section kind and its dimensions in mm.
+
+    ``height_mm`` is always the overall height (the OCX ``Height``). ``web_depth_mm`` is the web
+    between the flange and the base; it is left 0 to take the overall height less the flange
+    thickness (equal to the height for a section without a flange)."""
     name: str
     kind: str  # "BulbFlat", "FlatBar" or "TBar" (the OCX section element)
     height_mm: float
     web_mm: float
     flange_width_mm: float = 0.0
     flange_thickness_mm: float = 0.0
+    web_depth_mm: float = 0.0
+
+    def __post_init__(self):
+        if not self.web_depth_mm:
+            object.__setattr__(self, "web_depth_mm", self.height_mm - self.flange_thickness_mm)
 
     def area_m2(self) -> float:
-        web = self.height_mm * self.web_mm
+        web = self.web_depth_mm * self.web_mm  # the flange covers the rest of the height
         if self.kind == "BulbFlat":
             return web * BULB_AREA_SHARE / 1e6
         return (web + self.flange_width_mm * self.flange_thickness_mm) / 1e6
@@ -65,7 +74,7 @@ def parse_profile(text: str) -> Profile | None:
     tee = TEE_PATTERN.search(text)
     if tee:
         height, web, width, flange = (_number(g) for g in tee.groups())
-        return Profile(text, "TBar", height + flange, web, width, flange)
+        return Profile(text, "TBar", height + flange, web, width, flange, web_depth_mm=height)
     for pattern, kind in PROFILE_PATTERNS:
         match = pattern.match(text)
         if match:
