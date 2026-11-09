@@ -376,6 +376,84 @@ def setup_changes(old: dict, new: dict) -> list[str]:
     return changes
 
 
+# A sheet-only first hull is read READINGS times: after the first hull the
+# model reads the sheet again (phase 1), and of the first hulls the one with
+# the better drawing fit (fit_feedback.score, combined_fit: drawing only, never
+# truth) is kept. Live runs differ by 1-5 points from the model's reading alone
+# (docs/CONTINUATION_STATUS.md, variance); two readings cost a few model calls.
+READINGS = 2
+# Description state of one reading; a new reading starts it again.
+READING_STATE = {"description_phase": "views", "description_next_view": None, "described_views": [],
+                 "sheet_setups": {}}
+NEXT_READING_MESSAGE = ("Second reading (best of 2 by drawing fit): read the sheet again from the views, as an "
+                        "independent check: describe_views, propose_sheet_setup and describe_vessel. The first "
+                        "hull of the reading that fits the drawing better is kept.")
+
+
+def reading_record(tools, kept: bool | None = None) -> dict:
+    """Summary of one reading's first hull: its drawing fit and stations."""
+    fit = (tools.state.get("fit_score") or {}).get("combined_fit")
+    stations = (tools.state.get("vessel_description") or {}).get("stations") or []
+    record = {"combined_fit": fit, "station_count": len(stations)}
+    if kept is not None:
+        record["kept"] = kept
+    return record
+
+
+def start_next_reading(tools) -> dict | None:
+    """After the first sheet-only first hull, start another phase-1 reading (best of READINGS).
+
+    The built hull stays the task's draft while the model reads again; the
+    new reading's first hull is built by rebuild_if_setup_changed and kept
+    only when it fits the drawing better. Returns the observation part, or
+    None when no further reading is due.
+    """
+    if not tools.state.get("sheet_only") or tools.state.get("phase1_only"):
+        return None
+    readings = tools.state.setdefault("readings", [])
+    if readings:
+        return None  # Only the controller's first build starts the readings.
+    readings.append(reading_record(tools, kept=True))
+    if len(readings) >= READINGS:
+        tools._save()
+        return None
+    tools.state.update(copy.deepcopy(READING_STATE))
+    tools._save()
+    return {"reading": len(readings) + 1, "of": READINGS, "message": NEXT_READING_MESSAGE}
+
+
+def keep_better_reading(tools, snapshot: dict, materialized: bytes | None, observation: dict) -> dict:
+    """Keep the earlier reading's first hull when the new one fits the drawing worse or failed.
+
+    ``snapshot`` is the task state before the rebuild and ``materialized``
+    its materialized spec file. Returns the selection record.
+    """
+    from .agent_tools import MATERIALIZED_SPEC
+    from .schema import load_bounded_json
+    old_fit = (snapshot.get("fit_score") or {}).get("combined_fit")
+    new_fit = (tools.state.get("fit_score") or {}).get("combined_fit") if observation.get("ok") else None
+    keep_old = materialized is not None and old_fit is not None and (new_fit is None or new_fit < old_fit)
+    readings = copy.deepcopy(tools.state.get("readings") or [])
+    for record in readings:
+        if record.get("kept"):
+            record["kept"] = keep_old
+    readings.append({**reading_record(tools), "combined_fit": new_fit, "kept": not keep_old})
+    selection = {"kept": "earlier" if keep_old else "new", "fit_earlier": old_fit, "fit_new": new_fit}
+    if keep_old:
+        (tools.root / "input" / MATERIALIZED_SPEC).write_bytes(materialized)
+        builds = tools.state.get("builds", [])
+        tools.state = copy.deepcopy(snapshot)
+        # The new reading's builds stay in the history; its hull is set aside.
+        tools.state["builds"] = builds
+        tools.spec = load_bounded_json(tools.root / "input" / MATERIALIZED_SPEC)
+        write_json(tools.root / "vessel.json", {"description": tools.state.get("vessel_description"),
+                                                "table": tools.state.get("vessel_table")})
+    tools.state["readings"] = readings
+    tools.state["reading_selection"] = selection
+    tools._save()
+    return selection
+
+
 def rebuild_if_setup_changed(tools, previous_description) -> dict | None:
     """Build the first hull again when a later reading changes its setup (sheet-only happy path).
 
@@ -398,12 +476,26 @@ def rebuild_if_setup_changed(tools, previous_description) -> dict | None:
     changes = setup_changes(old, new)
     if not changes:
         return None
+    snapshot = copy.deepcopy(tools.state)
+    from .agent_tools import MATERIALIZED_SPEC
+    materialized_path = tools.root / "input" / MATERIALIZED_SPEC
+    materialized = materialized_path.read_bytes() if materialized_path.exists() else None
     tools.state.pop("materialized_spec_sha256", None)
     tools.state.update(copy.deepcopy(SECTION_STATE))
     tools.spec = tools.captured_spec
     tools._save()
     observation = build_first_hull(tools)
+    selection = keep_better_reading(tools, snapshot, materialized, observation)
+    if selection["kept"] == "earlier":
+        return tools._observation(True, "earlier_reading_kept", setup_changes=changes[:12],
+                                  reading_selection=selection,
+                                  candidate=copy.deepcopy(tools.state.get("last_valid_candidate")),
+                                  message=(f"The new reading changed the hull setup, but its first hull fits the "
+                                           f"drawing worse (fit {selection['fit_new']} vs "
+                                           f"{selection['fit_earlier']}) or was not built; the earlier reading "
+                                           "and its first hull were kept."))
     observation["setup_changes"] = changes[:12]
+    observation["reading_selection"] = selection
     observation["message"] = ("The corrected reading changed the hull setup; the first hull was built again from it "
                               "and earlier section edits were set aside. " + observation.get("message", ""))[:600]
     return observation
