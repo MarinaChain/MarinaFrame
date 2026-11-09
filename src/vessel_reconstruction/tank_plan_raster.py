@@ -896,12 +896,18 @@ def claude_asker(cache_dir: Path, model: str = 'claude-sonnet-5-5', call=None) -
         messages = [{'role': 'user', 'content': [
             {'type': 'text', 'text': prompt},
             {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + base64.b64encode(data).decode()}}]}]
-        answer = {}
+        answer, completed = {}, False
         for _ in range(2):
             text, receipt = call(messages, cache_dir / 'receipts')
+            if receipt.get('state') != 'completed':
+                continue  # timeout, rate limit or error: the text is not an answer
+            completed = True
             answer = _json_object(text)
             if answer is not None:
                 break
+        if not completed:
+            # Never cache a failed call: a replay would return {} as if the model had said so.
+            raise RuntimeError(f'model call failed twice (receipts in {cache_dir / "receipts"})')
         answer = answer or {}
         cached.write_text(json.dumps({'prompt': prompt, 'model': model, 'answer': answer}, indent=1))
         return answer

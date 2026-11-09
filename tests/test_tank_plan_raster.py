@@ -171,3 +171,20 @@ def test_reading_order_and_sides_of_a_plan_region():
     room_low = raster.RegionLabel(8, -1, [block(90, 0, 'room')], 'room')
     merged = raster.resolve_sides([room, room_low])
     assert len(merged) == 1 and merged[0].side is None and merged[0].text == 'Engine room'
+
+
+def test_claude_asker_never_caches_a_failed_call(tmp_path):
+    calls = []
+
+    def failing_call(messages, receipts):
+        calls.append(1)
+        return '', {'state': 'failed'}
+
+    ask = raster.claude_asker(tmp_path, call=failing_call)
+    image = np.zeros((4, 4), np.uint8)
+    with pytest.raises(RuntimeError):
+        ask(image, 'prompt')
+    assert not list(tmp_path.glob('*.json'))
+
+    ask = raster.claude_asker(tmp_path, call=lambda messages, receipts: ('{"1": "FO"}', {'state': 'completed'}))
+    assert ask(image, 'prompt') == {'1': 'FO'}
