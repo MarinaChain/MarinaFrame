@@ -324,14 +324,67 @@ HAVE: MiDShip sample (midship only, with BOM truth), Gunnerus construction plans
 expansion (2D only), OCX schema and samples. PROCURE: MiDShip next tranche with 3D (12 GB,
 founder decision), a ship with a 3D structural model (OCX or class model) from a design partner.
 
-### 4.3 Metrics (fix before building)
+### 4.3 Metrics (fixed 2026-11-09, before the step 2 build)
 
-- MiDShip: per-member precision, recall and placement error at the midship section (as W3), and
-  plate thickness exact rate, now on frames away from midship where the BOM gives them.
-- Gunnerus: bulkhead x positions vs the construction plan labels; tank volumes vs the tank
-  arrangement table (relative error); count of plates with an ID and a thickness.
-- OCX: schema validation pass on every export; round trip (export, read, compare plate count,
-  thickness and area) on the VLCC sample.
+#### 4.3.1 MiDShip 3D cargo-hold block
+
+Input per design: the three plain PDFs only (view 3 members by the frozen W3 reader; printed
+tables of views 1, 2 and 3). The reader sees no BOM, no slice table, no CAD file.
+
+What the drawings do not give, and the fixed guesses (labelled `guessed`): block length 40 m
+(x from 0 to 40 m); 4 transverse bulkheads (3 holds) centred in the block, 9 web-frame spaces per
+hold at the printed web-frame spacing; 5 ordinary frame spaces per web-frame space. These are the
+generator conventions found in a BOM survey of the 488 SGLD designs outside the W3 sealed split
+(block length 40.0 m in 239, 40.0 to 43.7 m in the rest; 4 bulkheads and 9 web spaces in all 488;
+5 frame spaces in 269, 4 in 204, 3 in 15). A printed value always wins over a guess.
+
+Design set (development, all SGLD designs with 3D on disk except the W3 sealed ones):
+tanker 107, 168, 292, 379, 391; container 37, 66, 80, 191; bulk 60, 230, 445 (12 designs). SGLD
+118 and 215 have 3D but are W3 sealed designs: the scorer refuses them. There is no sealed
+3D split; these are development figures. A sealed 3D set needs the next MiDShip tranche.
+
+Truth: the design's full IGES (`sgld_design_<id>.igs`): one trimmed surface per BOM row, joined
+to the BOM by `struct_rsObject`. Truth unit: one BOM row; its box is the tight axis-aligned
+box of its surface (metres). Label from the BOM `Class`: the nine W3 labels, and for transverse
+members `transverse_bulkhead` (`Transverse_Bulkhead`), `floor` (`Transverse_Floor`), `web_frame`
+(`Vertical_Web_Frame`), `deck_beam` (`Deck_Transvere_Beam`), `frame` (`Vertical_Side_Frame`,
+`Transverse_Bottom_Frame`, `Inner_Bottom_Transverse_Beam`, `Deck_Transverse_Stiffener,`),
+`bulkhead_stiffener` (`Transverse_Bulkhead_*_Stiffener`), `bracket` (`Bracket_*`), `flange`
+(every `Stiffener_Flange`), `other`. Group: `longitudinal` when the truth box is longer than
+20 m in x, else `transverse`.
+
+Matching: predicted and true boxes, each padded by 50 mm on every side (about the 1 drawing-mm
+pad of W3 at the MiDShip scales), 3D IoU >= 0.5 candidates, one-to-one assignment maximising
+total IoU (Hungarian), label-agnostic.
+
+| ID | Metric | Development target (not a gate) |
+|---|---|---|
+| S1 | Detection precision, recall, F1, pooled over the 12 designs; recall per truth group, precision per predicted group | F1 >= 0.80; longitudinal recall >= 0.95; transverse recall >= 0.60 |
+| S2 | Typed F1 per label (match and equal label) and macro over labels with truth | report |
+| S3 | Placement of matched pairs: 3D centre distance (mm) median, 95th percentile, max; x centre error of matched transverse members | median <= 50 mm |
+| S4 | Thickness of matched members with a printed thickness: exact rate (whole mm, as W3), by group; diagnostics: equal to truth cut to whole mm, abs error | report (W3 sealed plate rate was 0.892) |
+| S5 | Steel volume: sum of built member volumes (area x thickness) against the sum of BOM `volume_pannel`, per design; median abs relative error | <= 10 % |
+| S6 | Members by placement source label (`traced`: section and x from print; `guessed`: x from a guessed convention) | report |
+
+#### 4.3.2 Gunnerus internals (development case)
+
+The STEP truth is the hull and tier 1 as one solid (section 3.3): it has no internal structure.
+Thus only containment is measurable against it; the other checks compare one printed source with
+another printed source that the builder did not use for that value.
+
+| ID | Metric | Development target (not a gate) |
+|---|---|---|
+| G1 | Tank x extents: built tank aft and forward ends (from the tank plan linework) against the frame range in the tank table (frame x from the drawn frame axis, ends at the frame lines); abs error, per tank and median | median <= 0.5 m (one frame) |
+| G2 | Tank volume: built tank solid (inside the built hull) against the table net volume; relative error per tank, median abs | median abs <= 15 % (net volume excludes structure) |
+| G3 | Main transverse bulkheads: built x (tank arrangement profile) against the nearest bulkhead line of the longitudinal-section construction plan; abs error | <= 0.25 m each |
+| G4 | Containment: share of built internal volume (decks, double bottom, bulkheads, tanks) outside the truth solid, from points on a 0.10 m grid | <= 5 % |
+| G5 | Internal parts built by source label; plates with an ID and a thickness (printed or `guessed`) | all requested built |
+
+#### 4.3.3 OCX
+
+Schema validation (OCX 3.0.1 XSD) pass on every export; round trip of our own MiDShip block export
+(export, read back, compare plate count, thickness and area: all equal). The VLCC sample is read
+with the same reader as a parser check (plate count and thickness parsed without error).
 
 Effort 4-6 weeks. Checks: unit tests per reader; OCX schema validation in the quick tier (small
 sample). Resume point: a new `docs/STRUCTURE_V2.md` written before the code.
