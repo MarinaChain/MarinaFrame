@@ -2,7 +2,7 @@
 
 Plan: `docs/plans/2026-11-09-whole-vessel-scope.md` section 4; metrics S1 to S6 fixed in section
 4.3.1 before the build (commit `7225a67`). Development figures only: there is no sealed 3D split.
-Every output has `engineering_approved=false`. Resume point: section 5.
+Every output has `engineering_approved=false`. Resume point: section 6.5 (round 2).
 
 ## 1. Method
 
@@ -90,3 +90,70 @@ needs a Panel/Plate writer for the block members (plan section 4.3.3).
 2. Read brackets, the floor openings and hatch openings from view 2 and view 3 linework
    (now guessed or missing).
 3. OCX export of the block (plan section 4.3.3).
+
+## 6. Round 2 (2026-11-09): material, steel table, OCX export, Gunnerus plates
+
+Written before the round 2 code (branch `feature/structure-3d`). Sections 1 to 5 above are round 1
+(commit `8e50146`); their numbers stay as the round 1 record.
+
+### 6.1 Deliverables
+
+1. Every block member carries: a stable ID (section 1 item 5), thickness with a source (`printed`
+   from a table row, else `guessed`: no member is left without a thickness), material with a
+   source (`printed` from the table material column of the row that gives the thickness, else
+   `guessed`: the most common printed material of the design), and the existing placement source
+   labels.
+2. Steel weight: per member `area x thickness x density`; density 7.85 t/m3 (carbon steel,
+   `guessed`: the drawings print a grade, not a density). Totals per scoring label, per group
+   (longitudinal / transverse) and per thickness source, and a grand total. Export as CSV with the
+   draft stamp lines (same rules as `exports/tank_tables.py`: formula-safe text cells).
+3. OCX 3.0.1 export of a block: one `Panel` per member host or transverse station zone, one
+   `Plate` per member (stiffener webs and flanges are written as plates: the block model holds
+   them as flat parts; an OCX `Stiffener` with a section catalogue is later work). Each plate has
+   its outer contour (closed polyline of the mid-plane rectangle), `PlateMaterial` with thickness
+   and a material catalogue entry, net area and dry weight. The ID goes in `name`; source labels
+   go in `Description`.
+4. OCX reader: streams `Plate` elements (name, thickness, area from the contour or `NetArea`),
+   memory-flat so that the 22 MB VLCC sample reads.
+5. Schema check: `xmllint` against the local OCX 3.0.1 XSD (`work/sources/ocx_schema/ocx/ocx_301`).
+   The XSD imports UnitsML and the W3C `xml.xsd` by URL; the check rewrites both imports to local
+   files (the UnitsML file shipped with the schema; a minimal `xml.xsd` that declares `xml:lang`,
+   `xml:space`, `xml:base` and `xml:id`). No network access.
+6. Gunnerus (development, plan section 4.3.2 G5): plate records (ID, thickness, source) for the
+   internals that the existing reader builds (tank tops and main transverse bulkheads). Extrusion
+   of the Gunnerus midship section along the parallel body with clipping to the hull at the ends
+   is in scope only if time is left after items 1 to 5; otherwise it is an open item.
+
+### 6.2 Metrics (unchanged from plan section 4)
+
+- S1 to S6 (plan section 4.3.1) on the 12 development designs, same scorer and targets. Round 2
+  must not lower them (it adds attributes, not geometry). S5 is the steel-volume check of the
+  steel table: the table total divided by the density equals the S5 built volume.
+- OCX (plan section 4.3.3): schema validation passes on every export (the 12 development blocks);
+  round trip of our own export: plate count, thickness per plate and area per plate equal
+  (area within 1e-6 relative: the contour is written with 6 decimals in metres); the VLCC sample
+  `D-VLCC_1-HOLD-OCX-simple_v3.3docx` is read by the same reader without error (plate count and
+  thicknesses reported).
+- G5 (plan section 4.3.2): Gunnerus internal parts by source label; plates with an ID and a
+  thickness (printed or `guessed`). G1 to G4 belong to the tanks lane (`docs/TANKS_V1.md`) and are
+  not re-measured here.
+
+### 6.3 Data
+
+As section 4: MiDShip development designs only (SGLD 118 and 215 refused); OCX samples in
+`work/sources/ocx_models_*`; Gunnerus drawings in `work/sources/gunnerus` (licensed). Outputs to
+git-ignored `work/step2/`. No drawing or derived data in the repository.
+
+### 6.4 Checks
+
+Unit tests: material and thickness labels, steel totals on a synthetic block, OCX export of a
+synthetic block validates and round-trips (skipped when `xmllint` or the XSD is missing).
+
+### 6.5 Resume point (round 2)
+
+Order: 6.1 items 1, 2, 3 to 5, then the scored run (S1 to S6 and OCX on all 12 designs), then G5,
+then results in section 7. Command for the scored run:
+
+    PYTHONPATH=src:. .venv/bin/python -m vessel_reconstruction.structure.block_eval \
+        --root ../../../work/sources/midship --out work/step2/round2.json \
+        --ocx-dir work/step2/ocx --steel-dir work/step2/steel
