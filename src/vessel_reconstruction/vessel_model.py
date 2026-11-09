@@ -35,11 +35,12 @@ from .draft import DRAFT_STATUS
 from .provenance import digest_object
 
 TABLE_VERSION = "vessel-table/v1"
-ROW_SOURCES = ("traced", "fitted", "prior", "inferred")
+ROW_SOURCES = ("traced", "read", "fitted", "prior", "inferred")
 # The label each row source has in a draft build (section_authoring.SOURCE_LABELS).
 # A ``prior`` row is the prior form of a hull with no usable ink (form_fit.prior_hull):
 # nothing was measured or interpolated, so it is ``ai_inferred``.
-BUILD_LABELS = {"traced": "traced", "fitted": "interpolated", "prior": "ai_inferred", "inferred": "ai_inferred"}
+# A "read" row (body-plan reader, code-measured ink) builds as an authored curve labelled read.
+BUILD_LABELS = {"traced": "traced", "read": "read", "fitted": "interpolated", "prior": "ai_inferred", "inferred": "ai_inferred"}
 # Waterlines of the cell matrix. The rows keep full resolution for the build;
 # the cells are the table that views and scores compare.
 DEFAULT_WATERLINES = 21
@@ -48,6 +49,7 @@ FITTED_ROW_SAMPLES = 65
 MAX_BASIS_CHARS = 300
 PRIOR_BASIS = "Prior hull form (no usable ink)"
 END_BASIS = "Hull end inferred from the profile outline"
+READ_BASIS = "Body-plan reader: station curve measured by code on the scanned body plan"
 # The builder accepts curve sections of 5 to 1025 points with rising heights.
 MAX_CURVE_POINTS = 1025
 HEIGHT_RESOLUTION_M = 1e-6
@@ -166,7 +168,7 @@ def build_spec(table: VesselTable, base_spec: dict, declared: list[dict] | None 
     spec = copy.deepcopy(base_spec)
     declared = {section["id"]: section for section in (declared or []) + spec["sections"]}
     old_guesses = {g["section_id"]: g for g in (spec.get("draft") or {}).get("guesses", [])}
-    traced_x = [row.x_m for row in table.stations if row.source == "traced"]
+    traced_x = [row.x_m for row in table.stations if row.source in ("traced", "read")]
     sections, guesses = [], []
     for row in table.stations:
         if row.source == "traced":
@@ -189,10 +191,15 @@ def build_spec(table: VesselTable, base_spec: dict, declared: list[dict] | None 
         section.pop("contour_selection", None)
         section.pop("pieces", None)
         note = "; ".join(row.notes)[:120]
-        row_basis = {"prior": PRIOR_BASIS, "inferred": END_BASIS}.get(row.source, basis)
+        row_basis = {"prior": PRIOR_BASIS, "inferred": END_BASIS, "read": READ_BASIS}.get(row.source, basis)
         section["authored"] = {"source_label": BUILD_LABELS[row.source],
                                "basis": (row_basis + (": " + note if note else ""))[:MAX_BASIS_CHARS],
                                "points_yz_m": _curve_points(row.points_yz_m)}
+        if row.source == "read":
+            section["evidence"] = (section.get("evidence", "")[:7000] + " Measured by the body-plan reader on the "
+                                   "scanned body plan (automatic calibration); a person confirms the calibration.")
+            sections.append(section)
+            continue
         section["evidence"] = (section.get("evidence", "")[:7000] +
                                " Filled by the vessel-table form fit; not measured ink; a person must confirm it.")
         sections.append(section)

@@ -19,8 +19,11 @@ import math
 import numpy as np
 
 # Source label of each section of a draft build.
-SOURCE_LABELS = ("traced", "repaired", "interpolated", "ai_inferred", "ai_corrected")
+SOURCE_LABELS = ("traced", "read", "repaired", "interpolated", "ai_inferred", "ai_corrected")
 AUTHORED_LABELS = ("ai_inferred", "ai_corrected")
+# A station curve measured by code on a scanned body plan (body_plan_intake): code-read ink,
+# built from its points because it has no contour selection. Never model output.
+READER_LABELS = ("read",)
 # Curve sections that code fills in a draft: the vessel-table form fit
 # (form_fit.py) labels a station it fills ``interpolated``. Never model output.
 TABLE_FIT_LABELS = ("interpolated",)
@@ -104,7 +107,7 @@ def check_authored(authored, *, table_fit: bool = False) -> bool:
     if type(authored) is not dict or set(authored) != {"source_label", "basis", "points_yz_m"}:
         return False
     points = authored["points_yz_m"]
-    allowed = AUTHORED_LABELS + (TABLE_FIT_LABELS if table_fit else ())
+    allowed = AUTHORED_LABELS + READER_LABELS + (TABLE_FIT_LABELS if table_fit else ())
     if (authored["source_label"] not in allowed or type(authored["basis"]) is not str
             or not 1 <= len(authored["basis"]) <= MAX_BASIS_CHARS
             or type(points) is not list or not 5 <= len(points) <= 1025):

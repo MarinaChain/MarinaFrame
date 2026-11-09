@@ -410,6 +410,8 @@ def _spec_source(page: dict, copied: dict, out_dir: Path) -> dict:
                 "transformation": f"PDF page {page['page_index'] + 1} rendered at {page['dpi']:g} dpi."}
     with Image.open(out_dir / "sources" / name) as opened:
         frames = getattr(opened, "n_frames", 1)
+        if frames == 1 and opened.width * opened.height > _worker_pixel_budget():
+            return _reduced_source(opened, name, out_dir)
         if frames == 1:
             return {"file": f"sources/{name}", "transformation": "Original raster; no preprocessing."}
         opened.seek(page["page_index"])
@@ -417,6 +419,29 @@ def _spec_source(page: dict, copied: dict, out_dir: Path) -> dict:
         Image.fromarray(_on_paper(opened)).save(out_dir / "sources" / frame_name)
     return {"file": f"sources/{frame_name}",
             "transformation": f"Frame {page['page_index'] + 1} of {name} saved as PNG; pixels unchanged."}
+
+
+# A reduced source fills this share of the worker's pixel budget (margin for rounding).
+REDUCED_SHARE_OF_BUDGET = 0.98
+
+
+def _worker_pixel_budget() -> int:
+    from .resources import DEFAULT_POLICY
+    return DEFAULT_POLICY.pixels
+
+
+def _reduced_source(opened: Image.Image, name: str, out_dir: Path) -> dict:
+    """A raster above the worker's pixel budget, reduced to fit it (a full-size HAER scan is
+    about 138 Mpx; the worker reads at most 16 Mpx). The original stays in sources/ for the
+    body-plan reader, which measures at full resolution."""
+    factor = (REDUCED_SHARE_OF_BUDGET * _worker_pixel_budget() / (opened.width * opened.height)) ** 0.5
+    size = (max(1, int(opened.width * factor)), max(1, int(opened.height * factor)))
+    reduced = opened.convert("L").resize(size, Image.Resampling.LANCZOS)
+    reduced_name = f"{Path(name).stem}-reduced.png"
+    reduced.save(out_dir / "sources" / reduced_name)
+    return {"file": f"sources/{reduced_name}",
+            "transformation": (f"{name} ({opened.width} x {opened.height} px) reduced to {size[0]} x {size[1]} px "
+                               f"(factor {factor:.4f}) to fit the worker's source pixel budget.")}
 
 
 def _constraints(particulars: dict) -> dict:
@@ -427,6 +452,22 @@ def _constraints(particulars: dict) -> dict:
         if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
             constraints[name] = float(value)
     return constraints
+
+
+def _body_plan_reading(sheet: Path, out_dir: Path, ask=None) -> dict | None:
+    """The automatic body-plan reading of the spec page, when the setting is on (body_plan_intake).
+
+    Any failure is recorded, never raised: the hull path then uses the model's reading alone.
+    """
+    from . import body_plan_intake
+    if not body_plan_intake.enabled() or sheet.suffix.lower() not in (".tif", ".tiff", ".png", ".jpg", ".jpeg"):
+        return None
+    try:
+        return body_plan_intake.read_at_intake(sheet, out_dir, ask=ask)
+    except Exception as exc:  # noqa: BLE001 - the reader is optional; the model path continues
+        return {"schema": body_plan_intake.SCHEMA, "usable_for_build": False,
+                "reason": f"body-plan reading failed: {type(exc).__name__}: {str(exc)[:200]}",
+                "engineering_approved": False}
 
 
 def write_spec(preview: dict, out_dir: Path) -> dict:
@@ -446,6 +487,12 @@ def write_spec(preview: dict, out_dir: Path) -> dict:
                         | {"source_file": f"sources/{copied[page['file']]}"} for page in pages],
               "engineering_approved": False,
               "note": "Region labels are proposals (code) and edits (person); not certified view identities."}
+    original = out_dir / "sources" / copied[chosen["file"]]
+    reading = _body_plan_reading(original, out_dir)
+    if reading is not None:
+        with Image.open(out_dir / source["file"]) as spec_image, Image.open(original) as original_image:
+            reading["spec_page_scale"] = spec_image.width / original_image.width
+        intake["body_plan_reading"] = reading
     (out_dir / "intake.json").write_text(json.dumps(intake, indent=2) + "\n")
     spec = {"schema_version": "1.0", "vessel_id": _slug(name or Path(chosen["file"]).stem), "units": "m",
             "source": source, "symmetry": "port_starboard",

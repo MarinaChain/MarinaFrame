@@ -24,8 +24,9 @@ const MAX_STEPS: usize = 400;
 /// Label used when a draft section carries none (drafts older than W17b).
 const DEFAULT_LABEL: &str = "traced";
 /// Shown order of the labels in the summary.
-const LABEL_ORDER: [&str; 6] = [
+const LABEL_ORDER: [&str; 7] = [
     "traced",
+    "read",
     "repaired",
     "interpolated",
     "ai_inferred",

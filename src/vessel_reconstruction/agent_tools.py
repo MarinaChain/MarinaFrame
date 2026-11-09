@@ -246,6 +246,14 @@ class DomainTools(InvestigationTools):
         page = next((p for p in record.get("pages", []) if p.get("page_id") == record.get("spec_page_id")), None)
         return [r for r in (page or {}).get("regions", []) if isinstance(r, dict) and r.get("label") != "skip"]
 
+    def body_plan_reading(self) -> dict | None:
+        """The intake's automatic body-plan reading (body_plan_intake), if the setting made one."""
+        if not self.state.get("intake"):
+            return None
+        record = load_bounded_json(self.root / "input" / self.state["intake"]["file"])
+        reading = record.get("body_plan_reading")
+        return reading if isinstance(reading, dict) else None
+
     def _materialize_sections(self):
         """Write declared sections for a sheet-only task from its phase-1 reading."""
         from .materialize import materialize_sections, materialized_spec

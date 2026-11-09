@@ -239,7 +239,9 @@ def cap_at_profile_outline(sections: list[dict], anchors: list[Anchor], heights:
     deck are left to the form fit. Returns (sections, anchors).
     """
     decks = {sid: h["deck"] for sid, h in heights.items()}
-    short = set(short_of_deck(anchors, decks))
+    # A body-plan reader curve is measured at every waterline it crosses; one that ends below the
+    # deck (a transom, a curve ending at a label) keeps its cells and is continued, not dropped.
+    short = set(short_of_deck(anchors, decks)) - {a.id for a in anchors if a.source == "read"}
     anchors = [a for a in anchors if a.id not in short]
     # A keel read at the deck (an outline broken at that station) is no keel:
     # a station section is never that shallow.
@@ -320,6 +322,15 @@ def build_first_hull(tools):
         selected["contour_selection"] = copy.deepcopy(candidate["contour_selection"])
         anchors.append(Anchor(section["id"], section["x_m"], points, selected,
             z_max_m=section["z_max_m"], pixels_per_metre=cal["pixels_per_metre"], stroke_width_px=width))
+    # Stations the body-plan reader measured replace the model path's anchors (body_plan_intake).
+    from .body_plan_intake import reader_anchors, write_check
+    body_plan = tools.body_plan_reading()
+    anchors, body_plan_report = reader_anchors(sections, anchors, body_plan)
+    write_check(tools.root, image, body_plan, body_plan_report)
+    if body_plan_report["used"]:
+        # A station the reader measured has no open candidate choice: its guess is dropped.
+        read = set(body_plan_report["stations"])
+        guesses = [g for g in guesses if g["section_id"] not in read]
     from .vessel_description import station_outline_heights
     outline = station_outline_heights(image, list(tools.state.get("sheet_setups", {}).values()), description,
                                       sections, tools.intake_hints())
@@ -353,6 +364,14 @@ def build_first_hull(tools):
         # Sections of a sheet-only intake came from the model's reading: say so.
         warnings = [w[:300] for w in tools.state["materialization"]["warnings"]] + warnings
         warnings.insert(0, "Stations and calibration were set from the model's reading of the sheet (ai_inferred).")
+    if body_plan is not None:
+        tools.state["body_plan_reader"] = body_plan_report
+        if body_plan_report["used"]:
+            warnings.insert(0, f"Stations {', '.join(body_plan_report['stations'])} were measured by the body-plan "
+                               "reader with an automatic calibration; confirm the calibration overlay.")
+        else:
+            warnings.insert(0, f"Body-plan reader not used: {body_plan_report['reason']}"[:300])
+        warnings[1:1] = [w[:300] for w in body_plan_report.get("warnings", [])]
     tools.state["vessel_table"] = table.to_json()
     write_json(tools.root / "vessel.json", {"description": description, "table": table.to_json()})
     from .fit_feedback import score
@@ -362,7 +381,10 @@ def build_first_hull(tools):
     tools.state["first_hull_spec"] = built["spec"]
     tools.state["guesses"] = built["spec"].get("draft", {}).get("guesses", guesses)
     candidate = {"id":tools.generation_id,"generation_id":tools.generation_id,"revision_id":tools.revision_id,
-        "path":built["out"].relative_to(tools.task_dir).as_posix(),"status":"review_required","valid":True,"draft":True,
+        "path":built["out"].relative_to(tools.task_dir).as_posix(),"status":"review_required","valid":True,
+        # The export is tagged a draft only when the build has open guesses (run_record._cad_names);
+        # a first hull read entirely by the body-plan reader has none.
+        "draft":"draft" in built["record"],
         "run_id":built["record"]["run_id"],"gaps":built["record"]["gaps"],"metrics":built["record"]["metrics"],
         "engineering_approved":False,"human_semantic_review_required":True,"identity_certified":False,
         "warnings":warnings}

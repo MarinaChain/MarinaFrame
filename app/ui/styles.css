@@ -1584,6 +1584,12 @@ code { font-family: var(--font-mono); }
 .check .badge { grid-row: 1 / span 2; grid-column: 2; align-self: center; }
 .check-summary { margin-bottom: var(--space-xs); }
 
+/* Body-plan calibration item (docs/AUTO_CALIBRATION.md): overlay to confirm once. */
+.body-plan-check { display: flex; flex-direction: column; gap: var(--space-xs); margin-bottom: var(--space-lg); padding-bottom: var(--space-md); border-bottom: 1px solid var(--line); }
+.body-plan-check-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+.body-plan-check-image { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
+.body-plan-check-flag { color: var(--fail, #b42318); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+
 /* Section areas (js/areas.js): the sectional-area curve with a dot per built station, coloured
    by its source label; a station far from its neighbours' line is ringed in amber. */
 .areas { display: flex; flex-direction: column; gap: var(--space-sm); margin-bottom: var(--space-lg); padding-bottom: var(--space-md); border-bottom: 1px solid var(--line); }
