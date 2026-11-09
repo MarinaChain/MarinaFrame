@@ -417,6 +417,81 @@ Option (not built; for a founder decision):
 Before a build: the truth cell above checked by a person, and one more scanned sheet with
 printed offsets as a holdout (the rule was met on one sheet only).
 
+#### 3.5.8 Round 7: code measures, low-cost model identifies (fixed before running)
+
+Why: founder strategy 2026-11-09: the product must work with low-cost models (Crouton Alpha Free
+on OpenCode Go while it is free; DeepSeek V4.1 Flash when Crouton is rate limited); GPT and Claude
+are a bonus path. Rounds 5 and 6 showed that the low-cost models fail at placing thin, overlaid
+lines (DeepSeek counts curves it cannot see, 1.68 m; Crouton 0.29 m), not at reading. Round 7
+splits the job: code places every line, the model answers only a small visual question.
+
+Method (`src/vessel_reconstruction/body_plan_crossings.py`, `body_plan_reader.py`,
+`body_plan_identity.py`; harness `benchmarks/balclutha/crossing_value.py`):
+
+1. Code, full resolution, per half and waterline: trace the drawn waterline (the sheet is skewed
+   a few px), mask its ink, follow every ink line through 40 rows above and below, fit it, and
+   give the crossing column (sub-pixel), slope and line width. Sort each crossing into a kind:
+   grid (thin, or vertical on a buttock column), stem or sternpost (vertical within 70 px of the
+   centreline), lettering (more than 2.2 line widths), shallow (more than 6 columns per row),
+   diagonal (an oblique straight line, within 5 px of one line, that runs at least 1,500 px to the
+   centreline), else a station-curve candidate.
+2. Code: follow each candidate's ink to the neighbouring waterline (row by row, moving line fit,
+   passing crossing lines on the prediction) and link it to the crossing where it arrives (within
+   8 px). Unlinked crossings enclosed by two links pair in order, or join the nearer neighbour
+   when the other waterline has none there (curves drawn together). The links form one chain per
+   drawn curve, swept bottom-up (chains may pass through one crossing where curves are drawn
+   together, and fork where they part). Chains are ordered outermost first.
+3. Station identity:
+   - R0 (code only): nesting order. The outermost chain is station 10 (aftbody) or 11 (forebody);
+     a chain that crosses only one waterline is not counted.
+   - R1 (model): one question per chain. Image: a crop around the chain's curve (its followed
+     path, extended up to 1,200 rows past its end crossings, plus 300 px, kept to its own half),
+     scaled so that the longer side is at most 1,536 px (station numbers about 20 px tall), with
+     the curve traced in semi-transparent red. Question: which station number labels the red curve
+     (or null); reply `{"station": <int or null>, "reason": ...}`, a number outside the half is
+     invalid. Code then numbers the chains in nesting order with the offset that agrees with the
+     most labels (ties: the code's own count); a one-waterline chain is kept only if the model
+     numbers it. Each chain whose label disagrees is asked once more (a fresh request), and the
+     offset is chosen again.
+   - Values in both arms: the code-measured column only, half-breadth = |x - 4824| / 491.48 m.
+4. Fairness checks, reported only (they do not change values): nesting order at each waterline,
+   bends above 1.0 m (second difference over three waterlines), cells more than 0.6 m from the
+   mean of their neighbouring stations.
+
+Unchanged from sections 3.5.3 to 3.5.5: sheet `balclutha_ca54_s7.tif` (SHA-256 `32f09c60…a8`), full
+resolution; host calibration (centreline column 4824, 491.48 px per metre, the nominal waterline
+rows and buttock columns of section 3.5.4); truth (the same 151 cells, file outside the repository,
+not checked by a person, the doubtful cell at 24 ft station 18 kept); metrics (cells given of 151,
+RMS and maximum error, share within 0.05 m and 0.15 m, station identity errors, median and range
+over repeats); decision rule per arm (all 3 repeats give at least 60 % of the cells **and** the
+median RMS is at most 0.15 m). The RMS without the doubtful cell is reported as extra information.
+
+Correction found while building (from the sheet at full resolution): the forebody labels that the
+round-5 prompt called half stations 11 1/2 and 12 1/2 are the numbers 11 and 12 with leader arrows.
+The forebody has stations 11 to 20 only; this round has no half stations.
+
+Arms (the measurement of steps 1 and 2 is computed once and shared by all arms and repeats):
+
+- R0, code only: deterministic; run 3 times (the same result is expected).
+- R1, base model: `crouton-alpha-free` on OpenCode Go, key 1, `reasoning_effort: high`,
+  temperature 0.2, `max_tokens` 32,000, at most 3 turns per question (turns 2 and 3 only for an
+  invalid reply), 4 questions in parallel, 3 repeats. A failed Crouton request (rate limit or
+  error) is retried once after 5 s, then sent to `deepseek-v4.1-flash` (thinking disabled, same
+  limits); the report counts the answers per model.
+- Bonus, only if the local codex-router answers: `gpt-6-astra` through the router (as
+  `router_value.py`, reasoning effort high, `detail: original`), same questions, 3 repeats. Never
+  through OpenCode Go.
+
+Report per arm and repeat: cells given, RMS, max, within 0.05 / 0.15 m, identity errors, RMS
+without the doubtful cell; questions, re-asks, invalid replies, answers per model, labels equal to
+the code's nesting count, identities that differ from R0, fairness flags, tokens, wall time.
+
+Disclosure: the measuring code and its thresholds were developed on this sheet's image (overlays
+of the chains checked by eye against the printed station numbers by the developer, Claude); the
+truth file was not opened before the scoring run. There is no holdout sheet, so a pass is a pass
+on the development sheet only; a second scanned sheet with printed offsets is needed before a
+build decision.
+
 ### 3.6 Effort, checks, resume
 
 Effort: 1-2 weeks (reader, executor change, scoring, Gunnerus run; then raster path and a
