@@ -243,6 +243,15 @@ pub struct TaskView {
     /// The whole-vessel GLB for the 3D view, when the run has one.
     #[serde(default)]
     pub whole_vessel_model: Option<WholeVesselModel>,
+    /// The capacity plan of the run's tank model (`run_tables`), when the run has one.
+    #[serde(default)]
+    pub capacity_plan: Option<crate::run_tables::CapacityPlanView>,
+    /// True when the run has a tank model file, so an export can add the tank tables.
+    #[serde(default)]
+    pub tank_model: bool,
+    /// Steel tables and OCX files of the run's structure folder (`run_tables`).
+    #[serde(default)]
+    pub structure_files: Vec<crate::run_tables::StructureFile>,
 }
 
 /// A whole-vessel model file: task-relative path, size in bytes, and whether the app loads it.

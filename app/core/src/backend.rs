@@ -281,6 +281,15 @@ impl Backend {
         )
     }
 
+    /// The sounding table of one tank of the run's capacity plan.
+    pub fn sounding_table(
+        &self,
+        task: &str,
+        tank_id: &str,
+    ) -> AppResult<crate::run_tables::SoundingTableView> {
+        crate::run_tables::read_sounding_table(&self.task_path(task)?, tank_id)
+    }
+
     /// Files already exported for one revision.
     pub fn list_exports(&self, task: &str, revision: &str) -> AppResult<ExportResult> {
         export::list_exports(&self.task_path(task)?, revision)

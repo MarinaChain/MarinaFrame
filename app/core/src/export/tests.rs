@@ -203,3 +203,84 @@ fn reveal_accepts_only_paths_inside_the_exports_folder() {
         assert_eq!(error.code, "export_reveal");
     }
 }
+
+#[test]
+fn tank_and_structure_files_have_their_own_kinds() {
+    assert_eq!(
+        kind_of_file("V_r0001_DRAFT_capacity_plan.csv"),
+        Some("tanks")
+    );
+    assert_eq!(
+        kind_of_file("V_r0001_DRAFT_sounding_db1.csv"),
+        Some("tanks")
+    );
+    assert_eq!(
+        kind_of_file("V_r0001_DRAFT_sounding_offsets.csv"),
+        Some("tanks")
+    );
+    assert_eq!(
+        kind_of_file("V_r0001_DRAFT_b_DRAFT_steel_members.csv"),
+        Some("structure")
+    );
+    assert_eq!(
+        kind_of_file("V_r0001_DRAFT_b_DRAFT.3docx"),
+        Some("structure")
+    );
+}
+
+#[test]
+fn the_tank_model_and_structure_folder_go_to_the_worker() {
+    let tmp = tempfile::tempdir().unwrap();
+    let task = tmp.path().join("task");
+    std::fs::create_dir_all(task.join("structure")).unwrap();
+    std::fs::write(task.join("tanks.npz"), "npz").unwrap();
+    std::fs::write(task.join("structure/b_DRAFT_steel_totals.csv"), "x").unwrap();
+    let args_file = tmp.path().join("args.txt");
+    let script = format!(
+        "printf '%s\\n' \"$@\" > \"{}\"\n{}",
+        args_file.display(),
+        full_export_script().replace(
+            "printf 'abc' > \"$out/{STEM}_package.zip\"".replace("{STEM}", STEM).as_str(),
+            &format!(
+                "printf 'abc' > \"$out/{STEM}_package.zip\"\nprintf 'abc' > \"$out/{STEM}_capacity_plan.csv\"\n\
+                 printf 'abc' > \"$out/{STEM}_sounding_db1.csv\"\n\
+                 printf 'abc' > \"$out/{STEM}_b_DRAFT_steel_totals.csv\""
+            )
+        )
+    );
+    let python = fake_worker(tmp.path(), &script);
+    let python = python.to_string_lossy();
+    let worker = Worker {
+        python: &python,
+        source: None,
+    };
+    let outputs = ["tanks".to_string(), "structure".into()];
+
+    let result = export_run(&task, &worker, "r3", &outputs, EXPORT_TIMEOUT).unwrap();
+
+    assert_eq!(kinds(&result), ["tanks", "tanks", "structure", MANIFEST]);
+    assert!(result.not_built.is_empty());
+    let args = std::fs::read_to_string(&args_file).unwrap();
+    assert!(args.contains(&format!("--tanks\n{}", task.join("tanks.npz").display())));
+    assert!(args.contains(&format!(
+        "--structure\n{}",
+        task.join("structure").display()
+    )));
+}
+
+#[test]
+fn tanks_and_structure_without_their_inputs_are_not_built() {
+    let tmp = tempfile::tempdir().unwrap();
+    let task = tmp.path().join("task");
+    std::fs::create_dir(&task).unwrap();
+    let python = fake_worker(tmp.path(), &full_export_script());
+    let python = python.to_string_lossy();
+    let worker = Worker {
+        python: &python,
+        source: None,
+    };
+    let outputs = ["tanks".to_string(), "structure".into(), "offsets".into()];
+    let result = export_run(&task, &worker, "r3", &outputs, EXPORT_TIMEOUT).unwrap();
+    assert_eq!(result.not_built, ["tanks", "structure"]);
+    assert_eq!(kinds(&result), ["offsets", MANIFEST]);
+}

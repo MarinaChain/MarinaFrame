@@ -7,6 +7,7 @@ use marinaframe_app_core::export::ExportResult;
 use marinaframe_app_core::intake::IntakePreview;
 use marinaframe_app_core::live::{HullSections, LiveSteps};
 use marinaframe_app_core::model_usage::ModelUsage;
+use marinaframe_app_core::run_tables::SoundingTableView;
 use marinaframe_app_core::types::*;
 use marinaframe_app_core::{AppError, AppPaths, AppResult, Backend};
 use std::path::PathBuf;
@@ -141,6 +142,16 @@ async fn list_exports(
     revision: String,
 ) -> Result<ExportResult, AppError> {
     run(backend, move |b| b.list_exports(&task, &revision)).await
+}
+
+/// The sounding table of one tank of the run's capacity plan.
+#[tauri::command(rename_all = "snake_case")]
+async fn sounding_table(
+    backend: Shared<'_>,
+    task: String,
+    tank_id: String,
+) -> Result<SoundingTableView, AppError> {
+    run(backend, move |b| b.sounding_table(&task, &tank_id)).await
 }
 
 /// Show an exported file or the exports folder in Finder.
@@ -440,6 +451,7 @@ fn main() {
             start_intake_run,
             export_run,
             list_exports,
+            sounding_table,
             reveal_export,
             cancel_task,
             resume_task,
