@@ -121,7 +121,8 @@ def parse_reading(text: str) -> dict:
     return reading
 
 
-def score(reading: dict, truth: dict) -> dict:
+def score(reading: dict, truth: dict, stations: tuple = STATIONS, waterlines: tuple = WATERLINES_FT) -> dict:
+    """Rounds 4 to 9 metrics; stations and waterlines default to Balclutha sheet 7."""
     common = [key for key in truth if key in reading]
     errors = np.array([reading[key] - truth[key] for key in common])
     result = {'truth_cells': len(truth), 'cells_given': len(common), 'coverage': len(common) / len(truth),
@@ -131,8 +132,8 @@ def score(reading: dict, truth: dict) -> dict:
                       within_0_05=float(np.mean(np.abs(errors) <= 0.05)),
                       within_0_15=float(np.mean(np.abs(errors) <= 0.15)))
     identity_errors = []
-    for station in STATIONS:
-        own = [(w, reading[(station, w)]) for w in WATERLINES_FT if (station, w) in reading]
+    for station in stations:
+        own = [(w, reading[(station, w)]) for w in waterlines if (station, w) in reading]
 
         def station_rms(other):
             pairs = [(v, truth[(other, w)]) for w, v in own if (other, w) in truth]
@@ -142,7 +143,7 @@ def score(reading: dict, truth: dict) -> dict:
         if mine is None:
             continue
         better = [other for other in (station - 1, station + 1)
-                  if other in STATIONS and (rms := station_rms(other)) is not None and rms < mine]
+                  if other in stations and (rms := station_rms(other)) is not None and rms < mine]
         if better:
             identity_errors.append(station)
     result['identity_errors'] = identity_errors

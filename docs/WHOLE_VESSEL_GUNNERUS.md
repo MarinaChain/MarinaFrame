@@ -626,6 +626,81 @@ error. Integration (plan section 3.5.6) is not changed by this round; a holdout 
 offsets and a person's check of the cell are still needed before a build. `engineering_approved`
 stays false.
 
+### 5.5 Round 9: holdout sheet, C.A. Thayer (protocol 3.5.9)
+
+Protocol committed first (`ad1166b`), then the harness (`652a372`, `0c3c7fd`:
+`benchmarks/thayer/holdout_value.py`, tests `tests/test_thayer_holdout_value.py`). The reader
+(`body_plan_crossings.py`, `body_plan_reader.py`, `body_plan_identity.py`) is not changed. Run
+2026-11-09.
+
+Sheet: Schooner C.A. Thayer, HAER CA-61 sheet 4 (body plan and printed table of offsets on one
+sheet, US public domain). It is the only sheet on disk with a body plan, a printed table and
+clearance for provider transfer. Truth: 151 half-breadth cells (stations 1 to 22, waterlines
+3'-7" to 17'-7"), read twice from different crops before any run; the two reads agree on every
+cell (0 dropped); not checked by a person; outside the repository (session scratchpad
+`wv-agent/thayer/truth_s4.json`). Calibration from the drawn grid only: centreline column 8857.5,
+150 px per ft, waterline rows, grid columns at 4, 8, 12 and 20 ft. One harness fix after the
+protocol commit and before any score: the waterline rows are whole pixels (the crossing finder
+slices by row, so 5543.5 raised a type error).
+
+Measurement (3 s, shared by all arms): aftbody 16 chains (2 of one waterline, 3 inferred links)
+for 11 stations; forebody 12 chains for 11 stations. Each true station curve is measured well:
+the chain that is the curve fits its printed offsets within 8 mm RMS (station 11: 50 mm, all from
+one doubtful cell, cause 5 below).
+
+| Arm, repeat | Cells (of 151) | RMS | Max | Within 0.05 / 0.15 m | Identity errors | Questions (re-asked) | Labels equal to code / null | Tokens in / out | Wall |
+|---|---:|---:|---:|---:|---|---:|---:|---:|---:|
+| R0 code only (1 run) | 148 (98 %) | 0.676 m | 3.44 m | 70 % / 74 % | 16 to 21 | 0 | - | 0 | 3 s |
+| Crouton Alpha Free R1-1 | 150 (99 %) | 0.0864 m | 0.52 m | 81 % / 93 % | 12, 13, 14 | 28 (2) | 11 / 8 | 4,746 / 512 * | 166 s |
+| Crouton Alpha Free R1-2 | 150 (99 %) | 0.0864 m | 0.52 m | 81 % / 93 % | 12, 13, 14 | 28 (2) | 11 / 6 | 4,746 / 493 * | 120 s |
+| Crouton Alpha Free R1-3 | 150 (99 %) | 0.0864 m | 0.52 m | 81 % / 93 % | 12, 13, 14 | 28 (2) | 12 / 7 | 4,746 / 526 * | 136 s |
+| Claude Sonnet 5.5 R1-1 | 150 (99 %) | 0.0864 m | 0.52 m | 81 % / 93 % | 12, 13, 14 | 28 (4) | 12 / 4 | 194,785 / 8,994 | 83 s |
+| Claude Sonnet 5.5 R1-2 | 150 (99 %) | 0.0864 m | 0.52 m | 81 % / 93 % | 12, 13, 14 | 28 (3) | 14 / 4 | 188,142 / 7,721 | 76 s |
+| Claude Sonnet 5.5 R1-3 | 150 (99 %) | 0.0864 m | 0.52 m | 81 % / 93 % | 12, 13, 14 | 28 (4) | 13 / 4 | 194,820 / 8,465 | 86 s |
+
+\* The Go usage does not count image tokens. Crouton answered all 90 requests (DeepSeek not used);
+Sonnet answered all 95 through `claude -p` on the subscription. 0 failed requests, 0 invalid replies.
+
+Decision by the fixed rule (every repeat at least 60 % of cells, median RMS at most 0.15 m):
+
+| Arm | Median RMS | Coverage (min) | Decision |
+|---|---:|---:|---|
+| R0 code only | 0.676 m | 98 % | **fails** |
+| R1 Crouton Alpha Free | 0.0864 m | 99 % | passes |
+| R1 Claude Sonnet 5.5 | 0.0864 m | 99 % | passes |
+
+**Result: by the reading fixed in section 3.5.9, the reader does not generalise.** That reading
+needs R0 and the Crouton arm to pass. R0 fails, so code alone cannot name the curves on a new sheet.
+With labels from a model, both arms pass the RMS rule. Crouton and Sonnet give the same table in all
+six runs (aftbody offset -2, forebody offset 0). That table still has 3 identity errors (stations 12
+to 14, up to 0.52 m). A pass with wrong station names is not a usable result. The measuring step
+transfers to the new sheet. The step that turns chains into stations does not.
+
+Failure causes found on the sheet (round 9 does not change the reader):
+
+1. False chains from leader lines and merged curves. In the aftbody, the leader lines of the
+   labels "15" and "14" and curves that merge near the 3'-7" and 5'-7" waterlines make 2 extra
+   chains (inferred links join parts of two curves). The nesting count then moves stations 16 to 21
+   by 2 (R0), and no single numbering offset fits both sides of the extra chains (R1, errors at
+   12 to 14).
+2. A centreline structure off the stem rule. The sternpost and stem are drawn about 100 px from the
+   centreline. Round 8 treats verticals within 70 px as the stem, so these become station chains
+   (aft chain 15, fore chains 10 and 11). This adds cells that are not in the truth and one more
+   chain to the aft count.
+3. One curve for two stations. Stations 12 and 13 have the same offsets up to 13'-7"
+   (label "13,12"). The reader splits them only where they part.
+4. Lines that are not station curves (the transom outline and the bulwark above the sheer) make
+   one-waterline chains. R0 ignores these, but each one adds a question.
+5. A possible truth error: station 11 at 13'-7" is printed 18-0-6. Its neighbours (18-4-5 above
+   and 18-6-2 below) and the drawn curve (18.50 ft) suggest 18-6-0 or a similar value. Every arm
+   differs from it by 0.14 m. A person should check this cell.
+
+Next: a later round may fix causes 1 and 2, for example by rejecting chains made by inferred links
+that change curve, and by finding the stem from the drawn post instead of a fixed 70 px. Then it
+must run on a third sheet, because this sheet is no longer a holdout. Run outputs (not in the
+repository): session scratchpad `wv-agent/thayer/runs/` (`code2`, `crouton`, `sonnet`; `code` is
+the empty folder of the run that hit the row type error). `engineering_approved` stays false.
+
 
 ## 6. Step 2: internals (development case, metrics G1 to G5 of plan section 4.3.2)
 
