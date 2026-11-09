@@ -64,13 +64,17 @@ BULKHEAD_CLUSTER_MM = 150.0
 MAX_TANK_PLAN_M2 = 30.0
 # Raster cell of the plan region reader (mm).
 PLAN_PIXEL_MM = 20.0
-# Slab steps of the hull clip (m). The tank mesh for volumes and sounding tables uses fine slabs
-# (0.10 m in x, rows of 0.02 m); the STEP and GLB solids (and G4) use 0.25 m slabs with rows of
-# 0.05 m, as before (fine STEP solids took 33 min and 419 MB on Gunnerus). Plates: one slab.
-TANK_SLAB_M = 0.10
+# Steps of the hull clip (m). A tank is lofted through hull sections 0.10 m apart in x, each
+# sampled in rows of 0.02 m (``tanks.tank_loft_in_hull``): one smooth solid gives the volumes,
+# the sounding tables, the STEP (one B-spline side face) and the GLB. Plates and the containment
+# metric G4 keep slabs of 0.25 m with rows of 0.05 m (a plate is one slab).
+TANK_STATION_M = 0.10
 TANK_ROW_DZ_M = 0.02
 SLAB_M = 0.25
 OUTLINE_DZ_M = 0.05
+# Display tolerance of the tank meshes in the GLB (mm): ring columns closer than this to the
+# chord are left out.
+TANK_DISPLAY_TOLERANCE_MM = 1.0
 # Phantom cross marks (two diagonals from corner to corner) bound a tank in the plans (layer
 # S0PH1). A diagonal spans at least CROSS_MIN_MM in x and y; the
 # two diagonals of one cross share their x ends within CROSS_TOL_MM.
@@ -103,6 +107,7 @@ class Part:
     volume_m3: float = 0.0
     notes: list[str] = field(default_factory=list)
     triangles: np.ndarray | None = None  # closed tank mesh (tanks only)
+    loft: tanks.TankLoft | None = None  # the lofted tank solid (tanks only)
 
 
 # --- frame axis -------------------------------------------------------------------------
@@ -764,15 +769,15 @@ def tank_part(part_id: str, row: TankRow, plan: str, place: TankPlace, view: Pla
             return (tank_top_at(section, x) or -1.0, section.deck_z_m)
         z_source = 'guessed'
         z_basis = 'from the tank top (or the hull bottom) to the 1-deck level; the tank height is not drawn'
-    fine = tank_slabs_in_hull(slicer, x_range, y_of_x, z_of_x, TANK_SLAB_M, TANK_ROW_DZ_M)
+    loft = tanks.tank_loft_in_hull(slicer, x_range, y_of_x, z_of_x, TANK_STATION_M, TANK_ROW_DZ_M)
     slabs = tank_slabs_in_hull(slicer, x_range, y_of_x, z_of_x, SLAB_M, OUTLINE_DZ_M)
-    triangles = tanks.slabs_triangles(fine)
+    triangles = loft.triangles()
     volume = tanks.fill_state(triangles, float(triangles[:, :, 2].max())).volume_m3 if triangles is not None else 0.0
     return Part(
         part_id, 'tank', f'{row.number or ""} {row.name}'.strip(), slabs, {'outline': 'traced', 'height': z_source},
         {'outline': {'source': 'traced', 'basis': place.basis(plan)}, 'height': {'source': z_source, 'basis': z_basis}},
         {'x_m': [round(x_range[0], 3), round(x_range[1], 3)], 'plan': plan, **table_geometry},
-        volume_m3=volume, triangles=triangles)
+        volume_m3=volume, triangles=triangles, loft=loft if loft.runs else None)
 
 
 # --- export -----------------------------------------------------------------------------
@@ -808,8 +813,15 @@ def write_tank_outputs(parts: list[Part], out: Path) -> list[dict]:
 
 
 def part_solid(part: Part):
+    """The STEP solid of a part: a tank's loft (one B-spline side per run), else its slabs."""
     import cadquery as cq
 
+    from vessel_reconstruction.geometry import ruled_loft_solid
+
+    if part.loft is not None:
+        lofted = [ruled_loft_solid(run) for run in part.loft.runs]
+        if all(solid is not None for solid in lofted):
+            return cq.Compound.makeCompound(lofted)
     solids = []
     for x0, x1, outline in part.slabs:
         points = [(x0 * MM, y * MM, z * MM) for y, z in outline]
@@ -817,6 +829,34 @@ def part_solid(part: Part):
         face = cq.Face.makeFromWires(wire)
         solids.append(cq.Solid.extrudeLinear(face, cq.Vector((x1 - x0) * MM, 0, 0)))
     return cq.Compound.makeCompound(solids) if solids else None
+
+
+def part_mesh(part: Part, solid) -> tuple[np.ndarray, np.ndarray]:
+    """Display mesh of a part (mm): a tank's loft directly, else the STEP solid tessellated."""
+    from vessel_reconstruction.display_mesh import loft_mesh, shape_mesh
+
+    if part.loft is not None:
+        return loft_mesh(part.loft.runs, tanks.cap_triangles, TANK_DISPLAY_TOLERANCE_MM)
+    return shape_mesh(solid, 1.0, 0.5)
+
+
+def part_styles(parts: list[Part]) -> dict:
+    """GLB styles of the tanks: capacity-plan colour by content, name and content as extras."""
+    from vessel_reconstruction.display_mesh import tank_style
+
+    return {part.id: tank_style(part.label, part.geometry.get('group'),
+                                {'name': 'read', 'content': 'read', **part.source_labels})
+            for part in parts if part.op == 'tank'}
+
+
+def part_display(part: Part) -> dict | None:
+    """Outlines of a tank for the app's profile and plan sketches, with its content class
+    (APP_SPEC "Whole-vessel parts"; the app colours the outline by that class)."""
+    from vessel_reconstruction.tanks import content_class
+
+    if part.loft is None:
+        return None
+    return {**part.loft.outlines(), 'content_class': content_class(part.geometry.get('group'), part.label)}
 
 
 def component_entry(part: Part, solid) -> dict:
@@ -837,6 +877,7 @@ def component_entry(part: Part, solid) -> dict:
             'source_labels': part.source_labels, 'provenance': part.provenance,
             'args': {name: f'{part.id}_{name}' for name in part.source_labels},
             'geometry': part.geometry, 'bbox_m': box, 'volume_m3': volume,
+            'display': part_display(part) if built else None,
             'engineering_approved': False}
 
 
@@ -849,7 +890,7 @@ def main() -> None:
     args = parser.parse_args()
     import cadquery as cq
 
-    from vessel_reconstruction.display_mesh import shape_mesh, write_glb
+    from vessel_reconstruction.display_mesh import write_glb
 
     started = time.time()
     out = args.out.resolve()
@@ -866,11 +907,11 @@ def main() -> None:
         solid = part_solid(part)
         if solid is not None:
             cq.exporters.export(cq.Workplane().add(solid), str(folder / f'{part.id}.step'), exportType='STEP')
-            meshes[part.id] = shape_mesh(solid, 1.0, 0.5)
+            meshes[part.id] = part_mesh(part, solid)
         components.append(component_entry(part, solid))
     record['result']['components'] = components
     (folder / 'execution.json').write_text(json.dumps(record, indent=2) + '\n')
-    write_glb_with_existing(glb, meshes, out / 'whole-vessel-draft.glb')
+    write_glb(meshes, out / 'whole-vessel-draft.glb', part_styles(parts), base=glb)
     capacity = write_tank_outputs(parts, out)
     summary = {'engineering_approved': False, 'status': 'draft_only', 'reading': reading,
                'capacity_plan': capacity,
@@ -881,18 +922,6 @@ def main() -> None:
         summary['metrics'] = score(parts, reading, np.load(args.truth_mesh)['triangles'], capacity)
     (out / 'internals.json').write_text(json.dumps(summary, indent=2, default=str) + '\n')
     print(json.dumps(summary.get('metrics', {}), indent=2, default=str))
-
-
-def write_glb_with_existing(existing: Path, meshes: dict, path: Path) -> None:
-    """The step 1 GLB with one more node per internal part (same Y-up, millimetres)."""
-    import trimesh
-
-    scene = trimesh.load(existing, force='scene')
-    for name, (vertices, triangles) in meshes.items():
-        y_up = np.column_stack([vertices[:, 0], vertices[:, 2], -vertices[:, 1]])
-        scene.add_geometry(trimesh.Trimesh(vertices=y_up, faces=triangles, process=False),
-                           node_name=name, geom_name=name)
-    path.write_bytes(scene.export(file_type='glb', include_normals=True))
 
 
 if __name__ == '__main__':

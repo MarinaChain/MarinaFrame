@@ -191,6 +191,30 @@ Notes on the results:
 - G5: 36 parts built (18 traced, 18 with a guessed value), 12 plates with an ID and a guessed
   10 mm thickness.
 
+### 5.2.1 Lofted tank solids (2026-11-09, branch `feature/realistic-visuals`)
+
+Tank solids were stacks of slabs: 0.10 m slabs for the volumes and 0.25 m slabs for the STEP and
+GLB, so curved edges looked stepped. A tank is now lofted through hull sections
+(`tanks.tank_loft_in_hull`): sections 0.10 m apart in x, each sampled in rows of 0.02 m, resampled
+at equal shares of the section height on both chains and joined by ruled faces. The same loft gives
+the volumes and sounding tables, the STEP (one degree-1 B-spline side face per run, as the hull
+runs; `geometry.ruled_loft_solid`) and the GLB mesh (`display_mesh.loft_mesh`, 1 mm display
+tolerance, creases kept sharp). The containment metric G4 and the plates keep their 0.25 m slabs
+(metric code unchanged). Unit test: on a tapered circular hull the loft volume equals the
+integrated section area within 0.5 % (the T1 tolerance) and is no further from it than the fine
+slabs.
+
+| Gunnerus | Slabs (`work/tanks/gunnerus-before`) | Loft (`work/tanks/gunnerus-loft`) |
+|---|---|---|
+| G1 tank ends, median abs | 0.019 m | 0.019 m |
+| G2 volume, median abs rel | 10.2 % (9 within 10 %, 0 within 3 %) | 10.1 % (9 within 10 %, 1 within 3 %) |
+| G4 containment | 2.4 % | 2.4 % |
+| T2 grand total | +4.2 % (misc +57.7 %) | +4.3 % (misc +57.8 %) |
+| Per tank volume change | | within 0.5 %, except No 12 +1.2 % (floor steps are ramps over 0.10 m) |
+| Run time, GLB size | 289 s, 4.8 MB | 67 s, 3.2 MB |
+
+T1 and T3 use the exact OCX solids, not this code, and do not change.
+
 ### 5.3 What is missing
 
 - Sounding tables are at even keel; there is no trim or heel table and no sounding-pipe position
@@ -202,3 +226,32 @@ Notes on the results:
   `test_whole_vessel_step1.py::test_revise_rebuilds_only_the_marked_part`) fail in this agent
   session: `sandbox-exec` exits with code 71 inside the session sandbox. They fail the same way on
   the base commit. All other tests pass (1,137).
+
+## 6. Colours by content and tank labels (2026-11-09, branch `feature/realistic-visuals`)
+
+One palette colours the GLB materials, the app's 3D view and its 2D sketches. No single standard
+exists; this one follows common capacity-plan practice (oils warm, waters cool, dry spaces light
+grey). The values are `tanks.CONTENT_CLASSES` and the app tokens `--tank-<class>` in
+`app/ui/styles.css` (a test checks that they agree).
+
+| Class | Colour | Content or name words |
+|---|---|---|
+| `fuel_oil` | brown-amber `#B8742A` | fuel, F.O |
+| `diesel_oil` | yellow `#E3C440` | diesel, gas oil, MGO, MDO, D.O |
+| `lube_oil` | orange `#EE8A2C` | lub, L.O |
+| `oily_residue` | dark brown `#6E4B36` | sludge, bilge, waste oil, dirty oil |
+| `water_ballast` | green `#4E9F57` | ballast |
+| `fresh_water` | blue `#3E7FD0` | fresh water, drinking, potable |
+| `feed_water` | light blue `#93C8EC` | feed, distilled, boiler water |
+| `sewage` | grey-violet `#8C7FAE` | sewage, grey/gray, black water, sanitary |
+| `cargo` | light grey `#C9CDD3` | cargo, hold |
+| `void` | near white `#EEF0F2` | void, cofferdam, dry, empty |
+| `other` | grey `#A3A7AD` | anything else |
+
+The tank name is read before the content group ("misc" tank "Black sewage" is sewage). Each GLB
+tank mesh has a material `tank_<class>` and extras: `kind` "tank", `label` (tank name),
+`content`, `content_class`, `content_label`, `source_labels` (`content_class` is `read` when a
+word gave it, else `guessed`) and `engineering_approved` false. The app colours tanks from the
+tokens, draws their edges, shows the hull and the other parts translucent while tanks show, and
+has a legend with switches for the tanks and for all tank names (by default only the tank under
+the pointer and the selected tank are named; overlapping names are left out).

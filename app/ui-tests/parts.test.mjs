@@ -1,7 +1,7 @@
 // Part list copy (js/parts.js): no spreadsheet formulas from labels or notes. Run: npm run test:ui
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { safeTextCell, partTableText, plainReason, withoutHandles, canRerun, elapsedText, partState } from '../ui/js/parts.js';
+import { safeTextCell, partTableText, plainReason, withoutHandles, canRerun, elapsedText, partState, outlinePolygons } from '../ui/js/parts.js';
 
 test('a marked part with a note can be re-run; a hull or a pending revision cannot', () => {
   const marked = { op: 'deckhouse', review: 'marked', review_note: 'Too high', revision_pending: false };
@@ -75,4 +75,11 @@ test('a sign-off line keeps the fixed words and stays a draft', () => {
   assert.match(text, /Signed off by A\. Architect, 2026-11-09: usable as a starting model\./);
   assert.match(text, /engineering_approved: false/);
   assert.doesNotMatch(text, /approved by|verified/i);
+});
+
+test('a tank sketch uses its outline polygons from the run; other parts keep their box', () => {
+  const tank = { display: { profile_m: [[[4, 0.2], [7, 0.2], [7, 1.4]], [[1, 1]]], plan_m: [], content_class: 'fresh_water' } };
+  assert.deepEqual(outlinePolygons(tank, 2), [[[4, 0.2], [7, 0.2], [7, 1.4]]]);
+  assert.equal(outlinePolygons(tank, 1), null);
+  assert.equal(outlinePolygons({ bbox_m: {} }, 2), null);
 });

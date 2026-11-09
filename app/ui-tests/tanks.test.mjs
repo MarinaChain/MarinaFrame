@@ -1,7 +1,7 @@
 // Tank tables (js/tanks.js) and the tank and steel export rows (js/export.js). Run: npm run test:ui
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { tankSource, tankNumber, capacityFields, capacityRowOf, groupLine, soundingView, tankDetailBlock, capacityPanel } from '../ui/js/tanks.js';
+import { tankSource, tankNumber, capacityFields, capacityRowOf, groupLine, soundingView, tankDetailBlock, capacityPanel, tankToken, tankLegend, placeLabels, steelToken, steelLegend } from '../ui/js/tanks.js';
 import { filesSummary, outputsOf } from '../ui/js/export.js';
 import { createParts } from '../ui/js/parts.js';
 
@@ -131,4 +131,35 @@ test('a tank part shows its capacity plan row, and the Parts page the capacity p
   assert.match(text, /Volume 98 %1\.96 m³Traced/);
   assert.match(text, /Capacity plan/);
   assert.match(text, /0\.250/);
+});
+
+test('tank colours come from one design token per content class', () => {
+  assert.equal(tankToken('fresh_water'), '--tank-fresh_water');
+  assert.equal(tankToken('no such class'), '--tank-other');
+  assert.equal(tankToken(undefined), '--tank-other');
+});
+
+test('the legend lists the content classes present, in capacity-plan order, with counts', () => {
+  const legend = tankLegend([{ content_class: 'water_ballast' }, { content_class: 'fuel_oil' }, { content_class: 'water_ballast' }, { content_class: 'odd' }]);
+  assert.deepEqual(legend.map((row) => [row.cls, row.count]), [['fuel_oil', 1], ['water_ballast', 2], ['other', 1]]);
+  assert.equal(legend[1].label, 'Water ballast');
+  assert.equal(legend[1].token, '--tank-water_ballast');
+});
+
+test('tank name labels never overlap; the hovered one wins', () => {
+  const box = { width: 60, height: 16 };
+  const shown = placeLabels([
+    { id: 'a', x: 100, y: 100, ...box },
+    { id: 'b', x: 120, y: 105, ...box },
+    { id: 'c', x: 300, y: 100, ...box },
+    { id: 'hover', x: 110, y: 100, priority: 1, ...box },
+  ]);
+  assert.deepEqual([...shown].sort(), ['c', 'hover']);
+});
+
+test('steel groups have one token each and the legend counts their members', () => {
+  assert.equal(steelToken('shell'), '--steel-shell');
+  assert.equal(steelToken('odd'), '--steel-primary');
+  const legend = steelLegend([{ group: 'stiffener', members: [{}, {}] }, { group: 'shell', members: [{}] }]);
+  assert.deepEqual(legend.map((row) => [row.cls, row.count]), [['shell', 1], ['stiffener', 2]]);
 });

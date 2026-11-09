@@ -13,6 +13,7 @@ Y-up (glTF), one node per part named by its id.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -139,22 +140,114 @@ def shape_mesh(shape, tolerance_mm: float, angular_rad: float) -> tuple[np.ndarr
     return np.concatenate(all_vertices), np.concatenate(all_triangles)
 
 
+# A ring corner sharper than this (turning angle) gets its own vertices on each side, so the
+# shading shows the edge (a tank top meeting its side); smaller turns are shaded smooth.
+CREASE_ANGLE_DEG = 35.0
+
+
+def _ring_creases(ring_grid: np.ndarray) -> list[int]:
+    """Ring indices where the ring turns more than CREASE_ANGLE_DEG at any station."""
+    incoming = ring_grid - np.roll(ring_grid, 1, axis=0)  # ring x stations x 3
+    outgoing = np.roll(ring_grid, -1, axis=0) - ring_grid
+    lengths = np.linalg.norm(incoming, axis=2) * np.linalg.norm(outgoing, axis=2)
+    cosine = np.where(lengths > 1e-12, (incoming * outgoing).sum(axis=2) / np.maximum(lengths, 1e-12), 1.0)
+    sharp = (cosine < np.cos(np.radians(CREASE_ANGLE_DEG))).any(axis=1)
+    return [int(k) for k in np.flatnonzero(sharp)]
+
+
+def loft_mesh(runs_m: list[np.ndarray], cap_triangles, tolerance_mm: float) -> tuple[np.ndarray, np.ndarray]:
+    """Display mesh (vertices in mm, triangles) of a lofted solid, faces outward.
+
+    ``runs_m`` are (stations, ring points, 3) arrays in metres (``tanks.TankLoft.runs``);
+    ``cap_triangles(ring_size)`` gives the ring indices of an end cap in ring order. The side is
+    split into strips at the ring creases; each strip is a grid mesh whose columns are thinned
+    to ``tolerance_mm`` and whose vertices are shared, so the side is shaded smooth.
+    """
+    all_vertices, all_triangles, offset = [], [], 0
+
+    def add(vertices, triangles):
+        nonlocal offset
+        all_vertices.append(vertices)
+        all_triangles.append(triangles + offset)
+        offset += len(vertices)
+
+    for run in runs_m:
+        grid = np.transpose(run, (1, 0, 2)) * 1000.0  # ring x stations x 3, mm
+        creases = _ring_creases(grid) or [0]
+        ring_size = len(grid)
+        for start, end in zip(creases, creases[1:] + [creases[0] + ring_size]):
+            columns = [k % ring_size for k in range(start, end + 1)]
+            add(*_grid_triangles(grid[columns], False, tolerance_mm))
+        cap = np.asarray(cap_triangles(ring_size))
+        add(grid[:, 0], cap[:, ::-1])
+        add(grid[:, -1], cap)
+    if not all_vertices:
+        return np.zeros((0, 3)), np.zeros((0, 3), dtype=int)
+    vertices, triangles = np.concatenate(all_vertices), np.concatenate(all_triangles)
+    if mesh_volume_mm3(vertices, triangles) < 0:
+        triangles = triangles[:, ::-1]
+    return vertices, triangles
+
+
 def mesh_volume_mm3(vertices: np.ndarray, triangles: np.ndarray) -> float:
     """Signed volume of a closed triangle mesh (divergence theorem)."""
     p = vertices[triangles]
     return float(np.einsum('ij,ij->i', p[:, 0], np.cross(p[:, 1], p[:, 2])).sum() / 6.0)
 
 
-def write_glb(meshes: dict[str, tuple[np.ndarray, np.ndarray]], path: Path) -> None:
-    """GLB with one node per part (named by its id), millimetres, glTF Y-up."""
+@dataclass(frozen=True)
+class PartStyle:
+    """Material and metadata of one GLB part: a base colour (sRGB, 0 to 1), a material name,
+    opacity, and JSON ``extras`` (glTF mesh extras; the app reads them as the mesh's userData)."""
+    colour: tuple[float, float, float]
+    material: str
+    extras: dict
+    opacity: float = 1.0
+
+
+def tank_style(name: str, content: str | None, source_labels: dict[str, str]) -> PartStyle:
+    """Style of a tank part: its capacity-plan colour by content and its name and content as
+    extras (with source labels; ``content_class`` is ``read`` when a word of the name or content
+    gave it, else ``guessed``)."""
+    from .tanks import CONTENT_CLASSES, content_class, content_colour
+
+    cls = content_class(content, name)
+    labels = {**source_labels, 'content_class': 'guessed' if cls == 'other' else 'read'}
+    return PartStyle(content_colour(cls), f'tank_{cls}',
+                     {'kind': 'tank', 'label': name, 'content': content or '', 'content_class': cls,
+                      'content_label': CONTENT_CLASSES[cls][0], 'source_labels': labels,
+                      'engineering_approved': False})
+
+
+def _scene_mesh(vertices: np.ndarray, triangles: np.ndarray, style: PartStyle | None):
+    """A trimesh mesh in glTF axes (Y-up), with the style's material and extras."""
     import trimesh
 
-    scene = trimesh.Scene()
+    # The model is Z-up; glTF is Y-up: (x, y, z) -> (x, z, -y).
+    y_up = np.column_stack([vertices[:, 0], vertices[:, 2], -vertices[:, 1]])
+    # No vertex merge: faces meshed apart keep their own vertices, so the vertex normals
+    # stay sharp at CAD edges (the app replaces the material and needs the normals).
+    mesh = trimesh.Trimesh(vertices=y_up, faces=triangles, process=False)
+    if style is not None:
+        material = trimesh.visual.material.PBRMaterial(
+            name=style.material, baseColorFactor=[*style.colour, style.opacity], metallicFactor=0.0,
+            roughnessFactor=0.7, alphaMode="BLEND" if style.opacity < 1 else "OPAQUE", doubleSided=True)
+        mesh.visual = trimesh.visual.TextureVisuals(material=material)
+        mesh.metadata.update(style.extras)
+    return mesh
+
+
+def write_glb(meshes: dict[str, tuple[np.ndarray, np.ndarray]], path: Path,
+              styles: dict[str, PartStyle] | None = None, base: Path | None = None) -> None:
+    """GLB with one node per part (named by its id), millimetres, glTF Y-up.
+
+    ``styles`` gives a material and extras per part id (parts without one keep no material).
+    With ``base``, the parts are added to the nodes of that GLB.
+    """
+    import trimesh
+
+    scene = trimesh.load(base, force='scene') if base is not None else trimesh.Scene()
     for name, (vertices, triangles) in meshes.items():
-        # The model is Z-up; glTF is Y-up: (x, y, z) -> (x, z, -y).
-        y_up = np.column_stack([vertices[:, 0], vertices[:, 2], -vertices[:, 1]])
-        # No vertex merge: faces meshed apart keep their own vertices, so the vertex normals
-        # stay sharp at CAD edges (the app replaces the material and needs the normals).
-        mesh = trimesh.Trimesh(vertices=y_up, faces=triangles, process=False)
-        scene.add_geometry(mesh, node_name=name, geom_name=name)
+        scene.add_geometry(_scene_mesh(vertices, triangles, (styles or {}).get(name)),
+                           node_name=name, geom_name=name)
     path.write_bytes(scene.export(file_type='glb', include_normals=True))

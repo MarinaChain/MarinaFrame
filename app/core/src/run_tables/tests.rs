@@ -129,13 +129,22 @@ fn structure_files_are_the_steel_tables_and_ocx_files() {
         "b_DRAFT_steel_totals.csv",
         "b_DRAFT_steel_members.csv",
         "b_DRAFT.3docx",
+        "b_DRAFT_structure.glb",
         "notes.txt",
     ] {
         std::fs::write(folder.join(name), "x").unwrap();
     }
     let files = structure_files(tmp.path());
     let roles: Vec<&str> = files.iter().map(|f| f.role.as_str()).collect();
-    assert_eq!(roles, ["ocx_structure", "steel_members", "steel_totals"]);
+    assert_eq!(
+        roles,
+        [
+            "ocx_structure",
+            "steel_members",
+            "steel_totals",
+            "structure_model"
+        ]
+    );
     assert_eq!(files[0].path, "structure/b_DRAFT.3docx");
     assert_eq!(files[0].bytes, 1);
 }

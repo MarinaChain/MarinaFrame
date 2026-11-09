@@ -2237,10 +2237,22 @@ async function showWholeVessel(part) {
     await runAction('Loading the whole-vessel model…', async () => {
       const buffer = await cachedArtifact('model', task, info.glb_path);
       if (task === state.task) await model.setWholeVessel(buffer);
+      await showStructure(task);
     });
   }
   $('hull-only').hidden = !model.showsWholeVessel;
   setPartOutline(part);
+}
+
+/**
+ * Add the run's steel structure (structure/<stem>_structure.glb, see run_tables.rs) to the whole
+ * vessel shown. A run without one, or one over the GLB limit, shows the vessel without steel.
+ */
+async function showStructure(task) {
+  const file = state.view?.structure_files?.find((f) => f.role === 'structure_model');
+  if (!file || file.bytes > MAX_GLB_BYTES) return;
+  const buffer = await cachedArtifact('model', task, file.path);
+  if (task === state.task) await model.setStructure(buffer);
 }
 
 $('hull-only').addEventListener('click', async () => {

@@ -5,7 +5,7 @@ and cut to the built hull at every frame; the transverse members are placed at e
 the bulkheads of the longitudinal construction section (step 2 internals reader) in their place.
 Thicknesses and profiles come from the labels of the midship section, the shell expansion and the
 profile-and-plan sheet, each labelled ``printed`` or ``guessed``. Outputs: steel tables, OCX 3.0.1
-(plates and stiffeners) and a JSON report with the metrics G6 to G11. No model call; every output
+(plates and stiffeners), a display GLB for the app (``structure.display``) and a JSON report with the metrics G6 to G11. No model call; every output
 has ``engineering_approved=false``.
 
     PYTHONPATH=src:. python -m benchmarks.gunnerus.structure_3d --sources work/sources/gunnerus \\
@@ -26,7 +26,7 @@ import numpy as np
 
 from benchmarks.gunnerus import structure_3d_reading as reading
 from benchmarks.gunnerus import whole_vessel_internals as internals
-from vessel_reconstruction.structure import extrude, ocx, steel
+from vessel_reconstruction.structure import display, extrude, ocx, steel
 from vessel_reconstruction.structure.extrude import HullSections, Profile, Seam
 from vessel_reconstruction.tanks import HullSlicer
 
@@ -613,6 +613,8 @@ def main(argv=None) -> int:
     path = args.out / "gunnerus_structure_DRAFT.3docx"
     ocx.export_ocx(block, path, name="Gunnerus parallel-body structure (draft)")
     check = ocx.validate(path, args.ocx_schema)
+    # Display meshes for the app's 3D view (plates with thickness, stiffeners as profiles).
+    display_counts = display.write_structure_glb(members, args.out / "gunnerus_structure_DRAFT_structure.glb")
     rows = steel.member_weights(members)
     totals = steel.weight_totals(rows)
     steel_t = sum(row["weight_t"] for row in rows)
@@ -621,6 +623,7 @@ def main(argv=None) -> int:
         "members": len(members), "members_by_label": by_count(members, "label"),
         "members_by_thickness_source": by_count(members, "thickness_source"),
         "stiffeners": sum(1 for m in members if ocx.is_stiffener(m)),
+        "display_members_by_group": display_counts,
         "steel_weight_t": round(steel_t, 3),
         "steel_by_label_t": {t["key"]: round(t["weight_t"], 3) for t in totals if t["group_by"] == "label"},
         "steel_by_thickness_source_t": {t["key"]: round(t["weight_t"], 3) for t in totals if t["group_by"] == "thickness_source"},
