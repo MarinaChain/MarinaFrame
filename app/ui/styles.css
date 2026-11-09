@@ -41,13 +41,14 @@
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
   --font-chip: var(--font-ui);
 
-  /* Type scale 11/12/13/15/18/24 px. */
+  /* Type scale 12/13/14/15/17/22 px. Body sizes stay readable; titles stay close to the
+     sidebar's 13 px labels (founder, 2026-11-09: "a little smaller to match the sidebar"). */
   --fs-xs: 12px;
   --fs-sm: 13px;
   --fs-md: 14px;
-  --fs-lg: 16px;
-  --fs-xl: 20px;
-  --fs-2xl: 26px;
+  --fs-lg: 15px;
+  --fs-xl: 17px;
+  --fs-2xl: 22px;
 
   /* 8 px grid: 4, 8, 12, 16, 24, 32 (2 px only inside small controls). */
   --space-2xs: 2px;
@@ -450,9 +451,12 @@ code { font-family: var(--font-mono); }
   min-width: 0;
   flex: 0 1 auto;
   overflow: hidden;
-  font-size: var(--fs-lg);
+  font-size: var(--fs-md);
   font-weight: 600;
 }
+/* The place icon in the title bar matches the sidebar icon. */
+.crumb-current { display: inline-flex; align-items: center; gap: var(--space-xs); }
+.crumb-current .icon { flex: none; width: 18px; height: 18px; color: var(--ink-2); }
 .crumb {
   min-width: 0;
   overflow: hidden;

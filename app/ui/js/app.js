@@ -633,6 +633,8 @@ function renderTask({ fresh = false } = {}) {
 // ---------------------------------------------------------------- title bar: breadcrumb
 
 const ROUTE_TITLES = { home: 'Home', queue: 'Queue', intake: 'New vessel', settings: 'Settings', welcome: 'Setup' };
+/** The title bar shows the same icon as the sidebar for these places. */
+const ROUTE_ICONS = { home: 'home', queue: 'queue', settings: 'gear' };
 
 function crumbSeparator() {
   return el('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '›');
@@ -645,7 +647,9 @@ function renderCrumbs() {
   const view = state.route === 'run' ? state.view : null;
   badge.hidden = !view;
   if (state.route !== 'run') {
-    fill(crumbs, el('span', { class: 'crumb crumb-current', 'aria-current': 'page' }, ROUTE_TITLES[state.route]));
+    const routeIcon = ROUTE_ICONS[state.route];
+    fill(crumbs, el('span', { class: 'crumb crumb-current', 'aria-current': 'page' },
+      routeIcon ? icon(routeIcon) : null, ROUTE_TITLES[state.route]));
     document.title = 'MarinaFrame';
     return;
   }
