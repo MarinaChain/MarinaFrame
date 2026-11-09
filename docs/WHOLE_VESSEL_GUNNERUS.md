@@ -510,6 +510,62 @@ better than the rule. Crouton fails also without that cell (RMS 0.24 to 0.28 m; 
 Integration option: plan section 3.5.6 (Astra reads, Sol is the second reader; the controller
 is not changed). Run outputs (not in the repository): the session scratchpad `r6/`.
 
+### 5.3 Round 8: code measures, low-cost model identifies (protocol 3.5.8)
+
+Protocol committed first (`7a11877`), then the reader and harness (`d5e7d3f`:
+`src/vessel_reconstruction/body_plan_crossings.py`, `body_plan_reader.py`,
+`body_plan_identity.py`, `benchmarks/balclutha/crossing_value.py`; synthetic tests
+`tests/test_body_plan_reader.py`). Run 2026-11-09. Same sheet, truth (151 cells), metrics and
+decision rule as rounds 4 to 6.
+
+Code measures every waterline crossing at full resolution (sub-pixel column, slope, width, kind)
+and follows each curve's ink to the next waterline. This gives 21 chains (aftbody 11, forebody
+10), with 1 inferred link per half and no one-waterline chains. The measurement takes 6 s. The
+values come only from code. The model answers one question per chain: "which station number
+labels the red curve?" It sees a crop of at most 1,536 px with the curve traced in red.
+
+| Arm, repeat | Cells (of 151) | RMS | Max | Within 0.05 / 0.15 m | Identity errors | RMS without 24 ft st. 18 | Questions (re-asked) | Labels equal to final / null | Tokens in / out | Wall |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| R0 code only (3 runs, identical) | 151 (100 %) | 0.1480 m | 1.81 m | 99 % / 99 % | 0 | 13.5 mm | 0 | - | 0 | 6 s |
+| Crouton Alpha Free R1-1 | 151 (100 %) | 0.1480 m | 1.81 m | 99 % / 99 % | 0 | 13.5 mm | 21 (4) | 14 / 5 | 3,960 / 432 * | 194 s |
+| Crouton Alpha Free R1-2 | 151 (100 %) | 0.1480 m | 1.81 m | 99 % / 99 % | 0 | 13.5 mm | 21 (2) | 15 / 4 | 3,826 / 397 * | 155 s |
+| Crouton Alpha Free R1-3 | 151 (100 %) | 0.1480 m | 1.81 m | 99 % / 99 % | 0 | 13.5 mm | 21 (4) | 15 / 4 | 3,961 / 446 * | 276 s |
+| GPT-6 Astra (bonus) R1-1 to R1-3 | 151 (100 %) | 0.1480 m | 1.81 m | 99 % / 99 % | 0 | 13.5 mm | 21 (0) | 21 / 0 | 32,852 / 867 to 1,154 | 20 to 24 s |
+| Round 6: GPT-6 Astra, median | 149 (99 %) | 0.1489 m | 1.81 m | 99 % / 99 % | 0 | 13 mm | 16 tiles | - | 187,566 / 8,679 | 95 to 113 s |
+| Round 6: Crouton Alpha Free, median | 148 (98 %) | 0.2907 m | 1.83 m | 40 % / 70 % | 1 to 3 | 0.24 to 0.28 m | 32 tiles | - | 10,922 / 2,171 * | 648 to 797 s |
+| Round 5: DeepSeek V4.1 Flash, median | 98 to 100 (65 %) | 1.68 m | 5.1 to 5.7 m | 8 to 11 % / 20 to 24 % | 11 to 15 | - | 32 tiles | - | 69,600 / 2,900 | 57 to 237 s |
+
+\* The Go usage does not count image tokens. Crouton answered every request (no rate limit), so
+DeepSeek was not used. There were 0 failed requests and 1 invalid reply in all.
+
+Decision by the fixed rule (all 3 repeats at least 60 % of cells, median RMS at most 0.15 m):
+
+| Arm | Median RMS | Coverage (min) | Decision |
+|---|---:|---:|---|
+| R0 code only | 0.1480 m | 100 % | **passes** |
+| R1 Crouton Alpha Free (DeepSeek fallback, not needed) | 0.1480 m | 100 % | **passes** |
+| Bonus GPT-6 Astra | 0.1480 m | 100 % | **passes** |
+
+All arms give the same table. Two cells are more than 0.05 m off. One is the doubtful truth cell
+(24 ft, station 18: 1.81 m, as in round 6). The other is off by 0.05 to 0.15 m. Without the
+doubtful cell, the RMS is 13.5 mm.
+
+What the model adds: on this sheet, nothing that changes a value. The code's nesting count alone
+names every curve correctly. Crouton's labels agree with the code where they are given: 14 or 15
+of 21. The exceptions are in the crowded flat-side cluster. Crouton gives null for forebody
+stations 11 to 14 in all repeats. In the aftbody, it labels 9 as 10 and 7 as 8 (both are next to
+the leader arrows "10 9"). The best-agreement offset stays 0 on both halves, so these wrong labels
+have no effect. A second question did not change any of them. Labels alone would therefore not
+be a safe identity in crowded areas. The model's useful role is a cross-check, and the place where
+it would matter is a sheet where the code's count is off by a curve. Astra labels all 21 curves
+correctly, at 1/6 of round 6's input tokens and 1/5 of its time.
+
+Limits: the measuring code and thresholds were developed on this sheet's image (protocol
+disclosure; the truth file was not opened before scoring). This is one sheet with no holdout.
+The 32 ft cells of forebody stations 11 to 14 are read where those curves meet the deck edge.
+Next: a second scanned sheet with printed offsets as a holdout, and a person checks the doubtful
+truth cell. Run outputs (not in the repository): the session scratchpad `r7/runs/`.
+
 ### 5.4 Round 7: Claude Sonnet 5.5 and Opus 5.5 (subagents on the Claude subscription)
 
 Protocol: plan section 3.5.7, committed first (`ba6e04c`). Scorer and pack builder:
@@ -569,6 +625,7 @@ quality. The Claude models are the only ones with all 151 cells in every repeat 
 error. Integration (plan section 3.5.6) is not changed by this round; a holdout sheet with printed
 offsets and a person's check of the cell are still needed before a build. `engineering_approved`
 stays false.
+
 
 ## 6. Step 2: internals (development case, metrics G1 to G5 of plan section 4.3.2)
 
