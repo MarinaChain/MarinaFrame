@@ -320,6 +320,11 @@ def build_first_hull(tools):
         selected["contour_selection"] = copy.deepcopy(candidate["contour_selection"])
         anchors.append(Anchor(section["id"], section["x_m"], points, selected,
             z_max_m=section["z_max_m"], pixels_per_metre=cal["pixels_per_metre"], stroke_width_px=width))
+    # Stations the body-plan reader measured replace the model path's anchors (body_plan_intake).
+    from .body_plan_intake import reader_anchors, write_check
+    body_plan = tools.body_plan_reading()
+    anchors, body_plan_report = reader_anchors(sections, anchors, body_plan)
+    write_check(tools.root, image, body_plan, body_plan_report)
     from .vessel_description import station_outline_heights
     outline = station_outline_heights(image, list(tools.state.get("sheet_setups", {}).values()), description,
                                       sections, tools.intake_hints())
@@ -353,6 +358,14 @@ def build_first_hull(tools):
         # Sections of a sheet-only intake came from the model's reading: say so.
         warnings = [w[:300] for w in tools.state["materialization"]["warnings"]] + warnings
         warnings.insert(0, "Stations and calibration were set from the model's reading of the sheet (ai_inferred).")
+    if body_plan is not None:
+        tools.state["body_plan_reader"] = body_plan_report
+        if body_plan_report["used"]:
+            warnings.insert(0, f"Stations {', '.join(body_plan_report['stations'])} were measured by the body-plan "
+                               "reader with an automatic calibration; confirm the calibration overlay.")
+        else:
+            warnings.insert(0, f"Body-plan reader not used: {body_plan_report['reason']}"[:300])
+        warnings[1:1] = [w[:300] for w in body_plan_report.get("warnings", [])]
     tools.state["vessel_table"] = table.to_json()
     write_json(tools.root / "vessel.json", {"description": description, "table": table.to_json()})
     from .fit_feedback import score

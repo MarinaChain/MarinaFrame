@@ -377,7 +377,9 @@ pub fn review_component(
         }
     }
     let known = read_components(task, &HashMap::new())
-        .is_some_and(|parts| parts.iter().any(|p| p.id == component_id));
+        .is_some_and(|parts| parts.iter().any(|p| p.id == component_id))
+        || (component_id == crate::body_plan_check::REVIEW_ID
+            && crate::body_plan_check::exists(task));
     if !known {
         return Err(AppError::new(
             "component_not_found",

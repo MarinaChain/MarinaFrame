@@ -429,6 +429,22 @@ def _constraints(particulars: dict) -> dict:
     return constraints
 
 
+def _body_plan_reading(sheet: Path, out_dir: Path, ask=None) -> dict | None:
+    """The automatic body-plan reading of the spec page, when the setting is on (body_plan_intake).
+
+    Any failure is recorded, never raised: the hull path then uses the model's reading alone.
+    """
+    from . import body_plan_intake
+    if not body_plan_intake.enabled() or sheet.suffix.lower() not in (".tif", ".tiff", ".png", ".jpg", ".jpeg"):
+        return None
+    try:
+        return body_plan_intake.read_at_intake(sheet, out_dir, ask=ask)
+    except Exception as exc:  # noqa: BLE001 - the reader is optional; the model path continues
+        return {"schema": body_plan_intake.SCHEMA, "usable_for_build": False,
+                "reason": f"body-plan reading failed: {type(exc).__name__}: {str(exc)[:200]}",
+                "engineering_approved": False}
+
+
 def write_spec(preview: dict, out_dir: Path) -> dict:
     """Copy sources and write intake.json and a sheet-only spec.json in ``out_dir``."""
     from .schema import validate_spec
@@ -446,6 +462,9 @@ def write_spec(preview: dict, out_dir: Path) -> dict:
                         | {"source_file": f"sources/{copied[page['file']]}"} for page in pages],
               "engineering_approved": False,
               "note": "Region labels are proposals (code) and edits (person); not certified view identities."}
+    reading = _body_plan_reading(out_dir / source["file"], out_dir)
+    if reading is not None:
+        intake["body_plan_reading"] = reading
     (out_dir / "intake.json").write_text(json.dumps(intake, indent=2) + "\n")
     spec = {"schema_version": "1.0", "vessel_id": _slug(name or Path(chosen["file"]).stem), "units": "m",
             "source": source, "symmetry": "port_starboard",

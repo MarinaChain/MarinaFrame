@@ -85,7 +85,8 @@ class Calibration:
     grid_rows: list = field(default_factory=list)  # rows of every drawn horizontal line in the box
     sources: dict = field(default_factory=dict)  # field -> source label
     measures: dict = field(default_factory=dict)  # scale measures and side checks, as found
-    flags: list = field(default_factory=list)
+    flags: list = field(default_factory=list)  # open problems: a person must look before use
+    notes: list = field(default_factory=list)  # weaker sources and side remarks, not blocking
     engineering_approved: bool = False
 
     def flag(self, name: str, message: str) -> None:
@@ -461,7 +462,10 @@ def calibrate(ink: np.ndarray, reading, dpi: float | None = None) -> Calibration
     cal.measures['scale'] = measures
     scale, source, problems = choose_scale(measures)
     for problem in problems:
-        cal.flag('pixels_per_ft' if 'noted' not in problem else 'scale_note', problem)
+        if 'noted' in problem:
+            cal.notes.append(problem)
+        else:
+            cal.flag('pixels_per_ft', problem)
     if scale is None:
         return cal
     cal.pixels_per_ft, cal.sources['pixels_per_ft'] = round(scale, 3), source
@@ -482,7 +486,7 @@ def calibrate(ink: np.ndarray, reading, dpi: float | None = None) -> Calibration
         if below:
             cal.baseline_row = min(below, key=lambda l: abs(l.position - bottom)).position
             cal.sources['baseline_row'] = 'code:line where the centreline ends (no base label)'
-            cal.flag('baseline_row', 'baseline is not labelled; taken where the centreline ends')
+            cal.notes.append('baseline is not labelled; taken where the centreline ends')
         else:
             cal.flag('baseline_row', 'no baseline found')
             return cal

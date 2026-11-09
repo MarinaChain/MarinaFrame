@@ -252,6 +252,29 @@ pub struct TaskView {
     /// Steel tables and OCX files of the run's structure folder (`run_tables`).
     #[serde(default)]
     pub structure_files: Vec<crate::run_tables::StructureFile>,
+    /// The automatic body-plan calibration to confirm (`body_plan_check`), when the run made one.
+    #[serde(default)]
+    pub body_plan_check: Option<BodyPlanCheckView>,
+}
+
+/// The automatic calibration of a scanned body plan: its overlay and why the body-plan reader
+/// was or was not used for the first hull. A person confirms it as one item.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct BodyPlanCheckView {
+    /// Task-relative overlay PNG: centreline, baseline, waterlines, FORE and AFT halves.
+    pub overlay_path: String,
+    pub width: u32,
+    pub height: u32,
+    /// True when the reader's station curves were used in the first hull.
+    pub used: bool,
+    pub stations_used: Vec<String>,
+    pub reason: String,
+    /// Open problems: the calibration was not used until a person looks.
+    pub flags: Vec<String>,
+    pub notes: Vec<String>,
+    pub warnings: Vec<String>,
+    /// The person's saved decision ("accepted", "marked", "open"), if any.
+    pub review: Option<crate::parts::PartReview>,
 }
 
 /// A whole-vessel model file: task-relative path, size in bytes, and whether the app loads it.

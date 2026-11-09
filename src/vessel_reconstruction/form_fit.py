@@ -123,6 +123,9 @@ class Anchor:
     # then built as a curve (the contour selection cannot extend ink).
     extended: bool = False
     notes: list = field(default_factory=list)
+    # "traced": rebuilt from its contour selection; "read": code-measured by the body-plan reader
+    # (body_plan_intake), built from its points.
+    source: str = "traced"
 
 
 @dataclass
@@ -482,7 +485,7 @@ def fit_vessel(declared: list[dict], anchors: list[Anchor],
         sid, sx = section["id"], float(section["x_m"])
         anchor = by_id.get(sid)
         if anchor is not None:
-            source = "fitted" if anchor.extended else "traced"
+            source = "fitted" if anchor.extended else anchor.source
             rows.append(StationRow(id=sid, x_m=sx, points_yz_m=anchor.points_yz_m, source=source,
                                    locked=not anchor.extended, selection_section=anchor.selection_section,
                                    notes=list(anchor.notes)))

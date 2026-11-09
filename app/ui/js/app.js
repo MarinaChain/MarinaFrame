@@ -1345,6 +1345,36 @@ const areas = createAreas({
   },
 });
 
+/**
+ * The automatic body-plan calibration (docs/AUTO_CALIBRATION.md) as one item to confirm: the
+ * overlay (centreline, baseline, waterlines, FORE and AFT halves), whether the body-plan reader's
+ * stations were used, the open flags, and Confirm / Wrong buttons saved like a part review.
+ */
+const BODY_PLAN_REVIEW_ID = 'body_plan_calibration';
+function bodyPlanCheckCard(check) {
+  if (!check) return null;
+  const decision = check.review?.decision || 'open';
+  const status = check.used
+    ? `Stations ${check.stations_used.join(', ')} were measured by the body-plan reader.`
+    : `Body-plan reader not used: ${check.reason}`;
+  const image = el('img', { class: 'body-plan-check-image', alt: 'Body-plan calibration overlay', width: check.width, height: check.height });
+  cachedArtifact('image', state.task, check.overlay_path).then((url) => { image.src = url; }, () => { image.alt = 'Overlay not readable'; });
+  const save = (value, note = null) => invoke('review_component', { task: state.task, component_id: BODY_PLAN_REVIEW_ID, decision: value, note })
+    .then(afterPartsChange, (error) => { showError(error); });
+  return el('section', { class: 'body-plan-check', 'aria-label': 'Body-plan calibration' },
+    el('div', { class: 'body-plan-check-head' },
+      el('strong', {}, 'Body-plan calibration'),
+      chip({ accepted: 'Confirmed', marked: 'Marked wrong', open: 'To confirm' }[decision], { tone: decision === 'accepted' ? 'pass' : decision === 'marked' ? 'fail' : '', small: true })),
+    el('p', { class: 'check-value selectable-text' }, status),
+    ...check.flags.map((flag) => el('p', { class: 'body-plan-check-flag selectable-text' }, flag)),
+    ...check.notes.concat(check.warnings).map((note) => el('p', { class: 'check-value selectable-text' }, note)),
+    image,
+    el('p', { class: 'chip-row' },
+      el('button', { type: 'button', class: 'btn', onclick: () => save('accepted') }, 'Calibration is right'),
+      el('button', { type: 'button', class: 'btn', onclick: () => save('marked', 'The body-plan calibration overlay is wrong (marked in review).') }, 'Something is wrong'),
+      decision !== 'open' ? el('button', { type: 'button', class: 'btn', onclick: () => save('open') }, 'Undo') : null));
+}
+
 function renderChecks() {
   const panel = $('panel-checks');
   const checks = state.view?.checks || [];
@@ -1353,8 +1383,9 @@ function renderChecks() {
     return;
   }
   areas.show(state.task, state.view, state.sectionId);
+  const calibration = bodyPlanCheckCard(state.view.body_plan_check);
   if (!checks.length) {
-    fill(panel, areas.element, el('p', { class: 'panel-empty' }, isRunning() ? 'Checks run after the 3D model is built.' : 'No checks ran for this run.'));
+    fill(panel, calibration, areas.element, el('p', { class: 'panel-empty' }, isRunning() ? 'Checks run after the 3D model is built.' : 'No checks ran for this run.'));
     return;
   }
   const counts = { pass: 0, fail: 0, not_run: 0 };
@@ -1365,6 +1396,7 @@ function renderChecks() {
     counts.not_run && chip(`${counts.not_run} not run`, { small: true }),
   ].filter(Boolean);
   fill(panel,
+    calibration,
     areas.element,
     el('p', { class: 'check-summary chip-row' }, ...summary),
     el('ul', {}, ...checks.map((check) => el('li', { class: 'check' },

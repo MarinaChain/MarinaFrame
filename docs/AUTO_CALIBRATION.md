@@ -148,3 +148,27 @@ Resume point: the last committed step; the measurement script is
 No drawings or derived data in the repository; truth and runs stay outside it. Claude only through
 the `claude` CLI on the subscription (API key variables removed). Never print keys. Status words
 "approved" or "verified" are not used for results.
+
+## 8. Integration (step 3, as built)
+
+- Setting: `MARINAFRAME_BODY_PLAN_READER=1` in the environment of the app (or of
+  `python -m vessel_reconstruction.intake write-spec`). Off by default: the intake then makes up to
+  six `claude -p` label questions on the subscription (about 1 to 2 minutes per sheet).
+- Intake (`intake.write_spec` -> `body_plan_intake.read_at_intake`): calibrates the spec page,
+  runs the frozen reader with code-only identity (nesting order), and stores
+  `body_plan_reading` in `intake.json` (calibration with source labels, flags and notes; per station
+  the waterline cells and the drawn curve in metres). The overlay PNG and the cached answers stay in
+  the intake folder. A failure is recorded, never raised.
+- Worker (`first_hull_tools.build_first_hull` -> `body_plan_intake.reader_anchors`): when the
+  calibration has no open flag, each section whose id names a station the reader read
+  (`S7`, `sta_07`, `7`) gets the reader's curve as its anchor (row source `read`, built as an
+  authored curve labelled `traced`, basis "Body-plan reader ..."). Other stations keep the model
+  path (traced candidates, form fit). Station positions (x) still come from the model's reading.
+  A flagged calibration is not used; the first hull's warnings say why.
+- Review: the worker writes `domain/body-plan-check.json` and `domain/body-plan-check.png`. The
+  app shows them at the top of the Checks tab ("Body-plan calibration": overlay with centreline,
+  baseline, waterlines, FORE/AFT halves and their stations, the flags, and whether the reader was
+  used). The person clicks "Calibration is right" or "Something is wrong"; the decision is saved
+  like a part review (`review_component`, id `body_plan_calibration`), in app state, not in the run.
+- Open: a person's "Something is wrong" does not yet re-run the build with a corrected calibration
+  (for example swapped halves); it records the decision only.
