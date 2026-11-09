@@ -411,3 +411,18 @@ def save_box_tanks(folder: Path) -> Path:
     path = folder / "box_tanks.npz"
     tanks.save_tanks(box_tank_model(), path)
     return path
+
+
+def test_report_has_an_accuracy_and_limits_section_without_approval_claims(tmp_path):
+    task = make_box_task(tmp_path)
+    out = tmp_path / "out"
+    export_draft(task, "r0001", out)
+    text = pdf_text(next(out.glob("*_report.pdf")))
+    flat = " ".join(text.split())
+    assert "Accuracy and limits" in text
+    assert "Hull: measured on clean synthetic sheets only" in flat
+    assert "Tanks: none in this run." in flat and "Steel: none in this run." in flat
+    assert "hull.model_reading_clean" in flat and "docs/HULL_SELECTION.md s.7" in flat
+    assert "engineering_approved stays false" in flat
+    section = flat.split("Accuracy and limits", 1)[1].split("Station overlay", 1)[0].lower()
+    assert "verified" not in section and "approved for" not in section

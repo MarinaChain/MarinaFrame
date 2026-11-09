@@ -50,6 +50,7 @@ class ReportFacts:
     hydrostatics_error: str | None
     generated_by: str
     capacity_rows: list[dict] | None = None  # capacity plan (tanks.capacity_plan), when tanks are given
+    accuracy_facts: dict | None = None  # run facts for the accuracy summary (accuracy_summary.facts_from_build)
 
 
 def label_text(label: str) -> str:
@@ -203,6 +204,27 @@ def write_summary(writer: PageWriter, facts: ReportFacts) -> None:
         writer.wrapped("No station overlay was rendered for this build.")
 
 
+def write_accuracy_section(writer: PageWriter, facts: dict) -> None:
+    """Accuracy and limits: one line per output, then the measured bands behind the lines."""
+    from ..accuracy_bands import band
+    from ..accuracy_summary import DRAFT_NOTE, SCOPE_NOTE, summarise
+
+    summaries = summarise(facts)
+    writer.heading("Accuracy and limits")
+    writer.wrapped(SCOPE_NOTE)
+    for summary in summaries.values():
+        writer.wrapped(summary.line, indent="- ")
+    listed = [band(i) for s in summaries.values() if s.present for i in s.detail_ids]
+    if listed:
+        writer.line("")
+        writer.line("Measured bands (development: the code was tuned on the case; holdout: read once, protocol fixed first)")
+        writer.table(["Band", "Set", "N", "Source"],
+                     [[b.id, b.dataset, b.n, f"{b.source} s.{b.section}"] for b in listed], [26, 12, 32, 62])
+        for item in listed:
+            writer.wrapped(f"{item.id}: {item.caveat}", indent="- ")
+    writer.wrapped(DRAFT_NOTE)
+
+
 def write_capacity_plan(writer: PageWriter, rows: list[dict]) -> None:
     writer.heading("Capacity plan (draft tank model)")
     writer.wrapped("Moulded volumes of the built tank solids; weight at 98 % fill; centre of gravity at 100 %. "
@@ -243,6 +265,8 @@ def write_report(facts: ReportFacts, path: Path) -> Path:
     with rc_context({"pdf.fonttype": 42}), PdfPages(path, metadata=metadata) as pdf:
         writer = PageWriter(pdf, title)
         write_summary(writer, facts)
+        if facts.accuracy_facts is not None:
+            write_accuracy_section(writer, facts.accuracy_facts)
         if facts.capacity_rows:
             write_capacity_plan(writer, facts.capacity_rows)
         write_overlay_pages(writer, facts.build)
