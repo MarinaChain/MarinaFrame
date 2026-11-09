@@ -12,8 +12,8 @@ owner's review, not legal clearance (see `docs/DEPENDENCIES_AND_RIGHTS.md`).
   licence file, with the licences of the libraries built into it, is
   `lib/python3.12/LICENSE.txt` in the runtime. The runtime also holds Tcl/Tk 9
   (`lib/libtcl9*`, Tcl/Tk licence, BSD style) from the same build.
-- Packages: `requirements-worker-macos-arm64-py312.lock` (SHA-256 `15a606ef0d0c25fc6e6f9011ed49d8be10e9cd483f75e32458b99a423d81a8f2`) and
-  `vessel_reconstruction-0.4.0-py3-none-any.whl` built from commit `5de964a0ce11`.
+- Packages: `requirements-worker-macos-arm64-py312.lock` (SHA-256 `83d0929f623823f8f31eda9d7047f0aa46b78f759f60484af18eb106478cda05`) and
+  `vessel_reconstruction-0.4.0-py3-none-any.whl` built from commit `5638ad57e0e1`.
 
 The column "Vendored native libraries" gives the number of libraries in the
 wheel's `.dylibs` folder and those whose usual upstream licence is GPL or LGPL
@@ -26,8 +26,8 @@ wheel's `.dylibs` folder and those whose usual upstream licence is GPL or LGPL
 | aiosignal | 1.4.0 | Apache 2.0 | - | - |
 | attrs | 26.1.0 | MIT | - | - |
 | cadquery | 2.7.0 | Apache Public License 2.0 | - | - |
-| cadquery-ocp | 7.8.1.1.post1 | Not declared | 75; copyleft by name: libTK* (LGPL-2.1 with OCCT exception), libfreeimage (GPL-2.0/GPL-3.0 or FreeImage Public License), libraw (LGPL-2.1 or CDDL-1.0) | Bindings for Open CASCADE Technology (libTK*), LGPL-2.1 with the OCCT exception; the metadata declares no licence. |
-| casadi | 3.7.2 | GNU Lesser General Public License v3 or later (LGPLv3+) | - | Copyleft terms: keep notices and meet the licence when distributing. |
+| cadquery-ocp | 7.8.1.1.post1 | Not declared | 75; copyleft by name: libTK* (LGPL-2.1 with OCCT exception), libfreeimage (GPL-2.0/GPL-3.0 or FreeImage Public License), libfreetype (FreeType licence or GPL-2.0), libraw (LGPL-2.1 or CDDL-1.0) | Bindings for Open CASCADE Technology (libTK*), LGPL-2.1 with the OCCT exception; the metadata declares no licence. LGPL libraries are dynamically linked; FreeImage is used under the FreeImage Public License and LibRaw under the LGPL option. |
+| casadi | 3.7.2 | GNU Lesser General Public License v3 or later (LGPLv3+) | - | Its own folder holds dynamically loaded libraries (not in .dylibs): CasADi (LGPL-3.0+), COIN-OR Ipopt, Cbc, Clp, Bonmin (EPL-2.0), MUMPS (CeCILL-C), fatrop and sleqp (LGPL-3.0), GCC runtime libraries (runtime exception). Each is a separate, replaceable file: keep notices and point to the sources. Copyleft terms: keep notices and meet the licence when distributing. |
 | contourpy | 1.3.3 | BSD 3-Clause License ... | - | - |
 | cycler | 0.12.1 | Copyright (c) 2015, matplotlib project ... | - | - |
 | ezdxf | 1.4.4 | MIT License | - | - |
@@ -40,19 +40,18 @@ wheel's `.dylibs` folder and those whose usual upstream licence is GPL or LGPL
 | msgpack | 1.2.3 | Apache-2.0 | - | - |
 | multidict | 6.9.1 | Apache License 2.0 | - | - |
 | multimethod | 1.12 | Copyright 2022 Aric Coady ... | - | - |
-| nlopt | 2.11.0 | MIT | - | - |
+| nlopt | 2.11.0 | MIT | - | The metadata says MIT, but _nlopt.so statically contains the LGPL-2.1+ Luksan routines, so the file is LGPL-2.1+ as a whole (dist-info LICENSE). It is a separate, replaceable extension module: keep notices and point to the source. |
 | numpy | 2.3.5 | Copyright (c) 2005-2025, NumPy Developers. ... | 1 | - |
-| opencv-python-headless | 4.14.0.94 | Apache 2.0 | 93; copyleft by name: libavcodec (LGPL-2.1+ (FFmpeg)), libavdevice (LGPL-2.1+ (FFmpeg)), libavfilter (LGPL-2.1+ (FFmpeg)), libavformat (LGPL-2.1+ (FFmpeg)), libavutil (LGPL-2.1+ (FFmpeg)), libbluray (LGPL-2.1+), libfribidi (LGPL-2.1+), libglib-2 (LGPL-2.1+), libgmp (LGPL-3.0+/GPL-2.0+), libgnutls (LGPL-2.1+), libhogweed (LGPL-3.0+/GPL-2.0+), libidn2 (LGPL-3.0+/GPL-2.0+), libintl (LGPL-2.1+), libmp3lame (LGPL-2.0+), libnettle (LGPL-3.0+/GPL-2.0+), libp11-kit (BSD-3-Clause), libpostproc (GPL-2.0+ (FFmpeg)), librubberband (GPL-2.0+), libswresample (LGPL-2.1+ (FFmpeg)), libswscale (LGPL-2.1+ (FFmpeg)), libtasn1 (LGPL-2.1+), libx264 (GPL-2.0+), libx265 (GPL-2.0+) | Vendors FFmpeg and codec libraries; see LICENSE-3RD-PARTY.txt in its dist-info. |
 | packaging | 26.3 | Apache-2.0 OR BSD-2-Clause | - | - |
 | path | 17.1.1 | MIT | - | - |
-| pillow | 13.0.0 | MIT-CMU | 18 | - |
+| pillow | 13.0.0 | MIT-CMU | 18; copyleft by name: libfreetype (FreeType licence or GPL-2.0) | - |
 | propcache | 0.5.2 | Apache-2.0 | - | - |
-| PyMuPDF | 1.26.7 | Dual Licensed - GNU AFFERO GPL 3.0 or Artifex Commercial License | - | AGPL-3.0 or Artifex commercial licence: distribution needs an owner decision. |
+| PyMuPDF | 1.26.7 | Dual Licensed - GNU AFFERO GPL 3.0 or Artifex Commercial License | - | Used under the Artifex commercial licence that MarinaChain bought (2026-11-09), not under the AGPL. |
 | pyparsing | 3.3.2 | MIT | - | - |
 | python-dateutil | 3.0.0 | Dual License | - | - |
 | PyYAML | 6.0.3 | MIT | - | - |
 | runtype | 0.5.3 | MIT | - | - |
-| scipy | 1.17.0 | Copyright (c) 2001-2002 Enthought, Inc. 2003, SciPy Developers. ... | 4; copyleft by name: libgcc_s (GPL-3.0+ with GCC runtime exception), libgfortran (GPL-3.0+ with GCC runtime exception), libquadmath (LGPL-2.1+) | - |
+| scipy | 1.17.0 | Copyright (c) 2001-2002 Enthought, Inc. 2003, SciPy Developers. ... | 4; copyleft by name: libgcc_s (GPL-3.0+ with GCC runtime exception), libgfortran (GPL-3.0+ with GCC runtime exception), libquadmath (LGPL-2.1+) | GCC runtime libraries: the GCC runtime exception applies; libquadmath is LGPL, dynamically linked. |
 | six | 1.17.0 | MIT | - | - |
 | trame | 3.13.2 | Apache License 2.0 | - | - |
 | trame-client | 3.13.6 | MIT | - | - |
@@ -64,8 +63,8 @@ wheel's `.dylibs` folder and those whose usual upstream licence is GPL or LGPL
 | typing_extensions | 4.16.0 | PSF-2.0 | - | - |
 | tzdata | 2026.5 | Apache-2.0 | - | - |
 | vessel-reconstruction | 0.4.0 | All rights reserved | - | - |
-| vtk | 9.3.1 | BSD | 208 | Scoped OSV exclusion for VTK 9.3.1 (GLTF loader); review before distribution. |
+| vtk | 9.3.1 | BSD | 208; copyleft by name: libvtkfreetype-9 (FreeType licence or GPL-2.0), libvtkgl2ps-9 (LGPL-2.0+ or GL2PS licence) | Required at run time (OCP links VTK). BSD-3-Clause; the bundled third-party libraries were reviewed (2026-11-09): permissive, or dual-licensed with a permissive option (gl2ps: GL2PS licence; FreeType: FreeType licence). Scoped OSV exclusion for the GLTF loader. |
 | wslink | 2.5.7 | BSD License | - | - |
 | yarl | 1.25.1 | Apache-2.0 | - | - |
 
-46 distributions.
+45 distributions.

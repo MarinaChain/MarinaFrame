@@ -32,7 +32,13 @@ KNOWN = {
                     'exception; the metadata declares no licence. LGPL libraries are '
                     'dynamically linked; FreeImage is used under the FreeImage Public '
                     'License and LibRaw under the LGPL option.',
-    'casadi': 'Dynamically linked libraries; the LGPL allows that with notices and relinking.',
+    'casadi': 'Its own folder holds dynamically loaded libraries (not in .dylibs): CasADi '
+              '(LGPL-3.0+), COIN-OR Ipopt, Cbc, Clp, Bonmin (EPL-2.0), MUMPS (CeCILL-C), '
+              'fatrop and sleqp (LGPL-3.0), GCC runtime libraries (runtime exception). Each '
+              'is a separate, replaceable file: keep notices and point to the sources.',
+    'nlopt': 'The metadata says MIT, but _nlopt.so statically contains the LGPL-2.1+ Luksan '
+             'routines, so the file is LGPL-2.1+ as a whole (dist-info LICENSE). It is a '
+             'separate, replaceable extension module: keep notices and point to the source.',
     'scipy': 'GCC runtime libraries: the GCC runtime exception applies; libquadmath is LGPL, '
              'dynamically linked.',
 }
@@ -55,6 +61,7 @@ COPYLEFT_LIBRARIES = {
     'libgcc_s': 'GPL-3.0+ with GCC runtime exception', 'libquadmath': 'LGPL-2.1+',
     'libTK': 'LGPL-2.1 with OCCT exception',
     'libvtkgl2ps': 'LGPL-2.0+ or GL2PS licence', 'libvtkfreetype': 'FreeType licence or GPL-2.0',
+    'libfreetype': 'FreeType licence or GPL-2.0',
 }
 
 

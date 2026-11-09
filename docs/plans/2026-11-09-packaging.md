@@ -27,7 +27,7 @@ embedded in the bundle.
 
 | Need | How the app finds it now | On a clean Mac |
 |---|---|---|
-| Worker Python (CadQuery 2.7, OCP 7.8, PyMuPDF, OpenCV, the `vessel_reconstruction` package) | `Settings.worker_python`. The default is `<repo>/.venv/bin/python`, where `<repo>` is **the build machine's checkout path, baked in at compile time** (`development_checkout()` uses `CARGO_MANIFEST_DIR`). | No default: the welcome check says the CAD worker is missing and the person must choose a Python. |
+| Worker Python (CadQuery 2.7, OCP 7.8, PyMuPDF, the `vessel_reconstruction` package; OpenCV was removed 2026-11-09) | `Settings.worker_python`. The default is `<repo>/.venv/bin/python`, where `<repo>` is **the build machine's checkout path, baked in at compile time** (`development_checkout()` uses `CARGO_MANIFEST_DIR`). | No default: the welcome check says the CAD worker is missing and the person must choose a Python. |
 | Worker source (`src/vessel_reconstruction`) | The repo `.venv` has an editable install (`__editable__.vessel_reconstruction-0.4.0.pth`) that points at the main checkout's `src/`. `MARINAFRAME_WORKER_SOURCE` can override it (`PYTHONPATH`). | Missing unless a venv with the package is installed. |
 | Size of that Python layer | `.venv` is 1.1 GB; the largest parts are `vtkmodules` 328 MB, `OCP` 253 MB, `casadi` 129 MB, `cv2` 120 MB, `scipy` 71 MB, `pymupdf` 54 MB. | — |
 | Model keys | Environment `OPENCODE_API_KEY*` or `~/.config/marinaframe/opencode-go-keys.txt` (mode 600). | Works when the person adds the key file. |
@@ -84,7 +84,7 @@ Resume at step 4 (an owner decision); nothing is distributed until steps 4 and 5
 
    | Item | Size |
    |---|---|
-   | Runtime (`build/worker-runtime/worker`) | 1.2 GB, 13,799 files, 903 `.so`/`.dylib` (VTK 329 MB, OCP 254 MB, CasADi 129 MB, OpenCV 120 MB, SciPy 120 MB) |
+   | Runtime (`build/worker-runtime/worker`) | 1.2 GB, 13,799 files, 903 `.so`/`.dylib` (VTK 329 MB, OCP 254 MB, CasADi 129 MB, OpenCV 120 MB, SciPy 120 MB; OpenCV since removed) |
    | `MarinaFrame.app` with the runtime | 1.22 GiB |
    | `MarinaFrame_0.5.0_aarch64.dmg` | 360 MiB |
 
@@ -117,12 +117,22 @@ Resume at step 4 (an owner decision); nothing is distributed until steps 4 and 5
    On a fresh checkout, stage `app/ui-release` (`cargo check -p marinaframe-app`) before the
    first `npm run build`: the Tauri CLI looks for `frontendDist` before `build.rs` runs. Intake
    was not run through the app UI (no screen access in this session).
-4. **Licence decision before distribution.** PyMuPDF is AGPL-3.0 or commercial
-   (`docs/DEPENDENCIES_AND_RIGHTS.md`); bundling it is distribution. The VTK scoped exclusion
-   also applies. The macOS OpenCV wheel vendors FFmpeg with GPL codecs (`libx264`, `libx265`,
-   `libpostproc`). `docs/WORKER_RUNTIME_LICENCES.md` lists every bundled package and its
-   vendored native libraries. Owner decision needed before the runtime ships outside the
-   company.
+4. **Licences (done 2026-11-09).** PyMuPDF: commercial licence bought. OpenCV removed from
+   the runtime: every macOS arm64 wheel vendors GPL codecs, and the worker's three OpenCV
+   operations now use SciPy (`raster_morphology.py`) with identical results (random images
+   and the 24 `work/factory-3view` drawings). VTK stays (OCP links it); BSD-3 with permissive
+   or permissive-option third-party libraries. NLopt's `_nlopt.so` is LGPL-2.1+ despite its
+   MIT metadata. Details and the handling of each LGPL item:
+   `docs/DEPENDENCIES_AND_RIGHTS.md` ("Worker runtime licence review");
+   `docs/WORKER_RUNTIME_LICENCES.md` lists every bundled package. Remaining: write the
+   third-party notices file for the app before the first distribution.
+
+   Rebuilt runtime without OpenCV (2026-11-09): 1.1 GB, 809 `.so`/`.dylib`, 44 wheels plus the
+   package; the build fails if `cv2` is importable. In the same clean environment:
+   `pytest -m "not cad"` (without `tests/test_rules.py`): 921 passed, 37 skipped (the OpenCV
+   comparison tests, `PlanRaster` tests and benchmark-factory modules skip without OpenCV);
+   `pytest -m cad`: 26 passed (the 27th lives in a skipped factory benchmark module). The
+   release-app run was not repeated.
 5. **Signing and notarization** (owner decision; not done here). Without a Developer ID, a
    downloaded app is blocked by Gatekeeper; testers must use Open from the context menu or
    remove the quarantine attribute. Notarization also needs the hardened runtime and
