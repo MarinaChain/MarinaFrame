@@ -369,6 +369,30 @@ merge, metrics, decision rule; R0 is not run again, its round-5 result is 0 cell
   the integration option for the hull path is written in this plan; the controller does not
   change in this round.
 
+**Amendment 2026-11-09 (founder addition, committed before any Crouton call on Balclutha):**
+also test Crouton Alpha Free on OpenCode Go (model id `crouton-alpha-free` in the Go model list;
+the Go list has no Claude Sonnet 5.5 or Opus 5.5 either, only `claude-haiku-5-5`). Endpoint and
+key handling as DeepSeek in round 5 (chat completions, `x-opencode-session`), key 1 only.
+
+Image probe (synthetic, same design): the usage reports 28 prompt tokens with or without an image,
+so token cost cannot set the size; readability does. `detail` has no effect.
+
+| Square PNG | 8 / 12 / 16 px text read of 12 |
+|---:|---|
+| 1,024 | 12 / 12 / 12 |
+| 2,048 | 11 / 12 / 12 (10 with `original`) |
+| 3,072 | 5 / 11 / 12 |
+| 4,096 | 1 / 9 / 10 |
+| 5,120 | 0 / 0 / 0 to 9 |
+
+Effective resolution about 2,048 px, so Crouton uses the **round-5 layout unchanged** (2048 x
+1024 px, inner and outer tile per side and waterline, 32 tiles, tile pairs reported). Request:
+`max_tokens` 32,000, temperature 0.2, at most 3 turns, 3 repeats, 4 tiles in parallel (as round
+5). Reasoning: the model reasons internally and reports no reasoning tokens; the `thinking` and
+`reasoning` objects are refused (HTTP 400); `reasoning_effort: "high"` is accepted and is sent
+(its high-quality setting; no measurable change on a probe). Cost: free model (the Go usage
+reports cost 0). Metrics, decision rule and report as above.
+
 ### 3.6 Effort, checks, resume
 
 Effort: 1-2 weeks (reader, executor change, scoring, Gunnerus run; then raster path and a
