@@ -38,6 +38,10 @@ jobs:
           python -m pip install --no-build-isolation --no-deps -e .
       - name: Configure real workers
         run: echo "MARINAFRAME_TEST_PYTHON=$(command -v python)" >> "$GITHUB_ENV"
+      # Install the pinned toolchain in its own step. Letting the first cargo call
+      # install it failed on macOS runners (conflict with the preinstalled cargo).
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt,clippy
       - name: Cache Rust dependencies and build outputs
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
@@ -180,6 +184,10 @@ jobs:
           python -m pip install --no-build-isolation --no-deps -e .
       - name: Configure real workers
         run: echo "MARINAFRAME_TEST_PYTHON=$(command -v python)" >> "$GITHUB_ENV"
+      # Install the pinned toolchain in its own step. Letting the first cargo call
+      # install it failed on macOS runners (conflict with the preinstalled cargo).
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal
       - name: Cache Rust dependencies and build outputs
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
@@ -213,6 +221,10 @@ jobs:
           python -m pip install --no-build-isolation --no-deps -e .
       - name: Configure real workers
         run: echo "MARINAFRAME_TEST_PYTHON=$(command -v python)" >> "$GITHUB_ENV"
+      # Install the pinned toolchain in its own step. Letting the first cargo call
+      # install it failed on macOS runners (conflict with the preinstalled cargo).
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal
       - name: Cache Rust dependencies and build outputs
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
@@ -259,6 +271,10 @@ jobs:
           python -m pip install --no-build-isolation --no-deps -e .
       - name: Configure real workers
         run: echo "MARINAFRAME_TEST_PYTHON=$(command -v python)" >> "$GITHUB_ENV"
+      # Install the pinned toolchain in its own step. Letting the first cargo call
+      # install it failed on macOS runners (conflict with the preinstalled cargo).
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal
       - name: Cache Rust dependencies and build outputs
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
@@ -314,6 +330,10 @@ jobs:
           python -m pytest -q -p no:cacheprovider tests/test_runtime.py
           python -m pytest -q -p no:cacheprovider tests/test_ship_cad.py -k sandbox
           python -m pytest -q -p no:cacheprovider tests/test_part_revise.py::test_revise_from_the_command_line_with_a_scripted_model
+      # Install the pinned toolchain in its own step. Letting the first cargo call
+      # install it failed on macOS runners (conflict with the preinstalled cargo).
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal
       - name: Cache Rust dependencies and build outputs
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
