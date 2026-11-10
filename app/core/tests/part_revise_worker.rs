@@ -1,7 +1,10 @@
 //! Re-run one whole-vessel part from a mark through the real Python worker
 //! (`vessel_reconstruction.part_revise`) and the real ship-cad build, with a scripted model:
 //! no model request is made. Then undo, re-run again and keep.
-//! Needs `MARINAFRAME_TEST_PYTHON` and macOS (the ship-cad sandbox); it skips itself otherwise.
+//! Needs `MARINAFRAME_TEST_PYTHON` and macOS (the ship-cad sandbox).
+//! Local runs may omit the worker Python; CI requires it. Other platforms skip.
+mod support;
+
 use marinaframe_app_core::actions::ActionRegistry;
 use marinaframe_app_core::intake::Worker;
 use marinaframe_app_core::part_revise::{self, Model, REVISE_TIMEOUT};
@@ -70,8 +73,7 @@ fn reply(half_breadth: f64) -> String {
 
 #[test]
 fn re_run_a_marked_part_then_undo_and_keep() {
-    let Ok(python) = std::env::var("MARINAFRAME_TEST_PYTHON") else {
-        eprintln!("MARINAFRAME_TEST_PYTHON not set; skipping");
+    let Some(python) = support::worker_python() else {
         return;
     };
     if !cfg!(target_os = "macos") {

@@ -1,7 +1,9 @@
 //! End to end on a real task: start a deterministic run through the backend, read
 //! the live view, pick another line, and check dismissed notices.
 //! Needs `MARINAFRAME_TEST_PYTHON` (a Python with the worker dependencies). The
-//! test skips itself when the variable is missing.
+//! test skips locally when the variable is missing; CI requires it.
+mod support;
+
 use marinaframe_app_core::types::*;
 use marinaframe_app_core::{AppPaths, Backend};
 use std::path::{Path, PathBuf};
@@ -35,8 +37,7 @@ fn wait_until_idle(backend: &Backend, task: &str) -> TaskView {
 #[test]
 #[ignore = "real CAD (slow): run with make test-full"]
 fn run_read_choose_and_dismiss() {
-    let Ok(python) = std::env::var("MARINAFRAME_TEST_PYTHON") else {
-        eprintln!("MARINAFRAME_TEST_PYTHON not set; skipping");
+    let Some(python) = support::worker_python() else {
         return;
     };
     let repo = repo_root();

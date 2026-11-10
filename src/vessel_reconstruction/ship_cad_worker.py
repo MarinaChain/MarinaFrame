@@ -33,7 +33,13 @@ def sandbox_profile(task: Path, runtime_paths: list[Path], executable: Path | No
         raise ValueError('runtime access is too broad')
     executable = Path(executable or sys.executable)
     # A virtualenv python is a symlink; exec needs both the link and its target.
-    executables = sorted({str(executable.absolute()), str(executable.resolve())})
+    executables = {str(executable.absolute()), str(executable.resolve())}
+    # A python.org framework build's bin/python3.x is a launcher that execs the
+    # real interpreter inside the framework's Python.app. Allow only that binary.
+    framework_python = executable.resolve().parent.parent / 'Resources/Python.app/Contents/MacOS/Python'
+    if framework_python.is_file():
+        executables.add(str(framework_python))
+    executables = sorted(executables)
     execs = ' '.join(f'(literal {json.dumps(e)})' for e in executables)
     reads = '\n'.join(f'(allow file-read* (subpath {quoted(p)}))' for p in paths)
     # Path lookup needs the metadata of each parent directory, not their contents.

@@ -1,6 +1,8 @@
 //! `export_run` through the real Python exports worker, on the trimmed real
 //! fixture `tests/fixtures/exports/shipd-1-00679-L0` (no CAD files).
-//! Needs `MARINAFRAME_TEST_PYTHON`; the test skips itself when it is missing.
+//! Needs `MARINAFRAME_TEST_PYTHON`; local runs skip when it is missing; CI requires it.
+mod support;
+
 use marinaframe_app_core::export::{self, EXPORT_TIMEOUT};
 use marinaframe_app_core::intake::Worker;
 use std::path::{Path, PathBuf};
@@ -27,8 +29,7 @@ fn copy_tree(from: &Path, to: &Path) {
 
 #[test]
 fn export_a_draft_revision_with_the_real_worker() {
-    let Ok(python) = std::env::var("MARINAFRAME_TEST_PYTHON") else {
-        eprintln!("MARINAFRAME_TEST_PYTHON not set; skipping");
+    let Some(python) = support::worker_python() else {
         return;
     };
     let root = repo_root();

@@ -261,6 +261,30 @@ def test_sandbox_profile_denies_network_and_external_files(tmp_path):
     assert str(tmp_path) in profile
 
 
+def test_sandbox_profile_allows_only_the_framework_interpreter_behind_a_launcher(tmp_path):
+    from vessel_reconstruction.ship_cad_worker import sandbox_profile
+
+    version = tmp_path / 'Python.framework/Versions/3.12'
+    launcher = version / 'bin/python3.12'
+    interpreter = version / 'Resources/Python.app/Contents/MacOS/Python'
+    for binary in (launcher, interpreter):
+        binary.parent.mkdir(parents=True)
+        binary.write_text('')
+    task = tmp_path / 'task'
+    task.mkdir()
+
+    profile = sandbox_profile(task, [version], executable=launcher)
+    exec_rule = next(line for line in profile.splitlines() if line.startswith('(allow process-exec'))
+
+    assert f'(literal "{launcher.resolve()}")' in exec_rule
+    assert f'(literal "{interpreter.resolve()}")' in exec_rule
+    assert exec_rule.count('(literal') == 2  # nothing else in the framework may run
+
+    interpreter.unlink()
+    plain = sandbox_profile(task, [version], executable=launcher)
+    assert 'Python.app' not in plain
+
+
 @pytest.mark.cad
 def test_sandbox_worker_cannot_write_host_files_or_exec_other_programs(tmp_path):
     import subprocess
