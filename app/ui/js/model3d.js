@@ -11,6 +11,7 @@ import { createSectionGrowth } from './growth3d.js';
 import { createAnimation } from './animation.js';
 import { placeLabels, steelLegend, steelToken, tankLegend, tankToken } from './tanks.js';
 import { configureOrbit } from './orbit3d.js';
+import { CAPTURE_SIZE, captureFraming, pngBase64 } from './capture3d.js';
 import { createFairness, nextFairnessMode, useSmoothNormals } from './fairness3d.js';
 import { createLighting, createPaintMaterial, createSteelMaterial, createTankMaterial, setUpRenderer, stylePaint } from './look3d.js';
 import { bootTopBand, fitDistance, frameLabel, frameAt, hullReference, nearestFrameX, pointReadout, STANDARD_VIEWS, viewOfKey } from './reference3d.js';
@@ -52,6 +53,9 @@ const GHOST_OPACITY = 0.07;
 const TANK_EDGE_SHADE = 0.55;
 /** Size of a tank name label (CSS px) for the overlap test; long names are cut in CSS. */
 const LABEL_BOX = { charWidth: 6.4, padding: 22, height: 20, maxWidth: 180 };
+
+/** The background of a captured picture. */
+const WHITE = new THREE.Color(0xffffff);
 
 /** Shared black, for emissive colours that must not allocate on every restyle. */
 const BLACK = new THREE.Color(0x000000);
@@ -115,7 +119,7 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
     renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true });
   } catch {
     showEmpty('3D view not available', 'This computer did not allow a WebGL view.');
-    return { setModel() {}, setSelected() {}, partList: () => [], hidePart() {}, isolatePart() {}, showAllParts() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, showsWholeVessel: false, hasTanks: false };
+    return { setModel() {}, captureImage: () => null, setSelected() {}, partList: () => [], hidePart() {}, isolatePart() {}, showAllParts() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, showsWholeVessel: false, hasTanks: false };
   }
   /** Pixel ratio cap: a 3x screen draws at 2x, which looks the same and costs 2.25 times less. */
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
@@ -1290,6 +1294,58 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
   }
 
 
+  /**
+   * Draw the view as it is now into a fixed-size picture with a white background and no page
+   * controls or labels, and return it as base64 PNG text; null when there is no model to show.
+   * The section planes, guess bands and the selection box stay out of the picture; the grid and
+   * the frame numbers too. The cut, the fairness view and the camera stay as they are. The
+   * visible view is drawn again at once, so it does not flicker.
+   */
+  function captureImage({ width, height } = CAPTURE_SIZE) {
+    if (!hull && !wholeVessel && !frameBox) return null;
+    const paneSize = renderer.getSize(new THREE.Vector2());
+    const pixelRatio = renderer.getPixelRatio();
+    const savedOverlays = overlays.shown;
+    const savedPerspective = { aspect: perspective.aspect, fov: perspective.fov };
+    const savedOrtho = { left: orthographic.left, right: orthographic.right, top: orthographic.top, bottom: orthographic.bottom };
+    const widen = captureFraming(perspective.aspect, width / height);
+    const loose = [...planes.values(), ...guessBands, highlight].filter(Boolean);
+    const looseVisible = loose.map((object) => object.visible);
+    let dataUrl = null;
+    try {
+      overlays.set({ grid: false, waterline: false, frames: false });
+      for (const object of loose) object.visible = false;
+      renderer.setPixelRatio(1);
+      renderer.setSize(width, height, false);
+      perspective.aspect = width / height;
+      perspective.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(savedPerspective.fov / 2)) * widen));
+      perspective.updateProjectionMatrix();
+      orthographic.top = savedOrtho.top * widen;
+      orthographic.bottom = -orthographic.top;
+      orthographic.right = orthographic.top * perspective.aspect;
+      orthographic.left = -orthographic.right;
+      orthographic.updateProjectionMatrix();
+      scene.background = WHITE;
+      lighting.setTheme(false);
+      renderer.render(scene, camera);
+      // Read in the same task as the draw: the drawing buffer is cleared after the frame is shown.
+      dataUrl = renderer.domElement.toDataURL('image/png');
+    } finally {
+      overlays.set(savedOverlays);
+      loose.forEach((object, index) => { object.visible = looseVisible[index]; });
+      renderer.setPixelRatio(pixelRatio);
+      renderer.setSize(paneSize.x, paneSize.y, false);
+      perspective.aspect = savedPerspective.aspect;
+      perspective.fov = savedPerspective.fov;
+      perspective.updateProjectionMatrix();
+      Object.assign(orthographic, savedOrtho);
+      orthographic.updateProjectionMatrix();
+      applyColours();
+      draw();
+    }
+    return pngBase64(dataUrl);
+  }
+
   return {
     /**
      * Show a model. `buffer` is the STL as an ArrayBuffer, or null for the empty state.
@@ -1575,6 +1631,7 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
       requestRender();
     },
     resetView: () => resetView({ animate: true }),
+    captureImage,
     /**
      * HOOK(M3 live): section curves of a build, coloured and patterned by source label.
      * `mode`: "grow" (slide in station by station, then the skin fades in between them),

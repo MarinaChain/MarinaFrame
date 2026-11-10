@@ -280,10 +280,15 @@ limits are in [PACKAGE_FORMAT.md](PACKAGE_FORMAT.md).
 
 In the app (`app/core/src/export.rs`, `js/export.js`):
 
-- `export_run(task, revision, outputs)` with `outputs` a subset of `step`, `iges`, `3dm`, `stl`, `offsets`,
+- `export_run(task, revision, outputs, viewer_image?)` with `outputs` a subset of `step`, `iges`, `3dm`, `stl`, `offsets`,
   `hydrostatics`, `report`, `tanks`, `structure`, `package`. The backend runs the command below (arguments, no shell;
   at most 300 s, then the worker is stopped: `export_timeout`) into a staging folder, moves the
   chosen files and the manifest into `<task>/exports/<rNNNN>/` and removes the staging folder.
+  `viewer_image` (optional) is the 3D view as base64 PNG (1600 x 1000, white background, no controls; `captureImage`
+  in `js/model3d.js`). The backend writes it as `viewer_capture.png` into the staging folder before the worker runs;
+  the report puts it on page 1 when the file is there and readable, and is complete without it. It is an input: it
+  is not listed, kept or packed. The page sends it only when `report` or `package` is chosen and the 3D view shows
+  this revision.
   Refused while an action runs on the task. Returns `{ folder, revision, files: [{ kind, file,
   path, bytes }], not_built, stamp, engineering_approved: false }`; `not_built` lists chosen
   outputs the build does not have (`step`, `iges`, `3dm`, `stl`). Worker refusal: `export_worker` with the

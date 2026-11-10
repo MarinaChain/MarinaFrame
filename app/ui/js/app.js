@@ -2347,7 +2347,12 @@ for (const item of document.querySelectorAll('.rail-item')) {
   item.addEventListener('click', () => navigate(item.dataset.route));
 }
 $('toast-close').addEventListener('click', () => { $('toast').hidden = true; });
-const exporter = createExport({ host: $('vessel-page-export'), invoke });
+// The report's hero picture is the 3D view as it is now, but only while the view shows this run's model.
+const exporter = createExport({
+  host: $('vessel-page-export'),
+  invoke,
+  captureView: (task, revision) => (state.task === task && state.modelKey?.startsWith(`${task}|${revision}|`) ? model.captureImage() : null),
+});
 // Parts tab (js/parts.js): whole-vessel components with per-part review.
 /** After a part review or a sign-off: Home cards and the open run read the change. Passes the result on. */
 function afterPartsChange(result) {

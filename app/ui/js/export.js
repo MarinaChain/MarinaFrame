@@ -52,9 +52,10 @@ export function canExport(view) {
 
 /**
  * The Export page. `host` is the element it fills; `invoke` is api.js `invoke`.
- * Errors show inside the page.
+ * `captureView(task, revision)` gives the 3D view as base64 PNG text (or null) for the report's
+ * hero picture. Errors show inside the page.
  */
-export function createExport({ host, invoke }) {
+export function createExport({ host, invoke, captureView = () => null }) {
   let task = null;
   let view = null;
   let revision = null;
@@ -181,6 +182,17 @@ export function createExport({ host, invoke }) {
     notBuilt = new Set(result.not_built || []);
   }
 
+  /** The 3D view as a picture for the report (also inside the package), or null when none is wanted or shown. */
+  function viewerPicture(outputs) {
+    if (!outputs.includes('report') && !outputs.includes('package')) return null;
+    try {
+      return captureView(task, revision);
+    } catch {
+      // The report is complete without the picture.
+      return null;
+    }
+  }
+
   async function runExport() {
     if (busy || !outputsOf(view, files).some((o) => chosen.has(o.kind))) return;
     busy = true;
@@ -188,7 +200,7 @@ export function createExport({ host, invoke }) {
     render();
     try {
       const outputs = outputsOf(view, files).map((o) => o.kind).filter((kind) => chosen.has(kind));
-      apply(await invoke('export_run', { task, revision, outputs }));
+      apply(await invoke('export_run', { task, revision, outputs, viewer_image: viewerPicture(outputs) }));
     } catch (failure) {
       error = failure?.message || 'The export did not finish.';
     } finally {

@@ -612,3 +612,62 @@ def test_report_has_an_accuracy_and_limits_section_without_approval_claims(tmp_p
     assert "engineering_approved stays false" in flat
     section = flat.split("Accuracy and limits", 1)[1].split("Station overlay", 1)[0].lower()
     assert "verified" not in section and "approved for" not in section
+
+
+# ---------------------------------------------------------------------------
+# Viewer capture: the app's picture of its 3D view is the hero image on page 1 of the report
+
+
+def page_one_images(path: Path) -> int:
+    """Images drawn on page 1 (get_images would also list the images of other pages: the PDF shares them)."""
+    fitz = pytest.importorskip("fitz")
+    with fitz.open(path) as document:
+        return len(document[0].get_image_info())
+
+
+def report_with_capture(tmp_path, capture: bytes | None) -> Path:
+    """Export the synthetic box; the app's capture file is in the export folder first, when given."""
+    task = make_box_task(tmp_path)
+    out = tmp_path / "out"
+    out.mkdir()
+    if capture is not None:
+        (out / "viewer_capture.png").write_bytes(capture)
+    export_draft(task, "r0001", out)
+    return next(out.glob("*_report.pdf"))
+
+
+def png_bytes(size=(1600, 1000), colour="white") -> bytes:
+    import io
+
+    buffer = io.BytesIO()
+    Image.new("RGB", size, colour).save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def test_report_without_a_viewer_capture_has_no_picture_on_page_one(tmp_path):
+    report = report_with_capture(tmp_path, None)
+    assert page_one_images(report) == 0
+    assert "3D view as shown in the app" not in pdf_text(report)
+
+
+def test_report_puts_the_viewer_capture_on_page_one(tmp_path):
+    report = report_with_capture(tmp_path, png_bytes())
+    assert page_one_images(report) == 1
+    text = " ".join(pdf_text(report).split())
+    assert "3D view as shown in the app when this report was exported" in text
+    # The rest of page 1 and the report are unchanged: the summary and the footer still print.
+    assert FOOTER in text and "Particulars (built model)" in text and "Station overlay" in text
+
+
+def test_a_capture_that_is_not_an_image_leaves_the_report_complete(tmp_path):
+    report = report_with_capture(tmp_path, b"this is not a png")
+    assert page_one_images(report) == 0
+    assert "Particulars (built model)" in pdf_text(report)
+
+
+def test_the_capture_is_not_listed_in_the_package(tmp_path):
+    report = report_with_capture(tmp_path, png_bytes())
+    manifest = json.loads(next(report.parent.glob("*_manifest.json")).read_text())
+    assert all(entry["file"] != "viewer_capture.png" for entry in manifest["files"])
+    with zipfile.ZipFile(next(report.parent.glob("*_package.zip"))) as archive:
+        assert "viewer_capture.png" not in archive.namelist()

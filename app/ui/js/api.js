@@ -1027,9 +1027,11 @@ function mockTransport() {
       requireTask(data, task);
       return mockExportResult(task, revision);
     },
-    async export_run(data, { task, revision, outputs }) {
+    async export_run(data, { task, revision, outputs, viewer_image: viewerImage = null }) {
       const view = requireTask(data, task);
       if (!outputs?.length) throw new BackendError('export_outputs', 'Choose at least one export.');
+      // The preview writes no files; it keeps the last 3D view picture for a local check (the app writes it into the export).
+      globalThis.mockLastViewerImage = viewerImage;
       await pause(900);
       const folderRevision = mockRevision(revision);
       const stem = `${view.summary.name.split(',')[0].replace(/\W+/g, '_')}_${folderRevision}_DRAFT`;

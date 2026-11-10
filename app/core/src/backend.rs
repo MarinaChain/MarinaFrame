@@ -10,6 +10,7 @@ use crate::storage::{self, AppPaths};
 use crate::types::*;
 use crate::view::{self, ViewContext};
 use crate::{artifact, events, files, intake, model_keys, part_revise, parts, sample, signoff};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use marinaframe_control::util;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -276,23 +277,28 @@ impl Backend {
 
     /// Write the chosen exports of one revision into `<task>/exports/<rNNNN>/`.
     /// Refused while an action runs on the task, so the build cannot change meanwhile.
+    /// `viewer_image` is the picture of the 3D view as base64 PNG text; it becomes the hero image of
+    /// the report. Text that is not a PNG is ignored, so the export still works.
     pub fn export_run(
         &self,
         task: &str,
         revision: &str,
         outputs: &[String],
+        viewer_image: Option<&str>,
     ) -> AppResult<ExportResult> {
         let path = self.task_path(task)?;
         if self.registry.is_busy(&path) {
             return Err(AppError::from_code("action_in_progress"));
         }
         let settings = self.run_settings();
-        export::export_run(
+        let capture = viewer_image.and_then(|text| STANDARD.decode(text).ok());
+        export::export_run_with_capture(
             &path,
             &self.intake_worker(&settings),
             revision,
             outputs,
             export::EXPORT_TIMEOUT,
+            capture.as_deref(),
         )
     }
 

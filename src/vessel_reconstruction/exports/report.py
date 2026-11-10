@@ -1,6 +1,7 @@
 """PDF review report of a draft build.
 
-Page 1 is the summary: vessel, revision, particulars, hydrostatics, the source
+Page 1 is the summary: vessel, revision, the picture of the 3D view when the app
+supplied one, particulars, hydrostatics, the source
 label and ink fit of every section, open guesses and warnings. Long section
 lists continue on the next pages. Then one page per station overlay image
 (built cuts drawn on the source drawing). Every page carries the draft footer.
@@ -34,6 +35,17 @@ WRAP_COLUMNS = 132
 MAX_LISTED_ITEMS = 12
 # Longest side of an overlay image placed on a page, in pixels.
 MAX_IMAGE_SIDE_PX = 1800
+# The picture of the 3D view that the app writes into the export folder before it runs the
+# export (the viewer capture: a white background, no controls). The report uses it when it is
+# there and a readable image, and is complete without it.
+VIEWER_CAPTURE_FILE = "viewer_capture.png"
+# Height of that picture on page 1, in inches; the width follows its shape.
+HERO_HEIGHT_IN = 3.1
+# The picture is cropped to what is drawn in it (anything darker than this level), plus this share
+# of its longer side on each side, so the vessel fills the slot and not the white around it.
+HERO_BLANK_LEVEL = 250
+HERO_MARGIN = 0.04
+HERO_CAPTION = "3D view as shown in the app when this report was exported. Draft geometry."
 MONO = "DejaVu Sans Mono"
 
 # Plain words for the internal source labels (review workflow section 5).
@@ -53,6 +65,7 @@ class ReportFacts:
     capacity_rows: list[dict] | None = None  # capacity plan (tanks.capacity_plan), when tanks are given
     accuracy_facts: dict | None = None  # run facts for the accuracy summary (accuracy_summary.facts_from_build)
     booklet_check: BookletCheck | None = None
+    viewer_image: Path | None = None  # picture of the 3D view (VIEWER_CAPTURE_FILE), when the app wrote one
 
 
 def label_text(label: str) -> str:
@@ -139,6 +152,47 @@ def section_rows(build: DraftBuild) -> list[list[str]]:
     return rows
 
 
+def read_viewer_image(path: Path | None) -> np.ndarray | None:
+    """The viewer capture as RGB pixels, or None when there is none or it cannot be read."""
+    if path is None or not Path(path).is_file():
+        return None
+    try:
+        with Image.open(path) as image:
+            image = image.convert("RGB")
+            image.thumbnail((MAX_IMAGE_SIDE_PX, MAX_IMAGE_SIDE_PX))
+            return crop_to_drawing(np.asarray(image))
+    except (OSError, ValueError, Image.DecompressionBombError):
+        return None
+
+
+def crop_to_drawing(pixels: np.ndarray) -> np.ndarray:
+    """Cut the white border off a picture, keeping a small margin; an all-white picture stays as it is."""
+    drawn = (pixels < HERO_BLANK_LEVEL).any(axis=2)
+    rows, columns = np.flatnonzero(drawn.any(axis=1)), np.flatnonzero(drawn.any(axis=0))
+    if not rows.size:
+        return pixels
+    margin = int(HERO_MARGIN * max(pixels.shape[:2]))
+    top, bottom = max(rows[0] - margin, 0), min(rows[-1] + margin + 1, pixels.shape[0])
+    left, right = max(columns[0] - margin, 0), min(columns[-1] + margin + 1, pixels.shape[1])
+    return pixels[top:bottom, left:right]
+
+
+def write_hero_image(writer: PageWriter, pixels: np.ndarray) -> None:
+    """The picture of the 3D view, centred under the intro lines of page 1, with a one-line caption."""
+    height_px, width_px = pixels.shape[:2]
+    height = HERO_HEIGHT_IN / PAGE_SIZE_IN[1]
+    width = HERO_HEIGHT_IN * width_px / height_px / PAGE_SIZE_IN[0]
+    width = min(width, RIGHT - LEFT)
+    height = width * PAGE_SIZE_IN[0] / PAGE_SIZE_IN[1] * height_px / width_px
+    writer.y -= LINE_HEIGHT * 0.5
+    axes = writer.figure.add_axes([(1 - width) / 2, writer.y - height, width, height])
+    axes.imshow(pixels, interpolation="lanczos")
+    axes.set_axis_off()
+    writer.y -= height + LINE_HEIGHT * 0.3
+    writer.figure.text(0.5, writer.y, HERO_CAPTION, fontsize=6.5, color="#5a6372", va="top", ha="center")
+    writer.y -= LINE_HEIGHT * 1.5
+
+
 def write_summary(writer: PageWriter, facts: ReportFacts) -> None:
     build, result = facts.build, facts.build.result
     metrics = result.get("metrics") or {}
@@ -153,6 +207,9 @@ def write_summary(writer: PageWriter, facts: ReportFacts) -> None:
                 "the baseline (z = 0), y to starboard from the centreline.")
     writer.wrapped("This report traces where the geometry came from. It is not a class document; the naval "
                 "architect re-runs hydrostatics and stability in approved software.")
+    hero = read_viewer_image(facts.viewer_image)
+    if hero is not None:
+        write_hero_image(writer, hero)
 
     writer.heading("Particulars (built model)")
     writer.wrapped(f"Length {fmt(metrics.get('length_m'))} m    Beam {fmt(metrics.get('beam_m'))} m    "
