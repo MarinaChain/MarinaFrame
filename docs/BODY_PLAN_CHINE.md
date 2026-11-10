@@ -1147,3 +1147,15 @@ E. C. COLLIER sheet (HAER MD-77 sheet 2, protocol SHA-256 checked): `load_ink` g
 array, and `measure_side` gives identical readings on both halves (frozen vs product module). The COLLIER holdout
 script, now importing the frozen copy, reproduces the published result exactly: 7 of 31 point cells, RMS 0.912 m,
 3 wrong cells, for both arms. The three frozen files are byte-identical to the pinned product files.
+
+### Reader thresholds scaled by stroke width (code-review item 8, partial, 2026-11-11)
+
+Five fixed pixel distances in the crossings reader now scale with `factor = measured stroke width / 5 px`
+(the 1700 x 2300 synthetic reference): tracing band, minimum diagonal length, centreline exclusion,
+link tolerance and the search margin. Gap and minimum-run thresholds are not scaled yet.
+
+- Gunnerus lines plan (development sheet): factor 1.00, so readings are unchanged.
+- E. C. COLLIER (holdout, scored once, no tuning after): factor 2.00. The score is unchanged:
+  7 of 31 point cells, RMS 0.912 m, 3 wrong cells, the same as the frozen v1 reader.
+
+The change is a robustness fix for scans at other resolutions. It does not improve the COLLIER score.

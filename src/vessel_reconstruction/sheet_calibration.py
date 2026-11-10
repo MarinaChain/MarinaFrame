@@ -21,6 +21,7 @@ from fractions import Fraction
 import numpy as np
 
 from vessel_reconstruction import body_plan_reader as bpr
+from vessel_reconstruction import body_plan_crossings as bpc
 
 FEET_M = 0.3048
 # A straight grid line covers at least this share of the body-plan box along its length.
@@ -94,6 +95,7 @@ class Calibration:
     flags: list = field(default_factory=list)  # open problems: a person must look before use
     notes: list = field(default_factory=list)  # weaker sources and side remarks, not blocking
     engineering_approved: bool = False
+    resolution_factor: float | None = None
 
     def flag(self, name: str, message: str) -> None:
         self.flags.append(Flag(name, message[:400]))
@@ -447,6 +449,9 @@ def calibrate(ink: np.ndarray, reading, dpi: float | None = None) -> Calibration
         cal.flag('body_plan_box', 'the body plan was not located')
         return cal
     cal = Calibration(box=[int(v) for v in box])
+    cal.resolution_factor = bpc.sheet_resolution_factor(ink)
+    if cal.resolution_factor < 0.75:
+        cal.flag('low_resolution', f'Low resolution ({cal.resolution_factor:.2f} of reference); check the reading.')
     cal.sources['box'] = located.get('source', 'model:coarse box')
     verticals = straight_lines(ink, cal.box, 'v')
     horizontals = straight_lines(ink, cal.box, 'h')
@@ -577,7 +582,7 @@ def calibrate(ink: np.ndarray, reading, dpi: float | None = None) -> Calibration
     frame_lines = [line for line in verticals if line.fill >= VERTICAL_FRAME_FILL
                    and abs(line.position - centre) >= GRID_MIN_OFFSET_SHARE * (cal.box[2] - cal.box[0])]
     cal.max_offset_px = search_half_span(ink, cal, frame_lines)
-    cal.sources['max_offset_px'] = f'code:outermost station crossing + {MAX_OFFSET_MARGIN_PX} px'
+    cal.sources['max_offset_px'] = 'code:outermost station crossing + scaled margin'
     return cal
 
 
@@ -600,7 +605,9 @@ def search_half_span(ink: np.ndarray, cal: Calibration, frame_lines: list[Line] 
             for waterline, index in chain.nodes.items():
                 crossing = reading.stations[waterline][index]
                 outermost = max(outermost, crossing.offset_px(layout.centre_column, side.sign))
-    return int(min(limit, outermost + MAX_OFFSET_MARGIN_PX)) if outermost else limit
+    # Reference: 120 px margin at 5 px line width (1700 x 2300 scan).
+    margin = bpc.scaled_pixels(MAX_OFFSET_MARGIN_PX, bpc.sheet_resolution_factor(ink))
+    return int(min(limit, outermost + margin)) if outermost else limit
 
 
 def feet_inches(height_ft: float) -> str:

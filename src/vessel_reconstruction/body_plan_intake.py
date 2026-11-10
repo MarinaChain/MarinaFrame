@@ -134,7 +134,8 @@ def calibration_from_record(data: dict, scale: float = 1.0) -> sc.Calibration:
                          centre_column=scaled(data.get('centre_column')), baseline_row=scaled(data.get('baseline_row')),
                          pixels_per_ft=scaled(data.get('pixels_per_ft')), max_offset_px=scaled(data.get('max_offset_px')),
                          waterlines=waterlines, sides=sides, grid_rows=[r * scale for r in data.get('grid_rows') or []],
-                         sources=dict(data.get('sources') or {}), notes=list(data.get('notes') or []))
+                         sources=dict(data.get('sources') or {}), notes=list(data.get('notes') or []),
+                         resolution_factor=data.get('resolution_factor'))
     cal.flags = [sc.Flag(f['field'], f['message']) for f in data.get('flags') or []]
     return cal
 
@@ -175,7 +176,10 @@ def reader_anchors(sections: list[dict], anchors: list, record: dict | None) -> 
     if not record:
         return anchors, {'used': False, 'reason': 'no body-plan reading (setting off or no body plan)'}
     if not record.get('usable_for_build'):
-        return anchors, {'used': False, 'reason': record.get('reason', 'calibration not usable')}
+        warnings = [flag['message'] for flag in record.get('calibration', {}).get('flags', [])
+                    if flag.get('field') == 'low_resolution']
+        return anchors, {'used': False, 'reason': record.get('reason', 'calibration not usable'),
+                         'warnings': warnings}
     curves = {s['station']: s for s in record.get('stations', [])}
     # px per metre on the worker's page (a reduced copy of the read sheet, when it was too large)
     per_metre = record['calibration']['pixels_per_ft'] / sc.FEET_M * record.get('spec_page_scale', 1.0)
