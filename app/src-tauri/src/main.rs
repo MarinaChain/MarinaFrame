@@ -133,15 +133,20 @@ async fn start_intake_run(
 }
 
 /// Write the chosen exports (`step`, `stl`, `offsets`, `hydrostatics`, `report`,
-/// `package`) of one revision into the run's `exports/<rNNNN>/` folder.
+/// `package`) of one revision into the run's `exports/<rNNNN>/` folder. `viewer_image` is
+/// the picture of the 3D view (base64 PNG), the hero image of the report; it is optional.
 #[tauri::command(rename_all = "snake_case")]
 async fn export_run(
     backend: Shared<'_>,
     task: String,
     revision: String,
     outputs: Vec<String>,
+    viewer_image: Option<String>,
 ) -> Result<ExportResult, AppError> {
-    run(backend, move |b| b.export_run(&task, &revision, &outputs)).await
+    run(backend, move |b| {
+        b.export_run(&task, &revision, &outputs, viewer_image.as_deref())
+    })
+    .await
 }
 
 /// Files already exported for one revision.

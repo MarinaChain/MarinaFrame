@@ -348,3 +348,85 @@ fn tanks_and_structure_without_their_inputs_are_not_built() {
     assert_eq!(result.not_built, ["tanks", "structure"]);
     assert_eq!(kinds(&result), ["offsets", MANIFEST]);
 }
+
+/// A worker that writes a report whose text says whether the app's 3D view picture was in the
+/// folder it was given, and copies that picture next to it so a test can see its bytes.
+fn capture_aware_script() -> String {
+    full_export_script().replace(
+        &format!("printf 'abc' > \"$out/{STEM}_report.pdf\""),
+        &format!(
+            "if [ -f \"$out/{VIEWER_CAPTURE_FILE}\" ]; then cp \"$out/{VIEWER_CAPTURE_FILE}\" \"$out/{STEM}_report.pdf\"; \
+             else printf 'no-picture' > \"$out/{STEM}_report.pdf\"; fi"
+        ),
+    )
+}
+
+fn report_bytes(result: &ExportResult) -> Vec<u8> {
+    let report = result.files.iter().find(|f| f.kind == "report").unwrap();
+    std::fs::read(&report.path).unwrap()
+}
+
+fn png_like() -> Vec<u8> {
+    let mut bytes = PNG_SIGNATURE.to_vec();
+    bytes.extend_from_slice(b"picture");
+    bytes
+}
+
+fn run_with_capture(capture: Option<&[u8]>) -> (tempfile::TempDir, ExportResult) {
+    let tmp = tempfile::tempdir().unwrap();
+    let python = fake_worker(tmp.path(), &capture_aware_script());
+    let python = python.to_string_lossy();
+    let worker = Worker {
+        python: &python,
+        source: None,
+    };
+    let result = export_run_with_capture(
+        tmp.path(),
+        &worker,
+        "r3",
+        &["report".into()],
+        EXPORT_TIMEOUT,
+        capture,
+    )
+    .unwrap();
+    (tmp, result)
+}
+
+#[test]
+fn the_3d_view_picture_is_in_the_worker_folder_before_the_worker_runs() {
+    let picture = png_like();
+    let (_tmp, result) = run_with_capture(Some(&picture));
+    assert_eq!(report_bytes(&result), picture);
+}
+
+#[test]
+fn the_picture_is_an_input_and_is_not_listed_or_kept() {
+    let (tmp, result) = run_with_capture(Some(&png_like()));
+    assert_eq!(kinds(&result), ["report", MANIFEST]);
+    assert!(!Path::new(&result.folder).join(VIEWER_CAPTURE_FILE).exists());
+    let exports = tmp.path().join(EXPORTS_FOLDER);
+    let left: Vec<_> = std::fs::read_dir(&exports)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(left, ["r0003"], "no staging folder is left behind");
+}
+
+#[test]
+fn without_a_picture_the_export_works_as_before() {
+    let (_tmp, result) = run_with_capture(None);
+    assert_eq!(report_bytes(&result), b"no-picture");
+    assert_eq!(kinds(&result), ["report", MANIFEST]);
+}
+
+#[test]
+fn bytes_that_are_not_a_png_or_are_too_large_are_left_out() {
+    let (_tmp, result) = run_with_capture(Some(b"not a picture"));
+    assert_eq!(report_bytes(&result), b"no-picture");
+    let mut too_large = PNG_SIGNATURE.to_vec();
+    too_large.resize(VIEWER_CAPTURE_MAX_BYTES + 1, 0);
+    assert!(!is_viewer_capture(&too_large));
+    let (_tmp, result) = run_with_capture(Some(&too_large));
+    assert_eq!(report_bytes(&result), b"no-picture");
+}

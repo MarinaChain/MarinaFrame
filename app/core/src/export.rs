@@ -41,6 +41,14 @@ pub const STAMP: &str = "Draft hull model from MarinaFrame. Not approved for con
 /// Longest time one export may take. The PDF report and the mesh hydrostatics of a
 /// large STL take tens of seconds; five minutes leaves a wide margin.
 pub const EXPORT_TIMEOUT: Duration = Duration::from_secs(300);
+/// File the app writes into the export folder before the worker runs: a picture of its 3D view
+/// for page 1 of the PDF report (the worker reads it when it is there). It is an input, not an output:
+/// it is not listed, moved or packed.
+pub const VIEWER_CAPTURE_FILE: &str = "viewer_capture.png";
+/// The first bytes of every PNG file.
+const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+/// Largest picture of the 3D view that is accepted (bytes). A 1600 x 1000 picture is well under 1 MB.
+pub const VIEWER_CAPTURE_MAX_BYTES: usize = 12 * 1024 * 1024;
 /// How often the wait loop checks whether the worker has finished.
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 /// Most digits of a revision number (`r` + digits).
@@ -186,11 +194,33 @@ pub fn export_run(
     outputs: &[String],
     timeout: Duration,
 ) -> AppResult<ExportResult> {
+    export_run_with_capture(task, worker, revision, outputs, timeout, None)
+}
+
+/// True for bytes that look like a PNG file of an accepted size.
+pub fn is_viewer_capture(bytes: &[u8]) -> bool {
+    bytes.len() <= VIEWER_CAPTURE_MAX_BYTES && bytes.starts_with(&PNG_SIGNATURE)
+}
+
+/// As [`export_run`], with the picture of the app's 3D view (PNG bytes). The picture goes into the
+/// staging folder before the worker runs, which puts it on page 1 of the report. Bytes that are not
+/// a PNG, or are too large, are left out: the report is complete without the picture.
+pub fn export_run_with_capture(
+    task: &Path,
+    worker: &Worker,
+    revision: &str,
+    outputs: &[String],
+    timeout: Duration,
+    viewer_capture: Option<&[u8]>,
+) -> AppResult<ExportResult> {
     let chosen = check_outputs(outputs)?;
     let revision = normalise_revision(revision)?;
     let exports = task.join(EXPORTS_FOLDER);
     let staging = exports.join(format!(".staging-{}-{}", revision, util::now_ms()));
     std::fs::create_dir_all(&staging).map_err(|_| write_error())?;
+    if let Some(bytes) = viewer_capture.filter(|bytes| is_viewer_capture(bytes)) {
+        std::fs::write(staging.join(VIEWER_CAPTURE_FILE), bytes).map_err(|_| write_error())?;
+    }
     let outcome = run_worker(worker, task, &revision, &staging, timeout).and_then(|manifest| {
         keep_chosen(
             &staging,

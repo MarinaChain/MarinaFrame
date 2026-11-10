@@ -8,6 +8,7 @@
 
 import * as THREE from '../vendor/three/three.module.min.js';
 import { RoomEnvironment } from '../vendor/three/RoomEnvironment.js';
+import { patchFairnessShader } from './fairness3d.js';
 
 /** Blur of the studio room for the image-based light (0 sharp, 1 fully blurred). */
 const ENVIRONMENT_BLUR = 0.04;
@@ -122,8 +123,9 @@ export function createLighting({ renderer, scene }) {
  * topside above. The zone follows the world height of each pixel, so every part that crosses the
  * waterline (hull, skegs, thrusters) is painted the same way. `paint.uniforms` holds the band
  * and the colours; `paint.setBand([low, high])` and `paint.setColours({...})` change them.
+ * With `fairness` (fairness3d.js) the material can also draw zebra stripes or a curvature map.
  */
-export function createPaintMaterial(options = {}) {
+export function createPaintMaterial(options = {}, fairness = null) {
   const uniforms = {
     paintBand: { value: new THREE.Vector2(-1e6, -1e6) },
     paintAntifouling: { value: new THREE.Color(0x8e3b2e) },
@@ -152,8 +154,9 @@ export function createPaintMaterial(options = {}) {
         'paint = mix( paint, diffuse, aboveHigh );',
         'vec4 diffuseColor = vec4( paint, opacity );',
       ].join('\n'));
+    if (fairness) patchFairnessShader(shader, fairness);
   };
-  material.customProgramCacheKey = () => 'marinaframe-hull-paint';
+  material.customProgramCacheKey = () => (fairness ? 'marinaframe-hull-paint-fairness' : 'marinaframe-hull-paint');
   material.userData.paint = uniforms;
   return material;
 }

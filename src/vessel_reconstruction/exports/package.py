@@ -46,7 +46,7 @@ from .csv_safety import safe_text_cell
 from .hydrostatics import Hydrostatics, design_draft, mesh_hydrostatics, read_stl, table_hydrostatics
 from .offsets import DEFAULT_WATERLINE_INTERVALS, offsets_table, write_offsets_csv
 from ..accuracy_summary import facts_from_build as accuracy_facts_from_build
-from .report import FOOTER, ReportFacts, write_report
+from .report import FOOTER, VIEWER_CAPTURE_FILE, ReportFacts, write_report
 from .source import DraftBuild, ExportError, load_build
 from .tank_tables import write_tank_tables
 from .identity import manifest_identity, known_particulars
@@ -252,10 +252,12 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
         entries.append(write_tanks_ocx(tanks, out_dir, stem, build.vessel))
 
     report = out_dir / f"{stem}_report.pdf"
+    # The app writes a picture of its 3D view here before the export; without it the report is unchanged.
+    viewer_image = out_dir / VIEWER_CAPTURE_FILE
     booklet_summary = booklet_check.summary if booklet_check is not None else None
     write_report(ReportFacts(build, hydrostatics, error, f"MarinaFrame {__version__}", capacity_rows,
                              accuracy_facts_from_build(build, capacity_rows, structure_dir, booklet_summary),
-                             booklet_check), report)
+                             booklet_check, viewer_image if viewer_image.is_file() else None), report)
     entries.append((report, "review_report", {}))
 
     missing = []

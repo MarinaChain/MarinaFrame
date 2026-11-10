@@ -83,3 +83,45 @@ test('mock fixtures write and list both CAD formats', async () => {
   const listed = await api.invoke('list_exports', { task, revision: 'r3' });
   assert.deepEqual(listed.files, result.files);
 });
+
+/** Export page with the given capture function; resolves to the export_run arguments. */
+async function exportWith(captureView, chosenKinds) {
+  const host = new FakeNode('div');
+  const calls = [];
+  const page = createExport({ host, captureView, invoke: async (command, args) => {
+    calls.push({ command, args });
+    return { files: [], folder: '/task/exports/r0003', not_built: [] };
+  } });
+  await page.show('/task', { revision: 'r0003', summary: { status: 'draft' } });
+  for (const output of outputsOf({})) {
+    const toggle = host.findAll((node) => node.dataset.kind === output.kind)[0].findAll((node) => node.className === 'export-toggle')[0];
+    const on = chosenKinds.includes(output.kind);
+    // Every output starts chosen; click the ones that must change.
+    if (!on) toggle.listeners.click();
+  }
+  await host.findAll((node) => node.tag === 'button' && node.textContent === 'Export')[0].listeners.click();
+  return calls.find((call) => call.command === 'export_run').args;
+}
+
+test('the report export sends the 3D view picture of this run', async () => {
+  const seen = [];
+  const args = await exportWith((task, revision) => { seen.push([task, revision]); return 'iVBORw0KGgoAAAA'; }, ['report']);
+  assert.equal(args.viewer_image, 'iVBORw0KGgoAAAA');
+  assert.deepEqual(seen, [['/task', 'r0003']]);
+});
+
+test('the package carries the report, so it sends the picture too', async () => {
+  assert.equal((await exportWith(() => 'iVBORw0KGgoAAAA', ['package'])).viewer_image, 'iVBORw0KGgoAAAA');
+});
+
+test('without the report or the package no picture is taken', async () => {
+  let taken = 0;
+  const args = await exportWith(() => { taken += 1; return 'iVBORw0KGgoAAAA'; }, ['stl', 'offsets']);
+  assert.equal(args.viewer_image, null);
+  assert.equal(taken, 0);
+});
+
+test('a view that shows another run, or fails to draw, still exports the report without a picture', async () => {
+  assert.equal((await exportWith(() => null, ['report'])).viewer_image, null);
+  assert.equal((await exportWith(() => { throw new Error('no WebGL'); }, ['report'])).viewer_image, null);
+});

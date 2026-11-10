@@ -10,6 +10,9 @@ import { el, fill as fillNode, icon, prefersReducedMotion } from './dom.js';
 import { createSectionGrowth } from './growth3d.js';
 import { createAnimation } from './animation.js';
 import { placeLabels, steelLegend, steelToken, tankLegend, tankToken } from './tanks.js';
+import { configureOrbit } from './orbit3d.js';
+import { CAPTURE_SIZE, captureFraming, pngBase64 } from './capture3d.js';
+import { createFairness, nextFairnessMode, useSmoothNormals, withFairnessOff } from './fairness3d.js';
 import { createLighting, createPaintMaterial, createSteelMaterial, createTankMaterial, setUpRenderer, stylePaint } from './look3d.js';
 import { bootTopBand, fitDistance, frameLabel, frameAt, hullReference, nearestFrameX, pointReadout, STANDARD_VIEWS, viewOfKey } from './reference3d.js';
 import { createOverlays } from './overlay3d.js';
@@ -50,6 +53,9 @@ const GHOST_OPACITY = 0.07;
 const TANK_EDGE_SHADE = 0.55;
 /** Size of a tank name label (CSS px) for the overlap test; long names are cut in CSS. */
 const LABEL_BOX = { charWidth: 6.4, padding: 22, height: 20, maxWidth: 180 };
+
+/** The background of a captured picture. */
+const WHITE = new THREE.Color(0xffffff);
 
 /** Shared black, for emissive colours that must not allocate on every restyle. */
 const BLACK = new THREE.Color(0x000000);
@@ -113,7 +119,7 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
     renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true });
   } catch {
     showEmpty('3D view not available', 'This computer did not allow a WebGL view.');
-    return { setModel() {}, setSelected() {}, partList: () => [], hidePart() {}, isolatePart() {}, showAllParts() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, showsWholeVessel: false, hasTanks: false };
+    return { setModel() {}, captureImage: () => null, setSelected() {}, partList: () => [], hidePart() {}, isolatePart() {}, showAllParts() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, showsWholeVessel: false, hasTanks: false };
   }
   /** Pixel ratio cap: a 3x screen draws at 2x, which looks the same and costs 2.25 times less. */
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
@@ -130,16 +136,14 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
   orthographic.up.set(0, 0, 1);
   let camera = perspective;
   const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = !prefersReducedMotion();
-  controls.dampingFactor = 0.12;
-  // Down to the horizon, so the profile and body plan views are level; never below the ground.
-  controls.maxPolarAngle = Math.PI / 2;
+  configureOrbit(controls, { reducedMotion: prefersReducedMotion() });
 
   const lighting = createLighting({ renderer, scene });
   /** The section cut: one clipping plane on every model material, with solid cut faces. */
   const cut = createSectionCut({ scene });
   /** Paint of the hull: antifouling, boot top and topside by height (look3d.js). */
-  const hullMaterial = createPaintMaterial();
+  const fairness = createFairness();
+  const hullMaterial = createPaintMaterial({}, fairness);
   /** Clipping planes of the live growth's skin; the hull material has them and the cut plane. */
   let skinPlanes = [];
   function clipHull() {
@@ -506,11 +510,27 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
     overlaySwitches[key].setAttribute('aria-pressed', String(on));
     requestRender();
   }
+  // The fairness view: one button steps through zebra stripes, a curvature map and off.
+  const fairnessButton = toolButton({
+    iconName: 'fairness', label: 'Fairness', keyHint: 'Z', pressed: false,
+    detail: 'Zebra stripes show kinks and flat spots. Press again for a curvature map.',
+    onClick: () => setFairness(nextFairnessMode(fairness.mode)),
+  });
+  /** Show the hull surface as zebra stripes or a curvature map, or as paint again (`mode` "off"). */
+  function setFairness(mode) {
+    fairness.setMode(mode);
+    if (hull) useSmoothNormals(hull.geometry, mode !== 'off');
+    fairnessButton.setAttribute('aria-pressed', String(mode !== 'off'));
+    fairnessButton.setAttribute('aria-label', mode === 'off' ? 'Fairness' : `Fairness, ${mode}`);
+    fairnessButton.dataset.mode = mode;
+    requestRender();
+  }
   toolbar.add('Show',
     overlaySwitch('grid', 'grid', 'Reference grid', 'G'),
     overlaySwitch('waterline', 'waterline', 'Design waterline plane', 'W'),
     overlaySwitch('frames', 'frames', 'Frame numbers', null),
-    overlaySwitch('edges', 'edges', 'Feature edges', 'E'));
+    overlaySwitch('edges', 'edges', 'Feature edges', 'E'),
+    fairnessButton);
   const OVERLAY_KEYS = { g: 'grid', w: 'waterline', e: 'edges' };
   /** The x of the selected part's middle (Parts tab), or null. */
   let selectionX = null;
@@ -574,6 +594,9 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
       event.preventDefault();
     } else if (event.key === 'f' || event.key === 'F') {
       fitSelection();
+      event.preventDefault();
+    } else if (event.key === 'z' || event.key === 'Z') {
+      setFairness(nextFairnessMode(fairness.mode));
       event.preventDefault();
     } else if (event.key === 'c' || event.key === 'C') {
       toggleCutPanel();
@@ -991,6 +1014,7 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
     gridBox = sceneBox;
     buildGrid();
     lighting.fit(sceneBox);
+    fairness.fit(hullBox);
     cut.fit(sceneBox);
     updateCutRanges(sceneBox);
     paintHull(hullMaterial);
@@ -1270,6 +1294,59 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
   }
 
 
+  /**
+   * Draw the view as it is now into a fixed-size picture with a white background and no page
+   * controls or labels, and return it as base64 PNG text; null when there is no model to show.
+   * The section planes, guess bands and the selection box stay out of the picture; the grid and
+   * the frame numbers too. The cut and the camera stay as they are; the fairness view is off for the picture. The
+   * visible view is drawn again at once, so it does not flicker.
+   */
+  function captureImage({ width, height } = CAPTURE_SIZE) {
+    if (!hull && !wholeVessel && !frameBox) return null;
+    const paneSize = renderer.getSize(new THREE.Vector2());
+    const pixelRatio = renderer.getPixelRatio();
+    const savedOverlays = overlays.shown;
+    const savedPerspective = { aspect: perspective.aspect, fov: perspective.fov };
+    const savedOrtho = { left: orthographic.left, right: orthographic.right, top: orthographic.top, bottom: orthographic.bottom };
+    const widen = captureFraming(perspective.aspect, width / height);
+    const loose = [...planes.values(), ...guessBands, highlight].filter(Boolean);
+    const looseVisible = loose.map((object) => object.visible);
+    let dataUrl = null;
+    try {
+      overlays.set({ grid: false, waterline: false, frames: false });
+      for (const object of loose) object.visible = false;
+      renderer.setPixelRatio(1);
+      renderer.setSize(width, height, false);
+      perspective.aspect = width / height;
+      perspective.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(savedPerspective.fov / 2)) * widen));
+      perspective.updateProjectionMatrix();
+      orthographic.top = savedOrtho.top * widen;
+      orthographic.bottom = -orthographic.top;
+      orthographic.right = orthographic.top * perspective.aspect;
+      orthographic.left = -orthographic.right;
+      orthographic.updateProjectionMatrix();
+      scene.background = WHITE;
+      lighting.setTheme(false);
+      // The report picture always has the normal hull shading, whatever the view shows now.
+      withFairnessOff(fairness, hull?.geometry ?? null, () => renderer.render(scene, camera));
+      // Read in the same task as the draw: the drawing buffer is cleared after the frame is shown.
+      dataUrl = renderer.domElement.toDataURL('image/png');
+    } finally {
+      overlays.set(savedOverlays);
+      loose.forEach((object, index) => { object.visible = looseVisible[index]; });
+      renderer.setPixelRatio(pixelRatio);
+      renderer.setSize(paneSize.x, paneSize.y, false);
+      perspective.aspect = savedPerspective.aspect;
+      perspective.fov = savedPerspective.fov;
+      perspective.updateProjectionMatrix();
+      Object.assign(orthographic, savedOrtho);
+      orthographic.updateProjectionMatrix();
+      applyColours();
+      draw();
+    }
+    return pngBase64(dataUrl);
+  }
+
   return {
     /**
      * Show a model. `buffer` is the STL as an ArrayBuffer, or null for the empty state.
@@ -1302,6 +1379,8 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
       hull = new THREE.Mesh(geometry, hullMaterial);
       hull.castShadow = true;
       hull.receiveShadow = true;
+      // A hull that arrives while the fairness view is on gets the smooth normals at once.
+      if (fairness.mode !== 'off') useSmoothNormals(geometry, true);
       content.add(hull);
       cut.addSolid(hull, { colour: () => colours.hull });
 
@@ -1396,7 +1475,7 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
               o.material = HIDDEN_MATERIAL;
               tankMeshes.push(o);
             } else {
-              o.material = clip(createPaintMaterial());
+              o.material = clip(createPaintMaterial({}, fairness));
               o.castShadow = true;
               o.receiveShadow = true;
               shellMeshes.push(o);
@@ -1553,6 +1632,7 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
       requestRender();
     },
     resetView: () => resetView({ animate: true }),
+    captureImage,
     /**
      * HOOK(M3 live): section curves of a build, coloured and patterned by source label.
      * `mode`: "grow" (slide in station by station, then the skin fades in between them),

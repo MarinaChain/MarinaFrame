@@ -686,7 +686,9 @@ function mockTransport() {
     },
     async read_artifact(_data, { path }) {
       const name = path.split('/').pop();
-      const response = await fetch(MOCK_FILES_URL + encodeURIComponent(name));
+      // ?mockfair: the hull is the fairness test hull, with a kink and a flat spot planted in it.
+      const file = name === 'model.stl' && new URLSearchParams(location.search).has('mockfair') ? 'model-fair.stl' : name;
+      const response = await fetch(MOCK_FILES_URL + encodeURIComponent(file));
       if (!response.ok) throw new BackendError('artifact_missing', 'This file is not in the run folder.');
       const blob = await response.blob();
       const mime = name.endsWith('.stl') ? 'model/stl' : blob.type || 'image/png';
@@ -1025,9 +1027,11 @@ function mockTransport() {
       requireTask(data, task);
       return mockExportResult(task, revision);
     },
-    async export_run(data, { task, revision, outputs }) {
+    async export_run(data, { task, revision, outputs, viewer_image: viewerImage = null }) {
       const view = requireTask(data, task);
       if (!outputs?.length) throw new BackendError('export_outputs', 'Choose at least one export.');
+      // The preview writes no files; it keeps the last 3D view picture for a local check (the app writes it into the export).
+      globalThis.mockLastViewerImage = viewerImage;
       await pause(900);
       const folderRevision = mockRevision(revision);
       const stem = `${view.summary.name.split(',')[0].replace(/\W+/g, '_')}_${folderRevision}_DRAFT`;
