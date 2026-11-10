@@ -2,7 +2,7 @@
 //! stdlib-only fixtures; there are no model calls, keys, or CAD operations.
 #![allow(dead_code)]
 
-#[path = "../src/controller.rs"]
+#[path = "../src/controller/mod.rs"]
 mod controller;
 #[path = "../src/models.rs"]
 mod models;

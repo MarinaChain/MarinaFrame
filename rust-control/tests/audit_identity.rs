@@ -7,7 +7,7 @@
 //! Tasks run the real worker protocol, real geometry and the real native audit through
 //! `tests/rust_audit_identity_worker.py`, which only adds identity faults.
 #![allow(dead_code)]
-#[path = "../src/controller.rs"]
+#[path = "../src/controller/mod.rs"]
 mod controller;
 #[path = "../src/models.rs"]
 mod models;

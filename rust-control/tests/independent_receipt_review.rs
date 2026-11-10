@@ -2,7 +2,7 @@
 //! The fixtures are explicit protocol doubles. No network, model or CAD runs.
 #![allow(dead_code)]
 
-#[path = "../src/controller.rs"]
+#[path = "../src/controller/mod.rs"]
 mod controller;
 #[path = "../src/models.rs"]
 mod models;

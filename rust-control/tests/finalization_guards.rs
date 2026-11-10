@@ -9,7 +9,7 @@
 //! The Python Harness deadline variants have no counterpart: the Rust
 //! controller has no task wall-clock deadline.
 #![allow(dead_code)]
-#[path = "../src/controller.rs"]
+#[path = "../src/controller/mod.rs"]
 mod controller;
 #[path = "../src/models.rs"]
 mod models;

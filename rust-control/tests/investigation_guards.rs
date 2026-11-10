@@ -9,7 +9,7 @@
 //! decisions (actor `live_model`) straight to `execute_decision`. No provider
 //! call is made. Tests that build CAD are marked real CAD.
 #![allow(dead_code)]
-#[path = "../src/controller.rs"]
+#[path = "../src/controller/mod.rs"]
 mod controller;
 #[path = "../src/models.rs"]
 mod models;
