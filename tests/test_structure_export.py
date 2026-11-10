@@ -95,6 +95,36 @@ def test_ocx_export_reads_back_equal(tmp_path):
     assert trip["all_equal"] and trip["plates_read"] == 4
 
 
+def test_ocx_round_trip_rejects_corrupt_written_contour(tmp_path):
+    block = synthetic_block()
+    path = tmp_path / "block.3docx"
+    ocx.export_ocx(block, path)
+    text = path.read_text()
+    text = text.replace('coordinates="10.000000 8.000000 0.000000"',
+                        'coordinates="9.000000 8.000000 0.000000"', 1)
+    path.write_text(text)
+    assert not ocx.round_trip(block, path)["all_equal"]
+
+
+def test_ocx_round_trip_rejects_shifted_contour_with_same_area(tmp_path):
+    from xml.etree import ElementTree
+
+    block = synthetic_block()
+    path = tmp_path / "block.3docx"
+    ocx.export_ocx(block, path)
+    tree = ElementTree.parse(path)
+    plate = next(element for element in tree.iter() if ocx._tag(element) == "Plate")
+    contour = next(element for element in plate.iter() if ocx._tag(element) == "OuterContour")
+    for point in contour.iter():
+        if ocx._tag(point) == "Point3D":
+            x, y, z = map(float, point.get("coordinates").split())
+            point.set("coordinates", f"{x + 1} {y} {z}")
+    tree.write(path, encoding="utf-8", xml_declaration=True)
+    trip = ocx.round_trip(block, path)
+    assert trip["area_equal"] == len(block["members"])
+    assert not trip["all_equal"]
+
+
 @pytest.mark.skipif(shutil.which("xmllint") is None or schema_dir() is None,
                     reason="xmllint or the local OCX 3.0.1 XSD (git-ignored work/sources) is missing")
 def test_ocx_export_is_schema_valid_and_a_broken_file_is_not(tmp_path):

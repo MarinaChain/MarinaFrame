@@ -85,6 +85,7 @@ The constants live in `scripts/check_cad_exports.py`.
 | Constant | Value | Purpose |
 | --- | --- | --- |
 | `VOLUME_RELATIVE_TOLERANCE` | `1e-6` | One part per million for solid round-trips and unchanged offset area |
+
 | `BOUNDING_BOX_TOLERANCE_MM` | `0.01 mm` | Ten micrometres for exchange-file roundoff |
 | `SEWING_TOLERANCE_MM` | `0.001 mm` | Join coincident exported edges without closing physical gaps |
 | `SURFACE_AREA_RELATIVE_TOLERANCE` | `0.005` | Allow the labelled mesh approximation in `.3dm` |
@@ -92,6 +93,11 @@ The constants live in `scripts/check_cad_exports.py`.
 | `FACE_OFFSET_TOLERANCE_MM` | `0.001 mm` | Check actual offset displacement |
 | `REBUILD_TOLERANCE_MM` | `1e-7 mm` | Construct imported OCC faces |
 | `AREA_INTEGRATION_RELATIVE_TOLERANCE` | `1e-8` | Avoid coarse quadrature errors on rational surfaces |
+
+The structure OCX round-trip check reads each written plate contour. It compares
+its area with the source outline and compares corresponding points within one
+micrometre, the precision of the written coordinates. A missing or open contour
+fails the check; a copied `NetArea` cannot replace this geometry check.
 
 ## Results
 
