@@ -14,7 +14,7 @@ from .errors import GeometryError
 from .provenance import digest_file, digest_object, snapshot_implementation, environment_record, write_json
 from .resources import DEFAULT_POLICY, ResourceLimitError, source_extension, validate_sources
 from .run_record import SCHEMA_VERSION, TABLE_READING_FILE, observed_geometry, seal_run, verify_run
-from .schema import MAX_SPEC_BYTES, TABLE_VISION_MODE, gap, loads_bounded_json, validate_spec
+from .schema import MAX_SPEC_BYTES, TABLE_VISION_MODE, gap, load_bounded_json, loads_bounded_json, validate_spec
 from .transaction import RunPublicationError, RunTransaction, quarantine_interrupted
 
 # Byte budget of the read-table record captured into a table run.
@@ -225,6 +225,19 @@ def _tag_draft_exports(stage: Path, exports: dict):
             exports[key] = name
 
 
+def _externalize_section_diagnostics(stage: Path, result: dict):
+    """Keep section diagnostics in the already retained extraction artifact."""
+    diagnostics = result.get("diagnostics")
+    path = stage / "extracted_sections.json"
+    if not isinstance(diagnostics, dict) or "sections" not in diagnostics or not path.is_file():
+        return
+    extraction = load_bounded_json(path, max_bytes=64 * 1024**2, max_depth=40, max_nodes=3_000_000)
+    if extraction.get("diagnostics", {}).get("sections") != diagnostics["sections"]:
+        raise ValueError("Section diagnostics disagree with the extraction artifact.")
+    diagnostics.pop("sections")
+    diagnostics["sections_artifact"] = {"file": path.name, "sha256": digest_file(path)}
+
+
 def _publish(transaction, result, input_spec, replay_spec, started):
     stage = transaction.stage
     if result["status"] != "review_required" or _has_block(result):
@@ -240,6 +253,7 @@ def _publish(transaction, result, input_spec, replay_spec, started):
     # The reservation keeps recovery discoverable after removing the private
     # checkpoint. Only committed files appear in the manifest inventory.
     (stage / "transaction.json").unlink()
+    _externalize_section_diagnostics(stage, result)
     seal_run(stage, result, writer=write_json)
     verification = verify_run(stage)
     if not verification["valid"]:

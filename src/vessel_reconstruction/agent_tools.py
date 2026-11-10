@@ -31,7 +31,7 @@ from .investigation_tools import (INVESTIGATION_ARGUMENTS, InvestigationTools, T
 from .ingest import _grid_evidence
 from .isolation import DEFAULT_LIMITS, run_isolated, supervise_process
 from .provenance import digest_file, digest_object, safe_relative_file, write_json
-from .schema import MAX_SPEC_BYTES, is_sheet_only, load_bounded_json, loads_bounded_json, validate_spec
+from .schema import MAX_SPEC_BYTES, is_sheet_only, load_bounded_json, load_build_result, loads_bounded_json, validate_spec
 from . import section_authoring
 
 
@@ -906,7 +906,7 @@ class DomainTools(InvestigationTools):
             path = safe_relative_file(self.task_dir, candidate["path"] + "/result.json")
         except (ValueError, OSError):
             return None
-        return load_bounded_json(path, max_bytes=MAX_INSPECTION_BYTES, max_nodes=600_000)
+        return load_build_result(path)
 
     # ------------------------------------------------------------ authoring
     def _section_curve(self, section_id):
