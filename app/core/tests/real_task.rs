@@ -8,30 +8,12 @@ use marinaframe_app_core::types::*;
 use marinaframe_app_core::{AppPaths, Backend};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::{Duration, Instant};
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .canonicalize()
         .unwrap()
-}
-
-fn wait_until_idle(backend: &Backend, task: &str) -> TaskView {
-    let start = Instant::now();
-    loop {
-        // A finished action leaves the status at needs_review, declined, failed, paused ...
-        // Read the view only after the run is idle: a view read first can still show
-        // `Running` when the run finishes between the two calls.
-        if !backend.is_busy(task) {
-            return backend.get_task(task).unwrap();
-        }
-        assert!(
-            start.elapsed() < Duration::from_secs(240),
-            "run did not finish"
-        );
-        std::thread::sleep(Duration::from_millis(300));
-    }
 }
 
 #[test]
@@ -75,7 +57,7 @@ fn run_read_choose_and_dismiss() {
         .any(|c| c.task == task));
     assert_eq!(backend.list_tasks().len(), 1);
 
-    let view = wait_until_idle(&backend, &task);
+    let view = support::wait_until_idle(&backend, &task);
     assert_eq!(view.summary.status, Status::NeedsReview);
     assert_eq!(view.summary.policy, "deterministic");
     assert_eq!(view.sections.len(), 3);
@@ -158,7 +140,7 @@ fn run_read_choose_and_dismiss() {
         .find(|c| !c.chosen && c.selectable)
         .expect("alternative");
     backend.choose_line(&task, &section.id, &other.id).unwrap();
-    let after = wait_until_idle(&backend, &task);
+    let after = support::wait_until_idle(&backend, &task);
     let picked = after.sections[0]
         .candidates
         .iter()
