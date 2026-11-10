@@ -6,6 +6,7 @@
 // Contract: docs/APP_SPEC.md, section "Intake".
 
 import { el, svg, icon, fill } from './dom.js';
+import { checklistPanel, computeChecklist, scaleChip, typeChip, typePicker, withType } from './drawing_set.js';
 
 /** The labels a region can have, in picker order, with the words people see. */
 const VIEW_LABELS = [
@@ -382,7 +383,11 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
         el('span', { class: 'intake-tray-views' }, page.skip ? 'Skipped' : (views.join(', ') || 'No view')),
         page.warnings.length && !page.skip
           ? el('span', { class: 'intake-tray-warn', title: page.warnings.map((w) => w.message).join(' ') }, icon('warn'))
-          : null));
+          : null),
+      // Sheet type and scale as small chips (drawing_set.js); a skipped page shows none.
+      page.sheet && !page.skip
+        ? el('span', { class: 'intake-tray-chips' }, typeChip(page, { focusable: false }), scaleChip(page, preview.set?.scale_agreement, { focusable: false }))
+        : null);
   }
 
   /**
@@ -409,6 +414,20 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
       el('ul', {}, ...rows));
   }
 
+  /** The sheet's type (a picker the person can change) and its scale, with the reason in the tooltips. */
+  function sheetRow(page) {
+    const note = preview.set?.scale_agreement?.items?.find((item) => item.page_id === page.page_id);
+    return el('div', { class: 'intake-sheet-row' },
+      el('span', { class: 'field-label' }, 'Sheet'),
+      typePicker(page, {
+        disabled: starting,
+        onchange: (type) => { Object.assign(page, withType(page, type)); render(); },
+      }),
+      typeChip(page, { focusable: true }),
+      scaleChip(page, preview.set?.scale_agreement, { focusable: true }),
+      note ? el('span', { class: 'intake-sheet-note', role: 'note' }, icon('warn'), note.message) : null);
+  }
+
   /** The selected page, large, with its region labels and warnings. */
   function stage(page) {
     const where = pageWhere(page);
@@ -423,6 +442,7 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
         where ? el('span', { class: 'intake-where' }, where) : null,
         dpi ? el('span', { class: 'intake-dpi' }, dpi) : null,
         skipButton(page)),
+      page.sheet && !page.skip ? sheetRow(page) : null,
       // The labels sit above the page, next to the thing they name; spare height goes below.
       el('div', { class: 'intake-stage-foot' },
         page.skip
@@ -475,7 +495,12 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
         el('span', { class: 'field-label' }, 'Mode'),
         aiStatus?.active
           ? el('span', { class: 'badge', dataset: { tone: 'ai' }, title: 'The AI reads the sheets, then builds a draft hull that a person reviews.' }, 'AI draft')
-          : el('span', { class: 'badge', dataset: { tone: 'warn' }, title: 'A drawing set without a spec needs the AI.' }, aiStatus?.enabled ? 'No key' : 'AI off')));
+          : el('span', { class: 'badge', dataset: { tone: 'warn' }, title: 'A drawing set without a spec needs the AI.' }, aiStatus?.enabled ? 'No key' : 'AI off')),
+      // The drawings the set needs, from the sheet types (they follow the person's edits).
+      preview.set?.rules
+        ? checklistPanel(computeChecklist(preview.pages, preview.set.rules), preview.set.outputs, preview.set.scale_agreement,
+          { onShow: (pageId) => selectPage(pageId, { focusTray: true }) })
+        : null);
   }
 
   function loadingBody() {

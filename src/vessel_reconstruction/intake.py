@@ -338,8 +338,25 @@ def survey_page(image: np.ndarray) -> list[dict]:
 
 
 # ------------------------------------------------------------------ prepare
-def prepare(files: list[Path], out_dir: Path, render_dpi: float = DEFAULT_RENDER_DPI) -> dict:
-    """The intake preview of ``files``. A file that cannot be read is a warning."""
+def sheet_result(path: Path, info: dict, image: np.ndarray, regions: list[dict], ask=None) -> dict | None:
+    """The sheet type and scale of one page (drawing_set.analyse_page); None when it cannot be read."""
+    from .drawing_set import analyse_page
+    try:
+        gray = image.mean(axis=2).astype(np.uint8) if image.ndim == 3 else image
+        facts = {"dpi": info.get("dpi"), "full_px": [int(image.shape[1]), int(image.shape[0])]}
+        return analyse_page(path=path, page_index=info["page_index"], gray=gray, info=facts, file_name=path.name,
+                            regions=regions, ask=ask)
+    except Exception:  # typing is a help; a page it cannot read is still a page
+        return None
+
+
+def prepare(files: list[Path], out_dir: Path, render_dpi: float = DEFAULT_RENDER_DPI, ask=None) -> dict:
+    """The intake preview of ``files``. A file that cannot be read is a warning.
+
+    Every page also gets ``sheet`` (type, confidence, source, scale) and the preview gets ``set`` (the
+    drawings checklist and the scale agreement), see docs/DRAWING_SET_INTAKE.md. ``ask`` is an optional
+    model transport used only for sheets whose type the code cannot settle.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     pages, warnings = [], []
     for path in files:
@@ -352,12 +369,13 @@ def prepare(files: list[Path], out_dir: Path, render_dpi: float = DEFAULT_RENDER
                               **info, "width_px": int(image.shape[1]), "height_px": int(image.shape[0]),
                               "thumbnail_png_base64": thumbnail, "thumbnail_scale": round(scale, 6),
                               "regions": regions, "warnings": page_warnings(info, image, regions),
-                              "skip": False})
+                              "skip": False, "sheet": sheet_result(path, info, image, regions, ask)})
         except Exception as exc:  # A broken file must not stop the other pages.
             warnings.append({"code": "unreadable_file", "file": str(path),
                              "message": f"{path.name} could not be read ({type(exc).__name__})."})
+    from .drawing_set import analyse_set
     preview = {"schema": PREVIEW_SCHEMA, "pages": pages, "warnings": warnings, "render_dpi": render_dpi,
-               "particulars": {}, "engineering_approved": False,
+               "particulars": {}, "engineering_approved": False, "set": analyse_set(pages),
                "note": "View labels are code proposals from ink layout; edit them before the run."}
     (out_dir / "preview.json").write_text(json.dumps(preview, indent=2) + "\n")
     return preview
@@ -516,6 +534,8 @@ def main(argv=None) -> int:
     prep = sub.add_parser("prepare")
     prep.add_argument("--out", type=Path, required=True)
     prep.add_argument("--render-dpi", type=float, default=DEFAULT_RENDER_DPI)
+    prep.add_argument("--vision", action="store_true",
+                      help="ask the model about sheets whose type the code cannot settle (Claude CLI, subscription)")
     prep.add_argument("files", type=Path, nargs="+")
     write = sub.add_parser("write-spec")
     write.add_argument("--preview", type=Path, required=True)
@@ -523,7 +543,11 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "prepare":
-            result = prepare(args.files, args.out, args.render_dpi)
+            ask = None
+            if args.vision:
+                from .calibration_reading import claude_ask
+                ask = claude_ask()
+            result = prepare(args.files, args.out, args.render_dpi, ask)
         else:
             result = write_spec(json.loads(args.preview.read_text()), args.out)
     except (IntakeError, OSError, ValueError, KeyError) as exc:
