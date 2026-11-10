@@ -278,6 +278,16 @@ def _check_package(stage: Path, manifest: dict) -> None:
             raise ExportError("Staged package archive has a different manifest.")
 
 
+def _report_progress(stage: str) -> None:
+    """Tell the app's progress watchdog that the export moved on (no-op outside a supervised run)."""
+    from .. import progress
+
+    try:
+        progress.report(stage)
+    except (OSError, ValueError, KeyError):
+        pass  # Telemetry failures must not fail an export.
+
+
 def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float | None = None,
                  waterline_intervals: int = DEFAULT_WATERLINE_INTERVALS, vessel: str | None = None,
                  tanks: list | None = None, structure_dir: Path | None = None,
@@ -311,16 +321,19 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
             raise ExportError(f"Cannot check booklet: {error}") from error
     with _package_stage(Path(out_dir)) as out_dir:
         stem = build.file_stem
+        _report_progress("Writing the 3D files")
         entries, units_axes, glb_result, display_omissions = write_spatial(build, identity, tanks, structure_dir, out_dir)
         format_results = dict(build.result.get("export_results") or {})
         if glb_result is not None:
             format_results["glb"] = glb_result
 
+        _report_progress("Writing the offsets")
         offsets = out_dir / f"{stem}_offsets.csv"
         table = offsets_table(build.sections, build.spec, waterline_intervals)
         write_offsets_csv(table, offsets, stamp_lines(build))
         entries.append((offsets, "offsets_table", {}))
 
+        _report_progress("Computing the hydrostatics")
         hydrostatics, error = compute_hydrostatics(build, draft_m)
         hydro_json, hydro_csv = out_dir / f"{stem}_hydrostatics.json", out_dir / f"{stem}_hydrostatics.csv"
         write_hydrostatics(hydrostatics, error, build, hydro_json, hydro_csv)
@@ -332,6 +345,7 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
             entries.append((booklet_csv, "booklet_check", {}))
 
         capacity_rows = None
+        _report_progress("Writing the tank and structure tables")
         if tanks:
             capacity_rows, tank_entries = write_tank_tables(tanks, out_dir, stem, stamp_lines(build))
             entries += tank_entries
@@ -351,6 +365,7 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
         elif any(role.startswith("ocx_") for _, role, _ in entries):
             format_results["ocx"] = {"status": "ok", "reason": None}
 
+        _report_progress("Writing the report")
         report = out_dir / f"{stem}_report.pdf"
         # The app writes a picture of its 3D view here before the export; without it the report is unchanged.
         viewer_image = out_dir / VIEWER_CAPTURE_FILE
@@ -360,6 +375,7 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
                                  booklet_check, viewer_image if viewer_image.is_file() else None), report)
         entries.append((report, "review_report", {}))
 
+        _report_progress("Copying the CAD models")
         missing = []
         for source, suffix, role, stamp in ((build.step_path, "step", "step_model", stamped_step),
                                             (build.iges_path, "iges", "iges_model", None),

@@ -3,6 +3,7 @@
 mod support;
 
 use marinaframe_app_core::intake::{self, Worker};
+use marinaframe_app_core::worker_run::UNCANCELLABLE;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -42,8 +43,14 @@ fn prepare_then_write_a_sheet_only_spec() {
         source: Some(&src),
     };
     let runs = tmp.path().join("runs");
-    let mut preview =
-        intake::prepare_intake(&runs, &worker, &[png.to_string_lossy().into()], false).unwrap();
+    let mut preview = intake::prepare_intake(
+        &runs,
+        &worker,
+        &[png.to_string_lossy().into()],
+        false,
+        &UNCANCELLABLE,
+    )
+    .unwrap();
     assert!(preview.intake_id.starts_with("intake-"));
     assert_eq!(preview.pages.len(), 1);
     let page = &preview.pages[0];

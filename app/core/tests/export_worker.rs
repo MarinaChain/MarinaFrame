@@ -3,7 +3,7 @@
 //! Needs `MARINAFRAME_TEST_PYTHON`; local runs skip when it is missing; CI requires it.
 mod support;
 
-use marinaframe_app_core::export::{self, EXPORT_TIMEOUT};
+use marinaframe_app_core::export::{self, EXPORT_STALL_PERIOD};
 use marinaframe_app_core::intake::Worker;
 use std::path::{Path, PathBuf};
 
@@ -46,7 +46,7 @@ fn export_a_draft_revision_with_the_real_worker() {
     };
     let outputs: Vec<String> = export::OUTPUTS.iter().map(|o| o.to_string()).collect();
 
-    let result = export::export_run(&task, &worker, "r3", &outputs, EXPORT_TIMEOUT).unwrap();
+    let result = export::export_run(&task, &worker, "r3", &outputs, EXPORT_STALL_PERIOD).unwrap();
 
     let kinds: Vec<&str> = result.files.iter().map(|f| f.kind.as_str()).collect();
     assert_eq!(
