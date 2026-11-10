@@ -264,3 +264,31 @@ def test_a_corrected_reading_after_the_first_hull_builds_it_again(tmp_path, monk
     rebuilt = tools._describe_vessel(corrected)
     assert built == [None], "the sections are materialized again from the corrected reading"
     assert rebuilt["setup_changes"] and tools.state["selected"] == {} and tools.state["authored_sections"] == {}
+
+
+def test_prepare_types_every_page_and_checks_the_drawing_set(tmp_path, monkeypatch):
+    # OCR is replaced so the test does not depend on the tesseract program.
+    monkeypatch.setattr("vessel_reconstruction.sheet_types.ocr_read", lambda gray, **kw: ("", ""))
+    pdf = tmp_path / "Tank Plan Rev1.pdf"
+    document = fitz.open()
+    page = document.new_page(width=600, height=400)
+    page.insert_text((40, 40), "TANK PLAN   tank schedule   capacity   SCALE 1:50", fontsize=14)
+    page.draw_line((50, 300), (550, 300), color=(0, 0, 0), width=2)
+    document.save(pdf)
+    png = three_view_png(tmp_path / "sheet.png")
+    asked = []
+
+    def ask(prompt, pngs):
+        asked.append(len(pngs))
+        return '{"type": "lines_plan", "confidence": 0.8, "evidence": "sheer and body plan"}'
+
+    preview = intake.prepare([pdf, png], tmp_path / "prep", render_dpi=100, ask=ask)
+    tank, sheet = (p["sheet"] for p in preview["pages"])
+    assert tank["type"] == "tank_plan" and tank["source"].startswith("file_name") and tank["scale"]["main_ratio"] == 50.0
+    assert sheet["source"] == "model:claude-sonnet-5-5" and sheet["type"] == "lines_plan"
+    assert asked == [1]  # only the sheet code could not settle was asked
+    found = {item["id"]: item["status"] for item in preview["set"]["checklist"]}
+    assert found["tanks_plan"] == "met" and found["hull_lines"] == "met" and found["steel_shell"] == "missing"
+    assert "steel_shell" in preview["set"]["missing_required"]
+    assert preview["set"]["engineering_approved"] is False
+    assert preview["set"]["rules"] and preview["set"]["outputs"]

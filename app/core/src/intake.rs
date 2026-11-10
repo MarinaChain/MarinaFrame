@@ -77,6 +77,9 @@ pub struct IntakePage {
     pub thumbnail_scale: f64,
     pub regions: Vec<IntakeRegion>,
     pub warnings: Vec<IntakeWarning>,
+    /// The sheet type and scale the worker read (`drawing_set.analyse_page`); passed through as is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sheet: Option<serde_json::Value>,
     /// The person removed this page (for example a cover page).
     #[serde(default)]
     pub skip: bool,
@@ -115,6 +118,9 @@ pub struct IntakePreview {
     /// Whether the run will use the AI (it must, to read a set without a spec).
     #[serde(default)]
     pub ai_active: bool,
+    /// The drawings checklist and scale agreement (`drawing_set.analyse_set`); passed through as is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub set: Option<serde_json::Value>,
 }
 
 /// How to call the Python worker.
@@ -219,6 +225,10 @@ pub fn prepare_intake(
         .map_err(|_| AppError::new("runs_folder", "The runs folder could not be written."))?;
     let mut args: Vec<&std::ffi::OsStr> =
         vec!["prepare".as_ref(), "--out".as_ref(), prepare.as_os_str()];
+    if ai_active {
+        // Sheets whose type the code cannot settle are asked of the model (one small question each).
+        args.push("--vision".as_ref());
+    }
     args.extend(paths.iter().map(|p| p.as_os_str()));
     let mut value = worker.call(&args)?;
     value["intake_id"] = intake_id.clone().into();
@@ -351,6 +361,7 @@ mod tests {
                 evidence: String::new(),
             }],
             warnings: vec![],
+            sheet: None,
             skip: false,
         }
     }
@@ -418,6 +429,7 @@ mod tests {
             render_dpi: 200.0,
             particulars: Particulars::default(),
             ai_active: true,
+            set: None,
         };
         assert!(check_preview(&preview).is_ok());
         preview.pages[0].regions[0].label = "deck".into();

@@ -245,8 +245,27 @@ function blobToBase64(blob) {
 
 /** What the mock's "Choose files" picks: a two-page PDF and a low-resolution scan. */
 const MOCK_DRAWING_SET = ['/Users/demo/Downloads/survey-launch-lines.pdf', '/Users/demo/Downloads/survey-launch-sections.tif'];
+/** With ?mockdrawings the mock reads this one file as a nine-sheet set (mock/drawing_set.json). */
+const MOCK_DRAWINGS_FILE = '/Users/demo/Downloads/survey-launch-drawings.pdf';
+const MOCK_DRAWINGS_URL = 'mock/drawing_set.json';
 /** The mock page image (mock/files/page-1.png) in pixels. */
 const MOCK_PAGE = { width: 1600, height: 1000 };
+
+/**
+ * The preview of the mock drawing set (made by mock/make_drawing_set_mock.py from the worker's own
+ * code): each sheet has its type and scale, the set has the checklist. One required drawing is missing.
+ */
+function mockDrawingSetPreview(drawings, thumbnail, aiActive) {
+  const pages = drawings.pages.map((entry, index) => ({
+    page_id: entry.page_id, file: `/Users/demo/Downloads/${entry.file_name}`, file_name: entry.file_name,
+    kind: 'pdf', page_index: 0, dpi: 200, dpi_source: 'pdf_render',
+    width_px: MOCK_PAGE.width, height_px: MOCK_PAGE.height, thumbnail_png_base64: thumbnail, thumbnail_scale: 1,
+    regions: [{ region_id: 'r1', label: ['body_plan', 'profile', 'profile', 'other'][index % 4], confidence: 0.6, region_px: [140, 250, 1470, 820], evidence: 'One framed ink group.' }],
+    warnings: [], skip: false, sheet: entry.sheet,
+  }));
+  const warnings = aiActive ? [] : [{ code: 'ai_off', message: 'AI drafting is off. A drawing set without a spec needs the AI to read stations and scale.' }];
+  return { intake_id: `intake-${Date.now()}`, pages, warnings, render_dpi: 200, particulars: { vessel_name: '' }, ai_active: aiActive, set: drawings.set };
+}
 
 /**
  * An IntakePreview for `files`, shaped like the worker's: a PDF gives a lines page (body plan,
@@ -1050,6 +1069,10 @@ function mockTransport() {
       if (wrong) throw new BackendError('intake_file_type', `${wrong.split('/').pop()} is not a drawing. Use PDF, PNG, TIFF or JPEG files.`);
       await pause(900);
       const status = await commands.get_ai_status(data);
+      if (files[0] === MOCK_DRAWINGS_FILE) {
+        const drawings = await fetch(MOCK_DRAWINGS_URL).then((r) => r.json());
+        return mockDrawingSetPreview(drawings, await mockThumbnail(), status.active);
+      }
       return mockIntakePreview(files, await mockThumbnail(), status.active);
     },
     async start_sample_run(data) {
@@ -1116,6 +1139,7 @@ function mockTransport() {
     async pickDrawingFiles({ multiple = true } = {}) {
       if (!multiple) return [MOCK_DRAWING_SET[0]];
       // With ?mockset=N (2 to 16) the set is N scanned sheets plus the PDF: a customer's full set.
+      if (new URLSearchParams(location.search).has('mockdrawings')) return [MOCK_DRAWINGS_FILE];
       const sheets = Number(new URLSearchParams(location.search).get('mockset'));
       if (sheets >= 2 && sheets <= 16) {
         return [MOCK_DRAWING_SET[0], ...Array.from({ length: sheets }, (_, i) => `/Users/demo/Downloads/sheet-${String(i + 1).padStart(2, '0')}-lines-plan-scan.tif`)];

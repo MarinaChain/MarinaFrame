@@ -1,0 +1,598 @@
+{
+ "pages": [
+  {
+   "page_id": "p1",
+   "file_name": "01-lines-plan.pdf",
+   "skip": false,
+   "sheet": {
+    "type": "lines_plan",
+    "type_label": "Lines plan",
+    "confidence": 0.95,
+    "source": "title:ocr+text:ocr",
+    "evidence": [
+     "title:ocr: lines plan"
+    ],
+    "alternatives": [],
+    "text_source": "ocr",
+    "views": [
+     "sheer",
+     "half_breadth",
+     "body_plan"
+    ],
+    "scale": {
+     "status": "read",
+     "main_ratio": 50.0,
+     "main_text": "1:50",
+     "source": "text:ocr",
+     "scales": [
+      {
+       "ratio": 50.0,
+       "count": 1
+      }
+     ]
+    },
+    "length_m": 24.1,
+    "printed_length_m": null
+   }
+  },
+  {
+   "page_id": "p2",
+   "file_name": "02-general-arrangement.pdf",
+   "skip": false,
+   "sheet": {
+    "type": "general_arrangement",
+    "type_label": "General arrangement",
+    "confidence": 0.95,
+    "source": "text:pdf_text",
+    "evidence": [
+     "text:pdf_text: general arrangement"
+    ],
+    "alternatives": [],
+    "text_source": "ocr",
+    "views": [],
+    "scale": {
+     "status": "read",
+     "main_ratio": 50.0,
+     "main_text": "1:50",
+     "source": "text:ocr",
+     "scales": [
+      {
+       "ratio": 50.0,
+       "count": 1
+      }
+     ]
+    },
+    "length_m": 23.8,
+    "printed_length_m": null
+   }
+  },
+  {
+   "page_id": "p3",
+   "file_name": "03-profile.pdf",
+   "skip": false,
+   "sheet": {
+    "type": "profile",
+    "type_label": "Profile",
+    "confidence": 0.9,
+    "source": "file_name+text:ocr",
+    "evidence": [
+     "file_name: profile"
+    ],
+    "alternatives": [],
+    "text_source": "ocr",
+    "views": [],
+    "scale": {
+     "status": "read",
+     "main_ratio": 50.0,
+     "main_text": "1:50",
+     "source": "text:ocr",
+     "scales": [
+      {
+       "ratio": 50.0,
+       "count": 1
+      }
+     ]
+    },
+    "length_m": 24.0,
+    "printed_length_m": null
+   }
+  },
+  {
+   "page_id": "p4",
+   "file_name": "04-midship-section.pdf",
+   "skip": false,
+   "sheet": {
+    "type": "midship_section",
+    "type_label": "Midship section",
+    "confidence": 0.95,
+    "source": "text:pdf_text",
+    "evidence": [
+     "text:pdf_text: midship section"
+    ],
+    "alternatives": [],
+    "text_source": "ocr",
+    "views": [],
+    "scale": {
+     "status": "read",
+     "main_ratio": 25.0,
+     "main_text": "1:25",
+     "source": "text:ocr",
+     "scales": [
+      {
+       "ratio": 25.0,
+       "count": 1
+      }
+     ]
+    },
+    "length_m": null,
+    "printed_length_m": null
+   }
+  },
+  {
+   "page_id": "p5",
+   "file_name": "05-tank-plan.pdf",
+   "skip": false,
+   "sheet": {
+    "type": "tank_plan",
+    "type_label": "Tank or capacity plan",
+    "confidence": 0.88,
+    "source": "title:ocr",
+    "evidence": [
+     "title:ocr: tank plan"
+    ],
+    "alternatives": [],
+    "text_source": "ocr",
+    "views": [],
+    "scale": {
+     "status": "read",
+     "main_ratio": 100.0,
+     "main_text": "1:100",
+     "source": "text:ocr",
+     "scales": [
+      {
+       "ratio": 100.0,
+       "count": 1
+      }
+     ]
+    },
+    "length_m": 47.6,
+    "printed_length_m": null
+   }
+  },
+  {
+   "page_id": "p6",
+   "file_name": "06-hydrostatics.pdf",
+   "skip": false,
+   "sheet": {
+    "type": "hydrostatics",
+    "type_label": "Hydrostatic tables",
+    "confidence": 0.92,
+    "source": "text:pdf_text",
+    "evidence": [
+     "text:pdf_text: hydrostatic tables"
+    ],
+    "alternatives": [],
+    "text_source": "ocr",
+    "views": [],
+    "scale": {
+     "status": "missing",
+     "main_ratio": null,
+     "scales": [],
+     "source": "none"
+    },
+    "length_m": null,
+    "printed_length_m": null
+   }
+  },
+  {
+   "page_id": "p7",
+   "file_name": "07-structure.pdf",
+   "skip": false,
+   "sheet": {
+    "type": "construction_profile",
+    "type_label": "Construction profile and decks",
+    "confidence": 0.62,
+    "source": "model:claude-sonnet-5-5",
+    "evidence": [
+     "frames and girders"
+    ],
+    "alternatives": [],
+    "text_source": "ocr",
+    "views": [],
+    "scale": {
+     "status": "read",
+     "main_ratio": 50.0,
+     "main_text": "1:50",
+     "source": "text:ocr",
+     "scales": [
+      {
+       "ratio": 50.0,
+       "count": 1
+      }
+     ]
+    },
+    "length_m": 24.3,
+    "printed_length_m": null
+   }
+  },
+  {
+   "page_id": "p8",
+   "file_name": "08-title-sheet.pdf",
+   "skip": false,
+   "sheet": {
+    "type": "other",
+    "type_label": "Other",
+    "confidence": 0.4,
+    "source": "code:no_rule",
+    "evidence": [
+     "no title or keyword rule matched"
+    ],
+    "alternatives": [],
+    "text_source": "ocr",
+    "views": [],
+    "scale": {
+     "status": "missing",
+     "main_ratio": null,
+     "scales": [],
+     "source": "none"
+    },
+    "length_m": null,
+    "printed_length_m": null
+   }
+  },
+  {
+   "page_id": "p9",
+   "file_name": "09-notes.pdf",
+   "skip": false,
+   "sheet": {
+    "type": "other",
+    "type_label": "Other",
+    "confidence": 0.3,
+    "source": "code:no_rule",
+    "evidence": [
+     "no title or keyword rule matched"
+    ],
+    "alternatives": [],
+    "text_source": "ocr",
+    "views": [],
+    "scale": {
+     "status": "missing",
+     "main_ratio": null,
+     "scales": [],
+     "source": "none"
+    },
+    "length_m": null,
+    "printed_length_m": null
+   }
+  }
+ ],
+ "set": {
+  "schema": "marinaframe.drawing_set/1",
+  "rules": [
+   {
+    "id": "hull_lines",
+    "output": "hull",
+    "need": "Lines plan or body plan",
+    "level": "required",
+    "any_of": [
+     "lines_plan"
+    ],
+    "why": "The hull form is read from the lines or the body plan."
+   },
+   {
+    "id": "hull_profile",
+    "output": "hull",
+    "need": "Profile",
+    "level": "required",
+    "any_of": [
+     "profile",
+     "construction_profile",
+     "general_arrangement"
+    ],
+    "via_views": [
+     {
+      "type": "lines_plan",
+      "view": "sheer"
+     }
+    ],
+    "why": "The side view gives length, stem, stern, keel and deck lines."
+   },
+   {
+    "id": "hull_ga",
+    "output": "hull",
+    "need": "General arrangement",
+    "level": "recommended",
+    "any_of": [
+     "general_arrangement"
+    ],
+    "why": "Gives main dimensions and checks the hull against the layout."
+   },
+   {
+    "id": "tanks_plan",
+    "output": "tanks",
+    "need": "Tank or capacity plan",
+    "level": "required",
+    "any_of": [
+     "tank_plan"
+    ],
+    "why": "Tank outlines and volumes come from this plan."
+   },
+   {
+    "id": "tanks_ga",
+    "output": "tanks",
+    "need": "General arrangement",
+    "level": "recommended",
+    "any_of": [
+     "general_arrangement"
+    ],
+    "why": "Shows where each tank lies in the vessel."
+   },
+   {
+    "id": "tanks_profile",
+    "output": "tanks",
+    "need": "Profile",
+    "level": "recommended",
+    "any_of": [
+     "profile",
+     "construction_profile"
+    ],
+    "why": "Gives tank heights."
+   },
+   {
+    "id": "steel_midship",
+    "output": "steel",
+    "need": "Midship section",
+    "level": "required",
+    "any_of": [
+     "midship_section"
+    ],
+    "why": "Plate and stiffener sizes of a typical frame."
+   },
+   {
+    "id": "steel_shell",
+    "output": "steel",
+    "need": "Shell expansion",
+    "level": "required",
+    "any_of": [
+     "shell_expansion"
+    ],
+    "why": "Shell plates and their thickness laid flat."
+   },
+   {
+    "id": "steel_construction",
+    "output": "steel",
+    "need": "Construction profile and decks",
+    "level": "recommended",
+    "any_of": [
+     "construction_profile"
+    ],
+    "why": "Bulkheads, decks and girders along the vessel."
+   },
+   {
+    "id": "booklet_tables",
+    "output": "booklet",
+    "need": "Hydrostatic tables",
+    "level": "required",
+    "any_of": [
+     "hydrostatics"
+    ],
+    "why": "The hull is checked against these tables."
+   },
+   {
+    "id": "booklet_lines",
+    "output": "booklet",
+    "need": "Lines plan",
+    "level": "recommended",
+    "any_of": [
+     "lines_plan"
+    ],
+    "why": "Needed to rebuild the hull the tables describe."
+   },
+   {
+    "id": "booklet_tanks",
+    "output": "booklet",
+    "need": "Tank or capacity plan",
+    "level": "recommended",
+    "any_of": [
+     "tank_plan"
+    ],
+    "why": "Checks tank volumes against the booklet."
+   }
+  ],
+  "outputs": [
+   {
+    "id": "hull",
+    "label": "Hull"
+   },
+   {
+    "id": "tanks",
+    "label": "Tanks"
+   },
+   {
+    "id": "steel",
+    "label": "Steel"
+   },
+   {
+    "id": "booklet",
+    "label": "Booklet check"
+   }
+  ],
+  "checklist": [
+   {
+    "id": "hull_lines",
+    "output": "hull",
+    "need": "Lines plan or body plan",
+    "level": "required",
+    "why": "The hull form is read from the lines or the body plan.",
+    "status": "met",
+    "met_by": [
+     "p1"
+    ],
+    "met_note": ""
+   },
+   {
+    "id": "hull_profile",
+    "output": "hull",
+    "need": "Profile",
+    "level": "required",
+    "why": "The side view gives length, stem, stern, keel and deck lines.",
+    "status": "met",
+    "met_by": [
+     "p2",
+     "p3",
+     "p7",
+     "p1"
+    ],
+    "met_note": ""
+   },
+   {
+    "id": "hull_ga",
+    "output": "hull",
+    "need": "General arrangement",
+    "level": "recommended",
+    "why": "Gives main dimensions and checks the hull against the layout.",
+    "status": "met",
+    "met_by": [
+     "p2"
+    ],
+    "met_note": ""
+   },
+   {
+    "id": "tanks_plan",
+    "output": "tanks",
+    "need": "Tank or capacity plan",
+    "level": "required",
+    "why": "Tank outlines and volumes come from this plan.",
+    "status": "met",
+    "met_by": [
+     "p5"
+    ],
+    "met_note": ""
+   },
+   {
+    "id": "tanks_ga",
+    "output": "tanks",
+    "need": "General arrangement",
+    "level": "recommended",
+    "why": "Shows where each tank lies in the vessel.",
+    "status": "met",
+    "met_by": [
+     "p2"
+    ],
+    "met_note": ""
+   },
+   {
+    "id": "tanks_profile",
+    "output": "tanks",
+    "need": "Profile",
+    "level": "recommended",
+    "why": "Gives tank heights.",
+    "status": "met",
+    "met_by": [
+     "p3",
+     "p7"
+    ],
+    "met_note": ""
+   },
+   {
+    "id": "steel_midship",
+    "output": "steel",
+    "need": "Midship section",
+    "level": "required",
+    "why": "Plate and stiffener sizes of a typical frame.",
+    "status": "met",
+    "met_by": [
+     "p4"
+    ],
+    "met_note": ""
+   },
+   {
+    "id": "steel_shell",
+    "output": "steel",
+    "need": "Shell expansion",
+    "level": "required",
+    "why": "Shell plates and their thickness laid flat.",
+    "status": "missing",
+    "met_by": [],
+    "met_note": ""
+   },
+   {
+    "id": "steel_construction",
+    "output": "steel",
+    "need": "Construction profile and decks",
+    "level": "recommended",
+    "why": "Bulkheads, decks and girders along the vessel.",
+    "status": "met",
+    "met_by": [
+     "p7"
+    ],
+    "met_note": ""
+   },
+   {
+    "id": "booklet_tables",
+    "output": "booklet",
+    "need": "Hydrostatic tables",
+    "level": "required",
+    "why": "The hull is checked against these tables.",
+    "status": "met",
+    "met_by": [
+     "p6"
+    ],
+    "met_note": ""
+   },
+   {
+    "id": "booklet_lines",
+    "output": "booklet",
+    "need": "Lines plan",
+    "level": "recommended",
+    "why": "Needed to rebuild the hull the tables describe.",
+    "status": "met",
+    "met_by": [
+     "p1"
+    ],
+    "met_note": ""
+   },
+   {
+    "id": "booklet_tanks",
+    "output": "booklet",
+    "need": "Tank or capacity plan",
+    "level": "recommended",
+    "why": "Checks tank volumes against the booklet.",
+    "status": "met",
+    "met_by": [
+     "p5"
+    ],
+    "met_note": ""
+   }
+  ],
+  "scale_agreement": {
+   "status": "check",
+   "reference_m": 24.1,
+   "spread": 1.0,
+   "estimates": 5,
+   "items": [
+    {
+     "code": "scale_disagrees",
+     "page_id": "p5",
+     "estimate_m": 47.6,
+     "reference_m": 24.1,
+     "message": "This sheet gives a length of 47.6 m; the other sheets give about 24.1 m."
+    }
+   ]
+  },
+  "counts": {
+   "lines_plan": 1,
+   "general_arrangement": 1,
+   "profile": 1,
+   "midship_section": 1,
+   "tank_plan": 1,
+   "hydrostatics": 1,
+   "construction_profile": 1,
+   "other": 2
+  },
+  "missing_required": [
+   "steel_shell"
+  ],
+  "engineering_approved": false
+ }
+}

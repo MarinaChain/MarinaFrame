@@ -82,6 +82,7 @@ const SCREENS = [
   { name: 'settings (key usage)', path: '/?mockusagefull#settings', steps: { open: 'usage' } },
   { name: 'intake', path: '/#home', steps: { open: 'intake' } },
   { name: 'intake (10 sheets)', path: '/?mockset=10#home', steps: { open: 'intake' } },
+  { name: 'intake (drawing set, one required drawing missing)', path: '/?mockdrawings#home', steps: { open: 'intake' } },
   { name: 'run (draft)', path: '/#home', steps: { vessel: 'Survey' } },
   { name: 'run (declined)', path: '/#home', steps: { vessel: 'Passenger' } },
   { name: 'checks', path: '/#home', steps: { vessel: 'Survey', tab: 'checks' } },
