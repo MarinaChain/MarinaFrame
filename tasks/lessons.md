@@ -220,3 +220,9 @@
 - **Trigger:** View reader v2 first named plan-view runs by order from the centreline. On shipd-1-00679 (tumblehome: the deck line is innermost) and shipd-1-08158 (crossing waterlines) identity fell to 15-45 %. Grid-row heights from every long line also gave 14 spurious waterlines on ten sheets.
 - **Rule:** Name a plan curve from a cross-view correspondence (its centreline end equals the profile end at its height), follow it, and abstain at bunches, crossings and shared ink. Take waterline heights only from labelled grid rows on the regular spacing. Score evidence against development truth before any fitting.
 - **Why:** Breadth order with height is a hull property, not a drawing rule; accurate evidence can still worsen a fit when the fit holds stored boundaries in another datum (section 10.5).
+
+### Pin a new dependency in every lock file
+- **Date:** 2026-11-10
+- **Trigger:** The CAD export lane added rhino3dm to pyproject.toml and requirements-lock.txt only. CI installs the hashed requirements-linux-py312.lock, so the worker's .3dm export failed with ModuleNotFoundError and the real-CAD Rust tests failed for several pushes; local runs passed because the dev .venv had the package.
+- **Rule:** When adding a runtime dependency, add it with hashes to requirements-linux-py312.lock and requirements-worker-macos-arm64-py312.lock as well as pyproject.toml and requirements-lock.txt. Check `git grep -l "^<name>==" -- 'requirements*'` lists all four. A test that fails in CI should print the worker observation, not only "failed".
+- **Why:** CI and the packaged worker install only from the hashed locks, not from the dev environment.
