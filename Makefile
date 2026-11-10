@@ -1,5 +1,5 @@
 # Test tiers (see docs/STRATEGY_2026Q4.md, "Engineering rules").
-#   make test-quick  every commit: format, lint, unit tests; skips real-CAD tests (~1-3 min)
+#   make test-quick  every commit: format, lint, unit and UI tests; skips real-CAD tests (~1-3 min)
 #   make test-full   before a merge: quick tier + real-CAD tests + deterministic smoke run
 #
 # Real-CAD tests are Rust tests marked #[ignore = "real CAD ..."] and pytest tests
@@ -7,14 +7,15 @@
 
 PY ?= $(CURDIR)/.venv/bin/python
 CARGO ?= cargo
+NODE ?= node
 export MARINAFRAME_TEST_PYTHON ?= $(PY)
 export PATH := $(dir $(PY)):$(PATH)
 
 CAD_RUST_TESTS = --test finalization_guards --test validation_matrix --test audit_identity --test draft_guards --test region_pipeline --test investigation_guards
 
-.PHONY: test-quick test-full lint rust-quick python-quick rust-cad python-cad smoke secrets
+.PHONY: test-quick test-full lint rust-quick python-quick ui-quick rust-cad python-cad smoke secrets
 
-test-quick: lint rust-quick python-quick secrets
+test-quick: lint rust-quick python-quick ui-quick secrets
 
 test-full: test-quick rust-cad python-cad smoke
 
@@ -28,9 +29,12 @@ rust-quick:
 python-quick:
 	$(PY) -m pytest -q -p no:cacheprovider -m "not cad"
 
+ui-quick:
+	$(NODE) --test app/ui-tests/
+
 rust-cad:
 	$(CARGO) test --locked -p marinaframe-control $(CAD_RUST_TESTS) -- --ignored --test-threads=1
-	$(CARGO) test --locked -p marinaframe-app-core --test real_task -- --ignored
+	$(CARGO) test --locked -p marinaframe-app-core --test real_task --test draft_task -- --ignored --test-threads=1
 
 python-cad:
 	$(PY) -m pytest -q -p no:cacheprovider -m cad

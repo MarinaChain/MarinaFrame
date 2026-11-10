@@ -3,6 +3,8 @@
 //! `choose_line`; the controller then rebuilds, validates and reaches review.
 //! Needs `MARINAFRAME_TEST_PYTHON`. Set `MARINAFRAME_DUMP_DIR` to also write the
 //! views, events and artifacts as JSON and files (used to make UI screenshots).
+mod support;
+
 use marinaframe_app_core::types::*;
 use marinaframe_app_core::{AppPaths, Backend};
 use std::path::{Path, PathBuf};
@@ -52,8 +54,7 @@ fn dump(backend: &Backend, task: &str, view: &TaskView, name: &str) {
 #[test]
 #[ignore = "real CAD (slow): run with make test-full"]
 fn draft_run_shows_its_guess_and_confirming_it_reaches_review() {
-    let Ok(python) = std::env::var("MARINAFRAME_TEST_PYTHON") else {
-        eprintln!("MARINAFRAME_TEST_PYTHON not set; skipping");
+    let Some(python) = support::worker_python() else {
         return;
     };
     let repo = repo_root();

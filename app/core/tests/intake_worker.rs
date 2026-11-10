@@ -1,5 +1,7 @@
 //! `prepare_intake` and the spec writer through the real Python worker.
-//! Needs `MARINAFRAME_TEST_PYTHON`; the test skips itself when it is missing.
+//! Needs `MARINAFRAME_TEST_PYTHON`; local runs skip when it is missing; CI requires it.
+mod support;
+
 use marinaframe_app_core::intake::{self, Worker};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -28,8 +30,7 @@ fn make_png(python: &str, path: &Path) {
 
 #[test]
 fn prepare_then_write_a_sheet_only_spec() {
-    let Ok(python) = std::env::var("MARINAFRAME_TEST_PYTHON") else {
-        eprintln!("MARINAFRAME_TEST_PYTHON not set; skipping");
+    let Some(python) = support::worker_python() else {
         return;
     };
     let tmp = tempfile::tempdir().unwrap();

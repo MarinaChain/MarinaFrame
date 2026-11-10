@@ -1,3 +1,5 @@
+mod support;
+
 use marinaframe_app_core::{actions::ActionRegistry, sheet_review};
 use serde_json::json;
 
@@ -50,9 +52,7 @@ fn real_worker_replaces_one_unreadable_extra_sheet_without_a_hull_rebuild() {
         .join("../..")
         .canonicalize()
         .unwrap();
-    // Like the other real-worker tests: skip when no worker Python is given (CI's plain cargo test step).
-    let Ok(python) = std::env::var("MARINAFRAME_TEST_PYTHON") else {
-        eprintln!("MARINAFRAME_TEST_PYTHON not set; skipping");
+    let Some(python) = support::worker_python() else {
         return;
     };
     assert!(
