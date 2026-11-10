@@ -21,7 +21,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .sheet_scale import (drawn_width_fraction, length_estimate_m, printed_length_m, read_scale, scale_agreement)
+from .sheet_scale import (drawn_width_fraction, strip_text, length_estimate_m, printed_length_m, read_scale, scale_agreement)
 from .sheet_types import SHEET_TYPE_LABELS, type_sheet
 
 SET_SCHEMA = "marinaframe.drawing_set/1"
@@ -89,6 +89,11 @@ def analyse_page(*, path: Path | None, page_index: int, gray: np.ndarray, info: 
     typed = type_sheet(gray=gray, file_name=file_name, regions=regions, text=text, title=title,
                        use_file_name=use_file_name, ask=ask)
     scale = read_scale(text, where)
+    if scale["status"] == "missing":
+        # Small lettering is lost in the whole-page OCR: read the strips where scales are printed.
+        extra = strip_text(gray, ocr)
+        scale = read_scale(extra, "ocr_strip")
+        text = f"{text}\n{extra}"
     length = length_estimate_m(drawn_width_fraction(gray), info, scale["main_ratio"]) if scale["main_ratio"] else None
     return {"type": typed["type"], "type_label": SHEET_TYPE_LABELS[typed["type"]], "confidence": typed["confidence"],
             "source": typed["source"], "evidence": typed["evidence"], "alternatives": typed.get("alternatives", []),

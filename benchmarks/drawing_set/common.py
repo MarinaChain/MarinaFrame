@@ -55,3 +55,31 @@ def cached_text(path: Path, gray: np.ndarray, ocr) -> tuple[str, str, str]:
     text, title, where = sheet_text(path, 0, gray, ocr)
     key.write_text(json.dumps({"text": text, "title": title, "where": where, "path": str(path)}))
     return text, title, where
+
+
+def cached_strip_text(path: Path) -> str:
+    """OCR text of the bottom and right strips at full resolution (where scales are printed), cached on disk."""
+    from functools import partial
+    from vessel_reconstruction.sheet_scale import BOTTOM_STRIP_FRACTION, RIGHT_STRIP_FRACTION, strip_text
+    from vessel_reconstruction.sheet_types import ocr_read
+    CACHE.mkdir(parents=True, exist_ok=True)
+    key = CACHE / (hashlib.sha1(str(path).encode()).hexdigest() + ".strip.json")
+    if key.exists():
+        return json.loads(key.read_text())["text"]
+    if path.suffix.lower() == ".pdf":
+        import fitz
+        with fitz.open(path) as document:
+            page = document[0]
+            zoom = 200 / 72
+            pixmap = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), colorspace=fitz.csGRAY)
+            gray = np.frombuffer(pixmap.samples, dtype=np.uint8).reshape(pixmap.height, pixmap.width)
+        text = strip_text(gray)
+    else:
+        with Image.open(path) as opened:
+            width, height = opened.size
+            bottom = np.asarray(opened.crop((0, int(height * (1 - BOTTOM_STRIP_FRACTION)), width, height)).convert("L"))
+            right = np.asarray(opened.crop((int(width * (1 - RIGHT_STRIP_FRACTION)), 0, width, height)).convert("L"))
+        read = partial(ocr_read, side=6000)
+        text = "\n".join(read(np.ascontiguousarray(strip))[0] for strip in (bottom, right))
+    key.write_text(json.dumps({"text": text, "path": str(path)}))
+    return text

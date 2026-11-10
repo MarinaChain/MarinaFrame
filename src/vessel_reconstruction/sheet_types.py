@@ -72,6 +72,8 @@ RULES: dict[str, list[tuple[str, float]]] = {
         (r"body\s*plan", 3.5), (r"half\s*breadth", 3.5), (r"sheer\s*plan", 3.5), (r"lines\s*plan", 4.0),
         (r"table\s+of\s+offsets", 3.0), (r"\boffsets\b", 1.5), (r"\blines\b", 1.5), (r"\bbuttocks?\b", 1.0),
         (r"\bwater\s*lines?\b", 0.8), (r"\bstations?\b", 0.8), (r"\bsheer\b", 1.0),
+        # The main-particulars block a lines plan carries.
+        (r"rise\s+of\s+floor|rake\s+of\s+keel|breadth\s+moulded|moulded\s+breadth", 1.2),
     ],
     "general_arrangement": [
         (r"general\s+arrangement", 4.5), (r"\barrangement\b", 1.5), (r"deck\s+plans?", 2.5),
@@ -149,7 +151,7 @@ def ocr_available() -> bool:
     return shutil.which("tesseract") is not None
 
 
-def ocr_read(gray: np.ndarray, runner=subprocess.run) -> tuple[str, str]:
+def ocr_read(gray: np.ndarray, runner=subprocess.run, side: int = OCR_SIDE) -> tuple[str, str]:
     """``(text, title)`` by the ``tesseract`` program: all words, and the words set much larger than the rest.
 
     ('', '') when it is not installed or fails. Large words are the sheet's headings; small words are
@@ -158,7 +160,7 @@ def ocr_read(gray: np.ndarray, runner=subprocess.run) -> tuple[str, str]:
     if not ocr_available():
         return "", ""
     picture = Image.fromarray(gray)
-    scale = OCR_SIDE / max(picture.size)
+    scale = side / max(picture.size)
     if scale < 1:
         picture = picture.resize((max(1, round(picture.width * scale)), max(1, round(picture.height * scale))),
                                  Image.LANCZOS)

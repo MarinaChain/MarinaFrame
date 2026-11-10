@@ -69,3 +69,19 @@ def test_analyse_page_reads_type_and_scale_from_text_given_by_ocr():
     assert sheet_result["type"] == "tank_plan" and sheet_result["scale"]["main_ratio"] == 50.0
     assert sheet_result["printed_length_m"] == 31.2
     assert sheet_result["length_m"] is not None and sheet_result["text_source"] == "ocr"
+
+
+def test_a_scale_missing_from_the_page_text_is_read_from_the_strips(monkeypatch):
+    gray = np.full((400, 900), 255, np.uint8)
+    gray[100:140, 100:500] = 0
+    calls = []
+
+    def ocr(array):
+        calls.append(array.shape)
+        # The whole page gives a heading only; a strip gives the small printed scale.
+        return "TANK PLAN" if array.shape == gray.shape else "SCALE 1:50"
+
+    sheet_result = analyse_page(path=None, page_index=0, gray=gray, info={"dpi": 200.0, "full_px": [900, 400]},
+                                file_name="x.png", ocr=ocr)
+    assert sheet_result["scale"]["main_ratio"] == 50.0 and sheet_result["scale"]["source"] == "text:ocr_strip"
+    assert len(calls) == 3  # page, bottom strip, right strip

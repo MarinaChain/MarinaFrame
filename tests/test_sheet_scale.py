@@ -73,3 +73,9 @@ def test_missing_scale_and_few_estimates_and_printed_length():
     assert [i["code"] for i in result["items"]] == ["scale_missing"]
     result = scale_agreement([sheet("p1", "lines_plan", 31.0), sheet("p2", "profile", 31.1, printed=40.0)])
     assert [i["code"] for i in result["items"]] == ["printed_length_differs"]
+
+
+def test_printed_length_in_a_particulars_table():
+    text = "LENGTH OVER ALL  36.25 [m] LENGTH BETV. PERP.   33.90 [m] BREADTH MOULDED 9.60 [m]"
+    assert printed_length_m(text) == 36.25
+    assert printed_length_m("LENGTH BETWEEN PERPENDICULARS 33.9 m") == 33.9

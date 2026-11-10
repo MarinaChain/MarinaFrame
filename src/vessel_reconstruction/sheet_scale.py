@@ -25,8 +25,10 @@ from .sheet_calibration import parse_scale_ratio
 # Denominators that are real drawing scales; "1:37" or a time "10:30" is not a scale.
 STANDARD_DENOMINATORS = {1, 2, 5, 10, 20, 25, 30, 40, 50, 60, 75, 80, 100, 120, 125, 150, 200, 250, 300, 400, 500,
                          600, 1000}
-# Spread of length estimates (largest over smallest, minus 1) within which the sheets agree.
-AGREEMENT_TOLERANCE = 0.08
+# A sheet's length estimate may differ from the median by this share before it becomes a check item. The
+# estimate is the width of the drawn view, which also holds dimension lines and overhangs (about 13 %
+# too long on the one development sheet with a printed length), so it is not tighter than this.
+AGREEMENT_TOLERANCE = 0.15
 # A printed length and the estimate agree within this share.
 PRINTED_TOLERANCE = 0.08
 # Types whose sheets show the whole hull length in one view.
@@ -37,6 +39,11 @@ LONG_VIEW_ASPECT = 2.0
 MM_PER_INCH = 25.4
 # Metres per foot, for printed lengths in feet.
 M_PER_FT = 0.3048
+# Printed scales sit under the views or in the title block: the bottom and right strips of the page
+# are read again at higher resolution when the whole page gave no scale.
+BOTTOM_STRIP_FRACTION = 0.18
+RIGHT_STRIP_FRACTION = 0.2
+STRIP_OCR_SIDE = 6000
 # Page images smaller than this many pixels across are too small to measure a view.
 MIN_PAGE_PX = 400
 
@@ -44,9 +51,9 @@ _RATIO = re.compile(r"(?<![\d.:/])1\s*:\s*(\d{1,4})(?![\d:])")
 _FRACTION_RATIO = re.compile(r"scale\s*[:=]?\s*1\s*/\s*(\d{1,4})(?![\d/\"'])", re.IGNORECASE)
 _IMPERIAL = re.compile(r"(\d+\s+\d+\s*/\s*\d+|\d+\s*/\s*\d+|\d+)\s*[\"”″']{1,2}\s*=\s*(\d+)\s*['’′]"
                        r"(?:\s*-?\s*\d*\s*[\"”″]{0,2})?")
-_LENGTH_WORDS = (r"(?:l\.?\s?o\.?\s?a\.?|length\s+overall|l\.?\s?b\.?\s?p\.?|l\.?\s?p\.?\s?p\.?|"
-                 r"length\s+between\s+perpendiculars|length\s+o\.?a\.?)")
-_PRINTED_METRES = re.compile(_LENGTH_WORDS + r"\s*[:=.]*\s*(\d{1,3}(?:[.,]\d{1,3})?)\s*m(?![a-z])", re.IGNORECASE)
+_LENGTH_WORDS = (r"(?:l\.?\s?o\.?\s?a\.?|length\s+over\s*all|l\.?\s?b\.?\s?p\.?|l\.?\s?p\.?\s?p\.?|"
+                 r"length\s+betw(?:een|\.|v\.)?\s+perp(?:endiculars|\.)?|length\s+o\.?a\.?)")
+_PRINTED_METRES = re.compile(_LENGTH_WORDS + r"\s*[:=.]*\s*(\d{1,3}(?:[.,]\d{1,3})?)\s*\[?\s*m\b\]?", re.IGNORECASE)
 _PRINTED_FEET = re.compile(_LENGTH_WORDS + r"\s*[:=.]*\s*(\d{2,3})\s*['’]\s*-?\s*(\d{1,2})?", re.IGNORECASE)
 
 
@@ -98,6 +105,24 @@ def read_scale(text: str, text_where: str = "ocr") -> dict:
     return {"status": "mixed" if len(counts) > 1 else "read", "main_ratio": float(main),
             "main_text": printed, "scales": [{"ratio": r, "count": c} for r, c in counts.most_common()],
             "source": f"text:{text_where}"}
+
+
+def strip_text(gray: np.ndarray, ocr=None) -> str:
+    """OCR text of the bottom and right strips of the page (where scales are printed), at high resolution.
+
+    ``gray`` is the page at full resolution. ``ocr`` takes a grey array and returns text or (text, title);
+    by default it is the ``tesseract`` reader at ``STRIP_OCR_SIDE`` pixels.
+    """
+    from functools import partial
+    from .sheet_types import ocr_read
+    read = ocr or partial(ocr_read, side=STRIP_OCR_SIDE)
+    height, width = gray.shape[:2]
+    strips = (gray[int(height * (1 - BOTTOM_STRIP_FRACTION)):, :], gray[:, int(width * (1 - RIGHT_STRIP_FRACTION)):])
+    texts = []
+    for strip in strips:
+        answer = read(np.ascontiguousarray(strip))
+        texts.append(answer if isinstance(answer, str) else answer[0])
+    return "\n".join(texts)
 
 
 # ------------------------------------------------------------------ drawn hull length

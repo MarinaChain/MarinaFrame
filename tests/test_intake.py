@@ -268,7 +268,7 @@ def test_a_corrected_reading_after_the_first_hull_builds_it_again(tmp_path, monk
 
 def test_prepare_types_every_page_and_checks_the_drawing_set(tmp_path, monkeypatch):
     # OCR is replaced so the test does not depend on the tesseract program.
-    monkeypatch.setattr("vessel_reconstruction.sheet_types.ocr_read", lambda gray: ("", ""))
+    monkeypatch.setattr("vessel_reconstruction.sheet_types.ocr_read", lambda gray, **kw: ("", ""))
     pdf = tmp_path / "Tank Plan Rev1.pdf"
     document = fitz.open()
     page = document.new_page(width=600, height=400)

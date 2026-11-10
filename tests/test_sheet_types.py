@@ -111,3 +111,8 @@ def test_a_short_pdf_layer_is_read_with_ocr(monkeypatch):
     from vessel_reconstruction.sheet_types import sheet_text
     text, title, where = sheet_text(Path("x.pdf"), 0, GRAY, lambda g: ("TANK PLAN", "TANK PLAN"))
     assert where == "pdf_text+ocr" and "1:50" in text and "TANK PLAN" in text and title == "TANK PLAN"
+
+
+def test_main_particulars_block_points_to_a_lines_plan():
+    text = "BREADTH MOULDED 9.60 [m]  RISE OF FLOOR 585 [mm]  RAKE OF KEEL 1140 [mm]"
+    assert decide(text, "pdf_text")["type"] == "lines_plan"
