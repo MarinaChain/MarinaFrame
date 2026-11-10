@@ -1,4 +1,68 @@
 {
+ "export_files": {
+  "step": [
+   [
+    "model.step",
+    4812330
+   ]
+  ],
+  "iges": [
+   [
+    "model.iges",
+    5126400
+   ]
+  ],
+  "3dm": [
+   [
+    "model.3dm",
+    3824100
+   ]
+  ],
+  "stl": [
+   [
+    "model.stl",
+    2160084
+   ]
+  ],
+  "offsets": [
+   [
+    "offsets.csv",
+    3912
+   ]
+  ],
+  "hydrostatics": [
+   [
+    "hydrostatics.json",
+    1731
+   ],
+   [
+    "hydrostatics.csv",
+    1452
+   ]
+  ],
+  "report": [
+   [
+    "report.pdf",
+    486220
+   ]
+  ],
+  "tanks": [
+   [
+    "capacity_plan.csv",
+    1204
+   ],
+   [
+    "sounding_tank_fw1.csv",
+    2310
+   ]
+  ],
+  "package": [
+   [
+    "package.zip",
+    15853618
+   ]
+  ]
+ },
  "tasks": [
   {
    "task": "/Users/demo/MarinaFrame/runs/2026-11-07-pilot-boat",

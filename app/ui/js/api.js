@@ -355,17 +355,6 @@ const MOCK_CAPACITY_PLAN = {
   ],
 };
 
-/** File suffixes and sizes (bytes) the mock "writes" for each export. */
-const MOCK_EXPORT_FILES = {
-  step: [['model.step', 4_812_330]],
-  stl: [['model.stl', 2_160_084]],
-  offsets: [['offsets.csv', 3_912]],
-  hydrostatics: [['hydrostatics.json', 1_731], ['hydrostatics.csv', 1_452]],
-  report: [['report.pdf', 486_220]],
-  tanks: [['capacity_plan.csv', 1_204], ['sounding_tank_fw1.csv', 2_310]],
-  package: [['package.zip', 6_903_118]],
-};
-
 function mockTransport() {
   const listeners = new Set();
   let fixtures = null;
@@ -522,7 +511,7 @@ function mockTransport() {
   const mockExports = new Map();
   const mockRevision = (revision) => `r${String(revision).replace(/^r/, '').padStart(4, '0')}`;
   function mockExportResult(task, revision) {
-    const order = ['step', 'stl', 'offsets', 'hydrostatics', 'report', 'tanks', 'structure', 'package', 'manifest'];
+    const order = ['step', 'iges', '3dm', 'stl', 'offsets', 'hydrostatics', 'report', 'tanks', 'structure', 'package', 'manifest'];
     const folderRevision = mockRevision(revision);
     const files = [...(mockExports.get(`${task}|${folderRevision}`) || [])]
       .sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
@@ -1011,7 +1000,7 @@ function mockTransport() {
           notBuilt.push(kind);
           continue;
         }
-        for (const [suffix, bytes] of MOCK_EXPORT_FILES[kind]) add(kind, suffix, bytes);
+        for (const [suffix, bytes] of data.export_files[kind]) add(kind, suffix, bytes);
       }
       add('manifest', 'manifest.json', 2310);
       mockExports.set(`${task}|${folderRevision}`, written);

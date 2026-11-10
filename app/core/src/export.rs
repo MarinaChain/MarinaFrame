@@ -22,8 +22,10 @@ pub const EXPORTS_FOLDER: &str = "exports";
 /// The outputs a person can choose, in display order. `tanks` (capacity plan and sounding
 /// tables) and `structure` (steel tables and OCX file) need the run's tank model or structure
 /// folder (`run_tables`); without them they are listed as not built.
-pub const OUTPUTS: [&str; 8] = [
+pub const OUTPUTS: [&str; 10] = [
     "step",
+    "iges",
+    "3dm",
     "stl",
     "offsets",
     "hydrostatics",
@@ -112,8 +114,10 @@ pub fn check_outputs(outputs: &[String]) -> AppResult<Vec<&'static str>> {
 
 /// Kind of an export file from its name suffix, or `None` for other files.
 pub fn kind_of_file(name: &str) -> Option<&'static str> {
-    const SUFFIXES: [(&str, &str); 8] = [
+    const SUFFIXES: [(&str, &str); 10] = [
         ("_model.step", "step"),
+        ("_model.iges", "iges"),
+        ("_model.3dm", "3dm"),
         ("_model.stl", "stl"),
         ("_offsets.csv", "offsets"),
         ("_hydrostatics.json", "hydrostatics"),
@@ -144,6 +148,8 @@ pub fn kind_of_file(name: &str) -> Option<&'static str> {
 fn not_built_kind(role: &str) -> Option<&'static str> {
     match role {
         "step_model" => Some("step"),
+        "iges_model" => Some("iges"),
+        "rhino_model" => Some("3dm"),
         "stl_mesh" => Some("stl"),
         _ => None,
     }
