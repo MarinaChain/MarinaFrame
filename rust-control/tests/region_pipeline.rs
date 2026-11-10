@@ -8,7 +8,7 @@
 //! the Rust predicate binds the audit contract version and the engine's
 //! solids to the run: a v1-shaped claim or another solid inventory is refused.
 #![allow(dead_code)]
-#[path = "../src/controller.rs"]
+#[path = "../src/controller/mod.rs"]
 mod controller;
 #[path = "../src/models.rs"]
 mod models;

@@ -9,7 +9,7 @@
 //! guess list or a permissive envelope. The last test resolves the guess as an
 //! operator and shows that the ordinary verified path then runs unchanged.
 #![allow(dead_code)]
-#[path = "../src/controller.rs"]
+#[path = "../src/controller/mod.rs"]
 mod controller;
 #[path = "../src/models.rs"]
 mod models;

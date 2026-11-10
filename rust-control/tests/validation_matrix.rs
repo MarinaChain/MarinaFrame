@@ -16,7 +16,7 @@
 //! and then change one thing on disk or in the observation. A few drive the real
 //! controller finish path. Each prepared task is built once per test binary.
 #![allow(dead_code)]
-#[path = "../src/controller.rs"]
+#[path = "../src/controller/mod.rs"]
 mod controller;
 #[path = "../src/models.rs"]
 mod models;
