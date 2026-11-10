@@ -541,14 +541,12 @@ stalled state. Stop uses the existing cancellation and process cleanup path.
 it (the default)**. A positive value, such as 86400, sets an absolute safety deadline.
 Supervision records `timed_out`; without a published receipt the run reports
 `worker_absolute_safety_cap`. Existing saved configurations retain
-their explicit cap. Provider request deadlines, CPU and memory resource limits remain
-unchanged. Nested Python workers in a controller run defer wall-time decisions to
+their explicit cap. `limits.worker_cpu_seconds` also defaults to 0 (unlimited); a positive value up to 600 enables a CPU cap. Provider request deadlines and memory limits remain unchanged. Nested Python workers in a controller run defer wall-time decisions to
 this watchdog. Standalone deterministic Python CAD also has no stall or total wall
 deadline: after five minutes without an accepted advance it logs the stage and keeps
-running. Its supervisor creates request-bound progress telemetry when needed. CPU,
-memory, output and cancellation controls remain active. Sandbox-local
+running. Its supervisor creates request-bound progress telemetry when needed. Python worker CPU and wall time defaults are zero (unlimited). Memory, output and cancellation controls remain active. Inspection batch CPU estimates are planning budgets, not kill limits. Sandbox-local
 ship progress is relayed through the trusted supervisor without widening sandbox writes.
-Sandboxed model-code children have a separate four-hour supervisor wall cap. It is a
+Sandboxed model-code children retain their 120-second CPU limit and a separate four-hour supervisor wall cap. It is a
 security backstop against fabricated progress, not a speed limit for deterministic
 own-code CAD. The trusted caller selects this mode; child environment settings cannot
 turn it off. Standalone sandboxed steps stop after five minutes without an accepted

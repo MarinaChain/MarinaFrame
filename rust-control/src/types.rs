@@ -610,6 +610,7 @@ pub struct OperationalLimits {
     pub worker_wall_seconds: u64,
     pub request_wall_seconds: u64,
     pub worker_memory_bytes: u64,
+    /// Optional CPU cap in seconds; zero disables it.
     pub worker_cpu_seconds: u64,
     pub task_disk_bytes: u64,
     pub max_output_tokens_per_request: u64,
@@ -655,7 +656,7 @@ impl Default for OperationalLimits {
             // Generous: thinking requests took up to 45 s and the old 90 s limit cut them off.
             request_wall_seconds: 300,
             worker_memory_bytes: 5 * 1024 * 1024 * 1024,
-            worker_cpu_seconds: 480,
+            worker_cpu_seconds: 0,
             task_disk_bytes: 2 * 1024 * 1024 * 1024,
             // Thinking spends output tokens on reasoning before the answer.
             max_output_tokens_per_request: 16_384,
@@ -678,7 +679,7 @@ impl OperationalLimits {
     pub fn validate(&self) -> Result<()> {
         if !(1..=MAX_REQUEST_WALL_SECONDS).contains(&self.request_wall_seconds)
             || !(256 * 1024 * 1024..=8 * 1024 * 1024 * 1024).contains(&self.worker_memory_bytes)
-            || !(1..=600).contains(&self.worker_cpu_seconds)
+            || self.worker_cpu_seconds > 600
             || !(32 * 1024 * 1024..=8 * 1024 * 1024 * 1024).contains(&self.task_disk_bytes)
             || !(16..=MAX_OUTPUT_TOKENS_PER_REQUEST).contains(&self.max_output_tokens_per_request)
             || !(4096..=196_608).contains(&self.max_observation_bytes)

@@ -14,7 +14,7 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
-from .isolation import DEFAULT_LIMITS, safe_worker_environment, supervise_process
+from .isolation import SANDBOX_MODEL_LIMITS, safe_worker_environment, supervise_process
 
 
 def sandbox_profile(task: Path, runtime_paths: list[Path], executable: Path | None = None) -> str:
@@ -106,7 +106,7 @@ def read_worker_json(root: Path, relative: Path) -> dict | None:
     return json.loads(data)
 
 
-def run(program: dict, measurements: dict, task: Path, *, audit=None, limits=DEFAULT_LIMITS,
+def run(program: dict, measurements: dict, task: Path, *, audit=None, limits=SANDBOX_MODEL_LIMITS,
         guesses: dict | None = None, detail: dict | None = None) -> dict:
     from .ship_cad import triage_program
 

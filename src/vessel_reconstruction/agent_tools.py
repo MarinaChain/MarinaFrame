@@ -44,15 +44,14 @@ VIEWS = ("body", "plan", "profile", "oblique")
 MAX_CANDIDATES = 10
 # Most sections in one inspection call (and in one observation).
 INSPECTION_BATCH = 12
-# CPU limit of one non-native worker call (RLIMIT_CPU). It is not raised here.
+# Reference CPU budget for planning inspection batches; it does not stop workers.
 INSPECTION_CPU_SECONDS = 45
 # Estimated inspection CPU per megapixel of section ROI. Measured on the
 # Gunnerus composite body plan (docs/BENCHMARK_GUNNERUS.md 7.5): a 4.18 Mpx
 # whole-half-body-plan ROI needs 3.4-3.9 CPU s, and 12 such ROIs 50.4 CPU s
 # (1.0 s/Mpx). Tracing cost grows with the pixels and the overlaid ink in the ROI.
 INSPECTION_CPU_SECONDS_PER_MEGAPIXEL = 1.0
-# A batch is filled only up to this share of the CPU limit, so drawings denser
-# than the measured one still finish inside the unchanged limit.
+# Limit batch size to this share of the reference budget for responsive results.
 INSPECTION_BUDGET_SHARE = 0.5
 MAX_INSPECTION_BYTES = 24 * 1024 * 1024
 # The fit that judges a model's section edit (keep or refuse) and ranks its
@@ -604,8 +603,7 @@ class DomainTools(InvestigationTools):
         out.parent.mkdir(parents=True, exist_ok=True)
         request_path = self.root / f"request-{uuid4().hex}.json"
         write_json(request_path, request)
-        limits = replace(DEFAULT_LIMITS, wall_seconds=120 if native else 60,
-                         cpu_seconds=90 if native else INSPECTION_CPU_SECONDS, output_bytes=64 * 1024**2)
+        limits = replace(DEFAULT_LIMITS, output_bytes=64 * 1024**2)
         command = [sys.executable, "-m", "vessel_reconstruction.agent_render_worker",
                    "--operation", operation, "--request", str(request_path), "--out", str(out),
                    "--limits", json.dumps(asdict(limits)), "--parent", str(os.getpid())]
@@ -676,7 +674,7 @@ class DomainTools(InvestigationTools):
                 return self._observation(False, outcome["state"],
                     error_code="resource_limit" if limited else "inspection_worker_failed",
                     message="Source inspection exceeds the bounded evidence budget." if limited
-                            else "Source inspection worker failed; no recoverable diagnostic is available.",
+                            else outcome.get("error", "Source inspection worker failed; no recoverable diagnostic is available."),
                     failed_section_ids=missing, recovery_tools=["enumerate_strokes", "trace_from_point", "trace_corridor"] if limited else [],
                     resources=resources)
             for section in result["sections"]:
