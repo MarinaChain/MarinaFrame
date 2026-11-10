@@ -32,7 +32,7 @@ P0 = wrong result or unprotected boundary; P1 = structural debt that blocks prog
 | 6 | P0 | `part_revise.py` calls the model directly (hardcoded model, no budget/receipts, regex JSON) | Done in `32e0067`: route through the Rust provider worker | M |
 | 7 | P1 | Product reader source pinned by sha256 in three holdout tests, so every improvement became a wrapper; three hard-chine readers exist, none in the product path | freeze a benchmark copy or git tag; choose one reader by benchmark, integrate, move the rest out | S + M |
 | 8 | P1 | Fixed pixel thresholds in the product reader path (`body_plan_crossings.py:25,48,52,78`, `sheet_calibration.py:44`) tuned on HAER scans; low-res uploads can misread with no flag | Partial: scale the five listed distances by measured ink width and flag low resolution; other fixed pixel thresholds and real-sheet equivalence remain open | M |
-| 9 | P1 | Tool catalog defined in Rust and Python (texts differ); third operation list in `rust_worker.py` | one shared schema file | M |
+| 9 | P1 | Tool catalog defined in Rust and Python (texts differ); third operation list in `rust_worker.py` | Done: `src/vessel_reconstruction/tool_catalog.json`, read by Rust and Python | M |
 | 10 | P1 | Revision export can package another revision's display GLB (`exports/spatial.py:23`) | `32333d6` plus follow-up: bind producer outputs to the build and check their hashes | M |
 | 11 | P1 | One export-format failure drops all CAD (`geometry.py:745`, `pipeline.py:230`) | Done in `082725f`: per-format results; keep valid formats | M |
 | 12 | P1 | Package written in place, manifest last (`exports/package.py:225,292`) | Done in `c31a040`: stage privately, publish atomically | M |
