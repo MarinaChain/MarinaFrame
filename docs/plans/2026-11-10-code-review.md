@@ -33,10 +33,10 @@ P0 = wrong result or unprotected boundary; P1 = structural debt that blocks prog
 | 7 | P1 | Product reader source pinned by sha256 in three holdout tests, so every improvement became a wrapper; three hard-chine readers exist, none in the product path | freeze a benchmark copy or git tag; choose one reader by benchmark, integrate, move the rest out | S + M |
 | 8 | P1 | Fixed pixel thresholds in the product reader path (`body_plan_crossings.py:25,48,52,78`, `sheet_calibration.py:44`) tuned on HAER scans; low-res uploads can misread with no flag | scale by line width / waterline spacing like the newer modules | M |
 | 9 | P1 | Tool catalog defined in Rust and Python (texts differ); third operation list in `rust_worker.py` | one shared schema file | M |
-| 10 | P1 | Revision export can package another revision's display GLB (`exports/spatial.py:23`) | select display artifacts through the build record | M |
-| 11 | P1 | One export-format failure drops all CAD (`geometry.py:745`, `pipeline.py:230`) | per-format results; keep valid formats | M |
-| 12 | P1 | Package written in place, manifest last (`exports/package.py:225,292`) | stage privately, publish atomically | M |
-| 13 | P1 | OCX check compares copied NetArea, not exported contour (`structure/ocx.py:573,734`) | compare contour geometry | M |
+| 10 | P1 | Revision export can package another revision's display GLB (`exports/spatial.py:23`) | Done in `32333d6`: select display artifacts through the build record | M |
+| 11 | P1 | One export-format failure drops all CAD (`geometry.py:745`, `pipeline.py:230`) | Done in `082725f`: per-format results; keep valid formats | M |
+| 12 | P1 | Package written in place, manifest last (`exports/package.py:225,292`) | Done in `c31a040`: stage privately, publish atomically | M |
+| 13 | P1 | OCX check compares copied NetArea, not exported contour (`structure/ocx.py:573,734`) | Done in `cb00afe`: compare contour geometry | M |
 | 14 | P2 | Tank mesh spans gaps between separate hull pieces at one height (volume is correct) (`tanks.py:418,497`; PM checked) | keep separate regions through lofting | L |
 | 15 | P2 | Table hydrostatics uses the outer half-breadth; wrong for sections with inner voids (`exports/hydrostatics.py:268`; PM checked) | integrate occupied intervals | M |
 | 16 | P2 | Display mesh may mesh trimmed faces as their support patch (`display_mesh.py:49,141`) | grid path only for proven-untrimmed faces | M |
