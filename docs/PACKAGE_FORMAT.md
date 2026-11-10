@@ -38,8 +38,8 @@ formats from the package. Formats that were not attempted may be absent.
 | `spaces.json` | `spaces` | Always. One space per tank with a non-empty built mesh; otherwise an empty list. |
 | `frames.json` | `frames` | Always. Stored frame spacing, zero and rows; missing data stays unknown. |
 | `glb/hull.glb` | `display_glb` | If the selected build records `exports.glb`. |
-| `glb/whole-vessel-draft.glb` | `display_glb` | If the selected build records `exports.whole_vessel_glb`. |
-| `glb/tanks.glb` | `display_glb` | If the selected build records `exports.tanks_glb`. |
+| `glb/whole-vessel-draft.glb` | `display_glb` | A build-recorded file, or a task-level file with a matching display record. |
+| `glb/tanks.glb` | `display_glb` | A build-recorded file, or a task-level file with a matching display record. |
 | `glb/<source-name>` ending `_structure.glb` | `display_glb` | Each existing structure display GLB supplied through `structure_dir`. |
 | `<stem>_offsets.csv` | `offsets_table` | Always. Station half-breadths and their source labels. |
 | `<stem>_hydrostatics.json` | `hydrostatics` | Always. Computed summary, or `null` with a reason. |
@@ -261,6 +261,18 @@ The exporter does not generate missing display GLBs or update a stale run-level
 GLB after a part edit. Do not treat display links as a new CAD validation. A
 stored frame table is optional; the exporter does not recover one from drawings
 or infer its zero. The intake IMO text field is still pending.
+
+Task-level models are considered at `whole-vessel-draft.glb`,
+`whole_vessel/whole-vessel-draft.glb` and `tanks.glb`. Each needs an adjacent
+`<filename>.json` record with the revision, selected build path, build-result
+SHA-256, model SHA-256 and units. The assembly, internals and raster tank steps
+accept `--task <task> --revision <revision>` to write this record as they produce
+the GLB. Copy the record with the model if the output is moved into a task.
+The internals step also checks that its input assembly has the same binding.
+Task-local production requires both options; a standalone run without them
+does not claim a revision. Existing unrecorded models are not assigned to the
+current revision by the exporter. The manifest's `display_omissions` list gives
+the reason when a task-level model has no matching record or bytes.
 
 ## Existing test coverage
 

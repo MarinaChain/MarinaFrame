@@ -78,6 +78,9 @@ pub struct ExportResult {
     pub not_built: Vec<String>,
     /// Format outcomes and plain failure reasons from the package manifest.
     pub format_results: serde_json::Value,
+    /// Task display models omitted from this package and their reasons.
+    #[serde(default)]
+    pub display_omissions: Vec<serde_json::Value>,
     pub stamp: String,
     /// Always false: engineering sign-off happens outside MarinaFrame.
     pub engineering_approved: bool,
@@ -236,15 +239,21 @@ pub fn export_run_with_capture(
                 .get("format_results")
                 .cloned()
                 .unwrap_or_else(|| serde_json::json!({})),
+            manifest
+                .get("display_omissions")
+                .and_then(serde_json::Value::as_array)
+                .cloned()
+                .unwrap_or_default(),
         ))
     });
     // The staging folder is ours alone; remove it whether the export worked or not.
     let _ = std::fs::remove_dir_all(&staging);
-    let (mut not_built, format_results) = outcome?;
+    let (mut not_built, format_results, display_omissions) = outcome?;
     not_built.extend(missing_run_tables(task, &chosen));
     let mut result = list_exports(task, &revision)?;
     result.not_built = not_built;
     result.format_results = format_results;
+    result.display_omissions = display_omissions;
     Ok(result)
 }
 
@@ -329,19 +338,28 @@ pub fn list_exports(task: &Path, revision: &str) -> AppResult<ExportResult> {
             .cmp(&order(&b.kind))
             .then(a.file.cmp(&b.file))
     });
-    let format_results = files
+    let manifest = files
         .iter()
         .find(|file| file.kind == MANIFEST)
         .and_then(|file| std::fs::read(&file.path).ok())
         .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
-        .and_then(|manifest| manifest.get("format_results").cloned())
         .unwrap_or_else(|| serde_json::json!({}));
+    let format_results = manifest
+        .get("format_results")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    let display_omissions = manifest
+        .get("display_omissions")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     Ok(ExportResult {
         folder: folder.to_string_lossy().into_owned(),
         revision,
         files,
         not_built: vec![],
         format_results,
+        display_omissions,
         stamp: STAMP.into(),
         engineering_approved: false,
     })

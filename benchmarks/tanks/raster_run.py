@@ -165,7 +165,17 @@ def main() -> None:
                         help='dev: R1 to R7 (section 3); holdout: H1 to H3 (section 4, Huddell truth.json)')
     parser.add_argument('--cache', type=Path, default=Path('work/tanks-raster/cache'))
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--task', type=Path, help='Task whose build the tank display belongs to')
+    parser.add_argument('--revision', help='Revision of the task build')
     args = parser.parse_args()
+    if (args.task is None) != (args.revision is None):
+        parser.error('--task and --revision must be supplied together')
+    from vessel_reconstruction.display_provenance import bind_display_output, check_display_record
+    binding = bind_display_output(args.out / 'tanks.glb', args.task, args.revision)
+    if binding is not None and args.hull:
+        _, reason = check_display_record(args.hull, binding)
+        if reason is not None:
+            raise ValueError(f'Cannot bind the tank display: {reason}.')
 
     started = time.time()
     args.out.mkdir(parents=True, exist_ok=True)
@@ -180,7 +190,10 @@ def main() -> None:
     del sheets
     reading.update(case=args.case, scan_variant=args.scan, seconds=round(time.time() - started, 1))
     model = raster.tank_model(results)
+    if binding != bind_display_output(args.out / 'tanks.glb', args.task, args.revision):
+        raise ValueError('The selected build changed while making the tank model.')
     tanks.save_tanks(model, args.out / 'tanks.npz')
+    tanks.write_tanks_display(model, args.out / 'tanks.glb', task=args.task, revision=args.revision)
     from vessel_reconstruction.exports.tank_tables import write_tank_tables
     stamp = [f'Draft tank model from a raster tank plan ({args.case}). Not approved for construction.',
              'Units metres; x forward from frame 0, y to port, z up from the baseline.']

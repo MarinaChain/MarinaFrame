@@ -7,13 +7,14 @@ from pathlib import Path
 import numpy as np
 
 from ..provenance import digest_file, write_json
+from ..display_provenance import check_display_record
 from ..resources import ResourceLimitError
 from .glb import copy_metres_glb
 from .source import DraftBuild, ExportError, inside, read_json
 
-def display_sources(build: DraftBuild, structure_dir: Path | None) -> list[tuple[Path, str, str]]:
+def display_sources(build: DraftBuild, structure_dir: Path | None) -> tuple[list[tuple[Path, str, str, str | None]], list[dict]]:
     """Existing display models, in link-preference order; paths in the package are relative."""
-    sources = []
+    sources, omissions = [], []
     exports = build.result.get("exports") or {}
     for key, target in (("glb", "glb/hull.glb"),
                         ("whole_vessel_glb", "glb/whole-vessel-draft.glb"),
@@ -22,15 +23,35 @@ def display_sources(build: DraftBuild, structure_dir: Path | None) -> list[tuple
             continue
         candidate = inside(build.build_dir, exports[key])
         if candidate.is_file() and not candidate.is_symlink():
-            sources.append((candidate, target, exports.get(f"{key}_units", "mm")))
+            sources.append((candidate, target, exports.get(f"{key}_units", "mm"), None))
+    binding = {"revision": build.revision_id,
+               "build": build.build_dir.resolve().relative_to(build.task_dir.resolve()).as_posix(),
+               "result_sha256": digest_file(build.build_dir / "result.json")}
+    task_models = (("whole-vessel-draft.glb", "glb/whole-vessel-draft.glb"),
+                   ("whole_vessel/whole-vessel-draft.glb", "glb/whole-vessel-draft.glb"),
+                   ("tanks.glb", "glb/tanks.glb"))
+    for relative, target in task_models:
+        candidate = build.task_dir / relative
+        if not candidate.exists() and not candidate.is_symlink():
+            continue
+        if candidate.parent.is_symlink() or not candidate.resolve().is_relative_to(build.task_dir.resolve()):
+            omissions.append({"file": relative, "reason": "display model path leaves the task folder"})
+            continue
+        record, reason = check_display_record(candidate, binding)
+        if reason is not None:
+            omissions.append({"file": relative, "reason": reason})
+            continue
+        if any(name == target for _, name, _, _ in sources):
+            continue
+        sources.append((candidate, target, record["units"], record["sha256"]))
     if structure_dir is not None:
         for candidate in sorted(Path(structure_dir).glob("*_structure.glb")):
             if candidate.is_file() and not candidate.is_symlink():
-                sources.append((candidate, f"glb/{candidate.name}", "mm"))
-    names = [relative for _, relative, _ in sources]
+                sources.append((candidate, f"glb/{candidate.name}", "mm", None))
+    names = [relative for _, relative, _, _ in sources]
     if len(names) != len(set(names)):
         raise ExportError("Display GLB files have conflicting package names.")
-    return sources
+    return sources, omissions
 
 
 def units_axes(whole_vessel: bool, stl_units: str) -> dict:
@@ -135,16 +156,24 @@ def frame_record(build: DraftBuild) -> dict:
 
 
 def write_spatial(build: DraftBuild, identity: dict, tanks: list | None, structure_dir: Path | None,
-                  out_dir: Path) -> tuple[list[tuple[Path, str, dict]], dict, dict | None]:
+                  out_dir: Path) -> tuple[list[tuple[Path, str, dict]], dict, dict | None, list[dict]]:
     """Write the spatial records and existing GLBs; return manifest entries and units/axes."""
-    sources = display_sources(build, structure_dir)
+    sources, omissions = display_sources(build, structure_dir)
+    if (out_dir / "glb").is_symlink():
+        raise ExportError("The package GLB folder must not be a symbolic link.")
+    selected_names = {relative for _, relative, _, _ in sources}
+    # Staging starts as a copy of the previous package. Do not retain a model
+    # that this export has rejected or that is no longer present.
+    for relative in ("glb/whole-vessel-draft.glb", "glb/tanks.glb"):
+        if relative not in selected_names:
+            (out_dir / relative).unlink(missing_ok=True)
     frames = frame_record(build)
     spaces = tank_spaces(identity, tanks)
     if (out_dir / "frames.json").resolve() == (build.task_dir / "frames.json").resolve():
         raise ExportError("The package frame record must not replace its source table.")
     entries, links, failures = [], {}, []
     copied_whole_vessel = False
-    for source, relative, source_units in sources:
+    for source, relative, source_units, expected_hash in sources:
         target = out_dir / relative
         if target.parent.is_symlink():
             raise ExportError("The package GLB folder must not be a symbolic link.")
@@ -153,6 +182,8 @@ def write_spatial(build: DraftBuild, identity: dict, tanks: list | None, structu
             document = copy_metres_glb(source, target, source_units)
             node_links = _node_links(document, relative)
             source_hash = digest_file(source)
+            if expected_hash is not None and source_hash != expected_hash:
+                raise ExportError("The display model hash changed during export.")
         except ResourceLimitError:
             raise
         except Exception as error:
@@ -174,4 +205,4 @@ def write_spatial(build: DraftBuild, identity: dict, tanks: list | None, structu
     axes = units_axes(copied_whole_vessel, build.stl_units)
     result = ({"status": "failed", "reason": "; ".join(failures)[:1000]} if failures else
               {"status": "ok", "reason": None} if sources else None)
-    return entries, axes, result
+    return entries, axes, result, omissions

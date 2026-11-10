@@ -65,6 +65,7 @@ export function createExport({ host, invoke, captureView = () => null }) {
   let files = []; // ExportedFile[] in the folder now
   let notBuilt = new Set();
   let formatResults = {};
+  let displayOmissions = [];
   let folder = null;
   let busy = false;
   let error = '';
@@ -120,6 +121,8 @@ export function createExport({ host, invoke, captureView = () => null }) {
         el('span', { class: 'export-name' }, output.name),
         el('span', { class: 'export-hint' }, output.hint),
         ...failures.map((failure) => el('span', { class: 'export-hint' }, `${failure.kind.toUpperCase()}: ${failure.reason}`)),
+        ...(output.kind === 'package' ? displayOmissions.map((item) =>
+          el('span', { class: 'export-hint' }, `${item.file}: ${item.reason}`)) : []),
         filesSummary(output.kind, written) ? el('span', { class: 'export-hint' }, `Written: ${filesSummary(output.kind, written)}.`) : null)),
       state,
       finder);
@@ -189,6 +192,7 @@ export function createExport({ host, invoke, captureView = () => null }) {
     folder = result.folder;
     notBuilt = new Set(result.not_built || []);
     formatResults = result.format_results || {};
+    displayOmissions = result.display_omissions || [];
   }
 
   /** The 3D view as a picture for the report (also inside the package), or null when none is wanted or shown. */
@@ -245,6 +249,7 @@ export function createExport({ host, invoke, captureView = () => null }) {
         files = [];
         notBuilt = new Set();
         formatResults = {};
+        displayOmissions = [];
         folder = null;
         error = '';
       }

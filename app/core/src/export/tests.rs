@@ -4,6 +4,21 @@ use std::os::unix::fs::PermissionsExt;
 const STEM: &str = "Box_r0003_DRAFT";
 
 #[test]
+fn listed_package_reports_display_omissions() {
+    let root = tempfile::tempdir().unwrap();
+    let folder = exports_folder(root.path(), "r0003");
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(folder.join(format!("{STEM}_manifest.json")),
+        r#"{"display_omissions":[{"file":"tanks.glb","reason":"display model belongs to revision 'r0002'"}]}"#).unwrap();
+    let result = list_exports(root.path(), "r3").unwrap();
+    assert_eq!(result.display_omissions[0]["file"], "tanks.glb");
+    assert!(result.display_omissions[0]["reason"]
+        .as_str()
+        .unwrap()
+        .contains("r0002"));
+}
+
+#[test]
 fn failed_format_removes_an_old_file_and_keeps_other_outputs() {
     let root = tempfile::tempdir().unwrap();
     let staging = root.path().join("stage");

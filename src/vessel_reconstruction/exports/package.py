@@ -311,7 +311,7 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
             raise ExportError(f"Cannot check booklet: {error}") from error
     with _package_stage(Path(out_dir)) as out_dir:
         stem = build.file_stem
-        entries, units_axes, glb_result = write_spatial(build, identity, tanks, structure_dir, out_dir)
+        entries, units_axes, glb_result, display_omissions = write_spatial(build, identity, tanks, structure_dir, out_dir)
         format_results = dict(build.result.get("export_results") or {})
         if glb_result is not None:
             format_results["glb"] = glb_result
@@ -395,7 +395,8 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
                     "review_state": (build.result.get("review") or {}).get("state", "unreviewed"),
                     "draft_status": (build.result.get("draft") or {}).get("status"),
                     "open_guesses": sum(1 for g in build.guesses if g.get("status") == "open"),
-                    "not_built": missing, "format_results": format_results, "units_axes": units_axes,
+                    "not_built": missing, "format_results": format_results, "display_omissions": display_omissions,
+                    "units_axes": units_axes,
                     "files": [file_entry(path, role, root=out_dir, **extra) for path, role, extra in entries]}
         if booklet_summary is not None:
             manifest["booklet_check"] = booklet_summary

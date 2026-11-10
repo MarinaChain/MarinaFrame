@@ -225,6 +225,12 @@
 - **CI correction (2026-11-10):** Allow missing worker Python only in local runs. Required CI jobs set `MARINAFRAME_TEST_PYTHON` before every Cargo test step and `MARINAFRAME_REQUIRE_WORKER=1`; missing Python must fail those tests. Run macOS Seatbelt probes on macOS, and prove cleanup helpers reject a live child before trusting their exit checks.
 - **Why:** Focused runs miss tests that encode the old file set, and CI's plain cargo step has no worker Python.
 
+### Bind display exports at their producer
+- **Date:** 2026-11-10
+- **Trigger:** Revision export switched to build-record display keys that no real producer wrote, so packages lost task-level whole-vessel and tank models.
+- **Rule:** Trace each actual producer and carry the chosen revision, build identity and file hash from production to export. Test the real producer path as well as revision and hash mismatches; report unbound files instead of assigning them to the current revision.
+- **Why:** A fixture that invents record fields can pass while production never supplies them.
+
 ### Name plan waterlines by drawing correspondence, not by order (MarinaFrame)
 - **Date:** 2026-11-10
 - **Trigger:** View reader v2 first named plan-view runs by order from the centreline. On shipd-1-00679 (tumblehome: the deck line is innermost) and shipd-1-08158 (crossing waterlines) identity fell to 15-45 %. Grid-row heights from every long line also gave 14 spurious waterlines on ten sheets.
