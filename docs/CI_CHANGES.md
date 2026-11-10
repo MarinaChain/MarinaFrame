@@ -36,6 +36,6 @@ Before: locked Linux measured 869–1,516 seconds (14.5–25.3 minutes), plus an
 - `make rust-cad`: passed all eight targets in 455.37 s on a loaded Mac. A no-fail-fast Rust workspace run failed the part-revision worker and two process-group tests; the latter did not publish their fixture files.
 - Slowest Python calls under concurrent local load: CAD complexity 53.52 s, flared bow containment 47.00 s, provisional CAD build 42.76 s, and body-plan label leader 41.06 s. Top-40 calls and setup in `test_body_plan_polyline.py` totalled 154.92 s; its cases are distributed across quick shards.
 - Redundancy: real geometry builds in `test_geometry*.py` and `test_cad_export_check.py` were unmarked. Rust integration targets include source modules by path, so their inline unit tests compile and run repeatedly (for example, 99 shared tests per target). The tests remain intact; converting those targets to library imports is a separate refactor.
-- Full local logs are in ignored `work/ci-measure/`.
+- Full local logs were kept outside the repository.
 
 GitHub branch-protection settings and hosted-run timings cannot be verified from this worktree.
