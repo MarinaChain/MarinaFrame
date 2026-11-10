@@ -178,7 +178,11 @@ fn build_template(omit_identity: bool) -> tempfile::TempDir {
         }
         let tool = next.tool.clone();
         decide(&mut store, &tool, next.arguments);
-        assert_eq!(store.state.last_observation["ok"], true, "{tool} failed");
+        assert_eq!(
+            store.state.last_observation["ok"], true,
+            "{tool} failed: {}",
+            store.state.last_observation
+        );
     }
     if omit_identity {
         // The omission was only for initialization; later receipts report it again.
