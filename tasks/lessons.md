@@ -145,3 +145,9 @@
 - **Trigger:** `until ! pgrep -f "replay_edits" ...` waited forever: the waiter's own command line contained the pattern.
 - **Rule:** Wait on a PID (`kill -0 $pid`), a result-file count, or a done marker, not on `pgrep -f` with a pattern that the waiting command contains.
 - **Why:** Silent waits hide finished work and block the lane.
+
+### Commit a lane's measurement scripts before removing its worktree (MarinaFrame)
+- **Date:** 2026-11-10
+- **Trigger:** The best-of-N lane validated its fit score offline on 130 stored drafts with a script that lived only in its worktree. I removed the worktree after the merge (`git worktree remove --force`), so a later lane (better picks) could not rerun the validation and had to rebuild it from the doc.
+- **Rule:** Before removing a merged worktree, check `git status` there for untracked scripts, benchmarks or replay tools; commit any that produced a reported number (data stays in git-ignored work/), or ask the lane to. Do not use `--force` while untracked code files remain.
+- **Why:** A number in a doc that cannot be reproduced cannot be compared with later work.
