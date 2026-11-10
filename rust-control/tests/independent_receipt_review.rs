@@ -288,6 +288,11 @@ fn worker_stalled_before_reading_large_request_remains_time_bounded() {
     )
     .unwrap();
     assert!(matches!(outcome.state, worker::ProcessState::TimedOut));
+    let message = outcome.message.as_deref().unwrap();
+    assert!(
+        message.contains("observe") && message.contains("min"),
+        "{message}"
+    );
     assert!(
         outcome.spawned && outcome.wall_seconds < 5.0,
         "blocked stdin exceeded bounded process supervision: {outcome:?}"

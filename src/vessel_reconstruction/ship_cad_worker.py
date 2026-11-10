@@ -118,16 +118,16 @@ def run(program: dict, measurements: dict, task: Path, *, audit=None, limits=DEF
     profile.write_text(sandbox_profile(task, runtime_paths()))
     env = safe_worker_environment()
     env.update(HOME=str(task/'work'), TMPDIR=str(task/'work'), PYTHONDONTWRITEBYTECODE='1')
-    if env.get('MARINAFRAME_PROGRESS_PATH'):
-        # Keep all sandbox writes inside work; the supervisor relays this record.
-        env['MARINAFRAME_PROGRESS_PATH'] = str(task/'work'/'progress.json')
+    # Keep all sandbox writes inside work, including standalone progress.
+    env['MARINAFRAME_PROGRESS_PATH'] = str(task/'work'/'progress.json')
+    env.setdefault('MARINAFRAME_PROGRESS_REQUEST', task.name)
     command = ['/usr/bin/sandbox-exec', '-f', str(profile), sys.executable, '-m',
                'vessel_reconstruction.ship_cad_worker', '--task', str(task),
                '--limits', json.dumps(asdict(limits)), '--parent', str(os.getpid())]
     outcome = supervise_process(command, limits=limits, output_dir=task/'work', env=env,
                                 sandboxed_model_code=True)
     # supervise_process has killed the worker group, so these files no longer change.
-    outcome['result'] = (None if outcome['state'] == 'sandbox_safety_cap' else
+    outcome['result'] = (None if outcome['state'] in ('sandbox_safety_cap', 'stalled') else
                          read_worker_json(task/'work', Path('output/provenance.json')))
     outcome['sandbox'] = 'macos-seatbelt-deny-default'
     (task/'worker-receipt.json').write_text(json.dumps(outcome, indent=2) + '\n')

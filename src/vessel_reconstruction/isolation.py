@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import ctypes
 import json
+import logging
 import math
 import os
 from pathlib import Path
@@ -38,16 +39,6 @@ class WorkerLimits:
 
 DEFAULT_LIMITS = WorkerLimits()
 
-# The wall limit stops runaway work, so it counts only work the worker did: a
-# worker past ``wall_seconds`` keeps running while its process group has used
-# less CPU time than that (a busy machine gave it less than one core). A
-# worker that does not progress (a hang, or a machine so busy that it gets
-# under 1 / STALL_WALL_FACTOR of a core) is still stopped at this multiple of
-# the wall limit. 10 covers the 6.5x slowdown seen with parallel CAD lanes
-# (W19a2, shipd-1-00045-L2). RLIMIT_CPU and the memory and file limits are unchanged.
-STALL_WALL_FACTOR = 10
-# How often, after the wall limit, the supervisor reads the group's CPU time.
-CPU_POLL_SECONDS = 1.0
 # Security backstop for sandboxed model code, not a laptop speed limit. Even
 # fabricated progress and repeated waiting cannot extend a child beyond four hours.
 # Own-code CAD workers supervised by Rust retain no default absolute wall limit.
@@ -250,56 +241,6 @@ def child_has_exited(pid: int) -> bool:
     return int.from_bytes(info.raw[offset:offset + 4], sys.byteorder, signed=True) != 0
 
 
-def _ps_time_seconds(text: str) -> float:
-    """Seconds of a ps ``time`` field: [[dd-]hh:]mm:ss[.ff]."""
-    days, _, clock = text.rpartition('-')
-    seconds = 0.0
-    for part in clock.split(':'):
-        seconds = seconds * 60 + float(part)
-    return seconds + (int(days) * 86400 if days else 0)
-
-
-def group_cpu_seconds(pgid: int) -> float | None:
-    """CPU time (user + system) used by the live members of a process group, or None.
-
-    Children that have exited and been reaped no longer count, so the value can
-    be low; the supervisor then waits longer, never less (see STALL_WALL_FACTOR).
-    """
-    try:
-        result = subprocess.run(['/bin/ps', '-A', '-o', 'pgid=', '-o', 'time='],
-                                capture_output=True, text=True, env={'LC_ALL': 'C'}, timeout=5)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if result.returncode != 0:
-        return None
-    total, found = 0.0, False
-    for line in result.stdout.splitlines():
-        fields = line.split()
-        if len(fields) != 2 or fields[0] != str(pgid):
-            continue
-        try:
-            total += _ps_time_seconds(fields[1])
-            found = True
-        except ValueError:
-            return None
-    return total if found else None
-
-
-def wall_limit_reached(elapsed: float, limits: WorkerLimits, cpu_seconds: Callable[[], float | None]) -> bool:
-    """True when a worker has run ``elapsed`` seconds past its time budget.
-
-    The budget is ``limits.wall_seconds`` of CPU time, so the result does not
-    depend on how busy the machine is. ``cpu_seconds`` is read only after the
-    wall limit; when it is unknown, the wall limit applies as before.
-    """
-    if elapsed < limits.wall_seconds:
-        return False
-    if elapsed >= STALL_WALL_FACTOR * limits.wall_seconds:
-        return True
-    used = cpu_seconds()
-    return used is None or used >= limits.wall_seconds
-
-
 def _tree_bytes(root: Path, *, stop_after: int) -> int:
     total = 0
     if root.is_symlink():
@@ -363,10 +304,10 @@ def supervise_process(command: list[str], *, limits: WorkerLimits = DEFAULT_LIMI
     if identity:
         identity['token'] = child_environment['MARINAFRAME_JOB_TOKEN']
     state = 'exited'
-    group = (identity or {}).get('pgid', process.pid)
-    next_cpu_check = 0.0
     controller_supervised = bool(os.environ.get('MARINAFRAME_PROGRESS_PATH'))
     relay = progress.ProgressRelay()
+    watchdog = progress.ProgressWatchdog()
+    stalled = False
     try:
         if on_start:
             on_start(identity or {'pid': process.pid, 'pgid': process.pid, 'start_ticks': -1})
@@ -380,18 +321,27 @@ def supervise_process(command: list[str], *, limits: WorkerLimits = DEFAULT_LIMI
             if stop_event is not None and stop_event.is_set():
                 state = 'interrupted'; break
             elapsed = time.monotonic() - started
+            value = progress.read_child_progress(
+                child_environment.get('MARINAFRAME_PROGRESS_PATH'),
+                child_environment.get('MARINAFRAME_PROGRESS_REQUEST'))
+            next_stalled = watchdog.update(elapsed, value)
             if sandboxed_model_code and elapsed >= SANDBOX_MODEL_WALL_SECONDS:
                 state = 'sandbox_safety_cap'; break
             # The Rust controller watches progress for its entire worker tree.
             # Nested supervisors retain cancellation and all resource limits.
             if controller_supervised:
                 relay.relay(child_environment.get('MARINAFRAME_PROGRESS_PATH'))
-            if not controller_supervised and not sandboxed_model_code and elapsed >= STALL_WALL_FACTOR * limits.wall_seconds:
-                state = 'timed_out'; break
-            if not controller_supervised and not sandboxed_model_code and elapsed >= limits.wall_seconds and elapsed >= next_cpu_check:
-                next_cpu_check = elapsed + CPU_POLL_SECONDS
-                if wall_limit_reached(elapsed, limits, lambda: group_cpu_seconds(group)):
-                    state = 'timed_out'; break
+            if not controller_supervised:
+                if next_stalled and sandboxed_model_code:
+                    state = 'stalled'; break
+                if next_stalled != stalled:
+                    if next_stalled:
+                        logging.getLogger(__name__).warning(
+                            'No progress at %s for %g min. The CAD worker keeps running; stop it to cancel.',
+                            watchdog.stage, progress.NO_PROGRESS_SECONDS / 60)
+                    else:
+                        logging.getLogger(__name__).info('Continuing: %s.', watchdog.stage)
+                    stalled = next_stalled
             if output_dir is not None and _output_bytes(output_dir, limits.output_bytes) > limits.output_bytes:
                 state = 'resource_limited'; break
             time.sleep(0.05)
@@ -399,7 +349,7 @@ def supervise_process(command: list[str], *, limits: WorkerLimits = DEFAULT_LIMI
         kill_process_tree(identity, limits.termination_grace_seconds)
         process.wait(timeout=3)
         raise
-    if state == 'sandbox_safety_cap':
+    if state in ('sandbox_safety_cap', 'stalled'):
         # Popen created this session, and waitid above has not reaped its leader.
         # That unreaped child pins the PID/group identity even when ps is unavailable.
         for attempt in range(SANDBOX_KILL_ATTEMPTS):
@@ -428,14 +378,20 @@ def supervise_process(command: list[str], *, limits: WorkerLimits = DEFAULT_LIMI
                'process': identity, 'limits': asdict(limits)}
     if state == 'sandbox_safety_cap':
         outcome.update(error_code='sandbox_worker_absolute_safety_cap',
-                       error='The sandboxed CAD worker reached the four-hour security limit.')
+                       error=f'The sandboxed CAD worker reached the four-hour security limit (240 min) at {watchdog.stage}.')
+    elif state == 'stalled':
+        outcome.update(error_code='sandbox_worker_stalled',
+                       error=f'The sandboxed CAD worker stopped at {watchdog.stage} after {progress.NO_PROGRESS_SECONDS / 60:g} min without progress.')
+    elif state in ('cancelled', 'interrupted') and stalled:
+        minutes = (time.monotonic() - started - watchdog.last_progress) / 60
+        outcome['error'] = f'The worker was stopped at {watchdog.stage} after {minutes:.1f} min without progress.'
     return outcome
 
 
-def recover_worker_output(output: Path, *, status: str = 'interrupted') -> dict:
+def recover_worker_output(output: Path, *, status: str = 'interrupted', reason: str | None = None) -> dict:
     try:
         from .pipeline import recover_interrupted_run
-        return recover_interrupted_run(output, status=status)
+        return recover_interrupted_run(output, status=status, reason=reason)
     except (ImportError, OSError, ValueError, RuntimeError):
         return {'recovered': False, 'status': 'interrupted'}
 
@@ -460,11 +416,16 @@ def run_isolated(spec_path: str | Path, output_dir: str | Path, *, export_cad: b
     receipt = output.parent / f'.worker-{uuid4().hex}.json'
     command = [sys.executable, '-m', 'vessel_reconstruction.worker', '--spec', str(spec), '--out', str(output),
                '--receipt', str(receipt), '--limits', json.dumps(asdict(limits)), '--parent', str(os.getpid())]
+    env = safe_worker_environment()
+    local_progress = None
+    if not env.get('MARINAFRAME_PROGRESS_PATH'):
+        local_progress = receipt.with_suffix('.progress.json')
+        env.update(MARINAFRAME_PROGRESS_PATH=str(local_progress), MARINAFRAME_PROGRESS_REQUEST=receipt.stem)
     if not export_cad:
         command.append('--no-cad')
     try:
         outcome = supervise_process(command, limits=limits, cancel_event=cancel_event, stop_event=stop_event,
-                                    on_start=on_start, output_dir=output)
+                                    on_start=on_start, output_dir=output, env=env)
         info = {}
         if receipt.is_file() and receipt.stat().st_size <= 64 * 1024:
             try:
@@ -513,7 +474,7 @@ def run_isolated(spec_path: str | Path, output_dir: str | Path, *, export_cad: b
                 except OSError:
                     outcome['error_code'] = 'resource_quarantine_failed'
             recovered_status = 'cancelled' if outcome['state'] == 'cancelled' else 'failed' if outcome['state'] == 'failed' else 'interrupted'
-            outcome['recovery'] = recover_worker_output(output, status=recovered_status)
+            outcome['recovery'] = recover_worker_output(output, status=recovered_status, reason=outcome.get('error'))
             if outcome['recovery'].get('published'):
                 try:
                     if verify_run(output).get('valid'):
@@ -523,3 +484,6 @@ def run_isolated(spec_path: str | Path, output_dir: str | Path, *, export_cad: b
         return outcome
     finally:
         receipt.unlink(missing_ok=True)
+        if local_progress is not None:
+            local_progress.unlink(missing_ok=True)
+            local_progress.with_suffix('.lock').unlink(missing_ok=True)

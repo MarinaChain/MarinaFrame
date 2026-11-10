@@ -1,6 +1,23 @@
 use super::*;
 use serde_json::json;
 
+#[test]
+fn worker_limit_timeline_keeps_stage_and_duration() {
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::create_dir(tmp.path().join("events")).unwrap();
+    let message =
+        "The worker reached the configured safety time limit at Making the mesh after 5.5 min.";
+    write(
+        tmp.path(),
+        1,
+        "task_terminated",
+        json!({"reason":"worker_absolute_safety_cap", "message":message}),
+        "interrupted",
+    );
+    let events = get_events(tmp.path(), 0);
+    assert_eq!(events[0].text, format!("Stopped: {message}"));
+}
+
 fn write(task: &Path, sequence: u64, kind: &str, payload: Value, status: &str) {
     let event = json!({"sequence":sequence,"kind":kind,"time_ms":1000 + sequence,"payload":payload,
         "state_after":{"status":status}});

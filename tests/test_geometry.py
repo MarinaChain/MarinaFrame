@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import numpy as np
 import cadquery as cq
 import pytest
@@ -22,6 +23,20 @@ def test_box_hull_preserves_real_units_and_volume(tmp_path):
     assert step.Volume() == pytest.approx(120e9)
     assert exports["step_units"] == "mm"
     assert metrics["step_roundtrip_relative_error"] < 1e-9
+
+
+def test_hull_mesh_reports_face_progress_without_changing_tessellation(tmp_path, monkeypatch):
+    from vessel_reconstruction import geometry
+    shape = cq.Solid.makeBox(1000, 2000, 3000)
+    records = []
+    monkeypatch.setattr(geometry, 'report_progress', lambda *args, **kwargs: records.append(args))
+    export_geometry(shape, tmp_path, export_cad=False)
+    parts = [record[1:] for record in records if record[0] == 'Making the mesh']
+    assert parts == [(i, 6) for i in range(7)]
+    mesh = json.loads((tmp_path / 'mesh.json').read_text())
+    vertices, triangles = shape.tessellate(2.5, 0.15)
+    assert mesh['vertices'] == [[v.x / 1000, v.y / 1000, v.z / 1000] for v in vertices]
+    assert mesh['faces'] == [list(face) for face in triangles]
 
 
 def test_degenerate_section_is_rejected():

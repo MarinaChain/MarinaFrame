@@ -18,6 +18,7 @@ from itertools import pairwise
 from pathlib import Path
 
 import numpy as np
+from .progress import report as report_progress
 
 
 def _decimated_columns(grid: np.ndarray, tolerance_mm: float) -> list[int]:
@@ -255,7 +256,9 @@ def shape_mesh(shape, tolerance_mm: float, angular_rad: float,
     from OCP.TopAbs import TopAbs_REVERSED
 
     all_vertices, all_triangles, offset = [], [], 0
-    for face in shape.Faces():
+    faces = shape.Faces()
+    report_progress('Making the display mesh', 0, len(faces))
+    for face_index, face in enumerate(faces, 1):
         bspline = _bspline_grid(face)
         smooth = _smooth_bspline(face) if bspline is None else None
         if bspline is not None:
@@ -275,6 +278,7 @@ def shape_mesh(shape, tolerance_mm: float, angular_rad: float,
         all_vertices.append(vertices)
         all_triangles.append(triangles + offset)
         offset += len(vertices)
+        report_progress('Making the display mesh', face_index, len(faces))
     if not all_vertices:
         return np.zeros((0, 3)), np.zeros((0, 3), dtype=int)
     return np.concatenate(all_vertices), np.concatenate(all_triangles)

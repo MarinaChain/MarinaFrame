@@ -743,9 +743,19 @@ def export_geometry(shape: cq.Shape, out: Path, *, export_cad: bool = True,
     # CadQuery's convenience mesh/STL functions default to relative deflection.
     # Our number is in millimetres: premesh explicitly with absolute deflection
     # and one native meshing thread, then read that triangulation for mesh.json.
-    report_progress('Making the mesh')
+    mesh_faces = shape.Faces()
+    report_progress('Making the mesh', 0, len(mesh_faces))
     BRepMesh_IncrementalMesh(shape.wrapped, tolerance_mm, False, 0.15, False)
-    vertices, faces = shape.tessellate(tolerance_mm, 0.15)
+    # Keep the same whole-shape meshing settings and face order as CadQuery.
+    # The kernel call is indivisible; collecting its mesh has face boundaries.
+    shape.mesh(tolerance_mm, 0.15)
+    vertices, faces = [], []
+    for face_index, face in enumerate(mesh_faces, 1):
+        points, triangles = face.tessellate(tolerance_mm, 0.15)
+        offset = len(vertices)
+        vertices.extend(points)
+        faces.extend(tuple(index + offset for index in triangle) for triangle in triangles)
+        report_progress('Making the mesh', face_index, len(mesh_faces))
     mesh = {
         "units": "m",
         "vertices": [[v.x / 1000, v.y / 1000, v.z / 1000] for v in vertices],
