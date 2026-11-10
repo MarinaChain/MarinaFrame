@@ -50,11 +50,14 @@ fn real_worker_replaces_one_unreadable_extra_sheet_without_a_hull_rebuild() {
         .join("../..")
         .canonicalize()
         .unwrap();
-    let python = std::env::var("MARINAFRAME_TEST_PYTHON")
-        .unwrap_or_else(|_| repo.join(".venv/bin/python").to_string_lossy().into_owned());
+    // Like the other real-worker tests: skip when no worker Python is given (CI's plain cargo test step).
+    let Ok(python) = std::env::var("MARINAFRAME_TEST_PYTHON") else {
+        eprintln!("MARINAFRAME_TEST_PYTHON not set; skipping");
+        return;
+    };
     assert!(
         Path::new(&python).is_file(),
-        "set MARINAFRAME_TEST_PYTHON to the worker Python"
+        "MARINAFRAME_TEST_PYTHON is not a file"
     );
     let tmp = tempfile::tempdir().unwrap();
     let inputs = tmp.path().join("inputs");
