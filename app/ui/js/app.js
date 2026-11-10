@@ -21,6 +21,7 @@ import { createEvidenceCard } from './evidence.js';
 import { createShortcutSheet } from './shortcuts.js';
 import { createParts, partState } from './parts.js';
 import { createExport } from './export.js';
+import { capacityRowOf } from './tanks.js';
 import { createUsage } from './usage.js';
 import { createBatch } from './batch.js';
 import { glyphChip, sourceGlyph, stateGlyph, legendPopover } from './glyphs.js';
@@ -128,6 +129,16 @@ const model = createModelView({
   onPick: (id) => {
     if (markTool.pickSection(id)) return;
     if (state.view?.sections.some((s) => s.id === id)) selectSection(id, { focusDrawing: true });
+  },
+  // What the run knows of a part, for its fact card in 3D: the capacity plan row of a tank, the
+  // part record, and the source it was read from (the drawing opens beside the model).
+  partContext: (id) => {
+    const component = state.view?.components?.find((part) => part.id === id) || null;
+    const basis = component?.arguments?.find((argument) => argument.basis)?.basis;
+    const source = component && (basis || component.view)
+      ? { label: [basis, component.view ? `${component.view} view` : null].filter(Boolean).join(' · '), open: () => setLayout('split') }
+      : null;
+    return { row: capacityRowOf(state.view?.capacity_plan, id), component, source };
   },
 });
 

@@ -18,6 +18,7 @@ import { createSectionCut } from './cut3d.js';
 import { createCutPanel, createToolbar, toolButton } from './controls3d.js';
 import { createPartVisibility, describeParts, PART_STATES, steelPartId } from './visibility3d.js';
 import { createPartsPanel } from './parts_panel3d.js';
+import { cardFor, renderFactCard } from './factcard3d.js';
 
 /** Extra size of a section plane around the hull, as a fraction of beam and depth. */
 const PLANE_MARGIN = 0.25;
@@ -98,7 +99,7 @@ function scaleToMetres(geometry, lengthM) {
   if (Math.abs(factor - 1) > 1e-6) geometry.scale(factor, factor, factor);
 }
 
-export function createModelView({ host, onPick = null, onPartPick = null }) {
+export function createModelView({ host, onPick = null, onPartPick = null, partContext = () => ({}) }) {
   const empty = el('div', { class: 'pane-empty' });
   host.append(empty);
 
@@ -235,7 +236,34 @@ export function createModelView({ host, onPick = null, onPartPick = null }) {
     partsButton.setAttribute('aria-expanded', String(open));
     if (open) partsPanel.reveal(highlightedId);
   }
-  host.append(partsPanel.element);
+  // The panel and the fact card share one column at the right, so they never cover each other.
+  const sideColumn = el('div', { class: 'model-side' }, partsPanel.element);
+  host.append(sideColumn);
+  /** The id the fact card shows now (rebuilt only when it changes or the run's data does). */
+  let cardId = null;
+  let cardElement = null;
+  function updateCard(force = false) {
+    if (!force && cardId === highlightedId) return;
+    cardId = highlightedId;
+    cardElement?.remove();
+    cardElement = null;
+    const mesh = cardId ? meshById.get(cardId) : null;
+    if (!mesh) return;
+    const entry = partList().find((item) => item.id === cardId);
+    if (!entry) return;
+    const box3 = new THREE.Box3().setFromObject(mesh);
+    const box = box3.isEmpty() ? null : { min: box3.min.toArray(), max: box3.max.toArray() };
+    cardElement = renderFactCard(cardFor({ entry, extras: mesh.userData, box, reference, context: partContext(cardId) || {} }), { onClose: () => pickPart(null) });
+    sideColumn.append(cardElement);
+  }
+  /** The part list entries (no state), in list order. */
+  function partList() {
+    return describeParts({
+      shell: shellMeshes.map((mesh) => mesh.userData),
+      tanks: tankMeshes.map((mesh) => mesh.userData),
+      steel: steelMeshes.map((mesh) => mesh.userData),
+    });
+  }
   /** Part meshes by id, for the list's states. */
   let meshById = new Map();
   function restyle() {
@@ -244,6 +272,7 @@ export function createModelView({ host, onPick = null, onPartPick = null }) {
   }
   function syncPartsPanel() {
     partsPanel.setStates((id) => (meshById.has(id) ? stateOfMesh(meshById.get(id)) : PART_STATES.shown), visibility.isolatedId, highlightedId);
+    updateCard();
   }
   /** Rebuild the part list from the meshes the model has now (after the vessel or its steel loads). */
   function rebuildParts() {
@@ -257,6 +286,7 @@ export function createModelView({ host, onPick = null, onPartPick = null }) {
     visibility.keepOnly(entries.map((entry) => entry.id));
     partsPanel.setParts(entries);
     partsGroup.hidden = !wholeVessel;
+    updateCard(true);
     if (!wholeVessel) togglePartsPanel(false);
     syncPartsPanel();
   }
@@ -1193,11 +1223,7 @@ export function createModelView({ host, onPick = null, onPartPick = null }) {
     },
     /** The parts of the whole-vessel model: [{ id, name, kind, detail, state }], in list order. */
     partList() {
-      return describeParts({
-        shell: shellMeshes.map((mesh) => mesh.userData),
-        tanks: tankMeshes.map((mesh) => mesh.userData),
-        steel: steelMeshes.map((mesh) => mesh.userData),
-      }).map((entry) => ({ ...entry, state: stateOfMesh(meshById.get(entry.id)) }));
+      return partList().map((entry) => ({ ...entry, state: stateOfMesh(meshById.get(entry.id)) }));
     },
     hidePart(id) {
       visibility.toggleHide(id);

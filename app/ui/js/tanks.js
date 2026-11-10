@@ -14,6 +14,7 @@ const TANK_SOURCES = {
   traced: { word: 'Traced', tone: '', icon: 'src-traced', title: 'Measured from the drawing linework.' },
   read: { word: 'Read', tone: '', icon: 'read', title: 'Read from printed text on the drawing.' },
   guessed: { word: 'Guessed', tone: 'draft', icon: 'st-guessed', title: 'A default or a convention. Check it.' },
+  ai_inferred: { word: 'AI read', tone: 'ai', icon: 'src-ai_inferred', title: 'Read by the AI, with no ink to follow. Check it.' },
 };
 
 /** The fields of one capacity plan row, in the order of the capacity plan CSV. */
@@ -160,7 +161,7 @@ export function soundingView(table) {
   };
 }
 
-function sourceChip(label) {
+export function sourceChip(label) {
   if (!label) return null;
   const source = tankSource(label);
   if (!source.icon) {
