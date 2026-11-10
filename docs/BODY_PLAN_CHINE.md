@@ -974,3 +974,71 @@ Verification (2026-11-10, `b9b2289` plus a test fix): `PYTHONPATH=src:. .venv/bi
 files). The sixth was `test_existing_cells_above_their_own_traced_side_are_unsupported`, whose synthetic station line
 was too short for the guard added late in step 3; its geometry was corrected (test only, no module change) and
 `tests/test_body_plan_polyline.py` passes (20). The pinned hashes above are unchanged. Frozen reader hashes unchanged.
+
+### CALEB JONES: calibration and scorer (written before any reader run on the sheet)
+
+Branch `feature/caleb-holdout`. Calibration `benchmarks/caleb_jones/holdout_value.py` (interface of COLLEEN's). The
+11 pinned files were checked first: all SHA-256 values match the table above. Sheet SHA-256 `c05fb65a...85b8` matches
+SOURCE.md. **No reader has run on the sheet. No truth file, table crop, preview or reader output was opened.**
+
+**Disclosure.** To find the body plan the calibrating agent viewed the upper-left quarter of the sheet (rows 0 to 4800,
+columns 0 to 7200) at 1/8 scale. The left edge of the table of offsets was in that view: its row names (SHEER, CHINE,
+RABBET, and SHEER / CHINE AT STEM under "height above baseline" and "half-breadths from centreline") and the values of
+the two "AT STEM" rows were legible, with the first words of a note ("Stations offset 4'-0""). No value was used; the
+stem rows are not stations and the loader ignores them. Every later view of the sheet masked rows 1900 to 4300 from
+column 5650 (the table), or showed only the body plan, profile, half-breadth plan or scale bar.
+
+| Constant | Value and source |
+|---|---|
+| Pixels per foot | 200.0: feet bar "0" / "5" ticks at 11299 / 12299. Body-plan beam "16'-9 15/16"" 3367 px (200.05); station spacing "4'-0"" 800 px in profile and plan (200.0). The centimetre bar is drawn 0.9 % short (650 px/m) and is not used |
+| Centre column | 3436.5 (dash-dot ink 3435 to 3438 above the stem head and below the keel) |
+| Base row | 2989.0, slope 0 (drawn "Baseline", one pixel, columns 1583 to 5290). The chines lie just below it; bottoms meet the keel near -1.73 ft, keel bottom about -2.28 ft |
+| Measuring rows | no waterlines drawn; 6-inch grid from -2.0 to +4.5 ft (14 rows, 100 px), labels signed ft-in-eighths. -2.0 ft crosses only the keel sides; 4.5 ft is above the highest station top (station 1, about 4.2 ft); the 0.0 ft row is on the drawn base line |
+| Sides | fore RIGHT outer first (7, 6, 5, 4, 3, 2, 1); aft LEFT outer first (107, 8, 9, 10), where 107 is a placeholder for the left copy of station 7 (below) |
+| Grid columns | none drawn |
+| Max offset | 1705 px (hull 1683 left / 1684 right at station 7's top; labels "7" from 1792 px and "Baseline" from 1776 px stay outside) |
+
+Sides, read twice (lesson: check the side assignment twice):
+
+1. Body-plan labels: "1" (innermost, at the stem) to "7" (outermost) along the right sheer; "8", "9", "10" on the left
+   from the outside inward.
+2. Profile and half-breadth plan: the profile is labelled "10" (transom, left) to "1" (stem, right), and the stem
+   rakes forward at the right. Plan half-breadths at the outer line, stations 7, 8, 9, 10: 1683 / 1649 / 1567 / 1455
+   px against the left body-plan curve tops 1681 / 1646 / 1561 / 1451 px; at the heavy sheer line, stations 1, 2, 3,
+   6, 7: 433 / 855 / 1175.5 / 1635 / 1666 px against the right curves 435 / 855 / 1176 / 1636 / 1660 px. Right =
+   forebody, left = aftbody. Both readings agree.
+
+**Station 7 is drawn on both halves.** The left half's outermost curve has no label and is the mirror of the right
+station 7 (left / right offsets 1683 / 1684 px at row 2495, 1656 / 1657 at 2600, 1604 / 1604 at 2800, 1526 / 1527 at
+3100) and of the plan's station 7; the beam dimension spans the two. The label "7" is on the right, so the right curve
+is station 7. The left copy is listed as placeholder station 107 so that rank naming does not call it "8". It is not a
+truth station: the loader requires the truth stations 1 to 10, and the scorer scores only printed cells, so 107 is
+never scored and gives no extra cell (checked with a synthetic truth and synthetic curves; no reader ran). Without the
+placeholder every left curve would be named one station too far out.
+
+Known limits recorded before the run (not fixed; the protocol forbids tuning):
+
+- **Transom outline.** The left half has a heavy, unlabelled outline inside station 10: a top edge near row 2355
+  running in to the centreline, a side down to about row 2550 (1290 px out), a heavy diagonal inward to about row
+  2925 (45 px out) and a vertical beside the keel; a thin line also runs from about row 2955 (1290 px out) to the
+  keel. It crosses the 0.5 to 3.0 ft rows. A reader that counts it as a station may misname or decline the half.
+- **Station 10's corner is rounded** (a curve from about -0.5 ft into the bottom), not a sharp knuckle. The left
+  half has 4 listed curves, of which 3 have sharp chines.
+- **Two lines at the top.** Every station runs up past the heavy "Sheer" line to a thin top line (the covering board
+  top, about 0.1 to 0.2 ft higher). Which of the two the table calls the sheer is not known to this calibration.
+- **Labels inside the reach** (all above the hull at their columns except "Sheer"): left "8" and right "6" (3.0 ft
+  row), left "9" and "10" and right "4" (3.5 ft row), right "2" (glyph foot on the 4.0 ft row), and the word "Sheer"
+  inside the forebody between the sheer line and stations 1 and 2 (534 to 752 px out, 3.5 ft row).
+
+Scorer (step 2): `benchmarks/deadrise_holdout/score.py` and `scripts/measure_deadrise_holdout.py`, pinned and
+unchanged. Point cells: printed (station, SHEER / CHINE / RABBET) height and half-breadth pairs, COLLIER point-scorer
+rules, no extrapolation, identity check with 2 shared points, sheer-, chine- and rabbet-only lines. Printed heights may
+be negative (leading "-" makes the whole value negative; "+" adds 1/16 in); the loader accepts heights from -1.5 to 4
+m. Rows named "... AT STEM" are not point rows and are ignored. Printed waterline cells, if any, are scored as on
+WHITE GULL. `TRUTH_SHA256 = None`: the loader stops until the PM gives the truth file's SHA-256.
+
+Calibration overlay (git-ignored): `work/deadrise_holdouts/caleb-jones_calibration_overlay.png` (SHA-256
+`19c15f706651049a...`), drawn by `scripts/deadrise_calibration_overlay.py` through a wrapper that adds the boat to its
+list (the script file is not changed). Checked by eye: the centre line is on the dash-dot centreline, the base line on
+the drawn "Baseline", the reach lines just outside station 7 on both halves, and the grid from below the bottoms to
+above station 1's top.
