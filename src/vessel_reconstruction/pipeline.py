@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 from .draft import DRAFT_EXPORT_NAMES, check_draft
+from .artifacts import GEOMETRY_NAMES
 from .errors import GeometryError
 from .provenance import digest_file, digest_object, snapshot_implementation, environment_record, write_json
 from .resources import DEFAULT_POLICY, ResourceLimitError, source_extension, validate_sources
@@ -208,7 +209,7 @@ def _capture_table_reading(input_spec: dict, replay_spec: dict, base_dir: Path, 
 def _discard_geometry(stage: Path, result: dict):
     result.update(exports={}, parts=[], metrics={}, normalized_sections=[])
     result.pop("export_results", None)
-    for name in ("mesh.json", "model.step", "model.stl", "model.iges", "model.3dm", "cad_sections.json", *DRAFT_EXPORT_NAMES.values()):
+    for name in GEOMETRY_NAMES:
         (stage / name).unlink(missing_ok=True)
     # Observations are evidence, but cannot be asserted when their required
     # artifact was not successfully written.

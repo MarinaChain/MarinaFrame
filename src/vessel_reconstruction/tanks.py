@@ -200,6 +200,7 @@ class Tank:
     source_labels: dict[str, str] = field(default_factory=dict)
     printed_volume_m3: float | None = None
     notes: list[str] = field(default_factory=list)
+    repairs: list[TriangulationResult] = field(default_factory=list)
 
     def density(self) -> tuple[float | None, str]:
         """Density and its source label: the printed value, else a content default."""
@@ -223,7 +224,9 @@ def capacity_row(tank: Tank) -> dict:
            "volume_100_m3": None, "volume_98_m3": None, "density_t_m3": density, "weight_98_t": None,
            "lcg_m": None, "tcg_m": None, "vcg_m": None, "max_free_surface_moment_tm": None,
            "printed_volume_m3": tank.printed_volume_m3, "source_labels": labels,
-           "engineering_approved": False, "notes": "; ".join(tank.notes)}
+           "engineering_approved": False, "notes": "; ".join(tank.notes),
+           "check_items": [{"code": "triangle_fan_repair", "status": "check", "message": repair.fallback_reason}
+                           for repair in tank.repairs]}
     if tank.triangles is None or len(tank.triangles) == 0:  # not built, or an empty mesh
         return row
     triangles = outward(tank.triangles)
@@ -285,7 +288,13 @@ def clean_polygon(points) -> np.ndarray:
     return array[::-1] if signed_area < 0 else array
 
 
-def triangulate_polygon(polygon: np.ndarray) -> list[tuple[int, int, int]]:
+@dataclass(frozen=True)
+class TriangulationResult:
+    triangles: list[tuple[int, int, int]]
+    fallback_reason: str | None = None
+
+
+def triangulate_polygon(polygon: np.ndarray) -> TriangulationResult:
     """Ear clipping of a simple counter-clockwise polygon; indices into ``polygon``."""
     remaining = list(range(len(polygon)))
     triangles = []
@@ -303,9 +312,9 @@ def triangulate_polygon(polygon: np.ndarray) -> list[tuple[int, int, int]]:
             break
         else:  # no ear found (a self-touching outline): fan the rest
             triangles.extend((remaining[0], remaining[n], remaining[n + 1]) for n in range(1, len(remaining) - 1))
-            return triangles
+            return TriangulationResult(triangles, "Ear clipping found no ear in the remaining outline; a triangle fan was used.")
     triangles.append(tuple(remaining))
-    return triangles
+    return TriangulationResult(triangles)
 
 
 def _points_in_triangle(points, a, b, c) -> np.ndarray:
@@ -314,14 +323,18 @@ def _points_in_triangle(points, a, b, c) -> np.ndarray:
     return (side(a, b) >= 0) & (side(b, c) >= 0) & (side(c, a) >= 0)
 
 
-def prism_triangles(x0: float, x1: float, outline_yz) -> np.ndarray:
+def prism_triangles(x0: float, x1: float, outline_yz, *, repairs: list[TriangulationResult] | None = None) -> np.ndarray:
     """Closed outward mesh of a polygon in the (y, z) plane extruded from x0 to x1."""
     polygon = clean_polygon(outline_yz)
     if len(polygon) < 3 or x1 <= x0:
         return np.zeros((0, 3, 3))
     caps = triangulate_polygon(polygon)
+    if caps.fallback_reason:
+        if repairs is None:
+            raise ValueError(caps.fallback_reason)
+        repairs.append(caps)
     triangles = []
-    for i, j, k in caps:
+    for i, j, k in caps.triangles:
         # Counter-clockwise in (y, z) has its normal along +x: the forward cap.
         triangles.append([(x1, *polygon[i]), (x1, *polygon[j]), (x1, *polygon[k])])
         triangles.append([(x0, *polygon[i]), (x0, *polygon[k]), (x0, *polygon[j])])
@@ -332,10 +345,10 @@ def prism_triangles(x0: float, x1: float, outline_yz) -> np.ndarray:
     return np.asarray(triangles, dtype=float)
 
 
-def slabs_triangles(slabs) -> np.ndarray | None:
+def slabs_triangles(slabs, *, repairs: list[TriangulationResult] | None = None) -> np.ndarray | None:
     """Mesh of a stack of slabs (x0, x1, outline [[y, z], ...]). Touching slabs need not merge:
     their shared caps cancel in every integral above."""
-    pieces = [prism_triangles(x0, x1, outline) for x0, x1, outline in slabs]
+    pieces = [prism_triangles(x0, x1, outline, repairs=repairs) for x0, x1, outline in slabs]
     pieces = [p for p in pieces if len(p)]
     return np.concatenate(pieces) if pieces else None
 

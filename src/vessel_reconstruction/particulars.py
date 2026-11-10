@@ -145,6 +145,29 @@ def pdf_words(path: Path, page_index: int, full_px: list[int]) -> list[dict]:
         return words
 
 
+def _length_precision(reading: dict) -> float:
+    """Half the last printed unit in metres, for a rounded dimension."""
+    text = reading.get("source", {}).get("text", "")
+    match = _LENGTH.search(text) or _PREFIX_LENGTH.search(text)
+    if not match:
+        return 0.0
+    def step(number: str) -> float:
+        number = number.replace(",", ".")
+        return 10 ** -len(number.split(".", 1)[1]) if "." in number else 1.0
+    feet = match.groupdict().get("feet")
+    if feet is not None:
+        inches = match.groupdict().get("inches")
+        if inches:
+            if "/" in inches:
+                resolution = 1 / float(inches.rsplit("/", 1)[1])
+            else:
+                resolution = step(inches)
+            return resolution * 0.0254 / 2
+        return step(feet) * 0.3048 / 2
+    factor = {"mm": 0.001, "cm": 0.01}.get(match["unit"].lower(), 1.0)
+    return step(match["metric"]) * factor / 2
+
+
 def resolve(pages: list[dict], typed: dict | None = None) -> dict:
     """Resolve equal readings, retain every source, and leave conflicting fields unset."""
     typed = typed or {}
@@ -160,11 +183,16 @@ def resolve(pages: list[dict], typed: dict | None = None) -> dict:
     fields, checks = {}, []
     for field, readings in grouped.items():
         first = readings[0]["value"]
-        def equal(value):
+        def equal(reading):
+            value = reading["value"]
             if isinstance(first, (int, float)) and isinstance(value, (int, float)):
-                return math.isclose(first, value, rel_tol=0, abs_tol=1e-6)
+                # Use the coarser reading's rounding interval, plus floating point noise.
+                tolerance = 1e-6
+                if field.endswith("_m"):
+                    tolerance += max(_length_precision(readings[0]), _length_precision(reading))
+                return math.isclose(first, value, rel_tol=0, abs_tol=tolerance)
             return first == value
-        conflict = any(not equal(r["value"]) for r in readings)
+        conflict = any(not equal(r) for r in readings)
         status = "typed" if field in values else "conflict" if conflict else "read"
         if status == "read":
             values[field] = first

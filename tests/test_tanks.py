@@ -276,3 +276,18 @@ def test_loft_outlines_follow_the_hull_in_profile_and_plan():
     # In plan the breadth is the hull chord at z = -0.5.
     x, y = plan[-1]
     assert y == pytest.approx(math.sqrt((2.0 - 0.1 * x) ** 2 - 0.25), abs=0.02)
+
+
+def test_triangle_fan_repair_is_reported_and_requires_review():
+    outline = [(0, 0), (0, 1), (2, 0), (0, 2), (1, 0)]
+    result = tanks.triangulate_polygon(tanks.clean_polygon(outline))
+    assert result.fallback_reason and result.triangles
+    with pytest.raises(ValueError, match="triangle fan"):
+        tanks.prism_triangles(0, 1, outline)
+    repairs = []
+    mesh = tanks.prism_triangles(0, 1, outline, repairs=repairs)
+    tank = tanks.Tank("t1", "Tank", "fresh water", mesh, repairs=repairs)
+    row = tanks.capacity_row(tank)
+    assert row["check_items"][0]["code"] == "triangle_fan_repair"
+    assert row["check_items"][0]["status"] == "check"
+    assert row["engineering_approved"] is False

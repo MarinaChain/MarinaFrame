@@ -23,6 +23,7 @@ from scipy import linalg
 from scipy.interpolate import BSpline, PchipInterpolator
 
 from . import fairing
+from . import fairing_shared
 from .schema import gap
 
 METHOD = "three_view_robust_tensor_spline_v1"
@@ -254,9 +255,9 @@ def _movement_report(surface, points):
 
 
 def fair_sections(sections, evidence, *, plan_weight=DEFAULT_PLAN_WEIGHT, fairness=FAIRNESS, profile_weight=1.):
-    stations = fairing._parse(sections)
+    stations = fairing_shared.parse_stations(sections)
     if stations is None:
-        result, report = fairing._not_applied(sections, "invalid single-region stations for a joint surface.")
+        result, report = fairing_shared.not_applied(sections, "invalid single-region stations for a joint surface.")
         report.update(three_view_applied=False, three_view_reason=report["reason"])
         return result, report
     independent = [p for p in evidence.get("points", []) if p["view"] != "body_plan"]
@@ -299,7 +300,7 @@ def fair_sections(sections, evidence, *, plan_weight=DEFAULT_PLAN_WEIGHT, fairne
         result.append({**place, "points_yz_m": np.column_stack([y, z]).tolist()})
     result.sort(key=lambda s: s["x_m"])
     summary, outside = _movement_report(surface, points)
-    check_items = fairing._check_items(stations, moves, surface.half_beam)
+    check_items = fairing_shared.check_items(stations, moves, surface.half_beam)
     # Each excess carries its location and distance in the report. A compact
     # check item per view/curve points the operator to that list.
     for view, curve in sorted({(p["view"], p["curve_id"]) for p in outside if p["view"] != "body_plan"}):
@@ -312,7 +313,7 @@ def fair_sections(sections, evidence, *, plan_weight=DEFAULT_PLAN_WEIGHT, fairne
                   "body_plan": 1., "half_breadth_plan": plan_weight, "profile": profile_weight},
                   "fairness": fairness, "huber_scale_m": surface.scale, "label_weights": fairing.LABEL_WEIGHTS,
                   "tensor_shape": list(surface.shape), "irls_iterations": iterations},
-              "moves_by_label": fairing._moves_by_label(stations, moves, surface.half_beam),
+              "moves_by_label": fairing_shared.moves_by_label(stations, moves, surface.half_beam),
               "moves_by_view": summary, "point_excesses": outside,
               "coverage": evidence.get("coverage", {}), "hard_boundary_max_move_m": 0.,
               "negative_breadth_projections": projections, "added_half_stations": additions,

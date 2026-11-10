@@ -95,6 +95,7 @@ def claude_ask(model: str = MODEL, runner=subprocess.run, receipts: Path | None 
             raise RuntimeError('the claude CLI gave no answer')
         return result.get('result') or ''
 
+    ask.model_id = model
     return ask
 
 
@@ -230,8 +231,10 @@ Reply with JSON only: {"fore_half": "left" | "right" | "unsure", "evidence": "sh
 class ClaudeReading:
     """The label questions of one sheet, answered by `ask(prompt, pngs) -> text` and cached."""
 
-    def __init__(self, ask, cache: Path | None = None, sheet_id: str = '', images: Path | None = None):
+    def __init__(self, ask, cache: Path | None = None, sheet_id: str = '', images: Path | None = None,
+                 model_id: str | None = None):
         self.ask = ask
+        self.model_id = model_id or getattr(ask, "model_id", None)
         self.images = images  # when set, every question image is saved here (outside the repository)
         self.cache = cache
         self.sheet_id = sheet_id
@@ -241,12 +244,13 @@ class ClaudeReading:
 
     # -- cached question
     def question(self, name: str, prompt: str, pngs: list[bytes]) -> dict:
-        digest = hashlib.sha256((self.sheet_id + name + prompt).encode() + b''.join(pngs)).hexdigest()[:24]
+        digest = hashlib.sha256(json.dumps([self.model_id, self.sheet_id, name, prompt]).encode()
+                                + b''.join(pngs)).hexdigest()[:24]
         if self.images is not None:
             self.images.mkdir(parents=True, exist_ok=True)
             for index, png in enumerate(pngs):
                 (self.images / f'{name}-{index}.png').write_bytes(png)
-        path = self.cache / f'{name}-{digest}.json' if self.cache else None
+        path = self.cache / f'{name}-{digest}.json' if self.cache and self.model_id else None
         if path and path.exists():
             answer = json.loads(path.read_text())
             self.log.append({'question': name, 'cached': True})

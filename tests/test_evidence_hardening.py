@@ -522,3 +522,20 @@ assert 'cadquery' not in sys.modules and 'OCP' not in sys.modules
 """
     completed = subprocess.run([sys.executable, "-c", script, str(tmp_path)], env=os.environ.copy(), capture_output=True, text=True, timeout=30)
     assert completed.returncode == 0, completed.stderr
+
+
+def test_artifact_table_covers_build_output(good_run):
+    from vessel_reconstruction.artifacts import ARTIFACTS
+
+    result = json.loads((good_run / "result.json").read_text())
+    fixed = {artifact.name for artifact in ARTIFACTS.values()}
+    fixed.update(artifact.draft_name for artifact in ARTIFACTS.values() if artifact.draft_name)
+    sources = {source["file"] for source in result["sources"]}
+    sources.update(source["preview_file"] for source in result["sources"] if "preview_file" in source)
+    snapshot = set(result["provenance"]["implementation_snapshot"]["files_sha256"])
+    files = {path.relative_to(good_run).as_posix() for path in good_run.rglob("*") if path.is_file()}
+    assert files <= fixed | sources | snapshot
+    assert {"mesh.json", "model.step", "model.stl", "model.iges", "model.3dm"} <= files
+    assert all(ARTIFACTS[key].name in files for key in ("result", "input_spec", "replay_spec", "manifest"))
+    assert ARTIFACTS["source"].name.format(role="source", extension=".png") in sources
+    assert all(name.startswith(ARTIFACTS["implementation"].name.split("{module}")[0]) for name in snapshot)
