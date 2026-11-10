@@ -21,8 +21,8 @@ from . import progress
 
 @dataclass(frozen=True)
 class WorkerLimits:
-    wall_seconds: float = 180
-    cpu_seconds: int = 120
+    wall_seconds: float = 0  # Zero disables the optional wall cap.
+    cpu_seconds: int = 0  # Zero leaves CPU time unlimited.
     memory_bytes: int = 4 * 1024**3
     file_bytes: int = 128 * 1024**2
     output_bytes: int = 256 * 1024**2
@@ -31,13 +31,15 @@ class WorkerLimits:
 
     def validate(self) -> None:
         for name, value in asdict(self).items():
-            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
-                raise ValueError(f'{name} must be a positive finite number')
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0 or (value == 0 and name not in ('wall_seconds', 'cpu_seconds')):
+                raise ValueError(f'{name} must be finite and positive, or zero for a time limit')
         if self.cpu_seconds != int(self.cpu_seconds) or self.open_files < 16:
             raise ValueError('Invalid CPU/open-file worker limit')
 
 
 DEFAULT_LIMITS = WorkerLimits()
+# Preserve the original CPU and nominal wall settings for untrusted model code.
+SANDBOX_MODEL_LIMITS = WorkerLimits(wall_seconds=180, cpu_seconds=120)
 
 # Security backstop for sandboxed model code, not a laptop speed limit. Even
 # fabricated progress and repeated waiting cannot extend a child beyond four hours.
@@ -308,6 +310,8 @@ def supervise_process(command: list[str], *, limits: WorkerLimits = DEFAULT_LIMI
     relay = progress.ProgressRelay()
     watchdog = progress.ProgressWatchdog()
     stalled = False
+    value = None
+    limit_name = None
     try:
         if on_start:
             on_start(identity or {'pid': process.pid, 'pgid': process.pid, 'start_ticks': -1})
@@ -343,7 +347,7 @@ def supervise_process(command: list[str], *, limits: WorkerLimits = DEFAULT_LIMI
                         logging.getLogger(__name__).info('Continuing: %s.', watchdog.stage)
                     stalled = next_stalled
             if output_dir is not None and _output_bytes(output_dir, limits.output_bytes) > limits.output_bytes:
-                state = 'resource_limited'; break
+                state = 'resource_limited'; limit_name = f'output size limit ({limits.output_bytes} bytes)'; break
             time.sleep(0.05)
     except BaseException:
         kill_process_tree(identity, limits.termination_grace_seconds)
@@ -372,10 +376,20 @@ def supervise_process(command: list[str], *, limits: WorkerLimits = DEFAULT_LIMI
     returncode = process.wait(timeout=3)
     if output_dir is not None and _output_bytes(output_dir, limits.output_bytes) > limits.output_bytes:
         state = 'resource_limited'
+        limit_name = f'output size limit ({limits.output_bytes} bytes)'
     if state == 'exited' and returncode in (-signal.SIGXCPU, -signal.SIGXFSZ):
         state = 'resource_limited'
+        limit_name = (f'CPU limit ({limits.cpu_seconds} seconds)' if returncode == -signal.SIGXCPU
+                      else f'file size limit ({limits.file_bytes} bytes)')
     outcome = {'state': state, 'exit_code': returncode, 'elapsed_seconds': round(time.monotonic() - started, 4),
                'process': identity, 'limits': asdict(limits)}
+    if state == 'resource_limited':
+        value = progress.read_child_progress(child_environment.get('MARINAFRAME_PROGRESS_PATH'),
+                                             child_environment.get('MARINAFRAME_PROGRESS_REQUEST')) or value
+        stage = value['stage'] if value else watchdog.stage
+        unit = 'faces' if stage == 'Making the mesh' else (value['unit'] if value else 'parts')
+        detail = f", {value['part']} of {value['total']} {unit}" if value and value['total'] else ''
+        outcome['error'] = f'Stopped by the {limit_name} while {stage}{detail}.'
     if state == 'sandbox_safety_cap':
         outcome.update(error_code='sandbox_worker_absolute_safety_cap',
                        error=f'The sandboxed CAD worker reached the four-hour security limit (240 min) at {watchdog.stage}.')
@@ -433,6 +447,19 @@ def run_isolated(spec_path: str | Path, output_dir: str | Path, *, export_cad: b
             except (OSError, ValueError):
                 pass
         outcome['resources'] = info.get('resources', {})
+        receipt_limits = {
+            'worker_memory_limit': f'memory limit ({limits.memory_bytes} bytes)',
+            'worker_file_size_limit': f'file size limit ({limits.file_bytes} bytes)',
+            'worker_open_file_limit': f'open-file limit ({limits.open_files} files)',
+        }
+        limit_name = receipt_limits.get(info.get('error_code'))
+        if limit_name:
+            outcome['state'] = 'resource_limited'
+            value = progress.read_child_progress(env.get('MARINAFRAME_PROGRESS_PATH'), env.get('MARINAFRAME_PROGRESS_REQUEST'))
+            stage = value['stage'] if value else 'CAD work'
+            unit = 'faces' if stage == 'Making the mesh' else (value['unit'] if value else 'parts')
+            detail = f", {value['part']} of {value['total']} {unit}" if value and value['total'] else ''
+            outcome['error'] = f'Stopped by the {limit_name} while {stage}{detail}.'
         outcome['result'] = None
         worker_state = outcome['state']
         if worker_state == 'exited' and outcome['exit_code'] != 0:

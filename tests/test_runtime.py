@@ -131,3 +131,56 @@ def test_output_quota_uses_literal_transaction_basename(tmp_path):
     assert _output_bytes(requested,1024)==0
     own=tmp_path/('.run-[ab].staging-'+'b'*32);own.mkdir();(own/'file.bin').write_bytes(b'x'*10)
     assert _output_bytes(requested,1024)==10
+
+
+def test_deterministic_default_has_no_cpu_limit_and_reports_progress(tmp_path):
+    from vessel_reconstruction.isolation import DEFAULT_LIMITS
+    assert DEFAULT_LIMITS.cpu_seconds == 0 and DEFAULT_LIMITS.wall_seconds == 0
+    progress_file = tmp_path / 'progress.json'
+    env = safe_worker_environment()
+    env.update(MARINAFRAME_PROGRESS_PATH=str(progress_file), MARINAFRAME_PROGRESS_REQUEST='cpu-test')
+    prefix = f"import os,json,time; from vessel_reconstruction.worker import apply_limits; from vessel_reconstruction.progress import report; apply_limits(json.loads({json.dumps(asdict(DEFAULT_LIMITS))!r}), os.getppid()); "
+    # One CPU second is the smallest POSIX limit; this loop exceeds it without sleeping.
+    code = prefix + "\nstart=time.process_time()\nwhile time.process_time()-start < 1.3:\n report('Making the mesh', 1, 2)\n"
+    result = supervise_process([sys.executable, '-c', code], limits=DEFAULT_LIMITS, env=env)
+    assert result['state'] == 'exited' and result['exit_code'] == 0
+    assert json.loads(progress_file.read_text())['stage'] == 'Making the mesh'
+
+
+def test_cpu_limit_stop_names_limit_and_progress(tmp_path):
+    limits = replace(LIMITS, cpu_seconds=1)
+    progress_file = tmp_path / 'progress.json'
+    env = safe_worker_environment()
+    env.update(MARINAFRAME_PROGRESS_PATH=str(progress_file), MARINAFRAME_PROGRESS_REQUEST='cpu-test')
+    prefix = f"import os,json; from vessel_reconstruction.worker import apply_limits; from vessel_reconstruction.progress import report; apply_limits(json.loads({json.dumps(asdict(limits))!r}), os.getppid()); report('Making the mesh', 7, 16); "
+    result = supervise_process([sys.executable, '-c', prefix+'\nwhile True: pass'], limits=limits, env=env, sandboxed_model_code=True)
+    assert result['state'] == 'resource_limited'
+    assert 'CPU' in result['error'] and 'Making the mesh' in result['error'] and '7 of 16' in result['error']
+
+
+def test_resource_stop_reason_reaches_run_recovery(tmp_path, monkeypatch):
+    from vessel_reconstruction import isolation
+    message = 'Stopped by the CPU limit (1 seconds) while Making the mesh, 7 of 16 part.'
+    monkeypatch.setattr(isolation, 'supervise_process', lambda *args, **kwargs: {
+        'state': 'resource_limited', 'exit_code': -signal.SIGXCPU, 'error': message})
+    recovered = {}
+    def recover(output, *, status, reason):
+        recovered.update(status=status, reason=reason)
+        return {'published': False}
+    monkeypatch.setattr(isolation, 'recover_worker_output', recover)
+    isolation.run_isolated(tmp_path / 'spec.json', tmp_path / 'run')
+    assert recovered['reason'] == message
+
+
+def test_worker_receipt_identifies_file_size_limit(tmp_path, monkeypatch):
+    import errno
+    from vessel_reconstruction import pipeline, worker
+    receipt = tmp_path / 'receipt.json'
+    monkeypatch.setattr(worker, 'apply_limits', lambda *args: None)
+    def exceed_file_limit(*args, **kwargs):
+        raise OSError(errno.EFBIG, 'File too large')
+    monkeypatch.setattr(pipeline, 'reconstruct', exceed_file_limit)
+    monkeypatch.setattr(sys, 'argv', ['worker', '--spec', 'spec', '--out', 'out',
+                                      '--receipt', str(receipt), '--limits', '{}', '--parent', '1'])
+    assert worker.main() == 1
+    assert json.loads(receipt.read_text())['error_code'] == 'worker_file_size_limit'

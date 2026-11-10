@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import errno
 import json
 import os
 import signal
@@ -20,8 +21,7 @@ def apply_limits(limits: dict, parent_pid: int) -> None:
         raise RuntimeError('Linux or macOS is required for the isolated worker profile.')
     # Kill the worker if the controller dies. Supervisor kills its process group
     # on normal exit/cancel; durable recovery handles a surviving group leader.
-    # macOS has no parent-death signal: there an orphaned worker is bounded only
-    # by RLIMIT_CPU (see docs/CONTINUATION_STATUS.md).
+    # macOS has no parent-death signal; recovery handles orphaned workers.
     if linux:
         libc = ctypes.CDLL(None, use_errno=True)
         if libc.prctl(1, signal.SIGKILL, 0, 0, 0) != 0:
@@ -30,7 +30,8 @@ def apply_limits(limits: dict, parent_pid: int) -> None:
         raise RuntimeError('Worker parent identity could not be established.')
     resource = posix_resource()
     cpu_seconds = int(limits['cpu_seconds'])
-    resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds + 1))
+    if cpu_seconds:
+        resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds + 1))
     # On macOS RLIMIT_AS is an alias of RLIMIT_RSS: the kernel rejects lowering
     # it and does not enforce RSS limits, so the memory limit is Linux-only.
     memory_limit = ((resource.RLIMIT_AS, int(limits['memory_bytes'])),) if linux else ()
@@ -66,6 +67,10 @@ def main() -> int:
         receipt = {'error_code': 'worker_memory_limit'}
     except FileExistsError:
         receipt = {'error_code': 'output_exists'}
+    except OSError as exc:
+        resource_errors = {errno.EFBIG: 'worker_file_size_limit', errno.EMFILE: 'worker_open_file_limit'}
+        receipt = {'error_code': resource_errors.get(exc.errno, 'worker_exception'),
+                   'exception_type': type(exc).__name__}
     except BaseException as exc:
         receipt = {'error_code': 'worker_exception', 'exception_type': type(exc).__name__}
     if resource is not None:

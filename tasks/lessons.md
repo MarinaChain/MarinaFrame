@@ -7,6 +7,7 @@
 - **Why:** Elapsed time depends on machine load. A slow build can still make progress.
 - **Security correction (2026-11-10):** Sandboxed model-code children are untrusted. Read telemetry through non-blocking, no-follow descriptors, require a regular file and validate bounded JSON fields. Trusted supervisors count stage/part changes with a finite advance budget; never trust a child's counter. Keep a four-hour security cap for these children only, with a clear error and no automatic retry. Deterministic own-code CAD retains no default total wall limit.
 - **Own-code correction (2026-11-10):** Apply the trust policy in every supervisor, including standalone and nested Python CAD. A deterministic kernel call with no part changes must only report a stall and keep running. Report natural section, mesh-face, format and part boundaries; never advance on a timer. Pass the specific stage and duration from supervision into recovery instead of replacing it with the generic publication message.
+- **CPU correction (2026-11-10):** Do not apply CPU-time limits to deterministic CAD by default; preserve sandbox limits and report the stopping limit with progress.
 - **Cleanup correction (2026-11-10):** A zombie leader does not prove its process group is empty. After a refused group signal on macOS, check for live group members, retry SIGKILL within a fixed bound, and raise if cleanup remains unproven. Keep the leader unreaped until that check succeeds.
 
 ### Freeze executable and Python source for concurrent evaluation
