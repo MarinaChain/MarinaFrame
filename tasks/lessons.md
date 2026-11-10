@@ -163,3 +163,8 @@
 - **Trigger:** Cost-per-ship ledgers were placed in outputs, and the initial collector omitted the live hull intake calibration log.
 - **Rule:** Keep per-run derived JSON/CSV ledgers in git-ignored work/; commit the accounting script, tests and dated report only. Count intake calibration receipts as well as controller receipts. The calibration log's input_tokens already includes cache reads and writes, so preserve it as collapsed prompt usage and price it with a range. Do not add intake time again to inclusive case wall time.
 - **Why:** Generated run data does not belong in source history, and omitted or misclassified calibration usage understates the hull cost.
+### Keep sheet replacement separate from source classification
+- **Date:** 2026-11-10
+- **Trigger:** Recovery must accept a clearer scan without discarding the old draft or reusing its old pixel reading.
+- **Rule:** Keep source versions and dependent output state in the run. Record a uniform resolution adjustment explicitly; require new calibration for a changed page shape. Keep unrelated outputs. Leave independent checks not run while draft guesses remain open. Test the single-file picker as well as the worker command.
+- **Why:** A readable replacement is input for another draft revision, not an engineering review.

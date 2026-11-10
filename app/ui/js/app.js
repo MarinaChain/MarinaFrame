@@ -15,6 +15,7 @@ import { createWelcome } from './welcome.js';
 import { createPalette } from './palette.js';
 import { buildChanges, renderChanges } from './changes.js';
 import { createAreas } from './areas.js';
+import { renderSheetReview, renderSheetHistory } from './sheets.js';
 import { calibrationChoice } from './calibration.js';
 import { createEvidenceCard } from './evidence.js';
 import { createShortcutSheet } from './shortcuts.js';
@@ -609,6 +610,18 @@ function renderTask({ fresh = false } = {}) {
   renderActions();
   renderNotices();
   renderDraftSummary();
+  fill($('sheet-review'), renderSheetReview(state.view?.sheet_review, {
+    busy: state.busy || state.view?.summary.status === 'running',
+    onReplace: async (sheetId) => {
+      const task = state.task;
+      const files = await pickDrawingFiles({ multiple: false });
+      if (!files.length || task !== state.task) return;
+      if (files.length !== 1) { showError(new Error('Choose one replacement file.')); return; }
+      if (await runAction('Replacing the sheet…', () => invoke('replace_sheet', { task, sheet_id: sheetId, file: files[0] }))) {
+        await loadTask({ fresh: true });
+      }
+    },
+  }));
   renderNarration();
   renderStrip();
   renderSelection();
@@ -743,6 +756,7 @@ function renderHistory() {
     runs.length
       ? el('ul', { class: 'history-list' }, ...runs.map(row))
       : el('div', { class: 'page-empty' }, icon('queue'), el('p', {}, 'No runs of this vessel yet.')),
+    renderSheetHistory(state.view?.sheet_review?.history),
     state.task ? changesSection(vessel) : null));
 }
 

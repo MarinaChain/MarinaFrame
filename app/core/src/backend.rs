@@ -263,6 +263,11 @@ impl Backend {
         let settings = self.run_settings();
         let runs = PathBuf::from(&settings.runs_folder);
         let inputs = intake::write_run_inputs(&runs, &self.intake_worker(&settings), preview)?;
+        util::atomic_json(
+            &inputs.join("sheet_review_preview.json"),
+            &serde_json::json!({"warnings": preview.warnings}),
+            false,
+        )?;
         let spec = inputs.join("spec.json");
         let task = self.start_run(&spec.to_string_lossy())?;
         intake::copy_inputs_to_task(&inputs, Path::new(&task))?;
@@ -444,6 +449,13 @@ impl Backend {
     pub fn is_busy(&self, task: &str) -> bool {
         self.task_path(task)
             .is_ok_and(|path| self.registry.is_busy(&path))
+    }
+
+    pub fn replace_sheet(&self, task: &str, sheet_id: &str, file: &str) -> AppResult<()> {
+        let path = self.task_path(task)?;
+        crate::sheet_review::replace_sheet(&self.registry, &path, sheet_id, Path::new(file))?;
+        signoff::withdraw(&self.paths, &path)?;
+        Ok(())
     }
 
     pub fn cancel_task(&self, task: &str) -> AppResult<()> {

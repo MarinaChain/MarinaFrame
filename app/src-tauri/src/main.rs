@@ -101,6 +101,16 @@ async fn start_run(backend: Shared<'_>, spec_path: String) -> Result<Started, Ap
     .await
 }
 
+#[tauri::command(rename_all = "snake_case")]
+async fn replace_sheet(
+    backend: Shared<'_>,
+    task: String,
+    sheet_id: String,
+    file: String,
+) -> Result<(), AppError> {
+    run(backend, move |b| b.replace_sheet(&task, &sheet_id, &file)).await
+}
+
 /// Read a dropped drawing set (PDF, PNG, TIFF, JPEG) without a spec file.
 #[tauri::command(rename_all = "snake_case")]
 async fn prepare_intake(
@@ -447,6 +457,7 @@ fn main() {
             read_artifact,
             start_run,
             start_sample_run,
+            replace_sheet,
             prepare_intake,
             start_intake_run,
             export_run,

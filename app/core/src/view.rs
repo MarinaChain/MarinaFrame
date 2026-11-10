@@ -164,6 +164,7 @@ pub fn get_task(task: &Path, context: &ViewContext) -> Result<TaskView, String> 
         }
     }
     Ok(TaskView {
+        sheet_review: crate::sheet_review::read(task),
         source_counts: draft_sources
             .as_ref()
             .map(|s| s.counts.clone())

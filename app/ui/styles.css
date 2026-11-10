@@ -3218,3 +3218,18 @@ code { font-family: var(--font-mono); }
 .export-accuracy-note { margin: 0; color: var(--text-3); }
 .export-accuracy-line { display: flex; align-items: flex-start; gap: var(--space-sm); margin: 0; }
 .export-accuracy-line .badge { flex: none; }
+
+/* A partial run keeps its work area; sheet recovery is a compact row above it. */
+.sheet-review { padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.sheet-strip { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.sheet-item { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.sheet-name { font-weight: 600; }
+.sheet-reason { max-width: 32ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-draft-note { margin: 6px 0 0; color: var(--ink-3); font-size: 11px; }
+.sheet-requests { margin-top: 6px; }
+.sheet-requests summary { cursor: pointer; }
+.sheet-requests ul, .sheet-history ul { list-style: none; padding: 0; margin: 8px 0; }
+.sheet-requests li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 0; }
+.sheet-requests small, .sheet-history small { color: var(--ink-3); }
+.sheet-history { margin: 20px 0; }
+.sheet-history li { display: flex; gap: 8px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--line); }

@@ -68,6 +68,10 @@ pub fn plain_message(code: &str) -> String {
         "artifact_type_not_allowed" => "Only images and 3D models can be opened.",
         "artifact_too_large" => "That file is too large to open.",
         "invalid_settings" => "The settings are not valid.",
+        "replacement_file_invalid" => {
+            "The replacement could not be read with this page and scale. Choose a readable drawing."
+        }
+        "sheet_resume_pending" => "Resume the pending run action before replacing a sheet.",
         "not_built_yet" => "This run has no model to change yet.",
         "revision_instruction" => "Say what to fix in up to 500 characters.",
         "revision_needs_region_range_or_sections" => "Mark a region or pick a section first.",
