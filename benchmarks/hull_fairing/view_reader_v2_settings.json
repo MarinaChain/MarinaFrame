@@ -1,0 +1,49 @@
+{
+  "method": "view_reader_v2",
+  "frozen": "2026-11-10, after fit-half (L0) development only; before any check-half reading",
+  "fit_cases": [
+    "dtmb5415-3v-L0",
+    "series60-3v-L0",
+    "shipd-1-00679-3v-L0",
+    "shipd-1-08158-3v-L0",
+    "shipd-1-09867-3v-L0"
+  ],
+  "settings": {
+    "BASELINE_MATCH_PX": 3.0,
+    "CENTRELINE_CLEARANCE_LW": 1.0,
+    "CENTRELINE_ROW_SHARE": 0.4,
+    "DARK_PERCENTILE": 0.5,
+    "DECK_END_LW": 2.0,
+    "DEFAULT_LINE_WIDTH_PX": 3.0,
+    "EXCLUSION_PASSES": 3,
+    "EXISTS_BAND_LW": 1.5,
+    "GRID_ROW_SHARE": 0.5,
+    "GRID_SNAP_SHARE": 0.1,
+    "HULL_TONE_SHARE": 0.35,
+    "LABEL_BOX_PX": [
+      80,
+      6
+    ],
+    "LABEL_MIN_PIXELS": 6,
+    "LABEL_TONE_SHARE": 0.6,
+    "LIGHT_CONTRAST": 15.0,
+    "MIN_WATERLINE_Z_M": 0.25,
+    "OUTLINE_SHARE": 0.25,
+    "PAPER_PERCENTILE": 90,
+    "PROFILE_END_HEIGHTS": 24,
+    "SAMPLE_STEP_M": 0.5,
+    "SEED_MAX_Y_LW": 8.0,
+    "SEED_OFFSET_LW": 2.0,
+    "SEED_TIE_LW": 3.0,
+    "SHARED_INK_PX": 1.0,
+    "SWEEP_AGREE_PX": 1.0,
+    "TANGENT_FACTOR": 2.5,
+    "TRACK_GAP_PX": 12,
+    "TRACK_POINTS": 6,
+    "TRACK_TOL_LW": 1.2,
+    "TRACK_TOL_PX": 3.0
+  },
+  "reader_sha256": "bec193a95bd3c57b94c003a0ba7d0e30c134d4a0498b28cb6c061f09fd9a8438",
+  "fairing_choice": "benchmarks/hull_fairing/three_view_choice.json (unchanged, plan weight 0.5)",
+  "engineering_approved": false
+}
