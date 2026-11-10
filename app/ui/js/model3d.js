@@ -18,7 +18,10 @@ import { createSectionCut } from './cut3d.js';
 import { createCutPanel, createToolbar, toolButton } from './controls3d.js';
 import { createPartVisibility, describeParts, PART_STATES, steelPartId } from './visibility3d.js';
 import { createPartsPanel } from './parts_panel3d.js';
+import { tipAttributes } from './tooltip.js';
 import { cardFor, renderFactCard } from './factcard3d.js';
+import { bulkheadChoices, bulkheadPositions, bulkheadSpace, tankSpaces } from './spaces3d.js';
+import { createSpacesPanel } from './spaces_panel3d.js';
 
 /** Extra size of a section plane around the hull, as a fraction of beam and depth. */
 const PLANE_MARGIN = 0.25;
@@ -220,24 +223,50 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
     },
     onPick: (id) => pickPart(id === highlightedId ? null : id),
   });
-  const partsButton = toolButton({
-    text: 'Parts', iconName: 'parts', label: 'Parts', keyHint: null, pressed: false,
-    detail: 'Search the parts. Hide one, or isolate it and make the rest faint.',
-    onClick: () => togglePartsPanel(),
+  // The space list: click a space to clip the model to its box and frame it (spaces3d.js).
+  const spacesPanel = createSpacesPanel({
+    onEnter: (id) => (id === activeSpaceId ? exitSpace() : enterSpace(id)),
+    onExit: () => exitSpace(),
+    onAdd: (first, second) => addBulkheadSpace(first, second),
+    onRemove: (id) => removeSpace(id),
   });
-  partsButton.setAttribute('aria-expanded', 'false');
-  partsButton.setAttribute('aria-controls', partsPanel.id);
-  const partsGroup = toolbar.add('Parts', partsButton);
-  // Parts exist only with a whole-vessel model; until then neither the button nor the panel shows.
-  partsGroup.hidden = true;
-  function togglePartsPanel(open = partsPanel.element.hidden) {
-    partsPanel.element.hidden = !open;
-    partsButton.setAttribute('aria-pressed', String(open));
-    partsButton.setAttribute('aria-expanded', String(open));
-    if (open) partsPanel.reveal(highlightedId);
+  const panelId = `panel-${Math.random().toString(36).slice(2, 8)}`;
+  const panel = el('div', { class: 'model-panel', id: panelId, role: 'group', 'aria-label': 'Parts and spaces', hidden: true }, partsPanel.element, spacesPanel.element);
+  /** Which list the panel shows: "parts", "spaces" or null (closed). */
+  let panelTab = null;
+  const panelButtons = {
+    parts: toolButton({
+      text: 'Parts', iconName: 'parts', label: 'Parts', keyHint: null, pressed: false,
+      detail: 'Search the parts. Hide one, or isolate it and make the rest faint.',
+      onClick: () => togglePanel('parts'),
+    }),
+    spaces: toolButton({
+      text: 'Spaces', iconName: 'space', label: 'Spaces', keyHint: null, pressed: false,
+      detail: 'Click a space to clip the model to it and frame it. Exit space brings the whole model back.',
+      onClick: () => togglePanel('spaces'),
+    }),
+  };
+  for (const button of Object.values(panelButtons)) {
+    button.setAttribute('aria-expanded', 'false');
+    button.setAttribute('aria-controls', panelId);
   }
+  const partsGroup = toolbar.add('Parts and spaces', panelButtons.parts, panelButtons.spaces);
+  // Parts and spaces exist only with a whole-vessel model; until then neither button nor panel shows.
+  partsGroup.hidden = true;
+  function showPanel(tab) {
+    panelTab = tab;
+    panel.hidden = !tab;
+    partsPanel.element.hidden = tab !== 'parts';
+    spacesPanel.element.hidden = tab !== 'spaces';
+    for (const [key, button] of Object.entries(panelButtons)) {
+      button.setAttribute('aria-pressed', String(key === tab));
+      button.setAttribute('aria-expanded', String(key === tab));
+    }
+    if (tab === 'parts') partsPanel.reveal(highlightedId);
+  }
+  const togglePanel = (tab) => showPanel(panelTab === tab ? null : tab);
   // The panel and the fact card share one column at the right, so they never cover each other.
-  const sideColumn = el('div', { class: 'model-side' }, partsPanel.element);
+  const sideColumn = el('div', { class: 'model-side' }, panel);
   host.append(sideColumn);
   /** The id the fact card shows now (rebuilt only when it changes or the run's data does). */
   let cardId = null;
@@ -287,9 +316,105 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
     partsPanel.setParts(entries);
     partsGroup.hidden = !wholeVessel;
     updateCard(true);
-    if (!wholeVessel) togglePartsPanel(false);
+    if (!wholeVessel) showPanel(null);
+    rebuildSpaces();
     syncPartsPanel();
   }
+  // ---- Spaces: a box the model is clipped to (cut3d.js setSpace). One per built tank, and boxes
+  // between two bulkheads the person adds. "Exit space" restores the clip and the camera.
+  /** The spaces now: tanks, then the added boxes. */
+  let spaces = [];
+  let customSpaces = [];
+  let bulkheads = [];
+  let activeSpaceId = null;
+  /** The camera before the first space was entered, for Exit space. */
+  let cameraBeforeSpace = null;
+  const spaceName = el('span', { class: 'model-space-name' });
+  const spaceExitTip = tipAttributes('Exit space (Esc)', 'Show the whole model again and return the camera.');
+  const spaceChip = el('div', { class: 'model-space-chip', role: 'status', hidden: true },
+    icon('space'), spaceName,
+    el('button', { class: 'model-part-tool', type: 'button', ...spaceExitTip.attrs, onclick: () => exitSpace() }, icon('close'), spaceExitTip.describer));
+
+  const boxOf = (object) => {
+    const box = new THREE.Box3().setFromObject(object);
+    return box.isEmpty() ? null : { min: box.min.toArray(), max: box.max.toArray() };
+  };
+  /** World positions of a mesh's vertices (x, y, z each), for finding its plates. */
+  function worldPositions(mesh) {
+    mesh.updateWorldMatrix(true, false);
+    const source = mesh.geometry.getAttribute('position');
+    const out = new Float32Array(source.count * 3);
+    const point = new THREE.Vector3();
+    for (let i = 0; i < source.count; i += 1) {
+      point.fromBufferAttribute(source, i).applyMatrix4(mesh.matrixWorld).toArray(out, i * 3);
+    }
+    return out;
+  }
+  function rebuildSpaces() {
+    const tanks = tankMeshes.map((mesh) => ({ id: mesh.userData.partId, name: mesh.userData.label || mesh.userData.partId, box: boxOf(mesh) }));
+    spaces = [...tankSpaces(tanks), ...customSpaces];
+    const bulkheadMesh = steelMeshes.find((mesh) => mesh.userData.group === 'bulkhead');
+    bulkheads = bulkheadMesh
+      ? bulkheadChoices(bulkheadPositions(worldPositions(bulkheadMesh), bulkheadMesh.geometry.index?.array || null), reference)
+      : [];
+    spacesPanel.setSpaces(spaces);
+    spacesPanel.setBulkheads(bulkheads);
+    if (activeSpaceId && !spaces.some((space) => space.id === activeSpaceId)) exitSpace({ restoreCamera: false });
+    spacesPanel.setActive(activeSpaceId);
+  }
+  function snapshotCamera() {
+    const distance = viewDistance();
+    return {
+      target: controls.target.clone(), direction: currentDirection(), distance, atHome: cameraAtHome,
+      orthoHalfHeight: camera.isOrthographicCamera ? orthographic.top / orthographic.zoom : distance * Math.tan(halfFov()),
+    };
+  }
+  function enterSpace(id) {
+    const space = spaces.find((item) => item.id === id);
+    if (!space) return;
+    if (!activeSpaceId) cameraBeforeSpace = snapshotCamera();
+    activeSpaceId = id;
+    cut.setSpace(space.box);
+    cut.refresh();
+    spacesPanel.setActive(id);
+    spaceName.textContent = `Space: ${space.name}`;
+    spaceChip.hidden = false;
+    cameraAtHome = false;
+    markView(null);
+    fitView({ direction: currentDirection(), box: new THREE.Box3(new THREE.Vector3(...space.box.min), new THREE.Vector3(...space.box.max)), animate: true });
+    requestRender();
+  }
+  function exitSpace({ restoreCamera = true } = {}) {
+    if (!activeSpaceId) return;
+    activeSpaceId = null;
+    cut.setSpace(null);
+    cut.refresh();
+    spacesPanel.setActive(null);
+    spaceChip.hidden = true;
+    const before = cameraBeforeSpace;
+    cameraBeforeSpace = null;
+    if (restoreCamera && before) {
+      cameraMove.cancel();
+      placeCameras(before.target, before.direction, before.distance, before.orthoHalfHeight);
+      cameraAtHome = before.atHome;
+      requestFrame();
+    }
+    requestRender();
+  }
+  function addBulkheadSpace(first, second) {
+    const hullBox = hullBoxShown ? { min: hullBoxShown.min.toArray(), max: hullBoxShown.max.toArray() } : null;
+    const space = hullBox && bulkheadSpace(first, second, hullBox);
+    if (!space) return;
+    if (!customSpaces.some((item) => item.id === space.id)) customSpaces.push(space);
+    rebuildSpaces();
+    enterSpace(space.id);
+  }
+  function removeSpace(id) {
+    if (activeSpaceId === id) exitSpace();
+    customSpaces = customSpaces.filter((space) => space.id !== id);
+    rebuildSpaces();
+  }
+
   /** Pick a part (a click in 3D or a row in the list): it is tinted and offered to the app. */
   function pickPart(id) {
     highlightedId = id;
@@ -298,7 +423,7 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
     onPartPick?.(id);
   }
   // The cut panel opens under the tool bar, however many rows the tool bar wraps to.
-  host.append(el('div', { class: 'model-controls' }, toolbar.element, cutPanel.element));
+  host.append(el('div', { class: 'model-controls' }, toolbar.element, cutPanel.element, spaceChip));
 
   // ---- Engineering overlays and the switches for them.
   const overlays = createOverlays({ scene, host, clip });
@@ -390,6 +515,9 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
       event.preventDefault();
     } else if (event.key === 'Escape' && !cutPanel.element.hidden) {
       toggleCutPanel(false);
+      event.preventDefault();
+    } else if (event.key === 'Escape' && activeSpaceId) {
+      exitSpace();
       event.preventDefault();
     }
   });
@@ -738,6 +866,8 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
       const id = mesh.userData.partId;
       const priority = id === hoveredTankId ? 2 : id === highlightedId ? 1 : 0;
       if (!layers.names && !priority) continue;
+      // A tank outside the space or behind the section cut has no label.
+      if (!cut.keeps(mesh.userData.labelAnchor)) continue;
       const point = mesh.userData.labelAnchor.clone().project(camera);
       if (point.z > 1 || Math.abs(point.x) > 1 || Math.abs(point.y) > 1) continue;
       // The GLB extras "label" (GLTFLoader keeps userData.name for the node name).
@@ -1122,6 +1252,8 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
      */
     setWholeVessel(buffer) {
       const showedWholeVessel = Boolean(wholeVessel);
+      exitSpace({ restoreCamera: false });
+      customSpaces = [];
       if (wholeVessel) {
         cut.removeSolids(wholeVessel);
         for (const key of ['tanks', 'shell', 'steel']) overlays.removeEdges(key);

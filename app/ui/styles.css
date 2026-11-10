@@ -3193,12 +3193,30 @@ code { font-family: var(--font-mono); }
 }
 .model-side > * { pointer-events: auto; }
 .model-panel {
-  flex: 1 1 110px; min-height: 72px; display: flex; flex-direction: column; gap: 4px; padding: 6px;
+  flex: 1 1 110px; min-height: 72px; display: flex; flex-direction: column; padding: 6px;
   border-radius: var(--radius-md); border: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface) 95%, transparent); color: var(--ink); font-size: 12px;
   cursor: default;
 }
-.model-panel[hidden] { display: none; }
+.model-panel[hidden], .model-panel-body[hidden] { display: none; }
+.model-panel-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 4px; }
+.model-space-glyph { flex: none; display: inline-flex; color: var(--ink-2); }
+.model-space-glyph .icon { width: 14px; height: 14px; }
+.model-space-builder { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding-top: 4px; border-top: 1px solid var(--line); }
+.model-space-builder[hidden] { display: none; }
+.model-space-label { color: var(--text-3); font-size: 11px; }
+.model-space-select {
+  flex: 1 1 70px; min-width: 0; height: 26px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--ink); font: inherit; font-size: 11px;
+}
+.model-space-select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.model-space-chip {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 2px 2px 2px 8px; border-radius: var(--radius-md);
+  border: 1px solid var(--accent); background: color-mix(in srgb, var(--surface) 95%, transparent); color: var(--ink); font-size: 12px; pointer-events: auto;
+}
+.model-space-chip[hidden] { display: none; }
+.model-space-chip .icon { width: 14px; height: 14px; flex: none; }
+.model-space-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .model-panel-head { display: flex; align-items: center; gap: 4px; }
 .model-part-search {
   flex: 1 1 auto; min-width: 0; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--radius-sm);
@@ -3330,3 +3348,9 @@ code { font-family: var(--font-mono); }
 .sheet-requests small, .sheet-history small { color: var(--ink-3); }
 .sheet-history { margin: 20px 0; }
 .sheet-history li { display: flex; gap: 8px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--line); }
+
+/* A narrow 3D pane (an 800 px window): a slimmer part list so the section cut strip stays reachable. */
+@container pane (max-width: 520px) {
+  .model-side { width: min(206px, calc(100% - 2 * var(--space-sm))); }
+  .model-part-detail { display: none; }
+}

@@ -43,7 +43,7 @@ export function createPartsPanel({ onHide, onIsolate, onShowAll, onPick }) {
   const list = el('ul', { class: 'model-part-list', 'aria-label': 'Parts' });
   const none = el('p', { class: 'model-part-none', hidden: true }, 'No part matches.');
   const summary = el('p', { class: 'model-part-summary', role: 'status' });
-  const element = el('div', { class: 'model-panel', id, role: 'group', 'aria-label': 'Parts', hidden: true },
+  const element = el('div', { class: 'model-panel-body', role: 'group', 'aria-label': 'Parts', hidden: true },
     el('div', { class: 'model-panel-head' }, search, showAll), list, none, summary);
   // Escape in the search box clears it first; the 3D view's own keys stay out of a text box.
   search.addEventListener('keydown', (event) => {

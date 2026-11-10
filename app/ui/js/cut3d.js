@@ -6,9 +6,13 @@
 //
 // The plane is always on the materials; with no cut it is moved far away, so switching a cut on
 // or off does not recompile a shader.
+//
+// A space (spaces3d.js) clips the model to a box with six more planes, always on the materials in
+// the same way. The section cut and a space work together; the cut faces stay inside the space.
 
 import * as THREE from '../vendor/three/three.module.min.js';
 import { cutPlane } from './reference3d.js';
+import { boxPlanes } from './spaces3d.js';
 
 /** Plane constant with no cut: far beyond any vessel (metres), so nothing is clipped. */
 const NO_CUT_CONSTANT = 1e7;
@@ -19,10 +23,10 @@ const CAP_ORDER_START = 100;
 const CAP_ORDER_STEP = 1;
 
 /** Material of a stencil pass: no colour or depth, counts faces into the stencil buffer. */
-function stencilMaterial(plane, side, op) {
+function stencilMaterial(clippingPlanes, side, op) {
   return new THREE.MeshBasicMaterial({
     side,
-    clippingPlanes: [plane],
+    clippingPlanes,
     colorWrite: false,
     depthWrite: false,
     depthTest: false,
@@ -36,10 +40,13 @@ function stencilMaterial(plane, side, op) {
 
 export function createSectionCut({ scene }) {
   const plane = new THREE.Plane(new THREE.Vector3(1, 0, 0), NO_CUT_CONSTANT);
-  /** The shared clipping planes of every model material (one plane, always present). */
-  const planes = [plane];
-  const backMaterial = stencilMaterial(plane, THREE.BackSide, THREE.IncrementWrapStencilOp);
-  const frontMaterial = stencilMaterial(plane, THREE.FrontSide, THREE.DecrementWrapStencilOp);
+  /** The six planes of the space box; open (far away) with no space. */
+  const spacePlanes = boxPlanes(null).map((spec) => new THREE.Plane(new THREE.Vector3(...spec.normal), spec.constant));
+  /** The shared clipping planes of every model material (seven planes, always present). */
+  const planes = [plane, ...spacePlanes];
+  let spaceBox = null;
+  const backMaterial = stencilMaterial(planes, THREE.BackSide, THREE.IncrementWrapStencilOp);
+  const frontMaterial = stencilMaterial(planes, THREE.FrontSide, THREE.DecrementWrapStencilOp);
   const capGroup = new THREE.Group();
   capGroup.visible = false;
   scene.add(capGroup);
@@ -76,6 +83,7 @@ export function createSectionCut({ scene }) {
       roughness: 0.7,
       metalness: 0,
       side: THREE.DoubleSide,
+      clippingPlanes: spacePlanes,
       stencilWrite: true,
       stencilRef: 0,
       stencilFunc: THREE.NotEqualStencilFunc,
@@ -97,9 +105,22 @@ export function createSectionCut({ scene }) {
     get active() {
       return Boolean(state.axis);
     },
-    /** True when a world point is on the kept side of the cut (always true with no cut). */
+    /** True when a world point is on the kept side of the cut and inside the space (true with neither). */
     keeps(point) {
-      return plane.distanceToPoint(point) >= 0;
+      for (const each of planes) if (each.distanceToPoint(point) < 0) return false;
+      return true;
+    },
+    /** The box the model is clipped to ({ min, max } in metres), or null. */
+    get space() {
+      return spaceBox;
+    },
+    /** Clip the model to a box (a space), or end the clip with null. */
+    setSpace(box) {
+      spaceBox = box;
+      boxPlanes(box).forEach((spec, i) => {
+        spacePlanes[i].normal.fromArray(spec.normal);
+        spacePlanes[i].constant = spec.constant;
+      });
     },
     /** Set the cut: `axis` "x", "y", "z" or null (off), `value` in metres, `flipped` keeps the other side. */
     set({ axis = state.axis, value = state.value, flipped = state.flipped } = {}) {
