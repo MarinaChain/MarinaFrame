@@ -14,7 +14,7 @@ measurement.
 1. Define the quantities, units, datums, tolerances and labels here.
 2. Read the DSYHS workbooks and IGES canoe bodies. Run the existing mesh engine
    before adding the customer comparison. Save all rows and error statistics in
-   `work/booklet-check (git-ignored)/`. Keep extracted geometry in `work/booklet-check/`.
+   `work/booklet-check/` (git-ignored). Keep extracted geometry in `work/booklet-check/`.
 3. Add a JSON booklet reader and a comparison module. Test against exact box and
    Wigley integrals, then test missing data, trim, units and range boundaries.
 4. Add optional booklet input to the export API and CLI. Add a short PDF section,
@@ -168,7 +168,7 @@ To repeat the engine check (the source path may be in the main checkout):
 set -o pipefail
 PYTHONPATH=src:. .venv/bin/python scripts/check_dsyhs_hydrostatics.py \
   --source /path/to/MarinaFrame/work/sources/dsyhs \
-  --scratch work/booklet-check --out work/booklet-check (git-ignored)
+  --scratch work/booklet-check --out work/booklet-check
 ```
 
 The runner checks input SHA-256 hashes against the supplied manifest. It uses
