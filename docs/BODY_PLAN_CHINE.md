@@ -624,8 +624,9 @@ Known limits recorded before the run (not fixed; the protocol forbids tuning):
 - **Labels inside the reach.** WHITE GULL: the left "Chine" label lies across the W2 row (1220 to 1410 px out).
   COLLEEN: left "7" (2.5 ft row), both "Chine" labels (-0.5 ft row), right "4" (3.0 ft row) and right "2" (3.5 ft row,
   above the hull) are inside 1465 px. A single reach serves both halves, so these cannot be excluded.
-- **COLLEEN grid.** Waterline truth cells are scored only on measuring rows. A printed waterline height that is not on
-  the 6-inch grid makes the truth loader stop. Then the PM must decide; a grid is never added after a run.
+- **COLLEEN grid.** Waterline truth cells are scored only on measuring rows. A printed waterline whose height is on
+  no measuring row (within 0.02 ft) is listed in the result as unmatched and is not scored. The grid is never changed
+  after a run. (Amended before the run, with the PM's truth format; the first draft stopped the loader instead.)
 - WHITE GULL draws two sheer lines ("Actual Sheer" and "Measured Sheer"). The polyline sheer is the top of the traced
   side, as on COLLIER.
 
@@ -639,14 +640,18 @@ Scorer (`benchmarks/deadrise_holdout/score.py`, exactly the committed protocol):
 - **Point cells**: printed (station, SHEER / CHINE / RABBET) height and half-breadth pairs, COLLIER point-scorer
   rules. Frozen and v2 samples = the station's crossings on consecutive measuring rows; polyline = its traced points.
   No extrapolation. Identity check with 2 shared points. Separate chine-only, sheer-only and rabbet-only lines.
-- **Truth file** (`work/holdout/<boat>/truth.json`), proposed format: `{"units": "ft-in-eighths", "stations": [...],
-  "waterlines": {label: [value or null per station]}, "heights": {point: [...]}, "half_breadths": {point: [...]},
-  "unsure": [...]}`. Waterline labels are the calibration's (`W1`..`W6`; COLLEEN's grid labels) or a printed height
-  that matches a measuring row within 0.02 ft. Heights below the base line take a leading '-'. Half-breadths use the
-  harness parser (a leading dash is a separator). The loader refuses values outside 0 to 4 m (half-breadth) or -1.5 to
-  4 m (height). It stops unless the file's sha256 equals `TRUTH_SHA256` in the calibration. That value is `None` until
-  the PM records it, and then nothing loads.
+- **Truth file** (`work/holdout/<boat>/truth.json` in the main checkout, read-only), format given by the PM:
+  `{"units": "ft-in-eighths", "stations": ["1", ..., "TRANSOM"], "x_positions": [...], "heights": {ROW NAME: [...]},
+  "half_breadths": {ROW NAME: [...]}, "notes": {...}, "unsure": [...]}`. Row names are matched with all whitespace
+  removed. Waterline truth = half-breadth rows "WL <height>". Point truth = SHEER, CHINE, RABBET. The rabbet
+  half-breadth row is "RABBET", or "KEEL RABBET" when there is no "RABBET" (COLLEEN). The loader ignores BUTTOCK, KEEL
+  and STEM EDGE rows and the TRANSOM column. Each value is feet-inches-eighths: a leading "-" makes the whole value
+  negative, and a trailing "+" adds 1/16 inch. null = no cell. The loader refuses half-breadths outside 0 to 4 m and
+  heights outside -1.5 to 4 m. It stops unless the sha256 equals `TRUTH_SHA256` in the calibration. WHITE GULL:
+  `de30930e...a2f2`. COLLEEN: `bbc124ef...a4cc`.
+- **Run script** `scripts/measure_deadrise_holdout.py --boat <boat>`: frozen, v2 and polyline (product rule) all
+  read the sheet before the truth is loaded. Output: JSON and overlay in `work/deadrise_holdouts/`. Smoke-tested
+  only on the COLLIER dev sheet with a fake truth file.
 - Gates per kind of cell (`gates`): as the protocol, with the by-eye knuckle check recorded separately.
 
-**State: steps 1 to 3 done; stopped. No reader has been run on either sheet. Waiting for the PM's "run" and the two
-truth sha256 values.**
+PM approved both calibrations as committed in `30611af` and gave the truth format and sha256 values (2026-11-10).

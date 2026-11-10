@@ -29,7 +29,6 @@ from pathlib import Path
 import numpy as np
 
 from benchmarks.balclutha import model_value as harness
-from benchmarks.bue_girl import holdout_value as printed
 from benchmarks.ec_collier import point_score as collier
 from vessel_reconstruction import body_plan_polyline as polyline
 from vessel_reconstruction import body_plan_reader as reader
@@ -42,39 +41,53 @@ TRUTH_UNITS = 'ft-in-eighths'
 # half-breadth; Colleen's keel is about 0.63 m below its base line, neither sheer is above 2 m.
 HALF_BREADTH_RANGE_M = (0.0, 4.0)
 HEIGHT_RANGE_M = (-1.5, 4.0)
-# A truth waterline label that is not a calibration label is matched by its height (feet-inches-
-# eighths); it must be within this of a measuring row's nominal height, or the truth is refused.
+# A printed waterline ("WL <height>") is scored on the measuring row whose nominal height is within
+# this of the printed height. A printed waterline on no measuring row is listed, not scored.
 WATERLINE_MATCH_FT = 0.02
+# Printed row names (whitespace removed) that give point truth: point -> (heights row, half-breadth
+# rows in order of preference). COLLEEN prints the rabbet half-breadth as "KEEL RABBET".
+POINT_ROWS = {'sheer': ('SHEER', ('SHEER',)), 'chine': ('CHINE', ('CHINE',)),
+              'rabbet': ('RABBET', ('RABBET', 'KEELRABBET'))}
+WATERLINE_PREFIX = 'WL'
+VALUE_PATTERN = re.compile(r'(-)?(\d+)-(\d+)-([0-7])(\+)?')
 
 
 # ---------------------------------------------------------------- printed values
 
-def half_breadth_m(value) -> float | None:
-    """A printed feet-inches-eighths half-breadth in metres (a leading dash is a separator)."""
-    return collier._metres(value)
+def printed_feet(value: str) -> float:
+    """A printed feet-inches-eighths value in feet.
+
+    "5-2-4+" is 5 ft 2 4/8 in plus 1/16 in; a leading "-" makes the whole value negative
+    ("-0-4-1" is -(4 1/8) in). Whitespace inside the value is ignored.
+    """
+    if not isinstance(value, str):
+        raise ValueError('truth: every cell must be a feet-inches-eighths string or null')
+    match = VALUE_PATTERN.fullmatch(re.sub(r'\s+', '', value))
+    if match is None:
+        raise ValueError(f'truth: invalid feet-inches-eighths value {value!r}')
+    feet, inches, eighths = int(match[2]), int(match[3]), int(match[4])
+    if inches >= 12:
+        raise ValueError(f'truth: inches out of range in {value!r}')
+    magnitude = feet + (inches + eighths / 8 + (1 / 16 if match[5] else 0)) / 12
+    return -magnitude if match[1] else magnitude
 
 
-def signed_height_ft(text: str) -> float:
-    """A printed feet-inches-eighths height in feet; a leading '-' means below the base line."""
-    if not isinstance(text, str):
-        raise ValueError('truth: every height must be a feet-inches-eighths string or null')
-    stripped = text.strip()
-    magnitude = printed.printed_half_breadth(re.sub(r'(?<=\d)\s+(?=\d)', '-', stripped)) / 0.3048
-    return -magnitude if stripped.startswith('-') else magnitude
+def printed_metres(value) -> float | None:
+    """A printed cell in metres; None for a blank (null) cell."""
+    return None if value is None else printed_feet(value) * 0.3048
 
 
-def match_waterline(label: str, cal) -> str:
-    """The calibration label of a printed waterline label (same label, or same height)."""
-    if label in cal.WATERLINES:
-        return label
-    try:
-        height = signed_height_ft(label)
-    except ValueError:
-        raise ValueError(f'truth: waterline {label!r} is neither a calibration label nor a height') from None
-    for known, known_height in cal.WATERLINE_HEIGHTS_FT.items():
-        if abs(known_height - height) <= WATERLINE_MATCH_FT:
-            return known
-    raise ValueError(f'truth: waterline {label!r} ({height:.3f} ft) is not a measuring row of this sheet')
+def row_key(name: str) -> str:
+    """A printed row name with all whitespace removed ("WL -1- 0-0" -> "WL-1-0-0")."""
+    return re.sub(r'\s+', '', name).upper()
+
+
+def match_waterline(height_ft: float, cal) -> str | None:
+    """The measuring-row label at a printed waterline height, or None if there is none."""
+    for label, known in cal.WATERLINE_HEIGHTS_FT.items():
+        if abs(known - height_ft) <= WATERLINE_MATCH_FT:
+            return label
+    return None
 
 
 # ---------------------------------------------------------------- truth
@@ -84,53 +97,65 @@ def _check_range(value: float | None, limits: tuple, what: str) -> None:
         raise ValueError(f'truth: {what} is outside the plausible range')
 
 
-def parse_truth(data: dict, cal) -> dict:
-    """{'waterlines': {(station, label): m or None}, 'points': {(station, point): {...}}}.
+def _station_columns(names: list, cal) -> list[tuple[int, int]]:
+    """(column index, station number) of the numbered stations; other columns (TRANSOM) are ignored."""
+    columns = [(index, int(name)) for index, name in enumerate(names) if str(name).strip().isdigit()]
+    if [station for _, station in columns] != list(cal.STATIONS):
+        raise ValueError(f'truth: numbered stations must be {list(cal.STATIONS)} in order')
+    return columns
 
-    Format: {"units": "ft-in-eighths", "stations": [...], "waterlines": {label: [value or null per
-    station]}, "heights": {point: [...]}, "half_breadths": {point: [...]}, "unsure": [...]}.
-    "waterlines" may be absent; "heights" and "half_breadths" are absent together. Point names
-    are sheer, chine, rabbet (any case). Blank cells are null.
+
+def parse_truth(data: dict, cal) -> dict:
+    """{'waterlines': {(station, label): m or None}, 'points': {(station, point): {...}},
+    'unmatched_waterlines': [printed names]}.
+
+    Format (PM): {"units": "ft-in-eighths", "stations": ["1", ..., "TRANSOM"], "x_positions": [...],
+    "heights": {ROW NAME: [one per station]}, "half_breadths": {ROW NAME: [...]}, "notes": {...},
+    "unsure": [...]}. Waterline truth: half-breadth rows named "WL <height>". Point truth: SHEER,
+    CHINE, RABBET (half-breadth "KEEL RABBET" when no "RABBET"). Other rows (BUTTOCK, KEEL, STEM
+    EDGE) and non-numbered station columns are ignored.
     """
     if data.get('units') != TRUTH_UNITS:
         raise ValueError(f'truth: units must be {TRUTH_UNITS!r}')
-    stations = list(data.get('stations', []))
-    if stations != list(cal.STATIONS):
-        raise ValueError(f'truth: stations must be {list(cal.STATIONS)} in order')
+    names = list(data.get('stations', []))
+    columns = _station_columns(names, cal)
+    heights = {row_key(name): values for name, values in (data.get('heights') or {}).items()}
+    breadths = {row_key(name): values for name, values in (data.get('half_breadths') or {}).items()}
+    for table, values in ((heights, 'heights'), (breadths, 'half_breadths')):
+        for name, row in table.items():
+            if len(row) != len(names):
+                raise ValueError(f'truth: {values} row {name} must list {len(names)} cells')
 
     waterlines: dict = {}
-    for label, values in (data.get('waterlines') or {}).items():
-        row = match_waterline(label, cal)
-        if len(values) != len(stations):
-            raise ValueError(f'truth: waterline {label} must list {len(stations)} stations')
-        for station, value in zip(stations, values):
-            if (station, row) in waterlines:
-                raise ValueError(f'truth: waterline {label} repeats a row')
-            metres = half_breadth_m(value)
-            _check_range(metres, HALF_BREADTH_RANGE_M, f'station {station} {label}')
-            waterlines[(station, row)] = metres
+    unmatched = []
+    for name, row in breadths.items():
+        if not name.startswith(WATERLINE_PREFIX):
+            continue
+        label = match_waterline(printed_feet(name[len(WATERLINE_PREFIX):]), cal)
+        if label is None:
+            unmatched.append(name)
+            continue
+        if any(w == label for _, w in waterlines):
+            raise ValueError(f'truth: waterline {name} repeats a measuring row')
+        for index, station in columns:
+            metres = printed_metres(row[index])
+            _check_range(metres, HALF_BREADTH_RANGE_M, f'station {station} {name}')
+            waterlines[(station, label)] = metres
 
-    heights, breadths = data.get('heights'), data.get('half_breadths')
-    if (heights is None) != (breadths is None):
-        raise ValueError('truth: heights and half_breadths come together')
     points: dict = {}
-    if heights is not None:
-        heights = {name.lower(): values for name, values in heights.items()}
-        breadths = {name.lower(): values for name, values in breadths.items()}
-        if set(heights) != set(breadths) or not set(heights) <= set(POINTS):
-            raise ValueError(f'truth: heights and half_breadths must name the same points from {POINTS}')
-        for point in heights:
-            if len(heights[point]) != len(stations) or len(breadths[point]) != len(stations):
-                raise ValueError(f'truth: {point} must list {len(stations)} stations')
-            for station, height, breadth in zip(stations, heights[point], breadths[point]):
-                height_m = None if height is None else signed_height_ft(height) * 0.3048
-                breadth_m = half_breadth_m(breadth)
-                _check_range(height_m, HEIGHT_RANGE_M, f'station {station} {point} height')
-                _check_range(breadth_m, HALF_BREADTH_RANGE_M, f'station {station} {point} half-breadth')
-                points[(station, point)] = {'height': height_m, 'half_breadth': breadth_m}
+    for point, (height_row, breadth_rows) in POINT_ROWS.items():
+        breadth_row = next((name for name in breadth_rows if name in breadths), None)
+        if height_row not in heights or breadth_row is None:
+            continue
+        for index, station in columns:
+            height_m = printed_metres(heights[height_row][index])
+            breadth_m = printed_metres(breadths[breadth_row][index])
+            _check_range(height_m, HEIGHT_RANGE_M, f'station {station} {point} height')
+            _check_range(breadth_m, HALF_BREADTH_RANGE_M, f'station {station} {point} half-breadth')
+            points[(station, point)] = {'height': height_m, 'half_breadth': breadth_m}
     if not waterlines and not points:
         raise ValueError('truth: no cells')
-    return {'waterlines': waterlines, 'points': points}
+    return {'waterlines': waterlines, 'points': points, 'unmatched_waterlines': unmatched}
 
 
 def load_truth(path: Path, cal) -> dict:

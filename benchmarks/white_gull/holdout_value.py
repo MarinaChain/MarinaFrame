@@ -14,9 +14,9 @@ from __future__ import annotations
 from vessel_reconstruction import body_plan_reader as bpr
 
 PROTOCOL = 'docs/BODY_PLAN_CHINE.md (Holdout protocol: WHITE GULL and COLLEEN)'
-# Frozen truth file work/holdout/<boat>/truth.json: its sha256 is given by the PM before the run.
-# None until then; the scorer refuses to load any truth while it is None.
-TRUTH_SHA256: str | None = None
+# Frozen truth file work/holdout/<boat>/truth.json (main checkout, read-only): sha256 given by the PM
+# before the run. The scorer stops if the file differs.
+TRUTH_SHA256: str | None = 'de30930e0bd60294c2823a39aeb837cd85361e512b1922a5e59c3f470482a2f2'
 SHEET_SHA256 = '905e9150de0fa71dd3c76c7aff8fabc10f95a43e2e61c7d2331fa0732d6b5177'
 
 # ---------------------------------------------------------------- scale

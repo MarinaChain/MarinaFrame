@@ -27,7 +27,7 @@ def test_sides_cover_every_station_once_and_rows_run_low_to_high(cal):
     heights = [cal.height_ft(cal.WATERLINE_ROWS[label], cal.CENTRE_COLUMN) for label in cal.WATERLINES]
     for label, height in zip(cal.WATERLINES, heights):
         assert height == pytest.approx(cal.WATERLINE_HEIGHTS_FT[label], abs=0.01)
-    assert cal.TRUTH_SHA256 is None  # given by the PM before the run
+    assert len(cal.TRUTH_SHA256) == 64  # given by the PM before the run
 
 
 def test_white_gull_sides_and_waterlines():
@@ -45,78 +45,95 @@ def test_colleen_grid_goes_below_the_base_line():
     assert colleen.WATERLINES[0] == '-2-0-0' and colleen.WATERLINES[-1] == '3-6-0'
     assert colleen.WATERLINE_HEIGHTS_FT['-0-6-0'] == pytest.approx(-0.5)
     assert colleen.height_ft(colleen.BASE_ROW + 300, 100.0) == pytest.approx(-1.0)
-    for label in colleen.WATERLINES:  # every label states its own signed height
-        assert sc.signed_height_ft(label) == pytest.approx(colleen.WATERLINE_HEIGHTS_FT[label])
 
 
 # ---------------------------------------------------------------- printed values
 
-def test_signed_height_and_waterline_matching():
-    assert sc.signed_height_ft('1-6-4') == pytest.approx(1 + 6.5 / 12)
-    assert sc.signed_height_ft('-0-9-0') == pytest.approx(-0.75)
-    assert sc.match_waterline('W3', gull) == 'W3'
-    assert sc.match_waterline('3-0-0', gull) == 'W3'
-    assert sc.match_waterline('-1-0-0', colleen) == '-1-0-0'
-    assert sc.match_waterline('-1 0 0', colleen) == '-1-0-0'
-    with pytest.raises(ValueError):
-        sc.match_waterline('1-3-0', colleen)  # 1.25 ft is not a measuring row
-    with pytest.raises(ValueError):
-        sc.match_waterline('WL A', gull)
+def test_printed_values_plus_sixteenth_and_negative():
+    assert sc.printed_feet('5-2-4+') == pytest.approx(5 + (2 + 4 / 8 + 1 / 16) / 12)
+    assert sc.printed_feet('-0-4-1') == pytest.approx(-(4 + 1 / 8) / 12)
+    assert sc.printed_feet('-1-6-0') == pytest.approx(-1.5)
+    assert sc.printed_feet('-0-0-0+') == pytest.approx(-1 / 16 / 12)
+    assert sc.printed_feet(' 1- 0-0') == pytest.approx(1.0)
+    assert sc.printed_metres(None) is None
+    for bad in ('5-12-0', '5-2-8', '5-2', 'five', 1.5):
+        with pytest.raises(ValueError):
+            sc.printed_feet(bad)
+
+
+def test_row_names_and_waterline_matching():
+    assert sc.row_key('WL -1- 0-0') == 'WL-1-0-0'
+    assert sc.row_key('KEEL RABBET') == 'KEELRABBET'
+    assert sc.match_waterline(3.0, gull) == 'W3'
+    assert sc.match_waterline(-1.0, colleen) == '-1-0-0'
+    assert sc.match_waterline(1.25, colleen) is None  # not a measuring row
+    for label in colleen.WATERLINES:  # every grid label states its own signed height
+        assert sc.printed_feet(label) == pytest.approx(colleen.WATERLINE_HEIGHTS_FT[label])
 
 
 # ---------------------------------------------------------------- truth
 
 def _gull_truth(**changes):
-    data = {'units': 'ft-in-eighths', 'stations': list(range(1, 11)),
-            'waterlines': {'W2': ['3-0-0'] * 9 + [None], 'W3': ['4-0-0'] * 10},
-            'heights': {'Sheer': ['5-6-0'] * 10, 'Chine': ['2-3-0'] * 10, 'Rabbet': [None] + ['0-9-0'] * 9},
-            'half_breadths': {'Sheer': ['6-0-0'] * 10, 'Chine': ['5-0 0'] * 9 + [None], 'Rabbet': ['0-2-0'] * 10},
-            'unsure': []}
+    stations = [str(k) for k in range(1, 11)] + ['TRANSOM']
+    data = {'units': 'ft-in-eighths', 'stations': stations, 'x_positions': ['0-0-0'] * 11,
+            'heights': {'SHEER': ['5-6-0'] * 11, 'CHINE': ['2-3-0'] * 11, 'RABBET': [None] + ['0-9-0'] * 10,
+                        'KEEL': ['0-0-0'] * 11, 'STEM EDGE': [None] * 11},
+            'half_breadths': {'SHEER': ['6-0-0'] * 11, 'CHINE': ['5- 0-0'] * 9 + [None, '9-0-0'],
+                              'RABBET': ['0-2-0'] * 11, 'WL 2- 0-0': ['3-0-0'] * 9 + [None, '1-0-0'],
+                              'WL 3- 0-0': ['4-0-4+'] * 11, 'BUTTOCK 1- 0-0': ['1-0-0'] * 11,
+                              'WL 2- 6-0': ['3-6-0'] * 11},
+            'notes': {}, 'unsure': []}
     data.update(changes)
     return data
 
 
-def test_truth_format_with_blanks_and_point_names_in_any_case():
+def test_truth_format_ignores_transom_buttock_keel_and_stem_rows():
     truth = sc.parse_truth(_gull_truth(), gull)
     assert truth['waterlines'][(1, 'W2')] == pytest.approx(3 * FT)
+    assert truth['waterlines'][(1, 'W3')] == pytest.approx((4 + (4 / 8 + 1 / 16) / 12) * FT)
     assert truth['waterlines'][(10, 'W2')] is None
+    assert len(truth['waterlines']) == 20  # the TRANSOM column is not a station
+    assert truth['unmatched_waterlines'] == ['WL2-6-0']  # listed, not scored
+    assert set(p for _, p in truth['points']) == {'sheer', 'chine', 'rabbet'}
     assert truth['points'][(2, 'chine')] == {'height': pytest.approx(2.25 * FT), 'half_breadth': pytest.approx(5 * FT)}
     assert truth['points'][(1, 'rabbet')]['height'] is None
 
 
-def test_waterline_rows_given_as_heights_and_negative_point_heights():
-    data = {'units': 'ft-in-eighths', 'stations': list(range(1, 10)),
-            'waterlines': {'-1-0-0': ['1-0-0'] * 9, '1-0-0': ['3-0-0'] * 9},
-            'heights': {'rabbet': ['-1-9-0'] * 9}, 'half_breadths': {'rabbet': ['0-1-4'] * 9}}
+def test_colleen_keel_rabbet_pairs_with_rabbet_heights_and_negative_waterlines():
+    data = {'units': 'ft-in-eighths', 'stations': [str(k) for k in range(1, 10)], 'x_positions': [],
+            'heights': {'SHEER': ['3-0-0'] * 9, 'RABBET': ['-1-9-0'] * 9},
+            'half_breadths': {'SHEER': ['4-0-0'] * 9, 'KEEL RABBET': ['0-1-4'] * 9,
+                              'WL -1- 0-0': ['1-0-0'] * 9, 'WL 1- 0-0': ['3-0-0'] * 9},
+            'notes': {}, 'unsure': []}
     truth = sc.parse_truth(data, colleen)
     assert set(w for _, w in truth['waterlines']) == {'-1-0-0', '1-0-0'}
-    assert truth['points'][(3, 'rabbet')]['height'] == pytest.approx(-1.75 * FT)
+    assert truth['points'][(3, 'rabbet')] == {'height': pytest.approx(-1.75 * FT),
+                                              'half_breadth': pytest.approx(1.5 / 12 * FT)}
+    assert (3, 'chine') not in truth['points']
 
 
 def test_bad_truth_is_refused():
     with pytest.raises(ValueError):
         sc.parse_truth(_gull_truth(units='m'), gull)
     with pytest.raises(ValueError):
-        sc.parse_truth(_gull_truth(stations=list(range(0, 11))), gull)
-    with pytest.raises(ValueError):
-        sc.parse_truth(_gull_truth(waterlines={'W2': ['3-0-0'] * 9}), gull)  # one station short
-    with pytest.raises(ValueError):
-        sc.parse_truth(_gull_truth(waterlines={'W2': ['3-0-0'] * 10, '2-0-0': ['3-0-0'] * 10}), gull)
-    with pytest.raises(ValueError):
-        sc.parse_truth(_gull_truth(heights={'sheer': ['5-0-0'] * 10}), gull)  # points differ
-    with pytest.raises(ValueError):
-        sc.parse_truth(_gull_truth(heights={'keel': ['5-0-0'] * 10}, half_breadths={'keel': ['1-0-0'] * 10}), gull)
-    with pytest.raises(ValueError):
-        sc.parse_truth(_gull_truth(waterlines={'W2': ['15-0-0'] * 10}), gull)  # 4.6 m half-breadth
+        sc.parse_truth(_gull_truth(stations=[str(k) for k in range(0, 11)]), gull)
+    with pytest.raises(ValueError):  # a row one cell short
+        sc.parse_truth(_gull_truth(half_breadths={'WL 2-0-0': ['3-0-0'] * 10}), gull)
+    with pytest.raises(ValueError):  # two printed rows on one measuring row
+        sc.parse_truth(_gull_truth(half_breadths={'WL 2-0-0': ['3-0-0'] * 11, 'WL 2- 0-0+': ['3-0-0'] * 11}), gull)
+    with pytest.raises(ValueError):  # 4.6 m half-breadth: wrong units
+        sc.parse_truth(_gull_truth(half_breadths={'WL 2-0-0': ['15-0-0'] * 11}), gull)
+    with pytest.raises(ValueError):  # a negative half-breadth
+        sc.parse_truth(_gull_truth(half_breadths={'WL 2-0-0': ['-0-4-1'] * 11}), gull)
 
 
 def test_truth_fingerprint(tmp_path):
     path = tmp_path / 'truth.json'
     path.write_text(json.dumps(_gull_truth()))
-    with pytest.raises(SystemExit):  # no sha256 recorded yet
+    with pytest.raises(SystemExit):  # not the frozen file
         sc.load_truth(path, gull)
     with pytest.raises(SystemExit):
-        sc.load_truth(path, SimpleNamespace(**{**vars(gull), 'TRUTH_SHA256': '0' * 64}))
+        sc.load_truth(path, SimpleNamespace(**{**vars(gull), 'TRUTH_SHA256': None}))
     frozen = SimpleNamespace(**{**vars(gull), 'TRUTH_SHA256': hashlib.sha256(path.read_bytes()).hexdigest()})
     assert len(sc.load_truth(path, frozen)['waterlines']) == 20
 
