@@ -1406,7 +1406,7 @@ const REFUSED_ARGUMENTS_BYTES: usize = 4096;
 /// A completed HTTP exchange whose content was not one valid tool call (bad
 /// JSON, unknown tool, arguments out of bounds). Transport, identity and
 /// credential failures are not model output and still stop the task.
-fn model_output_refused(receipt: &Receipt) -> bool {
+pub fn model_output_refused(receipt: &Receipt) -> bool {
     receipt.state == RequestState::Failed
         && receipt.http_status == Some(200)
         && provider::returned_requested_model(receipt)

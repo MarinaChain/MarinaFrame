@@ -10,6 +10,7 @@
 //!
 //! The model call happens only here, through the supervised provider worker,
 //! and every request and image is receipted.
+use crate::provider::part_revision::{self, PartProgram};
 use crate::provider::{self, ImageReceipt, ProviderInput, Purpose, Receipt, RequestState};
 use crate::types::*;
 use crate::util::{self, Result};
@@ -76,6 +77,7 @@ impl Purpose {
             Purpose::BuildReview => Some(REVIEW_EVIDENCE_KIND),
             Purpose::Localisation => Some("localisation_image"),
             Purpose::ShipCad => Some("ship_cad_drawing"),
+            Purpose::PartRevision => Some(part_revision::EVIDENCE_KIND),
             _ => None,
         }
     }
@@ -360,6 +362,7 @@ pub enum VisionReply {
     BuildReview(ReviewReply),
     Localisation(LocalisationReply),
     ShipCad(ShipReply),
+    PartRevision(PartProgram),
 }
 
 fn bounded_text(text: &str, max: usize) -> bool {
@@ -482,6 +485,7 @@ pub fn parse_reply(
             reply.validate()?;
             Ok(VisionReply::ShipCad(reply))
         }
+        Purpose::PartRevision => Ok(VisionReply::PartRevision(part_revision::parse(content)?)),
         Purpose::Localisation => {
             let reply: LocalisationReply = util::parse(content.as_bytes(), 32_768)?;
             let mut ids = BTreeSet::new();
@@ -637,6 +641,9 @@ fn response_schema(purpose: Purpose, view: &str) -> Value {
         Purpose::ShipCad => {
             json!({"schema":"ship-cad/v1", "components":[{"id":"component", "op":"deckhouse", "source":{"view":"plan", "region":"house", "method":"closed_outline"}, "args":{"outline":"house_outline", "height":"house_height"}}], "regions":[{"id":"house", "view":"plan", "box_normalized":"[left,top,right,bottom] 0..1000"}], "measurements":[{"id":"house_outline", "tool":"closed_outline", "view":"plan", "region":"house"}]})
         }
+        Purpose::PartRevision => {
+            json!({"schema":"ship-cad/v1","components":[{"id":"the part id given in context","op":"the operation given in context","source":{"view":"plan, or profile for an appendage","region":"the part id","method":"closed_outline"},"args":{"ARGUMENT":{"value":"the value in the argument form given in context","source":"ai_inferred","basis":"short reason"}}}]})
+        }
         Purpose::Localisation => {
             json!({"answers":[{"id":"question id","x":"number or null","y":"number or null","value":"number or null","evidence":"visible mark or missing reason"}]})
         }
@@ -686,6 +693,7 @@ pub fn payload(
         Purpose::BuildReview => "review_station_overlays",
         Purpose::ShipCad => "write_measured_ship_program",
         Purpose::Localisation => "measure_localisation",
+        Purpose::PartRevision => "revise_one_part",
         _ if manifest.images[0].view == OVERVIEW_VIEW => "overview",
         _ => "panel",
     };
@@ -719,10 +727,10 @@ pub fn payload(
             pixel_size: Some([image.width, image.height]),
         });
     }
-    let tokens = if purpose == Purpose::BuildReview {
-        REVIEW_OUTPUT_TOKENS
-    } else {
-        SETUP_OUTPUT_TOKENS
+    let tokens = match purpose {
+        Purpose::BuildReview => REVIEW_OUTPUT_TOKENS,
+        Purpose::PartRevision => part_revision::OUTPUT_TOKENS,
+        _ => SETUP_OUTPUT_TOKENS,
     };
     let messages =
         json!([{"role":"system","content":purpose.prompt()},{"role":"user","content":content}]);
@@ -784,6 +792,24 @@ impl Usage {
             None => self.requests_without_cost += 1,
         }
     }
+    /// The aggregate caps of `limits` (requests, tokens, observed spend), as
+    /// the controller checks them before each request
+    /// (`configured_deployment_budget`).
+    pub fn within_budget(&self, limits: &OperationalLimits) -> Result<()> {
+        if limits
+            .max_requests
+            .is_some_and(|n| self.requests_intended >= n)
+            || limits
+                .max_total_tokens
+                .is_some_and(|n| self.prompt_tokens + self.completion_tokens >= n)
+            || limits
+                .max_spend_usd
+                .is_some_and(|n| self.observed_cost_usd >= n)
+        {
+            return Err("configured_deployment_budget".into());
+        }
+        Ok(())
+    }
     /// Add these meters to the task counters (the review runs inside a task).
     pub fn add_to(&self, counters: &mut Counters) {
         counters.requests_intended += self.requests_intended;
@@ -833,23 +859,61 @@ pub type ProviderStub = fn(&ProviderInput) -> Vec<u8>;
 #[allow(dead_code)]
 pub static PROVIDER_STUB: std::sync::Mutex<Option<ProviderStub>> = std::sync::Mutex::new(None);
 
-#[cfg(test)]
-fn stubbed_receipt(out: &Path, response_path: &str, input: &ProviderInput) -> Result<bool> {
-    let stub = *PROVIDER_STUB.lock().unwrap_or_else(|e| e.into_inner());
-    let Some(stub) = stub else {
-        return Ok(false);
+/// Who answers a request: the supervised provider worker (the model), or a
+/// recorded response body. A recorded body goes through the same checks and
+/// receipt as a live one; its receipt says `recorded_test_completion`.
+#[derive(Clone, Copy)]
+pub enum Responder<'a> {
+    ProviderWorker,
+    Recorded(&'a dyn Fn(&ProviderInput) -> Vec<u8>),
+}
+
+/// A response body in the form of `model`'s transport (an OpenCode Go chat
+/// completion, or the `claude` CLI's stream-json output) whose answer is
+/// `content`, with fixed usage. For recorded responders only.
+pub fn recorded_body(model: &str, content: &str) -> Result<Vec<u8>> {
+    /// Fixed meters of one recorded completion, so budgets can be tested.
+    const PROMPT_TOKENS: u64 = 1000;
+    const COMPLETION_TOKENS: u64 = 100;
+    let body = match crate::models::settings(model)?.transport {
+        crate::models::Transport::OpencodeGo => util::json_bytes(&json!({
+            "id": format!("recorded-{}", util::nonce()), "model": model,
+            "choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": content}}],
+            "usage": {"prompt_tokens": PROMPT_TOKENS, "completion_tokens": COMPLETION_TOKENS,
+                      "total_tokens": PROMPT_TOKENS + COMPLETION_TOKENS, "cost": 0.0}}))?,
+        crate::models::Transport::ClaudeSubscription => {
+            let init = json!({"type": "system", "subtype": "init", "tools": [],
+                "mcp_servers": [], "apiKeySource": "none"});
+            let result = json!({"type": "result", "subtype": "success", "is_error": false,
+                "result": content, "stop_reason": "end_turn",
+                "uuid": format!("recorded-{}", util::nonce()), "modelUsage": {model: {}},
+                "usage": {"input_tokens": PROMPT_TOKENS, "output_tokens": COMPLETION_TOKENS}});
+            let mut bytes = util::json_bytes(&init)?;
+            bytes.push(b'\n');
+            bytes.extend(util::json_bytes(&result)?);
+            bytes.push(b'\n');
+            bytes
+        }
     };
+    Ok(body)
+}
+
+/// The receipt of a recorded response body: interpreted exactly as a live one.
+pub fn recorded_receipt(input: &ProviderInput, body: &[u8]) -> Result<Receipt> {
+    let requested_model: String = input.payload["model"].as_str().unwrap_or_default().into();
     let mut receipt = Receipt {
         protocol: provider::PROTOCOL.into(),
         request_id: input.request_id.clone(),
         state: RequestState::Failed,
-        endpoint: GO_ENDPOINT.into(),
-        requested_model: input.payload["model"].as_str().unwrap_or_default().into(),
+        endpoint: crate::models::endpoint(&requested_model)
+            .unwrap_or(GO_ENDPOINT)
+            .into(),
+        requested_model,
         returned_model: None,
         completion_id: None,
         provider_request_id: None,
         http_status: Some(200),
-        response_sha256: None,
+        response_sha256: Some(util::hash(body)),
         request_sha256: util::hash_json(&input.payload)?,
         prompt_sha256: util::hash(input.purpose.prompt().as_bytes()),
         source_manifest_sha256: input.source_manifest_sha256.clone(),
@@ -874,11 +938,21 @@ fn stubbed_receipt(out: &Path, response_path: &str, input: &ProviderInput) -> Re
         transcription: None,
         vision: None,
     };
-    let body = stub(input);
-    receipt.response_sha256 = Some(util::hash(&body));
-    if let Err(code) = provider::interpret_completion(&mut receipt, &body, "") {
+    if let Err(code) = provider::interpret_completion(&mut receipt, body, "") {
         receipt.error_code = Some(code);
     }
+    Ok(receipt)
+}
+
+#[cfg(test)]
+fn stubbed_receipt(out: &Path, response_path: &str, input: &ProviderInput) -> Result<bool> {
+    let stub = *PROVIDER_STUB.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(stub) = stub else {
+        return Ok(false);
+    };
+    let mut receipt = recorded_receipt(input, &stub(input))?;
+    // The controller hook tests record every stub on the OpenCode Go endpoint.
+    receipt.endpoint = GO_ENDPOINT.into();
     util::atomic_json(&out.join(response_path), &receipt, false)?;
     Ok(true)
 }
@@ -893,6 +967,25 @@ pub fn send(
     config: &Config,
     template: &ProviderInput,
     usage: &mut Usage,
+) -> Result<Sent> {
+    send_with(
+        out,
+        prefix,
+        config,
+        template,
+        usage,
+        Responder::ProviderWorker,
+    )
+}
+
+/// [`send`] with a chosen [`Responder`].
+pub fn send_with(
+    out: &Path,
+    prefix: &str,
+    config: &Config,
+    template: &ProviderInput,
+    usage: &mut Usage,
+    responder: Responder,
 ) -> Result<Sent> {
     let mut sent = Sent {
         receipts: vec![],
@@ -929,7 +1022,10 @@ pub fn send(
         #[cfg(not(test))]
         let stubbed = false;
         let path = out.join(&pending.response_path);
-        if !stubbed {
+        if let (false, Responder::Recorded(answer)) = (stubbed, responder) {
+            let receipt = recorded_receipt(&input, &answer(&input))?;
+            util::atomic_json(&path, &receipt, false)?;
+        } else if !stubbed {
             let outcome = worker::run(
                 out,
                 config,
