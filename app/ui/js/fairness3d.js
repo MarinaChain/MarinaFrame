@@ -154,3 +154,20 @@ export function useSmoothNormals(geometry, on) {
   geometry.setAttribute('normal', wanted);
   return true;
 }
+
+/**
+ * Run `draw` with the fairness view off and the hull's own shading normals, then put the mode
+ * (and the normals) back, even when `draw` throws. The report picture uses this: it always shows
+ * the normal hull shading. `geometry` is the STL hull's geometry, or null.
+ */
+export function withFairnessOff(fairness, geometry, draw) {
+  const mode = fairness.mode;
+  fairness.setMode('off');
+  if (geometry) useSmoothNormals(geometry, false);
+  try {
+    return draw();
+  } finally {
+    fairness.setMode(mode);
+    if (geometry && mode !== 'off') useSmoothNormals(geometry, true);
+  }
+}

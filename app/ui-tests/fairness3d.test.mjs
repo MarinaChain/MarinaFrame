@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import * as THREE from '../ui/vendor/three/three.module.min.js';
 import { STLLoader } from '../ui/vendor/three/STLLoader.js';
 import {
-  createFairness, FAIRNESS_MODES, fullCurvature, nextFairnessMode, patchFairnessShader, useSmoothNormals, zebraValue, ZEBRA_AXIS,
+  createFairness, FAIRNESS_MODES, fullCurvature, nextFairnessMode, patchFairnessShader, useSmoothNormals, withFairnessOff, zebraValue, ZEBRA_AXIS,
 } from '../ui/js/fairness3d.js';
 
 function loadHull(name) {
@@ -149,4 +149,24 @@ test('the fairness test hull has a kink and a flat spot, the plain mock hull has
   for (let i = 1; i < patch.length; i += 1) assert.ok(Math.abs(slope(patch[i - 1], patch[i]) - chord) < 0.02, 'a straight patch');
   const bent = sectionAt(plain, ringNear(plain, 19)).filter(([, z]) => z >= 0.5 && z <= 1.5);
   assert.ok(Math.abs(slope(bent[0], bent[1]) - slope(bent[bent.length - 2], bent[bent.length - 1])) > 0.1, 'the plain hull curves there');
+});
+
+test('the capture draws with the fairness view off, then restores the mode and the normals', () => {
+  const geometry = loadHull('model.stl');
+  const flat = geometry.getAttribute('normal');
+  const fairness = createFairness();
+  fairness.setMode('curvature');
+  useSmoothNormals(geometry, true);
+  const smooth = geometry.getAttribute('normal');
+  const seen = withFairnessOff(fairness, geometry, () => [fairness.mode, fairness.uniforms.fairnessMode.value, geometry.getAttribute('normal')]);
+  assert.deepEqual(seen, ['off', 0, flat]);
+  assert.equal(fairness.mode, 'curvature');
+  assert.equal(fairness.uniforms.fairnessMode.value, 2);
+  assert.equal(geometry.getAttribute('normal'), smooth);
+  assert.throws(() => withFairnessOff(fairness, geometry, () => { throw new Error('draw failed'); }), /draw failed/);
+  assert.equal(fairness.mode, 'curvature', 'restored after a failure');
+  // With the view already off nothing changes.
+  fairness.setMode('off');
+  withFairnessOff(fairness, null, () => {});
+  assert.equal(fairness.mode, 'off');
 });

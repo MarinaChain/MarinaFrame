@@ -12,7 +12,7 @@ import { createAnimation } from './animation.js';
 import { placeLabels, steelLegend, steelToken, tankLegend, tankToken } from './tanks.js';
 import { configureOrbit } from './orbit3d.js';
 import { CAPTURE_SIZE, captureFraming, pngBase64 } from './capture3d.js';
-import { createFairness, nextFairnessMode, useSmoothNormals } from './fairness3d.js';
+import { createFairness, nextFairnessMode, useSmoothNormals, withFairnessOff } from './fairness3d.js';
 import { createLighting, createPaintMaterial, createSteelMaterial, createTankMaterial, setUpRenderer, stylePaint } from './look3d.js';
 import { bootTopBand, fitDistance, frameLabel, frameAt, hullReference, nearestFrameX, pointReadout, STANDARD_VIEWS, viewOfKey } from './reference3d.js';
 import { createOverlays } from './overlay3d.js';
@@ -1298,7 +1298,7 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
    * Draw the view as it is now into a fixed-size picture with a white background and no page
    * controls or labels, and return it as base64 PNG text; null when there is no model to show.
    * The section planes, guess bands and the selection box stay out of the picture; the grid and
-   * the frame numbers too. The cut, the fairness view and the camera stay as they are. The
+   * the frame numbers too. The cut and the camera stay as they are; the fairness view is off for the picture. The
    * visible view is drawn again at once, so it does not flicker.
    */
   function captureImage({ width, height } = CAPTURE_SIZE) {
@@ -1327,7 +1327,8 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
       orthographic.updateProjectionMatrix();
       scene.background = WHITE;
       lighting.setTheme(false);
-      renderer.render(scene, camera);
+      // The report picture always has the normal hull shading, whatever the view shows now.
+      withFairnessOff(fairness, hull?.geometry ?? null, () => renderer.render(scene, camera));
       // Read in the same task as the draw: the drawing buffer is cleared after the frame is shown.
       dataUrl = renderer.domElement.toDataURL('image/png');
     } finally {
