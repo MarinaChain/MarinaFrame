@@ -1,0 +1,188 @@
+#!/usr/bin/env python3
+"""Account for stored run records only. Never imports a model client or reads images.
+
+Run from any checkout with --main-work pointing at the main checkout's work folder.
+CLI result usage is cumulative within one invocation: read only its final result, not
+assistant messages, modelUsage, or usage.iterations again. Holdout summaries duplicate
+per-call receipts; they supply timing and scores only.
+"""
+from __future__ import annotations
+
+import argparse
+from collections import Counter, defaultdict
+import json
+from pathlib import Path
+
+MAIN_WORK = Path('/Users/jonathanjie/Documents/workspace/MarinaFrame/work')
+HOLDOUT_ROOT = Path('/private/tmp/claude-501')
+TOKEN_FIELDS = ('prompt_tokens', 'output_tokens', 'input_tokens', 'cache_read_tokens',
+                'cache_write_tokens', 'cache_write_5m_tokens', 'cache_write_1h_tokens')
+
+
+def read_json(path):
+    return json.loads(path.read_text())
+
+
+def normalize_call(receipt, source, phase, raw=None):
+    usage = receipt.get('usage') or {}
+    model = (receipt.get('returned_model') or receipt.get('answered_by')
+             or receipt.get('requested_model') or receipt.get('model') or 'unknown')
+    output = usage.get('completion_tokens')
+    prompt = usage.get('prompt_tokens')
+    # Failed holdout CLI invocations wrote prompt=0 even when no result existed.
+    missing = prompt is None or output is None
+    call = dict(source=str(source), model=model, phase=phase,
+                state=receipt.get('state', 'unknown'), prompt_tokens=prompt,
+                output_tokens=output, missing_usage=missing,
+                seconds=receipt.get('latency_seconds', receipt.get('seconds')),
+                receipt_list_cost_usd=usage.get('list_cost'),
+                observed_cost_usd=receipt.get('observed_cost_usd', usage.get('cost')))
+    call.update({key: None for key in TOKEN_FIELDS if key not in call})
+    if raw is not None:
+        u = raw.get('usage') or {}
+        if 'input_tokens' in u and 'output_tokens' in u:
+            creation = u.get('cache_creation') or {}
+            writes = u.get('cache_creation_input_tokens', 0)
+            call.update(input_tokens=u['input_tokens'], output_tokens=u['output_tokens'],
+                        cache_read_tokens=u.get('cache_read_input_tokens', 0),
+                        cache_write_tokens=writes,
+                        cache_write_5m_tokens=creation.get('ephemeral_5m_input_tokens'),
+                        cache_write_1h_tokens=creation.get('ephemeral_1h_input_tokens'),
+                        missing_usage=False)
+            call['prompt_tokens'] = call['input_tokens'] + call['cache_read_tokens'] + writes
+    return call
+
+
+def final_cli_result(path):
+    if not path.exists():
+        return None
+    result = None
+    for line in path.read_text().splitlines():
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if value.get('type') == 'result':
+            result = value
+    return result
+
+
+def summarize_calls(calls):
+    models = {}
+    for model in sorted({call['model'] for call in calls}):
+        rows = [call for call in calls if call['model'] == model]
+        total = {'requests': len(rows), 'states': dict(Counter(c['state'] for c in rows)),
+                 'missing_usage_requests': sum(c['missing_usage'] for c in rows)}
+        for field in TOKEN_FIELDS:
+            values = [c[field] for c in rows if c[field] is not None]
+            total[field] = sum(values) if values else None
+        total['model_seconds'] = sum(c['seconds'] or 0 for c in rows)
+        total['receipt_list_cost_usd'] = sum(c['receipt_list_cost_usd'] or 0 for c in rows)
+        models[model] = total
+    return {'requests': len(calls), 'prompt_tokens': sum(c['prompt_tokens'] or 0 for c in calls),
+            'output_tokens': sum(c['output_tokens'] or 0 for c in calls),
+            'missing_usage_requests': sum(c['missing_usage'] for c in calls), 'models': models}
+
+
+def controller_run(case, campaign):
+    task = case / 'task'
+    result_path = case / 'result.json'
+    result = read_json(result_path) if result_path.exists() else {}
+    phase_by_request = {}
+    for path in sorted((task / 'events').glob('*.json')):
+        event = read_json(path)
+        if event.get('kind') == 'provider_intent':
+            phase_by_request[event['payload']['request_id']] = (
+                event.get('state_after', {}).get('domain', {}).get('description_phase') or 'investigation')
+    calls, seen = [], set()
+    for path in sorted((task / 'receipts').glob('request-*.json')):
+        receipt = read_json(path)
+        request_id = receipt.get('request_id', str(path))
+        if request_id in seen:
+            continue
+        seen.add(request_id)
+        calls.append(normalize_call(receipt, path, phase_by_request.get(request_id, 'unknown'),
+                                    final_cli_result(path.with_suffix('.body'))))
+    workers = defaultdict(lambda: {'operations': 0, 'wall_seconds': 0., 'cpu_seconds': 0.})
+    for path in sorted((task / 'receipts').glob('worker-*.json')):
+        receipt = read_json(path)
+        resources = receipt.get('resources') or {}
+        row = workers[receipt.get('operation', 'unknown')]
+        row['operations'] += 1
+        row['wall_seconds'] += resources.get('wall_seconds', 0)
+        row['cpu_seconds'] += sum(resources.get(k, 0) for k in ('worker_cpu_seconds', 'children_cpu_seconds'))
+    return dict(kind='controller', campaign=campaign, case=case.name, arm='live',
+                source=str(case), wall_seconds=result.get('wall_seconds'),
+                status=result.get('controller_status'), termination_reason=result.get('termination_reason'),
+                worker_seconds=sum(r['wall_seconds'] for r in workers.values()),
+                worker_cpu_seconds=sum(r['cpu_seconds'] for r in workers.values()),
+                worker_operations=dict(workers), calls=calls)
+
+
+def holdout_runs(arm_dir, case):
+    summary = read_json(arm_dir / 'summary.json')
+    runs = []
+    for index, score in enumerate(summary.get('repeats', []), 1):
+        repeat = arm_dir / f'R1-{index}'
+        calls = []
+        for path in sorted((repeat / 'receipts').glob('*.json')):
+            calls.append(normalize_call(read_json(path), path, 'label_questions'))
+        for path in sorted((repeat / 'receipts').glob('*.jsonl')):
+            for number, line in enumerate(path.read_text().splitlines(), 1):
+                if line.strip():
+                    calls.append(normalize_call(json.loads(line), f'{path}:{number}', 'label_questions'))
+        runs.append(dict(kind='holdout', campaign=arm_dir.name, case=case,
+                         arm=summary.get('arm', arm_dir.name), repeat=index, source=str(repeat),
+                         wall_seconds=score.get('seconds'),
+                         measurement_seconds=summary.get('measurement', {}).get('seconds'),
+                         summary_requests=score.get('calls'), summary_prompt_tokens=score.get('prompt_tokens'),
+                         summary_output_tokens=score.get('completion_tokens'),
+                         rms_m=score.get('rms_m'), coverage=score.get('coverage'),
+                         passes_rule=summary.get('passes_rule'), calls=calls))
+    return runs
+
+
+def collect(main_work, holdout_root, tank_roots=()):
+    runs = []
+    for pattern in ('round-3view-*-sonnet-*', 'autocal-live-*'):
+        for campaign in sorted(main_work.glob(pattern)):
+            for case in sorted(campaign.iterdir()):
+                if (case / 'task').is_dir():
+                    runs.append(controller_run(case, campaign.name))
+    for case in ('bue-girl', 'bumble-bee', 'pardon-me'):
+        for summary in sorted((holdout_root / case / 'runs').glob('*/summary.json')):
+            runs.extend(holdout_runs(summary.parent, case))
+    # Tank caches are shared across replays. Count each actual receipt path once, not
+    # once per reading. Reading wall times cannot be assigned to that shared cache.
+    tank_paths = sorted({p.resolve() for root in tank_roots for p in root.rglob('claude.jsonl')})
+    for path in tank_paths:
+        calls = [normalize_call(json.loads(line), f'{path}:{n}', 'tank_label_questions')
+                 for n, line in enumerate(path.read_text().splitlines(), 1) if line.strip()]
+        runs.append(dict(kind='tank_cache', campaign='tank', case=path.parent.parent.name,
+                         arm='sonnet', source=str(path), wall_seconds=None, calls=calls))
+    for run in runs:
+        run['totals'] = summarize_calls(run['calls'])
+        run['phases'] = {phase: summarize_calls([c for c in run['calls'] if c['phase'] == phase])
+                         for phase in sorted({c['phase'] for c in run['calls']})}
+    return {'schema_version': 1, 'main_work': str(main_work), 'holdout_root': str(holdout_root),
+            'tank_roots': [str(p) for p in tank_roots], 'tank_receipt_files': len(tank_paths),
+            'runs': runs}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--main-work', type=Path, default=MAIN_WORK)
+    parser.add_argument('--holdout-root', type=Path, default=HOLDOUT_ROOT)
+    parser.add_argument('--tank-root', type=Path, action='append', default=[])
+    parser.add_argument('--out', type=Path, required=True)
+    args = parser.parse_args()
+    tank_roots = args.tank_root or [args.main_work / 'tanks-raster']
+    report = collect(args.main_work, args.holdout_root, tank_roots)
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(json.dumps(report, indent=2) + '\n')
+    print(f"{len(report['runs'])} runs; {sum(r['totals']['requests'] for r in report['runs'])} receipts; "
+          f"{report['tank_receipt_files']} tank receipt files; saved {args.out}")
+
+
+if __name__ == '__main__':
+    main()
