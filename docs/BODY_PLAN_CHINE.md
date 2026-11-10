@@ -655,3 +655,82 @@ Scorer (`benchmarks/deadrise_holdout/score.py`, exactly the committed protocol):
 - Gates per kind of cell (`gates`): as the protocol, with the by-eye knuckle check recorded separately.
 
 PM approved both calibrations as committed in `30611af` and gave the truth format and sha256 values (2026-11-10).
+
+### HOLDOUT RESULT: WHITE GULL and COLLEEN (one run each, no tuning)
+
+One run per sheet on 2026-11-10 with calibrations `30611af` and loader and run script `f0ac36f`. The three arms are
+the frozen reader (rank identities), reader v2, and the polyline reader under the product rule. No constant was
+changed after the run. Truth sha256 matched (WHITE GULL `de30930e...`, COLLEEN `bbc124ef...`); neither file lists
+"unsure" entries. `body_plan_polyline.py` sha256 is `1f39f866...` as pinned. Evidence (git-ignored), in
+`work/deadrise_holdouts/`:
+
+- `<boat>_holdout_result.json` (WHITE GULL `33a79bf9...`, COLLEEN `283e85f8...`)
+- `<boat>_holdout_overlay.png`
+- `<boat>_holdout_stdout.txt`
+
+Truth cells: WHITE GULL 53 waterline, 30 point. COLLEEN 26 waterline (WL -1, 0, +1 ft), 26 point. The WHITE GULL
+row "WL 0-0-0" (the base line) is not a measuring row; it is listed as unmatched and not scored.
+
+**WHITE GULL.** v2 verified a chine line on the fore half only. The polyline reader **declined both halves**: it found
+2 knuckled stations per half and needs 3, so its table and curves equal the frozen reader's.
+
+| Arm | Waterline cells | RMS m | Max m | Wrong | Point cells | RMS m | Max m | Wrong | Chine only | Identity (WL / pt) | Extra |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Frozen | 45/53 | 0.0263 | 0.1315 | 0 | 8/30 | 0.1338 | 0.2477 | 2 | 5/10, RMS 0.169, 2 wrong | [7] / [6] | W6 of 5, 6, 7 |
+| v2 | 43/53 | 0.0179 | 0.1153 | 0 | 7/30 | 0.1394 | 0.2477 | 2 | 4/10, RMS 0.184, 2 wrong | [7] / [6] | W6 of 5, 6, 7 |
+| Polyline (both halves declined) | 45/53 | 0.0263 | 0.1315 | 0 | 8/30 | 0.1338 | 0.2477 | 2 | 5/10, RMS 0.169, 2 wrong | [7] / [6] | W6 of 5, 6, 7 |
+
+Point cells by kind (all arms): sheer 3/10 (RMS 0.006 m) and rabbet 0/10. The chine errors are -0.25 m (stations 6
+and 7) and -0.13 m (station 2).
+
+Gates:
+
+| Gate | v2 (WL / point) | Polyline (WL / point) |
+|---|---|---|
+| Cells >= frozen | **fail** (43 < 45) / **fail** (7 < 8) | pass / pass |
+| RMS not worse | pass / **fail** (0.139 > 0.134) | pass / pass |
+| Wrong not worse | pass / pass | pass / pass |
+| Wrong <= 10 % of cells | pass / **fail** (2/7) | pass / **fail** (2/8 = 25 %) |
+| No extra on blank truth | **fail** (W6 of stations 5, 6, 7) / pass | **fail** (same, from the frozen table) / pass |
+| By eye | v2 fore line on the drawn chine from station 5 to 2. It then runs along the painted waterline (row 3658), where its "station 1" point lies, and outward along the "Chine" label leader: **fail** | no named knuckle (both halves declined). The 4 unnamed knuckles are on drawn corners (fore: stations 5 and 3; aft: near the chine of stations 7 and 8) |
+
+**WHITE GULL: FAIL** (both v2 and polyline). The polyline reader's decline follows its own rule: on each half only 2
+stations gave a sharp knuckle. The other traced lines ended as grid lines (11 fore, 5 aft, on the drawn buttocks), with
+no bottom branch, or with no sharp knuckle. On this sheet the 1-ft buttock grid crosses every station, and the aft
+stations crowd within 100 px of each other near the transom outline.
+
+**COLLEEN.** v2 verified a chine line on the fore half only. The polyline reader **read the fore half** (stations 6,
+5, 4, 3, 2; station 1 innermost not read) and **declined the aft half** (2 knuckled curves, 3 needed; the frozen table
+is kept there).
+
+| Arm | Waterline cells | RMS m | Max m | Wrong | Point cells | RMS m | Max m | Wrong | Chine only | Identity (WL / pt) | Extra |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Frozen | 15/26 | 0.1642 | 0.4787 | 3 | 3/26 | 0.0259 | 0.0360 | 0 | 0/9 | [] / [] | none |
+| v2 | 9/26 | 0.5234 | 1.0617 | 3 | 2/26 | 1.0420 | 1.0819 | 2 | 1/9, 1.082 m, 1 wrong | [5] / [5] | none |
+| Polyline (fore read, aft declined) | **21/26** | **0.0006** | **0.0016** | **0** | **10/26** | **0.0047** | **0.0092** | **0** | **5/9, RMS 0.003, 0 wrong** | [] / [] | none |
+
+Polyline point cells by kind: chine 5/9 (stations 2 to 6, RMS 3 mm); rabbet 5/8 (stations 2 to 6, RMS 6 mm); sheer
+0/9. The traced side stops below the printed sheer height, as on COLLIER. Missing cells: station 1 (not read); aft
+stations 7 to 9 chine, rabbet and sheer (frozen curves on the declined half do not enclose those heights); -1 ft for
+stations 7 and 8.
+
+Gates:
+
+| Gate | v2 (WL / point) | Polyline (WL / point) |
+|---|---|---|
+| Cells >= frozen | **fail** (9 < 15) / **fail** (2 < 3) | pass (21 >= 15) / pass (10 >= 3) |
+| RMS not worse | **fail** / **fail** | pass / pass |
+| Wrong not worse | pass / **fail** (2 > 0) | pass / pass |
+| Wrong <= 10 % of cells | **fail** (3/9) / **fail** (2/2) | pass (0/21) / pass (0/10) |
+| No extra on blank truth | pass / pass | pass / pass |
+| By eye | v2 fore line on the drawn chine from station 6 to the bow (dashed part) and out along the "Chine" label leader. Its chine points are at station 1's corner and between stations 3 and 4 (misplaced): **fail** | **pass**: the 5 named knuckles (2 to 6) are on the drawn station corners. The aft half's 2 unnamed knuckles are on the aft chine corners |
+
+**COLLEEN: PASS for the polyline reader** (all code gates for both kinds of cell, and the by-eye gate). **FAIL for
+v2.** The pass covers the fore half only, with 21/26 waterline and 10/26 point cells. The aft half was declined (the
+transom outline and stations 7 to 9 lie within about 70 px, and only 2 sharp knuckles were found). Sheer cells are not
+read.
+
+**Summary.** One hard-chine holdout passes for the polyline reader (COLLEEN, fore half) and one fails (WHITE GULL: it
+declined both halves, so it is equal to the frozen reader, which fails on the 10 % wrong-cell gate for point cells and
+on extra W6 cells). Reader v2 fails both. WHITE GULL and COLLEEN are now spent as holdouts; any change made after
+looking at these results makes them development cases.
