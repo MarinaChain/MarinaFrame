@@ -1557,6 +1557,7 @@ class RasterTank:
     triangles: np.ndarray | None
     volume_m3: float
     notes: list[str] = field(default_factory=list)
+    repairs: list[tanks.TriangulationResult] = field(default_factory=list)
 
 
 def match_profile(tank: PlanTank, regions: list[ProfileRegion], on_bottom: bool = False) -> ProfileRegion | None:
@@ -1632,7 +1633,8 @@ def double_bottom_level(profile: ReadView, xs: np.ndarray) -> float | None:
 
 
 def build_tank(tank: PlanTank, plan_role: str, profile: ReadView | None, regions: list[ProfileRegion],
-               slicer: tanks.HullSlicer | None, region: ProfileRegion | None = None
+               slicer: tanks.HullSlicer | None, region: ProfileRegion | None = None,
+               repairs: list[tanks.TriangulationResult] | None = None
                ) -> tuple[np.ndarray | None, str, str, str | None]:
     """Solid of a plan tank: (triangles, z source, z basis, matched profile label). ``region``
     gives the profile region directly (a tank named in the profile only)."""
@@ -1691,7 +1693,7 @@ def build_tank(tank: PlanTank, plan_role: str, profile: ReadView | None, regions
             (ya, yb), (za, zb) = y_range, z_range
             slabs.append((float(xa), float(xb), [[ya, za], [yb, za], [yb, zb], [ya, zb]]))
     basis += '; no hull given: prism of the plan region (bilge not cut, guessed)'
-    triangles = tanks.slabs_triangles(slabs) if slabs else None
+    triangles = tanks.slabs_triangles(slabs, repairs=repairs) if slabs else None
     return triangles, 'guessed', basis, matched.label if matched else None
 
 
@@ -1914,23 +1916,25 @@ def read_sheets(sheets: list[tuple[np.ndarray, float, SheetSpec]], ask: Asker,
             content = content_of(row.get('content', '') if row else '', row.get('name', '') if row else '',
                                  tank.label) or 'misc'
             tank_name = row.get('name') if row else tank.label
-            triangles, z_source, z_basis, profile_label = build_tank(tank, view.ink.spec.role, profile, regions, slicer)
+            repairs = []
+            triangles, z_source, z_basis, profile_label = build_tank(tank, view.ink.spec.role, profile, regions, slicer, repairs=repairs)
             volume = tanks.fill_state(tanks.outward(triangles), float(triangles[:, :, 2].max())).volume_m3 \
                 if triangles is not None else 0.0
             results.append(RasterTank(tank, content, tank_name or tank.label, row.get('key') if row else None,
-                                      z_source, z_basis, profile_label, triangles, volume))
+                                      z_source, z_basis, profile_label, triangles, volume, repairs=repairs))
     if profile is not None:
         plans = [view for view in views.values() if view.ink.spec.kind == 'plan']
         for tank, region in profile_tanks(profile, labels[profile_name], regions, plans,
                                           [t.plan for t in results]):
             row = schedule_row_for(tank.label, schedule, sheet_of[profile_name]) if schedule else None
             content = content_of(row.get('content', '') if row else '', tank.label) or 'misc'
-            triangles, z_source, z_basis, profile_label = build_tank(tank, 'above', profile, regions, slicer, region)
+            repairs = []
+            triangles, z_source, z_basis, profile_label = build_tank(tank, 'above', profile, regions, slicer, region, repairs=repairs)
             volume = tanks.fill_state(tanks.outward(triangles), float(triangles[:, :, 2].max())).volume_m3 \
                 if triangles is not None else 0.0
             z_basis += '; breadth from the plan outlines at each x (guessed)'
             results.append(RasterTank(tank, content, tank.label, row.get('key') if row else None, 'guessed',
-                                      z_basis, profile_label, triangles, volume))
+                                      z_basis, profile_label, triangles, volume, repairs=repairs))
     reading['tanks'] = [tank_record(t) for t in results]
     return results, reading
 
@@ -1972,7 +1976,9 @@ def tank_record(tank: RasterTank) -> dict:
                                                        round(float(tank.triangles[:, :, 1].max()), 3)],
             'source_labels': {'outline': 'traced', 'height': tank.z_source, 'name': 'read',
                               'content': 'read' if tank.schedule_key or content_of(tank.plan.label) else 'guessed'},
-            'height_basis': tank.z_basis, 'engineering_approved': False}
+            'height_basis': tank.z_basis, 'engineering_approved': False,
+            'check_items': [{'code': 'triangle_fan_repair', 'status': 'check', 'message': repair.fallback_reason}
+                            for repair in tank.repairs]}
 
 
 def tank_model(results: list[RasterTank]) -> list[tanks.Tank]:
@@ -1988,5 +1994,5 @@ def tank_model(results: list[RasterTank]) -> list[tanks.Tank]:
         labels = {'name': 'read', 'content': record['source_labels']['content'], 'density': 'guessed',
                   'geometry': 'traced' if tank.z_source == 'traced' else 'guessed', 'sounding_origin': 'guessed'}
         model.append(tanks.Tank(identity, tank.name, tank.content, tank.triangles, None, None, labels, None,
-                                [tank.z_basis]))
+                                [tank.z_basis], tank.repairs))
     return model

@@ -13,6 +13,7 @@ import json
 import math
 
 from .provenance import digest_object
+from .artifacts import DRAFT_NAMES
 
 DRAFT_STATUS = "draft_not_verified"
 GUESS_KINDS = ("best_candidate", "bridged_gap", "dropped_end", "model_choice", "model_authored")
@@ -28,8 +29,7 @@ MAX_GUESSES = 300
 MAX_REASON_CHARS = 512
 # Exported CAD file names of a draft build. The tag is in the file name, so a
 # downloaded draft file cannot be mistaken for a verified export.
-DRAFT_EXPORT_NAMES = {"step": "model-draft.step", "stl": "model-draft.stl", "iges": "model-draft.iges",
-                      "3dm": "model-draft.3dm"}
+DRAFT_EXPORT_NAMES = DRAFT_NAMES
 
 
 def candidate_score(candidate: dict) -> float:

@@ -98,16 +98,16 @@ def test_side_checks_that_disagree_are_flagged_not_silent():
 
 def test_single_scale_measure_is_flagged():
     value, source, problems = sc.choose_scale({'buttock_grid': {'px_per_ft': 100.0}})
-    assert value == 100.0 and problems and 'only one' in problems[0]
+    assert value == 100.0 and problems and 'only one' in problems[0].message and problems[0].severity is sc.ScaleSeverity.BLOCKING
 
 
 def test_disagreeing_scales_are_flagged_and_a_third_agreeing_pair_wins():
     _, _, problems = sc.choose_scale({'buttock_grid': {'px_per_ft': 100.0}, 'scale_ratio': {'px_per_ft': 110.0}})
-    assert problems and 'disagree' in problems[0]
+    assert problems and 'disagree' in problems[0].message and problems[0].severity is sc.ScaleSeverity.BLOCKING
     value, source, problems = sc.choose_scale({'scale_bar': {'px_per_ft': 400.0}, 'buttock_grid': {'px_per_ft': 399.0},
                                                'waterline_spacing': {'px_per_ft': 534.0}})
     assert value == 400.0 and 'agrees' in source
-    assert any('waterline_spacing disagrees' in p for p in problems)
+    assert any('waterline_spacing disagrees' in p.message and p.severity is sc.ScaleSeverity.NOTE for p in problems)
 
 
 def test_missing_centreline_tag_uses_grid_symmetry_with_a_flag():
@@ -156,9 +156,9 @@ def test_reading_parses_answers_and_caches(tmp_path):
         return 'Here: ```json\n{"lowest_at": "stern", "evidence": "Transom next to 22"}\n```'
 
     ink = synthetic_sheet()
-    reading = cr.ClaudeReading(ask, tmp_path, 'synthetic')
+    reading = cr.ClaudeReading(ask, tmp_path, 'synthetic', model_id='test-model')
     assert reading.numbering_direction(ink)['lowest_at'] == 'stern'
-    again = cr.ClaudeReading(ask, tmp_path, 'synthetic')
+    again = cr.ClaudeReading(ask, tmp_path, 'synthetic', model_id='test-model')
     assert again.numbering_direction(ink)['lowest_at'] == 'stern'
     assert len(calls) == 1 and again.calls == 0
 
@@ -227,3 +227,16 @@ def test_frame_lines_are_not_buttocks():
     lines = [sc.Line(900.0, 3, 0.4), sc.Line(600.0, 6, 0.97), sc.Line(1100.0, 3, 0.4)]
     grid = sc.grid_lines(lines, 1000.0, [500, 0, 1500, 1000])
     assert [l.position for l in grid[-1]] == [900.0] and [l.position for l in grid[1]] == [1100.0]
+
+
+def test_answer_cache_is_scoped_to_model(tmp_path):
+    calls = []
+    def ask(prompt, pngs):
+        calls.append(1)
+        return json.dumps({"answer": len(calls)})
+    first = cr.ClaudeReading(ask, tmp_path, model_id="model-a")
+    second = cr.ClaudeReading(ask, tmp_path, model_id="model-b")
+    assert first.question("q", "prompt", []) == {"answer": 1}
+    assert second.question("q", "prompt", []) == {"answer": 2}
+    assert first.question("q", "prompt", []) == {"answer": 1}
+    assert len(calls) == 2
