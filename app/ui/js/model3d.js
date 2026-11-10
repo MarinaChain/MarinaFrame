@@ -10,6 +10,7 @@ import { el, fill as fillNode, icon, prefersReducedMotion } from './dom.js';
 import { createSectionGrowth } from './growth3d.js';
 import { createAnimation } from './animation.js';
 import { placeLabels, steelLegend, steelToken, tankLegend, tankToken } from './tanks.js';
+import { configureOrbit } from './orbit3d.js';
 import { createLighting, createPaintMaterial, createSteelMaterial, createTankMaterial, setUpRenderer, stylePaint } from './look3d.js';
 import { bootTopBand, fitDistance, frameLabel, frameAt, hullReference, nearestFrameX, pointReadout, STANDARD_VIEWS, viewOfKey } from './reference3d.js';
 import { createOverlays } from './overlay3d.js';
@@ -130,10 +131,7 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
   orthographic.up.set(0, 0, 1);
   let camera = perspective;
   const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = !prefersReducedMotion();
-  controls.dampingFactor = 0.12;
-  // Down to the horizon, so the profile and body plan views are level; never below the ground.
-  controls.maxPolarAngle = Math.PI / 2;
+  configureOrbit(controls, { reducedMotion: prefersReducedMotion() });
 
   const lighting = createLighting({ renderer, scene });
   /** The section cut: one clipping plane on every model material, with solid cut faces. */
