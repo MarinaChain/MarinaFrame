@@ -348,3 +348,105 @@ error (it crosses its neighbours between W2 and W0).
 
 Limits: development case only; one drawing style; the line finder is unchanged and its weak points (wrong
 branch at merges) are handled only by abstention. No holdout has been scored.
+
+### E. C. COLLIER holdout: calibration and scorer (written before any reader run on the sheet)
+
+Branch `feature/collier-holdout`. Calibration `benchmarks/ec_collier/holdout_value.py`; scorer
+`benchmarks/ec_collier/point_score.py`; tests `tests/test_ec_collier_holdout.py`; overlay
+`scripts/ec_collier_calibration_overlay.py` (writes `work/ec_collier/calibration_overlay.png`, git-ignored).
+No reader has run on the sheet. Truth (`work/holdout/ec-collier/truth.json`, sha256 a6ef1671...) was not opened.
+
+**Disclosure.** The brief listed `preview_8x.png` (whole sheet, 1/8 scale) as an input. It shows the printed
+table of hull measurements at low resolution, so the calibrating agent saw the table. No constant was set from it:
+every constant comes from the scale bars, the drawn base line, centreline and labels (sources in the file comments),
+and the measuring rows are a fixed grid from the scale.
+
+Calibration (full-sheet pixels):
+
+| Constant | Value | How set |
+|---|---|---|
+| Pixels per foot | 150.25 | feet scale bar, ticks 0 and 70 ft (columns 1995.0, 12512.5). Drawn vertical "8'-10 1/2" extreme half-breadth" gives 149.9 (0.2 %). The metres bar (500.2 px/m, labelled 1:24) and the 45'-10" length dimension (153.4 px/ft) disagree and are not used |
+| Centre column | 3209.3 | fit of the centreline ink, at row 6950 (mid hull); +1.2/-1.1 px over the hull rows |
+| Base row | 7656.1 at the centre, slope 0.001144 row/column | fit of the drawn BASE LINE; heights are measured from the sloped line |
+| Sides | aft left, outer first (4, 3, 2, 1, 0); fore right, outer first (5, 6, 7, 8, 9, 10) | two readings that agree: (1) labels in the body plan; (2) profile: station 0 at the transom, 10 at the stem, widest at station 4 to 5 |
+| Grid columns | none | no buttocks drawn |
+| Max offset | 1370 px | hull ink reaches 1341 (aft) and 1318 (fore); aft station labels start at 1381 |
+| Measuring rows | every 6 in from 0.5 ft to 8.0 ft above base (16 rows, 75.1 px apart), labels '0-6-0' ... '8-0-0' | scale only; top row above the top of the log rail at the centre |
+
+Row spacing is a choice with consequences for both readers and was made before any run. The reader's
+spacing-scaled constants were developed on 300 to 600 px spacings. A 3-inch grid (37.6 px) would put most of any
+traced chine line within v2's waterline-rejection band (about 13 px either side of each row), so v2 would reject
+its own chine line, and the chine-point match radius would be 3.8 px. A 1-ft grid (150 px) suits the constants but
+leaves few rows for interpolation. 6 inches is the compromise. The sheet has no drawn waterlines, so a row near a
+drawn line (light waterline at 3.5 ft, keel and deck lines) is moved onto it by the frozen waterline locator; the
+scorer uses each crossing's measured row, so this does not move a scored height.
+
+Scorer (amendment):
+
+- Truth cells: printed (station, point) for SHEER, CHINE, RABBET with both height and half-breadth printed.
+- Reader value: the station's half-breadth at the printed height, linear between its crossings on two consecutive
+  measuring rows that enclose the height (heights from each crossing's measured row and column). No extrapolation;
+  if either enclosing row has no crossing for the station, no cell.
+- Report: cells given / truth cells, RMS, maximum, wrong cells (> 0.15 m), the same for chine cells only and per
+  point, identity errors, missing and extra cells, unevaluable blank points; per arm, abstentions and whether a
+  chine line was verified per side (v2).
+- Identity errors: as the harness (a station's curve fits station ±1's printed points better than its own), with at
+  least **2** shared points instead of 3, because a station has at most 3 printed points.
+- Extra cell: a reader value at a printed height whose half-breadth is printed blank. A point with a blank height
+  cannot be evaluated and is listed only.
+- Gates (unchanged): v2 cells >= frozen; v2 RMS and wrong cells not worse; v2 wrong <= 10 % of v2 cells given; no
+  extra cell on blank truth; the verified chine line on the drawn chine (overlay, by eye).
+- Truth loader: accepts the table form (`stations`, a height table and a half-breadth table keyed by point), a list
+  of records, or station -> point -> values; values as feet-inches-eighths strings or numbers in metres (feet or
+  inches when the key ends `_ft`/`_in`); refuses values outside 0 to 4 m. It has not been run on truth.json.
+
+Known limits before the run: the bottom is shallow (about 1:6 to 1:9 rise on the aft half), and the frozen
+crossing classifier calls lines flatter than 6 columns per row "shallow", not station curves; so many rows below
+the chine will have no bottom crossings and chine and rabbet cells may be missing. Where a station does have a
+crossing below the chine, interpolating across the knuckle can give a large chine error at 6-inch spacing. The fore
+label "5" lies beside station 5 within the reach limit.
+
+PM approved the calibration as committed (6-inch rows) and gave the truth file format; the loader accepts exactly
+that format and checks the truth sha256 (`6915b3b`). Run script `scripts/measure_ec_collier_holdout.py` (`e1c7d25`).
+
+### HOLDOUT RESULT: E. C. COLLIER (one run, no tuning) - FAIL
+
+One run of both arms on 2026-11-10 with the committed calibration and scorer; no constant changed after the run.
+Source and protocol files unchanged since `2d31179`. Evidence (git-ignored): `work/ec_collier/holdout_result.json`
+(sha256 09d88133...), overlay `work/ec_collier/holdout_v2_overlay.png`. Truth sha256 a6ef1671... matched; the file
+lists 1 "unsure" entry (not used). The script wrote the JSON and overlay, then failed on a diagnostic print (a numpy
+integer in `json.dumps`); that print was fixed afterwards, display only. The run was not repeated.
+
+| Arm | Cells given | RMS m | Max m | Wrong (>0.15 m) | Identity errors | Extra | Abstained | Chine line verified (aft / fore) |
+|---|---|---|---|---|---|---|---|---|
+| Frozen (rank identities) | 7/31 | 0.9124 | 2.3133 | 3 | [] | 0 | - | - |
+| Reader v2 | 7/31 | 0.9124 | 2.3133 | 3 | [] | 0 | 0 / 0 | no / no |
+
+Chine cells only (both arms): **4/10, RMS 0.2057 m, max 0.4032 m, 1 wrong.** By point (both arms): sheer 2 cells
+(RMS 0.391 m, 1 wrong), chine 4 (0.206 m, 1 wrong), rabbet 1 (2.313 m, 1 wrong). Cells given: chine of stations
+0, 1, 2, 3 (errors +0.403, -0.010, +0.081, -0.009 m); sheer of stations 8 and 10; rabbet of station 10.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| v2 cells >= frozen | pass (equal) |
+| v2 RMS not worse | pass (equal) |
+| v2 wrong cells not worse | pass (equal) |
+| v2 wrong <= 10 % of cells given | **fail** (3/7 = 43 %) |
+| No extra cell on blank truth | pass |
+| Verified chine line on the drawn chine | **fail**: no line is verified on either half |
+
+**Result: FAIL.** v2 equals the frozen reader on this sheet: it verified no chine line, so both halves kept the
+frozen rank identities. Aft: the line finder found no line. Fore: it traced the drawn light waterline (rows 7128 to
+7138, 3.5 ft), which v2 correctly rejected as lying on a measuring row. The drawn chine (the curve through the station
+knuckles) was not found on either half.
+
+Why so few cells: the frozen reader measured crossings mainly on the station sides above the chine; the shallow
+bottom gave few station crossings (aft: 3 crossings classed "shallow"; fore: none), so heights below the chine are
+mostly unmeasured. Sheer cells are missing because the chains above the deck line run along the log-rail and deck
+lines, or end. The identity check finds no error only because few stations have two scored points; the frozen chains
+are visibly misnamed (for example the chain named station 10 is the station 5/6 side below 6 ft, then a deck line),
+which gives the 2.31 m rabbet error and the 0.55 m station-8 sheer error.
+
+E. C. COLLIER is now spent as a holdout; any change made after looking at this result makes it a development case.
