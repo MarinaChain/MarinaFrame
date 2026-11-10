@@ -5,6 +5,8 @@
 pub mod claude_cli;
 #[path = "credentials.rs"]
 pub mod credentials;
+#[path = "part_revision.rs"]
+pub mod part_revision;
 #[path = "transcription.rs"]
 pub mod transcription;
 #[path = "vision.rs"]
@@ -57,6 +59,8 @@ pub enum Purpose {
     Localisation,
     /// Restricted ship program and drawing-region measurement proposals.
     ShipCad,
+    /// One whole-vessel part re-run from a person's mark (see `part_revision`).
+    PartRevision,
 }
 impl Purpose {
     fn is_model_decision(&self) -> bool {
@@ -71,6 +75,7 @@ impl Purpose {
             Purpose::BuildReview => vision::REVIEW_PROMPT,
             Purpose::Localisation => vision::LOCALISATION_PROMPT,
             Purpose::ShipCad => vision::SHIP_CAD_PROMPT,
+            Purpose::PartRevision => part_revision::PROMPT,
         }
     }
     /// Decision purposes return a tool call; table reading returns cells.
@@ -231,9 +236,11 @@ pub fn check_input(input: &ProviderInput) -> Result<Vec<u8>> {
     match input.purpose {
         Purpose::ModelDecision | Purpose::Investigation => (),
         Purpose::TableTranscription => check_table_input(input)?,
-        Purpose::SheetSetup | Purpose::BuildReview | Purpose::Localisation | Purpose::ShipCad => {
-            vision::check_input(input)?
-        }
+        Purpose::SheetSetup
+        | Purpose::BuildReview
+        | Purpose::Localisation
+        | Purpose::ShipCad
+        | Purpose::PartRevision => vision::check_input(input)?,
     }
     let messages = p["messages"]
         .as_array()
@@ -462,7 +469,11 @@ fn interpret_content(receipt: &mut Receipt, content: &str) -> Result<()> {
             let requested = requested_cells(&receipt.images);
             receipt.transcription = Some(transcription::parse(content, &requested)?);
         }
-        Purpose::SheetSetup | Purpose::BuildReview | Purpose::Localisation | Purpose::ShipCad => {
+        Purpose::SheetSetup
+        | Purpose::BuildReview
+        | Purpose::Localisation
+        | Purpose::ShipCad
+        | Purpose::PartRevision => {
             receipt.vision = Some(vision::parse_reply(
                 receipt.purpose,
                 content,

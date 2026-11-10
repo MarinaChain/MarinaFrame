@@ -213,6 +213,13 @@ pub fn build(payload: &Value, purpose: Purpose) -> Result<CliRequest> {
     .collect();
     if purpose.is_decision() {
         args.extend(["--json-schema".to_string(), DECISION_SCHEMA.to_string()]);
+    } else if purpose == Purpose::PartRevision {
+        // The model answers through the structured-output tool; the reply is
+        // still checked strictly by `part_revision::parse`.
+        args.extend([
+            "--json-schema".to_string(),
+            super::part_revision::CLI_SCHEMA.to_string(),
+        ]);
     }
     Ok(CliRequest {
         args,

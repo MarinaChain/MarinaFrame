@@ -1,13 +1,14 @@
 //! Re-run one whole-vessel part from a mark through the real Python worker
-//! (`vessel_reconstruction.part_revise`) and the real ship-cad build, with a scripted model:
-//! no model request is made. Then undo, re-run again and keep.
+//! (`vessel_reconstruction.part_revise`) and the real ship-cad build, with a scripted model at
+//! the provider level: the replies get the checks and receipts of the provider path, and no
+//! model request is made. Then undo, re-run again and keep.
 //! Needs `MARINAFRAME_TEST_PYTHON` and macOS (the ship-cad sandbox).
 //! Local runs may omit the worker Python; CI requires it. Other platforms skip.
 mod support;
 
 use marinaframe_app_core::actions::ActionRegistry;
 use marinaframe_app_core::intake::Worker;
-use marinaframe_app_core::part_revise::{self, Model, REVISE_STALL_PERIOD};
+use marinaframe_app_core::part_revise::{self, ModelChoice, Replies, REVISE_STALL_PERIOD};
 use marinaframe_app_core::{parts, AppPaths};
 use serde_json::json;
 use std::path::{Path, PathBuf};
@@ -94,8 +95,13 @@ fn re_run_a_marked_part_then_undo_and_keep() {
     };
     let registry = ActionRegistry::default();
     let replies = tmp.path().join("replies.json");
-    std::fs::write(&replies, json!([reply(0.5)]).to_string()).unwrap();
-    let model = Model::Scripted(replies.clone());
+    // The first reply is not JSON: it is refused with a typed error and the model is asked again.
+    std::fs::write(&replies, json!(["not json", reply(0.5)]).to_string()).unwrap();
+    // The model comes from this configuration, not from the worker.
+    let model = ModelChoice::new(
+        vec!["deepseek-v4.1-flash".into()],
+        Replies::Scripted(replies.clone()),
+    );
     // The note starts with "-": it must stay the note, not become an option.
     parts::review_component(
         &paths,
@@ -143,6 +149,14 @@ fn re_run_a_marked_part_then_undo_and_keep() {
     let record: serde_json::Value =
         serde_json::from_slice(&std::fs::read(task.join(parts::EXECUTION_FILE)).unwrap()).unwrap();
     assert_eq!(record["result"]["engineering_approved"], json!(false));
+    let receipts = record["result"]["components"][0]["revision_receipts"]
+        .as_array()
+        .unwrap();
+    assert_eq!(receipts.len(), 2);
+    assert_eq!(receipts[0]["error_code"], "part_program_invalid_json");
+    assert!(receipts
+        .iter()
+        .all(|r| r["requested_model"] == "deepseek-v4.1-flash"));
 
     let part = part_revise::undo_revision(&registry, &paths, &task, "wheelhouse", &worker).unwrap();
     assert_eq!((part.revision, part.revision_pending), (0, false));

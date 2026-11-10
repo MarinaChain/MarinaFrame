@@ -326,41 +326,11 @@ def revision_folder(tmp_path):
     return pack
 
 
-def fake_model(reply):
-    def call(messages, receipts, settings):
-        assert settings['thinking'] == 'disabled'
-        assert 'narrower' in messages[0]['content'][0]['text']
-        return reply, {'request_id': 'test', 'state': 'completed', 'usage': {}, 'seconds': 0.0}
-    return call
-
-
-@pytest.mark.cad
-@pytest.mark.skipif(sys.platform != 'darwin', reason='the ship-cad worker needs the macOS sandbox')
-def test_revise_rebuilds_only_the_marked_part(tmp_path):
-    import json
-
-    from benchmarks.gunnerus.whole_vessel_revise import revise
-
-    pack = revision_folder(tmp_path)
-    narrow = [[0.0, -0.5], [2.0, -0.5], [2.0, 0.5], [0.0, 0.5]]
-    reply = json.dumps({'schema': 'ship-cad/v1', 'components': [
-        {'id': 'wheelhouse', 'op': 'deckhouse', 'source': {'view': 'plan', 'region': 'wheelhouse',
-                                                          'method': 'closed_outline'},
-         'args': {'outline': inline(narrow), 'height': inline([9.0, 11.5])}}]})
-    entry = revise(tmp_path, pack, 'wheelhouse', 'Make it narrower: 1 m wide', call=fake_model(reply))
-    assert entry['revision'] == 1 and entry['geometry']['outline'] == narrow
-    assert entry['source_labels'] == {'outline': 'ai_inferred', 'height': 'traced'}
-    assert entry['revision_history'][0]['geometry']['outline'] == SQUARE
-    saved = json.loads((tmp_path / 'whole_vessel' / 'execution.json').read_text())['result']['components']
-    assert saved[0] == {'id': 'hull', 'op': 'hull', 'built': True, 'status': 'measured_draft'}
-    assert (tmp_path / 'whole_vessel' / 'wheelhouse.r0.step').read_text() == 'old'
-
-
 def test_revise_refuses_hull_and_empty_note(tmp_path):
     from benchmarks.gunnerus.whole_vessel_revise import revise
 
-    pack = revision_folder(tmp_path)
+    revision_folder(tmp_path)
     with pytest.raises(ValueError, match='cannot be re-run'):
-        revise(tmp_path, pack, 'hull', 'lower it', call=fake_model('{}'))
+        revise(tmp_path, 'hull', 'lower it')
     with pytest.raises(ValueError, match='1 to 500'):
-        revise(tmp_path, pack, 'wheelhouse', ' ', call=fake_model('{}'))
+        revise(tmp_path, 'wheelhouse', ' ')

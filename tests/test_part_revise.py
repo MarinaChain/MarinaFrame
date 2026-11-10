@@ -1,9 +1,14 @@
-"""Re-run one whole-vessel part from a mark (vessel_reconstruction.part_revise). No model calls."""
+"""Re-run one whole-vessel part from a mark (vessel_reconstruction.part_revise).
+
+The worker never calls a model: the app sends its request through the controller's provider
+worker and writes the checked program of each turn. These tests write that program themselves.
+"""
 from __future__ import annotations
 
 import json
 import re
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -58,30 +63,59 @@ def make_task(tmp_path, entry_extra=None):
     return task
 
 
-@pytest.mark.skipif(sys.platform != 'darwin', reason='the part-revise path requires macOS')
+def program(outline=SQUARE, height=(9.0, 11.5)):
+    """A checked program as the app writes it for one turn."""
+    return {'schema': 'ship-cad/v1', 'components': [
+        {'id': 'wheelhouse', 'op': 'deckhouse',
+         'source': {'view': 'plan', 'region': 'wheelhouse', 'method': 'closed_outline'},
+         'args': {'outline': inline(outline), 'height': inline(list(height))}}]}
+
+
+def prepared(task):
+    """A prepared re-run (as --prepare leaves it) without the drawing crops."""
+    work = task / 'whole_vessel/revisions/wheelhouse-r1-test'
+    (work / 'request').mkdir(parents=True)
+    (work / 'request/request.json').write_text(json.dumps({'context': {'note': 'Make it narrower'}}))
+    return work
+
+
 @pytest.mark.parametrize('state, message', [
     ('sandbox_safety_cap', 'The sandboxed CAD worker reached the four-hour security limit (240 min) at Building vessel parts.'),
     ('stalled', 'The sandboxed CAD worker stopped at Building vessel parts after 5 min without progress.'),
 ])
-def test_security_cap_stops_retries_and_preserves_its_message(tmp_path, monkeypatch, state, message):
-    from vessel_reconstruction import ship_cad_worker
+def test_security_cap_stops_the_re_run_and_preserves_its_message(tmp_path, state, message):
     task = make_task(tmp_path)
+    work = prepared(task)
+    (work / 'program-1.json').write_text(json.dumps(program()))
     calls = []
-    reply = json.dumps({'schema': 'ship-cad/v1', 'components': [
-        {'id': 'wheelhouse', 'op': 'deckhouse',
-         'source': {'view': 'plan', 'region': 'wheelhouse', 'method': 'closed_outline'},
-         'args': {'outline': inline(SQUARE), 'height': inline([9.0, 11.5])}}]})
 
-    def model(*_):
+    def worker(*_args, **_kwargs):
         calls.append(True)
-        return reply, {'state': 'completed'}
+        return {'state': state, 'result': None, 'error': message}
 
-    monkeypatch.setattr(ship_cad_worker, 'run', lambda *a, **k: {
-        'state': state, 'result': None, 'error': message})
     with pytest.raises(PartReviseError, match=re.escape(message)):
-        part_revise.revise_part(task, 'wheelhouse', 'Make it narrower', call=model, pack={'images': []})
+        part_revise.build_turn(task, 'wheelhouse', work, 1, run_worker=worker)
     assert len(calls) == 1
     assert (task / 'whole_vessel/wheelhouse.step').read_text() == 'old'
+
+
+def test_a_program_that_does_not_build_says_why_and_changes_nothing(tmp_path):
+    task = make_task(tmp_path)
+    work = prepared(task)
+    before = (task / 'whole_vessel/execution.json').read_text()
+    (work / 'program-1.json').write_text(json.dumps(program(outline=[[14.0, 0.0], [21.0, 0.0]])))
+    outcome = part_revise.build_turn(task, 'wheelhouse', work, 1, run_worker=lambda *a, **k: pytest.fail())
+    assert outcome['built'] is False and 'ValueError' in outcome['problem']
+    assert (task / 'whole_vessel/execution.json').read_text() == before
+
+
+def test_a_build_needs_a_work_folder_of_this_part_in_this_run(tmp_path):
+    task = make_task(tmp_path)
+    elsewhere = tmp_path / 'elsewhere'
+    elsewhere.mkdir()
+    for work in (elsewhere, task / 'whole_vessel/revisions/other-r1-x'):
+        with pytest.raises(PartReviseError, match='no prepared request'):
+            part_revise.build_turn(task, 'wheelhouse', work, 1)
 
 
 def metres(formula, pixel):
@@ -136,29 +170,49 @@ def test_views_must_be_complete_and_unchanged(tmp_path):
         part_revise.build_pack(task, entry, tmp_path / 'pack')
 
 
-def test_prompt_has_the_note_values_and_the_argument_forms(tmp_path):
+def test_request_has_the_note_values_and_the_argument_forms(tmp_path):
     entry = {'id': 'skeg_ps', 'op': 'appendage', 'label': 'Skeg', 'geometry': {'outline': SQUARE, 'span': [1, 2]},
              'source_labels': {'outline': 'traced', 'span': 'guessed'},
              'provenance': {'span': {'source': 'guessed', 'basis': 'half breadth guessed'}}}
-    pack = {'images': []}
-    text = part_revise.revision_prompt(entry, 'Make it 0.5 m deeper', pack)[0]['content'][0]['text']
-    assert 'Make it 0.5 m deeper' in text and 'half breadth guessed' in text
-    assert 'profile polygon [[x, z]' in text and '"view":"profile"' in text
-    assert '- span (guessed): [1, 2]' in text
+    context = part_revise.request_context(entry, 'Make it 0.5 m deeper', {'images': []})
+    assert context['note'] == 'Make it 0.5 m deeper'
+    assert context['part'] == {'id': 'skeg_ps', 'label': 'Skeg', 'op': 'appendage'}
+    assert context['arguments']['outline'].startswith('profile polygon [[x, z]')
+    assert context['component_source']['view'] == 'profile'
+    assert {'argument': 'span', 'source_label': 'guessed', 'value': [1, 2],
+            'basis': 'half breadth guessed'} in context['current_values']
+
+
+@pytest.mark.skipif(sys.platform != 'darwin', reason='the part-revise path requires macOS')
+def test_prepare_writes_a_vision_request_without_a_model_or_a_key(tmp_path, monkeypatch):
+    for variable in ('OPENCODE_API_KEY', 'ANTHROPIC_API_KEY'):
+        monkeypatch.delenv(variable, raising=False)
+    task = make_task(tmp_path)
+    prepared = part_revise.prepare_revision(task, 'wheelhouse', 'Make it 1 m wide')
+    request = json.loads((Path(prepared['request']) / 'request.json').read_text())
+    assert request['schema_version'] == 'marinaframe.vision_request.v1'
+    assert request['purpose'] == 'part_revision' and request['engineering_approved'] is False
+    assert [image['view'] for image in request['images']] == ['profile', 'plan_adeck']
+    for image in request['images']:
+        crop = Path(prepared['request']) / image['file']
+        assert crop.stat().st_size == image['bytes']
+        assert part_revise._sha256(crop) == image['sha256']
+    calibration = request['context']['image_calibration']
+    assert [c['image_id'] for c in calibration] == [i['image_id'] for i in request['images']]
+    assert prepared['revision'] == 1
 
 
 def test_refusals_change_nothing(tmp_path):
     task = make_task(tmp_path)
     before = (task / 'whole_vessel/execution.json').read_text()
-    model = part_revise.scripted_model([])
     with pytest.raises(PartReviseError, match='cannot be re-run'):
-        part_revise.revise_part(task, 'hull', 'lower it', call=model)
+        part_revise.prepare_revision(task, 'hull', 'lower it')
     with pytest.raises(PartReviseError, match='1 to 500'):
-        part_revise.revise_part(task, 'wheelhouse', ' ', call=model)
+        part_revise.prepare_revision(task, 'wheelhouse', ' ')
     with pytest.raises(PartReviseError, match='1 to 500'):
-        part_revise.revise_part(task, 'wheelhouse', 'x' * 501, call=model)
+        part_revise.prepare_revision(task, 'wheelhouse', 'x' * 501)
     with pytest.raises(PartReviseError, match='no such part'):
-        part_revise.revise_part(task, '../escape', 'lower it', call=model)
+        part_revise.prepare_revision(task, '../escape', 'lower it')
     with pytest.raises(PartReviseError, match='no new revision'):
         part_revise.undo_revision(task, 'wheelhouse')
     assert (task / 'whole_vessel/execution.json').read_text() == before
@@ -215,24 +269,29 @@ def test_keep_ends_the_choice_and_keeps_the_history(tmp_path):
 
 def test_command_line_refusal_is_json_on_stderr(tmp_path, capsys):
     task = make_task(tmp_path)
-    assert part_revise.main(['--task', str(task), '--part', 'hull', '--note=lower it']) == 2
+    assert part_revise.main(['--task', str(task), '--part', 'hull', '--prepare', '--note=lower it']) == 2
     assert 'cannot be re-run' in json.loads(capsys.readouterr().err)['error']
 
 
 @pytest.mark.cad
 @pytest.mark.skipif(sys.platform != 'darwin', reason='the ship-cad worker needs the macOS sandbox')
 def test_revise_from_the_command_line_with_a_scripted_model(tmp_path, capsys):
+    """The command-line steps the app runs; this test writes what the app writes after each
+    scripted model reply (the checked program and the receipt summaries)."""
     task = make_task(tmp_path)
     narrow = [[14.0, -0.5], [21.0, -0.5], [21.0, 0.5], [14.0, 0.5]]
-    good = json.dumps({'schema': 'ship-cad/v1', 'components': [
-        {'id': 'wheelhouse', 'op': 'deckhouse', 'source': {'view': 'plan', 'region': 'wheelhouse',
-                                                          'method': 'closed_outline'},
-         'args': {'outline': inline(narrow), 'height': inline([9.0, 11.5])}}]})
-    replies = tmp_path / 'replies.json'
-    replies.write_text(json.dumps(['not json', good]))  # the first reply goes back with the reason
-    code = part_revise.main(['--task', str(task), '--part', 'wheelhouse', '--note=Make it 1 m wide',
-                             '--replies', str(replies)])
-    assert code == 0, capsys.readouterr().err
+    base = ['--task', str(task), '--part', 'wheelhouse']
+    assert part_revise.main(base + ['--prepare', '--note=Make it 1 m wide']) == 0, capsys.readouterr().err
+    work = Path(json.loads(capsys.readouterr().out)['work'])
+    # Turn 1: a program that does not build goes back to the model with the reason.
+    (work / 'program-1.json').write_text(json.dumps(program(outline=[[14.0, 0.0], [21.0, 0.0], [17.0, 0.0]])))
+    assert part_revise.main(base + ['--build', '1', '--work', str(work)]) == 0, capsys.readouterr().err
+    first = json.loads(capsys.readouterr().out)
+    assert first['built'] is False and first['problem']
+    # Turn 2: the app wrote both receipt summaries before this build.
+    (work / 'program-2.json').write_text(json.dumps(program(outline=narrow)))
+    (work / 'receipts.json').write_text(json.dumps([{'request_id': 'vision-1'}, {'request_id': 'vision-2'}]))
+    assert part_revise.main(base + ['--build', '2', '--work', str(work)]) == 0, capsys.readouterr().err
     assert json.loads(capsys.readouterr().out)['revision'] == 1
     entry = json.loads((task / 'whole_vessel/execution.json').read_text())['result']['components'][1]
     assert entry['geometry']['outline'] == narrow and entry['revision_note'] == 'Make it 1 m wide'
@@ -241,5 +300,5 @@ def test_revise_from_the_command_line_with_a_scripted_model(tmp_path, capsys):
     assert entry['revision_kept'] is False and len(entry['revision_receipts']) == 2
     assert (task / 'whole_vessel/wheelhouse.r0.step').read_text() == 'old'
     assert (task / 'whole_vessel/wheelhouse.step').read_text().startswith('ISO-10303-21')
-    crops = list((task / 'whole_vessel/revisions').glob('wheelhouse-r1-*/pack/*.png'))
+    crops = list((task / 'whole_vessel/revisions').glob('wheelhouse-r1-*/request/*.png'))
     assert len(crops) == 2
