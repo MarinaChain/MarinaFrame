@@ -387,6 +387,32 @@ def survey_page(image: np.ndarray) -> list[dict]:
 
 
 # ------------------------------------------------------------------ prepare
+def _report_progress(stage: str) -> None:
+    """Telemetry failures must not turn a readable page into an intake failure."""
+    from . import progress
+
+    try:
+        progress.report(stage)
+    except (OSError, ValueError, KeyError):
+        pass
+
+
+def _reporting_ask(ask):
+    """``ask`` that reports progress before each model question, so a page with several
+    questions is not taken for a stall by the app's watchdog."""
+    if ask is None:
+        return None
+    asked = 0
+
+    def reporting(prompt, pngs):
+        nonlocal asked
+        asked += 1
+        _report_progress(f"Asking the model (question {asked})")
+        return ask(prompt, pngs)
+
+    return reporting
+
+
 def sheet_result(path: Path, info: dict, image: np.ndarray, regions: list[dict], ask=None) -> dict | None:
     """The sheet type and scale of one page (drawing_set.analyse_page); None when it cannot be read."""
     from .drawing_set import analyse_page
@@ -408,6 +434,8 @@ def prepare(files: list[Path], out_dir: Path, render_dpi: float = DEFAULT_RENDER
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     pages, warnings = [], []
+    _report_progress("Reading drawings")
+    ask = _reporting_ask(ask)
     for path in files:
         path = Path(path).resolve()
         try:
@@ -419,6 +447,7 @@ def prepare(files: list[Path], out_dir: Path, render_dpi: float = DEFAULT_RENDER
                               "thumbnail_png_base64": thumbnail, "thumbnail_scale": round(scale, 6),
                               "regions": regions, "warnings": page_warnings(info, image, regions),
                               "skip": False, "sheet": sheet_result(path, info, image, regions, ask)})
+                _report_progress(f"Read page {len(pages)}")
         except Exception as exc:  # A broken file must not stop the other pages.
             warnings.append({"code": "unreadable_file", "file": str(path),
                              "message": f"{path.name} could not be read ({type(exc).__name__})."})

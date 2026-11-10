@@ -15,6 +15,9 @@
 use crate::provider::vision::{self, ReviewReply, Usage, Verdict, VisionReply};
 use crate::provider::{self, Purpose};
 use crate::store::{self, Store};
+use crate::supervised::{
+    run_watched, stall_message, Watch, WatchedEnd, WorkerCommand, DEFAULT_STALL_PERIOD,
+};
 use crate::types::*;
 use crate::util::{self, Result};
 use crate::worker;
@@ -22,8 +25,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
 use std::path::Path;
-use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
 
 /// Event that enables the review for a task; appended once by `run`.
 pub const REQUESTED_EVENT: &str = "model_review_requested";
@@ -35,8 +36,6 @@ pub const RECORD_VERSION: &str = "marinaframe.model_review.v1";
 /// request size and keep each verdict tied to few images.
 const STATIONS_PER_REQUEST: usize = 3;
 const MAX_STATIONS: usize = 64;
-/// Wall time of the Python renderer (it reimports and cuts the STEP).
-const RENDER_WALL_SECONDS: u64 = 300;
 const MAX_IMAGE_BYTES: usize = 1_048_576;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -163,48 +162,40 @@ pub fn load_images(directory: &Path, step_sha256: &str) -> Result<(ReviewImages,
     Ok((manifest, bytes))
 }
 
-/// Run the Python renderer under a wall-time limit, with the worker's
-/// environment rules. It reads the candidate run and writes only `out`.
+/// Run the Python renderer under the progress watchdog, with the shared worker
+/// environment. It reads the candidate run and writes only `out`. A cancel or a
+/// stall stops its whole process group; either one fails the review.
 fn render(config: &Config, run: &Path, out: &Path, logs: &Path, root: &Path) -> Result<bool> {
-    let mut command = Command::new(&config.worker_python);
+    let mut command = WorkerCommand::python(
+        &config.worker_python,
+        config.worker_source.as_deref().map(Path::new),
+    );
     command
         .args(["-m", "vessel_reconstruction.llm_review", "render", "--run"])
         .arg(run)
         .arg("--out")
-        .arg(out)
-        .env_clear();
-    for key in ["PATH", "LANG", "LC_ALL", "TZ"] {
-        if let Ok(value) = std::env::var(key) {
-            command.env(key, value);
+        .arg(out);
+    let cancelled = || worker::cancelled(root);
+    let watch = Watch {
+        stall_period: DEFAULT_STALL_PERIOD,
+        cancelled: &cancelled,
+        operation: "rendering the review images",
+    };
+    let end = run_watched(&mut command, &watch).map_err(|_| "review_render_start")?;
+    let (success, stdout, stderr) = match end {
+        WatchedEnd::Finished(finished) => {
+            (finished.status.success(), finished.stdout, finished.stderr)
         }
-    }
-    command
-        .env("PYTHONDONTWRITEBYTECODE", "1")
-        .env("OPENBLAS_NUM_THREADS", "1")
-        .env("OMP_NUM_THREADS", "1");
-    if let Some(path) = &config.worker_source {
-        command.env("PYTHONPATH", path);
-    }
-    let stdout = std::fs::File::create(logs.join("render.stdout")).map_err(|_| "review_log")?;
-    let stderr = std::fs::File::create(logs.join("render.stderr")).map_err(|_| "review_log")?;
-    let mut child = command
-        .stdin(Stdio::null())
-        .stdout(stdout)
-        .stderr(stderr)
-        .spawn()
-        .map_err(|_| "review_render_start")?;
-    let deadline = Instant::now() + Duration::from_secs(RENDER_WALL_SECONDS);
-    loop {
-        if let Some(status) = child.try_wait().map_err(|_| "review_render_wait")? {
-            return Ok(status.success());
-        }
-        if Instant::now() >= deadline || worker::cancelled(root) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Ok(false);
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    }
+        WatchedEnd::Cancelled => (false, vec![], b"Stopped: the run was cancelled.\n".to_vec()),
+        WatchedEnd::Stalled { stage, minutes } => (
+            false,
+            vec![],
+            format!("{}\n", stall_message(&stage, minutes)).into_bytes(),
+        ),
+    };
+    std::fs::write(logs.join("render.stdout"), stdout).map_err(|_| "review_log")?;
+    std::fs::write(logs.join("render.stderr"), stderr).map_err(|_| "review_log")?;
+    Ok(success)
 }
 
 struct Review {

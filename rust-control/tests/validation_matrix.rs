@@ -24,6 +24,8 @@ mod models;
 mod provider;
 #[path = "../src/store.rs"]
 mod store;
+#[path = "../src/supervised.rs"]
+mod supervised;
 #[path = "../src/types.rs"]
 mod types;
 #[path = "../src/util.rs"]

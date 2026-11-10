@@ -1155,6 +1155,9 @@ function mockTransport() {
       data.tasks.find((t) => t.task === task).name = 'Sample hull';
       return { task };
     },
+    async cancel_intake() {
+      return { ok: true };
+    },
     async start_intake_run(data, { preview }) {
       await pause(700);
       if (!preview.pages.some((page) => !page.skip)) throw new BackendError('intake_no_pages', 'Every page is skipped. Keep at least one page.');

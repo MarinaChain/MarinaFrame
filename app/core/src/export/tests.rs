@@ -1,5 +1,6 @@
 use super::*;
 use std::os::unix::fs::PermissionsExt;
+use std::time::Instant;
 
 const STEM: &str = "Box_r0003_DRAFT";
 
@@ -143,7 +144,7 @@ fn new_cad_outputs_are_selected_moved_and_listed_like_step() {
         &worker,
         "r3",
         &["3dm".into(), "iges".into()],
-        EXPORT_TIMEOUT,
+        EXPORT_STALL_PERIOD,
     )
     .unwrap();
     assert_eq!(kinds(&result), ["iges", "3dm", MANIFEST]);
@@ -182,7 +183,7 @@ fn missing_new_cad_files_are_reported_as_output_kinds() {
         &worker,
         "r3",
         &["iges".into(), "3dm".into()],
-        EXPORT_TIMEOUT,
+        EXPORT_STALL_PERIOD,
     )
     .unwrap();
     assert_eq!(result.not_built, ["iges", "3dm"]);
@@ -202,7 +203,7 @@ fn only_the_chosen_outputs_and_the_manifest_are_kept() {
     };
     let outputs = ["offsets".to_string(), "stl".into(), "report".into()];
 
-    let result = export_run(&task, &worker, "r3", &outputs, EXPORT_TIMEOUT).unwrap();
+    let result = export_run(&task, &worker, "r3", &outputs, EXPORT_STALL_PERIOD).unwrap();
 
     assert_eq!(result.revision, "r0003");
     assert_eq!(kinds(&result), ["offsets", "report", MANIFEST]);
@@ -218,7 +219,14 @@ fn only_the_chosen_outputs_and_the_manifest_are_kept() {
     assert_eq!(left.len(), 1);
 
     // A later export adds to the folder; the listing shows everything.
-    export_run(&task, &worker, "r0003", &["package".into()], EXPORT_TIMEOUT).unwrap();
+    export_run(
+        &task,
+        &worker,
+        "r0003",
+        &["package".into()],
+        EXPORT_STALL_PERIOD,
+    )
+    .unwrap();
     let listed = list_exports(&task, "r3").unwrap();
     assert_eq!(kinds(&listed), ["offsets", "report", "package", MANIFEST]);
 }
@@ -240,7 +248,7 @@ fn a_worker_refusal_is_a_plain_error() {
         &worker,
         "r9",
         &["report".into()],
-        EXPORT_TIMEOUT,
+        EXPORT_STALL_PERIOD,
     )
     .unwrap_err();
     assert_eq!(error.code, "export_worker");
@@ -253,7 +261,7 @@ fn a_worker_refusal_is_a_plain_error() {
 }
 
 #[test]
-fn a_slow_worker_is_stopped() {
+fn a_worker_without_progress_is_stopped() {
     let tmp = tempfile::tempdir().unwrap();
     let python = fake_worker(tmp.path(), "exec sleep 30");
     let python = python.to_string_lossy();
@@ -270,7 +278,12 @@ fn a_slow_worker_is_stopped() {
         Duration::from_millis(300),
     )
     .unwrap_err();
-    assert_eq!(error.code, "export_timeout");
+    assert_eq!(error.code, "export_stalled");
+    assert!(
+        error.message.contains("min without progress"),
+        "{}",
+        error.message
+    );
     assert!(started.elapsed() < Duration::from_secs(10));
     let left: Vec<_> = std::fs::read_dir(tmp.path().join("exports"))
         .unwrap()
@@ -290,7 +303,7 @@ fn missing_python_is_a_plain_error() {
         &worker,
         "r1",
         &["report".into()],
-        EXPORT_TIMEOUT,
+        EXPORT_STALL_PERIOD,
     )
     .unwrap_err();
     assert_eq!(error.code, "worker_python_missing");
@@ -369,7 +382,7 @@ fn the_tank_model_and_structure_folder_go_to_the_worker() {
     };
     let outputs = ["tanks".to_string(), "structure".into()];
 
-    let result = export_run(&task, &worker, "r3", &outputs, EXPORT_TIMEOUT).unwrap();
+    let result = export_run(&task, &worker, "r3", &outputs, EXPORT_STALL_PERIOD).unwrap();
 
     assert_eq!(kinds(&result), ["tanks", "tanks", "structure", MANIFEST]);
     assert!(result.not_built.is_empty());
@@ -393,7 +406,7 @@ fn tanks_and_structure_without_their_inputs_are_not_built() {
         source: None,
     };
     let outputs = ["tanks".to_string(), "structure".into(), "offsets".into()];
-    let result = export_run(&task, &worker, "r3", &outputs, EXPORT_TIMEOUT).unwrap();
+    let result = export_run(&task, &worker, "r3", &outputs, EXPORT_STALL_PERIOD).unwrap();
     assert_eq!(result.not_built, ["tanks", "structure"]);
     assert_eq!(kinds(&result), ["offsets", MANIFEST]);
 }
@@ -434,7 +447,7 @@ fn run_with_capture(capture: Option<&[u8]>) -> (tempfile::TempDir, ExportResult)
         &worker,
         "r3",
         &["report".into()],
-        EXPORT_TIMEOUT,
+        EXPORT_STALL_PERIOD,
         capture,
     )
     .unwrap();

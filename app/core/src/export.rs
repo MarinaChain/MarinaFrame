@@ -9,13 +9,13 @@
 //! Every export is a draft. Nothing here marks a file as approved or verified.
 use crate::error::{AppError, AppResult};
 use crate::intake::Worker;
-use marinaframe_control::util;
+use crate::worker_run::{Supervision, WorkerWords, UNCANCELLABLE};
+use marinaframe_control::{supervised, util};
 use serde::{Deserialize, Serialize};
 use std::ffi::OsStr;
-use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
-use std::time::{Duration, Instant};
+use std::process::{Command, Stdio};
+use std::time::Duration;
 
 /// Folder inside the task that holds the exports, one subfolder per revision.
 pub const EXPORTS_FOLDER: &str = "exports";
@@ -38,9 +38,10 @@ pub const OUTPUTS: [&str; 10] = [
 pub const MANIFEST: &str = "manifest";
 /// The stamp the worker writes into every export.
 pub const STAMP: &str = "Draft hull model from MarinaFrame. Not approved for construction.";
-/// Longest time one export may take. The PDF report and the mesh hydrostatics of a
-/// large STL take tens of seconds; five minutes leaves a wide margin.
-pub const EXPORT_TIMEOUT: Duration = Duration::from_secs(300);
+/// An export with no progress report for this long is stopped. The worker reports
+/// each stage (3D files, offsets, hydrostatics, tables, report, CAD models); there
+/// is no limit on the total time.
+pub const EXPORT_STALL_PERIOD: Duration = supervised::DEFAULT_STALL_PERIOD;
 /// File the app writes into the export folder before the worker runs: a picture of its 3D view
 /// for page 1 of the PDF report (the worker reads it when it is there). It is an input, not an output:
 /// it is not listed, moved or packed.
@@ -49,8 +50,6 @@ pub const VIEWER_CAPTURE_FILE: &str = "viewer_capture.png";
 const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
 /// Largest picture of the 3D view that is accepted (bytes). A 1600 x 1000 picture is well under 1 MB.
 pub const VIEWER_CAPTURE_MAX_BYTES: usize = 12 * 1024 * 1024;
-/// How often the wait loop checks whether the worker has finished.
-const POLL_INTERVAL: Duration = Duration::from_millis(100);
 /// Most digits of a revision number (`r` + digits).
 const REVISION_DIGITS_MAX: usize = 6;
 
@@ -197,9 +196,9 @@ pub fn export_run(
     worker: &Worker,
     revision: &str,
     outputs: &[String],
-    timeout: Duration,
+    stall_period: Duration,
 ) -> AppResult<ExportResult> {
-    export_run_with_capture(task, worker, revision, outputs, timeout, None)
+    export_run_with_capture(task, worker, revision, outputs, stall_period, None)
 }
 
 /// True for bytes that look like a PNG file of an accepted size.
@@ -215,7 +214,7 @@ pub fn export_run_with_capture(
     worker: &Worker,
     revision: &str,
     outputs: &[String],
-    timeout: Duration,
+    stall_period: Duration,
     viewer_capture: Option<&[u8]>,
 ) -> AppResult<ExportResult> {
     let chosen = check_outputs(outputs)?;
@@ -226,26 +225,27 @@ pub fn export_run_with_capture(
     if let Some(bytes) = viewer_capture.filter(|bytes| is_viewer_capture(bytes)) {
         std::fs::write(staging.join(VIEWER_CAPTURE_FILE), bytes).map_err(|_| write_error())?;
     }
-    let outcome = run_worker(worker, task, &revision, &staging, timeout).and_then(|manifest| {
-        let not_built = keep_chosen(
-            &staging,
-            &exports_folder(task, &revision),
-            &chosen,
-            &manifest,
-        )?;
-        Ok((
-            not_built,
-            manifest
-                .get("format_results")
-                .cloned()
-                .unwrap_or_else(|| serde_json::json!({})),
-            manifest
-                .get("display_omissions")
-                .and_then(serde_json::Value::as_array)
-                .cloned()
-                .unwrap_or_default(),
-        ))
-    });
+    let outcome =
+        run_worker(worker, task, &revision, &staging, stall_period).and_then(|manifest| {
+            let not_built = keep_chosen(
+                &staging,
+                &exports_folder(task, &revision),
+                &chosen,
+                &manifest,
+            )?;
+            Ok((
+                not_built,
+                manifest
+                    .get("format_results")
+                    .cloned()
+                    .unwrap_or_else(|| serde_json::json!({})),
+                manifest
+                    .get("display_omissions")
+                    .and_then(serde_json::Value::as_array)
+                    .cloned()
+                    .unwrap_or_default(),
+            ))
+        });
     // The staging folder is ours alone; remove it whether the export worked or not.
     let _ = std::fs::remove_dir_all(&staging);
     let (mut not_built, format_results, display_omissions) = outcome?;
@@ -365,6 +365,13 @@ pub fn list_exports(task: &Path, revision: &str) -> AppResult<ExportResult> {
     })
 }
 
+/// How export errors are named.
+const EXPORT_WORDS: WorkerWords = WorkerWords {
+    code: "export",
+    name: "The export",
+    after_stop: "",
+};
+
 /// Run `python -m vessel_reconstruction.exports` and return its manifest.
 /// Paths go to the worker as separate arguments; no shell is involved.
 fn run_worker(
@@ -372,37 +379,20 @@ fn run_worker(
     task: &Path,
     revision: &str,
     out: &Path,
-    timeout: Duration,
+    stall_period: Duration,
 ) -> AppResult<serde_json::Value> {
-    if worker.python.is_empty() || !Path::new(worker.python).is_file() {
-        return Err(AppError::from_code("worker_python_missing"));
-    }
-    let mut command = Command::new(worker.python);
+    let mut command = worker.module_command("vessel_reconstruction.exports")?;
     command
-        .args(["-m", "vessel_reconstruction.exports"])
         .args([OsStr::new("--task"), task.as_os_str()])
         .args(["--revision", revision])
         .args([OsStr::new("--out"), out.as_os_str()])
-        .args(run_table_arguments(task))
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    if let Some(source) = worker.source {
-        command.env("PYTHONPATH", source);
-    }
-    let child = command
-        .spawn()
-        .map_err(|_| AppError::new("export_worker", "The export worker could not start."))?;
-    let Some(finished) = wait_bounded(child, timeout) else {
-        return Err(AppError::new(
-            "export_timeout",
-            &format!(
-                "The export took longer than {} s and was stopped.",
-                timeout.as_secs()
-            ),
-        ));
+        .args(run_table_arguments(task));
+    let supervision = Supervision {
+        stall_period,
+        ..UNCANCELLABLE
     };
-    if !finished.success {
+    let finished = worker.run_supervised(&mut command, &supervision, &EXPORT_WORDS)?;
+    if !finished.status.success() {
         let reason: Option<String> = serde_json::from_slice::<serde_json::Value>(&finished.stderr)
             .ok()
             .and_then(|value| value["error"].as_str().map(String::from));
@@ -431,56 +421,6 @@ fn run_table_arguments(task: &Path) -> Vec<std::ffi::OsString> {
         arguments.extend(["--structure".into(), folder.into_os_string()]);
     }
     arguments
-}
-
-/// A worker process that finished in time: its exit status and output.
-pub(crate) struct Finished {
-    pub success: bool,
-    pub stdout: Vec<u8>,
-    pub stderr: Vec<u8>,
-}
-
-/// Wait for `child` at most `timeout`; kill it when the time is up (None). The pipes are
-/// read on their own threads so that a full pipe cannot block the worker.
-pub(crate) fn wait_bounded(mut child: Child, timeout: Duration) -> Option<Finished> {
-    let read_pipe = |pipe: Option<Box<dyn Read + Send>>| {
-        std::thread::spawn(move || {
-            let mut bytes = vec![];
-            if let Some(mut pipe) = pipe {
-                let _ = pipe.read_to_end(&mut bytes);
-            }
-            bytes
-        })
-    };
-    let stdout = read_pipe(
-        child
-            .stdout
-            .take()
-            .map(|p| Box::new(p) as Box<dyn Read + Send>),
-    );
-    let stderr = read_pipe(
-        child
-            .stderr
-            .take()
-            .map(|p| Box::new(p) as Box<dyn Read + Send>),
-    );
-    let deadline = Instant::now() + timeout;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) if Instant::now() < deadline => std::thread::sleep(POLL_INTERVAL),
-            _ => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return None;
-            }
-        }
-    };
-    Some(Finished {
-        success: status.success(),
-        stdout: stdout.join().unwrap_or_default(),
-        stderr: stderr.join().unwrap_or_default(),
-    })
 }
 
 /// Check that `path` is a file or folder inside `<task>/exports/`; return it.

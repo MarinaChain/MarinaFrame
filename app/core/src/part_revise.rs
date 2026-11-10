@@ -3,26 +3,32 @@
 //! `python -m vessel_reconstruction.part_revise`: it crops the run's drawings around the part,
 //! asks the model with the mark note, rebuilds only that part and rewrites its entry in
 //! `<task>/whole_vessel/execution.json`. This module checks the request, runs the worker with
-//! a time limit (arguments only, no shell) and returns the part as the app shows it.
+//! the progress watchdog (arguments only, no shell) and returns the part as the app shows it.
 use crate::actions::ActionRegistry;
 use crate::error::{AppError, AppResult};
-use crate::export::wait_bounded;
 use crate::intake::Worker;
 use crate::parts::{self, PartReview};
 use crate::storage::AppPaths;
 use crate::types::ComponentView;
+use crate::worker_run::{Supervision, WorkerWords, UNCANCELLABLE};
 use marinaframe_control::provider::credentials::CREDENTIAL_VARIABLES;
+use marinaframe_control::supervised;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::time::Duration;
 
-/// Longest re-run: at most three model requests of up to 300 s each (the worker's
-/// `REQUEST_TIMEOUT_S` and `MAX_TURNS`) and three short part builds, with a margin.
-pub const REVISE_TIMEOUT: Duration = Duration::from_secs(20 * 60);
-/// Keep and Undo only rewrite one entry and move one file.
-pub const KEEP_UNDO_TIMEOUT: Duration = Duration::from_secs(60);
+/// A re-run with no progress report for this long is stopped. The worker reports each model
+/// request and each part build; one model request may run up to the worker's
+/// `REQUEST_TIMEOUT_S` (300 s) with no report, so the period is twice that. There is no
+/// limit on the total time: the sandboxed part build keeps its own caps inside the worker.
+pub const REVISE_STALL_PERIOD: Duration = Duration::from_secs(2 * 300);
+/// How part-worker errors are named.
+const PART_WORDS: WorkerWords = WorkerWords {
+    code: "part_revise",
+    name: "The re-run",
+    after_stop: " The old part stays.",
+};
 
 /// How the worker reaches the model.
 pub enum Model {
@@ -48,7 +54,7 @@ pub fn revise_part(
     component_id: &str,
     worker: &Worker,
     model: &Model,
-    timeout: Duration,
+    stall_period: Duration,
 ) -> AppResult<ComponentView> {
     let reviews = parts::reviews_of(paths, task);
     let note = match reviews.get(component_id) {
@@ -69,7 +75,7 @@ pub fn revise_part(
         task,
         component_id,
         Action::Revise { note: &note, model },
-        timeout,
+        stall_period,
     )?;
     part_view(task, component_id, &reviews)
 }
@@ -84,7 +90,13 @@ pub fn keep_revision(
     worker: &Worker,
 ) -> AppResult<ComponentView> {
     let _guard = registry.begin(task)?;
-    run_worker(worker, task, component_id, Action::Keep, KEEP_UNDO_TIMEOUT)?;
+    run_worker(
+        worker,
+        task,
+        component_id,
+        Action::Keep,
+        supervised::DEFAULT_STALL_PERIOD,
+    )?;
     parts::review_component(paths, task, component_id, "open", None)?;
     part_view(task, component_id, &parts::reviews_of(paths, task))
 }
@@ -98,7 +110,13 @@ pub fn undo_revision(
     worker: &Worker,
 ) -> AppResult<ComponentView> {
     let _guard = registry.begin(task)?;
-    run_worker(worker, task, component_id, Action::Undo, KEEP_UNDO_TIMEOUT)?;
+    run_worker(
+        worker,
+        task,
+        component_id,
+        Action::Undo,
+        supervised::DEFAULT_STALL_PERIOD,
+    )?;
     part_view(task, component_id, &parts::reviews_of(paths, task))
 }
 
@@ -117,26 +135,13 @@ fn run_worker(
     task: &Path,
     component_id: &str,
     action: Action,
-    timeout: Duration,
+    stall_period: Duration,
 ) -> AppResult<()> {
-    if worker.python.is_empty() || !Path::new(worker.python).is_file() {
-        return Err(AppError::from_code("worker_python_missing"));
-    }
-    let mut command = Command::new(worker.python);
+    // The shared worker environment holds no model key; only the key given here is added.
+    let mut command = worker.module_command("vessel_reconstruction.part_revise")?;
     command
-        .args(["-m", "vessel_reconstruction.part_revise"])
         .args([OsStr::new("--task"), task.as_os_str()])
-        .args(["--part", component_id])
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    if let Some(source) = worker.source {
-        command.env("PYTHONPATH", source);
-    }
-    // Only the key given here reaches the worker (a key in the app's own environment does not).
-    for variable in CREDENTIAL_VARIABLES {
-        command.env_remove(variable);
-    }
+        .args(["--part", component_id]);
     match action {
         Action::Revise { note, model } => {
             // One argument: a note that starts with "-" stays the note.
@@ -157,19 +162,12 @@ fn run_worker(
             command.arg("--undo");
         }
     }
-    let child = command
-        .spawn()
-        .map_err(|_| AppError::new("part_revise_worker", "The part worker could not start."))?;
-    let Some(finished) = wait_bounded(child, timeout) else {
-        return Err(AppError::new(
-            "part_revise_timeout",
-            &format!(
-                "The re-run took longer than {} minutes and was stopped. The old part stays.",
-                timeout.as_secs() / 60
-            ),
-        ));
+    let supervision = Supervision {
+        stall_period,
+        ..UNCANCELLABLE
     };
-    if finished.success {
+    let finished = worker.run_supervised(&mut command, &supervision, &PART_WORDS)?;
+    if finished.status.success() {
         return Ok(());
     }
     // The worker writes {"error": "..."} for a refusal it explains; anything else is generic.
@@ -251,7 +249,7 @@ mod tests {
             &part,
             &worker,
             &Model::Key(key),
-            REVISE_TIMEOUT,
+            REVISE_STALL_PERIOD,
         )
         .unwrap();
         eprintln!(
@@ -276,7 +274,7 @@ mod tests {
             "wheelhouse",
             &NO_PYTHON,
             &model,
-            REVISE_TIMEOUT,
+            REVISE_STALL_PERIOD,
         )
         .unwrap_err();
         assert_eq!(refused.code, "revise_needs_mark");
@@ -288,7 +286,7 @@ mod tests {
             "wheelhouse",
             &NO_PYTHON,
             &model,
-            REVISE_TIMEOUT,
+            REVISE_STALL_PERIOD,
         )
         .unwrap_err();
         assert_eq!(refused.code, "revise_needs_mark");
@@ -309,7 +307,7 @@ mod tests {
             "wheelhouse",
             &NO_PYTHON,
             &model,
-            REVISE_TIMEOUT,
+            REVISE_STALL_PERIOD,
         )
         .unwrap_err();
         assert_eq!(refused.code, "action_in_progress");
@@ -335,7 +333,7 @@ mod tests {
             "wheelhouse",
             &NO_PYTHON,
             &model,
-            REVISE_TIMEOUT,
+            REVISE_STALL_PERIOD,
         )
         .unwrap_err();
         assert_eq!(refused.code, "worker_python_missing");
