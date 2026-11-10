@@ -77,10 +77,11 @@ def _reduce_to_run_budget(mask: np.ndarray) -> tuple[np.ndarray, dict[str, Any] 
             reduced[row] = False
             counts[row] = 0
             cleared.append(int(row))
-    kept_labels = np.unique(labels[reduced])
+    # Kept pixels all carry a nonzero label; count the distinct labels.
+    kept_component_count = np.count_nonzero(np.bincount(labels[reduced]))
     return reduced, {"method": "small_component_removal_v1",
                      "minimum_kept_component_pixels": int(limit) + 1,
-                     "removed_component_count": int(count - np.count_nonzero(kept_labels)),
+                     "removed_component_count": int(count - kept_component_count),
                      "removed_pixel_count": int(mask.sum() - reduced.sum()),
                      "cleared_row_count": int(len(cleared)),
                      "warning": COMPLEXITY_REDUCTION_WARNING}
@@ -166,7 +167,10 @@ def _foreground(crop: np.ndarray) -> tuple[np.ndarray, np.ndarray, dict[str, Any
     rgb = crop.astype(float)
     luminance = rgb @ np.array([0.2126, 0.7152, 0.0722])
     background = float(np.percentile(luminance, 98))
-    chroma = rgb.max(axis=2) - rgb.min(axis=2)
+    red, green, blue = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    # Same values as rgb.max(axis=2) - rgb.min(axis=2); a reduction over a
+    # length-3 axis is much slower than elementwise maximum and minimum.
+    chroma = np.maximum(np.maximum(red, green), blue) - np.minimum(np.minimum(red, green), blue)
     # Saturated ink remains visible even when its luminance is close to paper.
     ink = np.maximum(background - luminance, 0.8 * chroma)
     # Use the same quantization for estimating and applying the threshold.
@@ -214,13 +218,67 @@ def _foreground(crop: np.ndarray) -> tuple[np.ndarray, np.ndarray, dict[str, Any
                         "raw_component_count": int(count)}
 
 
+def _run_bounds(mask: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Row, first column and stop column (exclusive) of every horizontal run.
+
+    Runs are the maximal sequences of nonzero pixels in each row of a 2D
+    mask. They come in row-major order: by row, then left to right.
+    """
+    height, width = mask.shape
+    # A zero column on each side makes every run start with +1 and stop with -1.
+    padded = np.zeros((height, width + 2), dtype=np.int8)
+    padded[:, 1:-1] = mask != 0
+    edges = np.diff(padded, axis=1)
+    # In row-major order the nonzero edges alternate: start, stop, start, ...
+    edge_rows, edge_columns = np.divmod(np.flatnonzero(edges), width + 1)
+    return edge_rows[0::2], edge_columns[0::2], edge_columns[1::2]
+
+
+def _dilate_5x5(mask: np.ndarray) -> np.ndarray:
+    """Binary dilation by a full 5x5 square, outside pixels counted as empty.
+
+    Same result as ndimage.binary_dilation(mask, np.ones((5, 5))), but faster.
+    """
+    return ndimage.maximum_filter(mask.astype(np.uint8), size=5, mode="constant", cval=0).astype(bool)
+
+
 def _runs(row: np.ndarray) -> list[tuple[int, int]]:
-    indices = np.flatnonzero(row)
-    if not len(indices):
-        return []
-    cuts = np.flatnonzero(np.diff(indices) > 1) + 1
-    groups = np.split(indices, cuts)
-    return [(int(group[0]), int(group[-1]) + 1) for group in groups]
+    _, starts, stops = _run_bounds(np.asarray(row)[None, :])
+    return list(zip(starts.tolist(), stops.tolist()))
+
+
+def _run_weight_stats(ink: np.ndarray, run_rows: np.ndarray, starts: np.ndarray,
+                      stops: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Ink-weighted centre column and mean weight of each run.
+
+    The weight of a pixel is max(1, ink). The values are bit-identical to
+    np.average(np.arange(start, stop), weights=w) and np.mean(w) for each run:
+    a sum along the last axis of a C-contiguous 2D block uses the same
+    summation order as the sum of one 1D run. Runs of one length share a block.
+    np.add.reduceat and cumulative sums use another order and change last bits.
+    """
+    lengths = stops - starts
+    centres = np.empty(len(starts))
+    mean_weights = np.empty(len(starts))
+    for length in np.unique(lengths):
+        group = np.flatnonzero(lengths == length)
+        columns = starts[group, None] + np.arange(length)
+        weights = np.maximum(1.0, ink[run_rows[group, None], columns])
+        centres[group] = (columns * weights).sum(axis=1) / weights.sum(axis=1)
+        mean_weights[group] = weights.mean(axis=1)
+    return centres, mean_weights
+
+
+def _narrow_runs(mask: np.ndarray, broad_limit: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Runs no wider than broad_limit; broad baselines and rulers are dropped."""
+    run_rows, starts, stops = _run_bounds(mask)
+    narrow = stops - starts <= broad_limit
+    return run_rows[narrow], starts[narrow], stops[narrow]
+
+
+def _row_offsets(run_rows: np.ndarray, height: int) -> np.ndarray:
+    """Index of the first run of each row; runs of row r are offsets[r]:offsets[r + 1]."""
+    return np.searchsorted(run_rows, np.arange(height + 1))
 
 
 def _trace(mask: np.ndarray, ink: np.ndarray, centre_local: float) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
@@ -235,30 +293,21 @@ def _trace(mask: np.ndarray, ink: np.ndarray, centre_local: float) -> tuple[np.n
     # as a competitor, but allow it as the hull's measured keel endpoint.
     centre_band = max(2.0, w * 0.008)
     broad_row_limit = max(12, round(w * 0.16))
-    candidate_count = 0
-    for row_index in range(h):
-        runs = _runs(mask[row_index])
-        # Baselines and horizontal rulers cross a large part of the panel.
-        # They supply no local half-breadth observation on that row.
-        runs = [(a, b) for a, b in runs if b - a <= broad_row_limit]
-        candidate_count += len(runs)
-        if len(runs) > MAX_ROW_CANDIDATES or candidate_count > MAX_TRACE_CANDIDATES:
-            raise DrawingError("resource_limit", "Contour candidate complexity exceeds the bounded tracing budget; select a smaller panel.")
-        centres = []
-        evidence_strength = []
-        widths = []
-        for start, stop in runs:
-            pixels = np.arange(start, stop)
-            weights = np.maximum(1.0, ink[row_index, start:stop])
-            x = float(np.average(pixels, weights=weights))
-            centres.append(x)
-            evidence_strength.append(float(np.mean(weights)) / 255.0)
-            widths.append(stop - start)
-        if centres:
-            rows.append(row_index)
-            candidates.append(np.asarray(centres))
-            strengths.append(np.asarray(evidence_strength))
-            run_widths.append(np.asarray(widths))
+    # Baselines and horizontal rulers cross a large part of the panel.
+    # They supply no local half-breadth observation on that row.
+    run_rows, starts, stops = _narrow_runs(mask, broad_row_limit)
+    offsets = _row_offsets(run_rows, h)
+    if np.diff(offsets).max(initial=0) > MAX_ROW_CANDIDATES or len(starts) > MAX_TRACE_CANDIDATES:
+        raise DrawingError("resource_limit", "Contour candidate complexity exceeds the bounded tracing budget; select a smaller panel.")
+    centres, mean_weights = _run_weight_stats(ink, run_rows, starts, stops)
+    evidence_strength = mean_weights / 255.0
+    all_widths = stops - starts
+    for row_index in np.unique(run_rows).tolist():
+        first, stop = offsets[row_index], offsets[row_index + 1]
+        rows.append(row_index)
+        candidates.append(centres[first:stop])
+        strengths.append(evidence_strength[first:stop])
+        run_widths.append(all_widths[first:stop])
     if len(rows) < max(12, h * 0.5):
         raise DrawingError("missing_curve", "Too few drawing rows contain a supported section curve.")
     # Reward source contrast and only a mild outer-contour preference.  The
@@ -289,12 +338,16 @@ def _trace(mask: np.ndarray, ink: np.ndarray, centre_local: float) -> tuple[np.n
     # and from the selected stroke.  Overlaid body plans require review.
     alternatives = np.zeros_like(mask, dtype=bool)
     separation = max(5.0, 2.5 * float(np.median(widths)))
-    for index, row in enumerate(rows):
-        for candidate in candidates[index]:
-            if abs(candidate - x[index]) > separation and candidate > centre_local + centre_band:
-                col = int(round(candidate))
-                alternatives[row, max(0, col - 1):min(w, col + 2)] = True
-    linked = ndimage.binary_dilation(alternatives, structure=np.ones((5, 5), dtype=bool))
+    # Every narrow run belongs to an observed row, so x can be repeated per run.
+    selected_x = np.repeat(x, [len(c) for c in candidates])
+    away = (np.abs(centres - selected_x) > separation) & (centres > centre_local + centre_band)
+    # np.rint rounds half to even, as Python round() does.
+    away_rows, away_cols = run_rows[away], np.rint(centres[away]).astype(int)
+    for offset in (-1, 0, 1):
+        cols = away_cols + offset
+        inside = (cols >= 0) & (cols < w)
+        alternatives[away_rows[inside], cols[inside]] = True
+    linked = _dilate_5x5(alternatives)
     lab, nlab = ndimage.label(linked)
     alternative_span = 0
     for segment in ndimage.find_objects(lab):
@@ -332,8 +385,8 @@ def _trace(mask: np.ndarray, ink: np.ndarray, centre_local: float) -> tuple[np.n
 def _grid_evidence(mask, origin):
     """Detect a repeated orthogonal lattice, never engineering stroke identity."""
     h, w = mask.shape
-    horizontal = [row for row in range(h)
-                  if any(b - a >= .72 * w for a, b in _runs(mask[row]))]
+    run_rows, starts, stops = _run_bounds(mask)
+    horizontal = np.unique(run_rows[stops - starts >= .72 * w]).tolist()
 
     def groups(values):
         if not len(values):
@@ -496,8 +549,9 @@ def _eligible_trace_mask(mask: np.ndarray, selection: np.ndarray | None,
     """
     eligible = mask.copy()
     broad_limit = max(12, round(mask.shape[1] * .16))
-    broad_runs = [(row, first, last) for row in range(mask.shape[0])
-                  for first, last in _runs(mask[row]) if last - first > broad_limit]
+    run_rows, starts, stops = _run_bounds(mask)
+    broad = stops - starts > broad_limit
+    broad_runs = list(zip(run_rows[broad].tolist(), starts[broad].tolist(), stops[broad].tolist()))
     for row, first, last in broad_runs:
         eligible[row, first:last] = False
     runs_removed = len(broad_runs)
@@ -637,25 +691,24 @@ def _candidate_evidence(mask: np.ndarray, ink: np.ndarray, rows: np.ndarray, xs:
     h, w = mask.shape
     proposed = np.interp(np.arange(h), rows, xs)
     alternatives = np.zeros_like(mask, dtype=bool)
-    points: list[tuple[int, int, float, bool]] = []
     separation = max(2.0, 1.25 * stroke_width)
     centre_band = max(2.0, w * .008)
     broad_limit = max(12, round(w * .16))
-    for row in range(h):
-        runs = [(a, b) for a, b in _runs(mask[row]) if b - a <= broad_limit]
-        if len(runs) > MAX_ROW_CANDIDATES:
-            raise DrawingError("resource_limit", "Contour candidate complexity exceeds the bounded evidence budget.")
-        for a, b in runs:
-            weights = np.maximum(1.0, ink[row, a:b])
-            col = int(round(float(np.average(np.arange(a, b), weights=weights))))
-            if abs(col - proposed[row]) <= separation or col <= centre_local + centre_band:
-                continue
-            active = selection is None or bool(selection[row, col])
-            points.append((row, col, float(np.mean(weights)), active))
-            alternatives[row, col] = True
-            if len(points) > MAX_TRACE_CANDIDATES:
-                raise DrawingError("resource_limit", "Contour candidate complexity exceeds the bounded evidence budget.")
-    linked = ndimage.binary_dilation(alternatives, structure=np.ones((5, 5), dtype=bool))
+    run_rows, starts, stops = _narrow_runs(mask, broad_limit)
+    if np.diff(_row_offsets(run_rows, h)).max(initial=0) > MAX_ROW_CANDIDATES:
+        raise DrawingError("resource_limit", "Contour candidate complexity exceeds the bounded evidence budget.")
+    centres, mean_weights = _run_weight_stats(ink, run_rows, starts, stops)
+    # np.rint rounds half to even, as Python round() does.
+    cols = np.rint(centres).astype(int)
+    competing = (np.abs(cols - proposed[run_rows]) > separation) & (cols > centre_local + centre_band)
+    point_rows, point_cols, point_ink = run_rows[competing], cols[competing], mean_weights[competing]
+    if len(point_rows) > MAX_TRACE_CANDIDATES:
+        raise DrawingError("resource_limit", "Contour candidate complexity exceeds the bounded evidence budget.")
+    active = np.ones(len(point_rows), dtype=bool) if selection is None else selection[point_rows, point_cols].astype(bool)
+    alternatives[point_rows, point_cols] = True
+    points: list[tuple[int, int, float, bool]] = list(zip(
+        point_rows.tolist(), point_cols.tolist(), point_ink.tolist(), active.tolist()))
+    linked = _dilate_5x5(alternatives)
     labels, count = ndimage.label(linked)
     grouped: dict[int, list[tuple[int, int, float, bool]]] = {}
     for point in points:
