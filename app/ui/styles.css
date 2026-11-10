@@ -3250,10 +3250,13 @@ code { font-family: var(--font-mono); }
 .model-part-summary { margin: 0 2px; min-height: 0; color: var(--text-3); font-size: 11px; }
 .model-part-summary:empty { display: none; }
 .model-card {
-  flex: 0 1 auto; min-height: 0; max-height: 72%; overflow-y: auto; padding: 6px 8px 8px; border-radius: var(--radius-md); border: 1px solid var(--line);
+  flex: 0 1 auto; min-height: 0; margin-top: auto; overflow-y: auto; padding: 6px 8px 8px; border-radius: var(--radius-md); border: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface) 96%, transparent); color: var(--ink); font-size: 12px; cursor: default;
 }
 .model-card-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.model-card.is-collapsed .model-card-head { margin-bottom: 0; }
+.model-card-toggle { border: 0; background: transparent; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; align-items: stretch; }
+.model-card-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .model-card-title { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 .model-card-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-card-title span { color: var(--text-3); font-size: 11px; }

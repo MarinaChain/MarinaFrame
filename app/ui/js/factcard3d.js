@@ -105,21 +105,26 @@ export function cardFor({ entry, extras = {}, box = null, reference = null, cont
 }
 
 /** The card as DOM. `onClose()` clears the pick; a link's `open()` runs when it is pressed. */
-export function renderFactCard(card, { onClose }) {
+export function renderFactCard(card, { onClose, collapsible = false, collapsed = false, onToggle = () => {} }) {
   const close = el('button', { class: 'model-part-tool', type: 'button', 'aria-label': 'Close the card', onclick: () => onClose(), ...tipAttributes('Close the card').attrs }, icon('close'));
   const link = card.link
     ? el('button', { class: 'model-card-link', type: 'button', onclick: () => card.link.open?.() }, icon('drawing'), el('span', {}, card.link.label || 'Source'))
     : null;
-  return el('section', { class: 'model-card', 'aria-label': `${card.name}, ${card.kindWord}` },
+  const title = [el('strong', {}, card.name), el('span', {}, card.kindWord)];
+  // In a short pane the title row is a button that expands or collapses the card.
+  const titleNode = collapsible
+    ? el('button', { class: 'model-card-title model-card-toggle', type: 'button', 'aria-expanded': String(!collapsed), onclick: () => onToggle() }, ...title)
+    : el('div', { class: 'model-card-title' }, ...title);
+  return el('section', { class: `model-card${collapsed ? ' is-collapsed' : ''}`, 'aria-label': `${card.name}, ${card.kindWord}` },
     el('header', { class: 'model-card-head' },
       el('span', { class: 'model-swatch', style: { background: `var(${card.token})` }, 'aria-hidden': 'true' }),
-      el('div', { class: 'model-card-title' }, el('strong', {}, card.name), el('span', {}, card.kindWord)),
+      titleNode,
       sourceChip(card.source),
       close),
-    el('dl', { class: 'model-card-facts' }, ...card.facts.flatMap((fact) => [
+    collapsed ? null : el('dl', { class: 'model-card-facts' }, ...card.facts.flatMap((fact) => [
       el('dt', {}, fact.name),
       el('dd', {}, fact.value, ' ', sourceChip(fact.source)),
     ])),
-    card.note ? el('p', { class: 'model-card-note' }, card.note) : null,
-    link);
+    !collapsed && card.note ? el('p', { class: 'model-card-note' }, card.note) : null,
+    collapsed ? null : link);
 }

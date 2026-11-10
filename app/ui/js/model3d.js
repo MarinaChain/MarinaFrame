@@ -22,6 +22,7 @@ import { tipAttributes } from './tooltip.js';
 import { cardFor, renderFactCard } from './factcard3d.js';
 import { bulkheadChoices, bulkheadPositions, bulkheadSpace, tankSpaces } from './spaces3d.js';
 import { createSpacesPanel } from './spaces_panel3d.js';
+import { cardMaxHeight, freeRegion, isCompactHost, reachesCovered } from './dock3d.js';
 
 /** Extra size of a section plane around the hull, as a fraction of beam and depth. */
 const PLANE_MARGIN = 0.25;
@@ -271,8 +272,11 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
   /** The id the fact card shows now (rebuilt only when it changes or the run's data does). */
   let cardId = null;
   let cardElement = null;
+  /** The card shows its title row only: a short pane starts so, and a click on the title expands it. */
+  let cardCollapsed = false;
   function updateCard(force = false) {
     if (!force && cardId === highlightedId) return;
+    if (cardId !== highlightedId) cardCollapsed = isCompactHost(host.clientHeight);
     cardId = highlightedId;
     cardElement?.remove();
     cardElement = null;
@@ -282,7 +286,13 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
     if (!entry) return;
     const box3 = new THREE.Box3().setFromObject(mesh);
     const box = box3.isEmpty() ? null : { min: box3.min.toArray(), max: box3.max.toArray() };
-    cardElement = renderFactCard(cardFor({ entry, extras: mesh.userData, box, reference, context: partContext(cardId) || {} }), { onClose: () => pickPart(null) });
+    cardElement = renderFactCard(cardFor({ entry, extras: mesh.userData, box, reference, context: partContext(cardId) || {} }), {
+      onClose: () => pickPart(null),
+      collapsible: isCompactHost(host.clientHeight),
+      collapsed: cardCollapsed && isCompactHost(host.clientHeight),
+      onToggle: () => { cardCollapsed = !cardCollapsed; updateCard(true); },
+    });
+    cardElement.style.setProperty('max-height', `${cardMaxHeight(host.clientHeight)}px`);
     sideColumn.append(cardElement);
   }
   /** The part list entries (no state), in list order. */
@@ -379,9 +389,11 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
     spacesPanel.setActive(id);
     spaceName.textContent = `Space: ${space.name}`;
     spaceChip.hidden = false;
+    // The list closes (the chip stays, with its exit); the fact card, if open, keeps clear of the space.
+    showPanel(null);
     cameraAtHome = false;
     markView(null);
-    fitView({ direction: currentDirection(), box: new THREE.Box3(new THREE.Vector3(...space.box.min), new THREE.Vector3(...space.box.max)), animate: true });
+    fitView({ direction: currentDirection(), box: new THREE.Box3(new THREE.Vector3(...space.box.min), new THREE.Vector3(...space.box.max)), animate: true, free: freeArea() });
     requestRender();
   }
   function exitSpace({ restoreCamera = true } = {}) {
@@ -416,11 +428,62 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
   }
 
   /** Pick a part (a click in 3D or a row in the list): it is tinted and offered to the app. */
-  function pickPart(id) {
+  function pickPart(id, { fromView = false } = {}) {
+    // A pick in the 3D view closes the list, so it does not cover the part just picked.
+    if (fromView && id) showPanel(null);
     highlightedId = id;
     restyle();
     partsPanel.reveal(id);
+    if (id) keepClearOfPanels(meshById.get(id));
     onPartPick?.(id);
+  }
+
+  /** The area the panels cover, { left, top } in CSS px from the pane's top left, or null. */
+  function coveredArea() {
+    const hostBox = host.getBoundingClientRect();
+    let left = Infinity;
+    let top = Infinity;
+    for (const child of sideColumn.children) {
+      if (child.hidden) continue;
+      const box = child.getBoundingClientRect();
+      if (!box.width) continue;
+      left = Math.min(left, box.left - hostBox.left);
+      // An open list runs down the whole column; the card alone covers only the bottom.
+      top = Math.min(top, child === panel ? 0 : box.top - hostBox.top);
+    }
+    return left === Infinity ? null : { left, top };
+  }
+  const projectedCorner = new THREE.Vector3();
+  /** The screen box (CSS px) of a world box. */
+  function screenBox(box) {
+    const width = host.clientWidth;
+    const height = host.clientHeight;
+    const out = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
+    for (let i = 0; i < 8; i += 1) {
+      projectedCorner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).project(camera);
+      const x = (projectedCorner.x + 1) / 2 * width;
+      const y = (1 - projectedCorner.y) / 2 * height;
+      out.left = Math.min(out.left, x);
+      out.right = Math.max(out.right, x);
+      out.top = Math.min(out.top, y);
+      out.bottom = Math.max(out.bottom, y);
+    }
+    return out;
+  }
+  /** What the panels leave free of the pane, for framing (null when nothing is covered). */
+  function freeArea() {
+    const occupied = coveredArea();
+    return occupied ? freeRegion({ width: host.clientWidth, height: host.clientHeight, occupied }) : null;
+  }
+  /** Move the camera to the picked part when a panel covers it, so the part sits in the free area. */
+  function keepClearOfPanels(mesh) {
+    const occupied = coveredArea();
+    if (!mesh || !occupied) return;
+    const box = new THREE.Box3().setFromObject(mesh);
+    if (box.isEmpty() || !reachesCovered(screenBox(box), occupied)) return;
+    cameraAtHome = false;
+    markView(null);
+    fitView({ direction: currentDirection(), box, animate: true, free: freeArea() });
   }
   // The cut panel opens under the tool bar, however many rows the tool bar wraps to.
   host.append(el('div', { class: 'model-controls' }, toolbar.element, cutPanel.element, spaceChip));
@@ -644,7 +707,7 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
       return;
     }
     // A click on a part of the whole vessel picks it; a click on nothing clears the pick.
-    if (wholeVessel) pickPart(partAt(event));
+    if (wholeVessel) pickPart(partAt(event), { fromView: true });
   });
   renderer.domElement.addEventListener('pointermove', (event) => {
     if (event.buttons) return;
@@ -894,8 +957,16 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
     perspective.updateProjectionMatrix();
     setOrthoHeight(orthographic.top);
     if (cameraAtHome) fitView({ direction: viewDirection });
+    // The card follows the pane's height: its limit, and collapsed or not when the pane turns short or tall.
+    if (cardElement) {
+      const compact = isCompactHost(height);
+      if (compact !== cardWasCompact) cardCollapsed = compact;
+      updateCard(true);
+    }
+    cardWasCompact = isCompactHost(height);
     requestRender();
   }
+  let cardWasCompact = false;
   new ResizeObserver(resize).observe(host);
 
   /** Paint a hull material: topside in the theme's hull colour, the boot top at the design waterline. */
@@ -1068,11 +1139,9 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
    * Camera distance that fits a box seen from `direction` (zoom to extents): the box corners are
    * measured across and up the screen, so a profile or a plan fills the pane, not a sphere.
    */
-  function boxFitDistance(box, direction) {
+  function boxFitDistance(box, direction, free = null) {
     const centre = box.getCenter(new THREE.Vector3());
-    const worldUp = Math.abs(direction.z) > 0.99 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
-    const up = worldUp.clone().addScaledVector(direction, -worldUp.dot(direction)).normalize();
-    const right = new THREE.Vector3().crossVectors(up, direction).normalize();
+    const { up, right } = screenAxes(direction);
     let halfWidth = 0;
     let halfHeight = 0;
     let halfDepth = 0;
@@ -1086,9 +1155,17 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
     // The radius that fits both screen extents, as fitDistance takes it (a sphere seen edge on).
     const aspect = perspective.aspect || 1;
     const tanHalf = Math.tan(halfFov());
-    const fit = Math.max(halfHeight, halfWidth / aspect) / tanHalf * FRAME_MARGIN;
+    // With panels over part of the pane (`free`), the box has to fit the free share of it only.
+    const fit = Math.max(halfHeight / (free?.usableY ?? 1), halfWidth / aspect / (free?.usableX ?? 1)) / tanHalf * FRAME_MARGIN;
     // Perspective stands back by the box depth too; orthographic shows exactly the screen extent.
     return { distance: Math.max(fit + halfDepth, fitDistance(1e-3, perspective.fov, aspect)), orthoHalfHeight: fit * tanHalf };
+  }
+
+  /** Screen up and screen right (unit vectors) of a camera that looks from `direction` at its target. */
+  function screenAxes(direction) {
+    const worldUp = Math.abs(direction.z) > 0.99 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
+    const up = worldUp.clone().addScaledVector(direction, -worldUp.dot(direction)).normalize();
+    return { up, right: new THREE.Vector3().crossVectors(up, direction).normalize() };
   }
 
   /** The direction the camera looks from now (target to camera, unit length). */
@@ -1101,13 +1178,19 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
    * default), fitted to the pane. Animated unless the person prefers reduced motion. The turn
    * goes the short way round the sphere; a half turn goes round the vertical.
    */
-  function fitView({ direction, box = modelBox(), animate = false }) {
+  function fitView({ direction, box = modelBox(), animate = false, free = null }) {
     // An older animated move would aim at the old target and overwrite this view.
     cameraMove.cancel();
     if (!box || box.isEmpty()) return;
     const toDirection = direction.clone().normalize();
     const centre = box.getCenter(new THREE.Vector3());
-    const { distance, orthoHalfHeight } = boxFitDistance(box, toDirection);
+    const { distance, orthoHalfHeight } = boxFitDistance(box, toDirection, free);
+    if (free && (free.shiftX || free.shiftY)) {
+      // Aim past the part, so it sits in the free area (top left) and not under the panels.
+      const { up, right } = screenAxes(toDirection);
+      const halfHeight = camera.isOrthographicCamera ? orthoHalfHeight : distance * Math.tan(halfFov());
+      centre.addScaledVector(right, free.shiftX * halfHeight * (perspective.aspect || 1)).addScaledVector(up, -free.shiftY * halfHeight);
+    }
     if (!animate || prefersReducedMotion()) {
       placeCameras(centre, toDirection, distance, orthoHalfHeight);
       requestFrame();
