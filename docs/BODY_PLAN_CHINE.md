@@ -300,3 +300,32 @@ advisory lists no known restrictions; confirm on the item page before use):
 
 **Protocol state: written, nothing run.** The next step needs a person (or a browser session that passes the
 challenge normally) to download one or two sheets into `work/holdout/`, then freeze truth and calibration as above.
+
+### Reader v2 results (PARDON ME is a development case)
+
+Frozen reader (rank identities) versus reader v2, same harness calibration and scorers; BUMBLE BEE with the
+corrected sides. Evidence: `outputs/body_plan_chine_reader_v2.json`.
+
+| Sheet | Cells given | RMS m | Max m | Wrong cells (>0.15 m) | Identity-error stations |
+|---|---|---|---|---|---|
+| PARDON ME (development) | 34/57 -> 45/57 | 0.134696 -> 0.005556 | 0.6372 -> 0.0297 | 3 -> 0 | [6, 10, 11] -> [6] |
+| BUE GIRL | 37/39 -> 37/39 | 0.001431 (same) | 0.0058 (same) | 0 -> 0 | [] |
+| C.A. Thayer | 149/151 -> 149/151 | 0.011616 (same) | 0.1324 (same) | 0 -> 0 | [] |
+| Balclutha | 151/151 -> 151/151 | 0.148012 (same) | 1.8113 (same) | 1 -> 1 | [] |
+| BUMBLE BEE (corrected) | 50/54 -> 50/54 | 0.148585 (same) | 0.4636 (same) | 13 -> 13 | [1..6] (same) |
+
+Round-bilge check: no chine line is accepted on BUE GIRL, C.A. Thayer, Balclutha or BUMBLE BEE (the two false lines
+on Thayer and Balclutha lie on waterlines and are rejected), so those sheets give the frozen table unchanged.
+
+PARDON ME: all stations 1-5 (fore) are now named from their chine points. The wrong W-1/W-2 values that the frozen
+reader gave to stations 1 and 2 are gone, and their W3 to W-1 cells are filled. Aft W3 and W2 are fixed for stations
+10 and 11 (a curve forked into two chains had shifted the numbering).
+
+Still missing (12 cells): station 2, 3, 4 at W-2 (two lines meet at 0.13 m near the keel and both trace to station 5;
+two crossings claim one cell, so the cell is left empty); aft W-1 for stations 6 to 10 (the six lower pieces run along
+the heavy line for about 300 px and meet within 15 to 70 px; no arrival is clearly nearest, so all are left out); aft W0
+for stations 6 to 9 and aft W1 for station 9 (links across the cluster are ambiguous). Station 6 remains an identity
+error (it crosses its neighbours between W2 and W0).
+
+Limits: development case only; one drawing style; the line finder is unchanged and its weak points (wrong
+branch at merges) are handled only by abstention. No holdout has been scored.

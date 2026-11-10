@@ -1,0 +1,726 @@
+{
+  "engineering_approved": false,
+  "pardon_me_is_development_case": true,
+  "cases": [
+    {
+      "sheet": "PARDON ME (development)",
+      "frozen": {
+        "truth_cells": 57,
+        "cells_given": 34,
+        "coverage": 0.5964912280701754,
+        "extra_cells": 1,
+        "rms_m": 0.13469565346898643,
+        "max_abs_m": 0.6371791158495798,
+        "within_0_05": 0.7941176470588235,
+        "within_0_15": 0.9117647058823529,
+        "identity_errors": [
+          6,
+          10,
+          11
+        ],
+        "wrong_cells": 3,
+        "missing_cells": 23,
+        "missing_cell_keys": [
+          [
+            1,
+            "3-0-0"
+          ],
+          [
+            2,
+            "3-0-0"
+          ],
+          [
+            1,
+            "2-0-0"
+          ],
+          [
+            2,
+            "2-0-0"
+          ],
+          [
+            1,
+            "1-0-0"
+          ],
+          [
+            2,
+            "1-0-0"
+          ],
+          [
+            1,
+            "0-0-0"
+          ],
+          [
+            2,
+            "0-0-0"
+          ],
+          [
+            3,
+            "0-0-0"
+          ],
+          [
+            6,
+            "0-0-0"
+          ],
+          [
+            7,
+            "0-0-0"
+          ],
+          [
+            8,
+            "0-0-0"
+          ],
+          [
+            9,
+            "0-0-0"
+          ],
+          [
+            3,
+            "-1-0-0"
+          ],
+          [
+            4,
+            "-1-0-0"
+          ],
+          [
+            5,
+            "-1-0-0"
+          ],
+          [
+            6,
+            "-1-0-0"
+          ],
+          [
+            7,
+            "-1-0-0"
+          ],
+          [
+            8,
+            "-1-0-0"
+          ],
+          [
+            9,
+            "-1-0-0"
+          ],
+          [
+            10,
+            "-1-0-0"
+          ],
+          [
+            3,
+            "-2-0-0"
+          ],
+          [
+            4,
+            "-2-0-0"
+          ]
+        ],
+        "extra_cell_keys": [
+          [
+            1,
+            "-2-0-0"
+          ]
+        ]
+      },
+      "v2": {
+        "truth_cells": 57,
+        "cells_given": 45,
+        "coverage": 0.7894736842105263,
+        "extra_cells": 0,
+        "rms_m": 0.005555839211709343,
+        "max_abs_m": 0.02971107045734489,
+        "within_0_05": 1.0,
+        "within_0_15": 1.0,
+        "identity_errors": [
+          6
+        ],
+        "wrong_cells": 0,
+        "missing_cells": 12,
+        "missing_cell_keys": [
+          [
+            9,
+            "1-0-0"
+          ],
+          [
+            6,
+            "0-0-0"
+          ],
+          [
+            7,
+            "0-0-0"
+          ],
+          [
+            8,
+            "0-0-0"
+          ],
+          [
+            6,
+            "-1-0-0"
+          ],
+          [
+            7,
+            "-1-0-0"
+          ],
+          [
+            8,
+            "-1-0-0"
+          ],
+          [
+            9,
+            "-1-0-0"
+          ],
+          [
+            10,
+            "-1-0-0"
+          ],
+          [
+            2,
+            "-2-0-0"
+          ],
+          [
+            3,
+            "-2-0-0"
+          ],
+          [
+            4,
+            "-2-0-0"
+          ]
+        ],
+        "extra_cell_keys": []
+      },
+      "sides_using_chine": [
+        "aft",
+        "fore"
+      ],
+      "abstained": {
+        "aft": [
+          {
+            "waterline": "-1-0-0",
+            "index": 0,
+            "column": 2554.8285951993857,
+            "reason": "no single nearest chine point",
+            "arrival": [
+              5409.0,
+              2242.0
+            ]
+          },
+          {
+            "waterline": "-1-0-0",
+            "index": 1,
+            "column": 2592.888527225937,
+            "reason": "no single nearest chine point",
+            "arrival": [
+              5409.0,
+              2242.0
+            ]
+          },
+          {
+            "waterline": "-1-0-0",
+            "index": 2,
+            "column": 2712.5883727952028,
+            "reason": "no single nearest chine point",
+            "arrival": [
+              5376.0,
+              1930.5
+            ]
+          },
+          {
+            "waterline": "-1-0-0",
+            "index": 3,
+            "column": 3224.059823493069,
+            "reason": "no single nearest chine point",
+            "arrival": [
+              5483.0,
+              3225.5
+            ]
+          },
+          {
+            "station": 9,
+            "waterline": "1-0-0",
+            "indices": [
+              1,
+              2
+            ],
+            "reason": "more than one crossing for the cell"
+          }
+        ],
+        "fore": [
+          {
+            "waterline": "0-0-0",
+            "index": 2,
+            "column": 4379.361371161432,
+            "reason": "the chine line itself"
+          },
+          {
+            "waterline": "0-0-0",
+            "index": 6,
+            "column": 3384.160700784739,
+            "reason": "no single nearest chine point",
+            "arrival": [
+              5105.0,
+              3445.0
+            ]
+          },
+          {
+            "station": 5,
+            "waterline": "-2-0-0",
+            "indices": [
+              0,
+              1
+            ],
+            "reason": "more than one crossing for the cell"
+          }
+        ]
+      },
+      "chine_points": {
+        "aft": [
+          [
+            6,
+            5372.2276087784585,
+            1873.196057055729
+          ],
+          [
+            7,
+            5372.2276087784585,
+            1873.196057055729
+          ],
+          [
+            8,
+            5376.43863570692,
+            1935.3857810953614
+          ],
+          [
+            9,
+            5375.728098231719,
+            1924.8923479605744
+          ],
+          [
+            10,
+            5375.017560756517,
+            1914.3989148257874
+          ],
+          [
+            11,
+            5377.083683087243,
+            1944.912036627864
+          ]
+        ],
+        "fore": [
+          [
+            5,
+            5290.274078046183,
+            4554.395394109886
+          ],
+          [
+            4,
+            5251.540280830392,
+            4451.761630043138
+          ],
+          [
+            3,
+            5207.039454955834,
+            4282.353639752928
+          ],
+          [
+            2,
+            5164.0,
+            4016.0
+          ],
+          [
+            1,
+            5112.0,
+            3583.0
+          ]
+        ]
+      },
+      "rms_no_regression": true,
+      "coverage_no_regression": true,
+      "seconds": 16.7
+    },
+    {
+      "sheet": "BUE GIRL",
+      "frozen": {
+        "truth_cells": 39,
+        "cells_given": 37,
+        "coverage": 0.9487179487179487,
+        "extra_cells": 7,
+        "rms_m": 0.0014314012559828676,
+        "max_abs_m": 0.005839332636477179,
+        "within_0_05": 1.0,
+        "within_0_15": 1.0,
+        "identity_errors": [],
+        "wrong_cells": 0,
+        "missing_cells": 2,
+        "missing_cell_keys": [
+          [
+            10,
+            "2-6-0"
+          ],
+          [
+            12,
+            "2-6-0"
+          ]
+        ],
+        "extra_cell_keys": [
+          [
+            2,
+            "6-6-0"
+          ],
+          [
+            3,
+            "6-6-0"
+          ],
+          [
+            4,
+            "6-6-0"
+          ],
+          [
+            5,
+            "5-6-0"
+          ],
+          [
+            5,
+            "6-6-0"
+          ],
+          [
+            6,
+            "5-6-0"
+          ],
+          [
+            6,
+            "6-6-0"
+          ]
+        ]
+      },
+      "v2": {
+        "truth_cells": 39,
+        "cells_given": 37,
+        "coverage": 0.9487179487179487,
+        "extra_cells": 7,
+        "rms_m": 0.0014314012559828676,
+        "max_abs_m": 0.005839332636477179,
+        "within_0_05": 1.0,
+        "within_0_15": 1.0,
+        "identity_errors": [],
+        "wrong_cells": 0,
+        "missing_cells": 2,
+        "missing_cell_keys": [
+          [
+            10,
+            "2-6-0"
+          ],
+          [
+            12,
+            "2-6-0"
+          ]
+        ],
+        "extra_cell_keys": [
+          [
+            2,
+            "6-6-0"
+          ],
+          [
+            3,
+            "6-6-0"
+          ],
+          [
+            4,
+            "6-6-0"
+          ],
+          [
+            5,
+            "5-6-0"
+          ],
+          [
+            5,
+            "6-6-0"
+          ],
+          [
+            6,
+            "5-6-0"
+          ],
+          [
+            6,
+            "6-6-0"
+          ]
+        ]
+      },
+      "sides_using_chine": [],
+      "abstained": {
+        "fore": [],
+        "aft": []
+      },
+      "chine_points": {
+        "fore": [],
+        "aft": []
+      },
+      "rms_no_regression": true,
+      "coverage_no_regression": true,
+      "seconds": 15.7
+    },
+    {
+      "sheet": "C.A. Thayer",
+      "frozen": {
+        "truth_cells": 151,
+        "cells_given": 149,
+        "coverage": 0.9867549668874173,
+        "extra_cells": 1,
+        "rms_m": 0.011615860973390688,
+        "max_abs_m": 0.13237900163606753,
+        "within_0_05": 0.9932885906040269,
+        "within_0_15": 1.0,
+        "identity_errors": [],
+        "wrong_cells": 0,
+        "missing_cells": 2,
+        "missing_cell_keys": [
+          [
+            1,
+            "17-7"
+          ],
+          [
+            11,
+            "17-7"
+          ]
+        ],
+        "extra_cell_keys": [
+          [
+            12,
+            "17-7"
+          ]
+        ]
+      },
+      "v2": {
+        "truth_cells": 151,
+        "cells_given": 149,
+        "coverage": 0.9867549668874173,
+        "extra_cells": 1,
+        "rms_m": 0.011615860973390688,
+        "max_abs_m": 0.13237900163606753,
+        "within_0_05": 0.9932885906040269,
+        "within_0_15": 1.0,
+        "identity_errors": [],
+        "wrong_cells": 0,
+        "missing_cells": 2,
+        "missing_cell_keys": [
+          [
+            1,
+            "17-7"
+          ],
+          [
+            11,
+            "17-7"
+          ]
+        ],
+        "extra_cell_keys": [
+          [
+            12,
+            "17-7"
+          ]
+        ]
+      },
+      "sides_using_chine": [],
+      "abstained": {
+        "aft": [],
+        "fore": []
+      },
+      "chine_points": {
+        "aft": [],
+        "fore": []
+      },
+      "rms_no_regression": true,
+      "coverage_no_regression": true,
+      "seconds": 35.6
+    },
+    {
+      "sheet": "Balclutha",
+      "frozen": {
+        "truth_cells": 151,
+        "cells_given": 151,
+        "coverage": 1.0,
+        "extra_cells": 4,
+        "rms_m": 0.1480119352787029,
+        "max_abs_m": 1.8113248090482368,
+        "within_0_05": 0.9867549668874173,
+        "within_0_15": 0.9933774834437086,
+        "identity_errors": [],
+        "rms_without_doubtful_cell_m": 0.013451125567118152,
+        "wrong_cells": 1,
+        "missing_cells": 0,
+        "missing_cell_keys": [],
+        "extra_cell_keys": [
+          [
+            14,
+            32
+          ],
+          [
+            13,
+            32
+          ],
+          [
+            12,
+            32
+          ],
+          [
+            11,
+            32
+          ]
+        ]
+      },
+      "v2": {
+        "truth_cells": 151,
+        "cells_given": 151,
+        "coverage": 1.0,
+        "extra_cells": 4,
+        "rms_m": 0.1480119352787029,
+        "max_abs_m": 1.8113248090482368,
+        "within_0_05": 0.9867549668874173,
+        "within_0_15": 0.9933774834437086,
+        "identity_errors": [],
+        "rms_without_doubtful_cell_m": 0.013451125567118152,
+        "wrong_cells": 1,
+        "missing_cells": 0,
+        "missing_cell_keys": [],
+        "extra_cell_keys": [
+          [
+            14,
+            32
+          ],
+          [
+            13,
+            32
+          ],
+          [
+            12,
+            32
+          ],
+          [
+            11,
+            32
+          ]
+        ]
+      },
+      "sides_using_chine": [],
+      "abstained": {
+        "aft": [],
+        "fore": []
+      },
+      "chine_points": {
+        "aft": [],
+        "fore": []
+      },
+      "rms_no_regression": true,
+      "coverage_no_regression": true,
+      "seconds": 54.4
+    },
+    {
+      "sheet": "BUMBLE BEE (corrected sides)",
+      "frozen": {
+        "truth_cells": 54,
+        "cells_given": 50,
+        "coverage": 0.9259259259259259,
+        "extra_cells": 2,
+        "rms_m": 0.14858472096366016,
+        "max_abs_m": 0.4636480915365219,
+        "within_0_05": 0.6,
+        "within_0_15": 0.74,
+        "identity_errors": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "wrong_cells": 13,
+        "missing_cells": 4,
+        "missing_cell_keys": [
+          [
+            6,
+            "1-6-0"
+          ],
+          [
+            7,
+            "1-6-0"
+          ],
+          [
+            8,
+            "1-6-0"
+          ],
+          [
+            9,
+            "1-6-0"
+          ]
+        ],
+        "extra_cell_keys": [
+          [
+            14,
+            "1-6-0"
+          ],
+          [
+            1,
+            "1-6-0"
+          ]
+        ]
+      },
+      "v2": {
+        "truth_cells": 54,
+        "cells_given": 50,
+        "coverage": 0.9259259259259259,
+        "extra_cells": 2,
+        "rms_m": 0.14858472096366016,
+        "max_abs_m": 0.4636480915365219,
+        "within_0_05": 0.6,
+        "within_0_15": 0.74,
+        "identity_errors": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "wrong_cells": 13,
+        "missing_cells": 4,
+        "missing_cell_keys": [
+          [
+            6,
+            "1-6-0"
+          ],
+          [
+            7,
+            "1-6-0"
+          ],
+          [
+            8,
+            "1-6-0"
+          ],
+          [
+            9,
+            "1-6-0"
+          ]
+        ],
+        "extra_cell_keys": [
+          [
+            14,
+            "1-6-0"
+          ],
+          [
+            1,
+            "1-6-0"
+          ]
+        ]
+      },
+      "sides_using_chine": [],
+      "abstained": {
+        "aft": [],
+        "fore": []
+      },
+      "chine_points": {
+        "aft": [],
+        "fore": []
+      },
+      "rms_no_regression": true,
+      "coverage_no_regression": true,
+      "seconds": 15.8
+    }
+  ]
+}
