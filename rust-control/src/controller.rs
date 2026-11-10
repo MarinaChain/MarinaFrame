@@ -535,21 +535,35 @@ fn collect_images(store: &Store) -> Result<Vec<(ImageReceipt, String)>> {
 /// The live model's tools. `build_draft` is offered only when the task's
 /// ambiguity policy is `draft`.
 pub fn tool_catalog(on_ambiguity: &OnAmbiguity) -> Value {
-    let empty = json!({"type":"object","properties":{},"additionalProperties":false});
-    let mut tools = base_tool_catalog(&empty);
+    let entries: Vec<Value> = serde_json::from_str(include_str!(
+        "../../src/vessel_reconstruction/tool_catalog.json"
+    ))
+    .expect("valid shared tool catalog");
+    let mut tools: Vec<Value> = entries
+        .into_iter()
+        .filter(|entry| {
+            entry["tier"] == "base"
+                || (*on_ambiguity == OnAmbiguity::Draft && entry["tier"] == "draft")
+        })
+        .map(|mut entry| {
+            let object = entry.as_object_mut().expect("tool catalog entry");
+            for key in ["operation", "route", "tier", "python_catalog"] {
+                object.remove(key);
+            }
+            entry
+        })
+        .collect();
     if *on_ambiguity == OnAmbiguity::Draft {
-        tools.as_array_mut().unwrap().insert(3, json!({"name":"build_draft","description":"After every section is inspected: build a best-effort draft that takes the best-scoring line where a section is ambiguous and spans unreadable stations. Each choice is an open guess; a draft is never verified and only a person can resolve its guesses.","parameters":empty}));
-        tools
-            .as_array_mut()
-            .unwrap()
-            .extend(investigation_catalog());
-        tools
-            .as_array_mut()
-            .unwrap()
-            .push(crate::types::authoring::tool());
+        let index = tools
+            .iter()
+            .position(|tool| tool["name"] == "build_draft")
+            .unwrap();
+        let draft = tools.remove(index);
+        tools.insert(3, draft);
     }
-    tools
+    Value::Array(tools)
 }
+
 fn phase_tool_catalog(store: &Store) -> Value {
     let mut tools = tool_catalog(&store.state.config.on_ambiguity);
     if revision::active(store) {
@@ -576,37 +590,6 @@ fn phase_tool_catalog(store: &Store) -> Value {
     tools
 }
 
-/// Investigation tools of the live model (draft mode only). Each one is
-/// executed by the harness; every claim is checked by deterministic code.
-fn investigation_catalog() -> Vec<Value> {
-    let region = json!({"type":"array","items":{"type":"integer","minimum":0},"minItems":4,"maxItems":4,"description":"[left, top, right, bottom] in sheet pixels"});
-    let id = json!({"type":"string","maxLength":64});
-    vec![
-        json!({"name":"survey_sheet","description":"Survey the sheet without CAD. The harness normally runs this before view identification.","parameters":{"type":"object","properties":{},"additionalProperties":false}}),
-        json!({"name":"describe_views","description":"Name view families and sheet-pixel bounds. All same-scale body panels are ONE family: use one body view with optional panels [{region_px,centreline_px,baseline_px}], family_id and shared setup {pixels_per_metre,grid_spacing_m}. The first body setup is reused across the family. Include plan/profile and useful title or offset tables.","parameters":{"type":"object","properties":{"views":{"type":"array","minItems":1,"maxItems":32,"items":{"type":"object","properties":{"view_id":{"type":"string","maxLength":64},"kind":{"enum":["body","body_fore","body_aft","plan","profile","title_block","offsets_table","other"]},"region_px":region,"halves":{"type":"string","maxLength":2000},"mirror":{"type":"boolean"},"grid_roles":{"type":"object"},"family_id":{"type":"string"},"panels":{"type":"array","items":{"type":"object"}},"setup":{"type":"object"}},"required":["view_id","kind","region_px"],"additionalProperties":true}}},"required":["views"],"additionalProperties":false}}),
-        json!({"name":"describe_vessel","description":"Record the vessel before CAD: principal dimensions with value/source/view_id, stations (id/x_m), waterlines (id/z_m), buttocks (id/y_m), ends, deck and form. Keep measured and inferred values labelled. Doubtful dimensions receive warnings, not approval.","parameters":{"type":"object","properties":{"description":{"type":"object","properties":{"units":{"type":"string"},"dimension_text":{"type":"string","description":"Exact labelled dimension text read from the title/dimension crop: LOA, LWL, BEAM, DEPTH, DRAFT (DWL), units. Do not invent unreadable numbers."},"frame":{},"principal":{"type":"object"},"stations":{"type":"array","maxItems":300,"items":{"type":"object"}},"waterlines":{"type":"array","maxItems":300,"items":{"type":"object"}},"buttocks":{"type":"array","maxItems":300,"items":{"type":"object"}},"ends":{"type":"object"},"deck":{"type":"object"},"form":{"type":"object"}},"additionalProperties":true}},"required":["description"],"additionalProperties":false}}),
-        json!({"name":"recall_view","description":"Reattach a previous task view by view_id without creating a new crop.","parameters":{"type":"object","properties":{"view_id":id},"required":["view_id"],"additionalProperties":false}}),
-        json!({"name":"view_region","description":"Return the pixels of any sheet region at any zoom (up to 1024 px per side, 4x enlargement). Start with the whole sheet, then zoom.","parameters":{"type":"object","properties":{"region_px":region,"max_side_px":{"type":"integer","minimum":256,"maximum":1024}},"required":["region_px"],"additionalProperties":false}}),
-        json!({"name":"read_region","description":"Return the pixels of a region to read station labels, a scale bar, dimensions or the title block. What you read is your claim.","parameters":{"type":"object","properties":{"region_px":region,"subject":{"enum":["labels","scale_bar","dimensions","title_block"]}},"required":["region_px","subject"],"additionalProperties":false}}),
-        json!({"name":"trace_corridor","description":"Draw a corridor on a view (2-24 points in that view's pixels, top to bottom, and a half width in view pixels) around one curve of a section. The host traces the real ink in it and re-reads it with the engine; it returns a candidate id with support scores, or refuses when no ink supports one continuous line.","parameters":{"type":"object","properties":{"section_id":id,"view_id":id,"path_px":{"type":"array","items":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2},"minItems":2,"maxItems":24},"half_width_px":{"type":"number","minimum":1,"maximum":64}},"required":["section_id","view_id","path_px","half_width_px"],"additionalProperties":false}}),
-        json!({"name":"enumerate_strokes","description":"The host traces every ink stroke of this section's drawing panel (or those crossing one height) and returns one image with each stroke in its own colour and a numbered tag at its top end and middle, plus each tag's candidate id. All sections that share the panel get these candidates. Usually the best first step on a crowded body plan.","parameters":{"type":"object","properties":{"section_id":id,"height_m":{"type":"number"}},"required":["section_id"],"additionalProperties":false}}),
-        json!({"name":"trace_from_point","description":"Click one point on a curve of a section (in a view's pixels, on the ink itself, for example just below its label). The host follows that ink stroke up and down, then traces and verifies it like a corridor; it returns a candidate id or refuses with an image of the point.","parameters":{"type":"object","properties":{"section_id":id,"view_id":id,"point_px":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2}},"required":["section_id","view_id","point_px"],"additionalProperties":false}}),
-        json!({"name":"assign_station","description":"Claim that a traced candidate is this section's station line, with the label you read and the view where you read it. Checked by the host; if accepted it is an open model_choice guess for a person to confirm.","parameters":{"type":"object","properties":{"section_id":id,"candidate_id":id,"label_view_id":id,"label_text":{"type":"string","maxLength":64},"reason":{"type":"string","maxLength":300},"comparison_id":id},"required":["section_id","candidate_id","label_view_id","label_text","reason"],"additionalProperties":false}}),
-        json!({"name":"propose_sheet_setup","description":"Propose the scale and datum lines of one view (body, plan or profile). The host checks them against the drawn grid and the declared calibration. Accepted setups serve compare_views; the build keeps the declared calibration.","parameters":{"type":"object","properties":{"view":{"enum":["body","plan","profile"]},"region_px":region,"pixels_per_metre":{"type":"number"},"grid_spacing_m":{"type":"number"},"centreline_px":{"type":"number"},"baseline_px":{"type":"number"},"x_origin_px":{"type":"number"},"x_direction":{"enum":[1,-1]},"evidence_view_id":id,"scale_claim":{"type":"string","maxLength":128},"reason":{"type":"string","maxLength":300}},"required":["view","region_px","pixels_per_metre","grid_spacing_m","evidence_view_id","scale_claim","reason"],"additionalProperties":false}}),
-        json!({"name":"compare_views","description":"Compare a candidate's body-plan half-breadths at given heights with ink on the plan-view station line of an accepted plan setup.","parameters":{"type":"object","properties":{"section_id":id,"candidate_id":id,"setup_id":id,"heights_m":{"type":"array","items":{"type":"number"},"minItems":1,"maxItems":12}},"required":["section_id","candidate_id","setup_id","heights_m"],"additionalProperties":false}}),
-        json!({"name":"ask_person","description":"Stop and ask a person a question when the evidence is insufficient.","parameters":{"type":"object","properties":{"question":{"type":"string","maxLength":512}},"required":["question"],"additionalProperties":false}}),
-    ]
-}
-fn base_tool_catalog(empty: &Value) -> Value {
-    json!([
-        {"name":"inspect_source","description":"Inspect source regions and preserved candidate alternatives; section_ids optional, at most12 sections per observation.","parameters":{"type":"object","properties":{"section_ids":{"type":"array","items":{"type":"string"}}},"additionalProperties":false}},
-        {"name":"select_contours","description":"Choose already inspected candidate IDs; retains alternatives and invalidates previous validation and renders.","parameters":{"type":"object","properties":{"selections":{"type":"array","items":{"type":"object","properties":{"section_id":{"type":"string"},"candidate_id":{"type":"string"}},"required":["section_id","candidate_id"],"additionalProperties":false}}},"required":["selections"],"additionalProperties":false}},
-        {"name":"build_provisional","description":"Build current source-supported selections with the trusted CAD engine.","parameters":empty},
-        {"name":"render_candidate","description":"Reimport exported STEP and render view for visual inspection.","parameters":{"type":"object","properties":{"view":{"enum":["body","plan","profile","oblique"]}},"required":["view"],"additionalProperties":false}},
-        {"name":"validate_candidate","description":"Audit current exported STEP against selected source traces; failures remain failures on cache hits.","parameters":empty},
-        {"name":"finish","description":"Abstain or request human review after current passing validation and visual inspection; never engineering approval.","parameters":{"type":"object","properties":{"outcome":{"enum":["candidate_ready_for_review","abstain"]},"summary":{"type":"string","maxLength":512}},"required":["outcome","summary"],"additionalProperties":false}}
-    ])
-}
 /// The investigating model's observation: a compact task state (one line per
 /// section), the last tool result and the recent history. Full evidence stays
 /// in the task; the model asks for more with the tools.
@@ -3767,5 +3750,96 @@ mod tests {
         assert!(models::rate_limited(&receipt));
         assert!(!switch_model(&mut store, &receipt).unwrap());
         assert_eq!(store.state.current_model(), DEEPSEEK_V4_1_FLASH);
+    }
+}
+
+#[cfg(test)]
+mod shared_catalog_tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn catalog_matches_controller_operations_and_python_handlers() {
+        let entries: Vec<Value> = serde_json::from_str(include_str!(
+            "../../src/vessel_reconstruction/tool_catalog.json"
+        ))
+        .unwrap();
+        let mut names = BTreeSet::new();
+        let python = format!(
+            "{}\n{}",
+            include_str!("../../src/vessel_reconstruction/agent_tools.py"),
+            include_str!("../../src/vessel_reconstruction/investigation_tools.py")
+        );
+        for entry in &entries {
+            let name = entry["operation"].as_str().unwrap();
+            assert!(names.insert(name), "duplicate operation {name}");
+            if entry["route"] == "worker" && !["initialize", "observe"].contains(&name) {
+                assert!(
+                    python.contains(&format!("def _{name}(")),
+                    "missing Python handler {name}"
+                );
+            }
+        }
+        // These dictionaries are the actual Python argument allowlists. Compare
+        // their keys in both directions, including internal worker operations.
+        fn dictionary_keys(source: &str) -> BTreeSet<&str> {
+            let parts: Vec<_> = source.split('"').collect();
+            parts
+                .windows(3)
+                .step_by(2)
+                .filter_map(|window| window[2].trim_start().starts_with(':').then_some(window[1]))
+                .collect()
+        }
+        let domain = include_str!("../../src/vessel_reconstruction/agent_tools.py")
+            .split("        expected = {")
+            .nth(1)
+            .unwrap()
+            .split("        if name not in expected:")
+            .next()
+            .unwrap();
+        let investigation = include_str!("../../src/vessel_reconstruction/investigation_tools.py")
+            .split("INVESTIGATION_ARGUMENTS = {")
+            .nth(1)
+            .unwrap()
+            .split("\n}")
+            .next()
+            .unwrap();
+        let mut handlers = dictionary_keys(domain);
+        handlers.extend(dictionary_keys(investigation));
+        let worker_operations: BTreeSet<_> = entries
+            .iter()
+            .filter(|entry| entry["route"] == "worker")
+            .map(|entry| entry["operation"].as_str().unwrap())
+            .filter(|name| !["initialize", "observe"].contains(name))
+            .collect();
+        assert_eq!(worker_operations, handlers);
+        let offered: BTreeSet<_> = tool_catalog(&OnAmbiguity::Draft)
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|entry| entry["name"].as_str().unwrap().to_owned())
+            .collect();
+        let declared: BTreeSet<_> = entries
+            .iter()
+            .filter(|entry| entry["tier"] != "internal")
+            .map(|entry| entry["name"].as_str().unwrap().to_owned())
+            .collect();
+        assert_eq!(offered, declared);
+        let types = include_str!("types.rs");
+        let operation_names = types
+            .split("pub fn name(&self)")
+            .nth(1)
+            .unwrap()
+            .split("    /// The model investigation tools")
+            .next()
+            .unwrap();
+        let typed: BTreeSet<_> = operation_names
+            .lines()
+            .filter_map(|line| {
+                line.split_once("=> \"")
+                    .and_then(|(_, rest)| rest.split_once('"').map(|(name, _)| name.to_owned()))
+            })
+            .collect();
+        assert_eq!(offered, typed);
     }
 }

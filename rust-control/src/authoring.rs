@@ -6,6 +6,7 @@
 //! `validation.rs` checks the resulting `model_authored` guess.
 use crate::util;
 use serde::{Deserialize, Serialize};
+#[cfg(test)]
 use serde_json::{json, Value};
 
 /// Input bounds of a proposal. The worker applies the same bounds per form.
@@ -91,23 +92,6 @@ impl ProposeSection {
                 }
             }
     }
-}
-
-/// The live model's tool definition.
-pub fn tool() -> Value {
-    let number = json!({"type":"number"});
-    json!({"name":"propose_section","description":"Write the shape of a section yourself when it has no usable traced curve or you judge the trace wrong (you may also correct, complete or fair a trace). form half_breadths: offsets_m = 5-24 [height_m, half_breadth_m] pairs in metres; blend: the two neighbouring sections blended by station position and scaled by fullness (0.5-1.5, 1 = plain blend); standard_form: U or V section with beam_m, draft_m and optional bilge_radius_m, deadrise_deg. basis: one line on what you based it on. replaces: 'none' or the traced candidate id it corrects. The host fairs the curve, clamps it to the declared beam and depth, shows it on the source panel with warnings; build_draft then uses it, labelled ai_inferred or ai_corrected.",
-        "parameters":{"type":"object","properties":{
-            "section_id":{"type":"string","maxLength":64},
-            "form":{"enum":["half_breadths","blend","standard_form"]},
-            "basis":{"type":"string","maxLength":MAX_BASIS_CHARS},
-            "replaces":{"type":"string","maxLength":64},
-            "offsets_m":{"type":"array","items":{"type":"array","items":number,"minItems":2,"maxItems":2},"minItems":MIN_OFFSETS,"maxItems":MAX_OFFSETS},
-            "fullness":{"type":"number","minimum":FULLNESS.0,"maximum":FULLNESS.1},
-            "shape":{"enum":["U","V"]},
-            "beam_m":number,"draft_m":number,"bilge_radius_m":number,
-            "deadrise_deg":{"type":"number","minimum":0,"maximum":MAX_DEADRISE_DEG}},
-        "required":["section_id","form","basis"],"additionalProperties":false}})
 }
 
 #[cfg(test)]

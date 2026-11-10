@@ -18,6 +18,7 @@ from importlib import metadata
 from pathlib import Path
 
 from .agent_tools import DomainTools, _artifact, _model_observation_image
+from .tool_catalog import catalog
 from .provenance import digest_file, digest_object, write_json
 from .process_limits import posix_resource
 from .resources import peak_rss_kib
@@ -26,17 +27,13 @@ from .schema import loads_bounded_json
 from .validation_contract import implementation_identity as audit_implementation_identity
 
 PROTOCOL = "marinaframe.worker.v1"
-OPERATIONS = {"initialize", "observe", "inspect_source", "select_contours",
-              "build_provisional", "build_draft", "build_first_hull", "correct_calibration", "replace_sheet", "render_candidate", "validate_candidate",
-              # Model investigation tools (investigation_tools.py).
-              "view_region", "read_region", "trace_corridor", "trace_from_point", "enumerate_strokes", "assign_station",
-              "propose_sheet_setup", "compare_views", "propose_section",
-              "survey_sheet", "describe_views", "describe_vessel"}
+OPERATIONS = {tool["operation"] for tool in catalog() if tool["route"] == "worker"}
 
 
 def implementation_identity():
     root = Path(__file__).resolve().parent
     files = {p.name: digest_file(p) for p in sorted(root.glob("*.py"))}
+    files["tool_catalog.json"] = digest_file(root / "tool_catalog.json")
     versions = {name: metadata.version(name) for name in ("cadquery", "cadquery-ocp", "numpy", "Pillow", "scipy")}
     return digest_object({"files": files, "dependencies": versions, "python": sys.version.split()[0]})
 
