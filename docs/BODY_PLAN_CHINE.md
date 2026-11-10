@@ -284,6 +284,25 @@ Metrics as in "Metrics and acceptance". Added: wrong cells = cells given with er
   is scored. A failure is reported as a failure; fixes after scoring make the sheet a development case.
 - **Round-bilge check.** The same run must leave every round-bilge dev sheet identical to the frozen result.
 
+### Holdout protocol amendment (PM, 2026-11-10, before any reader run on a candidate)
+
+The two hard-chine candidates found (E. C. COLLIER, HAER MD-77 sheet 2; skipjack CALEB JONES, HAER MD-171 sheet 1)
+print **point offsets**, not waterline half-breadths: for each station, height above base and half-breadth of the
+SHEER, CHINE and RABBET. Interpolating straight lines between them would add judgement (the COLLIER sheet notes a
+slightly hollow bottom aft). So for these sheets:
+
+- **Truth cells** are the printed (station, point) pairs: chine half-breadth at chine height, sheer half-breadth at
+  sheer height, and rabbet half-breadth at rabbet height. No interpolated waterline truth is made.
+- **Reader value for a truth cell**: the reader's traced station curve evaluated at the printed height of that point
+  (the half-breadth of the station curve at that z). A station with no traced curve at that height gives no cell.
+- **Metrics and gates** are otherwise unchanged (cells given, RMS, max, wrong cells > 0.15 m, identity errors, both
+  arms, no tuning, one scored run). A separate line reports the chine cells only.
+- **Files** are in `work/holdout/<boat>/` (git-ignored) with a SOURCE.md (URL, rights, sha256). COLLIER:
+  `md1203-sheet-00002a-lines.tif`, sha256 80e689130705ffcbd46716320865502a618a69cdd94d96191c3cafc3b22e0637.
+  CALEB JONES: download pending.
+- **Truth entry**: a person or a model that does not see reader output reads the table into
+  `work/holdout/<boat>/truth.json` (feet-inches-eighths converted to metres), frozen before the run.
+
 ### Holdout candidates (state: none scored)
 
 The Library of Congress site and `tile.loc.gov` answer this host with a Cloudflare challenge (HTTP 403, "Just a
