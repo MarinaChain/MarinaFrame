@@ -1,0 +1,825 @@
+[
+  {
+    "name": "inspect_source",
+    "description": "Inspect up to 12 frozen drawing regions per call, returning source-supported hypotheses and preserved alternatives. Without section_ids, inspect the next uninspected batch. Candidate identity remains unapproved.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "section_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "minItems": 1,
+          "maxItems": 300,
+          "uniqueItems": true
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "operation": "inspect_source",
+    "route": "worker",
+    "tier": "base",
+    "python_catalog": true
+  },
+  {
+    "name": "select_contours",
+    "description": "Select already inspected source-bound candidate IDs. This creates a reversible provisional revision; it does not establish contour identity or approve geometry. Selecting invalidates previous validation and renders.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "selections": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 300,
+          "items": {
+            "type": "object",
+            "properties": {
+              "section_id": {
+                "type": "string",
+                "maxLength": 256
+              },
+              "candidate_id": {
+                "type": "string",
+                "maxLength": 64
+              }
+            },
+            "required": [
+              "section_id",
+              "candidate_id"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "selections"
+      ],
+      "additionalProperties": false
+    },
+    "operation": "select_contours",
+    "route": "worker",
+    "tier": "base",
+    "python_catalog": true
+  },
+  {
+    "name": "build_provisional",
+    "description": "Run the unchanged, fail-closed drawing/CAD engine in an isolated worker using the current explicit candidate selections. Keep the last valid candidate if this attempt fails.",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    },
+    "operation": "build_provisional",
+    "route": "worker",
+    "tier": "base",
+    "python_catalog": true
+  },
+  {
+    "name": "render_candidate",
+    "description": "Reimport a verified exported STEP file and render a named physical view. Output identifies the revision and whether it is an older preserved candidate.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "view": {
+          "type": "string",
+          "enum": [
+            "body",
+            "plan",
+            "profile",
+            "oblique"
+          ]
+        }
+      },
+      "required": [
+        "view"
+      ],
+      "additionalProperties": false
+    },
+    "operation": "render_candidate",
+    "route": "worker",
+    "tier": "base",
+    "python_catalog": true
+  },
+  {
+    "name": "validate_candidate",
+    "description": "Verify the current immutable run and independently reimport STEP. Report source-to-CAD section checks and remaining semantic review obligations; never grant engineering approval. Failures remain failures on cache hits.",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    },
+    "operation": "validate_candidate",
+    "route": "worker",
+    "tier": "base",
+    "python_catalog": true
+  },
+  {
+    "name": "finish",
+    "description": "Abstain or request human review after current passing validation and visual inspection; never engineering approval.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "enum": [
+            "candidate_ready_for_review",
+            "abstain"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "outcome",
+        "summary"
+      ],
+      "additionalProperties": false
+    },
+    "operation": "finish",
+    "route": "controller",
+    "tier": "base",
+    "python_catalog": false
+  },
+  {
+    "name": "build_draft",
+    "description": "Build a best-effort draft after full inspection: take the best-scoring line where a section is ambiguous and span unreadable stations. Each such choice is recorded as an open guess. A draft is never verified and cannot be finished for review until a person resolves every guess.",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    },
+    "operation": "build_draft",
+    "route": "worker",
+    "tier": "draft",
+    "python_catalog": true
+  },
+  {
+    "name": "survey_sheet",
+    "description": "Survey the sheet without CAD. The harness normally runs this before view identification.",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "operation": "survey_sheet",
+    "route": "worker",
+    "tier": "draft",
+    "python_catalog": false
+  },
+  {
+    "name": "describe_views",
+    "description": "Name view families and sheet-pixel bounds. All same-scale body panels are ONE family: use one body view with optional panels [{region_px,centreline_px,baseline_px}], family_id and shared setup {pixels_per_metre,grid_spacing_m}. The first body setup is reused across the family. Include plan/profile and useful title or offset tables.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "views": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "properties": {
+              "view_id": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "kind": {
+                "enum": [
+                  "body",
+                  "body_fore",
+                  "body_aft",
+                  "plan",
+                  "profile",
+                  "title_block",
+                  "offsets_table",
+                  "other"
+                ]
+              },
+              "region_px": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "minItems": 4,
+                "maxItems": 4,
+                "description": "[left, top, right, bottom] in sheet pixels"
+              },
+              "halves": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "mirror": {
+                "type": "boolean"
+              },
+              "grid_roles": {
+                "type": "object"
+              },
+              "family_id": {
+                "type": "string"
+              },
+              "panels": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "setup": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "view_id",
+              "kind",
+              "region_px"
+            ],
+            "additionalProperties": true
+          }
+        }
+      },
+      "required": [
+        "views"
+      ],
+      "additionalProperties": false
+    },
+    "operation": "describe_views",
+    "route": "worker",
+    "tier": "draft",
+    "python_catalog": false
+  },
+  {
+    "name": "describe_vessel",
+    "description": "Record the vessel before CAD: principal dimensions with value/source/view_id, stations (id/x_m), waterlines (id/z_m), buttocks (id/y_m), ends, deck and form. Keep measured and inferred values labelled. Doubtful dimensions receive warnings, not approval.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "object",
+          "properties": {
+            "units": {
+              "type": "string"
+            },
+            "dimension_text": {
+              "type": "string",
+              "description": "Exact labelled dimension text read from the title/dimension crop: LOA, LWL, BEAM, DEPTH, DRAFT (DWL), units. Do not invent unreadable numbers."
+            },
+            "frame": {},
+            "principal": {
+              "type": "object"
+            },
+            "stations": {
+              "type": "array",
+              "maxItems": 300,
+              "items": {
+                "type": "object"
+              }
+            },
+            "waterlines": {
+              "type": "array",
+              "maxItems": 300,
+              "items": {
+                "type": "object"
+              }
+            },
+            "buttocks": {
+              "type": "array",
+              "maxItems": 300,
+              "items": {
+                "type": "object"
+              }
+            },
+            "ends": {
+              "type": "object"
+            },
+            "deck": {
+              "type": "object"
+            },
+            "form": {
+              "type": "object"
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "operation": "describe_vessel",
+    "route": "worker",
+    "tier": "draft",
+    "python_catalog": false
+  },
+  {
+    "name": "recall_view",
+    "description": "Reattach a previous task view by view_id without creating a new crop.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "view_id": {
+          "type": "string",
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "view_id"
+      ],
+      "additionalProperties": false
+    },
+    "operation": "recall_view",
+    "route": "controller",
+    "tier": "draft",
+    "python_catalog": false
+  },
+  {
+    "name": "view_region",
+    "description": "Return the pixels of any sheet region at any zoom (up to 1024 px per side, 4x enlargement). Start with the whole sheet, then zoom.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "region_px": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minItems": 4,
+          "maxItems": 4,
+          "description": "[left, top, right, bottom] in sheet pixels"
+        },
+        "max_side_px": {
+          "type": "integer",
+          "minimum": 256,
+          "maximum": 1024
+        }
+      },
+      "required": [
+        "region_px"
+      ],
+      "additionalProperties": false
+    },
+    "operation": "view_region",
+    "route": "worker",
+    "tier": "draft",
+    "python_catalog": false
+  },
+  {
+    "name": "read_region",
+    "description": "Return the pixels of a region to read station labels, a scale bar, dimensions or the title block. What you read is your claim.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "region_px": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minItems": 4,
+          "maxItems": 4,
+          "description": "[left, top, right, bottom] in sheet pixels"
+        },
+        "subject": {
+          "enum": [
+            "labels",
+            "scale_bar",
+            "dimensions",
+            "title_block"
+          ]
+        }
+      },
+      "required": [
+        "region_px",
+        "subject"
+      ],
+      "additionalProperties": false
+    },
+    "operation": "read_region",
+    "route": "worker",
+    "tier": "draft",
+    "python_catalog": false
+  },
+  {
+    "name": "trace_corridor",
+    "description": "Draw a corridor on a view (2-24 points in that view's pixels, top to bottom, and a half width in view pixels) around one curve of a section. The host traces the real ink in it and re-reads it with the engine; it returns a candidate id with support scores, or refuses when no ink supports one continuous line.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "section_id": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "view_id": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "path_px": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "minItems": 2,
+          "maxItems": 24
+        },
+        "half_width_px": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 64
+        }
+      },
+      "required": [
+        "section_id",
+        "view_id",
+        "path_px",
+        "half_width_px"
+      ],
+      "additionalProperties": false
+    },
+    "operation": "trace_corridor",
+    "route": "worker",
+    "tier": "draft",
+    "python_catalog": false
+  },
+  {
+    "name": "enumerate_strokes",
+    "description": "The host traces every ink stroke of this section's drawing panel (or those crossing one height) and returns one image with each stroke in its own colour and a numbered tag at its top end and middle, plus each tag's candidate id. All sections that share the panel get these candidates. Usually the best first step on a crowded body plan.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "section_id": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "height_m": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "section_id"
+      ],
+      "additionalProperties": false
+    },
+    "operation": "enumerate_strokes",
+    "route": "worker",
+    "tier": "draft",
+    "python_catalog": false
+  },
+  {
+    "name": "trace_from_point",
+    "description": "Click one point on a curve of a section (in a view's pixels, on the ink itself, for example just below its label). The host follows that ink stroke up and down, then traces and verifies it like a corridor; it returns a candidate id or refuses with an image of the point.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "section_id": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "view_id": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "point_px": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "section_id",
+        "view_id",
+        "point_px"
+      ],
+      "additionalProperties": false
+    },
+    "operation": "trace_from_point",
+    "route": "worker",
+    "tier": "draft",
+    "python_catalog": false
+  },
+  {
+    "name": "assign_station",
+    "description": "Claim that a traced candidate is this section's station line, with the label you read and the view where you read it. Checked by the host; if accepted it is an open model_choice guess for a person to confirm.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "section_id": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "candidate_id": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "label_view_id": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "label_text": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "comparison_id": {
+          "type": "string",
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "section_id",
+        "candidate_id",
+        "label_view_id",
+        "label_text",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "operation": "assign_station",
+    "route": "worker",
+    "tier": "draft",
+    "python_catalog": false
+  },
+  {
+    "name": "propose_sheet_setup",
+    "description": "Propose the scale and datum lines of one view (body, plan or profile). The host checks them against the drawn grid and the declared calibration. Accepted setups serve compare_views; the build keeps the declared calibration.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "view": {
+          "enum": [
+            "body",
+            "plan",
+            "profile"
+          ]
+        },
+        "region_px": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minItems": 4,
+          "maxItems": 4,
+          "description": "[left, top, right, bottom] in sheet pixels"
+        },
+        "pixels_per_metre": {
+          "type": "number"
+        },
+        "grid_spacing_m": {
+          "type": "number"
+        },
+        "centreline_px": {
+          "type": "number"
+        },
+        "baseline_px": {
+          "type": "number"
+        },
+        "x_origin_px": {
+          "type": "number"
+        },
+        "x_direction": {
+          "enum": [
+            1,
+            -1
+          ]
+        },
+        "evidence_view_id": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "scale_claim": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 300
+        }
+      },
+      "required": [
+        "view",
+        "region_px",
+        "pixels_per_metre",
+        "grid_spacing_m",
+        "evidence_view_id",
+        "scale_claim",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "operation": "propose_sheet_setup",
+    "route": "worker",
+    "tier": "draft",
+    "python_catalog": false
+  },
+  {
+    "name": "compare_views",
+    "description": "Compare a candidate's body-plan half-breadths at given heights with ink on the plan-view station line of an accepted plan setup.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "section_id": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "candidate_id": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "setup_id": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "heights_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1,
+          "maxItems": 12
+        }
+      },
+      "required": [
+        "section_id",
+        "candidate_id",
+        "setup_id",
+        "heights_m"
+      ],
+      "additionalProperties": false
+    },
+    "operation": "compare_views",
+    "route": "worker",
+    "tier": "draft",
+    "python_catalog": false
+  },
+  {
+    "name": "ask_person",
+    "description": "Stop and ask a person a question when the evidence is insufficient.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string",
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "question"
+      ],
+      "additionalProperties": false
+    },
+    "operation": "ask_person",
+    "route": "controller",
+    "tier": "draft",
+    "python_catalog": false
+  },
+  {
+    "name": "propose_section",
+    "description": "Write the shape of a section yourself when it has no usable traced curve or you judge the trace wrong (you may also correct, complete or fair a trace). form half_breadths: offsets_m = 5-24 [height_m, half_breadth_m] pairs in metres; blend: the two neighbouring sections blended by station position and scaled by fullness (0.5-1.5, 1 = plain blend); standard_form: U or V section with beam_m, draft_m and optional bilge_radius_m, deadrise_deg. basis: one line on what you based it on. replaces: 'none' or the traced candidate id it corrects. The host fairs the curve, clamps it to the declared beam and depth, shows it on the source panel with warnings; build_draft then uses it, labelled ai_inferred or ai_corrected. The labels are ai_inferred when replaces is 'none' and ai_corrected when it names a traced candidate.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "section_id": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "form": {
+          "enum": [
+            "half_breadths",
+            "blend",
+            "standard_form"
+          ]
+        },
+        "basis": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "replaces": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "offsets_m": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "minItems": 5,
+          "maxItems": 24
+        },
+        "fullness": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 1.5
+        },
+        "shape": {
+          "enum": [
+            "U",
+            "V"
+          ]
+        },
+        "beam_m": {
+          "type": "number"
+        },
+        "draft_m": {
+          "type": "number"
+        },
+        "bilge_radius_m": {
+          "type": "number"
+        },
+        "deadrise_deg": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 60.0
+        }
+      },
+      "required": [
+        "section_id",
+        "form",
+        "basis"
+      ],
+      "additionalProperties": false
+    },
+    "operation": "propose_section",
+    "route": "worker",
+    "tier": "draft",
+    "python_catalog": true
+  },
+  {
+    "name": "initialize",
+    "description": "Internal worker operation.",
+    "parameters": {
+      "type": "object"
+    },
+    "operation": "initialize",
+    "route": "worker",
+    "tier": "internal",
+    "python_catalog": false
+  },
+  {
+    "name": "observe",
+    "description": "Internal worker operation.",
+    "parameters": {
+      "type": "object"
+    },
+    "operation": "observe",
+    "route": "worker",
+    "tier": "internal",
+    "python_catalog": false
+  },
+  {
+    "name": "build_first_hull",
+    "description": "Internal worker operation.",
+    "parameters": {
+      "type": "object"
+    },
+    "operation": "build_first_hull",
+    "route": "worker",
+    "tier": "internal",
+    "python_catalog": false
+  },
+  {
+    "name": "correct_calibration",
+    "description": "Internal worker operation.",
+    "parameters": {
+      "type": "object"
+    },
+    "operation": "correct_calibration",
+    "route": "worker",
+    "tier": "internal",
+    "python_catalog": false
+  },
+  {
+    "name": "replace_sheet",
+    "description": "Internal worker operation.",
+    "parameters": {
+      "type": "object"
+    },
+    "operation": "replace_sheet",
+    "route": "worker",
+    "tier": "internal",
+    "python_catalog": false
+  }
+]

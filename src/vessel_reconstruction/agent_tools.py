@@ -85,36 +85,8 @@ MIRRORED_HALF_NOTE = ("The curve is drawn left of the centreline (afterbody of a
 # propose_section: the model writes a section's shape (section_authoring.py).
 PROPOSE_SECTION_ARGUMENTS = {"section_id", "form", "basis", "replaces", "offsets_m", "fullness", "shape",
                              "beam_m", "draft_m", "bilge_radius_m", "deadrise_deg"}
-PROPOSE_SECTION_DESCRIPTION = (
-    "Write the shape of a section yourself when it has no usable traced curve or you judge the trace wrong. "
-    "form half_breadths: offsets_m = 5-24 [height_m, half_breadth_m] pairs; blend: the two neighbouring "
-    "sections blended by station position, scaled by fullness (0.5-1.5); standard_form: U or V section with "
-    "beam_m, draft_m, optional bilge_radius_m and deadrise_deg. The host fairs the curve, clamps it to the "
-    "declared beam and depth, shows it on the source panel and returns warnings. build_draft uses it, labelled "
-    "ai_inferred (replaces 'none') or ai_corrected (replaces a traced candidate id).")
-PROPOSE_SECTION_PROPERTIES = {
-    "section_id": {"type": "string", "maxLength": 64},
-    "form": {"type": "string", "enum": list(section_authoring.FORMS)},
-    "basis": {"type": "string", "maxLength": section_authoring.MAX_BASIS_CHARS},
-    "replaces": {"type": "string", "maxLength": 64},
-    "offsets_m": {"type": "array", "minItems": section_authoring.MIN_OFFSETS,
-                  "maxItems": section_authoring.MAX_OFFSETS,
-                  "items": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}},
-    "fullness": {"type": "number", "minimum": section_authoring.FULLNESS_RANGE[0],
-                 "maximum": section_authoring.FULLNESS_RANGE[1]},
-    "shape": {"type": "string", "enum": list(section_authoring.SHAPES)},
-    "beam_m": {"type": "number"}, "draft_m": {"type": "number"},
-    "bilge_radius_m": {"type": "number"}, "deadrise_deg": {"type": "number"}}
-
-
 class ToolInputError(ValueError):
     """A recoverable rejected action, without arbitrary exception text."""
-
-
-def _definition(name, description, properties=None, required=()):
-    return {"name": name, "description": description, "parameters": {
-        "type": "object", "properties": properties or {}, "required": list(required),
-        "additionalProperties": False}}
 
 
 # Station overlay artifacts a render worker may return: allowed display keys and file names.
@@ -360,25 +332,9 @@ class DomainTools(InvestigationTools):
                 "materialization": copy.deepcopy(self.state.get("materialization")), **SEMANTIC_FLAGS}
 
     def catalog(self) -> list[dict]:
-        return [
-            _definition("inspect_source", "Inspect up to 12 frozen drawing regions per call, returning source-supported hypotheses and preserved alternatives. Without section_ids, inspect the next uninspected batch. Candidate identity remains unapproved.",
-                        {"section_ids": {"type": "array", "items": {"type": "string", "maxLength": 256},
-                                         "minItems": 1, "maxItems": 300, "uniqueItems": True}}),
-            _definition("select_contours", "Select already inspected source-bound candidate IDs. This creates a reversible provisional revision; it does not establish contour identity or approve geometry.",
-                        {"selections": {"type": "array", "minItems": 1, "maxItems": 300,
-                            "items": {"type": "object", "properties": {
-                                "section_id": {"type": "string", "maxLength": 256},
-                                "candidate_id": {"type": "string", "maxLength": 64}},
-                                "required": ["section_id", "candidate_id"], "additionalProperties": False}}},
-                        ["selections"]),
-            _definition("build_provisional", "Run the unchanged, fail-closed drawing/CAD engine in an isolated worker using the current explicit candidate selections. Keep the last valid candidate if this attempt fails."),
-            _definition("build_draft", "Build a best-effort draft after full inspection: take the best-scoring line where a section is ambiguous and span unreadable stations. Each such choice is recorded as an open guess. A draft is never verified and cannot be finished for review until a person resolves every guess."),
-            _definition("propose_section", PROPOSE_SECTION_DESCRIPTION, PROPOSE_SECTION_PROPERTIES,
-                        ["section_id", "form", "basis"]),
-            _definition("render_candidate", "Reimport a verified exported STEP file and render a named physical view. Output identifies the revision and whether it is an older preserved candidate.",
-                        {"view": {"type": "string", "enum": list(VIEWS)}}, ["view"]),
-            _definition("validate_candidate", "Verify the current immutable run and independently reimport STEP. Report source-to-CAD section checks and remaining semantic review obligations; never grant engineering approval."),
-        ]
+        from .tool_catalog import catalog
+        return [{key: tool[key] for key in ("name", "description", "parameters")}
+                for tool in catalog() if tool["python_catalog"]]
 
     def _arguments(self, name, arguments):
         if not isinstance(arguments, dict) or len(json.dumps(arguments, allow_nan=False)) > 65536:
