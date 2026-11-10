@@ -277,11 +277,13 @@ fn apply_worker(
     }
     store::verify_domain_identity(&store.path, &domain)?;
     store::verify_artifact_values(&store.path, &result, &mut 0)?;
-    if store
-        .state
-        .source_manifest_sha256
-        .as_deref()
-        .is_some_and(|h| Some(h) != domain["source_manifest_sha256"].as_str())
+    // Only this person action can publish a new source manifest.
+    if pending.operation != "replace_sheet"
+        && store
+            .state
+            .source_manifest_sha256
+            .as_deref()
+            .is_some_and(|h| Some(h) != domain["source_manifest_sha256"].as_str())
     {
         return Err("worker_source_changed".into());
     }

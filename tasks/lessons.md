@@ -157,3 +157,9 @@
 - **Trigger:** Cross-view outlier replay wrote a 5.2 MB derived JSON file under `outputs/`; the user asked to move it to ignored `work/` before committing.
 - **Rule:** Write per-run derived replay JSON and logs to git-ignored `work/`, including the script's default output path. Commit the replay code, tests and concise result tables, not the per-run data.
 - **Why:** Reproducible measurement output is not a source deliverable and need not enlarge repository history.
+
+### Keep sheet replacement separate from source classification
+- **Date:** 2026-11-10
+- **Trigger:** Recovery must accept a clearer scan without discarding the old draft or reusing its old pixel reading.
+- **Rule:** Keep source versions and dependent output state in the run. Record a uniform resolution adjustment explicitly; require new calibration for a changed page shape. Keep unrelated outputs. Leave independent checks not run while draft guesses remain open. Test the single-file picker as well as the worker command.
+- **Why:** A readable replacement is input for another draft revision, not an engineering review.

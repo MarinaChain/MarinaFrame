@@ -70,7 +70,7 @@ impl ActionRegistry {
 /// thread too; its error comes back to the caller before this function returns,
 /// so a busy task or a changed binary shows at once. Later failures are recorded
 /// in the registry and shown as a notice.
-fn spawn_with_store(
+pub(crate) fn spawn_with_store(
     registry: &ActionRegistry,
     task: &Path,
     open: impl FnOnce() -> Result<Store, String> + Send + 'static,

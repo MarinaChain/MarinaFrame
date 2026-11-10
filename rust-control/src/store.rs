@@ -303,7 +303,8 @@ pub fn verify_domain_identity(root: &Path, description: &Value) -> Result<()> {
     if d["version"] != "source_bound_tools_v1" {
         return Err("domain_schema".into());
     }
-    let input = util::safe_file(root, "domain/input/spec.json")?;
+    let input_name = d["active_spec_file"].as_str().unwrap_or("spec.json");
+    let input = util::safe_file(root, &format!("domain/input/{input_name}"))?;
     let input_hash = d["input_spec_sha256"]
         .as_str()
         .ok_or("input_spec_binding")?;

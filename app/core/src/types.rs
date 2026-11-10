@@ -219,6 +219,9 @@ pub struct NoticeView {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct TaskView {
+    /// Per-sheet recovery state and requests. Absent on older runs.
+    #[serde(default)]
+    pub sheet_review: Value,
     pub summary: TaskSummary,
     pub revision: Option<String>,
     pub source_page: Option<SourcePage>,

@@ -80,11 +80,11 @@ function tauriTransport(tauri) {
     pickFile({ title, defaultPath } = {}) {
       return openDialog({ title, defaultPath });
     },
-    async pickDrawingFiles() {
+    async pickDrawingFiles({ multiple = true } = {}) {
       if (!tauri.dialog?.open) return [];
       const picked = await tauri.dialog.open({
-        title: 'Choose a drawing set',
-        multiple: true,
+        title: multiple ? 'Choose a drawing set' : 'Replace sheet',
+        multiple,
         filters: [{ name: 'Drawings', extensions: DRAWING_EXTENSIONS }],
       });
       if (!picked) return [];
@@ -181,11 +181,11 @@ function httpTransport() {
     },
     pickFolder: async () => null,
     pickFile: async () => null,
-    pickDrawingFiles() {
+    pickDrawingFiles({ multiple = true } = {}) {
       return new Promise((resolve, reject) => {
         const input = document.createElement('input');
         input.type = 'file';
-        input.multiple = true;
+        input.multiple = multiple;
         input.accept = DRAWING_EXTENSIONS.map((ext) => `.${ext}`).join(',');
         input.addEventListener('change', () => {
           Promise.all([...(input.files || [])].map(uploadDrawing)).then(resolve, reject);
@@ -570,6 +570,28 @@ function mockTransport() {
   const MOCK_SLOTS = 3;
   const mockQueue = [];
   const commands = {
+    async replace_sheet(data, { task, sheet_id, file }) {
+      requireTask(data, task);
+      if (!isDrawingFileName(file)) throw new BackendError('sheet_file_type', 'Choose a drawing file.');
+      const view = data.views[task];
+      const review = view.sheet_review;
+      const sheet = review?.sheets.find(s => s.id === sheet_id);
+      if (!sheet) throw new BackendError('sheet_not_found', 'This run has no such sheet.');
+      const previous = view.revision;
+      sheet.status = 'replaced';
+      sheet.reason = '';
+      sheet.version = (sheet.version || 1) + 1;
+      for (const request of review.requests) {
+        if (request.sheet_id === sheet_id) request.status = 'answered';
+      }
+      for (const output of review.outputs) {
+        if (output.sheet_ids.includes(sheet_id)) output.status = 'draft';
+      }
+      view.revision = `r${Number(String(previous).replace('r', '')) + 1}`;
+      review.history.push({ sheet_id, label: sheet.label, previous_revision_id: previous,
+        revision_id: view.revision, stages: ['read', 'build', 'render', 'check'], status: 'draft', engineering_approved: false });
+      emit(task, Date.now());
+    },
     async list_tasks(data) {
       // With ?mockempty the runs folder has no runs (a first start).
       if (new URLSearchParams(location.search).has("mockempty")) return data.tasks.filter((t) => t.task === sampleTask).map((t) => ({ ...t, status: "running" }));
@@ -1091,7 +1113,8 @@ function mockTransport() {
     async pickFile({ defaultPath } = {}) {
       return defaultPath || '/usr/local/bin/python3';
     },
-    async pickDrawingFiles() {
+    async pickDrawingFiles({ multiple = true } = {}) {
+      if (!multiple) return [MOCK_DRAWING_SET[0]];
       // With ?mockset=N (2 to 16) the set is N scanned sheets plus the PDF: a customer's full set.
       const sheets = Number(new URLSearchParams(location.search).get('mockset'));
       if (sheets >= 2 && sheets <= 16) {
@@ -1168,8 +1191,8 @@ export function onFileDrop(handlers) {
  * Ask for the files of a drawing set (several at once). Resolves to their paths for
  * prepare_intake, or an empty list (cancelled or unsupported).
  */
-export function pickDrawingFiles() {
-  return transport.pickDrawingFiles();
+export function pickDrawingFiles(options) {
+  return transport.pickDrawingFiles(options);
 }
 
 /** True when the file name has a drawing set extension (PDF, PNG, TIFF, JPEG). */

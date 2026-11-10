@@ -207,17 +207,27 @@ class DomainTools(InvestigationTools):
                  "rendered_views": [], "input_errors": validation}
         if intake is not None:
             state.update(sheet_only=True, intake=intake)
+        from .sheet_review import initial_state, capture_intake
+        state["sheet_review"] = initial_state(sources)
+        if intake is not None:
+            capture_intake(state["sheet_review"], load_bounded_json(destination / INTAKE_FILE),
+                           destination, spec_path.parent)
         write_json(self.state_path, state)
 
     def _verify_inputs(self):
         self.revision_id  # Reject malformed checkpoint revisions before any operation.
-        path = safe_relative_file(self.root, "input/spec.json")
+        path = safe_relative_file(self.root / "input", self.state.get("active_spec_file", "spec.json"))
         if digest_file(path) != self.state["input_spec_sha256"]:
             raise ValueError("Captured specification changed after task admission.")
         for item in self.state["sources"].values():
             source = safe_relative_file(self.root / "input", item["file"])
             if digest_file(source) != item["sha256"]:
                 raise ValueError("Captured drawing changed after task admission.")
+        for sheet in self.state.get("sheet_review", {}).get("sheets", []):
+            if sheet.get("file") and sheet.get("sha256"):
+                source = safe_relative_file(self.root / "input", sheet["file"])
+                if digest_file(source) != sheet["sha256"]:
+                    raise ValueError("A captured sheet changed after admission.")
         if self.state.get("intake"):
             record = safe_relative_file(self.root / "input", self.state["intake"]["file"])
             if digest_file(record) != self.state["intake"]["sha256"]:
@@ -235,12 +245,12 @@ class DomainTools(InvestigationTools):
     @property
     def spec_path(self) -> Path:
         """The spec file whose sections the tools use (materialized when present)."""
-        name = MATERIALIZED_SPEC if self.state.get("materialized_spec_sha256") else "spec.json"
+        name = MATERIALIZED_SPEC if self.state.get("materialized_spec_sha256") else self.state.get("active_spec_file", "spec.json")
         return self.root / "input" / name
 
     def intake_hints(self) -> list[dict]:
         """Proposed view regions of the source page from the intake record, if any."""
-        if not self.state.get("intake"):
+        if not self.state.get("intake") or self.state.get("replacement_source"):
             return []
         record = load_bounded_json(self.root / "input" / self.state["intake"]["file"])
         page = next((p for p in record.get("pages", []) if p.get("page_id") == record.get("spec_page_id")), None)
@@ -375,7 +385,7 @@ class DomainTools(InvestigationTools):
             raise ToolInputError("Tool arguments must be a bounded JSON object.")
         expected = {"inspect_source": {"section_ids"}, "select_contours": {"selections"},
                     "build_provisional": set(), "build_draft": set(), "build_first_hull": set(),
-                    "correct_calibration": {"correction"}, "render_candidate": {"view"},
+                    "correct_calibration": {"correction"}, "replace_sheet": {"sheet_id", "file"}, "render_candidate": {"view"},
                     "validate_candidate": set(), "propose_section": PROPOSE_SECTION_ARGUMENTS,
                     **INVESTIGATION_ARGUMENTS}
         if name not in expected:
@@ -455,6 +465,10 @@ class DomainTools(InvestigationTools):
                     result["current_candidate_catalog"] = candidate_catalog(section, self.state["catalog"].get(sid, {}))
             return result
         except (ValueError, OSError, TypeError, KeyError, RuntimeError) as exc:
+            if tool_name == "replace_sheet":
+                return self._observation(False, "replacement_needs_input",
+                    message="The replacement could not be read with this page and scale. Choose a readable drawing.",
+                    error_code="replacement_file_invalid")
             return self._observation(False, "blocked", error_code="domain_integrity_or_input_error",
                                      exception_type=type(exc).__name__)
 
@@ -566,7 +580,13 @@ class DomainTools(InvestigationTools):
                 **candidate_feedback(s, next((c for c in self.state["catalog"].get(s["id"], {}).get("candidates", [])
                     if c["candidate_id"] == chosen.get(s["id"])), {}))}
                 for s in self.spec["sections"] if chosen.get(s["id"])]
+        from .sheet_review import record_operation
+        record_operation(self, tool_name, result)
         return result
+
+    def _replace_sheet(self, sheet_id, file):
+        from .sheet_review import replace_sheet
+        return replace_sheet(self, sheet_id, file)
 
     def _observation(self, ok, status, **values):
         try:

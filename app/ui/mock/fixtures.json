@@ -1103,6 +1103,62 @@
      "policy_version": 3,
      "trace_fidelity_mm": 0.86
     }
+   },
+   "sheet_review": {
+    "sheets": [
+     {
+      "id": "ga",
+      "label": "GA",
+      "status": "ok",
+      "reason": "",
+      "version": 1
+     },
+     {
+      "id": "source",
+      "label": "Lines plan",
+      "status": "unreadable",
+      "reason": "Lines too faint.",
+      "version": 1
+     },
+     {
+      "id": "midship",
+      "label": "Midship",
+      "status": "ok",
+      "reason": "",
+      "version": 1
+     }
+    ],
+    "outputs": [
+     {
+      "id": "Hull",
+      "stage": "build",
+      "sheet_ids": [
+       "source"
+      ],
+      "depends_on": [],
+      "status": "stale"
+     },
+     {
+      "id": "Decks",
+      "stage": "build",
+      "sheet_ids": [
+       "ga"
+      ],
+      "depends_on": [],
+      "status": "draft"
+     }
+    ],
+    "requests": [
+     {
+      "id": "clear-lines",
+      "sheet_id": "source",
+      "output_id": "Hull",
+      "who": "Yard",
+      "status": "open",
+      "text": "Send the lines plan in higher resolution."
+     }
+    ],
+    "history": []
    }
   },
   "/Users/demo/MarinaFrame/runs/2026-11-07-harbour-tug": {

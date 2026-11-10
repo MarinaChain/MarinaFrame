@@ -637,3 +637,46 @@ folder (`signoffs.json`); the run and every file stay drafts and `engineering_ap
 
 The part list copy is tab-separated; a text cell that starts with =, +, -, @, a tab or a carriage
 return gets a leading single quote (as `exports/csv_safety.py`); numbers stay numbers.
+
+## Partial runs: replace a sheet and resume
+
+A run stays a draft when one sheet needs attention. `engineering_approved` is
+always false. Sheet state is separate from run state and from drawing type:
+
+| State | Meaning |
+| --- | --- |
+| `ok` | The sheet can be read. This does not confirm its content or scale. |
+| `unreadable` | The sheet or its dependent stage could not be read; show one reason. |
+| `wrong_scale` | A scale problem was reported; retain the draft and request a correction. |
+| `missing` | A requested sheet has not arrived. Other work can continue. |
+| `replaced` | A new source version was supplied. Its stage results still need review. |
+
+The domain checkpoint holds `sheet_review`: sheets, outputs, requests, and
+history. A sheet has a stable id, label, state, reason, source file, hash, and
+source version. Each output names its stage, source sheet ids, and upstream
+output ids. Output state is `draft`, `stale`, or `failed`. These records describe
+actual worker stages, not sheet classification. Existing source roles are used
+as ids. Extra intake pages can be shown without claiming that a hull used them.
+
+`replace_sheet(task, sheet_id, file)` is a person action. The app copies the
+chosen file to a task-owned inbox. The worker checks the file type and decodes
+the selected page before it changes the run. It then saves the bytes under a
+new hash-bound source name and writes a new active specification. Old source
+files, specifications, revision snapshots, and builds remain on disk.
+
+Replacement marks outputs that name the sheet stale, then follows downstream
+output dependencies. Resume reruns only this closure, in stage order. The
+current hull path reads sections, builds a draft, renders, and checks it; an
+unrelated sheet does not trigger that path. Failed stages leave their outputs
+stale or failed, retain the previous draft, and create an open request. A later
+replacement retries those stages. A replacement never grants engineering review.
+For calibrated inputs, a uniform resolution change rescales pixel regions and
+pixels per metre by the same recorded factor. A changed page shape needs a new
+calibration. Open draft guesses leave independent checks `not_run`.
+
+History records the old and new source hashes, revision ids, retained state
+snapshot, rerun stages, and outcome. The run page shows a compact sheet strip,
+one short reason per bad sheet, and Replace. A requests panel shows `open` or
+`answered`, the person or team asked (`who`), the sheet, and the blocked output.
+A replacement answers requests for that sheet; any remaining stage failure
+opens a new request. “Send later” leaves the request open and the draft usable.
