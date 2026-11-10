@@ -52,6 +52,10 @@ CPU_POLL_SECONDS = 1.0
 # fabricated progress and repeated waiting cannot extend a child beyond four hours.
 # Own-code CAD workers supervised by Rust retain no default absolute wall limit.
 SANDBOX_MODEL_WALL_SECONDS = 4 * 60 * 60
+# SIGKILL delivery can race group exit on macOS. Retry briefly, keeping the
+# leader unreaped until no live group member remains; never infer that from the leader alone.
+SANDBOX_KILL_ATTEMPTS = 5
+SANDBOX_KILL_RETRY_SECONDS = 0.02
 
 
 def safe_worker_environment() -> dict[str, str]:
@@ -398,14 +402,21 @@ def supervise_process(command: list[str], *, limits: WorkerLimits = DEFAULT_LIMI
     if state == 'sandbox_safety_cap':
         # Popen created this session, and waitid above has not reaped its leader.
         # That unreaped child pins the PID/group identity even when ps is unavailable.
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        except PermissionError:
-            # macOS can refuse a signal when only the zombie leader remains.
-            if not child_has_exited(process.pid):
-                raise
+        for attempt in range(SANDBOX_KILL_ATTEMPTS):
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                break
+            except PermissionError:
+                if sys.platform != 'darwin':
+                    raise
+            # EPERM can mean only zombies remain, but an exited leader alone
+            # cannot prove that. The group check also fails closed if ps fails.
+            if sys.platform != 'darwin' or not _darwin_group_has_live_member(process.pid):
+                break
+            if attempt + 1 == SANDBOX_KILL_ATTEMPTS:
+                raise PermissionError('Sandbox security limit reached; the process group still has live members.')
+            time.sleep(SANDBOX_KILL_RETRY_SECONDS)
     else:
         kill_process_tree(identity, 0.02 if state == 'exited' else limits.termination_grace_seconds)
     returncode = process.wait(timeout=3)

@@ -163,6 +163,7 @@ def test_supervisor_absolute_cap_applies_only_to_sandboxed_model_code(monkeypatc
     monkeypatch.setattr(isolation, 'process_identity', lambda pid: None)
     monkeypatch.setattr(isolation, 'child_has_exited', lambda pid: clock[0] > 2 * isolation.SANDBOX_MODEL_WALL_SECONDS)
     monkeypatch.setattr(isolation, 'kill_process_tree', lambda *a: False)
+    monkeypatch.setattr(isolation, '_darwin_group_has_live_member', lambda pid: False)
     monkeypatch.setattr(isolation.os, 'killpg', lambda group, sig: killed.append((group, sig)))
     monkeypatch.setattr(isolation.time, 'monotonic', lambda: clock[0])
     monkeypatch.setattr(isolation.time, 'sleep', lambda _: clock.__setitem__(0, clock[0] + isolation.SANDBOX_MODEL_WALL_SECONDS))
@@ -182,8 +183,60 @@ def test_security_cap_stops_a_live_child_without_process_inspection(monkeypatch)
     from vessel_reconstruction import isolation
     monkeypatch.setattr(isolation, 'SANDBOX_MODEL_WALL_SECONDS', 0.05)
     monkeypatch.setattr(isolation, 'process_identity', lambda pid: None)
+    # This controlled child only sleeps and never forks. Simulate the group
+    # inspection that the host sandbox blocks; still send and verify a real SIGKILL.
+    monkeypatch.setattr(isolation, '_darwin_group_has_live_member', lambda pid: not isolation.child_has_exited(pid))
     result = isolation.supervise_process(
         [sys.executable, '-c', 'import time; time.sleep(20)'], sandboxed_model_code=True)
     assert result['state'] == 'sandbox_safety_cap'
     assert result['exit_code'] == -isolation.signal.SIGKILL
     assert result['elapsed_seconds'] < 3
+
+
+@pytest.mark.parametrize('child_survives', [False, True])
+def test_security_cap_retries_a_group_with_an_exited_leader_and_live_child(monkeypatch, child_survives):
+    from vessel_reconstruction import isolation
+    clock = [0.0]
+    signals, group_checks, reaped = [], [], []
+
+    class Child:
+        pid = 12345
+
+        def wait(self, timeout):
+            reaped.append(True)
+            return 0
+
+    def leader_exited(pid):
+        # Alive when supervision first checks; a zombie by the first SIGKILL.
+        return bool(signals)
+
+    def refuse_signal(group, sig):
+        assert (group, sig) == (Child.pid, isolation.signal.SIGKILL)
+        signals.append(True)
+        raise PermissionError('controlled signal refusal')
+
+    def group_alive(group):
+        assert group == Child.pid and leader_exited(group)
+        group_checks.append(True)
+        return child_survives or len(signals) < 2
+
+    monkeypatch.setattr(isolation.sys, 'platform', 'darwin')
+    monkeypatch.setattr(isolation.subprocess, 'Popen', lambda *a, **k: Child())
+    monkeypatch.setattr(isolation, 'process_identity', lambda pid: None)
+    monkeypatch.setattr(isolation, 'child_has_exited', leader_exited)
+    monkeypatch.setattr(isolation, '_darwin_group_has_live_member', group_alive)
+    monkeypatch.setattr(isolation.os, 'killpg', refuse_signal)
+    monkeypatch.setattr(isolation.time, 'monotonic', lambda: clock[0])
+    monkeypatch.setattr(isolation.time, 'sleep', lambda seconds: clock.__setitem__(0, clock[0] + seconds))
+    monkeypatch.setattr(isolation, 'SANDBOX_MODEL_WALL_SECONDS', 0)
+    if child_survives:
+        with pytest.raises(PermissionError, match='live'):
+            isolation.supervise_process(['controlled-child'], sandboxed_model_code=True)
+        assert len(signals) == isolation.SANDBOX_KILL_ATTEMPTS
+        assert not reaped, 'retain group identity while cleanup is unproven'
+    else:
+        result = isolation.supervise_process(['controlled-child'], sandboxed_model_code=True)
+        assert result['state'] == 'sandbox_safety_cap'
+        assert len(signals) == 2
+        assert reaped
+    assert len(group_checks) == len(signals)

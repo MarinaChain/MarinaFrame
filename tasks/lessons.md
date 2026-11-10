@@ -6,6 +6,7 @@
 - **Rule:** Track completed work with an increasing counter. A periodic heartbeat must not increase it. After five minutes without new progress, keep the worker alive and offer Keep waiting or Stop. Default the optional absolute safety cap to off; retain CPU, memory and receipt checks.
 - **Why:** Elapsed time depends on machine load. A slow build can still make progress.
 - **Security correction (2026-11-10):** Sandboxed model-code children are untrusted. Read telemetry through non-blocking, no-follow descriptors, require a regular file and validate bounded JSON fields. Trusted supervisors count stage/part changes with a finite advance budget; never trust a child's counter. Keep a four-hour security cap for these children only, with a clear error and no automatic retry. Deterministic own-code CAD retains no default total wall limit.
+- **Cleanup correction (2026-11-10):** A zombie leader does not prove its process group is empty. After a refused group signal on macOS, check for live group members, retry SIGKILL within a fixed bound, and raise if cleanup remains unproven. Keep the leader unreaped until that check succeeds.
 
 ### Freeze executable and Python source for concurrent evaluation
 - **Date:** 2026-11-08
