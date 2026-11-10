@@ -22,6 +22,7 @@ import { createShortcutSheet } from './shortcuts.js';
 import { DETAILS_KEY, isDetailsOpen, storedDetails, reviewBadge, toggleNames, TAB_META, tabName } from './details.js';
 import { createParts, partState } from './parts.js';
 import { createExport } from './export.js';
+import { createSources } from './sources.js';
 import { capacityRowOf } from './tanks.js';
 import { createUsage } from './usage.js';
 import { createBatch } from './batch.js';
@@ -59,7 +60,7 @@ const state = {
   lastSequence: 0,
   sectionId: null,
   tab: 'timeline',
-  vesselTab: 'run', // run | export | history: the vessel tabs in the title bar
+  vesselTab: 'run', // run | parts | sources | export | history: the vessel tabs in the title bar
   aiStatus: null,
   busy: null, // plain-language description of the running action
   settings: null,
@@ -710,9 +711,9 @@ function renderActions() {
   renderVesselPage();
 }
 
-// ---------------------------------------------------------------- vessel tabs: Run | Export | History
+// ---------------------------------------------------------------- vessel tabs: Run | Parts | Sources | Export | History
 
-const VESSEL_TABS = ['run', 'parts', 'export', 'history'];
+const VESSEL_TABS = ['run', 'parts', 'sources', 'export', 'history'];
 
 function setVesselTab(tab) {
   if (!VESSEL_TABS.includes(tab)) return;
@@ -739,6 +740,20 @@ function renderVesselPage() {
   if (tab === 'export') exporter.show(state.task, state.view, toCheckCount(state.view), partsToCheck(state.view));
   if (tab === 'history') renderHistory();
   if (tab === 'parts') parts.show(state.view);
+  if (tab === 'sources') sources.show(state.task, sourcesKey(state.view));
+}
+
+/** Changes when the run's files may have changed: a new revision or a replaced sheet. */
+function sourcesKey(view) {
+  return `${view?.revision ?? ''}|${view?.sheet_review?.history?.length ?? 0}`;
+}
+
+/** The inspector's Sources tab: the compact list; a pick opens the file on the Sources page. */
+function renderSourcesPanel() {
+  sources.showPanel($('panel-sources'), state.task, sourcesKey(state.view), (id) => {
+    setVesselTab('sources');
+    sources.select(id, { focus: true });
+  });
 }
 
 /** History: every run of this vessel, newest first. */
@@ -1326,7 +1341,7 @@ async function chooseLine(section, candidate) {
 
 // ---------------------------------------------------------------- inspector: tabs
 
-const TABS = ['thinking', 'timeline', 'checks', 'model', 'evidence'];
+const TABS = ['thinking', 'timeline', 'checks', 'model', 'evidence', 'sources'];
 
 function selectTab(tab, { focus = false } = {}) {
   state.tab = tab;
@@ -1338,6 +1353,7 @@ function selectTab(tab, { focus = false } = {}) {
     button.tabIndex = selected ? 0 : -1;
     $(`panel-${name}`).hidden = !selected;
   }
+  if (tab === 'sources') renderSourcesPanel();
   if (focus) $(`tab-${tab}`).focus();
 }
 
@@ -1364,6 +1380,7 @@ function renderTabs() {
   renderChecks();
   renderModelCalls();
   renderEvidence();
+  if (state.tab === 'sources') renderSourcesPanel();
 }
 
 function eventRow(event, fresh = false) {
@@ -2354,6 +2371,8 @@ const exporter = createExport({
   invoke,
   captureView: (task, revision) => (state.task === task && state.modelKey?.startsWith(`${task}|${revision}|`) ? model.captureImage() : null),
 });
+// Sources tab (js/sources.js): the files the run was given, and a large view of each page.
+const sources = createSources({ host: $('vessel-page-sources'), invoke });
 // Parts tab (js/parts.js): whole-vessel components with per-part review.
 /** After a part review or a sign-off: Home cards and the open run read the change. Passes the result on. */
 function afterPartsChange(result) {
@@ -2515,6 +2534,7 @@ function paletteCommands() {
     for (const part of state.view.components || []) {
       add('Parts', part.label, () => { setVesselTab('parts'); parts.selectPart(part.id); }, { hint: partState(part).word });
     }
+    add('This vessel', 'Sources', () => setVesselTab('sources'), { hint: 'drawings, sheets and spec inputs' });
     add('This vessel', 'Export', () => setVesselTab('export'), { hint: 'STEP, STL, offsets, hydrostatics, report' });
     add('This vessel', 'History', () => setVesselTab('history'));
     add('Layout', 'Drawing only', () => setLayout('drawing'), { keys: '⌘1' });

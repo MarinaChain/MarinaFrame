@@ -17,6 +17,7 @@ from .cad_exports import export_iges
 from .progress import report as report_progress
 from .rhino_exports import CadPart, export_3dm
 from .errors import GeometryError
+from .resources import ResourceLimitError
 
 
 CAD_CONSTRUCTION_METHOD = "bounded_source_knots_ruled_panels_v3"
@@ -765,29 +766,47 @@ def export_geometry(shape: cq.Shape, out: Path, *, export_cad: bool = True,
     (out / "mesh.json").write_text(json.dumps(mesh, separators=(",", ":"), allow_nan=False), encoding="utf-8")
     exports = {"mesh": "mesh.json", "mesh_units": "m"}
     if export_cad:
-        report_progress('Exporting STEP', 1, 4, unit='format')
-        shape.exportStep(str(out / "model.step"), write_pcurves=False)
-        report_progress('Exporting IGES', 2, 4, unit='format')
-        export_iges(shape, out / "model.iges")
-        report_progress('Exporting 3dm', 3, 4, unit='format')
-        export_3dm([CadPart("hull", shape, "Hull")], out / "model.3dm")
-        report_progress('Exporting STL', 4, 4, unit='format')
-        shape.exportStl(str(out / "model.stl"), tolerance=tolerance_mm, angularTolerance=0.15,
-                        relative=False, parallel=False)
-        report_progress('Checking the STEP export')
-        reread = cq.importers.importStep(str(out / "model.step")).val()
-        if not reread.isValid() or len(reread.Solids()) != expected_solids:
-            raise GeometryError("The exported STEP file failed independent reload validation.")
-        reloaded = metrics_for(reread)
-        rel = abs(reloaded["volume_m3"] - metrics["volume_m3"]) / metrics["volume_m3"]
-        extent_error = max(abs(reloaded[k] - metrics[k]) / max(metrics[k], 1e-12) for k in ("length_m", "beam_m", "depth_m"))
-        if rel > 1e-6 or extent_error > 1e-6:
-            raise GeometryError("STEP round-trip altered geometry or units beyond tolerance.")
-        metrics["step_roundtrip_relative_error"] = float(rel)
-        metrics["step_roundtrip_extent_error"] = float(extent_error)
-        exports.update({"step": "model.step", "step_units": "mm", "stl": "model.stl", "stl_units": "mm"})
-        exports.update({"iges": "model.iges", "iges_units": "mm"})
-        exports.update({"3dm": "model.3dm", "3dm_units": "mm"})
+        def write_step(path):
+            shape.exportStep(str(path), write_pcurves=False)
+            report_progress('Checking the STEP export')
+            reread = cq.importers.importStep(str(path)).val()
+            if not reread.isValid() or len(reread.Solids()) != expected_solids:
+                raise GeometryError("The exported STEP file failed independent reload validation.")
+            reloaded = metrics_for(reread)
+            rel = abs(reloaded["volume_m3"] - metrics["volume_m3"]) / metrics["volume_m3"]
+            extent_error = max(abs(reloaded[k] - metrics[k]) / max(metrics[k], 1e-12)
+                               for k in ("length_m", "beam_m", "depth_m"))
+            if rel > 1e-6 or extent_error > 1e-6:
+                raise GeometryError("STEP round-trip altered geometry or units beyond tolerance.")
+            metrics["step_roundtrip_relative_error"] = float(rel)
+            metrics["step_roundtrip_extent_error"] = float(extent_error)
+
+        writers = (("step", write_step),
+                   ("iges", lambda path: export_iges(shape, path)),
+                   ("3dm", lambda path: export_3dm([CadPart("hull", shape, "Hull")], path)),
+                   ("stl", lambda path: shape.exportStl(str(path), tolerance=tolerance_mm,
+                                                        angularTolerance=0.15, relative=False, parallel=False)))
+        results = {}
+        for index, (format_name, writer) in enumerate(writers, 1):
+            report_progress(f'Exporting {format_name.upper()}', index, len(writers), unit='format')
+            path = out / f"model.{format_name}"
+            try:
+                outcome = writer(path)
+                if outcome is False:
+                    raise GeometryError(f"The {format_name.upper()} writer reported a failure.")
+                if not path.is_file() or path.stat().st_size == 0:
+                    raise GeometryError(f"The {format_name.upper()} writer produced no file.")
+            except ResourceLimitError:
+                raise
+            except Exception as error:
+                path.unlink(missing_ok=True)
+                reason = str(error).strip() or type(error).__name__
+                results[format_name] = {"status": "failed", "reason": reason[:1000]}
+            else:
+                exports[format_name] = path.name
+                exports[f"{format_name}_units"] = "mm"
+                results[format_name] = {"status": "ok", "reason": None}
+        metrics["export_results"] = results
     metrics["mesh_vertices"] = len(vertices)
     metrics["mesh_faces"] = len(faces)
     metrics["mesh_deflection_mm"] = float(tolerance_mm)

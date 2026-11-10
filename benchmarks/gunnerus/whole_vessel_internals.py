@@ -881,19 +881,47 @@ def component_entry(part: Part, solid) -> dict:
             'engineering_approved': False}
 
 
+def write_internals_display(meshes: dict, parts: list[Part], base: Path, target: Path, *,
+                            task: Path | None = None, revision: str | None = None) -> None:
+    """Write the combined display and carry its explicit build binding forward."""
+    from vessel_reconstruction.display_mesh import write_glb
+    from vessel_reconstruction.display_provenance import (
+        bind_display_output, check_display_record, display_record_path, write_display_record,
+    )
+
+    binding = bind_display_output(target, task, revision)
+    if Path(base).resolve() == Path(target).resolve():
+        raise ValueError("The internals display must not replace its input assembly.")
+    if binding is not None:
+        _, reason = check_display_record(base, binding)
+        if reason is not None:
+            raise ValueError(f"Cannot bind the internals display: {reason}.")
+    display_record_path(target).unlink(missing_ok=True)
+    write_glb(meshes, target, part_styles(parts), base=base)
+    if binding is not None:
+        _, reason = check_display_record(base, binding)
+        if reason is not None:
+            raise ValueError(f"The input assembly changed during display production: {reason}.")
+        write_display_record(target, binding)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--sources', type=Path, required=True)
     parser.add_argument('--assembly', type=Path, required=True, help='step 1 assembly folder (whole_vessel/, GLB)')
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--truth-mesh', type=Path, help='truth_mesh.npz for the containment metric G4')
+    parser.add_argument('--task', type=Path, help='Task whose build the display model belongs to')
+    parser.add_argument('--revision', help='Revision of the task build')
     args = parser.parse_args()
+    if (args.task is None) != (args.revision is None):
+        parser.error('--task and --revision must be supplied together')
     import cadquery as cq
-
-    from vessel_reconstruction.display_mesh import write_glb
+    from vessel_reconstruction.display_provenance import bind_display_output
 
     started = time.time()
     out = args.out.resolve()
+    binding = bind_display_output(out / 'whole-vessel-draft.glb', args.task, args.revision)
     out.mkdir(parents=True, exist_ok=False)
     glb = args.assembly / 'whole-vessel-draft.glb'
     slicer = HullSlicer(hull_triangles_from_glb(glb))
@@ -911,7 +939,10 @@ def main() -> None:
         components.append(component_entry(part, solid))
     record['result']['components'] = components
     (folder / 'execution.json').write_text(json.dumps(record, indent=2) + '\n')
-    write_glb(meshes, out / 'whole-vessel-draft.glb', part_styles(parts), base=glb)
+    if binding != bind_display_output(out / 'whole-vessel-draft.glb', args.task, args.revision):
+        raise ValueError('The selected build changed while making the internals model.')
+    write_internals_display(meshes, parts, glb, out / 'whole-vessel-draft.glb',
+                            task=args.task, revision=args.revision)
     capacity = write_tank_outputs(parts, out)
     summary = {'engineering_approved': False, 'status': 'draft_only', 'reading': reading,
                'capacity_plan': capacity,

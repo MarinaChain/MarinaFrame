@@ -48,7 +48,9 @@ jobs:
   test:
     name: Locked Linux / Python 3.12.14
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    # Measured 2026-11-10: 15-25 min (869-1516 s); two runs hit the old 25 min
+    # limit in the last install smoke step. 45 min leaves room for runner variance.
+    timeout-minutes: 45
     env:
       MARINAFRAME_REQUIRE_WORKER: '1'
     steps:

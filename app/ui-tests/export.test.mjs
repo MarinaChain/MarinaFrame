@@ -30,6 +30,31 @@ test('CAD formats have the requested short names and tooltip details', () => {
   }
 });
 
+test('a failed format shows the reason while other files stay available', async () => {
+  const host = new FakeNode('div');
+  const page = createExport({ host, invoke: async () => ({
+    files: [{ kind: 'step', file: 'model.step', path: '/task/model.step', bytes: 100 }],
+    folder: '/task/exports/r0003', not_built: ['iges'],
+    format_results: { iges: { status: 'failed', reason: 'IGES writer failed' } },
+  }) });
+  await page.show('/task', { revision: 'r0003', summary: { status: 'draft' } });
+  const iges = host.findAll((node) => node.dataset.kind === 'iges')[0];
+  assert.match(iges.textContent, /IGES writer failed/);
+  const step = host.findAll((node) => node.dataset.kind === 'step')[0];
+  assert.ok(step.findAll((node) => node.className === 'export-size').length);
+});
+
+test('the package row explains an omitted revision-mismatched display', async () => {
+  const host = new FakeNode('div');
+  const page = createExport({ host, invoke: async () => ({
+    files: [], folder: '/task/exports/r0001', not_built: [],
+    display_omissions: [{ file: 'whole-vessel-draft.glb', reason: "display model belongs to revision 'r0002'" }],
+  }) });
+  await page.show('/task', { revision: 'r0001', summary: { status: 'draft' } });
+  const row = host.findAll((node) => node.dataset.kind === 'package')[0];
+  assert.match(row.textContent, /whole-vessel-draft\.glb.*r0002/);
+});
+
 test('IGES and 3dm rows show their name and hint, send their kinds, and reveal their files', async () => {
   const host = new FakeNode('div');
   const calls = [];

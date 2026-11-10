@@ -32,15 +32,23 @@ kept in the manifest, because the copies differ from them in the header only.
 from __future__ import annotations
 
 import csv
+import ctypes
+from contextlib import contextmanager
+import hashlib
 import json
+import os
 from pathlib import Path
 import re
+import shutil
+import sys
+import tempfile
 import zipfile
 
 from .. import __version__
 # The module, not its names: ``structure.ocx`` imports ``tanks``, which imports this package.
 from ..structure import ocx
 from ..provenance import digest_file
+from ..resources import ResourceLimitError
 from ..booklet_check import Booklet, compare_booklet, load_booklet, write_comparison_csv
 from .csv_safety import safe_text_cell
 from .hydrostatics import Hydrostatics, design_draft, mesh_hydrostatics, read_stl, table_hydrostatics
@@ -153,7 +161,7 @@ def write_hydrostatics(hydrostatics: Hydrostatics | None, error: str | None, bui
 
 
 def copy_structure_files(structure_dir: Path, out_dir: Path, stem: str,
-                         tanks: list | None = None) -> list[tuple[Path, str, dict]]:
+                         tanks: list | None = None) -> tuple[list[tuple[Path, str, dict]], list[str]]:
     """Copy the steel tables and OCX files of ``structure_dir`` as ``<stem>_<name>``; return their entries.
 
     When ``tanks`` hold built tanks and the folder has exactly one OCX file, that file gets the tanks as
@@ -165,16 +173,25 @@ def copy_structure_files(structure_dir: Path, out_dir: Path, stem: str,
         if role is not None and source.is_file() and not source.is_symlink():
             sources.append((source, role))
     ocx_sources = [source for source, role in sources if role == "ocx_structure"]
-    entries = []
+    entries, failures = [], []
     for source, role in sources:
         target = out_dir / f"{stem}_{source.name}"
         extra = {"source_file": source.name}
-        if ocx_sources == [source] and ocx.add_compartments(source, target, tanks):
-            role, extra["compartments"] = "ocx_structure_tanks", len(ocx.writable_tanks(tanks))
-        else:
-            target.write_bytes(source.read_bytes())
+        try:
+            if ocx_sources == [source] and ocx.add_compartments(source, target, tanks):
+                role, extra["compartments"] = "ocx_structure_tanks", len(ocx.writable_tanks(tanks))
+            else:
+                target.write_bytes(source.read_bytes())
+        except ResourceLimitError:
+            raise
+        except Exception as error:
+            if role != "ocx_structure":
+                raise
+            target.unlink(missing_ok=True)
+            failures.append(str(error).strip() or type(error).__name__)
+            continue
         entries.append((target, role, extra))
-    return entries
+    return entries, failures
 
 
 def write_tanks_ocx(tanks: list, out_dir: Path, stem: str, vessel: str) -> tuple[Path, str, dict]:
@@ -198,6 +215,69 @@ def write_zip(files: list[Path], path: Path) -> None:
             archive.writestr(info, file.read_bytes())
 
 
+def _exchange_directories(first: Path, second: Path) -> None:
+    """Swap two existing directories in one filesystem operation."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    if sys.platform == "darwin":
+        operation = libc.renameatx_np
+        current_directory = -2  # macOS AT_FDCWD
+    elif sys.platform.startswith("linux"):
+        operation = libc.renameat2
+        current_directory = -100  # Linux AT_FDCWD
+    else:
+        raise ExportError("Atomic replacement of an existing package is not supported on this platform.")
+    operation.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    operation.restype = ctypes.c_int
+    # Both systems use 2 for an atomic exchange of the two paths.
+    if operation(current_directory, os.fsencode(first), current_directory, os.fsencode(second), 2) != 0:
+        code = ctypes.get_errno()
+        raise OSError(code, os.strerror(code))
+
+
+@contextmanager
+def _package_stage(target: Path):
+    """Keep the target intact until the complete sibling directory is ready."""
+    # A relative "." otherwise puts the stage inside the directory being copied.
+    target = Path(os.path.abspath(target))
+    if Path.cwd().is_relative_to(target):
+        raise ExportError("The package destination must not replace the current directory.")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.is_symlink() or (target.exists() and not target.is_dir()):
+        raise ExportError("The package target must be a directory, not a symbolic link.")
+    stage = Path(tempfile.mkdtemp(prefix=f".{target.name}.", dir=target.parent))
+    try:
+        if target.exists():
+            if any(path.is_symlink() for path in target.rglob("*")):
+                raise ExportError("The package target must not contain symbolic links.")
+            shutil.copytree(target, stage, dirs_exist_ok=True)
+        yield stage
+        if target.exists():
+            _exchange_directories(stage, target)
+        else:
+            os.rename(stage, target)
+    finally:
+        if stage.exists():
+            shutil.rmtree(stage)
+
+
+def _check_package(stage: Path, manifest: dict) -> None:
+    """Check the staged file hashes and archive contents before publication."""
+    entries = manifest["files"]
+    expected = {entry["file"] for entry in entries} | {manifest["manifest_file"]}
+    for entry in entries:
+        path = stage / entry["file"]
+        if path.stat().st_size != entry["bytes"] or digest_file(path) != entry["sha256"]:
+            raise ExportError(f"Staged package file changed: {entry['file']}.")
+    with zipfile.ZipFile(stage / manifest["package"]["file"]) as archive:
+        if set(archive.namelist()) != expected or len(archive.namelist()) != len(expected):
+            raise ExportError("Staged package archive has an incorrect file list.")
+        for entry in entries:
+            if hashlib.sha256(archive.read(entry["file"])).hexdigest() != entry["sha256"]:
+                raise ExportError(f"Staged package archive differs: {entry['file']}.")
+        if archive.read(manifest["manifest_file"]) != (stage / manifest["manifest_file"]).read_bytes():
+            raise ExportError("Staged package archive has a different manifest.")
+
+
 def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float | None = None,
                  waterline_intervals: int = DEFAULT_WATERLINE_INTERVALS, vessel: str | None = None,
                  tanks: list | None = None, structure_dir: Path | None = None,
@@ -209,6 +289,13 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
     folder. ``booklet`` adds printed hydrostatic comparisons to the CSV, PDF and accuracy line.
     """
     build = load_build(Path(task_dir), revision, vessel)
+    destination = Path(out_dir).resolve()
+    task_root = build.task_dir.resolve()
+    domain = task_root / "domain"
+    if task_root.is_relative_to(destination) or destination.is_relative_to(domain):
+        raise ExportError("The package destination must not replace task or build evidence.")
+    if structure_dir is not None and Path(structure_dir).resolve().is_relative_to(destination):
+        raise ExportError("The package destination must not replace its structure source.")
     identity = manifest_identity(build, tanks, structure_dir)
     booklet_check = None
     if booklet is not None:
@@ -222,77 +309,102 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
             booklet_check = compare_booklet(booklet, **geometry)
         except (ValueError, OSError) as error:
             raise ExportError(f"Cannot check booklet: {error}") from error
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    stem = build.file_stem
-    entries, units_axes = write_spatial(build, identity, tanks, structure_dir, out_dir)
+    with _package_stage(Path(out_dir)) as out_dir:
+        stem = build.file_stem
+        entries, units_axes, glb_result, display_omissions = write_spatial(build, identity, tanks, structure_dir, out_dir)
+        format_results = dict(build.result.get("export_results") or {})
+        if glb_result is not None:
+            format_results["glb"] = glb_result
 
-    offsets = out_dir / f"{stem}_offsets.csv"
-    table = offsets_table(build.sections, build.spec, waterline_intervals)
-    write_offsets_csv(table, offsets, stamp_lines(build))
-    entries.append((offsets, "offsets_table", {}))
+        offsets = out_dir / f"{stem}_offsets.csv"
+        table = offsets_table(build.sections, build.spec, waterline_intervals)
+        write_offsets_csv(table, offsets, stamp_lines(build))
+        entries.append((offsets, "offsets_table", {}))
 
-    hydrostatics, error = compute_hydrostatics(build, draft_m)
-    hydro_json, hydro_csv = out_dir / f"{stem}_hydrostatics.json", out_dir / f"{stem}_hydrostatics.csv"
-    write_hydrostatics(hydrostatics, error, build, hydro_json, hydro_csv)
-    entries += [(hydro_json, "hydrostatics", {}), (hydro_csv, "hydrostatics_table", {})]
+        hydrostatics, error = compute_hydrostatics(build, draft_m)
+        hydro_json, hydro_csv = out_dir / f"{stem}_hydrostatics.json", out_dir / f"{stem}_hydrostatics.csv"
+        write_hydrostatics(hydrostatics, error, build, hydro_json, hydro_csv)
+        entries += [(hydro_json, "hydrostatics", {}), (hydro_csv, "hydrostatics_table", {})]
 
-    if booklet_check is not None:
-        booklet_csv = out_dir / f"{stem}_booklet_check.csv"
-        write_comparison_csv(booklet_check, booklet_csv, stamp_lines(build))
-        entries.append((booklet_csv, "booklet_check", {}))
+        if booklet_check is not None:
+            booklet_csv = out_dir / f"{stem}_booklet_check.csv"
+            write_comparison_csv(booklet_check, booklet_csv, stamp_lines(build))
+            entries.append((booklet_csv, "booklet_check", {}))
 
-    capacity_rows = None
-    if tanks:
-        capacity_rows, tank_entries = write_tank_tables(tanks, out_dir, stem, stamp_lines(build))
-        entries += tank_entries
-    structure_entries = copy_structure_files(Path(structure_dir), out_dir, stem, tanks) if structure_dir else []
-    entries += structure_entries
-    if ocx.writable_tanks(tanks) and not any(role == "ocx_structure_tanks" for _, role, _ in structure_entries):
-        entries.append(write_tanks_ocx(tanks, out_dir, stem, build.vessel))
+        capacity_rows = None
+        if tanks:
+            capacity_rows, tank_entries = write_tank_tables(tanks, out_dir, stem, stamp_lines(build))
+            entries += tank_entries
+        structure_entries, ocx_failures = (copy_structure_files(Path(structure_dir), out_dir, stem, tanks)
+                                           if structure_dir else ([], []))
+        entries += structure_entries
+        if ocx.writable_tanks(tanks) and not any(role == "ocx_structure_tanks" for _, role, _ in structure_entries):
+            try:
+                entries.append(write_tanks_ocx(tanks, out_dir, stem, build.vessel))
+            except ResourceLimitError:
+                raise
+            except Exception as export_error:
+                (out_dir / f"{stem}_tanks.3docx").unlink(missing_ok=True)
+                ocx_failures.append(str(export_error).strip() or type(export_error).__name__)
+        if ocx_failures:
+            format_results["ocx"] = {"status": "failed", "reason": "; ".join(ocx_failures)[:1000]}
+        elif any(role.startswith("ocx_") for _, role, _ in entries):
+            format_results["ocx"] = {"status": "ok", "reason": None}
 
-    report = out_dir / f"{stem}_report.pdf"
-    # The app writes a picture of its 3D view here before the export; without it the report is unchanged.
-    viewer_image = out_dir / VIEWER_CAPTURE_FILE
-    booklet_summary = booklet_check.summary if booklet_check is not None else None
-    write_report(ReportFacts(build, hydrostatics, error, f"MarinaFrame {__version__}", capacity_rows,
-                             accuracy_facts_from_build(build, capacity_rows, structure_dir, booklet_summary),
-                             booklet_check, viewer_image if viewer_image.is_file() else None), report)
-    entries.append((report, "review_report", {}))
+        report = out_dir / f"{stem}_report.pdf"
+        # The app writes a picture of its 3D view here before the export; without it the report is unchanged.
+        viewer_image = out_dir / VIEWER_CAPTURE_FILE
+        booklet_summary = booklet_check.summary if booklet_check is not None else None
+        write_report(ReportFacts(build, hydrostatics, error, f"MarinaFrame {__version__}", capacity_rows,
+                                 accuracy_facts_from_build(build, capacity_rows, structure_dir, booklet_summary),
+                                 booklet_check, viewer_image if viewer_image.is_file() else None), report)
+        entries.append((report, "review_report", {}))
 
-    missing = []
-    for source, suffix, role, stamp in ((build.step_path, "step", "step_model", stamped_step),
-                                        (build.iges_path, "iges", "iges_model", None),
-                                        (build.rhino_path, "3dm", "rhino_model", None),
-                                        (build.stl_path, "stl", "stl_mesh", stamped_stl)):
-        if source is None:
-            missing.append(role)
-            continue
-        target = out_dir / f"{stem}_model.{suffix}"
-        extra = {"source_sha256": digest_file(source)}
-        if stamp is not None:
-            extra["header_stamped"] = stamp(source, target, build)
-        else:
-            # IGES and 3dm already carry draft notes. Preserve their bytes and metadata.
-            target.write_bytes(source.read_bytes())
-            extra["units"] = "mm"
-        entries.append((target, role, extra))
+        missing = []
+        for source, suffix, role, stamp in ((build.step_path, "step", "step_model", stamped_step),
+                                            (build.iges_path, "iges", "iges_model", None),
+                                            (build.rhino_path, "3dm", "rhino_model", None),
+                                            (build.stl_path, "stl", "stl_mesh", stamped_stl)):
+            target = out_dir / f"{stem}_model.{suffix}"
+            if source is None:
+                target.unlink(missing_ok=True)
+                missing.append(role)
+                continue
+            try:
+                extra = {"source_sha256": digest_file(source)}
+                if stamp is not None:
+                    extra["header_stamped"] = stamp(source, target, build)
+                else:
+                    # IGES and 3dm already carry draft notes. Preserve their bytes and metadata.
+                    target.write_bytes(source.read_bytes())
+                    extra["units"] = "mm"
+            except ResourceLimitError:
+                raise
+            except Exception as export_error:
+                target.unlink(missing_ok=True)
+                missing.append(role)
+                format_results[suffix] = {"status": "failed", "reason": (str(export_error).strip() or type(export_error).__name__)[:1000]}
+                continue
+            format_results[suffix] = {"status": "ok", "reason": None}
+            entries.append((target, role, extra))
 
-    manifest = {**identity, "stamp": STAMP, "footer": FOOTER, "datum": DATUM, "engineering_approved": False,
-                "tool": f"MarinaFrame {__version__}", "vessel": build.vessel, "revision": build.revision_id,
-                "run_id": build.result.get("run_id"), "build": build.build_dir.name,
-                "result_sha256": digest_file(build.build_dir / "result.json"),
-                "review_state": (build.result.get("review") or {}).get("state", "unreviewed"),
-                "draft_status": (build.result.get("draft") or {}).get("status"),
-                "open_guesses": sum(1 for g in build.guesses if g.get("status") == "open"),
-                "not_built": missing, "units_axes": units_axes,
-                "files": [file_entry(path, role, root=out_dir, **extra) for path, role, extra in entries]}
-    if booklet_summary is not None:
-        manifest["booklet_check"] = booklet_summary
-    manifest_path = out_dir / f"{stem}_manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    package = out_dir / f"{stem}_package.zip"
-    write_zip([path for path, _, _ in entries] + [manifest_path], package)
-    manifest["package"] = file_entry(package, "package")
-    manifest["manifest_file"] = manifest_path.name
+        manifest = {**identity, "stamp": STAMP, "footer": FOOTER, "datum": DATUM, "engineering_approved": False,
+                    "tool": f"MarinaFrame {__version__}", "vessel": build.vessel, "revision": build.revision_id,
+                    "run_id": build.result.get("run_id"), "build": build.build_dir.name,
+                    "result_sha256": digest_file(build.build_dir / "result.json"),
+                    "review_state": (build.result.get("review") or {}).get("state", "unreviewed"),
+                    "draft_status": (build.result.get("draft") or {}).get("status"),
+                    "open_guesses": sum(1 for g in build.guesses if g.get("status") == "open"),
+                    "not_built": missing, "format_results": format_results, "display_omissions": display_omissions,
+                    "units_axes": units_axes,
+                    "files": [file_entry(path, role, root=out_dir, **extra) for path, role, extra in entries]}
+        if booklet_summary is not None:
+            manifest["booklet_check"] = booklet_summary
+        manifest_path = out_dir / f"{stem}_manifest.json"
+        manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        package = out_dir / f"{stem}_package.zip"
+        write_zip([path for path, _, _ in entries] + [manifest_path], package)
+        manifest["package"] = file_entry(package, "package")
+        manifest["manifest_file"] = manifest_path.name
+        _check_package(out_dir, manifest)
     return manifest

@@ -8,6 +8,7 @@ use marinaframe_app_core::intake::IntakePreview;
 use marinaframe_app_core::live::{HullSections, LiveSteps};
 use marinaframe_app_core::model_usage::ModelUsage;
 use marinaframe_app_core::run_tables::SoundingTableView;
+use marinaframe_app_core::sources::{PreviewSize, SourceList, SourcePreview};
 use marinaframe_app_core::types::*;
 use marinaframe_app_core::{AppError, AppPaths, AppResult, Backend};
 use std::path::PathBuf;
@@ -167,6 +168,27 @@ async fn sounding_table(
     tank_id: String,
 ) -> Result<SoundingTableView, AppError> {
     run(backend, move |b| b.sounding_table(&task, &tank_id)).await
+}
+
+/// Every source file given to the run (Sources tab).
+#[tauri::command(rename_all = "snake_case")]
+async fn list_sources(backend: Shared<'_>, task: String) -> Result<SourceList, AppError> {
+    run(backend, move |b| b.list_sources(&task)).await
+}
+
+/// One page of a listed source as PNG, or a spec input as text.
+#[tauri::command(rename_all = "snake_case")]
+async fn read_source_page(
+    backend: Shared<'_>,
+    task: String,
+    source_id: String,
+    page: u32,
+    size: PreviewSize,
+) -> Result<SourcePreview, AppError> {
+    run(backend, move |b| {
+        b.read_source_page(&task, &source_id, page, size)
+    })
+    .await
 }
 
 /// Show an exported file or the exports folder in Finder.
@@ -468,6 +490,8 @@ fn main() {
             export_run,
             list_exports,
             sounding_table,
+            list_sources,
+            read_source_page,
             reveal_export,
             cancel_task,
             resume_task,

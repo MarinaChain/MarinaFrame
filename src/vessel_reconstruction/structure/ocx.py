@@ -496,6 +496,7 @@ class OcxPlate:
     thickness_m: float | None
     area_m2: float | None  # from the outer contour when it is a polyline, else the printed NetArea
     net_area_m2: float | None
+    contour_points: tuple[tuple[float, float, float], ...] | None = None
 
 
 UNIT_TO_METRES = {"Umm": 1e-3, "Umm2": 1e-6, "Umm3": 1e-9, "Ucm": 1e-2, "Ucm2": 1e-4, "Ucm3": 1e-6}
@@ -517,14 +518,21 @@ def _metres(quantity) -> float | None:
     return float(quantity.get("numericvalue")) * UNIT_TO_METRES.get(quantity.get("unit", "Um"), 1.0)
 
 
-def _contour_area(contour) -> float | None:
+def _contour_points(contour) -> tuple[tuple[float, float, float], ...] | None:
     polylines = [e for e in contour.iter() if _tag(e) == "PolyLine3D"]
     if len(polylines) != 1:
         return None
-    points = [tuple(float(v) for v in p.get("coordinates").split()) for p in polylines[0] if _tag(p) == "Point3D"]
-    if len(points) > 1 and points[0] == points[-1]:
-        points = points[:-1]
-    return polygon_area(points) if len(points) >= 3 else None
+    points = []
+    for point in polylines[0]:
+        if _tag(point) == "Point3D":
+            scale = UNIT_TO_METRES.get(point.get("unit", "Um"), 1.0)
+            values = tuple(float(v) * scale for v in point.get("coordinates").split())
+            if len(values) != 3 or not all(math.isfinite(v) for v in values):
+                return None
+            points.append(values)
+    if len(points) < 4 or points[0] != points[-1]:
+        return None
+    return tuple(points[:-1])
 
 
 @dataclass(frozen=True)
@@ -570,8 +578,9 @@ def read_plates(path: Path) -> list[OcxPlate]:
             thickness = _metres(_child(material, "Thickness")) if material is not None else None
             net = _metres(_child(element, "NetArea"))
             contour = _child(element, "OuterContour")
-            area = _contour_area(contour) if contour is not None else None
-            plates.append(OcxPlate(element.get("name"), thickness, area if area is not None else net, net))
+            points = _contour_points(contour) if contour is not None else None
+            area = polygon_area(points) if points is not None else None
+            plates.append(OcxPlate(element.get("name"), thickness, area if area is not None else net, net, points))
             element.clear()
         elif depth == 0 and tag not in ("ocxXML", "Vessel"):
             element.clear()
@@ -723,7 +732,7 @@ def _stiffener_round_trip(members: list[dict], path: Path) -> dict:
 
 
 def _plate_round_trip(members: list[dict], plates: dict) -> dict:
-    thickness_equal = area_equal = 0
+    thickness_equal = area_equal = contour_equal = 0
     for member in members:
         plate = plates.get(member["member_id"])
         if plate is None:
@@ -731,9 +740,14 @@ def _plate_round_trip(members: list[dict], plates: dict) -> dict:
         thickness = (member["thickness_mm"] or 0.0) / 1000
         if plate.thickness_m is not None and abs(plate.thickness_m - thickness) <= 1e-9:
             thickness_equal += 1
-        expected = member["area_m2"]
-        if plate.net_area_m2 is not None and abs(plate.net_area_m2 - expected) <= 1e-6 * max(1.0, expected):
+        expected_points = member.get("contour") or plate_corners(member["box"])
+        expected = polygon_area(expected_points)
+        if plate.contour_points is not None and abs(polygon_area(plate.contour_points) - expected) <= 1e-6 * max(1.0, expected):
             area_equal += 1
+        # Coordinates are written to six decimal places, so allow one micrometre.
+        if plate.contour_points is not None and len(plate.contour_points) == len(expected_points):
+            if all(math.dist(actual, source) <= 1e-6 for actual, source in zip(plate.contour_points, expected_points)):
+                contour_equal += 1
     return {"members": len(members), "plates_read": len(plates), "count_equal": len(plates) == len(members),
-            "thickness_equal": thickness_equal, "area_equal": area_equal,
-            "all_equal": len(plates) == len(members) == thickness_equal == area_equal}
+            "thickness_equal": thickness_equal, "area_equal": area_equal, "contour_equal": contour_equal,
+            "all_equal": len(plates) == len(members) == thickness_equal == area_equal == contour_equal}

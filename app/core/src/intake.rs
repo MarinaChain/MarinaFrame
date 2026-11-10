@@ -132,7 +132,7 @@ pub struct Worker<'a> {
 
 impl Worker<'_> {
     /// Run `python -m vessel_reconstruction.intake <args>` and parse its JSON output.
-    fn call(&self, args: &[&std::ffi::OsStr]) -> AppResult<serde_json::Value> {
+    pub(crate) fn call(&self, args: &[&std::ffi::OsStr]) -> AppResult<serde_json::Value> {
         if self.python.is_empty() || !Path::new(self.python).is_file() {
             return Err(AppError::from_code("worker_python_missing"));
         }

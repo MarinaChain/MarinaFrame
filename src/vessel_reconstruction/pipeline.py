@@ -207,6 +207,7 @@ def _capture_table_reading(input_spec: dict, replay_spec: dict, base_dir: Path, 
 
 def _discard_geometry(stage: Path, result: dict):
     result.update(exports={}, parts=[], metrics={}, normalized_sections=[])
+    result.pop("export_results", None)
     for name in ("mesh.json", "model.step", "model.stl", "model.iges", "model.3dm", "cad_sections.json", *DRAFT_EXPORT_NAMES.values()):
         (stage / name).unlink(missing_ok=True)
     # Observations are evidence, but cannot be asserted when their required
@@ -455,6 +456,12 @@ def reconstruct(spec_path: str | Path, output_dir: str | Path, *, export_cad: bo
                     # A single-solid run calls the export seam exactly as before.
                     region_export = {"expected_solids": region_report["solid_count"]} if regions else {}
                     exports, metrics = export_geometry(shape, stage, export_cad=export_cad, **region_export)
+                    export_results = metrics.pop("export_results", None)
+                    if export_results is not None:
+                        result["export_results"] = export_results
+                        for format_name, outcome in export_results.items():
+                            if outcome["status"] == "failed":
+                                result["gaps"].append(gap("export_failed", f"{format_name.upper()} export failed: {outcome['reason']}", severity="warning"))
                     if "draft" in result:
                         _tag_draft_exports(stage, exports)
                     from .geometry import approximation_summary

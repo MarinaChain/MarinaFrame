@@ -582,6 +582,32 @@ def save_tanks(tanks: list[Tank], path) -> None:
                         **arrays)
 
 
+def write_tanks_display(tanks: list[Tank], path, *, task=None, revision: str | None = None) -> bool:
+    """Write built tank meshes and bind them to the selected build when supplied."""
+    from pathlib import Path
+    from .display_mesh import tank_style, write_glb
+    from .display_provenance import bind_display_output, display_record_path, write_display_record
+
+    path = Path(path)
+    binding = bind_display_output(path, Path(task) if task is not None else None, revision)
+    display_record_path(path).unlink(missing_ok=True)
+    meshes, styles = {}, {}
+    for tank in tanks:
+        if tank.triangles is None or not len(tank.triangles):
+            continue
+        vertices = np.asarray(tank.triangles, dtype=float).reshape(-1, 3) * 1000
+        faces = np.arange(len(vertices)).reshape(-1, 3)
+        meshes[tank.id] = (vertices, faces)
+        styles[tank.id] = tank_style(tank.name, tank.content, tank.source_labels)
+    if not meshes:
+        path.unlink(missing_ok=True)
+        return False
+    write_glb(meshes, path, styles)
+    if binding is not None:
+        write_display_record(path, binding)
+    return True
+
+
 def load_tanks(path) -> list[Tank]:
     import json
 

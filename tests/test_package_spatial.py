@@ -24,6 +24,12 @@ def display_task(tmp_path):
                       np.arange(model[0].triangles.size // 3).reshape(-1, 3))}
     write_glb(meshes, task / "whole-vessel-draft.glb",
               {"db1": tank_style(model[0].name, model[0].content, model[0].source_labels)})
+    build = task / "domain/builds/r0001-test"
+    (build / "whole-vessel-draft.glb").hardlink_to(task / "whole-vessel-draft.glb")
+    result_path = build / "result.json"
+    result = json.loads(result_path.read_text())
+    result["exports"]["whole_vessel_glb"] = "whole-vessel-draft.glb"
+    result_path.write_text(json.dumps(result))
     structure = tmp_path / "structure"
     structure.mkdir()
     write_structure_glb([{"member_id": "floor-1", "label": "floor", "thickness_mm": 8,
@@ -107,6 +113,151 @@ def test_missing_display_and_frame_data_stay_unknown(tmp_path):
     assert manifest["units_axes"]["model"]["y"] == "transverse_sign_not_recorded"
 
 
+def test_real_whole_vessel_producer_is_packaged_for_its_revision(tmp_path):
+    import cadquery as cq
+    from benchmarks.gunnerus.whole_vessel_assembly import export_all
+
+    task = make_box_task(tmp_path, with_cad=False)
+    export_all({"hull": cq.Solid.makeBox(1000, 2000, 3000)}, task, task=task, revision="r1")
+    manifest = export_draft(task, "r1", tmp_path / "out")
+    entry = next(entry for entry in manifest["files"] if entry["file"] == "glb/whole-vessel-draft.glb")
+    assert entry["source_sha256"] == hashlib.sha256((task / "whole-vessel-draft.glb").read_bytes()).hexdigest()
+
+
+def test_task_display_records_explain_revision_and_hash_mismatches(tmp_path):
+    import cadquery as cq
+    from benchmarks.gunnerus.whole_vessel_assembly import export_all
+
+    task = make_box_task(tmp_path, with_cad=False)
+    domain = task / "domain"
+    shutil.copytree(domain / "builds/r0001-test", domain / "builds/r0002-test")
+    shutil.copytree(domain / "revisions/r0001", domain / "revisions/r0002")
+    state_path = domain / "state.json"
+    state = json.loads(state_path.read_text())
+    state["revision"] = 2
+    state["builds"].append({"revision_id": "r0002", "path": "domain/builds/r0002-test", "valid": True})
+    state_path.write_text(json.dumps(state))
+    export_all({"hull": cq.Solid.makeBox(1000, 2000, 3000)}, task, task=task, revision="r2")
+
+    older = export_draft(task, "r1", tmp_path / "old")
+    assert not any(entry["file"] == "glb/whole-vessel-draft.glb" for entry in older["files"])
+    assert "r0002" in str(older["display_omissions"])
+    model = task / "whole-vessel-draft.glb"
+    model.write_bytes(model.read_bytes() + b"corrupt")
+    newer = export_draft(task, "r2", tmp_path / "new")
+    assert not any(entry["file"] == "glb/whole-vessel-draft.glb" for entry in newer["files"])
+    assert "hash" in str(newer["display_omissions"]).lower()
+
+
+def test_task_display_without_record_is_omitted_with_reason(tmp_path):
+    task = make_box_task(tmp_path, with_cad=False)
+    (task / "tanks.glb").write_bytes(b"unbound model")
+    manifest = export_draft(task, "r1", tmp_path / "out")
+    assert not any(entry["file"] == "glb/tanks.glb" for entry in manifest["files"])
+    assert any("no build record" in item["reason"] for item in manifest["display_omissions"])
+
+
+def test_reexport_removes_a_previously_packaged_stale_task_model(tmp_path):
+    from vessel_reconstruction.tanks import write_tanks_display
+
+    task = make_box_task(tmp_path, with_cad=False)
+    model = task / "tanks.glb"
+    write_tanks_display(box_tank_model(), model, task=task, revision="r1")
+    out = tmp_path / "out"
+    export_draft(task, "r1", out)
+    assert (out / "glb/tanks.glb").is_file()
+    model.write_bytes(model.read_bytes() + b"changed")
+    manifest = export_draft(task, "r1", out)
+    assert any("hash" in item["reason"] for item in manifest["display_omissions"])
+    assert not (out / "glb/tanks.glb").exists()
+
+
+def test_display_record_rejects_a_changed_build(tmp_path):
+    from vessel_reconstruction.tanks import write_tanks_display
+
+    task = make_box_task(tmp_path, with_cad=False)
+    write_tanks_display(box_tank_model(), task / "tanks.glb", task=task, revision="r1")
+    result_path = task / "domain/builds/r0001-test/result.json"
+    result = json.loads(result_path.read_text())
+    result["vessel_id"] = "different-build"
+    result_path.write_text(json.dumps(result))
+    manifest = export_draft(task, "r1", tmp_path / "out")
+    assert not any(entry["file"] == "glb/tanks.glb" for entry in manifest["files"])
+    assert any("different build" in item["reason"] for item in manifest["display_omissions"])
+
+
+def test_real_tank_display_producer_is_packaged_for_its_revision(tmp_path):
+    from vessel_reconstruction.tanks import write_tanks_display
+
+    task = make_box_task(tmp_path, with_cad=False)
+    source = task / "tanks.glb"
+    write_tanks_display(box_tank_model(), source, task=task, revision="r1")
+    manifest = export_draft(task, "r1", tmp_path / "out")
+    entry = next(entry for entry in manifest["files"] if entry["file"] == "glb/tanks.glb")
+    assert entry["source_sha256"] == hashlib.sha256(source.read_bytes()).hexdigest()
+
+
+def test_task_local_producers_refuse_missing_revision_binding(tmp_path):
+    import cadquery as cq
+    from benchmarks.gunnerus.whole_vessel_assembly import export_all
+    from vessel_reconstruction.tanks import write_tanks_display
+
+    task = make_box_task(tmp_path, with_cad=False)
+    with pytest.raises(ValueError, match="explicit task and revision"):
+        export_all({"hull": cq.Solid.makeBox(1000, 2000, 3000)}, task)
+    with pytest.raises(ValueError, match="explicit task and revision"):
+        write_tanks_display(box_tank_model(), task / "tanks.glb")
+    assert not (task / "whole-vessel-draft.glb").exists()
+    assert not (task / "tanks.glb").exists()
+
+
+def test_tank_producer_does_not_record_a_build_changed_during_write(tmp_path, monkeypatch):
+    from vessel_reconstruction import display_mesh
+    from vessel_reconstruction.tanks import write_tanks_display
+
+    task = make_box_task(tmp_path, with_cad=False)
+    result_path = task / "domain/builds/r0001-test/result.json"
+    original_writer = display_mesh.write_glb
+
+    def write_then_change_build(*args, **kwargs):
+        original_writer(*args, **kwargs)
+        result = json.loads(result_path.read_text())
+        result["vessel_id"] = "changed-during-write"
+        result_path.write_text(json.dumps(result))
+
+    monkeypatch.setattr(display_mesh, "write_glb", write_then_change_build)
+    with pytest.raises(ValueError, match="build changed"):
+        write_tanks_display(box_tank_model(), task / "tanks.glb", task=task, revision="r1")
+    assert not (task / "tanks.glb.json").exists()
+
+
+def test_internals_display_keeps_the_base_build_binding(tmp_path):
+    import cadquery as cq
+    from benchmarks.gunnerus.whole_vessel_assembly import export_all
+    from benchmarks.gunnerus.whole_vessel_internals import write_internals_display
+
+    task = make_box_task(tmp_path, with_cad=False)
+    base = tmp_path / "assembly"
+    base.mkdir()
+    export_all({"hull": cq.Solid.makeBox(1000, 2000, 3000)}, base, task=task, revision="r1")
+    model = task / "whole-vessel-draft.glb"
+    write_internals_display({}, [], base / "whole-vessel-draft.glb", model, task=task, revision="r1")
+    manifest = export_draft(task, "r1", tmp_path / "out")
+    entry = next(entry for entry in manifest["files"] if entry["file"] == "glb/whole-vessel-draft.glb")
+    assert entry["source_sha256"] == hashlib.sha256(model.read_bytes()).hexdigest()
+
+
+def test_internals_display_refuses_an_unbound_base(tmp_path):
+    from benchmarks.gunnerus.whole_vessel_internals import write_internals_display
+
+    task = make_box_task(tmp_path, with_cad=False)
+    base = tmp_path / "unbound.glb"
+    base.write_bytes(b"unbound")
+    with pytest.raises(ValueError, match="no build record"):
+        write_internals_display({}, [], base, task / "whole-vessel-draft.glb", task=task, revision="r1")
+    assert not (task / "whole-vessel-draft.glb").exists()
+
+
 def test_spatial_package_is_repeatable_across_output_folders(tmp_path):
     task, model, structure = display_task(tmp_path)
     first = export_draft(task, "r1", tmp_path / "first", tanks=model, structure_dir=structure)
@@ -120,6 +271,7 @@ def test_build_glb_is_confined_and_linked_without_whole_vessel_model(tmp_path):
     build = task / "domain/builds/r0001-test"
     shutil.move(task / "whole-vessel-draft.glb", build / "display.glb")
     result = read_record(build, "result.json")
+    result["exports"].pop("whole_vessel_glb")
     result["exports"]["glb"] = "display.glb"
     (build / "result.json").write_text(json.dumps(result))
     out = tmp_path / "out"
@@ -142,10 +294,16 @@ def test_invalid_frame_table_is_not_exported_as_known(tmp_path, field, value):
 
 def test_invalid_glb_is_refused_and_source_is_unchanged(tmp_path):
     task = make_box_task(tmp_path, with_cad=False)
-    source = task / "whole-vessel-draft.glb"
+    build = task / "domain/builds/r0001-test"
+    source = build / "whole-vessel-draft.glb"
     source.write_bytes(b"not a glb")
-    with pytest.raises(ExportError, match="GLB"):
-        export_draft(task, "r1", tmp_path / "out")
+    result_path = build / "result.json"
+    result = json.loads(result_path.read_text())
+    result["exports"]["whole_vessel_glb"] = source.name
+    result_path.write_text(json.dumps(result))
+    manifest = export_draft(task, "r1", tmp_path / "out")
+    assert manifest["format_results"]["glb"]["status"] == "failed"
+    assert "GLB" in manifest["format_results"]["glb"]["reason"]
     assert source.read_bytes() == b"not a glb"
 
 
@@ -198,6 +356,11 @@ def test_spatial_ids_and_links_survive_a_geometry_revision(tmp_path):
 def test_standalone_tank_glb_and_guessed_frames_keep_their_sources(tmp_path):
     task, model, _ = display_task(tmp_path)
     (task / "whole-vessel-draft.glb").rename(task / "tanks.glb")
+    build = task / "domain/builds/r0001-test"
+    result_path = build / "result.json"
+    result = json.loads(result_path.read_text())
+    result["exports"]["tanks_glb"] = result["exports"].pop("whole_vessel_glb")
+    result_path.write_text(json.dumps(result))
     (task / "frames.json").write_text(json.dumps({"spacing_m": 0.55, "zero_x_m": 0, "source": "guessed"}))
     out = tmp_path / "out"
     export_draft(task, "r1", out, tanks=model)

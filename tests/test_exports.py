@@ -276,6 +276,92 @@ def test_export_is_repeatable(tmp_path):
     assert first["package"]["sha256"] == second["package"]["sha256"]
 
 
+@pytest.mark.parametrize("existing", [False, True])
+def test_package_write_failure_keeps_target_unchanged(tmp_path, monkeypatch, existing):
+    from vessel_reconstruction.exports import package
+
+    task = make_box_task(tmp_path, with_cad=False)
+    target = tmp_path / "out"
+    if existing:
+        target.mkdir()
+        (target / "old.txt").write_text("previous package")
+
+    def fail(*args, **kwargs):
+        raise OSError("injected write failure")
+
+    monkeypatch.setattr(package, "write_hydrostatics", fail)
+    with pytest.raises(OSError, match="injected"):
+        export_draft(task, "r1", target)
+    if existing:
+        assert sorted(path.name for path in target.iterdir()) == ["old.txt"]
+        assert (target / "old.txt").read_text() == "previous package"
+    else:
+        assert not target.exists()
+
+
+def test_package_replaces_existing_directory_after_complete_write(tmp_path):
+    task = make_box_task(tmp_path, with_cad=False)
+    target = tmp_path / "out"
+    target.mkdir()
+    (target / "viewer_capture.png").write_bytes(b"not an image")
+    manifest = export_draft(task, "r1", target)
+    assert (target / manifest["package"]["file"]).is_file()
+    assert (target / "viewer_capture.png").read_bytes() == b"not an image"
+    assert not list(tmp_path.glob(".out.*"))
+
+
+def test_package_destination_cannot_replace_current_directory(tmp_path, monkeypatch):
+    from vessel_reconstruction.exports import package
+
+    target = tmp_path / "out"
+    target.mkdir()
+    monkeypatch.chdir(target)
+    with pytest.raises(ExportError, match="current directory"):
+        with package._package_stage(Path(".")):
+            pass
+
+
+def test_failed_ocx_export_keeps_other_package_files(tmp_path, monkeypatch):
+    from vessel_reconstruction.exports import package
+
+    task = make_box_task(tmp_path, with_cad=False)
+    def fail(*args, **kwargs):
+        raise RuntimeError("injected OCX failure")
+
+    monkeypatch.setattr(package.ocx, "export_ocx", fail)
+    manifest = export_draft(task, "r1", tmp_path / "out", tanks=box_tank_model())
+    assert manifest["format_results"]["ocx"] == {"status": "failed", "reason": "injected OCX failure"}
+    assert any(entry["role"] == "offsets_table" for entry in manifest["files"])
+
+
+def test_old_revision_uses_its_recorded_display_glb(tmp_path):
+    import trimesh
+
+    task = make_box_task(tmp_path, with_cad=False)
+    domain = task / "domain"
+    old = domain / "builds/r0001-test"
+    new = domain / "builds/r0002-test"
+    shutil.copytree(old, new)
+    shutil.copytree(domain / "revisions/r0001", domain / "revisions/r0002")
+    for build, length in ((old, 1), (new, 2)):
+        result_path = build / "result.json"
+        result = json.loads(result_path.read_text())
+        result["exports"]["glb"] = "display.glb"
+        result_path.write_text(json.dumps(result))
+        trimesh.creation.box(extents=[length, 1, 1]).export(build / "display.glb")
+    shutil.copyfile(new / "display.glb", task / "whole-vessel-draft.glb")
+    state_path = domain / "state.json"
+    state = json.loads(state_path.read_text())
+    state["revision"] = 2
+    state["builds"].append({"revision_id": "r0002", "path": "domain/builds/r0002-test", "valid": True})
+    state_path.write_text(json.dumps(state))
+
+    manifest = export_draft(task, "r1", tmp_path / "package")
+    displays = [entry for entry in manifest["files"] if entry["role"] == "display_glb"]
+    assert len(displays) == 1
+    assert displays[0]["source_sha256"] == hashlib.sha256((old / "display.glb").read_bytes()).hexdigest()
+
+
 def test_manifest_identity_is_stable_across_revisions_and_display_names(tmp_path):
     from vessel_reconstruction.structure.steel import write_steel_tables
     from test_structure_export import synthetic_block

@@ -7,6 +7,7 @@
 - **Why:** Elapsed time depends on machine load. A slow build can still make progress.
 - **Security correction (2026-11-10):** Sandboxed model-code children are untrusted. Read telemetry through non-blocking, no-follow descriptors, require a regular file and validate bounded JSON fields. Trusted supervisors count stage/part changes with a finite advance budget; never trust a child's counter. Keep a four-hour security cap for these children only, with a clear error and no automatic retry. Deterministic own-code CAD retains no default total wall limit.
 - **Own-code correction (2026-11-10):** Apply the trust policy in every supervisor, including standalone and nested Python CAD. A deterministic kernel call with no part changes must only report a stall and keep running. Report natural section, mesh-face, format and part boundaries; never advance on a timer. Pass the specific stage and duration from supervision into recovery instead of replacing it with the generic publication message.
+- **CPU correction (2026-11-10):** Do not apply CPU-time limits to deterministic CAD by default; preserve sandbox limits and report the stopping limit with progress.
 - **Cleanup correction (2026-11-10):** A zombie leader does not prove its process group is empty. After a refused group signal on macOS, check for live group members, retry SIGKILL within a fixed bound, and raise if cleanup remains unproven. Keep the leader unreaped until that check succeeds.
 
 ### Freeze executable and Python source for concurrent evaluation
@@ -224,6 +225,12 @@
 - **Rule:** When a lane changes run files, export kinds or record checks, run the full Python suite before review, not only focused tests. Test helpers copy the files the record names, not a fixed list. Real-worker Rust tests may skip locally when `MARINAFRAME_TEST_PYTHON` is unset; required CI runs must fail instead.
 - **CI correction (2026-11-10):** Allow missing worker Python only in local runs. Required CI jobs set `MARINAFRAME_TEST_PYTHON` before every Cargo test step and `MARINAFRAME_REQUIRE_WORKER=1`; missing Python must fail those tests. Run macOS Seatbelt probes on macOS, and prove cleanup helpers reject a live child before trusting their exit checks.
 - **Why:** Focused runs miss tests that encode the old file set, and CI's plain cargo step has no worker Python.
+
+### Bind display exports at their producer
+- **Date:** 2026-11-10
+- **Trigger:** Revision export switched to build-record display keys that no real producer wrote, so packages lost task-level whole-vessel and tank models.
+- **Rule:** Trace each actual producer and carry the chosen revision, build identity and file hash from production to export. Test the real producer path as well as revision and hash mismatches; report unbound files instead of assigning them to the current revision.
+- **Why:** A fixture that invents record fields can pass while production never supplies them.
 
 ### Name plan waterlines by drawing correspondence, not by order (MarinaFrame)
 - **Date:** 2026-11-10
