@@ -3,32 +3,18 @@
 //! `choose_line`; the controller then rebuilds, validates and reaches review.
 //! Needs `MARINAFRAME_TEST_PYTHON`. Set `MARINAFRAME_DUMP_DIR` to also write the
 //! views, events and artifacts as JSON and files (used to make UI screenshots).
+mod support;
+
 use marinaframe_app_core::types::*;
 use marinaframe_app_core::{AppPaths, Backend};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::{Duration, Instant};
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .canonicalize()
         .unwrap()
-}
-
-fn wait_until_idle(backend: &Backend, task: &str) -> TaskView {
-    let start = Instant::now();
-    loop {
-        let view = backend.get_task(task).unwrap();
-        if !backend.is_busy(task) {
-            return view;
-        }
-        assert!(
-            start.elapsed() < Duration::from_secs(240),
-            "run did not finish"
-        );
-        std::thread::sleep(Duration::from_millis(300));
-    }
 }
 
 fn dump(backend: &Backend, task: &str, view: &TaskView, name: &str) {
@@ -52,8 +38,7 @@ fn dump(backend: &Backend, task: &str, view: &TaskView, name: &str) {
 #[test]
 #[ignore = "real CAD (slow): run with make test-full"]
 fn draft_run_shows_its_guess_and_confirming_it_reaches_review() {
-    let Ok(python) = std::env::var("MARINAFRAME_TEST_PYTHON") else {
-        eprintln!("MARINAFRAME_TEST_PYTHON not set; skipping");
+    let Some(python) = support::worker_python() else {
         return;
     };
     let repo = repo_root();
@@ -83,7 +68,7 @@ fn draft_run_shows_its_guess_and_confirming_it_reaches_review() {
     let task = backend
         .start_run(input.join("spec.json").to_str().unwrap())
         .unwrap();
-    let draft = wait_until_idle(&backend, &task);
+    let draft = support::wait_until_idle(&backend, &task);
     dump(&backend, &task, &draft, "draft-before");
 
     // The ambiguous section is a guess; the others are chosen.
@@ -137,7 +122,7 @@ fn draft_run_shows_its_guess_and_confirming_it_reaches_review() {
 
     // Confirm the guessed line. The controller rebuilds, renders and validates.
     backend.choose_line(&task, &section.id, &kept).unwrap();
-    let after = wait_until_idle(&backend, &task);
+    let after = support::wait_until_idle(&backend, &task);
     dump(&backend, &task, &after, "draft-after");
     assert_eq!(
         after.summary.status,

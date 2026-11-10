@@ -222,7 +222,8 @@
 ### Run the full suite when a lane changes export file lists
 - **Date:** 2026-11-10
 - **Trigger:** The CAD export lane added IGES and .3dm files; its focused tests passed, but three evidence-hardening tests failed at merge because a test helper copied a fixed file list. A replace-sheet real-worker test also failed in CI because it did not skip without `MARINAFRAME_TEST_PYTHON`.
-- **Rule:** When a lane changes run files, export kinds or record checks, run the full Python suite before review, not only focused tests. Test helpers copy the files the record names, not a fixed list. New real-worker Rust tests skip when `MARINAFRAME_TEST_PYTHON` is unset, like the existing ones.
+- **Rule:** When a lane changes run files, export kinds or record checks, run the full Python suite before review, not only focused tests. Test helpers copy the files the record names, not a fixed list. Real-worker Rust tests may skip locally when `MARINAFRAME_TEST_PYTHON` is unset; required CI runs must fail instead.
+- **CI correction (2026-11-10):** Allow missing worker Python only in local runs. Required CI jobs set `MARINAFRAME_TEST_PYTHON` before every Cargo test step and `MARINAFRAME_REQUIRE_WORKER=1`; missing Python must fail those tests. Run macOS Seatbelt probes on macOS, and prove cleanup helpers reject a live child before trusting their exit checks.
 - **Why:** Focused runs miss tests that encode the old file set, and CI's plain cargo step has no worker Python.
 
 ### Name plan waterlines by drawing correspondence, not by order (MarinaFrame)

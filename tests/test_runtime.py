@@ -9,7 +9,7 @@ import sys
 import threading
 import time
 
-from vessel_reconstruction.isolation import WorkerLimits, _proc_path, kill_process_tree, process_identity, safe_worker_environment, supervise_process
+from vessel_reconstruction.isolation import WorkerLimits, kill_process_tree, process_identity, safe_worker_environment, supervise_process
 from vessel_reconstruction.resources import native_resource_profile
 
 
@@ -17,13 +17,61 @@ LIMITS = WorkerLimits(wall_seconds=3, cpu_seconds=2, memory_bytes=256*1024**2, f
 
 
 def stopped(pid):
+    """Check POSIX liveness without treating a missing procfs as an exit."""
     try:
-        directory = _proc_path(pid)
-        if directory is None: return True
-        fields = (directory/'stat').read_text().rsplit(')',1)[1].split()
-        return fields[0] == 'Z'
-    except FileNotFoundError:
+        reaped_pid, _ = os.waitpid(pid, os.WNOHANG)
+    except ChildProcessError:
+        pass  # Descendants are not necessarily children of the test process.
+    else:
+        return reaped_pid == pid
+
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
         return True
+    except PermissionError:
+        return False
+
+    # An orphan may remain a zombie until its new parent reaps it. ps works on
+    # both macOS and Linux; an inspection error must fail the cleanup check.
+    result = subprocess.run(['/bin/ps', '-o', 'stat=', '-p', str(pid)],
+                            capture_output=True, text=True, timeout=3)
+    state = result.stdout.strip()
+    if result.returncode == 1 and not state and not result.stderr.strip():
+        return True  # The process exited between kill(0) and ps.
+    assert result.returncode == 0 and state, f'cannot inspect process {pid}: {result}'
+    return state.startswith('Z')
+
+
+def test_stopped_distinguishes_a_live_child_from_a_reaped_child():
+    child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])
+    try:
+        assert child.poll() is None
+        assert not stopped(child.pid), 'a live child must not pass a cleanup check'
+    finally:
+        child.kill()
+        child.wait(timeout=3)
+    assert stopped(child.pid)
+
+
+def test_stopped_recognizes_an_unreaped_child():
+    child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])
+    try:
+        child.kill()
+        deadline = time.monotonic() + 3
+        while not stopped(child.pid):
+            assert time.monotonic() < deadline, 'killed child did not stop'
+            time.sleep(0.01)
+    finally:
+        child.wait(timeout=3)
+
+
+def test_stopped_does_not_treat_permission_denial_as_an_exit(monkeypatch):
+    def deny_signal(pid, sig):
+        raise PermissionError('signal permission denied')
+
+    monkeypatch.setattr(os, 'kill', deny_signal)
+    assert not stopped(os.getpid())
 
 
 def test_sandbox_stall_kills_child_process_group(tmp_path, monkeypatch):
