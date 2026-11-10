@@ -50,8 +50,10 @@ def loads_bounded_json(raw: bytes | str, *, max_bytes=MAX_SPEC_BYTES, max_depth=
     """Reject duplicate keys, nonfinite numbers and excessive trees before use."""
     if isinstance(raw, str):
         raw = raw.encode("utf-8")
-    if not isinstance(raw, bytes) or len(raw) > max_bytes:
-        raise BoundedJSONError("JSON exceeds the byte limit.")
+    if not isinstance(raw, bytes):
+        raise BoundedJSONError("JSON input must be bytes or text.")
+    if len(raw) > max_bytes:
+        raise BoundedJSONError(f"JSON has at least {len(raw):,} bytes; {max_bytes:,} is the byte limit.")
 
     def pairs(items):
         result = {}
@@ -86,8 +88,10 @@ def loads_bounded_json(raw: bytes | str, *, max_bytes=MAX_SPEC_BYTES, max_depth=
     while stack:
         item, depth = stack.pop()
         count += 1
-        if count > max_nodes or depth > max_depth:
-            raise BoundedJSONError("JSON tree exceeds the depth or item limit.")
+        if count > max_nodes:
+            raise BoundedJSONError(f"JSON has at least {count:,} items; the item limit is {max_nodes:,}.")
+        if depth > max_depth:
+            raise BoundedJSONError(f"JSON depth is at least {depth:,}; the depth limit is {max_depth:,}.")
         if isinstance(item, str) and len(item) > max_string:
             raise BoundedJSONError("JSON string exceeds the length limit.")
         if isinstance(item, dict):
@@ -104,7 +108,28 @@ def load_bounded_json(path: Path, **limits):
     limit = limits.get("max_bytes", MAX_SPEC_BYTES)
     with Path(path).open("rb") as handle:
         raw = handle.read(limit + 1)
-    return loads_bounded_json(raw, **limits)
+    try:
+        return loads_bounded_json(raw, **limits)
+    except BoundedJSONError as exc:
+        raise BoundedJSONError(f"{Path(path).name}: {exc}") from exc
+
+
+# A build can contain up to 300 sections and review samples for competing
+# contours. Budget 10,000 values per permitted section, pooled across the
+# record. The measured 72-section Gunnerus record uses 750,961 values, so
+# this gives almost four times its total. This is a hard resource ceiling,
+# not a promise that every maximal combination of evidence will fit.
+MAX_BUILD_RESULT_NODES = MAX_SECTIONS * 10_000
+MAX_BUILD_RESULT_BYTES = 64 * 1024 * 1024
+
+
+def load_build_result(path: Path):
+    """Read an untrusted build result within the shared record budget."""
+    try:
+        return load_bounded_json(path, max_bytes=MAX_BUILD_RESULT_BYTES,
+                                 max_depth=32, max_nodes=MAX_BUILD_RESULT_NODES)
+    except BoundedJSONError as exc:
+        raise BoundedJSONError(f"{exc} (build result)") from exc
 
 
 def _text(value, maximum=8192, *, optional=False):

@@ -15,7 +15,7 @@ import re
 
 from .provenance import canonical_json, digest_file, digest_object, safe_relative_file
 from .resources import KNOWN_RESOURCE_PROFILES
-from .schema import load_bounded_json
+from .schema import load_bounded_json, load_build_result
 
 
 SCHEMA_VERSION = "marinaframe.validation.v1"
@@ -180,7 +180,7 @@ def build_context(task_dir, domain_root, state, spec, candidate, run):
             and selection["engineering_approved"] is False and selection["identity_certified"] is False,
             "Current selection record is inconsistent")
     run_record = safe_relative_file(run, "result.json")
-    result = load_bounded_json(run_record, max_bytes=32 * 1024**2, max_nodes=600_000)
+    result = load_build_result(run_record)
     require(result.get("run_id") == candidate.get("run_id") and result.get("status") == "review_required",
             "Candidate run identity or status is inconsistent")
     review = result.get("review")
