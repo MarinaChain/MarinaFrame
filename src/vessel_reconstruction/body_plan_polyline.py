@@ -61,6 +61,22 @@ RUN_JOIN_GAP_PX = 2
 # A trace stops after this many pixels (a guard; body-plan station lines are much shorter).
 MAX_TRACE_PX = 6000.0
 
+# ---------------------------------------------------------------- the top of a side (sheer)
+# A station line ends on the drawn sheer line, whose top edge is the deck top at the side. When the
+# trace up a side stops inside the line it meets, the side's top end is carried on along its
+# direction to the far edge of that line's ink, at most END_INTO_LINE_WIDTHS line widths (a sheer
+# line is drawn up to about three widths heavy; a line met at a grazing angle is not followed).
+END_INTO_LINE_WIDTHS = 3.0
+# A side whose top runs on along a calibrated grid column for this many line widths is cut where it
+# joins the column.
+GRID_RUN_WIDTHS = 5.0
+# Station lines are drawn with one pen. A top part of the side, at least THIN_RUN_WIDTHS line widths
+# long, whose median ink width is under THIN_SHARE of the side's own median width (measured on its
+# lower half) is a thinner line the trace ran on into (a label leader, a grid line): the side ends
+# below it.
+THIN_RUN_WIDTHS = 5.0
+THIN_SHARE = 0.75
+
 # ---------------------------------------------------------------- seeds
 # A seed is a run no wider than this many line widths whose line is steeper than SEED_MAX_SLOPE
 # columns per row (a station side, not a bottom, rail or waterline).
@@ -154,6 +170,8 @@ class Trace:
 
     points: np.ndarray  # (n, 2) row, column
     states: np.ndarray  # (n,) NO_INK (coasted), IN_CROSSING (inside a wide run) or ON_INK
+    # Points inside a wide run right after the last narrow-run point: the trace ended in a line it met.
+    tail: np.ndarray = field(default_factory=lambda: np.zeros((0, 2)))
 
 
 @dataclass
@@ -179,7 +197,8 @@ class StationPolyline:
 
     @property
     def sheer(self) -> tuple[float, float]:
-        """The top end of the traced side (the drawing's line may run on into a rail above the deck)."""
+        """The top end of the traced side (`trace_side_up`): where the station line ends on the
+        drawn sheer line, or the top of a rail tick drawn on from the side."""
         return float(self.points[-1, 0]), float(self.points[-1, 1])
 
     def offset_px(self, column: float, centre_column: float) -> float:
@@ -325,7 +344,108 @@ def trace_line(ink: np.ndarray, start, direction, width: float, keep=None) -> Tr
         if state == ON_INK:
             heading = _direction(points, states, window, heading)
     last = max(i for i, state in enumerate(states) if state == ON_INK)
-    return Trace(np.asarray(points[:last + 1]), np.asarray(states[:last + 1]))
+    tail = []
+    for point, state in zip(points[last + 1:], states[last + 1:]):
+        if state != IN_CROSSING:
+            break
+        tail.append(point)
+    return Trace(np.asarray(points[:last + 1]), np.asarray(states[:last + 1]),
+                 np.asarray(tail).reshape(-1, 2))
+
+
+# ---------------------------------------------------------------- the top of a side
+
+def trace_side_up(ink: np.ndarray, seed, width: float) -> np.ndarray:
+    """Points from `seed` up the side to its top end, the sheer.
+
+    The sheer is where the station line ends on the drawn sheer line, at the line's top edge (the
+    deck top at the side). The trace passes lines that cross the side and stops where the ink ends.
+    When it stops inside the line it meets (a wide run), the end is carried on along the side's
+    direction to the far edge of that line's ink.
+    """
+    trace = trace_line(ink, seed, (-1.0, 0.0), width)
+    points = trace.points
+    if len(trace.tail):
+        heading = _direction(list(points), list(trace.states), DIRECTION_WINDOW_WIDTHS * width,
+                             np.array([-1.0, 0.0]))
+        edge = _ink_edge(ink, points[-1], heading, END_INTO_LINE_WIDTHS * width)
+        if edge > 0.0:
+            points = np.concatenate([points, [points[-1] + edge * heading]])
+    return points
+
+
+def _ink_widths(ink: np.ndarray, points: np.ndarray, width: float) -> np.ndarray:
+    """Width of the narrow ink run across the line at each point; NaN inside crossings or gaps."""
+    widths = np.full(len(points), np.nan)
+    for k, point in enumerate(points):
+        ahead, behind = points[min(len(points) - 1, k + 3)], points[max(0, k - 3)]
+        if np.allclose(ahead, behind):
+            continue
+        heading = _unit(ahead - behind)
+        normal = np.array([-heading[1], heading[0]])
+        for first, last in _perpendicular_runs(ink, point, normal, SEARCH_WIDTHS * width + 2.0):
+            if first <= 0.5 and last >= -0.5 and last - first + 1.0 <= WIDE_RUN_WIDTHS * width:
+                widths[k] = last - first + 1.0
+    return widths
+
+
+def _cut_at_thin_line(ink: np.ndarray, side_points: np.ndarray, width: float) -> np.ndarray:
+    """`side_points` (top first) without a thinner line the trace ran on into at the top.
+
+    The thin part runs from the top end down to the junction: the lowest point at which both the
+    whole part above it and the last THIN_RUN_WIDTHS above it have a median ink width under
+    THIN_SHARE of the side's lower half.
+    """
+    widths = _ink_widths(ink, side_points, width)
+    lower = widths[len(widths) // 2:]
+    if np.sum(~np.isnan(lower)) < 5:
+        return side_points
+    limit = THIN_SHARE * float(np.nanmedian(lower))
+    span = max(3, int(THIN_RUN_WIDTHS * width / STEP_PX))
+    junction = None
+    def thin(part: np.ndarray) -> bool:
+        return np.sum(~np.isnan(part)) >= 0.6 * len(part) and np.nanmedian(part) < limit
+
+    for end in range(span, len(side_points) // 2):
+        if thin(widths[:end]) and thin(widths[end - span:end]):
+            junction = end
+    return side_points if junction is None else side_points[junction:]
+
+
+def _ink_edge(ink: np.ndarray, start: np.ndarray, heading: np.ndarray, limit: float) -> float:
+    """Distance from `start` along `heading` to the far edge of the ink run there (gaps up to
+    RUN_JOIN_GAP_PX are ink); 0 when the run goes on beyond `limit`."""
+    edge, gap = 0.0, 0
+    for step in range(1, int(limit) + RUN_JOIN_GAP_PX + 2):
+        row, column = np.rint(start + step * heading).astype(int)
+        inside = 0 <= row < ink.shape[0] and 0 <= column < ink.shape[1]
+        if inside and ink[row, column]:
+            edge, gap = float(step), 0
+        else:
+            gap += 1
+            if gap > RUN_JOIN_GAP_PX:
+                return edge if edge <= limit else 0.0
+    return 0.0
+
+
+def _cut_at_grid(points: np.ndarray, width: float, grid_columns) -> np.ndarray:
+    """`points` (bottom first, upward) cut where they join a grid column and run on along it to the top.
+
+    A trace up a side beside a buttock line can leave the hull where they meet and run on up the
+    buttock; the side's top is then the junction.
+    """
+    band = GRID_BAND_WIDTHS * width + 3.0
+    arc = _arc(points)
+    for column in grid_columns:
+        near = np.abs(points[:, 1] - column) <= band
+        if not near[-1]:
+            continue
+        join = len(points) - 1
+        while join > 0 and near[join - 1]:
+            join -= 1
+        if join > 0 and arc[-1] - arc[join] >= GRID_RUN_WIDTHS * width:
+            return points[:join + 1]
+    return points
 
 
 # ---------------------------------------------------------------- seeds
@@ -583,16 +703,18 @@ def trace_station(ink: np.ndarray, seed, sheet: bpr.SheetLayout, side: bpr.SideL
     corners, the reason when None).
     """
     seed = np.asarray(seed, dtype=float)
-    up = trace_line(ink, seed, (-1.0, 0.0), width)
+    up = trace_side_up(ink, seed, width)
     down = trace_line(ink, seed, (1.0, 0.0), width)
-    line = np.concatenate([up.points[::-1], down.points[1:]])  # top to bottom
-    seed_index = len(up.points) - 1
+    line = np.concatenate([up[::-1], down.points[1:]])  # top to bottom
+    seed_index = len(up) - 1
     # The side is the straight-run of the line through the seed: cut at the first sharp corner
     # below it (the knuckle, where the trace ran on along the chine curve or the bottom) and
     # above it (where it ran on along a deck or rail line).
     lower = first_corner(line, seed_index, 1, width)
     upper = first_corner(line, seed_index, -1, width)
     side_points = line[(upper or 0):(lower + 1 if lower is not None else len(line))]
+    side_points = _cut_at_grid(side_points[::-1], width, side.grid_columns)[::-1]
+    side_points = _cut_at_thin_line(ink, side_points, width)
     if _length(side_points) < MIN_SIDE_WIDTHS * width:
         return None, line, side_points, 'short line'
     if on_grid_line(side_points, side.grid_columns, 1, width) or _ends_on_grid_column(side_points, side, width):

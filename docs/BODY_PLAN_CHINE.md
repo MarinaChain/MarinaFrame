@@ -794,3 +794,41 @@ heavy curve further in). Its extra W6 cells (stations 6 to 9) and the 5/W5 error
 the sheer and extra-cell items of steps 2 and 3. COLLEEN station 7 now gives side and knuckle only (one other bottom
 line through its knuckle), so its correct -1 ft and rabbet cells of the first trial are not given; COLLEEN station 9
 has no own bottom line (it ends on the transom) and is not engaged.
+
+### Step 2: the sheer
+
+**Rule.** The sheer of a station is where its line ends on the drawn sheer line, at that line's **top edge**: the
+deck top at the side (COLLIER's table defines sheer as the intersection of the deck top and the hull exterior). The
+trace up a side (`trace_side_up`) passes lines that cross the side and stops where the ink ends. Then:
+
+1. If it stopped inside the line it met (a wide run), the end is carried on along the side's direction to the far
+   edge of that line's ink, at most 3 line widths (a line met at a grazing angle is not followed).
+2. If the top part of the side is drawn with a thinner pen (median ink width under 0.75 of the side's lower half,
+   over at least 5 line widths), it is a label leader or a grid line that the trace ran on into: the side ends at
+   the junction (`_cut_at_thin_line`). WHITE GULL stations 8 and 9 ran up their "Sta.8"/"Sta.9" leaders.
+3. If the top of the side runs on up a calibrated grid column for 5 line widths, the side ends where it joins
+   the column (`_cut_at_grid`). WHITE GULL station 5 left the hull for the 6-ft buttock.
+
+The polyline's `sheer` is that top end. A rail drawn on above the deck (COLLIER's log rail) is followed only when the
+same line continues; where the rail tick is offset from the hull line (a jog at the rail's lower edge), the side ends
+there. Two other rules were tried and dropped: following such jogs to the rail top (it also followed station labels
+printed beyond the sheer on COLLEEN) and stopping where the ink beyond a crossing line turns away (the turns at
+rail lines, 6 to 13 degrees, overlap those at label leaders, 1 to 6 degrees).
+
+Results (step 1 -> step 2):
+
+| Sheet | Waterline cells | WL RMS m | WL wrong | WL extra | Point cells | Point RMS m | Point wrong | Sheer cells (RMS m) |
+|---|---|---|---|---|---|---|---|---|
+| COLLIER | - | - | - | - | 22/31 -> 22/31 | 0.0691 -> 0.0691 | 2 -> 2 | 6 (0.007) -> 6 (0.007) |
+| WHITE GULL | 45/53 -> 43/53 | 0.0289 -> 0.0269 | 0 -> 0 | W6 of 6, 7, 8, 9 -> W6 of 6, 7 | 12/30 -> 12/30 | 0.1065 -> 0.1065 | 2 -> 2 | 5 (0.005) -> 5 (0.005) |
+| COLLEEN | 22/26 -> 22/26 | 0.0007 -> 0.0007 | 0 -> 0 | none | 13/26 -> 17/26 | 0.0063 -> 0.0070 | 0 -> 0 | 0/9 -> 4/9 (0.009) |
+| PARDON ME | 43/57 -> 43/57 | 0.035486 -> 0.035486 | 1 -> 1 | - | - | - | - | - |
+| Round-bilge set | identical (no station engaged; tables equal the frozen tables) | | | | | | | |
+
+COLLEEN sheer cells: stations 3, 4, 5 and aft 8 (errors +6 to +10 mm and -9 mm). Still missing: station 2 (traced top
+7 px, 0.6 in, below the printed height), 6 (the side meets the sheer line at a grazing angle near its end), 7 (17 px
+short; the aft sheer line is light there) and 1 and 9 (not traced). WHITE GULL: the W6 cells of 8 and 9 are gone
+(their leaders); stations 5 loses W4 and W5 (correct values in step 1 that came from the side's lower part being
+on the hull; after the cut the polyline ends below them), and its W5 error (-0.08 m) is gone. The W6 cells of
+stations 6 and 7 come from the frozen reader (step 3). COLLIER: unchanged; its missing sheer cells (stations 1, 4, 7,
+8, 10) are the offset rail ticks above.

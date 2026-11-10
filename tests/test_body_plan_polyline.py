@@ -250,3 +250,43 @@ def test_an_engaged_station_with_other_lines_through_its_knuckle_gives_its_side_
         assert station.knuckle_index == 0
         assert station.rabbet[0] == pytest.approx(station.chine[0], abs=3)  # the polyline starts at the knuckle
     assert (4, 'r775') not in table and (4, 'r475') in table
+
+
+# ---------------------------------------------------------------- the sheer (top of the side)
+
+def _with(ink, draw_more):
+    image = Image.fromarray(np.where(ink, 0, 255).astype(np.uint8))
+    draw_more(ImageDraw.Draw(image))
+    return np.asarray(image) < 128
+
+
+def test_the_sheer_is_the_top_edge_of_the_heavy_sheer_line_the_side_ends_in():
+    ink, sheet, side = v_bottom()
+    heavy = 12  # a sheer line drawn heavy across the tops of the sides, centred on SHEER_ROW
+    ink = _with(ink, lambda draw: draw.line([(0, SHEER_ROW), (WIDTH - 1, SHEER_ROW)], fill=0, width=heavy))
+    half = bpp.read_half(ink, sheet, side)
+    assert [s.station for s in half.stations] == [4, 3, 2, 1]
+    for station in half.stations:
+        assert station.sheer[0] == pytest.approx(SHEER_ROW - heavy / 2, abs=3)
+
+
+def test_a_thin_label_leader_beyond_the_sheer_is_not_the_side():
+    ink, sheet, side = v_bottom()
+    top = sheet.centre_column + STATIONS[1][0]  # the top of station 3's side
+    # A thin leader drawn on from the top of station 3's side, almost in line with it, to a label.
+    ink = _with(ink, lambda draw: draw.line([(top, SHEER_ROW), (top + 30, SHEER_ROW - 140)], fill=0, width=2))
+    half = bpp.read_half(ink, sheet, side)
+    station = half.station(3)
+    assert station is not None
+    assert station.sheer[0] == pytest.approx(SHEER_ROW, abs=2 * LINE + 2)  # the junction, within two widths
+    assert station.sheer[0] >= SHEER_ROW - LINE
+
+
+def test_a_side_cut_where_it_runs_on_up_a_grid_column():
+    width = 5.0
+    points = np.array([[row, 300.0 + 0.2 * (500 - row)] for row in range(500, 300, -2)]  # slanted side
+                      + [[row, 340.0] for row in range(300, 200, -2)])  # then straight up a grid column
+    cut = bpp._cut_at_grid(points, width, (340.0,))
+    assert cut[-1, 0] == pytest.approx(300, abs=70)  # the junction (the band reaches below it)
+    assert cut[-1, 0] > 250
+    assert len(bpp._cut_at_grid(points, width, ())) == len(points)
