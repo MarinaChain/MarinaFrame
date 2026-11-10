@@ -163,3 +163,9 @@
 - **Trigger:** Cost-per-ship ledgers were placed in outputs, and the initial collector omitted the live hull intake calibration log.
 - **Rule:** Keep per-run derived JSON/CSV ledgers in git-ignored work/; commit the accounting script, tests and dated report only. Count intake calibration receipts as well as controller receipts. The calibration log's input_tokens already includes cache reads and writes, so preserve it as collapsed prompt usage and price it with a range. Do not add intake time again to inclusive case wall time.
 - **Why:** Generated run data does not belong in source history, and omitted or misclassified calibration usage understates the hull cost.
+
+### Match CAD export units to STEP
+- **Date:** 2026-11-10
+- **Trigger:** The CAD export brief said metres, but STEP uses millimetres; the PM corrected the brief so IGES and future .3dm exports match STEP.
+- **Rule:** Write IGES and future .3dm exports in millimetres, the same unit as STEP. Set the IGES unit flag to 2 (MM). Keep file labels, export metadata and tests consistent with that unit.
+- **Why:** Matching CAD units avoids scale errors between formats; metre-based reporting does not change the CAD file unit.

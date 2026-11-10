@@ -20,6 +20,7 @@ from pathlib import Path
 import re
 
 from . import read_section_pdf
+from ..cad_exports import export_iges
 from .model import SectionResult
 from .tables import PLATE_HEADER, STIFFENER_HEADER, _table_rows, text_lines
 from .vector import read_pdf_words
@@ -421,7 +422,7 @@ def build_block(sheets: dict[str, Path], length_m: float = GUESS_BLOCK_LENGTH_M,
 
 
 def export_step(block: dict, path: Path) -> int:
-    """Write the members as thin boxes (thickness centred on the mid-plane) to STEP, millimetres."""
+    """Write thin member boxes to STEP and a draft IGES beside it, both in millimetres."""
     import cadquery as cq
 
     solids = []
@@ -435,5 +436,7 @@ def export_step(block: dict, path: Path) -> int:
         hi[thin] += t / 2
         size = [max(hi[i] - lo[i], 1e-4) * 1000 for i in range(3)]
         solids.append(cq.Solid.makeBox(*size, cq.Vector(*(v * 1000 for v in lo))))
-    cq.exporters.export(cq.Workplane().add(cq.Compound.makeCompound(solids)), str(path), exportType="STEP")
+    compound = cq.Compound.makeCompound(solids)
+    cq.exporters.export(cq.Workplane().add(compound), str(path), exportType="STEP")
+    export_iges(compound, path.with_suffix(".iges"))
     return len(solids)

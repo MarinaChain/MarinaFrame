@@ -14,6 +14,7 @@ import math
 from pathlib import Path
 
 from .model import SectionResult
+from ..cad_exports import export_iges
 
 
 def build_slice(result: SectionResult, slice_length_mm: float):
@@ -43,11 +44,12 @@ def build_slice(result: SectionResult, slice_length_mm: float):
 
 
 def export_slice_step(result: SectionResult, path: Path, slice_length_mm: float) -> list[str]:
-    """Write the slice to a STEP file and return the omitted members."""
+    """Write the slice to STEP and a draft IGES beside it; return omitted members."""
     import cadquery as cq
 
     compound, omitted = build_slice(result, slice_length_mm)
     if compound is None:
         raise ValueError("no member has both a placement and a printed thickness")
     cq.exporters.export(cq.Workplane().add(compound), str(path), exportType="STEP")
+    export_iges(compound, path.with_suffix(".iges"))
     return omitted
