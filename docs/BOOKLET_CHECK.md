@@ -224,8 +224,8 @@ limits do not change the final focused-suite result.
 
 ## Measured DSYHS engine results (2026-11-10)
 
-Final files: `work/booklet-check (git-ignored)/dsyhs_engine_check.csv` (464 comparison
-cells) and `work/booklet-check (git-ignored)/dsyhs_engine_check.json` (input hashes,
+Final files: `work/booklet-check/dsyhs_engine_check.csv` (464 comparison
+cells) and `work/booklet-check/dsyhs_engine_check.json` (input hashes,
 settings, omissions and statistics). There are **58 of 61 printed variants
 compared at each scale**. The full-scale check uses the scaled model IGES, not
 an independent full-scale geometry sample.
