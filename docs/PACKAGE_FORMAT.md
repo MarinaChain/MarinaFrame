@@ -19,6 +19,13 @@ its extension. Paths in the manifest and asset map are relative to the ZIP root,
 with `/` separators. Generated JSON and CSV use UTF-8; copied structure files
 keep their source encoding.
 
+The writer creates a private sibling staging directory, checks the staged file
+hashes and ZIP contents, then publishes the directory in one filesystem
+operation. An existing directory is exchanged atomically on macOS and Linux;
+its existing files, including a viewer capture, are copied into the stage.
+Task and build evidence cannot be used as the destination. A failed write leaves
+the destination unchanged.
+
 | File | Manifest role | Contents and presence |
 | --- | --- | --- |
 | `<stem>_manifest.json` | Not in its own `files` list | Always. Identity, units/axes, review context and the file inventory. |
