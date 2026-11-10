@@ -145,3 +145,9 @@
 - **Trigger:** `until ! pgrep -f "replay_edits" ...` waited forever: the waiter's own command line contained the pattern.
 - **Rule:** Wait on a PID (`kill -0 $pid`), a result-file count, or a done marker, not on `pgrep -f` with a pattern that the waiting command contains.
 - **Why:** Silent waits hide finished work and block the lane.
+
+### Keep run accounting data in work and include intake calls
+- **Date:** 2026-11-10
+- **Trigger:** Cost-per-ship ledgers were placed in outputs, and the initial collector omitted the live hull intake calibration log.
+- **Rule:** Keep per-run derived JSON/CSV ledgers in git-ignored work/; commit the accounting script, tests and dated report only. Count intake calibration receipts as well as controller receipts. The calibration log's input_tokens already includes cache reads and writes, so preserve it as collapsed prompt usage and price it with a range. Do not add intake time again to inclusive case wall time.
+- **Why:** Generated run data does not belong in source history, and omitted or misclassified calibration usage understates the hull cost.

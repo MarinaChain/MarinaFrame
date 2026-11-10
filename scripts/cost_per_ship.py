@@ -5,11 +5,14 @@ Run from any checkout with --main-work pointing at the main checkout's work fold
 CLI result usage is cumulative within one invocation: read only its final result, not
 assistant messages, modelUsage, or usage.iterations again. Holdout summaries duplicate
 per-call receipts; they supply timing and scores only.
+
+Writes derived JSON and CSV ledgers under work/ by default; do not commit them.
 """
 from __future__ import annotations
 
 import argparse
 from collections import Counter, defaultdict
+import csv
 import json
 from pathlib import Path
 
@@ -65,7 +68,8 @@ def normalize_call(receipt, source, phase, raw=None):
     output = usage.get('completion_tokens')
     prompt = usage.get('prompt_tokens')
     # Failed holdout CLI invocations wrote prompt=0 even when no result existed.
-    missing = prompt is None or output is None
+    missing = (prompt is None or output is None
+               or (receipt.get('state') == 'failed' and prompt == 0 and output == 0))
     call = dict(source=str(source), model=model, phase=phase,
                 state=receipt.get('state', 'unknown'), prompt_tokens=prompt,
                 output_tokens=output, missing_usage=missing,
@@ -142,6 +146,17 @@ def controller_run(case, campaign):
         seen.add(request_id)
         calls.append(normalize_call(receipt, path, phase_by_request.get(request_id, 'unknown'),
                                     final_cli_result(path.with_suffix('.body'))))
+    # Intake uses a separate log. Its "input_tokens" already includes cache reads
+    # and writes, so preserve it as collapsed prompt usage, not uncached input.
+    intake_log = case / 'intake/run-input/body-plan-answers/receipts/claude.jsonl'
+    if intake_log.exists():
+        for number, line in enumerate(intake_log.read_text().splitlines(), 1):
+            if line.strip():
+                receipt = json.loads(line)
+                receipt = dict(receipt, usage={
+                    'prompt_tokens': receipt.get('input_tokens'),
+                    'completion_tokens': receipt.get('output_tokens')})
+                calls.append(normalize_call(receipt, f'{intake_log}:{number}', 'intake_calibration'))
     workers = defaultdict(lambda: {'operations': 0, 'wall_seconds': 0., 'cpu_seconds': 0.})
     for path in sorted((task / 'receipts').glob('worker-*.json')):
         receipt = read_json(path)
@@ -163,17 +178,25 @@ def holdout_runs(arm_dir, case):
     runs = []
     for index, score in enumerate(summary.get('repeats', []), 1):
         repeat = arm_dir / f'R1-{index}'
-        calls = []
-        for path in sorted((repeat / 'receipts').glob('*.json')):
-            calls.append(normalize_call(read_json(path), path, 'label_questions'))
-        for path in sorted((repeat / 'receipts').glob('*.jsonl')):
-            for number, line in enumerate(path.read_text().splitlines(), 1):
-                if line.strip():
-                    calls.append(normalize_call(json.loads(line), f'{path}:{number}', 'label_questions'))
+        calls, seen = [], set()
+        receipt_dirs = [repeat / 'receipts']
+        receipt_dirs.extend(p / 'receipts' for p in sorted(arm_dir.glob(f'R1-{index}-*')) if p.is_dir())
+        for receipt_dir in receipt_dirs:
+            for path in sorted(receipt_dir.glob('*.json')):
+                receipt = read_json(path)
+                identity = receipt.get('request_id', str(path.resolve()))
+                if identity not in seen:
+                    seen.add(identity)
+                    calls.append(normalize_call(receipt, path, 'label_questions'))
+            for path in sorted(receipt_dir.glob('*.jsonl')):
+                for number, line in enumerate(path.read_text().splitlines(), 1):
+                    if line.strip():
+                        calls.append(normalize_call(json.loads(line), f'{path}:{number}', 'label_questions'))
         runs.append(dict(kind='holdout', campaign=arm_dir.name, case=case,
                          arm=summary.get('arm', arm_dir.name), repeat=index, source=str(repeat),
                          wall_seconds=score.get('seconds'),
-                         measurement_seconds=summary.get('measurement', {}).get('seconds'),
+                         measurement_seconds=(summary.get('measurement') or {}).get('seconds'),
+                         resume_note=score.get('resume_note'),
                          summary_requests=score.get('calls'), summary_prompt_tokens=score.get('prompt_tokens'),
                          summary_output_tokens=score.get('completion_tokens'),
                          rms_m=score.get('rms_m'), coverage=score.get('coverage'),
@@ -214,14 +237,37 @@ def main():
     parser.add_argument('--main-work', type=Path, default=MAIN_WORK)
     parser.add_argument('--holdout-root', type=Path, default=HOLDOUT_ROOT)
     parser.add_argument('--tank-root', type=Path, action='append', default=[])
-    parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--out', type=Path, default=Path('work/cost_per_ship.json'),
+                        help='JSON ledger (default: work/cost_per_ship.json); also writes <stem>_runs.csv')
     args = parser.parse_args()
     tank_roots = args.tank_root or [args.main_work / 'tanks-raster']
     report = collect(args.main_work, args.holdout_root, tank_roots)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2) + '\n')
+    csv_path = args.out.with_name(f'{args.out.stem}_runs.csv')
+    fields = ('case', 'campaign', 'arm', 'repeat', 'kind', 'wall_seconds', 'worker_seconds',
+              'worker_cpu_seconds', 'requests', 'prompt_tokens', 'output_tokens',
+              'missing_usage_requests', 'api_cost_low_usd', 'api_cost_high_usd',
+              'unpriced_requests', 'source')
+    with csv_path.open('w', newline='') as stream:
+        writer = csv.DictWriter(stream, fieldnames=fields)
+        writer.writeheader()
+        for run in report['runs']:
+            totals = run['totals']
+            models = totals['models'].values()
+            unpriced = sum(model['unpriced_requests'] for model in models)
+            row = {field: run.get(field) for field in fields}
+            row.update({field: totals[field] for field in
+                        ('requests', 'prompt_tokens', 'output_tokens', 'missing_usage_requests')})
+            # A partial known subtotal is not the total price of an unpriced run.
+            row.update(unpriced_requests=unpriced,
+                       api_cost_low_usd=None if unpriced else sum(
+                           model['known_api_cost_low_usd'] for model in models),
+                       api_cost_high_usd=None if unpriced else sum(
+                           model['known_api_cost_high_usd'] for model in models))
+            writer.writerow(row)
     print(f"{len(report['runs'])} runs; {sum(r['totals']['requests'] for r in report['runs'])} receipts; "
-          f"{report['tank_receipt_files']} tank receipt files; saved {args.out}")
+          f"{report['tank_receipt_files']} tank receipt files; saved {args.out} and {csv_path}")
 
 
 if __name__ == '__main__':

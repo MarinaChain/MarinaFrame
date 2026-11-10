@@ -1,5 +1,7 @@
 """Offline accounting: duplicated summaries must not become extra requests."""
+import csv
 import json
+import sys
 
 from scripts import cost_per_ship as cost
 
@@ -63,7 +65,7 @@ def test_holdout_keeps_identical_lines_and_failed_unknown_usage(tmp_path):
     row = {'model': 'claude-sonnet-5-5', 'state': 'completed', 'seconds': 2,
            'usage': {'prompt_tokens': 100, 'completion_tokens': 10}}
     receipt.write_text('\n'.join(map(json.dumps, [row, row, {'model': 'claude-sonnet-5-5',
-        'state': 'failed', 'seconds': 1, 'usage': {'prompt_tokens': 0, 'completion_tokens': None}}])))
+        'state': 'failed', 'seconds': 1, 'usage': {'prompt_tokens': 0, 'completion_tokens': 0}}])))
     runs = cost.holdout_runs(arm, 'hull')
     assert len(runs) == 1
     run = runs[0]
@@ -74,3 +76,63 @@ def test_holdout_keeps_identical_lines_and_failed_unknown_usage(tmp_path):
     assert totals['prompt_tokens'] == 200
     assert totals['missing_usage_requests'] == 1
     assert totals['models']['claude-sonnet-5-5']['cache_read_tokens'] is None
+
+
+def test_controller_includes_intake_calibration_without_treating_collapsed_input_as_uncached(tmp_path):
+    case = tmp_path / 'bue_girl'
+    save(case / 'result.json', {'wall_seconds': 100})
+    receipt = case / 'intake/run-input/body-plan-answers/receipts/claude.jsonl'
+    receipt.parent.mkdir(parents=True)
+    receipt.write_text(json.dumps({'model': 'claude-sonnet-5-5', 'state': 'completed',
+                                  'input_tokens': 100, 'output_tokens': 10, 'seconds': 4}) + '\n')
+
+    run = cost.controller_run(case, 'autocal-live-6')
+
+    assert run['wall_seconds'] == 100  # Intake is already inside the inclusive case time.
+    assert len(run['calls']) == 1
+    call = run['calls'][0]
+    assert call['phase'] == 'intake_calibration'
+    assert call['prompt_tokens'] == 100
+    assert call['output_tokens'] == 10
+    assert call['input_tokens'] is None
+    assert call['seconds'] == 4
+    assert cost.api_cost_range(call) == (0.00012, 0.0005)
+
+
+def test_holdout_resume_counts_unique_request_ids_from_both_directories(tmp_path):
+    arm = tmp_path / 'crouton'
+    save(arm / 'summary.json', {'arm': 'crouton', 'measurement': None,
+                              'repeats': [{'seconds': 10, 'calls': 2}]})
+    row = {'request_id': 'saved', 'model': 'crouton-alpha-free', 'state': 'completed',
+           'usage': {'prompt_tokens': 10, 'completion_tokens': 2}}
+    save(arm / 'R1-1/receipts/saved.json', row)
+    save(arm / 'R1-1-resumed/receipts/saved.json', row)
+    save(arm / 'R1-1-resumed/receipts/new.json', dict(row, request_id='new'))
+    run = cost.holdout_runs(arm, 'hull')[0]
+    assert len(run['calls']) == 2
+    assert run['measurement_seconds'] is None
+
+
+def test_cli_writes_matching_ledgers_in_work_with_unknown_cost_flagged(tmp_path, monkeypatch):
+    arm = tmp_path / 'holdouts/bue-girl/runs/sonnet'
+    save(arm / 'summary.json', {'arm': 'sonnet', 'measurement': {'seconds': 1},
+                              'repeats': [{'seconds': 2, 'calls': 1}]})
+    receipt = arm / 'R1-1/receipts/claude.jsonl'
+    receipt.parent.mkdir(parents=True)
+    receipt.write_text(json.dumps({'model': 'claude-sonnet-5-5', 'state': 'failed',
+                                  'usage': {'prompt_tokens': 0, 'completion_tokens': 0}}) + '\n')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, 'argv', ['cost_per_ship.py', '--main-work', str(tmp_path / 'main'),
+                                    '--holdout-root', str(tmp_path / 'holdouts')])
+
+    cost.main()
+
+    report = json.loads((tmp_path / 'work/cost_per_ship.json').read_text())
+    with (tmp_path / 'work/cost_per_ship_runs.csv').open(newline='') as stream:
+        rows = list(csv.DictReader(stream))
+    assert len(report['runs']) == len(rows) == 1
+    assert rows[0]['requests'] == '1'
+    assert rows[0]['missing_usage_requests'] == '1'
+    assert rows[0]['unpriced_requests'] == '1'
+    assert rows[0]['api_cost_low_usd'] == rows[0]['api_cost_high_usd'] == ''
+    assert not (tmp_path / 'outputs').exists()
