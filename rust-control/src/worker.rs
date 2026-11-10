@@ -6,7 +6,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::os::fd::AsRawFd;
 use std::os::unix::fs::OpenOptionsExt;
-use std::os::unix::process::CommandExt;
+use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -152,6 +152,7 @@ pub enum ProcessState {
     Cancelled,
     TimedOut,
     OutputLimit,
+    ResourceLimit,
     QueueTimeout,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -170,6 +171,21 @@ fn timeout_message(stage: &str, elapsed: Duration) -> String {
         "The worker reached the configured safety time limit at {stage} after {:.1} min.",
         elapsed.as_secs_f64() / 60.0
     )
+}
+
+fn resource_limit_message(
+    limit: &str,
+    operation: &str,
+    progress: Option<&WorkerProgress>,
+) -> String {
+    match progress {
+        Some(value) if value.total > 0 => format!(
+            "Stopped by the {limit} while {}, {} of {} {}.",
+            value.stage, value.part, value.total, value.unit
+        ),
+        Some(value) => format!("Stopped by the {limit} while {}.", value.stage),
+        None => format!("Stopped by the {limit} during {operation}."),
+    }
 }
 
 struct Admission {
@@ -427,8 +443,7 @@ pub fn run_with_progress(
                 return Err(std::io::Error::last_os_error());
             }
             // Linux stops the worker when the controller dies. macOS has no
-            // parent-death signal: an orphaned worker there is bounded only by
-            // its RLIMIT_CPU limit (see docs/CONTINUATION_STATUS.md).
+            // parent-death signal; recovery handles orphaned workers.
             #[cfg(target_os = "linux")]
             if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) < 0 {
                 return Err(std::io::Error::last_os_error());
@@ -446,8 +461,8 @@ pub fn run_with_progress(
                 let _ = memory;
                 None
             };
-            for (which, soft, hard) in memory_limit.into_iter().chain([
-                (libc::RLIMIT_CPU, cpu, cpu + 1),
+            let cpu_limit = (cpu > 0).then_some((libc::RLIMIT_CPU, cpu, cpu + 1));
+            for (which, soft, hard) in memory_limit.into_iter().chain(cpu_limit).chain([
                 (libc::RLIMIT_FSIZE, 256 * 1024 * 1024, 256 * 1024 * 1024),
                 (libc::RLIMIT_NOFILE, 128, 128),
             ]) {
@@ -533,9 +548,28 @@ pub fn run_with_progress(
                 + std::fs::metadata(&stderr_path)
                     .map(|m| m.len())
                     .unwrap_or(0);
+            let signal = status.signal();
+            let limit = if bytes > 1024 * 1024 {
+                Some("output size limit (1 MiB)".to_string())
+            } else if signal == Some(libc::SIGXCPU) {
+                Some(format!("CPU limit ({cpu} seconds)"))
+            } else if signal == Some(libc::SIGXFSZ) {
+                Some("file size limit (256 MiB)".to_string())
+            } else {
+                None
+            };
+            let message = limit.as_deref().map(|name| {
+                resource_limit_message(
+                    name,
+                    &pending.operation,
+                    read_progress(root, &pending.id).as_ref(),
+                )
+            });
             return Ok(ProcessOutcome {
                 state: if bytes > 1024 * 1024 {
                     ProcessState::OutputLimit
+                } else if limit.is_some() {
+                    ProcessState::ResourceLimit
                 } else {
                     ProcessState::Exited
                 },
@@ -543,7 +577,7 @@ pub fn run_with_progress(
                 wall_seconds: started.elapsed().as_secs_f64(),
                 queue_wait_seconds: queue_wait,
                 spawned: true,
-                message: None,
+                message,
             });
         }
         let output = std::fs::metadata(&stdout_path)
@@ -604,6 +638,12 @@ pub fn run_with_progress(
                         .as_ref()
                         .map_or(pending.operation.as_str(), |(stage, _)| stage.as_str());
                     Some(timeout_message(stage, elapsed))
+                } else if matches!(state, ProcessState::OutputLimit) {
+                    Some(resource_limit_message(
+                        "output size limit (1 MiB)",
+                        &pending.operation,
+                        read_progress(root, &pending.id).as_ref(),
+                    ))
                 } else if matches!(state, ProcessState::Cancelled) && stalled {
                     let stage = watchdog
                         .last_pair
@@ -630,6 +670,24 @@ pub fn run_with_progress(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resource_limit_message_names_stage_and_progress() {
+        let progress = WorkerProgress {
+            request_id: "test".into(),
+            stage: "Making the mesh".into(),
+            part: 7,
+            total: 16,
+            unit: "part".into(),
+            counter: 1,
+            timestamp_ms: 1,
+        };
+        let message =
+            resource_limit_message("CPU limit (1 second)", "build_draft", Some(&progress));
+        assert!(message.contains("CPU limit"));
+        assert!(message.contains("Making the mesh"));
+        assert!(message.contains("7 of 16"));
+    }
 
     #[test]
     fn safety_limit_message_names_stage_and_minutes() {
