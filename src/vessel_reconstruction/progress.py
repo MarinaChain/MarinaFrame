@@ -7,8 +7,16 @@ from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
+import stat
 import threading
 import time
+import unicodedata
+
+
+MAX_PROGRESS_BYTES = 2048
+# Normal CAD steps report hundreds of sections/parts and formats, not thousands.
+# Bound alternating invented stages so a child cannot postpone stalls forever.
+MAX_PROGRESS_ADVANCES_PER_STEP = 10_000
 
 
 @contextmanager
@@ -52,19 +60,63 @@ def refresh():
             _write(path, value)
 
 
-def relay(child_path):
-    """Bring sandbox-local telemetry out through its existing trusted supervisor."""
-    if not child_path or child_path == os.environ.get('MARINAFRAME_PROGRESS_PATH'):
-        return
+def read_child_progress(child_path, request_id):
+    """Read untrusted telemetry without following a link or waiting on a FIFO."""
     try:
-        with Path(child_path).open() as stream:
-            value = json.loads(stream.read(2049))
-        with _record() as (path, previous):
-            if (path is not None and value.get('request_id') == os.environ.get('MARINAFRAME_PROGRESS_REQUEST')
-                    and value.get('counter', 0) > previous.get('counter', 0)):
+        handle = os.open(child_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        try:
+            metadata = os.fstat(handle)
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_PROGRESS_BYTES:
+                return None
+            data = os.read(handle, MAX_PROGRESS_BYTES + 1)
+        finally:
+            os.close(handle)
+        if len(data) > MAX_PROGRESS_BYTES:
+            return None
+        value = json.loads(data)
+        if type(value) is not dict or value.get('request_id') != request_id:
+            return None
+        stage, part, total = value.get('stage'), value.get('part'), value.get('total')
+        if (type(stage) is not str or not 1 <= len(stage.encode('utf-8')) <= 120
+                or any(unicodedata.category(char) == 'Cc' for char in stage)
+                or value.get('unit') not in ('part', 'section', 'format')
+                or type(part) is not int or type(total) is not int
+                or not 0 <= part <= total <= 100_000):
+            return None
+        # Never copy the child's counter, timestamp or extra fields to trusted state.
+        return {'request_id': request_id, 'stage': stage, 'part': part,
+                'total': total, 'unit': value['unit']}
+    except (OSError, ValueError, TypeError, RecursionError):
+        return None
+
+
+class ProgressRelay:
+    """One trusted observer per supervised child, kept for the entire step."""
+    def __init__(self):
+        self.last_pair = None
+        self.advances = 0
+
+    def relay(self, child_path):
+        if not child_path or child_path == os.environ.get('MARINAFRAME_PROGRESS_PATH'):
+            return
+        value = read_child_progress(child_path, os.environ.get('MARINAFRAME_PROGRESS_REQUEST'))
+        if value is None:
+            return
+        pair = (value['stage'], value['part'])
+        if pair == self.last_pair or self.advances >= MAX_PROGRESS_ADVANCES_PER_STEP:
+            return
+        try:
+            with _record() as (path, previous):
+                if path is None:
+                    return
+                # The destination belongs to the trusted worker tree. Only it can
+                # assign a counter; untrusted input never chooses its magnitude.
+                value['counter'] = previous.get('counter', 0) + 1
                 _write(path, value)
-    except (OSError, ValueError, TypeError):
-        return  # A not-yet-written progress file is normal during worker startup.
+        except (OSError, ValueError, TypeError):
+            return  # Telemetry failure is not permission to stop or adopt CAD output.
+        self.last_pair = pair
+        self.advances += 1
 
 
 class Heartbeat:

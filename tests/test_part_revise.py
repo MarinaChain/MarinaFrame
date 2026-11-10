@@ -58,6 +58,29 @@ def make_task(tmp_path, entry_extra=None):
     return task
 
 
+@pytest.mark.skipif(sys.platform != 'darwin', reason='the part-revise path requires macOS')
+def test_security_cap_stops_retries_and_preserves_its_message(tmp_path, monkeypatch):
+    from vessel_reconstruction import ship_cad_worker
+    task = make_task(tmp_path)
+    calls = []
+    reply = json.dumps({'schema': 'ship-cad/v1', 'components': [
+        {'id': 'wheelhouse', 'op': 'deckhouse',
+         'source': {'view': 'plan', 'region': 'wheelhouse', 'method': 'closed_outline'},
+         'args': {'outline': inline(SQUARE), 'height': inline([9.0, 11.5])}}]})
+
+    def model(*_):
+        calls.append(True)
+        return reply, {'state': 'completed'}
+
+    monkeypatch.setattr(ship_cad_worker, 'run', lambda *a, **k: {
+        'state': 'sandbox_safety_cap', 'result': None,
+        'error': 'The sandboxed CAD worker reached the four-hour security limit.'})
+    with pytest.raises(PartReviseError, match='four-hour security limit'):
+        part_revise.revise_part(task, 'wheelhouse', 'Make it narrower', call=model, pack={'images': []})
+    assert len(calls) == 1
+    assert (task / 'whole_vessel/wheelhouse.step').read_text() == 'old'
+
+
 def metres(formula, pixel):
     start, step = (float(v) for v in re.match(r'(-?[\d.]+) [+-] ([\d.]+) \* p[xy]', formula).groups())
     return start + step * pixel if '+' in formula else start - step * pixel

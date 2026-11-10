@@ -1,6 +1,11 @@
 """Progress is work completed, not a timer that can hide a stuck CAD call."""
 import json
+import os
+import subprocess
+import sys
 import time
+
+import pytest
 
 from vessel_reconstruction import progress
 
@@ -50,10 +55,11 @@ def test_sandbox_progress_relay_keeps_newest_stage(tmp_path, monkeypatch):
     record = json.loads(path.read_text())
     record.update(stage='Building vessel parts', part=2, total=4, counter=record['counter'] + 1)
     child.write_text(json.dumps(record))
-    progress.relay(str(child))
+    relay = progress.ProgressRelay()
+    relay.relay(str(child))
     assert json.loads(path.read_text())['stage'] == 'Building vessel parts'
     progress.report('Exporting vessel parts', 1, 4)
-    progress.relay(str(child))
+    relay.relay(str(child))
     assert json.loads(path.read_text())['stage'] == 'Exporting vessel parts'
 
 
@@ -67,3 +73,117 @@ def test_nested_worker_defers_time_limit_to_controller(tmp_path, monkeypatch):
                                limits=replace(DEFAULT_LIMITS, wall_seconds=0.01))
     assert result['state'] == 'exited'
     assert result['exit_code'] == 0
+
+
+def child_record(**changes):
+    return {'request_id': 'worker-test', 'stage': 'Building the hull', 'part': 1,
+            'total': 72, 'unit': 'section', 'counter': 1, 'timestamp_ms': 1} | changes
+
+
+@pytest.mark.parametrize('kind', ['symlink', 'fifo', 'oversized', 'non_object'])
+def test_untrusted_progress_files_do_not_block_or_follow_links(tmp_path, kind):
+    child = tmp_path / 'child.json'
+    if kind == 'symlink':
+        target = tmp_path / 'private.json'
+        target.write_text(json.dumps(child_record()))
+        child.symlink_to(target)
+    elif kind == 'fifo':
+        os.mkfifo(child)
+    elif kind == 'oversized':
+        child.write_text(json.dumps(child_record()) + ' ' * 2048)
+    else:
+        child.write_text('[]')
+    # An isolated test process bounds a broken FIFO reader instead of hanging pytest.
+    code = '''import sys
+from vessel_reconstruction.progress import read_child_progress
+assert read_child_progress(sys.argv[1], 'worker-test') is None
+'''
+    result = subprocess.run([sys.executable, '-c', code, str(child)],
+                            capture_output=True, text=True, timeout=2)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize('changes', [
+    {'stage': 'x' * 121}, {'stage': 'hull\nexport'}, {'stage': 'hull\x85export'},
+    {'unit': 'shell'}, {'part': -1}, {'part': True}, {'part': 73},
+    {'total': 100001}, {'total': False}, {'request_id': 'another-worker'},
+])
+def test_relay_rejects_invalid_display_fields(tmp_path, changes):
+    child = tmp_path / 'child.json'
+    child.write_text(json.dumps(child_record(**changes)))
+    assert progress.read_child_progress(child, 'worker-test') is None
+
+
+def test_child_counter_alone_cannot_advance_trusted_progress(tmp_path, monkeypatch):
+    path, child = tmp_path / 'progress.json', tmp_path / 'child.json'
+    monkeypatch.setenv('MARINAFRAME_PROGRESS_PATH', str(path))
+    monkeypatch.setenv('MARINAFRAME_PROGRESS_REQUEST', 'worker-test')
+    relay = progress.ProgressRelay()
+    child.write_text(json.dumps(child_record(counter=10**100)))
+    relay.relay(child)
+    first = json.loads(path.read_text())
+    for counter in range(10):
+        child.write_text(json.dumps(child_record(counter=counter)))
+        relay.relay(child)
+    assert json.loads(path.read_text())['counter'] == first['counter']
+    child.write_text(json.dumps(child_record(part=2, counter=0)))
+    relay.relay(child)
+    assert json.loads(path.read_text())['counter'] == first['counter'] + 1
+
+
+def test_relay_advance_budget_is_per_step_and_cannot_be_reset_by_the_child(tmp_path, monkeypatch):
+    path, child = tmp_path / 'progress.json', tmp_path / 'child.json'
+    monkeypatch.setenv('MARINAFRAME_PROGRESS_PATH', str(path))
+    monkeypatch.setenv('MARINAFRAME_PROGRESS_REQUEST', 'worker-test')
+    monkeypatch.setattr(progress, 'MAX_PROGRESS_ADVANCES_PER_STEP', 3)
+    relay = progress.ProgressRelay()
+    for part in range(1, 7):
+        child.write_text(json.dumps(child_record(part=part)))
+        relay.relay(child)
+    value = json.loads(path.read_text())
+    assert value['part'] == 3
+    assert value['counter'] == 3
+
+
+@pytest.mark.parametrize('model_code', [False, True])
+def test_supervisor_absolute_cap_applies_only_to_sandboxed_model_code(monkeypatch, model_code):
+    from vessel_reconstruction import isolation
+    clock = [0.0]
+    killed = []
+
+    class Child:
+        pid = 12345
+
+        def wait(self, timeout):
+            return -9 if killed else 0
+
+    monkeypatch.setenv('MARINAFRAME_PROGRESS_PATH', '/unused/trusted-progress.json')
+    monkeypatch.setattr(isolation.subprocess, 'Popen', lambda *a, **k: Child())
+    # The cap must still stop our live child when host process inspection is unavailable.
+    monkeypatch.setattr(isolation, 'process_identity', lambda pid: None)
+    monkeypatch.setattr(isolation, 'child_has_exited', lambda pid: clock[0] > 2 * isolation.SANDBOX_MODEL_WALL_SECONDS)
+    monkeypatch.setattr(isolation, 'kill_process_tree', lambda *a: False)
+    monkeypatch.setattr(isolation.os, 'killpg', lambda group, sig: killed.append((group, sig)))
+    monkeypatch.setattr(isolation.time, 'monotonic', lambda: clock[0])
+    monkeypatch.setattr(isolation.time, 'sleep', lambda _: clock.__setitem__(0, clock[0] + isolation.SANDBOX_MODEL_WALL_SECONDS))
+    result = isolation.supervise_process(['controlled-child'], sandboxed_model_code=model_code)
+    if model_code:
+        assert result['state'] == 'sandbox_safety_cap'
+        assert result['error_code'] == 'sandbox_worker_absolute_safety_cap'
+        assert 'security limit' in result['error']
+        assert result['elapsed_seconds'] == isolation.SANDBOX_MODEL_WALL_SECONDS
+        assert killed == [(Child.pid, isolation.signal.SIGKILL)]
+    else:
+        assert result['state'] == 'exited'
+        assert result['elapsed_seconds'] > isolation.SANDBOX_MODEL_WALL_SECONDS
+
+
+def test_security_cap_stops_a_live_child_without_process_inspection(monkeypatch):
+    from vessel_reconstruction import isolation
+    monkeypatch.setattr(isolation, 'SANDBOX_MODEL_WALL_SECONDS', 0.05)
+    monkeypatch.setattr(isolation, 'process_identity', lambda pid: None)
+    result = isolation.supervise_process(
+        [sys.executable, '-c', 'import time; time.sleep(20)'], sandboxed_model_code=True)
+    assert result['state'] == 'sandbox_safety_cap'
+    assert result['exit_code'] == -isolation.signal.SIGKILL
+    assert result['elapsed_seconds'] < 3

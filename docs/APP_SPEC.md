@@ -517,7 +517,19 @@ model requests). The backend reads progress on every poll, including polls with 
 new ledger event. The run strip shows, for example,
 “Building the hull: section 31 of 72 · 12 min”.
 
-After 300 seconds without a larger counter, the controller records `worker_stalled`
+The trusted relay and Rust watchdog each maintain their own counter. Only a change
+in the validated `(stage, part)` pair advances it; child counters and timestamps do
+not reset supervision. Both observers accept at most 10,000 advances per worker step.
+Normal CAD steps report hundreds of units. This budget bounds invented alternating
+stages; Keep waiting resets only the stall timer, not the advance budget.
+
+Progress readers open with `O_NOFOLLOW | O_NONBLOCK`, require a regular file from
+the opened descriptor, and read at most 2,049 bytes (2,048 bytes plus one for overflow
+detection). They reject oversized records, non-object JSON, control characters,
+stages longer than 120 UTF-8 bytes, unknown units and counts outside
+`0 <= part <= total <= 100000`. Invalid records mean no progress.
+
+After 300 seconds without an accepted advance, the controller records `worker_stalled`
 and status `stalled`. Five minutes gives slow native calls room on a loaded laptop.
 The worker stays alive and keeps its admission slot. The strip names the stage and
 offers **Keep waiting** and **Stop**, with two-stage tooltips. `resume_task` for a
@@ -533,6 +545,12 @@ their explicit cap. Provider request deadlines, CPU and memory resource limits r
 unchanged. Nested Python workers in a controller run defer wall-time decisions to
 this watchdog; standalone Python supervisors keep their existing limits. Sandbox-local
 ship progress is relayed through the trusted supervisor without widening sandbox writes.
+Sandboxed model-code children have a separate four-hour supervisor wall cap. It is a
+security backstop against fabricated progress, not a speed limit for deterministic
+own-code CAD. The trusted caller selects this mode; child environment settings cannot
+turn it off. At the cap, supervision returns `sandbox_worker_absolute_safety_cap` and
+“The sandboxed CAD worker reached the four-hour security limit.” The part-revise path
+keeps that message and stops retries; it does not restart the clock automatically.
 Progress is display data only. Receipts, atomic publication and integrity checks still
 decide which outputs can be used.
 

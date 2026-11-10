@@ -48,6 +48,10 @@ DEFAULT_LIMITS = WorkerLimits()
 STALL_WALL_FACTOR = 10
 # How often, after the wall limit, the supervisor reads the group's CPU time.
 CPU_POLL_SECONDS = 1.0
+# Security backstop for sandboxed model code, not a laptop speed limit. Even
+# fabricated progress and repeated waiting cannot extend a child beyond four hours.
+# Own-code CAD workers supervised by Rust retain no default absolute wall limit.
+SANDBOX_MODEL_WALL_SECONDS = 4 * 60 * 60
 
 
 def safe_worker_environment() -> dict[str, str]:
@@ -337,7 +341,8 @@ def supervise_process(command: list[str], *, limits: WorkerLimits = DEFAULT_LIMI
                       cancel_event: threading.Event | None = None,
                       stop_event: threading.Event | None = None,
                       on_start: Callable[[dict], None] | None = None,
-                      output_dir: Path | None = None, env: dict | None = None) -> dict:
+                      output_dir: Path | None = None, env: dict | None = None,
+                      sandboxed_model_code: bool = False) -> dict:
     """Supervise a trusted argv. Child must apply POSIX limits before native work.
 
     Public web requests never provide commands. This factored supervisor permits
@@ -357,6 +362,7 @@ def supervise_process(command: list[str], *, limits: WorkerLimits = DEFAULT_LIMI
     group = (identity or {}).get('pgid', process.pid)
     next_cpu_check = 0.0
     controller_supervised = bool(os.environ.get('MARINAFRAME_PROGRESS_PATH'))
+    relay = progress.ProgressRelay()
     try:
         if on_start:
             on_start(identity or {'pid': process.pid, 'pgid': process.pid, 'start_ticks': -1})
@@ -370,13 +376,15 @@ def supervise_process(command: list[str], *, limits: WorkerLimits = DEFAULT_LIMI
             if stop_event is not None and stop_event.is_set():
                 state = 'interrupted'; break
             elapsed = time.monotonic() - started
+            if sandboxed_model_code and elapsed >= SANDBOX_MODEL_WALL_SECONDS:
+                state = 'sandbox_safety_cap'; break
             # The Rust controller watches progress for its entire worker tree.
             # Nested supervisors retain cancellation and all resource limits.
             if controller_supervised:
-                progress.relay(child_environment.get('MARINAFRAME_PROGRESS_PATH'))
-            if not controller_supervised and elapsed >= STALL_WALL_FACTOR * limits.wall_seconds:
+                relay.relay(child_environment.get('MARINAFRAME_PROGRESS_PATH'))
+            if not controller_supervised and not sandboxed_model_code and elapsed >= STALL_WALL_FACTOR * limits.wall_seconds:
                 state = 'timed_out'; break
-            if not controller_supervised and elapsed >= limits.wall_seconds and elapsed >= next_cpu_check:
+            if not controller_supervised and not sandboxed_model_code and elapsed >= limits.wall_seconds and elapsed >= next_cpu_check:
                 next_cpu_check = elapsed + CPU_POLL_SECONDS
                 if wall_limit_reached(elapsed, limits, lambda: group_cpu_seconds(group)):
                     state = 'timed_out'; break
@@ -387,14 +395,30 @@ def supervise_process(command: list[str], *, limits: WorkerLimits = DEFAULT_LIMI
         kill_process_tree(identity, limits.termination_grace_seconds)
         process.wait(timeout=3)
         raise
-    kill_process_tree(identity, 0.02 if state == 'exited' else limits.termination_grace_seconds)
+    if state == 'sandbox_safety_cap':
+        # Popen created this session, and waitid above has not reaped its leader.
+        # That unreaped child pins the PID/group identity even when ps is unavailable.
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        except PermissionError:
+            # macOS can refuse a signal when only the zombie leader remains.
+            if not child_has_exited(process.pid):
+                raise
+    else:
+        kill_process_tree(identity, 0.02 if state == 'exited' else limits.termination_grace_seconds)
     returncode = process.wait(timeout=3)
     if output_dir is not None and _output_bytes(output_dir, limits.output_bytes) > limits.output_bytes:
         state = 'resource_limited'
     if state == 'exited' and returncode in (-signal.SIGXCPU, -signal.SIGXFSZ):
         state = 'resource_limited'
-    return {'state': state, 'exit_code': returncode, 'elapsed_seconds': round(time.monotonic() - started, 4),
-            'process': identity, 'limits': asdict(limits)}
+    outcome = {'state': state, 'exit_code': returncode, 'elapsed_seconds': round(time.monotonic() - started, 4),
+               'process': identity, 'limits': asdict(limits)}
+    if state == 'sandbox_safety_cap':
+        outcome.update(error_code='sandbox_worker_absolute_safety_cap',
+                       error='The sandboxed CAD worker reached the four-hour security limit.')
+    return outcome
 
 
 def recover_worker_output(output: Path, *, status: str = 'interrupted') -> dict:

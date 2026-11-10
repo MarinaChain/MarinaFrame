@@ -5,6 +5,7 @@
 - **Trigger:** A loaded laptop's 72-station Gunnerus build was stopped at the 600-second wall limit twice. The founder rejected fixed total time limits for slower laptops.
 - **Rule:** Track completed work with an increasing counter. A periodic heartbeat must not increase it. After five minutes without new progress, keep the worker alive and offer Keep waiting or Stop. Default the optional absolute safety cap to off; retain CPU, memory and receipt checks.
 - **Why:** Elapsed time depends on machine load. A slow build can still make progress.
+- **Security correction (2026-11-10):** Sandboxed model-code children are untrusted. Read telemetry through non-blocking, no-follow descriptors, require a regular file and validate bounded JSON fields. Trusted supervisors count stage/part changes with a finite advance budget; never trust a child's counter. Keep a four-hour security cap for these children only, with a clear error and no automatic retry. Deterministic own-code CAD retains no default total wall limit.
 
 ### Freeze executable and Python source for concurrent evaluation
 - **Date:** 2026-11-08
