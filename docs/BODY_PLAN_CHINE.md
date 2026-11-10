@@ -832,3 +832,29 @@ short; the aft sheer line is light there) and 1 and 9 (not traced). WHITE GULL: 
 on the hull; after the cut the polyline ends below them), and its W5 error (-0.08 m) is gone. The W6 cells of
 stations 6 and 7 come from the frozen reader (step 3). COLLIER: unchanged; its missing sheer cells (stations 1, 4, 7,
 8, 10) are the offset rail ticks above.
+
+### Step 3: no cells where the hull is not drawn
+
+A polyline gives cells only between its own ends (rabbet to sheer), on its own traced ink, by construction; step 2
+put the sheer end on the drawn sheer line. The remaining extra cells came from the existing reader on declined
+halves. Rule (`unsupported_cells`, applied on a half with engaged stations): each existing station that is not
+engaged is traced up its own line from its middle cell by height (the lowest cell may lie on the bottom, the highest
+above the sheer), with the step-2 sheer rules and the thin-line and grid cuts; its cells more than one line width
+above that top end are left out of the table and the curves. A station whose middle cell gives no seed on ink, or
+whose trace rises less than 15 line widths, is not checked (no evidence either way; the first version of the rule
+removed five correct W2 to W6 cells of WHITE GULL station 1, whose trace failed at once). Halves without engaged
+stations, so the whole round-bilge set, are not touched.
+
+Results (step 2 -> step 3):
+
+| Sheet | Waterline cells | WL RMS m | WL extra | Point cells | Point RMS m | Point wrong | Point identity errors |
+|---|---|---|---|---|---|---|---|
+| WHITE GULL | 43/53 -> 43/53 | 0.0269 -> 0.0269 | W6 of 6, 7 -> **none** | 12/30 -> 10/30 | 0.1065 -> 0.1166 | 2 -> 2 | [6] -> [] |
+| COLLEEN | 22/26 (same) | 0.0007 (same) | none | 17/26 (same) | 0.0070 (same) | 0 | [] |
+| COLLIER | - | - | - | 22/31 (same) | 0.0691 (same) | 2 | [5] |
+| PARDON ME | 43/57 (same) | 0.035486 (same) | - | - | - | - | - |
+| Round-bilge set | identical (no station engaged) | | | | | | |
+
+WHITE GULL: the frozen W6 cells of stations 6 and 7 (above their drawn sheer) are left out. Two point cells go with
+them: the frozen sheer cells of 6 and 7 were interpolated between W5 and the W6 sample above the sheer, and without
+it the printed sheer height is no longer enclosed. Both were within 1 cm; they are lost, not wrong.

@@ -341,17 +341,18 @@ def frozen_half_tables(readings: dict, identities: dict, layout) -> dict:
             for name, reading in readings.items()}
 
 
-def engage(halves: dict, readings: dict, identities: dict, layout) -> None:
-    """Per-station engagement on the declined halves, named by the frozen rank identities."""
+def engage(halves: dict, readings: dict, identities: dict, layout, ink=None) -> None:
+    """Per-station engagement on the declined halves, named by the frozen rank identities; with
+    `ink`, frozen cells above their own station's traced side are listed as unsupported."""
     tables = frozen_half_tables(readings, identities, layout)
     for name, half in halves.items():
-        polyline.engage_stations(half, readings[name].layout, tables[name], layout)
+        polyline.engage_stations(half, readings[name].layout, tables[name], layout, ink)
 
 
 def polyline_curves(halves: dict, readings: dict, identities: dict, layout, cal) -> dict:
     """Product rule: traced polylines on read halves; on declined halves the frozen curves, with
-    engaged stations' polylines in place of their frozen curves and no frozen sample on an engaged
-    polyline's ink (`body_plan_polyline.half_table`)."""
+    engaged stations' polylines in place of their frozen curves, and no frozen sample on an engaged
+    polyline's ink or above its own station's traced side (`body_plan_polyline.half_table`)."""
     curves: dict = {}
     for name, reading in readings.items():
         half = halves[name]
@@ -360,6 +361,8 @@ def polyline_curves(halves: dict, readings: dict, identities: dict, layout, cal)
                 curves[station.station] = _polyline_samples(station, layout, cal)
             continue
         found = _identity_crossings(reading, identities[name])
+        for station, label in getattr(half, 'unsupported', []):
+            found.get(station, {}).pop(label, None)
         engaged = getattr(half, 'engaged', [])
         for station in engaged:
             found.pop(station.station, None)

@@ -290,3 +290,31 @@ def test_a_side_cut_where_it_runs_on_up_a_grid_column():
     assert cut[-1, 0] == pytest.approx(300, abs=70)  # the junction (the band reaches below it)
     assert cut[-1, 0] > 250
     assert len(bpp._cut_at_grid(points, width, ())) == len(points)
+
+
+# ---------------------------------------------------------------- cells only where the hull is drawn
+
+def test_existing_cells_above_their_own_traced_side_are_unsupported():
+    drawn = (STATIONS[0], STATIONS[2])
+    ink, sheet, side = v_bottom(1, stations=drawn)
+    sheet, side = _layout(sheet.centre_column, 1, 4)
+    offset = 900  # a station line the polyline reader does not trace: drawn from row 400 down only
+    ink = _with(ink, lambda draw: draw.line([(sheet.centre_column + offset, 400), (sheet.centre_column + offset - 30, 700)],
+                                           fill=0, width=LINE))
+    half = bpp.read_half(ink, sheet, side)
+    existing = _existing_values(sheet, side, ((4, drawn[0]), (2, drawn[1])))
+    for label in ('r325', 'r475', 'r625'):  # station 3: r325 lies above its drawn top
+        row = sheet.waterline_rows[label]
+        existing[(3, label)] = (offset - 30 * (row - 400) / 300) / sheet.pixels_per_metre
+    bpp.engage_stations(half, side, existing, sheet, ink)
+    assert half.unsupported == [(3, 'r325')]
+    table = bpp.half_table(half, existing, sheet)
+    assert (3, 'r325') not in table and (3, 'r475') in table and (3, 'r625') in table
+
+
+def test_no_unsupported_check_without_engaged_stations():
+    ink, sheet, side = round_bilge()
+    half = bpp.read_half(ink, sheet, side)
+    existing = {(4, 'r250'): 12.0}  # nowhere near any ink
+    bpp.engage_stations(half, side, existing, sheet, ink)
+    assert half.unsupported == [] and bpp.half_table(half, existing, sheet) == existing

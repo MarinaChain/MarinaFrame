@@ -70,7 +70,7 @@ def main():
                       for n, r in frozen.items()}
         before_table, _ = cv.table_and_flags(frozen, identities, layout)
         halves = polyline.read_sheet(ink, layout)
-        product.engage(halves, frozen, identities, layout)
+        product.engage(halves, frozen, identities, layout, ink)
         after_table = product.polyline_table(halves, frozen, identities, layout)
         truth = load_truth(truth_path)  # read only now, after both readers have run
         before, after = summarise(before_table, truth, scorer), summarise(after_table, truth, scorer)

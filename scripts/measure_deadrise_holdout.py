@@ -90,7 +90,7 @@ def main() -> None:
     seconds['v2'] = round(time.monotonic() - started, 1)
     started = time.monotonic()
     halves = polyline.read_sheet(ink, layout)
-    sc.engage(halves, frozen, identities, layout)
+    sc.engage(halves, frozen, identities, layout, ink)
     seconds['polyline'] = round(time.monotonic() - started, 1)
 
     tables = {'frozen': cv.table_and_flags(frozen, identities, layout)[0],

@@ -243,6 +243,8 @@ class HalfReading:
     unnamed: list[StationPolyline] = field(default_factory=list)  # traced with a knuckle, not named
     # On a declined half: stations engaged one by one, named by the existing reader (`engage_stations`).
     engaged: list[StationPolyline] = field(default_factory=list)
+    # Existing cells above the top of their own station's traced side (`unsupported_cells`).
+    unsupported: list = field(default_factory=list)
     line_width_px: float = 0.0
     notes: list = field(default_factory=list)
 
@@ -987,13 +989,15 @@ def _existing_name(station: StationPolyline, existing: dict, side: bpr.SideLayou
 
 
 def engage_stations(half: HalfReading, side: bpr.SideLayout, existing: dict,
-                    sheet: bpr.SheetLayout) -> list[StationPolyline]:
+                    sheet: bpr.SheetLayout, ink: np.ndarray | None = None) -> list[StationPolyline]:
     """Engage the clear-knuckle stations of a declined half, one by one.
 
     `existing` is the existing reader's table of this half, {(station, waterline): m}. A traced
     station is named after the existing station whose cells lie on its side; it is left out when
     no name or more than one name matches, or when another engaged station takes the same name.
     When other lines through its knuckle also reach the centreline, its bottom is not engaged.
+    With `ink`, existing cells of the other stations that lie above their own traced side are
+    listed in `half.unsupported` (`unsupported_cells`).
     Sets and returns `half.engaged`. A half read as a whole engages nothing here.
     """
     half.engaged = []
@@ -1027,7 +1031,50 @@ def engage_stations(half: HalfReading, side: bpr.SideLayout, existing: dict,
         half.engaged.append(station)
     if half.engaged:
         half.notes.append(f'engaged stations {[s.station for s in half.engaged]}; others kept from the existing reader')
+        if ink is not None:
+            half.unsupported = unsupported_cells(ink, half, side, existing, sheet)
+            if half.unsupported:
+                half.notes.append(f'existing cells above their station\'s traced side left out: {half.unsupported}')
     return half.engaged
+
+
+def unsupported_cells(ink: np.ndarray, half: HalfReading, side: bpr.SideLayout, existing: dict,
+                      sheet: bpr.SheetLayout) -> list:
+    """Existing cells (station, waterline) that lie above the top of their station's traced side.
+
+    A cell is kept only where the hull is drawn: on the station's own line between its ends. Each
+    existing station that is not engaged is traced up from its middle cell by height, with the
+    sheer rules of `trace_side_up` and the thin-line and grid cuts of a side; its cells more than
+    one line width above the top end are listed. A station whose middle cell gives no seed on ink,
+    or whose trace rises less than MIN_SIDE_WIDTHS above it, is not checked.
+    """
+    width = half.line_width_px
+    engaged = {station.station for station in half.engaged}
+    by_station: dict = {}
+    for (name, label), value in existing.items():
+        if name not in engaged:
+            by_station.setdefault(name, []).append((label, value))
+    unsupported = []
+    for name, cells in sorted(by_station.items()):
+        # The middle cell by height: on the side (the lowest may lie on the bottom, the highest above the sheer).
+        ordered = sorted(cells, key=lambda cell: sheet.waterline_rows[cell[0]])
+        label, value = ordered[(len(ordered) - 1) // 2]
+        column = sheet.centre_column + side.sign * value * sheet.pixels_per_metre
+        seed = None
+        for row in (sheet.waterline_rows[label] - int(2 * width) - 3, sheet.waterline_rows[label] + int(2 * width) + 3):
+            centre = _run_centre(ink, int(row), column, width) if 0 <= row < ink.shape[0] else None
+            if centre is not None:
+                seed = (float(int(row)), centre)
+                break
+        if seed is None:
+            continue
+        upward = _cut_at_grid(trace_side_up(ink, seed, width), width, side.grid_columns)  # seed first
+        side_points = _cut_at_thin_line(ink, upward[::-1], width)  # top first
+        top = float(side_points[0, 0])
+        if seed[0] - top < MIN_SIDE_WIDTHS * width:
+            continue  # the trace did not follow a side up from the seed: no evidence either way
+        unsupported += [(name, label) for label, _ in cells if sheet.waterline_rows[label] < top - width]
+    return sorted(unsupported)
 
 
 def same_ink(station: StationPolyline, row: float, column: float, width: float) -> bool:
@@ -1041,11 +1088,11 @@ def half_table(half: HalfReading, existing: dict, sheet: bpr.SheetLayout) -> dic
 
     A half read as a whole gives its polylines' table. A declined half gives the existing table
     with each engaged station's cells replaced by its polyline, and without existing cells of
-    other stations that lie on an engaged polyline.
+    other stations that lie on an engaged polyline or above their own traced side.
     """
     if half.read:
         return waterline_table({half.side: half}, sheet)
-    table = dict(existing)
+    table = {key: value for key, value in existing.items() if key not in set(half.unsupported)}
     for station in half.engaged:
         for (name, label), value in list(table.items()):
             row = sheet.waterline_rows[label]
