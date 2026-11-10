@@ -18,6 +18,10 @@ Files (``<stem>`` is ``<vessel>_<revision>_DRAFT``):
                             structure folder (role ocx_structure_tanks)
   <stem>_tanks.3docx        tanks only, as OCX compartments: written when there is a tank model and no
                             single structure OCX file to hold them (role ocx_tanks)
+  glb/*.glb                existing display meshes, copied with metre-scale scene transforms
+  assets.json              stable asset ids linked to GLB files and part nodes
+  spaces.json              built tanks, with bounds in model metres and source labels
+  frames.json              stored frame spacing, zero and table; unknown when not supplied
   <stem>_manifest.json      file list with SHA-256 hashes and the source build identity
   <stem>_package.zip        all of the above
 
@@ -46,6 +50,7 @@ from .report import FOOTER, ReportFacts, write_report
 from .source import DraftBuild, ExportError, load_build
 from .tank_tables import write_tank_tables
 from .identity import manifest_identity
+from .spatial import write_spatial
 
 STAMP = "Draft hull model from MarinaFrame. Not approved for construction."
 DATUM = "Units metres (STEP, IGES, Rhino 3dm and STL in millimetres); x along the length as drawn; z up from the baseline (z = 0)."
@@ -169,14 +174,15 @@ def write_tanks_ocx(tanks: list, out_dir: Path, stem: str, vessel: str) -> tuple
     return path, "ocx_tanks", {"compartments": count}
 
 
-def file_entry(path: Path, role: str, **extra) -> dict:
-    return {"file": path.name, "role": role, "bytes": path.stat().st_size, "sha256": digest_file(path), **extra}
+def file_entry(path: Path, role: str, *, root: Path | None = None, **extra) -> dict:
+    name = path.relative_to(root).as_posix() if root is not None else path.name
+    return {"file": name, "role": role, "bytes": path.stat().st_size, "sha256": digest_file(path), **extra}
 
 
 def write_zip(files: list[Path], path: Path) -> None:
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for file in files:
-            info = zipfile.ZipInfo(file.name, date_time=ZIP_DATE_TIME)
+            info = zipfile.ZipInfo(file.relative_to(path.parent).as_posix(), date_time=ZIP_DATE_TIME)
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = 0o644 << 16
             archive.writestr(info, file.read_bytes())
@@ -209,7 +215,7 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = build.file_stem
-    entries = []
+    entries, units_axes = write_spatial(build, identity, tanks, structure_dir, out_dir)
 
     offsets = out_dir / f"{stem}_offsets.csv"
     table = offsets_table(build.sections, build.spec, waterline_intervals)
@@ -267,8 +273,8 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
                 "review_state": (build.result.get("review") or {}).get("state", "unreviewed"),
                 "draft_status": (build.result.get("draft") or {}).get("status"),
                 "open_guesses": sum(1 for g in build.guesses if g.get("status") == "open"),
-                "not_built": missing,
-                "files": [file_entry(path, role, **extra) for path, role, extra in entries]}
+                "not_built": missing, "units_axes": units_axes,
+                "files": [file_entry(path, role, root=out_dir, **extra) for path, role, extra in entries]}
     if booklet_summary is not None:
         manifest["booklet_check"] = booklet_summary
     manifest_path = out_dir / f"{stem}_manifest.json"

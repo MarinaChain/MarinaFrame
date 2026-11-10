@@ -227,7 +227,7 @@ def test_export_of_synthetic_box_writes_stamped_package(tmp_path):
     names = {entry["file"] for entry in manifest["files"]}
     assert names == {f"{stem}_offsets.csv", f"{stem}_hydrostatics.json", f"{stem}_hydrostatics.csv",
                      f"{stem}_report.pdf", f"{stem}_model.step", f"{stem}_model.stl",
-                     f"{stem}_model.iges", f"{stem}_model.3dm"}
+                     f"{stem}_model.iges", f"{stem}_model.3dm", "assets.json", "spaces.json", "frames.json"}
     assert manifest["engineering_approved"] is False and manifest["not_built"] == []
     assert manifest["open_guesses"] == 1
     out = tmp_path / "out"
