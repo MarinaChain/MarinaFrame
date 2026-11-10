@@ -1059,3 +1059,54 @@ SHA-256: `1bc962218d25b86c6006a23c2e5567e241ad169cd430f2bdcb73a92793f58be1` (was
 Checks: `tests/test_deadrise_holdouts.py` 17 passed (new synthetic test; the old refusal of a "0" column is replaced by
 refusals of a missing and an out-of-order station). The WHITE GULL and COLLEEN truth files parse to identical cells with
 the old and new loader (pure parse check, no reader run), so their published scores are unchanged.
+
+### HOLDOUT RESULT: CALEB JONES (one run, no tuning) - FAIL
+
+One run on 2026-11-10 with the calibration `70789b1` and the amended scorer `1a16e01` (truth SHA-256 matched;
+`body_plan_polyline.py` `14ab4e82...` as pinned; no "unsure" entries). Nothing was changed after the run. Evidence
+(git-ignored) in `work/deadrise_holdouts/`: `caleb-jones_holdout_result.json` (`c10d2bd000a32686...`),
+`caleb-jones_holdout_overlay.png` (`aaacb43ff5aef7d4...`), `caleb-jones_holdout_stdout.txt` (`e8e579b8df5dd291...`).
+Truth cells: 30 point cells (SHEER, CHINE, RABBET for stations 1 to 10), no waterline cells.
+
+Readers: the polyline reader **read both halves as a whole** (no stations engaged). Fore: 4 knuckled stations for 7,
+named 7, 6, 5, 4; innermost 3, 2, 1 not read. Aft: 4 knuckled lines named 107, 8, 9, 10. v2 verified a chine line on
+the fore half only ("1 upper pieces for 7 stations"), with one chine point (station 7).
+
+| Arm | Point cells | RMS m | Max m | Wrong | Sheer only | Chine only | Rabbet only | Identity errors | Extra |
+|---|---|---|---|---|---|---|---|---|---|
+| Frozen | 5/30 | 0.589 | 1.244 | 4 | 3/10, RMS 0.223, 2 wrong | 2/10, RMS 0.890, 2 wrong | 0/10 | [] | none |
+| v2 | 1/30 | 0.193 | 0.193 | 1 | 0/10 | 1/10, RMS 0.193, 1 wrong | 0/10 | [] | none |
+| Polyline (both halves read) | 16/30 | 0.660 | 1.753 | 10 | 7/10, RMS 0.451, 5 wrong | 6/10, RMS 0.960, 5 wrong | 3/10, RMS 0.082, 0 wrong | [4, 5, 6, 7, 8, 9] | none |
+
+Polyline errors (m): station 7 chine +0.001, sheer +0.006, rabbet +0.124; station 4 chine -1.175, sheer -0.898; 5
+chine -0.858, sheer -0.600; 6 chine -0.463, sheer -0.373, rabbet +0.068; 8 chine -0.354, sheer -0.133; 9 chine
+-1.753, sheer -0.182; 10 sheer -0.259; 4 rabbet -0.007.
+
+Gates (point cells; there are no waterline truth cells, so the waterline gates do not apply):
+
+| Gate | v2 | Polyline |
+|---|---|---|
+| Cells >= frozen | **fail** (1 < 5) | pass (16 >= 5) |
+| RMS not worse | pass (0.193 <= 0.589) | **fail** (0.660 > 0.589) |
+| Wrong not worse | pass (1 <= 4) | **fail** (10 > 4) |
+| Wrong <= 10 % of cells | **fail** (1/1) | **fail** (10/16) |
+| No extra on blank truth | pass | pass |
+| By eye | v2's verified "chine" line runs along the heavy sheer line, not the chine, and its one chine point (row 2381, 1020 px out) is on the sheer line: **fail** | **fail**: see below |
+
+By eye (overlay): the fore knuckle named 7 is on station 7's corner. The knuckles named 6, 5 and 4 lie on drawn
+corners, but of stations 4, 3 and 2: the outer stations 6 and 5 (within about 30 and 60 px of station 7 at the
+chine) were not traced, and rank naming shifted the inner names by two. Aft: 107 is on the left copy of station 7;
+the knuckles named 8 and 9 are on stations 9 and 10 (station 8, next to the copy of 7, was not traced); the knuckle
+named 10 is on the corner of the **transom outline**, not a station. These name shifts are the identity errors and
+the large chine and sheer errors.
+
+Sheer line taken (PM question): the polyline sheer of every traced station ends on the **thin top line** (covering
+board top), not on the heavy "Sheer" line (overlay marks; station 7 sheer at row 2494, its top). Frozen and v2 sample
+the station crossings on the measuring rows only, so they take no sheer line; their sheer cells are interpolated
+between grid rows. Station 7, the only correctly named polyline station, scored sheer +0.006 m at the printed
+height, so this run does not separate the two lines.
+
+**CALEB JONES: FAIL** for both v2 and the polyline reader. The polyline failure is a naming failure, not a tracing
+failure on the stations it named correctly: on a half read as a whole, names are given by nesting rank, so a missed
+outer station (crowded stations 5 and 6 beside 7; station 8 beside the copy of 7) and a counted transom outline shift
+every inner name. CALEB JONES is now a development case.
