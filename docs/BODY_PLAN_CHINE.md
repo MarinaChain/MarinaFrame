@@ -967,3 +967,10 @@ line was verified per half. Printed waterline cells, if any, are scored as well,
 wrong cells not worse; wrong cells <= 10 % of cells given; no extra cell where the printed half-breadth is blank; by
 eye on the overlay, every named or engaged knuckle lies on a drawn station corner (recorded). A failure is reported
 as a failure. After the run CALEB JONES is a development case.
+
+Verification (2026-11-10, `b9b2289` plus a test fix): `PYTHONPATH=src:. .venv/bin/python -m pytest -q`: 1758 passed,
+1 skipped, 6 failed in 1135 s. Five are the known macOS `sandbox-exec` worker failures inside this agent's sandbox
+(`test_ship_cad.py` x3, `test_part_revise.py`, `test_whole_vessel_step1.py`; exit 71; they import nothing from these
+files). The sixth was `test_existing_cells_above_their_own_traced_side_are_unsupported`, whose synthetic station line
+was too short for the guard added late in step 3; its geometry was corrected (test only, no module change) and
+`tests/test_body_plan_polyline.py` passes (20). The pinned hashes above are unchanged. Frozen reader hashes unchanged.

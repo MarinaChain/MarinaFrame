@@ -301,15 +301,16 @@ def test_existing_cells_above_their_own_traced_side_are_unsupported():
     offset = 900  # a station line the polyline reader does not trace: drawn from row 400 down only
     ink = _with(ink, lambda draw: draw.line([(sheet.centre_column + offset, 400), (sheet.centre_column + offset - 30, 700)],
                                            fill=0, width=LINE))
+    # The check traces up from the station's middle cell (r625), which must rise at least 15 widths.
     half = bpp.read_half(ink, sheet, side)
     existing = _existing_values(sheet, side, ((4, drawn[0]), (2, drawn[1])))
-    for label in ('r325', 'r475', 'r625'):  # station 3: r325 lies above its drawn top
+    for label in ('r325', 'r625', 'r700'):  # station 3: r325 lies above its drawn top
         row = sheet.waterline_rows[label]
         existing[(3, label)] = (offset - 30 * (row - 400) / 300) / sheet.pixels_per_metre
     bpp.engage_stations(half, side, existing, sheet, ink)
     assert half.unsupported == [(3, 'r325')]
     table = bpp.half_table(half, existing, sheet)
-    assert (3, 'r325') not in table and (3, 'r475') in table and (3, 'r625') in table
+    assert (3, 'r325') not in table and (3, 'r625') in table and (3, 'r700') in table
 
 
 def test_no_unsupported_check_without_engaged_stations():
