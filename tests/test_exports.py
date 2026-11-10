@@ -276,6 +276,34 @@ def test_export_is_repeatable(tmp_path):
     assert first["package"]["sha256"] == second["package"]["sha256"]
 
 
+def test_old_revision_uses_its_recorded_display_glb(tmp_path):
+    import trimesh
+
+    task = make_box_task(tmp_path, with_cad=False)
+    domain = task / "domain"
+    old = domain / "builds/r0001-test"
+    new = domain / "builds/r0002-test"
+    shutil.copytree(old, new)
+    shutil.copytree(domain / "revisions/r0001", domain / "revisions/r0002")
+    for build, length in ((old, 1), (new, 2)):
+        result_path = build / "result.json"
+        result = json.loads(result_path.read_text())
+        result["exports"]["glb"] = "display.glb"
+        result_path.write_text(json.dumps(result))
+        trimesh.creation.box(extents=[length, 1, 1]).export(build / "display.glb")
+    shutil.copyfile(new / "display.glb", task / "whole-vessel-draft.glb")
+    state_path = domain / "state.json"
+    state = json.loads(state_path.read_text())
+    state["revision"] = 2
+    state["builds"].append({"revision_id": "r0002", "path": "domain/builds/r0002-test", "valid": True})
+    state_path.write_text(json.dumps(state))
+
+    manifest = export_draft(task, "r1", tmp_path / "package")
+    displays = [entry for entry in manifest["files"] if entry["role"] == "display_glb"]
+    assert len(displays) == 1
+    assert displays[0]["source_sha256"] == hashlib.sha256((old / "display.glb").read_bytes()).hexdigest()
+
+
 def test_manifest_identity_is_stable_across_revisions_and_display_names(tmp_path):
     from vessel_reconstruction.structure.steel import write_steel_tables
     from test_structure_export import synthetic_block

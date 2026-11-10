@@ -24,6 +24,12 @@ def display_task(tmp_path):
                       np.arange(model[0].triangles.size // 3).reshape(-1, 3))}
     write_glb(meshes, task / "whole-vessel-draft.glb",
               {"db1": tank_style(model[0].name, model[0].content, model[0].source_labels)})
+    build = task / "domain/builds/r0001-test"
+    (build / "whole-vessel-draft.glb").hardlink_to(task / "whole-vessel-draft.glb")
+    result_path = build / "result.json"
+    result = json.loads(result_path.read_text())
+    result["exports"]["whole_vessel_glb"] = "whole-vessel-draft.glb"
+    result_path.write_text(json.dumps(result))
     structure = tmp_path / "structure"
     structure.mkdir()
     write_structure_glb([{"member_id": "floor-1", "label": "floor", "thickness_mm": 8,
@@ -120,6 +126,7 @@ def test_build_glb_is_confined_and_linked_without_whole_vessel_model(tmp_path):
     build = task / "domain/builds/r0001-test"
     shutil.move(task / "whole-vessel-draft.glb", build / "display.glb")
     result = read_record(build, "result.json")
+    result["exports"].pop("whole_vessel_glb")
     result["exports"]["glb"] = "display.glb"
     (build / "result.json").write_text(json.dumps(result))
     out = tmp_path / "out"
@@ -142,8 +149,13 @@ def test_invalid_frame_table_is_not_exported_as_known(tmp_path, field, value):
 
 def test_invalid_glb_is_refused_and_source_is_unchanged(tmp_path):
     task = make_box_task(tmp_path, with_cad=False)
-    source = task / "whole-vessel-draft.glb"
+    build = task / "domain/builds/r0001-test"
+    source = build / "whole-vessel-draft.glb"
     source.write_bytes(b"not a glb")
+    result_path = build / "result.json"
+    result = json.loads(result_path.read_text())
+    result["exports"]["whole_vessel_glb"] = source.name
+    result_path.write_text(json.dumps(result))
     with pytest.raises(ExportError, match="GLB"):
         export_draft(task, "r1", tmp_path / "out")
     assert source.read_bytes() == b"not a glb"
@@ -198,6 +210,11 @@ def test_spatial_ids_and_links_survive_a_geometry_revision(tmp_path):
 def test_standalone_tank_glb_and_guessed_frames_keep_their_sources(tmp_path):
     task, model, _ = display_task(tmp_path)
     (task / "whole-vessel-draft.glb").rename(task / "tanks.glb")
+    build = task / "domain/builds/r0001-test"
+    result_path = build / "result.json"
+    result = json.loads(result_path.read_text())
+    result["exports"]["tanks_glb"] = result["exports"].pop("whole_vessel_glb")
+    result_path.write_text(json.dumps(result))
     (task / "frames.json").write_text(json.dumps({"spacing_m": 0.55, "zero_x_m": 0, "source": "guessed"}))
     out = tmp_path / "out"
     export_draft(task, "r1", out, tanks=model)

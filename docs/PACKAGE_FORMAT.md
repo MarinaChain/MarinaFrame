@@ -25,9 +25,9 @@ keep their source encoding.
 | `assets.json` | `asset_map` | Always. Asset UUID to display-file/node links and labels. |
 | `spaces.json` | `spaces` | Always. One space per tank with a non-empty built mesh; otherwise an empty list. |
 | `frames.json` | `frames` | Always. Stored frame spacing, zero and rows; missing data stays unknown. |
-| `glb/hull.glb` | `display_glb` | If the build has `exports.glb`, or a `model-draft.glb` file. |
-| `glb/whole-vessel-draft.glb` | `display_glb` | First existing model at task `whole-vessel-draft.glb` or `whole_vessel/whole-vessel-draft.glb`. Can contain hull, tanks and other parts together. |
-| `glb/tanks.glb` | `display_glb` | If task `tanks.glb` exists. A separate tank GLB is not required when tanks are in the whole-vessel GLB. |
+| `glb/hull.glb` | `display_glb` | If the selected build records `exports.glb`. |
+| `glb/whole-vessel-draft.glb` | `display_glb` | If the selected build records `exports.whole_vessel_glb`. |
+| `glb/tanks.glb` | `display_glb` | If the selected build records `exports.tanks_glb`. |
 | `glb/<source-name>` ending `_structure.glb` | `display_glb` | Each existing structure display GLB supplied through `structure_dir`. |
 | `<stem>_offsets.csv` | `offsets_table` | Always. Station half-breadths and their source labels. |
 | `<stem>_hydrostatics.json` | `hydrostatics` | Always. Computed summary, or `null` with a reason. |

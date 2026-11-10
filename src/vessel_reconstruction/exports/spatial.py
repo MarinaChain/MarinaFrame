@@ -10,24 +10,18 @@ from ..provenance import digest_file, write_json
 from .glb import copy_metres_glb
 from .source import DraftBuild, ExportError, inside, read_json
 
-WHOLE_VESSEL_MODELS = ("whole-vessel-draft.glb", "whole_vessel/whole-vessel-draft.glb")
-
-
 def display_sources(build: DraftBuild, structure_dir: Path | None) -> list[tuple[Path, str, str]]:
     """Existing display models, in link-preference order; paths in the package are relative."""
     sources = []
     exports = build.result.get("exports") or {}
-    hull = inside(build.build_dir, exports.get("glb") or "model-draft.glb")
-    if hull.is_file() and not hull.is_symlink():
-        sources.append((hull, "glb/hull.glb", exports.get("glb_units", "mm")))
-    for relative in WHOLE_VESSEL_MODELS:
-        candidate = inside(build.task_dir, relative)
+    for key, target in (("glb", "glb/hull.glb"),
+                        ("whole_vessel_glb", "glb/whole-vessel-draft.glb"),
+                        ("tanks_glb", "glb/tanks.glb")):
+        if not exports.get(key):
+            continue
+        candidate = inside(build.build_dir, exports[key])
         if candidate.is_file() and not candidate.is_symlink():
-            sources.append((candidate, "glb/whole-vessel-draft.glb", "mm"))
-            break
-    tank_model = inside(build.task_dir, "tanks.glb")
-    if tank_model.is_file() and not tank_model.is_symlink():
-        sources.append((tank_model, "glb/tanks.glb", "mm"))
+            sources.append((candidate, target, exports.get(f"{key}_units", "mm")))
     if structure_dir is not None:
         for candidate in sorted(Path(structure_dir).glob("*_structure.glb")):
             if candidate.is_file() and not candidate.is_symlink():
