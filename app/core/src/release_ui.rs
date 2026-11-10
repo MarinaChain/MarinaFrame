@@ -4,8 +4,8 @@
 // the tests run here, in marinaframe-app-core, which the Linux CI job also tests (it cannot
 // build the Tauri shell). It copies only the files the app needs from `app/ui` into
 // `app/ui-release` (not tracked), which `tauri.conf.json` embeds. The browser mock
-// (`ui/mock`), the screenshots and any local data stay out. Staging fails when a copied file
-// has a type outside [`ALLOWED_EXTENSIONS`] (drawings and CAD or model files such as .glb,
+// (`ui/mock`: the mock backend `mock/backend.js` and its fixtures), the screenshots and any
+// local data stay out. Staging fails when a copied file has a type outside [`ALLOWED_EXTENSIONS`] (drawings and CAD or model files such as .glb,
 // .step, .tif or .pdf are never UI files), is a link, or is larger than [`MAX_FILE_BYTES`].
 // `npm run dev` serves `app/ui` itself (tauri.dev.conf.json).
 //
@@ -140,6 +140,8 @@ mod tests {
             ("js/app.js", ""),
             ("vendor/LICENSE", "MIT"),
             ("assets/mark.svg", "<svg/>"),
+            ("mock/backend.js", "export function mockTransport() {}"),
+            ("mock/fixtures.json", "{}"),
             ("mock/files/whole-vessel-draft.glb", "glTF"),
             ("screenshots/shot.png", "png"),
         ] {
@@ -167,7 +169,10 @@ mod tests {
         assert_eq!(stage(&ui, &target), Vec::<String>::new());
         assert!(target.join("js/app.js").is_file());
         assert!(target.join("vendor/LICENSE").is_file());
+        // The browser mock backend (loaded by js/api.js only outside Tauri) and its data.
         assert!(!target.join("mock").exists());
+        assert!(!target.join("mock/backend.js").exists());
+        assert!(!target.join("mock/fixtures.json").exists());
         assert!(!target.join("screenshots").exists());
     }
 

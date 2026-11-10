@@ -1,5 +1,5 @@
 // The run-details column (selection review, Thinking, Steps, Checks, Calls, Evidence, Sources) can be
-// hidden, for people who only want the results. The pure rules live here; js/app.js wires them
+// hidden, for people who only want the results. The pure rules live here; js/inspector.js wires them
 // to the page.
 
 /** Key that toggles the column together with ⌘ (Ctrl). 1, 2 and 3 pick the layout. */
@@ -44,4 +44,17 @@ export function tabName(tab, count = 0, { failing = false } = {}) {
   const word = TAB_META[tab].word;
   if (!count) return word;
   return `${word}, ${count}${failing ? ' failing' : ''}`;
+}
+
+/** The run-detail tabs in their order on the page. */
+export const TABS = Object.keys(TAB_META);
+
+/** Arrow keys walk the tabs: the next or the previous one, wrapping at the ends. */
+const TAB_STEPS = { ArrowRight: 1, ArrowLeft: -1 };
+
+/** The tab that `key` moves to from `tab`, or null when the key does not move between tabs. */
+export function tabAfter(tab, key) {
+  const step = TAB_STEPS[key];
+  if (!step) return null;
+  return TABS[(TABS.indexOf(tab) + step + TABS.length) % TABS.length];
 }
