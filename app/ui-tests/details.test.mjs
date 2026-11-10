@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DETAILS_KEY, isDetailsOpen, storedDetails, reviewBadge, toggleNames } from '../ui/js/details.js';
+import { shortcutCommand } from '../ui/js/keymap.js';
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
@@ -22,7 +23,12 @@ test('a hidden column is remembered', () => {
 test('the shortcut is the next free key after the layout keys', () => {
   assert.equal(DETAILS_KEY, '4');
   assert.match(read('../ui/js/shortcuts.js'), /\$\{MOD\}4`, 'Show or hide the details column'/);
-  assert.match(read('../ui/js/app.js'), /event\.key === DETAILS_KEY/);
+  assert.deepEqual(shortcutCommand({ key: DETAILS_KEY, metaKey: true }), { command: 'details' });
+  assert.deepEqual(shortcutCommand({ key: DETAILS_KEY, ctrlKey: true }), { command: 'details' });
+  assert.equal(shortcutCommand({ key: DETAILS_KEY }), null, 'without ⌘ the key is free');
+  for (const [key, layout] of [['1', 'drawing'], ['2', 'split'], ['3', 'model']]) {
+    assert.deepEqual(shortcutCommand({ key, metaKey: true }), { command: 'layout', layout });
+  }
 });
 
 test('the badge counts open review items and hides at zero', () => {
@@ -53,7 +59,7 @@ test('the transition is short and off under reduced motion', () => {
 });
 
 // ---- run-detail tabs as icons
-import { TAB_META, tabName } from '../ui/js/details.js';
+import { TAB_META, TABS, tabAfter, tabName } from '../ui/js/details.js';
 
 const TAB_IDS = ['thinking', 'timeline', 'checks', 'model', 'evidence', 'sources'];
 
@@ -81,7 +87,11 @@ test('the spoken name of a tab keeps the word and adds the count', () => {
 });
 
 test('the tab arrows still walk the six tabs', () => {
-  const app = read('../ui/js/app.js');
-  assert.match(app, /const TABS = \['thinking', 'timeline', 'checks', 'model', 'evidence', 'sources'\]/);
-  assert.match(app, /ArrowRight: 1, ArrowLeft: -1[\s\S]{0,200}selectTab\(next, \{ focus: true \}\)/);
+  assert.deepEqual(TABS, TAB_IDS);
+  const walked = [TABS[0]];
+  for (let i = 0; i < TABS.length; i += 1) walked.push(tabAfter(walked.at(-1), 'ArrowRight'));
+  assert.deepEqual(walked, [...TAB_IDS, TAB_IDS[0]], 'ArrowRight walks every tab and wraps');
+  assert.equal(tabAfter('thinking', 'ArrowLeft'), 'sources', 'ArrowLeft wraps to the last tab');
+  assert.equal(tabAfter('checks', 'ArrowLeft'), 'timeline');
+  assert.equal(tabAfter('checks', 'ArrowUp'), null, 'other keys do not move');
 });
