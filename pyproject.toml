@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = {text = "All rights reserved"}
 dependencies = [
-  "cadquery==2.7.0", "numpy>=2.0,<3", "scipy>=1.13,<2", "Pillow>=13.0,<14"
+  "cadquery==2.7.0", "rhino3dm==8.35.0", "numpy>=2.0,<3", "scipy>=1.13,<2", "Pillow>=13.0,<14"
 ]
 
 [project.optional-dependencies]

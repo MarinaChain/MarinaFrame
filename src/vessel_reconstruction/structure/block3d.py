@@ -20,6 +20,8 @@ from pathlib import Path
 import re
 
 from . import read_section_pdf
+from ..cad_exports import export_iges
+from ..rhino_exports import CadPart, export_3dm
 from .model import SectionResult
 from .tables import PLATE_HEADER, STIFFENER_HEADER, _table_rows, text_lines
 from .vector import read_pdf_words
@@ -421,11 +423,11 @@ def build_block(sheets: dict[str, Path], length_m: float = GUESS_BLOCK_LENGTH_M,
 
 
 def export_step(block: dict, path: Path) -> int:
-    """Write the members as thin boxes (thickness centred on the mid-plane) to STEP, millimetres."""
+    """Write thin member boxes to STEP and draft IGES/3dm files, all in millimetres."""
     import cadquery as cq
 
-    solids = []
-    for member in block["members"]:
+    parts = []
+    for index, member in enumerate(block["members"]):
         t = (member["thickness_mm"] or 10.0) / 1000
         x0, y0, z0, x1, y1, z1 = member["box"]
         dims = [x1 - x0, y1 - y0, z1 - z0]
@@ -434,6 +436,10 @@ def export_step(block: dict, path: Path) -> int:
         lo[thin] -= t / 2
         hi[thin] += t / 2
         size = [max(hi[i] - lo[i], 1e-4) * 1000 for i in range(3)]
-        solids.append(cq.Solid.makeBox(*size, cq.Vector(*(v * 1000 for v in lo))))
-    cq.exporters.export(cq.Workplane().add(cq.Compound.makeCompound(solids)), str(path), exportType="STEP")
-    return len(solids)
+        shape = cq.Solid.makeBox(*size, cq.Vector(*(v * 1000 for v in lo)))
+        parts.append(CadPart(member.get("member_id", f"member-{index}"), shape, "Structure"))
+    compound = cq.Compound.makeCompound([part.shape for part in parts])
+    cq.exporters.export(cq.Workplane().add(compound), str(path), exportType="STEP")
+    export_iges(compound, path.with_suffix(".iges"))
+    export_3dm(parts, path.with_suffix(".3dm"))
+    return len(parts)

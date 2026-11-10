@@ -207,7 +207,7 @@ def _capture_table_reading(input_spec: dict, replay_spec: dict, base_dir: Path, 
 
 def _discard_geometry(stage: Path, result: dict):
     result.update(exports={}, parts=[], metrics={}, normalized_sections=[])
-    for name in ("mesh.json", "model.step", "model.stl", "cad_sections.json", *DRAFT_EXPORT_NAMES.values()):
+    for name in ("mesh.json", "model.step", "model.stl", "model.iges", "model.3dm", "cad_sections.json", *DRAFT_EXPORT_NAMES.values()):
         (stage / name).unlink(missing_ok=True)
     # Observations are evidence, but cannot be asserted when their required
     # artifact was not successfully written.

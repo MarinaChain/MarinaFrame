@@ -13,6 +13,8 @@ import cadquery as cq
 from OCP.BRepMesh import BRepMesh_IncrementalMesh
 
 from . import section_regions
+from .cad_exports import export_iges
+from .rhino_exports import CadPart, export_3dm
 from .errors import GeometryError
 
 
@@ -719,7 +721,7 @@ def metrics_for(shape: cq.Shape) -> dict:
 
 def export_geometry(shape: cq.Shape, out: Path, *, export_cad: bool = True,
                     expected_solids: int = 1) -> tuple[dict, dict]:
-    """Write mesh.json and, on request, STEP and STL; reload the STEP and compare.
+    """Write mesh.json and, on request, STEP, IGES, 3dm and STL; reload STEP and compare.
 
     ``expected_solids`` is 1 for ``build_hull`` and the solid count of a
     ``build_region_hull`` compound; the reloaded STEP must hold exactly that many.
@@ -741,6 +743,8 @@ def export_geometry(shape: cq.Shape, out: Path, *, export_cad: bool = True,
     exports = {"mesh": "mesh.json", "mesh_units": "m"}
     if export_cad:
         shape.exportStep(str(out / "model.step"), write_pcurves=False)
+        export_iges(shape, out / "model.iges")
+        export_3dm([CadPart("hull", shape, "Hull")], out / "model.3dm")
         shape.exportStl(str(out / "model.stl"), tolerance=tolerance_mm, angularTolerance=0.15,
                         relative=False, parallel=False)
         reread = cq.importers.importStep(str(out / "model.step")).val()
@@ -754,6 +758,8 @@ def export_geometry(shape: cq.Shape, out: Path, *, export_cad: bool = True,
         metrics["step_roundtrip_relative_error"] = float(rel)
         metrics["step_roundtrip_extent_error"] = float(extent_error)
         exports.update({"step": "model.step", "step_units": "mm", "stl": "model.stl", "stl_units": "mm"})
+        exports.update({"iges": "model.iges", "iges_units": "mm"})
+        exports.update({"3dm": "model.3dm", "3dm_units": "mm"})
     metrics["mesh_vertices"] = len(vertices)
     metrics["mesh_faces"] = len(faces)
     metrics["mesh_deflection_mm"] = float(tolerance_mm)

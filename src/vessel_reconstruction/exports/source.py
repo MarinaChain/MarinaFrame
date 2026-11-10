@@ -45,6 +45,8 @@ class DraftBuild:
     stl_units: str = "mm"
     scoreboard: dict | None = None
     overlay_images: list[Path] = field(default_factory=list)
+    iges_path: Path | None = None
+    rhino_path: Path | None = None
 
     @property
     def sections(self) -> list[dict]:
@@ -143,11 +145,15 @@ def load_build(task_dir: Path, revision: str, vessel: str | None = None) -> Draf
     exports = result.get("exports") or {}
     step = inside(build_dir, exports["step"]) if exports.get("step") else None
     stl = inside(build_dir, exports["stl"]) if exports.get("stl") else None
+    iges = inside(build_dir, exports["iges"]) if exports.get("iges") else None
+    rhino = inside(build_dir, exports["3dm"]) if exports.get("3dm") else None
     step = step if step is not None and step.is_file() else None
     stl = stl if stl is not None and stl.is_file() else None
+    iges = iges if iges is not None and iges.is_file() else None
+    rhino = rhino if rhino is not None and rhino.is_file() else None
     scoreboard, images = find_render(domain, step)
     name = vessel or spec.get("vessel_name") or result.get("vessel_id") or domain.parent.name
     return DraftBuild(task_dir=domain.parent, revision_id=revision_id, vessel=name, build_dir=build_dir,
                       result=result, spec=spec, guesses=current_guesses(state, result, revision_id),
                       step_path=step, stl_path=stl, stl_units=exports.get("stl_units", "mm"),
-                      scoreboard=scoreboard, overlay_images=images)
+                      scoreboard=scoreboard, overlay_images=images, iges_path=iges, rhino_path=rhino)

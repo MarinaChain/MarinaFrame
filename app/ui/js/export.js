@@ -11,6 +11,8 @@ import { accuracyBlock } from './accuracy.js';
 /** The outputs in display order. `kind` matches the backend; `name` is the one-word chip. */
 const OUTPUTS = [
   { kind: 'step', name: 'STEP', glyph: 'cube', hint: 'Hull surface for CAD, millimetres, draft stamp in the header.' },
+  { kind: 'iges', name: 'IGES', glyph: 'cube', hint: 'Hull surfaces for CAD, millimetres. Use STEP for solids.' },
+  { kind: '3dm', name: 'Rhino 3dm', glyph: 'cube', hint: 'Rhino file with a layer per output, millimetres; curved trimmed faces are meshes.' },
   { kind: 'stl', name: 'STL', glyph: 'mesh', hint: 'Triangle mesh for viewers and 3D printing, millimetres.' },
   { kind: 'offsets', name: 'Offsets', glyph: 'table', hint: 'Half-breadths at each station and waterline, CSV for Excel.' },
   { kind: 'hydrostatics', name: 'Hydrostatics', glyph: 'waterline', hint: 'Volume, displacement, centres and coefficients at the design waterline (JSON and CSV).' },

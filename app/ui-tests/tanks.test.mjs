@@ -59,9 +59,9 @@ test('the sounding table shows sounding, ullage, volume and fill of the file col
 
 test('tank and steel exports are offered only for runs that have them', () => {
   const kinds = (view, files) => outputsOf(view, files).map((o) => o.kind);
-  assert.deepEqual(kinds({}), ['step', 'stl', 'offsets', 'hydrostatics', 'report', 'package']);
+  assert.deepEqual(kinds({}), ['step', 'iges', '3dm', 'stl', 'offsets', 'hydrostatics', 'report', 'package']);
   assert.deepEqual(kinds({ tank_model: true, structure_files: [{ file: 'b.3docx' }] }),
-    ['step', 'stl', 'offsets', 'hydrostatics', 'report', 'tanks', 'structure', 'package']);
+    ['step', 'iges', '3dm', 'stl', 'offsets', 'hydrostatics', 'report', 'tanks', 'structure', 'package']);
   // Files already exported stay listed.
   assert.ok(kinds({}, [{ kind: 'structure', file: 'x' }]).includes('structure'));
 });

@@ -19,6 +19,8 @@ fn full_export_script() -> String {
         "hydrostatics.csv",
         "report.pdf",
         "model.step",
+        "model.iges",
+        "model.3dm",
         "manifest.json",
         "package.zip",
     ];
@@ -64,6 +66,8 @@ fn outputs_must_be_known_and_not_empty() {
 
 #[test]
 fn file_kinds_come_from_the_name_suffix() {
+    assert_eq!(kind_of_file("V_r0001_DRAFT_model.iges"), Some("iges"));
+    assert_eq!(kind_of_file("V_r0001_DRAFT_model.3dm"), Some("3dm"));
     assert_eq!(kind_of_file("V_r0001_DRAFT_offsets.csv"), Some("offsets"));
     assert_eq!(
         kind_of_file("V_r0001_DRAFT_hydrostatics.csv"),
@@ -74,6 +78,66 @@ fn file_kinds_come_from_the_name_suffix() {
     assert_eq!(kind_of_file("notes.txt"), None);
     assert_eq!(kind_of_file(".staging-x_report.pdf"), None);
     assert_eq!(kind_of_file("a/b_report.pdf"), None);
+}
+
+#[test]
+fn new_cad_outputs_are_selected_moved_and_listed_like_step() {
+    let tmp = tempfile::tempdir().unwrap();
+    let python = fake_worker(tmp.path(), &full_export_script());
+    let python = python.to_string_lossy();
+    let worker = Worker {
+        python: &python,
+        source: None,
+    };
+    let result = export_run(
+        tmp.path(),
+        &worker,
+        "r3",
+        &["3dm".into(), "iges".into()],
+        EXPORT_TIMEOUT,
+    )
+    .unwrap();
+    assert_eq!(kinds(&result), ["iges", "3dm", MANIFEST]);
+    assert!(result.not_built.is_empty());
+    assert_eq!(
+        kinds(&list_exports(tmp.path(), "r3").unwrap()),
+        ["iges", "3dm", MANIFEST]
+    );
+    assert!(result
+        .files
+        .iter()
+        .all(|file| Path::new(&file.path).is_file()));
+    assert!(!Path::new(&result.folder)
+        .join(format!("{STEM}_model.step"))
+        .exists());
+}
+
+#[test]
+fn missing_new_cad_files_are_reported_as_output_kinds() {
+    let tmp = tempfile::tempdir().unwrap();
+    let script = full_export_script()
+        .replace(&format!("printf 'abc' > \"$out/{STEM}_model.iges\""), "")
+        .replace(&format!("printf 'abc' > \"$out/{STEM}_model.3dm\""), "")
+        .replace(
+            "[\"stl_mesh\"]",
+            "[\"iges_model\",\"rhino_model\",\"stl_mesh\"]",
+        );
+    let python = fake_worker(tmp.path(), &script);
+    let python = python.to_string_lossy();
+    let worker = Worker {
+        python: &python,
+        source: None,
+    };
+    let result = export_run(
+        tmp.path(),
+        &worker,
+        "r3",
+        &["iges".into(), "3dm".into()],
+        EXPORT_TIMEOUT,
+    )
+    .unwrap();
+    assert_eq!(result.not_built, ["iges", "3dm"]);
+    assert_eq!(kinds(&result), [MANIFEST]);
 }
 
 #[test]

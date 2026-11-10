@@ -190,3 +190,21 @@
 - **Trigger:** A whole-station injection increased the legacy fairer's measured half-beam, changing its Huber scale and movement tolerance inside a supposedly fixed-scale trial.
 - **Rule:** Pass the unperturbed half-beam explicitly to both paired fits, including station-only baselines and missing-view fallbacks. Recompute affected trial measurements; keep the fit/check choice frozen.
 - **Why:** Re-estimating a scale from perturbed evidence confounds error response with a parameter change.
+
+### Match CAD export units to STEP
+- **Date:** 2026-11-10
+- **Trigger:** The CAD export brief said metres, but STEP uses millimetres; the PM corrected the brief so IGES and future .3dm exports match STEP.
+- **Rule:** Write IGES and future .3dm exports in millimetres, the same unit as STEP. Set the IGES unit flag to 2 (MM). Keep file labels, export metadata and tests consistent with that unit.
+- **Why:** Matching CAD units avoids scale errors between formats; metre-based reporting does not change the CAD file unit.
+
+### Use IGES for surface exchange
+- **Date:** 2026-11-10
+- **Trigger:** The PM changed IGES export from MSBO solids to trimmed surfaces because many CAD tools import entity 186 unreliably.
+- **Rule:** Use IGESControl_Writer mode 0 for trimmed surfaces. Keep STEP as the solid format. Test imported face counts and sew the hull faces into a closed shell; do not require imported IGES solids.
+- **Why:** A valid OCC solid round-trip does not prove reliable exchange with other CAD tools.
+
+### Preserve face trims in Rhino exports
+- **Date:** 2026-11-10
+- **Trigger:** The PM found that exporting a trimmed face's UV-bounded support surface filled areas outside the real deck or transom outline.
+- **Rule:** Compare face and support areas. Write planar outer trims as exact Breps. Use and label a counted mesh fallback for non-planar trims and unsupported inner holes. Keep representation counts in document user text and the export return value; test written areas and source bounds.
+- **Why:** Correct units and NURBS control data do not preserve a trimmed face's boundary.

@@ -14,20 +14,23 @@ import math
 from pathlib import Path
 
 from .model import SectionResult
+from ..cad_exports import export_iges
+from ..rhino_exports import CadPart, export_3dm
 
 
-def build_slice(result: SectionResult, slice_length_mm: float):
-    """Return (CadQuery compound or None, list of omitted member descriptions)."""
+def _slice_parts(result: SectionResult, slice_length_mm: float) -> tuple[list[CadPart], list[str]]:
+    """Build named segment solids and list the omitted members."""
     import cadquery as cq
 
-    solids = []
+    parts = []
     omitted = []
     for number, member in enumerate(result.members):
         if member.thickness_mm is None or len(member.ship_points_mm) < 2:
             omitted.append(f"member {number} ({member.role}, stroke {member.stroke.index}): "
                            "no printed thickness or no ship placement")
             continue
-        for (y0, z0), (y1, z1) in zip(member.ship_points_mm, member.ship_points_mm[1:]):
+        segments = zip(member.ship_points_mm, member.ship_points_mm[1:])
+        for segment, ((y0, z0), (y1, z1)) in enumerate(segments):
             length = math.hypot(y1 - y0, z1 - z0)
             if length <= 0:
                 continue
@@ -36,18 +39,30 @@ def build_slice(result: SectionResult, slice_length_mm: float):
             angle = math.degrees(math.atan2(z1 - z0, y1 - y0))
             box = box.rotate(cq.Vector(0, 0, 0), cq.Vector(1, 0, 0), angle)
             box = box.translate(cq.Vector(0, (y0 + y1) / 2, (z0 + z1) / 2))
-            solids.append(box)
-    if not solids:
+            part_id = f"stroke-{member.stroke.index}-segment-{segment}"
+            parts.append(CadPart(part_id, box, "Structure"))
+    return parts, omitted
+
+
+def build_slice(result: SectionResult, slice_length_mm: float):
+    """Return (CadQuery compound or None, list of omitted member descriptions)."""
+    import cadquery as cq
+
+    parts, omitted = _slice_parts(result, slice_length_mm)
+    if not parts:
         return None, omitted
-    return cq.Compound.makeCompound(solids), omitted
+    return cq.Compound.makeCompound([part.shape for part in parts]), omitted
 
 
 def export_slice_step(result: SectionResult, path: Path, slice_length_mm: float) -> list[str]:
-    """Write the slice to a STEP file and return the omitted members."""
+    """Write STEP and draft IGES/3dm files beside it; return omitted members."""
     import cadquery as cq
 
-    compound, omitted = build_slice(result, slice_length_mm)
-    if compound is None:
+    parts, omitted = _slice_parts(result, slice_length_mm)
+    if not parts:
         raise ValueError("no member has both a placement and a printed thickness")
+    compound = cq.Compound.makeCompound([part.shape for part in parts])
     cq.exporters.export(cq.Workplane().add(compound), str(path), exportType="STEP")
+    export_iges(compound, path.with_suffix(".iges"))
+    export_3dm(parts, path.with_suffix(".3dm"))
     return omitted

@@ -429,10 +429,19 @@ def _check_record(root: Path, result: dict, manifest: dict):
         _require(check_draft(result.get("draft")) and result.get("draft") == spec_draft,
                  "Draft record does not list exactly the guesses of its draft specification.")
     step_name, stl_name = _cad_names(result)
+    iges_name = DRAFT_EXPORT_NAMES["iges"] if "draft" in result else "model.iges"
+    rhino_name = DRAFT_EXPORT_NAMES["3dm"] if "draft" in result else "model.3dm"
+    # Older immutable runs predate IGES. Include it only when their record declares it.
+    has_iges = "iges" in result["exports"]
+    has_rhino = "3dm" in result["exports"]
     if status == "review_required":
         expected_files.update(("mesh.json", "cad_sections.json", "extracted_sections.json"))
         if result["requested_exports"]:
             expected_files.update((step_name, stl_name))
+            if has_iges:
+                expected_files.add(iges_name)
+            if has_rhino:
+                expected_files.add(rhino_name)
     _require(declared == expected_files, "Immutable artifacts are not fully explained by the record's evidence and terminal state.")
     if isinstance(input_spec, dict) and isinstance(replay, dict):
         expected_replay = dict(input_spec)
@@ -472,7 +481,7 @@ def _check_record(root: Path, result: dict, manifest: dict):
     exports = result["exports"]
     if status != "review_required":
         _require(not exports and not result["parts"] and not result["metrics"] and not result["normalized_sections"], "A non-success state exposes geometry or authoritative geometry metrics.")
-        _require(not {"mesh.json", "model.step", "model.stl", "cad_sections.json", *DRAFT_EXPORT_NAMES.values()}.intersection(declared),
+        _require(not {"mesh.json", "model.step", "model.stl", "model.iges", "model.3dm", "cad_sections.json", *DRAFT_EXPORT_NAMES.values()}.intersection(declared),
                  "A non-success run retains published geometry.")
         return
     _require(isinstance(input_spec, dict) and isinstance(replay, dict) and "source-1" in source_ids, "Successful run lacks input evidence.")
@@ -480,12 +489,16 @@ def _check_record(root: Path, result: dict, manifest: dict):
     expected_exports = {"mesh": "mesh.json", "mesh_units": "m"}
     if result["requested_exports"]:
         expected_exports.update(step=step_name, step_units="mm", stl=stl_name, stl_units="mm")
+        if has_iges:
+            expected_exports.update(iges=iges_name, iges_units="mm")
+        if has_rhino:
+            expected_exports.update({"3dm": rhino_name, "3dm_units": "mm"})
     _require(exports == expected_exports, "Export status, request, filenames or units are inconsistent.")
     _require({"mesh.json", "cad_sections.json", "extracted_sections.json"} <= declared, "Required successful geometry evidence is missing.")
     if result["requested_exports"]:
         _require({step_name, stl_name} <= declared, "Requested CAD exports are missing.")
     else:
-        _require(not {step_name, stl_name}.intersection(declared), "Unrequested CAD exports present.")
+        _require(not {step_name, stl_name, iges_name, rhino_name}.intersection(declared), "Unrequested CAD exports present.")
     normalized = result["normalized_sections"]
     _require(_read(root, "cad_sections.json") == normalized and len(normalized) == len(sections), "Normalized CAD sections disagree with the record.")
     metrics = result["metrics"]

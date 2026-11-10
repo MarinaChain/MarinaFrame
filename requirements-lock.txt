@@ -34,6 +34,7 @@ pyparsing==3.3.2
 pytest==9.2.0
 python-dateutil==3.0.0
 PyYAML==6.0.3
+rhino3dm==8.35.0
 runtype==0.5.3
 scipy==1.17.0
 six==1.17.0

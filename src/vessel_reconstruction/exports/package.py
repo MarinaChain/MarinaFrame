@@ -6,6 +6,8 @@ Files (``<stem>`` is ``<vessel>_<revision>_DRAFT``):
   <stem>_hydrostatics.csv   the same summary, one quantity per row
   <stem>_report.pdf         review report with station overlays
   <stem>_model.step         the build's STEP, header stamped as a draft
+  <stem>_model.iges         the build's draft IGES trimmed surfaces, millimetres
+  <stem>_model.3dm          the build's draft Rhino layers and faces, millimetres
   <stem>_model.stl          the build's STL, binary header stamped as a draft
   <stem>_capacity_plan.csv  capacity plan, when a tank model is given (``tanks``)
   <stem>_sounding_<id>.csv  sounding table of each built tank, when a tank model is given
@@ -44,7 +46,7 @@ from .source import DraftBuild, ExportError, load_build
 from .tank_tables import write_tank_tables
 
 STAMP = "Draft hull model from MarinaFrame. Not approved for construction."
-DATUM = "Units metres (STEP and STL in millimetres); x along the length as drawn; z up from the baseline (z = 0)."
+DATUM = "Units metres (STEP, IGES, Rhino 3dm and STL in millimetres); x along the length as drawn; z up from the baseline (z = 0)."
 # Fixed timestamp for zip entries, so the same files give the same zip bytes.
 ZIP_DATE_TIME = (2026, 1, 1, 0, 0, 0)
 STEP_DESCRIPTION = re.compile(r"FILE_DESCRIPTION\(\(.*?\),'2;1'\);", re.DOTALL)
@@ -239,13 +241,21 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
 
     missing = []
     for source, suffix, role, stamp in ((build.step_path, "step", "step_model", stamped_step),
+                                        (build.iges_path, "iges", "iges_model", None),
+                                        (build.rhino_path, "3dm", "rhino_model", None),
                                         (build.stl_path, "stl", "stl_mesh", stamped_stl)):
         if source is None:
             missing.append(role)
             continue
         target = out_dir / f"{stem}_model.{suffix}"
-        stamped = stamp(source, target, build)
-        entries.append((target, role, {"source_sha256": digest_file(source), "header_stamped": stamped}))
+        extra = {"source_sha256": digest_file(source)}
+        if stamp is not None:
+            extra["header_stamped"] = stamp(source, target, build)
+        else:
+            # IGES and 3dm already carry draft notes. Preserve their bytes and metadata.
+            target.write_bytes(source.read_bytes())
+            extra["units"] = "mm"
+        entries.append((target, role, extra))
 
     manifest = {"stamp": STAMP, "footer": FOOTER, "datum": DATUM, "engineering_approved": False,
                 "tool": f"MarinaFrame {__version__}", "vessel": build.vessel, "revision": build.revision_id,

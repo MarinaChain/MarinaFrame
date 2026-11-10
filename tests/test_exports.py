@@ -100,7 +100,8 @@ def make_box_task(root: Path, *, with_cad: bool = True) -> Path:
                           "volume_m3": BOX["length"] * BOX["beam"] * BOX["depth"], "cad_valid": True,
                           "bbox_m": {"min": [0, -4, 0], "max": [40, 4, 5]}},
               "exports": {"step": "model-draft.step", "step_units": "mm", "stl": "model-draft.stl",
-                          "stl_units": "mm"},
+                          "stl_units": "mm", "iges": "model-draft.iges", "iges_units": "mm",
+                          "3dm": "model-draft.3dm", "3dm_units": "mm"},
               "draft": {"status": "draft_not_verified", "guesses": []}}
     (build / "result.json").write_text(json.dumps(result))
     guesses = [{"guess_id": "g1", "section_id": "s02", "kind": "model_authored", "x_m": 20.0,
@@ -114,6 +115,13 @@ def make_box_task(root: Path, *, with_cad: bool = True) -> Path:
         binary_stl(prism([(0, 0), (half, 0), (half, BOX["depth"]), (0, BOX["depth"])], BOX["length"]),
                    build / "model-draft.stl")
         (build / "model-draft.step").write_text(STEP_TEXT)
+        import cadquery as cq
+        from vessel_reconstruction.cad_exports import export_iges
+        from vessel_reconstruction.rhino_exports import CadPart, export_3dm
+
+        shape = cq.Solid.makeBox(40000, 8000, 5000, cq.Vector(0, -4000, 0))
+        export_iges(shape, build / "model-draft.iges")
+        export_3dm([CadPart("hull", shape, "Hull")], build / "model-draft.3dm")
         render = domain / "renders" / "render-1"
         render.mkdir(parents=True)
         step_sha256 = hashlib.sha256((build / "model-draft.step").read_bytes()).hexdigest()
@@ -217,12 +225,19 @@ def test_export_of_synthetic_box_writes_stamped_package(tmp_path):
     stem = "Test-Box-1_r0001_DRAFT"
     names = {entry["file"] for entry in manifest["files"]}
     assert names == {f"{stem}_offsets.csv", f"{stem}_hydrostatics.json", f"{stem}_hydrostatics.csv",
-                     f"{stem}_report.pdf", f"{stem}_model.step", f"{stem}_model.stl"}
+                     f"{stem}_report.pdf", f"{stem}_model.step", f"{stem}_model.stl",
+                     f"{stem}_model.iges", f"{stem}_model.3dm"}
     assert manifest["engineering_approved"] is False and manifest["not_built"] == []
     assert manifest["open_guesses"] == 1
     out = tmp_path / "out"
     for entry in manifest["files"]:
         assert hashlib.sha256((out / entry["file"]).read_bytes()).hexdigest() == entry["sha256"]
+    for suffix, role in (("iges", "iges_model"), ("3dm", "rhino_model")):
+        entry = next(entry for entry in manifest["files"] if entry["role"] == role)
+        source = task / "domain/builds/r0001-test" / f"model-draft.{suffix}"
+        assert (out / entry["file"]).read_bytes() == source.read_bytes()
+        assert entry["source_sha256"] == entry["sha256"]
+        assert entry["units"] == "mm"
 
     hydro = json.loads((out / f"{stem}_hydrostatics.json").read_text())["hydrostatics"]
     assert hydro["draft_basis"] == "specification design_draft_m"
@@ -265,7 +280,7 @@ def test_export_of_real_build_fixture_without_cad(tmp_path):
     shutil.copytree(FIXTURE / "task", task)
     manifest = export_draft(task, "r3", tmp_path / "out", draft_m=8.0)
     stem = "factory-70ed8f4700b0_r0003_DRAFT"
-    assert manifest["not_built"] == ["step_model", "stl_mesh"]
+    assert manifest["not_built"] == ["step_model", "iges_model", "rhino_model", "stl_mesh"]
     assert manifest["open_guesses"] == 9
     out = tmp_path / "out"
     rows = list(csv.reader((out / f"{stem}_offsets.csv").read_text().splitlines()))
@@ -290,8 +305,39 @@ def test_revision_errors_and_cli(tmp_path, capsys):
     assert "r0001" in capsys.readouterr().err
     assert main(["--task", str(task), "--revision", "r1", "--out", str(tmp_path / "cli")]) == 0
     printed = json.loads(capsys.readouterr().out)
-    assert printed["not_built"] == ["step_model", "stl_mesh"]
+    assert printed["not_built"] == ["step_model", "iges_model", "rhino_model", "stl_mesh"]
     assert (tmp_path / "cli" / printed["package"]["file"]).is_file()
+
+
+@pytest.mark.parametrize("missing", ["declaration", "file"])
+def test_old_builds_without_new_cad_formats_keep_step_and_stl(tmp_path, missing):
+    task = make_box_task(tmp_path)
+    build = task / "domain/builds/r0001-test"
+    if missing == "declaration":
+        result = json.loads((build / "result.json").read_text())
+        for kind in ("iges", "3dm"):
+            result["exports"].pop(kind)
+            result["exports"].pop(f"{kind}_units")
+        (build / "result.json").write_text(json.dumps(result))
+    else:
+        for suffix in ("iges", "3dm"):
+            (build / f"model-draft.{suffix}").unlink()
+    manifest = export_draft(task, "r1", tmp_path / "out")
+    assert manifest["not_built"] == ["iges_model", "rhino_model"]
+    roles = {entry["role"] for entry in manifest["files"]}
+    assert {"step_model", "stl_mesh"} <= roles
+    assert not {"iges_model", "rhino_model"} & roles
+
+
+@pytest.mark.parametrize("kind", ["iges", "3dm"])
+def test_new_cad_export_paths_cannot_leave_the_build(tmp_path, kind):
+    task = make_box_task(tmp_path)
+    build = task / "domain/builds/r0001-test"
+    result = json.loads((build / "result.json").read_text())
+    result["exports"][kind] = f"../outside.{kind}"
+    (build / "result.json").write_text(json.dumps(result))
+    with pytest.raises(ExportError, match="leaves the task folder"):
+        export_draft(task, "r1", tmp_path / "out")
 
 
 def test_csv_text_cells_cannot_become_spreadsheet_formulas():

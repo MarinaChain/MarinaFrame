@@ -28,7 +28,8 @@ MAX_GUESSES = 300
 MAX_REASON_CHARS = 512
 # Exported CAD file names of a draft build. The tag is in the file name, so a
 # downloaded draft file cannot be mistaken for a verified export.
-DRAFT_EXPORT_NAMES = {"step": "model-draft.step", "stl": "model-draft.stl"}
+DRAFT_EXPORT_NAMES = {"step": "model-draft.step", "stl": "model-draft.stl", "iges": "model-draft.iges",
+                      "3dm": "model-draft.3dm"}
 
 
 def candidate_score(candidate: dict) -> float:

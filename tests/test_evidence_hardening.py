@@ -172,7 +172,9 @@ def _reuse_valid_geometry(monkeypatch, good_run):
         return object(), normalized
 
     def export(_shape, out, *, export_cad):
-        for name in ("mesh.json", "model.step", "model.stl"):
+        # Copy every file the reference export record names (mesh, STEP, IGES, 3dm, STL), not a fixed list.
+        names = [value for key, value in reference["exports"].items() if not key.endswith("_units")]
+        for name in names:
             shutil.copyfile(good_run / name, out / name)
         return copy.deepcopy(reference["exports"]), copy.deepcopy(reference["metrics"])
 

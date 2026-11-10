@@ -143,6 +143,10 @@ def test_draft_build_records_guesses_and_tags_exports(tmp_path):
     record = json.loads((run / "result.json").read_text())
     assert record["draft"] == {"status": DRAFT_STATUS, "guesses": guesses}
     assert record["exports"]["step"] == "model-draft.step" and record["exports"]["stl"] == "model-draft.stl"
+    assert record["exports"]["iges"] == "model-draft.iges" and record["exports"]["iges_units"] == "mm"
+    assert (run / "model-draft.iges").is_file() and not (run / "model.iges").exists()
+    assert record["exports"]["3dm"] == "model-draft.3dm" and record["exports"]["3dm_units"] == "mm"
+    assert (run / "model-draft.3dm").is_file() and not (run / "model.3dm").exists()
     assert (run / "model-draft.step").is_file() and not (run / "model.step").exists()
     assert "draft_sha256" in record["identity"]
     # The unreadable station is left out; the loft spans x = 2 .. 6 m.

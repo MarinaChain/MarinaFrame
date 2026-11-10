@@ -541,6 +541,17 @@ def main() -> None:
         section["source"] = {"label": label, "basis": basis}
 
     fixtures = {
+        "export_files": {
+            "step": [["model.step", 4_812_330]],
+            "iges": [["model.iges", 5_126_400]],
+            "3dm": [["model.3dm", 3_824_100]],
+            "stl": [["model.stl", 2_160_084]],
+            "offsets": [["offsets.csv", 3_912]],
+            "hydrostatics": [["hydrostatics.json", 1_731], ["hydrostatics.csv", 1_452]],
+            "report": [["report.pdf", 486_220]],
+            "tanks": [["capacity_plan.csv", 1_204], ["sounding_tank_fw1.csv", 2_310]],
+            "package": [["package.zip", 15_853_618]],
+        },
         "tasks": [v["summary"] for v in views],
         "views": {v["summary"]["task"]: v for v in views},
         "events": {
