@@ -450,3 +450,129 @@ are visibly misnamed (for example the chain named station 10 is the station 5/6 
 which gives the 2.31 m rabbet error and the 0.55 m station-8 sheer error.
 
 E. C. COLLIER is now spent as a holdout; any change made after looking at this result makes it a development case.
+
+## V-bottom polyline reader (branch `feature/vbottom-reader`, 2026-11-10)
+
+Module `src/vessel_reconstruction/body_plan_polyline.py`; tests `tests/test_body_plan_polyline.py` (synthetic
+PIL body plans: both halves, round bilge, a missing inner station, crossing lines, buttock grid lines);
+measurement `scripts/measure_vbottom_collier.py` (COLLIER, point scorer) and `scripts/measure_vbottom_dev_sheets.py`
+(five waterline dev sheets). The frozen `body_plan_{crossings,reader,identity}.py` are not edited (hashes as in
+"Boundaries", checked). **E. C. COLLIER is a DEVELOPMENT case** (its holdout is spent); its truth was read only to
+score and diagnose, never by the reader. PARDON ME is a development case too.
+
+Why a new reader: the crossing reader measures stations where they cross horizontal rows. A low-deadrise bottom
+runs nearly horizontal, so it barely crosses rows and the classifier calls it "shallow"; on COLLIER no chine line
+was found and the chains were misnamed (7/31 cells, 3 wrong).
+
+Method (code only; no truth, no vessel names, no benchmark constants):
+
+1. **Seeds**: narrow, steep ink runs on the half just off each measuring row (station sides). Runs near the
+   centre column are skipped. Scan lines are joined across 1 to 2 px specks (the 1-bit scan breaks lines).
+2. **Side**: each seed is followed up and down along its own ink (step 2 px; perpendicular search; a run wider
+   than 1.8 line widths is a crossing line and is passed on the trace's straight prediction). The side is cut at
+   its first sharp corner below and above the seed (where the trace ran on along the chine curve or a deck line).
+   A side on a calibrated buttock column is rejected.
+3. **Bottom**: from the side's lower end, branches are followed inward at 2-degree steps. A bottom must start on
+   ink, never rise above its start, descend overall, be long (half the knuckle half-breadth and 15 line widths),
+   not lie along one drawn waterline row, and is cut at its own first sharp corner (the keel). The branch that
+   reaches nearest the centreline is taken; a start further up the side is tried only when none leaves the end.
+   The drawn chine curve between knuckles rises inward and is therefore never taken as a bottom.
+4. **Knuckle**: the intersection of straight fits of the side's lower arm and the bottom's outer arm. It must
+   turn by 25 degrees or more and be sharp (half-length arms see at least 75 % of the turn; a round bilge turns
+   gradually) and lie within 2 line widths of the ink.
+5. **Names**: stations ranked outermost first by nesting and named in the calibration's order. More stations
+   than the calibration lists: the half is declined. Fewer: names run from the outermost and the innermost are
+   left unread, unless a long untraced side-like line lies between two traced stations; then stations inward of
+   it are not named (this stopped a misnaming on PARDON ME, where station 4's line was lost). A knuckle out of
+   the chine order (half-breadths must decrease inward) is not named.
+6. **Decline**: a half with fewer than max(3, half the calibration's stations) knuckled stations is declined and
+   keeps the existing reader.
+
+Output per station: the (row, column) polyline from rabbet to the top of the traced side, the chine, sheer and
+rabbet points, and `half_breadth_m(row)` at any row (rows decrease strictly along the polyline, so it crosses a
+row once). `waterline_table` gives a waterline table for scoring. The **sheer** is the top end of the traced side:
+where the station's tick runs on into the log rail it is the rail top, otherwise the rail's lower edge, so it is
+not one drawn feature.
+
+### COLLIER result (development case)
+
+Committed calibration (`benchmarks/ec_collier/holdout_value.py`) and point scorer (`point_score.py`) unchanged. The
+polyline's own points are passed to the scorer as consecutive samples, so the scorer interpolates along the traced
+ink, not between 6-inch rows. Evidence (git-ignored): `work/vbottom/collier_result.json`, overlay
+`work/vbottom/collier_result_overlay.png` (knuckles on the drawn chine curve, checked by eye).
+
+| Arm | Cells given | RMS m | Max m | Wrong (>0.15 m) | Chine only | Identity errors | Extra |
+|---|---|---|---|---|---|---|---|
+| Frozen (baseline, reproduced) | 7/31 | 0.9124 | 2.3133 | 3 | 4/10, RMS 0.2057, 1 wrong | [] | 0 |
+| Polyline | **22/31** | **0.0691** | **0.1883** | **2** | **10/10, RMS 0.0412, max 0.108, 0 wrong** | [5] | 0 |
+
+By point (polyline): sheer 6 cells, RMS 0.007 m; chine 10, RMS 0.041 m; rabbet 6, RMS 0.121 m, 2 wrong
+(stations 2 +0.157, 7 +0.188). Point-scorer gates (polyline in place of v2): all code gates pass (22 >= 7; RMS,
+wrong not worse; 2/22 = 9 % wrong; no extra cell).
+
+All 10 traced stations (aft 4..0, fore 5..9) carry their own knuckle; fore station 10 (it meets the stem) is not
+read. Missing cells: sheer of 1, 4, 7, 8, 10 (the traced side stops at the rail's lower edge, below the printed
+sheer height); rabbet of 4, 6, 9, 10 (printed rabbet height below the traced bottom's inner end). The rabbet
+errors are where the low-deadrise bottoms merge at the keel: there 1 cm of height is about 10 cm of half-breadth.
+Identity error [5]: stations 4 (aft) and 5 (fore) are the two widest sections and nearly equal, so the 2-point
+neighbour check prefers station 4's points for station 5; the names follow the calibration's side order.
+
+### Dev sheets: round-bilge decline and PARDON ME
+
+Product rule measured: a half the polyline reader reads takes its waterline table; a declined half keeps the frozen
+rank-identity table. Same calibrations, truth and scorers as reader v2. Evidence: `work/vbottom/dev_sheets.json`.
+
+| Sheet | Halves read | Cells | RMS m | Max m | Wrong | Identity errors |
+|---|---|---|---|---|---|---|
+| PARDON ME (dev) | fore | 34/57 -> 43/57 | 0.134696 -> 0.035633 | 0.6372 -> 0.1621 | 3 -> 1 | [6, 10, 11] (same) |
+| BUE GIRL | none | 37/39 (same) | 0.001431 (same) | 0.0058 | 0 | [] |
+| C.A. Thayer | none | 149/151 (same) | 0.011616 (same) | 0.1324 | 0 | [] |
+| Balclutha | none | 151/151 (same) | 0.148012 (same) | 1.8113 | 1 | [] |
+| BUMBLE BEE (corrected) | none | 50/54 (same) | 0.148585 (same) | 0.4636 | 13 | [1..6] (same) |
+
+Round-bilge check: every half of BUE GIRL, Thayer, Balclutha and BUMBLE BEE is declined; their tables are
+identical to the frozen tables. Margin: at most 3 knuckled "stations" were found on a round-bilge half (Balclutha
+fore: 3 of 10 needed 5); these are grid and keel junctions, not stations. The first version (before the grid-line
+rules) read BUE GIRL wrongly on both halves (22/39, RMS 0.39 m): buttock lines meeting waterlines look like knuckles.
+PARDON ME: fore stations 5, 4, 3, 2 are read (station 1 not); the aft half (a tight cluster of curves on one
+heavy line) is declined. Reader v2 remains better on PARDON ME (45/57, RMS 0.0056 m); the two readers address
+different drawings and are not combined here.
+
+Open items: sheer definition (rail edge vs top of tick); rabbet cells at merged keel lines; station 10/stem
+sections; a hollow bottom is followed but its corner test is tuned only on straight bottoms; the decline margin on
+Balclutha is small; product integration (`body_plan_intake.py`) is not done; no holdout scored.
+
+### Holdout protocol: WHITE GULL and COLLEEN (written before any run; folders not opened)
+
+`work/holdout/white-gull/` and `work/holdout/colleen/` are **UNSCORED HOLDOUTS**. Nothing in them was opened while
+writing this module or this protocol. The reader under test is `body_plan_polyline.py` at sha256
+`1f39f8661ffd2967e9309a0cc777e9d26e5320956ac79504ac381f0fd2eb771a` with its constants as committed; any edit
+before the run is recorded and the protocol re-committed before the run.
+
+- **Calibration first, per sheet**, in `benchmarks/<boat>/holdout_value.py`, committed before any reader run: centre
+  column, base row (and slope), pixels per metre from the printed scale bar (checked against one drawn dimension),
+  measuring rows (the drawn waterlines; where none are drawn, a fixed grid from the scale, as COLLIER), maximum
+  offset, buttock grid columns, sides and station order. Sides are set by two independent readings (labels in the
+  body plan; stem and stern in the profile) and both are recorded (lesson: check the side assignment twice).
+- **Truth first**: the printed table, read by a person or a model that does not see reader output, into
+  `work/holdout/<boat>/truth.json`, sha256 recorded here before the run. Blank or illegible cells are not truth.
+- **Cells**: (a) **waterline cells**: printed (station, waterline) half-breadths, reader value = the station's
+  polyline at that waterline's row (`waterline_table`), scored with the waterline harness scorer; (b) **point
+  cells**: printed (station, SHEER/CHINE/RABBET) height and half-breadth pairs, scored with the COLLIER point-scorer
+  rules (polyline evaluated at the printed height; no extrapolation). A sheet scores whichever kinds it prints.
+- **Arms**: frozen reader with rank identities vs the product rule (polyline on read halves, frozen on declined
+  halves), same calibration and scorer. Report separately for each kind of cell: cells given / truth cells, RMS,
+  maximum, wrong cells (> 0.15 m), chine-only and sheer-only lines, identity errors (harness check), extra and
+  missing cells, halves read or declined with the reader's notes.
+- **Gates (pass only if all hold)**: polyline cells >= frozen; polyline RMS and wrong cells not worse; polyline wrong
+  cells at most 10 % of cells given; no extra cell where truth is blank; on the overlay, every named knuckle lies on
+  a drawn station corner (checked by eye and recorded). A round-bilge sheet passes only if both halves are declined
+  and the table equals the frozen table.
+- **One run, no tuning**: run once per sheet, the full JSON and overlay kept in `work/`. A failure is reported as a
+  failure. Any change after the run makes the sheet a development case.
+
+Verification (2026-11-10): `PYTHONPATH=src:. .venv/bin/python -m pytest -q`: 1730 passed, 1 skipped, 5 failed in
+392 s. The 5 failures (`test_ship_cad.py` sandbox tests x3, `test_part_revise.py`, `test_whole_vessel_step1.py`) are
+the macOS `sandbox-exec` worker exiting 71 inside this agent's own sandbox; they import nothing from this branch's
+files (the branch adds 5 files and edits only this document). `tests/test_body_plan_polyline.py`: 8 passed. Frozen
+reader hashes unchanged.
