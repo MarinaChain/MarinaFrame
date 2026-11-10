@@ -845,3 +845,257 @@ docs/HULL_FAIRING.md
 Derived replay data and logs stay ignored under `work/three-view-fairing/`;
 they are not commit inputs. No commit, push, merge or branch switch was run
 after the PM's update.
+
+## 10. Plan and profile view reader v2
+
+Date: 2026-11-10, branch `feature/view-reader-v2`. Development data only
+(`work/factory-3view`); no `work/factory-sealed-*` directory was opened. No
+model call, no application wiring: the reader is off by default and is used
+only by the benchmark scripts below.
+
+### 10.1 Why and what
+
+Section 9 found two evidence limits: plan-view waterline identity came from the
+stored hull prediction, and stored boundaries conflict with independent ink.
+A measurement of the old evidence (10.3) adds a third: the old waterline
+heights came from every long horizontal line of the profile, so flat keels,
+flat decks and buttock bottoms became "waterlines" (series60, 00679 and 09867
+have 1-4 spurious heights; 09867-L1 lost four of six true heights).
+
+`src/vessel_reconstruction/view_reader_v2.py` reads the profile and the
+half-breadth plan from the drawing only (region boxes and scale from
+`draft_fit.reference_views`; no stored hull, no truth):
+
+- The sheet rotation (`view_skew`) is removed by resampling each view.
+- Profile: hull ink is separated from grid, baseline and centreline by tone.
+  Keel and deck/sheer are the outer edges of the lowest and highest outline
+  runs in each column (less half a line); stem and stern are the outer runs of
+  each row. z = 0 is the drawn baseline when it is within 3 px of the lowest
+  keel ink.
+- Waterline heights: grid rows that have a label left of the view and lie on
+  a whole number of grid spacings above the baseline label.
+- Plan identity: a waterline meets the centreline where the profile outline
+  crosses its height. Each curve is named at its own end (the curves that end
+  nearer to that end lie nearer the centreline) and then followed along its
+  own line. Following stops at a bunch of curves, at a crossing, at a split
+  and outside the profile's keel-to-deck span. An exclusion step names the
+  last free run when every other curve present holds its own run. Points
+  followed from both ends must agree (`traced`); one-end points are
+  `repaired`; two curves on one run abstain.
+- No order from the centreline is assumed. A first version named runs by
+  order (lowest waterline nearest the centreline). Fit-half development showed
+  this is wrong for tumblehome (00679: the deck line is innermost) and for
+  crossing waterlines (08158).
+- Breadth is the distance of an ink run above the centreline row, outside a
+  one-line clearance; runs within one more line width of the centreline
+  abstain. A negative breadth cannot occur; abstentions are counted by reason.
+
+Development used only the five L0 fit cases. The settings and the reader's
+SHA-256 were committed in `benchmarks/hull_fairing/view_reader_v2_settings.json`
+(commit a4bb28c) before the check half was read; the evaluator refuses a
+changed reader for the check split. The check half was scored once.
+
+### 10.2 Evidence error method
+
+`benchmarks/hull_fairing/view_reader_eval.py` scores the plan/profile points
+of the delivered build of each case against development truth lines, for the
+old reader (`collect_three_view`, regenerated) and the new one. Plan error is
+read breadth minus the truth waterline (or deck) breadth at the point's x.
+Identity is correct when the claimed height is a truth waterline present at x
+and the point is nearest to that truth curve (or within 1 % of half-beam of
+it). Old points at a height that is no truth waterline count as wrong identity
+and are not in the RMS. Keel truth is `keel_xz_m`, deck truth is
+`deck_xyz_m` (deck at side). Stem/stern truth is the midpoint of the 0.5 m
+truth grid step where breadth starts, so stem/stern errors below about 0.25 m
+are within the truth resolution. Old "abstention" is its missing-scan share;
+the old reader also kept 50-90 % of its plan points as `repaired`.
+
+### 10.3 Evidence results: old reader against v2
+
+Plan totals (delivered builds):
+
+| Split | Reader | Plan points | Identity correct | Plan abstention | Points within 1 % half-beam |
+|---|---|---|---|---|---|
+| fit | old | 2246 | 64.5 % | 0.0 % | 73.7 % |
+| fit | new | 637 | 99.8 % | 90.1 % | 97.6 % |
+| check | old | 1977 | 51.8 % | 0.2 % | 42.4 % |
+| check | new | 292 | 74.7 % | 95.3 % | 68.9 % |
+
+Per case (plan, profile and heights):
+
+| Case | Reader | Plan points | Plan RMS / max m | Identity correct | Plan abstention | Negative | Keel RMS / max m | Deck RMS / max m | Stem / stern RMS m | Heights matched (spurious) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| dtmb5415-3v-L0 | old | 283 | 0.149 / 1.047 | 79.5 % | 0.4 % | 0 | 0.340 / 2.509 | 0.073 / 0.111 | 0.191 / 3.561 | 6/6 (0) |
+| dtmb5415-3v-L0 | new | 218 | 0.032 / 0.096 | 100.0 % | 77.9 % | 0 | 0.043 / 0.139 | 0.020 / 0.054 | 0.231 / 0.312 | 6/6 (0) |
+| series60-3v-L0 | old | 526 | 0.168 / 1.135 | 72.4 % | 0.0 % | 0 | 0.069 / 0.134 | 0.075 / 0.129 | 0.173 / 0.185 | 7/7 (1) |
+| series60-3v-L0 | new | 3 | 0.068 / 0.096 | 100.0 % | 99.8 % | 0 | 0.029 / 0.058 | 0.040 / 0.098 | 0.225 / 0.114 | 7/7 (0) |
+| shipd-1-00679-3v-L0 | old | 567 | 0.326 / 4.500 | 54.1 % | 0.0 % | 0 | 0.088 / 0.428 | 0.171 / 1.301 | 0.711 / 0.845 | 7/7 (2) |
+| shipd-1-00679-3v-L0 | new | 12 | 0.028 / 0.080 | 100.0 % | 99.2 % | 0 | 0.101 / 0.120 | 0.064 / 0.153 | 0.338 / 0.195 | 7/7 (0) |
+| shipd-1-08158-3v-L0 | old | 260 | 0.121 / 1.275 | 89.6 % | 0.0 % | 0 | 0.770 / 3.649 | 0.057 / 0.103 | 0.339 / 0.422 | 5/5 (0) |
+| shipd-1-08158-3v-L0 | new | 202 | 0.049 / 0.153 | 99.5 % | 81.1 % | 0 | 0.101 / 0.142 | 0.072 / 0.168 | 0.281 / 0.339 | 5/5 (0) |
+| shipd-1-09867-3v-L0 | old | 610 | 0.366 / 2.911 | 49.5 % | 0.0 % | 0 | 0.052 / 0.218 | 0.087 / 0.448 | 0.412 / 0.276 | 5/6 (4) |
+| shipd-1-09867-3v-L0 | new | 202 | 0.018 / 0.065 | 100.0 % | 84.9 % | 0 | 0.106 / 0.149 | 0.073 / 0.146 | 0.259 / 0.145 | 6/6 (0) |
+| dtmb5415-3v-L1 | old | 272 | 0.924 / 3.282 | 45.6 % | 0.0 % | 0 | 0.725 / 5.009 | 0.147 / 0.238 | 0.444 / 6.857 | 6/6 (0) |
+| dtmb5415-3v-L1 | new | 92 | 0.050 / 0.098 | 93.5 % | 90.6 % | 0 | 0.035 / 0.156 | 0.025 / 0.217 | 0.258 / 0.468 | 6/6 (0) |
+| series60-3v-L1 | old | 549 | 0.225 / 0.962 | 48.5 % | 0.5 % | 0 | 0.109 / 0.179 | 0.110 / 0.177 | 0.175 / 0.198 | 7/7 (1) |
+| series60-3v-L1 | new | 36 | 0.854 / 1.172 | 0.0 % | 97.6 % | 0 | 0.053 / 0.159 | 0.096 / 0.155 | 0.257 / 0.133 | 7/7 (0) |
+| shipd-1-00679-3v-L1 | old | 536 | 0.339 / 4.553 | 49.3 % | 0.0 % | 0 | 0.164 / 0.662 | 0.161 / 1.252 | 0.990 / 1.195 | 6/7 (3) |
+| shipd-1-00679-3v-L1 | new | 10 | 0.025 / 0.043 | 100.0 % | 99.3 % | 0 | 0.139 / 0.201 | 0.126 / 0.188 | 0.539 / 0.233 | 7/7 (0) |
+| shipd-1-08158-3v-L1 | old | 293 | 0.151 / 1.266 | 79.5 % | 0.0 % | 0 | 0.795 / 3.770 | 0.054 / 0.089 | 0.401 / 0.502 | 5/5 (0) |
+| shipd-1-08158-3v-L1 | new | 147 | 0.600 / 2.300 | 78.2 % | 83.6 % | 0 | 0.157 / 0.300 | 0.118 / 0.195 | 0.505 / 0.379 | 4/5 (0) |
+| shipd-1-09867-3v-L1 | old | 327 | 0.318 / 1.410 | 41.9 % | 0.0 % | 0 | 0.143 / 0.484 | 0.161 / 0.834 | 0.643 / 0.388 | 2/6 (3) |
+| shipd-1-09867-3v-L1 | new | 7 | 0.114 / 0.135 | 100.0 % | 99.5 % | 0 | 0.111 / 0.157 | 0.067 / 0.104 | 0.282 / 0.152 | 6/6 (0) |
+| bue_girl (check) | both | not available: intake has only a body-plan region; no plan or profile view to read | | | | | | | | |
+Plan error per curve (points, RMS m, max m; "absent" = a claimed waterline
+that truth does not have at that x):
+
+| Case | Reader | Per curve: points, RMS m, max m |
+|---|---|---|
+| dtmb5415-3v-L0 | old | deck: 67, 0.191, 0.861; deck_absent: 1 unscorable; wl_10: 23, 0.030, 0.047; wl_12: 17, 0.031, 0.059; wl_2: 10, 0.499, 1.047; wl_2_absent: 2 unscorable; wl_4: 39, 0.045, 0.164; wl_4_absent: 2 unscorable; wl_6: 57, 0.103, 0.479; wl_6_absent: 2 unscorable; wl_8: 61, 0.080, 0.429; wl_8_absent: 2 unscorable |
+| dtmb5415-3v-L0 | new | deck: 12, 0.069, 0.096; wl_10: 42, 0.031, 0.066; wl_12: 11, 0.053, 0.093; wl_4: 151, 0.025, 0.093; wl_8: 2, 0.028, 0.028 |
+| series60-3v-L0 | old | deck: 72, 0.047, 0.170; deck_absent: 1 unscorable; spurious_height: 8 unscorable; wl_1: 57, 0.080, 0.329; wl_2: 58, 0.160, 0.879; wl_3: 59, 0.203, 0.914; wl_3_absent: 1 unscorable; wl_4: 59, 0.227, 0.823; wl_4_absent: 3 unscorable; wl_5: 65, 0.230, 1.135; wl_6: 70, 0.222, 0.991; wl_7: 73, 0.049, 0.267 |
+| series60-3v-L0 | new | wl_6: 3, 0.068, 0.096 |
+| shipd-1-00679-3v-L0 | old | deck: 71, 0.710, 4.500; deck_absent: 2 unscorable; spurious_height: 84 unscorable; wl_10: 64, 0.127, 0.438; wl_12: 51, 0.204, 0.643; wl_14: 33, 0.091, 0.454; wl_2: 55, 0.374, 0.907; wl_4: 64, 0.193, 0.635; wl_6: 70, 0.118, 0.365; wl_8: 73, 0.096, 0.341 |
+| shipd-1-00679-3v-L0 | new | wl_2: 11, 0.027, 0.080; wl_4: 1, 0.033, 0.033 |
+| shipd-1-08158-3v-L0 | old | deck: 65, 0.069, 0.395; wl_10: 19, 0.055, 0.060; wl_2: 29, 0.021, 0.034; wl_4: 39, 0.134, 0.360; wl_6: 50, 0.215, 1.275; wl_6_absent: 2 unscorable; wl_8: 56, 0.081, 0.533 |
+| shipd-1-08158-3v-L0 | new | deck: 32, 0.050, 0.153; wl_2: 140, 0.045, 0.078; wl_4: 23, 0.068, 0.087; wl_6: 7, 0.057, 0.097 |
+| shipd-1-09867-3v-L0 | old | deck: 71, 0.520, 1.583; deck_absent: 2 unscorable; spurious_height: 193 unscorable; wl_10: 70, 0.409, 2.911; wl_10_absent: 2 unscorable; wl_12: 68, 0.407, 1.149; wl_4: 54, 0.079, 0.512; wl_4_absent: 7 unscorable; wl_6: 64, 0.176, 0.564; wl_6_absent: 6 unscorable; wl_8: 69, 0.352, 2.742; wl_8_absent: 4 unscorable |
+| shipd-1-09867-3v-L0 | new | wl_2: 169, 0.013, 0.065; wl_4: 23, 0.034, 0.061; wl_6: 10, 0.039, 0.057 |
+| dtmb5415-3v-L1 | old | deck: 68, 0.203, 0.774; deck_absent: 1 unscorable; wl_10: 22, 1.080, 1.540; wl_12: 17, 0.298, 0.477; wl_2: 8, 0.534, 0.961; wl_2_absent: 1 unscorable; wl_4: 38, 1.182, 2.313; wl_6: 56, 1.141, 3.282; wl_8: 61, 1.087, 2.622 |
+| dtmb5415-3v-L1 | new | deck: 12, 0.067, 0.093; wl_10: 61, 0.039, 0.081; wl_10_absent: 6 unscorable; wl_12: 11, 0.074, 0.098; wl_8: 2, 0.043, 0.049 |
+| series60-3v-L1 | old | deck: 71, 0.203, 0.675; deck_absent: 1 unscorable; spurious_height: 34 unscorable; wl_1: 56, 0.138, 0.468; wl_2: 58, 0.178, 0.620; wl_3: 58, 0.211, 0.635; wl_3_absent: 2 unscorable; wl_4: 59, 0.333, 0.962; wl_4_absent: 3 unscorable; wl_5: 64, 0.231, 0.899; wl_5_absent: 1 unscorable; wl_6: 69, 0.266, 0.846; wl_6_absent: 1 unscorable; wl_7: 72, 0.183, 0.679 |
+| series60-3v-L1 | new | wl_6: 36, 0.854, 1.172 |
+| shipd-1-00679-3v-L1 | old | deck: 71, 0.718, 4.553; deck_absent: 2 unscorable; spurious_height: 87 unscorable; wl_10: 64, 0.133, 0.429; wl_12: 50, 0.177, 0.503; wl_2: 55, 0.379, 0.917; wl_4: 64, 0.203, 0.587; wl_6: 70, 0.098, 0.389; wl_8: 73, 0.102, 0.316 |
+| shipd-1-00679-3v-L1 | new | wl_2: 9, 0.025, 0.043; wl_4: 1, 0.016, 0.016 |
+| shipd-1-08158-3v-L1 | old | deck: 65, 0.126, 0.862; wl_10: 53, 0.163, 0.773; wl_2: 29, 0.054, 0.104; wl_4: 38, 0.115, 0.355; wl_6: 50, 0.237, 1.266; wl_6_absent: 2 unscorable; wl_8: 56, 0.121, 0.537 |
+| shipd-1-08158-3v-L1 | new | deck: 30, 0.044, 0.101; wl_10: 5, 0.019, 0.033; wl_2: 44, 0.044, 0.072; wl_6: 31, 0.994, 1.844; wl_8: 37, 0.774, 2.300 |
+| shipd-1-09867-3v-L1 | old | deck: 71, 0.451, 1.410; deck_absent: 2 unscorable; spurious_height: 142 unscorable; wl_2: 43, 0.099, 0.278; wl_2_absent: 8 unscorable; wl_4: 54, 0.199, 1.008; wl_4_absent: 7 unscorable |
+| shipd-1-09867-3v-L1 | new | wl_6: 7, 0.114, 0.135 |
+
+Summary:
+
+- Waterline heights: v2 matched every truth height on 9 of 10 sheets with no
+  spurious height (08158-L1: 4 of 5). The old reader had 14 spurious heights
+  over the ten sheets and lost four 09867-L1 heights.
+- Profile keel: v2 RMS 0.03-0.16 m and maximum at most 0.30 m on all ten
+  sheets; old maxima reached 2.5-5.0 m (dtmb, 08158). Deck: v2 RMS
+  0.02-0.13 m.
+- Plan: where v2 names a curve on the fit half, 99.8 % of points have the
+  correct identity and 97.6 % are within 1 % of half-beam (old: 64.5 % and
+  73.7 %). Coverage is the cost: v2 abstains on 90 % of plan places on the fit
+  half and 95 % on the check half. Curves whose ends cluster within three line
+  widths (series60, 00679, most of 09867-L1) get no name at all.
+- Check half: dtmb, 00679 and 09867 stay accurate. Two failures remain:
+  series60-L1 (36 points, all on the wrong curve, 0.85 m RMS) and 08158-L1
+  (two-end `traced` points on waterlines 6 and 8 follow a neighbour through
+  a crossing, 0.99 / 0.77 m RMS). The check identity share is 74.7 % against
+  the old 51.8 %. No setting was changed after these results.
+- Negative breadths: 0 for both readers in the evidence. (Section 9's 1,282
+  were fitted-surface samples projected to the floor, not evidence values.)
+
+### 10.4 Frozen three-view fairing replay with v2 evidence
+
+`collect_view_reader_v2.py` keeps each stored build's sections and body-plan
+points and replaces only the plan and profile points with v2 points. The
+replay used `replay_three_view replay` with the unchanged
+`three_view_choice.json` (plan weight 0.5, fairness 0.02, Huber 1 %), all 21
+development builds plus BUE GIRL, 63 CAD builds, no failure. Current and
+station-only columns do not use plan/profile evidence and equal section 9.3.
+
+| Delivered case | Split | RMS % current / station-only | Joint, 9.3 evidence | Joint, v2 evidence | Volume % joint 9.3 / v2 | Joint passes 9.3 / v2 |
+|---|---|---|---|---|---|---|
+| dtmb5415-L0 | fit | 8.087 / 8.087 | 8.301 | 8.380 | 1.270 / 0.568 | 0 / 0 |
+| series60-L0 | fit | 1.385 / 1.285 | 3.411 | 4.061 | 2.069 / 2.340 | 0 / 0 |
+| 00679-L0 | fit | 4.048 / 3.846 | 9.415 | 16.419 | -4.685 / -13.378 | 0 / 0 |
+| 08158-L0 | fit | 0.755 / 0.715 | 3.058 | 6.616 | 0.102 / 6.368 | 0 / 0 |
+| 09867-L0 | fit | 3.246 / 2.506 | 4.260 | 4.106 | 2.654 / 2.792 | 0 / 0 |
+| dtmb5415-L1 | check | 14.339 / 14.188 | 13.915 | 12.391 | 13.042 / 11.342 | 0 / 0 |
+| series60-L1 | check | 3.492 / 3.334 | 7.123 | 8.066 | -0.199 / 1.797 | 0 / 0 |
+| 00679-L1 | check | 5.467 / 5.438 | 8.173 | 10.981 | -2.119 / -6.762 | 0 / 0 |
+| 08158-L1 | check | 1.642 / 1.625 | 3.120 | 4.326 | -3.214 / -4.602 | 0 / 0 |
+| 09867-L1 | check | 1.005 / 0.983 | 1.191 | 1.381 | 1.552 / 1.136 | 1 / 1 |
+
+| Population | Mean RMS % current / station-only | Joint 9.3 | Joint v2 | Joint passes 9.3 / v2 |
+|---|---|---|---|---|
+| fit (5 delivered) | 3.504 / 3.288 | 5.689 | 7.916 | 0 / 0 |
+| check (5 delivered) | 5.189 / 5.114 | 6.704 | 7.429 | 1 / 1 |
+| all builds (21) | 6.521 / 6.424 | 7.877 | 9.510 | 2 / 2 |
+| all builds fit (11) | 7.732 / 7.613 | 9.063 | 11.317 | 0 / 0 |
+| all builds check (10) | 5.190 / 5.116 | 6.572 | 7.521 | 2 / 2 |
+
+Injections with v2 evidence (delivered, maximum absolute follow share): fit
++0.1 m 0.254, +0.2 m 0.233, whole station 1.040; check 0.330, 0.272, 1.000.
+Joint diagnostics: 34 added half stations, 1,344 negative fitted-surface
+samples projected to the floor (9.3: 1,282). Targets T1-T4 fail on both
+halves; BUE GIRL T5 holds (station-only fallback, no plan/profile view).
+
+### 10.5 Findings and limits
+
+**Keep three-view fairing off.** Better evidence did not give a better
+surface: the joint fit with v2 evidence is worse than with the old evidence on
+both halves (fit 5.69 -> 7.92 %, check 6.70 -> 7.43 %) and much worse than
+station-only (3.29 / 5.11 %). It improves only dtmb5415-L1 (13.92 -> 12.39 %)
+and 09867-L0.
+
+The joint fit now rests mainly on profile evidence (about 440 keel/deck/end
+points per case, against 3-218 plan points). A diagnostic after the replay
+(not a tuning input) compared each stored station's lowest and highest point
+with the v2 profile at the same x. On the eight non-DTMB sheets the stored
+deck ends sit a median 0.08-0.19 m below the v2 deck (keel: 0.01-0.18 m below,
+08158-L1 +0.03 m); on both DTMB sheets they agree within 0.03 m. Single
+stations differ by up to 3.6 m (08158 keel at an end station). The stored
+reading and the drawing frame have different z datums. The fitter holds the
+stored station ends exactly and bends the height envelope between stations
+towards the profile ink, so a datum offset becomes a wave in every gap
+(00679-L0 volume -13.4 %). This is a frame-alignment limit of the fitter,
+not an evidence error; it was not tested by an ablation here.
+
+The plan evidence is now accurate where it exists but sparse; its weight
+(0.5, normalised by point count) is fixed, and the fitted surface still moves
+named plan points by about 1 m on dtmb5415-L1 and 08158 (10-30 % within
+tolerance). The evidence measurement (10.3) is the main result of this lane;
+the fairing replay shows that the fitter must align frames before it can use
+independent profile evidence.
+
+Open items:
+
+1. Align the stored reading's frame to the drawing frame (x origin, z datum,
+   scale) before a joint fit, or let the fit move station ends within the
+   profile evidence instead of holding them.
+2. Plan coverage: curves with clustered ends get no name. Candidate cues: the
+   buttock correspondence (plan curve k crosses buttock row j where the
+   profile buttock j crosses waterline k) and body-plan ink at stations.
+3. Crossings: 08158-L1 shows two-end agreement can still be wrong through a
+   shallow crossing. A crossing check (two curves exchange runs) is missing.
+4. series60-L1: one wrongly named curve (rank seed at a crowded bow). Find
+   the failing seed on a new development sheet, not on this check case.
+5. Stem/stern truth here is on a 0.5 m grid; an exact truth contour would
+   make the end errors comparable.
+6. BUE GIRL has no plan/profile region in its intake; the reader was not run.
+
+### 10.6 Reproduction and verification
+
+```bash
+set -o pipefail
+export PYTHONPATH=src:. OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1
+.venv/bin/python -m benchmarks.hull_fairing.collect_three_view --output work/view-reader-v2/old-evidence
+for s in fit check; do .venv/bin/python -m benchmarks.hull_fairing.view_reader_eval --split $s --old work/view-reader-v2/old-evidence --output work/view-reader-v2/eval-$s.json --overlays work/view-reader-v2/overlays-$s; done
+.venv/bin/python -m benchmarks.hull_fairing.summary_view_reader_v2 work/view-reader-v2/eval-fit.json work/view-reader-v2/eval-check.json
+.venv/bin/python -m benchmarks.hull_fairing.collect_view_reader_v2 --old work/view-reader-v2/old-evidence --output work/view-reader-v2/evidence
+for s in fit check; do .venv/bin/python -m benchmarks.hull_fairing.replay_three_view replay --evidence work/view-reader-v2/evidence/$s --output work/view-reader-v2/replay-$s --choice benchmarks/hull_fairing/three_view_choice.json; done
+```
+
+Merge the two `replay.json` row lists and run `summary_three_view` with
+`--evidence work/view-reader-v2/evidence/check` (it holds BUE GIRL). Derived
+data, overlays and logs stay in ignored `work/view-reader-v2/`.
+`tests/test_view_reader_v2.py` reads a synthetic lines drawing (heights,
+keel/deck, named plan curves within 0.2 m, positive breadths, abstention
+counts, ambiguous-run and coincident-end refusals).
+
+Test runs on this branch: the non-CAD suite passed (1,661 passed, 46
+deselected). The CAD suite gave 40 passed, 1 skipped and 5 failures, all in
+sandbox or part-revision tests (`test_ship_cad` sandbox tests,
+`test_part_revise`, `test_whole_vessel_step1`) that fail with
+`sandbox-exec: execvp() ... Operation not permitted` inside this agent's own
+sandbox. This lane changed none of those modules (as in 9.5, where the same
+sandbox-bound tests were deselected).

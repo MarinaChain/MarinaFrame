@@ -214,3 +214,9 @@
 - **Trigger:** The CAD export lane added IGES and .3dm files; its focused tests passed, but three evidence-hardening tests failed at merge because a test helper copied a fixed file list. A replace-sheet real-worker test also failed in CI because it did not skip without `MARINAFRAME_TEST_PYTHON`.
 - **Rule:** When a lane changes run files, export kinds or record checks, run the full Python suite before review, not only focused tests. Test helpers copy the files the record names, not a fixed list. New real-worker Rust tests skip when `MARINAFRAME_TEST_PYTHON` is unset, like the existing ones.
 - **Why:** Focused runs miss tests that encode the old file set, and CI's plain cargo step has no worker Python.
+
+### Name plan waterlines by drawing correspondence, not by order (MarinaFrame)
+- **Date:** 2026-11-10
+- **Trigger:** View reader v2 first named plan-view runs by order from the centreline. On shipd-1-00679 (tumblehome: the deck line is innermost) and shipd-1-08158 (crossing waterlines) identity fell to 15-45 %. Grid-row heights from every long line also gave 14 spurious waterlines on ten sheets.
+- **Rule:** Name a plan curve from a cross-view correspondence (its centreline end equals the profile end at its height), follow it, and abstain at bunches, crossings and shared ink. Take waterline heights only from labelled grid rows on the regular spacing. Score evidence against development truth before any fitting.
+- **Why:** Breadth order with height is a hull property, not a drawing rule; accurate evidence can still worsen a fit when the fit holds stored boundaries in another datum (section 10.5).
