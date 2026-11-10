@@ -145,3 +145,9 @@
 - **Trigger:** `until ! pgrep -f "replay_edits" ...` waited forever: the waiter's own command line contained the pattern.
 - **Rule:** Wait on a PID (`kill -0 $pid`), a result-file count, or a done marker, not on `pgrep -f` with a pattern that the waiting command contains.
 - **Why:** Silent waits hide finished work and block the lane.
+
+### Keep per-run replay data out of commits (MarinaFrame)
+- **Date:** 2026-11-10
+- **Trigger:** Cross-view outlier replay wrote a 5.2 MB derived JSON file under `outputs/`; the user asked to move it to ignored `work/` before committing.
+- **Rule:** Write per-run derived replay JSON and logs to git-ignored `work/`, including the script's default output path. Commit the replay code, tests and concise result tables, not the per-run data.
+- **Why:** Reproducible measurement output is not a source deliverable and need not enlarge repository history.
