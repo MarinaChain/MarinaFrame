@@ -1,5 +1,11 @@
 # MarinaFrame lessons
 
+### Ask the person when a worker stops making progress
+- **Date:** 2026-11-10
+- **Trigger:** A loaded laptop's 72-station Gunnerus build was stopped at the 600-second wall limit twice. The founder rejected fixed total time limits for slower laptops.
+- **Rule:** Track completed work with an increasing counter. A periodic heartbeat must not increase it. After five minutes without new progress, keep the worker alive and offer Keep waiting or Stop. Default the optional absolute safety cap to off; retain CPU, memory and receipt checks.
+- **Why:** Elapsed time depends on machine load. A slow build can still make progress.
+
 ### Freeze executable and Python source for concurrent evaluation
 - **Date:** 2026-11-08
 - **Trigger:** W11 `make test-full` rebuilt `target/release/marinaframe` while a live benchmark used it. The controller correctly stopped at `controller_binary_changed`. The smoke target also lacked `--worker-source`, so its cleared environment could use the main checkout's editable Python install.

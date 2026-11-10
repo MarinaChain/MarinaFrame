@@ -352,7 +352,7 @@ impl Backend {
     pub fn get_queue(&self) -> QueueView {
         let running = view::list_tasks(&self.runs_folder())
             .iter()
-            .filter(|t| t.status == Status::Running)
+            .filter(|t| matches!(t.status, Status::Running | Status::Stalled))
             .count()
             + self.batch.starting_count();
         let held = (!self.ai_status().active

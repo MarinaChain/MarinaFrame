@@ -173,11 +173,15 @@ impl TaskLive {
                 kind: InFlightKind::Worker,
                 operation: Some(operation.clone()),
                 since_ms: since.saturating_sub(started),
+                progress: None,
+                stalled: false,
             }),
             (_, Some(since)) => Some(InFlight {
                 kind: InFlightKind::Model,
                 operation: None,
                 since_ms: since.saturating_sub(started),
+                progress: None,
+                stalled: false,
             }),
             _ => None,
         };

@@ -29,6 +29,87 @@ pub fn cancelled(root: &Path) -> bool {
     STOP.load(Ordering::SeqCst) || root.join("cancel.request").exists()
 }
 
+/// Five minutes permits slow native calls on loaded laptops. Lack of progress
+/// asks the person what to do; it does not kill the worker or adopt its files.
+pub const NO_PROGRESS_SECONDS: u64 = 300;
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct WorkerProgress {
+    pub request_id: String,
+    pub stage: String,
+    pub part: u64,
+    pub total: u64,
+    pub unit: String,
+    pub counter: u64,
+    pub timestamp_ms: u64,
+}
+
+pub fn progress_path(root: &Path, request_id: &str) -> std::path::PathBuf {
+    root.join("worker-logs")
+        .join(format!("{request_id}.progress.json"))
+}
+
+pub fn read_progress(root: &Path, request_id: &str) -> Option<WorkerProgress> {
+    if request_id.is_empty()
+        || !request_id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
+    {
+        return None;
+    }
+    let bytes = crate::util::read_bounded(&progress_path(root, request_id), 2048).ok()?;
+    let value: WorkerProgress = serde_json::from_slice(&bytes).ok()?;
+    (value.request_id == request_id
+        && value.stage.len() <= 120
+        && !value.stage.chars().any(char::is_control)
+        && value.part <= value.total
+        && value.total <= 100_000
+        && ["part", "section", "format"].contains(&value.unit.as_str()))
+    .then_some(value)
+}
+
+/// Uses elapsed monotonic time supplied by the supervisor (a fake clock in tests).
+struct ProgressWatchdog {
+    counter: u64,
+    last_progress: Duration,
+}
+impl ProgressWatchdog {
+    fn new(now: Duration) -> Self {
+        Self {
+            counter: 0,
+            last_progress: now,
+        }
+    }
+    fn update(&mut self, now: Duration, counter: Option<u64>, keep_waiting: bool) -> bool {
+        if counter.is_some_and(|value| value > self.counter) {
+            self.counter = counter.unwrap();
+            self.last_progress = now;
+        }
+        if keep_waiting {
+            self.last_progress = now;
+        }
+        now.saturating_sub(self.last_progress) >= Duration::from_secs(NO_PROGRESS_SECONDS)
+    }
+}
+
+/// This request takes no controller lock: the running supervisor holds that lock.
+pub fn keep_waiting(root: &Path, request_id: &str) -> Result<()> {
+    crate::util::atomic_json(
+        &root.join("keep-waiting.request"),
+        &serde_json::json!({"request_id":request_id}),
+        true,
+    )
+}
+
+fn take_keep_waiting(root: &Path, request_id: &str) -> bool {
+    let path = root.join("keep-waiting.request");
+    let requested = crate::util::read_bounded(&path, 1024)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        .is_some_and(|value| value["request_id"] == request_id);
+    requested && std::fs::remove_file(path).is_ok()
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProcessState {
@@ -180,6 +261,17 @@ pub fn run(
     request: &[u8],
     source_spec: &Path,
 ) -> Result<ProcessOutcome> {
+    run_with_progress(root, config, pending, request, source_spec, |_, _| Ok(()))
+}
+
+pub fn run_with_progress(
+    root: &Path,
+    config: &Config,
+    pending: &Pending,
+    request: &[u8],
+    source_spec: &Path,
+    mut on_stall_change: impl FnMut(bool, Option<&WorkerProgress>) -> Result<()>,
+) -> Result<ProcessOutcome> {
     let is_provider = pending.kind == "provider";
     let queued = Instant::now();
     let _admission = if is_provider {
@@ -236,6 +328,11 @@ pub fn run(
             }
         }
         c.env("PYTHONDONTWRITEBYTECODE", "1")
+            .env(
+                "MARINAFRAME_PROGRESS_PATH",
+                progress_path(root, &pending.id),
+            )
+            .env("MARINAFRAME_PROGRESS_REQUEST", &pending.id)
             .env("PYTHONUNBUFFERED", "1")
             .env("OPENBLAS_NUM_THREADS", "1")
             .env("OMP_NUM_THREADS", "1")
@@ -351,6 +448,9 @@ pub fn run(
     } else {
         config.limits.worker_wall_seconds
     };
+    let mut watchdog = ProgressWatchdog::new(Duration::ZERO);
+    let mut stalled = false;
+    let mut next_progress_poll = Duration::ZERO;
     loop {
         if let Some(pipe) = stdin.as_mut() {
             if offset < request.len() && !pipe_failed {
@@ -406,11 +506,29 @@ pub fn run(
             + std::fs::metadata(&stderr_path)
                 .map(|m| m.len())
                 .unwrap_or(0);
+        let elapsed = started.elapsed();
+        if !is_provider && elapsed >= next_progress_poll {
+            next_progress_poll = elapsed + Duration::from_millis(250);
+            let progress = read_progress(root, &pending.id);
+            let waiting = take_keep_waiting(root, &pending.id);
+            let next_stalled =
+                watchdog.update(elapsed, progress.as_ref().map(|p| p.counter), waiting);
+            if next_stalled != stalled {
+                if let Err(error) = on_stall_change(next_stalled, progress.as_ref()) {
+                    unsafe {
+                        libc::kill(-pid, libc::SIGKILL);
+                    }
+                    let _ = child.wait();
+                    return Err(error);
+                }
+                stalled = next_stalled;
+            }
+        }
         let reason = if cancelled(root) {
             Some(ProcessState::Cancelled)
         } else if pipe_failed {
             Some(ProcessState::ProtocolWriteFailed)
-        } else if started.elapsed().as_secs() >= timeout {
+        } else if timeout > 0 && elapsed.as_secs() >= timeout {
             Some(ProcessState::TimedOut)
         } else if output > 1024 * 1024 {
             Some(ProcessState::OutputLimit)
@@ -449,6 +567,41 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn watchdog_counts_progress_not_heartbeats_or_total_duration() {
+        let mut watch = ProgressWatchdog::new(Duration::ZERO);
+        assert!(!watch.update(Duration::from_secs(299), Some(1), false));
+        // A repeated heartbeat is not progress.
+        assert!(watch.update(Duration::from_secs(599), Some(1), false));
+        // Keep waiting grants another no-progress window to the same worker.
+        assert!(!watch.update(Duration::from_secs(600), Some(1), true));
+        assert!(watch.update(Duration::from_secs(900), Some(1), false));
+        assert!(!watch.update(Duration::from_secs(901), Some(2), false));
+        for counter in 3..100 {
+            assert!(!watch.update(
+                Duration::from_secs(901 + (counter - 2) * 200),
+                Some(counter),
+                false
+            ));
+        }
+    }
+
+    #[test]
+    fn watchdog_detects_absent_and_regressing_progress() {
+        let mut watch = ProgressWatchdog::new(Duration::ZERO);
+        assert!(watch.update(Duration::from_secs(300), None, false));
+        assert!(!watch.update(Duration::from_secs(301), Some(8), false));
+        assert!(watch.update(Duration::from_secs(601), Some(7), false));
+    }
+
+    #[test]
+    fn absolute_worker_cap_is_disabled_by_default_and_can_be_large() {
+        let mut limits = crate::types::OperationalLimits::default();
+        assert_eq!(limits.worker_wall_seconds, 0);
+        limits.worker_wall_seconds = 86_400;
+        limits.validate().unwrap();
+    }
 
     #[test]
     fn admission_grants_each_slot_once_and_refuses_when_all_are_taken() {

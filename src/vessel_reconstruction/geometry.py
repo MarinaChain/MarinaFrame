@@ -14,6 +14,7 @@ from OCP.BRepMesh import BRepMesh_IncrementalMesh
 
 from . import section_regions
 from .cad_exports import export_iges
+from .progress import report as report_progress
 from .rhino_exports import CadPart, export_3dm
 from .errors import GeometryError
 
@@ -291,7 +292,8 @@ def build_hull(sections: list[dict], samples: int | None = None, *,
     ]) * 1000 for section in sections]
     faces: list[cq.Face] = []
     try:
-        for left, right in zip(profiles, profiles[1:]):
+        for section_index, (left, right) in enumerate(zip(profiles, profiles[1:]), 1):
+            report_progress('Building the hull', section_index, len(profiles), unit='section')
             for j in range(len(left) - 1):
                 panel = np.array([left[j], left[j + 1], right[j], right[j + 1]])
                 # Both sides would coincide on the centreplane here; this
@@ -321,6 +323,7 @@ def build_hull(sections: list[dict], samples: int | None = None, *,
                     faces.append(closure)
         for index in (0, -1):
             faces.append(_terminal_cap(profiles[index], sections[index]["id"]))
+        report_progress('Closing the hull', len(profiles), len(profiles), unit='section')
         shell = cq.Shell.makeShell(faces)
         if shell.ShapeType() != "Shell" or len(shell.Shells()) != 1 or not shell.Closed() or not shell.isValid():
             raise GeometryError("The measured section panels do not form one valid closed CAD shell; inspect centreline pinches or intersecting profiles.")
@@ -420,6 +423,7 @@ def _bilinear_side_faces(profiles: list[np.ndarray]) -> list[cq.Face]:
     ring_count, station_count = len(profiles[0]), len(profiles)
     poles = TColgp_Array2OfPnt(1, ring_count, 1, station_count)
     for v, profile in enumerate(profiles, start=1):
+        report_progress('Building the hull', v, station_count, unit='section')
         for u, point in enumerate(profile, start=1):
             poles.SetValue(u, v, gp_Pnt(*map(float, point)))
     # Periodic degree 1 in the ring direction: one knot per vertex plus the closing knot.
@@ -434,6 +438,7 @@ def _bilinear_side_faces(profiles: list[np.ndarray]) -> list[cq.Face]:
     for index, profile in enumerate(profiles):
         v_knots.SetValue(index + 1, float(profile[0][0]))
         v_mults.SetValue(index + 1, 2 if index in (0, station_count - 1) else 1)
+    report_progress('Lofting the hull')
     surface = Geom_BSplineSurface(poles, u_knots, v_knots, u_mults, v_mults, 1, 1, True, False)
     side = cq.Face(BRepBuilderAPI_MakeFace(surface, 1e-6).Face())
     caps = []
@@ -646,6 +651,7 @@ def build_region_hull(sections: list[dict], *, max_deviation_m: float = DEFAULT_
             outer_knots, inner_knots = _run_knots(members[first:last + 1])
             station_polygons = []
             for index in range(first, last + 1):
+                report_progress('Building the hull', path[index][0] + 1, len(stations), unit='section')
                 polygons, error = _station_polygons(members[index], outer_knots, inner_knots)
                 deviations.append(error)
                 station_polygons.append(polygons)
@@ -665,8 +671,13 @@ def build_region_hull(sections: list[dict], *, max_deviation_m: float = DEFAULT_
                 else:
                     if one_face_per_side:
                         panel_fallbacks.append(label)
-                    faces = [face for left, right in zip(profiles, profiles[1:]) for face in _panel_faces(left, right)]
+                    faces = []
+                    for panel_index, (left, right) in enumerate(zip(profiles, profiles[1:])):
+                        report_progress('Building the hull', path[first + panel_index][0] + 1,
+                                        len(stations), unit='section')
+                        faces.extend(_panel_faces(left, right))
                     faces += [_planar_face(profiles[0]), _planar_face(profiles[-1])]
+                    report_progress('Closing the hull')
                     solid = _closed_solid(faces, label)
                     volume = solid.Volume() / 1e9
                     if abs(volume - simpson) > _REGION_VOLUME_AUDIT_TOLERANCE * max(simpson, 1e-12):
@@ -726,11 +737,13 @@ def export_geometry(shape: cq.Shape, out: Path, *, export_cad: bool = True,
     ``expected_solids`` is 1 for ``build_hull`` and the solid count of a
     ``build_region_hull`` compound; the reloaded STEP must hold exactly that many.
     """
+    report_progress('Measuring the hull')
     metrics = metrics_for(shape)
     tolerance_mm = max(0.5, metrics["beam_m"] * 1000 / 800)
     # CadQuery's convenience mesh/STL functions default to relative deflection.
     # Our number is in millimetres: premesh explicitly with absolute deflection
     # and one native meshing thread, then read that triangulation for mesh.json.
+    report_progress('Making the mesh')
     BRepMesh_IncrementalMesh(shape.wrapped, tolerance_mm, False, 0.15, False)
     vertices, faces = shape.tessellate(tolerance_mm, 0.15)
     mesh = {
@@ -742,11 +755,16 @@ def export_geometry(shape: cq.Shape, out: Path, *, export_cad: bool = True,
     (out / "mesh.json").write_text(json.dumps(mesh, separators=(",", ":"), allow_nan=False), encoding="utf-8")
     exports = {"mesh": "mesh.json", "mesh_units": "m"}
     if export_cad:
+        report_progress('Exporting STEP', 1, 4, unit='format')
         shape.exportStep(str(out / "model.step"), write_pcurves=False)
+        report_progress('Exporting IGES', 2, 4, unit='format')
         export_iges(shape, out / "model.iges")
+        report_progress('Exporting 3dm', 3, 4, unit='format')
         export_3dm([CadPart("hull", shape, "Hull")], out / "model.3dm")
+        report_progress('Exporting STL', 4, 4, unit='format')
         shape.exportStl(str(out / "model.stl"), tolerance=tolerance_mm, angularTolerance=0.15,
                         relative=False, parallel=False)
+        report_progress('Checking the STEP export')
         reread = cq.importers.importStep(str(out / "model.step")).val()
         if not reread.isValid() or len(reread.Solids()) != expected_solids:
             raise GeometryError("The exported STEP file failed independent reload validation.")

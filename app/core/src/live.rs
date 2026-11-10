@@ -242,6 +242,8 @@ pub struct InFlight {
     pub kind: InFlightKind,
     pub operation: Option<String>,
     pub since_ms: u64,
+    pub progress: Option<marinaframe_control::worker::WorkerProgress>,
+    pub stalled: bool,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
@@ -289,7 +291,28 @@ impl LiveStore {
             .entry(task.to_path_buf())
             .or_insert_with(|| TaskLive::new(task));
         live.refresh(task);
-        live.snapshot(after_sequence)
+        let mut answer = live.snapshot(after_sequence);
+        if !answer.finished && answer.started_ms > 0 {
+            answer.elapsed_ms =
+                marinaframe_control::util::now_ms().saturating_sub(answer.started_ms);
+        }
+        if let Some(in_flight) = answer
+            .in_flight
+            .as_mut()
+            .filter(|p| p.kind == InFlightKind::Worker)
+        {
+            // Progress changes between ledger events. Read this small atomic
+            // record every poll; it conveys no authority to adopt worker output.
+            if let Some(state) = files::read_state(task) {
+                in_flight.stalled = state["status"] == "stalled";
+                if state["pending"]["kind"] == "worker" {
+                    if let Some(id) = state["pending"]["id"].as_str() {
+                        in_flight.progress = marinaframe_control::worker::read_progress(task, id);
+                    }
+                }
+            }
+        }
+        answer
     }
 
     /// Section curves of one build. `revision` is a revision id (`r0002`) or the

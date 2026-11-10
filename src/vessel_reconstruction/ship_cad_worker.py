@@ -118,6 +118,9 @@ def run(program: dict, measurements: dict, task: Path, *, audit=None, limits=DEF
     profile.write_text(sandbox_profile(task, runtime_paths()))
     env = safe_worker_environment()
     env.update(HOME=str(task/'work'), TMPDIR=str(task/'work'), PYTHONDONTWRITEBYTECODE='1')
+    if env.get('MARINAFRAME_PROGRESS_PATH'):
+        # Keep all sandbox writes inside work; the supervisor relays this record.
+        env['MARINAFRAME_PROGRESS_PATH'] = str(task/'work'/'progress.json')
     command = ['/usr/bin/sandbox-exec', '-f', str(profile), sys.executable, '-m',
                'vessel_reconstruction.ship_cad_worker', '--task', str(task),
                '--limits', json.dumps(asdict(limits)), '--parent', str(os.getpid())]

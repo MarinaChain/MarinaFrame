@@ -46,6 +46,7 @@ pub struct ViewContext {
 pub fn map_status(controller_status: &str) -> Status {
     match controller_status {
         "ready" | "running" => Status::Running,
+        "stalled" => Status::Stalled,
         "awaiting_human_review" => Status::NeedsReview,
         "draft_not_verified" => Status::Draft,
         "abstained" => Status::Declined,

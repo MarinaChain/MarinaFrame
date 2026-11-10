@@ -141,13 +141,29 @@ pub fn call_worker(store: &mut Store, operation: &str, arguments: Value) -> Resu
         store.state.counters.builds += 1;
     }
     store.append("worker_intent",json!({"operation":operation,"request":store::artifact(&store.path,&pending.request_path,"worker_request")?}))?;
-    let outcome = worker::run(
-        &store.path,
-        &store.state.config,
+    let root = store.path.clone();
+    let config = store.state.config.clone();
+    let outcome = worker::run_with_progress(
+        &root,
+        &config,
         &pending,
         &util::json_bytes(&request)?,
         &source_spec(store),
+        |stalled, progress| {
+            store.state.status = if stalled {
+                Status::Stalled
+            } else {
+                Status::Running
+            };
+            let stage = progress.map_or(operation, |p| p.stage.as_str());
+            store.append(if stalled { "worker_stalled" } else { "worker_continued" },
+                json!({"operation":operation,"stage":stage,
+                    "message":if stalled { format!("No progress: {stage}. Keep waiting or stop this step.") }
+                        else { format!("Continuing: {stage}.") }}))
+        },
     )?;
+    // A worker can finish while the person is considering the stalled prompt.
+    store.state.status = Status::Running;
     if !outcome.spawned {
         store.state.pending = None;
         store.append(
@@ -188,7 +204,12 @@ pub fn call_worker(store: &mut Store, operation: &str, arguments: Value) -> Resu
         };
         // Keep the durable pending intent: changed/unreceipted domain state is
         // never adopted merely because a STEP file exists.
-        stop(store, status, "worker_receipt_missing")?;
+        let reason = if matches!(outcome.state, worker::ProcessState::TimedOut) {
+            "worker_absolute_safety_cap"
+        } else {
+            "worker_receipt_missing"
+        };
+        stop(store, status, reason)?;
         Ok(false)
     }
 }

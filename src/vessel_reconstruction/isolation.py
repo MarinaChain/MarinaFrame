@@ -15,6 +15,7 @@ import threading
 import time
 from typing import Callable
 from uuid import uuid4
+from . import progress
 
 
 @dataclass(frozen=True)
@@ -53,7 +54,8 @@ def safe_worker_environment() -> dict[str, str]:
     # Explicit allowlist: provider credentials and unrelated inherited secrets
     # must not enter native worker descendants.
     # MARINAFRAME_HULL_FAIRING is a build setting (fairing.SETTING), not a secret.
-    env = {key: os.environ[key] for key in ('PATH', 'LANG', 'LC_ALL', 'TZ', 'MARINAFRAME_HULL_FAIRING')
+    env = {key: os.environ[key] for key in ('PATH', 'LANG', 'LC_ALL', 'TZ', 'MARINAFRAME_HULL_FAIRING',
+           'MARINAFRAME_PROGRESS_PATH', 'MARINAFRAME_PROGRESS_REQUEST')
            if key in os.environ}
     env.update(PYTHONPATH=str(Path(__file__).resolve().parent.parent), PYTHONUNBUFFERED='1',
                OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1', OMP_THREAD_LIMIT='1', MKL_NUM_THREADS='1')
@@ -354,6 +356,7 @@ def supervise_process(command: list[str], *, limits: WorkerLimits = DEFAULT_LIMI
     state = 'exited'
     group = (identity or {}).get('pgid', process.pid)
     next_cpu_check = 0.0
+    controller_supervised = bool(os.environ.get('MARINAFRAME_PROGRESS_PATH'))
     try:
         if on_start:
             on_start(identity or {'pid': process.pid, 'pgid': process.pid, 'start_ticks': -1})
@@ -367,9 +370,13 @@ def supervise_process(command: list[str], *, limits: WorkerLimits = DEFAULT_LIMI
             if stop_event is not None and stop_event.is_set():
                 state = 'interrupted'; break
             elapsed = time.monotonic() - started
-            if elapsed >= STALL_WALL_FACTOR * limits.wall_seconds:
+            # The Rust controller watches progress for its entire worker tree.
+            # Nested supervisors retain cancellation and all resource limits.
+            if controller_supervised:
+                progress.relay(child_environment.get('MARINAFRAME_PROGRESS_PATH'))
+            if not controller_supervised and elapsed >= STALL_WALL_FACTOR * limits.wall_seconds:
                 state = 'timed_out'; break
-            if elapsed >= limits.wall_seconds and elapsed >= next_cpu_check:
+            if not controller_supervised and elapsed >= limits.wall_seconds and elapsed >= next_cpu_check:
                 next_cpu_check = elapsed + CPU_POLL_SECONDS
                 if wall_limit_reached(elapsed, limits, lambda: group_cpu_seconds(group)):
                     state = 'timed_out'; break
