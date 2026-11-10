@@ -5,6 +5,7 @@ person never writes a spec file:
 
     python -m vessel_reconstruction.intake prepare --out DIR [--render-dpi N] FILE...
     python -m vessel_reconstruction.intake write-spec --preview PREVIEW.json --out DIR
+    python -m vessel_reconstruction.intake render-page --file FILE --page N --max-side PX
 
 ``prepare`` renders every page (PDF pages through ingest._read_image, rasters
 with Pillow), reads its size and dpi, runs the sheet survey and proposes view
@@ -49,6 +50,9 @@ SMALL_IMAGE_SIDE = 1000
 # Region detection works on a copy with this longest side.
 WORK_SIDE = 1200
 THUMBNAIL_SIDE = 320
+# Page previews of the app's Sources tab (render-page): a list thumbnail up to a large view.
+MIN_PREVIEW_SIDE = 64
+MAX_PREVIEW_SIDE = 4096
 # Ink is darker than this grey level (0 black, 255 white).
 INK_LEVEL = 160
 # A view's region also takes in the light marks (grid lines, axes) touching its
@@ -133,6 +137,51 @@ def read_pages(path: Path, render_dpi: float = DEFAULT_RENDER_DPI):
         yield from _raster_pages(path)
     else:
         raise IntakeError(f"{path.name}: only PDF, PNG, TIFF and JPEG files can be read.")
+
+
+def render_page(path: Path, page_index: int, max_side: int) -> dict:
+    """One page of a source file as a PNG whose longest side is at most ``max_side`` pixels.
+
+    The app's Sources tab shows uploaded files with it. A PDF page is rendered through
+    ingest._read_image at the resolution that gives about ``max_side`` pixels; a raster frame is
+    reduced with Pillow. Nothing is written to disk.
+    """
+    if not MIN_PREVIEW_SIDE <= max_side <= MAX_PREVIEW_SIDE:
+        raise IntakeError(f"A page preview is {MIN_PREVIEW_SIDE} to {MAX_PREVIEW_SIDE} pixels wide.")
+    suffix = path.suffix.lower()
+    if suffix in PDF_SUFFIXES:
+        import fitz
+        from .ingest import _read_image
+        with fitz.open(path) as document:
+            if not 0 <= page_index < document.page_count:
+                raise IntakeError(f"{path.name} has no page {page_index + 1}.")
+            longest_points = max(document[page_index].rect.width, document[page_index].rect.height)
+        # The worker's resource policy bounds the render resolution; a PDF point is 1/72 inch.
+        from .resources import DEFAULT_POLICY
+        dpi = 72.0 * max_side / max(longest_points, 1.0)
+        dpi = min(DEFAULT_POLICY.max_dpi, max(DEFAULT_POLICY.min_dpi, dpi))
+        image, _ = _read_image({"file": path.name, "page_index": page_index, "render_dpi": dpi}, path.parent)
+        picture = Image.fromarray(image)
+    elif suffix in RASTER_SUFFIXES:
+        try:
+            opened = Image.open(path)
+        except Image.DecompressionBombError as exc:
+            raise IntakeError(f"{path.name} is too large to show.") from exc
+        with opened:
+            frames = getattr(opened, "n_frames", 1)
+            if not 0 <= page_index < frames:
+                raise IntakeError(f"{path.name} has no page {page_index + 1}.")
+            opened.seek(page_index)
+            frame = opened.copy()
+        frame.thumbnail((max_side, max_side))
+        picture = Image.fromarray(_on_paper(frame))
+    else:
+        raise IntakeError(f"{path.name}: only PDF, PNG, TIFF and JPEG pages can be shown.")
+    picture.thumbnail((max_side, max_side))
+    buffer = io.BytesIO()
+    picture.save(buffer, format="PNG", optimize=True)
+    return {"png_base64": base64.b64encode(buffer.getvalue()).decode("ascii"),
+            "width_px": picture.width, "height_px": picture.height}
 
 
 def thumbnail_base64(image: np.ndarray) -> tuple[str, float]:
@@ -548,6 +597,10 @@ def main(argv=None) -> int:
     write = sub.add_parser("write-spec")
     write.add_argument("--preview", type=Path, required=True)
     write.add_argument("--out", type=Path, required=True)
+    render = sub.add_parser("render-page", help="one page of a source file as PNG (base64 JSON)")
+    render.add_argument("--file", type=Path, required=True)
+    render.add_argument("--page", type=int, default=0)
+    render.add_argument("--max-side", type=int, default=THUMBNAIL_SIDE)
     args = parser.parse_args(argv)
     try:
         if args.command == "prepare":
@@ -556,6 +609,8 @@ def main(argv=None) -> int:
                 from .calibration_reading import claude_ask
                 ask = claude_ask()
             result = prepare(args.files, args.out, args.render_dpi, ask)
+        elif args.command == "render-page":
+            result = render_page(args.file, args.page, args.max_side)
         else:
             result = write_spec(json.loads(args.preview.read_text()), args.out)
     except (IntakeError, OSError, ValueError, KeyError) as exc:

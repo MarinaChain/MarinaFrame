@@ -76,3 +76,57 @@ fn prepare_then_write_a_sheet_only_spec() {
     assert!(task.join("intake/spec.json").is_file());
     assert!(task.join("intake/sources/sheet.png").is_file());
 }
+
+/// The Sources tab shows page 2 of a dropped PDF through the worker's page renderer.
+#[test]
+fn a_dropped_pdf_page_is_rendered_for_the_sources_tab() {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use marinaframe_app_core::sources::{self, PreviewSize, SourceKind};
+    let Some(python) = support::worker_python() else {
+        return;
+    };
+    let tmp = tempfile::tempdir().unwrap();
+    let task = tmp.path().join("task");
+    std::fs::create_dir_all(task.join("intake/sources")).unwrap();
+    // A4 landscape then A4 portrait, in points.
+    let script = "import sys, fitz\n\
+        doc = fitz.open(); doc.new_page(width=842, height=595)\n\
+        page = doc.new_page(width=595, height=842); page.insert_text((72, 72), 'Sheet 2')\n\
+        doc.save(sys.argv[1])";
+    let pdf = task.join("intake/sources/set.pdf");
+    assert!(Command::new(&python)
+        .args(["-c", script])
+        .arg(&pdf)
+        .status()
+        .unwrap()
+        .success());
+    std::fs::write(
+        task.join("intake/intake.json"),
+        r#"{"spec_page_id": "p1", "pages": [
+            {"page_id": "p1", "file_name": "set.pdf", "page_index": 0, "source_file": "sources/set.pdf"},
+            {"page_id": "p2", "file_name": "set.pdf", "page_index": 1, "source_file": "sources/set.pdf"}]}"#,
+    )
+    .unwrap();
+    let list = sources::list_sources(&task).unwrap();
+    let set = &list.sources[0];
+    assert_eq!((set.kind, set.pages.len()), (SourceKind::Pdf, 2));
+
+    let src = repo_src();
+    let worker = Worker {
+        python: &python,
+        source: Some(&src),
+    };
+    let full = sources::read_source_page(&task, &worker, &set.id, 1, PreviewSize::Full).unwrap();
+    assert_eq!(full.mime, "image/png");
+    // Portrait page at the worker's highest render resolution (300 dpi: 842 pt is 3508 px).
+    assert!(
+        full.height > full.width && (3400..=4096).contains(&full.height),
+        "{} x {}",
+        full.width,
+        full.height
+    );
+    let bytes = STANDARD.decode(full.base64.unwrap()).unwrap();
+    assert!(bytes.starts_with(b"\x89PNG"));
+    let thumb = sources::read_source_page(&task, &worker, &set.id, 0, PreviewSize::Thumb).unwrap();
+    assert!(thumb.width > thumb.height && thumb.width <= 320);
+}

@@ -1,4 +1,4 @@
-// The run-details column (selection review, Thinking, Steps, Checks, Calls, Evidence) can be
+// The run-details column (selection review, Thinking, Steps, Checks, Calls, Evidence, Sources) can be
 // hidden, for people who only want the results. The pure rules live here; js/app.js wires them
 // to the page.
 
@@ -36,6 +36,7 @@ export const TAB_META = {
   checks: { icon: 'checks', word: 'Checks', detail: 'The automatic checks on the result.' },
   model: { icon: 'calls', word: 'Calls', detail: 'Each call to the AI model, with its cost.' },
   evidence: { icon: 'evidence', word: 'Evidence', detail: 'The marks on the drawing that the result rests on.' },
+  sources: { icon: 'sources', word: 'Sources', detail: 'The files this run was given: drawings, sheets and spec inputs.' },
 };
 
 /** Spoken name of a tab with its count: "Checks, 2 failing", "Calls, 5". */

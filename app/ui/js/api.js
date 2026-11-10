@@ -313,6 +313,51 @@ function mockIntakePreview(files, thumbnail, aiActive) {
 }
 
 /**
+ * Source files of a mock run (APP_SPEC "Sources"), in the shape of app/core sources.rs. Every
+ * page picture is a mock file (`image`: mock/files/page-1.png or a station crop); the names,
+ * sheet types and scales are made up. The survey launch has a replaced lines plan, a sheet the
+ * run could not read and two spec inputs; a run without a drawing page has no sources.
+ */
+function mockSources(task, view) {
+  if (!view.source_page) return [];
+  const added = view.summary.updated_ms - 2 * 3_600_000;
+  const hash = (seed) => Array.from({ length: 64 }, (_, i) => '0123456789abcdef'[(seed.charCodeAt(i % seed.length) + i * 7) % 16]).join('');
+  const page = (index, sheetType = null, scale = null, size = MOCK_PAGE) => ({
+    index, sheet_type: sheetType, scale, width_px: size.width, height_px: size.height, dpi: 200, replaced: false,
+  });
+  const file = (id, fields) => ({
+    id, version: 1, status: 'current', pages: [], size_bytes: 24_000, sha256: hash(id), added_ms: added,
+    used_from: 'r0000', used_to: null, replaced_by: null, note: null, previewable: true, image: 'page-1.png', ...fields,
+  });
+  const spec = (id, role) => file(id, { name: id === 'mock-intake' ? 'intake.json' : 'spec.json', kind: 'spec', role, size_bytes: 1_400 });
+  if (!task.endsWith('survey-launch')) {
+    return [
+      file('mock-drawing', { name: 'drawing.png', kind: 'drawing', role: 'Main drawing', pages: [page(0, 'Lines plan', '1:50')], size_bytes: 23_551 }),
+      spec('mock-spec', 'Run spec as given'),
+    ];
+  }
+  const crop = { width: 220, height: 290 };
+  return [
+    file('mock-lines-1', {
+      name: 'survey-launch-lines.pdf', kind: 'pdf', role: 'Main drawing', status: 'replaced', size_bytes: 1_840_000,
+      pages: [{ ...page(0, 'Lines plan', '1:50'), replaced: true }, page(1, 'Other')],
+      used_to: 'r0001', replaced_by: 'mock-lines-2',
+    }),
+    file('mock-ga', { name: 'survey-launch-ga.png', kind: 'drawing', role: 'Sheet', pages: [page(0, 'General arrangement', '1:100')], size_bytes: 412_000 }),
+    file('mock-midship', {
+      name: 'survey-launch-midship.tif', kind: 'drawing', role: 'Sheet', image: 'crop-st12.png',
+      pages: [page(0, 'Midship section', '1:25', crop)], size_bytes: 96_000,
+    }),
+    file('mock-lines-2', {
+      name: 'Lines plan, version 2', kind: 'pdf', role: 'Replacement for Lines plan', status: 'unreadable', version: 2,
+      note: 'Lines too faint.', pages: [page(0)], size_bytes: 1_120_000, added_ms: added + 3_600_000, used_from: 'r0002',
+    }),
+    spec('mock-spec', 'Run spec written from the drawing set'),
+    spec('mock-intake', 'Drawing set record'),
+  ];
+}
+
+/**
  * Whole-vessel parts of the mock survey launch (a made-up 24 m vessel, not a real drawing),
  * in the shape of APP_SPEC "Whole-vessel parts".
  */
@@ -693,6 +738,31 @@ function mockTransport() {
       const blob = await response.blob();
       const mime = name.endsWith('.stl') ? 'model/stl' : blob.type || 'image/png';
       return { mime, base64: await blobToBase64(blob) };
+    },
+    async list_sources(data, { task }) {
+      const view = requireTask(data, task);
+      // ?mocksourcesfail: the list cannot be read (the error state of the Sources tab).
+      if (new URLSearchParams(location.search).has('mocksourcesfail')) {
+        throw new BackendError('runs_folder', 'The run folder could not be read.');
+      }
+      await pause(150);
+      const sources = mockSources(task, view).map(({ image, ...source }) => source);
+      return { sources, revision: view.revision ? mockRevision(view.revision) : null };
+    },
+    async read_source_page(data, { task, source_id, page }) {
+      const source = mockSources(task, requireTask(data, task)).find((s) => s.id === source_id);
+      if (!source) throw new BackendError('source_not_found', 'This source file is not in the run.');
+      if (source.kind === 'spec') {
+        const text = JSON.stringify({ schema_version: '1.0', vessel_id: task.split('/').pop(), units: 'm',
+          source: { file: 'sources/drawing.png' }, sections: [], engineering_approved: false }, null, 2);
+        return { mime: 'application/json', base64: null, text, width: 0, height: 0 };
+      }
+      const facts = source.pages.find((p) => p.index === page);
+      if (!facts) throw new BackendError('source_page_missing', 'The run has no record of this page.');
+      await pause(200);
+      const response = await fetch(MOCK_FILES_URL + encodeURIComponent(source.image));
+      if (!response.ok) throw new BackendError('source_render', 'This page could not be shown.');
+      return { mime: 'image/png', base64: await blobToBase64(await response.blob()), text: null, width: facts.width_px, height: facts.height_px };
     },
     async start_run(_data, { spec_path }) {
       await pause(600);

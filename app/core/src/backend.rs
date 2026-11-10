@@ -311,6 +311,31 @@ impl Backend {
         crate::run_tables::read_sounding_table(&self.task_path(task)?, tank_id)
     }
 
+    /// Every source file given to the run (drawings, spec inputs), read from its records.
+    pub fn list_sources(&self, task: &str) -> AppResult<crate::sources::SourceList> {
+        crate::sources::list_sources(&self.task_path(task)?)
+    }
+
+    /// One page of a listed source as PNG (a spec input as text). PDF and TIFF pages are
+    /// rendered by the worker's intake page renderer.
+    pub fn read_source_page(
+        &self,
+        task: &str,
+        source_id: &str,
+        page: u32,
+        size: crate::sources::PreviewSize,
+    ) -> AppResult<crate::sources::SourcePreview> {
+        let path = self.task_path(task)?;
+        let settings = self.run_settings();
+        crate::sources::read_source_page(
+            &path,
+            &self.intake_worker(&settings),
+            source_id,
+            page,
+            size,
+        )
+    }
+
     /// Files already exported for one revision.
     pub fn list_exports(&self, task: &str, revision: &str) -> AppResult<ExportResult> {
         export::list_exports(&self.task_path(task)?, revision)

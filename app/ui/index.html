@@ -49,6 +49,8 @@
     <symbol id="i-more" viewBox="0 0 16 16"><circle class="glyph-fill" cx="3.5" cy="8" r="1.2" /><circle class="glyph-fill" cx="8" cy="8" r="1.2" /><circle class="glyph-fill" cx="12.5" cy="8" r="1.2" /></symbol>
     <symbol id="i-drop" viewBox="0 0 16 16"><path d="M8 2.5v7.5M5 7l3 3 3-3" /><path d="M2.5 10.5v3h11v-3" /></symbol>
     <symbol id="i-export" viewBox="0 0 16 16"><path d="M8 10V2.5M5 5.5l3-3 3 3" /><path d="M2.5 9.5v4h11v-4" /></symbol>
+    <!-- Sources: a sheet in front of the sheet given before it. -->
+    <symbol id="i-sources" viewBox="0 0 16 16"><path d="M5.5 1.8h5l3 3v7.7h-8z" /><path d="M10.2 1.8V5h3.3" /><path d="M3 4.5v9.7h7.6" /></symbol>
     <symbol id="i-table" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1" /><path d="M2 6.5h12M2 9.8h12M6 3v10" /></symbol>
     <symbol id="i-waterline" viewBox="0 0 16 16"><path d="M2.5 5h11l-1.6 5.5H4.1z" /><path d="M1.5 12.5c1.1-.8 2.2-.8 3.3 0s2.2.8 3.2 0 2.2-.8 3.3 0 2.1.8 3.2 0" /></symbol>
     <symbol id="i-mesh" viewBox="0 0 16 16"><path d="M2.5 12.5L8 3l5.5 9.5z" /><path d="M5.2 7.8h5.6M8 12.5L5.2 7.8M8 12.5l2.8-4.7" /></symbol>
@@ -128,6 +130,7 @@
       <div class="vessel-tabs" id="vessel-tabs" role="tablist" aria-label="Vessel" hidden>
         <button type="button" role="tab" data-vtab="run" aria-controls="views">Run</button>
         <button type="button" role="tab" data-vtab="parts" aria-controls="views" hidden>Parts</button>
+        <button type="button" role="tab" data-vtab="sources" aria-controls="views">Sources</button>
         <button type="button" role="tab" data-vtab="export" aria-controls="views">Export</button>
         <button type="button" role="tab" data-vtab="history" aria-controls="views">History</button>
       </div>
@@ -317,6 +320,7 @@
             <button role="tab" type="button" id="tab-checks" aria-controls="panel-checks" data-tab="checks"></button>
             <button role="tab" type="button" id="tab-model" aria-controls="panel-model" data-tab="model"></button>
             <button role="tab" type="button" id="tab-evidence" aria-controls="panel-evidence" data-tab="evidence"></button>
+            <button role="tab" type="button" id="tab-sources" aria-controls="panel-sources" data-tab="sources"></button>
           </div>
           <div class="tab-panels">
             <div role="tabpanel" class="tab-panel" id="panel-thinking" aria-labelledby="tab-thinking" tabindex="0" data-hook="thinking" hidden></div>
@@ -324,11 +328,13 @@
             <div role="tabpanel" class="tab-panel" id="panel-checks" aria-labelledby="tab-checks" tabindex="0" hidden></div>
             <div role="tabpanel" class="tab-panel" id="panel-model" aria-labelledby="tab-model" tabindex="0" hidden></div>
             <div role="tabpanel" class="tab-panel" id="panel-evidence" aria-labelledby="tab-evidence" tabindex="0" hidden></div>
+            <div role="tabpanel" class="tab-panel" id="panel-sources" aria-labelledby="tab-sources" tabindex="0" hidden></div>
           </div>
         </section>
 
-        <!-- Export and History tabs of the vessel: full-width pages over the run workspace. -->
+        <!-- Parts, Sources, Export and History tabs of the vessel: full-width pages over the run workspace. -->
         <section class="vessel-page" id="vessel-page-parts" data-vtab="parts" aria-labelledby="parts-title" hidden></section>
+        <section class="vessel-page vessel-page-sources" id="vessel-page-sources" data-vtab="sources" aria-labelledby="sources-title" hidden></section>
         <section class="vessel-page" id="vessel-page-export" data-vtab="export" aria-labelledby="export-title" hidden></section>
         <section class="vessel-page" id="vessel-page-history" data-vtab="history" aria-labelledby="history-title" hidden></section>
       </section>
