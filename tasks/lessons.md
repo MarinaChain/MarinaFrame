@@ -179,3 +179,14 @@
 - **Trigger:** The first bounded DSYHS check doubled SYSSER43 volume and waterplane area because that IGES already contained both sides, unlike most files in the archive.
 - **Rule:** Inspect side coverage before reflection. A sign crossing at y=0 can be a spline overshoot, not a full hull. For the symmetric DSYHS canoe bodies, require equal port/starboard extents within mesh tolerance before preserving a full hull once. Test half hulls, overshoots and full hulls. Use absolute mesh deflection and a bounded CAD process for imported geometry.
 - **Why:** One archive can mix half hulls and full hulls; a file-name convention does not establish geometry coverage.
+### Keep inferred fairing stations outside immutable observed-station records
+- **Date:** 2026-11-10
+- **Trigger:** A three-view fitter could build a valid STEP with new half stations, but inserting them inside `pipeline.reconstruct` would violate the unchanged verifier's exact submitted/observed station-id contract.
+- **Rule:** Treat direct CAD validity and immutable run publication as separate checks. Keep new half-station fitting/export explicit until an earlier input-materialization stage declares those stations. Do not weaken the verifier or rewrite submitted station evidence to make the new ids pass.
+- **Why:** A valid solid is not sufficient evidence that an application run can be published.
+
+### Freeze reference scale in paired fit trials
+- **Date:** 2026-11-10
+- **Trigger:** A whole-station injection increased the legacy fairer's measured half-beam, changing its Huber scale and movement tolerance inside a supposedly fixed-scale trial.
+- **Rule:** Pass the unperturbed half-beam explicitly to both paired fits, including station-only baselines and missing-view fallbacks. Recompute affected trial measurements; keep the fit/check choice frozen.
+- **Why:** Re-estimating a scale from perturbed evidence confounds error response with a parameter change.

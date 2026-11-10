@@ -136,3 +136,13 @@ def test_setting_is_off_by_default(monkeypatch):
     assert not fairing.enabled()
     monkeypatch.setenv(fairing.SETTING, "1")
     assert fairing.enabled()
+
+
+def test_paired_injections_can_keep_the_reference_half_beam_fixed():
+    sections = fair_hull()
+    bad = [{**s, "points_yz_m": [[y + .25 if y > 0 else y, z] for y, z in s["points_yz_m"]]}
+           if s["id"] == "S50" else s for s in sections]
+    _, before = fairing.fair_sections(sections, half_beam_m=HALF_BEAM)
+    _, after = fairing.fair_sections(bad, half_beam_m=HALF_BEAM)
+    assert before["parameters"]["half_beam_m"] == after["parameters"]["half_beam_m"] == HALF_BEAM
+    assert before["parameters"]["huber_scale_m"] == after["parameters"]["huber_scale_m"] == .05

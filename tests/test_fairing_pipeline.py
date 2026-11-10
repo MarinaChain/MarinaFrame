@@ -99,3 +99,14 @@ def test_unbuildable_faired_sections_fall_back_to_the_observed_hull(tmp_path, mo
     assert record["diagnostics"]["hull_fairing"]["applied"] is False
     assert [s["points_yz_m"] for s in record["sections"]] == [s["points_yz_m"] for s in observed]
     assert verify_run(tmp_path / "run")["valid"]
+
+
+def test_joint_surface_builds_valid_cad_with_view_diagnostics(tmp_path):
+    from test_three_view_fairing import hull, evidence
+    sections = hull()
+    faired, report = fairing.fair_sections(sections, evidence=evidence(sections))
+    from benchmarks.hull_fairing.replay import build_step
+    step = build_step(faired, tmp_path)
+    assert step.stat().st_size > 0
+    assert report["three_view_applied"] is True
+    assert len(faired) == len(sections) + 2

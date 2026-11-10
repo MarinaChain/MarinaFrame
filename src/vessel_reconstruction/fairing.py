@@ -221,11 +221,28 @@ def _not_applied(sections: list[dict], reason: str) -> tuple[list[dict], dict]:
 
 
 def fair_sections(sections: list[dict], *, fairing_length_spacings: float = FAIRING_LENGTH_SPACINGS,
-                  keep_ends: bool = True) -> tuple[list[dict], dict]:
+                  keep_ends: bool = True, evidence: dict | None = None,
+                  plan_weight: float = 0.5, fairness: float = 0.02,
+                  half_beam_m: float | None = None) -> tuple[list[dict], dict]:
     """Sections taken from one fair surface fitted to all of ``sections``, and a report.
 
-    ``keep_ends`` keeps the stations outside the measured ones as given (module docstring).
+    With cross-view ``evidence`` from ``three_view_evidence.collect``, use the
+    joint tensor fit. It can return new half stations; callers must declare
+    those station ids before using the immutable application pipeline.
+    Without cross-view evidence, use the station-only fit below. ``keep_ends``
+    applies to that path (module docstring). ``half_beam_m`` can hold its Huber
+    scale and movement tolerances fixed during paired injection tests.
     """
+    if evidence is not None:
+        cross_view = [p for p in evidence.get("points", []) if p["view"] != "body_plan"]
+        if cross_view:
+            from .three_view_fairing import fair_sections as joint_fit
+            return joint_fit(sections, evidence, plan_weight=plan_weight, fairness=fairness)
+        result, report = fair_sections(sections, fairing_length_spacings=fairing_length_spacings,
+                                       keep_ends=keep_ends, half_beam_m=evidence.get("half_beam_m", half_beam_m))
+        report.update(three_view_applied=False, three_view_reason="No cross-view evidence; station-only fallback.",
+                      coverage=evidence.get("coverage", {}))
+        return result, report
     stations = _parse(sections)
     if stations is None:
         return _not_applied(sections, "it needs at least four single-region sections with increasing "
@@ -236,7 +253,7 @@ def fair_sections(sections: list[dict], *, fairing_length_spacings: float = FAIR
         return _not_applied(sections, f"fewer than {MINIMUM_SECTIONS} measured stations to fair.")
     u = np.arange(len(fitted_stations), dtype=float)
     lam = smoothing_lambda(fairing_length_spacings)
-    half_beam = _half_beam(stations)
+    half_beam = _half_beam(stations) if half_beam_m is None else float(half_beam_m)
     # A station that is also a hull terminal (transom or stem end) is held.
     held = np.array([span.start + j in (0, len(stations) - 1) for j in range(len(fitted_stations))])
     station_weight = np.array([label_weight(s["label"]) for s in fitted_stations])

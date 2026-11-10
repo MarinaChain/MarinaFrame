@@ -447,3 +447,401 @@ The non-CAD Python suite passed: **1467 passed, 45 deselected**, with five SWIG
 import deprecation warnings. This includes detector and replay-accounting tests.
 CAD and detector-weighted fit tests were not run; no geometry or fit integration
 was changed. Per-run JSON and logs remain under ignored `work/`.
+
+## 8. Three-view surface: protocol fixed before results
+
+Date: 2026-11-10, branch `feature/three-view-fairing`. This section and the
+machine-readable `benchmarks/hull_fairing/three_view_protocol.json` are committed
+before collecting new evidence or running new fits. No live model calls, images,
+sealed factory inputs, reader edits, selection edits or gate edits are part of this work.
+
+### 8.1 Fixed fit/check split
+
+The fit half is the five **L0** cases in the 4f92e9f round: dtmb5415, series60,
+shipd-1-00679, shipd-1-08158 and shipd-1-09867 (full ids in the JSON). The check
+half is the same five **L1** cases. Every stored first/revision build follows its
+case, including both readings. No reading can cross the split. BUE GIRL's stored
+reader output is an additional check case. This is a paired degradation check;
+it is not a hull-disjoint test and all these cases have earlier development results.
+Report delivered builds and all stored builds separately; revisions are correlated.
+No fit choices may use L1 or BUE GIRL results, including injection results.
+
+### 8.2 Metrics and fixed targets
+
+Use the unchanged section 6 replay scorer and development truth. Report per case
+and per half: gate RMS % of half-beam, signed in-range volume error %, gate passes,
+waterline/section inflections and maximum curvature jump. Report both the current
+builder and the station-only fairer against the new surface. Also report BUE GIRL
+at the stored reader cells **before bottom/deck continuation**, RMS m, maximum m,
+number of scored cells and share within 0.05 m. Keep unavailable cells visible.
+
+At the measured stations nearest 25 % and 50 % of the measured span (ties by x,
+then id), inject each of: one +0.1 m cell, one +0.2 m cell (linear taper to zero
+at +/-5 % section height), and one whole station +5 % of the unperturbed measured
+half-beam. Centreline points stay zero. Use a paired zero-injection baseline with
+the same inserted midpoint. **Freeze the other two views and all scales/weights**
+for each paired test. Report signed and absolute follow share, median and maximum,
+and off-target movement. Missing fits remain explicit failed trials.
+
+For each view and source label, report point count, median, p95 and maximum
+Euclidean movement to the fitted surface at the same x and height (profile:
+projected x/z). Include the movement of hard boundaries. Report coverage, ambiguous
+points, and fit/build failures. Never call inferred or ambiguous points traced.
+
+| Id | Fixed target, applied separately to fit and check halves |
+|---|---|
+| T1 | Delivered mean RMS improves by at least 0.10 points; no case regresses by more than 0.10 points |
+| T2 | No delivered gate pass lost; no absolute in-range volume error increases by more than 0.5 points |
+| T3 | Each +0.1 m and +0.2 m trial follows at most 25 %; each whole-station trial at most 60 % (absolute share) |
+| T4 | In each available view, at least 95 % of traced/read points stay within 1 % of unperturbed half-beam per case; report every excess as a check item |
+| T5 | BUE GIRL reader output RMS <= 0.01 m, maximum <= 0.05 m, with no lost scored cells |
+
+All-build metrics are secondary. Fewer inflections and curvature jumps are desired
+and reported; they do not replace T1-T3. Switch fairing on by default only if the
+**check** half meets T1-T3, every planned case builds, and no BUE GIRL regression
+or hidden coverage loss occurs. Otherwise retain the off-by-default setting.
+
+### 8.3 Data and fit design
+
+Reuse `draft_fit.reference_views` for the reference frame and `view_measure` ink
+scans. Sample plan waterlines and the deck line between stations as well as at
+stations. Waterline height labels come from the profile grid. Matching uses the
+stored hull as a search prediction only; competing/merged crossings are labelled
+`repaired` with reduced confidence. Store coordinates in metres, labels, curve
+ids, calibration, pixel locations and missing/ambiguous counts per stored build.
+Profile keel/deck and stem/transom scans define boundary evidence. No truth enters
+the evidence collector or fitter. Store derived data and logs under ignored `work/`;
+commit code, tests and concise result tables.
+
+Fit one tensor spline surface, with view weights, the existing source-label
+weights, a second-difference fairness penalty and Huber residual weights. Keep
+keel/centreline, terminal sections and deck edges as exact boundary conditions.
+Profile evidence fixes the domain between stations; add half stations in the first
+and last measured gaps only where profile evidence spans them. Report conflicting
+boundary evidence; do not silently move a hard boundary to satisfy it. The current
+station-only fit remains the fallback when cross-view evidence is absent.
+
+Choose plan weight from **0.5, 2, 8** using only delivered L0 evidence and paired
+injections. Body and profile weights = 1, fairness = 0.02, Huber scale = 1 % of
+unperturbed half-beam. Among candidates meeting T4 on L0, choose the smallest
+worst absolute injection follow share; ties choose the smaller plan weight. If
+none meet T4, choose the largest minimum within-tolerance share, then the smallest
+worst follow share, then smaller weight. Freeze that choice in a committed file
+before scoring either half or running check-half injections. Do not tune after
+check results. The final replay includes all stored builds on both halves.
+
+## 9. Three-view implementation and replay
+
+PM instruction after protocol commit `cf3c5f4`: finish steps 2-4 without running
+`git commit`; leave file groups for the PM. The split and targets in section 8
+are unchanged. The weight-choice file was saved before any check-half fit or
+score. All data below are stored-reading replays; no live model was called.
+
+### 9.1 Evidence collected (step 2)
+
+`three_view_evidence.py` reuses `draft_fit.reference_views` and
+`view_measure.measure_views`. `collect_three_view.py` collects 21 stored
+first/revision builds, plus the BUE GIRL reader output: 11 fit entries and 11
+check entries. It records each build's scale, reference frame and source hash.
+No current task-state reading is substituted for an older stored build.
+
+There are 8,754 plan points across the 21 development builds. Each source gap
+has four sampling intervals, so the evidence includes ink between stations.
+Each observation stores view, curve id, source label, confidence, hull x/y/z,
+and pixel position where applicable. Profile observations have `y_m=null`:
+a silhouette is not a measurement of interior breadth. Missing views and scan
+failures have explicit counts. Body points retain their stored source labels.
+Unique plan/profile scans are `traced`; competing, distant, one-sided or shared
+crossings are `repaired`. Two waterline labels assigned the same ink both get
+lower confidence. The height association still uses the stored hull prediction;
+these are not independently verified waterline identities.
+
+BUE GIRL's captured intake supplies only a body-plan region. The existing
+reference-frame helper returns no usable plan or profile. This gap is retained;
+its result is an explicit station-only fallback, not a three-view success.
+
+Derived observations, manifest and logs are under
+`work/three-view-fairing/evidence/` and `work/three-view-fairing/collection.log`.
+They remain ignored. No `work/factory-sealed-*` directory was opened. The scorer
+uses only the development truth under `work/factory-3view/sealed/truth/`.
+
+### 9.2 Surface and frozen choice (step 3)
+
+`three_view_fairing.py` fits one cubic tensor spline correction to a boundary
+patch. Coordinates are hull x and the square root of normalized height above
+the profile keel. Body and plan observations constrain breadth at true height.
+Profile keel/deck observations fit robust height curves between the fixed source
+station heights. Source-label weights are the existing fairing weights; each
+breadth view's weights are normalized by its observation count. Each profile
+boundary curve is normalized separately. Huber residual weights and a
+second-difference penalty limit local bends in both spline directions.
+
+The correction vanishes at the keel, deck and terminal sections. Those source
+boundaries are exact, including centreline observations. Hard constraints use
+elimination and a boundary patch, not a large approximate penalty weight.
+The profile's stem/stern scans are compared with this held terminal domain.
+A conflicting end silhouette is reported; it does not move a stored terminal
+cap. Thus the end silhouette is a boundary check, while keel/deck profile ink
+constrains the fitted domain. This is a limit when the stored end sections are
+wrong or do not reach the drawn ends. Half stations are added at the first and
+last measured gaps only where profile keel and deck samples bracket them.
+Their shape is labelled `interpolated`.
+
+The explicit API is `fairing.fair_sections(sections, evidence=point_sets)`.
+The application pipeline remains unchanged: `run_record.py` requires the
+submitted and observed station ids to match exactly. Adding new half stations
+inside that pipeline would violate this contract. A future application hook
+must declare inferred stations in an earlier materialization step; this lane
+does not change that gate or the other lane's reading materialization. The
+replay builds and scores the complete returned sections directly. Missing
+cross-view evidence uses the station-only fallback. The existing application
+setting remains off by default; application publication of the new surface is
+not established by the direct CAD test.
+
+L0-only choice, before check evaluation:
+
+| Plan weight | Minimum traced/read fidelity across L0 cases/views | Worst injection follow share (all kinds) |
+|---|---|---|
+| **0.5 (selected)** | **32.14 %** | **0.993** |
+| 2 | 12.78 % | 0.938 |
+| 8 | 12.66 % | 0.760 |
+
+None met T4. The frozen rule therefore selects 0.5, which has the largest
+minimum fidelity. Body/profile weights are 1, fairness 0.02 and Huber scale 1 %
+of the unperturbed measured half-beam. Increasing plan weight reduces the
+single-cell influence on L0, but moves more original points. The saved choice
+is `benchmarks/hull_fairing/three_view_choice.json`; tuning details are in
+`work/three-view-fairing/tuning.json`. There is no check-half tuning.
+
+Reproduction (from this worktree, with the existing development data):
+
+```bash
+set -o pipefail
+export PYTHONPATH=src:.
+export OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1
+.venv/bin/python -m benchmarks.hull_fairing.collect_three_view
+.venv/bin/python -m benchmarks.hull_fairing.replay_three_view choose --choice work/three-view-fairing/repeat-choice.json --output work/three-view-fairing/repeat-tuning.json
+.venv/bin/python -m benchmarks.hull_fairing.replay_three_view replay --choice work/three-view-fairing/repeat-choice.json --output work/three-view-fairing/repeat-replay
+.venv/bin/python -m benchmarks.hull_fairing.summary_three_view work/three-view-fairing/repeat-replay/replay.json --export-sections work/three-view-fairing/repeat-sections --complete-output work/three-view-fairing/repeat-complete.json --json-output work/three-view-fairing/repeat-summary.json
+```
+
+The choice command creates its choice file exclusively. For another repeat,
+use a new choice filename. To evaluate the saved choice without tuning, omit
+the `choose` command and pass
+`--choice benchmarks/hull_fairing/three_view_choice.json` to `replay`.
+
+### 9.3 Fixed-choice results (step 4)
+
+All 21 development builds were rebuilt in three modes and scored through the
+unchanged STEP scorer: 63 CAD builds, no fit/build/score failure. BUE GIRL was
+scored on reader points and curves only; it was not rebuilt as CAD. The two
+unavailable all-build injection trials per kind remain in the denominator.
+
+Gate metrics below use rebuilt STEP meshes. Injection follow and fidelity use
+the returned section/surface points, as in section 6; the injection ratios do
+not include a fresh CAD approximation or mesh cut for each perturbation.
+Inflection counts include added half stations. All source boundary points of
+the joint fit are held exactly; independent ink can still disagree with them.
+
+The canonical data are `work/three-view-fairing/replay/replay.json` and its
+per-build JSON files. Exact returned section arrays for all three modes are in
+`work/three-view-fairing/sections/` (22 files). `summary.json` and `summary.md`
+are under `work/three-view-fairing/`. The old raw combined replay is retained
+as `replay-before-scale-fix.json`: its legacy injection scales were not frozen.
+The canonical injection results were recomputed with the unperturbed half-beam
+fixed for both legacy and joint fallbacks. Unperturbed reports and every
+three-view injection response were checked equal before exporting sections;
+no fit choice or gate score changed.
+
+Modes in each cell: **current / station-only / joint**. Signed volume errors use the unchanged in-range scorer.
+
+Joint-fit diagnostics: 34 added half stations; 1282 negative breadth samples projected to the small positive floor.
+
+| Delivered case | Split | RMS % | Volume % | Gate passes |
+|---|---|---|---|---|
+| dtmb5415-L0 | fit | 8.087 / 8.087 / 8.301 | 0.989 / 0.991 / 1.270 | 0 / 0 / 0 |
+| series60-L0 | fit | 1.385 / 1.285 / 3.411 | 1.068 / 1.027 / 2.069 | 1 / 1 / 0 |
+| 00679-L0 | fit | 4.048 / 3.846 / 9.415 | 0.032 / -0.041 / -4.685 | 0 / 0 / 0 |
+| 08158-L0 | fit | 0.755 / 0.715 / 3.058 | -2.072 / -2.037 / 0.102 | 1 / 1 / 0 |
+| 09867-L0 | fit | 3.246 / 2.506 / 4.260 | 1.797 / 1.751 / 2.654 | 0 / 0 / 0 |
+| dtmb5415-L1 | check | 14.339 / 14.188 / 13.915 | 13.194 / 13.180 / 13.042 | 0 / 0 / 0 |
+| series60-L1 | check | 3.492 / 3.334 / 7.123 | -0.521 / -0.507 / -0.199 | 0 / 0 / 0 |
+| 00679-L1 | check | 5.467 / 5.438 / 8.173 | -0.941 / -0.949 / -2.119 | 0 / 0 / 0 |
+| 08158-L1 | check | 1.642 / 1.625 / 3.120 | -3.129 / -3.133 / -3.214 | 1 / 1 / 0 |
+| 09867-L1 | check | 1.005 / 0.983 / 1.191 | 2.150 / 2.104 / 1.552 | 1 / 1 / 1 |
+
+| Population | Planned builds | Scored (current / station-only / joint) | Mean RMS % | Passes |
+|---|---|---|---|---|
+| fit | 5 | 5 / 5 / 5 | 3.504 / 3.288 / 5.689 | 2 / 2 / 0 |
+| check | 5 | 5 / 5 / 5 | 5.189 / 5.114 / 6.704 | 2 / 2 / 1 |
+| all_builds | 21 | 21 / 21 / 21 | 6.521 / 6.424 / 7.877 | 7 / 7 / 2 |
+| all_builds_fit | 11 | 11 / 11 / 11 | 7.732 / 7.613 / 9.063 | 3 / 3 / 0 |
+| all_builds_check | 10 | 10 / 10 / 10 | 5.190 / 5.116 / 6.572 | 4 / 4 / 2 |
+
+| Population | Mode | Injection | Available / planned | Median signed share | Median absolute share | Max absolute share | Target met |
+|---|---|---|---|---|---|---|---|
+| fit | station_only | cell_0.1m | 10 / 10 | 0.978 | 0.978 | 0.987 | False |
+| fit | station_only | cell_0.2m | 10 / 10 | 0.979 | 0.979 | 0.997 | False |
+| fit | station_only | station_5pct | 10 / 10 | 0.965 | 0.965 | 0.985 | False |
+| fit | joint | cell_0.1m | 10 / 10 | 0.153 | 0.153 | 0.306 | False |
+| fit | joint | cell_0.2m | 10 / 10 | 0.127 | 0.127 | 0.342 | False |
+| fit | joint | station_5pct | 10 / 10 | 0.931 | 0.931 | 0.993 | False |
+| check | station_only | cell_0.1m | 10 / 10 | 0.978 | 0.978 | 0.998 | False |
+| check | station_only | cell_0.2m | 10 / 10 | 0.960 | 0.960 | 0.998 | False |
+| check | station_only | station_5pct | 10 / 10 | 0.903 | 0.903 | 0.998 | False |
+| check | joint | cell_0.1m | 10 / 10 | 0.206 | 0.206 | 0.254 | False |
+| check | joint | cell_0.2m | 10 / 10 | 0.189 | 0.189 | 0.246 | True |
+| check | joint | station_5pct | 10 / 10 | 0.974 | 0.974 | 1.002 | False |
+| BUE GIRL reader | station_only | cell_0.1m | 2 / 2 | 0.872 | 0.872 | 0.911 | False |
+| BUE GIRL reader | station_only | cell_0.2m | 2 / 2 | 0.730 | 0.730 | 0.761 | False |
+| BUE GIRL reader | station_only | station_5pct | 2 / 2 | 0.938 | 0.938 | 0.973 | False |
+| BUE GIRL reader | joint | cell_0.1m | 2 / 2 | 0.872 | 0.872 | 0.911 | False |
+| BUE GIRL reader | joint | cell_0.2m | 2 / 2 | 0.730 | 0.730 | 0.761 | False |
+| BUE GIRL reader | joint | station_5pct | 2 / 2 | 0.938 | 0.938 | 0.973 | False |
+| all stored (factory) | station_only | cell_0.1m | 40 / 42 | 0.978 | 0.978 | 1.000 | False |
+| all stored (factory) | station_only | cell_0.2m | 40 / 42 | 0.965 | 0.965 | 1.000 | False |
+| all stored (factory) | station_only | station_5pct | 40 / 42 | 0.916 | 0.916 | 1.000 | False |
+| all stored (factory) | joint | cell_0.1m | 40 / 42 | 0.188 | 0.188 | 1.000 | False |
+| all stored (factory) | joint | cell_0.2m | 40 / 42 | 0.154 | 0.154 | 1.000 | False |
+| all stored (factory) | joint | station_5pct | 40 / 42 | 0.941 | 0.941 | 1.002 | False |
+
+The current builder follows every available injection by 1.00. The JSON also records off-target maximum movement for every trial.
+
+Traced/read point movements below are **median / p95 / max metres; % within tolerance**. Each view uses its own measured points. Full per-source-label statistics and every excess location are in the replay JSON.
+
+| Delivered case | Body plan | Half-breadth plan | Profile |
+|---|---|---|---|
+| dtmb5415-L0 | traced: 0.049 / 0.370 / 0.743; 62.2% (1207 points, 0 unavailable) | traced: 0.063 / 0.468 / 0.699; 54.6% (119 points, 0 unavailable) | traced: 0.021 / 0.395 / 0.894; 70.8% (144 points, 0 unavailable) |
+| series60-L0 | traced: 0.026 / 0.643 / 1.106; 73.9% (1190 points, 0 unavailable) | traced: 0.039 / 0.414 / 0.730; 62.5% (176 points, 0 unavailable) | traced: 0.013 / 0.394 / 0.551; 77.7% (175 points, 0 unavailable) |
+| 00679-L0 | traced: 0.188 / 0.763 / 1.483; 32.1% (837 points, 0 unavailable) | traced: 0.095 / 0.903 / 1.821; 46.7% (75 points, 0 unavailable) | traced: 0.025 / 0.204 / 3.126; 81.4% (183 points, 0 unavailable) |
+| 08158-L0 | traced: 0.093 / 0.624 / 0.734; 53.0% (659 points, 0 unavailable) | traced: 0.086 / 0.617 / 0.929; 57.0% (128 points, 0 unavailable) | traced: 0.028 / 0.722 / 1.377; 76.7% (150 points, 0 unavailable) |
+| 09867-L0 | traced: 0.015 / 0.175 / 1.102; 89.1% (1104 points, 0 unavailable) | traced: 0.025 / 0.393 / 0.974; 69.0% (87 points, 0 unavailable) | traced: 0.030 / 0.873 / 1.637; 75.0% (132 points, 0 unavailable) |
+| dtmb5415-L1 | traced: 0.055 / 0.740 / 1.769; 52.9% (934 points, 0 unavailable) | traced: 0.164 / 0.802 / 1.364; 19.8% (101 points, 0 unavailable) | traced: 0.061 / 0.451 / 0.813; 55.5% (146 points, 0 unavailable) |
+| series60-L1 | traced: 0.039 / 0.960 / 5.190; 63.6% (938 points, 0 unavailable) | traced: 0.121 / 0.576 / 0.910; 38.2% (131 points, 0 unavailable) | traced: 0.043 / 0.392 / 0.753; 64.6% (181 points, 0 unavailable) |
+| 00679-L1 | traced: 0.107 / 0.817 / 1.095; 42.2% (845 points, 0 unavailable) | traced: 0.075 / 0.726 / 1.103; 52.0% (100 points, 0 unavailable) | traced: 0.024 / 0.169 / 1.270; 87.5% (184 points, 0 unavailable) |
+| 08158-L1 | traced: 0.118 / 0.649 / 1.082; 42.6% (1098 points, 0 unavailable) | traced: 0.138 / 0.978 / 1.394; 40.8% (130 points, 0 unavailable) | traced: 0.061 / 0.698 / 0.888; 58.6% (133 points, 0 unavailable) |
+| 09867-L1 | traced: 0.020 / 0.093 / 0.413; 95.2% (1111 points, 0 unavailable) | traced: 0.078 / 0.732 / 1.257; 54.5% (33 points, 0 unavailable) | traced: 0.066 / 0.835 / 2.256; 63.9% (147 points, 0 unavailable) |
+| bue_girl | read: 0.000 / 0.001 / 0.006; 100.0% (1391 points, 0 unavailable) | not available (station-only fallback) | not available (station-only fallback) |
+
+| Delivered case | WL inflections | Section inflections | Max curvature jump |
+|---|---|---|---|
+| dtmb5415-L0 | 38.000 / 36.000 / 32.000 | 21.000 / 21.000 / 13.000 | 1.734 / 1.734 / 1.892 |
+| series60-L0 | 92.000 / 81.000 / 72.000 | 32.000 / 30.000 / 23.000 | 3.890 / 3.890 / 2.895 |
+| 00679-L0 | 43.000 / 51.000 / 153.000 | 41.000 / 41.000 / 5.000 | 0.449 / 0.454 / 0.397 |
+| 08158-L0 | 50.000 / 54.000 / 44.000 | 42.000 / 42.000 / 34.000 | 3.668 / 3.664 / 4.200 |
+| 09867-L0 | 87.000 / 77.000 / 112.000 | 25.000 / 25.000 / 0.000 | 1.329 / 1.329 / 1.174 |
+| dtmb5415-L1 | 48.000 / 48.000 / 60.000 | 31.000 / 33.000 / 13.000 | 3.787 / 3.787 / 3.452 |
+| series60-L1 | 94.000 / 94.000 / 154.000 | 41.000 / 41.000 / 22.000 | 4.049 / 4.049 / 3.084 |
+| 00679-L1 | 63.000 / 61.000 / 143.000 | 27.000 / 27.000 / 0.000 | 0.677 / 0.683 / 0.547 |
+| 08158-L1 | 52.000 / 52.000 / 45.000 | 66.000 / 66.000 / 56.000 | 3.743 / 3.738 / 4.078 |
+| 09867-L1 | 95.000 / 95.000 / 69.000 | 18.000 / 17.000 / 6.000 | 0.575 / 0.575 / 0.452 |
+| bue_girl | 12.000 / 9.000 / 9.000 | 18.000 / 18.000 / 18.000 | 0.290 / 0.280 / 0.280 |
+
+| BUE GIRL reader mode | RMS m | Max m | Within 0.05 m | Scored / truth cells |
+|---|---|---|---|---|
+| stored reader cells | 0.00143 | 0.00588 | 100.0% | 37 / 39 |
+
+Missing stored reader truth cells: `[{"station": 10, "waterline": "2-6-0"}, {"station": 12, "waterline": "2-6-0"}]`.
+
+| Resampled reader curves | RMS m | Max m | Within 0.05 m | Scored / truth cells |
+|---|---|---|---|---|
+| current | 0.00229 | 0.00938 | 100.0% | 37 / 39 |
+| station_only | 0.00217 | 0.00832 | 100.0% | 37 / 39 |
+| joint | 0.00217 | 0.00832 | 100.0% | 37 / 39 |
+
+Targets: `{"fit": {"complete": true, "T1": false, "T2": false, "T3": false, "T4": false}, "check": {"complete": true, "T1": false, "T2": false, "T3": false, "T4": false}}`. BUE GIRL T5: `True`.
+
+
+### 9.4 Recommendation and limits
+
+**Keep fairing off by default. Do not route the application to this fit.**
+On the delivered check half, RMS increases from 5.189 to 6.704 %, one of two
+gate passes is lost, and 00679-L1's absolute volume error increases by more than
+0.5 points. T1 and T2 fail. Across all ten delivered development cases, mean
+RMS is 4.347 / 4.201 / 6.197 % (current / station-only / joint), with passes
+4 / 4 / 1. All stored development builds give 6.521 / 6.424 / 7.877 %.
+
+The joint surface reduces single-cell influence: on the five delivered check
+cases, the +0.2 m maximum follow share is 0.246, within the nominal 0.25 target.
+But +0.1 m reaches 0.254, whole-station errors reach 1.002, and BUE GIRL lacks
+cross-view evidence and falls back. T3 fails. T4 also fails: movements of
+traced points in all three views exceed the fixed fidelity allowance on many
+cases. The fit adds 34 half stations and projects 1,282 negative breadth
+samples to a small positive floor. Those projections keep the CAD open but
+are a further limit on a claim of smoothness; they are counted, not hidden.
+
+These results establish a response improvement for isolated cells, not an
+accuracy improvement. Two limits are explicit in this implementation: ink
+identity still depends on a stored-hull prediction, and hard stored boundaries
+can conflict with independent ink. In the whole-station injection, the stored
+deck edge is itself shifted but remains a hard boundary. The terminal boundary
+patch also carries the terminal curves' shape into the interior; its limited
+spline correction need not remove their noise. The experiment does not isolate
+these causes with an ablation and does not justify more tuning on the check half.
+
+BUE GIRL's stored cell output has 1.43 mm RMS. Resampling its raw curves at exact
+truth heights gives 2.29 mm before fitting and 2.17 mm after the station-only
+fallback. These are separate measurements, not a new reader run. Both methods
+score 37/39 truth cells; stations 10 and 12 at 2-6-0 are absent. Seven extra
+reader cells have no truth entry. T5 is met on available cells, with no cell
+lost by fitting, but no three-view benefit is established for this drawing.
+
+Application publication is a separate pending integration task: inferred half
+stations must be declared before reconstruction under the existing immutable
+station-id contract. No reader, selection, application pipeline, verifier or
+2 % RMS / 5 % volume gate was changed by this experiment.
+
+### 9.5 Verification
+
+- 31 focused fairing/evidence/replay/protocol tests passed, including five CAD
+  tests and a regression that freezes the reference half-beam in paired trials.
+- The supported non-CAD suite passed: 1,470 passed, 61 deselected, five existing
+  SWIG deprecation warnings. Deselections are 46 CAD tests and 15 sandbox-bound
+  tests, not a change to the test definitions.
+- A full non-CAD attempt before those exclusions gave 1,468 passed, four runtime
+  failures and 11 review-server setup errors. The sandbox denies process
+  inspection/control and localhost port binding needed by those tests. No
+  runtime or server code was changed. An intermediate supported rerun was
+  interrupted under high host load; it is not counted as a complete run.
+- Report/replay tests were checked again after the final report-only additions.
+  Per-view statistics, corrected paired trials and section exports are present
+  for every planned entry. No live model calls or image deliverables were used.
+
+### 9.6 Files for PM commits
+
+Step 1 is already committed as `cf3c5f4`. All files below remain uncommitted.
+The protocol JSON and its original test remain unchanged.
+
+**Step 2: evidence data adapter and collection**
+
+```text
+src/vessel_reconstruction/three_view_evidence.py
+benchmarks/hull_fairing/collect_three_view.py
+tests/test_three_view_evidence.py
+```
+
+**Step 3: fit, frozen choice and fit-half measurements**
+
+```text
+src/vessel_reconstruction/fairing.py
+src/vessel_reconstruction/three_view_fairing.py
+benchmarks/hull_fairing/replay_three_view.py
+benchmarks/hull_fairing/three_view_choice.json
+tests/test_fairing.py
+tests/test_fairing_pipeline.py
+tests/test_three_view_fairing.py
+tests/test_three_view_replay.py
+tasks/lessons.md
+```
+
+**Step 4: final report and summary checks**
+
+```text
+benchmarks/hull_fairing/summary_three_view.py
+tests/test_three_view_summary.py
+docs/HULL_FAIRING.md
+```
+
+Derived replay data and logs stay ignored under `work/three-view-fairing/`;
+they are not commit inputs. No commit, push, merge or branch switch was run
+after the PM's update.
