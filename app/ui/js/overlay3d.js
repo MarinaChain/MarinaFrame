@@ -280,6 +280,29 @@ export function createOverlays({ scene, host, clip }) {
       }
       colours.needsUpdate = true;
     },
+    /**
+     * Draw only the edges of the meshes `shownOf(mesh)` accepts (a hidden or ghost part has no
+     * edges). The line index is rewritten in place, so no buffer is made or sent twice.
+     */
+    maskEdges(key, shownOf) {
+      const set = edgeSets.get(key);
+      if (!set) return;
+      const geometry = set.lines.geometry;
+      const total = geometry.getAttribute('position').count;
+      let index = geometry.getIndex();
+      if (!index) {
+        index = new THREE.Uint32BufferAttribute(new Uint32Array(total), 1);
+        geometry.setIndex(index);
+      }
+      const array = index.array;
+      let used = 0;
+      for (const { mesh, start, count } of set.ranges) {
+        if (!shownOf(mesh)) continue;
+        for (let i = 0; i < count; i += 1) array[used++] = start + i;
+      }
+      index.needsUpdate = true;
+      geometry.setDrawRange(0, used);
+    },
     /** Show or hide one edge set with its layer (tanks, steel). */
     setEdgesLayer(key, visible) {
       const set = edgeSets.get(key);

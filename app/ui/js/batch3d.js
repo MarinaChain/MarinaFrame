@@ -25,7 +25,7 @@ function batchGeometry(source) {
 
 /**
  * Draw `meshes` (placed in the world; their world matrices are read now) as one batch with
- * `material`. Returns { mesh, setColour(source, colour), dispose() }.
+ * `material`. Returns { mesh, setColour(source, colour), setVisible(source, shown), dispose() }.
  */
 export function createBatch(meshes, material) {
   const geometries = meshes.map((mesh) => batchGeometry(mesh.geometry));
@@ -45,6 +45,10 @@ export function createBatch(meshes, material) {
     mesh: batch,
     setColour(source, colour) {
       batch.setColorAt(instanceOf.get(source), colour);
+    },
+    /** Draw one solid or not (a hidden or ghost part leaves the batch). */
+    setVisible(source, shown) {
+      batch.setVisibleAt(instanceOf.get(source), shown);
     },
     dispose() {
       // The batch copied the geometries into its own buffers; the wrappers above share the

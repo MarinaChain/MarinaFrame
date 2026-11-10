@@ -366,10 +366,15 @@ const MOCK_CAPACITY_PLAN = {
   engineering_approved: false,
   rows: [
     { id: 'tank_fw1', name: 'No 1 fresh water', content: 'fresh water', frames: '6...10', built: true, volume_100_m3: 4.2, volume_98_m3: 4.116, density_t_m3: 1, weight_98_t: 4.116, lcg_m: 5.5, tcg_m: 0, vcg_m: 0.83, max_free_surface_moment_tm: 2.1, printed_volume_m3: 4, sources: { name: 'read', content: 'read', frames: 'read', volume: 'guessed', density: 'read', centroid: 'guessed', weight: 'guessed' }, notes: '', has_sounding: true },
+    { id: 'tank_wb1', name: 'No 1 ballast port', content: 'water ballast', frames: '14...18', built: true, volume_100_m3: 9.5, volume_98_m3: 9.31, density_t_m3: 1.025, weight_98_t: 9.543, lcg_m: 14.5, tcg_m: 1.3, vcg_m: 0.75, max_free_surface_moment_tm: 3.2, printed_volume_m3: null, sources: { name: 'read', content: 'read', frames: 'guessed', volume: 'guessed', density: 'guessed', centroid: 'guessed', weight: 'guessed' }, notes: '', has_sounding: false },
+    { id: 'tank_wb2', name: 'No 1 ballast starboard', content: 'water ballast', frames: '14...18', built: true, volume_100_m3: 9.5, volume_98_m3: 9.31, density_t_m3: 1.025, weight_98_t: 9.543, lcg_m: 14.5, tcg_m: -1.3, vcg_m: 0.75, max_free_surface_moment_tm: 3.2, printed_volume_m3: null, sources: { name: 'read', content: 'read', frames: 'guessed', volume: 'guessed', density: 'guessed', centroid: 'guessed', weight: 'guessed' }, notes: '', has_sounding: false },
+    { id: 'tank_do1', name: 'Diesel oil', content: 'diesel oil', frames: '19...22', built: true, volume_100_m3: 10.0, volume_98_m3: 9.8, density_t_m3: 0.84, weight_98_t: 8.232, lcg_m: 18.25, tcg_m: 0, vcg_m: 0.7, max_free_surface_moment_tm: 4.1, printed_volume_m3: 10, sources: { name: 'read', content: 'read', frames: 'read', volume: 'read', density: 'guessed', centroid: 'guessed', weight: 'guessed' }, notes: '', has_sounding: false },
     { id: 'tank_fo1', name: 'No 1 fuel oil', content: 'fuel oil', frames: '10...12', built: false, volume_100_m3: null, volume_98_m3: null, density_t_m3: 0.85, weight_98_t: null, lcg_m: null, tcg_m: null, vcg_m: null, max_free_surface_moment_tm: null, printed_volume_m3: 2, sources: { name: 'read', content: 'read', frames: 'read', volume: 'guessed', density: 'guessed', centroid: 'guessed', weight: 'guessed' }, notes: 'no plan region holds its label: not built', has_sounding: false },
   ],
   groups: [
     { content: 'fresh water', tanks: 1, built: 1, volume_100_m3: 4.2, weight_98_t: 4.116 },
+    { content: 'water ballast', tanks: 2, built: 2, volume_100_m3: 19, weight_98_t: 19.086 },
+    { content: 'diesel oil', tanks: 1, built: 1, volume_100_m3: 10, weight_98_t: 8.232 },
     { content: 'fuel oil', tanks: 1, built: 0, volume_100_m3: 0, weight_98_t: 0 },
   ],
 };

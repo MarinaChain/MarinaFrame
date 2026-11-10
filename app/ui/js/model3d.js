@@ -16,6 +16,8 @@ import { createOverlays } from './overlay3d.js';
 import { createBatch, HIDDEN_MATERIAL } from './batch3d.js';
 import { createSectionCut } from './cut3d.js';
 import { createCutPanel, createToolbar, toolButton } from './controls3d.js';
+import { createPartVisibility, describeParts, PART_STATES, steelPartId } from './visibility3d.js';
+import { createPartsPanel } from './parts_panel3d.js';
 
 /** Extra size of a section plane around the hull, as a fraction of beam and depth. */
 const PLANE_MARGIN = 0.25;
@@ -37,10 +39,15 @@ const HOME_MOVE_MS = 360;
 const SHELL_OPACITY_WITH_TANKS = 0.22;
 /** Steel shell plating is see-through, so the frames and floors behind it show. */
 const STEEL_SHELL_OPACITY = 0.35;
+/** Opacity of a ghost part (every part but the isolated one): present, but out of the way. */
+const GHOST_OPACITY = 0.07;
 /** Tank edge lines are the tank colour darkened to this share. */
 const TANK_EDGE_SHADE = 0.55;
 /** Size of a tank name label (CSS px) for the overlap test; long names are cut in CSS. */
 const LABEL_BOX = { charWidth: 6.4, padding: 22, height: 20, maxWidth: 180 };
+
+/** Shared black, for emissive colours that must not allocate on every restyle. */
+const BLACK = new THREE.Color(0x000000);
 
 /** Convert any CSS colour (including oklch) to a THREE.Color by painting one pixel. */
 const colourProbe = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
@@ -91,7 +98,7 @@ function scaleToMetres(geometry, lengthM) {
   if (Math.abs(factor - 1) > 1e-6) geometry.scale(factor, factor, factor);
 }
 
-export function createModelView({ host, onPick = null }) {
+export function createModelView({ host, onPick = null, onPartPick = null }) {
   const empty = el('div', { class: 'pane-empty' });
   host.append(empty);
 
@@ -101,7 +108,7 @@ export function createModelView({ host, onPick = null }) {
     renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true });
   } catch {
     showEmpty('3D view not available', 'This computer did not allow a WebGL view.');
-    return { setModel() {}, setSelected() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, showsWholeVessel: false, hasTanks: false };
+    return { setModel() {}, setSelected() {}, partList: () => [], hidePart() {}, isolatePart() {}, showAllParts() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, showsWholeVessel: false, hasTanks: false };
   }
   /** Pixel ratio cap: a 3x screen draws at 2x, which looks the same and costs 2.25 times less. */
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
@@ -161,6 +168,13 @@ export function createModelView({ host, onPick = null }) {
   let hoveredTankId = null;
   /** Layer switches of the whole-vessel view (the legend panel holds them). */
   const layers = { tanks: true, names: false, structure: true };
+  /** Hide and isolate per part (visibility3d.js), and the meshes a pointer can pick now. */
+  const visibility = createPartVisibility();
+  const pickable = { tanks: [], all: [] };
+  /** True while the shell is see-through: a tank or steel group that shows lies inside it. */
+  let seeThrough = false;
+  /** A tank drawn ghost shows its source mesh in this faint material (the batch skips it). */
+  const ghostTankMaterial = clip(new THREE.MeshBasicMaterial({ transparent: true, opacity: GHOST_OPACITY, depthWrite: false, side: THREE.DoubleSide }));
   /** Overlays: tank name labels, and the legend with the layer switches. */
   const labelLayer = el('div', { class: 'model-labels', 'aria-hidden': 'true' });
   const legend = el('div', { class: 'model-legend', id: `legend-${Math.random().toString(36).slice(2, 8)}`, role: 'group', 'aria-label': 'Tanks and steel' });
@@ -193,6 +207,66 @@ export function createModelView({ host, onPick = null }) {
     for (const [key, button] of Object.entries(viewButtons)) button.setAttribute('aria-pressed', String(key === name));
   }
   toolbar.add('Section', cutButton);
+  // The part list: hide, isolate and search the parts of the whole vessel (parts_panel3d.js).
+  const partsPanel = createPartsPanel({
+    onHide: (id) => { visibility.toggleHide(id); restyle(); },
+    onIsolate: (id) => { visibility.toggleIsolate(id); restyle(); },
+    onShowAll: () => {
+      visibility.showAll();
+      layers.tanks = true;
+      layers.structure = true;
+      restyle();
+    },
+    onPick: (id) => pickPart(id === highlightedId ? null : id),
+  });
+  const partsButton = toolButton({
+    text: 'Parts', iconName: 'parts', label: 'Parts', keyHint: null, pressed: false,
+    detail: 'Search the parts. Hide one, or isolate it and make the rest faint.',
+    onClick: () => togglePartsPanel(),
+  });
+  partsButton.setAttribute('aria-expanded', 'false');
+  partsButton.setAttribute('aria-controls', partsPanel.id);
+  const partsGroup = toolbar.add('Parts', partsButton);
+  // Parts exist only with a whole-vessel model; until then neither the button nor the panel shows.
+  partsGroup.hidden = true;
+  function togglePartsPanel(open = partsPanel.element.hidden) {
+    partsPanel.element.hidden = !open;
+    partsButton.setAttribute('aria-pressed', String(open));
+    partsButton.setAttribute('aria-expanded', String(open));
+    if (open) partsPanel.reveal(highlightedId);
+  }
+  host.append(partsPanel.element);
+  /** Part meshes by id, for the list's states. */
+  let meshById = new Map();
+  function restyle() {
+    styleWholeVessel();
+    requestRender();
+  }
+  function syncPartsPanel() {
+    partsPanel.setStates((id) => (meshById.has(id) ? stateOfMesh(meshById.get(id)) : PART_STATES.shown), visibility.isolatedId, highlightedId);
+  }
+  /** Rebuild the part list from the meshes the model has now (after the vessel or its steel loads). */
+  function rebuildParts() {
+    meshById = new Map();
+    for (const mesh of [...shellMeshes, ...tankMeshes, ...steelMeshes]) meshById.set(mesh.userData.partId, mesh);
+    const entries = describeParts({
+      shell: shellMeshes.map((mesh) => mesh.userData),
+      tanks: tankMeshes.map((mesh) => mesh.userData),
+      steel: steelMeshes.map((mesh) => mesh.userData),
+    });
+    visibility.keepOnly(entries.map((entry) => entry.id));
+    partsPanel.setParts(entries);
+    partsGroup.hidden = !wholeVessel;
+    if (!wholeVessel) togglePartsPanel(false);
+    syncPartsPanel();
+  }
+  /** Pick a part (a click in 3D or a row in the list): it is tinted and offered to the app. */
+  function pickPart(id) {
+    highlightedId = id;
+    restyle();
+    partsPanel.reveal(id);
+    onPartPick?.(id);
+  }
   // The cut panel opens under the tool bar, however many rows the tool bar wraps to.
   host.append(el('div', { class: 'model-controls' }, toolbar.element, cutPanel.element));
 
@@ -383,15 +457,17 @@ export function createModelView({ host, onPick = null }) {
   // a plane shows the hand cursor. A drag still rotates the view.
   const raycaster = new THREE.Raycaster();
   let pressedAt = null;
+  /** The pointer in normalised device coordinates; one vector is reused, nothing is allocated per move. */
+  const pointer = new THREE.Vector2();
+  function pointerAt(event) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    return pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+  }
 
   /** The id of the section plane under the pointer, nearest first, or null. */
   function planeAt(event) {
     if (!planes.size) return null;
-    const rect = renderer.domElement.getBoundingClientRect();
-    const pointer = new THREE.Vector2(
-      ((event.clientX - rect.left) / rect.width) * 2 - 1,
-      -((event.clientY - rect.top) / rect.height) * 2 + 1);
-    raycaster.setFromCamera(pointer, camera);
+    raycaster.setFromCamera(pointerAt(event), camera);
     const faces = [...planes].map(([id, group]) => {
       group.children[0].userData.sectionId = id;
       return group.children[0];
@@ -403,9 +479,14 @@ export function createModelView({ host, onPick = null }) {
   renderer.domElement.addEventListener('pointerup', (event) => {
     const moved = pressedAt ? Math.hypot(event.clientX - pressedAt[0], event.clientY - pressedAt[1]) : Infinity;
     pressedAt = null;
-    if (moved > CLICK_SLOP_PX || !onPick) return;
+    if (moved > CLICK_SLOP_PX) return;
     const id = planeAt(event);
-    if (id) onPick(id);
+    if (id) {
+      onPick?.(id);
+      return;
+    }
+    // A click on a part of the whole vessel picks it; a click on nothing clears the pick.
+    if (wholeVessel) pickPart(partAt(event));
   });
   renderer.domElement.addEventListener('pointermove', (event) => {
     if (event.buttons) return;
@@ -432,10 +513,7 @@ export function createModelView({ host, onPick = null }) {
       overlays.setReadout(null);
       return;
     }
-    const rect = renderer.domElement.getBoundingClientRect();
-    raycaster.setFromCamera(new THREE.Vector2(
-      ((event.clientX - rect.left) / rect.width) * 2 - 1,
-      -((event.clientY - rect.top) / rect.height) * 2 + 1), camera);
+    raycaster.setFromCamera(pointerAt(event), camera);
     const hit = raycaster.intersectObjects(targets, false).find((h) => cut.keeps(h.point));
     if (!hit) {
       overlays.setReadout(null);
@@ -446,12 +524,7 @@ export function createModelView({ host, onPick = null }) {
   }
   /** The model meshes the readout can point at: what shows now. */
   function pickTargets() {
-    if (wholeVessel) {
-      const meshes = [...shellMeshes];
-      if (layers.tanks) meshes.push(...tankMeshes);
-      if (layers.structure) meshes.push(...steelMeshes);
-      return meshes;
-    }
+    if (wholeVessel) return pickable.all;
     return hull && hull.visible && hullMaterial.visible ? [hull] : [];
   }
   renderer.domElement.addEventListener('pointerleave', () => {
@@ -466,62 +539,109 @@ export function createModelView({ host, onPick = null }) {
 
   /** The part id of the shown tank under the pointer, or null. */
   function tankAt(event) {
-    if (!wholeVessel || !layers.tanks || !tankMeshes.length) return null;
-    const rect = renderer.domElement.getBoundingClientRect();
-    const pointer = new THREE.Vector2(
-      ((event.clientX - rect.left) / rect.width) * 2 - 1,
-      -((event.clientY - rect.top) / rect.height) * 2 + 1);
-    raycaster.setFromCamera(pointer, camera);
-    const hit = raycaster.intersectObjects(tankMeshes, false).find((h) => cut.keeps(h.point));
+    if (!wholeVessel || !pickable.tanks.length) return null;
+    raycaster.setFromCamera(pointerAt(event), camera);
+    const hit = raycaster.intersectObjects(pickable.tanks, false).find((h) => cut.keeps(h.point));
     return hit ? hit.object.userData.partId : null;
+  }
+
+  /** The part under a click (a tank, a steel group, the hull or another part), or null. A
+   * see-through mesh (the shell, steel plating) gives way to a solid part behind it. */
+  function partAt(event) {
+    if (!wholeVessel || !pickable.all.length) return null;
+    raycaster.setFromCamera(pointerAt(event), camera);
+    const hits = raycaster.intersectObjects(pickable.all, false).filter((h) => cut.keeps(h.point));
+    const solid = hits.find((h) => !isSeeThroughMesh(h.object));
+    return (solid || hits[0])?.object.userData.partId || null;
+  }
+
+  /** True for a mesh drawn faint because parts lie inside it. */
+  function isSeeThroughMesh(mesh) {
+    if (mesh.userData.kind === 'structure') return mesh.userData.group === 'shell';
+    return mesh.userData.kind !== 'tank' && seeThrough;
   }
 
   // ---- Whole-vessel tanks: colours by content, translucent shell, labels and legend.
 
+  /** What a mesh of the whole vessel looks like now: a layer that is off hides all its parts. */
+  function stateOfMesh(mesh) {
+    const kind = mesh.userData.kind;
+    if ((kind === 'tank' && !layers.tanks) || (kind === 'structure' && !layers.structure)) return PART_STATES.hidden;
+    return visibility.stateOf(mesh.userData.partId);
+  }
+  const isShown = (mesh) => stateOfMesh(mesh) === PART_STATES.shown;
+
+  /** Set a material see-through (or solid) the way a ghost, the shell or steel plating needs. */
+  function setFaint(material, opacity) {
+    const faint = opacity < 1;
+    material.transparent = faint;
+    material.opacity = opacity;
+    material.depthWrite = !faint;
+  }
+
   /** Colour the whole vessel: tanks by content (capacity-plan tokens), the shell translucent
-   * while tanks show, the highlighted part in the selection blue. */
+   * while tanks show, the highlighted part in the selection blue, hidden parts out and ghost
+   * parts faint (hide and isolate, visibility3d.js). */
   function styleWholeVessel() {
     // The shell turns translucent while tanks or steel inside it show.
-    const seeInside = shellSeeThrough();
+    seeThrough = tankMeshes.some(isShown) || steelMeshes.some(isShown);
+    ghostTankMaterial.color.copy(colours.plane);
     for (const mesh of shellMeshes) {
       const material = mesh.material;
+      const state = stateOfMesh(mesh);
       paintHull(material);
       // A selected part keeps its paint and glows in the selection blue.
       material.emissive = mesh.userData.partId === highlightedId ? colours.accent.clone().multiplyScalar(0.45) : new THREE.Color(0x000000);
-      if (material.transparent !== seeInside) material.needsUpdate = true;
-      material.transparent = seeInside;
-      material.opacity = seeInside ? SHELL_OPACITY_WITH_TANKS : 1;
-      material.depthWrite = !seeInside;
+      const faint = state === PART_STATES.ghost || (state === PART_STATES.shown && seeThrough);
+      if (material.transparent !== faint) material.needsUpdate = true;
+      setFaint(material, state === PART_STATES.ghost ? GHOST_OPACITY : faint ? SHELL_OPACITY_WITH_TANKS : 1);
+      mesh.visible = state !== PART_STATES.hidden;
       // A see-through shell casts no shadow, or the tanks and steel inside it would be dark.
-      mesh.castShadow = !seeInside;
-      mesh.receiveShadow = !seeInside;
+      mesh.castShadow = !faint;
+      mesh.receiveShadow = !faint;
     }
+    pickable.tanks.length = 0;
+    pickable.all.length = 0;
+    for (const mesh of shellMeshes) if (isShown(mesh)) pickable.all.push(mesh);
     for (const mesh of tankMeshes) {
-      mesh.visible = layers.tanks;
+      const state = stateOfMesh(mesh);
+      // A shown tank is drawn by the batch; a ghost tank by its own faint mesh; a hidden one not at all.
+      mesh.visible = state !== PART_STATES.hidden;
+      mesh.material = state === PART_STATES.ghost ? ghostTankMaterial : HIDDEN_MATERIAL;
+      tankBatch.setVisible(mesh, state === PART_STATES.shown);
       const colour = colours.tank(mesh.userData.content_class);
       // A selected tank keeps a share of its content colour and turns toward the selection blue.
       if (mesh.userData.partId === highlightedId) colour.lerp(colours.accent, 0.45);
       tankBatch.setColour(mesh, colour);
+      if (state === PART_STATES.shown) {
+        pickable.tanks.push(mesh);
+        pickable.all.push(mesh);
+      }
     }
     if (tankBatch) tankBatch.mesh.visible = layers.tanks;
     overlays.setEdgesLayer('tanks', layers.tanks);
     overlays.recolourEdges('tanks');
+    overlays.maskEdges('tanks', isShown);
+    overlays.maskEdges('shell', isShown);
     overlays.setEdgesLayer('steel', layers.structure);
+    overlays.maskEdges('steel', isShown);
     for (const mesh of steelMeshes) {
-      mesh.visible = layers.structure;
-      mesh.material.color = colours.steel(mesh.userData.group);
+      const state = stateOfMesh(mesh);
       const shell = mesh.userData.group === 'shell';
-      mesh.material.transparent = shell;
-      mesh.material.opacity = shell ? STEEL_SHELL_OPACITY : 1;
-      mesh.material.depthWrite = !shell;
+      mesh.visible = state !== PART_STATES.hidden;
+      mesh.material.color = colours.steel(mesh.userData.group);
+      mesh.material.emissive.copy(mesh.userData.partId === highlightedId ? colours.accent : BLACK).multiplyScalar(0.45);
+      setFaint(mesh.material, state === PART_STATES.ghost ? GHOST_OPACITY : shell ? STEEL_SHELL_OPACITY : 1);
+      if (state === PART_STATES.shown) pickable.all.push(mesh);
     }
     cut.refresh();
     renderLegend();
+    syncPartsPanel();
   }
 
   /** True while the whole-vessel shell is see-through (tanks or steel show inside it). */
   function shellSeeThrough() {
-    return (layers.tanks && tankMeshes.length > 0) || (layers.structure && steelMeshes.length > 0);
+    return seeThrough;
   }
 
   /** Which colour keys of the legend are open (the legend starts as one row of chips). */
@@ -577,14 +697,14 @@ export function createModelView({ host, onPick = null }) {
   /** Tank name labels: the hovered and the selected tank, or every tank with Names on (labels
    * that would overlap are left out; the hovered one wins). */
   function updateLabels() {
-    if (!wholeVessel || !layers.tanks || !tankMeshes.length) {
+    if (!wholeVessel || !pickable.tanks.length) {
       if (labelLayer.childElementCount) labelLayer.replaceChildren();
       return;
     }
     const width = renderer.domElement.clientWidth;
     const height = renderer.domElement.clientHeight;
     const candidates = [];
-    for (const mesh of tankMeshes) {
+    for (const mesh of pickable.tanks) {
       const id = mesh.userData.partId;
       const priority = id === hoveredTankId ? 2 : id === highlightedId ? 1 : 0;
       if (!layers.names && !priority) continue;
@@ -984,7 +1104,7 @@ export function createModelView({ host, onPick = null }) {
         wholeVessel.traverse((o) => {
           if (o.isMesh || o.isLineSegments) {
             o.geometry.dispose();
-            if (o.material !== HIDDEN_MATERIAL) o.material.dispose();
+            if (o.material !== HIDDEN_MATERIAL && o.material !== ghostTankMaterial) o.material.dispose();
           }
         });
         wholeVessel = null;
@@ -993,6 +1113,7 @@ export function createModelView({ host, onPick = null }) {
         shellMeshes = [];
         steelMeshes = [];
         hoveredTankId = null;
+        rebuildParts();
         renderLegend();
         updateLabels();
       }
@@ -1039,9 +1160,9 @@ export function createModelView({ host, onPick = null }) {
             tankBatch.mesh.receiveShadow = true;
             scene.add(tankBatch.mesh);
           }
-          for (const mesh of tankMeshes) cut.addSolid(mesh, { colour: () => colours.tank(mesh.userData.content_class) });
+          for (const mesh of tankMeshes) cut.addSolid(mesh, { colour: () => colours.tank(mesh.userData.content_class), capped: () => isShown(mesh) });
           // A see-through shell shows no cut face, or the face would hide what is inside.
-          for (const mesh of shellMeshes) cut.addSolid(mesh, { colour: () => colours.hull, capped: () => !shellSeeThrough() });
+          for (const mesh of shellMeshes) cut.addSolid(mesh, { colour: () => colours.hull, capped: () => !shellSeeThrough() && isShown(mesh) });
           overlays.setEdges('shell', shellMeshes);
           overlays.setEdges('tanks', tankMeshes, {
             colourOf: (mesh) => colours.tank(mesh.userData.content_class).multiplyScalar(TANK_EDGE_SHADE),
@@ -1058,6 +1179,7 @@ export function createModelView({ host, onPick = null }) {
             const box = new THREE.Box3().setFromObject(mesh);
             mesh.userData.labelAnchor = new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.max.z);
           }
+          rebuildParts();
           styleWholeVessel();
           if (hull) hull.visible = false;
           empty.hidden = true;
@@ -1068,6 +1190,28 @@ export function createModelView({ host, onPick = null }) {
           resolve();
         }, reject);
       });
+    },
+    /** The parts of the whole-vessel model: [{ id, name, kind, detail, state }], in list order. */
+    partList() {
+      return describeParts({
+        shell: shellMeshes.map((mesh) => mesh.userData),
+        tanks: tankMeshes.map((mesh) => mesh.userData),
+        steel: steelMeshes.map((mesh) => mesh.userData),
+      }).map((entry) => ({ ...entry, state: stateOfMesh(meshById.get(entry.id)) }));
+    },
+    hidePart(id) {
+      visibility.toggleHide(id);
+      restyle();
+    },
+    isolatePart(id) {
+      visibility.toggleIsolate(id);
+      restyle();
+    },
+    showAllParts() {
+      visibility.showAll();
+      layers.tanks = true;
+      layers.structure = true;
+      restyle();
     },
     /** Tint one part of the whole-vessel model in the selection blue (null: none). */
     highlightPart(id) {
@@ -1097,6 +1241,7 @@ export function createModelView({ host, onPick = null }) {
         });
         structure = null;
         steelMeshes = [];
+        rebuildParts();
       }
       if (!buffer || !wholeVessel) {
         if (wholeVessel) styleWholeVessel();
@@ -1112,6 +1257,7 @@ export function createModelView({ host, onPick = null }) {
           const members = [];
           gltf.scene.traverse((o) => { if (o.isMesh && o.userData.kind === 'structure') members.push(o); });
           members.forEach((o) => {
+            o.userData.partId = steelPartId(o.userData.group);
             o.material = clip(createSteelMaterial());
             o.castShadow = true;
             o.receiveShadow = true;
@@ -1122,9 +1268,10 @@ export function createModelView({ host, onPick = null }) {
           wholeVessel.add(structure);
           wholeVessel.updateMatrixWorld(true);
           // See-through shell plating shows no cut face; the other members are solid plate.
-          for (const o of members) cut.addSolid(o, { colour: () => colours.steel(o.userData.group), capped: () => o.userData.group !== 'shell' });
+          for (const o of members) cut.addSolid(o, { colour: () => colours.steel(o.userData.group), capped: () => o.userData.group !== 'shell' && isShown(o) });
           overlays.setEdges('steel', members);
           lighting.fit(new THREE.Box3().setFromObject(wholeVessel));
+          rebuildParts();
           styleWholeVessel();
           requestRender();
           resolve();
