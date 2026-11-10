@@ -734,3 +734,63 @@ read.
 declined both halves, so it is equal to the frozen reader, which fails on the 10 % wrong-cell gate for point cells and
 on extra W6 cells). Reader v2 fails both. WHITE GULL and COLLEEN are now spent as holdouts; any change made after
 looking at these results makes them development cases.
+
+## V-bottom reader v1.1 (branch `feature/vbottom-v11`, founder approved 2026-11-10)
+
+Development cases only: E. C. COLLIER, WHITE GULL and COLLEEN (holdouts spent), PARDON ME, and the round-bilge set
+(BUE GIRL, C.A. Thayer, Balclutha, BUMBLE BEE corrected) for regression. Truth was read to score and diagnose, never
+by the reader. The frozen `body_plan_{crossings,reader,identity}.py` are not edited. Calibrations are the committed
+ones. `work/holdout/caleb-jones` is an unscored holdout and was not opened.
+
+Measurement: `scripts/measure_vbottom_collier.py` (COLLIER, point scorer, polyline arm), `scripts/measure_deadrise_holdout.py
+--boat white-gull|colleen` (waterline and point cells, product rule), `scripts/measure_vbottom_dev_sheets.py`
+(five waterline sheets, product rule). Evidence per step in `work/vbottom11/<step>/` (git-ignored). "Base" is
+`3afcf46`, reproduced exactly (the published tables above).
+
+### Step 1: engagement per station
+
+Before, a half with fewer than max(3, half its stations) knuckled stations was declined as a whole. Now:
+
+1. **One station per drawn line.** Two traces are one station only when their polylines are one line *and* their
+   sides are one line (or one side is a fragment, under half the half's median side). Neighbouring aft stations
+   share most of their bottom near the keel; COLLEEN's aft stations 7 and 8 were merged by the old whole-polyline
+   test. The trace with the longest side is kept.
+2. **A shared knuckle is nobody's.** Different sides that end at one knuckle point (within 1.5 line widths) ran
+   into one line (PARDON ME aft: four sides end at one point of the heavy line). None of them is named or engaged.
+3. **A bottom belongs to one station.** When two stations claim one bottom line, it is the outer station's (a
+   bottom starts at its own knuckle and runs inward, so it can pass an inner knuckle but never an outer one). The
+   inner station is traced again without that line, or dropped. COLLEEN aft: station 8 had taken station 7's
+   bottom, and "station 9" station 8's.
+4. **Engagement per station** (`engage_stations`, `half_table`). On a half that is not read as a whole, a traced
+   station with a **clear knuckle** (turn >= 45 degrees, knuckle at least 0.2 of the reach from the centreline)
+   takes the name that the existing (frozen rank-identity) reader gave the same curve: that station's cells lie
+   within 1.5 line widths of the traced side at 2 or more rows and at 75 % of the shared rows. No match, two
+   matches, or two traces for one name: not engaged. The engaged polyline replaces that station's cells; every
+   other station keeps the existing cells; an existing cell of another station that lies on an engaged polyline
+   (within 1 line width) is dropped, so one drawn line never gives two stations. When other lines through the
+   knuckle also reach the centreline, nothing tells which is this station's bottom without its neighbours traced:
+   only the side and knuckle are engaged.
+
+Halves read as a whole are unchanged in rule (names by nesting rank, polylines only). The engagement thresholds were
+chosen from the knuckle features of every traced station on all eight sheets: round-bilge "knuckles" turn 27 to 42
+degrees (Balclutha bilges, seen with short arms) or lie at 0.03 to 0.10 of the reach (keel and stem junctions);
+the hard-chine knuckles engaged turn 58 to 76 degrees at 0.6 to 0.9 of the reach.
+
+Results (base -> step 1):
+
+| Sheet | Halves read / engaged stations | Waterline cells | WL RMS m | WL wrong | Point cells | Point RMS m | Point wrong | Chine cells (RMS m) |
+|---|---|---|---|---|---|---|---|---|
+| COLLIER | both read (unchanged) | - | - | - | 22/31 -> 22/31 | 0.0691 -> 0.0691 | 2 -> 2 | 10 (0.041) -> same |
+| WHITE GULL | none -> engaged fore 5, 3; aft 8, 9 | 45/53 -> 45/53 | 0.0263 -> 0.0289 | 0 -> 0 | 8/30 -> 12/30 | 0.1338 -> 0.1065 | 2 -> 2 | 5 (0.169) -> 7 (0.139) |
+| COLLEEN | fore read -> fore read, aft engaged 7, 8 | 21/26 -> 22/26 | 0.0006 -> 0.0007 | 0 -> 0 | 10/26 -> 13/26 | 0.0047 -> 0.0063 | 0 -> 0 | 5 (0.003) -> 7 (0.003) |
+| PARDON ME | fore read | 43/57 -> 43/57 | 0.035633 -> 0.035486 | 1 -> 1 | - | - | - | - |
+| BUE GIRL, Thayer, Balclutha, BUMBLE BEE | none, none engaged | identical | identical | identical | - | - | - | - |
+
+Round-bilge check: on all four sheets no station is engaged and the product table equals the frozen table
+(`table_unchanged: true`). PARDON ME's small change is station 3 (fore): the kept trace is now the one with the longer
+side. WHITE GULL: stations 8 and 9 were named by the frozen reader; the drawing's leaders ("Sta.8", "Sta.9") confirm
+the names (the earlier holdout note that called the 1072 px knuckle the transom outline was wrong: the transom is the
+heavy curve further in). Its extra W6 cells (stations 6 to 9) and the 5/W5 error (-0.08 m, side top at the rail) are
+the sheer and extra-cell items of steps 2 and 3. COLLEEN station 7 now gives side and knuckle only (one other bottom
+line through its knuckle), so its correct -1 ft and rabbet cells of the first trial are not given; COLLEEN station 9
+has no own bottom line (it ends on the transom) and is not engaged.

@@ -16,6 +16,10 @@ Two kinds of truth cell, scored separately:
     the measuring rows (a row without a crossing breaks the curve); polyline samples are the
     traced polyline's own points. No extrapolation. Identity check with 2 shared points.
 
+Product rule (polyline arm): a half read as a whole gives its polylines; a declined half gives the
+frozen curves, with the stations engaged one by one (`body_plan_polyline.engage_stations`, named by
+the frozen rank identities) in place of their frozen curves.
+
 The calibration module (`benchmarks.white_gull.holdout_value` or `benchmarks.colleen.holdout_value`)
 is passed in; nothing here knows a vessel. Truth is read only when scoring, after a sha256 check.
 """
@@ -286,14 +290,20 @@ def _crossing_sample(crossing, layout, sign: int, cal) -> tuple[float, float]:
     return sample(crossing.row, crossing.x_px, breadth, cal)
 
 
-def _identity_cells(reading, identities: dict, layout, cal) -> dict:
-    """{station: {label: sample}}; as `table_from_identities`, the outer chain keeps a shared cell."""
+def _identity_crossings(reading, identities: dict) -> dict:
+    """{station: {label: crossing}}; as `table_from_identities`, the outer chain keeps a shared cell."""
     found: dict = {}
     for chain_index, station in sorted(identities.items(), reverse=True):
         for label, node in reading.chains[chain_index].nodes.items():
-            crossing = reading.stations[label][node]
-            found.setdefault(station, {})[label] = _crossing_sample(crossing, layout, reading.layout.sign, cal)
+            found.setdefault(station, {})[label] = reading.stations[label][node]
     return found
+
+
+def _identity_cells(reading, identities: dict, layout, cal) -> dict:
+    """{station: {label: sample}} of the frozen reader's rank identities."""
+    return {station: {label: _crossing_sample(crossing, layout, reading.layout.sign, cal)
+                      for label, crossing in cells.items()}
+            for station, cells in _identity_crossings(reading, identities).items()}
 
 
 def frozen_curves(readings: dict, identities: dict, layout, cal, halves: tuple | None = None) -> dict:
@@ -318,30 +328,59 @@ def v2_curves(sides: dict, layout, cal) -> dict:
     return _row_curves(found, cal)
 
 
+def _polyline_samples(station, layout, cal) -> list:
+    """Samples along a traced polyline; its points run from the rabbet (low) up to the sheer."""
+    return [sample(row, column, station.offset_px(column, layout.centre_column) / layout.pixels_per_metre, cal)
+            for row, column in station.points]
+
+
+def frozen_half_tables(readings: dict, identities: dict, layout) -> dict:
+    """{half: frozen rank-identity table of that half}."""
+    return {name: reader.table_from_identities(reading, identities[name], layout.pixels_per_metre,
+                                               layout.centre_column)
+            for name, reading in readings.items()}
+
+
+def engage(halves: dict, readings: dict, identities: dict, layout) -> None:
+    """Per-station engagement on the declined halves, named by the frozen rank identities."""
+    tables = frozen_half_tables(readings, identities, layout)
+    for name, half in halves.items():
+        polyline.engage_stations(half, readings[name].layout, tables[name], layout)
+
+
 def polyline_curves(halves: dict, readings: dict, identities: dict, layout, cal) -> dict:
-    """Product rule: traced polylines on read halves, the frozen curves on declined halves."""
-    declined = tuple(name for name, half in halves.items() if not half.read)
-    curves = frozen_curves(readings, identities, layout, cal, declined)
-    for half in halves.values():
-        if not half.read:
+    """Product rule: traced polylines on read halves; on declined halves the frozen curves, with
+    engaged stations' polylines in place of their frozen curves and no frozen sample on an engaged
+    polyline's ink (`body_plan_polyline.half_table`)."""
+    curves: dict = {}
+    for name, reading in readings.items():
+        half = halves[name]
+        if half.read:
+            for station in half.stations:
+                curves[station.station] = _polyline_samples(station, layout, cal)
             continue
-        for station in half.stations:
-            # Polyline points run from the rabbet (low) up to the sheer, so they are low to high.
-            curves[station.station] = [
-                sample(row, column, station.offset_px(column, layout.centre_column) / layout.pixels_per_metre, cal)
-                for row, column in station.points]
+        found = _identity_crossings(reading, identities[name])
+        engaged = getattr(half, 'engaged', [])
+        for station in engaged:
+            found.pop(station.station, None)
+            for cells in found.values():
+                for label in [label for label, crossing in cells.items()
+                              if polyline.same_ink(station, crossing.row, crossing.x_px, half.line_width_px)]:
+                    del cells[label]
+        curves.update(_row_curves({station: {label: _crossing_sample(crossing, layout, reading.layout.sign, cal)
+                                             for label, crossing in cells.items()}
+                                   for station, cells in found.items()}, cal))
+        for station in engaged:
+            curves[station.station] = _polyline_samples(station, layout, cal)
     return curves
 
 
 def polyline_table(halves: dict, readings: dict, identities: dict, layout) -> dict:
-    """Product rule waterline table: polyline on read halves, frozen rank identities on declined halves."""
+    """Product rule waterline table (`body_plan_polyline.half_table` per half)."""
+    tables = frozen_half_tables(readings, identities, layout)
     table = {}
-    for name, reading in readings.items():
-        if halves[name].read:
-            table.update(polyline.waterline_table({name: halves[name]}, layout))
-        else:
-            table.update(reader.table_from_identities(reading, identities[name], layout.pixels_per_metre,
-                                                      layout.centre_column))
+    for name in readings:
+        table.update(polyline.half_table(halves[name], tables[name], layout))
     return table
 
 

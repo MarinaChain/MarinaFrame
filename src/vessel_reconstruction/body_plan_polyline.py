@@ -21,9 +21,13 @@ This module reads each station as a polyline instead:
    moving inward, each knuckle is nearer the centreline than the one outside it; a station
    whose knuckle breaks that order is not named.
 
-A half is read only when enough stations have a knuckle; otherwise it is declined (round bilge,
-or ink too ambiguous) and the caller keeps the existing reader. Truth, vessel names and
-benchmark constants are never read. The frozen modules are not edited.
+A half is read as a whole only when enough stations have a knuckle. Otherwise it is declined
+as a whole, and engagement is per station (`engage_stations`): a traced station with a clear
+knuckle takes the name that the existing reader gave the same curve, and its polyline replaces
+that station's cells; every other station keeps the existing reader's cells, and a cell of
+another station that lies on an engaged station's ink is dropped (no double cells). A round
+bilge gives no clear knuckle, so its table is the existing reader's table unchanged. Truth,
+vessel names and benchmark constants are never read. The frozen modules are not edited.
 
 Coordinates are image pixels (row, column). Half-breadths are metres from the centre column;
 heights stay in image rows, because the base line and its slope are the host's calibration.
@@ -117,6 +121,27 @@ GRID_MAX_SLOPE = 0.02
 GAP_SIDE_SHARE = 0.5
 # Two traces within this many line widths of each other over most of their side are one line.
 SAME_LINE_WIDTHS = 1.5
+# Two traces that share their bottom are one line only when their sides are one line too, or when
+# one side is shorter than this share of the median side of the half (a fragment).
+FRAGMENT_SIDE_SHARE = 0.5
+
+# ---------------------------------------------------------------- per-station engagement
+# On a half that is not read as a whole, a traced station is engaged only when its knuckle is
+# clear: it turns by at least CLEAR_TURN_DEG (a chine between a steep side and a low-deadrise
+# bottom; the tight bilge of a round-bilge section seen with short arms turns less) and lies at
+# least CLEAR_OFFSET_SHARE of the half's reach from the centreline (corners where lines meet the
+# keel or stem outline are nearer).
+CLEAR_TURN_DEG = 45.0
+CLEAR_OFFSET_SHARE = 0.2
+# The station takes the existing reader's name for the same curve: that station's cells lie within
+# NAME_MATCH_WIDTHS line widths of the traced side at NAME_MIN_ROWS or more measuring rows, and at
+# NAME_ROW_SHARE or more of the rows they share above the knuckle. Exactly one name must match.
+NAME_MATCH_WIDTHS = 1.5
+NAME_MIN_ROWS = 2
+NAME_ROW_SHARE = 0.75
+# A cell of the existing reader within this many line widths of an engaged polyline on the same
+# row is the same ink: keeping it would give one drawn line two stations.
+SAME_INK_WIDTHS = 1.0
 
 
 # Trace point states.
@@ -143,6 +168,10 @@ class StationPolyline:
     turn_deg: float
     station: int | None = None
     notes: list = field(default_factory=list)
+    shared_knuckle: bool = False  # another traced side reaches the same knuckle point
+    seed: tuple[float, float] | None = None  # (row, column) the side was traced from
+    # Other lines that leave the knuckle and reach the centreline: the bottom could be any of them.
+    bottom_alternatives: int = 0
 
     @property
     def rabbet(self) -> tuple[float, float]:
@@ -171,6 +200,14 @@ class StationPolyline:
             return None
         return self.offset_px(column, sheet.centre_column) / sheet.pixels_per_metre
 
+    def side_points(self) -> np.ndarray:
+        """The traced side: the knuckle up to the sheer end."""
+        return self.points[self.knuckle_index:]
+
+    def bottom_points(self) -> np.ndarray:
+        """The traced bottom: the rabbet up to the knuckle."""
+        return self.points[:self.knuckle_index + 1]
+
     def yz_m(self, sheet: bpr.SheetLayout, height_m) -> np.ndarray:
         """(half-breadth, height) in metres for every point; `height_m(row, column)` is the host's."""
         return np.array([[self.offset_px(c, sheet.centre_column) / sheet.pixels_per_metre, height_m(r, c)]
@@ -185,6 +222,8 @@ class HalfReading:
     read: bool
     stations: list[StationPolyline] = field(default_factory=list)  # named stations, outermost first
     unnamed: list[StationPolyline] = field(default_factory=list)  # traced with a knuckle, not named
+    # On a declined half: stations engaged one by one, named by the existing reader (`engage_stations`).
+    engaged: list[StationPolyline] = field(default_factory=list)
     line_width_px: float = 0.0
     notes: list = field(default_factory=list)
 
@@ -447,14 +486,16 @@ def _inward(sign: int, angle_deg: float) -> np.ndarray:
 
 
 def _bottom(ink: np.ndarray, side_points: np.ndarray, sheet: bpr.SheetLayout, sign: int,
-            width: float) -> np.ndarray | None:
-    """Points of the bottom leaving the lower end of a side (outer end first), or None.
+            width: float, exclude: tuple = ()) -> tuple[np.ndarray | None, int]:
+    """(Points of the bottom leaving the lower end of a side, outer end first, or None; the number
+    of other lines that leave the end and reach the centreline elsewhere).
 
     Every branch that leaves the end inward on ink is followed to its first corner. A bottom
     descends over its whole length and reaches in toward the centreline. Of those, the one that
     reaches nearest the centreline is the bottom, the longest if several reach equally far. A
     start further back up the side is tried only when no branch leaves from nearer its end (a
-    branch from higher up can cut across to the bottom and miss the corner).
+    branch from higher up can cut across to the bottom and miss the corner). A branch that runs
+    along one of the `exclude` lines (another station's bottom) is not taken.
     """
     end = side_points[-1]
     knuckle_offset = sign * (end[1] - sheet.centre_column)
@@ -488,13 +529,25 @@ def _bottom(ink: np.ndarray, side_points: np.ndarray, sheet: bpr.SheetLayout, si
                 continue
             if on_grid_line(points, sheet.waterline_rows.values(), 0, width):
                 continue
+            if any(_same_line(points, other, width) for other in exclude):
+                continue
             inner = sign * (points[-1, 1] - centre)
             candidates.append((back, round(inner / width), -length, points))
         if candidates:
             break
     if not candidates:
-        return None
-    return min(candidates, key=lambda c: c[:3])[3]
+        return None, 0
+    chosen = min(candidates, key=lambda c: c[:3])[3]
+    # Other branches that also reach the centreline but end elsewhere: lines of other stations that
+    # pass the knuckle, any of which could be this station's bottom.
+    reach = BOTTOM_INNER_SHARE * knuckle_offset
+    ends = [c[3][-1] for c in candidates if sign * (c[3][-1, 1] - centre) <= reach]
+    alternatives = [end for end in ends if np.hypot(*(end - chosen[-1])) > SAME_LINE_WIDTHS * width]
+    distinct: list = []
+    for end in alternatives:
+        if all(np.hypot(*(end - other)) > SAME_LINE_WIDTHS * width for other in distinct):
+            distinct.append(end)
+    return chosen, len(distinct)
 
 
 def _monotone(points: np.ndarray) -> np.ndarray:
@@ -523,8 +576,8 @@ def _ends_on_grid_column(side_points: np.ndarray, side: bpr.SideLayout, width: f
 
 
 def trace_station(ink: np.ndarray, seed, sheet: bpr.SheetLayout, side: bpr.SideLayout,
-                  width: float) -> tuple[StationPolyline | None, np.ndarray, np.ndarray, str]:
-    """Trace the station whose side passes through `seed`.
+                  width: float, exclude: tuple = ()) -> tuple[StationPolyline | None, np.ndarray, np.ndarray, str]:
+    """Trace the station whose side passes through `seed`; its bottom runs along no `exclude` line.
 
     Returns (station or None, the whole traced line for de-duplication, the side cut at its
     corners, the reason when None).
@@ -544,7 +597,7 @@ def trace_station(ink: np.ndarray, seed, sheet: bpr.SheetLayout, side: bpr.SideL
         return None, line, side_points, 'short line'
     if on_grid_line(side_points, side.grid_columns, 1, width) or _ends_on_grid_column(side_points, side, width):
         return None, line, side_points, 'grid line'
-    bottom = _bottom(ink, side_points, sheet, side.sign, width)
+    bottom, alternatives = _bottom(ink, side_points, sheet, side.sign, width, exclude)
     if bottom is None:
         return None, line, side_points, 'no bottom branch'
     # Knuckle: where straight fits of the side's lower end and the bottom's outer end meet.
@@ -572,18 +625,68 @@ def trace_station(ink: np.ndarray, seed, sheet: bpr.SheetLayout, side: bpr.SideL
     polyline = _monotone(low_to_high)
     knuckle_index = int(np.argmin(np.hypot(*(polyline - corner).T)))
     station = StationPolyline(side.name, side.sign, polyline, knuckle_index,
-                              (float(corner[0]), float(corner[1])), turn)
+                              (float(corner[0]), float(corner[1])), turn, seed=(float(seed[0]), float(seed[1])),
+                              bottom_alternatives=alternatives)
     return station, line, side_points, ''
 
 
 # ---------------------------------------------------------------- one half
 
 def _same_line(first: np.ndarray, second: np.ndarray, width: float) -> bool:
-    """Two side traces are one line when most of the shorter lies on the longer."""
+    """Two traces are one line when most of the shorter lies on the longer."""
     short, long_ = (first, second) if len(first) <= len(second) else (second, first)
     sample = short[:: max(1, len(short) // 40)]
     near = [_distance_to(long_, point) <= SAME_LINE_WIDTHS * width for point in sample]
     return float(np.mean(near)) > 0.5
+
+
+def _same_station(first: StationPolyline, second: StationPolyline, width: float, fragment_px: float) -> bool:
+    """Two traced stations are one when their polylines are one line and their sides are too.
+
+    Neighbouring stations can share most of their bottom where they run into the keel; their
+    sides still differ. A side shorter than `fragment_px` is a fragment, not a station of its own.
+    """
+    if not _same_line(first.points, second.points, width):
+        return False
+    sides = first.side_points(), second.side_points()
+    return _same_line(*sides, width) or min(_length(points) for points in sides) < fragment_px
+
+
+def _own_bottoms(ink: np.ndarray, sheet: bpr.SheetLayout, side: bpr.SideLayout, width: float,
+                 stations: list[StationPolyline]) -> tuple[list[StationPolyline], int]:
+    """Give each bottom line to one station: (stations, number dropped).
+
+    Where the bottoms of neighbouring stations cross near a knuckle, the trace from an inner
+    knuckle can run on along the outer station's bottom. A bottom starts at its own knuckle and
+    runs inward, so a bottom that two stations claim belongs to the outer one (its knuckle is
+    further out); the inner station is traced again without that line. A station with no other
+    bottom is dropped.
+    """
+    kept: list[StationPolyline] = []
+    dropped = 0
+    for station in sorted(stations, key=lambda s: -s.offset_px(s.chine[1], sheet.centre_column)):
+        taken = tuple(other.bottom_points() for other in kept)
+        if any(_same_line(station.bottom_points(), bottom, width) for bottom in taken):
+            again, *_ = trace_station(ink, station.seed, sheet, side, width, taken)
+            if again is None:
+                dropped += 1
+                continue
+            again.notes.append('bottom traced again: the first one was an outer station\'s bottom')
+            station = again
+        kept.append(station)
+    return kept, dropped
+
+
+def _mark_shared_knuckles(stations: list[StationPolyline], width: float) -> None:
+    """Flag stations whose knuckle another (different) traced station reaches as well.
+
+    Different sides that end at one corner ran into one line (curves crowded on a heavy line);
+    the corner cannot be given to either.
+    """
+    for i, first in enumerate(stations):
+        for second in stations[i + 1:]:
+            if np.hypot(first.chine[0] - second.chine[0], first.chine[1] - second.chine[1]) <= SAME_LINE_WIDTHS * width:
+                first.shared_knuckle = second.shared_knuckle = True
 
 
 def _nesting_key(station: StationPolyline, rows: list[float], sheet: bpr.SheetLayout) -> tuple:
@@ -636,7 +739,7 @@ def read_half(ink: np.ndarray, sheet: bpr.SheetLayout, side: bpr.SideLayout) -> 
     width = line_width(ink, sheet, side)
     result = HalfReading(side.name, False, line_width_px=width)
     traced_sides: list[np.ndarray] = []
-    stations: list[StationPolyline] = []
+    candidates: list[StationPolyline] = []
     failed_sides: list[np.ndarray] = []  # side-like lines that gave no station
     reasons: dict = {}
     for seed in seeds(ink, sheet, side, width):
@@ -649,14 +752,28 @@ def read_half(ink: np.ndarray, sheet: bpr.SheetLayout, side: bpr.SideLayout) -> 
             if reason not in ('short line', 'grid line'):
                 failed_sides.append(side_points)
             continue
-        if any(_same_line(station.points, other.points, width) for other in stations):
-            continue
-        stations.append(station)
+        candidates.append(station)
+    # One station per drawn line: the trace with the longest side is kept.
+    stations: list[StationPolyline] = []
+    if candidates:
+        fragment = FRAGMENT_SIDE_SHARE * float(np.median([_length(s.side_points()) for s in candidates]))
+        for station in sorted(candidates, key=lambda s: -_length(s.side_points())):
+            if not any(_same_station(station, other, width, fragment) for other in stations):
+                stations.append(station)
+    _mark_shared_knuckles(stations, width)
+    shared = [s for s in stations if s.shared_knuckle]
+    stations, dropped = _own_bottoms(ink, sheet, side, width, [s for s in stations if not s.shared_knuckle])
+    if dropped:
+        reasons['bottom of an outer station only'] = dropped
+    for station in shared:
+        station.notes.append('another traced side reaches the same knuckle; not named')
     result.notes.append(f'traced {len(traced_sides)} lines; {len(stations)} with a knuckle; '
-                        f'others: {dict(sorted(reasons.items()))}')
+                        f'others: {dict(sorted(reasons.items()))}'
+                        + (f'; {len(shared)} with a shared knuckle' if shared else ''))
+    result.unnamed += shared
     expected = len(side.stations_outer_first)
     if len(stations) < max(MIN_STATIONS, MIN_STATION_SHARE * expected):
-        result.unnamed = stations
+        result.unnamed += stations
         result.notes.append('declined: too few stations with a sharp knuckle (no hard chine read)')
         return result
     result.read = True
@@ -669,7 +786,7 @@ def read_half(ink: np.ndarray, sheet: bpr.SheetLayout, side: bpr.SideLayout) -> 
     if breaks:
         result.notes.append(f'knuckles out of chine order at ranks {breaks}')
     if len(ordered) > expected:
-        result.unnamed = ordered
+        result.unnamed += ordered
         result.read = False
         result.notes.append(f'declined: {len(ordered)} stations traced for {expected} in the calibration')
         return result
@@ -714,4 +831,108 @@ def waterline_table(halves: dict[str, HalfReading], sheet: bpr.SheetLayout) -> d
                 value = station.half_breadth_m(row, sheet)
                 if value is not None:
                     table[(station.station, label)] = value
+    return table
+
+
+# ---------------------------------------------------------------- per-station engagement
+
+def is_clear_knuckle(station: StationPolyline, sheet: bpr.SheetLayout) -> bool:
+    """A knuckle clear enough to engage one station on its own (see CLEAR_TURN_DEG)."""
+    offset = station.offset_px(station.chine[1], sheet.centre_column)
+    return (not station.shared_knuckle and station.turn_deg >= CLEAR_TURN_DEG
+            and offset >= CLEAR_OFFSET_SHARE * sheet.max_offset_px)
+
+
+def _existing_name(station: StationPolyline, existing: dict, side: bpr.SideLayout,
+                   sheet: bpr.SheetLayout, width: float) -> int | None:
+    """The one station name whose existing cells lie on this station's traced side, else None."""
+    tolerance = NAME_MATCH_WIDTHS * width / sheet.pixels_per_metre
+    names = []
+    for name in side.stations_outer_first:
+        shared = agree = 0
+        for label, row in sheet.waterline_rows.items():
+            value = existing.get((name, label))
+            if value is None or row >= station.chine[0]:  # the side only: above the knuckle
+                continue
+            mine = station.half_breadth_m(row, sheet)
+            if mine is None:
+                continue
+            shared += 1
+            agree += abs(mine - value) <= tolerance
+        if agree >= NAME_MIN_ROWS and agree >= NAME_ROW_SHARE * shared:
+            names.append(name)
+    return names[0] if len(names) == 1 else None
+
+
+def engage_stations(half: HalfReading, side: bpr.SideLayout, existing: dict,
+                    sheet: bpr.SheetLayout) -> list[StationPolyline]:
+    """Engage the clear-knuckle stations of a declined half, one by one.
+
+    `existing` is the existing reader's table of this half, {(station, waterline): m}. A traced
+    station is named after the existing station whose cells lie on its side; it is left out when
+    no name or more than one name matches, or when another engaged station takes the same name.
+    When other lines through its knuckle also reach the centreline, its bottom is not engaged.
+    Sets and returns `half.engaged`. A half read as a whole engages nothing here.
+    """
+    half.engaged = []
+    if half.read:
+        return half.engaged
+    named = []
+    for station in half.unnamed:
+        if not is_clear_knuckle(station, sheet):
+            continue
+        name = _existing_name(station, existing, side, sheet, half.line_width_px)
+        if name is None:
+            station.notes.append('clear knuckle; no single existing station on its side; not engaged')
+            continue
+        named.append((name, station))
+    counts = {}
+    for name, _ in named:
+        counts[name] = counts.get(name, 0) + 1
+    for name, station in named:
+        if counts[name] > 1:
+            station.notes.append(f'clear knuckle; station {name} matched by another trace too; not engaged')
+            continue
+        station.station = name
+        station.notes.append(f'engaged on its own; named {name} by the existing reader')
+        if station.bottom_alternatives:
+            # Without its neighbours traced, nothing tells which of the lines through the knuckle
+            # is this station's bottom: only the side and the knuckle are engaged.
+            station.points = station.points[station.knuckle_index:]
+            station.knuckle_index = 0
+            station.notes.append(f'{station.bottom_alternatives} other bottom lines through the knuckle; '
+                                 'side and knuckle only')
+        half.engaged.append(station)
+    if half.engaged:
+        half.notes.append(f'engaged stations {[s.station for s in half.engaged]}; others kept from the existing reader')
+    return half.engaged
+
+
+def same_ink(station: StationPolyline, row: float, column: float, width: float) -> bool:
+    """True when the point (row, column) lies on the station's polyline at that row."""
+    mine = station.column_at_row(row)
+    return mine is not None and abs(mine - column) <= SAME_INK_WIDTHS * width
+
+
+def half_table(half: HalfReading, existing: dict, sheet: bpr.SheetLayout) -> dict:
+    """Product table of one half: {(station, waterline): half-breadth m}.
+
+    A half read as a whole gives its polylines' table. A declined half gives the existing table
+    with each engaged station's cells replaced by its polyline, and without existing cells of
+    other stations that lie on an engaged polyline.
+    """
+    if half.read:
+        return waterline_table({half.side: half}, sheet)
+    table = dict(existing)
+    for station in half.engaged:
+        for (name, label), value in list(table.items()):
+            row = sheet.waterline_rows[label]
+            column = sheet.centre_column + station.sign * value * sheet.pixels_per_metre
+            if name == station.station or same_ink(station, row, column, half.line_width_px):
+                del table[(name, label)]
+    for station in half.engaged:
+        for label, row in sheet.waterline_rows.items():
+            value = station.half_breadth_m(row, sheet)
+            if value is not None:
+                table[(station.station, label)] = value
     return table

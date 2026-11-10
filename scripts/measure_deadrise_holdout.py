@@ -40,7 +40,7 @@ def overlay(ink, halves, sides, cal, out: Path) -> None:
             x, y = point.column - left, point.row - top
             draw.rectangle([x - 7, y - 7, x + 7, y + 7], outline=(0, 120, 255), width=2)
     for half in halves.values():
-        for station in half.stations + half.unnamed:
+        for station in half.stations + half.unnamed:  # engaged stations are among the unnamed
             colour = (220, 0, 0) if station.station is not None else (255, 150, 0)
             draw.line([(c - left, r - top) for r, c in station.points], fill=colour, width=3)
             for (row, column), mark in ((station.chine, (0, 160, 0)), (station.rabbet, (0, 0, 255)),
@@ -90,6 +90,7 @@ def main() -> None:
     seconds['v2'] = round(time.monotonic() - started, 1)
     started = time.monotonic()
     halves = polyline.read_sheet(ink, layout)
+    sc.engage(halves, frozen, identities, layout)
     seconds['polyline'] = round(time.monotonic() - started, 1)
 
     tables = {'frozen': cv.table_and_flags(frozen, identities, layout)[0],
@@ -121,7 +122,8 @@ def main() -> None:
                'notes': {n: s.notes for n, s in sides.items()}},
         'polyline': {name: {'read': h.read, 'line_width_px': h.line_width_px, 'notes': h.notes,
                             'stations': [station_record(s, layout, cal) for s in h.stations],
-                            'unnamed': [station_record(s, layout, cal) for s in h.unnamed]}
+                            'engaged': [station_record(s, layout, cal) for s in h.engaged],
+                            'unnamed': [station_record(s, layout, cal) for s in h.unnamed if all(s is not e for e in h.engaged)]}
                      for name, h in halves.items()},
         'tables': {arm: {f'{s}/{w}': v for (s, w), v in sorted(table.items())} for arm, table in tables.items()},
     }
@@ -137,7 +139,8 @@ def main() -> None:
             print(arm, kind, json.dumps({k: result.get(k) for k in keys}, default=float))
         print(arm, 'chine', json.dumps(results[arm]['point'].get('chine_only'), default=float))
     for name, half in halves.items():
-        print('polyline', name, 'read' if half.read else 'declined', [s.station for s in half.stations], half.notes)
+        print('polyline', name, 'read' if half.read else 'declined', [s.station for s in half.stations],
+              'engaged', [s.station for s in half.engaged], half.notes)
     print('v2 chine verified', report['v2']['chine_verified'])
     print('unmatched waterlines', truth['unmatched_waterlines'])
     print('gates', json.dumps(gates))
