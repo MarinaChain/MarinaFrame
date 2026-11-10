@@ -341,7 +341,7 @@ def _check_record(root: Path, result: dict, manifest: dict):
     required = {"schema_version", "record_kind", "run_id", "identity", "vessel_id", "status", "method",
                 "input_mode", "review", "sources", "parts", "sections", "normalized_sections", "gaps",
                 "assumptions", "metrics", "exports", "provenance", "timing_seconds", "terminal", "requested_exports"}
-    _require(isinstance(result, dict) and required <= set(result) <= required | {"diagnostics", "draft"}, "Incomplete or unsupported inference record schema.")
+    _require(isinstance(result, dict) and required <= set(result) <= required | {"diagnostics", "draft", "export_results"}, "Incomplete or unsupported inference record schema.")
     _require(result["schema_version"] == SCHEMA_VERSION and result["record_kind"] == "immutable_inference_record", "Unsupported inference record.")
     status = result["status"]
     _require(isinstance(status, str) and status in TERMINAL_STATES, "Nonterminal or unknown run state.")
@@ -434,10 +434,24 @@ def _check_record(root: Path, result: dict, manifest: dict):
     # Older immutable runs predate IGES. Include it only when their record declares it.
     has_iges = "iges" in result["exports"]
     has_rhino = "3dm" in result["exports"]
+    export_results = result.get("export_results")
+    if export_results is not None:
+        _require(status == "review_required" and result["requested_exports"] and isinstance(export_results, dict)
+                 and set(export_results) == {"step", "iges", "3dm", "stl"}, "Invalid per-format export record.")
+        for format_name, outcome in export_results.items():
+            _require(isinstance(outcome, dict) and set(outcome) == {"status", "reason"}
+                     and outcome["status"] in ("ok", "failed"), "Invalid per-format export outcome.")
+            _require((outcome["status"] == "ok" and outcome["reason"] is None and format_name in result["exports"])
+                     or (outcome["status"] == "failed" and isinstance(outcome["reason"], str)
+                         and 0 < len(outcome["reason"]) <= 1000 and format_name not in result["exports"]),
+                     "Per-format outcome contradicts the published export.")
     if status == "review_required":
         expected_files.update(("mesh.json", "cad_sections.json", "extracted_sections.json"))
         if result["requested_exports"]:
-            expected_files.update((step_name, stl_name))
+            if export_results is None or "step" in result["exports"]:
+                expected_files.add(step_name)
+            if export_results is None or "stl" in result["exports"]:
+                expected_files.add(stl_name)
             if has_iges:
                 expected_files.add(iges_name)
             if has_rhino:
@@ -488,7 +502,10 @@ def _check_record(root: Path, result: dict, manifest: dict):
     _require(set(input_sections) == ids and len(ids) >= 3, "Required stations are missing from a successful run.")
     expected_exports = {"mesh": "mesh.json", "mesh_units": "m"}
     if result["requested_exports"]:
-        expected_exports.update(step=step_name, step_units="mm", stl=stl_name, stl_units="mm")
+        if export_results is None or "step" in exports:
+            expected_exports.update(step=step_name, step_units="mm")
+        if export_results is None or "stl" in exports:
+            expected_exports.update(stl=stl_name, stl_units="mm")
         if has_iges:
             expected_exports.update(iges=iges_name, iges_units="mm")
         if has_rhino:
@@ -496,7 +513,8 @@ def _check_record(root: Path, result: dict, manifest: dict):
     _require(exports == expected_exports, "Export status, request, filenames or units are inconsistent.")
     _require({"mesh.json", "cad_sections.json", "extracted_sections.json"} <= declared, "Required successful geometry evidence is missing.")
     if result["requested_exports"]:
-        _require({step_name, stl_name} <= declared, "Requested CAD exports are missing.")
+        if export_results is None:
+            _require({step_name, stl_name} <= declared, "Requested CAD exports are missing.")
     else:
         _require(not {step_name, stl_name, iges_name, rhino_name}.intersection(declared), "Unrequested CAD exports present.")
     normalized = result["normalized_sections"]

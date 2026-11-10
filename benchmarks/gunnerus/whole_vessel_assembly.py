@@ -174,7 +174,8 @@ def write_brep(shape, path: Path) -> None:
     BinTools.Write_s(shape.wrapped, str(path))
 
 
-def export_all(shapes: dict, out: Path) -> tuple[dict, dict]:
+def export_all(shapes: dict, out: Path, *, task: Path | None = None,
+               revision: str | None = None) -> tuple[dict, dict]:
     """STEP per part and for the assembly (no pcurves: about half the size), plus a GLB mesh view.
 
     The GLB is a display mesh (``display_mesh``), not a tessellation of the STEP export.
@@ -183,6 +184,10 @@ def export_all(shapes: dict, out: Path) -> tuple[dict, dict]:
     import cadquery as cq
 
     from vessel_reconstruction.display_mesh import mesh_volume_mm3, shape_mesh, write_glb
+    from vessel_reconstruction.display_provenance import bind_display_output, display_record_path, write_display_record
+
+    mesh = out / 'whole-vessel-draft.glb'
+    binding = bind_display_output(mesh, task, revision)
 
     sizes = {}
     parts = out / 'whole_vessel'
@@ -196,8 +201,10 @@ def export_all(shapes: dict, out: Path) -> tuple[dict, dict]:
     sizes[step.name] = step.stat().st_size
     meshes = {name: shape_mesh(shape, DISPLAY_TOLERANCE_MM, DISPLAY_ANGULAR_RAD, DISPLAY_SMOOTH_TOLERANCE_MM)
               for name, shape in shapes.items()}
-    mesh = out / 'whole-vessel-draft.glb'
+    display_record_path(mesh).unlink(missing_ok=True)
     write_glb(meshes, mesh)
+    if binding is not None:
+        write_display_record(mesh, binding)
     sizes[mesh.name] = mesh.stat().st_size
     mesh_volumes = {name: mesh_volume_mm3(*meshes[name]) / 1e9 for name in meshes}
     return {'bytes': sizes, 'assembly_step_sha256': hashlib.sha256(step.read_bytes()).hexdigest(),
@@ -284,12 +291,18 @@ def main() -> None:
     parser.add_argument('--step1', type=Path, required=True, help='Step 1 run folder (whole_vessel.py output)')
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--hull-brep', type=Path, help='Reuse a hull model.brep built by this script earlier.')
+    parser.add_argument('--task', type=Path, help='Task whose build the display model belongs to')
+    parser.add_argument('--revision', help='Revision of the task build')
     args = parser.parse_args()
+    if (args.task is None) != (args.revision is None):
+        parser.error('--task and --revision must be supplied together')
     import cadquery as cq
 
     from vessel_reconstruction.geometry import precise_volume_mm3
+    from vessel_reconstruction.display_provenance import bind_display_output
 
     out = args.out.resolve()
+    binding = bind_display_output(out / 'whole-vessel-draft.glb', args.task, args.revision)
     out.mkdir(parents=True, exist_ok=False)
     started = time.time()
     step1 = args.step1.resolve()
@@ -321,7 +334,9 @@ def main() -> None:
         record['truth_comparable_m3'] = volumes['hull'] + volumes['house_t1']
         record['truth_volume_m3'] = TRUTH_VOLUME_M3
         record['truth_comparable_error'] = record['truth_comparable_m3'] / TRUTH_VOLUME_M3 - 1
-    record['exports'], meshes = export_all(shapes, out)
+    if binding != bind_display_output(out / 'whole-vessel-draft.glb', args.task, args.revision):
+        raise ValueError('The selected build changed while making the whole-vessel model.')
+    record['exports'], meshes = export_all(shapes, out, task=args.task, revision=args.revision)
     assembly = cq.Compound.makeCompound(list(shapes.values()))
     box = assembly.BoundingBox()
     record.update(bbox_m={'min': [box.xmin / 1000, box.ymin / 1000, box.zmin / 1000],
