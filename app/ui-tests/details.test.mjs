@@ -55,7 +55,7 @@ test('the transition is short and off under reduced motion', () => {
 // ---- run-detail tabs as icons
 import { TAB_META, tabName } from '../ui/js/details.js';
 
-const TAB_IDS = ['thinking', 'timeline', 'checks', 'model', 'evidence'];
+const TAB_IDS = ['thinking', 'timeline', 'checks', 'model', 'evidence', 'sources'];
 
 test('every tab has an icon in the sprite, its word as title and a one-line detail', () => {
   const html = read('../ui/index.html');
@@ -65,7 +65,7 @@ test('every tab has an icon in the sprite, its word as title and a one-line deta
     assert.ok(html.includes(`<symbol id="i-${meta.icon}"`), `sprite icon ${meta.icon}`);
     assert.ok(meta.detail.length > 10 && meta.detail.length < 70 && !meta.detail.includes('\n'), `${tab} detail`);
   }
-  assert.deepEqual(TAB_IDS.map((tab) => TAB_META[tab].word), ['Thinking', 'Steps', 'Checks', 'Calls', 'Evidence']);
+  assert.deepEqual(TAB_IDS.map((tab) => TAB_META[tab].word), ['Thinking', 'Steps', 'Checks', 'Calls', 'Evidence', 'Sources']);
 });
 
 test('the tab buttons keep their roles and carry no text in the page', () => {
@@ -80,8 +80,8 @@ test('the spoken name of a tab keeps the word and adds the count', () => {
   assert.equal(tabName('model', 5), 'Calls, 5');
 });
 
-test('the tab arrows still walk the five tabs', () => {
+test('the tab arrows still walk the six tabs', () => {
   const app = read('../ui/js/app.js');
-  assert.match(app, /const TABS = \['thinking', 'timeline', 'checks', 'model', 'evidence'\]/);
+  assert.match(app, /const TABS = \['thinking', 'timeline', 'checks', 'model', 'evidence', 'sources'\]/);
   assert.match(app, /ArrowRight: 1, ArrowLeft: -1[\s\S]{0,200}selectTab\(next, \{ focus: true \}\)/);
 });

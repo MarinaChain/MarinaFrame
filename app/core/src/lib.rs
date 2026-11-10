@@ -26,6 +26,7 @@ pub mod run_tables;
 pub mod sample;
 pub mod sheet_review;
 pub mod signoff;
+pub mod sources;
 pub mod storage;
 pub mod types;
 pub mod view;
