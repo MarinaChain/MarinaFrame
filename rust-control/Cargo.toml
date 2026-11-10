@@ -10,6 +10,9 @@ description = "Typed persistent local control plane for evidence-bound hull reco
 name = "marinaframe_control"
 path = "src/lib.rs"
 
+[features]
+test-support = []
+
 [[bin]]
 name = "marinaframe"
 path = "src/main.rs"
@@ -23,3 +26,6 @@ serde_json = { version = "=1.0.145", features = ["float_roundtrip"] }
 sha2 = "=0.10.9"
 # A private working folder for each `claude` CLI request (claude_cli.rs).
 tempfile = "=3.23.0"
+
+[dev-dependencies]
+marinaframe-control = { path = ".", features = ["test-support"] }
