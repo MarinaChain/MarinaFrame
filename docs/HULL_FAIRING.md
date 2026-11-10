@@ -1029,6 +1029,74 @@ Joint diagnostics: 34 added half stations, 1,344 negative fitted-surface
 samples projected to the floor (9.3: 1,282). Targets T1-T4 fail on both
 halves; BUE GIRL T5 holds (station-only fallback, no plan/profile view).
 
+#### 10.4.1 Committed station-end check (edc3f2f)
+
+The PM committed the fit-only choice in `edc3f2f` before this check. The
+settings match that commit byte for byte: **B, bounded endpoint movement,
+2.5% of each build's original half-beam**. The reader, fitter, weights,
+bound and gate are unchanged. No tuning, other arm or fit-half rescore was
+run. Section 10's existing comparison numbers below are reused; only frozen
+B was newly scored, once per stored build.
+
+**10/10 L1 CAD builds and the BUE GIRL reader fallback completed without
+fit/build/score failure.** Five delivered L1 builds are the primary result;
+all ten stored L1 builds are secondary, correlated revisions. One exclusive
+run directory and one attempt file per build prevent a second check run.
+
+RMS is % of truth half-beam. Per-case volume errors are signed in-range
+errors at design draft. Gate passes require RMS <=2% and absolute volume
+error <=5%. `v2` means the unaligned joint fit in the table above.
+
+| Delivered check case | RMS % station-only / v2 joint / frozen B | Volume % v2 / frozen B | Gate pass v2 / frozen B |
+|---|---|---|---|
+| dtmb5415-L1 | 14.188 / 12.391 / 11.566 | +11.342 / +11.874 | 0 / 0 |
+| series60-L1 | 3.334 / 8.066 / 9.351 | +1.797 / -1.536 | 0 / 0 |
+| 00679-L1 | 5.438 / 10.981 / 10.343 | -6.762 / -6.939 | 0 / 0 |
+| 08158-L1 | 1.625 / 4.326 / 4.373 | -4.602 / -5.140 | 0 / 0 |
+| 09867-L1 | 0.983 / 1.381 / 2.711 | +1.136 / -0.883 | 1 / 0 |
+
+| Check population | Mean RMS % current / station-only / v2 joint / frozen B | Gate passes in the same order |
+|---|---|---|
+| Delivered (5/5 scored) | 5.189 / 5.114 / 7.429 / 7.669 | 2 / 2 / 1 / 0 |
+| All stored (10/10 scored) | 5.190 / 5.116 / 7.521 / 7.601 | 4 / 4 / 2 / 0 |
+
+Delivered mean RMS increases by 0.240 points
+(7.429 -> 7.669%). Mean absolute volume error increases
+from 5.128% to 5.274%. The 09867-L1 pass
+is lost (1.381 -> 2.711% RMS). DTMB improves (12.391 -> 11.566%) and
+00679 improves in shape (10.981 -> 10.343%), but 00679 volume remains
+outside the gate (-6.762 -> -6.939%). The fit-half -13.378% volume deficit
+also remained unresolved at the frozen choice (-13.958%, section 11.3);
+no fit case was rescored during this check.
+
+T1-T4 fail on the check half. All 30/30 primary injection trials are
+available; maximum absolute follow shares are 0.331 / 0.272 / 1.000 for
++0.1 m / +0.2 m / whole-station injections. These are paired surface fits,
+with no additional CAD accuracy scores. BUE GIRL has no independent
+plan/profile views, so the unchanged public fairer uses its station-only
+fallback. It retains 37/39 truth cells,
+RMS 0.00217492 m and maximum 0.00832272 m; T5 holds.
+The two missing cells (stations 10 and 12 at 2-6-0) remain explicit.
+
+**Conclusion and next step.** The station-end hypothesis has limited support
+as a local contributor: DTMB improves on both halves. It is not supported
+as a sufficient explanation or remedy for the joint-fit failure. The check
+mean worsens, a gate pass is lost, and the 00679 volume deficit persists.
+**Stop this joint-fairing approach and retain the existing station-only
+path as the optional fairing method. Keep fairing off by default.** Do not
+tune another bound or method on this check half.
+
+Reproduction and verification artifacts are retained under
+`work/station-frame/`: `check_once.py` (the single-use driver),
+`check-once.log`, and `check-edc3f2f/{started,evidence/manifest,check,verification}.json`.
+The frozen settings SHA-256 remains
+`110454345211d68b424ba3a2075d5aafcfa8f8f11ae5d11f86db8ae6a7d3a6a0`.
+The driver checks the committed settings and pinned source hashes before
+and after execution. Accuracy-score attempts are unique: ten CAD builds
+plus one BUE GIRL curve score. Comparison values are from sections 9.3
+and 10.4 and were not rescored. Only this report changed in tracked files;
+no source/settings changes, commit, pip or sealed-factory access was run.
+
 ### 10.5 Findings and limits
 
 **Keep three-view fairing off.** Better evidence did not give a better
@@ -1099,3 +1167,216 @@ sandbox or part-revision tests (`test_ship_cad` sandbox tests,
 `sandbox-exec: execvp() ... Operation not permitted` inside this agent's own
 sandbox. This lane changed none of those modules (as in 9.5, where the same
 sandbox-bound tests were deselected).
+
+## 11. Station-frame ablation: fit-half checkpoint
+
+Date: 2026-11-10, branch `feature/station-frame`. The PM brief asks for a
+fit-only checkpoint before the settings commit. No L1 or BUE GIRL geometry,
+evidence or truth is opened by this runner. No `work/factory-sealed-*`
+directory is opened. Truth is the unchanged development scorer's
+`work/factory-3view/sealed/truth/`. Fairing stays off by default; there is no
+application wiring or change to the runtime fitter.
+
+### 11.1 Fixed experiment
+
+`benchmarks/hull_fairing/replay_station_frame.py` collects only the five L0
+cases named in `three_view_protocol.json`. It regenerates the v2 evidence
+from each stored build's drawing, intake regions and scale. The fit population
+is 11 stored builds, including five delivered builds. The delivered points
+match section 10's coverage: 218 / 3 / 12 / 202 / 202 plan observations for
+DTMB / series60 / 00679 / 08158 / 09867. Per-build evidence and coverage stay in
+`work/station-frame/evidence/`.
+
+The candidate set and ranking rule are saved to
+`work/station-frame/design.json` before evidence collection or scoring:
+
+- A: current joint fit with v2 evidence.
+- B: move each station's keel and deck heights towards the independent profile
+  at that x. Test bounds of 0.01, 0.025 and 0.05 times the original half-beam.
+  Keep x and y; remap interior heights linearly within the new span. Keep an
+  endpoint unchanged when the profile does not cover its x; refuse a reversed
+  height span. This tests bounded boundary movement without a new surface fit.
+- C: least-squares registration of one uniform x/y/z scale, one x offset and
+  one z offset. Residuals compare station keel/deck heights with profile
+  interpolants. Separate residuals count x distance outside profile coverage.
+  Fixed search bounds are scale 0.8-1.2, x offset +/-10% of source length,
+  z offset +/-10% of original half-beam. Record residuals, active bounds and
+  Jacobian rank. There is no truth input to registration.
+
+All arms retain plan weight 0.5, body/profile weights 1, fairness 0.02 and
+Huber scale 1% of the original half-beam. The unchanged current builder and
+station-only fit are controls. Every score rebuilds STEP and uses the same
+2% RMS / 5% absolute in-range volume gate as section 10. All 11 builds are
+scored for every candidate, but only the five delivered L0 scores select the
+arm. Complete candidates rank first, then most gate passes, lowest mean RMS,
+lowest mean absolute volume error, then candidate order (A, ascending B
+bounds, C). This is a new frame-arm choice; the old plan weight is not retuned.
+
+The benchmark adapter is `benchmarks/hull_fairing/station_frame.py`.
+Registration movement is measured from the original station vertices,
+including x/z displacement and breadth scaling. Body movement statistics,
+excess locations and boundary movement include that displacement; independent
+view diagnostics remain the joint fitter's. Paired injections keep independent
+views and the reference half-beam fixed. Each candidate has 30 delivered
+injection trials, separate from the CAD gate scores. There is no CAD rebuild
+for each injection, as in section 9.
+
+The settings file is created exclusively after fit scoring. An existing file
+blocks a retune. The runner has no check-half execution path. The PM must
+commit the settings before a later, separate check-half evaluation.
+
+### 11.2 Verification at the fit checkpoint
+
+Command (all Python tests, no exclusions):
+
+```bash
+PYTHONPATH=src:. OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 \
+  .venv/bin/python -m pytest -q -p no:cacheprovider
+```
+
+Result: **1,738 passed, 9 failed, 1 skipped, 11 setup errors**, five SWIG
+warnings, exit code 1, 1,664.58 s. Log:
+`work/station-frame/python-full.log`. This is not a passing full-suite claim.
+
+- Eleven `test_rust_review` setup errors: localhost `server_bind` raises
+  `PermissionError: [Errno 1] Operation not permitted`.
+- Four `test_runtime` failures: process identity is unavailable through
+  `/bin/ps`, and worker/descendant shutdown times out under the outer sandbox.
+- Three `test_ship_cad` failures: nested `sandbox-exec` returns 71;
+  `sandbox_apply: Operation not permitted` is visible in the traces.
+- The command-line part revision and whole-vessel part revision fail to build.
+  Their retained worker receipts also report exit code 71.
+
+None of these tests imports the station-frame benchmark, and this lane changes
+no worker, runtime, review-server or sandbox source. No permission guard was
+weakened. The focused station-frame and existing joint-fit run passed **13/13**
+before the replay. Six alignment/selection/population tests were first observed
+failing against empty implementations; the red log is
+`work/station-frame/tests-red.log`. The seventh test checks that joint movement
+reports include frame displacement relative to the original observations.
+
+Final focused rerun: **13 passed in 5.11 s**, exit code 0. Settings, result
+and pinned source hashes match. The source Python parses, `git diff --check`
+passes, and the runtime source diff is empty.
+
+### 11.3 Fit results and frozen choice
+
+**Select B at 2.5% of the original half-beam for the later fixed-choice check.**
+It has the lowest delivered mean RMS among the five complete candidates. All
+candidates have zero delivered gate passes. This is an experimental choice;
+**keep fairing off**. The settings are saved, uncommitted, in
+`benchmarks/hull_fairing/station_frame_settings.json`. No check-half score was run.
+
+All **77/77 CAD builds and scores completed**, with zero fit/build/score failures:
+22 controls plus 55 candidate evaluations. The five delivered cases are the
+primary denominator; the 11 stored builds are secondary, correlated revisions.
+There are 150 candidate injection trials and 30 station-only control trials,
+each with a paired zero-injection fit. No live model calls.
+
+Each aggregate cell is **mean RMS % / mean absolute volume error % / gate passes**.
+Signed per-case volume errors follow in the next table. A reproduces section
+10.4: delivered 7.916% RMS, all stored fit 11.317%, zero passes.
+
+| Mode | Delivered fit (5 scored) | All stored fit (11 scored) |
+|---|---|---|
+| current | 3.504 / 1.192 / 2 | 7.732 / 6.135 / 3 |
+| station only | 3.288 / 1.169 / 2 | 7.613 / 6.114 / 3 |
+| A: current joint | 7.916 / 5.089 / 0 | 11.317 / 8.975 / 0 |
+| B: 1% bound | 7.305 / 4.338 / 0 | 10.831 / 8.385 / 0 |
+| B: 2.5% bound (selected) | 7.258 / 4.182 / 0 | 10.719 / 8.159 / 0 |
+| B: 5% bound | 7.309 / 4.317 / 0 | 10.713 / 8.140 / 0 |
+| C: registered frame | 7.871 / 4.405 / 0 | 11.401 / 8.511 / 0 |
+
+Each case cell is **RMS % / signed volume error % / gate pass (0 or 1)**.
+
+| Delivered L0 case | A (section 10.4) | B 1% | B 2.5% (selected) | B 5% | C |
+|---|---|---|---|---|---|
+| dtmb5415 | 8.380 / +0.568 / 0 | 4.584 / +0.397 / 0 | 3.548 / +0.548 / 0 | 3.746 / +0.862 / 0 | 7.010 / -0.992 / 0 |
+| series60 | 4.061 / +2.340 / 0 | 4.102 / +0.685 / 0 | 4.870 / -0.125 / 0 | 4.870 / -0.127 / 0 | 4.155 / -0.405 / 0 |
+| 00679 | 16.419 / -13.378 / 0 | 16.458 / -13.918 / 0 | 16.423 / -13.958 / 0 | 16.385 / -13.944 / 0 | 16.453 / -13.736 / 0 |
+| 08158 | 6.616 / +6.368 / 0 | 7.057 / +5.157 / 0 | 7.152 / +5.142 / 0 | 7.256 / +5.697 / 0 | 7.048 / +6.639 / 0 |
+| 09867 | 4.106 / +2.792 / 0 | 4.323 / +1.535 / 0 | 4.297 / +1.137 / 0 | 4.286 / +0.956 / 0 | 4.691 / +0.250 / 0 |
+
+**00679-L0 is not resolved.** Its volume error is -13.378% in A,
+-13.958% in selected B, and -13.736% in C; all tested endpoint bounds
+remain outside the 5% volume gate. Selected B reduces the joint mean RMS
+by 0.659 points, mainly through DTMB (8.380 -> 3.548%). It regresses
+series60 (4.061 -> 4.870%) and 08158 (6.616 -> 7.152%). Its mean RMS
+remains worse than the current builder (3.504%) and station-only (3.288%).
+The tested boundary changes give a partial DTMB benefit; they do not
+establish a general accuracy gain or remove the 00679 volume deficit.
+
+| Arm | T1 | T2 | T3 | T4 | Max absolute follow: +0.1 m / +0.2 m / whole station |
+|---|---|---|---|---|---|
+| A: current joint | False | False | False | False | 0.254 / 0.233 / 1.040 |
+| B: 1% bound | False | False | False | False | 0.254 / 0.233 / 1.041 |
+| B: 2.5% bound (selected) | False | False | False | False | 0.254 / 0.233 / 1.040 |
+| B: 5% bound | False | False | False | False | 0.254 / 0.233 / 1.040 |
+| C: registered frame | False | False | False | False | 0.253 / 0.233 / 1.047 |
+
+Every candidate has all 10/10 trials available for each injection kind.
+The +0.2 m maximum meets its 0.25 target, but +0.1 m is about 0.254
+and whole-station following exceeds 1.0. T3 fails. T4 uses the unchanged
+`minimum_fidelity` helper: an available view with no traced/read points
+returns zero, with repaired-only coverage retained separately. Excess
+locations and original-body displacement are in each candidate report.
+T5 and every check-half target remain unassessed.
+
+| Arm | Added half stations (all 11) | Negative breadth projections (all 11) | Largest original boundary move m |
+|---|---|---|---|
+| A: current joint | 18 | 814 | 0.000 |
+| B: 1% bound | 18 | 813 | 0.099 |
+| B: 2.5% bound (selected) | 18 | 807 | 0.246 |
+| B: 5% bound | 18 | 797 | 0.493 |
+| C: registered frame | 18 | 737 | 0.525 |
+
+Registration diagnostics for delivered C cases (least-squares residual RMS
+includes both height residuals and out-of-profile x distances):
+
+| Case | Scale | x offset m | z offset m | Residual RMS before / after m |
+|---|---|---|---|---|
+| dtmb5415 | 0.994889 | +0.156 | +0.052 | 0.290 / 0.128 |
+| series60 | 0.995659 | +0.287 | +0.090 | 0.127 / 0.045 |
+| 00679 | 0.998042 | +0.106 | +0.007 | 0.430 / 0.428 |
+| 08158 | 1.005570 | -0.513 | +0.023 | 0.462 / 0.167 |
+| 09867 | 0.999029 | +0.141 | +0.159 | 0.177 / 0.139 |
+
+All five delivered registration Jacobians have rank three; no search bound
+is active. The affine frame barely reduces 00679 profile residuals
+(0.430 -> 0.428 m). This negative result applies to the tested bounds and
+ordinary least-squares frame, not to every possible alignment method.
+
+### 11.4 Reproduction and handoff
+
+The completed run used:
+
+```bash
+PYTHONPATH=src:. OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 \
+  .venv/bin/python -m benchmarks.hull_fairing.replay_station_frame \
+  --output work/station-frame \
+  --settings benchmarks/hull_fairing/station_frame_settings.json
+```
+
+For an independent fit-only repeat, use a new output directory and a new
+settings path inside it. Existing settings block retuning. There is no
+check-half mode. The PM commits the settings before any separate check run.
+
+Canonical derived data and verification evidence:
+
+- `work/station-frame/experiment.json`: controls, all candidates, per-build scores, movement, fairness and injection reports.
+- `work/station-frame/evidence/manifest.json`: 11 fit builds, five delivered; no check rows.
+- `work/station-frame/replay.log`: complete collection and score log.
+- `work/station-frame/artifact-verification.json`: 77 scored, zero failures, source/settings/result hashes, default-off and zero-check assertions.
+- `work/station-frame/python-full.log`: complete full-suite failure evidence.
+- `work/station-frame/focused-tests.log`: final focused verification.
+
+Five source files are left for the PM:
+
+- `benchmarks/hull_fairing/station_frame.py` (new)
+- `benchmarks/hull_fairing/replay_station_frame.py` (new)
+- `benchmarks/hull_fairing/station_frame_settings.json` (new, frozen choice)
+- `tests/test_station_frame.py` (new, seven tests)
+- `docs/HULL_FAIRING.md` (this fit-only report)
+
+No commit, pip, reader edit, runtime fitter edit, product wiring or check
+evaluation was run. Derived data remain in ignored `work/station-frame/`.

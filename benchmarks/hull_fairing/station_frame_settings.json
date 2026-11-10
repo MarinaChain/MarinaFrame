@@ -1,0 +1,181 @@
+{
+  "split": "fit",
+  "fit_cases": [
+    "dtmb5415-3v-L0",
+    "series60-3v-L0",
+    "shipd-1-00679-3v-L0",
+    "shipd-1-08158-3v-L0",
+    "shipd-1-09867-3v-L0"
+  ],
+  "candidates": [
+    {
+      "name": "a_current_joint",
+      "arm": "current_joint",
+      "bound_fraction": 0.0
+    },
+    {
+      "name": "b_endpoints_0.01",
+      "arm": "bounded_endpoints",
+      "bound_fraction": 0.01
+    },
+    {
+      "name": "b_endpoints_0.025",
+      "arm": "bounded_endpoints",
+      "bound_fraction": 0.025
+    },
+    {
+      "name": "b_endpoints_0.05",
+      "arm": "bounded_endpoints",
+      "bound_fraction": 0.05
+    },
+    {
+      "name": "c_registered_frame",
+      "arm": "registered_frame",
+      "bound_fraction": 0.0
+    }
+  ],
+  "selection": "Complete candidates first; most delivered fit gate passes (RMS <=2%, absolute volume <=5%); then lowest mean RMS, lowest mean absolute volume error, then candidate order.",
+  "scale_bounds": [
+    0.8,
+    1.2
+  ],
+  "x_offset_length_fraction": 0.1,
+  "z_offset_half_beam_fraction": 0.1,
+  "joint_choice": {
+    "plan_weight": 0.5,
+    "fairness": 0.02,
+    "fit_cases": [
+      "dtmb5415-3v-L0",
+      "series60-3v-L0",
+      "shipd-1-00679-3v-L0",
+      "shipd-1-08158-3v-L0",
+      "shipd-1-09867-3v-L0"
+    ],
+    "protocol_sha256": "54de016f834399e9792d1787f9fc56f5f3eed93b3b8c3f82ee356af1d4f61a42",
+    "minimum_fit_fidelity": 0.3213859020310633,
+    "worst_fit_follow_share": 0.9931119163083145,
+    "selection": "section 8.3; no candidate met T4",
+    "engineering_approved": false
+  },
+  "engineering_approved": false,
+  "chosen": {
+    "name": "b_endpoints_0.025",
+    "arm": "bounded_endpoints",
+    "bound_fraction": 0.025
+  },
+  "delivered_fit": {
+    "planned": 5,
+    "available": 5,
+    "passes": 0,
+    "mean_rms_pct": 7.2578398564518904,
+    "mean_abs_volume_pct": 4.181975258258836
+  },
+  "all_stored_fit": {
+    "planned": 11,
+    "available": 11,
+    "passes": 0,
+    "mean_rms_pct": 10.719361455253171,
+    "mean_abs_volume_pct": 8.15878896730557
+  },
+  "candidate_fit_summaries": [
+    {
+      "name": "a_current_joint",
+      "delivered": {
+        "planned": 5,
+        "available": 5,
+        "passes": 0,
+        "mean_rms_pct": 7.916403001083798,
+        "mean_abs_volume_pct": 5.089331228335727
+      },
+      "all_stored": {
+        "planned": 11,
+        "available": 11,
+        "passes": 0,
+        "mean_rms_pct": 11.317393168748056,
+        "mean_abs_volume_pct": 8.975116983900515
+      }
+    },
+    {
+      "name": "b_endpoints_0.01",
+      "delivered": {
+        "planned": 5,
+        "available": 5,
+        "passes": 0,
+        "mean_rms_pct": 7.304622876778441,
+        "mean_abs_volume_pct": 4.338384577456365
+      },
+      "all_stored": {
+        "planned": 11,
+        "available": 11,
+        "passes": 0,
+        "mean_rms_pct": 10.831375006872802,
+        "mean_abs_volume_pct": 8.385471329809649
+      }
+    },
+    {
+      "name": "b_endpoints_0.025",
+      "delivered": {
+        "planned": 5,
+        "available": 5,
+        "passes": 0,
+        "mean_rms_pct": 7.2578398564518904,
+        "mean_abs_volume_pct": 4.181975258258836
+      },
+      "all_stored": {
+        "planned": 11,
+        "available": 11,
+        "passes": 0,
+        "mean_rms_pct": 10.719361455253171,
+        "mean_abs_volume_pct": 8.15878896730557
+      }
+    },
+    {
+      "name": "b_endpoints_0.05",
+      "delivered": {
+        "planned": 5,
+        "available": 5,
+        "passes": 0,
+        "mean_rms_pct": 7.308710754513887,
+        "mean_abs_volume_pct": 4.316990899602184
+      },
+      "all_stored": {
+        "planned": 11,
+        "available": 11,
+        "passes": 0,
+        "mean_rms_pct": 10.713134652445351,
+        "mean_abs_volume_pct": 8.140167221893803
+      }
+    },
+    {
+      "name": "c_registered_frame",
+      "delivered": {
+        "planned": 5,
+        "available": 5,
+        "passes": 0,
+        "mean_rms_pct": 7.871373010190032,
+        "mean_abs_volume_pct": 4.404526053381476
+      },
+      "all_stored": {
+        "planned": 11,
+        "available": 11,
+        "passes": 0,
+        "mean_rms_pct": 11.401126867414058,
+        "mean_abs_volume_pct": 8.510575659942525
+      }
+    }
+  ],
+  "source_sha256": {
+    "/Users/jonathanjie/Documents/workspace/MarinaFrame/.claude/worktrees/feature-station-frame/benchmarks/hull_fairing/three_view_protocol.json": "54de016f834399e9792d1787f9fc56f5f3eed93b3b8c3f82ee356af1d4f61a42",
+    "/Users/jonathanjie/Documents/workspace/MarinaFrame/.claude/worktrees/feature-station-frame/benchmarks/hull_fairing/three_view_choice.json": "e0476e466b45ff5bd4797752cdd19e3e099fe833f9178addd2b588fac859728e",
+    "/Users/jonathanjie/Documents/workspace/MarinaFrame/.claude/worktrees/feature-station-frame/benchmarks/hull_fairing/replay_station_frame.py": "2b65a577b435ed4c3fbd8bf11d0ee4d2826ec635ded6f734d0951e6f6367825e",
+    "/Users/jonathanjie/Documents/workspace/MarinaFrame/.claude/worktrees/feature-station-frame/benchmarks/hull_fairing/station_frame.py": "3ad5ed496c97d40118142f60e7e053173b5308cd8aad227646b848c040dadec1",
+    "src/vessel_reconstruction/three_view_fairing.py": "87f77c5101050cba85850226dba368bcf828ee9c8a5fe354b6705ee8815cf69a",
+    "src/vessel_reconstruction/view_reader_v2.py": "bec193a95bd3c57b94c003a0ba7d0e30c134d4a0498b28cb6c061f09fd9a8438",
+    "benchmarks/hull_fairing/view_reader_v2_settings.json": "27992a42f6f4fc323457267352459aee3bb832199e3ce02c6d13c0efad88af3a"
+  },
+  "fit_results": "work/station-frame/experiment.json",
+  "fit_results_sha256": "a7da69e61a915970cc55175de7fb0aa0cd0293bcdd4e534af52d2b23c767e966",
+  "check_status": "not_read_not_scored",
+  "requires_pm_commit_before_check": true,
+  "fairing_default": "off"
+}
