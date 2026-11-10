@@ -37,13 +37,16 @@ function lines(points, material) {
   return new THREE.LineSegments(geometry, material);
 }
 
-export function createOverlays({ scene, host, clip }) {
+export function createOverlays({ scene, host, clip, clipSpace = (material) => material }) {
   const group = new THREE.Group();
   scene.add(group);
-  const minorMaterial = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.5, depthWrite: false });
-  const majorMaterial = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.9, depthWrite: false });
-  const waterMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: WATER_OPACITY, depthWrite: false, side: THREE.DoubleSide });
-  const waterEdgeMaterial = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.8 });
+  // The grid and the waterline plane are clipped by a space (clipSpace); the frame ticks and their
+  // numbers are not, so the frames stay readable in a space view.
+  const minorMaterial = clipSpace(new THREE.LineBasicMaterial({ transparent: true, opacity: 0.5, depthWrite: false }));
+  const majorMaterial = clipSpace(new THREE.LineBasicMaterial({ transparent: true, opacity: 0.9, depthWrite: false }));
+  const tickMaterial = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.9, depthWrite: false });
+  const waterMaterial = clipSpace(new THREE.MeshBasicMaterial({ transparent: true, opacity: WATER_OPACITY, depthWrite: false, side: THREE.DoubleSide }));
+  const waterEdgeMaterial = clipSpace(new THREE.LineBasicMaterial({ transparent: true, opacity: 0.8 }));
   /** One material for every feature edge, so a theme change is one colour change. */
   const edgeMaterial = clip(new THREE.LineBasicMaterial({ transparent: true, opacity: EDGE_OPACITY.light, depthWrite: false }));
   const parts = { grid: new THREE.Group(), waterline: new THREE.Group(), frames: new THREE.Group() };
@@ -150,7 +153,7 @@ export function createOverlays({ scene, host, clip }) {
         ticks.push(x, y, z0, x, y - length, z0);
       }
       ticks.push(zeroX + first * spacing, y, z0, zeroX + last * spacing, y, z0);
-      parts.frames.add(lines(ticks, majorMaterial));
+      parts.frames.add(lines(ticks, tickMaterial));
       frameLine = { reference, y: y - hullSize.y * MAJOR_TICK_SHARE * 1.6, z: z0, first, last };
       referenceText.textContent = referenceLine(reference);
       const guessed = guessedReferences(reference);
@@ -337,6 +340,7 @@ export function createOverlays({ scene, host, clip }) {
     setColours({ grid, gridMinor, water, edge, dark }) {
       minorMaterial.color.copy(gridMinor);
       majorMaterial.color.copy(grid);
+      tickMaterial.color.copy(grid);
       waterMaterial.color.copy(water);
       waterEdgeMaterial.color.copy(water);
       edgeMaterial.color.copy(edge);

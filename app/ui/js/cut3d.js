@@ -110,6 +110,8 @@ export function createSectionCut({ scene }) {
       for (const each of planes) if (each.distanceToPoint(point) < 0) return false;
       return true;
     },
+    /** The six planes of the space box, for materials that only the space clips (overlay lines, curves). */
+    spacePlanes,
     /** The box the model is clipped to ({ min, max } in metres), or null. */
     get space() {
       return spaceBox;

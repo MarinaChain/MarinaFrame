@@ -153,6 +153,11 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
     material.clipShadows = true;
     return material;
   }
+  /** Put only the space's clipping planes on a material (overlay lines, section planes, curves). */
+  function clipSpace(material) {
+    material.clippingPlanes = cut.spacePlanes;
+    return material;
+  }
   /** Design waterline, baseline and frame numbering of the model shown (reference3d.js). */
   let reference = null;
   const content = new THREE.Group();
@@ -489,7 +494,7 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
   host.append(el('div', { class: 'model-controls' }, toolbar.element, cutPanel.element, spaceChip));
 
   // ---- Engineering overlays and the switches for them.
-  const overlays = createOverlays({ scene, host, clip });
+  const overlays = createOverlays({ scene, host, clip, clipSpace });
   const overlaySwitches = {};
   function overlaySwitch(key, iconName, label, keyHint) {
     const button = toolButton({ iconName, label, keyHint, pressed: overlays.shown[key], onClick: () => setOverlay(key, !overlays.shown[key]) });
@@ -588,6 +593,7 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
   // Live section curves stay outside `content`, so a new STL does not remove them.
   const growth = createSectionGrowth({
     scene,
+    curveClip: cut.spacePlanes,
     hullMaterial,
     renderer,
     requestRender: () => requestRender(),
@@ -1030,8 +1036,8 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
       size.y * (1 + 2 * GUESS_BAND_MARGIN),
       size.z * (1 + 2 * GUESS_BAND_MARGIN),
     );
-    const face = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }));
-    const edge = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ transparent: true }));
+    const face = new THREE.Mesh(geometry, clipSpace(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false })));
+    const edge = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), clipSpace(new THREE.LineBasicMaterial({ transparent: true })));
     const group = new THREE.Group();
     group.add(face, edge);
     const centre = box.getCenter(new THREE.Vector3());
@@ -1084,8 +1090,8 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
     const geometry = new THREE.PlaneGeometry(width, height);
     // PlaneGeometry lies in XY; turn it to face along x.
     geometry.rotateY(Math.PI / 2);
-    const face = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide }));
-    const edge = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ transparent: true }));
+    const face = new THREE.Mesh(geometry, clipSpace(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide })));
+    const edge = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), clipSpace(new THREE.LineBasicMaterial({ transparent: true })));
     const group = new THREE.Group();
     group.add(face, edge);
     const centre = box.getCenter(new THREE.Vector3());

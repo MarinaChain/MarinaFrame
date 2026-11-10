@@ -105,7 +105,7 @@ function tube(points, radius) {
  * `setSkinClip(planes)` sets the skin's clipping planes (null: none); the 3D view adds its section
  * cut to them. Without it the planes go on the hull material as they are.
  */
-export function createSectionGrowth({ scene, hullMaterial, renderer, requestRender, colours, onFirstSections,
+export function createSectionGrowth({ scene, hullMaterial, renderer, requestRender, colours, onFirstSections, curveClip = [],
   setSkinClip = (planes) => { hullMaterial.clippingPlanes = planes; } }) {
   const group = new THREE.Group();
   group.renderOrder = 10;
@@ -196,7 +196,7 @@ export function createSectionGrowth({ scene, hullMaterial, renderer, requestRend
   function drawCurve(curve) {
     disposeCurve(curve);
     const pattern = PATTERNS[curve.label] || PATTERNS.omitted;
-    curve.material = new THREE.MeshBasicMaterial({ color: curveColour(curve), transparent: true, opacity: curveOpacity(curve) });
+    curve.material = new THREE.MeshBasicMaterial({ color: curveColour(curve), transparent: true, opacity: curveOpacity(curve), clippingPlanes: curveClip });
     const x = curve.x - curve.slide;
     const path = fullSection(curve.points).map(([y, z]) => new THREE.Vector3(x, y, z));
     const mesh = new THREE.Group();
