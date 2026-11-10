@@ -16,6 +16,7 @@ def checker():
     return importlib.import_module("scripts.check_cad_exports")
 
 
+@pytest.mark.cad
 def test_both_fixtures_pass_all_three_formats(tmp_path):
     check = checker()
     report = check.run_checks(tmp_path)
@@ -40,6 +41,7 @@ def test_both_fixtures_pass_all_three_formats(tmp_path):
             assert row["details"]["closed_solid_count"] == (1 if row["fixture"] == "flat_deck_hull" else 3)
 
 
+@pytest.mark.cad
 def test_missing_step_reports_failure_without_a_successful_edit(tmp_path):
     check = checker()
     fixture = check.make_fixtures()[0]
@@ -48,6 +50,7 @@ def test_missing_step_reports_failure_without_a_successful_edit(tmp_path):
     assert row["edits_ok"] is None and row["errors"]
 
 
+@pytest.mark.cad
 def test_step_translation_is_detected_even_when_volume_is_unchanged(tmp_path):
     check = checker()
     fixture = check.make_fixtures()[0]
@@ -60,6 +63,7 @@ def test_step_translation_is_detected_even_when_volume_is_unchanged(tmp_path):
     assert not row["passed"]
 
 
+@pytest.mark.cad
 def test_open_iges_does_not_pass_as_an_editable_closed_hull(tmp_path):
     check = checker()
     fixture = check.make_fixtures()[0]
@@ -71,6 +75,7 @@ def test_open_iges_does_not_pass_as_an_editable_closed_hull(tmp_path):
     assert any("face count" in error for error in row["errors"])
 
 
+@pytest.mark.cad
 def test_rhino_counts_are_checked_against_objects_and_export_return_value(tmp_path):
     check = checker()
     fixture = check.make_fixtures()[1]
@@ -83,6 +88,7 @@ def test_rhino_counts_are_checked_against_objects_and_export_return_value(tmp_pa
     assert any("representation counts" in error for error in row["errors"])
 
 
+@pytest.mark.cad
 def test_unlabelled_mesh_fallback_is_rejected(tmp_path):
     check = checker()
     fixture = check.make_fixtures()[1]
@@ -96,6 +102,7 @@ def test_unlabelled_mesh_fallback_is_rejected(tmp_path):
     assert any("mesh" in error for error in row["errors"])
 
 
+@pytest.mark.cad
 def test_rhino_planar_trims_rebuild_with_their_original_areas(tmp_path):
     check = checker()
     fixture = check.make_fixtures()[0]
@@ -112,6 +119,7 @@ def test_rhino_planar_trims_rebuild_with_their_original_areas(tmp_path):
     assert checked > 0
 
 
+@pytest.mark.cad
 def test_rational_surface_rebuild_keeps_the_circle(tmp_path):
     check = checker()
     from vessel_reconstruction.rhino_exports import CadPart, export_3dm
@@ -127,6 +135,7 @@ def test_rational_surface_rebuild_keeps_the_circle(tmp_path):
     assert check.bbox_error(rebuilt, cylinder) <= check.BOUNDING_BOX_TOLERANCE_MM
 
 
+@pytest.mark.cad
 def test_valid_but_unchanged_cuts_do_not_pass(monkeypatch):
     check = checker()
     shape = check.make_fixtures()[0].shape
@@ -136,6 +145,7 @@ def test_valid_but_unchanged_cuts_do_not_pass(monkeypatch):
     assert edits["face_offset"] is True
 
 
+@pytest.mark.cad
 def test_valid_but_unchanged_face_offset_does_not_pass(monkeypatch):
     check = checker()
     shape = check.make_fixtures()[0].shape
