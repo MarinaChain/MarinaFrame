@@ -109,7 +109,7 @@ def main() -> None:
                                                            'identity_errors', 'missing_cell_keys',
                                                            'extra_cell_keys')}))
     print('v2 chine verified', report['v2']['chine_verified'], 'abstained', report['v2']['abstained'])
-    print('traced', json.dumps(traced))
+    print('traced', json.dumps(traced, default=float))
     print('gates', json.dumps(report['gates']))
 
 

@@ -406,5 +406,47 @@ the chine will have no bottom crossings and chine and rabbet cells may be missin
 crossing below the chine, interpolating across the knuckle can give a large chine error at 6-inch spacing. The fore
 label "5" lies beside station 5 within the reach limit.
 
-Resume point: step 3 (PM review of the calibration and overlay). Do not run either reader on the sheet until the PM
-replies "run".
+PM approved the calibration as committed (6-inch rows) and gave the truth file format; the loader accepts exactly
+that format and checks the truth sha256 (`6915b3b`). Run script `scripts/measure_ec_collier_holdout.py` (`e1c7d25`).
+
+### HOLDOUT RESULT: E. C. COLLIER (one run, no tuning) - FAIL
+
+One run of both arms on 2026-11-10 with the committed calibration and scorer; no constant changed after the run.
+Source and protocol files unchanged since `2d31179`. Evidence (git-ignored): `work/ec_collier/holdout_result.json`
+(sha256 09d88133...), overlay `work/ec_collier/holdout_v2_overlay.png`. Truth sha256 a6ef1671... matched; the file
+lists 1 "unsure" entry (not used). The script wrote the JSON and overlay, then failed on a diagnostic print (a numpy
+integer in `json.dumps`); that print was fixed afterwards, display only. The run was not repeated.
+
+| Arm | Cells given | RMS m | Max m | Wrong (>0.15 m) | Identity errors | Extra | Abstained | Chine line verified (aft / fore) |
+|---|---|---|---|---|---|---|---|---|
+| Frozen (rank identities) | 7/31 | 0.9124 | 2.3133 | 3 | [] | 0 | - | - |
+| Reader v2 | 7/31 | 0.9124 | 2.3133 | 3 | [] | 0 | 0 / 0 | no / no |
+
+Chine cells only (both arms): **4/10, RMS 0.2057 m, max 0.4032 m, 1 wrong.** By point (both arms): sheer 2 cells
+(RMS 0.391 m, 1 wrong), chine 4 (0.206 m, 1 wrong), rabbet 1 (2.313 m, 1 wrong). Cells given: chine of stations
+0, 1, 2, 3 (errors +0.403, -0.010, +0.081, -0.009 m); sheer of stations 8 and 10; rabbet of station 10.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| v2 cells >= frozen | pass (equal) |
+| v2 RMS not worse | pass (equal) |
+| v2 wrong cells not worse | pass (equal) |
+| v2 wrong <= 10 % of cells given | **fail** (3/7 = 43 %) |
+| No extra cell on blank truth | pass |
+| Verified chine line on the drawn chine | **fail**: no line is verified on either half |
+
+**Result: FAIL.** v2 equals the frozen reader on this sheet: it verified no chine line, so both halves kept the
+frozen rank identities. Aft: the line finder found no line. Fore: it traced the drawn light waterline (rows 7128 to
+7138, 3.5 ft), which v2 correctly rejected as lying on a measuring row. The drawn chine (the curve through the station
+knuckles) was not found on either half.
+
+Why so few cells: the frozen reader measured crossings mainly on the station sides above the chine; the shallow
+bottom gave few station crossings (aft: 3 crossings classed "shallow"; fore: none), so heights below the chine are
+mostly unmeasured. Sheer cells are missing because the chains above the deck line run along the log-rail and deck
+lines, or end. The identity check finds no error only because few stations have two scored points; the frozen chains
+are visibly misnamed (for example the chain named station 10 is the station 5/6 side below 6 ft, then a deck line),
+which gives the 2.31 m rabbet error and the 0.55 m station-8 sheer error.
+
+E. C. COLLIER is now spent as a holdout; any change made after looking at this result makes it a development case.
