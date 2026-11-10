@@ -1139,3 +1139,11 @@ numbers, not the anchor logic. Looser anchor rules were not tried, to avoid tuni
 candidates: station identity from the plan or profile view (station spacing along the baseline), or a vision-model
 label read offered as a suggestion for the user to confirm. Code: unmerged branch `fix/vbottom-label-names`
 (commits `60ceecb`, `c2694c5`), kept in a local clone only.
+
+### Frozen reader v1: real-sheet equivalence (2026-11-11)
+
+After the move to `benchmarks/frozen_readers/v1/` (code-review item 7), the frozen copy was checked on the real
+E. C. COLLIER sheet (HAER MD-77 sheet 2, protocol SHA-256 checked): `load_ink` gives an identical 9632 x 14460 ink
+array, and `measure_side` gives identical readings on both halves (frozen vs product module). The COLLIER holdout
+script, now importing the frozen copy, reproduces the published result exactly: 7 of 31 point cells, RMS 0.912 m,
+3 wrong cells, for both arms. The three frozen files are byte-identical to the pinned product files.
