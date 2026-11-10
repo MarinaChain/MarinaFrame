@@ -757,3 +757,30 @@ def test_the_capture_is_not_listed_in_the_package(tmp_path):
     assert all(entry["file"] != "viewer_capture.png" for entry in manifest["files"])
     with zipfile.ZipFile(next(report.parent.glob("*_package.zip"))) as archive:
         assert "viewer_capture.png" not in archive.namelist()
+
+
+def test_table_hydrostatics_preserves_inner_void_and_outer_beam():
+    # A 40 m prism has an 8 m wide section and a 2 m wide void from z=1 to z=4.
+    pieces = [
+        {"points_yz_m": [[0, 0], [4, 0], [4, 1], [0, 1]]},
+        {"points_yz_m": [[4, 1], [4, 4]], "inner_points_yz_m": [[1, 1], [1, 4]]},
+        {"points_yz_m": [[0, 4], [4, 4], [4, 5], [0, 5]]},
+    ]
+    sections = [{"x_m": x, "pieces": pieces} for x in (0, 40)]
+    h = table_hydrostatics(sections, 3, "test")
+    assert h.largest_section_area_m2 == pytest.approx(20, abs=0.03)
+    assert h.volume_m3 == pytest.approx(800, abs=1.2)
+    assert h.vcb_m == pytest.approx(1.4, abs=0.002)
+    assert h.waterplane_area_m2 == pytest.approx(240)
+    assert h.bmt_m == pytest.approx(2.1, abs=0.004)
+    assert h.waterline_beam_m == pytest.approx(8)
+    assert h.largest_breadth_below_waterline_m == pytest.approx(8)
+
+
+def test_table_hydrostatics_plain_box_analytic_moments():
+    sections = [box_section("s01", 0, "traced"), box_section("s02", 40, "traced")]
+    h = table_hydrostatics(sections, 3, "test")
+    assert h.largest_section_area_m2 == pytest.approx(24)
+    assert h.vcb_m == pytest.approx(1.5)
+    assert h.bmt_m == pytest.approx(8**2 / (12 * 3))
+    assert h.waterline_beam_m == pytest.approx(8)
