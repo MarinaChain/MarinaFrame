@@ -17,8 +17,8 @@ from benchmarks.balclutha import model_value as round4
 from benchmarks.balclutha import router_value as round6
 from benchmarks.bue_girl import holdout_value as bue_girl
 from benchmarks.thayer import holdout_value as thayer
-from vessel_reconstruction import body_plan_crossings as bpc
-from vessel_reconstruction import body_plan_reader as bpr
+from benchmarks.frozen_readers.v1 import body_plan_crossings as bpc
+from benchmarks.frozen_readers.v1 import body_plan_reader as bpr
 
 PROTOCOL = 'docs/holdouts/round13-bumble-bee.md'
 SHEET_SHA256 = 'd1c0830dff9648b8c6967ead14fcaff484a91021eece277fda62725a0002f991'

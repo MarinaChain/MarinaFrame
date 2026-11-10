@@ -53,3 +53,10 @@ def test_explicit_selection_yields_source_bound_outer_envelope(tmp_path):
     assert result['review']['engineering_approved'] is False
     assert verify_run(out)['exports_allowed']
     assert all(section['evidence']['contour_selection'] for section in result['sections'])
+    reference = result['diagnostics']['sections_artifact']
+    assert 'sections' not in result['diagnostics']
+    extracted = json.loads((out / reference['file']).read_text())
+    assert set(extracted['diagnostics']['sections']) == {'s0', 's1', 's2'}
+    with (out / reference['file']).open('a') as artifact:
+        artifact.write(' ')
+    assert not verify_run(out)['valid']

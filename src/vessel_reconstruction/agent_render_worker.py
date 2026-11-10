@@ -27,10 +27,10 @@ REGION_SOLID_VOLUME_TOLERANCE = 1e-6
 def _reimport(run: Path):
     from .provenance import digest_file, safe_relative_file
     from .run_record import verify_run
-    from .schema import load_bounded_json
+    from .schema import load_build_result
     if not verify_run(run).get("valid"):
         raise ValueError("The immutable engine run does not verify.")
-    record = load_bounded_json(run / "result.json", max_bytes=32 * 1024**2, max_nodes=600_000)
+    record = load_build_result(run / "result.json")
     if record["status"] != "review_required" or record["exports"].get("step_units") != "mm":
         raise ValueError("A verified millimetre STEP export is required.")
     path = safe_relative_file(run, record["exports"]["step"])

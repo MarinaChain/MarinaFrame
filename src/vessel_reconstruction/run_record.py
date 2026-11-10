@@ -15,7 +15,7 @@ from pathlib import Path
 
 from .draft import DRAFT_EXPORT_NAMES, check_draft
 from .provenance import digest_file, digest_object, safe_relative_file, snapshot_hash, sync_file, write_json
-from .schema import finite, load_bounded_json, SHA256
+from .schema import finite, load_bounded_json, load_build_result, SHA256
 
 SCHEMA_VERSION = "2.0"
 TERMINAL_STATES = {"review_required", "blocked", "failed", "interrupted", "cancelled"}
@@ -32,6 +32,8 @@ LIMITATION = ("Content hashes and derived checks detect changes against this loc
 
 
 def _read(root, name):
+    if name == "result.json":
+        return load_build_result(safe_relative_file(root, name))
     return load_bounded_json(safe_relative_file(root, name), max_bytes=MAX_RECORD_BYTES,
                              max_depth=40, max_nodes=3_000_000)
 
@@ -343,6 +345,18 @@ def _check_record(root: Path, result: dict, manifest: dict):
                 "assumptions", "metrics", "exports", "provenance", "timing_seconds", "terminal", "requested_exports"}
     _require(isinstance(result, dict) and required <= set(result) <= required | {"diagnostics", "draft", "export_results"}, "Incomplete or unsupported inference record schema.")
     _require(result["schema_version"] == SCHEMA_VERSION and result["record_kind"] == "immutable_inference_record", "Unsupported inference record.")
+    diagnostics = result.get("diagnostics", {})
+    _require(isinstance(diagnostics, dict), "Invalid diagnostics record.")
+    reference = diagnostics.get("sections_artifact")
+    if reference is not None:
+        entry = manifest["files"].get("extracted_sections.json", {})
+        _require("sections" not in diagnostics and reference == {"file": "extracted_sections.json",
+                 "sha256": entry.get("sha256")} and isinstance(entry.get("sha256"), str),
+                 "Section diagnostics artifact reference is invalid.")
+        extraction = _read(root, "extracted_sections.json")
+        _require(isinstance(extraction.get("diagnostics"), dict)
+                 and isinstance(extraction["diagnostics"].get("sections"), dict),
+                 "Section diagnostics are missing from the extraction artifact.")
     status = result["status"]
     _require(isinstance(status, str) and status in TERMINAL_STATES, "Nonterminal or unknown run state.")
     _require(result["terminal"] == {"state": status, "complete": True, "publication": "exclusive_staging_atomic_directory_v1"}, "Terminal state declaration is inconsistent.")

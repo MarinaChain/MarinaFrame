@@ -14,7 +14,7 @@ the scale alone (MEASURING_STEP_FT); they are not placed at any printed point he
 """
 from __future__ import annotations
 
-from vessel_reconstruction import body_plan_reader as bpr
+from benchmarks.frozen_readers.v1 import body_plan_reader as bpr
 
 PROTOCOL = 'docs/BODY_PLAN_CHINE.md (Holdout protocol amendment)'
 SHEET_SHA256 = '80e689130705ffcbd46716320865502a618a69cdd94d96191c3cafc3b22e0637'

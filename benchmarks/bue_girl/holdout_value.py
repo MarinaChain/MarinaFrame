@@ -15,8 +15,8 @@ from benchmarks.balclutha import crossing_value as round8
 from benchmarks.balclutha import model_value as round4
 from benchmarks.balclutha import router_value as round6
 from benchmarks.thayer import holdout_value as thayer
-from vessel_reconstruction import body_plan_crossings as bpc
-from vessel_reconstruction import body_plan_reader as bpr
+from benchmarks.frozen_readers.v1 import body_plan_crossings as bpc
+from benchmarks.frozen_readers.v1 import body_plan_reader as bpr
 
 PROTOCOL = 'docs/plans/2026-11-09-whole-vessel-scope.md 3.5.11'
 CENTRE_COLUMN = 3266.5
