@@ -576,3 +576,77 @@ Verification (2026-11-10): `PYTHONPATH=src:. .venv/bin/python -m pytest -q`: 173
 the macOS `sandbox-exec` worker exiting 71 inside this agent's own sandbox; they import nothing from this branch's
 files (the branch adds 5 files and edits only this document). `tests/test_body_plan_polyline.py`: 8 passed. Frozen
 reader hashes unchanged.
+
+### WHITE GULL and COLLEEN: calibration and scorer (written before any reader run on either sheet)
+
+Branch `feature/deadrise-holdouts`. Calibrations `benchmarks/white_gull/holdout_value.py` and
+`benchmarks/colleen/holdout_value.py`; shared scorer `benchmarks/deadrise_holdout/score.py`; tests
+`tests/test_deadrise_holdouts.py` (synthetic); overlay `scripts/deadrise_calibration_overlay.py` (writes
+`work/deadrise_holdouts/<boat>_calibration_overlay.png`, git-ignored). `body_plan_polyline.py` sha256 checked:
+`1f39f866...` as pinned above. **No reader has run on either sheet. No truth file was opened.** Sheet sha256 values
+match SOURCE.md.
+
+**Disclosure.** `table_crop*.png`, `truth*.json`, `preview_8x.png` and the PM scratchpad were not opened. To find the
+body plan, profile and scale bar, the calibrating agent viewed each whole sheet once at 1/24 scale. On WHITE GULL the
+table's numbers are not legible at that scale. On COLLEEN the table is larger and its row and column structure was
+visible; no value was read or used. A note line under it was glimpsed. Every constant comes from the scale bars,
+drawn lines, labels and the profile and half-breadth plans (sources in the file comments).
+
+| Constant | WHITE GULL (1/2" = 1'-0") | COLLEEN (3/4" = 1'-0") |
+|---|---|---|
+| Pixels per foot | 200.0: feet bar 0 / 50 ticks at 2014.0 / 12014.0; metres bar 199.95 (0.03 %); drawn "4'-0"" station spacing 800 px, "3'-5 5/16"" 689 px (200.1) | 300.0: feet bar 0 / 5 ticks at 6225.0 / 7725.0; drawn beam "9'-5 3/8"" 2833 px (299.9), "4'-0"" station spacing 1200 px, "2'-6 3/4"" 770 px (300.5) |
+| Centre column | 3779.5 (dash-dot ink 3778 to 3781; buttocks symmetric) | 2826.0 (dash-dot ink 2825 to 2827) |
+| Base row | 4146.0, slope 0 (drawn "Baseline", below the keel) | 3133.0, slope 0 (drawn "Baseline", **above** the keel; keel bottom about -2.06 ft) |
+| Measuring rows | drawn W2..W6 at 3746, 3546, 3345, 3145, 2945; W1 (not drawn in the body plan) at 3946 from the scale. Wk = k ft (profile labels, 200 px apart). Painted waterline (3658, 2.44 ft) is not a measuring row | no waterlines drawn; 6-inch grid from -2.0 to +3.5 ft (12 rows, 150 px), labels signed ft-in-eighths ('-1-6-0' ... '3-6-0') |
+| Sides | fore LEFT outer first (5, 4, 3, 2, 1); aft RIGHT (6, 7, 8, 9, 10) | aft LEFT outer first (7, 8, 9); fore RIGHT (6, 5, 4, 3, 2, 1) |
+| Grid columns | buttocks 1 to 6 ft both halves (3579.5 ... 2579.5; 3979.5 ... 4979.5) | none drawn |
+| Max offset | 1356 px (hull 1341.5 left / about 1320 right; labels from 1358.5) | 1465 px (hull 1443 right / 1364 left) |
+
+Sides, read twice (lesson: check the side assignment twice):
+
+- WHITE GULL. (1) Body-plan labels: "Sta.1" to "Sta.5" left with leaders (5 outermost), "Sta.6" to "Sta.10" right
+  (6 outermost). (2) Profile and plan: stem at the profile's right. No station numbers are printed there, so the plan's
+  outer line was compared: 670 px at the station line next to the stem against about 690 px for the innermost left
+  curve ("Sta.1"), and 1074 to 1102 px at the station line next to the transom against about 1020 to 1070 px for the
+  innermost right curve ("Sta.10"). Stations count from the bow; left = forebody. Both readings agree.
+- COLLEEN. (1) Labels: "1" to "6" along the right sheer (6 outermost), "7", "8", "9" on the left from the outside in.
+  (2) The profile is labelled "Sta.9" (transom end) to "Sta.1" (stem). Half-breadth-plan chine at stations 7, 8, 9 =
+  1311 / 1289.5 / 1262.5 px against the left curves near the chine at 1311.5 / 1287.5 / 1263.0 px. Station 1's sheer
+  (685 px) is the innermost right curve. Left = aftbody. Both readings agree.
+
+Known limits recorded before the run (not fixed; the protocol forbids tuning):
+
+- **Transom outlines.** Each sheet has a heavy, unlabelled curve inside the last aft station, with a heavy horizontal
+  lower edge at chine height (WHITE GULL right half, row 3771; COLLEEN left half, row 3239). It is not a station and is
+  not listed. A reader that counts it as a station may decline the half (more curves than stations) or misname it.
+- **COLLEEN fore nesting.** Station 6 is outside station 5 at the chine (1297 vs 1238 px in the plan), but station 5
+  is wider at the sheer (1439 vs 1425 px). The two curves may cross near the top, which can break rank naming there.
+- **Labels inside the reach.** WHITE GULL: the left "Chine" label lies across the W2 row (1220 to 1410 px out).
+  COLLEEN: left "7" (2.5 ft row), both "Chine" labels (-0.5 ft row), right "4" (3.0 ft row) and right "2" (3.5 ft row,
+  above the hull) are inside 1465 px. A single reach serves both halves, so these cannot be excluded.
+- **COLLEEN grid.** Waterline truth cells are scored only on measuring rows. A printed waterline height that is not on
+  the 6-inch grid makes the truth loader stop. Then the PM must decide; a grid is never added after a run.
+- WHITE GULL draws two sheer lines ("Actual Sheer" and "Measured Sheer"). The polyline sheer is the top of the traced
+  side, as on COLLIER.
+
+Scorer (`benchmarks/deadrise_holdout/score.py`, exactly the committed protocol):
+
+- **Waterline cells**: printed (station, waterline) half-breadths. Arm values: frozen `table_from_identities`, v2
+  `sheet_table`, polyline `waterline_table` on read halves with the frozen table on declined halves (product rule).
+  Scored with the waterline harness scorer (`balclutha.model_value.score`, identity check with 3 shared waterlines)
+  on the printed rows only, plus wrong cells (> 0.15 m) and missing / extra keys. Extra = a reader value where the
+  printed cell is blank.
+- **Point cells**: printed (station, SHEER / CHINE / RABBET) height and half-breadth pairs, COLLIER point-scorer
+  rules. Frozen and v2 samples = the station's crossings on consecutive measuring rows; polyline = its traced points.
+  No extrapolation. Identity check with 2 shared points. Separate chine-only, sheer-only and rabbet-only lines.
+- **Truth file** (`work/holdout/<boat>/truth.json`), proposed format: `{"units": "ft-in-eighths", "stations": [...],
+  "waterlines": {label: [value or null per station]}, "heights": {point: [...]}, "half_breadths": {point: [...]},
+  "unsure": [...]}`. Waterline labels are the calibration's (`W1`..`W6`; COLLEEN's grid labels) or a printed height
+  that matches a measuring row within 0.02 ft. Heights below the base line take a leading '-'. Half-breadths use the
+  harness parser (a leading dash is a separator). The loader refuses values outside 0 to 4 m (half-breadth) or -1.5 to
+  4 m (height). It stops unless the file's sha256 equals `TRUTH_SHA256` in the calibration. That value is `None` until
+  the PM records it, and then nothing loads.
+- Gates per kind of cell (`gates`): as the protocol, with the by-eye knuckle check recorded separately.
+
+**State: steps 1 to 3 done; stopped. No reader has been run on either sheet. Waiting for the PM's "run" and the two
+truth sha256 values.**
