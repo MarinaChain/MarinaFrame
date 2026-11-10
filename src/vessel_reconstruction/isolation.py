@@ -284,6 +284,15 @@ def _output_bytes(output: Path, maximum: int) -> int:
     return total
 
 
+def limit_stop_message(limit_name: str, progress_value: dict | None, fallback_stage: str) -> str:
+    """Plain stop message naming the limit, the stage and, when known, the progress."""
+    stage = progress_value['stage'] if progress_value else fallback_stage
+    if progress_value and progress_value['total']:
+        unit = 'faces' if stage == 'Making the mesh' else progress_value['unit']
+        return f"Stopped by the {limit_name} while {stage}, {progress_value['part']} of {progress_value['total']} {unit}."
+    return f'Stopped by the {limit_name} while {stage}.'
+
+
 def supervise_process(command: list[str], *, limits: WorkerLimits = DEFAULT_LIMITS,
                       cancel_event: threading.Event | None = None,
                       stop_event: threading.Event | None = None,
@@ -386,10 +395,7 @@ def supervise_process(command: list[str], *, limits: WorkerLimits = DEFAULT_LIMI
     if state == 'resource_limited':
         value = progress.read_child_progress(child_environment.get('MARINAFRAME_PROGRESS_PATH'),
                                              child_environment.get('MARINAFRAME_PROGRESS_REQUEST')) or value
-        stage = value['stage'] if value else watchdog.stage
-        unit = 'faces' if stage == 'Making the mesh' else (value['unit'] if value else 'parts')
-        detail = f", {value['part']} of {value['total']} {unit}" if value and value['total'] else ''
-        outcome['error'] = f'Stopped by the {limit_name} while {stage}{detail}.'
+        outcome['error'] = limit_stop_message(limit_name, value, watchdog.stage)
     if state == 'sandbox_safety_cap':
         outcome.update(error_code='sandbox_worker_absolute_safety_cap',
                        error=f'The sandboxed CAD worker reached the four-hour security limit (240 min) at {watchdog.stage}.')
@@ -456,10 +462,7 @@ def run_isolated(spec_path: str | Path, output_dir: str | Path, *, export_cad: b
         if limit_name:
             outcome['state'] = 'resource_limited'
             value = progress.read_child_progress(env.get('MARINAFRAME_PROGRESS_PATH'), env.get('MARINAFRAME_PROGRESS_REQUEST'))
-            stage = value['stage'] if value else 'CAD work'
-            unit = 'faces' if stage == 'Making the mesh' else (value['unit'] if value else 'parts')
-            detail = f", {value['part']} of {value['total']} {unit}" if value and value['total'] else ''
-            outcome['error'] = f'Stopped by the {limit_name} while {stage}{detail}.'
+            outcome['error'] = limit_stop_message(limit_name, value, 'CAD work')
         outcome['result'] = None
         worker_state = outcome['state']
         if worker_state == 'exited' and outcome['exit_code'] != 0:
