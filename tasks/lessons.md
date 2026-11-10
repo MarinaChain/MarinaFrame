@@ -157,3 +157,15 @@
 - **Trigger:** Cross-view outlier replay wrote a 5.2 MB derived JSON file under `outputs/`; the user asked to move it to ignored `work/` before committing.
 - **Rule:** Write per-run derived replay JSON and logs to git-ignored `work/`, including the script's default output path. Commit the replay code, tests and concise result tables, not the per-run data.
 - **Why:** Reproducible measurement output is not a source deliverable and need not enlarge repository history.
+
+### Keep inferred fairing stations outside immutable observed-station records
+- **Date:** 2026-11-10
+- **Trigger:** A three-view fitter could build a valid STEP with new half stations, but inserting them inside `pipeline.reconstruct` would violate the unchanged verifier's exact submitted/observed station-id contract.
+- **Rule:** Treat direct CAD validity and immutable run publication as separate checks. Keep new half-station fitting/export explicit until an earlier input-materialization stage declares those stations. Do not weaken the verifier or rewrite submitted station evidence to make the new ids pass.
+- **Why:** A valid solid is not sufficient evidence that an application run can be published.
+
+### Freeze reference scale in paired fit trials
+- **Date:** 2026-11-10
+- **Trigger:** A whole-station injection increased the legacy fairer's measured half-beam, changing its Huber scale and movement tolerance inside a supposedly fixed-scale trial.
+- **Rule:** Pass the unperturbed half-beam explicitly to both paired fits, including station-only baselines and missing-view fallbacks. Recompute affected trial measurements; keep the fit/check choice frozen.
+- **Why:** Re-estimating a scale from perturbed evidence confounds error response with a parameter change.
