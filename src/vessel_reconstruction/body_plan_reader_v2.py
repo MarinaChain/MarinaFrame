@@ -49,15 +49,6 @@ PARALLEL_DEGREES = 10.0
 # of a drawn waterline row.
 WATERLINE_BAND_WIDTHS = 2.0
 WATERLINE_SHARE = 0.5
-# A station curve has a knuckle at the line when its direction changes by this many degrees over
-# the short windows on either side of the meeting (a smooth bilge changes far less).
-KNUCKLE_DEGREES = 20.0
-# Knuckle fit: skip this many rows next to the meeting, fit this many rows beyond; both are
-# shares of a waterline spacing (about 9 px and 36 px on a 300 px spacing).
-KNUCKLE_SKIP_SHARE = 0.03
-KNUCKLE_WINDOW_SHARE = 0.12
-# At least this many curves must show a knuckle for a side to be hard-chine by itself.
-MIN_KNUCKLE_CURVES = 2
 
 
 @dataclass
@@ -109,36 +100,6 @@ def lies_on_waterline(line: chine_line.ChineLine, sheet: bpr.SheetLayout) -> boo
     band = WATERLINE_BAND_WIDTHS * line.thickness_px + 3.0
     distance = np.min(np.abs(line.points[:, 0][:, None] - rows[None, :]), axis=1)
     return float(np.mean(distance <= band)) > WATERLINE_SHARE
-
-
-def knuckle_degrees(chain: bpr.Chain, meeting: chine_line.Meeting, spacing: float) -> float | None:
-    """Direction change (degrees) of a curve across its meeting with the line, or None.
-
-    Only a curve whose ink crosses the line is measured; a meeting reached by extrapolation has
-    no ink on the far side to fit.
-    """
-    if meeting.extrapolated:
-        return None
-    path = np.asarray(chain.path, dtype=float)
-    nearest = int(np.argmin(np.hypot(path[:, 0] - meeting.row, path[:, 1] - meeting.column)))
-    skip = KNUCKLE_SKIP_SHARE * spacing
-    window = KNUCKLE_WINDOW_SHARE * spacing
-    directions = []
-    for sign in (-1, 1):
-        distance = sign * (np.arange(len(path)) - nearest)
-        rows = np.abs(path[:, 0] - path[nearest, 0])
-        part = path[(distance > 0) & (rows >= skip) & (rows <= skip + window)]
-        if len(part) < 5 or np.ptp(part[:, 0]) < window / 2:
-            return None
-        slope = np.polyfit(part[:, 0], part[:, 1], 1)[0]  # columns per row
-        directions.append(np.degrees(np.arctan(slope)))
-    return float(abs(directions[0] - directions[1]))
-
-
-def count_knuckles(line: chine_line.ChineLine, reading: bpr.SideReading, spacing: float) -> int:
-    meetings = chine_line.station_meetings(line.points, reading, chine_line.EXTRAPOLATION_SPACINGS * spacing)
-    turns = (knuckle_degrees(reading.chains[m.chain], m, spacing) for m in meetings)
-    return sum(1 for turn in turns if turn is not None and turn >= KNUCKLE_DEGREES)
 
 
 # ---------------------------------------------------------------- upper pieces
@@ -316,21 +277,15 @@ def read_side(ink: np.ndarray, sheet: bpr.SheetLayout, reading: bpr.SideReading,
 
 def read_sheet(ink: np.ndarray, sheet: bpr.SheetLayout,
                readings: dict[str, bpr.SideReading] | None = None) -> dict[str, SideReadingV2]:
-    """Both halves of a sheet. A half takes the chine reading when its own chine line passes the
-    checks, or when the other half passes them (one drawing, one chine)."""
+    """Both halves of a sheet; a half takes the chine reading when its traced line is not a waterline."""
     if readings is None:
         readings = {side.name: bpr.measure_side(ink, sheet, side) for side in sheet.sides}
     lines = {}
-    own_evidence = {}
     for name, reading in readings.items():
         stations = [c for found in reading.stations.values() for c in found]
         line = chine_line.find_chine_line(ink, sheet, reading) if stations else None
-        if line is not None and lies_on_waterline(line, sheet):
-            line = None
-        lines[name] = line
-        own_evidence[name] = (line is not None
-                              and count_knuckles(line, reading, reading.waterline_spacing_px) >= MIN_KNUCKLE_CURVES)
-    hard_chine = any(own_evidence.values())
+        lines[name] = None if line is not None and lies_on_waterline(line, sheet) else line
+    hard_chine = any(line is not None for line in lines.values())
     return {name: read_side(ink, sheet, reading, lines[name], hard_chine and lines[name] is not None)
             for name, reading in readings.items()}
 
