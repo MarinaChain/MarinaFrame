@@ -5,6 +5,7 @@ pub mod controller;
 pub mod models;
 pub mod provider;
 pub mod store;
+pub mod supervised;
 pub mod table_reading;
 pub mod types;
 pub mod util;

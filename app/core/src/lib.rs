@@ -31,6 +31,7 @@ pub mod storage;
 pub mod types;
 pub mod view;
 pub mod worker_python;
+pub mod worker_run;
 
 pub use backend::Backend;
 pub use error::{AppError, AppResult};

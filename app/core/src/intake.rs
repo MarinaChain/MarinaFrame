@@ -12,10 +12,11 @@
 //! The intake sets live in `<runs folder>/intake-sets/<intake_id>/`. That folder
 //! has no task state, so the run list skips it.
 use crate::error::{AppError, AppResult};
+use crate::worker_run::{Supervision, WorkerWords, UNCANCELLABLE};
+use marinaframe_control::supervised::WorkerCommand;
 use marinaframe_control::util;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 /// Folder under the runs folder that holds intake sets.
 pub const INTAKE_SETS: &str = "intake-sets";
@@ -130,22 +131,35 @@ pub struct Worker<'a> {
     pub source: Option<&'a Path>,
 }
 
+/// Intake with no progress report for this long is stopped. The worker reports each page
+/// it reads and each model question it asks; there is no limit on the total time. One
+/// Claude CLI question may take up to the worker's `calibration_reading.TIMEOUT_S`
+/// (600 s) with no report, so the period is that plus five minutes.
+pub const INTAKE_STALL_PERIOD: std::time::Duration = std::time::Duration::from_secs(600 + 300);
+/// How intake errors are named.
+const INTAKE_WORDS: WorkerWords = WorkerWords {
+    code: "intake",
+    name: "Reading the drawings",
+    after_stop: "",
+};
+/// What the Claude CLI (subscription) needs to find its login, for `--vision`.
+/// None of these holds a key; model keys are never passed to the intake worker.
+const MODEL_CLI_ENVIRONMENT: [&str; 4] = ["HOME", "USER", "LOGNAME", "TMPDIR"];
+
 impl Worker<'_> {
     /// Run `python -m vessel_reconstruction.intake <args>` and parse its JSON output.
     pub(crate) fn call(&self, args: &[&std::ffi::OsStr]) -> AppResult<serde_json::Value> {
-        if self.python.is_empty() || !Path::new(self.python).is_file() {
-            return Err(AppError::from_code("worker_python_missing"));
-        }
-        let mut command = Command::new(self.python);
-        command
-            .args(["-m", "vessel_reconstruction.intake"])
-            .args(args);
-        if let Some(source) = self.source {
-            command.env("PYTHONPATH", source);
-        }
-        let output = command
-            .output()
-            .map_err(|_| AppError::new("intake_worker", "The drawing reader could not start."))?;
+        let mut command = self.module_command("vessel_reconstruction.intake")?;
+        command.args(args);
+        self.intake_answer(&mut command, &UNCANCELLABLE)
+    }
+
+    fn intake_answer(
+        &self,
+        command: &mut WorkerCommand,
+        supervision: &Supervision,
+    ) -> AppResult<serde_json::Value> {
+        let output = self.run_supervised(command, supervision, &INTAKE_WORDS)?;
         let value: serde_json::Value = serde_json::from_slice(&output.stdout).map_err(|_| {
             AppError::new(
                 "intake_worker",
@@ -211,11 +225,14 @@ fn set_folder(runs_folder: &Path, intake_id: &str) -> AppResult<PathBuf> {
 }
 
 /// Render and survey the dropped files. Never refuses a readable page.
+/// The worker reports each page it reads; `supervision` stops it on Cancel or
+/// when no page is read for its stall period. There is no wall-clock limit.
 pub fn prepare_intake(
     runs_folder: &Path,
     worker: &Worker,
     files: &[String],
     ai_active: bool,
+    supervision: &Supervision,
 ) -> AppResult<IntakePreview> {
     let paths = check_files(files)?;
     let intake_id = format!("intake-{}", util::now_ms());
@@ -223,14 +240,17 @@ pub fn prepare_intake(
     let prepare = folder.join("prepare");
     std::fs::create_dir_all(&prepare)
         .map_err(|_| AppError::new("runs_folder", "The runs folder could not be written."))?;
-    let mut args: Vec<&std::ffi::OsStr> =
-        vec!["prepare".as_ref(), "--out".as_ref(), prepare.as_os_str()];
+    let mut command = worker.module_command("vessel_reconstruction.intake")?;
+    command.arg("prepare").arg("--out").arg(&prepare);
     if ai_active {
         // Sheets whose type the code cannot settle are asked of the model (one small question each).
-        args.push("--vision".as_ref());
+        command.arg("--vision");
+        for key in MODEL_CLI_ENVIRONMENT {
+            command.pass_through(key);
+        }
     }
-    args.extend(paths.iter().map(|p| p.as_os_str()));
-    let mut value = worker.call(&args)?;
+    command.args(&paths);
+    let mut value = worker.intake_answer(&mut command, supervision)?;
     value["intake_id"] = intake_id.clone().into();
     value["ai_active"] = ai_active.into();
     let mut preview: IntakePreview = serde_json::from_value(value).map_err(|_| {
@@ -461,8 +481,14 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let png = tmp.path().join("a.png");
         std::fs::write(&png, "x").unwrap();
-        let error =
-            prepare_intake(tmp.path(), &worker, &[png.to_string_lossy().into()], true).unwrap_err();
+        let error = prepare_intake(
+            tmp.path(),
+            &worker,
+            &[png.to_string_lossy().into()],
+            true,
+            &UNCANCELLABLE,
+        )
+        .unwrap_err();
         assert_eq!(error.code, "worker_python_missing");
     }
 }

@@ -115,6 +115,8 @@ def render(run: Path, out: Path) -> dict:
     from PIL import Image
     from .agent_render_worker import _cut_edges, _reimport
     from .provenance import digest_file, safe_relative_file, write_json
+    from . import progress
+    progress.report("Reading the STEP model")
     shape, record, audit = _reimport(run)
     regions = "region_loft" in record["metrics"]
     source_entry = record["sources"][0]
@@ -125,7 +127,9 @@ def render(run: Path, out: Path) -> dict:
     with Image.open(source_path) as opened:
         source = opened.convert("RGB")
     images = []
-    for index, section in enumerate(record["sections"]):
+    sections = record["sections"]
+    for index, section in enumerate(sections):
+        progress.report("Rendering the review images", index, len(sections), unit="section")
         if "points_yz_m" not in section:
             continue  # multi-piece sections have no single drawn line to compare
         x_m = float(section["x_m"])

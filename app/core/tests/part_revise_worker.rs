@@ -7,7 +7,7 @@ mod support;
 
 use marinaframe_app_core::actions::ActionRegistry;
 use marinaframe_app_core::intake::Worker;
-use marinaframe_app_core::part_revise::{self, Model, REVISE_TIMEOUT};
+use marinaframe_app_core::part_revise::{self, Model, REVISE_STALL_PERIOD};
 use marinaframe_app_core::{parts, AppPaths};
 use serde_json::json;
 use std::path::{Path, PathBuf};
@@ -113,7 +113,7 @@ fn re_run_a_marked_part_then_undo_and_keep() {
         "wheelhouse",
         &worker,
         &model,
-        REVISE_TIMEOUT,
+        REVISE_STALL_PERIOD,
     )
     .unwrap();
     assert_eq!(
@@ -160,7 +160,7 @@ fn re_run_a_marked_part_then_undo_and_keep() {
         "wheelhouse",
         &worker,
         &model,
-        REVISE_TIMEOUT,
+        REVISE_STALL_PERIOD,
     )
     .unwrap();
     assert_eq!(

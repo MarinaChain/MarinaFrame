@@ -9,11 +9,13 @@ use crate::live::{HullSections, LiveSteps, LiveStore};
 use crate::storage::{self, AppPaths};
 use crate::types::*;
 use crate::view::{self, ViewContext};
+use crate::worker_run::{Supervision, UNCANCELLABLE};
 use crate::{artifact, events, files, intake, model_keys, part_revise, parts, sample, signoff};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use marinaframe_control::util;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 pub struct Backend {
@@ -27,6 +29,8 @@ pub struct Backend {
     batch: BatchQueue,
     /// One pump at a time, so two callers cannot both see the same free slots.
     pump_lock: std::sync::Mutex<()>,
+    /// The cancel flag of the intake the intake view waits for (`cancel_intake`).
+    view_intake: std::sync::Mutex<Option<Arc<AtomicBool>>>,
 }
 
 impl Backend {
@@ -44,6 +48,7 @@ impl Backend {
         Self {
             batch,
             pump_lock: std::sync::Mutex::new(()),
+            view_intake: std::sync::Mutex::new(None),
             paths,
             registry: ActionRegistry::default(),
             binary_sha256,
@@ -120,8 +125,8 @@ impl Backend {
 
     /// Re-run one whole-vessel part from its saved mark note (the model reads crops of the
     /// run's drawings and the note; only that part is rebuilt). Needs AI drafting on and a
-    /// model key; refused while another action runs on the run. Takes up to
-    /// `part_revise::REVISE_TIMEOUT`.
+    /// model key; refused while another action runs on the run. Stopped when it reports no
+    /// progress for `part_revise::REVISE_STALL_PERIOD`.
     pub fn revise_part(&self, task: &str, component_id: &str) -> AppResult<ComponentView> {
         let path = self.task_path(task)?;
         let settings = self.run_settings();
@@ -145,7 +150,7 @@ impl Backend {
             component_id,
             &self.intake_worker(&settings),
             &part_revise::Model::Key(key),
-            part_revise::REVISE_TIMEOUT,
+            part_revise::REVISE_STALL_PERIOD,
         )?;
         // The part changed: a sign-off of the parts no longer holds.
         signoff::withdraw(&self.paths, &path)?;
@@ -247,14 +252,49 @@ impl Backend {
         }
     }
 
-    /// Read a dropped drawing set: pages, thumbnails, proposed view labels, warnings.
+    /// Read a dropped drawing set for the intake view: pages, thumbnails, proposed view
+    /// labels, warnings. `cancel_intake` stops it; a newer set for the view stops it too.
     pub fn prepare_intake(&self, files: &[String]) -> AppResult<intake::IntakePreview> {
+        let cancel = Arc::new(AtomicBool::new(false));
+        let older = self
+            .view_intake
+            .lock()
+            .map_err(|_| AppError::from_code("internal"))?
+            .replace(cancel.clone());
+        if let Some(older) = older {
+            older.store(true, Ordering::SeqCst);
+        }
+        let cancelled = || cancel.load(Ordering::SeqCst);
+        self.prepare_intake_with(
+            files,
+            &Supervision {
+                cancelled: &cancelled,
+                stall_period: intake::INTAKE_STALL_PERIOD,
+            },
+        )
+    }
+
+    /// Stop the intake the intake view waits for. Nothing happens when none runs.
+    pub fn cancel_intake(&self) {
+        if let Ok(current) = self.view_intake.lock() {
+            if let Some(cancel) = current.as_ref() {
+                cancel.store(true, Ordering::SeqCst);
+            }
+        }
+    }
+
+    fn prepare_intake_with(
+        &self,
+        files: &[String],
+        supervision: &Supervision,
+    ) -> AppResult<intake::IntakePreview> {
         let settings = self.run_settings();
         intake::prepare_intake(
             Path::new(&settings.runs_folder),
             &self.intake_worker(&settings),
             files,
             self.ai_status().active,
+            supervision,
         )
     }
 
@@ -297,7 +337,7 @@ impl Backend {
             &self.intake_worker(&settings),
             revision,
             outputs,
-            export::EXPORT_TIMEOUT,
+            export::EXPORT_STALL_PERIOD,
             capture.as_deref(),
         )
     }
@@ -450,7 +490,8 @@ impl Backend {
 
     /// Read one queued set and start its run with the proposed labels and its name.
     fn start_queued(&self, set: &batch::QueuedSet) -> AppResult<String> {
-        let mut preview = self.prepare_intake(&set.files)?;
+        // Queued sets are not the intake view's: its Cancel does not reach them.
+        let mut preview = self.prepare_intake_with(&set.files, &UNCANCELLABLE)?;
         if preview.particulars.vessel_name.trim().is_empty() {
             preview.particulars.vessel_name = set.name.clone();
         }

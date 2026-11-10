@@ -121,6 +121,16 @@ async fn prepare_intake(
     run(backend, move |b| b.prepare_intake(&files)).await
 }
 
+/// Stop the drawing set the intake view is reading (its Cancel button).
+#[tauri::command(rename_all = "snake_case")]
+async fn cancel_intake(backend: Shared<'_>) -> Result<Ok_, AppError> {
+    run(backend, |b| {
+        b.cancel_intake();
+        Ok(OK)
+    })
+    .await
+}
+
 /// Write the spec of the edited preview and start its run with the current AI setting.
 #[tauri::command(rename_all = "snake_case")]
 async fn start_intake_run(
@@ -486,6 +496,7 @@ fn main() {
             start_sample_run,
             replace_sheet,
             prepare_intake,
+            cancel_intake,
             start_intake_run,
             export_run,
             list_exports,

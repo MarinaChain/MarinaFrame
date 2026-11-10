@@ -40,6 +40,7 @@ import math
 import os
 import re
 import shutil
+import signal
 import sys
 import time
 import urllib.request
@@ -477,6 +478,22 @@ def updated_entry(old: dict, built: dict, note: str, revision: int, receipts: li
     return entry
 
 
+def _report_progress(stage: str) -> None:
+    """Tell the app's progress watchdog that the re-run moved on (no-op outside a supervised run)."""
+    from . import progress
+
+    try:
+        progress.report(stage)
+    except (OSError, ValueError, KeyError):
+        pass  # Telemetry failures must not fail a re-run.
+
+
+def _stop_on_terminate(signum, _frame):
+    """The app stops this worker with SIGTERM. Raising (not dying at once) lets the sandbox
+    supervisor stop the CAD worker's own process group before this process exits."""
+    raise SystemExit(128 + signum)
+
+
 def revise_part(task: Path, part_id: str, note: str, *, call=None, pack: dict | None = None) -> dict:
     """Rebuild one part from a mark; return the new entry. ``call`` is the model client."""
     from .ship_cad import triage_program
@@ -502,6 +519,7 @@ def revise_part(task: Path, part_id: str, note: str, *, call=None, pack: dict | 
     messages = revision_prompt(old, note, pack)
     receipts, built, problem = [], None, None
     for turn in range(1, MAX_TURNS + 1):
+        _report_progress(f'Asking the model (attempt {turn})')
         text, receipt = call(messages, work / 'receipts', SETTINGS)
         receipts.append({k: receipt.get(k) for k in ('request_id', 'state', 'usage', 'seconds')})
         (work / f'reply-{turn}.txt').write_text(text)
@@ -513,6 +531,7 @@ def revise_part(task: Path, part_id: str, note: str, *, call=None, pack: dict | 
             program['components'] = [c for c in program.get('components', []) if c.get('id') == part_id][:1]
             triage_program(program)
             (work / f'program-{turn}.json').write_text(json.dumps(program, indent=2) + '\n')
+            _report_progress(f'Building the part (attempt {turn})')
             execution = run_worker(program, {}, work / f'task-{turn}', detail=load_detail(task))
             if execution.get('state') in ('sandbox_safety_cap', 'stalled'):
                 problem = execution['error']
@@ -594,6 +613,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--replies', type=Path,
                         help='JSON list of scripted model replies (tests only; no model request is made)')
     args = parser.parse_args(argv)
+    signal.signal(signal.SIGTERM, _stop_on_terminate)
     try:
         if args.keep:
             entry = keep_revision(args.task, args.part)
