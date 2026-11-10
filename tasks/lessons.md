@@ -157,3 +157,15 @@
 - **Trigger:** Cross-view outlier replay wrote a 5.2 MB derived JSON file under `outputs/`; the user asked to move it to ignored `work/` before committing.
 - **Rule:** Write per-run derived replay JSON and logs to git-ignored `work/`, including the script's default output path. Commit the replay code, tests and concise result tables, not the per-run data.
 - **Why:** Reproducible measurement output is not a source deliverable and need not enlarge repository history.
+
+### Keep the booklet check as secondary evidence
+- **Date:** 2026-11-10
+- **Trigger:** The PM set the accuracy rule while reviewing the booklet-check feature, after a competitor report criticised a hydrostatics-only accuracy claim.
+- **Rule:** State in the booklet documentation and PDF section that integrated quantities (displacement, LCB, KMT) can agree while local shape is wrong. Keep section-shape error at withheld stations as the primary accuracy number. A booklet match cannot replace a missing shape-error measurement.
+- **Why:** Integrated hydrostatics can hide local shape errors that cancel along the hull.
+
+### Check IGES side coverage before reflecting a hull
+- **Date:** 2026-11-10
+- **Trigger:** The first bounded DSYHS check doubled SYSSER43 volume and waterplane area because that IGES already contained both sides, unlike most files in the archive.
+- **Rule:** Inspect side coverage before reflection. A sign crossing at y=0 can be a spline overshoot, not a full hull. For the symmetric DSYHS canoe bodies, require equal port/starboard extents within mesh tolerance before preserving a full hull once. Test half hulls, overshoots and full hulls. Use absolute mesh deflection and a bounded CAD process for imported geometry.
+- **Why:** One archive can mix half hulls and full hulls; a file-name convention does not establish geometry coverage.

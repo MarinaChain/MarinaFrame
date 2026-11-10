@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 import sys
 
 from ..tanks import load_tanks
@@ -37,12 +38,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--structure", default=None,
                         help="folder with steel tables (*_steel_members.csv, *_steel_totals.csv) and OCX "
                              "files (*.3docx): copied into the package")
+    parser.add_argument("--booklet", type=Path, default=None,
+                        help="printed hydrostatics JSON (docs/BOOKLET_CHECK.md): adds the booklet CSV, "
+                             "PDF section and accuracy summary")
     args = parser.parse_args(argv)
     tanks = load_tanks(args.tanks) if args.tanks else None
     try:
         manifest = export_draft(args.task, args.revision, args.out, draft_m=args.draft_m,
                                 waterline_intervals=args.waterlines, vessel=args.vessel, tanks=tanks,
-                                structure_dir=args.structure)
+                                structure_dir=args.structure, booklet=args.booklet)
     except ExportError as error:
         print(json.dumps({"error": str(error)}), file=sys.stderr)
         return 2

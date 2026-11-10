@@ -302,7 +302,7 @@ In the app (`app/core/src/export.rs`, `js/export.js`):
   says approved or verified.
 
 Command: `python -m vessel_reconstruction.exports --task DIR --revision rN --out DIR
-[--draft-m T] [--waterlines N] [--vessel NAME]`. It prints the manifest as JSON; exit code 2 (and
+[--draft-m T] [--waterlines N] [--vessel NAME] [--booklet FILE.json]`. It prints the manifest as JSON; exit code 2 (and
 `{"error": ...}` on stderr) when the revision has no valid build. Python: `export_draft(task,
 "r3", out)`.
 
@@ -326,6 +326,15 @@ Command: `python -m vessel_reconstruction.exports --task DIR --revision rN --out
   the mesh volume is checked against the build volume (warning above 1 %). Without an STL: the
   station curves by the trapezoid rule, with a warning. Not computed: `hydrostatics: null` with
   `not_computed_reason`.
+- Optional `_booklet_check.csv`: compare the built hull at every printed even-keel
+  draft in a supplied `--booklet` JSON file (`export_draft(..., booklet=Path(...))`).
+  Volume, displacement, LCB, VCB, KMT, Awp, LCF, TPC and hydrostatic MCT where
+  available; explicit units, density, datums and trim. Each quantity cell has an
+  error, tolerance and `within tolerance` / `outside tolerance` / `not comparable`
+  label. Out-of-range drafts, trim and missing values keep reasons. The PDF adds
+  a short Booklet check section; the package includes the CSV. The hull accuracy
+  line can cite the count of comparable cells within tolerance. See
+  `docs/BOOKLET_CHECK.md` for the input contract, starting limits and engine checks.
 - `_report.pdf` (matplotlib PDF backend; matplotlib is a locked dependency): page 1 summary
   (vessel, revision, run, status and review state, particulars, hydrostatics, per-section source
   in plain words and ink fit max/RMS/% B/2/near, open guesses, warnings; long lists continue on

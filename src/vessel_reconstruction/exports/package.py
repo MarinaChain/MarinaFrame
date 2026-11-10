@@ -34,12 +34,13 @@ from .. import __version__
 # The module, not its names: ``structure.ocx`` imports ``tanks``, which imports this package.
 from ..structure import ocx
 from ..provenance import digest_file
+from ..booklet_check import Booklet, compare_booklet, load_booklet, write_comparison_csv
 from .csv_safety import safe_text_cell
 from .hydrostatics import Hydrostatics, design_draft, mesh_hydrostatics, read_stl, table_hydrostatics
 from .offsets import DEFAULT_WATERLINE_INTERVALS, offsets_table, write_offsets_csv
 from ..accuracy_summary import facts_from_build as accuracy_facts_from_build
 from .report import FOOTER, ReportFacts, write_report
-from .source import DraftBuild, load_build
+from .source import DraftBuild, ExportError, load_build
 from .tank_tables import write_tank_tables
 
 STAMP = "Draft hull model from MarinaFrame. Not approved for construction."
@@ -179,14 +180,27 @@ def write_zip(files: list[Path], path: Path) -> None:
 
 def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float | None = None,
                  waterline_intervals: int = DEFAULT_WATERLINE_INTERVALS, vessel: str | None = None,
-                 tanks: list | None = None, structure_dir: Path | None = None) -> dict:
+                 tanks: list | None = None, structure_dir: Path | None = None,
+                 booklet: Booklet | Path | str | None = None) -> dict:
     """Write all exports of one revision into ``out_dir``; return the manifest.
 
     ``tanks`` (``vessel_reconstruction.tanks.Tank`` list) adds the capacity plan, the sounding tables and
     the tanks as OCX compartments; ``structure_dir`` adds the steel tables and OCX files found in that
-    folder.
+    folder. ``booklet`` adds printed hydrostatic comparisons to the CSV, PDF and accuracy line.
     """
     build = load_build(Path(task_dir), revision, vessel)
+    booklet_check = None
+    if booklet is not None:
+        try:
+            if isinstance(booklet, (Path, str)):
+                booklet = load_booklet(Path(booklet))
+            if not isinstance(booklet, Booklet):
+                raise ValueError("Supply a parsed Booklet or JSON file path")
+            geometry = ({"triangles": read_stl(build.stl_path, build.stl_units)} if build.stl_path is not None
+                        else {"sections": build.sections})
+            booklet_check = compare_booklet(booklet, **geometry)
+        except (ValueError, OSError) as error:
+            raise ExportError(f"Cannot check booklet: {error}") from error
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = build.file_stem
@@ -202,6 +216,11 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
     write_hydrostatics(hydrostatics, error, build, hydro_json, hydro_csv)
     entries += [(hydro_json, "hydrostatics", {}), (hydro_csv, "hydrostatics_table", {})]
 
+    if booklet_check is not None:
+        booklet_csv = out_dir / f"{stem}_booklet_check.csv"
+        write_comparison_csv(booklet_check, booklet_csv, stamp_lines(build))
+        entries.append((booklet_csv, "booklet_check", {}))
+
     capacity_rows = None
     if tanks:
         capacity_rows, tank_entries = write_tank_tables(tanks, out_dir, stem, stamp_lines(build))
@@ -212,8 +231,10 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
         entries.append(write_tanks_ocx(tanks, out_dir, stem, build.vessel))
 
     report = out_dir / f"{stem}_report.pdf"
+    booklet_summary = booklet_check.summary if booklet_check is not None else None
     write_report(ReportFacts(build, hydrostatics, error, f"MarinaFrame {__version__}", capacity_rows,
-                             accuracy_facts_from_build(build, capacity_rows, structure_dir)), report)
+                             accuracy_facts_from_build(build, capacity_rows, structure_dir, booklet_summary),
+                             booklet_check), report)
     entries.append((report, "review_report", {}))
 
     missing = []
@@ -235,6 +256,8 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
                 "open_guesses": sum(1 for g in build.guesses if g.get("status") == "open"),
                 "not_built": missing,
                 "files": [file_entry(path, role, **extra) for path, role, extra in entries]}
+    if booklet_summary is not None:
+        manifest["booklet_check"] = booklet_summary
     manifest_path = out_dir / f"{stem}_manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     package = out_dir / f"{stem}_package.zip"
