@@ -13,7 +13,7 @@ export PATH := $(dir $(PY)):$(PATH)
 
 CAD_RUST_TESTS = --test finalization_guards --test validation_matrix --test audit_identity --test draft_guards --test region_pipeline --test investigation_guards
 
-.PHONY: test-quick test-full lint rust-quick python-quick ui-quick rust-cad python-cad smoke secrets
+.PHONY: test-quick test-full lint lint-ci rust-quick python-quick ui-quick rust-cad python-cad smoke secrets
 
 test-quick: lint rust-quick python-quick ui-quick secrets
 
@@ -22,6 +22,11 @@ test-full: test-quick rust-cad python-cad smoke
 lint:
 	$(CARGO) fmt --all --check
 	$(CARGO) clippy --locked --workspace --all-targets -- -D warnings
+
+# The Linux CI runner does not install the desktop shell GTK/WebKit libraries.
+lint-ci:
+	$(CARGO) fmt --all --check
+	$(CARGO) clippy --locked --workspace --exclude marinaframe-app --all-targets -- -D warnings
 
 rust-quick:
 	$(CARGO) test --locked --workspace

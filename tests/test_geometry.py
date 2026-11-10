@@ -11,6 +11,7 @@ def rectangular_sections():
     return [{"id": f"s{i}", "x_m": x, "points_yz_m": [[2.0, float(z)] for z in np.linspace(0, 3, 11)]} for i, x in enumerate([0, 5, 10])]
 
 
+@pytest.mark.cad
 def test_box_hull_preserves_real_units_and_volume(tmp_path):
     shape, _ = build_hull(rectangular_sections())
     exports, metrics = export_geometry(shape, tmp_path)
@@ -25,6 +26,7 @@ def test_box_hull_preserves_real_units_and_volume(tmp_path):
     assert metrics["step_roundtrip_relative_error"] < 1e-9
 
 
+@pytest.mark.cad
 def test_hull_mesh_reports_face_progress_without_changing_tessellation(tmp_path, monkeypatch):
     from vessel_reconstruction import geometry
     shape = cq.Solid.makeBox(1000, 2000, 3000)
@@ -60,6 +62,7 @@ def test_no_nan_geometry():
         build_hull(sections)
 
 
+@pytest.mark.cad
 def test_mixed_keels_and_flat_bottoms_preserve_measured_volume_and_step(tmp_path):
     # Independently specified trapezoids alternate a zero-width keel with a
     # finite flat bottom. They have unequal closed-wire edge counts, but the
@@ -95,6 +98,7 @@ def test_mixed_keels_and_flat_bottoms_preserve_measured_volume_and_step(tmp_path
     assert stl.volume / 1e9 == pytest.approx(expected, rel=1e-3)
 
 
+@pytest.mark.cad
 def test_changing_vertical_ranges_have_planar_top_bottom_and_correct_volume():
     xs = [0.0, 3.0, 8.0]
     half_widths = [1.0, 2.2, 1.5]
@@ -119,6 +123,7 @@ def test_changing_vertical_ranges_have_planar_top_bottom_and_correct_volume():
     assert shape.BoundingBox().zmax == pytest.approx(3700)
 
 
+@pytest.mark.cad
 def test_zero_area_centreline_spur_does_not_invent_material():
     # The lower metre is exactly zero-width, followed by a triangular section.
     # Removing its retraced cap-wire spur must not add an epsilon-width strip.
@@ -143,6 +148,7 @@ def test_interior_centreline_pinch_is_rejected_without_width_adjustment():
 
 
 
+@pytest.mark.cad
 def test_a_repeated_sample_point_closes_a_triangle_instead_of_crashing(monkeypatch):
     """A zero-length profile segment cannot be ruled (OpenCascade crashes); it becomes a triangle."""
     from vessel_reconstruction import geometry

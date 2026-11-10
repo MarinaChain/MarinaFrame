@@ -88,6 +88,9 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
       selectedPageId = (preview.pages.find((p) => !p.skip) || preview.pages[0])?.page_id || null;
       form = initialForm(preview);
       return true;
+    } catch (failure) {
+      if (mine !== token) return false; // cancelled, or a newer set replaced this one
+      throw failure;
     } finally {
       if (mine === token) {
         loading = null;
@@ -202,6 +205,8 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
   }
 
   function cancel() {
+    // Stop the drawing reader too, not only the wait for it.
+    if (loading) invoke('cancel_intake').catch(() => {});
     token += 1;
     preview = null;
     loading = null;

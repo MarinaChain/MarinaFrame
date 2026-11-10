@@ -111,6 +111,24 @@ def load_ink(sheet: Path) -> np.ndarray:
     return np.logical_not(white, out=white)
 
 
+def sheet_resolution_factor(ink: np.ndarray) -> float:
+    """Estimate scan scale from the upper quartile of short horizontal ink runs.
+
+    The synthetic reference scan has 5 px station strokes (1700 x 2300 pixels).
+    Sampling many rows and using a quartile reduces the effect of thin grid lines and blobs.
+    A blank sheet has no measurable scale and conservatively receives the lowest factor.
+    """
+    rows = np.linspace(0, ink.shape[0] - 1, min(128, ink.shape[0]), dtype=int)
+    widths = [end - start for row in ink[rows] for start, end in ink_runs(row)
+              if 1 <= end - start <= 30]
+    return float(np.percentile(widths, 75) / 5.0) if widths else 0.2
+
+
+def scaled_pixels(reference_pixels: float, factor: float) -> float:
+    """Scale a reference pixel distance by measured stroke width / 5 px."""
+    return reference_pixels * factor
+
+
 @dataclass
 class Crossing:
     """One ink line crossing one waterline."""
@@ -346,11 +364,14 @@ def _fit_crossing(track: _Track, waterline: WaterlineTrace, band: int) -> Crossi
                     fit_residual_px=residual)
 
 
-def find_crossings(ink: np.ndarray, row: int, x_range: tuple[int, int], band: int = BAND_ROWS) -> list[Crossing]:
+def find_crossings(ink: np.ndarray, row: int, x_range: tuple[int, int], band: int | None = None) -> list[Crossing]:
     """Every ink line that crosses the drawn waterline near image row `row` within columns x_range.
 
     Sorted by column. Kinds are not set here (all `curve`); see `classify`.
     """
+    if band is None:
+        # Reference: 40 rows at 5 px line width (1700 x 2300 synthetic scan).
+        band = max(1, round(scaled_pixels(BAND_ROWS, sheet_resolution_factor(ink))))
     x_low, x_high = max(0, x_range[0]), min(ink.shape[1], x_range[1])
     waterline = locate_waterline(ink, row, (x_low, x_high))
     margin = waterline.half_thickness + WATERLINE_MARGIN_PX
@@ -407,14 +428,17 @@ def straight_ends(ink: np.ndarray, row: float, x_px: float, slope: float, step: 
     return ends[0], ends[1], deviation
 
 
-def is_diagonal(ink: np.ndarray, crossing: Crossing, centre_column: float) -> bool:
+def is_diagonal(ink: np.ndarray, crossing: Crossing, centre_column: float,
+                resolution_factor: float | None = None) -> bool:
     """A body-plan diagonal: an oblique straight line that runs to the centreline."""
     if not STRAIGHT_SLOPES[0] <= abs(crossing.slope) <= STRAIGHT_SLOPES[1]:
         return False
     *ends, deviation = straight_ends(ink, crossing.row, crossing.x_px, crossing.slope)
     length = abs(ends[1] - ends[0]) * float(np.sqrt(1 + crossing.slope ** -2))
     reaches_centre = min(abs(end - centre_column) for end in ends) <= DIAGONAL_CENTRE_REACH_PX
-    return reaches_centre and length >= DIAGONAL_MIN_LENGTH_PX and deviation <= DIAGONAL_MAX_DEVIATION_PX
+    # Reference: 1500 px diagonal length at 5 px line width (1700 x 2300 scan).
+    factor = sheet_resolution_factor(ink) if resolution_factor is None else resolution_factor
+    return reaches_centre and length >= scaled_pixels(DIAGONAL_MIN_LENGTH_PX, factor) and deviation <= DIAGONAL_MAX_DEVIATION_PX
 
 
 def typical_width(crossings: list[Crossing]) -> float:
@@ -492,10 +516,13 @@ def classify(ink: np.ndarray, crossings: list[Crossing], curve_width: float, cen
     sternpost drawn away from the centreline and for short strokes (lettering, leader lines).
     """
     shape_rules = waterline_spacing_px is not None and max_offset_px is not None
+    factor = sheet_resolution_factor(ink)
+    # Reference: 70 px centreline offset at 5 px line width (1700 x 2300 scan).
+    centreline_offset = scaled_pixels(CENTRELINE_STRUCTURE_PX, factor)
     for crossing in crossings:
         ratio = crossing.width_px / curve_width
         on_grid = any(abs(crossing.x_px - column) <= 6 for column in grid_columns)
-        if abs(crossing.x_px - centre_column) <= CENTRELINE_STRUCTURE_PX and abs(crossing.slope) < 0.03:
+        if abs(crossing.x_px - centre_column) <= centreline_offset and abs(crossing.slope) < 0.03:
             crossing.kind, crossing.notes = KIND_GRID, ['vertical line at the centreline (stem or sternpost)']
         elif ratio <= GRID_MAX_WIDTH_RATIO or (on_grid and abs(crossing.slope) < 0.02 and ratio < 0.9):
             crossing.kind, crossing.notes = KIND_GRID, ['thin line' if not on_grid else 'on a grid column']
@@ -507,7 +534,7 @@ def classify(ink: np.ndarray, crossings: list[Crossing], curve_width: float, cen
             crossing.kind, crossing.notes = KIND_LETTERING, [f'width {crossing.width_px:.1f} px']
         elif abs(crossing.slope) > SHALLOW_SLOPE:
             crossing.kind, crossing.notes = KIND_SHALLOW, [f'slope {crossing.slope:.1f} columns per row']
-        elif is_diagonal(ink, crossing, centre_column):
+        elif is_diagonal(ink, crossing, centre_column, factor):
             crossing.kind, crossing.notes = KIND_STRAIGHT, ['straight line to the centreline (diagonal)']
         elif shape_rules and is_short_stroke(ink, crossing, curve_width, waterline_spacing_px):
             crossing.kind, crossing.notes = KIND_LETTERING, ['short stroke (lettering or leader line)']
@@ -592,6 +619,8 @@ def link_waterlines(lower: list[Crossing], upper: list[Crossing], ink: np.ndarra
     that would cross (break the nesting order) are removed, worst first.
     """
     links: dict[tuple[int, int], float] = {}
+    # Reference: 8 px link tolerance at 5 px line width (1700 x 2300 scan).
+    link_tolerance = scaled_pixels(LINK_TOLERANCE_PX, sheet_resolution_factor(ink))
 
     def link_from(sources: list[Crossing], targets: list[Crossing], upward: bool) -> None:
         if not targets:
@@ -604,7 +633,7 @@ def link_waterlines(lower: list[Crossing], upper: list[Crossing], ink: np.ndarra
             errors = [(abs(arrival + t.slope * (t.row - target_row) - t.x_px), t_index)
                       for t_index, t in enumerate(targets)]
             error, t_index = min(errors)
-            if error <= LINK_TOLERANCE_PX:
+            if error <= link_tolerance:
                 key = (s_index, t_index) if upward else (t_index, s_index)
                 links[key] = min(error, links.get(key, error))
 

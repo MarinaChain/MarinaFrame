@@ -292,3 +292,24 @@ def test_prepare_types_every_page_and_checks_the_drawing_set(tmp_path, monkeypat
     assert "steel_shell" in preview["set"]["missing_required"]
     assert preview["set"]["engineering_approved"] is False
     assert preview["set"]["rules"] and preview["set"]["outputs"]
+
+
+def test_prepare_reports_completed_pages(tmp_path, monkeypatch):
+    from vessel_reconstruction import progress
+
+    reports = []
+    monkeypatch.setattr(progress, "report", lambda stage, part=0, total=0, **kw: reports.append((stage, part, total)))
+    pdf = two_page_pdf(tmp_path / "set.pdf")
+    intake.prepare([pdf], tmp_path / "prep", render_dpi=100)
+    assert reports == [("Reading drawings", 0, 0), ("Read page 1", 0, 0), ("Read page 2", 0, 0)]
+
+
+def test_each_model_question_reports_progress(monkeypatch):
+    from vessel_reconstruction import progress
+
+    reports = []
+    monkeypatch.setattr(progress, "report", lambda stage, part=0, total=0, **kw: reports.append(stage))
+    ask = intake._reporting_ask(lambda prompt, pngs: f"answer to {prompt}")
+    assert ask("a", []) == "answer to a" and ask("b", []) == "answer to b"
+    assert reports == ["Asking the model (question 1)", "Asking the model (question 2)"]
+    assert intake._reporting_ask(None) is None
