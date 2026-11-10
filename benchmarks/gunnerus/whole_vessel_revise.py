@@ -1,20 +1,20 @@
-"""Re-run one Gunnerus whole-vessel part from a person's mark (thin wrapper).
+"""Prepare a re-run of one Gunnerus whole-vessel part from a person's mark (thin wrapper).
 
-The work is in ``vessel_reconstruction.part_revise`` (the app runs the same worker). This
-wrapper only adds what a Gunnerus run folder made before 2026-11-09 lacks: the drawing views
-(``whole_vessel/views.json``), from the Gunnerus host calibration and the source folder.
+The work is in ``vessel_reconstruction.part_revise``. Since code-review item 6 the model call
+is made by the controller's provider worker (the app), not by Python, so this wrapper only
+checks the request and writes its vision request folder. It also adds what a Gunnerus run
+folder made before 2026-11-09 lacks: the drawing views (``whole_vessel/views.json``), from the
+Gunnerus host calibration and the source folder. No key is needed::
 
-Load the keys in the same shell first (never print them)::
-
-    source scripts/load_opencode_keys.sh
     PYTHONPATH=src python -m benchmarks.gunnerus.whole_vessel_revise --folder <run folder> \\
         --sources work/sources/gunnerus --part wheelhouse --note "What to change"
+
+Then start the re-run from the app, which sends the request and builds the part.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import time
 from pathlib import Path
 
 from vessel_reconstruction import part_revise
@@ -41,11 +41,10 @@ def write_views(folder: Path, sources: Path) -> Path:
     return path
 
 
-def revise(folder: Path, pack: dict | None, part_id: str, note: str, call=None, settings=None) -> dict:
-    """Rebuild one part from a mark. ``pack`` (crops) is optional: without it the worker makes
-    its own from ``whole_vessel/views.json``. ``settings`` is kept for older callers; the worker
-    always uses ``part_revise.SETTINGS``. Refusals raise ``PartReviseError`` (a ValueError)."""
-    return part_revise.revise_part(folder, part_id, note, call=call, pack=pack)
+def revise(folder: Path, part_id: str, note: str) -> dict:
+    """Check a re-run request and write its vision request folder (``prepare_revision``).
+    Refusals raise ``PartReviseError`` (a ValueError)."""
+    return part_revise.prepare_revision(folder, part_id, note)
 
 
 def main() -> None:
@@ -58,11 +57,7 @@ def main() -> None:
     folder = args.folder.resolve()
     if args.sources:
         write_views(folder, args.sources)
-    started = time.time()
-    entry = part_revise.revise_part(folder, args.part, args.note)
-    print(json.dumps({'part': entry['id'], 'revision': entry['revision'], 'status': entry['status'],
-                      'geometry': entry['geometry'], 'volume_m3': entry.get('volume_m3'),
-                      'seconds': round(time.time() - started, 1)}, indent=2))
+    print(json.dumps(revise(folder, args.part, args.note), indent=2))
 
 
 if __name__ == '__main__':
