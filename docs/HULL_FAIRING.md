@@ -236,3 +236,86 @@ first hull's bottom handling below the lowest read cell (BUE GIRL); (2) detect b
 the section (dense in height) and against the profile and plan views, which are independent of
 the neighbouring stations; (3) more stations (half stations at the ends) make the cross-station
 check sharper.
+
+## 7. Cross-view cell detector: protocol fixed before results
+
+Date: 2026-11-10. No detector replay results were inspected before this protocol.
+The detector is a report-only check, not a new acceptance gate. Fairing stays off.
+Frozen body-plan readers, draft fit, best-of-N selection and the 2 %/5 % gates do not change.
+
+### 7.1 Replay population and denominators
+
+Replay the delivered build and every stored first/revision build of the ten L0/L1
+4f92e9f development cases listed in section 3. Report delivered and all-build results
+separately, since revisions are correlated. Include BUE GIRL's stored reader sections
+as a separate case. No live model calls, new images, CAD builds or sealed holdouts.
+Use only stored sections and their source sheet/calibration for independent view scans.
+No truth geometry enters the detector. Missing inputs fail the replay, not disappear.
+
+A cell is a point in a measured (`read` or `traced`) section, in source curve order.
+The unchanged-reading alarm rate is flagged cells / all measured cells. It is a
+**conservative false-alarm proxy**, not a truth-labelled false-positive rate: unchanged
+readings can contain real errors. Also report alarms / cells with usable independent
+view evidence and coverage for plan, profile and section-neighbour checks. Missing or
+ambiguous evidence is not agreement. Report each case and pooled counts, not only a mean.
+
+Inject one fault at a time into the same stored geometry. Select the measured stations
+nearest 25 % and 50 % of the measured x span (distinct ids; deterministic x/id tie break).
+At each selected station inject +0.1 m and +0.2 m at mid-height, with the section 3.4
+triangular taper over +/-5 % of section height; insert the peak vertex if absent.
+Keep centreline points fixed. Separately increase every positive half-breadth in that
+station by 5 % of the unchanged measured half-beam (section 3.4 convention).
+Cell detection means the peak cell is flagged; station detection means at least one
+changed cell is flagged. Report raw detection and **new** detection (not already flagged
+at that location in the unchanged input). Count missing-view trials as misses in the
+all-trial rate; also show the covered-only rate. Report unchanged-cell collateral alarms.
+
+### 7.2 Targets and fixed decision rule
+
+| Metric | Target fixed before replay |
+|---|---|
+| +0.1 m peak-cell detection | >= 80 % of trials |
+| +0.2 m peak-cell detection | >= 90 % of trials |
+| Whole station +5 % half-beam detection | >= 90 % of trials |
+| Unchanged-reading alarm proxy | <= 1 % pooled, <= 2 % on every delivered case and BUE GIRL |
+| Independent plan/profile coverage | >= 90 % of measured cells on every delivered case |
+
+Both raw and new detection must meet the detection targets. These are engineering
+aspirations, not relaxed gates. Use in fairing by default only after all targets hold
+and a separate weighted-fit replay meets G1/G2. This task makes no default-weight change.
+Failure or insufficient view coverage means keep report-only; do not tune after seeing
+results without explicitly recording a new development experiment.
+
+### 7.3 Design, constants and execution checkpoints
+
+Use a separate `cross_view_outliers.py` module. Reuse the existing read-only reference
+view calibration and ink-scan primitives, without changing the selection score. Compare
+each cell with plan ink at its station x; this is nearest-curve evidence, not proof of
+waterline identity. Mark competing runs ambiguous. Profile checks are one-sided limits
+(below keel, above deck, aft of transom, forward of stem), not an interior shape predictor.
+For the section check, use distance to the chord between bracketing neighbours at a
+5 %-height scale, not immediate dense trace pixels; this matches the injected-cell scale.
+Do not extrapolate section neighbours at curve ends.
+
+Initial tolerance: max(0.02 m, 0.005 * unchanged half-beam, 3 source pixels in metres).
+The 20 mm floor avoids sub-centimetre drawing noise; 0.5 % of half-beam is one quarter
+of the RMS gate; three pixels allow line thickness and scan/calibration noise. Flag
+when any usable independent-view distance exceeds tolerance, or the section chord
+distance exceeds twice it (curvature needs more allowance). Report all distances,
+tolerances, ambiguity and missing checks per cell, with one check item per flagged cell.
+Explain additional constants at their definitions. Never infer an independent view
+from the sections being checked. Report-only avoids removing real chines or shoulders.
+
+Implementation checkpoints (commit each):
+1. Commit this protocol after existing fairing unit tests and a diff check.
+2. Write failing synthetic tests, implement the pure detector and replay input adapter,
+   test exact/shifted curves, profile limits, neighbours, missing/ambiguous views,
+   invalid inputs and input immutability. Commit source and tests.
+3. Run `benchmarks/hull_fairing/replay_outliers.py` over the fixed population, write
+   machine-readable counts under `outputs/` and tables here. Test replay accounting and
+   repeatability, run related regression tests, review the diff, then commit results.
+
+Resume at the first checkpoint absent from `git log`. Run Python with
+`PYTHONPATH=src:. .venv/bin/python`. All shell commands start `set -o pipefail`;
+never push, merge, switch branches or pipe git. No files under `work/factory-sealed-*`
+may be opened. Optional fit down-weighting is deferred, not silently enabled.
