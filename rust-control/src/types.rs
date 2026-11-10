@@ -20,6 +20,8 @@ pub enum Policy {
 pub enum Status {
     Ready,
     Running,
+    /// A live worker has no new progress; a person can keep waiting or stop it.
+    Stalled,
     Paused,
     AwaitingHumanReview,
     Abstained,
@@ -603,6 +605,8 @@ pub const MAX_REQUEST_WALL_SECONDS: u64 = 600;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OperationalLimits {
+    /// Optional absolute safety cap in seconds. Zero (default) disables it.
+    /// No-progress supervision remains active regardless of this cap.
     pub worker_wall_seconds: u64,
     pub request_wall_seconds: u64,
     pub worker_memory_bytes: u64,
@@ -647,10 +651,7 @@ fn is_zero(value: &f64) -> bool {
 impl Default for OperationalLimits {
     fn default() -> Self {
         Self {
-            // build_first_hull took 100-208 s in the Sonnet rounds of 2026-11-09
-            // and was cut off at the old 210 s limit on a loaded machine
-            // (worker_receipt_missing: the run ended with no draft).
-            worker_wall_seconds: 600,
+            worker_wall_seconds: 0,
             // Generous: thinking requests took up to 45 s and the old 90 s limit cut them off.
             request_wall_seconds: 300,
             worker_memory_bytes: 5 * 1024 * 1024 * 1024,
@@ -675,8 +676,7 @@ impl Default for OperationalLimits {
 }
 impl OperationalLimits {
     pub fn validate(&self) -> Result<()> {
-        if !(1..=900).contains(&self.worker_wall_seconds)
-            || !(1..=MAX_REQUEST_WALL_SECONDS).contains(&self.request_wall_seconds)
+        if !(1..=MAX_REQUEST_WALL_SECONDS).contains(&self.request_wall_seconds)
             || !(256 * 1024 * 1024..=8 * 1024 * 1024 * 1024).contains(&self.worker_memory_bytes)
             || !(1..=600).contains(&self.worker_cpu_seconds)
             || !(32 * 1024 * 1024..=8 * 1024 * 1024 * 1024).contains(&self.task_disk_bytes)

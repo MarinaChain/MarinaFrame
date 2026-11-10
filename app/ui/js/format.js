@@ -2,6 +2,7 @@
 
 const STATUS_LABELS = {
   running: 'Running',
+  stalled: 'Waiting for you',
   needs_review: 'Needs review',
   draft: 'Draft',
   signed_off: 'Signed off', // a person's sign-off: usable as a starting model. Never "approved".

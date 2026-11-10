@@ -413,19 +413,22 @@ def execute(program: dict, measurements: dict, out: Path, *, audit=None, veto=Fa
     import cadquery as cq
 
     from .geometry import precise_volume_mm3
+    from .progress import report as report_progress
 
     hull = _hull_side(detail)
     buildable, unbuilt, source_notes = triage_program(program)
     components = resolve_program(buildable, measurements, guesses)
     arguments = {c['id']: c['args'] for c in buildable['components']}
-    for component in components:
+    for part_index, component in enumerate(components, 1):
+        report_progress('Preparing vessel parts', part_index, len(components))
         # The app shows each value (geometry) and which reference or inline value gave it (args).
         component['args'] = arguments[component['id']]
         if component['id'] in source_notes:
             component['reason'] = f'{component["reason"]}; {source_notes[component["id"]]}'
     shapes = {}
     out.mkdir(parents=True, exist_ok=True)
-    for component in components:
+    for part_index, component in enumerate(components, 1):
+        report_progress('Building vessel parts', part_index, len(components))
         values = component['geometry']
         if component['op'] == 'hull' and values is not None:
             # Station sections are large; the result keeps their count, not the rows.
@@ -463,7 +466,8 @@ def execute(program: dict, measurements: dict, out: Path, *, audit=None, veto=Fa
         except Exception as exc:
             component.update(status='draft_guess', built=False, reason=f'{type(exc).__name__}: {exc}')
     material = []
-    for component in components:
+    for part_index, component in enumerate(components, 1):
+        report_progress('Exporting vessel parts', part_index, len(components))
         if not component['built']:
             continue
         shape = shapes[component['id']]

@@ -195,7 +195,7 @@ function currentSection() {
 }
 
 function isRunning() {
-  return state.view?.summary.status === 'running';
+  return ['running', 'stalled'].includes(state.view?.summary.status);
 }
 
 function showError(error) {
@@ -524,7 +524,7 @@ function pollQueueWhileStarting() {
 
 /** The Queue rail item: how many runs are going and how many sets wait. */
 function renderRailCount() {
-  const running = state.tasks.filter((t) => t.status === 'running').length;
+  const running = state.tasks.filter((t) => ['running', 'stalled'].includes(t.status)).length;
   const waiting = state.queue?.waiting.length || 0;
   const count = $('rail-queue-count');
   count.hidden = running + waiting === 0;
@@ -623,7 +623,7 @@ function renderTask({ fresh = false } = {}) {
   renderNotices();
   renderDraftSummary();
   fill($('sheet-review'), renderSheetReview(state.view?.sheet_review, {
-    busy: state.busy || state.view?.summary.status === 'running',
+    busy: state.busy || isRunning(),
     onReplace: async (sheetId) => {
       const task = state.task;
       const files = await pickDrawingFiles({ multiple: false });
@@ -703,8 +703,9 @@ function renderActions() {
   const status = state.view?.summary.status;
   const resume = $('resume-task');
   const cancel = $('cancel-task');
-  resume.hidden = !['paused', 'blocked', 'cancelled'].includes(status);
-  cancel.hidden = status !== 'running';
+  resume.hidden = !['paused', 'blocked', 'cancelled', 'stalled'].includes(status);
+  resume.textContent = status === 'stalled' ? 'Keep waiting' : 'Resume';
+  cancel.hidden = !['running', 'stalled'].includes(status);
   resume.disabled = cancel.disabled = Boolean(state.busy);
   renderVesselPage();
 }
@@ -2696,4 +2697,3 @@ async function start() {
 }
 
 start();
-

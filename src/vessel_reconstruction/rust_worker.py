@@ -21,6 +21,7 @@ from .agent_tools import DomainTools, _artifact, _model_observation_image
 from .provenance import digest_file, digest_object, write_json
 from .process_limits import posix_resource
 from .resources import peak_rss_kib
+from .progress import Heartbeat
 from .schema import loads_bounded_json
 from .validation_contract import implementation_identity as audit_implementation_identity
 
@@ -147,7 +148,9 @@ def main(argv=None):
         resource = posix_resource()  # first: Windows fails closed before any work, with a receipt
         request = parse_request(sys.stdin.buffer.read(98_305))
         envelope.update(request_id=request["request_id"], operation=request["operation"])
-        envelope.update(execute(request, args.task_root, args.source_spec, cancel))
+        stage = request['operation'].replace('_', ' ').capitalize()
+        with Heartbeat(stage):
+            envelope.update(execute(request, args.task_root, args.source_spec, cancel))
         envelope["execution_state"] = "completed"
     except InterruptedError:
         envelope.update(execution_state="cancelled", error_code="worker_cancelled")

@@ -229,6 +229,9 @@ fn describe(event: &Value, context: &Context) -> Option<(String, EventKind)> {
     let status_after = event["state_after"]["status"].as_str().unwrap_or("");
     match event["kind"].as_str()? {
         "task_created" => Some(("Run created".into(), EventKind::Other)),
+        "worker_stalled" | "worker_continued" => {
+            Some((payload["message"].as_str()?.into(), EventKind::Other))
+        }
         "calibration_corrected" => Some((payload["message"].as_str()?.into(), EventKind::Build)),
         "decision" => describe_decision(payload, context),
         "draft_built" => {
@@ -295,6 +298,7 @@ fn describe(event: &Value, context: &Context) -> Option<(String, EventKind)> {
 pub fn plain_reason(reason: &str) -> String {
     let known = match reason {
         "requested_step_boundary" => "paused at a step boundary",
+        "worker_absolute_safety_cap" => "the configured worker safety time limit was reached",
         "operator_action_completed" => "your change was applied",
         "operator_revision_completed" => "your marked revision is done",
         "operator_revision_forced" => "your kept edit was applied",

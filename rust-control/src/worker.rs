@@ -3,7 +3,7 @@ use crate::types::{Config, Pending};
 use crate::util::Result;
 use serde::{Deserialize, Serialize};
 use std::fs::{File, OpenOptions};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::os::fd::AsRawFd;
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::process::CommandExt;
@@ -27,6 +27,120 @@ pub fn install_signals() {
 }
 pub fn cancelled(root: &Path) -> bool {
     STOP.load(Ordering::SeqCst) || root.join("cancel.request").exists()
+}
+
+/// Five minutes permits slow native calls on loaded laptops. Lack of progress
+/// asks the person what to do; it does not kill the worker or adopt its files.
+pub const NO_PROGRESS_SECONDS: u64 = 300;
+/// CAD steps normally report hundreds of units. Limit invented alternating
+/// stages to 10,000 advances per worker step; explicit waiting does not refill it.
+const MAX_PROGRESS_ADVANCES_PER_STEP: u64 = 10_000;
+const MAX_PROGRESS_BYTES: u64 = 2048;
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct WorkerProgress {
+    pub request_id: String,
+    pub stage: String,
+    pub part: u64,
+    pub total: u64,
+    pub unit: String,
+    pub counter: u64,
+    pub timestamp_ms: u64,
+}
+
+pub fn progress_path(root: &Path, request_id: &str) -> std::path::PathBuf {
+    root.join("worker-logs")
+        .join(format!("{request_id}.progress.json"))
+}
+
+pub fn read_progress(root: &Path, request_id: &str) -> Option<WorkerProgress> {
+    if request_id.is_empty()
+        || !request_id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
+    {
+        return None;
+    }
+    let file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(progress_path(root, request_id))
+        .ok()?;
+    let metadata = file.metadata().ok()?;
+    if !metadata.is_file() || metadata.len() > MAX_PROGRESS_BYTES {
+        return None;
+    }
+    let mut bytes = Vec::new();
+    file.take(MAX_PROGRESS_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .ok()?;
+    if bytes.len() as u64 > MAX_PROGRESS_BYTES {
+        return None;
+    }
+    let value: WorkerProgress = serde_json::from_slice(&bytes).ok()?;
+    (value.request_id == request_id
+        && !value.stage.is_empty()
+        && value.stage.len() <= 120
+        && !value.stage.chars().any(char::is_control)
+        && value.part <= value.total
+        && value.total <= 100_000
+        && ["part", "section", "format"].contains(&value.unit.as_str()))
+    .then_some(value)
+}
+
+/// Uses elapsed monotonic time supplied by the supervisor (a fake clock in tests).
+struct ProgressWatchdog {
+    counter: u64,
+    last_pair: Option<(String, u64)>,
+    last_progress: Duration,
+}
+impl ProgressWatchdog {
+    fn new(now: Duration) -> Self {
+        Self {
+            counter: 0,
+            last_pair: None,
+            last_progress: now,
+        }
+    }
+    fn update(
+        &mut self,
+        now: Duration,
+        progress: Option<&WorkerProgress>,
+        keep_waiting: bool,
+    ) -> bool {
+        if let Some(progress) = progress {
+            let pair = (progress.stage.clone(), progress.part);
+            if self.last_pair.as_ref() != Some(&pair)
+                && self.counter < MAX_PROGRESS_ADVANCES_PER_STEP
+            {
+                self.last_pair = Some(pair);
+                self.counter += 1;
+                self.last_progress = now;
+            }
+        }
+        if keep_waiting {
+            self.last_progress = now;
+        }
+        now.saturating_sub(self.last_progress) >= Duration::from_secs(NO_PROGRESS_SECONDS)
+    }
+}
+
+/// This request takes no controller lock: the running supervisor holds that lock.
+pub fn keep_waiting(root: &Path, request_id: &str) -> Result<()> {
+    crate::util::atomic_json(
+        &root.join("keep-waiting.request"),
+        &serde_json::json!({"request_id":request_id}),
+        true,
+    )
+}
+
+fn take_keep_waiting(root: &Path, request_id: &str) -> bool {
+    let path = root.join("keep-waiting.request");
+    let requested = crate::util::read_bounded(&path, 1024)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        .is_some_and(|value| value["request_id"] == request_id);
+    requested && std::fs::remove_file(path).is_ok()
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -180,6 +294,17 @@ pub fn run(
     request: &[u8],
     source_spec: &Path,
 ) -> Result<ProcessOutcome> {
+    run_with_progress(root, config, pending, request, source_spec, |_, _| Ok(()))
+}
+
+pub fn run_with_progress(
+    root: &Path,
+    config: &Config,
+    pending: &Pending,
+    request: &[u8],
+    source_spec: &Path,
+    mut on_stall_change: impl FnMut(bool, Option<&WorkerProgress>) -> Result<()>,
+) -> Result<ProcessOutcome> {
     let is_provider = pending.kind == "provider";
     let queued = Instant::now();
     let _admission = if is_provider {
@@ -236,6 +361,11 @@ pub fn run(
             }
         }
         c.env("PYTHONDONTWRITEBYTECODE", "1")
+            .env(
+                "MARINAFRAME_PROGRESS_PATH",
+                progress_path(root, &pending.id),
+            )
+            .env("MARINAFRAME_PROGRESS_REQUEST", &pending.id)
             .env("PYTHONUNBUFFERED", "1")
             .env("OPENBLAS_NUM_THREADS", "1")
             .env("OMP_NUM_THREADS", "1")
@@ -351,6 +481,9 @@ pub fn run(
     } else {
         config.limits.worker_wall_seconds
     };
+    let mut watchdog = ProgressWatchdog::new(Duration::ZERO);
+    let mut stalled = false;
+    let mut next_progress_poll = Duration::ZERO;
     loop {
         if let Some(pipe) = stdin.as_mut() {
             if offset < request.len() && !pipe_failed {
@@ -406,11 +539,28 @@ pub fn run(
             + std::fs::metadata(&stderr_path)
                 .map(|m| m.len())
                 .unwrap_or(0);
+        let elapsed = started.elapsed();
+        if !is_provider && elapsed >= next_progress_poll {
+            next_progress_poll = elapsed + Duration::from_millis(250);
+            let progress = read_progress(root, &pending.id);
+            let waiting = take_keep_waiting(root, &pending.id);
+            let next_stalled = watchdog.update(elapsed, progress.as_ref(), waiting);
+            if next_stalled != stalled {
+                if let Err(error) = on_stall_change(next_stalled, progress.as_ref()) {
+                    unsafe {
+                        libc::kill(-pid, libc::SIGKILL);
+                    }
+                    let _ = child.wait();
+                    return Err(error);
+                }
+                stalled = next_stalled;
+            }
+        }
         let reason = if cancelled(root) {
             Some(ProcessState::Cancelled)
         } else if pipe_failed {
             Some(ProcessState::ProtocolWriteFailed)
-        } else if started.elapsed().as_secs() >= timeout {
+        } else if timeout > 0 && elapsed.as_secs() >= timeout {
             Some(ProcessState::TimedOut)
         } else if output > 1024 * 1024 {
             Some(ProcessState::OutputLimit)
@@ -449,6 +599,145 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn progress_record(part: u64, counter: u64) -> WorkerProgress {
+        WorkerProgress {
+            request_id: "worker-test".into(),
+            stage: "Building the hull".into(),
+            part,
+            total: 100_000,
+            unit: "section".into(),
+            counter,
+            timestamp_ms: 1,
+        }
+    }
+
+    #[test]
+    fn watchdog_ignores_child_counter_changes_and_limits_accepted_advances() {
+        let mut watch = ProgressWatchdog::new(Duration::ZERO);
+        assert!(!watch.update(Duration::ZERO, Some(&progress_record(1, 10)), false));
+        assert!(watch.update(
+            Duration::from_secs(300),
+            Some(&progress_record(1, u64::MAX)),
+            false
+        ));
+        assert!(!watch.update(
+            Duration::from_secs(301),
+            Some(&progress_record(2, 0)),
+            false
+        ));
+        for part in 3..=MAX_PROGRESS_ADVANCES_PER_STEP {
+            watch.update(
+                Duration::from_secs(301),
+                Some(&progress_record(part, 0)),
+                false,
+            );
+        }
+        assert_eq!(watch.counter, MAX_PROGRESS_ADVANCES_PER_STEP);
+        assert!(watch.update(
+            Duration::from_secs(601),
+            Some(&progress_record(99_999, 0)),
+            false
+        ));
+        // Explicit waiting can reset the stall clock, but never replenishes the budget.
+        assert!(!watch.update(Duration::from_secs(602), None, true));
+        assert!(watch.update(
+            Duration::from_secs(902),
+            Some(&progress_record(1, 0)),
+            false
+        ));
+    }
+
+    #[test]
+    fn progress_reader_rejects_links_fifo_oversized_and_non_object_records() {
+        use std::os::unix::fs::symlink;
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("worker-logs")).unwrap();
+        let path = progress_path(dir.path(), "worker-test");
+        let target = dir.path().join("private.json");
+        let bytes = serde_json::to_vec(&progress_record(1, 1)).unwrap();
+        std::fs::write(&target, &bytes).unwrap();
+        symlink(&target, &path).unwrap();
+        assert!(read_progress(dir.path(), "worker-test").is_none());
+        std::fs::remove_file(&path).unwrap();
+        let name = std::ffi::CString::new(path.as_os_str().as_encoded_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+        let mut writer = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .custom_flags(libc::O_NONBLOCK)
+            .open(&path)
+            .unwrap();
+        writer.write_all(&bytes).unwrap();
+        let now = Instant::now();
+        assert!(read_progress(dir.path(), "worker-test").is_none());
+        assert!(now.elapsed() < Duration::from_secs(1));
+        drop(writer);
+        std::fs::remove_file(&path).unwrap();
+        for bad in [vec![b' '; 2049], b"[]".to_vec()] {
+            std::fs::write(&path, bad).unwrap();
+            assert!(read_progress(dir.path(), "worker-test").is_none());
+        }
+    }
+
+    #[test]
+    fn watchdog_counts_progress_not_heartbeats_or_total_duration() {
+        let mut watch = ProgressWatchdog::new(Duration::ZERO);
+        assert!(!watch.update(
+            Duration::from_secs(299),
+            Some(&progress_record(1, 1)),
+            false
+        ));
+        // A repeated heartbeat is not progress.
+        assert!(watch.update(
+            Duration::from_secs(599),
+            Some(&progress_record(1, 1)),
+            false
+        ));
+        // Keep waiting grants another no-progress window to the same worker.
+        assert!(!watch.update(Duration::from_secs(600), Some(&progress_record(1, 1)), true));
+        assert!(watch.update(
+            Duration::from_secs(900),
+            Some(&progress_record(1, 1)),
+            false
+        ));
+        assert!(!watch.update(
+            Duration::from_secs(901),
+            Some(&progress_record(2, 2)),
+            false
+        ));
+        for counter in 3..100 {
+            assert!(!watch.update(
+                Duration::from_secs(901 + (counter - 2) * 200),
+                Some(&progress_record(counter, counter)),
+                false
+            ));
+        }
+    }
+
+    #[test]
+    fn watchdog_detects_absent_and_unchanged_work() {
+        let mut watch = ProgressWatchdog::new(Duration::ZERO);
+        assert!(watch.update(Duration::from_secs(300), None, false));
+        assert!(!watch.update(
+            Duration::from_secs(301),
+            Some(&progress_record(8, 8)),
+            false
+        ));
+        assert!(watch.update(
+            Duration::from_secs(601),
+            Some(&progress_record(8, 7)),
+            false
+        ));
+    }
+
+    #[test]
+    fn absolute_worker_cap_is_disabled_by_default_and_can_be_large() {
+        let mut limits = crate::types::OperationalLimits::default();
+        assert_eq!(limits.worker_wall_seconds, 0);
+        limits.worker_wall_seconds = 86_400;
+        limits.validate().unwrap();
+    }
 
     #[test]
     fn admission_grants_each_slot_once_and_refuses_when_all_are_taken() {

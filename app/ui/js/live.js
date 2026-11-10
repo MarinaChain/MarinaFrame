@@ -13,6 +13,7 @@
 import { el, svg, fill, icon, prefersReducedMotion } from './dom.js';
 import { readArtifactAsDataUrl } from './api.js';
 import * as fmt from './format.js';
+import { workerProgressView, renderWorkerProgress } from './progress.js';
 
 /** Poll interval while a run is active (task-changed events also poll at once). */
 const POLL_MS = 1000;
@@ -263,6 +264,7 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
   }
 
   function afterUpdate(changedShown) {
+    renderNarration();
     if (followLive && !playing && cursor < steps.length - 1) {
       catchUp();
       return;
@@ -653,13 +655,32 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
   function renderNarration() {
     const strip = nodes.narration;
     const step = current();
+    const atEnd = cursor === steps.length - 1;
+    const workerView = atEnd && !finished
+      ? workerProgressView(inFlight, elapsedMs + (Date.now() - fetchedAt)) : null;
+    if (workerView) {
+      strip.dataset.live = String(!inFlight.stalled);
+      strip.dataset.category = inFlight.stalled ? 'refused' : 'build';
+      renderWorkerProgress(strip, workerView, async (command, button) => {
+        const asked = token;
+        button.disabled = true;
+        try {
+          await invoke(command, { task });
+          if (asked === token) await fetchSteps();
+        } catch (error) {
+          if (asked === token) strip.append(el('span', { role: 'alert' }, error?.message || 'The action could not finish. Try again.'));
+        } finally {
+          button.disabled = false;
+        }
+      });
+      return;
+    }
     if (!step) {
       strip.dataset.live = 'false';
       fill(strip, el('span', { class: 'narration-dot', 'aria-hidden': 'true' }),
         el('span', { class: 'narration-text narration-empty' }, hasSteps() ? 'Press play to replay the run from the start.' : ''));
       return;
     }
-    const atEnd = cursor === steps.length - 1;
     const working = (atEnd && !finished && inFlight) || playing;
     strip.dataset.live = String(Boolean(working));
     strip.dataset.category = stepCategory(step);

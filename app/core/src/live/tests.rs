@@ -76,6 +76,40 @@ fn write(path: &Path, value: &Value) {
     fs::write(path, value.to_string()).unwrap();
 }
 
+#[test]
+fn progress_is_read_on_each_poll_and_stalls_keep_the_worker_in_flight() {
+    let mut ledger = Ledger::new();
+    ledger.push("task_created", json!({}));
+    ledger.push("worker_intent", json!({"operation":"build_first_hull"}));
+    write(
+        &ledger.task().join("state.json"),
+        &json!({"state":{
+        "status":"running", "pending":{"kind":"worker", "id":"worker-test"}}}),
+    );
+    let path = ledger.task().join("worker-logs/worker-test.progress.json");
+    let record = json!({"request_id":"worker-test", "stage":"Building the hull",
+        "part":31, "total":72, "unit":"section", "counter":31, "timestamp_ms":1000});
+    write(&path, &record);
+    let store = LiveStore::default();
+    let first = store.steps(ledger.task(), 0);
+    assert_eq!(first.in_flight.unwrap().progress.unwrap().part, 31);
+    let mut changed = record.clone();
+    changed["part"] = json!(32);
+    changed["counter"] = json!(32);
+    write(&path, &changed);
+    // No new ledger event is needed for progress to reach the UI.
+    let next = store.steps(ledger.task(), first.last_sequence);
+    assert_eq!(next.in_flight.unwrap().progress.unwrap().part, 32);
+    write(
+        &ledger.task().join("state.json"),
+        &json!({"state":{
+        "status":"stalled", "pending":{"kind":"worker", "id":"worker-test"}}}),
+    );
+    let stalled = store.steps(ledger.task(), next.last_sequence);
+    assert!(!stalled.finished);
+    assert!(stalled.in_flight.unwrap().stalled);
+}
+
 fn label_view() -> Value {
     json!({"status": "viewed", "ok": true, "view": {
         "view_id": "view-1", "crop_box_px": [100, 100, 500, 500],

@@ -219,6 +219,24 @@ pub fn cancel_task(task: &Path) -> AppResult<()> {
 
 /// Continue a paused, interrupted or cancelled task. A cancel request is cleared first.
 pub fn resume_task(registry: &ActionRegistry, task: &Path) -> AppResult<()> {
+    if let Some(state) = crate::files::read_state(task).filter(|state| state["status"] == "stalled")
+    {
+        if state["pending"]["kind"] == "worker" {
+            // A live controller owns its store lock, including CLI controllers
+            // outside this app's registry. After a crash, use normal receipt
+            // recovery instead of signalling a supervisor that is gone.
+            match Store::open(task) {
+                Err(reason) if reason == "task_already_running" => {
+                    if let Some(id) = state["pending"]["id"].as_str() {
+                        marinaframe_control::worker::keep_waiting(task, id)?;
+                        return Ok(());
+                    }
+                }
+                Err(reason) => return Err(reason.into()),
+                Ok(_) => {}
+            }
+        }
+    }
     let location = task.to_path_buf();
     let clear_cancel = task.join("cancel.request").exists();
     spawn_with_store(
@@ -361,6 +379,52 @@ pub fn force_keep_revision(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keep_waiting_requires_a_live_controller_or_a_recoverable_store() {
+        let dir = tempfile::tempdir().unwrap();
+        util::atomic_json(
+            &dir.path().join("state.json"),
+            &json!({"state":{
+            "status":"stalled", "pending":{"kind":"worker", "id":"worker-old"}}}),
+            false,
+        )
+        .unwrap();
+        // A stale display checkpoint alone must not report that work resumed.
+        assert!(resume_task(&ActionRegistry::default(), dir.path()).is_err());
+        assert!(!dir.path().join("keep-waiting.request").exists());
+    }
+
+    #[test]
+    fn keep_waiting_signals_the_existing_locked_worker_without_replaying_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let task = dir.path().join("task");
+        let config = app_run_config(
+            "python".into(),
+            None,
+            "spec.json".into(),
+            "a".repeat(64),
+            false,
+        );
+        let mut store = Store::create(&task, controller::new_state(config)).unwrap();
+        store.state.status = marinaframe_control::types::Status::Stalled;
+        store.state.pending = Some(marinaframe_control::types::Pending {
+            kind: "worker".into(),
+            id: "worker-live".into(),
+            operation: "build_first_hull".into(),
+            response_path: "receipts/worker-live.json".into(),
+            request_path: "requests/worker-live.json".into(),
+            domain_before: None,
+            started_ms: 0,
+        });
+        store.append("worker_stalled", json!({})).unwrap();
+        let count = store.events.len();
+        resume_task(&ActionRegistry::default(), &task).unwrap();
+        let request = util::read_json(&task.join("keep-waiting.request"), 1024).unwrap();
+        assert_eq!(request["request_id"], "worker-live");
+        assert_eq!(store.events.len(), count);
+        assert!(store.state.pending.is_some());
+    }
 
     #[test]
     fn app_runs_use_the_model_in_draft_mode_or_the_deterministic_draft() {

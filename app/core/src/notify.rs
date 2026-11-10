@@ -31,7 +31,7 @@ fn outcome(status: Status) -> Option<&'static str> {
         Status::NeedsReview => Some("Ready for your review."),
         Status::Declined => Some("Declined. Open the run to see why."),
         Status::Failed => Some("Stopped with an error."),
-        Status::Paused | Status::Blocked => Some("Waiting for you."),
+        Status::Paused | Status::Blocked | Status::Stalled => Some("Waiting for you."),
         Status::Cancelled | Status::Running => None,
     }
 }
