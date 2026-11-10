@@ -108,7 +108,7 @@ def read_scale(text: str, text_where: str = "ocr") -> dict:
             "source": f"text:{text_where}"}
 
 
-def strip_text(gray: np.ndarray, ocr=None) -> str:
+def strip_text(gray: np.ndarray, ocr=None, words_out: list[dict] | None = None) -> str:
     """OCR text of the bottom and right strips of the page (where scales are printed), at high resolution.
 
     ``gray`` is the page at full resolution. ``ocr`` takes a grey array and returns text or (text, title);
@@ -116,13 +116,21 @@ def strip_text(gray: np.ndarray, ocr=None) -> str:
     """
     from functools import partial
     from .sheet_types import ocr_read
-    read = ocr or partial(ocr_read, side=STRIP_OCR_SIDE)
     height, width = gray.shape[:2]
     strips = (gray[int(height * (1 - BOTTOM_STRIP_FRACTION)):, :], gray[:, int(width * (1 - RIGHT_STRIP_FRACTION)):])
     texts = []
-    for strip in strips:
+    origins = ((0, int(height * (1 - BOTTOM_STRIP_FRACTION))),
+               (int(width * (1 - RIGHT_STRIP_FRACTION)), 0))
+    for index, (strip, (left, top)) in enumerate(zip(strips, origins)):
+        words = []
+        read = ocr or partial(ocr_read, side=STRIP_OCR_SIDE, words_out=words)
         answer = read(np.ascontiguousarray(strip))
         texts.append(answer if isinstance(answer, str) else answer[0])
+        if words_out is not None:
+            for word in words:
+                x0, y0, x1, y1 = word["bbox"]
+                words_out.append({**word, "line": [index, *word["line"]],
+                                  "bbox": [x0 + left, y0 + top, x1 + left, y1 + top]})
     return "\n".join(texts)
 
 

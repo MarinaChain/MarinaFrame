@@ -151,7 +151,8 @@ def ocr_available() -> bool:
     return shutil.which("tesseract") is not None
 
 
-def ocr_read(gray: np.ndarray, runner=subprocess.run, side: int = OCR_SIDE) -> tuple[str, str]:
+def ocr_read(gray: np.ndarray, runner=subprocess.run, side: int = OCR_SIDE,
+             words_out: list[dict] | None = None) -> tuple[str, str]:
     """``(text, title)`` by the ``tesseract`` program: all words, and the words set much larger than the rest.
 
     ('', '') when it is not installed or fails. Large words are the sheet's headings; small words are
@@ -179,6 +180,12 @@ def ocr_read(gray: np.ndarray, runner=subprocess.run, side: int = OCR_SIDE) -> t
         fields = line.split("\t")
         if len(fields) == 12 and fields[11].strip() and float(fields[10]) >= OCR_MIN_CONFIDENCE:
             words.append((fields[11].strip(), int(fields[9])))
+            if words_out is not None:
+                left, top, width, height = map(int, fields[6:10])
+                factor = gray.shape[1] / picture.width
+                words_out.append({"text": fields[11].strip(), "line": fields[1:5],
+                                  "bbox": [left * factor, top * factor,
+                                           (left + width) * factor, (top + height) * factor]})
     if not words:
         return "", ""
     median = float(np.median([height for _, height in words]))

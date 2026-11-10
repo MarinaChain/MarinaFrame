@@ -327,7 +327,9 @@ Command: `python -m vessel_reconstruction.exports --task DIR --revision rN --out
   station does not reach that waterline (never written as 0). Leading `#` lines: stamp, vessel,
   revision, run, units and datum.
 - `_hydrostatics.json` and `_hydrostatics.csv`: at the design waterline z = T above the baseline
-  (`--draft-m`, else spec `design_draft_m`, else 0.6 x depth marked "assumed"). Volume,
+  (`--draft-m`, else typed intake draft, else an unambiguous printed design draft, else
+  spec `design_draft_m`, else 0.6 x depth marked "assumed"). Printed drafts carry a "read from
+  drawing" basis and source sheet ids. Conflicting printed drafts remain check items. Volume,
   displacement (1.025 t/m3), LCB, VCB, KB, Awp, LCF, BMt, BMl, waterline length, largest breadth,
   largest section area, wetted surface, Cb, Cp, Cm, Cwp (basis stated in the file). Method: the
   exported STL (a tessellation of the STEP) clipped at T, divergence theorem, exact for the mesh;
@@ -372,9 +374,11 @@ Command: `python -m vessel_reconstruction.exports --task DIR --revision rN --out
   display groups (`structure_shell`, etc.). They do not depend on labels, geometry or revision.
   Tank IDs include unbuilt tanks. Revision links use the vessel UUID and revision together;
   a parent can exist without a successful build. Repeated exports reuse the same vessel UUID.
-  Particulars come from captured intake fields and known spec constraints, without model guesses.
-  Only a typed intake `particulars.imo` supplies an optional `imo` (also in manifest particulars).
-  Empty values are omitted; malformed values or a wrong check digit stop export. The check uses
+  Particulars come from typed intake fields, unambiguous printed readings, then known spec constraints.
+  Typed values win. Printed readings carry `sources` with the sheet, text and word box; conflicts
+  remain `check_items` without selecting a value. A typed or read IMO supplies optional `imo`
+  (also in manifest particulars). Empty values are omitted. A malformed typed IMO or wrong typed
+  check digit stops export; an invalid printed check digit remains a check item. The check uses
   first-six-digit weights 7, 6, 5, 4, 3, 2 modulo ten, as described in the
   [Irish Revenue IMO validation rules](https://www.revenue.ie/en/online-services/support/software-developers/documents/ais/ais-business-rules-and-conditions.pdf).
   TODO: add the optional IMO text field to the intake UI and Rust `Particulars` contract together;
@@ -747,3 +751,5 @@ one short reason per bad sheet, and Replace. A requests panel shows `open` or
 `answered`, the person or team asked (`who`), the sheet, and the blocked output.
 A replacement answers requests for that sheet; any remaining stage failure
 opens a new request. “Send later” leaves the request open and the draft usable.
+
+Printed particulars are described in [PARTICULARS_READER.md](PARTICULARS_READER.md).

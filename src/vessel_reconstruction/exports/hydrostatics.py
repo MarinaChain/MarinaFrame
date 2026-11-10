@@ -302,6 +302,10 @@ def design_draft(spec: dict, depth_m: float, keel_z_m: float, requested: float |
         return float(requested), "given for this export"
     given = spec.get("design_draft_m")
     if isinstance(given, (int, float)) and given > 0:
+        source = spec.get("design_draft_source") or {}
+        if source.get("status") == "read":
+            sheets = dict.fromkeys(r["source"].get("sheet", "unknown") for r in source.get("readings", []))
+            return float(given), "read from drawing: " + ", ".join(sheets)
         return float(given), "specification design_draft_m"
     value = keel_z_m + ASSUMED_DRAFT_FRACTION_OF_DEPTH * depth_m
     return value, (f"assumed: {ASSUMED_DRAFT_FRACTION_OF_DEPTH:g} x moulded depth; no design draft was given. "

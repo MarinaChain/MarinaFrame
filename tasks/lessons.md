@@ -226,3 +226,8 @@
 - **Trigger:** The CAD export lane added rhino3dm to pyproject.toml and requirements-lock.txt only. CI installs the hashed requirements-linux-py312.lock, so the worker's .3dm export failed with ModuleNotFoundError and the real-CAD Rust tests failed for several pushes; local runs passed because the dev .venv had the package.
 - **Rule:** When adding a runtime dependency, add it with hashes to requirements-linux-py312.lock and requirements-worker-macos-arm64-py312.lock as well as pyproject.toml and requirements-lock.txt. Check `git grep -l "^<name>==" -- 'requirements*'` lists all four. A test that fails in CI should print the worker observation, not only "failed".
 - **Why:** CI and the packaged worker install only from the hashed locks, not from the dev environment.
+
+### Do not read another vessel's narrative year as a principal particular
+- **Date:** 2026-11-10
+- **Trigger:** The particulars reader read 1897 from the C.A. Thayer title notes, which say the builder built another vessel in that year. C.A. Thayer's own construction year is 1895.
+- **Rule:** Require a labelled construction-year field or explicit vessel identity before accepting a year in prose. Keep the other-vessel sentence as a negative fixture and report missed prose fields in development results.

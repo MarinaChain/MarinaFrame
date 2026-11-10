@@ -84,26 +84,50 @@ def checklist(sheets: list[dict], rules: list[dict] = CHECKLIST_RULES) -> list[d
 def analyse_page(*, path: Path | None, page_index: int, gray: np.ndarray, info: dict, file_name: str | None,
                  regions: list[dict] | None = None, ask=None, use_file_name: bool = True, ocr=None) -> dict:
     """The ``sheet`` result of one page: type (with source), scale, length estimate."""
+    from functools import partial
     from .sheet_types import ocr_read, sheet_text
-    text, title, where = sheet_text(path, page_index, gray, ocr or ocr_read)
+    from .particulars import pdf_words, read_text, read_words
+    words = []
+    text, title, where = sheet_text(path, page_index, gray, ocr or partial(ocr_read, words_out=words))
+    source = {"text_source": "ocr", "bbox_space": "page_px", "file": str(path) if path else None,
+              "page_index": page_index, "sheet": f"{file_name or path or 'sheet'}#{page_index + 1}"}
+    readings = read_words(words, source=source)
+    if ocr is not None and not words and where in ("ocr", "pdf_text+ocr"):
+        readings = read_text(text, source={**source, "bbox_space": None})
+    if path is not None and Path(path).suffix.lower() == ".pdf":
+        try:
+            layer = pdf_words(path, page_index, info.get("full_px") or [gray.shape[1], gray.shape[0]])
+            readings = read_words(layer, source={**source, "text_source": "pdf_text"}) + readings
+        except (OSError, ValueError, RuntimeError):
+            pass  # A damaged layer does not discard the OCR readings.
     typed = type_sheet(gray=gray, file_name=file_name, regions=regions, text=text, title=title,
                        use_file_name=use_file_name, ask=ask)
     scale = read_scale(text, where)
     if scale["status"] == "missing":
         # Small lettering is lost in the whole-page OCR: read the strips where scales are printed.
-        extra = strip_text(gray, ocr)
+        strip_words = []
+        extra = strip_text(gray, ocr, words_out=strip_words)
+        readings += read_words(strip_words, source=source)
         scale = read_scale(extra, "ocr_strip")
         text = f"{text}\n{extra}"
+    # OCR boxes use the raster passed here; callers may analyse a reduced copy.
+    sx = (info.get("full_px") or [gray.shape[1], gray.shape[0]])[0] / gray.shape[1]
+    sy = (info.get("full_px") or [gray.shape[1], gray.shape[0]])[1] / gray.shape[0]
+    for reading in readings:
+        if reading["source"]["text_source"] == "ocr" and reading["source"]["bbox"] is not None:
+            box = reading["source"]["bbox"]
+            reading["source"]["bbox"] = [box[0] * sx, box[1] * sy, box[2] * sx, box[3] * sy]
     length = length_estimate_m(drawn_width_fraction(gray), info, scale["main_ratio"]) if scale["main_ratio"] else None
     return {"type": typed["type"], "type_label": SHEET_TYPE_LABELS[typed["type"]], "confidence": typed["confidence"],
             "source": typed["source"], "evidence": typed["evidence"], "alternatives": typed.get("alternatives", []),
             "text_source": where, "views": views_in(text) if typed["type"] == "lines_plan" else [],
             "scale": {k: scale.get(k) for k in ("status", "main_ratio", "main_text", "source", "scales")},
-            "length_m": length, "printed_length_m": printed_length_m(text)}
+            "length_m": length, "printed_length_m": printed_length_m(text), "particulars": readings}
 
 
 def analyse_set(pages: list[dict]) -> dict:
     """Checklist and scale agreement for pages that carry a ``sheet`` (skipped pages are left out)."""
+    from .particulars import resolve
     kept = [p for p in pages if not p.get("skip") and p.get("sheet")]
     sheets = [{"page_id": p["page_id"], "type": p["sheet"]["type"], "views": p["sheet"].get("views", [])} for p in kept]
     agreement = scale_agreement([
@@ -117,7 +141,7 @@ def analyse_set(pages: list[dict]) -> dict:
     return {"schema": SET_SCHEMA, "rules": CHECKLIST_RULES, "outputs": [{"id": i, "label": l} for i, l in OUTPUTS],
             "checklist": items, "scale_agreement": agreement, "counts": counts,
             "missing_required": [i["id"] for i in items if i["level"] == "required" and i["status"] == "missing"],
-            "engineering_approved": False}
+            "engineering_approved": False, "particulars": resolve(pages)}
 
 
 def main(argv=None) -> int:

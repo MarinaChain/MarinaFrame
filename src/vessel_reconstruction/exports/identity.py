@@ -60,21 +60,46 @@ def vessel_uuid(domain: Path, state: dict) -> str:
 
 
 def known_particulars(build: DraftBuild, domain: Path, state: dict) -> dict:
-    """Typed intake values, with known spec constraints as fallbacks; no model guesses."""
+    """Typed values first, then unambiguous printed readings, then known spec values."""
     intake_file = (state.get("intake") or {}).get("file", "intake.json")
     intake_path = inside(domain / "input", intake_file)
     typed = {}
+    intake = {}
     if intake_path.is_file():
-        typed = read_json(intake_path).get("particulars") or {}
+        intake = read_json(intake_path)
+        typed = intake.get("particulars") or {}
     particulars = {field: typed[field] for field in PARTICULAR_FIELDS if typed.get(field) not in (None, "")}
+    from ..particulars import FIELDS, resolve
+    for field in FIELDS:
+        if field != "imo" and typed.get(field) not in (None, ""):
+            particulars[field] = typed[field]
+    resolved = resolve(intake.get("pages") or [], typed)
+    sources = {}
+    for field, detail in resolved["fields"].items():
+        if detail["status"] == "read":
+            particulars.setdefault(field, detail["value"])
+            sources[field] = detail
+    if sources:
+        particulars["sources"] = sources
+    if resolved["check_items"]:
+        particulars["check_items"] = resolved["check_items"]
     if "vessel_name" not in particulars and build.spec.get("vessel_name"):
         particulars["vessel_name"] = build.spec["vessel_name"]
+    conflicts = {field for field, detail in resolved["fields"].items() if detail["status"] == "conflict"}
     constraints = build.spec.get("constraints") or {}
     for field in ("length_m", "beam_m", "depth_m"):
-        if constraints.get(field) is not None:
+        conflicted_field = "loa_m" if field == "length_m" else field
+        if constraints.get(field) is not None and conflicted_field not in conflicts:
             particulars.setdefault(field, constraints[field])
-    if build.spec.get("design_draft_m") is not None:
+    if build.spec.get("design_draft_m") is not None and "draft_m" not in conflicts:
         particulars.setdefault("draft_m", build.spec["design_draft_m"])
+    if "imo" in sources:
+        try:
+            checked_imo(particulars["imo"])
+        except ExportError:
+            # Keep the literal reading but make its invalid checksum a check item.
+            particulars.setdefault("check_items", []).append({"code": "imo_checksum", "field": "imo",
+                                                             "status": "check"})
     imo = checked_imo(typed.get("imo"))
     if imo is not None:
         particulars["imo"] = imo

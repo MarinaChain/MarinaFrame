@@ -463,7 +463,7 @@ def _reduced_source(opened: Image.Image, name: str, out_dir: Path) -> dict:
 
 
 def _constraints(particulars: dict) -> dict:
-    """Known particulars the person typed (metres). Unknown fields are left out."""
+    """Typed or unambiguous printed particulars (metres). Unknown fields are left out."""
     constraints = {}
     for field, name in (("loa_m", "length_m"), ("beam_m", "beam_m"), ("depth_m", "depth_m")):
         value = particulars.get(field)
@@ -497,10 +497,14 @@ def write_spec(preview: dict, out_dir: Path) -> dict:
     copied = _copy_sources(pages, out_dir / "sources")
     source = _spec_source(chosen, copied, out_dir)
     source["sha256"] = _sha256(out_dir / source["file"])
-    particulars = preview.get("particulars") or {}
+    from .particulars import resolve
+    typed_particulars = preview.get("particulars") or {}
+    resolved = resolve(pages, typed_particulars)
+    particulars = resolved["values"]
     name = str(particulars.get("vessel_name") or "").strip()
     source["description"] = f"Drawing set dropped in the MarinaFrame app ({len(pages)} page(s))."
-    intake = {"schema": INTAKE_SCHEMA, "spec_page_id": chosen["page_id"], "particulars": particulars,
+    intake = {"schema": INTAKE_SCHEMA, "spec_page_id": chosen["page_id"], "particulars": typed_particulars,
+              "particulars_reading": resolved,
               "pages": [{key: value for key, value in page.items() if key != "thumbnail_png_base64"}
                         | {"source_file": f"sources/{copied[page['file']]}"} for page in pages],
               "engineering_approved": False,
@@ -517,6 +521,10 @@ def write_spec(preview: dict, out_dir: Path) -> dict:
             "symmetry_evidence": "Assumed for a lines drawing (one half drawn); the model checks it in phase 1.",
             "end_closure": "flat_at_terminal_stations", "sections": [], "components": [],
             "intake": {"file": "intake.json", "sha256": _sha256(out_dir / "intake.json")}}
+    draft = particulars.get("draft_m")
+    if isinstance(draft, (int, float)) and not isinstance(draft, bool) and draft > 0:
+        spec["design_draft_m"] = draft
+        spec["design_draft_source"] = resolved["fields"]["draft_m"]
     constraints = _constraints(particulars)
     if constraints:
         spec["constraints"] = constraints

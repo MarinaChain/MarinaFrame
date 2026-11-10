@@ -49,7 +49,7 @@ from ..accuracy_summary import facts_from_build as accuracy_facts_from_build
 from .report import FOOTER, ReportFacts, write_report
 from .source import DraftBuild, ExportError, load_build
 from .tank_tables import write_tank_tables
-from .identity import manifest_identity
+from .identity import manifest_identity, known_particulars
 from .spatial import write_spatial
 
 STAMP = "Draft hull model from MarinaFrame. Not approved for construction."
@@ -109,7 +109,17 @@ def compute_hydrostatics(build: DraftBuild, draft_m: float | None) -> tuple[Hydr
     bbox_min_z = ((metrics.get("bbox_m") or {}).get("min") or [0, 0, 0])[2]
     keel = float(bbox_min_z)
     try:
-        level, basis = design_draft(build.spec, float(metrics.get("depth_m") or 0), keel, draft_m)
+        from .source import domain_root, read_json
+        domain = domain_root(build.task_dir)
+        known = known_particulars(build, domain, read_json(domain / "state.json"))
+        spec = dict(build.spec)
+        if any(item.get("field") == "draft_m" for item in known.get("check_items", [])) and "draft_m" not in known:
+            spec.pop("design_draft_m", None)
+            spec.pop("design_draft_source", None)
+        if known.get("draft_m") is not None:
+            spec["design_draft_m"] = known["draft_m"]
+            spec["design_draft_source"] = (known.get("sources") or {}).get("draft_m", {"status": "typed"})
+        level, basis = design_draft(spec, float(metrics.get("depth_m") or 0), keel, draft_m)
         if level <= keel:
             return None, f"the waterline z = {level:.3f} m is not above the keel z = {keel:.3f} m"
         if build.stl_path is not None:
