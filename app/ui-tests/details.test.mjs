@@ -51,3 +51,37 @@ test('the transition is short and off under reduced motion', () => {
   assert.ok(ms <= 150);
   assert.match(css, /prefers-reduced-motion: reduce\) \{\s*\.view-run, :root\[data-details="closed"\] \.inspector \{ transition: none/);
 });
+
+// ---- run-detail tabs as icons
+import { TAB_META, tabName } from '../ui/js/details.js';
+
+const TAB_IDS = ['thinking', 'timeline', 'checks', 'model', 'evidence'];
+
+test('every tab has an icon in the sprite, its word as title and a one-line detail', () => {
+  const html = read('../ui/index.html');
+  assert.deepEqual(Object.keys(TAB_META), TAB_IDS);
+  for (const tab of TAB_IDS) {
+    const meta = TAB_META[tab];
+    assert.ok(html.includes(`<symbol id="i-${meta.icon}"`), `sprite icon ${meta.icon}`);
+    assert.ok(meta.detail.length > 10 && meta.detail.length < 70 && !meta.detail.includes('\n'), `${tab} detail`);
+  }
+  assert.deepEqual(TAB_IDS.map((tab) => TAB_META[tab].word), ['Thinking', 'Steps', 'Checks', 'Calls', 'Evidence']);
+});
+
+test('the tab buttons keep their roles and carry no text in the page', () => {
+  const html = read('../ui/index.html');
+  for (const tab of TAB_IDS) assert.match(html, new RegExp(`role="tab"[^>]*data-tab="${tab}"></button>`));
+});
+
+test('the spoken name of a tab keeps the word and adds the count', () => {
+  assert.equal(tabName('thinking'), 'Thinking');
+  assert.equal(tabName('checks', 0, { failing: true }), 'Checks');
+  assert.equal(tabName('checks', 2, { failing: true }), 'Checks, 2 failing');
+  assert.equal(tabName('model', 5), 'Calls, 5');
+});
+
+test('the tab arrows still walk the five tabs', () => {
+  const app = read('../ui/js/app.js');
+  assert.match(app, /const TABS = \['thinking', 'timeline', 'checks', 'model', 'evidence'\]/);
+  assert.match(app, /ArrowRight: 1, ArrowLeft: -1[\s\S]{0,200}selectTab\(next, \{ focus: true \}\)/);
+});

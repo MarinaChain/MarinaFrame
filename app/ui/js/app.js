@@ -19,7 +19,7 @@ import { renderSheetReview, renderSheetHistory } from './sheets.js';
 import { calibrationChoice } from './calibration.js';
 import { createEvidenceCard } from './evidence.js';
 import { createShortcutSheet } from './shortcuts.js';
-import { DETAILS_KEY, isDetailsOpen, storedDetails, reviewBadge, toggleNames } from './details.js';
+import { DETAILS_KEY, isDetailsOpen, storedDetails, reviewBadge, toggleNames, TAB_META, tabName } from './details.js';
 import { createParts, partState } from './parts.js';
 import { createExport } from './export.js';
 import { capacityRowOf } from './tanks.js';
@@ -1340,12 +1340,24 @@ function selectTab(tab, { focus = false } = {}) {
   if (focus) $(`tab-${tab}`).focus();
 }
 
+/** A tab is an icon (with a small count when there is one); the tooltip says the word. */
+function renderTabButton(tab, count = 0, { failing = false } = {}) {
+  const meta = TAB_META[tab];
+  const button = $(`tab-${tab}`);
+  const tip = tipAttributes(meta.word, meta.detail);
+  for (const [name, value] of Object.entries(tip.attrs)) button.setAttribute(name, value);
+  button.setAttribute('aria-label', tabName(tab, count, { failing }));
+  fill(button, icon(meta.icon),
+    count ? el('span', { class: `count${failing ? ' bad' : ''}`, 'aria-hidden': 'true' }, String(count)) : null,
+    tip.describer);
+}
+
 function renderTabs() {
   const view = state.view;
   const failing = view?.checks.filter((c) => c.result === 'fail').length || 0;
   const calls = view?.provider.length || 0;
-  fill($('tab-checks'), 'Checks', failing ? el('span', { class: 'count bad' }, `${failing} fail`) : null);
-  fill($('tab-model'), 'Calls', calls ? el('span', { class: 'count' }, String(calls)) : null);
+  renderTabButton('checks', failing, { failing: true });
+  renderTabButton('model', calls);
   renderThinking();
   renderTimeline();
   renderChecks();
@@ -2429,6 +2441,7 @@ $('view-switch').addEventListener('click', (event) => {
   const button = event.target.closest('button[data-view]');
   if (button) setLayout(button.dataset.view);
 });
+for (const tab of TABS) renderTabButton(tab);
 $('tabs').addEventListener('click', (event) => {
   const button = event.target.closest('[role="tab"]');
   if (button) selectTab(button.dataset.tab);

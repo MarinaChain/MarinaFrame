@@ -1523,7 +1523,7 @@ code { font-family: var(--font-mono); }
 
 .tabs {
   display: flex;
-  gap: var(--space-md);
+  gap: var(--space-xs);
   overflow-x: auto;
   scrollbar-width: none;
   padding: 0 var(--space-lg);
@@ -1532,16 +1532,20 @@ code { font-family: var(--font-mono); }
 }
 .tabs button {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   flex: none;
   white-space: nowrap;
   height: 34px;
-  padding: 0;
+  padding: 0 var(--space-sm);
   border: 0;
   background: none;
   color: var(--text-3);
   font-size: var(--fs-sm);
   font-weight: 500;
 }
+.tabs button .icon { width: 16px; height: 16px; }
 .tabs button:hover { color: var(--text); }
 .tabs button[aria-selected="true"] { color: var(--text); font-weight: 600; }
 .tabs button[aria-selected="true"]::after {
@@ -1554,7 +1558,7 @@ code { font-family: var(--font-mono); }
   border-radius: 2px;
   background: var(--accent);
 }
-.tabs .count { margin-left: 4px; color: var(--text-3); font-weight: 500; }
+.tabs .count { color: var(--text-3); font-weight: 500; }
 .tabs .count.bad { color: var(--fail); }
 
 .tab-panels { flex: 1; min-height: 0; display: flex; }
@@ -1972,7 +1976,7 @@ code { font-family: var(--font-mono); }
 
 @media (max-width: 1240px) {
   :root { --inspector-w: 312px; }
-  .tabs { gap: 10px; padding: 0 var(--space-md); }
+  .tabs { padding: 0 var(--space-md); }
   .tab-panel, .selection { padding-left: var(--space-md); padding-right: var(--space-md); }
   .inspector-head { padding: 0 var(--space-md); }
   .home-scroll { padding: var(--space-xl); }
