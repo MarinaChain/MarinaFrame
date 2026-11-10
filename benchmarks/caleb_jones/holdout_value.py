@@ -21,7 +21,7 @@ from vessel_reconstruction import body_plan_reader as bpr
 PROTOCOL = 'docs/BODY_PLAN_CHINE.md (Holdout protocol: CALEB JONES)'
 # Frozen truth file work/holdout/caleb-jones/truth.json (main checkout, read-only): sha256 given by
 # the PM before the run. The scorer stops if the file differs.
-TRUTH_SHA256: str | None = None
+TRUTH_SHA256: str | None = '1830c5213591604f52f5cb36c1924acee338ad3a1b52d706fff86c4b8dbae9e5'
 SHEET_SHA256 = 'c05fb65a16a6221d3eddc984fba7c40c652c2bcef275ce12d044949b7a1485b8'
 
 # ---------------------------------------------------------------- scale

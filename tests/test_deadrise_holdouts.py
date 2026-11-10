@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from benchmarks.caleb_jones import holdout_value as caleb
 from benchmarks.colleen import holdout_value as colleen
 from benchmarks.deadrise_holdout import score as sc
 from benchmarks.white_gull import holdout_value as gull
@@ -112,11 +113,31 @@ def test_colleen_keel_rabbet_pairs_with_rabbet_heights_and_negative_waterlines()
     assert (3, 'chine') not in truth['points']
 
 
+def test_station_names_with_decimals_and_unlisted_stations():
+    """CALEB JONES prints "0.000" to "10.000"; station 0 is not in the calibration and is ignored."""
+    assert [sc._station_number(n) for n in ('7', '7.000', ' 10.0 ', '7.5', 'TRANSOM', '0.000')] == [
+        7, 7, 10, None, None, 0]
+    names = [f'{k}.000' for k in range(0, 11)]
+    data = {'units': 'ft-in-eighths', 'stations': names, 'x_positions': [None] * 11,
+            'heights': {'SHEER': [None] + ['4-0-0'] * 10, 'CHINE': [None] + ['-0-6-0'] * 10},
+            'half_breadths': {'SHEER': [None] + [f'{k}-0-0' for k in range(1, 11)], 'CHINE': [None] * 11},
+            'notes': {}, 'unsure': []}
+    truth = sc.parse_truth(data, caleb)
+    assert sorted({s for s, _ in truth['points']}) == list(range(1, 11))
+    assert truth['points'][(3, 'sheer')]['half_breadth'] == pytest.approx(3 * FT)  # column "3.000"
+    assert truth['points'][(3, 'chine')] == {'height': pytest.approx(-0.5 * FT), 'half_breadth': None}
+    for cal in (gull, colleen):  # the committed station names give the same columns as before
+        plain = [str(k) for k in cal.STATIONS] + ['TRANSOM']
+        assert sc._station_columns(plain, cal) == [(i, s) for i, s in enumerate(cal.STATIONS)]
+
+
 def test_bad_truth_is_refused():
     with pytest.raises(ValueError):
         sc.parse_truth(_gull_truth(units='m'), gull)
-    with pytest.raises(ValueError):
-        sc.parse_truth(_gull_truth(stations=[str(k) for k in range(0, 11)]), gull)
+    with pytest.raises(ValueError):  # station 10 missing (the 11th column is not a station)
+        sc.parse_truth(_gull_truth(stations=[str(k) for k in range(1, 10)] + ['TRANSOM', 'STEM']), gull)
+    with pytest.raises(ValueError):  # stations out of order
+        sc.parse_truth(_gull_truth(stations=['2', '1'] + [str(k) for k in range(3, 11)] + ['TRANSOM']), gull)
     with pytest.raises(ValueError):  # a row one cell short
         sc.parse_truth(_gull_truth(half_breadths={'WL 2-0-0': ['3-0-0'] * 10}), gull)
     with pytest.raises(ValueError):  # two printed rows on one measuring row

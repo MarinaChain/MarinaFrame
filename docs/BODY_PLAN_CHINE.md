@@ -1042,3 +1042,20 @@ Calibration overlay (git-ignored): `work/deadrise_holdouts/caleb-jones_calibrati
 list (the script file is not changed). Checked by eye: the centre line is on the dash-dot centreline, the base line on
 the drawn "Baseline", the reach lines just outside station 7 on both halves, and the grid from below the bottoms to
 above station 1's top.
+
+### CALEB JONES pre-run amendment (PM approved 2026-11-10, before any reader run)
+
+PM approved the calibration as committed in `70789b1`, including placeholder station 107. The sheer ambiguity (heavy
+"Sheer" line or thin covering-board line) is not resolved from the table; the run records which line each reader took.
+Truth: `work/holdout/caleb-jones/truth.json`, SHA-256 `1830c5213591604f52f5cb36c1924acee338ad3a1b52d706fff86c4b8dbae9e5`
+(checked; the file was not opened by this agent), now `TRUTH_SHA256` in the calibration. The PM states that its
+stations are printed "0.000" to "10.000" and that station 0.000 is all null.
+
+**Amendment: truth station names only.** The pinned loader took only plain digit names ("7") as stations, so it
+refused this file before scoring. `benchmarks/deadrise_holdout/score.py` now reads a whole-number name ("7" or
+"7.000") as that station and ignores any column whose number is not in the calibration's `STATIONS` (as TRANSOM was
+ignored); the stations kept must still be the calibration's, in order. Nothing else in the scorer changed. New pinned
+SHA-256: `1bc962218d25b86c6006a23c2e5567e241ad169cd430f2bdcb73a92793f58be1` (was `30140ebb...c820`). The other ten pinned files are unchanged.
+Checks: `tests/test_deadrise_holdouts.py` 17 passed (new synthetic test; the old refusal of a "0" column is replaced by
+refusals of a missing and an out-of-order station). The WHITE GULL and COLLEEN truth files parse to identical cells with
+the old and new loader (pure parse check, no reader run), so their published scores are unchanged.

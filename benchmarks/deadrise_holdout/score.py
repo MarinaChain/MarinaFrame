@@ -101,9 +101,20 @@ def _check_range(value: float | None, limits: tuple, what: str) -> None:
         raise ValueError(f'truth: {what} is outside the plausible range')
 
 
+WHOLE_STATION_NAME = re.compile(r'(\d+)(\.0+)?')  # "7" or "7.000"
+
+
+def _station_number(name) -> int | None:
+    """The station number of a printed column name that is a whole number ("7", "7.000"), else None."""
+    match = WHOLE_STATION_NAME.fullmatch(str(name).strip())
+    return int(match[1]) if match else None
+
+
 def _station_columns(names: list, cal) -> list[tuple[int, int]]:
-    """(column index, station number) of the numbered stations; other columns (TRANSOM) are ignored."""
-    columns = [(index, int(name)) for index, name in enumerate(names) if str(name).strip().isdigit()]
+    """(column index, station number) of the calibration's stations. Other columns (TRANSOM, or a
+    whole-number station the calibration does not list, such as CALEB JONES "0.000") are ignored."""
+    numbered = ((index, _station_number(name)) for index, name in enumerate(names))
+    columns = [(index, station) for index, station in numbered if station in cal.STATIONS]
     if [station for _, station in columns] != list(cal.STATIONS):
         raise ValueError(f'truth: numbered stations must be {list(cal.STATIONS)} in order')
     return columns
