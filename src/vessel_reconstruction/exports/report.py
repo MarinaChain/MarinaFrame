@@ -21,6 +21,7 @@ from PIL import Image
 
 from .hydrostatics import Hydrostatics
 from .source import DraftBuild
+from ..booklet_check import BookletCheck
 
 FOOTER = "Draft — not for construction; engineering sign-off happens outside MarinaFrame"
 # A4 portrait, inches.
@@ -51,6 +52,7 @@ class ReportFacts:
     generated_by: str
     capacity_rows: list[dict] | None = None  # capacity plan (tanks.capacity_plan), when tanks are given
     accuracy_facts: dict | None = None  # run facts for the accuracy summary (accuracy_summary.facts_from_build)
+    booklet_check: BookletCheck | None = None
 
 
 def label_text(label: str) -> str:
@@ -240,6 +242,44 @@ def write_capacity_plan(writer: PageWriter, rows: list[dict]) -> None:
                  table_rows, [22, 13, 7, 8, 8, 8, 7, 7, 7, 12])
 
 
+def write_booklet_section(writer: PageWriter, check: BookletCheck) -> None:
+    """A short summary; the package CSV retains every draft and quantity."""
+    from ..accuracy_summary import booklet_summary_line
+
+    booklet = check.booklet
+    writer.heading("Booklet check")
+    writer.wrapped("The booklet comparison is secondary evidence only. Integrated quantities "
+                   "(displacement, LCB, KMT) can agree while the local hull shape is wrong. "
+                   "The primary accuracy number remains the section-shape error at withheld stations. "
+                   "A booklet match does not replace that shape check or supply a missing shape-error measurement.")
+    writer.wrapped(f"{booklet.title}. {booklet_summary_line(check.summary)}. Counts are quantity cells, not drafts.")
+    writer.wrapped(f"Density {booklet.density:g} t/m3; trim {booklet.trim}, trim {booklet.trim_m:g} m, "
+                   f"heel {booklet.heel_deg:g} deg. {len(booklet.rows)} printed draft rows. "
+                   "Starting tolerances: docs/BOOKLET_CHECK.md; this is not engineering approval.")
+    writer.wrapped(f"Booklet datum in model metres: x origin {booklet.x_origin_m:g}, direction "
+                   f"{booklet.x_direction:g}; z origin {booklet.z_origin_m:g}. KMT is above the built keel. "
+                   f"MCT basis {booklet.mct_basis}, trim length {booklet.trim_length_m} m.")
+    methods = list(dict.fromkeys(c.method for c in check.comparisons if c.method))
+    for method in methods:
+        writer.wrapped(f"Method: {method}.")
+    from ..booklet_check import QUANTITIES
+
+    rows = []
+    for key, quantity in QUANTITIES.items():
+        cells = [c for c in check.comparisons if c.quantity == key]
+        errors = [abs(c.error) for c in cells if c.error is not None]
+        rows.append([key, quantity.unit, str(sum(c.label == "within tolerance" for c in cells)),
+                     str(sum(c.label == "outside tolerance" for c in cells)),
+                     str(sum(c.label == "not comparable" for c in cells)), fmt(max(errors), 4) if errors else "-"])
+    writer.table(["Quantity", "Unit", "Within", "Outside", "Not comparable", "Max abs error"],
+                 rows, [16, 10, 7, 7, 15, 16])
+    for reason in dict.fromkeys(c.reason for c in check.comparisons if c.reason):
+        writer.wrapped(f"Not comparable: {reason}.")
+    for warning in check.warnings:
+        writer.wrapped(f"Note: {warning}")
+    writer.wrapped("See the booklet_check CSV for every printed value, computed value, error, tolerance and label.")
+
+
 def write_overlay_pages(writer: PageWriter, build: DraftBuild) -> None:
     for path in build.overlay_images:
         figure = writer.new_page()
@@ -265,6 +305,8 @@ def write_report(facts: ReportFacts, path: Path) -> Path:
     with rc_context({"pdf.fonttype": 42}), PdfPages(path, metadata=metadata) as pdf:
         writer = PageWriter(pdf, title)
         write_summary(writer, facts)
+        if facts.booklet_check is not None:
+            write_booklet_section(writer, facts.booklet_check)
         if facts.accuracy_facts is not None:
             write_accuracy_section(writer, facts.accuracy_facts)
         if facts.capacity_rows:

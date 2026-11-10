@@ -206,6 +206,9 @@ def mesh_hydrostatics(triangles: np.ndarray, draft_m: float, draft_basis: str, *
     keel = float(triangles[:, :, 2].min())
     level = draft_m
     wet = clip_below(triangles, level)
+    # A face on the waterline is the artificial top cap, not wetted shell.
+    # Its normal would cancel Awp and its moments at a draft equal to deck z.
+    wet = wet[~np.all(wet[:, :, 2] == level, axis=1)]
     volume = _flux(wet, lambda x, y, z: z - level)
     if volume <= 0:
         raise ValueError(f"The hull has no volume below z = {level:.3f} m.")

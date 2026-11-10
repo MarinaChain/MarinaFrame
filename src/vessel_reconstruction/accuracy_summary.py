@@ -81,6 +81,14 @@ def _weak(bands: list[Band]) -> bool:
     return any(b.outcome in ("missed", "mixed", "not measured") for b in bands)
 
 
+def booklet_summary_line(summary: dict) -> str:
+    """Count comparable quantity cells, and keep unavailable cells visible."""
+    text = f"booklet check: {summary['within']} of {summary['comparable']} within tolerance"
+    if summary["comparable"] == 0:
+        text += " (no values comparable)"
+    return text + f"; {summary['not_comparable']} not comparable"
+
+
 def _hull(facts: dict) -> OutputSummary:
     path = facts.get("path") or "model_reading"
     if path not in HULL_DETAIL_IDS:
@@ -108,6 +116,10 @@ def _hull(facts: dict) -> OutputSummary:
     if fit is not None:
         parts.append(f"fit score {fit:.2f}")
     caution = _weak(head) or bool(to_check) or total > _count(labels, "traced", "repaired")
+    booklet = facts.get("booklet_check")
+    if booklet is not None:
+        parts.append(booklet_summary_line(booklet))
+        caution = caution or booklet["within"] < booklet["comparable"] or bool(booklet["not_comparable"])
     return OutputSummary("hull", True, "; ".join(parts) + ".", _chip(head), caution, head_ids,
                          tuple(b.id for b in _bands(HULL_DETAIL_IDS[path])))
 
@@ -196,7 +208,8 @@ def tank_facts(capacity_rows: list[dict] | None) -> dict | None:
             "volume_labels": labels or None}
 
 
-def facts_from_build(build, capacity_rows: list[dict] | None = None, structure_dir: Path | None = None) -> dict:
+def facts_from_build(build, capacity_rows: list[dict] | None = None, structure_dir: Path | None = None,
+                     booklet_summary: dict | None = None) -> dict:
     """Facts of an exported draft (``exports.source.DraftBuild``)."""
     from .exports.source import domain_root, read_json, select_build
 
@@ -211,6 +224,8 @@ def facts_from_build(build, capacity_rows: list[dict] | None = None, structure_d
     for section in build.sections:
         label = str(section.get("source_label", "omitted"))
         labels[label] = labels.get(label, 0) + 1
-    return {"hull": {"path": hull_path_of(domain), "hull_type": None, "labels": labels,
-                     "to_check": sum(1 for g in build.guesses if g.get("status") == "open"), "fit": fit},
-            "tanks": tank_facts(capacity_rows), "steel": steel_facts(structure_dir)}
+    hull = {"path": hull_path_of(domain), "hull_type": None, "labels": labels,
+            "to_check": sum(1 for g in build.guesses if g.get("status") == "open"), "fit": fit}
+    if booklet_summary is not None:
+        hull["booklet_check"] = dict(booklet_summary)
+    return {"hull": hull, "tanks": tank_facts(capacity_rows), "steel": steel_facts(structure_dir)}

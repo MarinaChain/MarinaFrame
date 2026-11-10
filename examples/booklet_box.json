@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "title": "Exact box: length 40 m, beam 8 m, depth 5 m",
+  "trim": "even_keel",
+  "density": {"value": 1.025, "unit": "t/m3"},
+  "datum": {"x_origin_m": 0, "x_direction": 1, "z_origin_m": 0},
+  "mct_basis": "hydrostatic",
+  "trim_length_m": 40,
+  "units": {
+    "draft": "m",
+    "volume": "m3",
+    "displacement": "t",
+    "lcb": "m",
+    "vcb": "m",
+    "kmt": "m",
+    "waterplane_area": "m2",
+    "lcf": "m",
+    "tpc": "t/cm",
+    "mct": "t*m/cm"
+  },
+  "rows": [
+    {"draft": 1, "volume": 320, "displacement": 328, "lcb": 20, "vcb": 0.5,
+     "kmt": 5.833333333333333, "waterplane_area": 320, "lcf": 20,
+     "tpc": 3.28, "mct": 10.933333333333334},
+    {"draft": 3, "volume": 960, "displacement": 984, "lcb": 20, "vcb": 1.5,
+     "kmt": 3.2777777777777777, "waterplane_area": 320, "lcf": 20,
+     "tpc": 3.28, "mct": 10.933333333333334},
+    {"draft": 5, "volume": 1600, "displacement": 1640, "lcb": 20, "vcb": 2.5,
+     "kmt": 3.5666666666666664, "waterplane_area": 320, "lcf": 20,
+     "tpc": 3.28, "mct": 10.933333333333334}
+  ]
+}

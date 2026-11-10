@@ -175,6 +175,15 @@ def test_mesh_hydrostatics_of_a_box_are_exact():
     assert h.wetted_surface_m2 == pytest.approx(40 * 8 + 2 * 40 * 3 + 2 * 8 * 3)
 
 
+def test_mesh_waterplane_at_deck_is_the_limit_from_below():
+    mesh = prism([(0, 0), (4, 0), (4, 5), (0, 5)], 40)
+    h = mesh_hydrostatics(mesh, 5.0, "top boundary")
+    assert h.volume_m3 == pytest.approx(1600)
+    assert h.waterplane_area_m2 == pytest.approx(320)
+    assert h.lcf_m == pytest.approx(20)
+    assert h.bmt_m == pytest.approx(40 * 8**3 / 12 / 1600)
+
+
 def test_mesh_hydrostatics_of_a_v_prism_match_closed_form():
     # Half-breadth y = z (45 degree V), deck at z = 4, length 10, waterline T = 2.
     mesh = prism([(0, 0), (4, 4), (0, 4)], 10.0)

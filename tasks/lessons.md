@@ -168,3 +168,14 @@
 - **Trigger:** Recovery must accept a clearer scan without discarding the old draft or reusing its old pixel reading.
 - **Rule:** Keep source versions and dependent output state in the run. Record a uniform resolution adjustment explicitly; require new calibration for a changed page shape. Keep unrelated outputs. Leave independent checks not run while draft guesses remain open. Test the single-file picker as well as the worker command.
 - **Why:** A readable replacement is input for another draft revision, not an engineering review.
+### Keep the booklet check as secondary evidence
+- **Date:** 2026-11-10
+- **Trigger:** The PM set the accuracy rule while reviewing the booklet-check feature, after a competitor report criticised a hydrostatics-only accuracy claim.
+- **Rule:** State in the booklet documentation and PDF section that integrated quantities (displacement, LCB, KMT) can agree while local shape is wrong. Keep section-shape error at withheld stations as the primary accuracy number. A booklet match cannot replace a missing shape-error measurement.
+- **Why:** Integrated hydrostatics can hide local shape errors that cancel along the hull.
+
+### Check IGES side coverage before reflecting a hull
+- **Date:** 2026-11-10
+- **Trigger:** The first bounded DSYHS check doubled SYSSER43 volume and waterplane area because that IGES already contained both sides, unlike most files in the archive.
+- **Rule:** Inspect side coverage before reflection. A sign crossing at y=0 can be a spline overshoot, not a full hull. For the symmetric DSYHS canoe bodies, require equal port/starboard extents within mesh tolerance before preserving a full hull once. Test half hulls, overshoots and full hulls. Use absolute mesh deflection and a bounded CAD process for imported geometry.
+- **Why:** One archive can mix half hulls and full hulls; a file-name convention does not establish geometry coverage.
