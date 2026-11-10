@@ -321,6 +321,19 @@ def test_package_destination_cannot_replace_current_directory(tmp_path, monkeypa
             pass
 
 
+def test_failed_ocx_export_keeps_other_package_files(tmp_path, monkeypatch):
+    from vessel_reconstruction.exports import package
+
+    task = make_box_task(tmp_path, with_cad=False)
+    def fail(*args, **kwargs):
+        raise RuntimeError("injected OCX failure")
+
+    monkeypatch.setattr(package.ocx, "export_ocx", fail)
+    manifest = export_draft(task, "r1", tmp_path / "out", tanks=box_tank_model())
+    assert manifest["format_results"]["ocx"] == {"status": "failed", "reason": "injected OCX failure"}
+    assert any(entry["role"] == "offsets_table" for entry in manifest["files"])
+
+
 def test_old_revision_uses_its_recorded_display_glb(tmp_path):
     import trimesh
 

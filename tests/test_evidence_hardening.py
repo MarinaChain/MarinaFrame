@@ -42,6 +42,43 @@ def independent_spec(root):
     return spec
 
 
+def test_failed_iges_writer_keeps_other_cad_exports(tmp_path, monkeypatch):
+    from vessel_reconstruction import geometry
+
+    independent_spec(tmp_path)
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("injected IGES writer failure")
+
+    monkeypatch.setattr(geometry, "export_iges", fail)
+    result = reconstruct(tmp_path / "spec.json", tmp_path / "run", export_cad=True)
+    assert result["status"] == "review_required", result["gaps"]
+    assert result["export_results"]["iges"] == {"status": "failed", "reason": "injected IGES writer failure"}
+    for format_name in ("step", "3dm", "stl"):
+        assert result["export_results"][format_name]["status"] == "ok"
+        assert (tmp_path / "run" / result["exports"][format_name]).is_file()
+    assert "iges" not in result["exports"]
+    assert verify_run(tmp_path / "run")["exports_allowed"]
+
+
+def test_failed_step_reload_keeps_other_cad_exports(tmp_path, monkeypatch):
+    from vessel_reconstruction import geometry
+
+    independent_spec(tmp_path)
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("injected STEP reload failure")
+
+    monkeypatch.setattr(geometry.cq.importers, "importStep", fail)
+    result = reconstruct(tmp_path / "spec.json", tmp_path / "run", export_cad=True)
+    assert result["status"] == "review_required", result["gaps"]
+    assert result["export_results"]["step"]["status"] == "failed"
+    assert "step" not in result["exports"]
+    assert not (tmp_path / "run/model.step").exists()
+    assert all((tmp_path / "run" / result["exports"][name]).is_file() for name in ("iges", "3dm", "stl"))
+    assert verify_run(tmp_path / "run")["exports_allowed"]
+
+
 @pytest.fixture(scope="module")
 def good_run(tmp_path_factory):
     root = tmp_path_factory.mktemp("complete-evidence")

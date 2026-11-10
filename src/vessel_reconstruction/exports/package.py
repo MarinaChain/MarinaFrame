@@ -48,6 +48,7 @@ from .. import __version__
 # The module, not its names: ``structure.ocx`` imports ``tanks``, which imports this package.
 from ..structure import ocx
 from ..provenance import digest_file
+from ..resources import ResourceLimitError
 from ..booklet_check import Booklet, compare_booklet, load_booklet, write_comparison_csv
 from .csv_safety import safe_text_cell
 from .hydrostatics import Hydrostatics, design_draft, mesh_hydrostatics, read_stl, table_hydrostatics
@@ -160,7 +161,7 @@ def write_hydrostatics(hydrostatics: Hydrostatics | None, error: str | None, bui
 
 
 def copy_structure_files(structure_dir: Path, out_dir: Path, stem: str,
-                         tanks: list | None = None) -> list[tuple[Path, str, dict]]:
+                         tanks: list | None = None) -> tuple[list[tuple[Path, str, dict]], list[str]]:
     """Copy the steel tables and OCX files of ``structure_dir`` as ``<stem>_<name>``; return their entries.
 
     When ``tanks`` hold built tanks and the folder has exactly one OCX file, that file gets the tanks as
@@ -172,16 +173,25 @@ def copy_structure_files(structure_dir: Path, out_dir: Path, stem: str,
         if role is not None and source.is_file() and not source.is_symlink():
             sources.append((source, role))
     ocx_sources = [source for source, role in sources if role == "ocx_structure"]
-    entries = []
+    entries, failures = [], []
     for source, role in sources:
         target = out_dir / f"{stem}_{source.name}"
         extra = {"source_file": source.name}
-        if ocx_sources == [source] and ocx.add_compartments(source, target, tanks):
-            role, extra["compartments"] = "ocx_structure_tanks", len(ocx.writable_tanks(tanks))
-        else:
-            target.write_bytes(source.read_bytes())
+        try:
+            if ocx_sources == [source] and ocx.add_compartments(source, target, tanks):
+                role, extra["compartments"] = "ocx_structure_tanks", len(ocx.writable_tanks(tanks))
+            else:
+                target.write_bytes(source.read_bytes())
+        except ResourceLimitError:
+            raise
+        except Exception as error:
+            if role != "ocx_structure":
+                raise
+            target.unlink(missing_ok=True)
+            failures.append(str(error).strip() or type(error).__name__)
+            continue
         entries.append((target, role, extra))
-    return entries
+    return entries, failures
 
 
 def write_tanks_ocx(tanks: list, out_dir: Path, stem: str, vessel: str) -> tuple[Path, str, dict]:
@@ -301,7 +311,10 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
             raise ExportError(f"Cannot check booklet: {error}") from error
     with _package_stage(Path(out_dir)) as out_dir:
         stem = build.file_stem
-        entries, units_axes = write_spatial(build, identity, tanks, structure_dir, out_dir)
+        entries, units_axes, glb_result = write_spatial(build, identity, tanks, structure_dir, out_dir)
+        format_results = dict(build.result.get("export_results") or {})
+        if glb_result is not None:
+            format_results["glb"] = glb_result
 
         offsets = out_dir / f"{stem}_offsets.csv"
         table = offsets_table(build.sections, build.spec, waterline_intervals)
@@ -322,10 +335,21 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
         if tanks:
             capacity_rows, tank_entries = write_tank_tables(tanks, out_dir, stem, stamp_lines(build))
             entries += tank_entries
-        structure_entries = copy_structure_files(Path(structure_dir), out_dir, stem, tanks) if structure_dir else []
+        structure_entries, ocx_failures = (copy_structure_files(Path(structure_dir), out_dir, stem, tanks)
+                                           if structure_dir else ([], []))
         entries += structure_entries
         if ocx.writable_tanks(tanks) and not any(role == "ocx_structure_tanks" for _, role, _ in structure_entries):
-            entries.append(write_tanks_ocx(tanks, out_dir, stem, build.vessel))
+            try:
+                entries.append(write_tanks_ocx(tanks, out_dir, stem, build.vessel))
+            except ResourceLimitError:
+                raise
+            except Exception as export_error:
+                (out_dir / f"{stem}_tanks.3docx").unlink(missing_ok=True)
+                ocx_failures.append(str(export_error).strip() or type(export_error).__name__)
+        if ocx_failures:
+            format_results["ocx"] = {"status": "failed", "reason": "; ".join(ocx_failures)[:1000]}
+        elif any(role.startswith("ocx_") for _, role, _ in entries):
+            format_results["ocx"] = {"status": "ok", "reason": None}
 
         report = out_dir / f"{stem}_report.pdf"
         # The app writes a picture of its 3D view here before the export; without it the report is unchanged.
@@ -341,17 +365,27 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
                                             (build.iges_path, "iges", "iges_model", None),
                                             (build.rhino_path, "3dm", "rhino_model", None),
                                             (build.stl_path, "stl", "stl_mesh", stamped_stl)):
+            target = out_dir / f"{stem}_model.{suffix}"
             if source is None:
+                target.unlink(missing_ok=True)
                 missing.append(role)
                 continue
-            target = out_dir / f"{stem}_model.{suffix}"
-            extra = {"source_sha256": digest_file(source)}
-            if stamp is not None:
-                extra["header_stamped"] = stamp(source, target, build)
-            else:
-                # IGES and 3dm already carry draft notes. Preserve their bytes and metadata.
-                target.write_bytes(source.read_bytes())
-                extra["units"] = "mm"
+            try:
+                extra = {"source_sha256": digest_file(source)}
+                if stamp is not None:
+                    extra["header_stamped"] = stamp(source, target, build)
+                else:
+                    # IGES and 3dm already carry draft notes. Preserve their bytes and metadata.
+                    target.write_bytes(source.read_bytes())
+                    extra["units"] = "mm"
+            except ResourceLimitError:
+                raise
+            except Exception as export_error:
+                target.unlink(missing_ok=True)
+                missing.append(role)
+                format_results[suffix] = {"status": "failed", "reason": (str(export_error).strip() or type(export_error).__name__)[:1000]}
+                continue
+            format_results[suffix] = {"status": "ok", "reason": None}
             entries.append((target, role, extra))
 
         manifest = {**identity, "stamp": STAMP, "footer": FOOTER, "datum": DATUM, "engineering_approved": False,
@@ -361,7 +395,7 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
                     "review_state": (build.result.get("review") or {}).get("state", "unreviewed"),
                     "draft_status": (build.result.get("draft") or {}).get("status"),
                     "open_guesses": sum(1 for g in build.guesses if g.get("status") == "open"),
-                    "not_built": missing, "units_axes": units_axes,
+                    "not_built": missing, "format_results": format_results, "units_axes": units_axes,
                     "files": [file_entry(path, role, root=out_dir, **extra) for path, role, extra in entries]}
         if booklet_summary is not None:
             manifest["booklet_check"] = booklet_summary

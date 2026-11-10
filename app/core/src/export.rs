@@ -76,6 +76,8 @@ pub struct ExportResult {
     pub files: Vec<ExportedFile>,
     /// Chosen outputs the build does not have (for example `stl` without a mesh).
     pub not_built: Vec<String>,
+    /// Format outcomes and plain failure reasons from the package manifest.
+    pub format_results: serde_json::Value,
     pub stamp: String,
     /// Always false: engineering sign-off happens outside MarinaFrame.
     pub engineering_approved: bool,
@@ -222,19 +224,27 @@ pub fn export_run_with_capture(
         std::fs::write(staging.join(VIEWER_CAPTURE_FILE), bytes).map_err(|_| write_error())?;
     }
     let outcome = run_worker(worker, task, &revision, &staging, timeout).and_then(|manifest| {
-        keep_chosen(
+        let not_built = keep_chosen(
             &staging,
             &exports_folder(task, &revision),
             &chosen,
             &manifest,
-        )
+        )?;
+        Ok((
+            not_built,
+            manifest
+                .get("format_results")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({})),
+        ))
     });
     // The staging folder is ours alone; remove it whether the export worked or not.
     let _ = std::fs::remove_dir_all(&staging);
-    let mut not_built = outcome?;
+    let (mut not_built, format_results) = outcome?;
     not_built.extend(missing_run_tables(task, &chosen));
     let mut result = list_exports(task, &revision)?;
     result.not_built = not_built;
+    result.format_results = format_results;
     Ok(result)
 }
 
@@ -247,6 +257,25 @@ fn keep_chosen(
     manifest: &serde_json::Value,
 ) -> AppResult<Vec<String>> {
     std::fs::create_dir_all(folder).map_err(|_| write_error())?;
+    // A failed retry must not leave an earlier file looking like the new result.
+    for entry in std::fs::read_dir(folder)
+        .map_err(|_| write_error())?
+        .flatten()
+    {
+        let name = entry.file_name();
+        let Some(kind) = name.to_str().and_then(kind_of_file) else {
+            continue;
+        };
+        let failed_ocx = kind == "structure"
+            && name.to_str().is_some_and(|name| name.ends_with(".3docx"))
+            && manifest["format_results"]["ocx"]["status"] == "failed";
+        if chosen.contains(&kind)
+            && (manifest["format_results"][kind]["status"] == "failed" || failed_ocx)
+            && entry.file_type().is_ok_and(|file_type| file_type.is_file())
+        {
+            std::fs::remove_file(entry.path()).map_err(|_| write_error())?;
+        }
+    }
     let entries = std::fs::read_dir(staging).map_err(|_| write_error())?;
     for entry in entries.filter_map(Result::ok) {
         let name = entry.file_name();
@@ -300,11 +329,19 @@ pub fn list_exports(task: &Path, revision: &str) -> AppResult<ExportResult> {
             .cmp(&order(&b.kind))
             .then(a.file.cmp(&b.file))
     });
+    let format_results = files
+        .iter()
+        .find(|file| file.kind == MANIFEST)
+        .and_then(|file| std::fs::read(&file.path).ok())
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        .and_then(|manifest| manifest.get("format_results").cloned())
+        .unwrap_or_else(|| serde_json::json!({}));
     Ok(ExportResult {
         folder: folder.to_string_lossy().into_owned(),
         revision,
         files,
         not_built: vec![],
+        format_results,
         stamp: STAMP.into(),
         engineering_approved: false,
     })

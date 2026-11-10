@@ -156,8 +156,9 @@ def test_invalid_glb_is_refused_and_source_is_unchanged(tmp_path):
     result = json.loads(result_path.read_text())
     result["exports"]["whole_vessel_glb"] = source.name
     result_path.write_text(json.dumps(result))
-    with pytest.raises(ExportError, match="GLB"):
-        export_draft(task, "r1", tmp_path / "out")
+    manifest = export_draft(task, "r1", tmp_path / "out")
+    assert manifest["format_results"]["glb"]["status"] == "failed"
+    assert "GLB" in manifest["format_results"]["glb"]["reason"]
     assert source.read_bytes() == b"not a glb"
 
 

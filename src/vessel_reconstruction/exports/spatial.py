@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from ..provenance import digest_file, write_json
+from ..resources import ResourceLimitError
 from .glb import copy_metres_glb
 from .source import DraftBuild, ExportError, inside, read_json
 
@@ -134,24 +135,35 @@ def frame_record(build: DraftBuild) -> dict:
 
 
 def write_spatial(build: DraftBuild, identity: dict, tanks: list | None, structure_dir: Path | None,
-                  out_dir: Path) -> tuple[list[tuple[Path, str, dict]], dict]:
+                  out_dir: Path) -> tuple[list[tuple[Path, str, dict]], dict, dict | None]:
     """Write the spatial records and existing GLBs; return manifest entries and units/axes."""
     sources = display_sources(build, structure_dir)
     frames = frame_record(build)
     spaces = tank_spaces(identity, tanks)
     if (out_dir / "frames.json").resolve() == (build.task_dir / "frames.json").resolve():
         raise ExportError("The package frame record must not replace its source table.")
-    entries, links = [], {}
+    entries, links, failures = [], {}, []
+    copied_whole_vessel = False
     for source, relative, source_units in sources:
         target = out_dir / relative
         if target.parent.is_symlink():
             raise ExportError("The package GLB folder must not be a symbolic link.")
         target.parent.mkdir(parents=True, exist_ok=True)
-        document = copy_metres_glb(source, target, source_units)
-        for part_id, link in _node_links(document, relative).items():
+        try:
+            document = copy_metres_glb(source, target, source_units)
+            node_links = _node_links(document, relative)
+            source_hash = digest_file(source)
+        except ResourceLimitError:
+            raise
+        except Exception as error:
+            target.unlink(missing_ok=True)
+            failures.append(f"{source.name}: {str(error).strip() or type(error).__name__}")
+            continue
+        for part_id, link in node_links.items():
             links.setdefault(part_id, link)
+        copied_whole_vessel |= relative == "glb/whole-vessel-draft.glb"
         entries.append((target, "display_glb", {"units": "m", "source_units": source_units,
-                                              "source_sha256": digest_file(source)}))
+                                              "source_sha256": source_hash}))
     records = {"assets.json": ("asset_map", {"assets": asset_records(build, identity, tanks, links)}),
                "spaces.json": ("spaces", {"units": "m", "axes": "model", "spaces": spaces}),
                "frames.json": ("frames", frames)}
@@ -159,5 +171,7 @@ def write_spatial(build: DraftBuild, identity: dict, tanks: list | None, structu
         path = out_dir / name
         write_json(path, {"schema_version": "1.0", **data, "engineering_approved": False})
         entries.append((path, role, {}))
-    axes = units_axes(any(relative == "glb/whole-vessel-draft.glb" for _, relative, _ in sources), build.stl_units)
-    return entries, axes
+    axes = units_axes(copied_whole_vessel, build.stl_units)
+    result = ({"status": "failed", "reason": "; ".join(failures)[:1000]} if failures else
+              {"status": "ok", "reason": None} if sources else None)
+    return entries, axes, result

@@ -3,6 +3,40 @@ use std::os::unix::fs::PermissionsExt;
 
 const STEM: &str = "Box_r0003_DRAFT";
 
+#[test]
+fn failed_format_removes_an_old_file_and_keeps_other_outputs() {
+    let root = tempfile::tempdir().unwrap();
+    let staging = root.path().join("stage");
+    let folder = root.path().join("exports");
+    std::fs::create_dir_all(&staging).unwrap();
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(folder.join(format!("{STEM}_model.iges")), b"old").unwrap();
+    std::fs::write(staging.join(format!("{STEM}_model.step")), b"new").unwrap();
+    let manifest = serde_json::json!({"not_built": ["iges_model"],
+        "format_results": {"iges": {"status": "failed", "reason": "writer failed"}}});
+    let missing = keep_chosen(&staging, &folder, &["step", "iges"], &manifest).unwrap();
+    assert_eq!(missing, ["iges"]);
+    assert!(!folder.join(format!("{STEM}_model.iges")).exists());
+    assert!(folder.join(format!("{STEM}_model.step")).is_file());
+}
+
+#[test]
+fn failed_ocx_removes_old_ocx_but_keeps_steel_tables() {
+    let root = tempfile::tempdir().unwrap();
+    let staging = root.path().join("stage");
+    let folder = root.path().join("exports");
+    std::fs::create_dir_all(&staging).unwrap();
+    std::fs::create_dir_all(&folder).unwrap();
+    let ocx = folder.join(format!("{STEM}_block.3docx"));
+    let steel = folder.join(format!("{STEM}_block_steel_members.csv"));
+    std::fs::write(&ocx, b"old").unwrap();
+    std::fs::write(&steel, b"steel").unwrap();
+    let manifest = serde_json::json!({"format_results": {"ocx": {"status": "failed", "reason": "writer failed"}}});
+    keep_chosen(&staging, &folder, &["structure"], &manifest).unwrap();
+    assert!(!ocx.exists());
+    assert!(steel.exists());
+}
+
 /// A stand-in for Python: a shell script that writes the files of a full export
 /// (no STL, like a build without a mesh) and prints a manifest.
 fn fake_worker(dir: &Path, body: &str) -> PathBuf {

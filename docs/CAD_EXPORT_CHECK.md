@@ -82,6 +82,11 @@ and edit operations are **not applicable**, not counted as passed edits.
 
 The constants live in `scripts/check_cad_exports.py`.
 
+The hull writer records an `ok` or `failed` outcome for each requested STEP,
+IGES, 3dm and STL output. A format failure records a reason and removes that
+format's incomplete file; other successful outputs remain in the run. The
+package records display GLB and OCX outcomes when those formats are attempted.
+
 | Constant | Value | Purpose |
 | --- | --- | --- |
 | `VOLUME_RELATIVE_TOLERANCE` | `1e-6` | One part per million for solid round-trips and unchanged offset area |

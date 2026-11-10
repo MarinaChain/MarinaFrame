@@ -23,8 +23,13 @@ The writer creates a private sibling staging directory, checks the staged file
 hashes and ZIP contents, then publishes the directory in one filesystem
 operation. An existing directory is exchanged atomically on macOS and Linux;
 its existing files, including a viewer capture, are copied into the stage.
-Task and build evidence cannot be used as the destination. A failed write leaves
-the destination unchanged.
+Task and build evidence cannot be used as the destination. A failure that stops
+package assembly leaves the destination unchanged.
+
+`format_results` lists the outcomes of the formats attempted for the build and
+package. Each entry has `status` (`ok` or `failed`) and `reason` (null for a
+success, otherwise plain text). A failed format does not remove successful
+formats from the package. Formats that were not attempted may be absent.
 
 | File | Manifest role | Contents and presence |
 | --- | --- | --- |

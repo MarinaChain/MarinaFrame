@@ -64,6 +64,7 @@ export function createExport({ host, invoke, captureView = () => null }) {
   const chosen = new Set(OUTPUTS.map((o) => o.kind));
   let files = []; // ExportedFile[] in the folder now
   let notBuilt = new Set();
+  let formatResults = {};
   let folder = null;
   let busy = false;
   let error = '';
@@ -81,10 +82,16 @@ export function createExport({ host, invoke, captureView = () => null }) {
 
   function outputRow(output) {
     const pressed = chosen.has(output.kind);
-    const written = filesOf(output.kind);
+    const failures = (output.kind === 'package' ? ['glb', 'ocx'] :
+      output.kind === 'structure' ? ['ocx'] : [output.kind])
+      .map((kind) => ({ kind, ...formatResults[kind] }))
+      .filter((result) => result.status === 'failed');
+    const written = failures.length && output.kind !== 'package' && output.kind !== 'structure' ? [] : filesOf(output.kind);
     const size = written.reduce((sum, f) => sum + f.bytes, 0);
     let state;
-    if (notBuilt.has(output.kind)) {
+    if (failures.length) {
+      state = el('span', { class: 'badge badge-small' }, 'Failed');
+    } else if (notBuilt.has(output.kind)) {
       state = el('span', { class: 'badge badge-small', title: 'This build has no such file.' }, el('span', { class: 'badge-text' }, 'Not built'));
     } else if (written.length) {
       state = el('span', { class: 'export-size', title: written.map((f) => f.file).join('\n') }, fmt.bytes(size));
@@ -112,6 +119,7 @@ export function createExport({ host, invoke, captureView = () => null }) {
       el('span', { class: 'export-text' },
         el('span', { class: 'export-name' }, output.name),
         el('span', { class: 'export-hint' }, output.hint),
+        ...failures.map((failure) => el('span', { class: 'export-hint' }, `${failure.kind.toUpperCase()}: ${failure.reason}`)),
         filesSummary(output.kind, written) ? el('span', { class: 'export-hint' }, `Written: ${filesSummary(output.kind, written)}.`) : null)),
       state,
       finder);
@@ -180,6 +188,7 @@ export function createExport({ host, invoke, captureView = () => null }) {
     files = result.files;
     folder = result.folder;
     notBuilt = new Set(result.not_built || []);
+    formatResults = result.format_results || {};
   }
 
   /** The 3D view as a picture for the report (also inside the package), or null when none is wanted or shown. */
@@ -235,6 +244,7 @@ export function createExport({ host, invoke, captureView = () => null }) {
         revision = taskView?.revision || null;
         files = [];
         notBuilt = new Set();
+        formatResults = {};
         folder = null;
         error = '';
       }
