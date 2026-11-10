@@ -105,6 +105,16 @@ BOTTOM_INNER_SHARE = 0.35
 # stations, have a knuckle.
 MIN_STATIONS = 3
 MIN_STATION_SHARE = 0.5
+# A line is a drawn grid line (a waterline or a buttock), not a station part, when more than
+# GRID_SHARE of its points lie within GRID_BAND_WIDTHS line widths (plus 3 px) of one calibrated
+# waterline row or grid column.
+GRID_BAND_WIDTHS = 2.0
+GRID_SHARE = 0.5
+# A grid column is drawn vertical: within this many columns per row.
+GRID_MAX_SLOPE = 0.02
+# A failed side-like line at least this share of the median station side length, lying between
+# two traced stations, marks a possible station that was not read.
+GAP_SIDE_SHARE = 0.5
 # Two traces within this many line widths of each other over most of their side are one line.
 SAME_LINE_WIDTHS = 1.5
 
@@ -413,6 +423,15 @@ def first_corner(points: np.ndarray, start: int, step: int, width: float) -> int
 
 # ---------------------------------------------------------------- one station
 
+def on_grid_line(points: np.ndarray, values, axis: int, width: float) -> bool:
+    """True when most of `points` lie along one grid line: a row (axis 0) or a column (axis 1)."""
+    band = GRID_BAND_WIDTHS * width + 3.0
+    for value in values:
+        if float(np.mean(np.abs(points[:, axis] - value) <= band)) > GRID_SHARE:
+            return True
+    return False
+
+
 def _distance_to(points: np.ndarray, point) -> float:
     return float(np.min(np.hypot(points[:, 0] - point[0], points[:, 1] - point[1])))
 
@@ -467,6 +486,8 @@ def _bottom(ink: np.ndarray, side_points: np.ndarray, sheet: bpr.SheetLayout, si
                 continue
             if np.min(points[:, 0]) < points[0, 0] - width:  # rises above its start: not a bottom
                 continue
+            if on_grid_line(points, sheet.waterline_rows.values(), 0, width):
+                continue
             inner = sign * (points[-1, 1] - centre)
             candidates.append((back, round(inner / width), -length, points))
         if candidates:
@@ -485,11 +506,28 @@ def _monotone(points: np.ndarray) -> np.ndarray:
     return np.asarray(kept)
 
 
+def _ends_on_grid_column(side_points: np.ndarray, side: bpr.SideLayout, width: float) -> bool:
+    """True when the side's lower arm runs straight down a calibrated grid column.
+
+    A trace can leave a station side for a buttock line where they cross; the knuckle it then
+    finds is where the buttock meets a waterline. A station side beside a buttock is slanted.
+    """
+    arc = _arc(side_points)
+    arm = side_points[arc >= arc[-1] - KNUCKLE_ARM_WIDTHS * width]
+    if len(arm) < 3:
+        return False
+    columns_per_row = np.polyfit(arm[:, 0], arm[:, 1], 1)[0]
+    band = GRID_BAND_WIDTHS * width + 3.0
+    return abs(columns_per_row) <= GRID_MAX_SLOPE and any(
+        float(np.max(np.abs(arm[:, 1] - column))) <= band for column in side.grid_columns)
+
+
 def trace_station(ink: np.ndarray, seed, sheet: bpr.SheetLayout, side: bpr.SideLayout,
-                  width: float) -> tuple[StationPolyline | None, np.ndarray, str]:
+                  width: float) -> tuple[StationPolyline | None, np.ndarray, np.ndarray, str]:
     """Trace the station whose side passes through `seed`.
 
-    Returns (station or None, the traced side line for de-duplication, the reason when None).
+    Returns (station or None, the whole traced line for de-duplication, the side cut at its
+    corners, the reason when None).
     """
     seed = np.asarray(seed, dtype=float)
     up = trace_line(ink, seed, (-1.0, 0.0), width)
@@ -503,10 +541,12 @@ def trace_station(ink: np.ndarray, seed, sheet: bpr.SheetLayout, side: bpr.SideL
     upper = first_corner(line, seed_index, -1, width)
     side_points = line[(upper or 0):(lower + 1 if lower is not None else len(line))]
     if _length(side_points) < MIN_SIDE_WIDTHS * width:
-        return None, line, 'short line'
+        return None, line, side_points, 'short line'
+    if on_grid_line(side_points, side.grid_columns, 1, width) or _ends_on_grid_column(side_points, side, width):
+        return None, line, side_points, 'grid line'
     bottom = _bottom(ink, side_points, sheet, side.sign, width)
     if bottom is None:
-        return None, line, 'no bottom branch'
+        return None, line, side_points, 'no bottom branch'
     # Knuckle: where straight fits of the side's lower end and the bottom's outer end meet.
     arm, skip = KNUCKLE_ARM_WIDTHS * width, KNUCKLE_SKIP_WIDTHS * width
     start_index = int(np.argmin(np.hypot(*(side_points - bottom[0]).T)))
@@ -515,25 +555,25 @@ def trace_station(ink: np.ndarray, seed, sheet: bpr.SheetLayout, side: bpr.SideL
     arc = _arc(joined)
     sharp, turn = is_sharp(joined, arc, len(side_points) - 1, width)
     if not sharp:
-        return None, line, 'no sharp knuckle'
+        return None, line, side_points, 'no sharp knuckle'
     side_arc, bottom_arc = _arc(side_points), _arc(bottom)
     side_end = side_points[side_arc >= side_arc[-1] - arm]
     bottom_start = bottom[(bottom_arc >= skip) & (bottom_arc <= arm)]
     fits = (_fit_line(side_end, side_end[-1] - side_end[0]), _fit_line(bottom_start, bottom_start[-1] - bottom_start[0]))
     corner = None if None in fits else _intersection(*fits)
     if corner is None or _distance_to(joined, corner) > KNUCKLE_REACH_WIDTHS * width:
-        return None, line, 'side and bottom do not meet at a corner'
+        return None, line, side_points, 'side and bottom do not meet at a corner'
     knuckle_offset = side.sign * (corner[1] - sheet.centre_column)
     inner_offset = side.sign * (bottom[-1, 1] - sheet.centre_column)
     if inner_offset > BOTTOM_INNER_SHARE * knuckle_offset:
-        return None, line, 'bottom does not reach the centreline'
+        return None, line, side_points, 'bottom does not reach the centreline'
     # Low to high: the rabbet (the bottom's inner end) first; the knuckle is the fitted corner.
     low_to_high = np.concatenate([bottom[::-1][:-1], [corner], side_points[::-1][1:]])
     polyline = _monotone(low_to_high)
     knuckle_index = int(np.argmin(np.hypot(*(polyline - corner).T)))
     station = StationPolyline(side.name, side.sign, polyline, knuckle_index,
                               (float(corner[0]), float(corner[1])), turn)
-    return station, line, ''
+    return station, line, side_points, ''
 
 
 # ---------------------------------------------------------------- one half
@@ -565,20 +605,49 @@ def _chine_order_breaks(stations: list[StationPolyline], sheet: bpr.SheetLayout)
     return breaks
 
 
+def _first_gap(ordered: list[StationPolyline], failed_sides: list[np.ndarray], rows: list[float],
+               sheet: bpr.SheetLayout, width: float) -> int | None:
+    """Rank k when a long failed side lies between stations k and k+1 at a nesting row, else None.
+
+    Long: at least GAP_SIDE_SHARE of the median station side length (rail ticks, labels and short
+    strokes are shorter).
+    """
+    if len(ordered) < 2 or not rows:
+        return None
+    lengths = [_length(s.points[s.knuckle_index:]) for s in ordered]
+    minimum = GAP_SIDE_SHARE * float(np.median(lengths))
+    row = rows[len(rows) // 2]
+    offsets = [s.offset_px(s.column_at_row(row), sheet.centre_column) for s in ordered]
+    gaps = []
+    for points in failed_sides:
+        if _length(points) < minimum or not points[:, 0].min() <= row <= points[:, 0].max():
+            continue
+        order = np.argsort(points[:, 0])
+        offset = ordered[0].sign * (np.interp(row, points[order, 0], points[order, 1]) - sheet.centre_column)
+        for k in range(len(ordered) - 1):
+            clear = SAME_LINE_WIDTHS * width
+            if offsets[k + 1] + clear < offset < offsets[k] - clear:
+                gaps.append(k)
+    return min(gaps) if gaps else None
+
+
 def read_half(ink: np.ndarray, sheet: bpr.SheetLayout, side: bpr.SideLayout) -> HalfReading:
     """Trace and name the stations of one half; declined when the half has no hard chine."""
     width = line_width(ink, sheet, side)
     result = HalfReading(side.name, False, line_width_px=width)
     traced_sides: list[np.ndarray] = []
     stations: list[StationPolyline] = []
+    failed_sides: list[np.ndarray] = []  # side-like lines that gave no station
     reasons: dict = {}
     for seed in seeds(ink, sheet, side, width):
         if any(_distance_to(points, seed) <= SAME_LINE_WIDTHS * width for points in traced_sides):
             continue
-        station, side_points, reason = trace_station(ink, seed, sheet, side, width)
-        traced_sides.append(side_points)
+        station, line, side_points, reason = trace_station(ink, seed, sheet, side, width)
+        traced_sides.append(line)
         if station is None:
             reasons[reason] = reasons.get(reason, 0) + 1
+            if reason not in ('short line', 'grid line'):
+                failed_sides.append(side_points)
             continue
         if any(_same_line(station.points, other.points, width) for other in stations):
             continue
@@ -604,14 +673,24 @@ def read_half(ink: np.ndarray, sheet: bpr.SheetLayout, side: bpr.SideLayout) -> 
         result.read = False
         result.notes.append(f'declined: {len(ordered)} stations traced for {expected} in the calibration')
         return result
+    named = len(ordered)
     if len(ordered) < expected:
         # Names run from the outermost station, the widest and clearest line of the half. The
         # stations not traced are taken to be the innermost (the small sections at the stem or
-        # transom, whose sides merge with the stem, keel or transom outline).
+        # transom, whose sides merge with the stem, keel or transom outline). A long side-like
+        # line that failed between two traced stations may be a station that was not read: the
+        # stations inward of it are then not named.
+        gap = _first_gap(ordered, failed_sides, rows, sheet, width)
+        if gap is not None:
+            named = gap + 1
+            result.notes.append(f'an untraced side-like line lies inside rank {gap}; stations inward of it not named')
         missing = side.stations_outer_first[len(ordered):]
         result.notes.append(f'{len(ordered)} stations traced for {expected}; innermost {list(missing)} not read')
     for i, (station, number) in enumerate(zip(ordered, side.stations_outer_first)):
-        if i in breaks:
+        if i >= named:
+            station.notes.append(f'traced at rank {i}, inward of an untraced line; not named')
+            result.unnamed.append(station)
+        elif i in breaks:
             station.notes.append(f'traced at rank {i} (station {number}); knuckle breaks the chine order; not named')
             result.unnamed.append(station)
         else:

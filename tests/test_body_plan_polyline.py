@@ -125,3 +125,20 @@ def test_trace_passes_a_crossing_line_and_stops_where_the_ink_ends():
     assert trace.points[-1, 0] == pytest.approx(300, abs=4)
     assert np.allclose(trace.points[:, 1], 200, atol=1.5)
     assert (trace.states == bpp.IN_CROSSING).any()
+
+
+def test_buttock_grid_lines_are_not_stations():
+    ink, sheet, side = v_bottom()
+    image = Image.fromarray(np.where(ink, 0, 255).astype(np.uint8))
+    draw = ImageDraw.Draw(image)
+    grid = (sheet.centre_column + 300, sheet.centre_column + 600)
+    for column in grid:  # vertical buttock lines from above the sheer to below the keel
+        draw.line([(column, 100), (column, 900)], fill=0, width=2)
+    ink = np.asarray(image) < 128
+    side = bpr.SideLayout('fore', 1, side.stations_outer_first, grid)
+    sheet = bpr.SheetLayout(sheet.centre_column, sheet.pixels_per_metre, sheet.waterline_rows,
+                            sheet.max_offset_px, (side,))
+    half = bpp.read_half(ink, sheet, side)
+    assert [s.station for s in half.stations] == [4, 3, 2, 1]
+    for station, (_, knuckle, knuckle_row, _) in zip(half.stations, STATIONS):
+        assert station.chine[0] == pytest.approx(knuckle_row, abs=3)
