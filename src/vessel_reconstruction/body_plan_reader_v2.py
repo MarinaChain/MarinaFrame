@@ -7,7 +7,8 @@ rank, which shifts the numbers of the stations that follow. This module reuses t
 measurement and the chine-line finder and then:
 
 1. checks that the traced line is a chine (a flat waterline or a diagonal also looks like a
-   heavy shallow stroke);
+   heavy shallow stroke), and finds the part of it that is the chine: not where it runs on along
+   a drawn waterline or out along a label leader (`chine_columns`);
 2. names the stations from the pieces ABOVE the line, ranked by nesting at one waterline, and
    gives each station its chine point;
 3. re-traces every crossing BELOW the line locally, up its own ink to the line, and names it
@@ -49,6 +50,14 @@ PARALLEL_DEGREES = 10.0
 # of a drawn waterline row.
 WATERLINE_BAND_WIDTHS = 2.0
 WATERLINE_SHARE = 0.5
+# A drawn waterline (a measuring row or not, such as a painted waterline) is a straight horizontal
+# ink run at least LONG_RUN_SHARE of the half's reach long. A chine is curved: it crosses such a
+# line over a short stretch, but never runs along one for ALONG_SHARE of the reach.
+LONG_RUN_SHARE = 0.5
+ALONG_SHARE = 0.1
+# A label leader runs out beyond the hull: line points more than this many curve widths beyond the
+# outermost measured station crossing of the half are not the chine.
+BEYOND_HULL_WIDTHS = 2.0
 
 
 @dataclass
@@ -79,6 +88,8 @@ class SideReadingV2:
     verified: bool
     identities: dict  # frozen rank identities, used when no chine line is verified
     chine_points: list[ChinePoint] = field(default_factory=list)
+    # Column range of the line that is the chine (`chine_columns`); None: all of it.
+    columns: tuple | None = None
     cells: dict = field(default_factory=dict)  # (station, waterline) -> Claim
     abstained: list = field(default_factory=list)  # {'waterline', 'index', 'reason', ...}
     notes: list = field(default_factory=list)
@@ -100,6 +111,66 @@ def lies_on_waterline(line: chine_line.ChineLine, sheet: bpr.SheetLayout) -> boo
     band = WATERLINE_BAND_WIDTHS * line.thickness_px + 3.0
     distance = np.min(np.abs(line.points[:, 0][:, None] - rows[None, :]), axis=1)
     return float(np.mean(distance <= band)) > WATERLINE_SHARE
+
+
+def _horizontal_run(ink: np.ndarray, row: float, column: float) -> int:
+    """Length of the longest horizontal ink run through (row +- 1, column)."""
+    longest = 0
+    for r in (int(round(row)) - 1, int(round(row)), int(round(row)) + 1):
+        c = int(round(column))
+        if not (0 <= r < ink.shape[0] and 0 <= c < ink.shape[1]) or not ink[r, c]:
+            continue
+        values = ink[r]
+        left = c
+        while left > 0 and (values[left - 1] or (left > 2 and values[left - 2])):
+            left -= 1
+        right = c
+        while right < len(values) - 1 and (values[right + 1] or (right < len(values) - 2 and values[right + 2])):
+            right += 1
+        longest = max(longest, right - left + 1)
+    return longest
+
+
+def chine_columns(ink: np.ndarray, line: chine_line.ChineLine, sheet: bpr.SheetLayout,
+                  reading: bpr.SideReading) -> tuple[float, float] | None:
+    """(first, last) column of the part of the line that is the chine, or None when too little is.
+
+    The finder traces a heavy shallow stroke and may run on from the chine onto a horizontal drawn
+    line (a waterline, including a painted one that is not a measuring row) or out beyond the hull
+    along a label leader. Those points are not the chine; the longest remaining stretch is. It must
+    still span MIN_SPAN_SHARE of the half's reach, or the line is not a chine (None).
+    """
+    sign = reading.layout.sign
+    crossings = [c for found in reading.stations.values() for c in found]
+    outermost = max((c.offset_px(sheet.centre_column, sign) for c in crossings), default=sheet.max_offset_px)
+    long_run = LONG_RUN_SHARE * sheet.max_offset_px
+    beyond = outermost + BEYOND_HULL_WIDTHS * line.thickness_px
+    on_long_run = np.array([_horizontal_run(ink, row, column) >= long_run for row, column in line.points])
+    along = np.zeros(len(on_long_run), dtype=bool)
+    start = None
+    for index, marked in enumerate(np.append(on_long_run, False)):
+        if marked and start is None:
+            start = index
+        elif not marked and start is not None:
+            if np.ptp(line.points[start:index, 1]) >= ALONG_SHARE * sheet.max_offset_px:
+                along[start:index] = True
+            start = None
+    inside = np.array([sign * (column - sheet.centre_column) <= beyond for _, column in line.points])
+    keep = ~along & inside
+    if keep.all():
+        return float(line.points[0, 1]), float(line.points[-1, 1])
+    best, start = (0, 0), None
+    for index, kept in enumerate(np.append(keep, False)):
+        if kept and start is None:
+            start = index
+        elif not kept and start is not None:
+            if index - start > best[1] - best[0]:
+                best = (start, index)
+            start = None
+    points = line.points[best[0]:best[1]]
+    if len(points) < 2 or np.ptp(points[:, 1]) < chine_line.MIN_SPAN_SHARE * sheet.max_offset_px:
+        return None
+    return float(points[0, 1]), float(points[-1, 1])
 
 
 # ---------------------------------------------------------------- upper pieces
@@ -218,10 +289,15 @@ def match_chine_point(arrival: tuple[float, float], points: list[ChinePoint],
 # ---------------------------------------------------------------- the side reading
 
 def read_side(ink: np.ndarray, sheet: bpr.SheetLayout, reading: bpr.SideReading,
-              line: chine_line.ChineLine | None, verified: bool) -> SideReadingV2:
-    """Name the stations of one side from the frozen reading and its chine line."""
+              line: chine_line.ChineLine | None, verified: bool,
+              columns: tuple | None = None) -> SideReadingV2:
+    """Name the stations of one side from the frozen reading and its chine line.
+
+    A station whose pieces meet the line outside `columns` (where the line runs along a waterline
+    or a leader) keeps its upper cells but has no chine point, so no lower piece is named by it.
+    """
     identities = bpr.identities_by_rank(reading.chains, reading.layout.stations_outer_first)
-    result = SideReadingV2(reading, line, verified, identities)
+    result = SideReadingV2(reading, line, verified, identities, columns=columns)
     if line is None or not verified:
         return result
     spacing = reading.waterline_spacing_px
@@ -239,9 +315,12 @@ def read_side(ink: np.ndarray, sheet: bpr.SheetLayout, reading: bpr.SideReading,
 
     for group, station in zip(groups, stations):
         member_meetings = [meetings[c] for c in group.chains]
-        result.chine_points.append(ChinePoint(station, float(np.median([m.row for m in member_meetings])),
-                                              float(np.median([m.column for m in member_meetings])),
-                                              list(group.chains)))
+        point = ChinePoint(station, float(np.median([m.row for m in member_meetings])),
+                           float(np.median([m.column for m in member_meetings])), list(group.chains))
+        if columns is None or min(columns) <= point.column <= max(columns):
+            result.chine_points.append(point)
+        else:
+            result.notes.append(f'station {station} meets the line where it is not the chine; no chine point')
         for waterline, nodes in group.above.items():
             for node in nodes:
                 claim(station, waterline, node, 'upper')
@@ -280,13 +359,16 @@ def read_sheet(ink: np.ndarray, sheet: bpr.SheetLayout,
     """Both halves of a sheet; a half takes the chine reading when its traced line is not a waterline."""
     if readings is None:
         readings = {side.name: bpr.measure_side(ink, sheet, side) for side in sheet.sides}
-    lines = {}
+    lines, columns = {}, {}
     for name, reading in readings.items():
         stations = [c for found in reading.stations.values() for c in found]
         line = chine_line.find_chine_line(ink, sheet, reading) if stations else None
-        lines[name] = None if line is not None and lies_on_waterline(line, sheet) else line
+        if line is not None and lies_on_waterline(line, sheet):
+            line = None
+        columns[name] = None if line is None else chine_columns(ink, line, sheet, reading)
+        lines[name] = None if columns[name] is None else line
     hard_chine = any(line is not None for line in lines.values())
-    return {name: read_side(ink, sheet, reading, lines[name], hard_chine and lines[name] is not None)
+    return {name: read_side(ink, sheet, reading, lines[name], hard_chine and lines[name] is not None, columns[name])
             for name, reading in readings.items()}
 
 

@@ -858,3 +858,29 @@ Results (step 2 -> step 3):
 WHITE GULL: the frozen W6 cells of stations 6 and 7 (above their drawn sheer) are left out. Two point cells go with
 them: the frozen sheer cells of 6 and 7 were interpolated between W5 and the W6 sample above the sheer, and without
 it the printed sheer height is no longer enclosed. Both were within 1 cm; they are lost, not wrong.
+
+### Step 4: reader v2 chine-line guard
+
+`body_plan_reader_v2.chine_columns`: the traced chine stroke is the chine only where it does not run **along a drawn
+waterline** (a straight horizontal ink run at least half the reach long, a measuring row or not, such as WHITE GULL's
+painted waterline, followed over at least 0.1 of the reach; a chine only crosses such a line over a short stretch)
+and does not run **out beyond the hull** (more than 2 curve widths outside the outermost measured station crossing:
+a label leader). The longest remaining stretch is the chine; it must still span 0.25 of the reach, or the half has no
+verified line. A station whose pieces meet the stroke outside that stretch keeps its upper cells but gets **no chine
+point**, so no lower piece is named by it. The existing whole-line waterline test runs first, unchanged, so a line
+rejected before is still rejected.
+
+Results, reader v2 arm (base -> step 4):
+
+| Sheet | Chine points (fore) | Waterline cells | WL RMS m | Point cells | Point RMS m | Chine cells (RMS m) |
+|---|---|---|---|---|---|---|
+| WHITE GULL | 5, 4, 3, 2, 1 -> 5, 4, 3, 2 | 43/53 -> 42/53 | 0.0179 -> 0.0181 | 7/30 -> 6/30 | 0.139 -> 0.150 | 4 (0.184) -> 3 (0.212) |
+| COLLEEN | 6, 5 -> same | 9/26 -> 9/26 | 0.523 (same) | 2/26 (same) | 1.042 (same) | 1 (1.082) (same) |
+| Five waterline dev sheets | | identical to the published v2 table (PARDON ME 45/57, RMS 0.005556; round-bilge set unchanged, no line verified) | | | | |
+
+WHITE GULL: the line now stops at station 2; the false "station 1" chine point on the painted waterline is gone.
+The two cells it gave are lost with it: 1/W2 (a lower piece named by that point) and the station 1 chine point cell
+(-0.036 m). Both were within the band, but they came from a point that was not on the chine, so leaving them out is
+the guard working, not a loss of evidence. COLLEEN's v2 failure is not this guard's case: its line has only 2 upper
+pieces for 6 stations and its chine points are misplaced on the drawn chine itself (the base result notes); the
+guard does not change it. v2 still fails both sheets' gates; the polyline product rule is the reader to use on them.

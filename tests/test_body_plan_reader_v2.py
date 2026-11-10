@@ -50,3 +50,25 @@ def test_two_crossings_claiming_one_cell_are_left_out():
     side_reading = readings['fore']
     assert side_reading.uses_chine
     assert all(a['reason'] for a in side_reading.abstained)
+
+
+def test_the_chine_part_stops_where_the_line_runs_on_along_a_drawn_waterline():
+    from types import SimpleNamespace
+    from PIL import Image, ImageDraw
+    image = Image.new('L', (1700, 900), 255)
+    draw = ImageDraw.Draw(image)
+    draw.line([(50, 600), (1650, 600)], fill=0, width=3)  # a drawn (painted) waterline, not a measuring row
+    chine = [(c, 650 - 40 * (c - 300) / 500) for c in range(300, 801)]  # the chine, rising to the waterline
+    draw.line(chine, fill=0, width=5)
+    ink = np.asarray(image) < 128
+    side = bpr.SideLayout('fore', 1, (3, 2, 1))
+    sheet = bpr.SheetLayout(100.0, 100.0, {'w': 300}, 1500, (side,))
+    points = np.array([(row, c) for c, row in chine] + [(600.0, c) for c in range(801, 1400)], dtype=float)
+    line = v2.chine_line.ChineLine(points, 3, 5.0)
+    reading = SimpleNamespace(layout=side, stations={})
+    first, last = v2.chine_columns(ink, line, sheet, reading)
+    assert first == pytest.approx(300, abs=2)
+    assert 790 <= last <= 1000  # not along the waterline to column 1400
+    straight = v2.chine_line.ChineLine(np.array([(650 - 40 * (c - 300) / 500, c) for c in range(300, 801)],
+                                                dtype=float), 3, 5.0)
+    assert v2.chine_columns(ink, straight, sheet, reading) == (300.0, 800.0)
