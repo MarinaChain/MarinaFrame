@@ -464,6 +464,7 @@ def run_isolated(spec_path: str | Path, output_dir: str | Path, *, export_cad: b
                 try:
                     output.rename(quarantine)
                     for name in ('model.step', 'model.stl', 'model.iges', 'model-draft.step', 'model-draft.stl', 'model-draft.iges',
+                                 'model.3dm', 'model-draft.3dm',
                                  'mesh.json', 'cad_sections.json', 'result.json', 'manifest.json'):
                         (quarantine / name).unlink(missing_ok=True)
                     outcome['quarantine'] = quarantine.name

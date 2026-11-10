@@ -9,13 +9,13 @@ from .errors import GeometryError
 if TYPE_CHECKING:
     import cadquery as cq
 
-# Mode 1 writes boundary representations, including solid topology; mode 0 writes surfaces.
-IGES_BREP_MODE = 1
+# Mode 0 writes trimmed surfaces for exchange; STEP carries solid topology.
+IGES_BREP_MODE = 0
 IGES_DRAFT_STAMP = "MarinaFrame DRAFT: not for construction."
 
 
 def export_iges(shape: cq.Shape, path: Path) -> None:
-    """Write an IGES BRep in millimetres, matching STEP, with a draft stamp."""
+    """Write IGES trimmed surfaces in millimetres, matching STEP, with a draft stamp."""
     from OCP.IGESControl import IGESControl_Writer
 
     writer = IGESControl_Writer("MM", IGES_BREP_MODE)

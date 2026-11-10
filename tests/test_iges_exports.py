@@ -4,6 +4,7 @@ from pathlib import Path
 import cadquery as cq
 from OCP.IFSelect import IFSelect_RetDone
 from OCP.IGESControl import IGESControl_Reader
+from OCP.BRepBuilderAPI import BRepBuilderAPI_Sewing
 import pytest
 
 from vessel_reconstruction.geometry import export_geometry
@@ -17,6 +18,10 @@ def read_iges(path: Path) -> cq.Shape:
     # IGES unit flag 2 means millimetres, the same unit as STEP and the OCC model.
     assert reader.IGESModel().GlobalSection().UnitFlag() == 2
     assert reader.IGESModel().GlobalSection().UnitName().ToCString() == "MM"
+    entity_types = {reader.IGESModel().Entity(i).TypeNumber()
+                    for i in range(1, reader.IGESModel().NbEntities() + 1)}
+    assert 144 in entity_types  # Trimmed surfaces, without MSBO solids (entity 186).
+    assert 186 not in entity_types
     assert reader.TransferRoots() > 0
     return cq.Shape.cast(reader.OneShape())
 
@@ -37,8 +42,16 @@ def test_hull_export_writes_iges_in_millimetres_with_a_draft_stamp(tmp_path):
     path = tmp_path / exports["iges"]
     assert_draft_stamp(path)
     imported = read_iges(path)
-    assert imported.isValid() and len(imported.Solids()) == 1
-    assert imported.Volume() == pytest.approx(120e9)
+    assert imported.isValid() and not imported.Solids()
+    assert len(imported.Faces()) == len(shape.Faces())
+    # One micrometre in millimetres allows exchange-file roundoff at shared edges.
+    sewing = BRepBuilderAPI_Sewing(0.001)
+    for face in imported.Faces():
+        sewing.Add(face.wrapped)
+    sewing.Perform()
+    sewn = cq.Shape.cast(sewing.SewedShape())
+    assert sewn.isValid() and len(sewn.Shells()) == 1
+    assert sewn.Shells()[0].Closed()
     bounds = imported.BoundingBox()
     assert (bounds.xlen, bounds.ymin, bounds.ymax, bounds.zlen) == pytest.approx((10000, -2000, 2000, 3000))
 
@@ -49,7 +62,7 @@ def test_mesh_only_export_does_not_write_iges(tmp_path):
     assert not (tmp_path / "model.iges").exists()
 
 
-def test_iges_writer_keeps_all_solids_in_a_tank_compound(tmp_path):
+def test_iges_writer_keeps_all_faces_in_a_tank_compound(tmp_path):
     from vessel_reconstruction.cad_exports import export_iges
 
     tanks = cq.Compound.makeCompound([
@@ -60,8 +73,8 @@ def test_iges_writer_keeps_all_solids_in_a_tank_compound(tmp_path):
     export_iges(tanks, path)
     assert_draft_stamp(path)
     imported = read_iges(path)
-    assert imported.isValid() and len(imported.Solids()) == 2
-    assert imported.Volume() == pytest.approx(5e9)
+    assert imported.isValid() and not imported.Solids()
+    assert len(imported.Faces()) == len(tanks.Faces())
 
 
 def test_structure_slice_writes_iges_beside_step(tmp_path):
@@ -74,8 +87,9 @@ def test_structure_slice_writes_iges_beside_step(tmp_path):
     iges = path.with_suffix(".iges")
     assert_draft_stamp(iges)
     imported = read_iges(iges)
-    assert imported.isValid() and len(imported.Solids()) == 1
-    assert imported.Volume() == pytest.approx(500 * 1000 * 20)
+    assert imported.isValid() and not imported.Solids()
+    source, _ = solid.build_slice(section, 500)
+    assert len(imported.Faces()) == len(source.Faces())
 
 
 def test_structure_block_writes_iges_beside_step(tmp_path):
@@ -89,8 +103,9 @@ def test_structure_block_writes_iges_beside_step(tmp_path):
     iges = path.with_suffix(".iges")
     assert_draft_stamp(iges)
     imported = read_iges(iges)
-    assert imported.isValid() and len(imported.Solids()) == 2
-    assert imported.Volume() == pytest.approx(0.06e9)
+    assert imported.isValid() and not imported.Solids()
+    source = cq.importers.importStep(str(path)).val()
+    assert len(imported.Faces()) == len(source.Faces())
 
 
 def test_iges_writer_reports_file_write_failure(tmp_path):

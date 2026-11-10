@@ -176,6 +176,7 @@ def quarantine_interrupted(output_dir: str | Path) -> dict:
             # Partial geometry remains private and is removed before marking
             # the orphan as quarantined. If cleanup fails, do not publish.
             for name in ("mesh.json", "model.step", "model.stl", "model.iges", "model-draft.step", "model-draft.stl", "model-draft.iges",
+                         "model.3dm", "model-draft.3dm",
                          "cad_sections.json", "manifest.json", "result.json"):
                 (stage / name).unlink(missing_ok=True)
             quarantined = out.parent / f".{out.name}.interrupted-{uuid.uuid4().hex}"
