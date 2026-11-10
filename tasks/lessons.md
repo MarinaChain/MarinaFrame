@@ -151,3 +151,9 @@
 - **Trigger:** The best-of-N lane validated its fit score offline on 130 stored drafts with a script that lived only in its worktree. I removed the worktree after the merge (`git worktree remove --force`), so a later lane (better picks) could not rerun the validation and had to rebuild it from the doc.
 - **Rule:** Before removing a merged worktree, check `git status` there for untracked scripts, benchmarks or replay tools; commit any that produced a reported number (data stays in git-ignored work/), or ask the lane to. Do not use `--force` while untracked code files remain.
 - **Why:** A number in a doc that cannot be reproduced cannot be compared with later work.
+
+### Keep per-run replay data out of commits (MarinaFrame)
+- **Date:** 2026-11-10
+- **Trigger:** Cross-view outlier replay wrote a 5.2 MB derived JSON file under `outputs/`; the user asked to move it to ignored `work/` before committing.
+- **Rule:** Write per-run derived replay JSON and logs to git-ignored `work/`, including the script's default output path. Commit the replay code, tests and concise result tables, not the per-run data.
+- **Why:** Reproducible measurement output is not a source deliverable and need not enlarge repository history.

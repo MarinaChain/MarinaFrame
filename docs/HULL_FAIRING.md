@@ -236,3 +236,214 @@ first hull's bottom handling below the lowest read cell (BUE GIRL); (2) detect b
 the section (dense in height) and against the profile and plan views, which are independent of
 the neighbouring stations; (3) more stations (half stations at the ends) make the cross-station
 check sharper.
+
+## 7. Cross-view cell detector: protocol fixed before results
+
+Date: 2026-11-10. No detector replay results were inspected before this protocol.
+The detector is a report-only check, not a new acceptance gate. Fairing stays off.
+Frozen body-plan readers, draft fit, best-of-N selection and the 2 %/5 % gates do not change.
+
+### 7.1 Replay population and denominators
+
+Replay the delivered build and every stored first/revision build of the ten L0/L1
+4f92e9f development cases listed in section 3. Report delivered and all-build results
+separately, since revisions are correlated. Include BUE GIRL's stored reader sections
+as a separate case. No live model calls, new images, CAD builds or sealed holdouts.
+Use only stored sections and their source sheet/calibration for independent view scans.
+No truth geometry enters the detector. Missing inputs fail the replay, not disappear.
+
+A cell is a point in a measured (`read` or `traced`) section, in source curve order.
+The unchanged-reading alarm rate is flagged cells / all measured cells. It is a
+**conservative false-alarm proxy**, not a truth-labelled false-positive rate: unchanged
+readings can contain real errors. Also report alarms / cells with usable independent
+view evidence and coverage for plan, profile and section-neighbour checks. Missing or
+ambiguous evidence is not agreement. Report each case and pooled counts, not only a mean.
+
+Inject one fault at a time into the same stored geometry. Select the measured stations
+nearest 25 % and 50 % of the measured x span (distinct ids; deterministic x/id tie break).
+At each selected station inject +0.1 m and +0.2 m at mid-height, with the section 3.4
+triangular taper over +/-5 % of section height; insert the peak vertex if absent.
+Keep centreline points fixed. Separately increase every positive half-breadth in that
+station by 5 % of the unchanged measured half-beam (section 3.4 convention).
+Cell detection means the peak cell is flagged; station detection means at least one
+changed cell is flagged. Report raw detection and **new** detection (not already flagged
+at that location in the unchanged input). Count missing-view trials as misses in the
+all-trial rate; also show the covered-only rate. Report unchanged-cell collateral alarms.
+
+### 7.2 Targets and fixed decision rule
+
+| Metric | Target fixed before replay |
+|---|---|
+| +0.1 m peak-cell detection | >= 80 % of trials |
+| +0.2 m peak-cell detection | >= 90 % of trials |
+| Whole station +5 % half-beam detection | >= 90 % of trials |
+| Unchanged-reading alarm proxy | <= 1 % pooled, <= 2 % on every delivered case and BUE GIRL |
+| Independent plan/profile coverage | >= 90 % of measured cells on every delivered case |
+
+Both raw and new detection must meet the detection targets. These are engineering
+aspirations, not relaxed gates. Use in fairing by default only after all targets hold
+and a separate weighted-fit replay meets G1/G2. This task makes no default-weight change.
+Failure or insufficient view coverage means keep report-only; do not tune after seeing
+results without explicitly recording a new development experiment.
+
+### 7.3 Design, constants and execution checkpoints
+
+Use a separate `cross_view_outliers.py` module. Reuse the existing read-only reference
+view calibration and ink-scan primitives, without changing the selection score. Compare
+each cell with plan ink at its station x; this is nearest-curve evidence, not proof of
+waterline identity. Mark competing runs ambiguous. Profile checks are one-sided limits
+(below keel, above deck, aft of transom, forward of stem), not an interior shape predictor.
+For the section check, use distance to the chord between bracketing neighbours at a
+5 %-height scale, not immediate dense trace pixels; this matches the injected-cell scale.
+Do not extrapolate section neighbours at curve ends.
+
+Initial tolerance: max(0.02 m, 0.005 * unchanged half-beam, 3 source pixels in metres).
+The 20 mm floor avoids sub-centimetre drawing noise; 0.5 % of half-beam is one quarter
+of the RMS gate; three pixels allow line thickness and scan/calibration noise. Flag
+when any usable independent-view distance exceeds tolerance, or the section chord
+distance exceeds twice it (curvature needs more allowance). Report all distances,
+tolerances, ambiguity and missing checks per cell, with one check item per flagged cell.
+Explain additional constants at their definitions. Never infer an independent view
+from the sections being checked. Report-only avoids removing real chines or shoulders.
+
+Implementation checkpoints (commit each):
+1. Commit this protocol after existing fairing unit tests and a diff check.
+2. Write failing synthetic tests, implement the pure detector and replay input adapter,
+   test exact/shifted curves, profile limits, neighbours, missing/ambiguous views,
+   invalid inputs and input immutability. Commit source and tests.
+3. Run `benchmarks/hull_fairing/replay_outliers.py` over the fixed population, write
+   machine-readable per-run counts under git-ignored `work/` and tables here. Test replay accounting and
+   repeatability, run related regression tests, review the diff, then commit results.
+
+Resume at the first checkpoint absent from `git log`. Run Python with
+`PYTHONPATH=src:. .venv/bin/python`. All shell commands start `set -o pipefail`;
+never push, merge, switch branches or pipe git. No files under `work/factory-sealed-*`
+may be opened. Optional fit down-weighting is deferred, not silently enabled.
+
+### 7.4 Replay results (2026-11-10)
+
+Run from this worktree:
+
+```bash
+set -o pipefail
+PYTHONPATH=src:. .venv/bin/python -m benchmarks.hull_fairing.replay_outliers
+```
+
+The script writes per-run derived data to `work/cross-view-outliers.json`
+(git-ignored, not committed). `--work` selects the development input root;
+`--output` selects the report path. The report contains baseline check items with
+distances, input hashes, reference calibrations, per-trial counts and pooled rates.
+No detector constants were tuned after this replay. No truth, CAD build, new model
+reading, rendered image or sealed holdout was used.
+
+Population: 10 delivered builds, 21 stored first/revision builds (including those
+10), and the BUE GIRL frozen reader curves **before** bottom/deck continuation.
+One stored build, `shipd-1-09867-3v-L0/first-1041bae1a618`, contains only
+`ai_inferred`/`interpolated` sections. It has no eligible measured cells. Its six
+planned trials are explicitly unavailable and remain misses in the all-build
+trial denominator; its unchanged alarm rate is undefined, not zero. No input
+files were missing. Revisions are correlated, so the all-build set is not an
+independent validation set.
+
+#### Detection
+
+Each entry is raw / newly detected, with the common trial denominator. A new
+alarm must be absent at the same location in the paired unchanged geometry;
+when a peak vertex is inserted, it is inserted in both runs. Missing independent
+views count as misses, as fixed in section 7.1.
+
+| Population | +0.1 m cell | +0.2 m cell | Station +5 % half-beam |
+|---|---|---|---|
+| Delivered (20 trials per kind) | 3/20 / 0/20 (15 % / 0 %) | 1/20 / 1/20 (5 % / 5 %) | 20/20 / 20/20 (100 % / 100 %) |
+| All stored builds (42 per kind) | 7/42 / 1/42 (16.67 % / 2.38 %) | 3/42 / 3/42 (7.14 % / 7.14 %) | 40/42 / 40/42 (95.24 % / 95.24 %) |
+| BUE GIRL reader (2 per kind) | 0/2 / 0/2 | 0/2 / 0/2 | 0/2 / 0/2 |
+
+All delivered trials have some independent evidence. The all-build covered-only
+rates (40 covered trials per kind) are 17.5 % raw / 2.5 % new for +0.1 m,
+7.5 % / 7.5 % for +0.2 m, and 100 % / 100 % for station faults.
+BUE GIRL has no usable reference plan/profile from the existing calibration
+helper, so its covered-only rates are undefined. Its section-only check flags
+both injected cell peaks for each amplitude (2/2 raw and new), but no station
+fault (0/2). These section-only flags do not count as cross-view detections.
+
+Per delivered case below, entries are raw/new counts out of two trials. Every
+case detects both station faults, with two new alarms.
+
+| Case | +0.1 m | +0.2 m | Station +5 % |
+|---|---|---|---|
+| dtmb5415-L0 | 0/0 | 0/0 | 2/2 |
+| series60-L0 | 0/0 | 0/0 | 2/2 |
+| 00679-L0 | 0/0 | 0/0 | 2/2 |
+| 08158-L0 | 1/0 | 0/0 | 2/2 |
+| 09867-L0 | 0/0 | 0/0 | 2/2 |
+| dtmb5415-L1 | 1/0 | 0/0 | 2/2 |
+| series60-L1 | 0/0 | 0/0 | 2/2 |
+| 00679-L1 | 0/0 | 1/1 | 2/2 |
+| 08158-L1 | 1/0 | 0/0 | 2/2 |
+| 09867-L1 | 0/0 | 0/0 | 2/2 |
+
+#### Unchanged-reading alarms and coverage
+
+Coverage is the share of measured cells with a usable plan scan, at least one
+profile limit, or a bracketing section chord. A usable profile limit does **not**
+mean that all four limits are present or that profile can predict interior breadth.
+
+| Case | Alarms / measured cells | Alarm proxy | Plan coverage | Profile coverage | Section coverage |
+|---|---|---|---|---|---|
+| dtmb5415-L0 | 562/1207 | 46.56 % | 77.1 % | 100 % | 88.1 % |
+| series60-L0 | 207/1190 | 17.39 % | 60.3 % | 100 % | 87.9 % |
+| 00679-L0 | 116/837 | 13.86 % | 61.3 % | 100 % | 87.3 % |
+| 08158-L0 | 372/659 | 56.45 % | 92.7 % | 100 % | 88.3 % |
+| 09867-L0 | 486/1104 | 44.02 % | 93.3 % | 100 % | 87.2 % |
+| dtmb5415-L1 | 440/934 | 47.11 % | 75.9 % | 100 % | 87.7 % |
+| series60-L1 | 215/938 | 22.92 % | 77.2 % | 100 % | 87.1 % |
+| 00679-L1 | 109/845 | 12.90 % | 68.0 % | 100 % | 87.1 % |
+| 08158-L1 | 710/1098 | 64.66 % | 93.0 % | 100 % | 87.3 % |
+| 09867-L1 | 484/1111 | 43.56 % | 95.0 % | 100 % | 86.9 % |
+| BUE GIRL reader | 17/1391 | 1.22 % | 0 % | 0 % | 89.1 % |
+| Delivered pooled | 3701/9923 | **37.30 %** | | | |
+| All stored pooled | 7693/19920 | **38.62 %** | | | |
+
+For delivered and eligible stored builds, every measured cell has at least one
+profile limit. Their covered-cell alarm rates therefore equal their all-cell
+rates. BUE GIRL has no independently covered cells, so that rate is undefined.
+The alarm proxy is not a truth-labelled false-positive rate; even so, its high
+value fails the fixed <=1 % pooled and <=2 % per-delivered-case targets.
+
+New alarms on unchanged collateral cells: zero for all development-build trials
+(+0.1 m: 0/39307 cell-trial observations; +0.2 m: 0/39307; station: 0/34265).
+For BUE GIRL they are 3/2758 (0.11 %), 13/2758 (0.47 %), and 0/2544,
+respectively. These denominators repeat unchanged cells across trials; they are
+not counts of distinct cells.
+
+### 7.5 Recommendation and limits
+
+**Keep report-only; do not use this detector to down-weight fairing by default.
+Keep fairing off by default.** Whole-station detection meets its target, but both
+cell-detection targets and the unchanged-reading alarm target fail. Nominal
+profile coverage meets the delivered-case coverage target; plan-only coverage
+is below 90 % in six delivered cases, and BUE GIRL has no independent coverage.
+No weighted-fit replay was run, so G1/G2 are not established for detector weights.
+
+The current nearest-plan-ink check is not a labelled waterline-curve matcher.
+At a height not drawn in plan, even a correct section point can be far from the
+nearest drawn waterline; after an injection it can move closer to another line.
+Thus larger faults need not give more alarms (15 % raw at +0.1 m versus 5 % at
++0.2 m). Profile bounds do not constrain an interior half-breadth, and a short
+chord can preserve a bump when the section is steep. Outer profile ink can also
+include non-hull marks. These are method limits, not evidence that the unchanged
+readings are all wrong. Do not use the reported coverage as proof of correct
+waterline identity or calibrated hull-limit identity.
+
+Before automatic fit weighting, identify each plan waterline independently and
+compare only cells at that height (or a justified interpolation between labelled
+curves), validate hull-only profile limits, and support BUE GIRL's reference
+frame. Then preregister a new experiment and repeat the full paired replay and
+weighted-fit G1/G2 checks. No reader, draft-fit selection, default or gate changes
+are justified by this result.
+
+Verification: a second full replay produced byte-identical JSON (`cmp` passed).
+The non-CAD Python suite passed: **1467 passed, 45 deselected**, with five SWIG
+import deprecation warnings. This includes detector and replay-accounting tests.
+CAD and detector-weighted fit tests were not run; no geometry or fit integration
+was changed. Per-run JSON and logs remain under ignored `work/`.
