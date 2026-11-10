@@ -16,7 +16,7 @@ E. C. COLLIER and COLLEEN.
 """
 from __future__ import annotations
 
-from vessel_reconstruction import body_plan_reader as bpr
+from benchmarks.frozen_readers.v1 import body_plan_reader as bpr
 
 PROTOCOL = 'docs/BODY_PLAN_CHINE.md (Holdout protocol: CALEB JONES)'
 # Frozen truth file work/holdout/caleb-jones/truth.json (main checkout, read-only): sha256 given by

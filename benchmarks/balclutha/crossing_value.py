@@ -28,9 +28,9 @@ from benchmarks.balclutha import model_value as round4
 from benchmarks.balclutha import router_value as round6
 from benchmarks.balclutha import tiled_value as round5
 from benchmarks.gunnerus import whole_vessel_ab as ab
-from vessel_reconstruction import body_plan_crossings as bpc
-from vessel_reconstruction import body_plan_identity as bpi
-from vessel_reconstruction import body_plan_reader as bpr
+from benchmarks.frozen_readers.v1 import body_plan_crossings as bpc
+from benchmarks.frozen_readers.v1 import body_plan_identity as bpi
+from benchmarks.frozen_readers.v1 import body_plan_reader as bpr
 
 PROTOCOL = 'docs/plans/2026-11-09-whole-vessel-scope.md 3.5.8'
 # Stations are drawn out to the 20 ft buttock (2,990 px from the centreline); 3,150 px leaves room.

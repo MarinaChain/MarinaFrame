@@ -14,7 +14,7 @@ measuring rows are therefore a fixed grid of heights from the scale alone, as fo
 """
 from __future__ import annotations
 
-from vessel_reconstruction import body_plan_reader as bpr
+from benchmarks.frozen_readers.v1 import body_plan_reader as bpr
 
 PROTOCOL = 'docs/BODY_PLAN_CHINE.md (Holdout protocol: WHITE GULL and COLLEEN)'
 # Frozen truth file work/holdout/<boat>/truth.json (main checkout, read-only): sha256 given by the PM
