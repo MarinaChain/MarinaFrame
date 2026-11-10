@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import { createExport, outputsOf } from '../ui/js/export.js';
 
 const CAD_OUTPUTS = [
-  { kind: 'iges', name: 'IGES', hint: 'Surfaces, mm. Use STEP for solids.' },
-  { kind: '3dm', name: 'Rhino 3dm', hint: 'Rhino layers, mm. Curved trimmed faces are meshes.' },
+  { kind: 'iges', name: 'IGES', hint: 'Hull surfaces for CAD, millimetres. Use STEP for solids.' },
+  { kind: '3dm', name: 'Rhino 3dm', hint: 'Rhino file with a layer per output, millimetres; curved trimmed faces are meshes.' },
 ];
 
 class FakeNode {
@@ -30,7 +30,7 @@ test('CAD formats have the requested short names and tooltip details', () => {
   }
 });
 
-test('export controls show compact CAD labels, send their kinds, and reveal their files', async () => {
+test('IGES and 3dm rows show their name and hint, send their kinds, and reveal their files', async () => {
   const host = new FakeNode('div');
   const calls = [];
   const files = CAD_OUTPUTS.map(({ kind }) => ({ kind, file: `V_r0003_DRAFT_model.${kind}`, path: `/task/exports/r0003/V_r0003_DRAFT_model.${kind}`, bytes: 1200 }));
@@ -43,9 +43,10 @@ test('export controls show compact CAD labels, send their kinds, and reveal thei
     const row = host.findAll((node) => node.dataset.kind === output.kind)[0];
     assert.ok(row);
     const toggle = row.findAll((node) => node.className === 'export-toggle')[0];
-    assert.equal(toggle.attributes['data-tip-detail'], output.hint);
+    assert.ok(toggle);
     assert.equal(row.findAll((node) => node.className === 'export-name')[0].textContent, output.name);
-    assert.equal(row.findAll((node) => node.className === 'export-hint').length, 0);
+    // Like every other output, the hint is a subtitle line under the name.
+    assert.equal(row.findAll((node) => node.className === 'export-hint')[0].textContent, output.hint);
   }
   for (const output of outputsOf({}).filter((output) => !CAD_OUTPUTS.some(({ kind }) => kind === output.kind))) {
     const row = host.findAll((node) => node.dataset.kind === output.kind)[0];

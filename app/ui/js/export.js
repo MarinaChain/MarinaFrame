@@ -7,13 +7,12 @@ import { el, icon, fill } from './dom.js';
 import { glyphChip } from './glyphs.js';
 import * as fmt from './format.js';
 import { accuracyBlock } from './accuracy.js';
-import { tipAttributes } from './tooltip.js';
 
 /** The outputs in display order. `kind` matches the backend; `name` is the one-word chip. */
 const OUTPUTS = [
   { kind: 'step', name: 'STEP', glyph: 'cube', hint: 'Hull surface for CAD, millimetres, draft stamp in the header.' },
-  { kind: 'iges', name: 'IGES', glyph: 'cube', hint: 'Surfaces, mm. Use STEP for solids.', tooltip: true },
-  { kind: '3dm', name: 'Rhino 3dm', glyph: 'cube', hint: 'Rhino layers, mm. Curved trimmed faces are meshes.', tooltip: true },
+  { kind: 'iges', name: 'IGES', glyph: 'cube', hint: 'Hull surfaces for CAD, millimetres. Use STEP for solids.' },
+  { kind: '3dm', name: 'Rhino 3dm', glyph: 'cube', hint: 'Rhino file with a layer per output, millimetres; curved trimmed faces are meshes.' },
   { kind: 'stl', name: 'STL', glyph: 'mesh', hint: 'Triangle mesh for viewers and 3D printing, millimetres.' },
   { kind: 'offsets', name: 'Offsets', glyph: 'table', hint: 'Half-breadths at each station and waterline, CSV for Excel.' },
   { kind: 'hydrostatics', name: 'Hydrostatics', glyph: 'waterline', hint: 'Volume, displacement, centres and coefficients at the design waterline (JSON and CSV).' },
@@ -80,7 +79,6 @@ export function createExport({ host, invoke }) {
   }
 
   function outputRow(output) {
-    const tip = output.tooltip ? tipAttributes(output.name, output.hint, { label: false }) : null;
     const pressed = chosen.has(output.kind);
     const written = filesOf(output.kind);
     const size = written.reduce((sum, f) => sum + f.bytes, 0);
@@ -107,14 +105,13 @@ export function createExport({ host, invoke }) {
         'aria-pressed': String(pressed),
         disabled: busy,
         onclick: () => toggle(output.kind),
-        ...tip?.attrs,
       },
       el('span', { class: 'export-check', 'aria-hidden': 'true' }),
       icon(output.glyph),
       el('span', { class: 'export-text' },
         el('span', { class: 'export-name' }, output.name),
-        output.tooltip ? null : el('span', { class: 'export-hint' }, output.hint),
-        filesSummary(output.kind, written) ? el('span', { class: 'export-hint' }, `Written: ${filesSummary(output.kind, written)}.`) : null), tip?.describer),
+        el('span', { class: 'export-hint' }, output.hint),
+        filesSummary(output.kind, written) ? el('span', { class: 'export-hint' }, `Written: ${filesSummary(output.kind, written)}.`) : null)),
       state,
       finder);
   }
