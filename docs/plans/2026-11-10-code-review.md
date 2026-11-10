@@ -45,6 +45,11 @@ P0 = wrong result or unprotected boundary; P1 = structural debt that blocks prog
 | 19 | P2 | Tests that check source text instead of behaviour (`details.test.mjs:22-25,83-86`); quick tier still builds CAD (`test_geometry*.py` unmarked); Rust test targets recompile modules by path | behaviour tests; mark CAD tests; import the library | M |
 | 20 | P2 | Artifact names in several lists (`pipeline.py:208`, `transaction.py:178`, `run_record.py:431`); particulars 1e-6 m tolerance flags feet vs metres as a conflict; fairing modules import each other's privates | one descriptor table; unit-aware tolerance; one module | S each |
 
+## Reader work status
+
+- Item 7: benchmark reader isolation started in `b90c166`. Real-sheet equivalence and published-score reproduction are still pending.
+- Item 8: not started; scale-relative thresholds and the low-resolution flag are still required.
+
 ## Well designed (keep)
 
 Process supervision and the macOS Seatbelt sandbox; exclusive run publication with sealed records
