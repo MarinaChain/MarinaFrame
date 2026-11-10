@@ -447,3 +447,85 @@ The non-CAD Python suite passed: **1467 passed, 45 deselected**, with five SWIG
 import deprecation warnings. This includes detector and replay-accounting tests.
 CAD and detector-weighted fit tests were not run; no geometry or fit integration
 was changed. Per-run JSON and logs remain under ignored `work/`.
+
+## 8. Three-view surface: protocol fixed before results
+
+Date: 2026-11-10, branch `feature/three-view-fairing`. This section and the
+machine-readable `benchmarks/hull_fairing/three_view_protocol.json` are committed
+before collecting new evidence or running new fits. No live model calls, images,
+sealed factory inputs, reader edits, selection edits or gate edits are part of this work.
+
+### 8.1 Fixed fit/check split
+
+The fit half is the five **L0** cases in the 4f92e9f round: dtmb5415, series60,
+shipd-1-00679, shipd-1-08158 and shipd-1-09867 (full ids in the JSON). The check
+half is the same five **L1** cases. Every stored first/revision build follows its
+case, including both readings. No reading can cross the split. BUE GIRL's stored
+reader output is an additional check case. This is a paired degradation check;
+it is not a hull-disjoint test and all these cases have earlier development results.
+Report delivered builds and all stored builds separately; revisions are correlated.
+No fit choices may use L1 or BUE GIRL results, including injection results.
+
+### 8.2 Metrics and fixed targets
+
+Use the unchanged section 6 replay scorer and development truth. Report per case
+and per half: gate RMS % of half-beam, signed in-range volume error %, gate passes,
+waterline/section inflections and maximum curvature jump. Report both the current
+builder and the station-only fairer against the new surface. Also report BUE GIRL
+at the stored reader cells **before bottom/deck continuation**, RMS m, maximum m,
+number of scored cells and share within 0.05 m. Keep unavailable cells visible.
+
+At the measured stations nearest 25 % and 50 % of the measured span (ties by x,
+then id), inject each of: one +0.1 m cell, one +0.2 m cell (linear taper to zero
+at +/-5 % section height), and one whole station +5 % of the unperturbed measured
+half-beam. Centreline points stay zero. Use a paired zero-injection baseline with
+the same inserted midpoint. **Freeze the other two views and all scales/weights**
+for each paired test. Report signed and absolute follow share, median and maximum,
+and off-target movement. Missing fits remain explicit failed trials.
+
+For each view and source label, report point count, median, p95 and maximum
+Euclidean movement to the fitted surface at the same x and height (profile:
+projected x/z). Include the movement of hard boundaries. Report coverage, ambiguous
+points, and fit/build failures. Never call inferred or ambiguous points traced.
+
+| Id | Fixed target, applied separately to fit and check halves |
+|---|---|
+| T1 | Delivered mean RMS improves by at least 0.10 points; no case regresses by more than 0.10 points |
+| T2 | No delivered gate pass lost; no absolute in-range volume error increases by more than 0.5 points |
+| T3 | Each +0.1 m and +0.2 m trial follows at most 25 %; each whole-station trial at most 60 % (absolute share) |
+| T4 | In each available view, at least 95 % of traced/read points stay within 1 % of unperturbed half-beam per case; report every excess as a check item |
+| T5 | BUE GIRL reader output RMS <= 0.01 m, maximum <= 0.05 m, with no lost scored cells |
+
+All-build metrics are secondary. Fewer inflections and curvature jumps are desired
+and reported; they do not replace T1-T3. Switch fairing on by default only if the
+**check** half meets T1-T3, every planned case builds, and no BUE GIRL regression
+or hidden coverage loss occurs. Otherwise retain the off-by-default setting.
+
+### 8.3 Data and fit design
+
+Reuse `draft_fit.reference_views` for the reference frame and `view_measure` ink
+scans. Sample plan waterlines and the deck line between stations as well as at
+stations. Waterline height labels come from the profile grid. Matching uses the
+stored hull as a search prediction only; competing/merged crossings are labelled
+`repaired` with reduced confidence. Store coordinates in metres, labels, curve
+ids, calibration, pixel locations and missing/ambiguous counts per stored build.
+Profile keel/deck and stem/transom scans define boundary evidence. No truth enters
+the evidence collector or fitter. Store derived data and logs under ignored `work/`;
+commit code, tests and concise result tables.
+
+Fit one tensor spline surface, with view weights, the existing source-label
+weights, a second-difference fairness penalty and Huber residual weights. Keep
+keel/centreline, terminal sections and deck edges as exact boundary conditions.
+Profile evidence fixes the domain between stations; add half stations in the first
+and last measured gaps only where profile evidence spans them. Report conflicting
+boundary evidence; do not silently move a hard boundary to satisfy it. The current
+station-only fit remains the fallback when cross-view evidence is absent.
+
+Choose plan weight from **0.5, 2, 8** using only delivered L0 evidence and paired
+injections. Body and profile weights = 1, fairness = 0.02, Huber scale = 1 % of
+unperturbed half-beam. Among candidates meeting T4 on L0, choose the smallest
+worst absolute injection follow share; ties choose the smaller plan weight. If
+none meet T4, choose the largest minimum within-tolerance share, then the smallest
+worst follow share, then smaller weight. Freeze that choice in a committed file
+before scoring either half or running check-half injections. Do not tune after
+check results. The final replay includes all stored builds on both halves.

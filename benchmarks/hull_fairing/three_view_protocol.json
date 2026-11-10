@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "fit_cases": ["dtmb5415-3v-L0", "series60-3v-L0", "shipd-1-00679-3v-L0", "shipd-1-08158-3v-L0", "shipd-1-09867-3v-L0"],
+  "check_cases": ["dtmb5415-3v-L1", "series60-3v-L1", "shipd-1-00679-3v-L1", "shipd-1-08158-3v-L1", "shipd-1-09867-3v-L1", "bue_girl"],
+  "plan_weight_candidates": [0.5, 2.0, 8.0],
+  "body_weight": 1.0,
+  "profile_weight": 1.0,
+  "fairness": 0.02,
+  "huber_half_beam_fraction": 0.01,
+  "targets": {
+    "mean_rms_improvement_points": 0.1,
+    "max_rms_regression_points": 0.1,
+    "max_volume_regression_points": 0.5,
+    "cell_0.1m_max_follow_share": 0.25,
+    "cell_0.2m_max_follow_share": 0.25,
+    "station_5pct_max_follow_share": 0.6,
+    "measured_points_within_tolerance": 0.95,
+    "measured_tolerance_half_beam_fraction": 0.01,
+    "bue_reader_rms_m": 0.01,
+    "bue_reader_max_m": 0.05
+  }
+}
