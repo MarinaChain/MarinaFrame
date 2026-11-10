@@ -37,7 +37,7 @@ P0 = wrong result or unprotected boundary; P1 = structural debt that blocks prog
 | 11 | P1 | One export-format failure drops all CAD (`geometry.py:745`, `pipeline.py:230`) | Done in `082725f`: per-format results; keep valid formats | M |
 | 12 | P1 | Package written in place, manifest last (`exports/package.py:225,292`) | Done in `c31a040`: stage privately, publish atomically | M |
 | 13 | P1 | OCX check compares copied NetArea, not exported contour (`structure/ocx.py:573,734`) | Done in `cb00afe`: compare contour geometry | M |
-| 14 | P2 | Tank mesh spans gaps between separate hull pieces at one height (volume is correct) (`tanks.py:418,497`; PM checked) | keep separate regions through lofting | L |
+| 14 | P2 | Tank mesh spans gaps between separate hull pieces at one height (volume is correct) (`tanks.py:418,497`; PM checked) | Done: separate regions through lofting; unmatched spans flagged `tank_loft_span_omitted` | L |
 | 15 | P2 | Table hydrostatics uses the outer half-breadth; wrong for sections with inner voids (`exports/hydrostatics.py:268`; PM checked) | Done in `8f5fe2f`: integrate occupied intervals | M |
 | 16 | P2 | Display mesh may mesh trimmed faces as their support patch (`display_mesh.py:49,141`) | Done in `8f5fe2f`: grid path only for proven-untrimmed faces | M |
 | 17 | P2 | Silent triangle-fan fallback (`tanks.py:304`); calibration "noted" string decides blocking; model id missing from answer cache key | Done in `fc070c1`: typed repair result, typed severity, model id in key | S each |
