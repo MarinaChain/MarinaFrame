@@ -28,6 +28,7 @@ STANDARD_DENOMINATORS = {1, 2, 5, 10, 20, 25, 30, 40, 50, 60, 75, 80, 100, 120, 
 # A sheet's length estimate may differ from the median by this share before it becomes a check item. The
 # estimate is the width of the drawn view, which also holds dimension lines and overhangs (about 13 %
 # too long on the one development sheet with a printed length), so it is not tighter than this.
+# Provisional: set after seeing that one sheet; re-measure on a set with two read scales (docs/DRAWING_SET_INTAKE.md 7.2).
 AGREEMENT_TOLERANCE = 0.15
 # A printed length and the estimate agree within this share.
 PRINTED_TOLERANCE = 0.08

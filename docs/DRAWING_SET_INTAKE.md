@@ -153,7 +153,9 @@ length (Gunnerus lines plan, printed length overall 36.25 m) the estimate is 81.
 1:100; at 1:50 it would be 40.9 m, 13 % above the printed length because the view box includes
 dimension lines and overhangs. The sheet is probably drawn at 1:50 while its text says 1:100 in another
 place; we have no truth for that. This is why the agreement tolerance is 15 % and why a difference is a
-check item. Agreement and the check items are covered by unit tests on synthetic estimates.
+check item. The 15 % is provisional: it was set after seeing this one sheet, so it is not a measured
+result. Measure it again on the first set with two whole-hull sheets that have a read scale, and do not
+widen it further to hide a disagreement. Agreement and the check items are covered by unit tests on synthetic estimates.
 
 ### 7.3 Checklist
 
