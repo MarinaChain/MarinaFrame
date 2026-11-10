@@ -2584,7 +2584,11 @@ code { font-family: var(--font-mono); }
 @media (max-width: 1000px) {
   /* The form goes above the pages: the name is the first thing to check. */
   .intake-body, .intake-body.has-tray { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; overflow-y: auto; }
+  /* One column: each block keeps its full height; min-height: 0 would let the grid squeeze one under the next. */
+  .intake-body > * { min-height: auto; }
   .intake-side { order: -1; overflow: visible; }
+  /* A scroll box counts min-height: auto as 0, so the stage shows its full height and the page scrolls instead. */
+  .intake-stage { overflow: visible; max-height: none; }
   .intake-tray { flex-direction: row; overflow-x: auto; overflow-y: hidden; }
   .intake-sum ul { grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: var(--space-lg); }
   .intake-tray-item { width: 168px; }
