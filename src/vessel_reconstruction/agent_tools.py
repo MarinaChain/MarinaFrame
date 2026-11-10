@@ -459,6 +459,14 @@ class DomainTools(InvestigationTools):
         incumbent = copy.deepcopy(self.state) if judged and not force_keep else None
         fit_before = self.state.get("fit_score", {}).get("combined_fit")
         result = method(**arguments)
+        self._record_forced_fit(force_keep, judged, result, fit_before)
+        result = self._judge_edit(incumbent, result, arguments, revision_target)
+        self._add_accuracy_feedback(tool_name, arguments, result)
+        from .sheet_review import record_operation
+        record_operation(self, tool_name, result)
+        return result
+
+    def _record_forced_fit(self, force_keep, judged, result, fit_before):
         if force_keep and judged and result.get("ok"):
             from .fit_feedback import score, current_table
             after = score(self)
@@ -468,6 +476,8 @@ class DomainTools(InvestigationTools):
             result["fit_comparison"] = {"keep": True, "operator_forced": True, "fit_before": fit_before,
                                         "fit_after": after.get("combined_fit"),
                                         "reason": "A person kept this edit although the keep rule did not."}
+
+    def _judge_edit(self, incumbent, result, arguments, revision_target):
         if incumbent is not None and result.get("ok"):
             from .fit_feedback import score, current_table
             from .whole_vessel_score import keep_edit
@@ -516,6 +526,9 @@ class DomainTools(InvestigationTools):
                 self.state["non_improving_edits"] = 0
                 self._save()
                 result["fit_comparison"] = decision
+        return result
+
+    def _add_accuracy_feedback(self, tool_name, arguments, result):
         if tool_name in ("assign_station", "enumerate_strokes", "inspect_source", "trace_from_point", "trace_corridor"):
             from .accuracy_feedback import candidate_catalog, candidate_feedback
             by_id = {s["id"]: s for s in self.spec.get("sections", [])}
@@ -536,9 +549,6 @@ class DomainTools(InvestigationTools):
                 **candidate_feedback(s, next((c for c in self.state["catalog"].get(s["id"], {}).get("candidates", [])
                     if c["candidate_id"] == chosen.get(s["id"])), {}))}
                 for s in self.spec["sections"] if chosen.get(s["id"])]
-        from .sheet_review import record_operation
-        record_operation(self, tool_name, result)
-        return result
 
     def _replace_sheet(self, sheet_id, file):
         from .sheet_review import replace_sheet
