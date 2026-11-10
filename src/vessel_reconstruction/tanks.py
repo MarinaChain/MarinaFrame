@@ -443,6 +443,53 @@ def section_chains(slicer: HullSlicer, x: float, y_range, z_range, dz: float) ->
     return SectionChains(z, np.array([left[0], *left, left[-1]]), np.array([right[0], *right, right[-1]]), area)
 
 
+def section_regions(slicer: HullSlicer, x: float, y_range, z_range, dz: float) -> list[SectionChains]:
+    """Split sampled intervals at vertical branches, retaining each row's area."""
+    height = z_range[1] - z_range[0]
+    if height <= 0:
+        return []
+    rows = max(1, int(np.ceil(height / dz - 1e-9)))
+    step = height / rows
+    zs = z_range[0] + (np.arange(rows) + 0.5) * step
+    groups = []
+    previous = []
+    for z, intervals in zip(zs, slicer.intervals(x, zs)):
+        pieces = [(max(a, y_range[0]), min(b, y_range[1])) for a, b in intervals]
+        pieces = [(a, b) for a, b in pieces if b > a]
+        matches = [[i for i, (a, b, _) in enumerate(previous) if min(b, right) > max(a, left)]
+                   for left, right in pieces]
+        next_previous = []
+        for (left, right), candidates in zip(pieces, matches):
+            if len(candidates) == 1 and sum(candidates[0] in match for match in matches) == 1:
+                group = previous[candidates[0]][2]
+            else:
+                group = []
+                groups.append(group)
+            group.append((float(z), left, right))
+            next_previous.append((left, right, group))
+        previous = next_previous
+    regions = []
+    for group in groups:
+        z, left, right = np.asarray(group).T
+        regions.append(SectionChains(np.r_[z[0] - step / 2, z, z[-1] + step / 2],
+                                     np.r_[left[0], left, left[-1]],
+                                     np.r_[right[0], right, right[-1]],
+                                     float(np.sum(right - left) * step)))
+    return regions
+
+
+def _regions_overlap(first: SectionChains, second: SectionChains) -> bool:
+    """Match only regions with overlapping sampled material at a common height."""
+    low, high = max(first.z[0], second.z[0]), min(first.z[-1], second.z[-1])
+    if high <= low:
+        return False
+    heights = np.unique(np.r_[low, high, first.z, second.z])
+    heights = heights[(heights >= low) & (heights <= high)]
+    left = np.maximum(np.interp(heights, first.z, first.left), np.interp(heights, second.z, second.left))
+    right = np.minimum(np.interp(heights, first.z, first.right), np.interp(heights, second.z, second.right))
+    return bool(np.any(right > left))
+
+
 def clipped_outline(slicer: HullSlicer, x: float, y_range, z_range, dz: float):
     """Area of the hull section at x inside the y and z ranges, and its outline [[y, z], ...]
     (``section_chains``; None when nothing is inside)."""
@@ -482,8 +529,13 @@ class TankLoft:
     x resampled at the same share of its height on both chains (up the left chain, down the
     right chain), so ring point k of one station joins ring point k of the next by a straight
     line. The side between two stations is ruled; the solid has no steps.
+
+    ``omitted_spans`` lists the (x start, x end) station pairs where a region could not be
+    matched to exactly one region at the previous station; the loft caps the regions there, so
+    the solid (and its volume) leaves that span out and a person must check it.
     """
     runs: list[np.ndarray]
+    omitted_spans: list[tuple[float, float]] = field(default_factory=list)
 
     def triangles(self) -> np.ndarray | None:
         """Closed outward triangle mesh of all runs (None when there is no run)."""
@@ -553,26 +605,43 @@ def tank_loft_in_hull(slicer: HullSlicer, x_range, y_of_x, z_of_x, station_m: fl
     ``z_of_x(x)`` (each a (low, high) pair or None), clipped to the hull.
 
     Sections are taken at both ends of ``x_range`` and at most ``station_m`` apart, each sampled in
-    rows of ``row_dz_m``. Stations with no section split the tank into runs; a run needs two
-    stations. Compared with slabs (``tank_slabs_in_hull``), the side is smooth in x and the
-    section is not stepped in z.
+    rows of ``row_dz_m``. Vertical splits and joins end regions at the row boundary. Between
+    stations, only unambiguous overlapping regions continue a run; other regions are capped
+    at the nearest station. A run needs two stations. Compared with slabs
+    (``tank_slabs_in_hull``), the side is smooth in x and the section is not stepped in z.
     """
     count = max(1, int(np.ceil((x_range[1] - x_range[0]) / station_m - 1e-9)))
-    stations = []
+    runs, active, omitted_spans = [], [], []
+    previous_x = None
     for x in np.linspace(x_range[0], x_range[1], count + 1):
         y_range, z_range = y_of_x(x), z_of_x(x)
-        chains = section_chains(slicer, x, y_range, z_range, row_dz_m) if (y_range and z_range) else None
-        stations.append((float(x), chains))
-    runs, current = [], []
-    for x, chains in stations + [(None, None)]:
-        if chains is not None:
-            current.append((x, chains))
-            continue
-        if len(current) >= 2:
-            levels = min(MAX_LOFT_LEVELS, max(len(c.z) for _, c in current))
-            runs.append(np.stack([_ring(x_i, c, levels) for x_i, c in current]))
-        current = []
-    return TankLoft(runs)
+        regions = section_regions(slicer, x, y_range, z_range, row_dz_m) if (y_range and z_range) else []
+        matches = [[i for i, run in enumerate(active) if _regions_overlap(run[-1][1], region)]
+                   for region in regions]
+        continued = set()
+        next_active = []
+        for region, candidates in zip(regions, matches):
+            if len(candidates) == 1 and sum(candidates[0] in match for match in matches) == 1:
+                index = candidates[0]
+                continued.add(index)
+                run = active[index]
+            else:
+                if candidates:
+                    # Overlaps more than one region (a split or join between stations).
+                    omitted_spans.append((previous_x, float(x)))
+                run = []
+            run.append((float(x), region))
+            next_active.append(run)
+        runs.extend(run for i, run in enumerate(active) if i not in continued)
+        active = next_active
+        previous_x = float(x)
+    runs.extend(active)
+    rings = []
+    for run in runs:
+        if len(run) >= 2:
+            levels = min(MAX_LOFT_LEVELS, max(len(c.z) for _, c in run))
+            rings.append(np.stack([_ring(x_i, c, levels) for x_i, c in run]))
+    return TankLoft(rings, sorted(set(omitted_spans)))
 
 
 # ---------------------------------------------------------------------------

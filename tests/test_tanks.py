@@ -194,6 +194,62 @@ def test_loft_splits_where_the_tank_has_no_section():
     assert tanks.fill_state(triangles, 3.0).volume_m3 == pytest.approx(2 * 4 * 2)
 
 
+def test_loft_keeps_separate_hull_pieces_apart():
+    from vessel_reconstruction.display_mesh import loft_mesh, mesh_volume_mm3
+
+    hull = np.concatenate([box_triangles((0, -3, 0), (4, -1, 2)),
+                           box_triangles((0, 1, 0), (4, 3, 2))])
+    slicer = tanks.HullSlicer(hull)
+    loft = tanks.tank_loft_in_hull(slicer, (1, 3), lambda x: (-4, 4), lambda x: (0, 2), 0.5, 0.1)
+    vertices, faces = loft_mesh(loft.runs, tanks.cap_triangles, tolerance_mm=1.0)
+    mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=True)
+    assert len(trimesh.graph.connected_components(mesh.edges, engine="scipy")) == 2
+    assert all(not (triangle[:, 1].min() < 0 < triangle[:, 1].max()) for triangle in mesh.triangles)
+    section_area, _ = tanks.clipped_outline(slicer, 2, (-4, 4), (0, 2), 0.1)
+    assert mesh_volume_mm3(vertices, faces) / 1e9 == pytest.approx(2 * section_area, rel=0.005)
+
+
+def test_single_piece_loft_keeps_its_previous_rings():
+    slicer = tanks.HullSlicer(box_triangles((0, -3, 0), (4, 3, 2)))
+    loft = tanks.tank_loft_in_hull(slicer, (1, 3), lambda x: (-4, 4), lambda x: (0, 2), 0.5, 0.1)
+    stations = np.linspace(1, 3, 5)
+    chains = [tanks.section_chains(slicer, x, (-4, 4), (0, 2), 0.1) for x in stations]
+    expected = np.stack([tanks._ring(x, section, len(section.z)) for x, section in zip(stations, chains)])
+    np.testing.assert_array_equal(loft.runs[0], expected)
+    assert len(loft.runs) == 1
+
+
+def test_loft_splits_regions_at_a_height_where_a_section_branches():
+    outline = [(-3, 0), (3, 0), (3, 2), (1, 2), (1, 1), (-1, 1), (-1, 2), (-3, 2)]
+    slicer = tanks.HullSlicer(tanks.prism_triangles(0, 4, outline))
+    loft = tanks.tank_loft_in_hull(slicer, (1, 3), lambda x: (-4, 4), lambda x: (0, 2), 0.5, 0.1)
+    triangles = loft.triangles()
+    # The lower region ends at the branch; two upper regions start at that height.
+    assert len(loft.runs) == 3
+    above = triangles[np.all(triangles[:, :, 2] > 1.0 + 1e-9, axis=1)]
+    assert all(not (triangle[:, 1].min() < 0 < triangle[:, 1].max()) for triangle in above)
+    assert tanks.signed_volume(triangles) == pytest.approx(20.0, rel=0.005)
+
+
+def test_loft_records_the_span_where_two_pieces_join_along_the_ship():
+    # Two separate pieces aft of x = 2 m, one joined piece forward of it.
+    hull = np.concatenate([box_triangles((0, -3, 0), (2, -1, 2)), box_triangles((0, 1, 0), (2, 3, 2)),
+                           box_triangles((2, -3, 0), (4, 3, 2))])
+    slicer = tanks.HullSlicer(hull)
+    loft = tanks.tank_loft_in_hull(slicer, (1, 3), lambda x: (-4, 4), lambda x: (0, 2), 0.5, 0.1)
+    assert len(loft.omitted_spans) == 1
+    start, end = loft.omitted_spans[0]
+    assert 1.0 <= start < end <= 3.0 and start <= 2.0 <= end
+
+
+def test_loft_records_no_omitted_span_when_every_region_matches():
+    pieces = np.concatenate([box_triangles((0, -3, 0), (4, -1, 2)), box_triangles((0, 1, 0), (4, 3, 2))])
+    for hull in (box_triangles((0, -3, 0), (4, 3, 2)), pieces):
+        loft = tanks.tank_loft_in_hull(tanks.HullSlicer(hull), (1, 3), lambda x: (-4, 4),
+                                       lambda x: (0, 2), 0.5, 0.1)
+        assert loft.omitted_spans == []
+
+
 def test_loft_display_mesh_and_step_solid_hold_the_same_volume():
     from vessel_reconstruction.display_mesh import loft_mesh, mesh_volume_mm3
     from vessel_reconstruction.geometry import precise_volume_mm3, ruled_loft_solid
