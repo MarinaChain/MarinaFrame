@@ -4,6 +4,24 @@ import json
 from scripts import cost_per_ship as cost
 
 
+def test_prices_use_cache_ttl_and_bound_collapsed_holdout_usage():
+    call = dict(model='claude-sonnet-5-5', prompt_tokens=150, output_tokens=10,
+                input_tokens=20, cache_read_tokens=100, cache_write_tokens=30,
+                cache_write_5m_tokens=0, cache_write_1h_tokens=30, missing_usage=False)
+    low, high = cost.api_cost_range(call)
+    assert round(low, 6) == round((20 * 2 + 100 * .2 + 30 * 4 + 10 * 10) / 1e6, 6)
+    assert low == high
+    call.update(input_tokens=None, cache_read_tokens=None, cache_write_tokens=None,
+                cache_write_5m_tokens=None, cache_write_1h_tokens=None)
+    assert cost.api_cost_range(call) == ((150 * .2 + 100) / 1e6, (150 * 4 + 100) / 1e6)
+    call['model'] = 'deepseek-v4.1-flash'
+    assert cost.api_cost_range(call) == (None, None)
+    call['model'] = 'crouton-alpha-free'
+    assert cost.api_cost_range(call) == (0., 0.)
+    call.update(model='claude-sonnet-5-5', missing_usage=True)
+    assert cost.api_cost_range(call) == (None, None)
+
+
 def save(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value))

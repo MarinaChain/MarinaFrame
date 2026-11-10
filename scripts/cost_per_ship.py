@@ -15,6 +15,41 @@ from pathlib import Path
 
 MAIN_WORK = Path('/Users/jonathanjie/Documents/workspace/MarinaFrame/work')
 HOLDOUT_ROOT = Path('/private/tmp/claude-501')
+# USD per million tokens, recorded 2026-11-10. API-equivalent, not subscription bills.
+# Claude: bundled-skills/2.1.317/c2410b3d888fef8507425f875f1de23e/
+# claude-api/shared/models.md (Sonnet 5.5: 2/10/.20; Opus 5.5: 4/20/.20),
+# shared/prompt-caching.md (5m write 1.25x, 1h write 2x).
+# DeepSeek: no exact rate table found locally. The approximate blended historical
+# rate in docs/plans/2026-11-08-whole-vessel-design.md is NOT a tariff.
+PRICE_DATE = '2026-11-10'
+PRICES = {
+    'claude-sonnet-5-5': dict(input=2., output=10., read=.2, write_5m=2.5, write_1h=4.),
+    'claude-opus-5-5': dict(input=4., output=20., read=.2, write_5m=5., write_1h=8.),
+    'deepseek-v4.1-flash': None,  # price not found; report tokens only
+    'crouton-alpha-free': dict(input=0., output=0., read=0., write_5m=0., write_1h=0.),
+}
+
+
+def api_cost_range(call):
+    price = PRICES.get(call['model'])
+    if price is None or call['missing_usage']:
+        return None, None
+    output_cost = call['output_tokens'] * price['output']
+    if call['input_tokens'] is None:
+        # Holdout harness collapsed uncached + cache writes + cache reads.
+        # These are algebraic bounds, not claims about actual cache use.
+        return ((call['prompt_tokens'] * price['read'] + output_cost) / 1e6,
+                (call['prompt_tokens'] * price['write_1h'] + output_cost) / 1e6)
+    base = (call['input_tokens'] * price['input']
+            + call['cache_read_tokens'] * price['read'] + output_cost)
+    write_5m = call['cache_write_5m_tokens'] or 0
+    write_1h = call['cache_write_1h_tokens'] or 0
+    unknown_ttl = max(0, call['cache_write_tokens'] - write_5m - write_1h)
+    base += write_5m * price['write_5m'] + write_1h * price['write_1h']
+    return ((base + unknown_ttl * price['write_5m']) / 1e6,
+            (base + unknown_ttl * price['write_1h']) / 1e6)
+
+
 TOKEN_FIELDS = ('prompt_tokens', 'output_tokens', 'input_tokens', 'cache_read_tokens',
                 'cache_write_tokens', 'cache_write_5m_tokens', 'cache_write_1h_tokens')
 
@@ -76,6 +111,10 @@ def summarize_calls(calls):
         for field in TOKEN_FIELDS:
             values = [c[field] for c in rows if c[field] is not None]
             total[field] = sum(values) if values else None
+        costs = [api_cost_range(c) for c in rows]
+        total['unpriced_requests'] = sum(low is None for low, high in costs)
+        total['known_api_cost_low_usd'] = sum(low for low, high in costs if low is not None)
+        total['known_api_cost_high_usd'] = sum(high for low, high in costs if high is not None)
         total['model_seconds'] = sum(c['seconds'] or 0 for c in rows)
         total['receipt_list_cost_usd'] = sum(c['receipt_list_cost_usd'] or 0 for c in rows)
         models[model] = total
@@ -164,7 +203,8 @@ def collect(main_work, holdout_root, tank_roots=()):
         run['totals'] = summarize_calls(run['calls'])
         run['phases'] = {phase: summarize_calls([c for c in run['calls'] if c['phase'] == phase])
                          for phase in sorted({c['phase'] for c in run['calls']})}
-    return {'schema_version': 1, 'main_work': str(main_work), 'holdout_root': str(holdout_root),
+    return {'schema_version': 1, 'price_date': PRICE_DATE, 'prices_usd_per_million': PRICES,
+            'main_work': str(main_work), 'holdout_root': str(holdout_root),
             'tank_roots': [str(p) for p in tank_roots], 'tank_receipt_files': len(tank_paths),
             'runs': runs}
 
