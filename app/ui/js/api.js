@@ -686,7 +686,9 @@ function mockTransport() {
     },
     async read_artifact(_data, { path }) {
       const name = path.split('/').pop();
-      const response = await fetch(MOCK_FILES_URL + encodeURIComponent(name));
+      // ?mockfair: the hull is the fairness test hull, with a kink and a flat spot planted in it.
+      const file = name === 'model.stl' && new URLSearchParams(location.search).has('mockfair') ? 'model-fair.stl' : name;
+      const response = await fetch(MOCK_FILES_URL + encodeURIComponent(file));
       if (!response.ok) throw new BackendError('artifact_missing', 'This file is not in the run folder.');
       const blob = await response.blob();
       const mime = name.endsWith('.stl') ? 'model/stl' : blob.type || 'image/png';

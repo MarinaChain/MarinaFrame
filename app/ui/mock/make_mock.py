@@ -112,13 +112,49 @@ def draw_page(path: Path) -> None:
         image.crop(box).resize((220, 290)).save(FILES / f"crop-st{x_m:.0f}.png", optimize=True)
 
 
-def hull_mesh() -> np.ndarray:
-    """Closed triangle mesh of the hull as an (n, 3, 3) array."""
-    xs = np.linspace(0.15, LENGTH_M - 0.15, 64)
+# Planted faults of the fairness test hull (model-fair.stl): where each one is, in metres.
+# The kink is a crease along the topsides (a slope step of up to 0.25, about 14 degrees).
+KINK_X = (8.0, 15.0)
+KINK_Z = 1.6
+KINK_SLOPE = 0.25
+# The flat spot is a patch of the bilge pulled onto the chord between its edges.
+FLAT_X = (16.0, 22.0)
+FLAT_Z = (0.5, 1.5)
+
+
+def bump(x_m: float, span: tuple[float, float]) -> float:
+    """A smooth 0..1 window over `span`: zero outside, one in the middle."""
+    a, b = span
+    if not a < x_m < b:
+        return 0.0
+    return math.sin(math.pi * (x_m - a) / (b - a)) ** 2
+
+
+def faulted_section(x_m: float, samples: int = 40) -> list[tuple[float, float]]:
+    """Points (y, z) of one section of the fairness test hull: the smooth hull plus the two faults."""
+    z_values = sorted({DEPTH_M * (i / (samples - 1)) ** 1.4 for i in range(samples)} | {*FLAT_Z, KINK_Z})
+    flat_low, flat_high = (half_breadth(x_m, z) for z in FLAT_Z)
+    flat_weight = bump(x_m, FLAT_X)
+    kink_weight = bump(x_m, KINK_X)
+    points = []
+    for z in z_values:
+        y = half_breadth(x_m, z)
+        if FLAT_Z[0] < z < FLAT_Z[1]:
+            chord = flat_low + (flat_high - flat_low) * (z - FLAT_Z[0]) / (FLAT_Z[1] - FLAT_Z[0])
+            y += flat_weight * (chord - y)
+        y -= KINK_SLOPE * kink_weight * max(0.0, z - KINK_Z)
+        points.append((max(y, 0.0), z))
+    return points
+
+
+def hull_mesh(faults: bool = False) -> np.ndarray:
+    """Closed triangle mesh of the hull as an (n, 3, 3) array; `faults` plants a kink and a flat spot."""
+    xs = np.linspace(0.15, LENGTH_M - 0.15, 90 if faults else 64)
     rings = []
     for x in xs:
-        starboard = [(-y, z) for y, z in reversed(section_curve(x, samples=18))]
-        port = [(y, z) for y, z in section_curve(x, samples=18)]
+        section = faulted_section(x) if faults else section_curve(x, samples=18)
+        starboard = [(-y, z) for y, z in reversed(section)]
+        port = [(y, z) for y, z in section]
         ring = starboard[:-1] + port  # keel to deck, both sides, shared keel point
         rings.append([(x, y, z) for y, z in ring])
     rings = np.array(rings)
@@ -518,6 +554,7 @@ def main() -> None:
     FILES.mkdir(parents=True, exist_ok=True)
     draw_page(FILES / "page-1.png")
     write_stl(FILES / "model.stl", hull_mesh())
+    write_stl(FILES / "model-fair.stl", hull_mesh(faults=True))
 
     tug, tug_events = tug_task()
     ferry, ferry_events = ferry_task()

@@ -11,6 +11,7 @@ import { createSectionGrowth } from './growth3d.js';
 import { createAnimation } from './animation.js';
 import { placeLabels, steelLegend, steelToken, tankLegend, tankToken } from './tanks.js';
 import { configureOrbit } from './orbit3d.js';
+import { createFairness, nextFairnessMode, useSmoothNormals } from './fairness3d.js';
 import { createLighting, createPaintMaterial, createSteelMaterial, createTankMaterial, setUpRenderer, stylePaint } from './look3d.js';
 import { bootTopBand, fitDistance, frameLabel, frameAt, hullReference, nearestFrameX, pointReadout, STANDARD_VIEWS, viewOfKey } from './reference3d.js';
 import { createOverlays } from './overlay3d.js';
@@ -137,7 +138,8 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
   /** The section cut: one clipping plane on every model material, with solid cut faces. */
   const cut = createSectionCut({ scene });
   /** Paint of the hull: antifouling, boot top and topside by height (look3d.js). */
-  const hullMaterial = createPaintMaterial();
+  const fairness = createFairness();
+  const hullMaterial = createPaintMaterial({}, fairness);
   /** Clipping planes of the live growth's skin; the hull material has them and the cut plane. */
   let skinPlanes = [];
   function clipHull() {
@@ -504,11 +506,27 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
     overlaySwitches[key].setAttribute('aria-pressed', String(on));
     requestRender();
   }
+  // The fairness view: one button steps through zebra stripes, a curvature map and off.
+  const fairnessButton = toolButton({
+    iconName: 'fairness', label: 'Fairness', keyHint: 'Z', pressed: false,
+    detail: 'Zebra stripes show kinks and flat spots. Press again for a curvature map.',
+    onClick: () => setFairness(nextFairnessMode(fairness.mode)),
+  });
+  /** Show the hull surface as zebra stripes or a curvature map, or as paint again (`mode` "off"). */
+  function setFairness(mode) {
+    fairness.setMode(mode);
+    if (hull) useSmoothNormals(hull.geometry, mode !== 'off');
+    fairnessButton.setAttribute('aria-pressed', String(mode !== 'off'));
+    fairnessButton.setAttribute('aria-label', mode === 'off' ? 'Fairness' : `Fairness, ${mode}`);
+    fairnessButton.dataset.mode = mode;
+    requestRender();
+  }
   toolbar.add('Show',
     overlaySwitch('grid', 'grid', 'Reference grid', 'G'),
     overlaySwitch('waterline', 'waterline', 'Design waterline plane', 'W'),
     overlaySwitch('frames', 'frames', 'Frame numbers', null),
-    overlaySwitch('edges', 'edges', 'Feature edges', 'E'));
+    overlaySwitch('edges', 'edges', 'Feature edges', 'E'),
+    fairnessButton);
   const OVERLAY_KEYS = { g: 'grid', w: 'waterline', e: 'edges' };
   /** The x of the selected part's middle (Parts tab), or null. */
   let selectionX = null;
@@ -572,6 +590,9 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
       event.preventDefault();
     } else if (event.key === 'f' || event.key === 'F') {
       fitSelection();
+      event.preventDefault();
+    } else if (event.key === 'z' || event.key === 'Z') {
+      setFairness(nextFairnessMode(fairness.mode));
       event.preventDefault();
     } else if (event.key === 'c' || event.key === 'C') {
       toggleCutPanel();
@@ -989,6 +1010,7 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
     gridBox = sceneBox;
     buildGrid();
     lighting.fit(sceneBox);
+    fairness.fit(hullBox);
     cut.fit(sceneBox);
     updateCutRanges(sceneBox);
     paintHull(hullMaterial);
@@ -1300,6 +1322,8 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
       hull = new THREE.Mesh(geometry, hullMaterial);
       hull.castShadow = true;
       hull.receiveShadow = true;
+      // A hull that arrives while the fairness view is on gets the smooth normals at once.
+      if (fairness.mode !== 'off') useSmoothNormals(geometry, true);
       content.add(hull);
       cut.addSolid(hull, { colour: () => colours.hull });
 
@@ -1394,7 +1418,7 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
               o.material = HIDDEN_MATERIAL;
               tankMeshes.push(o);
             } else {
-              o.material = clip(createPaintMaterial());
+              o.material = clip(createPaintMaterial({}, fairness));
               o.castShadow = true;
               o.receiveShadow = true;
               shellMeshes.push(o);
