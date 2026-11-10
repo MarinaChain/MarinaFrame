@@ -692,7 +692,7 @@ Gates:
 | Wrong not worse | pass / pass | pass / pass |
 | Wrong <= 10 % of cells | pass / **fail** (2/7) | pass / **fail** (2/8 = 25 %) |
 | No extra on blank truth | **fail** (W6 of stations 5, 6, 7) / pass | **fail** (same, from the frozen table) / pass |
-| By eye | v2 fore line on the drawn chine from station 5 to 2. It then runs along the painted waterline (row 3658), where its "station 1" point lies, and outward along the "Chine" label leader: **fail** | no named knuckle (both halves declined). The 4 unnamed knuckles are on drawn corners (fore: stations 5 and 3; aft: near the chine of stations 7 and 8) |
+| By eye | v2 fore line on the drawn chine from station 5 to 2. It then runs along the painted waterline (row 3658), where its "station 1" point lies, and outward along the "Chine" label leader: **fail** | no named knuckle (both halves declined). The 4 unnamed knuckles are on drawn corners (fore: stations 5 and 3; aft: at the lower corners of the transom outline and station 10, 1072 and 1094 px out) |
 
 **WHITE GULL: FAIL** (both v2 and polyline). The polyline reader's decline follows its own rule: on each half only 2
 stations gave a sharp knuckle. The other traced lines ended as grid lines (11 fore, 5 aft, on the drawn buttocks), with
