@@ -1837,6 +1837,7 @@ version = "0.4.0"
 dependencies = [
  "base64 0.22.1",
  "libc",
+ "marinaframe-control",
  "reqwest 0.12.24",
  "serde",
  "serde_json",

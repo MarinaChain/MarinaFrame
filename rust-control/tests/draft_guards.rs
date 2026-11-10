@@ -8,25 +8,11 @@
 //! through the finish path, the cache, a restart, a forged ledger, a forged
 //! guess list or a permissive envelope. The last test resolves the guess as an
 //! operator and shows that the ordinary verified path then runs unchanged.
-#![allow(dead_code)]
-#[path = "../src/controller/mod.rs"]
-mod controller;
-#[path = "../src/models.rs"]
-mod models;
-#[path = "../src/provider.rs"]
-mod provider;
-#[path = "../src/store.rs"]
-mod store;
-#[path = "../src/supervised.rs"]
-mod supervised;
-#[path = "../src/types.rs"]
-mod types;
-#[path = "../src/util.rs"]
-mod util;
-#[path = "../src/validation.rs"]
-mod validation;
-#[path = "../src/worker.rs"]
-mod worker;
+use marinaframe_control::controller;
+use marinaframe_control::store;
+use marinaframe_control::types;
+use marinaframe_control::util;
+use marinaframe_control::validation;
 
 use serde_json::{json, Value};
 use std::os::unix::fs::PermissionsExt;

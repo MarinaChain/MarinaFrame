@@ -35,8 +35,6 @@ mod stops;
 mod test_support;
 mod worker_call;
 
-// The integration tests compile this module by path and use only part of it.
-#[allow(unused_imports)]
 pub use self::{
     catalog::tool_catalog,
     deterministic::deterministic_decision,
@@ -55,16 +53,15 @@ use live::live_decision;
 /// Test-only hook into finalization. It runs at "after_predicate" (current
 /// contract passed, domain guard held) and "before_commit" (review-ready state
 /// set, not yet committed). Tests use it for the interleavings that the Python
-/// tests reached by monkeypatching. Release builds contain no hook.
-#[cfg(test)]
+/// tests reached by monkeypatching. Normal builds contain no hook.
+#[cfg(any(test, feature = "test-support"))]
 pub type FinalizationHook = fn(&std::path::Path, &str);
 
-#[cfg(test)]
-#[allow(dead_code)]
+#[cfg(any(test, feature = "test-support"))]
 pub static FINALIZATION_HOOK: std::sync::Mutex<Option<FinalizationHook>> =
     std::sync::Mutex::new(None);
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 fn finalization_point(task: &std::path::Path, point: &str) {
     let hook = *FINALIZATION_HOOK.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(hook) = hook {
@@ -72,7 +69,7 @@ fn finalization_point(task: &std::path::Path, point: &str) {
     }
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-support")))]
 fn finalization_point(_task: &std::path::Path, _point: &str) {}
 
 pub fn new_state(config: Config) -> State {

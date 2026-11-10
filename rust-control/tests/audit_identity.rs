@@ -6,25 +6,11 @@
 //!
 //! Tasks run the real worker protocol, real geometry and the real native audit through
 //! `tests/rust_audit_identity_worker.py`, which only adds identity faults.
-#![allow(dead_code)]
-#[path = "../src/controller/mod.rs"]
-mod controller;
-#[path = "../src/models.rs"]
-mod models;
-#[path = "../src/provider.rs"]
-mod provider;
-#[path = "../src/store.rs"]
-mod store;
-#[path = "../src/supervised.rs"]
-mod supervised;
-#[path = "../src/types.rs"]
-mod types;
-#[path = "../src/util.rs"]
-mod util;
-#[path = "../src/validation.rs"]
-mod validation;
-#[path = "../src/worker.rs"]
-mod worker;
+use marinaframe_control::controller;
+use marinaframe_control::store;
+use marinaframe_control::types;
+use marinaframe_control::util;
+use marinaframe_control::validation;
 
 use serde_json::{json, Value};
 use std::os::unix::fs::PermissionsExt;

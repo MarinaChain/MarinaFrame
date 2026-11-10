@@ -8,25 +8,10 @@
 //!
 //! The Python Harness deadline variants have no counterpart: the Rust
 //! controller has no task wall-clock deadline.
-#![allow(dead_code)]
-#[path = "../src/controller/mod.rs"]
-mod controller;
-#[path = "../src/models.rs"]
-mod models;
-#[path = "../src/provider.rs"]
-mod provider;
-#[path = "../src/store.rs"]
-mod store;
-#[path = "../src/supervised.rs"]
-mod supervised;
-#[path = "../src/types.rs"]
-mod types;
-#[path = "../src/util.rs"]
-mod util;
-#[path = "../src/validation.rs"]
-mod validation;
-#[path = "../src/worker.rs"]
-mod worker;
+use marinaframe_control::controller;
+use marinaframe_control::store;
+use marinaframe_control::types;
+use marinaframe_control::util;
 
 use serde_json::{json, Value};
 use std::os::unix::fs::PermissionsExt;
