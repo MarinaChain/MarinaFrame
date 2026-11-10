@@ -1094,7 +1094,7 @@ Gates (point cells; there are no waterline truth cells, so the waterline gates d
 | By eye | v2's verified "chine" line runs along the heavy sheer line, not the chine, and its one chine point (row 2381, 1020 px out) is on the sheer line: **fail** | **fail**: see below |
 
 By eye (overlay): the fore knuckle named 7 is on station 7's corner. The knuckles named 6, 5 and 4 lie on drawn
-corners, but of stations 4, 3 and 2: the outer stations 6 and 5 (within about 30 and 60 px of station 7 at the
+corners, but of stations 4, 3 and 2: the outer stations 6 and 5 (plan chine half-breadths 1501 and 1414 px against 1512 px for station 7 at the
 chine) were not traced, and rank naming shifted the inner names by two. Aft: 107 is on the left copy of station 7;
 the knuckles named 8 and 9 are on stations 9 and 10 (station 8, next to the copy of 7, was not traced); the knuckle
 named 10 is on the corner of the **transom outline**, not a station. These name shifts are the identity errors and
