@@ -200,3 +200,32 @@ PYTHONPATH=src:. .venv/bin/python scripts/diagnose_body_plan_chine.py \
 ```
 
 The JSON includes full-precision endpoints, fitted directions, intersections, failed gates and chain-crossing records. The script calls the module's `_end`, `_meeting`, and `_series` and independently lists each rejected gate; it also calls the existing saved-run diagnosis and requires its scores to match. All local-pass candidates were checked against the module's actual candidate search. The production module, its constants, the frozen files, and the intake path are unchanged.
+
+
+## Chine line measurement
+
+Module `src/vessel_reconstruction/body_plan_chine_line.py`; benchmark `scripts/measure_chine_line.py` (writes `work/chine/chine_line_measurement.json`, git-ignored); test `tests/test_body_plan_chine_line.py`. The module reads only the ink mask, the host calibration and the frozen reader's measurement. Truth is read afterwards for the table only.
+
+Method: seed on heavy ink runs (1.5 to 2.0 curve widths) and trace each as a shallow line column by column, passing crossing lines. Keep long shallow strokes. Continue the stroke on its fitted line past each end, because the heavy line merges with other lines near the knuckles. For each reader chain, take where its path crosses the stroke, or where a quadratic continuation of its path end meets it (at most 1.5 waterline spacings). The chine is the stroke with the most chains that have measured crossings on both sides (the sheer has them only below, the keel only above). Chine points are the upper-piece meetings, outermost first, assigned to stations by rank. Chains drawn on top of each other give one point.
+
+Result on PARDON ME with the harness calibration: a chine line is found on both halves (fore: 7 chains on both sides; aft: 4). Station 1 to 11 all get a point. Units: feet (300 px/ft), baseline row 5229. Error = measured minus printed.
+
+| Station | y measured | y printed | y error | z measured | z printed | z error |
+|---|---|---|---|---|---|---|
+| 1 | 1.043 | 1.057 | -0.014 | 0.390 | 0.411 | -0.021 |
+| 2 | 2.487 | 2.516 | -0.029 | 0.217 | 0.240 | -0.023 |
+| 3 | 3.375 | 3.385 | -0.011 | 0.073 | 0.078 | -0.005 |
+| 4 | 3.939 | 3.953 | -0.014 | -0.075 | -0.078 | +0.003 |
+| 5 | 4.281 | 4.297 | -0.016 | -0.204 | -0.208 | +0.004 |
+| 6 | 4.656 | 4.484 | +0.172 | -0.477 | -0.302 | -0.175 |
+| 7 | 4.519 | 4.589 | -0.070 | -0.487 | -0.375 | -0.112 |
+| 8 | 4.449 | 4.630 | -0.181 | -0.491 | -0.417 | -0.075 |
+| 9 | 4.417 | 4.578 | -0.161 | -0.494 | -0.458 | -0.035 |
+| 10 | 4.357 | 4.521 | -0.164 | -0.498 | -0.490 | -0.008 |
+| 11 | 3.980 | 4.427 | -0.447 | -0.580 | -0.500 | -0.080 |
+
+RMS over 11 stations: half-breadth **0.171 ft (0.052 m)**, height **0.072 ft (0.022 m)**. Fore stations 1 to 5: 0.018 ft and 0.014 ft (sub-pixel to 9 px). Aft stations 6 to 11: 0.231 ft and 0.097 ft. The aft points sit in a cluster about 70 px wide where the station curves overlap, the reader's chains 0/1, 2/3 and 4/5 share paths, and the six aft points follow the reader's chain order. Station 11 (error -0.447 ft) is a chain that crosses the line 130 px away from the cluster; it is probably a wrong chain, so the aft assignment by rank is not trustworthy.
+
+### Can it fill PARDON ME's missing cells?
+
+Published baseline: 34 of 57 cells, 23 missing. Cheap test (comparison only, not product code): fill a missing cell by straight-line interpolation on its station between the chine point and the nearest measured crossing on the same side of the chine. Only **6 of 23** missing cells have such a neighbour (W0 cells of stations 1, 2, 6, 7, 8, 9); the other 17 have no measured crossing on that side. On those 6, RMS error is 0.099 m, maximum 0.199 m. Stations 1 and 2 are errors of the reader identity (their W0 points are far off), and stations 6 to 9 are 0.01 to 0.05 m. The chine line fixes where the knuckle is, but it does not supply the lower-piece crossings at W-1 and W-2 (the stations 3 to 10 fan lines) or the stations 1 and 2 curves; those cells need curve tracing along the lower pieces, not a chine point. Expect the chine line to recover at most about 4 of 23 cells at useful accuracy (aft W0, 0.01 to 0.05 m). Not integrated into the product path.
