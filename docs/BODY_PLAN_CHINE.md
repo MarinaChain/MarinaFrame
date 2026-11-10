@@ -734,3 +734,243 @@ read.
 declined both halves, so it is equal to the frozen reader, which fails on the 10 % wrong-cell gate for point cells and
 on extra W6 cells). Reader v2 fails both. WHITE GULL and COLLEEN are now spent as holdouts; any change made after
 looking at these results makes them development cases.
+
+## V-bottom reader v1.1 (branch `feature/vbottom-v11`, founder approved 2026-11-10)
+
+Development cases only: E. C. COLLIER, WHITE GULL and COLLEEN (holdouts spent), PARDON ME, and the round-bilge set
+(BUE GIRL, C.A. Thayer, Balclutha, BUMBLE BEE corrected) for regression. Truth was read to score and diagnose, never
+by the reader. The frozen `body_plan_{crossings,reader,identity}.py` are not edited. Calibrations are the committed
+ones. `work/holdout/caleb-jones` is an unscored holdout and was not opened.
+
+Measurement: `scripts/measure_vbottom_collier.py` (COLLIER, point scorer, polyline arm), `scripts/measure_deadrise_holdout.py
+--boat white-gull|colleen` (waterline and point cells, product rule), `scripts/measure_vbottom_dev_sheets.py`
+(five waterline sheets, product rule). Evidence per step in `work/vbottom11/<step>/` (git-ignored). "Base" is
+`3afcf46`, reproduced exactly (the published tables above).
+
+### Step 1: engagement per station
+
+Before, a half with fewer than max(3, half its stations) knuckled stations was declined as a whole. Now:
+
+1. **One station per drawn line.** Two traces are one station only when their polylines are one line *and* their
+   sides are one line (or one side is a fragment, under half the half's median side). Neighbouring aft stations
+   share most of their bottom near the keel; COLLEEN's aft stations 7 and 8 were merged by the old whole-polyline
+   test. The trace with the longest side is kept.
+2. **A shared knuckle is nobody's.** Different sides that end at one knuckle point (within 1.5 line widths) ran
+   into one line (PARDON ME aft: four sides end at one point of the heavy line). None of them is named or engaged.
+3. **A bottom belongs to one station.** When two stations claim one bottom line, it is the outer station's (a
+   bottom starts at its own knuckle and runs inward, so it can pass an inner knuckle but never an outer one). The
+   inner station is traced again without that line, or dropped. COLLEEN aft: station 8 had taken station 7's
+   bottom, and "station 9" station 8's.
+4. **Engagement per station** (`engage_stations`, `half_table`). On a half that is not read as a whole, a traced
+   station with a **clear knuckle** (turn >= 45 degrees, knuckle at least 0.2 of the reach from the centreline)
+   takes the name that the existing (frozen rank-identity) reader gave the same curve: that station's cells lie
+   within 1.5 line widths of the traced side at 2 or more rows and at 75 % of the shared rows. No match, two
+   matches, or two traces for one name: not engaged. The engaged polyline replaces that station's cells; every
+   other station keeps the existing cells; an existing cell of another station that lies on an engaged polyline
+   (within 1 line width) is dropped, so one drawn line never gives two stations. When other lines through the
+   knuckle also reach the centreline, nothing tells which is this station's bottom without its neighbours traced:
+   only the side and knuckle are engaged.
+
+Halves read as a whole are unchanged in rule (names by nesting rank, polylines only). The engagement thresholds were
+chosen from the knuckle features of every traced station on all eight sheets: round-bilge "knuckles" turn 27 to 42
+degrees (Balclutha bilges, seen with short arms) or lie at 0.03 to 0.10 of the reach (keel and stem junctions);
+the hard-chine knuckles engaged turn 58 to 76 degrees at 0.6 to 0.9 of the reach.
+
+Results (base -> step 1):
+
+| Sheet | Halves read / engaged stations | Waterline cells | WL RMS m | WL wrong | Point cells | Point RMS m | Point wrong | Chine cells (RMS m) |
+|---|---|---|---|---|---|---|---|---|
+| COLLIER | both read (unchanged) | - | - | - | 22/31 -> 22/31 | 0.0691 -> 0.0691 | 2 -> 2 | 10 (0.041) -> same |
+| WHITE GULL | none -> engaged fore 5, 3; aft 8, 9 | 45/53 -> 45/53 | 0.0263 -> 0.0289 | 0 -> 0 | 8/30 -> 12/30 | 0.1338 -> 0.1065 | 2 -> 2 | 5 (0.169) -> 7 (0.139) |
+| COLLEEN | fore read -> fore read, aft engaged 7, 8 | 21/26 -> 22/26 | 0.0006 -> 0.0007 | 0 -> 0 | 10/26 -> 13/26 | 0.0047 -> 0.0063 | 0 -> 0 | 5 (0.003) -> 7 (0.003) |
+| PARDON ME | fore read | 43/57 -> 43/57 | 0.035633 -> 0.035486 | 1 -> 1 | - | - | - | - |
+| BUE GIRL, Thayer, Balclutha, BUMBLE BEE | none, none engaged | identical | identical | identical | - | - | - | - |
+
+Round-bilge check: on all four sheets no station is engaged and the product table equals the frozen table
+(`table_unchanged: true`). PARDON ME's small change is station 3 (fore): the kept trace is now the one with the longer
+side. WHITE GULL: stations 8 and 9 were named by the frozen reader; the drawing's leaders ("Sta.8", "Sta.9") confirm
+the names (the earlier holdout note that called the 1072 px knuckle the transom outline was wrong: the transom is the
+heavy curve further in). Its extra W6 cells (stations 6 to 9) and the 5/W5 error (-0.08 m, side top at the rail) are
+the sheer and extra-cell items of steps 2 and 3. COLLEEN station 7 now gives side and knuckle only (one other bottom
+line through its knuckle), so its correct -1 ft and rabbet cells of the first trial are not given; COLLEEN station 9
+has no own bottom line (it ends on the transom) and is not engaged.
+
+### Step 2: the sheer
+
+**Rule.** The sheer of a station is where its line ends on the drawn sheer line, at that line's **top edge**: the
+deck top at the side (COLLIER's table defines sheer as the intersection of the deck top and the hull exterior). The
+trace up a side (`trace_side_up`) passes lines that cross the side and stops where the ink ends. Then:
+
+1. If it stopped inside the line it met (a wide run), the end is carried on along the side's direction to the far
+   edge of that line's ink, at most 3 line widths (a line met at a grazing angle is not followed).
+2. If the top part of the side is drawn with a thinner pen (median ink width under 0.75 of the side's lower half,
+   over at least 5 line widths), it is a label leader or a grid line that the trace ran on into: the side ends at
+   the junction (`_cut_at_thin_line`). WHITE GULL stations 8 and 9 ran up their "Sta.8"/"Sta.9" leaders.
+3. If the top of the side runs on up a calibrated grid column for 5 line widths, the side ends where it joins
+   the column (`_cut_at_grid`). WHITE GULL station 5 left the hull for the 6-ft buttock.
+
+The polyline's `sheer` is that top end. A rail drawn on above the deck (COLLIER's log rail) is followed only when the
+same line continues; where the rail tick is offset from the hull line (a jog at the rail's lower edge), the side ends
+there. Two other rules were tried and dropped: following such jogs to the rail top (it also followed station labels
+printed beyond the sheer on COLLEEN) and stopping where the ink beyond a crossing line turns away (the turns at
+rail lines, 6 to 13 degrees, overlap those at label leaders, 1 to 6 degrees).
+
+Results (step 1 -> step 2):
+
+| Sheet | Waterline cells | WL RMS m | WL wrong | WL extra | Point cells | Point RMS m | Point wrong | Sheer cells (RMS m) |
+|---|---|---|---|---|---|---|---|---|
+| COLLIER | - | - | - | - | 22/31 -> 22/31 | 0.0691 -> 0.0691 | 2 -> 2 | 6 (0.007) -> 6 (0.007) |
+| WHITE GULL | 45/53 -> 43/53 | 0.0289 -> 0.0269 | 0 -> 0 | W6 of 6, 7, 8, 9 -> W6 of 6, 7 | 12/30 -> 12/30 | 0.1065 -> 0.1065 | 2 -> 2 | 5 (0.005) -> 5 (0.005) |
+| COLLEEN | 22/26 -> 22/26 | 0.0007 -> 0.0007 | 0 -> 0 | none | 13/26 -> 17/26 | 0.0063 -> 0.0070 | 0 -> 0 | 0/9 -> 4/9 (0.009) |
+| PARDON ME | 43/57 -> 43/57 | 0.035486 -> 0.035486 | 1 -> 1 | - | - | - | - | - |
+| Round-bilge set | identical (no station engaged; tables equal the frozen tables) | | | | | | | |
+
+COLLEEN sheer cells: stations 3, 4, 5 and aft 8 (errors +6 to +10 mm and -9 mm). Still missing: station 2 (traced top
+7 px, 0.6 in, below the printed height), 6 (the side meets the sheer line at a grazing angle near its end), 7 (17 px
+short; the aft sheer line is light there) and 1 and 9 (not traced). WHITE GULL: the W6 cells of 8 and 9 are gone
+(their leaders); stations 5 loses W4 and W5 (correct values in step 1 that came from the side's lower part being
+on the hull; after the cut the polyline ends below them), and its W5 error (-0.08 m) is gone. The W6 cells of
+stations 6 and 7 come from the frozen reader (step 3). COLLIER: unchanged; its missing sheer cells (stations 1, 4, 7,
+8, 10) are the offset rail ticks above.
+
+### Step 3: no cells where the hull is not drawn
+
+A polyline gives cells only between its own ends (rabbet to sheer), on its own traced ink, by construction; step 2
+put the sheer end on the drawn sheer line. The remaining extra cells came from the existing reader on declined
+halves. Rule (`unsupported_cells`, applied on a half with engaged stations): each existing station that is not
+engaged is traced up its own line from its middle cell by height (the lowest cell may lie on the bottom, the highest
+above the sheer), with the step-2 sheer rules and the thin-line and grid cuts; its cells more than one line width
+above that top end are left out of the table and the curves. A station whose middle cell gives no seed on ink, or
+whose trace rises less than 15 line widths, is not checked (no evidence either way; the first version of the rule
+removed five correct W2 to W6 cells of WHITE GULL station 1, whose trace failed at once). Halves without engaged
+stations, so the whole round-bilge set, are not touched.
+
+Results (step 2 -> step 3):
+
+| Sheet | Waterline cells | WL RMS m | WL extra | Point cells | Point RMS m | Point wrong | Point identity errors |
+|---|---|---|---|---|---|---|---|
+| WHITE GULL | 43/53 -> 43/53 | 0.0269 -> 0.0269 | W6 of 6, 7 -> **none** | 12/30 -> 10/30 | 0.1065 -> 0.1166 | 2 -> 2 | [6] -> [] |
+| COLLEEN | 22/26 (same) | 0.0007 (same) | none | 17/26 (same) | 0.0070 (same) | 0 | [] |
+| COLLIER | - | - | - | 22/31 (same) | 0.0691 (same) | 2 | [5] |
+| PARDON ME | 43/57 (same) | 0.035486 (same) | - | - | - | - | - |
+| Round-bilge set | identical (no station engaged) | | | | | | |
+
+WHITE GULL: the frozen W6 cells of stations 6 and 7 (above their drawn sheer) are left out. Two point cells go with
+them: the frozen sheer cells of 6 and 7 were interpolated between W5 and the W6 sample above the sheer, and without
+it the printed sheer height is no longer enclosed. Both were within 1 cm; they are lost, not wrong.
+
+### Step 4: reader v2 chine-line guard
+
+`body_plan_reader_v2.chine_columns`: the traced chine stroke is the chine only where it does not run **along a drawn
+waterline** (a straight horizontal ink run at least half the reach long, a measuring row or not, such as WHITE GULL's
+painted waterline, followed over at least 0.1 of the reach; a chine only crosses such a line over a short stretch)
+and does not run **out beyond the hull** (more than 2 curve widths outside the outermost measured station crossing:
+a label leader). The longest remaining stretch is the chine; it must still span 0.25 of the reach, or the half has no
+verified line. A station whose pieces meet the stroke outside that stretch keeps its upper cells but gets **no chine
+point**, so no lower piece is named by it. The existing whole-line waterline test runs first, unchanged, so a line
+rejected before is still rejected.
+
+Results, reader v2 arm (base -> step 4):
+
+| Sheet | Chine points (fore) | Waterline cells | WL RMS m | Point cells | Point RMS m | Chine cells (RMS m) |
+|---|---|---|---|---|---|---|
+| WHITE GULL | 5, 4, 3, 2, 1 -> 5, 4, 3, 2 | 43/53 -> 42/53 | 0.0179 -> 0.0181 | 7/30 -> 6/30 | 0.139 -> 0.150 | 4 (0.184) -> 3 (0.212) |
+| COLLEEN | 6, 5 -> same | 9/26 -> 9/26 | 0.523 (same) | 2/26 (same) | 1.042 (same) | 1 (1.082) (same) |
+| Five waterline dev sheets | | identical to the published v2 table (PARDON ME 45/57, RMS 0.005556; round-bilge set unchanged, no line verified) | | | | |
+
+WHITE GULL: the line now stops at station 2; the false "station 1" chine point on the painted waterline is gone.
+The two cells it gave are lost with it: 1/W2 (a lower piece named by that point) and the station 1 chine point cell
+(-0.036 m). Both were within the band, but they came from a point that was not on the chine, so leaving them out is
+the guard working, not a loss of evidence. COLLEEN's v2 failure is not this guard's case: its line has only 2 upper
+pieces for 6 stations and its chine points are misplaced on the drawn chine itself (the base result notes); the
+guard does not change it. v2 still fails both sheets' gates; the polyline product rule is the reader to use on them.
+
+### v1.1 summary (base `3afcf46` -> `d026adb`; polyline product rule, development cases)
+
+| Sheet | WL cells | WL RMS m | WL extra | Point cells | Point RMS m | Point wrong | Chine / sheer / rabbet cells | Code gates vs frozen |
+|---|---|---|---|---|---|---|---|---|
+| COLLIER | - | - | - | 22/31 -> 22/31 | 0.0691 (same) | 2 (same) | 10 / 6 / 6 (same) | pass (same) |
+| WHITE GULL | 45/53 -> 43/53 | 0.0263 -> 0.0269 | W6 of 5, 6, 7 -> none | 8/30 -> 10/30 | 0.1338 -> 0.1166 | 2 -> 2 | 5/3/0 -> 7/3/0 | WL: fail (cells 43 < 45, RMS +0.0006); point: fail (2/10 wrong) |
+| COLLEEN | 21/26 -> 22/26 | 0.0006 -> 0.0007 | none | 10/26 -> 17/26 | 0.0047 -> 0.0070 | 0 -> 0 | 5/0/5 -> 7/4/6 | pass (both kinds) |
+| PARDON ME | 43/57 -> 43/57 | 0.035633 -> 0.035486 | - | - | - | - | - | - |
+| BUE GIRL, Thayer, Balclutha, BUMBLE BEE | identical tables (no station engaged) | | | | | | | |
+
+WHITE GULL still fails its gates: its two wrong point cells are the frozen chine cells of stations 6 and 7 (-0.25 m;
+the frozen curves interpolate across the knuckle), which are not engaged (no clear knuckle traced on their sides);
+it loses two correct W4/W5 cells of station 5 (cut where its trace left the hull for a buttock line).
+
+Open items: COLLIER sheer cells behind offset rail ticks (1, 4, 7, 8, 10); sheer cells that miss by a few pixels
+(COLLEEN 2, 6, 7) because a polyline is not extrapolated; engaged stations whose bottom is ambiguous give side and
+knuckle only (COLLEEN 7, WHITE GULL 3, 8, 9: no rabbet cells); the bottom branch choice still prefers the branch that
+reaches nearest the centreline, and an outer station can take an inner station's bottom where the inner one runs
+above the keel (synthetic case; resolved on COLLEEN by the ownership rule only when both stations are traced); the
+thresholds of steps 1 to 3 were set on these development sheets; product integration (`body_plan_intake.py`) is not
+done; no holdout scored with v1.1.
+
+### Holdout protocol: CALEB JONES (written before any run; folder not opened)
+
+`work/holdout/caleb-jones/` is an **UNSCORED HOLDOUT** (skipjack CALEB JONES, HAER MD-171 sheet 1). Nothing in it was
+opened while writing v1.1 or this protocol: no sheet, preview, crop or truth file. Its table prints **point offsets**
+(height above base and half-breadth of SHEER, CHINE and RABBET per station), as COLLIER's.
+
+**Reader under test (pinned).** The run is valid only with these files at these SHA-256 values (`shasum -a 256`);
+any edit before the run is recorded here and the protocol is committed again before the run:
+
+| File | SHA-256 |
+|---|---|
+| `src/vessel_reconstruction/body_plan_polyline.py` | `14ab4e82386c1bd11c3626ccf58b7b8ba3ab7dee222ddb7d69c6067fc299494b` |
+| `src/vessel_reconstruction/body_plan_reader_v2.py` | `61c6e834ed4df675b96cafd50fc4e77d811f85ef205354697cadb8eaa5a8174f` |
+| `src/vessel_reconstruction/body_plan_chine_line.py` | `ef2bd68f4f9e1f65d185dbc8de1896c6383134b6df9c8558200bfd83bf239223` |
+| `src/vessel_reconstruction/body_plan_crossings.py` | `c6553371691121cd934b0991f273f9ff3a41963d46fd4238034f818aaf6fcf97` |
+| `src/vessel_reconstruction/body_plan_reader.py` | `327c9f141876dc1945383ebe35023b6e7baaacc34306c5eecf26ffb16ba94e11` |
+| `src/vessel_reconstruction/body_plan_identity.py` | `ba738892696025364c3a58664bdf3fbf46e3c7d1a72df7eca31bcc441e9a0c34` |
+| `benchmarks/deadrise_holdout/score.py` | `30140ebb89feda86ab8e607aaf0ef34161d9f3329dcc806813624a7483c6d820` |
+| `benchmarks/ec_collier/point_score.py` | `b38bbda707c921f3d930cebf7ad37cb73e025a29af5e9dabac36a17755df2158` |
+| `benchmarks/balclutha/crossing_value.py` | `bafb3ac55a69046cbf3fafcdd02f63889a34a69b064917b8798315ad4c9a4ddf` |
+| `benchmarks/balclutha/model_value.py` | `aa3786c262434e8451f7659e2885c2fecbd6b3a285c922113c93409d638a71e0` |
+| `scripts/measure_deadrise_holdout.py` | `986efc563925f5b0d1351252ef735d59943185d05d478a30883b7cb9f148f660` |
+
+**Order of work (each step committed before the next):**
+
+1. **Calibration** in `benchmarks/caleb_jones/holdout_value.py`, by an agent that does not open the truth file, the
+   table crops or any reader output, with the same interface as `benchmarks/colleen/holdout_value.py`
+   (`SHEET_SHA256`, `TRUTH_SHA256 = None` until step 2, `PIXELS_PER_FT`, `CENTRE_COLUMN`, `BASE_ROW` and slope,
+   `height_ft`, `WATERLINE_ROWS` / `WATERLINE_HEIGHTS_FT` / `WATERLINES`, `STATIONS`, sides and grid columns,
+   `MAX_OFFSET_PX`, `OVERLAY_REGION`, `sheet_layout()`). Scale from the printed scale bar, checked against one drawn
+   dimension; centre column and base line from the drawn lines; measuring rows a fixed 6-inch grid from the scale (no
+   waterlines are expected; as COLLIER and COLLEEN); maximum offset clear of labels where possible, with the labels
+   inside it listed. **Sides read twice** (body-plan labels; stem and transom in the profile), both readings recorded.
+   If the sheet shows the table, the calibrating agent records that it saw it and that no constant came from it.
+   An overlay of the calibration is checked by eye. `scripts/measure_deadrise_holdout.py` already lists the boat
+   `caleb-jones`; no other code changes.
+2. **Blind truth.** A person or a model that sees no reader output reads the printed SHEER, CHINE and RABBET rows
+   (heights and half-breadths, feet-inches-eighths) into `work/holdout/caleb-jones/truth.json` in the PM format of
+   the WHITE GULL and COLLEEN truth files (`units`, `stations`, `heights`, `half_breadths`, `notes`, `unsure`). Blank
+   or illegible cells are null. Its SHA-256 is written into `TRUTH_SHA256` and committed.
+3. **One run**, with no tuning: `scripts/measure_deadrise_holdout.py --boat caleb-jones --sheet ... --truth ... --out
+   work/deadrise_holdouts/caleb-jones_holdout_result.json --overlay work/deadrise_holdouts/caleb-jones_holdout_overlay.png`.
+   The script checks the sheet and truth SHA-256 values; all three readers run before the truth file is read. The
+   JSON, overlay and stdout are kept in `work/` and their SHA-256 values recorded. The run is not repeated; a crash
+   after the JSON is written is fixed in display code only, as on COLLIER.
+
+**Cells and metrics** (as the WHITE GULL and COLLEEN protocol, point cells): truth cells are the printed (station,
+SHEER / CHINE / RABBET) pairs with both height and half-breadth printed. Reader value: the station's curve at the
+printed height (polyline: its traced points; frozen and v2: its crossings on consecutive measuring rows), no
+extrapolation. Arms: frozen reader (rank identities), reader v2, and the polyline product rule (halves read as a
+whole give their polylines; on declined halves the frozen curves with stations engaged one by one, without frozen
+samples on engaged ink or above their station's traced side). Report per arm: cells given / truth cells, RMS,
+maximum, wrong cells (> 0.15 m), identity errors (2 shared points), sheer-only, chine-only and rabbet-only lines,
+missing and extra cells, halves read / declined / engaged stations with the reader's notes; for v2 whether a chine
+line was verified per half. Printed waterline cells, if any, are scored as well, as on WHITE GULL.
+
+**Gates (polyline product rule against the frozen reader; pass only if all hold):** cells >= frozen; RMS not worse;
+wrong cells not worse; wrong cells <= 10 % of cells given; no extra cell where the printed half-breadth is blank; by
+eye on the overlay, every named or engaged knuckle lies on a drawn station corner (recorded). A failure is reported
+as a failure. After the run CALEB JONES is a development case.
+
+Verification (2026-11-10, `b9b2289` plus a test fix): `PYTHONPATH=src:. .venv/bin/python -m pytest -q`: 1758 passed,
+1 skipped, 6 failed in 1135 s. Five are the known macOS `sandbox-exec` worker failures inside this agent's sandbox
+(`test_ship_cad.py` x3, `test_part_revise.py`, `test_whole_vessel_step1.py`; exit 71; they import nothing from these
+files). The sixth was `test_existing_cells_above_their_own_traced_side_are_unsupported`, whose synthetic station line
+was too short for the guard added late in step 3; its geometry was corrected (test only, no module change) and
+`tests/test_body_plan_polyline.py` passes (20). The pinned hashes above are unchanged. Frozen reader hashes unchanged.

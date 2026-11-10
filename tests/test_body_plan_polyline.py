@@ -142,3 +142,180 @@ def test_buttock_grid_lines_are_not_stations():
     assert [s.station for s in half.stations] == [4, 3, 2, 1]
     for station, (_, knuckle, knuckle_row, _) in zip(half.stations, STATIONS):
         assert station.chine[0] == pytest.approx(knuckle_row, abs=3)
+
+
+# ---------------------------------------------------------------- per-station engagement
+
+def _existing_values(sheet, side, drawn):
+    """An existing reader's table for drawn (name, (sheer, knuckle, knuckle_row, rabbet_row)) sides."""
+    table = {}
+    for name, (sheer, knuckle, knuckle_row, _) in drawn:
+        for label, row in sheet.waterline_rows.items():
+            if SHEER_ROW <= row < knuckle_row:
+                column = _side_column(sheet, side, sheer, knuckle, knuckle_row, row)
+                table[(name, label)] = side.sign * (column - sheet.centre_column) / sheet.pixels_per_metre
+    return table
+
+
+@pytest.mark.parametrize('sign', [1, -1])
+def test_a_declined_half_engages_clear_knuckles_by_the_existing_names(sign):
+    drawn = (STATIONS[0], STATIONS[2])  # two stations drawn: too few to read the half as a whole
+    ink, sheet, side = v_bottom(sign, stations=drawn)
+    sheet, side = _layout(sheet.centre_column, sign, 4)
+    half = bpp.read_half(ink, sheet, side)
+    assert not half.read and len(half.unnamed) == 2
+    existing = _existing_values(sheet, side, ((4, drawn[0]), (2, drawn[1])))
+    existing[(3, 'r250')] = 0.123  # a station the polyline reader did not trace
+    engaged = bpp.engage_stations(half, side, existing, sheet)
+    assert sorted(s.station for s in engaged) == [2, 4]
+    table = bpp.half_table(half, existing, sheet)
+    assert table[(3, 'r250')] == 0.123  # kept from the existing reader
+    station = next(s for s in engaged if s.station == 4)
+    assert table[(4, 'r775')] == pytest.approx(station.half_breadth_m(775, sheet))  # the bottom, below the knuckle
+    assert (4, 'r775') not in existing
+
+
+def test_an_existing_cell_on_an_engaged_line_under_another_name_is_dropped():
+    drawn = (STATIONS[0], STATIONS[2])
+    ink, sheet, side = v_bottom(1, stations=drawn)
+    sheet, side = _layout(sheet.centre_column, 1, 4)
+    half = bpp.read_half(ink, sheet, side)
+    existing = _existing_values(sheet, side, ((4, drawn[0]), (2, drawn[1])))
+    # The existing reader also gave station 3 a crossing that lies on station 4's ink.
+    existing[(3, 'r325')] = existing[(4, 'r325')]
+    bpp.engage_stations(half, side, existing, sheet)
+    table = bpp.half_table(half, existing, sheet)
+    assert (3, 'r325') not in table
+    assert table[(4, 'r325')] == pytest.approx(existing[(4, 'r325')], abs=0.03)
+
+
+def test_no_engagement_without_a_single_matching_existing_name():
+    drawn = (STATIONS[0], STATIONS[2])
+    ink, sheet, side = v_bottom(1, stations=drawn)
+    sheet, side = _layout(sheet.centre_column, 1, 4)
+    half = bpp.read_half(ink, sheet, side)
+    assert bpp.engage_stations(half, side, {}, sheet) == []
+    assert bpp.half_table(half, {}, sheet) == {}
+
+
+def test_round_bilge_engages_nothing_and_keeps_the_existing_table():
+    ink, sheet, side = round_bilge()
+    half = bpp.read_half(ink, sheet, side)
+    existing = {(4, 'r400'): 12.0, (3, 'r400'): 9.99}
+    assert bpp.engage_stations(half, side, existing, sheet) == []
+    assert bpp.half_table(half, existing, sheet) == existing
+
+
+def _straight_station(sheet, side, corners, knuckle_index):
+    """A StationPolyline along straight lines through (offset, row) corners, rabbet first."""
+    points = []
+    for (offset_a, row_a), (offset_b, row_b) in zip(corners, corners[1:]):
+        for t in np.linspace(0.0, 1.0, 200, endpoint=False):
+            points.append((row_a + t * (row_b - row_a), sheet.centre_column + side.sign * (offset_a + t * (offset_b - offset_a))))
+    points.append((corners[-1][1], sheet.centre_column + side.sign * corners[-1][0]))
+    points = np.asarray(points)
+    knuckle = points[200 * knuckle_index]
+    return bpp.StationPolyline(side.name, side.sign, points, 200 * knuckle_index, (knuckle[0], knuckle[1]), 70.0)
+
+
+def test_an_inner_station_does_not_keep_the_outer_bottom_through_its_knuckle():
+    # The outer bottom runs from its knuckle (1200, 700) to the keel (row 800) and passes through
+    # the inner knuckle at offset 1000; the inner station's own bottom runs to row 760 at the keel.
+    inner_knuckle_row = 700 + (1200 - 1000) / (1200 - RABBET_OFFSET) * (800 - 700)
+    stations = ((1260, 1200, 700, 800), (1050, 1000, inner_knuckle_row, 760))
+    ink, sheet, side = v_bottom(stations=stations, chine_curve=False)
+    width = bpp.line_width(ink, sheet, side)
+    outer = _straight_station(sheet, side, [(RABBET_OFFSET, 800), (1200, 700), (1260, SHEER_ROW)], 1)
+    # The inner trace that ran on along the outer bottom from its knuckle.
+    hijacked = _straight_station(sheet, side, [(RABBET_OFFSET, 800), (1000, inner_knuckle_row), (1050, SHEER_ROW)], 1)
+    hijacked.seed = (400.0, _side_column(sheet, side, 1050, 1000, inner_knuckle_row, 400))
+    kept, dropped = bpp._own_bottoms(ink, sheet, side, width, [hijacked, outer])
+    assert dropped == 0 and len(kept) == 2
+    assert kept[0] is outer  # the outer station keeps the line
+    assert kept[1].rabbet[0] == pytest.approx(760, abs=6)  # the inner one is traced again along its own
+    assert any('traced again' in note for note in kept[1].notes)
+
+
+def test_an_engaged_station_with_other_lines_through_its_knuckle_gives_its_side_only():
+    drawn = (STATIONS[0], STATIONS[2])
+    ink, sheet, side = v_bottom(1, stations=drawn)
+    sheet, side = _layout(sheet.centre_column, 1, 4)
+    half = bpp.read_half(ink, sheet, side)
+    existing = _existing_values(sheet, side, ((4, drawn[0]), (2, drawn[1])))
+    for station in half.unnamed:
+        station.bottom_alternatives = 1
+    engaged = bpp.engage_stations(half, side, existing, sheet)
+    table = bpp.half_table(half, existing, sheet)
+    for station in engaged:
+        assert station.knuckle_index == 0
+        assert station.rabbet[0] == pytest.approx(station.chine[0], abs=3)  # the polyline starts at the knuckle
+    assert (4, 'r775') not in table and (4, 'r475') in table
+
+
+# ---------------------------------------------------------------- the sheer (top of the side)
+
+def _with(ink, draw_more):
+    image = Image.fromarray(np.where(ink, 0, 255).astype(np.uint8))
+    draw_more(ImageDraw.Draw(image))
+    return np.asarray(image) < 128
+
+
+def test_the_sheer_is_the_top_edge_of_the_heavy_sheer_line_the_side_ends_in():
+    ink, sheet, side = v_bottom()
+    heavy = 12  # a sheer line drawn heavy across the tops of the sides, centred on SHEER_ROW
+    ink = _with(ink, lambda draw: draw.line([(0, SHEER_ROW), (WIDTH - 1, SHEER_ROW)], fill=0, width=heavy))
+    half = bpp.read_half(ink, sheet, side)
+    assert [s.station for s in half.stations] == [4, 3, 2, 1]
+    for station in half.stations:
+        assert station.sheer[0] == pytest.approx(SHEER_ROW - heavy / 2, abs=3)
+
+
+def test_a_thin_label_leader_beyond_the_sheer_is_not_the_side():
+    ink, sheet, side = v_bottom()
+    top = sheet.centre_column + STATIONS[1][0]  # the top of station 3's side
+    # A thin leader drawn on from the top of station 3's side, almost in line with it, to a label.
+    ink = _with(ink, lambda draw: draw.line([(top, SHEER_ROW), (top + 30, SHEER_ROW - 140)], fill=0, width=2))
+    half = bpp.read_half(ink, sheet, side)
+    station = half.station(3)
+    assert station is not None
+    assert station.sheer[0] == pytest.approx(SHEER_ROW, abs=2 * LINE + 2)  # the junction, within two widths
+    assert station.sheer[0] >= SHEER_ROW - LINE
+
+
+def test_a_side_cut_where_it_runs_on_up_a_grid_column():
+    width = 5.0
+    points = np.array([[row, 300.0 + 0.2 * (500 - row)] for row in range(500, 300, -2)]  # slanted side
+                      + [[row, 340.0] for row in range(300, 200, -2)])  # then straight up a grid column
+    cut = bpp._cut_at_grid(points, width, (340.0,))
+    assert cut[-1, 0] == pytest.approx(300, abs=70)  # the junction (the band reaches below it)
+    assert cut[-1, 0] > 250
+    assert len(bpp._cut_at_grid(points, width, ())) == len(points)
+
+
+# ---------------------------------------------------------------- cells only where the hull is drawn
+
+def test_existing_cells_above_their_own_traced_side_are_unsupported():
+    drawn = (STATIONS[0], STATIONS[2])
+    ink, sheet, side = v_bottom(1, stations=drawn)
+    sheet, side = _layout(sheet.centre_column, 1, 4)
+    offset = 900  # a station line the polyline reader does not trace: drawn from row 400 down only
+    ink = _with(ink, lambda draw: draw.line([(sheet.centre_column + offset, 400), (sheet.centre_column + offset - 30, 700)],
+                                           fill=0, width=LINE))
+    # The check traces up from the station's middle cell (r625), which must rise at least 15 widths.
+    half = bpp.read_half(ink, sheet, side)
+    existing = _existing_values(sheet, side, ((4, drawn[0]), (2, drawn[1])))
+    for label in ('r325', 'r625', 'r700'):  # station 3: r325 lies above its drawn top
+        row = sheet.waterline_rows[label]
+        existing[(3, label)] = (offset - 30 * (row - 400) / 300) / sheet.pixels_per_metre
+    bpp.engage_stations(half, side, existing, sheet, ink)
+    assert half.unsupported == [(3, 'r325')]
+    table = bpp.half_table(half, existing, sheet)
+    assert (3, 'r325') not in table and (3, 'r625') in table and (3, 'r700') in table
+
+
+def test_no_unsupported_check_without_engaged_stations():
+    ink, sheet, side = round_bilge()
+    half = bpp.read_half(ink, sheet, side)
+    existing = {(4, 'r250'): 12.0}  # nowhere near any ink
+    bpp.engage_stations(half, side, existing, sheet, ink)
+    assert half.unsupported == [] and bpp.half_table(half, existing, sheet) == existing

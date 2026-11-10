@@ -1,9 +1,10 @@
 """The V-bottom polyline reader on the five waterline dev sheets (no model calls).
 
-Product rule measured here: a half that the polyline reader reads takes its waterline table
-(the traced polylines at the drawn waterline rows); a declined half keeps the frozen reader's
-rank-identity table. On a round-bilge sheet every half must be declined, so the table is the
-frozen table unchanged. PARDON ME (steep-sided hard chine) is a development case.
+Product rule measured here (`benchmarks.deadrise_holdout.score.polyline_table`): a half that the
+polyline reader reads takes its waterline table (the traced polylines at the drawn waterline rows);
+a declined half keeps the frozen reader's rank-identity table, with stations engaged one by one
+(clear knuckle, named by the frozen reader) replaced by their polylines. On a round-bilge sheet
+no station is engaged, so the table is the frozen table unchanged. PARDON ME (steep-sided hard chine) is a development case.
 
 Same harness calibrations, truth files and scorers as scripts/measure_chine_reader_v2.py. Truth is
 read after reading, for scoring only. Wrong cells = cells given with error above 0.15 m.
@@ -23,23 +24,12 @@ from benchmarks.balclutha import crossing_value as cv  # noqa: E402
 from benchmarks.balclutha import model_value as balclutha  # noqa: E402
 from benchmarks.bue_girl import holdout_value as bue  # noqa: E402
 from benchmarks.bumble_bee import holdout_value as bumble  # noqa: E402
+from benchmarks.deadrise_holdout import score as product  # noqa: E402
 from benchmarks.pardon_me import holdout_value as pardon  # noqa: E402
 from benchmarks.thayer import holdout_value as thayer  # noqa: E402
 from vessel_reconstruction import body_plan_crossings as crossings  # noqa: E402
 from vessel_reconstruction import body_plan_polyline as polyline  # noqa: E402
 from vessel_reconstruction import body_plan_reader as reader  # noqa: E402
-
-
-def combined_table(frozen: dict, identities: dict, halves: dict, layout) -> dict:
-    """Polyline table for read halves, the frozen table for declined halves."""
-    table = {}
-    for name, reading in frozen.items():
-        if halves[name].read:
-            table.update(polyline.waterline_table({name: halves[name]}, layout))
-        else:
-            table.update(reader.table_from_identities(reading, identities[name], layout.pixels_per_metre,
-                                                      layout.centre_column))
-    return table
 
 
 def main():
@@ -80,12 +70,14 @@ def main():
                       for n, r in frozen.items()}
         before_table, _ = cv.table_and_flags(frozen, identities, layout)
         halves = polyline.read_sheet(ink, layout)
-        after_table = combined_table(frozen, identities, halves, layout)
+        product.engage(halves, frozen, identities, layout, ink)
+        after_table = product.polyline_table(halves, frozen, identities, layout)
         truth = load_truth(truth_path)  # read only now, after both readers have run
         before, after = summarise(before_table, truth, scorer), summarise(after_table, truth, scorer)
         case = {'sheet': name, 'frozen': before, 'polyline_or_frozen': after,
                 'halves': {n: {'read': h.read, 'notes': h.notes, 'line_width_px': h.line_width_px,
                                'stations': [[s.station, s.chine[0], s.chine[1], s.turn_deg] for s in h.stations],
+                               'engaged': [[s.station, s.chine[0], s.chine[1], s.turn_deg] for s in h.engaged],
                                'unnamed': [[s.chine[0], s.chine[1], s.turn_deg] for s in h.unnamed]}
                            for n, h in halves.items()},
                 'table_unchanged': before_table == after_table,
@@ -98,7 +90,8 @@ def main():
               f"wrong {before['wrong_cells']} -> {after['wrong_cells']}, identity {before['identity_errors']} -> "
               f"{after['identity_errors']}, unchanged {case['table_unchanged']}", flush=True)
         for n, h in halves.items():
-            print('   ', n, 'read' if h.read else 'declined', h.notes, flush=True)
+            print('   ', n, 'read' if h.read else 'declined', 'engaged', [s.station for s in h.engaged], h.notes,
+                  flush=True)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2, default=float) + '\n')
 
