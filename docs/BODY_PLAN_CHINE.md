@@ -1110,3 +1110,20 @@ height, so this run does not separate the two lines.
 failure on the stations it named correctly: on a half read as a whole, names are given by nesting rank, so a missed
 outer station (crowded stations 5 and 6 beside 7; station 8 beside the copy of 7) and a counted transom outline shift
 every inner name. CALEB JONES is now a development case.
+
+### Label-based station naming (development, 2026-11-10): not adopted
+
+Two attempts to name V-bottom stations from printed station labels (OCR near each traced line) instead of nesting rank
+were run on the four development sheets (COLLIER, WHITE GULL, COLLEEN, CALEB JONES). Neither was merged.
+
+| Attempt | COLLIER cells | CALEB cells | CALEB identity errors | Outcome |
+|---|---|---|---|---|
+| v1.1 (rank naming, current) | 22/31 | 16/30 | [4, 5, 6, 7, 8, 9] | kept |
+| Labels name stations; abstain otherwise | 0/31 | 3/30 | [] | rejected: removes errors only by abstaining |
+| Labels as anchors that correct rank naming (two or more monotonic anchors required) | 22/31 | 16/30 | [4, 5, 6, 7, 8, 9] | rejected: no two usable labels were read on either CALEB half, so it fell back to rank naming |
+
+WHITE GULL and COLLEEN were unchanged in both attempts. The limit is the OCR read of the small hand-lettered station
+numbers, not the anchor logic. Looser anchor rules were not tried, to avoid tuning to the development sheets. Next
+candidates: station identity from the plan or profile view (station spacing along the baseline), or a vision-model
+label read offered as a suggestion for the user to confirm. Code: unmerged branch `fix/vbottom-label-names`
+(commits `60ceecb`, `c2694c5`), kept in a local clone only.
