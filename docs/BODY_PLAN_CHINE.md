@@ -570,3 +570,9 @@ before the run is recorded and the protocol re-committed before the run.
   and the table equals the frozen table.
 - **One run, no tuning**: run once per sheet, the full JSON and overlay kept in `work/`. A failure is reported as a
   failure. Any change after the run makes the sheet a development case.
+
+Verification (2026-11-10): `PYTHONPATH=src:. .venv/bin/python -m pytest -q`: 1730 passed, 1 skipped, 5 failed in
+392 s. The 5 failures (`test_ship_cad.py` sandbox tests x3, `test_part_revise.py`, `test_whole_vessel_step1.py`) are
+the macOS `sandbox-exec` worker exiting 71 inside this agent's own sandbox; they import nothing from this branch's
+files (the branch adds 5 files and edits only this document). `tests/test_body_plan_polyline.py`: 8 passed. Frozen
+reader hashes unchanged.
