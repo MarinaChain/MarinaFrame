@@ -238,3 +238,65 @@ which the frozen reader drops because it keeps only chains crossing two or more 
 stations 1-2. Next: a reader v2 (new module, frozen files untouched) that accepts one-waterline pieces below a detected
 chine line as station pieces, named by their chine point; PARDON ME is a dev case, so the result needs a new hard-chine
 holdout sheet.
+
+## Reader v2 (branch `feature/chine-reader-v2`)
+
+Module `src/vessel_reconstruction/body_plan_reader_v2.py`; benchmark `scripts/measure_chine_reader_v2.py`
+(writes `outputs/body_plan_chine_reader_v2.json`); tests `tests/test_body_plan_reader_v2.py`. The frozen
+crossings, reader and identity modules are untouched. PARDON ME is a **development case**: it guided the design,
+so its numbers below are not evidence of generalisation.
+
+Method (code only, no truth, no vessel names):
+
+1. Find the chine line with `body_plan_chine_line`. Reject a stroke that lies on a drawn waterline (most of it within
+   2 curve widths of a waterline row): this is what the old line finder returned on C.A. Thayer and Balclutha. Without a
+   verified line a side keeps the frozen rank identities, so a round-bilge sheet is unchanged.
+2. Upper pieces: chains that reach the line and have at least two measured crossings above it. Chains that share the
+   same highest crossing are one curve (the frozen builder forks one curve into several chains). Groups are ranked
+   outermost first by nesting at one waterline that all groups cross; the k-th group is station k. Its chine point is
+   where its chains meet the line.
+3. Lower pieces: every station crossing below the line is re-traced up its own ink to the line (`follow_curve`).
+   It is named after the chine point where it arrives, if that point is within 0.10 waterline spacing and at least
+   twice nearer than the next point. A crossing on the line and running along it is the line itself and is skipped.
+4. A cell that two different crossings claim is left empty (abstained), as is a crossing that does not arrive at one
+   clear chine point. No neighbouring value, truth or position prior picks a branch.
+
+Metrics as in "Metrics and acceptance". Added: wrong cells = cells given with error above 0.15 m (the harness band).
+
+### Holdout protocol (written before any reader run on a candidate)
+
+- **Candidate.** A public-domain hard-chine body-plan sheet with a printed table of offsets that gives half-breadths
+  (or can be converted without judgement) at stations and waterlines. Record source URL and rights statement. Download
+  to `work/holdout/` only (git-ignored). The sheet must not be one of the five dev sheets.
+- **Truth.** Only the printed table of offsets, keyed by station and waterline, read by a person or a model that does
+  not see reader output, frozen to a file outside the repository before the reader runs. Cells that are blank or
+  illegible are not truth cells. Truth is never read by the reader.
+- **Calibration.** Centre column, pixels per metre, waterline rows, maximum offset, sides, station order and grid
+  columns are set once from the drawing's own scale and labels, recorded in this file before scoring, and not changed
+  after scoring.
+- **Arms.** Frozen reader with rank identities versus reader v2, same calibration, same scorer.
+- **Report.** Cells given / truth cells, RMS and maximum error on common cells, wrong cells (> 0.15 m), identity
+  errors (harness check), extra and missing cells, abstained crossings, whether a chine line was verified per side.
+- **Gates (pass only if all hold).** v2 gives at least as many cells as frozen; v2 RMS and wrong cells are not worse
+  than frozen; v2 wrong cells are at most 10 percent of cells given; no extra cell that the truth shows is blank;
+  the verified chine line is on the drawn chine (checked on the overlay).
+- **No tuning.** Constants in `body_plan_reader_v2.py` and `body_plan_chine_line.py` are fixed before the run. One run
+  is scored. A failure is reported as a failure; fixes after scoring make the sheet a development case.
+- **Round-bilge check.** The same run must leave every round-bilge dev sheet identical to the frozen result.
+
+### Holdout candidates (state: none scored)
+
+The Library of Congress site and `tile.loc.gov` answer this host with a Cloudflare challenge (HTTP 403, "Just a
+moment"). The challenge is not bypassed, so no sheet was downloaded and no truth exists. Candidates from catalogue
+search results (hull form not verified by eye; rights: HAER/HABS drawings are US Government works, the LoC rights
+advisory lists no known restrictions; confirm on the item page before use):
+
+| Candidate | Catalogue URL | Note |
+|---|---|---|
+| St. Lawrence River Skiff, Antique Boat Museum (HAER NY-2432) | https://www.loc.gov/resource/hhh.ny2432.sheet | lines plan with table of offsets; hull form unknown |
+| 19' 6" Mukilteo Boat, Center for Wooden Boats (HAER WA-224) | https://www.loc.gov/resource/hhh.wa0921.sheet | lines and offsets table; likely round or lapstrake |
+| USS Saginaw Gig (HAER VA-146) | https://www.loc.gov/resource/hhh.va2293.sheet | lines plan and table of offsets; likely round |
+| Skipjack KATHRYN (HAER MD-117) | search the LoC catalogue for "Kathryn skipjack" | skipjacks are hard-chine; sheets not located |
+
+**Protocol state: written, nothing run.** The next step needs a person (or a browser session that passes the
+challenge normally) to download one or two sheets into `work/holdout/`, then freeze truth and calibration as above.
