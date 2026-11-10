@@ -272,7 +272,9 @@ agent builds a real `TaskView` from a real task and checks it against the same s
 ## Exports
 
 Backend for milestone M5 (design plan section 7; review workflow sections 3, 5, 6 P0-6, P0-7,
-P0-9, P0-11). Package `src/vessel_reconstruction/exports/`; it only reads the task folder.
+P0-9, P0-11). Package `src/vessel_reconstruction/exports/`; existing task evidence is read only.
+Older tasks gain `domain/vessel_identity.json` on their first export; the pinned checkpoint
+and immutable build files do not change.
 
 In the app (`app/core/src/export.rs`, `js/export.js`):
 
@@ -358,6 +360,21 @@ Command: `python -m vessel_reconstruction.exports --task DIR --revision rN --out
   [CAD_EXPORT_CHECK.md](CAD_EXPORT_CHECK.md) for the OCC/rhino3dm fixture checks and limits.
 - `_manifest.json`: stamp, vessel, revision, run, build, `result_sha256`, review state, open
   guess count, `engineering_approved: false`, and every file with role, bytes and SHA-256.
+  Identity schema `schema_version: "1.0"` adds `vessel_id` (a UUID created once in the domain's
+  `vessel_uuid` at initialization, or the legacy identity sidecar), `parent_revision`
+  (`null` for r0000, otherwise the preceding domain revision), known `particulars`, and
+  `assets: [{ asset_id, kind, part_id }]`. Asset IDs use UUIDv5 with the vessel UUID as namespace
+  and `<kind>:<part_id>` as name: kinds `hull`, `tank`, `steel_group`; steel part IDs match the
+  display groups (`structure_shell`, etc.). They do not depend on labels, geometry or revision.
+  Tank IDs include unbuilt tanks. Revision links use the vessel UUID and revision together;
+  a parent can exist without a successful build. Repeated exports reuse the same vessel UUID.
+  Particulars come from captured intake fields and known spec constraints, without model guesses.
+  Only a typed intake `particulars.imo` supplies an optional `imo` (also in manifest particulars).
+  Empty values are omitted; malformed values or a wrong check digit stop export. The check uses
+  first-six-digit weights 7, 6, 5, 4, 3, 2 modulo ten, as described in the
+  [Irish Revenue IMO validation rules](https://www.revenue.ie/en/online-services/support/software-developers/documents/ais/ais-business-rules-and-conditions.pdf).
+  TODO: add the optional IMO text field to the intake UI and Rust `Particulars` contract together;
+  the current form does not collect it. No number is inferred from names, drawings or build IDs.
 - `_package.zip`: all files above plus the manifest, with fixed entry dates, so the same build
   gives the same zip bytes.
 - Tests: `tests/test_exports.py` (synthetic box task, closed-form V prism, and a trimmed real

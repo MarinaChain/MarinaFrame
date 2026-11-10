@@ -21,7 +21,8 @@ Files (``<stem>`` is ``<vessel>_<revision>_DRAFT``):
   <stem>_manifest.json      file list with SHA-256 hashes and the source build identity
   <stem>_package.zip        all of the above
 
-The task folder is only read. Hashes of the original STEP and STL bytes are
+Legacy tasks gain a vessel identity sidecar; existing task evidence is only read.
+Hashes of the original STEP and STL bytes are
 kept in the manifest, because the copies differ from them in the header only.
 """
 from __future__ import annotations
@@ -44,6 +45,7 @@ from ..accuracy_summary import facts_from_build as accuracy_facts_from_build
 from .report import FOOTER, ReportFacts, write_report
 from .source import DraftBuild, ExportError, load_build
 from .tank_tables import write_tank_tables
+from .identity import manifest_identity
 
 STAMP = "Draft hull model from MarinaFrame. Not approved for construction."
 DATUM = "Units metres (STEP, IGES, Rhino 3dm and STL in millimetres); x along the length as drawn; z up from the baseline (z = 0)."
@@ -191,6 +193,7 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
     folder. ``booklet`` adds printed hydrostatic comparisons to the CSV, PDF and accuracy line.
     """
     build = load_build(Path(task_dir), revision, vessel)
+    identity = manifest_identity(build, tanks, structure_dir)
     booklet_check = None
     if booklet is not None:
         try:
@@ -257,7 +260,7 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
             extra["units"] = "mm"
         entries.append((target, role, extra))
 
-    manifest = {"stamp": STAMP, "footer": FOOTER, "datum": DATUM, "engineering_approved": False,
+    manifest = {**identity, "stamp": STAMP, "footer": FOOTER, "datum": DATUM, "engineering_approved": False,
                 "tool": f"MarinaFrame {__version__}", "vessel": build.vessel, "revision": build.revision_id,
                 "run_id": build.result.get("run_id"), "build": build.build_dir.name,
                 "result_sha256": digest_file(build.build_dir / "result.json"),

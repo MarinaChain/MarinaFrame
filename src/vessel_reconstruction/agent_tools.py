@@ -202,6 +202,7 @@ class DomainTools(InvestigationTools):
         validation = validate_spec(captured, destination, allow_sheet_only=True)
         state = {"version": DOMAIN_VERSION, "submitted_spec_sha256": digest_object(spec),
                  "input_spec_sha256": digest_file(destination / "spec.json"), "sources": sources,
+                 "vessel_uuid": str(uuid4()),
                  "revision": 0, "selected": {}, "catalog": {}, "inspection_artifacts": [],
                  "builds": [], "last_valid_candidate": None, "validation": None,
                  "rendered_views": [], "input_errors": validation}

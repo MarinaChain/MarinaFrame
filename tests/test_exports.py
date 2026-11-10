@@ -16,6 +16,7 @@ from pathlib import Path
 import shutil
 import struct
 import zipfile
+from uuid import UUID, uuid4
 
 import numpy as np
 from PIL import Image
@@ -273,6 +274,136 @@ def test_export_is_repeatable(tmp_path):
     second = export_draft(task, "r0001", tmp_path / "b")
     assert first["files"] == second["files"]
     assert first["package"]["sha256"] == second["package"]["sha256"]
+
+
+def test_manifest_identity_is_stable_across_revisions_and_display_names(tmp_path):
+    from vessel_reconstruction.structure.steel import write_steel_tables
+    from test_structure_export import synthetic_block
+
+    task = make_box_task(tmp_path, with_cad=False)
+    domain = task / "domain"
+    checkpoint = (domain / "state.json").read_bytes()
+    structure = tmp_path / "structure"
+    write_steel_tables(synthetic_block(), structure, "block_DRAFT")
+    first = export_draft(task, "r1", tmp_path / "first", tanks=box_tank_model(), structure_dir=structure)
+    assert first["schema_version"] == "1.0"
+    assert UUID(first["vessel_id"]).version == 4
+    assert first["parent_revision"] == "r0000"
+    assert (domain / "state.json").read_bytes() == checkpoint
+    identity = json.loads((domain / "vessel_identity.json").read_text())
+    assert identity["vessel_id"] == first["vessel_id"]
+    assets = {(a["kind"], a["part_id"]): a["asset_id"] for a in first["assets"]}
+    assert set(assets) == {("hull", "hull"), ("tank", "db1"), ("tank", "hold"),
+                           ("steel_group", "structure_shell"), ("steel_group", "structure_bulkhead"),
+                           ("steel_group", "structure_primary")}
+    assert len(set(assets.values())) == len(assets)
+    assert all(UUID(value).version == 5 for value in assets.values())
+
+    shutil.copytree(domain / "builds/r0001-test", domain / "builds/r0002-test")
+    shutil.copytree(domain / "revisions/r0001", domain / "revisions/r0002")
+    state = json.loads(checkpoint)
+    state["revision"] = 2
+    state["builds"].append({"revision_id": "r0002", "path": "domain/builds/r0002-test", "valid": True})
+    (domain / "state.json").write_text(json.dumps(state))
+    second = export_draft(task, "r2", tmp_path / "second", vessel="Renamed vessel",
+                          tanks=list(reversed(box_tank_model())), structure_dir=structure)
+    assert second["vessel_id"] == first["vessel_id"]
+    assert second["revision"] == "r0002" and second["parent_revision"] == first["revision"]
+    assert {(a["kind"], a["part_id"]): a["asset_id"] for a in second["assets"]} == assets
+    with zipfile.ZipFile(tmp_path / "second" / second["package"]["file"]) as archive:
+        packed = json.loads(archive.read(second["manifest_file"]))
+    assert packed["assets"] == second["assets"]
+    assert packed["vessel_id"] == first["vessel_id"]
+    assert packed["engineering_approved"] is False
+
+
+def test_manifest_uses_domain_uuid_and_keeps_known_particulars(tmp_path):
+    task = make_box_task(tmp_path, with_cad=False)
+    domain = task / "domain"
+    vessel_id = str(uuid4())
+    state = json.loads((domain / "state.json").read_text())
+    state["vessel_uuid"] = vessel_id
+    (domain / "state.json").write_text(json.dumps(state))
+    manifest = export_draft(task, "r1", tmp_path / "out")
+    assert manifest["vessel_id"] == vessel_id
+    assert manifest["particulars"] == {"vessel_name": "Test Box 1", "draft_m": 3.0}
+    assert "imo" not in manifest and "imo" not in manifest["particulars"]
+
+
+@pytest.mark.parametrize("typed, expected", [("7654329", "7654329"), (" IMO 7654329 ", "7654329"),
+                                            (None, None), ("", None), ("  ", None)])
+def test_manifest_imo_comes_only_from_typed_intake(tmp_path, typed, expected):
+    task = make_box_task(tmp_path, with_cad=False)
+    domain = task / "domain"
+    (domain / "input").mkdir()
+    particulars = {"vessel_name": "Typed name", "loa_m": 40.0, "beam_m": 8.0}
+    if typed is not None:
+        particulars["imo"] = typed
+    (domain / "input/intake.json").write_text(json.dumps({"particulars": particulars}))
+    # A build's slug and unrelated fields are not a typed IMO number.
+    result_path = domain / "builds/r0001-test/result.json"
+    result = json.loads(result_path.read_text())
+    result.update(vessel_id="7654329", imo="7654329")
+    result_path.write_text(json.dumps(result))
+    manifest = export_draft(task, "r1", tmp_path / "out")
+    assert manifest["particulars"]["loa_m"] == 40.0
+    assert manifest["particulars"]["vessel_name"] == "Typed name"
+    if expected is None:
+        assert "imo" not in manifest and "imo" not in manifest["particulars"]
+    else:
+        assert manifest["imo"] == expected and manifest["particulars"]["imo"] == expected
+
+
+@pytest.mark.parametrize("typed", ["7654328", "123456", "12345678", "７６５４３２９", 7654329, True])
+def test_manifest_rejects_invalid_typed_imo_before_writing_exports(tmp_path, typed):
+    task = make_box_task(tmp_path, with_cad=False)
+    (task / "domain/input").mkdir()
+    (task / "domain/input/intake.json").write_text(json.dumps({"particulars": {"imo": typed}}))
+    with pytest.raises(ExportError, match="IMO"):
+        export_draft(task, "r1", tmp_path / "out")
+    assert not (tmp_path / "out").exists()
+
+
+def test_manifest_rejects_corrupt_persisted_identity(tmp_path):
+    task = make_box_task(tmp_path, with_cad=False)
+    identity = task / "domain/vessel_identity.json"
+    identity.write_text('{"vessel_id": "not-a-uuid"}')
+    with pytest.raises(ExportError, match="identity"):
+        export_draft(task, "r1", tmp_path / "out")
+    assert json.loads(identity.read_text())["vessel_id"] == "not-a-uuid"
+
+
+def test_manifest_steel_ids_match_existing_display_nodes(tmp_path):
+    from vessel_reconstruction.structure.display import write_structure_glb
+    from vessel_reconstruction.structure.steel import write_steel_tables
+
+    structure = tmp_path / "structure"
+    members = [{"member_id": "frame-1", "label": "frame", "group": "transverse",
+                "trace": [(5, 1, 0), (5, 1, 1)], "web_direction": (0, -1, 0),
+                "profile": {"kind": "FlatBar", "height_mm": 100, "web_mm": 6},
+                "thickness_mm": 6.0, "area_m2": 0.1}]
+    write_steel_tables({"members": members}, structure, "block_DRAFT")
+    write_structure_glb(members, structure / "block_DRAFT_structure.glb")
+    task = make_box_task(tmp_path, with_cad=False)
+    manifest = export_draft(task, "r1", tmp_path / "out")
+    assert not any(a["kind"] == "steel_group" for a in manifest["assets"])
+    manifest = export_draft(task, "r1", tmp_path / "steel", structure_dir=structure)
+    assert [a["part_id"] for a in manifest["assets"] if a["kind"] == "steel_group"] == ["structure_stiffener"]
+
+
+def test_manifest_root_revision_has_no_parent_and_uses_existing_hull_part_id(tmp_path):
+    task = make_box_task(tmp_path, with_cad=False)
+    state_path = task / "domain/state.json"
+    state = json.loads(state_path.read_text())
+    state["builds"][0].update(valid=True, path="domain/builds/r0001-test")
+    state_path.write_text(json.dumps(state))
+    result_path = task / "domain/builds/r0001-test/result.json"
+    result = json.loads(result_path.read_text())
+    result["parts"] = [{"id": "envelope-1", "kind": "hull_envelope"}]
+    result_path.write_text(json.dumps(result))
+    manifest = export_draft(task, "r0", tmp_path / "out")
+    assert manifest["parent_revision"] is None
+    assert manifest["assets"][0]["part_id"] == "envelope-1"
 
 
 def test_export_of_real_build_fixture_without_cad(tmp_path):
