@@ -157,3 +157,9 @@
 - **Trigger:** Cross-view outlier replay wrote a 5.2 MB derived JSON file under `outputs/`; the user asked to move it to ignored `work/` before committing.
 - **Rule:** Write per-run derived replay JSON and logs to git-ignored `work/`, including the script's default output path. Commit the replay code, tests and concise result tables, not the per-run data.
 - **Why:** Reproducible measurement output is not a source deliverable and need not enlarge repository history.
+
+### Keep run accounting data in work and include intake calls
+- **Date:** 2026-11-10
+- **Trigger:** Cost-per-ship ledgers were placed in outputs, and the initial collector omitted the live hull intake calibration log.
+- **Rule:** Keep per-run derived JSON/CSV ledgers in git-ignored work/; commit the accounting script, tests and dated report only. Count intake calibration receipts as well as controller receipts. The calibration log's input_tokens already includes cache reads and writes, so preserve it as collapsed prompt usage and price it with a range. Do not add intake time again to inclusive case wall time.
+- **Why:** Generated run data does not belong in source history, and omitted or misclassified calibration usage understates the hull cost.
