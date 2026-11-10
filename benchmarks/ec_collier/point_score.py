@@ -17,6 +17,7 @@ identity errors, extra and missing cells. Truth is read only when scoring.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -38,96 +39,50 @@ TRUTH_RANGE_M = (0.0, 4.0)
 
 # ---------------------------------------------------------------- truth
 
-def _metres(value, key: str) -> float | None:
-    """A printed value in metres: a feet-inches-eighths string, or a number in metres.
+# The frozen truth file (work/holdout/ec-collier/truth.json, read-only). Its format, given by the
+# PM: {"units": "ft-in-eighths", "heights": {point: [11]}, "half_breadths": {point: [11]},
+# "unsure": [...]}; items are feet-inches-eighths strings or null, index = station 0..10.
+TRUTH_SHA256 = 'a6ef1671c5bec76511b6819832a61455524ffed05c8f43c842c7edad9efe0348'
+TRUTH_UNITS = 'ft-in-eighths'
 
-    A number is metres unless its key names feet ('ft') or inches ('in').
-    """
-    if value is None or (isinstance(value, str) and value.strip() in ('', '-', '—', '–')):
+
+def _metres(value) -> float | None:
+    """A printed feet-inches-eighths string in metres; None for a blank."""
+    if value is None:
         return None
-    if isinstance(value, str):
-        text = re.sub(r'(?<=\d)\s+(?=\d)', '-', value.strip())  # "5-0 0" -> "5-0-0"
-        return printed.printed_half_breadth(text)
-    number = float(value)
-    lowered = key.lower()
-    if lowered.endswith('_ft') or lowered.endswith('feet'):
-        return number * 0.3048
-    if lowered.endswith('_in') or lowered.endswith('inches'):
-        return number * 0.0254
-    return number
+    if not isinstance(value, str):
+        raise ValueError('truth: every item must be a feet-inches-eighths string or null')
+    return printed.printed_half_breadth(re.sub(r'(?<=\d)\s+(?=\d)', '-', value.strip()))  # "5-0 0" -> "5-0-0"
 
 
-def _find(mapping: dict, *fragments: str):
-    """The first key of `mapping` whose lower-case name contains all `fragments`."""
-    for key in mapping:
-        if all(fragment in key.lower() for fragment in fragments):
-            return key
-    return None
-
-
-def _from_tables(data: dict) -> dict:
-    """{"stations": [...], "<height...>": {point: [...]}, "<half breadth...>": {point: [...]}}."""
-    stations = [int(s) for s in data['stations']]
-    height_key = _find(data, 'height')
-    breadth_key = _find(data, 'half') or _find(data, 'breadth')
-    if height_key is None or breadth_key is None:
-        raise ValueError('truth: expected a height table and a half-breadth table')
-    truth = {}
-    for kind, key in (('height', height_key), ('half_breadth', breadth_key)):
-        table = {name.lower(): values for name, values in data[key].items()}
-        for point in POINTS:
-            values = table.get(point)
-            if values is None or len(values) != len(stations):
-                raise ValueError(f'truth: {key}.{point} must list one value per station')
-            for station, value in zip(stations, values):
-                truth.setdefault((station, point), {})[kind] = _metres(value, key)
-    return truth
-
-
-def _from_records(records: list) -> dict:
-    """[{"station": 0, "point": "sheer", "height...": v, "half...breadth...": v}, ...]."""
-    truth = {}
-    for record in records:
-        height_key = _find(record, 'height')
-        breadth_key = _find(record, 'half') or _find(record, 'breadth')
-        point = str(record['point']).lower()
-        if point not in POINTS:
-            raise ValueError(f'truth: unknown point name {record["point"]!r}')
-        truth[(int(record['station']), point)] = {
-            'height': _metres(record.get(height_key), height_key or ''),
-            'half_breadth': _metres(record.get(breadth_key), breadth_key or '')}
-    return truth
-
-
-def _from_nested(data: dict) -> dict:
-    """{"<station>": {"<point>": {"height...": v, "half...breadth...": v}}}."""
-    records = [dict(values, station=station, point=point)
-               for station, points in data.items() for point, values in points.items()]
-    return _from_records(records)
-
-
-def parse_truth(data) -> dict:
+def parse_truth(data: dict) -> dict:
     """{(station, point): {'height': m or None, 'half_breadth': m or None}} for every printed point."""
-    if isinstance(data, list):
-        truth = _from_records(data)
-    elif 'stations' in data:
-        truth = _from_tables(data)
-    elif _find(data, 'cell') or _find(data, 'point'):
-        truth = _from_records(data[_find(data, 'cell') or _find(data, 'point')])
-    else:
-        truth = _from_nested({k: v for k, v in data.items() if str(k).lstrip('-').isdigit()})
+    if data.get('units') != TRUTH_UNITS:
+        raise ValueError(f'truth: units must be {TRUTH_UNITS!r}')
+    truth = {}
+    for kind, key in (('height', 'heights'), ('half_breadth', 'half_breadths')):
+        table = data[key]
+        if set(table) != set(POINTS):
+            raise ValueError(f'truth: {key} must have exactly the points {POINTS}')
+        for point in POINTS:
+            if len(table[point]) != len(cal.STATIONS):
+                raise ValueError(f'truth: {key}.{point} must list {len(cal.STATIONS)} stations')
+            for station, value in zip(cal.STATIONS, table[point]):
+                truth.setdefault((station, point), {})[kind] = _metres(value)
     for (station, point), values in truth.items():
-        if station not in cal.STATIONS:
-            raise ValueError(f'truth: station {station} is not on the sheet')
         for value in values.values():
             if value is not None and not TRUTH_RANGE_M[0] <= value <= TRUTH_RANGE_M[1]:
-                raise ValueError(f'truth: a value of station {station} {point} is outside the plausible '
-                                 'range; check the units')
+                raise ValueError(f'truth: a value of station {station} {point} is outside the plausible range')
     return truth
 
 
-def load_truth(path: Path) -> dict:
-    return parse_truth(json.loads(Path(path).read_text()))
+def load_truth(path: Path, expected_sha256: str = TRUTH_SHA256) -> dict:
+    """Parse the frozen truth file after checking its fingerprint; a different file stops the run."""
+    raw = Path(path).read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest != expected_sha256:
+        raise SystemExit(f'truth sha256 {digest} does not match the frozen {expected_sha256}; stop')
+    return parse_truth(json.loads(raw))
 
 
 def truth_cells(truth: dict) -> dict:

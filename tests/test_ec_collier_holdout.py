@@ -1,6 +1,8 @@
 """Synthetic tests for the E. C. COLLIER calibration and point-offset scorer (no sheet, no truth)."""
 from __future__ import annotations
 
+import hashlib
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -71,29 +73,41 @@ def test_measured_rows_not_nominal_rows_set_the_weights():
 
 # ---------------------------------------------------------------- truth
 
-def test_truth_tables_of_strings_and_blanks():
-    data = {'stations': list(range(11)),
-            'heights_above_base': {'SHEER': ['5-0-0'] * 11, 'CHINE': ['2-0-0'] * 10 + [None],
-                                   'RABBET': [None] + ['1-0-0'] * 10},
-            'half_breadths': {'SHEER': ['6-0-0'] * 11, 'CHINE': ['5-0 0'] * 10 + [''],
-                              'RABBET': [None] + ['0-2-0'] * 10}}
-    truth = ps.parse_truth(data)
+def _truth_file(**changes):
+    data = {'units': 'ft-in-eighths',
+            'heights': {'sheer': ['5-0-0'] * 11, 'chine': ['2-0-0'] * 10 + [None], 'rabbet': [None] + ['1-0-0'] * 10},
+            'half_breadths': {'sheer': ['6-0-0'] * 11, 'chine': ['5-0 0'] * 10 + [None],
+                              'rabbet': [None] + ['0-2-0'] * 10},
+            'unsure': []}
+    data.update(changes)
+    return data
+
+
+def test_truth_file_format_with_blanks():
+    truth = ps.parse_truth(_truth_file())
     assert truth[(0, 'chine')]['half_breadth'] == pytest.approx(5 * 0.3048)
+    assert truth[(4, 'rabbet')]['half_breadth'] == pytest.approx(2 / 12 * 0.3048)
     assert truth[(10, 'chine')] == {'height': None, 'half_breadth': None}
     assert len(ps.truth_cells(truth)) == 31
 
 
-def test_truth_records_in_metres_and_feet():
-    truth = ps.parse_truth({'cells': [
-        {'station': 3, 'point': 'Chine', 'height_m': 0.8, 'half_breadth_m': 2.3},
-        {'station': 4, 'point': 'sheer', 'height_ft': 6.0, 'half_breadth_ft': 8.5}]})
-    assert truth[(3, 'chine')] == {'height': 0.8, 'half_breadth': 2.3}
-    assert truth[(4, 'sheer')]['height'] == pytest.approx(6.0 * 0.3048)
-
-
-def test_truth_in_wrong_units_is_refused():
+def test_truth_with_other_units_or_points_is_refused():
     with pytest.raises(ValueError):
-        ps.parse_truth({'cells': [{'station': 3, 'point': 'chine', 'height': 30.0, 'half_breadth': 70.0}]})
+        ps.parse_truth(_truth_file(units='m'))
+    with pytest.raises(ValueError):
+        ps.parse_truth(_truth_file(heights={'sheer': ['5-0-0'] * 11, 'chine': ['2-0-0'] * 11}))
+    with pytest.raises(ValueError):
+        ps.parse_truth(_truth_file(heights={'sheer': [1.5] * 11, 'chine': ['2-0-0'] * 11,
+                                            'rabbet': ['1-0-0'] * 11}))
+
+
+def test_truth_with_another_fingerprint_stops(tmp_path):
+    path = tmp_path / 'truth.json'
+    path.write_text(json.dumps(_truth_file()))
+    with pytest.raises(SystemExit):
+        ps.load_truth(path)
+    expected = hashlib.sha256(path.read_bytes()).hexdigest()
+    assert len(ps.truth_cells(ps.load_truth(path, expected))) == 31
 
 
 # ---------------------------------------------------------------- scoring
