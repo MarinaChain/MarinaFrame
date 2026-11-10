@@ -884,3 +884,86 @@ The two cells it gave are lost with it: 1/W2 (a lower piece named by that point)
 the guard working, not a loss of evidence. COLLEEN's v2 failure is not this guard's case: its line has only 2 upper
 pieces for 6 stations and its chine points are misplaced on the drawn chine itself (the base result notes); the
 guard does not change it. v2 still fails both sheets' gates; the polyline product rule is the reader to use on them.
+
+### v1.1 summary (base `3afcf46` -> `d026adb`; polyline product rule, development cases)
+
+| Sheet | WL cells | WL RMS m | WL extra | Point cells | Point RMS m | Point wrong | Chine / sheer / rabbet cells | Code gates vs frozen |
+|---|---|---|---|---|---|---|---|---|
+| COLLIER | - | - | - | 22/31 -> 22/31 | 0.0691 (same) | 2 (same) | 10 / 6 / 6 (same) | pass (same) |
+| WHITE GULL | 45/53 -> 43/53 | 0.0263 -> 0.0269 | W6 of 5, 6, 7 -> none | 8/30 -> 10/30 | 0.1338 -> 0.1166 | 2 -> 2 | 5/3/0 -> 7/3/0 | WL: fail (cells 43 < 45, RMS +0.0006); point: fail (2/10 wrong) |
+| COLLEEN | 21/26 -> 22/26 | 0.0006 -> 0.0007 | none | 10/26 -> 17/26 | 0.0047 -> 0.0070 | 0 -> 0 | 5/0/5 -> 7/4/6 | pass (both kinds) |
+| PARDON ME | 43/57 -> 43/57 | 0.035633 -> 0.035486 | - | - | - | - | - | - |
+| BUE GIRL, Thayer, Balclutha, BUMBLE BEE | identical tables (no station engaged) | | | | | | | |
+
+WHITE GULL still fails its gates: its two wrong point cells are the frozen chine cells of stations 6 and 7 (-0.25 m;
+the frozen curves interpolate across the knuckle), which are not engaged (no clear knuckle traced on their sides);
+it loses two correct W4/W5 cells of station 5 (cut where its trace left the hull for a buttock line).
+
+Open items: COLLIER sheer cells behind offset rail ticks (1, 4, 7, 8, 10); sheer cells that miss by a few pixels
+(COLLEEN 2, 6, 7) because a polyline is not extrapolated; engaged stations whose bottom is ambiguous give side and
+knuckle only (COLLEEN 7, WHITE GULL 3, 8, 9: no rabbet cells); the bottom branch choice still prefers the branch that
+reaches nearest the centreline, and an outer station can take an inner station's bottom where the inner one runs
+above the keel (synthetic case; resolved on COLLEEN by the ownership rule only when both stations are traced); the
+thresholds of steps 1 to 3 were set on these development sheets; product integration (`body_plan_intake.py`) is not
+done; no holdout scored with v1.1.
+
+### Holdout protocol: CALEB JONES (written before any run; folder not opened)
+
+`work/holdout/caleb-jones/` is an **UNSCORED HOLDOUT** (skipjack CALEB JONES, HAER MD-171 sheet 1). Nothing in it was
+opened while writing v1.1 or this protocol: no sheet, preview, crop or truth file. Its table prints **point offsets**
+(height above base and half-breadth of SHEER, CHINE and RABBET per station), as COLLIER's.
+
+**Reader under test (pinned).** The run is valid only with these files at these SHA-256 values (`shasum -a 256`);
+any edit before the run is recorded here and the protocol is committed again before the run:
+
+| File | SHA-256 |
+|---|---|
+| `src/vessel_reconstruction/body_plan_polyline.py` | `14ab4e82386c1bd11c3626ccf58b7b8ba3ab7dee222ddb7d69c6067fc299494b` |
+| `src/vessel_reconstruction/body_plan_reader_v2.py` | `61c6e834ed4df675b96cafd50fc4e77d811f85ef205354697cadb8eaa5a8174f` |
+| `src/vessel_reconstruction/body_plan_chine_line.py` | `ef2bd68f4f9e1f65d185dbc8de1896c6383134b6df9c8558200bfd83bf239223` |
+| `src/vessel_reconstruction/body_plan_crossings.py` | `c6553371691121cd934b0991f273f9ff3a41963d46fd4238034f818aaf6fcf97` |
+| `src/vessel_reconstruction/body_plan_reader.py` | `327c9f141876dc1945383ebe35023b6e7baaacc34306c5eecf26ffb16ba94e11` |
+| `src/vessel_reconstruction/body_plan_identity.py` | `ba738892696025364c3a58664bdf3fbf46e3c7d1a72df7eca31bcc441e9a0c34` |
+| `benchmarks/deadrise_holdout/score.py` | `30140ebb89feda86ab8e607aaf0ef34161d9f3329dcc806813624a7483c6d820` |
+| `benchmarks/ec_collier/point_score.py` | `b38bbda707c921f3d930cebf7ad37cb73e025a29af5e9dabac36a17755df2158` |
+| `benchmarks/balclutha/crossing_value.py` | `bafb3ac55a69046cbf3fafcdd02f63889a34a69b064917b8798315ad4c9a4ddf` |
+| `benchmarks/balclutha/model_value.py` | `aa3786c262434e8451f7659e2885c2fecbd6b3a285c922113c93409d638a71e0` |
+| `scripts/measure_deadrise_holdout.py` | `986efc563925f5b0d1351252ef735d59943185d05d478a30883b7cb9f148f660` |
+
+**Order of work (each step committed before the next):**
+
+1. **Calibration** in `benchmarks/caleb_jones/holdout_value.py`, by an agent that does not open the truth file, the
+   table crops or any reader output, with the same interface as `benchmarks/colleen/holdout_value.py`
+   (`SHEET_SHA256`, `TRUTH_SHA256 = None` until step 2, `PIXELS_PER_FT`, `CENTRE_COLUMN`, `BASE_ROW` and slope,
+   `height_ft`, `WATERLINE_ROWS` / `WATERLINE_HEIGHTS_FT` / `WATERLINES`, `STATIONS`, sides and grid columns,
+   `MAX_OFFSET_PX`, `OVERLAY_REGION`, `sheet_layout()`). Scale from the printed scale bar, checked against one drawn
+   dimension; centre column and base line from the drawn lines; measuring rows a fixed 6-inch grid from the scale (no
+   waterlines are expected; as COLLIER and COLLEEN); maximum offset clear of labels where possible, with the labels
+   inside it listed. **Sides read twice** (body-plan labels; stem and transom in the profile), both readings recorded.
+   If the sheet shows the table, the calibrating agent records that it saw it and that no constant came from it.
+   An overlay of the calibration is checked by eye. `scripts/measure_deadrise_holdout.py` already lists the boat
+   `caleb-jones`; no other code changes.
+2. **Blind truth.** A person or a model that sees no reader output reads the printed SHEER, CHINE and RABBET rows
+   (heights and half-breadths, feet-inches-eighths) into `work/holdout/caleb-jones/truth.json` in the PM format of
+   the WHITE GULL and COLLEEN truth files (`units`, `stations`, `heights`, `half_breadths`, `notes`, `unsure`). Blank
+   or illegible cells are null. Its SHA-256 is written into `TRUTH_SHA256` and committed.
+3. **One run**, with no tuning: `scripts/measure_deadrise_holdout.py --boat caleb-jones --sheet ... --truth ... --out
+   work/deadrise_holdouts/caleb-jones_holdout_result.json --overlay work/deadrise_holdouts/caleb-jones_holdout_overlay.png`.
+   The script checks the sheet and truth SHA-256 values; all three readers run before the truth file is read. The
+   JSON, overlay and stdout are kept in `work/` and their SHA-256 values recorded. The run is not repeated; a crash
+   after the JSON is written is fixed in display code only, as on COLLIER.
+
+**Cells and metrics** (as the WHITE GULL and COLLEEN protocol, point cells): truth cells are the printed (station,
+SHEER / CHINE / RABBET) pairs with both height and half-breadth printed. Reader value: the station's curve at the
+printed height (polyline: its traced points; frozen and v2: its crossings on consecutive measuring rows), no
+extrapolation. Arms: frozen reader (rank identities), reader v2, and the polyline product rule (halves read as a
+whole give their polylines; on declined halves the frozen curves with stations engaged one by one, without frozen
+samples on engaged ink or above their station's traced side). Report per arm: cells given / truth cells, RMS,
+maximum, wrong cells (> 0.15 m), identity errors (2 shared points), sheer-only, chine-only and rabbet-only lines,
+missing and extra cells, halves read / declined / engaged stations with the reader's notes; for v2 whether a chine
+line was verified per half. Printed waterline cells, if any, are scored as well, as on WHITE GULL.
+
+**Gates (polyline product rule against the frozen reader; pass only if all hold):** cells >= frozen; RMS not worse;
+wrong cells not worse; wrong cells <= 10 % of cells given; no extra cell where the printed half-breadth is blank; by
+eye on the overlay, every named or engaged knuckle lies on a drawn station corner (recorded). A failure is reported
+as a failure. After the run CALEB JONES is a development case.

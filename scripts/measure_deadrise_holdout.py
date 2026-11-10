@@ -1,4 +1,4 @@
-"""WHITE GULL or COLLEEN hard-chine holdout: one run of the frozen reader, reader v2 and the
+"""WHITE GULL, COLLEEN or CALEB JONES hard-chine holdout: one run of the frozen reader, reader v2 and the
 polyline reader (product rule) with the committed calibration and scorer (no model calls).
 
 All three readers run before the truth file is read; truth is used for scoring only. Writes the
@@ -24,7 +24,8 @@ from vessel_reconstruction import body_plan_polyline as polyline
 from vessel_reconstruction import body_plan_reader as reader
 from vessel_reconstruction import body_plan_reader_v2 as v2
 
-BOATS = {'white-gull': 'benchmarks.white_gull.holdout_value', 'colleen': 'benchmarks.colleen.holdout_value'}
+BOATS = {'white-gull': 'benchmarks.white_gull.holdout_value', 'colleen': 'benchmarks.colleen.holdout_value',
+         'caleb-jones': 'benchmarks.caleb_jones.holdout_value'}  # calibration committed before its one run
 ARMS = ('frozen', 'v2', 'polyline')
 
 
