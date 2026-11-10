@@ -39,3 +39,42 @@ def test_smooth_walls_mesh_closed_outward_and_shared(monkeypatch):
     assert len(vertices) < 1.5 * len(triangles)
     p = vertices[triangles]
     assert np.linalg.norm(np.cross(p[:, 1] - p[:, 0], p[:, 2] - p[:, 0]), axis=1).min() > 0
+
+
+@pytest.mark.parametrize('degree', [1, 3])
+def test_bspline_face_with_hole_preserves_trimmed_area(degree):
+    from vessel_reconstruction.display_mesh import shape_mesh
+
+    points = [[cq.Vector(x, y, 0) for y in (0, 5, 10, 15)] for x in (0, 5, 10, 15)]
+    face = cq.Face.makeSplineApprox(points, minDeg=degree, maxDeg=degree)
+    cutter = cq.Solid.makeCylinder(2, 2, cq.Vector(7.5, 7.5, -1))
+    trimmed = face.cut(cutter).Faces()[0]
+    assert trimmed.geomType() == 'BSPLINE'
+    assert len(trimmed.innerWires()) == 1
+    vertices, triangles = shape_mesh(trimmed, 0.02, 0.1)
+    p = vertices[triangles]
+    area = np.linalg.norm(np.cross(p[:, 1] - p[:, 0], p[:, 2] - p[:, 0]), axis=1).sum() / 2
+    assert area == pytest.approx(trimmed.Area(), rel=1e-3)
+
+
+def test_bspline_face_with_cut_corner_preserves_trimmed_area():
+    from vessel_reconstruction.display_mesh import shape_mesh
+
+    points = [[cq.Vector(x, y, 0) for y in (0, 5, 10, 15)] for x in (0, 5, 10, 15)]
+    face = cq.Face.makeSplineApprox(points, minDeg=3, maxDeg=3)
+    cutter = cq.Solid.makeCylinder(3, 2, cq.Vector(0, 0, -1))
+    trimmed = face.cut(cutter).Faces()[0]
+    assert not trimmed.innerWires()
+    vertices, triangles = shape_mesh(trimmed, 0.02, 0.1)
+    p = vertices[triangles]
+    area = np.linalg.norm(np.cross(p[:, 1] - p[:, 0], p[:, 2] - p[:, 0]), axis=1).sum() / 2
+    assert area == pytest.approx(trimmed.Area(), rel=1e-3)
+
+
+@pytest.mark.parametrize('degree', [1, 3])
+def test_untrimmed_bspline_keeps_grid_path(degree):
+    from vessel_reconstruction.display_mesh import _bspline_grid, _smooth_bspline
+
+    points = [[cq.Vector(x, y, 0) for y in (0, 5, 10, 15)] for x in (0, 5, 10, 15)]
+    face = cq.Face.makeSplineApprox(points, minDeg=degree, maxDeg=degree)
+    assert (_bspline_grid(face) is not None) if degree == 1 else (_smooth_bspline(face) is not None)

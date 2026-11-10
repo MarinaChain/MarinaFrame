@@ -18,8 +18,8 @@ The integrands are at most quadratic, and the edge-midpoint rule is exact for
 quadratics on a triangle, so the results are exact for the mesh. The
 largest section area (for Cm and Cp) uses even-odd widths of plane cuts.
 
-Table method (fallback when no mesh was exported). Half-breadths of the built
-station curves on a fine height grid, integrated with the trapezoid rule in z
+Table method (fallback when no mesh was exported). Occupied intervals of the built
+station sections on a fine height grid, integrated with the trapezoid rule in z
 and x. Stations only: the hull between and beyond them is not seen.
 
 This is a sanity check against the drawing and owner data, not a stability
@@ -32,7 +32,8 @@ from pathlib import Path
 
 import numpy as np
 
-from .offsets import half_breadth_at, section_curves
+from ..section_regions import piece_ring
+from .offsets import section_curves
 
 SEAWATER_DENSITY_T_PER_M3 = 1.025
 # Design draft when none is given: this fraction of the moulded depth (the
@@ -256,6 +257,30 @@ def mesh_hydrostatics(triangles: np.ndarray, draft_m: float, draft_basis: str, *
 # Table input (fallback)
 
 
+def _section_rings(section: dict) -> list[np.ndarray]:
+    """Close each half-section piece using the same boundaries as the CAD build."""
+    if "points_yz_m" in section:
+        return [piece_ring(section["points_yz_m"])]
+    return [piece_ring(piece["points_yz_m"], piece.get("inner_points_yz_m"))
+            for piece in section.get("pieces", [])]
+
+
+def _intervals_at(rings: list[np.ndarray], height: float) -> list[tuple[float, float]]:
+    """Occupied intervals on the positive-y side, paired by crossings of each ring."""
+    intervals = []
+    for ring in rings:
+        if len(ring) < 3:
+            continue
+        # Half-open edges count a shared vertex once and ignore horizontal edges.
+        z = height
+        start, end = ring, np.roll(ring, -1, axis=0)
+        hit = (np.minimum(start[:, 1], end[:, 1]) <= z) & (z < np.maximum(start[:, 1], end[:, 1]))
+        a, b = start[hit], end[hit]
+        crossings = np.sort(a[:, 0] + (z - a[:, 1]) * (b[:, 0] - a[:, 0]) / (b[:, 1] - a[:, 1]))
+        intervals.extend(zip(crossings[::2], crossings[1::2]))
+    return intervals
+
+
 def table_hydrostatics(sections: list[dict], draft_m: float, draft_basis: str, *,
                        density: float = SEAWATER_DENSITY_T_PER_M3) -> Hydrostatics:
     sections = sorted(sections, key=lambda s: float(s["x_m"]))
@@ -265,21 +290,36 @@ def table_hydrostatics(sections: list[dict], draft_m: float, draft_basis: str, *
     keel = float(min(c[:, 1].min() for group in curves for c in group))
     x = np.array([float(s["x_m"]) for s in sections])
     heights = np.linspace(keel, draft_m, HEIGHT_SAMPLES)
-    half = np.array([[half_breadth_at(group, float(z)) or 0.0 for z in heights] for group in curves])
-    area = 2 * np.trapezoid(half, heights, axis=1)
-    moment_z = 2 * np.trapezoid(half * heights, heights, axis=1)
+    rings = [_section_rings(section) for section in sections]
+    area, moment_z, waterline_intervals, maximum_outer = [], [], [], []
+    for group in rings:
+        # Split at all vertices so a horizontal step is integrated from each side.
+        vertices_z = [z for ring in group for z in ring[:, 1] if keel < z < draft_m]
+        levels = np.unique(np.concatenate((heights, vertices_z)))
+        lower = [_intervals_at(group, np.nextafter(z, np.inf)) for z in levels[:-1]]
+        upper = [_intervals_at(group, np.nextafter(z, -np.inf)) for z in levels[1:]]
+        low_width = np.array([2 * sum(right - left for left, right in row) for row in lower])
+        high_width = np.array([2 * sum(right - left for left, right in row) for row in upper])
+        dz = np.diff(levels)
+        area.append(float(np.sum(dz * (low_width + high_width) / 2)))
+        moment_z.append(float(np.sum(dz * (low_width * levels[:-1] + high_width * levels[1:]) / 2)))
+        waterline_intervals.append(_intervals_at(group, np.nextafter(draft_m, -np.inf)))
+        maximum_outer.append(max((right for row in lower + upper for _, right in row), default=0.0))
+    area, moment_z = np.asarray(area), np.asarray(moment_z)
     volume = float(np.trapezoid(area, x))
     if volume <= 0:
         raise ValueError(f"The stations have no area below z = {draft_m:.3f} m.")
-    waterline = 2 * half[:, -1]
+    waterline = np.array([2 * sum(right - left for left, right in row) for row in waterline_intervals])
     awp = float(np.trapezoid(waterline, x))
     lcf = float(np.trapezoid(waterline * x, x) / awp) if awp > 0 else None
-    inertia_t = float(np.trapezoid(2 * half[:, -1] ** 3 / 3, x))
+    transverse_moments = [2 * sum((right**3 - left**3) / 3 for left, right in station)
+                          for station in waterline_intervals]
+    inertia_t = float(np.trapezoid(transverse_moments, x))
     inertia_l = float(np.trapezoid(waterline * x * x, x)) - awp * lcf ** 2 if lcf is not None else None
     wet_x = x[waterline > 0]
     length = float(wet_x.max() - wet_x.min()) if len(wet_x) else 0.0
-    beam = float(waterline.max())
-    breadth = float(2 * half.max())
+    beam = float(2 * max((right for row in waterline_intervals for _, right in row), default=0.0))
+    breadth = float(2 * max(maximum_outer))
     largest = int(np.argmax(area))
     vcb = float(np.trapezoid(moment_z, x) / volume)
     return Hydrostatics(

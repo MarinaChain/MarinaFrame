@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.optimize import least_squares
 
-from vessel_reconstruction import fairing, three_view_fairing
+from vessel_reconstruction import fairing_shared, fairing, three_view_fairing
 
 # Search limits fixed before scoring. They permit a modest calibration error,
 # without letting a fit collapse the hull or shift it to a different drawing.
@@ -45,7 +45,7 @@ def align_sections(sections, evidence, arm, bound_fraction=0.):
     curves = profile_curves(evidence)
     if curves is None:
         return sections, {"arm": arm, "applied": False, "reason": "Missing keel/deck profile coverage"}
-    source = fairing._parse(sections)
+    source = fairing_shared.parse_stations(sections)
     if source is None:
         raise ValueError("Frame alignment needs valid single-region stations")
     half_beam = float(evidence["half_beam_m"])
@@ -124,7 +124,7 @@ def fit_sections(sections, evidence, arm, bound_fraction=0., *, plan_weight=.5, 
     if arm == "current_joint" or not registration["applied"]:
         return result, report
     output = {s["id"]: s for s in result}
-    stations = fairing._parse(sections)
+    stations = fairing_shared.parse_stations(sections)
     moves, by_label = [], {}
     for original, changed in zip(stations, adjusted):
         points = np.asarray(changed["points_yz_m"])
@@ -137,8 +137,8 @@ def fit_sections(sections, evidence, arm, bound_fraction=0., *, plan_weight=.5, 
         output[changed["id"]]["fairing"].update(input_points_yz_m=original["points"].tolist(),
                                                   max_move_m=float(max(distance)))
     half_beam = float(evidence["half_beam_m"])
-    report["moves_by_label"] = fairing._moves_by_label(stations, moves, half_beam)
-    report["check_items"].extend(fairing._check_items(stations, moves, half_beam))
+    report["moves_by_label"] = fairing_shared.moves_by_label(stations, moves, half_beam)
+    report["check_items"].extend(fairing_shared.check_items(stations, moves, half_beam))
     report["hard_boundary_max_move_m"] = registration["max_endpoint_move_m"]
     report["moves_by_view"]["body_plan"] = {}
     for label, values in by_label.items():

@@ -121,7 +121,10 @@ def plate_triangles(contour, thickness_m: float) -> np.ndarray:
     u /= np.linalg.norm(u)
     v = np.cross(normal, u)
     flat = np.column_stack([points @ u, points @ v])  # counter-clockwise about the normal
-    faces = np.array(triangulate_polygon(flat))
+    result = triangulate_polygon(flat)
+    if result.fallback_reason:
+        raise ValueError(result.fallback_reason)
+    faces = np.array(result.triangles)
     half = normal * max(thickness_m, 1e-4) / 2
     top, bottom = points + half, points - half
     triangles = [top[faces], bottom[faces][:, ::-1]]
@@ -180,7 +183,10 @@ def stiffener_triangles(trace, profile: dict, web_direction) -> np.ndarray:
     for a, b in zip(rings, rings[1:]):
         triangles.append(np.stack([a[k], b[k], b[k_next]], axis=1))
         triangles.append(np.stack([a[k], b[k_next], a[k_next]], axis=1))
-    cap = np.array(triangulate_polygon(section))
+    result = triangulate_polygon(section)
+    if result.fallback_reason:
+        raise ValueError(result.fallback_reason)
+    cap = np.array(result.triangles)
     triangles += [rings[0][cap], rings[-1][cap][:, ::-1]]
     return np.concatenate(triangles)
 
