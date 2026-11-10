@@ -1,20 +1,31 @@
 """Re-run one whole-vessel part from a person's mark (docs/APP_SPEC.md "Whole-vessel parts").
 
-A person marks a part in the app and writes what to change. This worker gives the model
-(DeepSeek through OpenCode Go, ship-cad JSON form, thinking disabled) crops of the run's
-drawings around the part, the part's current values and the note. It rebuilds only that part
-in the ship-cad worker and rewrites the part's entry in ``<task>/whole_vessel/execution.json``
-with a new revision. The other parts do not change. The previous STEP stays as
-``<id>.r<previous revision>.step`` and the previous entry stays in ``revision_history``, so the
-person can keep the new part or undo it.
+A person marks a part in the app and writes what to change. The app re-runs the part in turns:
+
+1. ``--prepare``: this worker checks the request, crops the run's drawings around the part and
+   writes a vision request directory (``<work>/request``: ``request.json`` in the
+   ``marinaframe.vision_request.v1`` form with purpose ``part_revision``, and the PNG crops).
+2. The app sends that request through the controller's supervised provider worker
+   (``rust-control/src/part_revision.rs``). The app's configuration chooses the model; the
+   controller owns the budget and writes one receipt per model call. It checks the reply against
+   the part program schema and writes the program to ``<work>/program-<turn>.json`` and the
+   receipt summaries to ``<work>/receipts.json``. This worker never calls a model and needs no key.
+3. ``--build TURN``: this worker builds that program in the ship-cad worker (model-written values
+   run only in its Seatbelt sandbox, with its caps). When the part builds, it rewrites the part's
+   entry in ``<task>/whole_vessel/execution.json`` with a new revision; otherwise it says why, and
+   the app can ask the model again with the reason.
+
+The other parts do not change. The previous STEP stays as ``<id>.r<previous revision>.step`` and the
+previous entry stays in ``revision_history``, so the person can keep the new part or undo it.
 
 The crops come from ``<task>/whole_vessel/views.json`` (the run's drawing views and their
 calibration; schema below). Every value the model gives is labelled ``ai_inferred``; nothing is
 approved (``engineering_approved`` stays false).
 
-Command line (the app runs it; the key comes from the environment, never from an argument)::
+Command line (the app runs it)::
 
-    python -m vessel_reconstruction.part_revise --task DIR --part ID --note=TEXT
+    python -m vessel_reconstruction.part_revise --task DIR --part ID --prepare --note=TEXT
+    python -m vessel_reconstruction.part_revise --task DIR --part ID --build TURN --work DIR
     python -m vessel_reconstruction.part_revise --task DIR --part ID --keep
     python -m vessel_reconstruction.part_revise --task DIR --part ID --undo
 
@@ -33,7 +44,6 @@ A point (u, v) is at ship x = (u - origin_u) * metres_per_unit and z (profile) o
 from __future__ import annotations
 
 import argparse
-import base64
 import hashlib
 import json
 import math
@@ -43,7 +53,6 @@ import shutil
 import signal
 import sys
 import time
-import urllib.request
 import uuid
 from pathlib import Path
 
@@ -61,13 +70,15 @@ REVISABLE_OPS = ('deck', 'deckhouse', 'bulwark', 'appendage')
 MAX_NOTE_CHARS = 500  # docs/APP_SPEC.md: a mark note has 1 to 500 characters
 PART_ID = re.compile(r'^[A-Za-z0-9_-]{1,64}$')  # part ids become file names
 
-# Model request (the same model and endpoint as rust-control/src/types.rs GO_MODEL, GO_ENDPOINT).
-GO_MODEL = 'deepseek-v4.1-flash'
-GO_ENDPOINT = 'https://opencode.ai/inference/go/openai/v1/chat/completions'
-KEY_VARIABLES = ('OPENCODE_API_KEY', 'OPENCODE_API_KEY_2', 'OPENCODE_API_KEY_3')
-SETTINGS = {'max_tokens': 32_000, 'thinking': 'disabled', 'temperature': 0.2}
-REQUEST_TIMEOUT_S = 300
-MAX_TURNS = 3  # a reply that does not build goes back to the model with the reason
+# The vision request that the app sends to the model (rust-control/src/vision.rs load_request).
+REQUEST_FOLDER = 'request'
+REQUEST_SCHEMA = 'marinaframe.vision_request.v1'
+REQUEST_PURPOSE = 'part_revision'
+# The task text of a request has at most 16 KiB (vision.rs MAX_CONTEXT_BYTES). A retry adds the
+# previous program and the reason it did not build, so the first request keeps room for that.
+MAX_CONTEXT_BYTES = 10 * 1024
+RECEIPTS_FILE = 'receipts.json'  # written by the app: one summary per model call
+MAX_PROBLEM_CHARS = 1500  # the reason a program did not build, as the model is told it
 
 # Crops. The provider accepts at most 1,048,576 pixels and 1 MiB per image.
 MAX_IMAGES = 3
@@ -303,8 +314,9 @@ def build_pack(task: Path, entry: dict, out: Path) -> dict:
         image.save(path, optimize=True)
         if path.stat().st_size > MAX_IMAGE_BYTES:
             raise PartReviseError(f'The crop of the {name} view is larger than the model accepts.')
-        images.append({'view': name, 'kind': view['kind'], 'file': path.name, 'path': str(path),
-                       'width': image.width, 'height': image.height,
+        images.append({'image_id': f'image-{len(images) + 1}', 'view': name, 'kind': view['kind'],
+                       'file': path.name, 'path': str(path), 'width': image.width, 'height': image.height,
+                       'crop_box': [round(v) for v in window],
                        'calibration': calibration(view, window, scale), 'sha256': _sha256(path)})
     if not images:
         raise PartReviseError('No drawing view of this run shows the part.')
@@ -323,30 +335,7 @@ def _safe(name: str) -> str:
     return re.sub(r'[^A-Za-z0-9_-]', '_', name)[:64]
 
 
-# ---------------------------------------------------------------- prompt
-
-PROMPT = """You revise ONE part of a draft 3D CAD model of a ship, read from its drawings. A person
-marked the part and wrote what to change. Coordinates are metres: x along the ship, positive
-forward; y positive to port, 0 on the centreline; z up from the baseline.
-
-Images (crops of the drawings; the calibration converts pixels to metres):
-{images}
-
-Part: {part_id} ({label}), operation {op}.
-Current values (source labels: traced = read from the drawing, guessed = code gap fill,
-ai_inferred = model value):
-{values}
-
-The person's mark (what to change): "{note}"
-
-Follow the mark. Check it against the images; keep every value the mark does not concern.
-Reply with ONE JSON object only (no prose), a ship-cad/v1 program with exactly this one component:
-{{"schema":"ship-cad/v1","components":[{{"id":"{part_id}","op":"{op}",
-  "source":{{"view":"{view}","region":"{part_id}","method":"closed_outline"}},
-  "args":{{ARGUMENT:{{"value":VALUE,"source":"ai_inferred","basis":"short reason"}}, ...}}}}]}}
-Arguments for {op} (every argument is required):
-{arguments}
-"""
+# ---------------------------------------------------------------- vision request
 
 ARGUMENT_HELP = {
     'outline': 'plan polygon [[x, y], ...] (3 or more points, not closed, not self-intersecting)',
@@ -357,98 +346,50 @@ ARGUMENT_HELP = {
 APPENDAGE_OUTLINE = 'profile polygon [[x, z], ...] (3 or more points, not closed, not self-intersecting)'
 
 
-def part_values(entry: dict) -> str:
+def part_values(entry: dict) -> list[dict]:
+    """The part's current values with their source labels and evidence."""
     from .ship_cad import OPERATIONS
 
     labels = entry.get('source_labels') or {}
     provenance = entry.get('provenance') or {}
-    lines = []
+    values = []
     for argument in OPERATIONS[entry['op']]:
-        value = (entry.get('geometry') or {}).get(argument)
         record = provenance.get(argument) if isinstance(provenance.get(argument), dict) else {}
-        basis = record.get('basis')
-        line = f'- {argument} ({labels.get(argument, "unknown")}): {json.dumps(value)}'
-        lines.append(line + (f'; basis: {basis}' if basis else ''))
-    return '\n'.join(lines)
+        value = {'argument': argument, 'source_label': labels.get(argument, 'unknown'),
+                 'value': (entry.get('geometry') or {}).get(argument)}
+        if record.get('basis'):
+            value['basis'] = record['basis']
+        values.append(value)
+    return values
 
 
-def revision_prompt(entry: dict, note: str, pack: dict) -> list:
+def request_context(entry: dict, note: str, pack: dict) -> dict:
+    """The task text of the request: the part, its values, the note and the image calibration."""
     from .ship_cad import OPERATIONS
 
     op = entry['op']
-    images = '\n'.join(f'{i + 1}. {m["view"]} ({m["width"]}x{m["height"]} px): '
-                       + '; '.join(f'{k} = {v}' for k, v in m['calibration'].items())
-                       for i, m in enumerate(pack['images']))
-    arguments = '\n'.join(
-        f'- {name}: {APPENDAGE_OUTLINE if (op, name) == ("appendage", "outline") else ARGUMENT_HELP[name]}'
-        for name in OPERATIONS[op])
-    text = PROMPT.format(images=images, part_id=entry['id'], label=entry.get('label', entry['id']), op=op,
-                         values=part_values(entry), note=note, arguments=arguments,
-                         view='profile' if op == 'appendage' else 'plan')
-    content = [{'type': 'text', 'text': text}]
-    for meta in pack['images']:
-        data = base64.b64encode(Path(meta['path']).read_bytes()).decode()
-        content.append({'type': 'image_url', 'image_url': {'url': f'data:image/png;base64,{data}'}})
-    return [{'role': 'user', 'content': content}]
+    arguments = {name: APPENDAGE_OUTLINE if (op, name) == ('appendage', 'outline') else ARGUMENT_HELP[name]
+                 for name in OPERATIONS[op]}
+    return {'part': {'id': entry['id'], 'label': entry.get('label', entry['id']), 'op': op},
+            'note': note, 'current_values': part_values(entry), 'arguments': arguments,
+            'component_source': {'view': 'profile' if op == 'appendage' else 'plan',
+                                 'region': entry['id'], 'method': 'closed_outline'},
+            'image_calibration': [{'image_id': image['image_id'], 'view': image['view'],
+                                   'pixels_to_metres': image['calibration']} for image in pack['images']]}
 
 
-# ---------------------------------------------------------------- model client
-
-def model_key() -> str:
-    """The first key in the environment. The app sets it from its key lookup; it is never printed."""
-    for variable in KEY_VARIABLES:
-        if os.environ.get(variable):
-            return os.environ[variable]
-    raise PartReviseError('No model key was found.')
-
-
-def call_model(messages: list, receipts: Path, settings: dict) -> tuple[str, dict]:
-    """One chat completion with a receipt (no key in the receipt)."""
-    body = json.dumps({'model': GO_MODEL, 'messages': messages, 'max_tokens': settings['max_tokens'],
-                       'temperature': settings['temperature'], 'stream': False,
-                       'thinking': {'type': settings['thinking']}}).encode()
-    request_id = uuid.uuid4().hex
-    request = urllib.request.Request(GO_ENDPOINT, data=body, method='POST', headers={
-        'Content-Type': 'application/json', 'Accept': 'application/json',
-        'Authorization': f'Bearer {model_key()}', 'User-Agent': 'MarinaFrame part revise',
-        'x-opencode-session': f'mf-{request_id}'})
-    started = time.time()
-    receipt = {'request_id': request_id, 'model': GO_MODEL, 'endpoint': GO_ENDPOINT,
-               'request_sha256': hashlib.sha256(body).hexdigest(), 'request_bytes': len(body)}
-    try:
-        with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_S) as response:
-            reply = json.loads(response.read())
-        text = reply['choices'][0]['message'].get('content') or ''
-        usage = reply.get('usage') or {}
-        receipt.update(state='completed', returned_model=reply.get('model'),
-                       finish_reason=reply['choices'][0].get('finish_reason'),
-                       usage={k: usage.get(k) for k in ('prompt_tokens', 'completion_tokens', 'total_tokens',
-                                                        'cost')},
-                       reply_sha256=hashlib.sha256(text.encode()).hexdigest())
-    except Exception as exc:  # noqa: BLE001 - a failed request is recorded, not hidden
-        text, receipt['state'] = '', 'failed'
-        receipt['error'] = type(exc).__name__ + (f' {exc.code}' if hasattr(exc, 'code') else '')
-    receipt['seconds'] = round(time.time() - started, 2)
-    receipts.mkdir(parents=True, exist_ok=True)
-    (receipts / f'{request_id}.json').write_text(json.dumps(receipt, indent=2) + '\n')
-    return text, receipt
-
-
-def scripted_model(replies: list[str]):
-    """A model that gives these replies in order (tests; no request is made)."""
-    remaining = list(replies)
-
-    def call(messages, receipts, settings):
-        text = remaining.pop(0) if remaining else ''
-        return text, {'request_id': f'scripted-{len(replies) - len(remaining)}', 'state': 'completed',
-                      'usage': {}, 'seconds': 0.0}
-    return call
-
-
-def extract_json(text: str) -> dict:
-    match = re.search(r'```(?:json)?\s*(\{.*\})\s*```', text, re.DOTALL)
-    body = match.group(1) if match else text[text.find('{'):text.rfind('}') + 1]
-    return json.loads(body)
+def revision_request(task: Path, entry: dict, note: str, pack: dict) -> dict:
+    """``request.json`` of the vision request directory (the crops are next to it)."""
+    context = request_context(entry, note, pack)
+    if len(json.dumps(context, separators=(',', ':')).encode()) > MAX_CONTEXT_BYTES:
+        raise PartReviseError('This part has too many values to send to the model.')
+    images = [{'image_id': image['image_id'], 'file': image['file'], 'sha256': image['sha256'],
+               'bytes': Path(image['path']).stat().st_size, 'width': image['width'],
+               'height': image['height'], 'view': image['view'], 'crop_box_px': image['crop_box']}
+              for image in pack['images']]
+    return {'schema_version': REQUEST_SCHEMA, 'purpose': REQUEST_PURPOSE,
+            'source_sha256': _sha256(task / EXECUTION_FILE), 'engineering_approved': False,
+            'context': context, 'images': images}
 
 
 # ---------------------------------------------------------------- revise, keep, undo
@@ -494,19 +435,21 @@ def _stop_on_terminate(signum, _frame):
     raise SystemExit(128 + signum)
 
 
-def revise_part(task: Path, part_id: str, note: str, *, call=None, pack: dict | None = None) -> dict:
-    """Rebuild one part from a mark; return the new entry. ``call`` is the model client."""
-    from .ship_cad import triage_program
-    from .ship_cad_worker import run as run_worker
-
-    note = check_note(note)
-    task = Path(task).resolve()
+def _revisable(task: Path, part_id: str) -> tuple[dict, int, dict]:
+    """The run record, the part's index and entry; refused for a part that cannot be re-run."""
     record = load_execution(task)
     index = find_part(record, part_id)
-    components = record['result']['components']
-    old = components[index]
+    old = record['result']['components'][index]
     if old.get('op') not in REVISABLE_OPS:
         raise PartReviseError(f'A {old.get("op")} part cannot be re-run from a mark yet.')
+    return record, index, old
+
+
+def prepare_revision(task: Path, part_id: str, note: str) -> dict:
+    """Check a re-run request and write its vision request directory; return the work folder."""
+    note = check_note(note)
+    task = Path(task).resolve()
+    _, _, old = _revisable(task, part_id)
     if sys.platform != 'darwin' or not Path('/usr/bin/sandbox-exec').is_file():
         raise PartReviseError('Parts are rebuilt only on macOS (the CAD worker needs its sandbox).')
     revision = int(old.get('revision', 0)) + 1
@@ -514,49 +457,70 @@ def revise_part(task: Path, part_id: str, note: str, *, call=None, pack: dict | 
     attempt = f'{time.strftime("%Y%m%dT%H%M%S")}-{uuid.uuid4().hex[:6]}'
     work = task / REVISIONS_FOLDER / f'{part_id}-r{revision}-{attempt}'
     work.mkdir(parents=True, exist_ok=False)
-    pack = pack or build_pack(task, old, work / 'pack')
-    call = call or call_model
-    messages = revision_prompt(old, note, pack)
-    receipts, built, problem = [], None, None
-    for turn in range(1, MAX_TURNS + 1):
-        _report_progress(f'Asking the model (attempt {turn})')
-        text, receipt = call(messages, work / 'receipts', SETTINGS)
-        receipts.append({k: receipt.get(k) for k in ('request_id', 'state', 'usage', 'seconds')})
-        (work / f'reply-{turn}.txt').write_text(text)
-        if receipt.get('state') != 'completed':
-            problem = 'the model request failed'
-            break
-        try:
-            program = extract_json(text)
-            program['components'] = [c for c in program.get('components', []) if c.get('id') == part_id][:1]
-            triage_program(program)
-            (work / f'program-{turn}.json').write_text(json.dumps(program, indent=2) + '\n')
-            _report_progress(f'Building the part (attempt {turn})')
-            execution = run_worker(program, {}, work / f'task-{turn}', detail=load_detail(task))
-            if execution.get('state') in ('sandbox_safety_cap', 'stalled'):
-                problem = execution['error']
-                break  # A new model attempt must not silently restart the security clock.
-            result = (execution.get('result') or {}).get('components', [])
-            built = next((c for c in result if c['id'] == part_id and c.get('built')), None)
-            problem = None if built else (result[0].get('reason') if result else execution.get('error'))
-        except Exception as exc:  # noqa: BLE001 - the error goes back to the model
-            problem = f'{type(exc).__name__}: {exc}'[:1500]
-        if built:
-            source = work / f'task-{turn}' / 'work' / 'output' / f'{part_id}.step'
-            break
-        messages = messages + [{'role': 'assistant', 'content': text},
-                               {'role': 'user', 'content': f'Not built: {problem}. Reply with the complete '
-                                                           'program again, in the same format.'}]
+    _report_progress('Cropping the drawings')
+    pack = build_pack(task, old, work / REQUEST_FOLDER)
+    request = revision_request(task, old, note, pack)
+    _write_json_atomic(work / REQUEST_FOLDER / 'request.json', request)
+    return {'work': str(work), 'request': str(work / REQUEST_FOLDER), 'revision': revision}
+
+
+def _work_folder(task: Path, part_id: str, work: Path) -> Path:
+    """A work folder that ``prepare_revision`` made for this part, inside this run."""
+    work = Path(work).resolve()
+    folder = (task / REVISIONS_FOLDER).resolve()
+    if work.parent != folder or not work.name.startswith(f'{part_id}-r') or not work.is_dir():
+        raise PartReviseError('This re-run has no prepared request.')
+    return work
+
+
+def build_turn(task: Path, part_id: str, work: Path, turn: int, *, run_worker=None) -> dict:
+    """Build the program of one model turn (``<work>/program-<turn>.json``, written by the app).
+
+    Built: the part's entry gets the new revision and this returns it with ``built`` true.
+    Not built: nothing changes and this returns ``built`` false with the reason, which the app
+    gives back to the model. A sandbox safety cap or stall stops the re-run (PartReviseError):
+    a new model attempt must not silently restart the security clock.
+    """
+    from .ship_cad import triage_program
+
+    if run_worker is None:
+        from .ship_cad_worker import run as run_worker
+    task = Path(task).resolve()
+    work = _work_folder(task, part_id, work)
+    record, index, old = _revisable(task, part_id)
+    note = check_note(_read_json(work / REQUEST_FOLDER / 'request.json', 1024 * 1024)['context']['note'])
+    program = _read_json(work / f'program-{int(turn)}.json', 1024 * 1024)
+    _report_progress(f'Building the part (attempt {turn})')
+    try:
+        triage_program(program)
+        execution = run_worker(program, {}, work / f'task-{turn}', detail=load_detail(task))
+    except PartReviseError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - the reason goes back to the model
+        return {'built': False, 'problem': f'{type(exc).__name__}: {exc}'[:MAX_PROBLEM_CHARS]}
+    if execution.get('state') in ('sandbox_safety_cap', 'stalled'):
+        raise PartReviseError(execution['error'])
+    result = (execution.get('result') or {}).get('components', [])
+    built = next((c for c in result if c['id'] == part_id and c.get('built')), None)
     if not built:
-        raise PartReviseError(f'The part was not rebuilt ({str(problem)[:200]}); the old part stays.')
+        problem = result[0].get('reason') if result else execution.get('error')
+        return {'built': False, 'problem': str(problem)[:MAX_PROBLEM_CHARS]}
+    receipts_path = work / RECEIPTS_FILE
+    receipts = _read_json(receipts_path, 1024 * 1024) if receipts_path.is_file() else []
+    revision = int(old.get('revision', 0)) + 1
     parts = task / 'whole_vessel'
     if (parts / f'{part_id}.step').is_file():
         shutil.copy2(parts / f'{part_id}.step', parts / f'{part_id}.r{revision - 1}.step')
-    shutil.copy2(source, parts / f'{part_id}.step')
+    shutil.copy2(work / f'task-{turn}' / 'work' / 'output' / f'{part_id}.step', parts / f'{part_id}.step')
     entry = updated_entry(old, built, note, revision, receipts)
-    components[index] = entry
+    record['result']['components'][index] = entry
     save_execution(task, record)
-    return entry
+    return dict(entry_summary(entry), built=True)
+
+
+def entry_summary(entry: dict) -> dict:
+    return {'part': entry['id'], 'revision': entry.get('revision', 0), 'built': entry.get('built'),
+            'status': entry.get('status')}
 
 
 def _pending(record: dict, part_id: str) -> tuple[int, dict]:
@@ -602,31 +566,34 @@ def undo_revision(task: Path, part_id: str) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog='python -m vessel_reconstruction.part_revise',
-                                     description='Re-run one whole-vessel part from a mark, or keep or undo '
-                                                 'its new revision.')
+                                     description='Prepare or build a re-run of one whole-vessel part from a '
+                                                 'mark, or keep or undo its new revision.')
     parser.add_argument('--task', type=Path, required=True, help='task folder (holds whole_vessel/)')
     parser.add_argument('--part', required=True, help='part id')
     action = parser.add_mutually_exclusive_group(required=True)
-    action.add_argument('--note', help='what to change (the mark note); pass it as --note=TEXT')
+    action.add_argument('--prepare', action='store_true', help='write the vision request of a re-run')
+    action.add_argument('--build', type=int, metavar='TURN', help='build the program of one model turn')
     action.add_argument('--keep', action='store_true', help='keep the new revision')
     action.add_argument('--undo', action='store_true', help='put back the previous revision')
-    parser.add_argument('--replies', type=Path,
-                        help='JSON list of scripted model replies (tests only; no model request is made)')
+    parser.add_argument('--note', help='what to change (the mark note), with --prepare; pass it as --note=TEXT')
+    parser.add_argument('--work', type=Path, help='the work folder that --prepare made, with --build')
     args = parser.parse_args(argv)
+    if args.prepare != (args.note is not None) or (args.build is not None) != (args.work is not None):
+        parser.error('--prepare needs --note, and --build needs --work')
     signal.signal(signal.SIGTERM, _stop_on_terminate)
     try:
-        if args.keep:
-            entry = keep_revision(args.task, args.part)
-        elif args.undo:
-            entry = undo_revision(args.task, args.part)
+        if args.prepare:
+            output = prepare_revision(args.task, args.part, args.note)
+        elif args.build is not None:
+            output = build_turn(args.task, args.part, args.work, args.build)
+        elif args.keep:
+            output = entry_summary(keep_revision(args.task, args.part))
         else:
-            call = scripted_model(json.loads(args.replies.read_text())) if args.replies else None
-            entry = revise_part(args.task, args.part, args.note, call=call)
+            output = entry_summary(undo_revision(args.task, args.part))
     except PartReviseError as error:
         print(json.dumps({'error': str(error)}), file=sys.stderr)
         return 2
-    print(json.dumps({'part': entry['id'], 'revision': entry.get('revision', 0), 'built': entry.get('built'),
-                      'status': entry.get('status')}))
+    print(json.dumps(output))
     return 0
 
 

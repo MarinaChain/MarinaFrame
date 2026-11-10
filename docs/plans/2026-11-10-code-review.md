@@ -29,7 +29,7 @@ P0 = wrong result or unprotected boundary; P1 = structural debt that blocks prog
 | 3 | P0 | App integration tests return early: `MARINAFRAME_TEST_PYTHON` is set after the plain cargo step (`ci.yml:68-79`); `draft_task` not in any tier | set it first; fail on missing prerequisites in required runs | S |
 | 4 | P0 | UI tests in neither `make` nor CI | add `node --test app/ui-tests/` to the quick tier and CI | S |
 | 5 | P0 | App starts Python five ways; export and part-revise kill only the leader on timeout (orphans, full env); intake has no timeout and cannot be cancelled | Done in `f66f5ff`: one supervised spawn builder (`rust-control/src/supervised.rs`) for all five sites; progress watchdog, no wall timer; intake Cancel | M |
-| 6 | P0 | `part_revise.py` calls the model directly (hardcoded model, no budget/receipts, regex JSON) | route through the Rust provider worker | M |
+| 6 | P0 | `part_revise.py` calls the model directly (hardcoded model, no budget/receipts, regex JSON) | Done in `32e0067`: route through the Rust provider worker | M |
 | 7 | P1 | Product reader source pinned by sha256 in three holdout tests, so every improvement became a wrapper; three hard-chine readers exist, none in the product path | freeze a benchmark copy or git tag; choose one reader by benchmark, integrate, move the rest out | S + M |
 | 8 | P1 | Fixed pixel thresholds in the product reader path (`body_plan_crossings.py:25,48,52,78`, `sheet_calibration.py:44`) tuned on HAER scans; low-res uploads can misread with no flag | Partial: scale the five listed distances by measured ink width and flag low resolution; other fixed pixel thresholds and real-sheet equivalence remain open | M |
 | 9 | P1 | Tool catalog defined in Rust and Python (texts differ); third operation list in `rust_worker.py` | one shared schema file | M |
@@ -38,12 +38,12 @@ P0 = wrong result or unprotected boundary; P1 = structural debt that blocks prog
 | 12 | P1 | Package written in place, manifest last (`exports/package.py:225,292`) | Done in `c31a040`: stage privately, publish atomically | M |
 | 13 | P1 | OCX check compares copied NetArea, not exported contour (`structure/ocx.py:573,734`) | Done in `cb00afe`: compare contour geometry | M |
 | 14 | P2 | Tank mesh spans gaps between separate hull pieces at one height (volume is correct) (`tanks.py:418,497`; PM checked) | keep separate regions through lofting | L |
-| 15 | P2 | Table hydrostatics uses the outer half-breadth; wrong for sections with inner voids (`exports/hydrostatics.py:268`; PM checked) | integrate occupied intervals | M |
-| 16 | P2 | Display mesh may mesh trimmed faces as their support patch (`display_mesh.py:49,141`) | grid path only for proven-untrimmed faces | M |
-| 17 | P2 | Silent triangle-fan fallback (`tanks.py:304`); calibration "noted" string decides blocking; model id missing from answer cache key | explicit repair result; typed severity; add model id to key | S each |
+| 15 | P2 | Table hydrostatics uses the outer half-breadth; wrong for sections with inner voids (`exports/hydrostatics.py:268`; PM checked) | Done in `8f5fe2f`: integrate occupied intervals | M |
+| 16 | P2 | Display mesh may mesh trimmed faces as their support patch (`display_mesh.py:49,141`) | Done in `8f5fe2f`: grid path only for proven-untrimmed faces | M |
+| 17 | P2 | Silent triangle-fan fallback (`tanks.py:304`); calibration "noted" string decides blocking; model id missing from answer cache key | Done in `fc070c1`: typed repair result, typed severity, model id in key | S each |
 | 18 | P2 | Oversized modules: `controller.rs` (~2,600 lines), `pipeline.py` main function, `agent_tools._execute_verified`, `app.js` (~2,700 lines, global state), ~1,000 lines of mock in `api.js` | split by responsibility; move mocks out of the shipped bundle | L |
 | 19 | P2 | Tests that check source text instead of behaviour (`details.test.mjs:22-25,83-86`); quick tier still builds CAD (`test_geometry*.py` unmarked); Rust test targets recompile modules by path | behaviour tests; mark CAD tests; import the library | M |
-| 20 | P2 | Artifact names in several lists (`pipeline.py:208`, `transaction.py:178`, `run_record.py:431`); particulars 1e-6 m tolerance flags feet vs metres as a conflict; fairing modules import each other's privates | one descriptor table; unit-aware tolerance; one module | S each |
+| 20 | P2 | Artifact names in several lists (`pipeline.py:208`, `transaction.py:178`, `run_record.py:431`); particulars 1e-6 m tolerance flags feet vs metres as a conflict; fairing modules import each other's privates | Done in `fc070c1`: one descriptor table, unit-aware tolerance, shared fairing module | S each |
 
 ## Reader work status
 

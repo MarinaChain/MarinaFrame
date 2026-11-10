@@ -14,6 +14,7 @@ from bisect import bisect_right
 from pathlib import Path
 
 from .draft import DRAFT_EXPORT_NAMES, check_draft
+from .artifacts import ARTIFACTS, GEOMETRY_NAMES, REQUIRED_NAMES
 from .provenance import digest_file, digest_object, safe_relative_file, snapshot_hash, sync_file, write_json
 from .schema import finite, load_bounded_json, load_build_result, SHA256
 
@@ -23,9 +24,9 @@ MUTABLE_FILES = {"review_history.json", "review_state.json", ".review.lock"}
 MAX_RECORD_BYTES = 64 * 1024 * 1024
 MAX_ARTIFACT_BYTES = 256 * 1024 * 1024
 MAX_RUN_BYTES = 1024 * 1024 * 1024
-REQUIRED_FILES = {"result.json", "input_spec.json", "replay_spec.json"}
+REQUIRED_FILES = REQUIRED_NAMES
 # The read-table record (provider receipts) of an offset_table_vision run.
-TABLE_READING_FILE = "table_reading.json"
+TABLE_READING_FILE = ARTIFACTS["table_reading"].name
 LIMITATION = ("Content hashes and derived checks detect changes against this local manifest. "
               "An actor who can rewrite all evidence and the manifest can replace the record; "
               "this is not a digital signature, engineering approval, or independent source authentication.")
@@ -77,7 +78,7 @@ def _cad_names(result: dict) -> tuple[str, str]:
     """STEP and STL file names: a draft run tags both names."""
     if "draft" in result:
         return DRAFT_EXPORT_NAMES["step"], DRAFT_EXPORT_NAMES["stl"]
-    return "model.step", "model.stl"
+    return ARTIFACTS["step"].name, ARTIFACTS["stl"].name
 
 
 def seal_run(root: Path, result: dict, *, writer=write_json) -> dict:
@@ -443,8 +444,8 @@ def _check_record(root: Path, result: dict, manifest: dict):
         _require(check_draft(result.get("draft")) and result.get("draft") == spec_draft,
                  "Draft record does not list exactly the guesses of its draft specification.")
     step_name, stl_name = _cad_names(result)
-    iges_name = DRAFT_EXPORT_NAMES["iges"] if "draft" in result else "model.iges"
-    rhino_name = DRAFT_EXPORT_NAMES["3dm"] if "draft" in result else "model.3dm"
+    iges_name = DRAFT_EXPORT_NAMES["iges"] if "draft" in result else ARTIFACTS["iges"].name
+    rhino_name = DRAFT_EXPORT_NAMES["3dm"] if "draft" in result else ARTIFACTS["3dm"].name
     # Older immutable runs predate IGES. Include it only when their record declares it.
     has_iges = "iges" in result["exports"]
     has_rhino = "3dm" in result["exports"]
@@ -460,7 +461,7 @@ def _check_record(root: Path, result: dict, manifest: dict):
                          and 0 < len(outcome["reason"]) <= 1000 and format_name not in result["exports"]),
                      "Per-format outcome contradicts the published export.")
     if status == "review_required":
-        expected_files.update(("mesh.json", "cad_sections.json", "extracted_sections.json"))
+        expected_files.update(ARTIFACTS[key].name for key in ("mesh", "cad_sections", "extracted_sections"))
         if result["requested_exports"]:
             if export_results is None or "step" in result["exports"]:
                 expected_files.add(step_name)
@@ -509,7 +510,7 @@ def _check_record(root: Path, result: dict, manifest: dict):
     exports = result["exports"]
     if status != "review_required":
         _require(not exports and not result["parts"] and not result["metrics"] and not result["normalized_sections"], "A non-success state exposes geometry or authoritative geometry metrics.")
-        _require(not {"mesh.json", "model.step", "model.stl", "model.iges", "model.3dm", "cad_sections.json", *DRAFT_EXPORT_NAMES.values()}.intersection(declared),
+        _require(not GEOMETRY_NAMES.intersection(declared),
                  "A non-success run retains published geometry.")
         return
     _require(isinstance(input_spec, dict) and isinstance(replay, dict) and "source-1" in source_ids, "Successful run lacks input evidence.")

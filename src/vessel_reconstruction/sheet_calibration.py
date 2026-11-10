@@ -14,6 +14,9 @@ this module only builds their `SheetLayout` and calls them.
 """
 from __future__ import annotations
 
+from enum import Enum
+from dataclasses import dataclass
+
 import re
 from dataclasses import asdict, dataclass, field
 from fractions import Fraction
@@ -369,25 +372,36 @@ def scale_from_ticks(ticks: list[tuple[float, float]], unit_ft: float) -> float 
     return float(abs(slope) / unit_ft)
 
 
-def choose_scale(measures: dict) -> tuple[float | None, str, list[str]]:
+class ScaleSeverity(Enum):
+    BLOCKING = "blocking"
+    NOTE = "note"
+
+
+@dataclass(frozen=True)
+class ScaleProblem:
+    message: str
+    severity: ScaleSeverity
+
+
+def choose_scale(measures: dict) -> tuple[float | None, str, list[ScaleProblem]]:
     """The accepted px/ft and its source, and the problems: two measures must agree."""
     present = [(name, measures[name]['px_per_ft']) for name in SCALE_PRIORITY
                if name in measures and measures[name].get('px_per_ft')]
     if not present:
-        return None, '', ['no scale measure found']
+        return None, '', [ScaleProblem('no scale measure found', ScaleSeverity.BLOCKING)]
     if len(present) == 1:
         name, value = present[0]
-        return value, f'{name} (single measure)', [f'only one scale measure ({name}); a second must agree']
+        return value, f'{name} (single measure)', [ScaleProblem(f'only one scale measure ({name}); a second must agree', ScaleSeverity.BLOCKING)]
     problems = []
     for i, (first, a) in enumerate(present):
         for second, b in present[i + 1:]:
             if abs(a - b) / max(a, b) <= SCALE_AGREEMENT:
                 others = [n for n, v in present if abs(v - a) / max(v, a) > SCALE_AGREEMENT]
                 for other in others:
-                    problems.append(f'{other} disagrees ({measures[other]["px_per_ft"]:.2f} px/ft); noted, not used')
+                    problems.append(ScaleProblem(f'{other} disagrees ({measures[other]["px_per_ft"]:.2f} px/ft); noted, not used', ScaleSeverity.NOTE))
                 return a, f'{first}, agrees with {second} within {SCALE_AGREEMENT:.0%}', problems
     listed = ', '.join(f'{n} {v:.2f}' for n, v in present)
-    return present[0][1], f'{present[0][0]} (provisional)', [f'scale measures disagree: {listed} px/ft']
+    return present[0][1], f'{present[0][0]} (provisional)', [ScaleProblem(f'scale measures disagree: {listed} px/ft', ScaleSeverity.BLOCKING)]
 
 
 # ---------------------------------------------------------------- sides
@@ -499,10 +513,10 @@ def calibrate(ink: np.ndarray, reading, dpi: float | None = None) -> Calibration
     cal.measures['scale'] = measures
     scale, source, problems = choose_scale(measures)
     for problem in problems:
-        if 'noted' in problem:
-            cal.notes.append(problem)
+        if problem.severity is ScaleSeverity.NOTE:
+            cal.notes.append(problem.message)
         else:
-            cal.flag('pixels_per_ft', problem)
+            cal.flag('pixels_per_ft', problem.message)
     if scale is None:
         return cal
     cal.pixels_per_ft, cal.sources['pixels_per_ft'] = round(scale, 3), source

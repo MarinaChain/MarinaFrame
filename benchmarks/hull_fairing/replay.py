@@ -19,7 +19,7 @@ import numpy as np
 
 from benchmarks.factory import truth
 from scripts import round_digest
-from vessel_reconstruction import fairing, geometry
+from vessel_reconstruction import fairing_shared, fairing, geometry
 
 MAIN = Path(__file__).resolve().parents[2]
 WORK = Path("/Users/jonathanjie/Documents/workspace/MarinaFrame/work")
@@ -113,7 +113,7 @@ def robustness(sections: list[dict], options: dict) -> list[dict]:
     for name, share in (("midship", 0.5), ("quarter", 0.25)):
         targets[name] = min(traced, key=lambda s: abs((s["x_m"] - x0) / length - share))["id"]
     base, _ = fairing.fair_sections(sections, **options)
-    half_beam = fairing._half_beam(fairing._parse(sections))
+    half_beam = fairing._half_beam(fairing_shared.parse_stations(sections))
     rows = []
     for name, station_id in targets.items():
         for kind, amount, whole in (("cell +0.2 m", 0.2, False), ("cell +5 % half-beam", .05 * half_beam, False),

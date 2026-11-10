@@ -125,8 +125,10 @@ impl Backend {
 
     /// Re-run one whole-vessel part from its saved mark note (the model reads crops of the
     /// run's drawings and the note; only that part is rebuilt). Needs AI drafting on and a
-    /// model key; refused while another action runs on the run. Stopped when it reports no
-    /// progress for `part_revise::REVISE_STALL_PERIOD`.
+    /// model route (the `claude` CLI or an OpenCode Go key); refused while another action
+    /// runs on the run. The model calls go through the controller's provider worker with the
+    /// app's models and the re-run budget; the Python worker gets no key. A worker stage is
+    /// stopped when it reports no progress for `part_revise::REVISE_STALL_PERIOD`.
     pub fn revise_part(&self, task: &str, component_id: &str) -> AppResult<ComponentView> {
         let path = self.task_path(task)?;
         let settings = self.run_settings();
@@ -136,20 +138,19 @@ impl Backend {
                 "AI drafting is off in Settings. Turn it on to re-run a part.",
             ));
         }
-        // The first key of the app's key lookup; it goes to the worker's environment only.
-        let Some((_, key)) = model_keys::configured_keys().1.into_iter().next() else {
+        if !self.ai_status().active {
             return Err(AppError::new(
-                "model_key_missing",
-                "No model key was found. See Settings.",
+                "model_route_missing",
+                "No model route was found (no claude CLI and no OpenCode Go key). See Settings.",
             ));
-        };
+        }
         let view = part_revise::revise_part(
             &self.registry,
             &self.paths,
             &path,
             component_id,
             &self.intake_worker(&settings),
-            &part_revise::Model::Key(key),
+            &part_revise::ModelChoice::app(),
             part_revise::REVISE_STALL_PERIOD,
         )?;
         // The part changed: a sign-off of the parts no longer holds.

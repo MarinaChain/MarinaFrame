@@ -47,6 +47,38 @@ def _decimated_columns(grid: np.ndarray, tolerance_mm: float) -> list[int]:
     return kept
 
 
+# UV boundary comparisons allow only floating-point noise in the parameters.
+NATURAL_BOUND_TOLERANCE = 1e-9
+
+
+def _has_natural_boundary(face, spline) -> bool:
+    """Accept only one rectangular UV boundary along the natural surface bounds."""
+    from OCP.BRepAdaptor import BRepAdaptor_Curve2d
+    from OCP.BRepTools import BRepTools
+    from OCP.GeomAbs import GeomAbs_Line
+
+    bounds = spline.Bounds()
+    if face.innerWires() or not np.allclose(BRepTools.UVBounds_s(face.wrapped), bounds,
+                                             atol=NATURAL_BOUND_TOLERANCE, rtol=0):
+        return False
+    u0, u1, v0, v1 = bounds
+    for edge in face.Edges():
+        try:
+            curve = BRepAdaptor_Curve2d(edge.wrapped, face.wrapped)
+            # A straight UV edge with both ends on one natural bound stays on it.
+            if curve.GetType() != GeomAbs_Line:
+                return False
+            points = [curve.Value(t) for t in (curve.FirstParameter(), curve.LastParameter())]
+            us, vs = [p.X() for p in points], [p.Y() for p in points]
+            if not any(all(abs(value - bound) <= NATURAL_BOUND_TOLERANCE for value in values)
+                       for values, limits in ((us, (u0, u1)), (vs, (v0, v1))) for bound in limits):
+                return False
+        except Exception:
+            # An edge without a usable parameter curve is not proven untrimmed.
+            return False
+    return bool(face.Edges())
+
+
 def _bspline_grid(face):
     """Poles of a degree-1 B-spline face (ring x stations x 3) and whether the ring is periodic."""
     from OCP.BRep import BRep_Tool
@@ -58,7 +90,7 @@ def _bspline_grid(face):
     if adaptor.GetType() != GeomAbs_BSplineSurface:
         return None
     spline = adaptor.BSpline()
-    if spline.UDegree() != 1 or spline.VDegree() != 1:
+    if spline.UDegree() != 1 or spline.VDegree() != 1 or not _has_natural_boundary(face, spline):
         return None
     grid = np.array([[spline.Pole(u, v).Coord() for v in range(1, spline.NbVPoles() + 1)]
                      for u in range(1, spline.NbUPoles() + 1)])
@@ -129,7 +161,6 @@ MAX_SPAN_HALVINGS = 6
 def _smooth_bspline(face):
     """The B-spline surface of an untrimmed face of degree above 1, else None."""
     from OCP.BRep import BRep_Tool
-    from OCP.BRepTools import BRepTools
     from OCP.GeomAbs import GeomAbs_BSplineSurface
     from OCP.GeomAdaptor import GeomAdaptor_Surface
 
@@ -139,10 +170,7 @@ def _smooth_bspline(face):
     spline = adaptor.BSpline()
     if spline.UDegree() < 2 and spline.VDegree() < 2:
         return None
-    u0, u1, v0, v1 = BRepTools.UVBounds_s(face.wrapped)
-    first_u, last_u, first_v, last_v = spline.Bounds()
-    untrimmed = np.allclose([u0, u1, v0, v1], [first_u, last_u, first_v, last_v], atol=1e-9)
-    return spline if untrimmed else None
+    return spline if _has_natural_boundary(face, spline) else None
 
 
 def _grid_params(spline, along_u: bool, tolerance_mm: float, angular_rad: float) -> np.ndarray:

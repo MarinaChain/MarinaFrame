@@ -211,3 +211,14 @@ def test_export_labels_guess_when_printed_drafts_conflict(tmp_path):
     (task / "domain/input/intake.json").write_text(json.dumps(record))
     hydro, error = compute_hydrostatics(load_build(task, "r1"), None)
     assert error is None and hydro.draft_basis.startswith("assumed:")
+
+
+def test_metric_and_feet_readings_respect_printed_precision():
+    from vessel_reconstruction import particulars
+    def page(text, page_id):
+        return {"page_id": page_id, "sheet": {"particulars": particulars.read_text(text, source={})}}
+    feet = page("LOA 100 ft", "feet")
+    same = page("LOA 30.5 m", "same")
+    different = page("LOA 32.00 m", "different")
+    assert particulars.resolve([feet, same])["fields"]["loa_m"]["status"] == "read"
+    assert particulars.resolve([feet, different])["fields"]["loa_m"]["status"] == "conflict"

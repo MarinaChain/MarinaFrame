@@ -714,29 +714,38 @@ Commands (each returns the part as a `ComponentView`):
 
 - `revise_part { task, component_id }`: re-run the part from its saved mark note. Refused when
   the part has no mark note (`revise_needs_mark`), while another action runs on the run
-  (`action_in_progress`), when AI drafting is off (`ai_drafting_off`) or no model key is found
-  (`model_key_missing`). Takes up to 20 minutes (then it is stopped and the old part stays).
+  (`action_in_progress`), when AI drafting is off (`ai_drafting_off`) or no model route is found
+  (`model_route_missing`: no `claude` CLI and no OpenCode Go key). Stopped when the model budget
+  is used up (`part_revise_budget`) or a worker stage makes no progress; the old part stays.
   Any sign-off of the parts ends (the part changed).
 - `keep_part_revision { task, component_id }`: keep the new revision. The mark has been acted
   on, so the review of the part opens again; any sign-off ends.
 - `undo_part_revision { task, component_id }`: put back the previous entry and STEP file. The
   mark stays, so the person can change the note and re-run.
 
-The app runs the worker `python -m vessel_reconstruction.part_revise --task <task> --part <id>
---note=<note>` (or `--keep`, `--undo`) with the worker Python of the other workers
-(`worker_python.rs`), arguments only (no shell). The model key comes from the app's key lookup
-(`model_keys.rs`) into the worker's environment only; it is never an argument or printed. The
-worker crops the run's drawings around the part (at most 3 crops, profile and plan first, at most
-1,000,000 pixels each) from `<task>/whole_vessel/views.json` (each view: drawing file, kind,
-bounds, origin, metres per unit; DXF, PNG or JPEG; schema in the module docstring). It gives
-DeepSeek the crops with their pixel-to-metre calibration, the part's current values with their
-source labels, and the note (ship-cad JSON, thinking disabled, at most 3 turns; a reply that does
-not build goes back with the reason). Only that part is rebuilt in the ship-cad worker. Its entry
+The re-run goes in turns (code-review item 6). The app runs the worker `python -m
+vessel_reconstruction.part_revise --task <task> --part <id> --prepare --note=<note>` with the
+worker Python of the other workers (`worker_python.rs`), arguments only (no shell) and no model
+key in its environment. The worker crops the run's drawings around the part (at most 3 crops,
+profile and plan first, at most 1,000,000 pixels each) from `<task>/whole_vessel/views.json`
+(each view: drawing file, kind, bounds, origin, metres per unit; DXF, PNG or JPEG; schema in the
+module docstring) and writes a vision request (`marinaframe.vision_request.v1`, purpose
+`part_revision`): the crops with their pixel-to-metre calibration, the part's current values
+with their source labels, and the note. The app sends it through the controller's supervised
+provider worker, as every controller model call goes: the models are the app's ordered list
+(Claude Sonnet 5.5, then Crouton and DeepSeek on a rate limit), the re-run budget (9 requests,
+250,000 tokens, 2 USD observed spend) is checked before each call, and each call writes a
+provider receipt (model, request and response hashes, usage). The reply must be one ship-cad
+component of the marked part with inline `ai_inferred` values (`provider/part_revision.rs`; the
+`claude` CLI answers through `--json-schema`); any other reply is a typed error
+(`part_program_*`), never a partial program. The app writes the checked program and runs
+`--build <turn> --work <folder>`; at most 3 turns, and a reply that does not build or does not
+match the form goes back to the model with the reason. Only that part is rebuilt in the ship-cad worker. Its entry
 in `whole_vessel/execution.json` gets the new values (source `ai_inferred`; a value the model
 gives back unchanged keeps its old label and evidence, so a traced value stays traced), `revision`,
 `revision_note`, `revision_kept: false`, `revision_history` (the whole previous entries) and the
-request receipts; the old STEP stays as `<id>.r<previous revision>.step`. Crops, replies and
-receipts stay in `whole_vessel/revisions/<id>-r<n>-<time>/`. The other parts do not change, and
+receipt summaries; the old STEP stays as `<id>.r<previous revision>.step`. The request, programs,
+requests and full receipts stay in `whole_vessel/revisions/<id>-r<n>-<time>/`. The other parts do not change, and
 `engineering_approved` stays false. Hull parts cannot be re-run this way (the hull is a loft).
 The whole-vessel GLB is not rebuilt: the 3D view shows the run's model until the next full run.
 
