@@ -229,3 +229,12 @@ RMS over 11 stations: half-breadth **0.171 ft (0.052 m)**, height **0.072 ft (0.
 ### Can it fill PARDON ME's missing cells?
 
 Published baseline: 34 of 57 cells, 23 missing. Cheap test (comparison only, not product code): fill a missing cell by straight-line interpolation on its station between the chine point and the nearest measured crossing on the same side of the chine. Only **6 of 23** missing cells have such a neighbour (W0 cells of stations 1, 2, 6, 7, 8, 9); the other 17 have no measured crossing on that side. On those 6, RMS error is 0.099 m, maximum 0.199 m. Stations 1 and 2 are errors of the reader identity (their W0 points are far off), and stations 6 to 9 are 0.01 to 0.05 m. The chine line fixes where the knuckle is, but it does not supply the lower-piece crossings at W-1 and W-2 (the stations 3 to 10 fan lines) or the stations 1 and 2 curves; those cells need curve tracing along the lower pieces, not a chine point. Expect the chine line to recover at most about 4 of 23 cells at useful accuracy (aft W0, 0.01 to 0.05 m). Not integrated into the product path.
+
+## Resume point (PM, 2026-11-10)
+
+Neither joining (no join fires: aft gaps ~65 px, fore ambiguity) nor the chine line (accurate fore, ~5 mm, but it fills
+only ~4 of 23 missing cells) closes PARDON ME's gap. Most missing cells are the short station pieces below the chine,
+which the frozen reader drops because it keeps only chains crossing two or more waterlines, plus the identity errors at
+stations 1-2. Next: a reader v2 (new module, frozen files untouched) that accepts one-waterline pieces below a detected
+chine line as station pieces, named by their chine point; PARDON ME is a dev case, so the result needs a new hard-chine
+holdout sheet.
