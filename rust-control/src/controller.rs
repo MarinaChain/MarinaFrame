@@ -64,6 +64,15 @@ pub fn new_state(config: Config) -> State {
     }
 }
 fn stop(store: &mut Store, status: Status, reason: &str) -> Result<()> {
+    stop_with_message(store, status, reason, None)
+}
+
+fn stop_with_message(
+    store: &mut Store,
+    status: Status,
+    reason: &str,
+    message: Option<&str>,
+) -> Result<()> {
     let has_draft = status != Status::Paused
         && store.state.config.on_ambiguity == OnAmbiguity::Draft
         && ["current_candidate", "last_valid_candidate"]
@@ -77,10 +86,10 @@ fn stop(store: &mut Store, status: Status, reason: &str) -> Result<()> {
     } else {
         status
     };
-    store.state.termination_reason = Some(reason.into());
+    store.state.termination_reason = Some(message.unwrap_or(reason).into());
     store.append(
         "task_terminated",
-        json!({"reason":reason,"engineering_approved":false}),
+        json!({"reason":reason,"message":message,"engineering_approved":false}),
     )
 }
 fn source_spec(store: &Store) -> PathBuf {
@@ -156,10 +165,23 @@ pub fn call_worker(store: &mut Store, operation: &str, arguments: Value) -> Resu
                 Status::Running
             };
             let stage = progress.map_or(operation, |p| p.stage.as_str());
-            store.append(if stalled { "worker_stalled" } else { "worker_continued" },
-                json!({"operation":operation,"stage":stage,
-                    "message":if stalled { format!("No progress: {stage}. Keep waiting or stop this step.") }
-                        else { format!("Continuing: {stage}.") }}))
+            let message = if stalled {
+                format!(
+                    "No progress at {stage} for {} min. Keep waiting or stop this step.",
+                    worker::NO_PROGRESS_SECONDS / 60
+                )
+            } else {
+                format!("Continuing: {stage}.")
+            };
+            eprintln!("{message}");
+            store.append(
+                if stalled {
+                    "worker_stalled"
+                } else {
+                    "worker_continued"
+                },
+                json!({"operation":operation,"stage":stage,"message":message}),
+            )
         },
     )?;
     // A worker can finish while the person is considering the stalled prompt.
@@ -184,7 +206,7 @@ pub fn call_worker(store: &mut Store, operation: &str, arguments: Value) -> Resu
     if store.path.join(&pending.response_path).is_file() {
         let success = apply_worker(store, &pending, json!(outcome), false)?;
         if success && !matches!(outcome.state, worker::ProcessState::Exited) {
-            stop(
+            stop_with_message(
                 store,
                 if matches!(outcome.state, worker::ProcessState::Cancelled) {
                     Status::Cancelled
@@ -192,6 +214,7 @@ pub fn call_worker(store: &mut Store, operation: &str, arguments: Value) -> Resu
                     Status::Interrupted
                 },
                 "worker_supervision_limit",
+                outcome.message.as_deref(),
             )?;
             return Ok(false);
         }
@@ -209,7 +232,7 @@ pub fn call_worker(store: &mut Store, operation: &str, arguments: Value) -> Resu
         } else {
             "worker_receipt_missing"
         };
-        stop(store, status, reason)?;
+        stop_with_message(store, status, reason, outcome.message.as_deref())?;
         Ok(false)
     }
 }
@@ -267,7 +290,7 @@ fn apply_worker(
     }
     if response.execution_state != "completed" {
         store.append("worker_failure_receipt",json!({"receipt":store::artifact(&store.path,&pending.response_path,"worker_receipt")?,"response":response,"supervision":supervision}))?;
-        stop(
+        stop_with_message(
             store,
             if response.execution_state == "cancelled" {
                 Status::Cancelled
@@ -275,6 +298,7 @@ fn apply_worker(
                 Status::Blocked
             },
             response.error_code.as_deref().unwrap_or("worker_failed"),
+            supervision["message"].as_str(),
         )?;
         return Ok(false);
     }
@@ -354,7 +378,12 @@ fn apply_worker(
     store.state.termination_reason = None;
     store.append(if reconciled{"worker_reconciled"}else{"worker_result"},json!({"operation":pending.operation,"response":response,"receipt":store::artifact(&store.path,&pending.response_path,"worker_receipt")?,"supervision":supervision}))?;
     if worker::cancelled(&store.path) {
-        stop(store, Status::Cancelled, "cancelled_after_worker_receipt")?;
+        stop_with_message(
+            store,
+            Status::Cancelled,
+            "cancelled_after_worker_receipt",
+            supervision["message"].as_str(),
+        )?;
         return Ok(false);
     }
     Ok(true)
@@ -2636,6 +2665,39 @@ pub fn summary(store: &Store) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn worker_limit_reason_keeps_stage_and_duration() {
+        let (_tmp, mut store) = fixture();
+        let message =
+            "The worker reached the configured safety time limit at Making the mesh after 5.5 min.";
+        let pending = Pending {
+            kind: "worker".into(),
+            id: "worker-limit".into(),
+            operation: "observe".into(),
+            response_path: "receipts/worker-limit.json".into(),
+            request_path: "requests/worker-limit.json".into(),
+            domain_before: None,
+            started_ms: 0,
+        };
+        let response = json!({
+            "protocol":WORKER_VERSION, "request_id":pending.id, "operation":pending.operation,
+            "execution_state":"cancelled", "implementation_sha256":"a".repeat(64),
+            "error_code":"worker_cancelled", "resources":{
+                "wall_seconds":330.0, "worker_cpu_seconds":1.0, "children_cpu_seconds":1.0,
+                "worker_peak_rss_kib":1, "children_peak_rss_kib":1,
+                "rss_interpretation":"separate process maxima; not summed process-tree peak"
+            }
+        });
+        util::atomic_json(&store.path.join(&pending.response_path), &response, false).unwrap();
+        assert!(!apply_worker(
+            &mut store,
+            &pending,
+            json!({"state":"timed_out", "message":message}),
+            false
+        )
+        .unwrap());
+        assert_eq!(store.state.termination_reason.as_deref(), Some(message));
+    }
     #[test]
     fn stop_keeps_available_draft_for_every_terminal_reason() {
         for status in [

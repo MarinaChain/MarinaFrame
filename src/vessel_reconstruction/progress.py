@@ -17,6 +17,28 @@ MAX_PROGRESS_BYTES = 2048
 # Normal CAD steps report hundreds of sections/parts and formats, not thousands.
 # Bound alternating invented stages so a child cannot postpone stalls forever.
 MAX_PROGRESS_ADVANCES_PER_STEP = 10_000
+NO_PROGRESS_SECONDS = 300
+
+
+class ProgressWatchdog:
+    """Count validated work boundaries using the supervisor's monotonic clock."""
+    def __init__(self):
+        self.last_pair = None
+        self.advances = 0
+        self.last_progress = 0.0
+
+    def update(self, elapsed, value):
+        if value is not None:
+            pair = (value['stage'], value['part'])
+            if pair != self.last_pair and self.advances < MAX_PROGRESS_ADVANCES_PER_STEP:
+                self.last_pair = pair
+                self.advances += 1
+                self.last_progress = elapsed
+        return elapsed - self.last_progress >= NO_PROGRESS_SECONDS
+
+    @property
+    def stage(self):
+        return self.last_pair[0] if self.last_pair else 'CAD work'
 
 
 @contextmanager

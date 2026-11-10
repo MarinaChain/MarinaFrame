@@ -267,7 +267,10 @@ fn describe(event: &Value, context: &Context) -> Option<(String, EventKind)> {
             _ => Some((
                 format!(
                     "Stopped: {}",
-                    plain_reason(payload["reason"].as_str().unwrap_or(""))
+                    payload["message"]
+                        .as_str()
+                        .map(str::to_owned)
+                        .unwrap_or_else(|| plain_reason(payload["reason"].as_str().unwrap_or("")))
                 ),
                 EventKind::Finish,
             )),

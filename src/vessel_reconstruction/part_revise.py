@@ -514,7 +514,7 @@ def revise_part(task: Path, part_id: str, note: str, *, call=None, pack: dict | 
             triage_program(program)
             (work / f'program-{turn}.json').write_text(json.dumps(program, indent=2) + '\n')
             execution = run_worker(program, {}, work / f'task-{turn}', detail=load_detail(task))
-            if execution.get('state') == 'sandbox_safety_cap':
+            if execution.get('state') in ('sandbox_safety_cap', 'stalled'):
                 problem = execution['error']
                 break  # A new model attempt must not silently restart the security clock.
             result = (execution.get('result') or {}).get('components', [])

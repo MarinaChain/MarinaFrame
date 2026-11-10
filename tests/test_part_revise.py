@@ -59,7 +59,11 @@ def make_task(tmp_path, entry_extra=None):
 
 
 @pytest.mark.skipif(sys.platform != 'darwin', reason='the part-revise path requires macOS')
-def test_security_cap_stops_retries_and_preserves_its_message(tmp_path, monkeypatch):
+@pytest.mark.parametrize('state, message', [
+    ('sandbox_safety_cap', 'The sandboxed CAD worker reached the four-hour security limit (240 min) at Building vessel parts.'),
+    ('stalled', 'The sandboxed CAD worker stopped at Building vessel parts after 5 min without progress.'),
+])
+def test_security_cap_stops_retries_and_preserves_its_message(tmp_path, monkeypatch, state, message):
     from vessel_reconstruction import ship_cad_worker
     task = make_task(tmp_path)
     calls = []
@@ -73,9 +77,8 @@ def test_security_cap_stops_retries_and_preserves_its_message(tmp_path, monkeypa
         return reply, {'state': 'completed'}
 
     monkeypatch.setattr(ship_cad_worker, 'run', lambda *a, **k: {
-        'state': 'sandbox_safety_cap', 'result': None,
-        'error': 'The sandboxed CAD worker reached the four-hour security limit.'})
-    with pytest.raises(PartReviseError, match='four-hour security limit'):
+        'state': state, 'result': None, 'error': message})
+    with pytest.raises(PartReviseError, match=re.escape(message)):
         part_revise.revise_part(task, 'wheelhouse', 'Make it narrower', call=model, pack={'images': []})
     assert len(calls) == 1
     assert (task / 'whole_vessel/wheelhouse.step').read_text() == 'old'

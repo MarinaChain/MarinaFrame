@@ -75,6 +75,65 @@ def test_nested_worker_defers_time_limit_to_controller(tmp_path, monkeypatch):
     assert result['exit_code'] == 0
 
 
+@pytest.mark.parametrize('model_code', [False, True])
+def test_standalone_stall_policy_uses_trust_not_child_heartbeat(tmp_path, monkeypatch, caplog, model_code):
+    from dataclasses import replace
+    from vessel_reconstruction import isolation
+    clock = [0.0]
+    killed = []
+    path = tmp_path / 'progress.json'
+    path.write_text(json.dumps(child_record(stage='Making the mesh', part=0, total=0)))
+
+    class Child:
+        pid = 12345
+
+        def wait(self, timeout):
+            return -9 if model_code and killed else 0
+
+    monkeypatch.delenv('MARINAFRAME_PROGRESS_PATH', raising=False)
+    monkeypatch.setattr(isolation.subprocess, 'Popen', lambda *a, **k: Child())
+    monkeypatch.setattr(isolation, 'process_identity', lambda pid: None)
+    monkeypatch.setattr(isolation, 'child_has_exited', lambda pid: clock[0] >= 900)
+    monkeypatch.setattr(isolation, 'kill_process_tree', lambda *a: killed.append(True))
+    monkeypatch.setattr(isolation.time, 'monotonic', lambda: clock[0])
+
+    def heartbeat(_):
+        clock[0] += 100
+        record = json.loads(path.read_text())
+        record.update(counter=record['counter'] + 1, timestamp_ms=int(clock[0] * 1000))
+        path.write_text(json.dumps(record))
+
+    monkeypatch.setattr(isolation.time, 'sleep', heartbeat)
+    result = isolation.supervise_process(
+        ['controlled-child'], limits=replace(isolation.DEFAULT_LIMITS, wall_seconds=10),
+        env={'MARINAFRAME_PROGRESS_PATH': str(path), 'MARINAFRAME_PROGRESS_REQUEST': 'worker-test'},
+        sandboxed_model_code=model_code)
+    if model_code:
+        assert result['state'] == 'stalled'
+        assert result['error_code'] == 'sandbox_worker_stalled'
+        assert 'Making the mesh' in result['error'] and '5 min' in result['error']
+        assert result['elapsed_seconds'] == 300
+    else:
+        assert result['state'] == 'exited' and result['exit_code'] == 0
+        assert result['elapsed_seconds'] == 900
+        assert 'Making the mesh' in caplog.text and '5 min' in caplog.text
+
+
+def test_isolated_recovery_keeps_specific_stop_reason(tmp_path, monkeypatch):
+    from vessel_reconstruction import isolation, pipeline
+    from vessel_reconstruction.transaction import RunTransaction
+    output = tmp_path / 'run'
+    transaction = RunTransaction(output)
+    transaction.checkpoint('cad_exports')
+    transaction.close()
+    message = 'The sandboxed CAD worker stopped at Making the mesh after 5 min without progress.'
+    monkeypatch.setattr(isolation, 'supervise_process', lambda *a, **k: {
+        'state': 'stalled', 'exit_code': -9, 'error_code': 'sandbox_worker_stalled', 'error': message})
+    outcome = isolation.run_isolated(tmp_path / 'spec.json', output)
+    assert outcome['result']['gaps'][0]['message'] == message
+    assert pipeline.verify_run(output)['valid']
+
+
 def child_record(**changes):
     return {'request_id': 'worker-test', 'stage': 'Building the hull', 'part': 1,
             'total': 72, 'unit': 'section', 'counter': 1, 'timestamp_ms': 1} | changes

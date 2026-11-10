@@ -26,12 +26,14 @@ def stopped(pid):
         return True
 
 
-def test_wall_timeout_kills_child_process_group(tmp_path):
+def test_sandbox_stall_kills_child_process_group(tmp_path, monkeypatch):
+    from vessel_reconstruction import progress
+    monkeypatch.delenv('MARINAFRAME_PROGRESS_PATH', raising=False)
+    monkeypatch.setattr(progress, 'NO_PROGRESS_SECONDS', 0.5)
     child = tmp_path/'child.pid'
     code = f"import subprocess,sys,time; from pathlib import Path; p=subprocess.Popen([sys.executable,'-c','import time; time.sleep(20)']); Path({str(child)!r}).write_text(str(p.pid)); time.sleep(20)"
-    # A sleeping worker uses no CPU time, so the stall limit (STALL_WALL_FACTOR x wall) stops it.
-    result = supervise_process([sys.executable,'-c',code], limits=replace(LIMITS, wall_seconds=0.1))
-    assert result['state'] == 'timed_out'
+    result = supervise_process([sys.executable,'-c',code], limits=LIMITS, sandboxed_model_code=True)
+    assert result['state'] == 'stalled'
     assert result['elapsed_seconds'] < 2
     assert stopped(int(child.read_text()))
 

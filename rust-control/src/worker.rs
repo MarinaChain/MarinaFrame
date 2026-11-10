@@ -161,6 +161,15 @@ pub struct ProcessOutcome {
     pub wall_seconds: f64,
     pub queue_wait_seconds: f64,
     pub spawned: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+fn timeout_message(stage: &str, elapsed: Duration) -> String {
+    format!(
+        "The worker reached the configured safety time limit at {stage} after {:.1} min.",
+        elapsed.as_secs_f64() / 60.0
+    )
 }
 
 struct Admission {
@@ -322,6 +331,7 @@ pub fn run_with_progress(
                 wall_seconds: 0.,
                 queue_wait_seconds: queued.elapsed().as_secs_f64(),
                 spawned: false,
+                message: None,
             });
         }
         slot
@@ -334,6 +344,7 @@ pub fn run_with_progress(
             wall_seconds: 0.,
             queue_wait_seconds: queue_wait,
             spawned: false,
+            message: None,
         });
     }
     let response = root.join(&pending.response_path);
@@ -461,6 +472,7 @@ pub fn run_with_progress(
                 wall_seconds: started.elapsed().as_secs_f64(),
                 queue_wait_seconds: queue_wait,
                 spawned: false,
+                message: None,
             })
         }
     };
@@ -531,6 +543,7 @@ pub fn run_with_progress(
                 wall_seconds: started.elapsed().as_secs_f64(),
                 queue_wait_seconds: queue_wait,
                 spawned: true,
+                message: None,
             });
         }
         let output = std::fs::metadata(&stdout_path)
@@ -585,6 +598,24 @@ pub fn run_with_progress(
             }
             let _ = child.wait();
             return Ok(ProcessOutcome {
+                message: if matches!(state, ProcessState::TimedOut) {
+                    let stage = watchdog
+                        .last_pair
+                        .as_ref()
+                        .map_or(pending.operation.as_str(), |(stage, _)| stage.as_str());
+                    Some(timeout_message(stage, elapsed))
+                } else if matches!(state, ProcessState::Cancelled) && stalled {
+                    let stage = watchdog
+                        .last_pair
+                        .as_ref()
+                        .map_or(pending.operation.as_str(), |(stage, _)| stage.as_str());
+                    Some(format!(
+                        "The worker was stopped at {stage} after {:.1} min without progress.",
+                        elapsed.saturating_sub(watchdog.last_progress).as_secs_f64() / 60.0
+                    ))
+                } else {
+                    None
+                },
                 state,
                 exit_code: None,
                 wall_seconds: started.elapsed().as_secs_f64(),
@@ -599,6 +630,14 @@ pub fn run_with_progress(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn safety_limit_message_names_stage_and_minutes() {
+        let message = timeout_message("Making the mesh", Duration::from_secs(330));
+        assert!(message.contains("Making the mesh"));
+        assert!(message.contains("5.5 min"));
+        assert!(!message.contains("atomic publication"));
+    }
 
     fn progress_record(part: u64, counter: u64) -> WorkerProgress {
         WorkerProgress {
