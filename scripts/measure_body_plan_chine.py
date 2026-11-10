@@ -19,8 +19,8 @@ from benchmarks.bumble_bee import holdout_value as bumble
 from benchmarks.pardon_me import holdout_value as pardon
 from benchmarks.thayer import holdout_value as thayer
 from vessel_reconstruction import body_plan_chine as chine
-from vessel_reconstruction import body_plan_crossings as crossings
-from vessel_reconstruction import body_plan_reader as reader
+from benchmarks.frozen_readers.v1 import body_plan_crossings as crossings
+from benchmarks.frozen_readers.v1 import body_plan_reader as reader
 
 
 def fingerprint(path: Path) -> str:

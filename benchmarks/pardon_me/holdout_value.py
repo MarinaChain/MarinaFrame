@@ -16,8 +16,8 @@ from benchmarks.balclutha import model_value as round4
 from benchmarks.balclutha import router_value as round6
 from benchmarks.bue_girl import holdout_value as round12
 from benchmarks.thayer import holdout_value as thayer
-from vessel_reconstruction import body_plan_crossings as bpc
-from vessel_reconstruction import body_plan_reader as bpr
+from benchmarks.frozen_readers.v1 import body_plan_crossings as bpc
+from benchmarks.frozen_readers.v1 import body_plan_reader as bpr
 
 PROTOCOL = 'docs/holdouts/round14-pardon-me.md'
 CENTRE_COLUMN = 3270.0

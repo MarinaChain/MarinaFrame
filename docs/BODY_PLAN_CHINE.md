@@ -1,5 +1,17 @@
 # Hard-chine station joining
 
+## Product reader and next step
+
+When `MARINAFRAME_BODY_PLAN_READER=1`, intake uses `body_plan_reader` with
+`body_plan_crossings` and code-only nesting-rank station identity. None of the
+hard-chine readers is in this product path. The historical benchmark reader is
+preserved separately in `benchmarks/frozen_readers/v1`.
+
+Before integrating a chine reader, compare the existing candidates on the same
+calibrated development and independent holdout sheets. Check coverage, value and
+identity errors, and the traced corners. Integrate only a candidate that meets
+predefined gates; otherwise keep the present product reader.
+
 ## Metrics and acceptance
 
 PARDON ME is a **DEVELOPMENT case**. Its round-14 holdout is spent. Its truth may now guide diagnosis, but the joining code must not read truth, vessel names, or benchmark calibration constants.
