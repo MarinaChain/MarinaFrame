@@ -208,3 +208,9 @@
 - **Trigger:** The PM found that exporting a trimmed face's UV-bounded support surface filled areas outside the real deck or transom outline.
 - **Rule:** Compare face and support areas. Write planar outer trims as exact Breps. Use and label a counted mesh fallback for non-planar trims and unsupported inner holes. Keep representation counts in document user text and the export return value; test written areas and source bounds.
 - **Why:** Correct units and NURBS control data do not preserve a trimmed face's boundary.
+
+### Run the full suite when a lane changes export file lists
+- **Date:** 2026-11-10
+- **Trigger:** The CAD export lane added IGES and .3dm files; its focused tests passed, but three evidence-hardening tests failed at merge because a test helper copied a fixed file list. A replace-sheet real-worker test also failed in CI because it did not skip without `MARINAFRAME_TEST_PYTHON`.
+- **Rule:** When a lane changes run files, export kinds or record checks, run the full Python suite before review, not only focused tests. Test helpers copy the files the record names, not a fixed list. New real-worker Rust tests skip when `MARINAFRAME_TEST_PYTHON` is unset, like the existing ones.
+- **Why:** Focused runs miss tests that encode the old file set, and CI's plain cargo step has no worker Python.
