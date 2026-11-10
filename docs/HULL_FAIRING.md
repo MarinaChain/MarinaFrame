@@ -1029,6 +1029,74 @@ Joint diagnostics: 34 added half stations, 1,344 negative fitted-surface
 samples projected to the floor (9.3: 1,282). Targets T1-T4 fail on both
 halves; BUE GIRL T5 holds (station-only fallback, no plan/profile view).
 
+#### 10.4.1 Committed station-end check (edc3f2f)
+
+The PM committed the fit-only choice in `edc3f2f` before this check. The
+settings match that commit byte for byte: **B, bounded endpoint movement,
+2.5% of each build's original half-beam**. The reader, fitter, weights,
+bound and gate are unchanged. No tuning, other arm or fit-half rescore was
+run. Section 10's existing comparison numbers below are reused; only frozen
+B was newly scored, once per stored build.
+
+**10/10 L1 CAD builds and the BUE GIRL reader fallback completed without
+fit/build/score failure.** Five delivered L1 builds are the primary result;
+all ten stored L1 builds are secondary, correlated revisions. One exclusive
+run directory and one attempt file per build prevent a second check run.
+
+RMS is % of truth half-beam. Per-case volume errors are signed in-range
+errors at design draft. Gate passes require RMS <=2% and absolute volume
+error <=5%. `v2` means the unaligned joint fit in the table above.
+
+| Delivered check case | RMS % station-only / v2 joint / frozen B | Volume % v2 / frozen B | Gate pass v2 / frozen B |
+|---|---|---|---|
+| dtmb5415-L1 | 14.188 / 12.391 / 11.566 | +11.342 / +11.874 | 0 / 0 |
+| series60-L1 | 3.334 / 8.066 / 9.351 | +1.797 / -1.536 | 0 / 0 |
+| 00679-L1 | 5.438 / 10.981 / 10.343 | -6.762 / -6.939 | 0 / 0 |
+| 08158-L1 | 1.625 / 4.326 / 4.373 | -4.602 / -5.140 | 0 / 0 |
+| 09867-L1 | 0.983 / 1.381 / 2.711 | +1.136 / -0.883 | 1 / 0 |
+
+| Check population | Mean RMS % current / station-only / v2 joint / frozen B | Gate passes in the same order |
+|---|---|---|
+| Delivered (5/5 scored) | 5.189 / 5.114 / 7.429 / 7.669 | 2 / 2 / 1 / 0 |
+| All stored (10/10 scored) | 5.190 / 5.116 / 7.521 / 7.601 | 4 / 4 / 2 / 0 |
+
+Delivered mean RMS increases by 0.240 points
+(7.429 -> 7.669%). Mean absolute volume error increases
+from 5.128% to 5.274%. The 09867-L1 pass
+is lost (1.381 -> 2.711% RMS). DTMB improves (12.391 -> 11.566%) and
+00679 improves in shape (10.981 -> 10.343%), but 00679 volume remains
+outside the gate (-6.762 -> -6.939%). The fit-half -13.378% volume deficit
+also remained unresolved at the frozen choice (-13.958%, section 11.3);
+no fit case was rescored during this check.
+
+T1-T4 fail on the check half. All 30/30 primary injection trials are
+available; maximum absolute follow shares are 0.331 / 0.272 / 1.000 for
++0.1 m / +0.2 m / whole-station injections. These are paired surface fits,
+with no additional CAD accuracy scores. BUE GIRL has no independent
+plan/profile views, so the unchanged public fairer uses its station-only
+fallback. It retains 37/39 truth cells,
+RMS 0.00217492 m and maximum 0.00832272 m; T5 holds.
+The two missing cells (stations 10 and 12 at 2-6-0) remain explicit.
+
+**Conclusion and next step.** The station-end hypothesis has limited support
+as a local contributor: DTMB improves on both halves. It is not supported
+as a sufficient explanation or remedy for the joint-fit failure. The check
+mean worsens, a gate pass is lost, and the 00679 volume deficit persists.
+**Stop this joint-fairing approach and retain the existing station-only
+path as the optional fairing method. Keep fairing off by default.** Do not
+tune another bound or method on this check half.
+
+Reproduction and verification artifacts are retained under
+`work/station-frame/`: `check_once.py` (the single-use driver),
+`check-once.log`, and `check-edc3f2f/{started,evidence/manifest,check,verification}.json`.
+The frozen settings SHA-256 remains
+`110454345211d68b424ba3a2075d5aafcfa8f8f11ae5d11f86db8ae6a7d3a6a0`.
+The driver checks the committed settings and pinned source hashes before
+and after execution. Accuracy-score attempts are unique: ten CAD builds
+plus one BUE GIRL curve score. Comparison values are from sections 9.3
+and 10.4 and were not rescored. Only this report changed in tracked files;
+no source/settings changes, commit, pip or sealed-factory access was run.
+
 ### 10.5 Findings and limits
 
 **Keep three-view fairing off.** Better evidence did not give a better
