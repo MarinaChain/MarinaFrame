@@ -7,21 +7,29 @@ ink. This reader reads each view from the drawing alone:
 - Sheet level: the sheet's small rotation (``view_skew``) is removed by
   resampling each view, so one levelled row is one height or one breadth.
 - Profile: dark hull ink (lighter grid, baseline and centreline excluded by
-  tone) in the large outline components. In each column the lowest ink run is
-  the keel line and the highest is the deck/sheer line; in each row the first
-  and last runs are the stern and stem. z = 0 is the lowest keel ink, x = 0 the
+  tone) in the large outline components. In each column the outer edge of the
+  lowest run, less half a line, is the keel line and that of the highest run
+  the deck/sheer line; in each row the first and last runs give the stern and
+  stem. z = 0 is the drawn baseline (BL) row when it lies within
+  BASELINE_MATCH_PX of the lowest keel ink, else that ink; x = 0 is the
   aftmost stern ink.
 - Waterline heights: light grid rows of the profile that have a label beside
   the view (the "WL" text left of it) and lie on the grid spacing. A label with
   no visible row still gives a row when it lies on the spacing.
-- Plan: dark runs above the centreline row in each column. The waterlines that
-  exist at column x are those between the profile's keel and deck at x. When
-  the run count equals that number, the runs are named in order from the
-  centreline (lowest waterline nearest, deck line outermost). Other columns
-  follow each named curve from both sides (nearest run to its local line);
-  coincident curves share one run (labelled ``merged``). A curve that both
-  sweeps do not name the same way abstains.
+- Plan: dark runs above the centreline row in each column. A waterline ends
+  on the centreline where the profile outline crosses its height, so each
+  curve is named at its own end: a few line widths inside that x, the curves
+  that end nearer lie nearer the centreline, which ranks the runs. Ends closer
+  together than SEED_TIE_LW line widths cannot be ordered and give no name.
+  A named curve is followed column by column along its own line. It stops at
+  a bunch of curves (one long run), at a crossing or split (two runs on its
+  line) and outside the profile's keel-to-deck span. Where every other curve
+  present holds its own run, the one run left names the last curve
+  (exclusion). Curves followed from both ends must agree; one-end names are
+  labelled ``repaired``; two curves on one run abstain there.
 
+No order from the centreline is assumed: hulls with tumblehome or crossing
+waterlines (shipd-1-00679, shipd-1-08158) change that order along the length.
 Every breadth is the distance of an ink run above the centreline row, so it is
 positive by construction. Unsure reads are abstentions with a reason; they are
 never clamped or filled. No truth, no model and no stored hull is read.
@@ -601,8 +609,13 @@ def read_plan(grey, roi, ppm: float, slope: float, centre_x: float, profile: Pro
         for column in np.flatnonzero(reach[cid]):
             row, how = named[cid].get(column, (None, "abstain_unnamed"))
             status[column] = how
-            if row is not None:
-                y[column] = (centre - row) / ppm
+            if row is None:
+                continue
+            if centre - row < clearance + width:
+                # The run touches the centreline line: the cut-off at the clearance biases its centre.
+                status[column] = "abstain_near_centreline"
+                continue
+            y[column] = (centre - row) / ppm
         curves[cid] = {"z_m": z, "y_m": y, "status": status, "sweeps": len(sweeps[cid])}
     # Two curves on one run: one of them has left its own line (or both touch). Neither is named there.
     shared_m = SHARED_INK_PX / ppm

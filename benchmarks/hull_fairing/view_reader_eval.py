@@ -10,6 +10,7 @@ is opened here, after reading, to score the evidence.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -247,8 +248,22 @@ def draw_overlay(grey, reading, points, path: Path) -> None:
     image.save(path)
 
 
+SETTINGS_PATH = Path(__file__).with_name("view_reader_v2_settings.json")
+
+
+def frozen_reader() -> dict:
+    """The committed reader settings; refuses a reader whose source changed after freezing."""
+    frozen = json.loads(SETTINGS_PATH.read_text())
+    source = Path(view_reader_v2.__file__).read_bytes()
+    if hashlib.sha256(source).hexdigest() != frozen["reader_sha256"]:
+        raise ValueError("view_reader_v2.py changed after its settings were frozen")
+    return frozen
+
+
 def evaluate(split: str, old_dir: Path, overlays: Path | None) -> dict:
     protocol = json.loads(PROTOCOL_PATH.read_text())
+    if split == "check":
+        frozen_reader()
     rows = []
     for name in protocol[f"{split}_cases"]:
         if name == "bue_girl":
