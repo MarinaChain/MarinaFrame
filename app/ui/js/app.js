@@ -19,6 +19,7 @@ import { renderSheetReview, renderSheetHistory } from './sheets.js';
 import { calibrationChoice } from './calibration.js';
 import { createEvidenceCard } from './evidence.js';
 import { createShortcutSheet } from './shortcuts.js';
+import { DETAILS_KEY, isDetailsOpen, storedDetails, reviewBadge, toggleNames } from './details.js';
 import { createParts, partState } from './parts.js';
 import { createExport } from './export.js';
 import { capacityRowOf } from './tanks.js';
@@ -637,6 +638,7 @@ function renderTask({ fresh = false } = {}) {
   renderStrip();
   renderSelection();
   renderTabs();
+  renderDetailsBadge();
   renderRevisionStrip();
   renderDrawing({ fresh });
   renderModel();
@@ -732,6 +734,7 @@ function renderVesselPage() {
   for (const page of document.querySelectorAll('.vessel-page')) page.hidden = page.dataset.vtab !== tab;
   // The layout switch only means something on the Run tab.
   $('view-switch').hidden = tab !== 'run';
+  $('details-toggle').hidden = tab !== 'run';
   if (tab === 'export') exporter.show(state.task, state.view, toCheckCount(state.view), partsToCheck(state.view));
   if (tab === 'history') renderHistory();
   if (tab === 'parts') parts.show(state.view);
@@ -1716,6 +1719,56 @@ new ResizeObserver(() => {
   splitter.addEventListener('dblclick', () => setSplit(0.56));
 })();
 
+// ---------------------------------------------------------------- run details: hide and show
+
+/** Open review items (sections and parts to check): the badge on the toggle while details are hidden. */
+function openReviewItems(view) {
+  return toCheckCount(view) + partsToCheck(view);
+}
+
+function detailsAreOpen() {
+  return document.documentElement.dataset.details !== 'closed';
+}
+
+function setDetails(open, { remember = true } = {}) {
+  document.documentElement.dataset.details = open ? 'open' : 'closed';
+  $('inspector').inert = !open;
+  $('details-edge').hidden = open;
+  if (remember) prefs.set('details', storedDetails(open));
+  renderDetailsBadge();
+  // The panes follow the freed width through their own resize observers.
+}
+
+/** Names and badge of the toggle and the edge handle. The badge shows only while hidden. */
+function renderDetailsBadge() {
+  const open = detailsAreOpen();
+  const count = openReviewItems(state.view);
+  const badge = reviewBadge(count);
+  const names = toggleNames(open, count);
+  const toggle = $('details-toggle');
+  toggle.setAttribute('aria-expanded', String(open));
+  toggle.setAttribute('aria-label', names.spoken);
+  toggle.dataset.tipTitle = names.title;
+  const edge = $('details-edge');
+  edge.setAttribute('aria-label', names.spoken);
+  edge.dataset.tipTitle = names.title;
+  for (const id of ['details-count', 'details-edge-count']) {
+    const node = $(id);
+    node.hidden = open || badge.hidden;
+    node.textContent = badge.text;
+  }
+}
+
+function toggleDetails() {
+  setDetails(!detailsAreOpen());
+}
+$('details-toggle').addEventListener('click', toggleDetails);
+$('details-edge').addEventListener('click', () => {
+  setDetails(true);
+  $('details-toggle').focus();
+});
+setDetails(isDetailsOpen(prefs.get('details', 'open')), { remember: false });
+
 // ---------------------------------------------------------------- settings and theme
 
 const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
@@ -2448,6 +2501,7 @@ function paletteCommands() {
     add('Layout', 'Drawing only', () => setLayout('drawing'), { keys: '⌘1' });
     add('Layout', 'Drawing and model', () => setLayout('split'), { keys: '⌘2' });
     add('Layout', 'Model only', () => setLayout('model'), { keys: '⌘3' });
+    add('Layout', detailsAreOpen() ? 'Hide details' : 'Show details', toggleDetails, { keys: '⌘4' });
   }
   for (const vessel of groupVessels(state.tasks)) {
     add('Vessels', vessel.name, () => { setVesselTab('run'); openTask(vessel.latest.task); }, { hint: fmt.statusLabel(vessel.latest.status) });
@@ -2502,6 +2556,9 @@ document.addEventListener('keydown', (event) => {
   } else if (command && event.key === ',') {
     event.preventDefault();
     openSettings();
+  } else if (command && event.key === DETAILS_KEY) {
+    event.preventDefault();
+    if (state.route === 'run' && state.vesselTab === 'run') toggleDetails();
   } else if (command && ['1', '2', '3'].includes(event.key)) {
     event.preventDefault();
     setLayout({ 1: 'drawing', 2: 'split', 3: 'model' }[event.key]);

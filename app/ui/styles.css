@@ -71,6 +71,7 @@
   --traffic-light-inset: 0px;
   --statusbar-h: 24px;
   --rail-w: 76px;
+  --dur-details: 140ms;
   --inspector-w: clamp(340px, 22vw, 420px); /* wider on large screens: the Thinking text reads better */
   --strip-h: 80px;
   --narration-h: 32px;
@@ -868,6 +869,53 @@ code { font-family: var(--font-mono); }
 .view-run {
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--inspector-w);
+  /* Hide or show the details column: short, and the panes follow the width. */
+  transition: grid-template-columns var(--dur-details) ease-out;
+}
+:root[data-details="closed"] { --inspector-w: 0px; }
+:root[data-details="closed"] .inspector { visibility: hidden; border-left-width: 0; overflow: hidden; transition: visibility 0s linear var(--dur-details); }
+.inspector { min-width: 0; }
+
+/* Titlebar toggle and the edge handle that reopens the column. Badge: review items still open. */
+.details-toggle { position: relative; }
+.details-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--brand);
+  color: var(--on-brand);
+  font: 600 10px/16px var(--font-mono);
+  text-align: center;
+  box-sizing: border-box;
+}
+.details-count[hidden] { display: none; }
+.details-edge {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  z-index: 5;
+  margin-top: -18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-right: 0;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  background: var(--surface);
+  color: var(--ink-2);
+}
+.details-edge:hover { color: var(--ink); background: var(--raised); }
+.details-edge[hidden] { display: none; }
+.details-edge .details-count { top: -6px; left: -6px; right: auto; }
+@media (prefers-reduced-motion: reduce) {
+  .view-run, :root[data-details="closed"] .inspector { transition: none; }
 }
 
 /* HOOK(M3 live): narration strip under the panes. */

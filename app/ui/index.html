@@ -24,6 +24,7 @@
     <symbol id="i-queue" viewBox="0 0 16 16"><path d="M8 2.2l5.8 3L8 8.2 2.2 5.2z" /><path d="M2.2 8L8 11l5.8-3" /><path d="M2.2 10.8L8 13.8l5.8-3" /></symbol>
     <symbol id="i-close" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" /></symbol>
     <symbol id="i-sidebar" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5" /><path d="M6 3v10" /></symbol>
+    <symbol id="i-panel-right" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5" /><path d="M10 3v10" /></symbol>
     <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" /><path d="M8 7.2V11M8 5v.2" /></symbol>
     <symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 2.2l6 10.8H2z" /><path d="M8 6.5v3M8 11v.2" /></symbol>
     <symbol id="i-fit" viewBox="0 0 16 16"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" /></symbol>
@@ -131,6 +132,9 @@
           <button type="button" role="radio" data-view="split" data-tip-title="Drawing and model (⌘2)" aria-label="Drawing and model"><svg class="icon"><use href="#i-split" /></svg></button>
           <button type="button" role="radio" data-view="model" data-tip-title="Model (⌘3)" aria-label="Model only"><svg class="icon"><use href="#i-cube" /></svg></button>
         </div>
+        <button class="btn btn-ghost btn-icon details-toggle" id="details-toggle" type="button" aria-controls="inspector" aria-expanded="true" aria-label="Hide details" data-tip-title="Hide details (⌘4)">
+          <svg class="icon"><use href="#i-panel-right" /></svg><b class="details-count" id="details-count" hidden></b>
+        </button>
         <button class="btn" id="resume-task" type="button" hidden>Resume</button>
         <button class="btn btn-danger-quiet" id="cancel-task" type="button" hidden>Stop</button>
       </div>
@@ -293,7 +297,10 @@
           </div>
         </div>
 
-        <section class="inspector" aria-label="Inspector">
+        <button class="details-edge" id="details-edge" type="button" aria-controls="inspector" aria-label="Show details" data-tip-title="Show details (⌘4)" hidden>
+          <svg class="icon"><use href="#i-panel-right" /></svg><b class="details-count" id="details-edge-count" hidden></b>
+        </button>
+        <section class="inspector" id="inspector" aria-label="Inspector">
           <header class="inspector-head" id="selection-head"></header>
           <section class="selection" id="selection" aria-live="polite"></section>
           <div class="tabs" role="tablist" aria-label="Run details" id="tabs">

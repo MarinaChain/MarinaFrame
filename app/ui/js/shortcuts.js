@@ -25,6 +25,7 @@ const GROUPS = [
     [`${MOD}1`, 'Drawing only'],
     [`${MOD}2`, 'Drawing and model'],
     [`${MOD}3`, 'Model only'],
+    [`${MOD}4`, 'Show or hide the details column'],
     ['R', 'Reset the 3D view'],
     ['+ − 0', 'Zoom the drawing in, out, to fit (click the drawing first)'],
     ['← → ↑ ↓', 'Pan the drawing (click the drawing first)'],
