@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+from pathlib import Path
 from uuid import uuid4
 
 from . import investigation as inv
@@ -294,6 +295,31 @@ def hull_end_extension(image, setups, description, sections, hints):
     return extend
 
 
+def built_table(table, build_dir):
+    """A copy of ``table`` whose rows hold the sections the build delivered (extracted_sections.json).
+
+    A traced row is rebuilt from its ink between the section's heights, so the
+    built curve can differ from the form-fit row (a top a pixel or two lower).
+    The reading choice must score what the build delivered: on dtmb5415-3v-L0
+    live the table fits kept a reading whose built tops were 0.08 m lower at
+    every station (8.92 % RMS over 5.07 %); the built fits rank the two correctly.
+    Rows the build did not report keep their table points.
+    """
+    import json
+    path = Path(build_dir) / "extracted_sections.json"
+    if not path.exists():
+        return table
+    built = {str(s["id"]): s.get("points_yz_m") for s in json.loads(path.read_text()).get("sections", [])}
+    copied = copy.deepcopy(table)
+    for row in copied.stations:
+        points = built.get(str(row.id))
+        if points and len(points) >= 2:
+            ordered = sorted(([float(y), float(z)] for y, z in points), key=lambda p: p[1])
+            row.points_yz_m = ordered
+            row.keel_z_m, row.top_z_m = ordered[0][1], ordered[-1][1]
+    return copied
+
+
 def build_first_hull(tools):
     from .vessel_description import first_hull_spec, describe_table
     description = tools.state.get("vessel_description")
@@ -397,6 +423,9 @@ def build_first_hull(tools):
     tools.state["fit_score"] = score(tools, table)
     from .draft_fit import task_score
     tools.state["draft_fit"] = task_score(tools, table)
+    # The reading choice scores the hull the build delivered (built_table); the edit keep
+    # rule keeps comparing table fits with table fits (draft_fit).
+    tools.state["built_draft_fit"] = task_score(tools, built_table(table, built["out"])).get("draft_fit")
     tools.state["first_hull_spec"] = built["spec"]
     tools.state["guesses"] = built["spec"].get("draft", {}).get("guesses", guesses)
     candidate = {"id":tools.generation_id,"generation_id":tools.generation_id,"revision_id":tools.revision_id,
@@ -546,19 +575,22 @@ def next_reading_message(number: int) -> str:
 
 def reading_fits(state: dict) -> dict:
     """Drawing fits of a task state's first hull: draft_fit (three views, code frame) and the body-plan fit."""
-    return {"draft_fit": (state.get("draft_fit") or {}).get("draft_fit"),
+    return {"built_draft_fit": state.get("built_draft_fit"),
+            "draft_fit": (state.get("draft_fit") or {}).get("draft_fit"),
             "combined_fit": (state.get("fit_score") or {}).get("combined_fit")}
 
 
 def better_reading(old: dict, new: dict) -> bool:
     """True when the new reading's fits (reading_fits) beat the old ones; ties keep the old reading.
 
-    Both readings are compared on draft_fit when both have it. The body-plan
-    fit alone measures each reading in its own frame: it kept a reading with x
-    = 0 3 m off the hull's aft end (shipd-1-08158-3v-L1 Sonnet live: fit 0.919
-    and 11.9 % RMS against 0.872 and 5.3 %).
+    Both readings are compared on the first fit both have, in this order:
+    built_draft_fit (the delivered hull, built_table), draft_fit (the form-fit
+    table), combined_fit. The body-plan fit alone measures each reading in its
+    own frame: it kept a reading with x = 0 3 m off the hull's aft end
+    (shipd-1-08158-3v-L1 Sonnet live: fit 0.919 and 11.9 % RMS against 0.872 and 5.3 %).
     """
-    key = "draft_fit" if old.get("draft_fit") is not None and new.get("draft_fit") is not None else "combined_fit"
+    key = next((k for k in ("built_draft_fit", "draft_fit")
+                if old.get(k) is not None and new.get(k) is not None), "combined_fit")
     if new.get(key) is None:
         return False
     return old.get(key) is None or new[key] > old[key]
@@ -656,7 +688,8 @@ def keep_better_reading(tools, snapshot: dict, materialized: bytes | None, obser
     readings.append({**reading_record(tools), **new_fits, "kept": not keep_old})
     selection = {"kept": "earlier" if keep_old else "new", "fit_earlier": old_fits["draft_fit"],
                  "fit_new": new_fits["draft_fit"], "body_fit_earlier": old_fits["combined_fit"],
-                 "body_fit_new": new_fits["combined_fit"]}
+                 "body_fit_new": new_fits["combined_fit"],
+                 "built_fit_earlier": old_fits.get("built_draft_fit"), "built_fit_new": new_fits.get("built_draft_fit")}
     if keep_old:
         (tools.root / "input" / MATERIALIZED_SPEC).write_bytes(materialized)
         set_aside = snapshot.get("set_aside_builds", []) + tools.state.get("builds", [])
