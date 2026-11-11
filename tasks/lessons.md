@@ -260,3 +260,9 @@
 - **Trigger:** The Gunnerus display mesh took 60 to 100 s for 3,151 hull faces, even with the triangulation already built. cProfile misattributed the time.
 - **Rule:** In loops over faces or edges, use `vessel_reconstruction.topology` (indexed `FindKey` access) instead of CadQuery `Faces()`, `Edges()`, `Wires()`, `innerWires()` or `tessellate()`. Time OCP-heavy code with direct timers, not only cProfile.
 - **Why:** Ending a Python iteration over an OCP map or array raises `StopIteration` through every OCP exception translator: about 6 ms per call (80 ms the first time), whatever the size.
+
+### Never drop a traced station from a rank order (MarinaFrame)
+- **Date:** 2026-11-11
+- **Trigger:** The polyline reader dropped crowded stations whose bottoms ran into an outer station's bottom, and counted a short transom outline as a station. On CALEB JONES every inner name shifted (identity errors at stations 4-9; 10 wrong of 16 point cells).
+- **Rule:** When names come from nesting rank, a drawn line with its own side keeps its rank even when a part of it (the bottom) is lost; keep the part that is its own and flag it. Remove only lines that are not stations (short outlines) before ranking. Read the per-trace log on the worst sheet before changing thresholds.
+- **Why:** One missing or extra member of a rank order shifts every name inside it; partial evidence for a station is better than none.
