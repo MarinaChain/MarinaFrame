@@ -50,7 +50,7 @@ def test_linux_supervisor_stop_kills_sandbox_group(tmp_path):
 def test_linux_runtime_imports_real_cad(tmp_path):
     import subprocess
     task, command = make_probe(tmp_path,
-        "import sys,json\nprint(json.dumps({'prefix':sys.prefix,'executable':sys.executable,'path':sys.path}),flush=True)\nimport cadquery\nfrom pathlib import Path\nshape=cadquery.Workplane('XY').box(1,2,3)\nassert shape.val().Volume() == 6\nPath('cad-ok').write_text('ok')")
+        "import sys,json\nimport site,os\nprint(json.dumps({'prefix':sys.prefix,'executable':sys.executable,'path':sys.path,'flags':str(sys.flags),'site':getattr(site,'__file__',None),'sites':site.getsitepackages(),'directories':[os.path.isdir(p) for p in site.getsitepackages()]}),flush=True)\nimport cadquery\nfrom pathlib import Path\nshape=cadquery.Workplane('XY').box(1,2,3)\nassert shape.val().Volume() == 6\nPath('cad-ok').write_text('ok')")
     result = subprocess.run(command, capture_output=True, text=True,
                             env={**worker.safe_worker_environment(), 'PYTHONDONTWRITEBYTECODE': '1'})
     assert result.returncode == 0, f'{result.stdout}\n{result.stderr}\nconfig={(task/"worker-linux.json").read_text()}'
