@@ -16,6 +16,8 @@ from pathlib import Path
 
 import numpy as np
 
+from . import source_record
+
 SCHEMA = 'ship-cad/v1'
 MAX_COMPONENTS = 64
 MAX_PROGRAM_BYTES = 64 * 1024
@@ -270,9 +272,12 @@ def resolve_program(program: dict, measurements: dict, guesses: dict | None = No
             status, reason = 'draft_guess', '; '.join(fills)
         else:
             status, reason = 'measured_draft', 'Component identity needs human review'
+        part_refs = [component['args'][argument] for argument, kind in OPERATIONS[op].items() if kind == 'component']
+        record = source_record.component_record(evidence, part_refs=part_refs, unspecified=unspecified)
         resolved.append({'id': component['id'], 'op': op, 'source': component['source'],
                          'status': status, 'reason': reason, 'source_labels': labels,
-                         'geometry': None if failures else values, 'provenance': evidence})
+                         'geometry': None if failures else values, 'provenance': evidence,
+                         'source_record': record})
     return resolved
 
 

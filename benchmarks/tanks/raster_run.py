@@ -22,9 +22,9 @@ import statistics
 import time
 
 from benchmarks.tanks import holdout_score
-from benchmarks.tanks.raster_cases import load_case
+from benchmarks.tanks.raster_cases import CASES, load_case
 from vessel_reconstruction import tank_plan_raster as raster
-from vessel_reconstruction import tanks
+from vessel_reconstruction import source_record, tanks
 
 R1_TARGET = 0.80
 R2_TARGET_M = 0.5
@@ -186,7 +186,9 @@ def main() -> None:
         from benchmarks.gunnerus.whole_vessel_internals import hull_triangles_from_glb
         slicer = tanks.HullSlicer(hull_triangles_from_glb(args.hull))
     ask = raster.claude_asker(args.cache)
-    results, reading = raster.read_sheets(sheets, ask, slicer)
+    # The simulated scan is a turned copy of the sheet: its boxes are not boxes of the file.
+    sheet_files = None if args.scan else [(relative, 0) for relative, _ in CASES[args.case]]
+    results, reading = raster.read_sheets(sheets, ask, slicer, sheet_files)
     del sheets
     reading.update(case=args.case, scan_variant=args.scan, seconds=round(time.time() - started, 1))
     model = raster.tank_model(results)
@@ -198,6 +200,8 @@ def main() -> None:
     stamp = [f'Draft tank model from a raster tank plan ({args.case}). Not approved for construction.',
              'Units metres; x forward from frame 0, y to port, z up from the baseline.']
     write_tank_tables(model, args.out / 'tank_tables', f'{args.case}_DRAFT', stamp)
+    source_record.write_records(args.out / 'tank_tables' / f'{args.case}_DRAFT{source_record.TANK_RECORDS_SUFFIX}',
+                                {tank.id: record['source_record'] for tank, record in zip(model, reading['tanks'])})
     if args.scorer == 'holdout':
         if not args.truth:
             parser.error('--scorer holdout needs --truth (liberty_truth/truth.json)')

@@ -177,7 +177,7 @@ def add_appendages(inputs: dict, sources: Path, ga_file: str) -> dict:
         measurements[f'{region}_outline'] = {
             'status': 'measured', 'kind': 'outline', 'view': 'profile', 'region': region,
             'method': 'enclosed_region', 'source_sha256': sha, 'value': outline, 'entity_ids': entity_ids,
-            'basis': basis}
+            'basis': basis, 'sheet_region': {'sheet': ga_file, 'page': 0, 'view': 'profile'}}
 
     def add(region, span, span_basis):
         guesses[f'{region}_span'] = {'kind': 'interval', 'value': span, 'source': 'guessed', 'basis': span_basis}

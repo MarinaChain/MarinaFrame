@@ -17,6 +17,7 @@
 //! ```
 use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -26,7 +27,7 @@ pub const TANK_MODEL_FILE: &str = "tanks.npz";
 pub const TANK_TABLES_FOLDER: &str = "tank_tables";
 /// Folder inside the task folder with the steel tables and OCX files.
 pub const STRUCTURE_FOLDER: &str = "structure";
-const CAPACITY_SUFFIX: &str = "_capacity_plan.csv";
+pub const CAPACITY_SUFFIX: &str = "_capacity_plan.csv";
 const SOUNDING_INFIX: &str = "_sounding_";
 /// Structure files by name suffix, with their role.
 const STRUCTURE_ROLES: [(&str, &str); 4] = [
@@ -67,6 +68,9 @@ pub struct CapacityRow {
     pub notes: String,
     /// True when the run has a sounding table for this tank.
     pub has_sounding: bool,
+    /// Where the tank was read (docs/SOURCE_RECORD.md), from `<stem>_source_records.json`.
+    #[serde(default)]
+    pub source_record: Option<Value>,
 }
 
 /// Totals of one content group: volume at 100 % and weight at 98 % of the built tanks.
@@ -297,6 +301,7 @@ fn capacity_row(columns: &[String], cells: &[String], capacity: &Path) -> Capaci
         sources,
         notes: text_cell(get("notes")),
         has_sounding,
+        source_record: None,
         id,
     }
 }
@@ -337,10 +342,15 @@ pub fn read_capacity_plan(task: &Path) -> Option<CapacityPlanView> {
     if !table.columns.iter().any(|c| c == "id") {
         return None;
     }
+    let mut records = crate::source_record::read_tank_records(&capacity);
     let rows: Vec<CapacityRow> = table
         .rows
         .iter()
-        .map(|cells| capacity_row(&table.columns, cells, &capacity))
+        .map(|cells| {
+            let mut row = capacity_row(&table.columns, cells, &capacity);
+            row.source_record = records.remove(&row.id);
+            row
+        })
         .collect();
     Some(CapacityPlanView {
         file: relative(task, &capacity),

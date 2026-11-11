@@ -164,6 +164,14 @@ pub fn get_task(task: &Path, context: &ViewContext) -> Result<TaskView, String> 
             section.source = sources.by_section.get(&section.id).cloned();
         }
     }
+    // Every build (draft or not) says where it read each section.
+    let mut section_records = current_build
+        .and_then(|build| draft_view::result_record(task, build))
+        .map(|r| crate::source_record::section_records(&r))
+        .unwrap_or_default();
+    for section in &mut sections {
+        section.source_record = section_records.remove(&section.id);
+    }
     Ok(TaskView {
         sheet_review: crate::sheet_review::read(task),
         source_counts: draft_sources
@@ -585,6 +593,7 @@ fn section_views(
                     guess: None,
                     source: None,
                     candidates: vec![],
+                    source_record: None,
                 })
             })
             .collect();
@@ -654,6 +663,7 @@ fn section_views(
                 guess,
                 source: None,
                 candidates,
+                source_record: None,
             }
         })
         .collect()
