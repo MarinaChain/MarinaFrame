@@ -450,8 +450,11 @@ def prepare_revision(task: Path, part_id: str, note: str) -> dict:
     note = check_note(note)
     task = Path(task).resolve()
     _, _, old = _revisable(task, part_id)
-    if sys.platform != 'darwin' or not Path('/usr/bin/sandbox-exec').is_file():
-        raise PartReviseError('Parts are rebuilt only on macOS (the CAD worker needs its sandbox).')
+    from .ship_cad_worker import require_sandbox
+    try:
+        require_sandbox()
+    except RuntimeError as exc:
+        raise PartReviseError(str(exc)) from exc
     revision = int(old.get('revision', 0)) + 1
     # One folder per attempt (an undone revision number can be used again).
     attempt = f'{time.strftime("%Y%m%dT%H%M%S")}-{uuid.uuid4().hex[:6]}'
