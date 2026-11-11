@@ -19,7 +19,12 @@ This module reads each station as a polyline instead:
 5. Names: the traced stations are ranked by nesting (outermost first) and take the host
    calibration's station order. The knuckles of a half must form one smooth chine curve:
    moving inward, each knuckle is nearer the centreline than the one outside it; a station
-   whose knuckle breaks that order is not named.
+   whose knuckle breaks that order is not named. Rank naming is only right when every drawn
+   station outside a named one holds its rank, so a station is never left out of the order
+   for its bottom alone: crowded stations run their bottoms into one line near the keel, and
+   a station whose bottom is an outer station's keeps its side and knuckle. A traced side much
+   shorter than the others (a transom or other outline with a corner) is not a station and
+   takes no rank.
 
 A half is read as a whole only when enough stations have a knuckle. Otherwise it is declined
 as a whole, and engagement is per station (`engage_stations`): a traced station with a clear
@@ -776,29 +781,52 @@ def _same_station(first: StationPolyline, second: StationPolyline, width: float,
     return _same_line(*sides, width) or min(_length(points) for points in sides) < fragment_px
 
 
+def side_and_knuckle_only(station: StationPolyline) -> None:
+    """Cut the station's polyline to its side: the knuckle up to the sheer end."""
+    station.points = station.points[station.knuckle_index:]
+    station.knuckle_index = 0
+
+
 def _own_bottoms(ink: np.ndarray, sheet: bpr.SheetLayout, side: bpr.SideLayout, width: float,
                  stations: list[StationPolyline]) -> tuple[list[StationPolyline], int]:
-    """Give each bottom line to one station: (stations, number dropped).
+    """Give each bottom line to one station: (stations, number kept without a bottom).
 
     Where the bottoms of neighbouring stations cross near a knuckle, the trace from an inner
     knuckle can run on along the outer station's bottom. A bottom starts at its own knuckle and
     runs inward, so a bottom that two stations claim belongs to the outer one (its knuckle is
     further out); the inner station is traced again without that line. A station with no other
-    bottom is dropped.
+    bottom keeps its side and knuckle only: its side is a drawn station of its own (crowded
+    stations run their bottoms into one line near the keel), and leaving it out would take one
+    station from the nesting order and shift the name of every station inside it.
     """
     kept: list[StationPolyline] = []
-    dropped = 0
+    without_bottom = 0
     for station in sorted(stations, key=lambda s: -s.offset_px(s.chine[1], sheet.centre_column)):
         taken = tuple(other.bottom_points() for other in kept)
         if any(_same_line(station.bottom_points(), bottom, width) for bottom in taken):
             again, *_ = trace_station(ink, station.seed, sheet, side, width, taken)
             if again is None:
-                dropped += 1
-                continue
-            again.notes.append('bottom traced again: the first one was an outer station\'s bottom')
-            station = again
+                side_and_knuckle_only(station)
+                station.notes.append('bottom is an outer station\'s and no other was found; side and knuckle only')
+                without_bottom += 1
+            else:
+                again.notes.append('bottom traced again: the first one was an outer station\'s bottom')
+                station = again
         kept.append(station)
-    return kept, dropped
+    return kept, without_bottom
+
+
+def _fragments(stations: list[StationPolyline]) -> list[StationPolyline]:
+    """Traced stations whose side is shorter than FRAGMENT_SIDE_SHARE of the half's median side.
+
+    A station side runs from the chine up to the sheer. A much shorter side with a knuckle is part
+    of another outline (a transom, a stem or keel corner, a rail), not a station of the nesting
+    order.
+    """
+    if len(stations) < MIN_STATIONS:
+        return []
+    median = float(np.median([_length(s.side_points()) for s in stations]))
+    return [s for s in stations if _length(s.side_points()) < FRAGMENT_SIDE_SHARE * median]
 
 
 def _mark_shared_knuckles(stations: list[StationPolyline], width: float) -> None:
@@ -886,15 +914,19 @@ def read_half(ink: np.ndarray, sheet: bpr.SheetLayout, side: bpr.SideLayout) -> 
                 stations.append(station)
     _mark_shared_knuckles(stations, width)
     shared = [s for s in stations if s.shared_knuckle]
-    stations, dropped = _own_bottoms(ink, sheet, side, width, [s for s in stations if not s.shared_knuckle])
-    if dropped:
-        reasons['bottom of an outer station only'] = dropped
+    stations, without_bottom = _own_bottoms(ink, sheet, side, width, [s for s in stations if not s.shared_knuckle])
     for station in shared:
         station.notes.append('another traced side reaches the same knuckle; not named')
+    fragments = _fragments(stations)
+    for station in fragments:
+        station.notes.append('side much shorter than the other stations\' sides: an outline, not a station; not named')
+    stations = [s for s in stations if not any(s is f for f in fragments)]
     result.notes.append(f'traced {len(traced_sides)} lines; {len(stations)} with a knuckle; '
                         f'others: {dict(sorted(reasons.items()))}'
-                        + (f'; {len(shared)} with a shared knuckle' if shared else ''))
-    result.unnamed += shared
+                        + (f'; {without_bottom} without an own bottom (side and knuckle only)' if without_bottom else '')
+                        + (f'; {len(shared)} with a shared knuckle' if shared else '')
+                        + (f'; {len(fragments)} short-side outlines' if fragments else ''))
+    result.unnamed += shared + fragments
     expected = len(side.stations_outer_first)
     if len(stations) < max(MIN_STATIONS, MIN_STATION_SHARE * expected):
         result.unnamed += stations
@@ -1024,8 +1056,7 @@ def engage_stations(half: HalfReading, side: bpr.SideLayout, existing: dict,
         if station.bottom_alternatives:
             # Without its neighbours traced, nothing tells which of the lines through the knuckle
             # is this station's bottom: only the side and the knuckle are engaged.
-            station.points = station.points[station.knuckle_index:]
-            station.knuckle_index = 0
+            side_and_knuckle_only(station)
             station.notes.append(f'{station.bottom_alternatives} other bottom lines through the knuckle; '
                                  'side and knuckle only')
         half.engaged.append(station)

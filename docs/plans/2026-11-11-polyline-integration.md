@@ -61,10 +61,10 @@ reader (rank names). The runner is pointed at the entry point; the per-sheet num
 
 ## 4. Steps and resume point
 
-- [ ] Gates and runner committed (this file, `scripts/measure_polyline_naming.py`).
-- [ ] Baseline run: `work/polyline-integration/before.json`.
-- [ ] Cause of the CALEB JONES naming errors from the traces; general fix in the naming step with unit tests.
-- [ ] After run with `--baseline`: `work/polyline-integration/after.json`; per-sheet table in section 5; fix commit.
+- [x] Gates and runner committed (this file, `scripts/measure_polyline_naming.py`) in `15fc1f0`.
+- [x] Baseline run at `15fc1f0`: `work/polyline-integration/before.json` (sha256 `4215993d76bf64f5...`).
+- [x] Cause of the CALEB JONES naming errors from the traces; general fix in the naming step with unit tests.
+- [x] After run with `--baseline`: `work/polyline-integration/after.json` (sha256 `df6e637c7508645f...`); all gates pass; per-sheet table in section 5; fix commit.
 - [ ] Integration: one product entry point for the body-plan side reading; v2 and chine joining out of `src/`;
   tests; integration run; integration commit.
 - [ ] Re-pin the Cama Beach (`docs/BODY_PLAN_CHINE.md`) and Davis Boat (`docs/holdouts/davis-boat.md`) protocols
@@ -88,4 +88,55 @@ PYTHONPATH=src:. /Users/jonathanjie/Documents/workspace/MarinaFrame/.venv/bin/py
 
 ## 5. Results
 
-(filled after the runs)
+### Baseline
+
+The baseline run equals the published table in section 2 on every sheet (531 correct, 29 wrong).
+
+### Cause of the CALEB JONES naming errors (from the traces, `work/lane-i/`)
+
+Both halves of CALEB JONES are read as a whole, so names come from nesting rank. Trace by trace:
+
+- Fore: six stations were traced with knuckles at 1511, 1501, 1415, 1234, 966 and 607 px from the centreline.
+  The two at 1501 and 1415 px have sides of their own, but their bottoms run into the outermost station's
+  bottom near the keel (crowded stations). `_own_bottoms` gave that bottom to the outer station, could not
+  trace another for the inner two, and **dropped them**. Four stations were left and took the names 7, 6, 5, 4;
+  the last three are stations 4, 3, 2 (the half-breadth plan gives chine offsets 1501 and 1414 px for stations
+  6 and 5). Every inner name shifted by two.
+- Aft: station 8 (knuckle 1472 px) was dropped the same way, and the transom outline (a knuckled line with a
+  159 px side, against about 700 px for the station sides) was counted as a station. Names shifted by one.
+
+### Fix (general, `body_plan_polyline.py`, module docstring step 5)
+
+1. A station whose bottom is an outer station's, with no other bottom line, keeps its **side and knuckle**
+   (`side_and_knuckle_only`) instead of being dropped, so it keeps its place in the nesting order.
+2. A traced station whose side is shorter than `FRAGMENT_SIDE_SHARE` (0.5, an existing constant) of the half's
+   median side is an outline (transom, stem or keel corner), not a station: it takes no rank and is listed unnamed.
+
+No new constant, vessel name or truth value. Unit tests (synthetic drawings, `tests/test_body_plan_polyline.py`):
+a station without its own bottom keeps side and knuckle; crowded stations sharing one bottom keep ranks 4-3-2-1
+on both halves; a short-side outline takes no rank (before the fix that half was declined, 5 lines for 4).
+
+### After the fix (one run, gates checked by the runner)
+
+Polyline product rule, correct / wrong cells per sheet (wrong = error > 0.15 m):
+
+| Sheet | Before | After | Gate 1 (correct not fewer) | Gate 3 (table = frozen) |
+|---|---|---|---|---|
+| PARDON ME | 42 / 1 | 42 / 1 | pass | - |
+| BUE GIRL | 37 / 0 | 37 / 0 | pass | pass |
+| C.A. Thayer | 149 / 0 | 149 / 0 | pass | pass |
+| Balclutha | 150 / 1 | 150 / 1 | pass | pass |
+| BUMBLE BEE (corrected) | 37 / 13 | 37 / 13 | pass | pass |
+| E. C. COLLIER | 20 / 2 | 20 / 2 | pass | - |
+| WHITE GULL | 51 / 2 | 51 / 2 | pass | - |
+| COLLEEN | 39 / 0 | **43 / 0** | pass | - |
+| CALEB JONES | 6 / 10 | **21 / 0** | pass | - |
+| **Total** | **531 / 29** | **550 / 19** | gate 2: 19 < 29, pass | |
+
+CALEB JONES: both halves read as a whole, named fore 7, 6, 5, 4, 3, 2 and aft 107 (the calibration's placeholder
+for the left copy of 7), 8, 9, 10; 21 of 30 point cells, RMS 0.660 -> 0.028 m, no wrong cell. The harness
+identity check still lists station 7 (it was [4, 5, 6, 7, 8, 9]); no station-7 cell is wrong. COLLEEN: the aft
+half now keeps its station 9 (side and knuckle, its bottom ends on station 8's), so the half has three knuckled
+stations and is read as a whole (7, 8, 9) instead of engaging 7 and 8 one by one: waterline cells 22 -> 23, point
+cells 17 -> 20, all correct. The other seven sheets are unchanged. These are development results, not holdout
+results (all nine sheets have been seen).
