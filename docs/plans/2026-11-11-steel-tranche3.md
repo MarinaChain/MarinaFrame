@@ -106,11 +106,91 @@ Script: `benchmarks/steel_t3/run.py` (metrics) and `benchmarks/steel_t3/scantlin
 4. The targets above do not change. Lane boundaries: no edits to body_plan readers,
    `panel_assignment.py`, `form_fit.py` or the model reading path.
 
-## 5. Results
+## 5. Results (2026-11-11; 187 designs, 186 built)
 
-(Filled after the runs.)
+Commands (outputs in git-ignored `work/steel-t3/<label>/`; 40 s without OCX, about 4 min with):
+
+    PYTHONPATH=src:. <venv>/python -m benchmarks.steel_t3.run --label final --ocx
+    PYTHONPATH=src:. <venv>/python -m benchmarks.steel_t3.scantlings --label final
+
+Build error in every run: Repaired 6205 (view 3 gives no plate). Identity: every design joins
+all BOM objects to the staging IGES (join rate 1.0); none excluded.
+
+Pooled (targets of section 4.3.1, unchanged):
+
+| Metric | Baseline | Fix 1 | Fix 2 | Fix 3 (final) | Target |
+|---|---|---|---|---|---|
+| S1 P / R / F1 | 0.431 / 0.396 / 0.413 | 0.462 / 0.424 / 0.442 | 0.473 / 0.434 / 0.453 | 0.475 / 0.447 / **0.461** | F1 >= 0.80: missed |
+| S1 longitudinal recall (precision) | 0.908 (0.911) | 0.995 (0.998) | same | **0.995** (0.998) | >= 0.95: met |
+| S1 transverse recall (precision) | 0.272 (0.302) | 0.286 (0.318) | 0.299 (0.332) | **0.314** (0.339) | >= 0.60: missed |
+| S2 typed macro F1 | 0.667 | 0.701 | 0.731 | 0.734 | report |
+| S3 centre median / p95 (mm) | 15.9 / 9,066 | 19.1 / 539 | 17.9 / 517 | **16.2** / 509 | median <= 50: met |
+| S3 transverse x median (mm) | 2.6 | 2.7 | 2.7 | 2.6 | report |
+| S4 printed exact, longitudinal (cut to mm) / transverse | 0.758 (0.997) / 0.996 | 0.766 (0.997) / 0.993 | 0.766 / 0.994 | 0.766 (0.997) / 0.996 | report |
+| S5 volume, median abs rel. error | 5.1 % | 4.7 % | 3.6 % | **3.1 %** | <= 10 %: met |
+| S6 traced / guessed members | 82,192 / 224,504 | same | 86,200 / 220,496 | 86,200 / 227,952 | report |
+| OCX schema valid / round trip equal | 186 / 186 | | | 186 / 186 | all |
+
+VLCC parser check: 523 plates read, all with thickness.
+
+Final per cell (S1 F1; longitudinal recall; transverse recall; S3 median mm; S5):
+
+| Cell | n | F1 | Long. R | Trans. R | S3 med | S5 |
+|---|---|---|---|---|---|---|
+| Repaired / bulk_carrier | 14 | 0.236 | 0.978 | 0.021 | 336 | 5.1 % |
+| Repaired / container_ship | 16 | 0.248 | 0.986 | 0.052 | 443 | 10.6 % |
+| Repaired / tanker | 20 | 0.288 | 0.995 | 0.109 | 246 | 9.3 % |
+| SGLD / bulk_carrier | 46 | 0.525 | 0.997 | 0.393 | 13.6 | 1.5 % |
+| SGLD / container_ship | 45 | 0.623 | 0.998 | 0.515 | 4.7 | 3.1 % |
+| SGLD / tanker | 45 | 0.503 | 0.998 | 0.379 | 15.6 | 3.3 % |
+
+Baseline per cell F1: Repaired 0.128 / 0.193 / 0.159; SGLD 0.483 / 0.599 / 0.492 (same order).
+
+Scantlings (final; whole mm and 10 mm bins; counts are built members against BOM rows; no
+missing thickness on either side):
+
+| Ship type | Designs | Plate TVD count / area | Plate median mm built / BOM | Web profile TVD | Flange TVD |
+|---|---|---|---|---|---|
+| bulk_carrier | 60 | 0.013 / 0.037 | 21 / 21 | 0.456 | 0.283 |
+| container_ship | 61 | 0.030 / 0.077 | 20 / 20 | 0.502 | 0.412 |
+| tanker | 65 | 0.004 / 0.010 | 21 / 21 | 0.508 | 0.365 |
+
+Plate thickness distributions agree (most common built 21/22/18 mm against BOM 21/22/18 mm for
+bulk carriers). Stiffener web profiles do not: the most common built profiles are the guessed
+ordinary-frame scantlings (for example 320x10 mm against BOM 260x10 and 270x10 mm); web counts
+are 82 % of the BOM rows (162,441 against 199,085).
+
+Fixes (each with a unit test in `tests/test_structure_block3d.py`):
+
+1. `b010539` Block length guess: 40 m when 27 web spaces at the printed spacing fit with 0.8 web
+   spaces at each end, else holds plus 1.2 web spaces at each end (BOM survey of 812 loose designs
+   outside the sample and W3 sealed split; exact lengths on the survey 269 against 220 for a
+   median-only rule). Repaired blocks are 41 to 80 m; the 40 m guess put bulkheads outside the
+   block. A first version (always holds plus 1.2 margin) lost SGLD transverse recall (0.382 to
+   0.299), so the 40 m point mass was kept.
+2. `bd5ff77` Brackets fill the hopper spaces of view 3 (167 of 168 hopper designs then match the
+   truth bracket section; 7 before); deck beams span the upper deck plate of view 3.
+3. `fdbe22c` Bulkhead stiffener rows from the bulkhead sheet: the web-frame sheet's
+   "Vert. BLKHD Stiff." row replaced it in 53 of 186 designs.
+
+Findings:
+
+- Repaired transverse recall stays low (0.02 to 0.11): the end margin is random (0.7 to 1.5 web
+  spaces) and not printed, so bulkheads and webs shift by more than the 33 mm that IoU 0.5 allows
+  for a padded plane. 34 of 460 surveyed Repaired designs also have 6 to 8 web spaces per hold.
+- The largest remaining losses (flanges 105,541, ordinary frames 54,724 truth members missed) come
+  from the frame spaces per web space (5, 4 or 3; not printed) and the guessed frame scantlings.
+- Repaired container ships: transverse thickness exact 0.28 is a pairing effect (shifted floors
+  match ordinary bottom frames under label-agnostic matching), not a thickness misread.
+- Not done: deck girders interrupted at hatches (truth pieces only near bulkheads; hatch length not
+  printed), the web-frame sheet's own "Vert. BLKHD Stiff." member, Random cells (no drawings).
 
 ## 6. Resume point
 
-Protocol committed. Next: write `benchmarks/steel_t3/run.py` and `scantlings.py`, run the
-baseline, record it in section 5.
+Done: join, protocol (`235dea6`), scripts (`f5d5f59`), baseline, fixes 1 to 3, final run with OCX.
+Next, in order: (1) read ordinary-frame count or spacing if any sheet linework shows it (check
+view 2 and view 1 linework before guessing again); (2) model the web-frame sheet's
+"Vert. BLKHD Stiff." member (truth class `Longitudinal_Bulkhead_Vertical_Stiffener`?); (3) get
+Random drawings and BOMs into permitted development staging to cover the three Random cells.
+Check after each step: `python -m benchmarks.steel_t3.run --label <next>` and compare with
+section 5.
