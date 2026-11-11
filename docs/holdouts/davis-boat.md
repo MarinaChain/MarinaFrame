@@ -158,6 +158,29 @@ and did not see `truth.json`.
 
 The round-bilge run script is not written yet; it must read this calibration unchanged.
 
+**Amendment: run script and pin check (lane M, 2026-11-11, before any run on this sheet).** Step 2 of
+section 6. All pins of the lane I and lane L amendments were checked on `lane/published-holdout` (base
+`origin/continue/v0.5` `99ce579`): every file matches its SHA-256, and so do the sheet and `truth.json`
+(hash only; the file was not opened). No pinned file changed, so no reader, scorer or calibration pin is
+replaced. Lane A's later changes (panel assignment, schema) are in files that no pinned file imports. The
+only new file is the run script, written without reading the sheet or the truth:
+
+- `scripts/measure_round_bilge_holdout.py` runs three code arms before it reads the truth: `product`
+  (`body_plan_sides.read_side` on `body_plan_reader.measure_side` of each half, as `body_plan_intake` calls
+  it; **this arm decides PASS / FAIL**), `frozen` (frozen reader v1, rank identities; reported) and
+  `polyline_rule` (`deadrise_holdout.score.polyline_table`; reported). Waterline cells are scored by
+  `deadrise_holdout.score.score_waterlines`, which calls `balclutha.model_value.score` on the nonblank
+  printed cells at stations 1 to 7. Rule 3.5.9 is `balclutha.router_value.decide` with one repeat (a
+  deterministic arm): coverage >= 0.60 and RMS <= 0.15 m. Point cells (sheer, rabbet) are reported for
+  `frozen` and `polyline_rule`, not gated.
+- Plumbing check: one run on COLLEEN (a spent holdout, now a development case) completed without error;
+  `product` and `polyline_rule` gave the same table there. No Davis file was read by the check.
+
+| File | SHA-256 |
+|---|---|
+| `scripts/measure_round_bilge_holdout.py` (new) | `6c44c96ebec6461cb87ba80c0278f41d3ea0a96b1b7adedda9c1a4b9afcd291f` |
+| `benchmarks/balclutha/router_value.py` (`decide`, unchanged) | `1cb0a527d4773c7151aafea73bdfd0ad976cd3c926d3d7d3866b6222cb37269d` |
+
 ## 6. Order of work
 
 1. **Calibration** (`benchmarks/davis_boat/holdout_value.py`) by an agent that has not seen
