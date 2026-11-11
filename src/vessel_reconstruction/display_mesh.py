@@ -53,16 +53,17 @@ NATURAL_BOUND_TOLERANCE = 1e-9
 
 def _has_natural_boundary(face, spline) -> bool:
     """Accept only one rectangular UV boundary along the natural surface bounds."""
+    from . import topology
     from OCP.BRepAdaptor import BRepAdaptor_Curve2d
     from OCP.BRepTools import BRepTools
     from OCP.GeomAbs import GeomAbs_Line
 
     bounds = spline.Bounds()
-    if face.innerWires() or not np.allclose(BRepTools.UVBounds_s(face.wrapped), bounds,
-                                             atol=NATURAL_BOUND_TOLERANCE, rtol=0):
+    if topology.inner_wires(face) or not np.allclose(BRepTools.UVBounds_s(face.wrapped), bounds,
+                                                     atol=NATURAL_BOUND_TOLERANCE, rtol=0):
         return False
     u0, u1, v0, v1 = bounds
-    for edge in face.Edges():
+    for edge in topology.edges(face):
         try:
             curve = BRepAdaptor_Curve2d(edge.wrapped, face.wrapped)
             # A straight UV edge with both ends on one natural bound stays on it.
@@ -76,7 +77,7 @@ def _has_natural_boundary(face, spline) -> bool:
         except Exception:
             # An edge without a usable parameter curve is not proven untrimmed.
             return False
-    return bool(face.Edges())
+    return bool(topology.edges(face))
 
 
 def _bspline_grid(face):
@@ -115,8 +116,8 @@ def _grid_triangles(grid: np.ndarray, periodic: bool, tolerance_mm: float) -> tu
 
 
 def _face_triangles(face, tolerance_mm: float, angular_rad: float) -> tuple[np.ndarray, np.ndarray]:
-    points, faces = face.tessellate(tolerance_mm, angular_rad)
-    return np.array([[p.x, p.y, p.z] for p in points]).reshape(-1, 3), np.asarray(faces, dtype=int).reshape(-1, 3)
+    from . import topology
+    return topology.face_triangulation(face, tolerance_mm, angular_rad)
 
 
 def _polygon_cap(face):
@@ -125,11 +126,12 @@ def _polygon_cap(face):
     The kernel mesher puts few points on such a long curve at display tolerances, so the
     cap would not meet the side. The curve's poles are the polygon vertices.
     """
+    from . import topology
     import cadquery as cq
     from OCP.BRepAdaptor import BRepAdaptor_Curve
     from OCP.GeomAbs import GeomAbs_BSplineCurve
 
-    edges = face.Edges()
+    edges = topology.edges(face)
     if face.geomType() != 'PLANE' or len(edges) != 1:
         return None
     curve = BRepAdaptor_Curve(edges[0].wrapped)
@@ -242,6 +244,7 @@ def _discretised_cap(face, tolerance_mm: float):
     Its edges are cut into straight pieces within the tolerance, so the kernel meshes it
     exactly and the cap meets the grid-meshed sides to within the tolerance.
     """
+    from . import topology
     import cadquery as cq
     from OCP.BRepAdaptor import BRepAdaptor_Curve
     from OCP.BRepTools import BRepTools_WireExplorer
@@ -251,7 +254,7 @@ def _discretised_cap(face, tolerance_mm: float):
 
     if face.geomType() != 'PLANE':
         return None
-    curves = [BRepAdaptor_Curve(edge.wrapped) for edge in face.Edges()]
+    curves = [BRepAdaptor_Curve(edge.wrapped) for edge in topology.edges(face)]
     if not any(c.GetType() == GeomAbs_BSplineCurve and c.BSpline().Degree() > 1 for c in curves):
         return None
 
@@ -270,7 +273,7 @@ def _discretised_cap(face, tolerance_mm: float):
         return cq.Wire.makePolygon([cq.Vector(*p) for p in points], close=True)
 
     outer = face.outerWire()
-    inner = [polygon(wire) for wire in face.innerWires()]
+    inner = [polygon(wire) for wire in topology.inner_wires(face)]
     return cq.Face.makeFromWires(polygon(outer), inner)
 
 
@@ -281,10 +284,11 @@ def shape_mesh(shape, tolerance_mm: float, angular_rad: float,
     ``smooth_tolerance_mm`` (default ``tolerance_mm``) is the chord tolerance of smooth B-spline
     faces, whose shared-vertex grid shades smooth at a coarser tolerance than flat facets need.
     """
+    from . import topology
     from OCP.TopAbs import TopAbs_REVERSED
 
     all_vertices, all_triangles, offset = [], [], 0
-    faces = shape.Faces()
+    faces = topology.faces(shape)
     report_progress('Making the display mesh', 0, len(faces))
     for face_index, face in enumerate(faces, 1):
         bspline = _bspline_grid(face)

@@ -410,6 +410,14 @@ def execute(program: dict, measurements: dict, out: Path, *, audit=None, veto=Fa
     and ``parts`` (labelled detail values by component id). With a hull side, decks, bulwarks
     and deckhouses follow the hull; without it they are straight extrusions.
     """
+    from .geometry import reused_volumes
+
+    # A part's solid is checked and recorded several times; integrate its volume once.
+    with reused_volumes():
+        return _execute(program, measurements, out, audit=audit, veto=veto, guesses=guesses, detail=detail)
+
+
+def _execute(program: dict, measurements: dict, out: Path, *, audit, veto, guesses, detail) -> dict:
     import cadquery as cq
 
     from .geometry import precise_volume_mm3

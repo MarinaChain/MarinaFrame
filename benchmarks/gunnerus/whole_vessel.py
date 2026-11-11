@@ -67,10 +67,10 @@ BREADTH_M = 9.60  # title block
 
 
 def label_heights(path: Path, view: View) -> dict:
-    import ezdxf
+    from vessel_reconstruction.dxf_documents import read_document
 
     heights = {}
-    for entity in ezdxf.readfile(path).modelspace().query('TEXT MTEXT'):
+    for entity in read_document(path).modelspace().query('TEXT MTEXT'):
         text = entity.dxf.text if entity.dxftype() == 'TEXT' else entity.plain_text()
         point = [[entity.dxf.insert.x, entity.dxf.insert.y]]
         if view.contains(point) and re.fullmatch(r'[A-Z0-9]-DECK', text.strip()):
@@ -276,13 +276,17 @@ def main() -> None:
     args = parser.parse_args()
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
-    inputs = build_inputs(args.sources)
-    if not args.no_appendages:
-        from benchmarks.gunnerus.whole_vessel_appendages import add_appendages
-        add_appendages(inputs, args.sources, GA_FILE)
-    if not args.no_detail:
-        from benchmarks.gunnerus.whole_vessel_detail import add_detail
-        add_detail(inputs, args.sources)
+    from vessel_reconstruction.dxf_documents import shared_documents
+
+    # The GA and the lines plan are read by several readers: parse each once.
+    with shared_documents():
+        inputs = build_inputs(args.sources)
+        if not args.no_appendages:
+            from benchmarks.gunnerus.whole_vessel_appendages import add_appendages
+            add_appendages(inputs, args.sources, GA_FILE)
+        if not args.no_detail:
+            from benchmarks.gunnerus.whole_vessel_detail import add_detail
+            add_detail(inputs, args.sources)
     (out / 'inputs.json').write_text(json.dumps(inputs, indent=2) + '\n')
     if args.in_process:
         from vessel_reconstruction.ship_cad import execute

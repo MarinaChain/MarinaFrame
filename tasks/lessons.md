@@ -254,3 +254,9 @@
 - **Trigger:** The section strip (`overflow-x: auto`, height from its tiles) showed cut tiles and a vertical scroll bar in the app's WebKit view on a 72-section run. Headless Chromium checks passed, because Chromium adds a horizontal scroll bar to a flex item's height and WebKit does not.
 - **Rule:** For a horizontal scroller, style its scroll bar to a fixed height, include that height in the min-height, and set `overflow-y: hidden`. Check long lists (70+ items) on the mock, not only the three-section fixture.
 - **Why:** Scroll bar sizing differs between web views and with system scroll bar settings; a layout that depends on it fails only on some machines.
+
+### Do not iterate OCP collections in per-face loops
+- **Date:** 2026-11-11
+- **Trigger:** The Gunnerus display mesh took 60 to 100 s for 3,151 hull faces, even with the triangulation already built. cProfile misattributed the time.
+- **Rule:** In loops over faces or edges, use `vessel_reconstruction.topology` (indexed `FindKey` access) instead of CadQuery `Faces()`, `Edges()`, `Wires()`, `innerWires()` or `tessellate()`. Time OCP-heavy code with direct timers, not only cProfile.
+- **Why:** Ending a Python iteration over an OCP map or array raises `StopIteration` through every OCP exception translator: about 6 ms per call (80 ms the first time), whatever the size.
