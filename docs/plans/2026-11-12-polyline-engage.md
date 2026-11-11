@@ -40,13 +40,36 @@ result is seen.
 ## 4. Steps and resume point
 
 - [x] Gates and runner committed (this file, `scripts/measure_polyline_engage.py`) in `1a33fee`.
-- [ ] Baseline run: `work/polyline-engage/before.json`. Started at `1a33fee` (it loaded the reader before any
-  edit); paused by the PM (SIGSTOP, demo build) and resumed by the PM. Its `polyline_sha256` field is hashed
-  when the report is written, so it shows the edited file; the `commit` field (`1a33fee`) is the code it ran.
-  If it was killed, run it again from a checkout of `1a33fee`.
+- [x] Baseline run: `work/polyline-engage/before.json` (exit 0). Reader at `1a33fee` (loaded before any edit;
+  its `polyline_sha256` field was hashed at write time and shows an edited file); Cama calibration at
+  `aa88271` (corrected; the engaged fore station is named 1, not the published 2). The nine original sheets
+  equal the published polyline-integration result (550 correct, 19 wrong); total 612 correct, 29 wrong.
 - [x] Diagnosis on Cama Beach (section 5).
-- [ ] General fix with synthetic tests: code written (uncommitted at the pause), synthetic tests being run.
-- [ ] Cama trace check of the fix (`diag.py` in the scratchpad: per-seed trace outcome), then the after run.
+- [x] General fix with synthetic tests (uncommitted until the gates pass; synthetic tests pass).
+- [x] Cama trace check of the fix: fore stations 2 to 6 traced (chines within 1 to 8 px of the printed
+  chines), aft 7 traced.
+- [x] After run 1, reader sha256 `a1629f5de3822a0e...` (`work/polyline-engage/after.json`): **gates fail**.
+  Cama Beach 22 correct / 10 wrong -> 33 / 0 (both halves read: aft 7, 8; fore 6, 5, 4, 3); round-bilge tables
+  unchanged; eight other sheets equal; but COLLEEN 43 / 0 -> 28 / 11 (fore names 6 to 1 instead of 6 to 2,
+  identity errors 1 to 5; aft no longer read as a whole). Total wrong 29 -> 30. Not committed.
+- [x] COLLEEN diagnosis: on both halves a line far below the hull (side rows 3622 to 4392 at about 1400 px,
+  a frame or box edge) meets a long level line at row 4393 (turn 90 degrees) that ends 318 / 349 px from the
+  centreline: it was taken as a level bottom, so fore had six stations (names shifted) and aft four for three
+  (declined). Fix: a level bottom must run on to the centreline, its inner end within `CENTRE_CLEAR_WIDTHS`
+  (existing constant: "this close to the centre column is the centreline or keel") line widths of the centre
+  column (Cama's level bottoms end 0 to 3 px from it). Synthetic test: a box corner below a flat-bottom half.
+- [ ] After run 2 (`work/polyline-engage/after2.json`), gates against the same baseline.
+
+**Truth files (PM, 2026-11-12).** The legacy truth of C.A. Thayer (`thayer/truth_s4.json`) and Balclutha
+(`balclutha/truth_s7.json`) was deleted from the shared scratchpad (`wv-agent/`) in a disk cleanup; no backup
+exists. The baseline and after run 1 used the old files. The runner (`0d8eda0`) carries a baseline score over for
+a sheet whose truth file is missing only when both arms' tables are byte-identical to the baseline (equal tables
+give equal scores; PM confirmed), and stops otherwise. From after run 2's restart on, both truth roots are
+`work/dev-truth` (PARDON ME, BUE GIRL and BUMBLE BEE there are byte-identical to the files the baseline used;
+after run 2 itself was started with the old paths, which give the same bytes). A new lane is re-transcribing
+Thayer sheet 4 and Balclutha sheet 7 into `work/dev-truth`; when those files exist the two sheets may be
+rescored, and **their numbers then use a re-transcribed truth and may differ slightly from older published
+values**.
 - [ ] After run with `--baseline`: `work/polyline-engage/after.json`; per-sheet table in section 5.
 - [ ] Quick test tier; push the branch (no merge).
 
@@ -60,8 +83,8 @@ set -o pipefail
 PYTHONPATH=src:. /Users/jonathanjie/Documents/workspace/MarinaFrame/.venv/bin/python \
   scripts/measure_polyline_engage.py \
   --sources /Users/jonathanjie/Documents/workspace/MarinaFrame/work/sources \
-  --truth-root /private/tmp/claude-501 \
-  --legacy-truth-root /private/tmp/claude-501/-Users-jonathanjie-Documents-workspace/31a3f286-f3b9-4116-93bc-756e11ead9ee/scratchpad/wv-agent \
+  --truth-root /Users/jonathanjie/Documents/workspace/MarinaFrame/work/dev-truth \
+  --legacy-truth-root /Users/jonathanjie/Documents/workspace/MarinaFrame/work/dev-truth \
   --holdout-root /Users/jonathanjie/Documents/workspace/MarinaFrame/work/holdout \
   --out work/polyline-engage/before.json
 ```
@@ -111,9 +134,13 @@ show which calibration it used, and the baseline is rerun if they show the old o
 1. A level branch (one that neither descends by `BOTTOM_MIN_DESCENT_SHARE` nor rises above its start by a line
    width) is a flat bottom. It is taken only when no descending branch leaves the side, so every V-bottom choice
    is unchanged. Selection among level branches uses the same rule as for descending ones.
-2. For a level branch, the grid-line test uses only the calibrated rows that are drawn (`drawn_rows`: ink
-   within half a line width of the row at more than `GRID_SHARE` of the columns across both halves; a bottom
-   covers at most its own half). Descending branches keep the test against every calibrated row.
+2. For a level branch, the grid-line test uses only the calibrated rows that are drawn (`drawn_rows`: on
+   each half, ink on the row, one pixel either side for the calibration's rounding, at more than `GRID_SHARE`
+   of the half's columns). Descending branches keep the test against every calibrated row. A first version
+   (ink within half a line width plus 1 px, across both halves together) called Cama's undrawn row 3410
+   drawn: the aft bottom of station 7 (about row 3403) and the fore bottoms (about 3420) each lie a few pixels
+   from it (coverage 0.64 / 0.67 per half at +-5 px). Measured on Cama at +-1 px: drawn W0 to W3 and the base
+   line 0.79 to 1.00 on each half, the eight undrawn measuring rows 0.01 to 0.12.
 3. The polyline keeps rows strictly decreasing: a level bottom is stored as its rabbet end and the knuckle
    (`LEVEL_ROW_STEP_PX` = 0.5 px: twice the 0.25 px rise `_monotone` needs to keep the knuckle); the traced
    bottom is kept in `level_bottom` for the bottom-ownership test.
