@@ -1,0 +1,13 @@
+{
+  "purpose": "Real hard-chine body-plan sheets that were each scored once as a holdout. They are now development cases.",
+  "status": "development, formerly holdout",
+  "rule": "Results on these sheets after their one holdout run must not be quoted as holdout results.",
+  "recorded": "2026-11-11",
+  "protocol": "docs/plans/2026-11-11-reader-selection.md section 12",
+  "sheets": [
+    {"boat": "E. C. COLLIER", "folder": "work/holdout/ec-collier", "calibration": "benchmarks/ec_collier/holdout_value.py", "holdout_run": "2026-11-10, docs/BODY_PLAN_CHINE.md"},
+    {"boat": "WHITE GULL", "folder": "work/holdout/white-gull", "calibration": "benchmarks/white_gull/holdout_value.py", "holdout_run": "2026-11-10, docs/BODY_PLAN_CHINE.md"},
+    {"boat": "COLLEEN", "folder": "work/holdout/colleen", "calibration": "benchmarks/colleen/holdout_value.py", "holdout_run": "2026-11-10, docs/BODY_PLAN_CHINE.md"},
+    {"boat": "CALEB JONES", "folder": "work/holdout/caleb-jones", "calibration": "benchmarks/caleb_jones/holdout_value.py", "holdout_run": "2026-11-10, docs/BODY_PLAN_CHINE.md"}
+  ]
+}

@@ -249,3 +249,48 @@ Tests that change:
 - `tests/test_body_plan_reader_v2.py`, `tests/test_body_plan_chine_line.py`: unchanged.
 - `tests/test_frozen_readers.py` and the three holdout-value tests: unchanged (they pin the frozen copy, not src).
 - `tests/test_body_plan_chine.py`: deleted. `tests/test_body_plan_polyline.py`: import path only.
+
+## 12. Amendment: confirmatory run on four V-bottom sheets (written before the run)
+
+Approval: the user approved one confirmatory run ("Yes, run it"), relayed by the PM on 2026-11-11. Scope: only
+the folders `work/holdout/ec-collier`, `work/holdout/white-gull`, `work/holdout/colleen` and
+`work/holdout/caleb-jones`. No other holdout folder and nothing sealed is opened.
+
+**Status of the four sheets.** E. C. COLLIER, WHITE GULL, COLLEEN and CALEB JONES were each scored once as a
+holdout on 2026-11-10 (`docs/BODY_PLAN_CHINE.md`). From this amendment on they are **development, formerly
+holdout**. Results on them, including this run, must not be quoted as holdout results. Record:
+`benchmarks/spent_real_sheet_holdouts.json`. (`benchmarks/holdout_contract.json` is the synthetic-family contract;
+its SHA-256 is pinned in `benchmarks/confirmation_contract_v2.json`, so it is not edited.)
+
+**Correction run first (lane B defect).** Lane B found that the partial item-8 scaling in src
+`body_plan_crossings.py` (`sheet_resolution_factor`) scales five distances about 2x too large on HAER sheets.
+In section 9's run every arm worked from the frozen reading; no arm reached the scaled code (`find_crossings`,
+`is_diagonal`, classify, `link_waterlines`), and all 20 results equal the pre-scaling published values. Even so,
+after the PM merges the fix (`lane/reader-thresholds`), this branch is rebased onto that commit and the five-sheet
+selection (sections 3-6, unchanged) is run once more. This is a correction for a defect in shared code, not
+tuning. Both base commits are recorded. If the corrected run changes the section 6 winner, that is reported; the
+confirmatory run below still tests reader v2, as agreed.
+
+**Confirmatory run.** Runner `scripts/confirm_hard_chine_reader.py`, one run, after the correction run, at the
+same base commit. No reader code, constant, calibration or scorer change after this commit.
+
+- Sheets and calibrations (committed): COLLIER `benchmarks/ec_collier/holdout_value.py`; WHITE GULL, COLLEEN,
+  CALEB JONES `benchmarks/<boat>/holdout_value.py`. Each sheet's SHA-256 is checked against its calibration
+  before reading; each truth file's SHA-256 is checked by its loader.
+- Arms: the same four (frozen v1, A joining, B reader v2, C polyline with the product rule), each from one frozen
+  reading, as in section 9. Truth is read after all arms have read the sheet.
+- Metric M1, existing scorers: point cells by `benchmarks/deadrise_holdout/score.score_points` with each arm's
+  station curves (`frozen_curves`, `v2_curves`, `polyline_curves`; the joining arm uses `frozen_curves` on its
+  joined reading). COLLIER's truth is parsed by its own `point_score.load_truth`, which gives the same cell shape.
+  Waterline cells (WHITE GULL, COLLEEN) by `score_waterlines`. Wrong = error > 0.15 m. Correct = given - wrong.
+- Metric M2: per-section ink distance as in section 5, on each arm's waterline table. Reported, not in the rule.
+
+**Decision rule (fixed).** Sum over the four sheets and over both kinds of cell (point cells on all four,
+waterline cells on WHITE GULL and COLLEEN; 196 truth cells if the truth files are as recorded):
+
+- the next-best arm is the arm among frozen, A and C with the most correct cells (on a tie: fewer wrong cells,
+  then the order frozen, A, C);
+- **integrate reader v2 only if its correct cells >= the next-best arm's correct cells and its wrong cells <= the
+  next-best arm's wrong cells.** Otherwise integrate no reader (section 10).
+
+Per-sheet and total tables go in section 13. A crash is reported; only a fix to the measuring script is allowed.
