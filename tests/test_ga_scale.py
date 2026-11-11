@@ -875,3 +875,143 @@ def test_cranes_left_without_an_extent_get_one_more_request(tmp_path):
     assert asked[-1] == ("extents-deck", ["cargo_crane-050"])
     assert "extent" in next(s for s in result["spaces"] if s["id"] == "cargo_crane-050")
     assert stats["extents"]["deck_requests"] == 1
+
+
+
+def _redraw_run(tmp_path, redrawn_bottom_px, redrawn_top_px=DECK_Y):
+    """A hold box that holds the label of a space without a box, and its redrawn box."""
+    result = _result(tmp_path)
+    void = json.loads(json.dumps(next(s for s in result["spaces"] if s["id"] == "other_space-006")))
+    void.update(id="other_space-060", label="VOID SPACE", view_id="v1")
+    void["source_record"]["regions"][0]["box_px"] = [1100.0, 440.0, 1160.0, 450.0]
+    result["spaces"].append(void)
+    asked = []
+
+    def call(request_dir, provider_dir):
+        if request_dir.name == "extents-redraw":
+            asked.extend(json.loads((request_dir / "request.json").read_text())["context"]["spaces"])
+            x0, y0 = _image_xy(request_dir, "v1", _px(80), redrawn_top_px)
+            x1, y1 = _image_xy(request_dir, "v1", _px(120), redrawn_bottom_px)
+            return {"reply": {"ga_scale": {"ticks": [], "spacing_labels": [], "spacing_boundaries": [], "points": [],
+                                           "note": "", "extents": [{"space_id": "cargo_hold-001", "image_id": "v1",
+                                                                    "box": [x0, y0, x1, y1], "basis": "outline"}]}}}
+        return _extent_reply(request_dir) if request_dir.name == "extents" else _scale_reply(request_dir)
+
+    stats = gs.scale_pass(result, tmp_path / "S-1_GA.png", tmp_path / "scale", call)
+    hold = next(s for s in result["spaces"] if s["id"] == "cargo_hold-001")
+    return result, stats, asked, hold
+
+
+def test_a_box_over_the_label_of_a_space_without_a_box_is_drawn_again(tmp_path):
+    """Review round 4: boxes took in stores and tanks that had a label but no box."""
+    result, stats, asked, hold = _redraw_run(tmp_path, redrawn_bottom_px=430.0)
+    assert [(entry["space_id"], [other["label"] for other in entry["exclude"]]) for entry in asked] == [
+        ("cargo_hold-001", ["VOID SPACE"])]
+    assert hold["extent"]["redrawn"] and hold["extent"]["status"]["x"] == gs.MEASURED
+    assert stats["extents"]["redraw_requests"] == 1 and stats["extents"]["redraw_kept"] == 1
+
+
+def test_a_redrawn_box_that_still_holds_the_label_is_refused_and_guessed(tmp_path):
+    result, stats, _, hold = _redraw_run(tmp_path, redrawn_bottom_px=BASE_Y - 24)
+    assert "redrawn" not in hold["extent"] and stats["extents"]["redraw_kept"] == 0
+    assert set(hold["extent"]["status"].values()) == {"guessed"} and "other_space-060" in hold["extent"]["covers"]
+    assert any(c["code"] == "extent_covers_a_labelled_neighbour" for c in result["checks"])
+
+
+
+def _local_scale(local_frames=(67, 137), stretched=True, mirror=False):
+    """Frame numbers every 5 frames at 800 mm (8 px a frame), with one-frame 1200 mm intervals."""
+    def x(frame):
+        place = 100 + 8.0 * frame + sum(4.0 for k in local_frames if stretched and frame >= k + 1)
+        return 3000 - place if mirror else place
+
+    ticks = [(frame, x(frame)) for frame in range(0, 201, 5)]
+    labels = [(800.0, x(30)), (800.0, x(100)), (800.0, x(170))]
+    labels += [(1200.0, (x(k) + x(k + 1)) / 2) for k in local_frames]
+    return ticks, labels
+
+
+@pytest.mark.parametrize("mirror", [False, True])
+def test_a_local_spacing_printed_for_one_frame_is_a_one_frame_interval(mirror):
+    """Review round 4: "1200" printed under close bulkheads inside a range of 800."""
+    ticks, labels = _local_scale(mirror=mirror)
+    table, reason = gs.spacing_table(ticks, labels, [])
+    assert reason == "established"
+    assert [(s["from_frame"], s["to_frame"], s["spacing_mm"]) for s in table.spans] == [
+        (0, 67, 800.0), (67, 68, 1200.0), (68, 137, 800.0), (137, 138, 1200.0), (138, 200, 800.0)]
+    assert table.x_m(140) - table.x_m(60) == pytest.approx(80 * 0.8 + 2 * 0.4)
+
+
+def test_a_second_spacing_that_the_frame_numbers_do_not_show_is_refused():
+    ticks, labels = _local_scale(stretched=False)
+    table, reason = gs.spacing_table(ticks, labels, [])
+    assert table is None and "no change drawn" in reason
+
+
+
+def _guessed_tank_over_a_hold():
+    """Lane W, round u6r3: a short untyped tank label got a box guessed along a whole hold."""
+    def entry(space_id, kind, label, extent):
+        return {"id": space_id, "kind": kind, "label": label, "number": None, "status": "read",
+                "source_record": {"kind": "read", "regions": [{"box_px": [0, 0, 10, 10]}]}, "extent": extent}
+
+    hold = entry("cargo_hold-001", "cargo_hold", "NO.4 CARGO HOLD",
+                 {"x_m": [20.0, 48.0], "y_m": [-10.0, 10.0], "z_m": [1.5, 14.0], "side": "both",
+                  "status": {"x": "measured_from_scale", "y": "measured_from_scale", "z": "measured_from_scale"}})
+    tank = entry("other_tank-002", "other_tank", "X. Y. (P)",
+                 {"x_m": [22.0, 47.0], "y_m": [7.5, 10.5], "side": "port", "status": {"x": "guessed", "y": "guessed"}})
+    room = entry("other_space-003", "other_space", "STORE",
+                 {"x_m": [50.0, 54.0], "y_m": [-3.0, 3.0], "side": "centre", "status": {"x": "guessed", "y": "guessed"}})
+    particulars = {"breadth_m": {"value": 32.0}, "depth_m": {"value": 18.0}}
+    return [hold, tank, room], particulars
+
+
+def test_a_box_guessed_on_every_axis_does_not_cover_a_cargo_space():
+    spaces, particulars = _guessed_tank_over_a_hold()
+    kept = gs._without_guessed_over_cargo(spaces, particulars)
+    assert "extent" in kept[0] and "extent" in kept[2]  # the hold, and a guessed room beside it
+    assert "extent" not in kept[1] and "cargo" in kept[1]["extent_withheld"]
+
+
+def test_the_gate_fails_a_box_guessed_on_every_axis_over_a_hold():
+    """The regression case of lane W's gate (round u6r3)."""
+    spaces, particulars = _guessed_tank_over_a_hold()
+    report = gs.arrangement_gate({"spaces": spaces, "particulars": particulars})
+    assert report["guessed_over_cargo"] == ["X. Y. (P)"] and not report["passed"]
+    report = gs.arrangement_gate({"spaces": gs._without_guessed_over_cargo(spaces, particulars),
+                                  "particulars": particulars})
+    assert report["guessed_over_cargo"] == [] and report["passed"]
+
+
+@pytest.mark.parametrize("box, withheld", [([0, 0, 280, 40], True), ([0, 0, 150, 90], False)])
+def test_a_short_untyped_label_keeps_a_small_guessed_box(box, withheld):
+    space = {"id": "other_tank-1", "kind": "other_tank", "label": "X. Y. (P)", "number": None, "status": "read",
+             "source_record": {"kind": "read", "regions": [{"box_px": [0, 0, 97, 61]}]},
+             "extent": {"outline_box_px": box, "status": {"x": "guessed", "y": "guessed"}}}
+    result = {"spaces": [space], "checks": []}
+    assert gs.withhold_oversized_guesses(result) == int(withheld)
+    assert ("extent" not in space) is withheld
+
+
+
+def test_a_guessed_side_tank_against_the_shell_keeps_its_extent():
+    """A wing tank inside a hold box drawn to the shell is not a small space over the hold."""
+    spaces, particulars = _guessed_tank_over_a_hold()
+    spaces[0]["extent"]["y_m"] = [-16.0, 16.0]
+    spaces[1]["extent"]["y_m"] = [13.8, 16.0]
+    kept = gs._without_guessed_over_cargo(spaces, particulars)
+    assert "extent" in kept[1]
+
+
+
+def test_a_redrawn_box_that_leaves_its_own_label_is_refused(tmp_path):
+    """Round u6r5: cargo tanks were redrawn as a strip at the bottom to leave out a label."""
+    _, stats, _, hold = _redraw_run(tmp_path, redrawn_bottom_px=BASE_Y - 24, redrawn_top_px=452.0)
+    assert stats["extents"]["redraw_kept"] == 0 and "redrawn" not in hold["extent"]
+
+
+
+def test_a_redrawn_box_cut_to_a_strip_is_refused(tmp_path):
+    """Rounds u6r5 and u6r6: holds and cargo tanks were cut to strips to leave out a label."""
+    _, stats, _, hold = _redraw_run(tmp_path, redrawn_bottom_px=418.0, redrawn_top_px=400.0)
+    assert stats["extents"]["redraw_kept"] == 0 and "redrawn" not in hold["extent"]

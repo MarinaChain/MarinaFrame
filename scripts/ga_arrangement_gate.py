@@ -28,6 +28,7 @@ def main(argv=None) -> int:
         failed += not report["passed"]
         print(f"{data.get('case_id', path.parent.name)}: {'pass' if report['passed'] else 'FAIL'}; "
               f"without volume {len(report['no_volume'])}; fragments {len(report['fragments'])}; "
+              f"guessed over cargo {len(report['guessed_over_cargo'])}; "
               f"largest cargo loss {report['max_cargo_loss']}")
     return 1 if failed else 0
 

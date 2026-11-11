@@ -316,6 +316,13 @@ def spacing_table(ticks: list[tuple[int, float]], labels: list[tuple[float, floa
             nearest = min(range(len(others)), key=lambda k: abs(others[k][0] - near_edge))
             groups[index] = [others.pop(nearest)]
             break
+    locals_found: list[tuple[float, float, float]] = []  # (sheet x, local mm, main mm)
+    for index, texts in enumerate(groups):
+        local = _local_intervals(texts, inside[index])
+        if local is not None:
+            main, places = local
+            groups[index] = [text for text in texts if text[1] == {main}]
+            locals_found += [(place, mm, main) for place, mm in places]
     found = []
     for texts in groups:
         # Texts at two places with two values are two printed spacings, and the change between
@@ -401,7 +408,79 @@ def spacing_table(ticks: list[tuple[int, float]], labels: list[tuple[float, floa
     numbers = [frame for frame, _ in ticks]
     spans[0]["from_frame"] = min(numbers + inner)
     spans[-1]["to_frame"] = max(numbers + inner)
+    for place, mm, main in locals_found:
+        spans = _with_local_interval(spans, _local_frame(ticks, place, mm / main), mm)
+        if spans is None:
+            return None, "a local frame spacing does not lie inside a range of its main spacing"
     return FrameTable(spans), "established"
+
+
+# A local spacing printed for one frame inside a range of another spacing ("1200" under two
+# close bulkheads in a range of 800; review round 4) lengthens the gap between the frame numbers
+# around it by (local / main - 1) frames. The gap must show that within this share of it.
+LOCAL_GAP_TOLERANCE = 0.5
+
+
+def _bracket(ticks: list[tuple[int, float]], place: float) -> tuple[tuple[int, float], tuple[int, float]] | None:
+    """The two neighbouring frame numbers (in sheet order) around sheet x ``place``, or None."""
+    ordered = sorted(ticks, key=lambda tick: tick[1])
+    for before, after in zip(ordered, ordered[1:]):
+        if before[1] < place < after[1]:
+            return before, after
+    return None
+
+
+def _local_intervals(texts: list[tuple[float, set]], ticks: list[tuple[int, float]]):
+    """(main mm, [(place, local mm)]) when a range prints a second spacing only for single
+    frames, which its frame numbers confirm; else None.
+
+    Each of the two values is tried as the main spacing: the other value must then show, at each
+    of its places, the gap the local frame adds between the frame numbers around it.
+    """
+    values = {next(iter(values)) for _, values in texts if len(values) == 1}
+    if len(values) != 2 or any(len(values_here) != 1 for _, values_here in texts) or len(ticks) < MIN_RANGE_TICKS:
+        return None
+    per_frame = abs(_range_slope(ticks))
+    for main in values:
+        places = [(place, next(iter(here))) for place, here in texts if here != {main}]
+        confirmed = True
+        for place, mm in places:
+            around = _bracket(ticks, place)
+            if around is None:
+                confirmed = False
+                break
+            (frame_a, x_a), (frame_b, x_b) = around
+            extra = abs(x_b - x_a) - abs(frame_b - frame_a) * per_frame
+            want = (mm / main - 1) * per_frame
+            if abs(extra - want) > LOCAL_GAP_TOLERANCE * abs(want):
+                confirmed = False
+                break
+        if confirmed:
+            return main, places
+    return None
+
+
+def _local_frame(ticks: list[tuple[int, float]], place: float, ratio: float) -> int:
+    """The frame where a local interval starts: its text is printed at the middle of it."""
+    (frame_a, x_a), (frame_b, x_b) = _bracket(ticks, place)
+    rising = frame_b > frame_a
+    # The gap in main frames: the frame numbers apart, and the local frame's extra length.
+    gap = (frame_b - frame_a) + (ratio - 1 if rising else 1 - ratio)
+    offset = (place - x_a) * gap / (x_b - x_a)  # main frames from frame_a to the text
+    # The text is at the middle of the local frame k..k+1: k + ratio/2 from below when the
+    # numbers rise along the sheet, k + 1 - ratio/2 from above when they fall.
+    return int(round(frame_a + offset - ratio / 2 if rising else frame_a + offset + ratio / 2 - 1))
+
+
+def _with_local_interval(spans: list[dict], frame: int, mm: float) -> list[dict] | None:
+    """The spans with frames ``frame``..``frame + 1`` at ``mm``; None when no span holds them."""
+    for index, span in enumerate(spans):
+        if span["from_frame"] <= frame and frame + 1 <= span["to_frame"]:
+            parts = [{"from_frame": span["from_frame"], "to_frame": frame, "spacing_mm": span["spacing_mm"]},
+                     {"from_frame": frame, "to_frame": frame + 1, "spacing_mm": mm},
+                     {"from_frame": frame + 1, "to_frame": span["to_frame"], "spacing_mm": span["spacing_mm"]}]
+            return spans[:index] + [part for part in parts if part["to_frame"] > part["from_frame"]] + spans[index + 1:]
+    return None
 
 
 @dataclass(frozen=True)
@@ -575,13 +654,15 @@ def missing_places(work: dict) -> list[str]:
 
 
 def prepare_extents(result: dict, sheet_path: Path, out: Path, missing: list[str] = (),
-                    only_ids: set[str] | None = None) -> list[Path]:
+                    only_ids: set[str] | None = None,
+                    exclude: dict[str, list[dict]] | None = None) -> list[Path]:
     """The requests that box the drawn boundary of each read space: one image per whole view.
 
     The spaces go out in requests of ``EXTENT_SPACES_PER_REQUEST`` (at most
     ``MAX_EXTENT_REQUESTS``), holds and tanks first; only the first request also asks for the
-    named places. Returns the request directories (``out``, ``out-2``, ...); empty when nothing
-    can be asked.
+    named places. ``exclude`` gives, per space id, the spaces whose labels its box must not hold
+    (a redrawn box). Returns the request directories (``out``, ``out-2``, ...); empty when
+    nothing can be asked.
     """
     from . import ga_commercial as ga
     views = chosen_views(result)
@@ -613,6 +694,9 @@ def prepare_extents(result: dict, sheet_path: Path, out: Path, missing: list[str
             # The label centre in sheet pixels; it is put in image pixels once the image size is known.
             entry.update(image_id=space["view_id"],
                          at=((region[0] + region[2]) / 2, (region[1] + region[3]) / 2))
+            if exclude and space["id"] in exclude:
+                entry["exclude"] = [{"label": other["label"][:64], "at": _label_centre(other)}
+                                    for other in exclude[space["id"]]]
         elif space["kind"] == "accommodation_deck" and profile:
             entry.update(image_id=profile["view_id"], at=None)
         else:
@@ -639,9 +723,14 @@ def prepare_extents(result: dict, sheet_path: Path, out: Path, missing: list[str
                 if entry["at"] is not None:
                     (left, top, right, bottom), _ = boxes[entry["image_id"]]
                     width, height = sizes[entry["image_id"]]
-                    x, y = entry["at"]
-                    entry = {**entry, "at": [round((x - left) * width / (right - left)),
-                                             round((y - top) * height / (bottom - top))]}
+
+                    def in_image(point, left=left, top=top, right=right, bottom=bottom, width=width, height=height):
+                        return [round((point[0] - left) * width / (right - left)),
+                                round((point[1] - top) * height / (bottom - top))]
+
+                    entry = {**entry, "at": in_image(entry["at"])}
+                    if "exclude" in entry:
+                        entry["exclude"] = [{**other, "at": in_image(other["at"])} for other in entry["exclude"]]
                 placed.append(entry)
             context = {"want": want, "spaces": placed}
             if note:
@@ -1075,6 +1164,77 @@ def _cover(outer: list[float], inner: list[float]) -> float:
     return max(0.0, min(outer[1], inner[1]) - max(outer[0], inner[0])) / length if length > 0 else 0.0
 
 
+def _label_centre(space: dict) -> tuple[float, float] | None:
+    """The centre of a space's printed label in sheet pixels, or None."""
+    box = (space["source_record"].get("regions") or [{}])[0].get("box_px")
+    return None if not box else ((box[0] + box[2]) / 2, (box[1] + box[3]) / 2)
+
+
+def covered_labels(result: dict) -> dict[str, list[dict]]:
+    """For each measured box, the spaces without a box of their own whose label it holds.
+
+    The overlap rules between two boxes cannot see a neighbour that was not boxed (a store above
+    a peak tank, a residue tank beside a slop tank; review round 4). A box that holds such a
+    label takes in that space. Not counted: a label of the same family (the same space read
+    twice), and in a profile a tank printed for the sides (a wing or topside tank seen in
+    projection).
+    """
+    kinds = {view["view_id"]: view["kind"] for view in result.get("views", [])}
+    found: dict[str, list[dict]] = {}
+    for big in result["spaces"]:
+        extent = big.get("extent")
+        if (not extent or extent.get("projection_of") or "outline_box_px" not in extent
+                or "guessed" in extent["status"].values()):
+            continue
+        left, top, right, bottom = extent["outline_box_px"]
+        for small in result["spaces"]:
+            if (small is big or "extent" in small or small["status"] != "read"
+                    or small.get("view_id") != extent["view_id"]):
+                continue
+            centre = _label_centre(small)
+            if centre is None or not (left < centre[0] < right and top < centre[1] < bottom):
+                continue
+            if label_family(small["label"]) == label_family(big["label"]):
+                continue
+            if kinds.get(extent["view_id"]) == "profile" and side_of_label(small["label"]) in ("both", "port", "starboard"):
+                continue
+            found.setdefault(big["id"], []).append(small)
+    return found
+
+
+# A short untyped label ("X. T. (P)": two letters) names a small tank or room. A box guessed for
+# it on every axis may be at most this many times its label box in each direction (lane W, round
+# u6r3: such a label got a guessed box along a whole hold).
+SMALL_LABEL_LETTERS = 4
+SMALL_LABEL_BOX_FACTOR = 2.0
+
+
+def _all_guessed(extent: dict) -> bool:
+    return bool(extent.get("status")) and set(extent["status"].values()) == {"guessed"}
+
+
+def withhold_oversized_guesses(result: dict) -> int:
+    """Remove the guessed box of a short untyped label that is far larger than its label box."""
+    from .ga_commercial import _named_words
+    withheld = 0
+    for space in result["spaces"]:
+        extent = space.get("extent")
+        region = (space["source_record"].get("regions") or [{}])[0].get("box_px")
+        if (not extent or not region or "outline_box_px" not in extent or not _all_guessed(extent)
+                or space["kind"] not in ("other_space", "other_tank")
+                or len("".join(_named_words(space["label"]))) > SMALL_LABEL_LETTERS):
+            continue
+        left, top, right, bottom = extent["outline_box_px"]
+        if (right - left > SMALL_LABEL_BOX_FACTOR * (region[2] - region[0])
+                or bottom - top > SMALL_LABEL_BOX_FACTOR * (region[3] - region[1])):
+            space.pop("extent")
+            space["extent_withheld"] = "a guessed box far larger than the short label of a small space"
+            result["checks"].append({"code": "extent_withheld", "status": "dropped", "label": space["label"][:64],
+                                     "reason": "guessed box larger than its short label allows"})
+            withheld += 1
+    return withheld
+
+
 def resolve_overlaps(result: dict) -> dict:
     """Keep each extent off the labelled spaces beside it, per view; return statistics.
 
@@ -1177,6 +1337,17 @@ def resolve_overlaps(result: dict) -> dict:
                     stats["guessed"] += 1
                     result["checks"].append({"code": "extent_covers_a_labelled_neighbour", "status": "changed",
                                              "label": f"{big['label'][:30]} / {small['label'][:30]}"})
+    # A box that still holds the label of a space without a box takes in that space: it is not
+    # a measured boundary (its axes become guessed).
+    spaces = {space["id"]: space for space in result["spaces"]}
+    for big_id, neighbours in covered_labels(result).items():
+        extent = spaces[big_id]["extent"]
+        for axis in extent["status"]:
+            extent["status"][axis] = "guessed"
+        extent.setdefault("covers", []).extend(small["id"] for small in neighbours)
+        stats["guessed"] += 1
+        result["checks"].append({"code": "extent_covers_a_labelled_neighbour", "status": "changed",
+                                 "label": f"{spaces[big_id]['label'][:30]} / {neighbours[0]['label'][:30]}"})
     return stats
 
 
@@ -1315,6 +1486,57 @@ def check_depth(result: dict, work: dict) -> None:
             "another space or the lowest deckhouse tier ends at the same height")
 
 
+# A redrawn box keeps at least this share of the first box's area. A larger cut is more often a
+# box that avoids a label printed over the space (a side tank's label over a hold) than a
+# boundary found (rounds u6r5 and u6r6: holds and cargo tanks cut to strips of 28-51 %; the
+# redrawn boxes that ended at a neighbour kept 65-84 %).
+REDRAW_MIN_AREA_SHARE = 0.6
+
+
+def _area(box) -> float:
+    return max(0.0, box[2] - box[0]) * max(0.0, box[3] - box[1])
+
+
+def redraw_covering_boxes(result: dict, work: dict, sheet_path: Path, out: Path, call, readings: list) -> dict:
+    """One more request for the boxes that hold the label of a space without a box (review round 4).
+
+    The request names, per box, the labels it must leave out. A redrawn box is kept only when it
+    holds none of them; otherwise the first box stays (and the overlap rules mark it guessed).
+    """
+    covered = covered_labels(result)
+    if not covered:
+        return {}
+    spaces = {space["id"]: space for space in result["spaces"]}
+    directories = prepare_extents(result, sheet_path, out / "extents-redraw", only_ids=set(covered), exclude=covered)
+    if not directories:
+        return {}
+    directory = directories[0]
+    asked = {entry["space_id"] for entry in json.loads((directory / "request.json").read_text())["context"]["spaces"]}
+    first = {space_id: spaces[space_id].pop("extent") for space_id in asked}
+    readings.append(call(directory, directory.with_name(f"{directory.name}-provider")))
+    read_extents(result, work, readings[-1], directory)
+    def holds(box, space):
+        centre = _label_centre(space)
+        return centre is not None and box[0] < centre[0] < box[2] and box[1] < centre[1] < box[3]
+
+    kept = 0
+    for space_id, old in first.items():
+        new = spaces[space_id].get("extent")
+        if new is not None:
+            inside = [other for other in covered[space_id] if holds(new["outline_box_px"], other)]
+            # A box shrunk off its own label is not the space (round u6r5: cargo tanks redrawn
+            # as a strip at the bottom to leave out a label).
+            lost_own = holds(old["outline_box_px"], spaces[space_id]) and not holds(new["outline_box_px"],
+                                                                                  spaces[space_id])
+            shrunk = _area(new["outline_box_px"]) < REDRAW_MIN_AREA_SHARE * _area(old["outline_box_px"])
+            if not inside and not lost_own and not shrunk:
+                new["redrawn"] = "drawn again without the labels of the spaces beside it"
+                kept += 1
+                continue
+        spaces[space_id]["extent"] = old
+    return {"redraw_requests": 1, "redraw_asked": len(asked), "redraw_kept": kept}
+
+
 def scale_pass(result: dict, sheet_path: Path, out: Path, call) -> dict:
     """Run both ``ga_scale`` requests for one ship. ``call(request_dir, out_dir)`` sends one request."""
     stats = {"requests": 0}
@@ -1361,7 +1583,8 @@ def scale_pass(result: dict, sheet_path: Path, out: Path, call) -> dict:
                 for key, value in part.items():
                     totals[key] = totals.get(key, 0) + value if isinstance(value, int) else value
                 totals["deck_requests"] = 1
-        totals["requests"] = len(directories) + totals.get("deck_requests", 0)
+        totals.update(redraw_covering_boxes(result, work, sheet_path, out, call, readings))
+        totals["requests"] = len(directories) + totals.get("deck_requests", 0) + totals.get("redraw_requests", 0)
         stats["extents"] = totals
         if any(work["kinds"].get(view) == "profile" for view in work["axes"]):
             check_depth(result, work)
@@ -1369,6 +1592,7 @@ def scale_pass(result: dict, sheet_path: Path, out: Path, call) -> dict:
     if any("extent" in space for space in result["spaces"]):
         # After the depth check: a trimmed hold ends at a topside tank, not at the deck.
         stats["overlaps"] = resolve_overlaps(result)
+        stats["overlaps"]["small_label_boxes_withheld"] = withhold_oversized_guesses(result)
     if not checked and result["measured"]["depth_m"]["status"] == MEASURED:
         # A depth that the space tops could not check is not given (see check_depth).
         pointed = result["measured"]["depth_m"]["value"]
@@ -1418,7 +1642,8 @@ def merged_spaces(result: dict) -> list[dict]:
         if "extent" in space:
             groups.setdefault(_identity(space), []).append(space)
         else:
-            plain.append({key: space[key] for key in ("id", "kind", "label", "number", "status", "source_record")})
+            plain.append({key: space[key] for key in ("id", "kind", "label", "number", "status", "source_record",
+                                                      "extent_withheld") if key in space})
     merged = []
     for members in groups.values():
         members = _without_repeats(members)
@@ -1583,7 +1808,8 @@ def arrangement_gate(data: dict) -> dict:
 
     Spaces are cut from the smallest to the largest (each loses the parts that smaller spaces
     cover); the hull is not modelled. Returns the spaces left without volume, the fragment
-    labels, each cargo space's loss, and ``passed``.
+    labels, each cargo space's loss, the spaces guessed on every axis that cover a cargo space
+    (lane W, round u6r3), and ``passed``.
     """
     from .ga_commercial import _words, fragment_reason
     particulars = data.get("particulars", {})
@@ -1594,8 +1820,10 @@ def arrangement_gate(data: dict) -> dict:
     fragments = [s["label"] for s in data["spaces"]
                  if fragment_reason(s, [o for o in data["spaces"] if o is not s], vocabulary_of(s),
                                     {"".join(_words(o["label"])) for o in data["spaces"] if o is not s})]
-    report = {"fragments": fragments, "no_volume": [], "cargo_loss": {}, "max_cargo_loss": None}
+    report = {"fragments": fragments, "no_volume": [], "cargo_loss": {}, "max_cargo_loss": None,
+              "guessed_over_cargo": []}
     if breadth and depth:
+        report["guessed_over_cargo"] = [s["label"] for s in _guessed_over_cargo(spaces, breadth, depth)]
         boxes = [(s, _gate_box(s, breadth, depth)) for s in spaces]
         boxes = [(s, b) for s, b in boxes if b is not None and np.all(b[:, 1] > b[:, 0])]
         volume = lambda b: float(np.prod(b[:, 1] - b[:, 0]))
@@ -1612,7 +1840,7 @@ def arrangement_gate(data: dict) -> dict:
             if space["kind"] in ("cargo_hold", "cargo_tank"):
                 report["cargo_loss"][space["id"]] = round(loss, 3)
         report["max_cargo_loss"] = max(report["cargo_loss"].values(), default=None)
-    report["passed"] = (not report["fragments"] and not report["no_volume"]
+    report["passed"] = (not report["fragments"] and not report["no_volume"] and not report["guessed_over_cargo"]
                         and (report["max_cargo_loss"] or 0.0) <= GATE_MAX_CARGO_LOSS)
     return report
 
@@ -1641,9 +1869,62 @@ def arrangement_input(result: dict, case_id: str) -> dict:
     frames = result.get("frames") or {"status": "unknown", "spacings": []}
     spaces, dropped = _without_same_boxes(merged_spaces(result), particulars)
     spaces = _without_outboard_extents(spaces, particulars)
+    spaces = _without_guessed_over_cargo(spaces, particulars)
     return {"schema": INPUT_SCHEMA, "case_id": case_id, "engineering_approved": False,
             "sources": result["sources"], "ship_type": result.get("ship_type"),
             "particulars": particulars, "frames": frames, "spaces": spaces, "dropped": dropped}
+
+
+# A box guessed on every axis that shares more than this share of its volume with a cargo
+# space covers it (touching faces and rounding stay below it).
+GUESSED_OVER_CARGO_SHARE = 0.02
+CARGO_KINDS = ("cargo_hold", "cargo_tank")
+# A box whose outer side reaches this share of the half breadth lies against the shell: a wing,
+# topside or side tank beside the cargo space (often inside a cargo box drawn to the shell). It
+# is not a small space guessed over the cargo space.
+AT_SHELL_SHARE = 0.85
+
+
+def _guessed_over_cargo(spaces: list[dict], breadth: float, depth: float) -> list[dict]:
+    """The spaces (not cargo) whose extent is guessed on every axis and covers a cargo space,
+    with the missing y and z filled by the arrangement step's rules. A box against the shell (a
+    side tank) is not counted."""
+    cargo = [box for space in spaces if space["kind"] in CARGO_KINDS
+             and (box := _gate_box(space, breadth, depth)) is not None]
+    found = []
+    for space in spaces:
+        extent = space.get("extent")
+        if not extent or space["kind"] in CARGO_KINDS or not _all_guessed(extent):
+            continue
+        own = _gate_box(space, breadth, depth)
+        if own is None or not np.all(own[:, 1] > own[:, 0]):
+            continue
+        if max(abs(own[1, 0]), abs(own[1, 1])) >= AT_SHELL_SHARE * breadth / 2:
+            continue
+        volume = float(np.prod(own[:, 1] - own[:, 0]))
+        for box in cargo:
+            shared = np.clip(np.minimum(own[:, 1], box[:, 1]) - np.maximum(own[:, 0], box[:, 0]), 0.0, None)
+            if float(np.prod(shared)) > GUESSED_OVER_CARGO_SHARE * volume:
+                found.append(space)
+                break
+    return found
+
+
+def _without_guessed_over_cargo(spaces: list[dict], particulars: dict) -> list[dict]:
+    """A box guessed on every axis does not cover a labelled cargo space (lane W, round u6r3: a
+    small tank guessed along a whole hold took its port side): it loses its extent."""
+    breadth = (particulars.get("breadth_m") or {}).get("value")
+    depth = (particulars.get("depth_m") or {}).get("value")
+    if not breadth or not depth:
+        return spaces
+    covering = {id(space) for space in _guessed_over_cargo(spaces, breadth, depth)}
+    kept = []
+    for space in spaces:
+        if id(space) in covering:
+            space = {key: value for key, value in space.items() if key != "extent"}
+            space["extent_withheld"] = "guessed on every axis and over a cargo space"
+        kept.append(space)
+    return kept
 
 
 def _without_outboard_extents(spaces: list[dict], particulars: dict) -> list[dict]:

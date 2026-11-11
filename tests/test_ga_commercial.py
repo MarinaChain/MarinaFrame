@@ -433,6 +433,15 @@ def test_a_piece_read_where_a_longer_label_is_printed_is_dropped_with_its_reason
     ("RESCUE BOAT", None, [], True),
     ("FOAM", None, [], True),                                # a system word without its room noun
     ("FOAM ROOM", None, [], False),
+    ("UPPER DECK", None, [], True),                          # a deck name (review round 4)
+    ("DECK STORE", None, [], False),
+    ("CHANGING ROOM (DECK)", None, [], False),
+    ("FOLDING TYPE", None, [], True),                        # a note beside a hatch cover
+    ("A/H TO NO.5 HOLD", None, [], True),                    # an access hatch (review round 4)
+    ("ACCESS HATCH TO DUCT KEEL", None, [], True),
+    ("HATCH COVER STORE", None, [], False),                  # a store for a fitting is a space
+    ("X.Y.Z.K(P)", None, [("NO.1 X.Y.ZK(P&S)", "1")], True),   # a numbered tank read without its number
+    ("X.Y.Z.K(P)", None, [("X.Y.ZK STORE", None)], False),
     ("NO. 2 F.O.", "2", [("2 F. O. T. (P/S)", "2")], True),  # cut dotted abbreviation of the same tank
     ("NO.4 C.O.T(P&S)", "4", [("NO.4 C.O.T(P&S) X", "4")], False),
     ("C02 RM", None, [("S/G RM", None)], False),             # "C" of CO2 is not a side mark

@@ -545,10 +545,17 @@ def _words(label: str) -> list[str]:
 # Words that name a fitting or an opening, not a space (lane W, round u6r: accommodation ladders
 # outboard of the ship side ended with no volume).
 FITTING_WORDS = {"LADDER", "GANGWAY", "DAVIT", "OPENING", "OPEN", "MANIFOLD", "WINCH", "WINDLASS", "MOORING",
-                 "BOLLARD", "FAIRLEAD", "RAFT", "LIFEBOAT", "BOAT", "CAPSTAN", "CHOCK"}
+                 "BOLLARD", "FAIRLEAD", "RAFT", "LIFEBOAT", "BOAT", "CAPSTAN", "CHOCK", "HATCH"}
+# The last word of a room or store: a label that ends with one is a space even when it names a
+# fitting ("HATCH COVER STORE", "BOAT DECK STORE").
+ROOM_NOUNS = {"STORE", "STR", "ROOM", "RM", "SPACE", "LOCKER", "SHOP", "WORKSHOP", "TRUNK", "TANK", "TK"}
 # Words that name a system and need a room noun to be a space ("FOAM" for "FOAM ROOM").
 SYSTEM_WORDS = {"FOAM", "CO", "FIRE", "FAN", "HYD", "PAINT", "LAMP", "ROPE", "CHAIN", "BATT", "ELEC", "EMERG",
                 "EMG", "PUMP"}
+# The last word of a deck name; a space on a deck ends with its own noun ("DECK STORE").
+DECK_NAME_WORDS = {"DECK", "DK"}
+# Words of a note printed beside a fitting ("FOLDING TYPE"), never of a space.
+NOTE_WORDS = {"TYPE"}
 
 
 def _named_words(label: str) -> list[str]:
@@ -573,7 +580,10 @@ def fragment_reason(space: dict, others: list[dict], vocabulary: set[str],
         return "an unclosed parenthesis: the label is cut"
     if re.search(r"\d\s*\.?\s*[A-Z]\.?$", label.upper()) and len(words[-1]) == 1 and len(words) <= 2:
         return "a single letter after the number: the label is cut"
-    if space.get("kind") in ("other_space", "other_tank") and FITTING_WORDS & set(words):
+    is_room = bool(_named_words(label)) and _named_words(label)[-1] in ROOM_NOUNS
+    if space.get("kind") in ("other_space", "other_tank") and not is_room and (
+            FITTING_WORDS & set(words) or re.search(r"\bA\s*/\s*H\b", label.upper())):
+        # "A/H" is an access hatch (review round 4).
         return "a fitting or an opening, not a space"
     # A last word cut inside a fitting word ("HATCH OPENI" for "HATCH OPENING"). Four letters at
     # least, so that a short word of a real room is not taken for the start of a fitting word.
@@ -582,6 +592,14 @@ def fragment_reason(space: dict, others: list[dict], vocabulary: set[str],
         return f"'{words[-1]}' is the start of a fitting word: a cut fitting or opening label"
     if len(words) == 1 and space.get("kind") in ("other_space", "other_tank") and words[0] in SYSTEM_WORDS:
         return f"'{words[0]}' names a system; the room noun of the label is missing"
+    untyped = space.get("kind") in ("other_space", "other_tank")
+    outside_parentheses = _named_words(re.sub(r"\([^)]*\)", " ", label))
+    if untyped and outside_parentheses and outside_parentheses[-1] in DECK_NAME_WORDS:
+        # "UPPER DECK", "2ND DECK" name a deck level of the drawing (review round 4); a room with
+        # its deck in parentheses ("CHANGING ROOM (DECK)") is a room.
+        return "a deck name, not a space"
+    if untyped and NOTE_WORDS & set(words):
+        return "a note on the drawing (a type or a size), not a space"
     last = words[-1]
     raw_last = label.upper().split()[-1] if label.split() else ""
     named = _named_words(label)
@@ -609,6 +627,14 @@ def fragment_reason(space: dict, others: list[dict], vocabulary: set[str],
     if (len(words) == 1 and space.get("kind") in ("other_space", "other_tank") and words[0] in vocabulary
             and words[0] not in whole_labels):
         return f"'{words[0]}' is printed only as a part of longer labels on the sheet"
+    if untyped and not space.get("number") and len(family) >= 3:
+        # The letters of a typed, numbered tank or hold without its number ("X.Y.T.K(P)" beside
+        # "NO.1 X.Y.TK(P&S)"): that space read a second time (round u6r5: its box took 90 % of
+        # the cargo tank).
+        for other in others:
+            if (other.get("kind") not in ("other_space", "other_tank") and other.get("number")
+                    and "".join(_named_words(other["label"])) == family):
+                return f"the label of '{other['label'][:40]}' read without its number"
     region = (space["source_record"].get("regions") or [{}])[0].get("box_px")
     for other in others:
         other_region = (other["source_record"].get("regions") or [{}])[0].get("box_px")

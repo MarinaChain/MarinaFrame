@@ -175,6 +175,23 @@ requests a ship; **off by default**, so the exam run is unchanged.
    **Deck equipment top-up:** cranes and hatch covers still without an extent after the extents
    requests get one more request (`extents-deck`), so that they are not lost when the spaces
    fill the requests.
+   **Boxes over a label without a box** (review round 4): the overlap rules above compare two
+   boxes; a measured box can also hold the label of a space that has no box (a store above a
+   peak tank, a residue tank beside a slop tank). One more request per ship (`extents-redraw`)
+   asks for those boxes again and names the labels each must leave out. A redrawn box is kept
+   only when it holds none of them, still holds its own label, and keeps at least 60 % of the
+   first box's area (smaller cuts were boxes cut to strips to avoid a label printed over the
+   space). Otherwise the first box stays with guessed axes and a check entry.
+   **Guessed boxes** (lane W, round u6r3): a box guessed on every axis that covers a cargo space
+   (missing y and z filled as the arrangement step fills them) loses its extent, unless it lies
+   against the shell (a side tank beside a cargo box drawn to the shell). A short untyped label
+   (four letters or fewer) keeps a guessed box only up to twice its label box in each direction.
+   Deck names ("UPPER DECK"), notes ("FOLDING TYPE"), access hatches ("A/H"), and an untyped
+   label that is a numbered tank read without its number are not spaces.
+   **Local frame spacings** (review round 4): a spacing printed for one frame inside a range of
+   another ("1200" between close bulkheads in a range of 800) is a one-frame interval of the
+   table when the frame numbers around it show the extra length; otherwise the scale is refused
+   as before. The scale prompt asks for such texts; not yet run live.
    **Gate** (`arrangement_gate`, `scripts/ga_arrangement_gate.py`): the arrangement step's
    checks as a regression check of each round: no space left without volume after smaller
    spaces are cut out, no fragment label, no cargo space losing more than 58 % (round s3b).
@@ -473,6 +490,16 @@ Observed cost is 0 in every round (subscription).
   miss: a two-letter untyped tank label (two dotted letters) stays, because a general rule for it would also
   drop real two-letter tanks ("B.T."). For lane W:
   `work/ga-internal-23/dev-runs/u6r3/<case>/ga_arrangement_input.json`.
+- Lane W tested u6r3: the tanker passes and is used; the bulk carrier failed because a short untyped tank
+  label got a box guessed along a whole hold. Astra round 4 (on u6) also found boxes that take
+  in spaces without a box (40 measured boxes in u6r3 held another space's label). Fixed by the
+  rules in Method, step 5 (boxes over a label without a box, guessed boxes); W's gate also
+  fails a box guessed on every axis over a cargo space.
+- Round `u6r7`: stored u6 replies, the u6r2 deck top-ups, and one live redraw request per ship
+  where a box held another label (`u6r5`; 7 ships, 7 calls; 15 boxes asked, 7 redrawn boxes
+  kept). **Gate: 14 of 14 development ships pass**; measured boxes that hold another space's
+  label 40 -> 3; fully measured extents 167 -> 160 (boxes that still cover a neighbour are now
+  guessed). For lane W: `work/ga-internal-23/dev-runs/u6r7/<case>/ga_arrangement_input.json`.
 
 ## Proposal (not built; PM 2026-11-12): printed sizes as a check of extents
 
@@ -488,11 +515,12 @@ model contract (Rust `ScaleReply`, CLI schema, prompt), so it waits for a PM dec
 
 Done: two Opus/Astra cycles; the Fable 5.2 step; the Opus check of it (regression found and fixed,
 overnight rounds u1-u6, overlap and fragment rules replayed as u6r, fittings, outboard boxes and
-deck top-up replayed as u6r3). **Not frozen; the exam
-was not run; the PM said not to freeze or prepare the exam until told.** Next: a new round with
-the overlap and fragment rules in the live run (u7) and its gate; Astra review; then cut
-diagonal labels (merge pieces into whole labels instead of dropping them), boxes along sloped
-and tapered boundaries, the printed-size proposal (above) if the PM accepts it.
+deck top-up replayed as u6r3; redraw of boxes over labels, guessed-box rules and local frame
+spacings as u6r7). **Not frozen; the exam was not run; the PM said not to freeze or prepare
+the exam until told.** Next: a full live round (scale requests with the local-spacing prompt,
+all extents rules) and its gate; Astra review; then recover spaces whose only label is a
+fragment (a wider crop read again) if it fits the per-ship ceiling, boxes along sloped and
+tapered boundaries, the printed-size proposal (above) if the PM accepts it.
 To repeat a development round: `ga_commercial batch --measure --max-requests 65` on groups of
 the 14 development cases; each `ga_reading.json` has `passes`, `frames`, `measured` and the space
 extents, and `ga_arrangement_input.json` is beside it.
