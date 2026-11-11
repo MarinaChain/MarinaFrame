@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self'; font-src 'self'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="color-scheme" content="light dark">
+  <!-- For the web build, add: <meta name="marinaframe-backend" content="http"> -->
+  <title>MarinaFrame</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/fonts/Manrope-Latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <svg class="icon-sprite" aria-hidden="true">
+    <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" /></symbol>
+    <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.4l3.2 3.1L13 4.6" /></symbol>
+    <symbol id="i-sun" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3" /><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1" /></symbol>
+    <symbol id="i-moon" viewBox="0 0 16 16"><path d="M13 9.6A5.5 5.5 0 0 1 6.4 3a5.5 5.5 0 1 0 6.6 6.6z" /></symbol>
+    <symbol id="i-auto" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" /><path class="glyph-fill" d="M8 2.5a5.5 5.5 0 0 1 0 11z" /></symbol>
+    <symbol id="i-gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2" /><path d="M8 1.8v1.7M8 12.5v1.7M1.8 8h1.7M12.5 8h1.7M3.6 3.6l1.2 1.2M11.2 11.2l1.2 1.2M3.6 12.4l1.2-1.2M11.2 4.8l1.2-1.2" /></symbol>
+    <symbol id="i-home" viewBox="0 0 16 16"><path d="M2.5 7.2L8 2.5l5.5 4.7" /><path d="M4 6v7.5h8V6" /><path d="M6.6 13.5V10h2.8v3.5" /></symbol>
+    <symbol id="i-queue" viewBox="0 0 16 16"><path d="M8 2.2l5.8 3L8 8.2 2.2 5.2z" /><path d="M2.2 8L8 11l5.8-3" /><path d="M2.2 10.8L8 13.8l5.8-3" /></symbol>
+    <symbol id="i-close" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" /></symbol>
+    <symbol id="i-sidebar" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5" /><path d="M6 3v10" /></symbol>
+    <symbol id="i-panel-right" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5" /><path d="M10 3v10" /></symbol>
+    <symbol id="i-thinking" viewBox="0 0 16 16"><path d="M4.8 10.6a2.7 2.7 0 0 1-.2-5.3 3.6 3.6 0 0 1 6.9.8 2.3 2.3 0 0 1-.4 4.5z" /><path d="M6.2 13h.1M4 14.4h.1" /></symbol>
+    <symbol id="i-steps" viewBox="0 0 16 16"><path d="M4.5 2.5v11" /><circle class="glyph-fill" cx="4.5" cy="4" r="1.3" /><circle class="glyph-fill" cx="4.5" cy="8" r="1.3" /><circle class="glyph-fill" cx="4.5" cy="12" r="1.3" /><path d="M8 4h5.5M8 8h5.5M8 12h5.5" /></symbol>
+    <symbol id="i-checks" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" /><path d="M5.3 8.2l2 2 3.6-4" /></symbol>
+    <symbol id="i-calls" viewBox="0 0 16 16"><path d="M2.5 5.5h10M10 3l2.5 2.5L10 8M13.5 10.5h-10M6 8l-2.5 2.5L6 13" /></symbol>
+    <symbol id="i-evidence" viewBox="0 0 16 16"><path d="M3.5 14V1.8h5l3 3V7" /><path d="M8.5 1.8V5h3" /><circle cx="9.5" cy="11" r="2.5" /><path d="M11.4 12.9l2.4 2.3" /></symbol>
+    <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" /><path d="M8 7.2V11M8 5v.2" /></symbol>
+    <symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 2.2l6 10.8H2z" /><path d="M8 6.5v3M8 11v.2" /></symbol>
+    <symbol id="i-fit" viewBox="0 0 16 16"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" /></symbol>
+    <symbol id="i-zoom-in" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" /><path d="M10.4 10.4L14 14M5 7h4M7 5v4" /></symbol>
+    <symbol id="i-zoom-out" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" /><path d="M10.4 10.4L14 14M5 7h4" /></symbol>
+    <symbol id="i-reset" viewBox="0 0 16 16"><path d="M3 8a5 5 0 1 0 1.5-3.6" /><path d="M3 2.5v2.8h2.8" /></symbol>
+    <symbol id="i-drawing" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1" /><path d="M5 11c2.5 0 5-2 6-6" /></symbol>
+    <symbol id="i-split" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1" /><path d="M8 2.5v11" /></symbol>
+    <symbol id="i-cube" viewBox="0 0 16 16"><path d="M8 1.8l5.5 3v6.4L8 14.2l-5.5-3V4.8z" /><path d="M2.5 4.8L8 7.8l5.5-3M8 7.8v6.4" /></symbol>
+    <symbol id="i-chevron" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4" /></symbol>
+    <symbol id="i-folder" viewBox="0 0 16 16"><path d="M2 4.5h4l1.5 1.5H14v6.5H2z" /></symbol>
+    <symbol id="i-file" viewBox="0 0 16 16"><path d="M4 1.8h5.2L12.5 5v9.2H4z" /><path d="M9 1.8V5.2h3.5" /></symbol>
+    <symbol id="i-sheet" viewBox="0 0 16 16"><path d="M4 1.8h5.2L12.5 5v9.2H4z" /><path d="M9 1.8V5.2h3.5" /><path d="M5.6 10.6h5.2l-.9 1.4H6.4z" /><path d="M7 10.6V9h2.2l.6 1.6" /></symbol>
+    <symbol id="i-play" viewBox="0 0 16 16"><path class="glyph-fill" d="M5 3.2v9.6L12.6 8z" /></symbol>
+    <symbol id="i-pause" viewBox="0 0 16 16"><path d="M5.5 3.5v9M10.5 3.5v9" /></symbol>
+    <symbol id="i-follow" viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.5" /><circle class="glyph-fill" cx="8" cy="8" r="1.4" /><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2" /></symbol>
+    <symbol id="i-more" viewBox="0 0 16 16"><circle class="glyph-fill" cx="3.5" cy="8" r="1.2" /><circle class="glyph-fill" cx="8" cy="8" r="1.2" /><circle class="glyph-fill" cx="12.5" cy="8" r="1.2" /></symbol>
+    <symbol id="i-drop" viewBox="0 0 16 16"><path d="M8 2.5v7.5M5 7l3 3 3-3" /><path d="M2.5 10.5v3h11v-3" /></symbol>
+    <symbol id="i-export" viewBox="0 0 16 16"><path d="M8 10V2.5M5 5.5l3-3 3 3" /><path d="M2.5 9.5v4h11v-4" /></symbol>
+    <!-- Sources: a sheet in front of the sheet given before it. -->
+    <symbol id="i-sources" viewBox="0 0 16 16"><path d="M5.5 1.8h5l3 3v7.7h-8z" /><path d="M10.2 1.8V5h3.3" /><path d="M3 4.5v9.7h7.6" /></symbol>
+    <symbol id="i-table" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1" /><path d="M2 6.5h12M2 9.8h12M6 3v10" /></symbol>
+    <symbol id="i-waterline" viewBox="0 0 16 16"><path d="M2.5 5h11l-1.6 5.5H4.1z" /><path d="M1.5 12.5c1.1-.8 2.2-.8 3.3 0s2.2.8 3.2 0 2.2-.8 3.3 0 2.1.8 3.2 0" /></symbol>
+    <symbol id="i-mesh" viewBox="0 0 16 16"><path d="M2.5 12.5L8 3l5.5 9.5z" /><path d="M5.2 7.8h5.6M8 12.5L5.2 7.8M8 12.5l2.8-4.7" /></symbol>
+    <symbol id="i-cut" viewBox="0 0 16 16"><path d="M2.5 5.5L8 2.5l5.5 3v5L8 13.5l-5.5-3z" /><path d="M8 1v14" stroke-dasharray="1.6 1.4" /></symbol>
+    <symbol id="i-view-iso" viewBox="0 0 16 16"><path d="M2 9.5l6-3 6 3-6 3z" /><path d="M2 9.5v1.5l6 3 6-3V9.5" /><path d="M6 7.5V4.5h4v3" /></symbol>
+    <symbol id="i-view-profile" viewBox="0 0 16 16"><path d="M1.5 8h13l-1.5 3.5H3.5z" /><path d="M5.5 8V5.5h4V8" /></symbol>
+    <symbol id="i-view-plan" viewBox="0 0 16 16"><path d="M1.5 5h9.5c2 0 3.5 1.5 3.5 3s-1.5 3-3.5 3H1.5z" /><path d="M8 8h.1" /></symbol>
+    <symbol id="i-view-bow" viewBox="0 0 16 16"><path d="M2.5 4c0 5 2.5 8.5 5.5 8.5s5.5-3.5 5.5-8.5" /><path d="M8 12.5V4" /><path d="M5.5 7.5l2.5 2 2.5-2" /></symbol>
+    <symbol id="i-view-stern" viewBox="0 0 16 16"><path d="M2.5 4c0 4 1 7 3 8h5c2-1 3-4 3-8" /><path d="M2.5 4h11" /></symbol>
+    <symbol id="i-ortho" viewBox="0 0 16 16"><rect x="2.5" y="4.5" width="7" height="7" /><path d="M2.5 4.5l4-2.5h7l-4 2.5M13.5 2v7l-4 2.5" /></symbol>
+    <symbol id="i-grid" viewBox="0 0 16 16"><path d="M2 5.5h12M2 10.5h12M5.5 2v12M10.5 2v12" /></symbol>
+    <symbol id="i-frames" viewBox="0 0 16 16"><path d="M1.5 10h13" /><path d="M3 10V6M6 10V8M9 10V6M12 10V8" /></symbol>
+    <symbol id="i-fairness" viewBox="0 0 16 16"><path d="M2 5.5C5 3.5 11 3.5 14 5.5M2 9C5 7 11 7 14 9" /><path d="M2 12.5C5 10.5 11 10.5 14 12.5" stroke-dasharray="3 2" /></symbol>
+    <symbol id="i-edges" viewBox="0 0 16 16"><path d="M3 5.5L8 3l5 2.5v5L8 13l-5-2.5z" /><path d="M3 5.5L8 8l5-2.5M8 8v5" stroke-dasharray="1.4 1.2" /></symbol>
+    <symbol id="i-eye" viewBox="0 0 16 16"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" /><circle cx="8" cy="8" r="2" /></symbol>
+    <symbol id="i-hide" viewBox="0 0 16 16"><path d="M5.6 4.2C6.4 3.8 7.2 3.5 8 3.5c4 0 6.5 4.5 6.5 4.5s-.9 1.6-2.4 2.9M10.4 11.8c-.8.4-1.6.7-2.4.7C4 12.5 1.5 8 1.5 8s.9-1.6 2.4-2.9" /><path d="M2.5 13.5l11-11" /></symbol>
+    <symbol id="i-isolate" viewBox="0 0 16 16"><rect x="5" y="5" width="6" height="6" rx="1" /><path d="M2 5V3.2A1.2 1.2 0 0 1 3.2 2H5M11 2h1.8A1.2 1.2 0 0 1 14 3.2V5M14 11v1.8a1.2 1.2 0 0 1-1.2 1.2H11M5 14H3.2A1.2 1.2 0 0 1 2 12.8V11" stroke-dasharray="1.6 1.4" /></symbol>
+    <symbol id="i-space" viewBox="0 0 16 16"><path d="M2.5 5.5L8 2.5l5.5 3v5L8 13.5l-5.5-3z" stroke-dasharray="2 1.5" /><path d="M2.5 5.5L8 8.5l5.5-3M8 8.5v5" /></symbol>
+    <symbol id="i-parts" viewBox="0 0 16 16"><path d="M5.5 4h8M5.5 8h8M5.5 12h8" /><path d="M2.5 4h.1M2.5 8h.1M2.5 12h.1" /></symbol>
+    <symbol id="i-flip" viewBox="0 0 16 16"><path d="M8 2v12" stroke-dasharray="1.6 1.4" /><path d="M5.5 5L2.5 8l3 3M10.5 5l3 3-3 3" /></symbol>
+    <symbol id="i-type-lines_plan" viewBox="0 0 16 16"><path d="M2 13.5C6.5 13.5 9.5 10 10.5 3M5.5 13.5C10 13 12.5 10 14 4" /><path d="M2 14.5h12" /></symbol>
+    <symbol id="i-type-general_arrangement" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1" /><path d="M2 8h12M7 3v5M10 8v5" /></symbol>
+    <symbol id="i-type-profile" viewBox="0 0 16 16"><path d="M1.5 9h13l-1.5 3.5H3.5z" /><path d="M5.5 9V6h4v3M7.5 6V4" /></symbol>
+    <symbol id="i-type-midship_section" viewBox="0 0 16 16"><path d="M3 3v6c0 2.5 2 4 5 4s5-1.5 5-4V3" /><path d="M8 2v12" stroke-dasharray="1.6 1.4" /></symbol>
+    <symbol id="i-type-shell_expansion" viewBox="0 0 16 16"><path d="M1.5 5.5h13v5h-13z" /><path d="M5.5 5.5v5M9.5 5.5v5M1.5 8h13" /></symbol>
+    <symbol id="i-type-construction_profile" viewBox="0 0 16 16"><path d="M1.5 10h13l-1.5 3H3z" /><path d="M1.5 7h13M4 7v3M7 7v3M10 7v3M13 7v3" /></symbol>
+    <symbol id="i-type-tank_plan" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1" /><path d="M5 7.5h6M5 10.5h6" /></symbol>
+    <symbol id="i-type-hydrostatics" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1" /><path d="M2 6.5h12M6 6.5V13M3.6 12C5 10.5 6.5 9.5 8.5 9.5" /></symbol>
+    <symbol id="i-type-other" viewBox="0 0 16 16"><path d="M4 1.8h5.2L12.5 5v9.2H4z" /><path d="M9 1.8V5.2h3.5" /></symbol>
+    <symbol id="i-scale" viewBox="0 0 16 16"><path d="M1.5 6h13v4h-13z" /><path d="M4.5 6v2M7.5 6v2.6M10.5 6v2M13.5 6v1.4" /></symbol>
+    <symbol id="i-package" viewBox="0 0 16 16"><path d="M2 2.8h12v3.2H2z" /><path d="M3 6v7.2h10V6" /><path d="M6.4 8.6h3.2" /></symbol>
+    <!-- Source-label glyphs: colour is never the only signal (visual language, lane C). -->
+    <!-- Ink trace: a curve followed to the pen. -->
+    <symbol id="i-src-traced" viewBox="0 0 16 16"><path d="M2.5 13.5C8 13.5 11 9.5 12.3 3.6" /><circle class="glyph-fill" cx="12.5" cy="3" r="1.9" /></symbol>
+    <symbol id="i-src-repaired" viewBox="0 0 16 16"><path d="M10.6 2.6a3 3 0 0 0-3.4 4L2.8 11a1.3 1.3 0 0 0 1.9 1.9l4.4-4.4a3 3 0 0 0 4-3.4l-1.8 1.8-1.7-.4-.4-1.7z" /></symbol>
+    <!-- Bridged: a dotted curve between two known ends. -->
+    <symbol id="i-src-interpolated" viewBox="0 0 16 16"><circle class="glyph-fill" cx="2.8" cy="13" r="1.8" /><circle class="glyph-fill" cx="13.2" cy="3" r="1.8" /><path d="M5 12.3C8.4 11 10.6 8.6 11.9 5.2" stroke-dasharray="1.4 2" /></symbol>
+    <symbol id="i-src-ai_inferred" viewBox="0 0 16 16"><path d="M8 2l1.5 4.5L14 8l-4.5 1.5L8 14l-1.5-4.5L2 8l4.5-1.5z" /></symbol>
+    <symbol id="i-src-ai_corrected" viewBox="0 0 16 16"><path class="glyph-fill" d="M8 2l1.5 4.5L14 8l-4.5 1.5L8 14l-1.5-4.5L2 8l4.5-1.5z" /></symbol>
+    <symbol id="i-src-omitted" viewBox="0 0 16 16"><path d="M4 8h8" /></symbol>
+    <!-- Section states and review glyphs (js/glyphs.js maps names to words). -->
+    <symbol id="i-st-guessed" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" stroke-dasharray="2.4 1.7" /><path d="M6.2 6.4a1.8 1.8 0 1 1 2.6 1.6c-.5.3-.8.6-.8 1.2v.4M8 11.2v.4" /></symbol>
+    <symbol id="i-st-chosen" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" /><circle class="glyph-fill" cx="8" cy="8" r="2.8" /></symbol>
+    <symbol id="i-st-declined" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" /><path d="M3.8 12.2l8.4-8.4" /></symbol>
+    <symbol id="i-st-not_read" viewBox="0 0 16 16"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z" /><path d="M3 13L13 3" /></symbol>
+    <symbol id="i-read" viewBox="0 0 16 16"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z" /><circle class="glyph-fill" cx="8" cy="8" r="2" /></symbol>
+    <symbol id="i-flag" viewBox="0 0 16 16"><path d="M3.5 14.5V2" /><path d="M3.5 2.5h8.8l-2.2 3 2.2 3H3.5" /></symbol>
+    <symbol id="i-not-built" viewBox="0 0 16 16"><path d="M8 1.8l5.5 3v6.4L8 14.2l-5.5-3V4.8z" /><path d="M1.8 14.2L14.2 1.8" /></symbol>
+    <symbol id="i-lines" viewBox="0 0 16 16"><path d="M2 13.5C6.5 13.5 9.5 10 10.5 3M5.5 13.5C10 13 12.5 10 14 4" /></symbol>
+    <symbol id="i-legend" viewBox="0 0 16 16"><path d="M2.5 4h2M2.5 8h2M2.5 12h2M7 4h6.5M7 8h6.5M7 12h6.5" /></symbol>
+    <symbol id="i-stop" viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1" /></symbol>
+    <symbol id="i-cost" viewBox="0 0 16 16"><path d="M10.8 5.2C10.3 4.2 9.3 3.7 8 3.7c-1.6 0-2.7.8-2.7 2s1 1.7 2.7 2.1 2.8.9 2.8 2.2-1.2 2.1-2.8 2.1c-1.4 0-2.5-.6-3-1.6M8 2v1.7M8 12.1v1.9" /></symbol>
+  </svg>
+
+  <!-- Stroke markers for source-label patterns. Not display:none, so markers still render. -->
+  <svg class="marker-defs" width="0" height="0" aria-hidden="true" focusable="false">
+    <defs>
+      <marker id="m-diamond" viewBox="-4 -4 8 8" markerWidth="5" markerHeight="5" markerUnits="userSpaceOnUse">
+        <path d="M0 -3.2L3.2 0 0 3.2-3.2 0z" fill="var(--raised)" stroke="var(--stroke-ai_corrected)" stroke-width="1.2" />
+      </marker>
+      <marker id="m-tick" viewBox="-4 -4 8 8" markerWidth="5" markerHeight="5" markerUnits="userSpaceOnUse" orient="auto">
+        <path d="M0 -3.5V3.5" stroke="var(--src-repaired)" stroke-width="1.2" />
+      </marker>
+    </defs>
+  </svg>
+
+  <div class="app" id="app">
+    <!-- Title bar: traffic-light inset, breadcrumb Vessel › Run › rN, run actions. -->
+    <header class="titlebar" data-tauri-drag-region>
+      <div class="brand">
+        <img class="brand-mark" src="assets/mark.svg" alt="" width="24" height="20">
+        <span class="brand-name">MarinaFrame</span>
+      </div>
+      <nav class="crumbs" id="crumbs" aria-label="Breadcrumb" data-tauri-drag-region></nav>
+      <span class="badge" id="task-badge" hidden></span>
+      <!-- Vessel tabs (design plan section 3). Sheets and Compare come later. -->
+      <div class="vessel-tabs" id="vessel-tabs" role="tablist" aria-label="Vessel" hidden>
+        <button type="button" role="tab" data-vtab="run" aria-controls="views">Run</button>
+        <button type="button" role="tab" data-vtab="parts" aria-controls="views" hidden>Parts</button>
+        <button type="button" role="tab" data-vtab="sources" aria-controls="views">Sources</button>
+        <button type="button" role="tab" data-vtab="export" aria-controls="views">Export</button>
+        <button type="button" role="tab" data-vtab="history" aria-controls="views">History</button>
+      </div>
+      <button class="btn btn-ghost palette-open" id="open-palette" type="button" title="Go to a vessel, a station or an action (⌘K)">Go to…<kbd class="key-hint">⌘K</kbd></button>
+      <div class="titlebar-actions" id="run-actions" hidden>
+        <div class="segmented" role="radiogroup" aria-label="Layout" id="view-switch">
+          <button type="button" role="radio" data-view="drawing" data-tip-title="Drawing (⌘1)" aria-label="Drawing only"><svg class="icon"><use href="#i-drawing" /></svg></button>
+          <button type="button" role="radio" data-view="split" data-tip-title="Drawing and model (⌘2)" aria-label="Drawing and model"><svg class="icon"><use href="#i-split" /></svg></button>
+          <button type="button" role="radio" data-view="model" data-tip-title="Model (⌘3)" aria-label="Model only"><svg class="icon"><use href="#i-cube" /></svg></button>
+        </div>
+        <button class="btn btn-ghost btn-icon details-toggle" id="details-toggle" type="button" aria-controls="inspector" aria-expanded="true" aria-label="Hide details" data-tip-title="Hide details (⌘4)">
+          <svg class="icon"><use href="#i-panel-right" /></svg>
+        </button>
+        <button class="btn" id="resume-task" type="button" hidden>Resume</button>
+        <button class="btn btn-danger-quiet" id="cancel-task" type="button" hidden>Stop</button>
+      </div>
+    </header>
+
+    <!-- Narrow left rail: the three global places. -->
+    <nav class="rail" aria-label="Main">
+      <button class="rail-item" type="button" data-route="home" title="Home">
+        <svg class="icon"><use href="#i-home" /></svg><span>Home</span>
+      </button>
+      <button class="rail-item" type="button" data-route="queue" title="Queue">
+        <svg class="icon"><use href="#i-queue" /></svg><span>Queue</span>
+        <b class="rail-count" id="rail-queue-count" hidden></b>
+      </button>
+      <button class="rail-item" type="button" data-route="settings" title="Settings (⌘,)">
+        <svg class="icon"><use href="#i-gear" /></svg><span>Settings</span>
+      </button>
+      <button class="rail-toggle" type="button" id="rail-toggle" title="Collapse the sidebar (⌘\)" aria-label="Collapse the sidebar" aria-expanded="true">
+        <svg class="icon"><use href="#i-sidebar" /></svg>
+      </button>
+    </nav>
+
+    <main class="views" id="views">
+      <!-- ============================================================ Home (F3, F18) -->
+      <section class="view view-home" id="view-home" data-route="home" aria-labelledby="home-needs-title" hidden>
+        <div class="home-scroll">
+          <div class="home-head">
+            <h1 id="home-needs-title">Needs you</h1>
+            <div class="home-head-actions">
+              <!-- Shown while drawing sets wait in the batch queue (js/app.js renderHome). -->
+              <button class="btn btn-ghost" id="home-queue-link" type="button" hidden></button>
+              <button class="btn btn-primary btn-large" id="new-vessel" type="button" title="Choose the drawing set of a new vessel (⌘N)">New vessel</button>
+              <!-- Developers: start a run from a run spec file. -->
+              <details class="menu" id="home-more">
+                <summary class="btn btn-large btn-icon" data-tip-title="More" aria-label="More ways to start"><svg class="icon"><use href="#i-more" /></svg></summary>
+                <div class="menu-list">
+                  <button class="menu-item" id="new-folder" type="button" title="A folder of drawing sets: each PDF and each subfolder becomes one run">New vessels from a folder…</button>
+                  <button class="menu-item" id="new-run" type="button" title="Start a run from a run spec file (.json, .toml, .yaml)">New run from a spec file…<kbd>⇧⌘N</kbd></button>
+                </div>
+              </details>
+            </div>
+          </div>
+          <div class="needs-row" id="needs-row" aria-live="polite"></div>
+          <h2 class="home-section-title">Vessels</h2>
+          <div class="vessel-grid" id="vessel-grid">
+            <!-- The drop tile is the last card; renderHome() keeps it at the end. -->
+            <div class="drop-tile" id="drop-tile">
+              <svg class="drop-art" viewBox="0 0 120 64" aria-hidden="true">
+                <path d="M60 4v58" />
+                <path d="M60 60C46 60 22 50 12 30 10 22 10 14 10 8" />
+                <path d="M60 60C50 58 34 46 26 28 24 20 24 12 24 6" />
+                <path d="M60 60C54 54 44 40 40 24 39 16 39 10 39 5" />
+                <path d="M60 60C74 60 98 50 108 30 110 22 110 14 110 8" />
+                <path d="M60 60C70 58 86 46 94 28 96 20 96 12 96 6" />
+                <path d="M60 60C66 54 76 40 80 24 81 16 81 10 81 5" />
+                <path class="drop-art-wl" d="M6 40h108M6 24h108" />
+              </svg>
+              <strong>Drop a drawing set</strong>
+              <span class="drop-hint" id="drop-hint" title="Drop the files anywhere on the window. The app finds the views; you check them, then the AI reads the set.">PDF, PNG, TIFF or JPEG</span>
+              <span class="drop-choices">
+                <button class="btn" type="button" id="drop-choose">Choose files</button>
+                <button class="btn btn-ghost" type="button" id="drop-choose-folder" title="A folder of drawing sets: each PDF and each subfolder becomes one run">Choose folder</button>
+              </span>
+              <!-- Shown on a first start only (styles.css: [data-empty="true"]). -->
+              <button class="btn btn-ghost first-sample" type="button" id="try-sample" title="Run the built-in sample vessel (a generated drawing, no AI cost)">No drawing at hand? Try the sample</button>
+              <ol class="first-steps" aria-label="What happens next">
+                <li><strong>Drop</strong><span>the pages of one lines plan</span></li>
+                <li><strong>Check</strong><span>the views the app found</span></li>
+                <li><strong>Watch</strong><span>the AI read it and build the hull</span></li>
+                <li><strong>Review</strong><span>the few sections it guessed</span></li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ Intake (F4): js/intake.js fills it -->
+      <section class="view view-intake" id="view-intake" data-route="intake" aria-labelledby="intake-title" hidden></section>
+
+      <!-- ============================================================ Welcome and setup check (F1-F2): js/welcome.js fills it -->
+      <section class="view view-welcome" id="view-welcome" data-route="welcome" aria-labelledby="welcome-title" hidden></section>
+
+      <!-- ============================================================ Queue (P1) -->
+      <section class="view view-queue" id="view-queue" data-route="queue" aria-labelledby="queue-title" hidden>
+        <div class="home-scroll">
+          <div class="home-head"><h1 id="queue-title">Queue</h1></div>
+          <ul class="queue-list" id="queue-list"></ul>
+        </div>
+      </section>
+
+      <!-- ============================================================ Run: drawing | 3D | inspector -->
+      <section class="view view-run" id="view-run" data-route="run" data-vtab="run" aria-labelledby="run-title" hidden>
+        <h1 class="visually-hidden" id="run-title">Run</h1>
+        <div class="workspace" id="workspace">
+          <div class="notices" id="notices" aria-live="polite"></div>
+          <!-- The run bar (js/run_header.js): one status sentence with its action and Next, the
+               section tiles, and Watch again with the fit. The sentence opens the run drawer. -->
+          <div class="run-bar" id="run-bar">
+            <div class="run-status" id="run-status" aria-live="polite"></div>
+            <!-- Review counter (sections still to check) and the section tiles. -->
+            <div class="strip-row">
+              <div class="strip-head" id="strip-head" aria-live="polite"></div>
+              <div class="strip" id="strip" role="listbox" aria-label="Sections" aria-orientation="horizontal" tabindex="0"></div>
+            </div>
+            <div class="run-bar-end" id="run-bar-end">
+              <!-- HOOK(M3 live): the fit of the shown revision as a small text chip; it counts to a new value. -->
+              <div class="fit-dial" id="fit-dial" role="img" aria-label="Fit" hidden>
+                <svg viewBox="0 0 48 48" aria-hidden="true">
+                  <circle class="dial-track" cx="24" cy="24" r="20" />
+                  <circle class="dial-arc" cx="24" cy="24" r="20" pathLength="1" />
+                </svg>
+                <span class="dial-label">fit</span>
+                <span class="dial-value"></span>
+                <span class="dial-delta"></span>
+              </div>
+            </div>
+            <!-- The run drawer: the detail behind the status sentence, over the top of the panes. -->
+            <section class="run-drawer" id="run-drawer" aria-label="Run status details" hidden>
+              <div class="draft-summary" id="draft-summary"></div>
+              <div class="drawer-group drawer-sheets">
+                <h2 class="drawer-title">Sheets and requests</h2>
+                <div id="sheet-review"></div>
+              </div>
+              <div class="drawer-group drawer-revisions">
+                <h2 class="drawer-title">Revisions</h2>
+                <div class="revision-ladder" id="revision-ladder" data-hook="revision-ladder"></div>
+              </div>
+              <div class="revision-facts" id="revision-facts"></div>
+            </section>
+          </div>
+
+          <div class="stage" id="stage" data-view="split">
+            <section class="pane pane-drawing" aria-label="Drawing">
+              <div class="pane-head">
+                <span class="pane-title">Drawing</span>
+                <span class="pane-meta" id="drawing-meta"></span>
+                <div class="pane-tools">
+                  <!-- HOOK(M3 live): the camera follows the AI's attention until the person pans or zooms. -->
+                  <button class="btn btn-ghost btn-small live-follow" id="live-follow" type="button" aria-pressed="true" hidden><svg class="icon"><use href="#i-follow" /></svg>Follow</button>
+                  <button class="btn btn-ghost btn-icon" id="zoom-out" type="button" data-tip-title="Zoom out (−)" aria-label="Zoom out"><svg class="icon"><use href="#i-zoom-out" /></svg></button>
+                  <span class="zoom-readout" id="zoom-readout" aria-live="off">100%</span>
+                  <button class="btn btn-ghost btn-icon" id="zoom-in" type="button" data-tip-title="Zoom in (+)" aria-label="Zoom in"><svg class="icon"><use href="#i-zoom-in" /></svg></button>
+                  <button class="btn btn-ghost btn-icon" id="zoom-fit" type="button" data-tip-title="Fit page (0)" aria-label="Fit page"><svg class="icon"><use href="#i-fit" /></svg></button>
+                </div>
+              </div>
+              <div class="drawing-host" id="drawing-host" tabindex="0" role="region" aria-label="Drawing. Drag to pan, scroll to zoom."></div>
+              <div class="tooltip" id="drawing-tooltip" role="tooltip" hidden></div>
+            </section>
+
+            <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" aria-label="Resize drawing and model" tabindex="0"></div>
+
+            <section class="pane pane-model" aria-label="3D model">
+              <div class="pane-head">
+                <span class="pane-title">3D model</span>
+                <span class="pane-meta" id="model-meta"></span>
+                <div class="pane-tools">
+                  <button class="btn btn-ghost btn-small" id="hull-only" type="button" title="Show the hull without the other parts" hidden>Hull only</button>
+                  <button class="btn btn-ghost btn-small" id="clear-outline" type="button" hidden>Hide outline</button>
+                  <button class="btn btn-ghost btn-icon" id="model-reset" type="button" data-tip-title="Reset view (R)" aria-label="Reset view"><svg class="icon"><use href="#i-reset" /></svg></button>
+                </div>
+              </div>
+              <div class="model-host" id="model-host" tabindex="0" role="region" aria-label="3D model. Drag to rotate, scroll to zoom, click a section plane to pick it. Keys: 1 to 5 standard views, P orthographic, F fit, C section cut, S section planes, X see-through hull, G grid, W waterline, E edges."></div>
+              <!-- HOOK(M3 live): a one-line caption over the 3D view. -->
+              <p class="model-caption" id="model-caption" hidden></p>
+            </section>
+          </div>
+
+          <!-- HOOK(M3 live): narration strip under both panes: what the agent does now. It shows
+               while the run works or a replay is open (the run bar says the rest). -->
+          <div class="narration" id="narration" data-hook="narration" role="status" aria-live="polite"></div>
+
+          <!-- HOOK(M3 live): the replay transport (play, scrub, speed), open after Watch again. -->
+          <div class="revision-strip" id="revision-strip" data-hook="revision-strip">
+            <div class="live-transport" id="live-transport" hidden></div>
+          </div>
+        </div>
+
+        <!-- The folded details column: show it, go to the review, or open it at one tab. -->
+        <nav class="details-rail" id="details-rail" aria-label="Run details" hidden>
+          <button class="details-rail-item" id="details-edge" type="button" aria-controls="inspector" aria-expanded="false" aria-label="Show details" data-tip-title="Show details (⌘4)">
+            <svg class="icon"><use href="#i-panel-right" /></svg>
+          </button>
+          <button class="details-rail-item" id="details-review" type="button" aria-controls="inspector" hidden>
+            <svg class="icon"><use href="#i-flag" /></svg><b class="details-count" id="details-edge-count" aria-hidden="true"></b>
+          </button>
+          <div class="details-rail-tabs" id="details-rail-tabs"></div>
+        </nav>
+        <section class="inspector" id="inspector" aria-label="Inspector">
+          <!-- The picked part's fact card (js/factcard3d.js); hidden with no part picked. -->
+          <section class="inspector-part" id="part-card" aria-label="Picked part" hidden></section>
+          <header class="inspector-head" id="selection-head"></header>
+          <section class="selection" id="selection" aria-live="polite"></section>
+          <div class="tabs" role="tablist" aria-label="Run details" id="tabs">
+            <!-- HOOK(M3 live): the Thinking tab. One card per model step; the live lane adds
+                 tool-call cards and "Why" disclosures. -->
+            <button role="tab" type="button" id="tab-thinking" aria-controls="panel-thinking" data-tab="thinking"></button>
+            <button role="tab" type="button" id="tab-timeline" aria-controls="panel-timeline" data-tab="timeline"></button>
+            <button role="tab" type="button" id="tab-checks" aria-controls="panel-checks" data-tab="checks"></button>
+            <button role="tab" type="button" id="tab-model" aria-controls="panel-model" data-tab="model"></button>
+            <button role="tab" type="button" id="tab-evidence" aria-controls="panel-evidence" data-tab="evidence"></button>
+            <button role="tab" type="button" id="tab-sources" aria-controls="panel-sources" data-tab="sources"></button>
+          </div>
+          <div class="tab-panels">
+            <div role="tabpanel" class="tab-panel" id="panel-thinking" aria-labelledby="tab-thinking" tabindex="0" data-hook="thinking" hidden></div>
+            <div role="tabpanel" class="tab-panel" id="panel-timeline" aria-labelledby="tab-timeline" tabindex="0"></div>
+            <div role="tabpanel" class="tab-panel" id="panel-checks" aria-labelledby="tab-checks" tabindex="0" hidden></div>
+            <div role="tabpanel" class="tab-panel" id="panel-model" aria-labelledby="tab-model" tabindex="0" hidden></div>
+            <div role="tabpanel" class="tab-panel" id="panel-evidence" aria-labelledby="tab-evidence" tabindex="0" hidden></div>
+            <div role="tabpanel" class="tab-panel" id="panel-sources" aria-labelledby="tab-sources" tabindex="0" hidden></div>
+          </div>
+        </section>
+
+        <!-- Parts, Sources, Export and History tabs of the vessel: full-width pages over the run workspace. -->
+        <section class="vessel-page" id="vessel-page-parts" data-vtab="parts" aria-labelledby="parts-title" hidden></section>
+        <section class="vessel-page vessel-page-sources" id="vessel-page-sources" data-vtab="sources" aria-labelledby="sources-title" hidden></section>
+        <section class="vessel-page" id="vessel-page-export" data-vtab="export" aria-labelledby="export-title" hidden></section>
+        <section class="vessel-page" id="vessel-page-history" data-vtab="history" aria-labelledby="history-title" hidden></section>
+      </section>
+
+      <!-- ============================================================ Settings -->
+      <section class="view view-settings" id="view-settings" data-route="settings" aria-labelledby="settings-title" hidden>
+        <div class="home-scroll">
+          <form class="settings-form" id="settings-form">
+            <h1 id="settings-title">Settings</h1>
+
+            <section class="settings-group" aria-labelledby="settings-ai-title">
+              <h2 class="settings-group-title" id="settings-ai-title">AI</h2>
+              <div class="setting-row">
+                <span class="setting-label">AI drafting <span class="badge" id="ai-status"></span></span>
+                <label class="switch" title="Turn AI drafting on or off">
+                  <input type="checkbox" name="ai_drafting" role="switch" aria-label="AI drafting">
+                  <span class="switch-track" aria-hidden="true"></span>
+                </label>
+              </div>
+              <div class="setting-row">
+                <span class="setting-label">Setup check</span>
+                <button class="btn" type="button" id="open-setup" title="Check the AI key, the CAD worker and the runs folder">Check setup</button>
+              </div>
+              <div id="key-usage-host"></div>
+            </section>
+
+            <section class="settings-group" aria-labelledby="settings-look-title">
+              <h2 class="settings-group-title" id="settings-look-title">Appearance</h2>
+              <div class="setting-row">
+                <span class="setting-label">Theme</span>
+                <div class="segmented segmented-text" role="radiogroup" aria-label="Theme">
+                  <label><input type="radio" name="theme" value="system"><span>System</span></label>
+                  <label><input type="radio" name="theme" value="light"><span>Light</span></label>
+                  <label><input type="radio" name="theme" value="dark"><span>Dark</span></label>
+                </div>
+              </div>
+              <div class="setting-row">
+                <span class="setting-label">Notices <span class="badge" id="notices-reset-status" title="Notices you close stay hidden until you show them again.">Hidden</span></span>
+                <button class="btn" type="button" id="reset-notices" title="Show dismissed notices again">Show again</button>
+              </div>
+              <div class="setting-row">
+                <span class="setting-label" id="notify-label">Notify when a run stops</span>
+                <label class="switch" title="A desktop notification with the run name and its outcome, once per run. It never shows drawing content.">
+                  <input type="checkbox" name="notify_finished" role="switch" aria-labelledby="notify-label">
+                  <span class="switch-track" aria-hidden="true"></span>
+                </label>
+              </div>
+              <!-- Per viewer, applied at once (js/settings_view.js); History always shows them. -->
+              <div class="setting-row">
+                <span class="setting-label" id="show-costs-label">Show costs and timings</span>
+                <label class="switch" title="Step times and costs, tool durations and the list cost on the Run tab. History always shows them.">
+                  <input type="checkbox" name="show_costs" role="switch" aria-labelledby="show-costs-label">
+                  <span class="switch-track" aria-hidden="true"></span>
+                </label>
+              </div>
+            </section>
+
+            <!-- Developer paths: the setup check finds them, so they stay out of the way. -->
+            <details class="settings-group settings-advanced" id="settings-advanced">
+              <summary class="settings-group-title"><svg class="icon chevron"><use href="#i-chevron" /></svg>Advanced</summary>
+              <div class="field">
+                <label class="field-label" for="runs-folder">Runs folder</label>
+                <span class="input-with-button">
+                  <input type="text" id="runs-folder" name="runs_folder" spellcheck="false" autocomplete="off" required>
+                  <button class="btn" type="button" id="pick-runs-folder" data-pick="folder" data-field="runs_folder" data-title="Choose the runs folder">
+                    <svg class="icon"><use href="#i-folder" /></svg>Choose…
+                  </button>
+                </span>
+                <div class="suggestions" id="runs-folder-suggestions" aria-label="Suggested runs folders"></div>
+              </div>
+              <div class="field">
+                <label class="field-label" for="worker-python">Worker Python</label>
+                <span class="input-with-button">
+                  <input type="text" id="worker-python" name="worker_python" spellcheck="false" autocomplete="off" placeholder="Empty: found automatically" aria-describedby="worker-python-in-use">
+                  <button class="btn" type="button" id="pick-worker-python" data-pick="file" data-field="worker_python" data-title="Choose the Python for the worker">
+                    <svg class="icon"><use href="#i-file" /></svg>Choose…
+                  </button>
+                </span>
+                <div class="suggestions" id="worker-python-suggestions" aria-label="Suggested Python programs"></div>
+                <p class="field-help" id="worker-python-in-use"></p>
+              </div>
+            </details>
+
+            <p class="form-error" id="settings-error" role="alert" hidden></p>
+            <div class="sheet-actions">
+              <button class="btn" type="button" id="settings-cancel">Cancel</button>
+              <button class="btn btn-primary" type="submit" id="settings-save">Save</button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <footer class="statusbar" id="statusbar">
+      <span class="status-ai" id="status-ai"></span>
+      <span class="status-progress" id="status-progress" role="status" aria-live="polite"></span>
+      <span class="status-spacer"></span>
+      <span class="status-item status-mode" id="status-mode"></span>
+      <span class="status-item status-folder" id="status-folder"></span>
+      <button class="status-theme" id="theme-toggle" type="button"></button>
+    </footer>
+  </div>
+
+  <dialog class="sheet" id="newrun-sheet" aria-labelledby="newrun-title">
+    <form method="dialog" class="sheet-body" id="newrun-form">
+      <div class="sheet-head">
+        <h2 id="newrun-title">New run</h2>
+        <span class="badge" id="newrun-mode"></span>
+      </div>
+      <div class="dropzone" id="spec-dropzone">
+        <div class="dropzone-empty" id="spec-empty">
+          <svg class="icon dropzone-icon"><use href="#i-drop" /></svg>
+          <button class="btn btn-primary" type="button" id="pick-spec">Choose run spec…</button>
+          <span class="dropzone-hint" title="A run spec is a .json, .toml or .yaml file that names the drawing.">or drop it here</span>
+        </div>
+        <div class="dropzone-chosen" id="spec-chosen" hidden>
+          <svg class="icon"><use href="#i-file" /></svg>
+          <span class="path-label" id="spec-chosen-label"></span>
+          <button class="btn btn-small" type="button" id="change-spec">Change…</button>
+        </div>
+      </div>
+      <div class="field" id="recent-specs-field" hidden>
+        <span class="field-label">Recent</span>
+        <div class="choice-list" id="recent-specs" role="list"></div>
+      </div>
+      <div class="field" id="dataset-specs-field" hidden>
+        <span class="field-label">Browse a dataset</span>
+        <div class="suggestions" id="dataset-specs"></div>
+      </div>
+      <details class="typed-path" id="typed-spec">
+        <summary><svg class="icon chevron"><use href="#i-chevron" /></svg>Type a path</summary>
+        <input type="text" name="spec_path" spellcheck="false" autocomplete="off" placeholder="/path/to/spec.json" aria-label="Run spec file path">
+      </details>
+      <p class="form-error" id="newrun-error" role="alert" hidden></p>
+      <div class="sheet-actions">
+        <button class="btn" type="button" id="newrun-cancel">Cancel</button>
+        <button class="btn btn-primary" type="submit" id="newrun-start" disabled>Start run</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="drop-overlay" aria-hidden="true">
+    <div class="drop-overlay-card">
+      <svg class="icon"><use href="#i-drop" /></svg>
+      <strong>Drop to start a new vessel</strong>
+      <span>PDF, PNG, TIFF or JPEG pages of one drawing set. You check the views before the AI reads them.</span>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="alert" hidden>
+    <span id="toast-text"></span>
+    <button class="btn btn-ghost btn-icon" type="button" id="toast-close" aria-label="Close message"><svg class="icon"><use href="#i-close" /></svg></button>
+  </div>
+</body>
+</html>

@@ -1,0 +1,168 @@
+{
+  "wigley": {
+    "stations": [
+      {
+        "reason": "Magenta cut traces the black station-1 hull curve from baseline to top, matching its bend at VL3-VL5 with only pixel-level offset.",
+        "station_id": "s000",
+        "verdict": "follows"
+      },
+      {
+        "reason": "Magenta line lies on the black station-2 section over its full height, following the same curvature and the near-vertical top at VL5-VL6.",
+        "station_id": "s001",
+        "verdict": "follows"
+      },
+      {
+        "reason": "Magenta cut coincides with the black station-3 hull line from bottom to top, including the S-bend around VL3-VL5.",
+        "station_id": "s002",
+        "verdict": "follows"
+      },
+      {
+        "reason": "Magenta cut traces the black station 4 hull curve from baseline to top, matching its curvature and endpoints.",
+        "station_id": "s003",
+        "verdict": "follows"
+      },
+      {
+        "reason": "Magenta cut lies on the black station 5 section line over its full length, including the upper flare.",
+        "station_id": "s004",
+        "verdict": "follows"
+      },
+      {
+        "reason": "Magenta cut coincides with the black station 6 hull line from the baseline up to the top of the curve.",
+        "station_id": "s005",
+        "verdict": "follows"
+      },
+      {
+        "reason": "Magenta cut traces the drawn station 7 hull curve from baseline to top, matching its curvature and position throughout.",
+        "station_id": "s006",
+        "verdict": "follows"
+      },
+      {
+        "reason": "Magenta cut lies on the drawn station 8 hull line over its full length, including the upper flare near VL5-VL6.",
+        "station_id": "s007",
+        "verdict": "follows"
+      },
+      {
+        "reason": "Magenta cut follows the drawn station 9 hull curve from the baseline up to the top, with only minor pixel offsets.",
+        "station_id": "s008",
+        "verdict": "follows"
+      }
+    ],
+    "vetoes": 0
+  },
+  "sysser45": {
+    "stations": [
+      {
+        "reason": "Magenta follows the hull curve only to about x=4, then drops into a stepped staircase (horizontal/vertical segments) well below the drawn section line, missing the upper hull curve.",
+        "station_id": "s000",
+        "verdict": "does_not_follow"
+      },
+      {
+        "reason": "Magenta tracks the lower hull curve to about x=6, then turns into a rectangular step down to the baseline, leaving the drawn section line and missing its upper part.",
+        "station_id": "s001",
+        "verdict": "does_not_follow"
+      },
+      {
+        "reason": "Magenta follows the hull curve only to about x=5, then steps down vertically to the baseline instead of continuing along the drawn section line.",
+        "station_id": "s002",
+        "verdict": "does_not_follow"
+      },
+      {
+        "reason": "Magenta line follows the hull curve only in the lower part, then leaves it near the bottom and runs as a horizontal/vertical step (a rectangular jog) across the grid instead of continuing along the drawn section line.",
+        "station_id": "s003",
+        "verdict": "does_not_follow"
+      },
+      {
+        "reason": "Magenta line lies on the drawn hull section curve along its whole length, from the bottom near the baseline up to the top of the station.",
+        "station_id": "s004",
+        "verdict": "follows"
+      },
+      {
+        "reason": "Magenta line traces the drawn hull section curve over its full length, from the baseline foot to the upper end, with only small offsets.",
+        "station_id": "s005",
+        "verdict": "follows"
+      },
+      {
+        "reason": "Magenta line traces the drawn station 7 hull curve from the bottom of the section up to the top, matching its shape and position.",
+        "station_id": "s006",
+        "verdict": "follows"
+      },
+      {
+        "reason": "Magenta line follows the drawn station 8 hull curve over its full length; the small step near the bottom is at the section's lower end, not a departure from the curve.",
+        "station_id": "s007",
+        "verdict": "follows"
+      },
+      {
+        "reason": "Magenta line lies on the drawn station 9 hull curve from its lower end to the top, with the same curvature.",
+        "station_id": "s008",
+        "verdict": "follows"
+      }
+    ],
+    "vetoes": 4
+  },
+  "shipd": {
+    "stations": [
+      {
+        "reason": "Magenta cut traces the black station curve from the baseline foot through the knuckle to the top, matching shape and position.",
+        "station_id": "s000",
+        "verdict": "follows"
+      },
+      {
+        "reason": "Magenta line lies on the drawn station 2 curve over its full length, including the lower knuckle and upper flare.",
+        "station_id": "s001",
+        "verdict": "follows"
+      },
+      {
+        "reason": "Magenta cut coincides with the black station 3 section line from bottom to top with only minor pixel offsets.",
+        "station_id": "s002",
+        "verdict": "follows"
+      },
+      {
+        "reason": "Magenta cut traces the drawn station 4 hull curve from the baseline knee up to the top, matching the black line throughout.",
+        "station_id": "s003",
+        "verdict": "follows"
+      },
+      {
+        "reason": "Magenta cut lies on the drawn station 5 section line over its full length, including the lower knee and upper flare.",
+        "station_id": "s004",
+        "verdict": "follows"
+      },
+      {
+        "reason": "Magenta cut coincides with the drawn station 6 hull line from baseline to top; no deviation onto grid or waterlines.",
+        "station_id": "s005",
+        "verdict": "follows"
+      },
+      {
+        "reason": "Magenta cut traces the drawn station 7 hull curve from the baseline up through the S-bend to the top, matching the black line throughout.",
+        "station_id": "s006",
+        "verdict": "follows"
+      },
+      {
+        "reason": "Magenta cut lies on the drawn station 8 section line over its full length, including the lower knee and upper flare.",
+        "station_id": "s007",
+        "verdict": "follows"
+      },
+      {
+        "reason": "Magenta cut follows the station 9 curve including the mid-height inflection and the upper reverse bend, coincident with the black line.",
+        "station_id": "s008",
+        "verdict": "follows"
+      }
+    ],
+    "vetoes": 0
+  },
+  "visual_labels_sysser45": {
+    "wrong_stations": [
+      "s000",
+      "s001",
+      "s002",
+      "s003",
+      "s006",
+      "s007",
+      "s008"
+    ],
+    "true_vetoes": 4,
+    "false_vetoes": 0,
+    "misses": 3,
+    "true_no_vetoes": 2,
+    "basis": "opened source versus exported STEP overlays, not main-band RMS alone"
+  }
+}

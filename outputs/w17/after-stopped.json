@@ -1,0 +1,42 @@
+{
+  "stopped_by": "PM",
+  "reason": "Investigation reaches builds, but strict geometry gates block drafts; switch to CAD-first small rounds. Thinking-on not run.",
+  "cases": [
+    {
+      "case_id": "dtmb5415-L0",
+      "status": "no_progress",
+      "drafts_built": 0,
+      "gate_correct": 0,
+      "requests": 40,
+      "known_list_cost_usd": 0.05406369,
+      "missing_list_cost": 0
+    },
+    {
+      "case_id": "dtmb5415-L1",
+      "status": "no_progress",
+      "drafts_built": 0,
+      "gate_correct": 0,
+      "requests": 29,
+      "known_list_cost_usd": 0.04641752,
+      "missing_list_cost": 0
+    },
+    {
+      "case_id": "dtmb5415-L2",
+      "status": "interrupted",
+      "drafts_built": 0,
+      "gate_correct": 0,
+      "requests": 8,
+      "known_list_cost_usd": 0.00900225,
+      "missing_list_cost": 1
+    },
+    {
+      "case_id": "dtmb5415-L3",
+      "status": "interrupted",
+      "drafts_built": 0,
+      "gate_correct": 0,
+      "requests": 6,
+      "known_list_cost_usd": 0.00597825,
+      "missing_list_cost": 1
+    }
+  ]
+}

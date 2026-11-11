@@ -1,5 +1,7 @@
 # Validation cache and finalization results
 
+> **Historical (0.5):** the Python Harness, `vessel-reconstruct agent ...`, `agent_review` and `agent_provider` described here were removed. Rust (`rust-control/`) is the control plane; see `docs/RUST_CONTROL_PLANE.md`. Results below stay as recorded.
+
 ## Result and scope
 
 The published 0.3 cached-failure defect is reproduced, preserved and fixed. A

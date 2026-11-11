@@ -1,0 +1,1 @@
+{"kind":"task_created","payload":{"aggregate_budget_policy":"explicit_config; null means uncapped","controller":"rust","professional_review":false},"sequence":1,"state_after":{"status":"ready"},"time_ms":1794098172770}

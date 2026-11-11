@@ -1,0 +1,9 @@
+{
+  "units": "m",
+  "z_min_m": -0.60,
+  "z_max_m": 7.60,
+  "z_step_m": 0.005,
+  "design_draft_m": 2.50,
+  "bands": {"main": ["truth_bottom", 4.287], "below_draft": ["truth_bottom", 2.50]},
+  "dense_every_truth_station": 5
+}

@@ -1,5 +1,7 @@
 # Bounded DeepSeek decisions in MarinaFrame
 
+> **Historical (0.5):** the Python Harness, `vessel-reconstruct agent ...`, `agent_review` and `agent_provider` described here were removed. Rust (`rust-control/`) is the control plane; see `docs/RUST_CONTROL_PLANE.md`. Results below stay as recorded.
+
 ## What has actually been verified
 
 On 2026-11-06, two live requests to OpenCode Go returned HTTP 200 and the requested

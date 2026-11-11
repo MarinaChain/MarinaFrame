@@ -7,6 +7,7 @@ from vessel_reconstruction.geometry import (build_hull, normalize_sections, expo
                                              approximation_summary, GeometryError)
 
 
+@pytest.mark.cad
 @pytest.mark.parametrize("name", FIXTURE_NAMES)
 def test_actual_step_local_error_at_stations_midstations_and_end_closures(tmp_path, name):
     fixture = analytic_fixture(name)

@@ -14,11 +14,17 @@ from pathlib import Path
 import re
 
 from .provenance import canonical_json, digest_file, digest_object, safe_relative_file
-from .schema import load_bounded_json
+from .resources import KNOWN_RESOURCE_PROFILES
+from .schema import load_bounded_json, load_build_result
 
 
 SCHEMA_VERSION = "marinaframe.validation.v1"
 AUDIT_CONTRACT_VERSION = "step_source_sections_v1"
+# Region runs (geometry.build_region_hull, multi-piece stations) export a
+# compound of solids. Their audit adds a per-solid check and per-piece trace
+# fidelity; tolerances and sampling are those of v1. Single-solid runs keep v1.
+REGION_AUDIT_CONTRACT_VERSION = "step_source_regions_v2"
+AUDIT_CONTRACT_VERSIONS = (AUDIT_CONTRACT_VERSION, REGION_AUDIT_CONTRACT_VERSION)
 SAMPLING_POLICY = "first_two_middle_last_two_v1"
 SECTION_SAMPLING_TEXT = "first two, middle, last two; bounded sample, not exhaustive"
 TOLERANCES = {"max_section_distance_m": 0.0011, "max_relative_metric_error": 1e-6}
@@ -39,6 +45,10 @@ GEOMETRY_KEYS = {"source", "step_sha256", "step_units", "reported_units", "valid
                  "engineering_approved", "human_semantic_review_required"}
 SECTION_KEYS = {"section_id", "x_m", "sample_count", "distance_type", "rms_m", "p95_m",
                 "max_m", "max_px", "source_measurement_uncertainty_m", "section_edges"}
+REGION_GEOMETRY_KEYS = GEOMETRY_KEYS | {"expected_solid_count", "solids", "solid_volume_relative_error"}
+REGION_SECTION_KEYS = SECTION_KEYS | {"pieces"}
+REGION_SOLID_KEYS = {"volume_m3", "valid_shape", "shell_count", "closed_shell"}
+REGION_PIECE_KEYS = {"piece", "sample_count", "max_m"}
 VALIDATION_KEYS = RAW_KEYS | {"generation_id", "revision_id", "identity_certified", "artifacts", "contract"}
 SEMANTICS = ["contour identity", "caller calibration", "station correspondence", "symmetry",
              "terminal and upper closure", "current vessel condition"]
@@ -117,7 +127,7 @@ def validate_reference(reference, task_dir=None):
 
 def implementation_identity():
     names = ("agent_render_worker.py", "validation_contract.py", "run_record.py", "geometry.py",
-             "schema.py", "provenance.py", "resources.py")
+             "schema.py", "provenance.py", "resources.py", "fonts.py", "section_regions.py")
     versions = {}
     for name in ("cadquery", "cadquery-ocp", "numpy"):
         try:
@@ -127,6 +137,18 @@ def implementation_identity():
     return digest_object({"audit_contract_version": AUDIT_CONTRACT_VERSION,
                           "implementation": {name: digest_file(Path(__file__).with_name(name)) for name in names},
                           "dependencies": versions})
+
+
+def piece_sample_counts(section: dict) -> list[int]:
+    """Observed samples per piece of a multi-piece section; empty for a single curve."""
+    return [len(piece["points_yz_m"]) + len(piece.get("inner_points_yz_m", [])) for piece in section.get("pieces", [])]
+
+
+def observed_sample_count(section: dict) -> int:
+    """All observed samples of a section: its curve, or every piece's curves."""
+    if "points_yz_m" in section:
+        return len(section["points_yz_m"])
+    return sum(piece_sample_counts(section))
 
 
 def build_context(task_dir, domain_root, state, spec, candidate, run):
@@ -158,7 +180,7 @@ def build_context(task_dir, domain_root, state, spec, candidate, run):
             and selection["engineering_approved"] is False and selection["identity_certified"] is False,
             "Current selection record is inconsistent")
     run_record = safe_relative_file(run, "result.json")
-    result = load_bounded_json(run_record, max_bytes=32 * 1024**2, max_nodes=600_000)
+    result = load_build_result(run_record)
     require(result.get("run_id") == candidate.get("run_id") and result.get("status") == "review_required",
             "Candidate run identity or status is inconsistent")
     review = result.get("review")
@@ -194,13 +216,28 @@ def build_context(task_dir, domain_root, state, spec, candidate, run):
                "revision_spec_sha256": digest_file(revision_spec),
                "run_manifest_sha256": digest_file(manifest), "run_result_sha256": digest_file(run_record),
                "step_sha256": digest_file(step), "audit_implementation_sha256": implementation_identity()}
-    return {"binding": binding, "evidence": evidence,
-            "sampling": {"policy": SAMPLING_POLICY, "section_ids": [s["id"] for s in selected_sections],
-                         "total_section_count": len(sections)},
-            "section_info": {s["id"]: {"x_m": s["x_m"], "sample_count": len(s["points_yz_m"]),
-                                        "pixels_per_metre": s["evidence"]["calibration"]["pixels_per_metre"]}
-                             for s in selected_sections},
-            "engine_metrics": {k: result["metrics"][k] for k in ("length_m", "beam_m", "depth_m", "volume_m3")}}
+    context = {"binding": binding, "evidence": evidence,
+               "sampling": {"policy": SAMPLING_POLICY, "section_ids": [s["id"] for s in selected_sections],
+                            "total_section_count": len(sections)},
+               "section_info": {s["id"]: {"x_m": s["x_m"], "sample_count": observed_sample_count(s),
+                                           "pixels_per_metre": s["evidence"]["calibration"]["pixels_per_metre"]}
+                                for s in selected_sections},
+               "engine_metrics": {k: result["metrics"][k] for k in ("length_m", "beam_m", "depth_m", "volume_m3")}}
+    if "region_loft" in result["metrics"]:
+        context["regions"] = region_context(result, selected_sections)
+    return context
+
+
+def region_context(result: dict, selected_sections: list[dict]) -> dict:
+    """Engine facts a region audit is checked against: solids and sampled piece counts."""
+    return {"audit_contract_version": REGION_AUDIT_CONTRACT_VERSION,
+            "solid_count": result["metrics"]["solid_count"],
+            "solid_volumes_m3": sorted(result["metrics"]["region_loft"]["solid_volumes_m3"]),
+            "piece_sample_counts": {s["id"]: piece_sample_counts(s) for s in selected_sections}}
+
+
+def contract_version(context) -> str:
+    return context["regions"]["audit_contract_version"] if "regions" in context else AUDIT_CONTRACT_VERSION
 
 
 def assess_raw(raw, context):
@@ -211,7 +248,9 @@ def assess_raw(raw, context):
             and raw["human_semantic_review_required"] is True, "Native review/truth boundary is invalid")
     require(raw["unresolved_semantics"] == SEMANTICS and raw["section_sampling"] == SECTION_SAMPLING_TEXT,
             "Unknown semantic obligations or section sampling contract")
-    geometry = record(raw["geometry_audit"], GEOMETRY_KEYS, "Native geometry audit")
+    regions = context.get("regions")
+    geometry = record(raw["geometry_audit"], REGION_GEOMETRY_KEYS if regions else GEOMETRY_KEYS,
+                      "Native geometry audit")
     require(geometry["source"] == "independently_reimported_exported_STEP"
             and geometry["step_units"] == "mm" and geometry["reported_units"] == "m",
             "Audit must measure actual exported millimetre STEP")
@@ -229,7 +268,10 @@ def assess_raw(raw, context):
     measured_relative = max(abs(metrics[k] - context["engine_metrics"][k]) /
                             max(abs(context["engine_metrics"][k]), 1e-12) for k in metrics)
     require(close(relative, measured_relative), "Reported metric error contradicts reimported measurements")
-    cad_passed = valid_shape and closed_shell and solid_count == 1 and shell_count == 1 and relative <= TOLERANCES["max_relative_metric_error"]
+    if regions:
+        cad_passed = _region_cad_passed(geometry, regions, valid_shape, closed_shell, solid_count, shell_count, relative)
+    else:
+        cad_passed = valid_shape and closed_shell and solid_count == 1 and shell_count == 1 and relative <= TOLERANCES["max_relative_metric_error"]
     sections = raw["sampled_sections"]
     sampling = context["sampling"]
     require(type(sections) is list and len(sections) == len(sampling["section_ids"]), "Missing or excess sampled sections")
@@ -238,7 +280,7 @@ def assess_raw(raw, context):
             "Section count contradicts the current candidate")
     ids = []
     for section in sections:
-        record(section, SECTION_KEYS, "Section measurement")
+        record(section, REGION_SECTION_KEYS if regions else SECTION_KEYS, "Section measurement")
         sid = section["section_id"]
         require(type(sid) is str and sid in context["section_info"], "Unknown sampled section identity")
         info = context["section_info"][sid]
@@ -254,12 +296,54 @@ def assess_raw(raw, context):
         require(close(section["max_px"], section["max_m"] * info["pixels_per_metre"]), "Pixel/metre error conversion is inconsistent")
         if section["source_measurement_uncertainty_m"] is not None:
             number(section["source_measurement_uncertainty_m"], "Source measurement uncertainty")
+        if regions:
+            _check_piece_reports(section, regions["piece_sample_counts"][sid])
     require(ids == sampling["section_ids"] and len(set(ids)) == len(ids), "Sampled section identity/order is inconsistent")
     maximum = max(section["max_m"] for section in sections)
     trace_passed = maximum <= TOLERANCES["max_section_distance_m"]
     passed = cad_passed and trace_passed
     require(raw["geometry_checks_passed"] is passed, "Native pass flag contradicts its individual checks")
     return Assessment(passed, cad_passed, trace_passed, float(maximum), relative)
+
+
+def _region_cad_passed(geometry, regions, valid_shape, closed_shell, solid_count, shell_count, relative):
+    """CAD validity of a region compound: the engine's solids, each valid, closed and of its volume."""
+    expected = integer(geometry["expected_solid_count"], "Expected solid count", 1, 20_000)
+    require(expected == regions["solid_count"], "Audit expects another solid count than the engine record")
+    solids = geometry["solids"]
+    require(type(solids) is list and len(solids) == solid_count, "Per-solid audit is incomplete")
+    for solid in solids:
+        record(solid, REGION_SOLID_KEYS, "Solid audit")
+        number(solid["volume_m3"], "Solid volume")
+        integer(solid["shell_count"], "Solid shell count", 0, 20_000)
+        boolean(solid["valid_shape"], "Solid validity")
+        boolean(solid["closed_shell"], "Solid closed shell")
+    volumes = [solid["volume_m3"] for solid in solids]
+    require(volumes == sorted(volumes), "Per-solid audit is not in volume order")
+    volume_error = number(geometry["solid_volume_relative_error"], "Solid volume error")
+    if len(volumes) == len(regions["solid_volumes_m3"]):
+        measured = max(abs(a - b) / max(b, 1e-12) for a, b in zip(volumes, regions["solid_volumes_m3"]))
+        require(close(volume_error, measured), "Reported solid volume error contradicts the measurements")
+    require(closed_shell == all(solid["closed_shell"] for solid in solids), "Closed-shell summary contradicts the solids")
+    return (valid_shape and closed_shell and solid_count == expected and shell_count == expected
+            and all(solid["valid_shape"] and solid["shell_count"] == 1 for solid in solids)
+            and len(volumes) == len(regions["solid_volumes_m3"])
+            and volume_error <= TOLERANCES["max_relative_metric_error"]
+            and relative <= TOLERANCES["max_relative_metric_error"])
+
+
+def _check_piece_reports(section, counts):
+    """Per-piece trace reports of one sampled section agree with its pieces and its maximum."""
+    pieces = section["pieces"]
+    require(type(pieces) is list and len(pieces) == len(counts), "Per-piece trace reports are incomplete")
+    for index, (piece, count) in enumerate(zip(pieces, counts)):
+        record(piece, REGION_PIECE_KEYS, "Piece trace report")
+        require(piece["piece"] == index and integer(piece["sample_count"], "Piece samples", 1, 1025) == count,
+                "Piece trace report identity or coverage changed")
+        number(piece["max_m"], "Piece maximum distance")
+    if pieces:
+        require(close(max(piece["max_m"] for piece in pieces), section["max_m"]),
+                "Piece maxima contradict the section maximum")
 
 
 def raw_validation(validation):
@@ -306,7 +390,7 @@ def make_contract(raw, context, artifacts, outcome, task_dir):
         "tolerances": dict(TOLERANCES), "sampling": context["sampling"],
         "measurements": {"max_section_distance_m": assessment.max_section_distance_m,
                          "relative_metric_error": assessment.relative_metric_error},
-        "evidence": context["evidence"] + references, "audit_contract_version": AUDIT_CONTRACT_VERSION,
+        "evidence": context["evidence"] + references, "audit_contract_version": contract_version(context),
         "semantic_review": "required", "engineering_approved": False}
     return contract
 
@@ -314,7 +398,7 @@ def make_contract(raw, context, artifacts, outcome, task_dir):
 def validate_contract_shape(contract):
     """Strict schema/semantic validation without trusting Python truthiness."""
     record(contract, CONTRACT_KEYS, "Validation contract")
-    require(contract["schema_version"] == SCHEMA_VERSION and contract["audit_contract_version"] == AUDIT_CONTRACT_VERSION,
+    require(contract["schema_version"] == SCHEMA_VERSION and contract["audit_contract_version"] in AUDIT_CONTRACT_VERSIONS,
             "Unsupported validation contract version")
     binding = record(contract["binding"], BINDING_KEYS, "Validation binding")
     for key in BINDING_KEYS - {"generation_id", "revision_id", "run_id"}:
@@ -362,7 +446,8 @@ def verify_validation(validation, context, task_dir):
     raw = raw_validation(validation)
     contract = validation["contract"]
     validate_contract_shape(contract)
-    require(contract["binding"] == context["binding"] and contract["sampling"] == context["sampling"],
+    require(contract["binding"] == context["binding"] and contract["sampling"] == context["sampling"]
+            and contract["audit_contract_version"] == contract_version(context),
             "Cached validation belongs to another source, revision, STEP or audit contract")
     require(validation["generation_id"] == context["binding"]["generation_id"]
             and validation["revision_id"] == context["binding"]["revision_id"], "Legacy validation identity disagrees")
@@ -387,7 +472,7 @@ def verify_validation(validation, context, task_dir):
     number(resources["wall_seconds"], "Native wall time")
     number(resources["cpu_seconds"], "Native CPU time")
     integer(resources["peak_rss_kib"], "Native peak RSS", 1, 2**40)
-    require(resources["resource_profile"] == "linux_rlimit_process_group_v1", "Unknown native resource profile")
+    require(resources["resource_profile"] in KNOWN_RESOURCE_PROFILES, "Unknown native resource profile")
     require(canonical_json(receipt["validation"]) == canonical_json(raw),
             "Worker receipt contradicts authoritative audit")
     require(type(receipt["artifacts"]) is list and len(receipt["artifacts"]) == len(validation["artifacts"]) - 1,

@@ -49,6 +49,7 @@ def run(directory: Path, spec: dict, name='run', **options):
     return reconstruct(path, directory/name, **options)
 
 
+@pytest.mark.cad
 def test_pixels_to_cad_analytical_volume_and_export_units(tmp_path):
     spec=drawing_fixture(tmp_path)
     result=run(tmp_path,spec)
@@ -81,6 +82,7 @@ def test_pixels_to_cad_analytical_volume_and_export_units(tmp_path):
     assert verify_run(tmp_path/'run')['valid'] is True
 
 
+@pytest.mark.cad
 def test_dimensional_scaling_changes_length_area_volume_consistently(tmp_path):
     original=run(tmp_path/'original',drawing_fixture(tmp_path/'original'),export_cad=False)
     doubled=run(tmp_path/'doubled',drawing_fixture(tmp_path/'doubled',scale=2),export_cad=False)
@@ -111,6 +113,7 @@ def test_blank_required_station_never_gets_interpolated_away(tmp_path):
     assert result['exports']=={} and result['parts']==[]
 
 
+@pytest.mark.cad
 def test_neighboring_reference_file_cannot_change_inference(tmp_path):
     spec=drawing_fixture(tmp_path)
     reference=tmp_path/'ground_truth.json'
@@ -126,6 +129,7 @@ def test_neighboring_reference_file_cannot_change_inference(tmp_path):
     assert not (tmp_path/'second'/'ground_truth.json').exists()
 
 
+@pytest.mark.cad
 def test_source_pixels_control_geometry_and_recorded_evidence(tmp_path):
     spec=drawing_fixture(tmp_path)
     first=run(tmp_path,spec,'first',export_cad=False)

@@ -8,30 +8,32 @@ Rust supervisor and retained native supervisors; this is not an OS sandbox.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import os
-from pathlib import Path
-import resource
-import signal
 import shutil
+import signal
 import sys
 import threading
 import time
 from importlib import metadata
+from pathlib import Path
 
 from .agent_tools import DomainTools, _artifact, _model_observation_image
+from .tool_catalog import catalog
 from .provenance import digest_file, digest_object, write_json
+from .process_limits import posix_resource
+from .resources import peak_rss_kib
+from .progress import Heartbeat
 from .schema import loads_bounded_json
+from .validation_contract import implementation_identity as audit_implementation_identity
 
 PROTOCOL = "marinaframe.worker.v1"
-OPERATIONS = {"initialize", "observe", "inspect_source", "select_contours",
-              "build_provisional", "render_candidate", "validate_candidate"}
+OPERATIONS = {tool["operation"] for tool in catalog() if tool["route"] == "worker"}
 
 
 def implementation_identity():
     root = Path(__file__).resolve().parent
     files = {p.name: digest_file(p) for p in sorted(root.glob("*.py"))}
+    files["tool_catalog.json"] = digest_file(root / "tool_catalog.json")
     versions = {name: metadata.version(name) for name in ("cadquery", "cadquery-ocp", "numpy", "Pillow", "scipy")}
     return digest_object({"files": files, "dependencies": versions, "python": sys.version.split()[0]})
 
@@ -65,6 +67,9 @@ def execute(request, task_root, source_spec, cancel):
     task_root = Path(task_root).absolute()
     if task_root.is_symlink() or not task_root.is_dir():
         raise ValueError("Task root must be an existing ordinary directory")
+    # A parent directory may be a symlink (macOS /tmp -> /private/tmp).
+    # DomainTools resolves its paths, so artifact paths must use the same form.
+    task_root = task_root.resolve()
     implementation = implementation_identity()
     expected = request["expected_worker_sha256"]
     if expected is not None and expected != implementation:
@@ -85,6 +90,9 @@ def execute(request, task_root, source_spec, cancel):
                   "tools": domain.catalog()}
     else:
         result = domain.execute(request["operation"], request["arguments"])
+    # The controller pins this value from the initialize receipt and later
+    # requires every validation contract to carry the pinned value.
+    result["audit_implementation_sha256"] = audit_implementation_identity()
     if domain.state.get("validation") is not None:
         result["validation_context"] = domain.validation_context()
     if request["operation"] == "validate_candidate" and isinstance(result.get("validation"), dict):
@@ -128,14 +136,18 @@ def main(argv=None):
     signal.signal(signal.SIGINT, lambda *_: cancel.set())
     started = time.monotonic()
     request = None
+    resource = None
     envelope = {"protocol": PROTOCOL, "request_id": None, "operation": None,
                 "execution_state": "failed", "result": None, "domain": None,
                 "domain_checkpoint_sha256": None,
                 "implementation_sha256": implementation_identity(), "error_code": None}
     try:
+        resource = posix_resource()  # first: Windows fails closed before any work, with a receipt
         request = parse_request(sys.stdin.buffer.read(98_305))
         envelope.update(request_id=request["request_id"], operation=request["operation"])
-        envelope.update(execute(request, args.task_root, args.source_spec, cancel))
+        stage = request['operation'].replace('_', ' ').capitalize()
+        with Heartbeat(stage):
+            envelope.update(execute(request, args.task_root, args.source_spec, cancel))
         envelope["execution_state"] = "completed"
     except InterruptedError:
         envelope.update(execution_state="cancelled", error_code="worker_cancelled")
@@ -143,15 +155,16 @@ def main(argv=None):
         # Native data and exceptions can include arbitrary source text/paths.
         # Preserve a bounded category, never a raw exception or environment.
         envelope["error_code"] = "worker_boundary_" + type(exc).__name__.lower()
-    usage = resource.getrusage(resource.RUSAGE_SELF)
-    children = resource.getrusage(resource.RUSAGE_CHILDREN)
-    envelope["resources"] = {
-        "wall_seconds": time.monotonic() - started,
-        "worker_cpu_seconds": usage.ru_utime + usage.ru_stime,
-        "children_cpu_seconds": children.ru_utime + children.ru_stime,
-        "worker_peak_rss_kib": usage.ru_maxrss,
-        "children_peak_rss_kib": children.ru_maxrss,
-        "rss_interpretation": "separate process maxima; not summed process-tree peak"}
+    if resource is not None:
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        children = resource.getrusage(resource.RUSAGE_CHILDREN)
+        envelope["resources"] = {
+            "wall_seconds": time.monotonic() - started,
+            "worker_cpu_seconds": usage.ru_utime + usage.ru_stime,
+            "children_cpu_seconds": children.ru_utime + children.ru_stime,
+            "worker_peak_rss_kib": peak_rss_kib(usage.ru_maxrss),
+            "children_peak_rss_kib": peak_rss_kib(children.ru_maxrss),
+            "rss_interpretation": "separate process maxima; not summed process-tree peak"}
     args.response.parent.mkdir(parents=True, exist_ok=True)
     if args.response.exists() or args.response.is_symlink():
         raise SystemExit("Refusing to replace a worker receipt")

@@ -1,0 +1,510 @@
+{
+  "step_sha256": "5750d4e8fcb975fe57b219ad0092c423954c867dd7c862eb8f0222ed8bd49fc7",
+  "records": [
+    {
+      "authorization_basis": "User authorized acquired drawings for W12 development evaluation",
+      "endpoint": "https://opencode.ai/inference/go/openai/v1/chat/completions",
+      "engineering_approved": false,
+      "evidence_mode": "live",
+      "finished_ms": 1794073177330,
+      "prompt_sha256": "86288e7612141c7abece7bb126c24f2e342c7c114ed4ef886588637e108fef08",
+      "purpose": "build_review",
+      "receipts": [
+        {
+          "aggregate_request_cap": null,
+          "aggregate_spend_cap": null,
+          "aggregate_token_cap": null,
+          "attempt": 1,
+          "completion_id": "gw-db10255fc9e-a7eca3",
+          "credential_selection": {
+            "candidates": [
+              {
+                "highest_usage_percent": 55.0,
+                "slot": 1
+              },
+              {
+                "slot": 2,
+                "unavailable": "usage_exhausted_or_unverified"
+              },
+              {
+                "slot": 3,
+                "unavailable": "usage_exhausted_or_unverified"
+              }
+            ],
+            "policy": "lowest_go_usage",
+            "slot": 1
+          },
+          "decision": null,
+          "endpoint": "https://opencode.ai/inference/go/openai/v1/chat/completions",
+          "error_code": null,
+          "evidence_mode": "live",
+          "generation_id": "vision_request",
+          "http_status": 200,
+          "images": [
+            {
+              "artifact_id": "s000",
+              "bytes": 179782,
+              "evidence_kind": "build_review_overlay",
+              "generation_id": null,
+              "mime_type": "image/png",
+              "path": "station-000.png",
+              "pixels_attached": true,
+              "revision_id": null,
+              "sha256": "2d0a4bed221b00e5c4e26dda0decbadae19d35b65384b929ec2ebbb3d8cdf151",
+              "step_sha256": null,
+              "view": "station:s000"
+            },
+            {
+              "artifact_id": "s001",
+              "bytes": 178834,
+              "evidence_kind": "build_review_overlay",
+              "generation_id": null,
+              "mime_type": "image/png",
+              "path": "station-001.png",
+              "pixels_attached": true,
+              "revision_id": null,
+              "sha256": "73d596999fbb2606d9393b5f09200b8a36fe9e31c422b56bb9b7b1713afa7500",
+              "step_sha256": null,
+              "view": "station:s001"
+            },
+            {
+              "artifact_id": "s002",
+              "bytes": 183062,
+              "evidence_kind": "build_review_overlay",
+              "generation_id": null,
+              "mime_type": "image/png",
+              "path": "station-002.png",
+              "pixels_attached": true,
+              "revision_id": null,
+              "sha256": "e1265d5ab83ec09ee7ef9a190834d40c655b41e6b74f2df075f50b7a52930c37",
+              "step_sha256": null,
+              "view": "station:s002"
+            }
+          ],
+          "latency_seconds": 4.337130708,
+          "observation_sha256": "a21ac0ed50898d3abc324b28906d7717b78701d808c1385e686c07e33ada10fc",
+          "observed_cost_usd": 0.0,
+          "prompt_sha256": "86288e7612141c7abece7bb126c24f2e342c7c114ed4ef886588637e108fef08",
+          "protocol": "marinaframe.provider.v1",
+          "provider_request_id": null,
+          "purpose": "build_review",
+          "request_id": "vision-1794073171206-40423-0-cbdb1df48b9d",
+          "request_sha256": "5c3488616611f0c12d9c8bb70de80ec4172f0fd060559c189b3d2ac3fdaa18f2",
+          "requested_model": "deepseek-v4.1-flash",
+          "response_sha256": "ee30883e3b9b124b6b81e2eaed540d08d7580f7d05ba9f861c4c2e3e72afcfbf",
+          "retry_after_seconds": null,
+          "retry_of": null,
+          "returned_model": "deepseek-v4.1-flash",
+          "revision_id": "8716bc87b7d15bec27482db2c43beba24dbac973e99af2abfaa4d63665aa2c1b",
+          "source_manifest_sha256": "ad6a5f32fbf52c50fb1602019aaf9376e7eb4775b1a5370bd983a404ba92b839",
+          "state": "completed",
+          "usage": {
+            "allowance": 0.00022113,
+            "billing_source": "go",
+            "completion_tokens": 159,
+            "cost": 0.0,
+            "list_cost": 0.00036855,
+            "prompt_tokens": 1821,
+            "total_tokens": 1980
+          },
+          "vision": {
+            "build_review": {
+              "stations": [
+                {
+                  "reason": "Magenta follows the hull curve only to about x=4, then drops into a stepped staircase (horizontal/vertical segments) well below the drawn section line, missing the upper hull curve.",
+                  "station_id": "s000",
+                  "verdict": "does_not_follow"
+                },
+                {
+                  "reason": "Magenta tracks the lower hull curve to about x=6, then turns into a rectangular step down to the baseline, leaving the drawn section line and missing its upper part.",
+                  "station_id": "s001",
+                  "verdict": "does_not_follow"
+                },
+                {
+                  "reason": "Magenta follows the hull curve only to about x=5, then steps down vertically to the baseline instead of continuing along the drawn section line.",
+                  "station_id": "s002",
+                  "verdict": "does_not_follow"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "reply": {
+        "build_review": {
+          "stations": [
+            {
+              "reason": "Magenta follows the hull curve only to about x=4, then drops into a stepped staircase (horizontal/vertical segments) well below the drawn section line, missing the upper hull curve.",
+              "station_id": "s000",
+              "verdict": "does_not_follow"
+            },
+            {
+              "reason": "Magenta tracks the lower hull curve to about x=6, then turns into a rectangular step down to the baseline, leaving the drawn section line and missing its upper part.",
+              "station_id": "s001",
+              "verdict": "does_not_follow"
+            },
+            {
+              "reason": "Magenta follows the hull curve only to about x=5, then steps down vertically to the baseline instead of continuing along the drawn section line.",
+              "station_id": "s002",
+              "verdict": "does_not_follow"
+            }
+          ]
+        }
+      },
+      "request_manifest_sha256": "ad6a5f32fbf52c50fb1602019aaf9376e7eb4775b1a5370bd983a404ba92b839",
+      "requested_model": "deepseek-v4.1-flash",
+      "schema_version": "marinaframe.vision_reading.v1",
+      "source_sha256": "8716bc87b7d15bec27482db2c43beba24dbac973e99af2abfaa4d63665aa2c1b",
+      "started_ms": 1794073171205,
+      "stop_reason": null,
+      "usage": {
+        "completion_tokens": 159,
+        "observed_cost_usd": 0.0,
+        "prompt_tokens": 1821,
+        "requests_completed": 1,
+        "requests_failed": 0,
+        "requests_intended": 1,
+        "requests_not_sent": 0,
+        "requests_unknown": 0,
+        "requests_without_cost": 0
+      }
+    },
+    {
+      "authorization_basis": "User authorized acquired drawings for W12 development evaluation",
+      "endpoint": "https://opencode.ai/inference/go/openai/v1/chat/completions",
+      "engineering_approved": false,
+      "evidence_mode": "live",
+      "finished_ms": 1794073183684,
+      "prompt_sha256": "86288e7612141c7abece7bb126c24f2e342c7c114ed4ef886588637e108fef08",
+      "purpose": "build_review",
+      "receipts": [
+        {
+          "aggregate_request_cap": null,
+          "aggregate_spend_cap": null,
+          "aggregate_token_cap": null,
+          "attempt": 1,
+          "completion_id": "gw-1075c2293789-11b2900",
+          "credential_selection": {
+            "candidates": [
+              {
+                "highest_usage_percent": 55.0,
+                "slot": 1
+              },
+              {
+                "slot": 2,
+                "unavailable": "usage_exhausted_or_unverified"
+              },
+              {
+                "slot": 3,
+                "unavailable": "usage_exhausted_or_unverified"
+              }
+            ],
+            "policy": "lowest_go_usage",
+            "slot": 1
+          },
+          "decision": null,
+          "endpoint": "https://opencode.ai/inference/go/openai/v1/chat/completions",
+          "error_code": null,
+          "evidence_mode": "live",
+          "generation_id": "vision_request",
+          "http_status": 200,
+          "images": [
+            {
+              "artifact_id": "s003",
+              "bytes": 180411,
+              "evidence_kind": "build_review_overlay",
+              "generation_id": null,
+              "mime_type": "image/png",
+              "path": "station-003.png",
+              "pixels_attached": true,
+              "revision_id": null,
+              "sha256": "59da31271341898c7edac505df44e15eb13b41cc1f3ce7b8d16e1d2408028e65",
+              "step_sha256": null,
+              "view": "station:s003"
+            },
+            {
+              "artifact_id": "s004",
+              "bytes": 179957,
+              "evidence_kind": "build_review_overlay",
+              "generation_id": null,
+              "mime_type": "image/png",
+              "path": "station-004.png",
+              "pixels_attached": true,
+              "revision_id": null,
+              "sha256": "6fe8512ff0554be1a6d34d616a456baec829321fb4aaf82f775bb2fb9a367206",
+              "step_sha256": null,
+              "view": "station:s004"
+            },
+            {
+              "artifact_id": "s005",
+              "bytes": 181293,
+              "evidence_kind": "build_review_overlay",
+              "generation_id": null,
+              "mime_type": "image/png",
+              "path": "station-005.png",
+              "pixels_attached": true,
+              "revision_id": null,
+              "sha256": "b77aea434e2c82262882e8e43d8bd55ed39983dd00e9ee82f7981a887b575a36",
+              "step_sha256": null,
+              "view": "station:s005"
+            }
+          ],
+          "latency_seconds": 4.879171416,
+          "observation_sha256": "1358fba16d549e5de49ebbeeaf8cd662639cb2f7bc4fc0264471207fc2adc2f8",
+          "observed_cost_usd": 0.0,
+          "prompt_sha256": "86288e7612141c7abece7bb126c24f2e342c7c114ed4ef886588637e108fef08",
+          "protocol": "marinaframe.provider.v1",
+          "provider_request_id": null,
+          "purpose": "build_review",
+          "request_id": "vision-1794073177371-40512-0-e655ca3458fe",
+          "request_sha256": "d7826a14d6a3fc7b212c9d76ccb9eb21d4c91324f0904ea112b2cdf710a7b902",
+          "requested_model": "deepseek-v4.1-flash",
+          "response_sha256": "a1fb5d48f9b29fc1790ad00e16aceb5c4be052a334bfccd1506b580871abb0f9",
+          "retry_after_seconds": null,
+          "retry_of": null,
+          "returned_model": "deepseek-v4.1-flash",
+          "revision_id": "8716bc87b7d15bec27482db2c43beba24dbac973e99af2abfaa4d63665aa2c1b",
+          "source_manifest_sha256": "7842e3fb62f896c4bec87ef8f4467f38a6e728329ab65ff77d0ffbbe1f905ca5",
+          "state": "completed",
+          "usage": {
+            "allowance": 0.00021933,
+            "billing_source": "go",
+            "completion_tokens": 154,
+            "cost": 0.0,
+            "list_cost": 0.00036555,
+            "prompt_tokens": 1821,
+            "total_tokens": 1975
+          },
+          "vision": {
+            "build_review": {
+              "stations": [
+                {
+                  "reason": "Magenta line follows the hull curve only in the lower part, then leaves it near the bottom and runs as a horizontal/vertical step (a rectangular jog) across the grid instead of continuing along the drawn section line.",
+                  "station_id": "s003",
+                  "verdict": "does_not_follow"
+                },
+                {
+                  "reason": "Magenta line lies on the drawn hull section curve along its whole length, from the bottom near the baseline up to the top of the station.",
+                  "station_id": "s004",
+                  "verdict": "follows"
+                },
+                {
+                  "reason": "Magenta line traces the drawn hull section curve over its full length, from the baseline foot to the upper end, with only small offsets.",
+                  "station_id": "s005",
+                  "verdict": "follows"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "reply": {
+        "build_review": {
+          "stations": [
+            {
+              "reason": "Magenta line follows the hull curve only in the lower part, then leaves it near the bottom and runs as a horizontal/vertical step (a rectangular jog) across the grid instead of continuing along the drawn section line.",
+              "station_id": "s003",
+              "verdict": "does_not_follow"
+            },
+            {
+              "reason": "Magenta line lies on the drawn hull section curve along its whole length, from the bottom near the baseline up to the top of the station.",
+              "station_id": "s004",
+              "verdict": "follows"
+            },
+            {
+              "reason": "Magenta line traces the drawn hull section curve over its full length, from the baseline foot to the upper end, with only small offsets.",
+              "station_id": "s005",
+              "verdict": "follows"
+            }
+          ]
+        }
+      },
+      "request_manifest_sha256": "7842e3fb62f896c4bec87ef8f4467f38a6e728329ab65ff77d0ffbbe1f905ca5",
+      "requested_model": "deepseek-v4.1-flash",
+      "schema_version": "marinaframe.vision_reading.v1",
+      "source_sha256": "8716bc87b7d15bec27482db2c43beba24dbac973e99af2abfaa4d63665aa2c1b",
+      "started_ms": 1794073177370,
+      "stop_reason": null,
+      "usage": {
+        "completion_tokens": 154,
+        "observed_cost_usd": 0.0,
+        "prompt_tokens": 1821,
+        "requests_completed": 1,
+        "requests_failed": 0,
+        "requests_intended": 1,
+        "requests_not_sent": 0,
+        "requests_unknown": 0,
+        "requests_without_cost": 0
+      }
+    },
+    {
+      "authorization_basis": "User authorized acquired drawings for W12 development evaluation",
+      "endpoint": "https://opencode.ai/inference/go/openai/v1/chat/completions",
+      "engineering_approved": false,
+      "evidence_mode": "live",
+      "finished_ms": 1794073189006,
+      "prompt_sha256": "86288e7612141c7abece7bb126c24f2e342c7c114ed4ef886588637e108fef08",
+      "purpose": "build_review",
+      "receipts": [
+        {
+          "aggregate_request_cap": null,
+          "aggregate_spend_cap": null,
+          "aggregate_token_cap": null,
+          "attempt": 1,
+          "completion_id": "gw-e9af2eb7498-c442c4",
+          "credential_selection": {
+            "candidates": [
+              {
+                "highest_usage_percent": 55.0,
+                "slot": 1
+              },
+              {
+                "slot": 2,
+                "unavailable": "usage_exhausted_or_unverified"
+              },
+              {
+                "slot": 3,
+                "unavailable": "usage_exhausted_or_unverified"
+              }
+            ],
+            "policy": "lowest_go_usage",
+            "slot": 1
+          },
+          "decision": null,
+          "endpoint": "https://opencode.ai/inference/go/openai/v1/chat/completions",
+          "error_code": null,
+          "evidence_mode": "live",
+          "generation_id": "vision_request",
+          "http_status": 200,
+          "images": [
+            {
+              "artifact_id": "s006",
+              "bytes": 179592,
+              "evidence_kind": "build_review_overlay",
+              "generation_id": null,
+              "mime_type": "image/png",
+              "path": "station-006.png",
+              "pixels_attached": true,
+              "revision_id": null,
+              "sha256": "2c8c6506582aa9f1301d3feff1a3063db3a8f32881ed9381e409ab847bd0a2ec",
+              "step_sha256": null,
+              "view": "station:s006"
+            },
+            {
+              "artifact_id": "s007",
+              "bytes": 181225,
+              "evidence_kind": "build_review_overlay",
+              "generation_id": null,
+              "mime_type": "image/png",
+              "path": "station-007.png",
+              "pixels_attached": true,
+              "revision_id": null,
+              "sha256": "e154dd037b91f3bb8d042f27c1987c75e9efcf163ed2ca28e4938aa4115c336a",
+              "step_sha256": null,
+              "view": "station:s007"
+            },
+            {
+              "artifact_id": "s008",
+              "bytes": 181820,
+              "evidence_kind": "build_review_overlay",
+              "generation_id": null,
+              "mime_type": "image/png",
+              "path": "station-008.png",
+              "pixels_attached": true,
+              "revision_id": null,
+              "sha256": "9f0737881b035f1724466c3ab2264795bb1606d93d4720ca5a9395cee7feb4c1",
+              "step_sha256": null,
+              "view": "station:s008"
+            }
+          ],
+          "latency_seconds": 3.89713675,
+          "observation_sha256": "f1d9e5a8179a0179ea086ca87507eefd77d2f5e10411955a93f6aae409255be8",
+          "observed_cost_usd": 0.0,
+          "prompt_sha256": "86288e7612141c7abece7bb126c24f2e342c7c114ed4ef886588637e108fef08",
+          "protocol": "marinaframe.provider.v1",
+          "provider_request_id": null,
+          "purpose": "build_review",
+          "request_id": "vision-1794073183722-40862-0-214e0c7efd09",
+          "request_sha256": "b6bac5ea442f3dc7b58940d52dc7f5e4f44c66e2443c5f6291da5b95cc06be00",
+          "requested_model": "deepseek-v4.1-flash",
+          "response_sha256": "11d46e317f4188e253add6f3f9548469abda31b6e10d782103a455e319b9aec1",
+          "retry_after_seconds": null,
+          "retry_of": null,
+          "returned_model": "deepseek-v4.1-flash",
+          "revision_id": "8716bc87b7d15bec27482db2c43beba24dbac973e99af2abfaa4d63665aa2c1b",
+          "source_manifest_sha256": "80beb66d2343c1c6ab52e109cb44e098da1e1c5c583c044f4cfd45d9e2fbaff2",
+          "state": "completed",
+          "usage": {
+            "allowance": 0.00021465,
+            "billing_source": "go",
+            "completion_tokens": 141,
+            "cost": 0.0,
+            "list_cost": 0.00035775,
+            "prompt_tokens": 1821,
+            "total_tokens": 1962
+          },
+          "vision": {
+            "build_review": {
+              "stations": [
+                {
+                  "reason": "Magenta line traces the drawn station 7 hull curve from the bottom of the section up to the top, matching its shape and position.",
+                  "station_id": "s006",
+                  "verdict": "follows"
+                },
+                {
+                  "reason": "Magenta line follows the drawn station 8 hull curve over its full length; the small step near the bottom is at the section's lower end, not a departure from the curve.",
+                  "station_id": "s007",
+                  "verdict": "follows"
+                },
+                {
+                  "reason": "Magenta line lies on the drawn station 9 hull curve from its lower end to the top, with the same curvature.",
+                  "station_id": "s008",
+                  "verdict": "follows"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "reply": {
+        "build_review": {
+          "stations": [
+            {
+              "reason": "Magenta line traces the drawn station 7 hull curve from the bottom of the section up to the top, matching its shape and position.",
+              "station_id": "s006",
+              "verdict": "follows"
+            },
+            {
+              "reason": "Magenta line follows the drawn station 8 hull curve over its full length; the small step near the bottom is at the section's lower end, not a departure from the curve.",
+              "station_id": "s007",
+              "verdict": "follows"
+            },
+            {
+              "reason": "Magenta line lies on the drawn station 9 hull curve from its lower end to the top, with the same curvature.",
+              "station_id": "s008",
+              "verdict": "follows"
+            }
+          ]
+        }
+      },
+      "request_manifest_sha256": "80beb66d2343c1c6ab52e109cb44e098da1e1c5c583c044f4cfd45d9e2fbaff2",
+      "requested_model": "deepseek-v4.1-flash",
+      "schema_version": "marinaframe.vision_reading.v1",
+      "source_sha256": "8716bc87b7d15bec27482db2c43beba24dbac973e99af2abfaa4d63665aa2c1b",
+      "started_ms": 1794073183721,
+      "stop_reason": null,
+      "usage": {
+        "completion_tokens": 141,
+        "observed_cost_usd": 0.0,
+        "prompt_tokens": 1821,
+        "requests_completed": 1,
+        "requests_failed": 0,
+        "requests_intended": 1,
+        "requests_not_sent": 0,
+        "requests_unknown": 0,
+        "requests_without_cost": 0
+      }
+    }
+  ],
+  "engineering_approved": false
+}

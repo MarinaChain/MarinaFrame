@@ -1,21 +1,12 @@
 //! Author-separated adversaries for receipt reconciliation and state recovery.
 //! The fixtures are explicit protocol doubles. No network, model or CAD runs.
-#![allow(dead_code)]
 
-#[path = "../src/controller.rs"]
-mod controller;
-#[path = "../src/provider.rs"]
-mod provider;
-#[path = "../src/store.rs"]
-mod store;
-#[path = "../src/types.rs"]
-mod types;
-#[path = "../src/util.rs"]
-mod util;
-#[path = "../src/validation.rs"]
-mod validation;
-#[path = "../src/worker.rs"]
-mod worker;
+use marinaframe_control::controller;
+use marinaframe_control::provider;
+use marinaframe_control::store;
+use marinaframe_control::types;
+use marinaframe_control::util;
+use marinaframe_control::worker;
 
 use provider::{ProviderInput, Receipt, RequestState};
 use serde_json::{json, Value};
@@ -31,7 +22,9 @@ fn controlled_config() -> Config {
         provider_transfer_authorized: true,
         authorization_basis: "Explicit no-network protocol fixture".into(),
         model: GO_MODEL.into(),
+        fallback_models: vec![],
         binary_sha256: util::file_hash(&std::env::current_exe().unwrap()).unwrap(),
+        on_ambiguity: OnAmbiguity::Abstain,
     }
 }
 
@@ -63,6 +56,7 @@ fn provider_fixture() -> (tempfile::TempDir, store::Store, Pending, Receipt) {
         payload: json!({"model": GO_MODEL, "messages": [{"role":"system", "content":provider::SYSTEM_PROMPT}], "fixture":"not transmitted"}),
         attempt: 1,
         retry_of: None,
+        purpose: Default::default(),
     };
     util::atomic_json(&store.path.join(&pending.request_path), &input, false).unwrap();
     store.state.pending = Some(pending.clone());
@@ -93,6 +87,7 @@ fn provider_fixture() -> (tempfile::TempDir, store::Store, Pending, Receipt) {
             tool: "finish".into(),
             arguments: json!({"outcome":"abstain","summary":"Protocol fixture only."}),
             reason: "Controlled receipt.".into(),
+            notes: None,
         }),
         error_code: None,
         attempt: 1,
@@ -102,6 +97,10 @@ fn provider_fixture() -> (tempfile::TempDir, store::Store, Pending, Receipt) {
         aggregate_token_cap: None,
         aggregate_spend_cap: None,
         evidence_mode: "live".into(),
+        credential_selection: None,
+        purpose: Default::default(),
+        transcription: None,
+        vision: None,
     };
     (directory, store, pending, receipt)
 }
@@ -157,6 +156,8 @@ fn receipt_request_image_and_state_substitutions_are_rejected() {
                 revision_id: Some(receipt.revision_id.clone()),
                 step_sha256: Some("f".repeat(64)),
                 pixels_attached: true,
+                crop_box_px: None,
+                pixel_size: None,
             }),
             "completed_http_error" => receipt.http_status = Some(503),
             "response_hash_missing" => receipt.response_sha256 = None,
@@ -276,6 +277,11 @@ fn worker_stalled_before_reading_large_request_remains_time_bounded() {
     )
     .unwrap();
     assert!(matches!(outcome.state, worker::ProcessState::TimedOut));
+    let message = outcome.message.as_deref().unwrap();
+    assert!(
+        message.contains("observe") && message.contains("min"),
+        "{message}"
+    );
     assert!(
         outcome.spawned && outcome.wall_seconds < 5.0,
         "blocked stdin exceeded bounded process supervision: {outcome:?}"

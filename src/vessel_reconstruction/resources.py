@@ -9,8 +9,25 @@ from dataclasses import asdict, dataclass
 import math
 from pathlib import Path
 import stat
+import sys
 import warnings
 from typing import Any
+
+
+# Native worker resource profiles. The macOS profile has no address-space limit
+# and no parent-death signal (see docs/CONTINUATION_STATUS.md).
+LINUX_RESOURCE_PROFILE = "linux_rlimit_process_group_v1"
+DARWIN_RESOURCE_PROFILE = "darwin_rlimit_process_group_v1"
+KNOWN_RESOURCE_PROFILES = frozenset({LINUX_RESOURCE_PROFILE, DARWIN_RESOURCE_PROFILE})
+
+
+def native_resource_profile() -> str:
+    return DARWIN_RESOURCE_PROFILE if sys.platform == "darwin" else LINUX_RESOURCE_PROFILE
+
+
+def peak_rss_kib(ru_maxrss: int) -> int:
+    """getrusage reports ru_maxrss in KiB on Linux and in bytes on macOS."""
+    return -(-ru_maxrss // 1024) if sys.platform == "darwin" else ru_maxrss
 
 
 class ResourceLimitError(ValueError):
@@ -201,7 +218,7 @@ def validate_sources(spec: dict, base_dir: Path, policy: SourcePolicy = DEFAULT_
         if 'roi_px' in section:
             left, top, right, bottom = _roi(section['roi_px'], width, height)
             rows += bottom - top
-        if spec.get('input_mode') == 'offset_table_ocr':
+        if spec.get('input_mode') == 'offset_table_vision':
             entries = section.get('cells', [])
             if not isinstance(entries, list):
                 _reject('Table cells must be a list.', 'invalid_region')
@@ -212,13 +229,15 @@ def validate_sources(spec: dict, base_dir: Path, policy: SourcePolicy = DEFAULT_
                 if not isinstance(cell, dict):
                     _reject('Each table cell must be an object.', 'invalid_region')
                 left, top, right, bottom = _roi(cell.get('roi_px'), width, height)
-                factor = max(1, math.ceil(120 / (bottom - top)))
-                expanded = ((right - left) * factor + 36) * ((bottom - top) * factor + 36)
-                if expanded > policy.cell_pixels:
-                    _reject('An enlarged OCR crop exceeds the per-cell pixel budget.')
-                cell_pixels += expanded
+                # Crops shorter than 48 px are enlarged by an integer factor
+                # (table_vision.MIN_CROP_HEIGHT_PX); budget the enlarged size.
+                factor = max(1, math.ceil(48 / (bottom - top)))
+                enlarged = (right - left) * factor * (bottom - top) * factor
+                if enlarged > policy.cell_pixels:
+                    _reject('An enlarged table cell crop exceeds the per-cell pixel budget.')
+                cell_pixels += enlarged
     if rows > policy.trace_rows or cell_pixels > policy.aggregate_cell_pixels:
-        _reject('Combined trace/OCR work exceeds the whole-job budget.')
+        _reject('Combined trace or table-cell work exceeds the whole-job budget.')
     records['work'] = {'trace_rows': rows, 'table_cells': cells, 'expanded_cell_pixels': cell_pixels}
     records['policy'] = asdict(policy)
     return records

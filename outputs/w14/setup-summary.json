@@ -1,0 +1,27 @@
+{
+  "cases": 40,
+  "driver_errors": 11,
+  "retained": 15,
+  "layout_correct": 14,
+  "exact_separate_panel_counts": 14,
+  "panel_corner_px": {
+    "n": 504,
+    "median": 71.4350013277861,
+    "p90": 202.0428571428572
+  },
+  "centreline_px": {
+    "n": 90,
+    "median": 40.46354211825111,
+    "p90": 95.25542766052904
+  },
+  "baseline_px": {
+    "n": 46,
+    "median": 171.386355248574,
+    "p90": 293.8807774812442
+  },
+  "scale_relative": {
+    "n": 0,
+    "median": null,
+    "p90": null
+  }
+}

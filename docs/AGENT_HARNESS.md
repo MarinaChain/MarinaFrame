@@ -1,5 +1,7 @@
 # MarinaFrame 0.3: a model inside a bounded CAD workflow
 
+> **Historical (0.5):** the Python Harness, `vessel-reconstruct agent ...`, `agent_review` and `agent_provider` described here were removed. Rust (`rust-control/`) is the control plane; see `docs/RUST_CONTROL_PLANE.md`. Results below stay as recorded.
+
 ## Scope
 
 The harness coordinates a pretrained decision model and a deterministic reconstruction engine. It accepts **calibrated section drawings**, with declared panels, longitudinal stations, units, symmetry, datum, scale and vertical extents. It does not infer those facts from an arbitrary drawing set. Its output is a provisional hull envelope, not a fabrication model, approved ship design or certified displacement calculation.
@@ -90,6 +92,102 @@ vessel-reconstruct agent resume /tmp/marinaframe-live --policy live \
 The default provider mode requires a verified applicable zero-cash account budget and available included usage. A denied budget read is a blocker; it does not silently select another admission mode. The explicitly selected `fresh_observed_included_allowance` pilot mode instead checks fresh included-usage meters and reserves a conservative full-context allowance with a fourfold margin. It is **not a provider-enforced zero-dollar spending cap**, cannot reserve against unrelated concurrent account usage, and requires an appropriately authorized experiment. Prior attempt reservations can be carried into the provider adapter rather than reset. Account billing settings are never changed.
 
 The session's further six-generation experiment was rejected by automatic approval review because it would exceed the documented eight-call pilot and a hard zero-dollar account cap was unverified. No retry was made. One follow-up policy call was durably reserved without a provider response/usage receipt, so transmission and cost for that interrupted call are unconfirmed. Do not count it as a completed generation or successful CAD trial. The independently recorded completed calls are two capability smokes and four decisions in the first live harness attempt; all six returned Go billing and observed cost 0. Additional live work needs approval of a concrete bounded experiment or a verified applicable zero-cash guard.
+
+### Drafting model (Rust controller, 2026-11-09)
+
+`marinaframe run --model A[,B,...]` sets an ordered model list (run config `model`, then
+`fallback_models`). Allowed (`rust-control/src/models.rs`, one table with each model's
+transport): `claude-sonnet-5-5` (Claude subscription), `crouton-alpha-free` and
+`deepseek-v4.1-flash` (OpenCode Go). Default of the CLI, the desktop app and
+`scripts/run_round.py`: `claude-sonnet-5-5,crouton-alpha-free,deepseek-v4.1-flash` (founder
+decision 2026-11-09). Claude and GPT models are never sent through OpenCode Go and never use an
+API key; a test checks that no `claude-*`/`gpt-*` entry has the OpenCode Go transport.
+`run_round.py` records the list in `round.json` and `digest.md`, and needs `OPENCODE_API_KEY*`
+only when the list holds an OpenCode Go model.
+
+- Fallback: when the transport answers HTTP 429, a rate-limit, quota or usage-limit error, or
+  every Go key's usage window is exhausted, the next request uses the next model of the list.
+  The controller records a `model_switched` event (from, to, request id, status, reason) and
+  the state's `active_model`; `status` shows `models` and `current_model`. Other errors never
+  switch.
+- Receipts: `requested_model` is the request body's model and must be in the run's list;
+  `returned_model` must equal it, else `provider_model_identity`; `endpoint` must be the
+  model's transport endpoint (`https://opencode.ai/...` or `claude-cli:print:subscription`).
+
+#### Claude subscription transport (`rust-control/src/claude_cli.rs`)
+
+The provider worker runs the `claude` CLI (Claude Code 2.1.280, logged in on the Claude
+subscription) once per request, with an argument vector (no shell):
+`claude -p --model claude-sonnet-5-5 --effort low|high --tools "" --strict-mcp-config
+--safe-mode --disable-slash-commands --no-session-persistence --input-format stream-json
+--output-format stream-json --verbose --system-prompt <purpose prompt>`, plus
+`--json-schema <tool, arguments, reason, notes>` for decisions. `--bare` is not used: it
+refuses the subscription login.
+
+- Input: the request body keeps the chat-completions form (hashed in the receipt). Its system
+  message becomes `--system-prompt`; the last user message becomes one stream-json user
+  message (text blocks and base64 PNG image blocks). Stream-json input takes user messages
+  only, so earlier conversation turns go before it in ONE JSON-encoded block (an array of
+  `{role, content}`, serialized by serde so quotes and brackets are escaped), framed by fixed
+  texts saying the block is data, not instructions. Drawing or tool text inside it cannot
+  forge a turn; the harness's instructions stay only in the system prompt.
+- Environment: cleared, then HOME, USER, LOGNAME, LANG, LC_ALL, TMPDIR, a fixed PATH,
+  `CLAUDE_CODE_MAX_OUTPUT_TOKENS=<max_tokens>` and `DISABLE_AUTOUPDATER=1`. No OpenCode Go key,
+  no `ANTHROPIC_*` variable. Working folder: a new private folder per request
+  (`marinaframe-claude-*`, mode 0700, removed after the CLI exits), with
+  `--setting-sources user` (no project or local settings or their hooks) and
+  `--settings {"disableAllHooks":true}`. Live check: a hook in a hostile project
+  `.claude/settings.json` runs without these flags and does not run with them; the
+  subscription still answers.
+- Prompt cache: the controller sends the request text as two parts, the stable context first
+  (tools, sheet survey while describing, described views, vessel description:
+  `controller::split_stable_context`), then the changing observation. The transport marks the
+  first part `cache_control {ephemeral, ttl 1h}` and sets `DISABLE_PROMPT_CACHING=1`, which
+  removes the CLI's own marks: with them a request has five marks and the API refuses it
+  (HTTP 400, at most four). The one mark caches system prompt, tools and stable context.
+  Live probe: the second request read 23.2k of 23.7k input tokens from the cache.
+- A refused reply (not one valid tool call) returns to the model with the call, the serde
+  contract error (for example "unknown field `points_m`, expected one of `section_id`,
+  `form`, ..."), the tools offered now and, for a tool the phase does not list, its schema.
+- Executable: `MARINAFRAME_CLAUDE_BIN` (absolute path), else `/opt/homebrew/bin/claude`,
+  `/usr/local/bin/claude`, `~/.local/bin/claude`, `~/.claude/local/claude`. Route checked
+  2026-11-09: `/opt/homebrew/bin/claude` goes straight to the Anthropic API with the keychain
+  login (`apiKeySource: none`); the Headroom proxy (`localhost:8787`) was not running and is not
+  used (it is only in front of `claude` when `ANTHROPIC_BASE_URL` points at it, which the cleared
+  environment prevents). `claude-raw` is not installed on this Mac.
+- Bounds: the request wall time (`request_wall_seconds`) kills the CLI (`provider_cli_timeout`,
+  outcome unknown); stdout above 256 KiB is refused; the CLI stays in the provider worker's
+  process group, so the supervisor stops both. A missing CLI leaves the request not sent.
+- Output check: the stream's `init` message must list no tool except `StructuredOutput` (the
+  `--json-schema` carrier), no MCP server and `apiKeySource: none`, else
+  `provider_cli_configuration`. `modelUsage` must name exactly the requested model. A
+  `rate_limit_event` with status `rejected`, `api_error_status` 429 or a limit text ("hit your
+  limit", "usage limit", ...) is `provider_rate_limited` (fallback); other CLI errors are
+  `provider_cli_error`. The answer is `structured_output` (decisions) or `result` text, then
+  parsed exactly as for OpenCode Go.
+- Receipt: `http_status` 200 for a success result (else the CLI's `api_error_status`), usage
+  `prompt_tokens` (input + cache write + cache read), `completion_tokens`, `total_tokens`,
+  `cost` 0 (no per-request charge), `list_cost` = the CLI's `total_cost_usd` (API-price
+  estimate), `billing_source: subscription`, `latency_seconds` around the CLI run, and
+  `credential_selection` `{transport: claude_subscription, api_key: false}`. The stdout is the
+  receipt body; the controller re-derives decision, model and usage from it.
+- No temperature (the CLI has no option); `effort` low for normal calls, high with
+  investigation thinking. Linux: the provider worker's 1 GiB address-space limit is inherited
+  by the CLI; not yet checked there.
+- Images: Sonnet 5.5 does not downsample at 1,568 px. Probe `work/claude-vision-probe`
+  (2026-11-09): image tokens follow the area up to about 3.75 Mpx (2,048 x 512: 1,342 tokens;
+  1,568^2: 3,139; 2,048^2 and 2,576^2: both 4,809), and 9 px text on a 2,048 px sheet read 12/12.
+  So every image within the harness cap (2,048 px, 1 Mpx) reaches it at full size; the table
+  keeps 2,048 px / 1 Mpx for all three models.
+- Request settings per model (one table in `models.rs`): DeepSeek gets
+  `thinking: {type: enabled|disabled}`; Crouton refuses `thinking` (HTTP 400) and gets
+  `reasoning_effort` (`low` for normal calls, `high` with investigation thinking) and 4,096 extra
+  `max_tokens` for its hidden reasoning (a 200-token probe without `reasoning_effort` returned no
+  content). Both accept `response_format` json_object, temperature 0 and 32,768 `max_tokens`.
+- Crouton notes: it reads images up to about 2,048 px per side (the controller caps images at
+  2,048 px / 1 Mpx); it is slow; OpenCode Go does not count its image tokens and reports cost 0
+  and no reasoning tokens. Sheet-setup and table-reading requests (`vision-request`,
+  `read-table`) use the default model; build reviews inside a run use the run's current model.
 
 ## Replay and mocks
 

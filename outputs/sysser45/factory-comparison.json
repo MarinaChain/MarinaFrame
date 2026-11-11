@@ -1,0 +1,2114 @@
+{
+  "before_cases": 528,
+  "after_cases": 528,
+  "lost": [
+    [
+      "dtmb5415-L1",
+      "s01"
+    ],
+    [
+      "dtmb5415-L1",
+      "s02"
+    ],
+    [
+      "dtmb5415-L1",
+      "s05"
+    ],
+    [
+      "dtmb5415-L1",
+      "s06"
+    ],
+    [
+      "dtmb5415-L2",
+      "s05"
+    ],
+    [
+      "shipd-1-00617-L3",
+      "s03"
+    ],
+    [
+      "shipd-1-01103-L2",
+      "s09"
+    ],
+    [
+      "shipd-1-01496-L3",
+      "s02"
+    ],
+    [
+      "shipd-1-01496-L3",
+      "s05"
+    ],
+    [
+      "shipd-1-04821-L2",
+      "s08"
+    ],
+    [
+      "shipd-1-05560-L2",
+      "s01"
+    ],
+    [
+      "shipd-1-05560-L2",
+      "s02"
+    ],
+    [
+      "shipd-1-05749-L1",
+      "s01"
+    ],
+    [
+      "shipd-1-05749-L2",
+      "s01"
+    ],
+    [
+      "shipd-1-07731-L1",
+      "s01"
+    ],
+    [
+      "shipd-1-07731-L1",
+      "s02"
+    ],
+    [
+      "shipd-1-08215-L2",
+      "s07"
+    ],
+    [
+      "shipd-1-08681-L2",
+      "s03"
+    ],
+    [
+      "shipd-1-08681-L2",
+      "s04"
+    ],
+    [
+      "shipd-1-08681-L2",
+      "s06"
+    ],
+    [
+      "shipd-2-02030-L1",
+      "s09"
+    ],
+    [
+      "shipd-2-03084-L3",
+      "s02"
+    ],
+    [
+      "shipd-2-03084-L3",
+      "s05"
+    ],
+    [
+      "shipd-2-03084-L3",
+      "s06"
+    ],
+    [
+      "shipd-2-04945-L2",
+      "s06"
+    ],
+    [
+      "shipd-2-04963-L1",
+      "s02"
+    ],
+    [
+      "shipd-2-07459-L3",
+      "s03"
+    ],
+    [
+      "shipd-2-07459-L3",
+      "s08"
+    ],
+    [
+      "shipd-2-07844-L2",
+      "s09"
+    ],
+    [
+      "shipd-3-00262-L3",
+      "s05"
+    ],
+    [
+      "shipd-3-00816-L3",
+      "s05"
+    ],
+    [
+      "shipd-3-00816-L3",
+      "s06"
+    ],
+    [
+      "shipd-3-00816-L3",
+      "s07"
+    ],
+    [
+      "shipd-3-00816-L3",
+      "s08"
+    ],
+    [
+      "shipd-3-00816-L3",
+      "s09"
+    ],
+    [
+      "shipd-3-00848-L3",
+      "s02"
+    ],
+    [
+      "shipd-3-01608-L2",
+      "s08"
+    ],
+    [
+      "shipd-3-01614-L3",
+      "s01"
+    ],
+    [
+      "shipd-3-01614-L3",
+      "s08"
+    ],
+    [
+      "shipd-3-01938-L2",
+      "s01"
+    ],
+    [
+      "shipd-3-02362-L3",
+      "s01"
+    ],
+    [
+      "shipd-3-02362-L3",
+      "s02"
+    ],
+    [
+      "shipd-3-02362-L3",
+      "s03"
+    ],
+    [
+      "shipd-3-02362-L3",
+      "s04"
+    ],
+    [
+      "shipd-3-02890-L2",
+      "s08"
+    ],
+    [
+      "shipd-3-02890-L2",
+      "s09"
+    ],
+    [
+      "shipd-3-02995-L1",
+      "s01"
+    ],
+    [
+      "shipd-3-02995-L2",
+      "s01"
+    ],
+    [
+      "shipd-3-04165-L2",
+      "s08"
+    ],
+    [
+      "shipd-3-04165-L2",
+      "s09"
+    ],
+    [
+      "shipd-3-04165-L1",
+      "s01"
+    ],
+    [
+      "shipd-3-05565-L3",
+      "s04"
+    ],
+    [
+      "shipd-3-05805-L3",
+      "s05"
+    ],
+    [
+      "shipd-3-06376-L2",
+      "s09"
+    ],
+    [
+      "shipd-3-06871-L3",
+      "s08"
+    ],
+    [
+      "shipd-3-06871-L3",
+      "s09"
+    ],
+    [
+      "shipd-3-07828-L1",
+      "s09"
+    ],
+    [
+      "shipd-3-08296-L2",
+      "s09"
+    ],
+    [
+      "shipd-3-09663-L3",
+      "s04"
+    ],
+    [
+      "shipd-3-09663-L3",
+      "s07"
+    ]
+  ],
+  "gained": [
+    [
+      "shipd-1-01350-L2",
+      "s01"
+    ],
+    [
+      "shipd-1-01350-L2",
+      "s09"
+    ],
+    [
+      "shipd-1-01496-L3",
+      "s06"
+    ],
+    [
+      "shipd-1-01496-L3",
+      "s08"
+    ],
+    [
+      "shipd-1-01496-L3",
+      "s09"
+    ],
+    [
+      "shipd-1-04821-L2",
+      "s04"
+    ],
+    [
+      "shipd-1-04821-L2",
+      "s07"
+    ],
+    [
+      "shipd-1-07731-L1",
+      "s09"
+    ],
+    [
+      "shipd-2-00505-L2",
+      "s01"
+    ],
+    [
+      "shipd-2-01147-L2",
+      "s06"
+    ],
+    [
+      "shipd-2-01147-L2",
+      "s07"
+    ],
+    [
+      "shipd-2-01147-L2",
+      "s08"
+    ],
+    [
+      "shipd-2-01147-L2",
+      "s09"
+    ],
+    [
+      "shipd-2-01359-L2",
+      "s02"
+    ],
+    [
+      "shipd-2-01359-L2",
+      "s03"
+    ],
+    [
+      "shipd-2-01359-L2",
+      "s05"
+    ],
+    [
+      "shipd-2-01359-L2",
+      "s06"
+    ],
+    [
+      "shipd-2-01359-L2",
+      "s09"
+    ],
+    [
+      "shipd-2-03084-L3",
+      "s01"
+    ],
+    [
+      "shipd-2-04945-L2",
+      "s04"
+    ],
+    [
+      "shipd-2-06136-L1",
+      "s02"
+    ],
+    [
+      "shipd-3-00848-L2",
+      "s05"
+    ],
+    [
+      "shipd-3-00848-L3",
+      "s03"
+    ],
+    [
+      "shipd-3-01868-L2",
+      "s07"
+    ],
+    [
+      "shipd-3-02378-L2",
+      "s01"
+    ],
+    [
+      "shipd-3-08296-L2",
+      "s02"
+    ],
+    [
+      "shipd-3-09663-L2",
+      "s02"
+    ]
+  ],
+  "changed_geometry": [
+    [
+      "shipd-1-08196-L1",
+      "s09"
+    ],
+    [
+      "shipd-2-04963-L1",
+      "s09"
+    ],
+    [
+      "shipd-2-05829-L2",
+      "s09"
+    ],
+    [
+      "shipd-2-06136-L1",
+      "s01"
+    ]
+  ],
+  "catalog_changed": [
+    [
+      "dtmb5415-L1",
+      "s01"
+    ],
+    [
+      "dtmb5415-L1",
+      "s02"
+    ],
+    [
+      "dtmb5415-L1",
+      "s05"
+    ],
+    [
+      "dtmb5415-L1",
+      "s06"
+    ],
+    [
+      "dtmb5415-L2",
+      "s05"
+    ],
+    [
+      "shipd-1-00617-L3",
+      "s03"
+    ],
+    [
+      "shipd-1-01103-L2",
+      "s09"
+    ],
+    [
+      "shipd-1-01350-L2",
+      "s01"
+    ],
+    [
+      "shipd-1-01350-L2",
+      "s09"
+    ],
+    [
+      "shipd-1-01496-L3",
+      "s02"
+    ],
+    [
+      "shipd-1-01496-L3",
+      "s05"
+    ],
+    [
+      "shipd-1-01496-L3",
+      "s06"
+    ],
+    [
+      "shipd-1-01496-L3",
+      "s07"
+    ],
+    [
+      "shipd-1-01496-L3",
+      "s08"
+    ],
+    [
+      "shipd-1-01496-L3",
+      "s09"
+    ],
+    [
+      "shipd-1-04821-L2",
+      "s01"
+    ],
+    [
+      "shipd-1-04821-L2",
+      "s04"
+    ],
+    [
+      "shipd-1-04821-L2",
+      "s07"
+    ],
+    [
+      "shipd-1-04821-L2",
+      "s08"
+    ],
+    [
+      "shipd-1-04821-L2",
+      "s09"
+    ],
+    [
+      "shipd-1-05560-L2",
+      "s01"
+    ],
+    [
+      "shipd-1-05560-L2",
+      "s02"
+    ],
+    [
+      "shipd-1-05749-L1",
+      "s01"
+    ],
+    [
+      "shipd-1-05749-L2",
+      "s01"
+    ],
+    [
+      "shipd-1-07731-L1",
+      "s01"
+    ],
+    [
+      "shipd-1-07731-L1",
+      "s02"
+    ],
+    [
+      "shipd-1-07731-L1",
+      "s09"
+    ],
+    [
+      "shipd-1-08196-L1",
+      "s09"
+    ],
+    [
+      "shipd-1-08215-L2",
+      "s03"
+    ],
+    [
+      "shipd-1-08215-L2",
+      "s07"
+    ],
+    [
+      "shipd-1-08681-L2",
+      "s03"
+    ],
+    [
+      "shipd-1-08681-L2",
+      "s04"
+    ],
+    [
+      "shipd-1-08681-L2",
+      "s06"
+    ],
+    [
+      "shipd-2-00505-L2",
+      "s01"
+    ],
+    [
+      "shipd-2-01147-L2",
+      "s06"
+    ],
+    [
+      "shipd-2-01147-L2",
+      "s07"
+    ],
+    [
+      "shipd-2-01147-L2",
+      "s08"
+    ],
+    [
+      "shipd-2-01147-L2",
+      "s09"
+    ],
+    [
+      "shipd-2-01359-L2",
+      "s02"
+    ],
+    [
+      "shipd-2-01359-L2",
+      "s03"
+    ],
+    [
+      "shipd-2-01359-L2",
+      "s05"
+    ],
+    [
+      "shipd-2-01359-L2",
+      "s06"
+    ],
+    [
+      "shipd-2-01359-L2",
+      "s09"
+    ],
+    [
+      "shipd-2-02030-L1",
+      "s09"
+    ],
+    [
+      "shipd-2-02216-L2",
+      "s05"
+    ],
+    [
+      "shipd-2-02216-L2",
+      "s08"
+    ],
+    [
+      "shipd-2-02216-L2",
+      "s09"
+    ],
+    [
+      "shipd-2-03084-L2",
+      "s07"
+    ],
+    [
+      "shipd-2-03084-L3",
+      "s01"
+    ],
+    [
+      "shipd-2-03084-L3",
+      "s02"
+    ],
+    [
+      "shipd-2-03084-L3",
+      "s05"
+    ],
+    [
+      "shipd-2-03084-L3",
+      "s06"
+    ],
+    [
+      "shipd-2-04945-L2",
+      "s04"
+    ],
+    [
+      "shipd-2-04945-L2",
+      "s06"
+    ],
+    [
+      "shipd-2-04945-L2",
+      "s09"
+    ],
+    [
+      "shipd-2-04963-L1",
+      "s01"
+    ],
+    [
+      "shipd-2-04963-L1",
+      "s02"
+    ],
+    [
+      "shipd-2-04963-L1",
+      "s04"
+    ],
+    [
+      "shipd-2-04963-L1",
+      "s05"
+    ],
+    [
+      "shipd-2-04963-L1",
+      "s06"
+    ],
+    [
+      "shipd-2-04963-L1",
+      "s07"
+    ],
+    [
+      "shipd-2-04963-L1",
+      "s08"
+    ],
+    [
+      "shipd-2-04963-L1",
+      "s09"
+    ],
+    [
+      "shipd-2-05829-L2",
+      "s04"
+    ],
+    [
+      "shipd-2-05829-L2",
+      "s09"
+    ],
+    [
+      "shipd-2-06136-L1",
+      "s01"
+    ],
+    [
+      "shipd-2-06136-L1",
+      "s02"
+    ],
+    [
+      "shipd-2-06833-L1",
+      "s01"
+    ],
+    [
+      "shipd-2-07459-L3",
+      "s03"
+    ],
+    [
+      "shipd-2-07459-L3",
+      "s08"
+    ],
+    [
+      "shipd-2-07844-L2",
+      "s09"
+    ],
+    [
+      "shipd-3-00199-L0",
+      "s01"
+    ],
+    [
+      "shipd-3-00199-L0",
+      "s02"
+    ],
+    [
+      "shipd-3-00199-L0",
+      "s03"
+    ],
+    [
+      "shipd-3-00199-L0",
+      "s04"
+    ],
+    [
+      "shipd-3-00199-L0",
+      "s05"
+    ],
+    [
+      "shipd-3-00262-L3",
+      "s05"
+    ],
+    [
+      "shipd-3-00816-L3",
+      "s05"
+    ],
+    [
+      "shipd-3-00816-L3",
+      "s06"
+    ],
+    [
+      "shipd-3-00816-L3",
+      "s07"
+    ],
+    [
+      "shipd-3-00816-L3",
+      "s08"
+    ],
+    [
+      "shipd-3-00816-L3",
+      "s09"
+    ],
+    [
+      "shipd-3-00848-L2",
+      "s05"
+    ],
+    [
+      "shipd-3-00848-L2",
+      "s08"
+    ],
+    [
+      "shipd-3-00848-L2",
+      "s09"
+    ],
+    [
+      "shipd-3-00848-L3",
+      "s02"
+    ],
+    [
+      "shipd-3-00848-L3",
+      "s03"
+    ],
+    [
+      "shipd-3-00848-L3",
+      "s05"
+    ],
+    [
+      "shipd-3-00848-L3",
+      "s07"
+    ],
+    [
+      "shipd-3-01608-L2",
+      "s08"
+    ],
+    [
+      "shipd-3-01614-L3",
+      "s01"
+    ],
+    [
+      "shipd-3-01614-L3",
+      "s08"
+    ],
+    [
+      "shipd-3-01614-L3",
+      "s09"
+    ],
+    [
+      "shipd-3-01868-L2",
+      "s07"
+    ],
+    [
+      "shipd-3-01938-L2",
+      "s01"
+    ],
+    [
+      "shipd-3-02362-L3",
+      "s01"
+    ],
+    [
+      "shipd-3-02362-L3",
+      "s02"
+    ],
+    [
+      "shipd-3-02362-L3",
+      "s03"
+    ],
+    [
+      "shipd-3-02362-L3",
+      "s04"
+    ],
+    [
+      "shipd-3-02378-L1",
+      "s09"
+    ],
+    [
+      "shipd-3-02378-L2",
+      "s01"
+    ],
+    [
+      "shipd-3-02378-L2",
+      "s06"
+    ],
+    [
+      "shipd-3-02890-L2",
+      "s08"
+    ],
+    [
+      "shipd-3-02890-L2",
+      "s09"
+    ],
+    [
+      "shipd-3-02995-L1",
+      "s01"
+    ],
+    [
+      "shipd-3-02995-L2",
+      "s01"
+    ],
+    [
+      "shipd-3-02995-L2",
+      "s02"
+    ],
+    [
+      "shipd-3-02995-L2",
+      "s07"
+    ],
+    [
+      "shipd-3-03402-L2",
+      "s01"
+    ],
+    [
+      "shipd-3-04165-L2",
+      "s08"
+    ],
+    [
+      "shipd-3-04165-L2",
+      "s09"
+    ],
+    [
+      "shipd-3-04165-L1",
+      "s01"
+    ],
+    [
+      "shipd-3-04754-L2",
+      "s09"
+    ],
+    [
+      "shipd-3-05565-L3",
+      "s04"
+    ],
+    [
+      "shipd-3-05805-L3",
+      "s05"
+    ],
+    [
+      "shipd-3-06376-L2",
+      "s09"
+    ],
+    [
+      "shipd-3-06871-L3",
+      "s08"
+    ],
+    [
+      "shipd-3-06871-L3",
+      "s09"
+    ],
+    [
+      "shipd-3-07828-L1",
+      "s09"
+    ],
+    [
+      "shipd-3-08296-L2",
+      "s01"
+    ],
+    [
+      "shipd-3-08296-L2",
+      "s02"
+    ],
+    [
+      "shipd-3-08296-L2",
+      "s03"
+    ],
+    [
+      "shipd-3-08296-L2",
+      "s07"
+    ],
+    [
+      "shipd-3-08296-L2",
+      "s08"
+    ],
+    [
+      "shipd-3-08296-L2",
+      "s09"
+    ],
+    [
+      "shipd-3-09663-L2",
+      "s01"
+    ],
+    [
+      "shipd-3-09663-L2",
+      "s02"
+    ],
+    [
+      "shipd-3-09663-L3",
+      "s04"
+    ],
+    [
+      "shipd-3-09663-L3",
+      "s05"
+    ],
+    [
+      "shipd-3-09663-L3",
+      "s07"
+    ]
+  ],
+  "case_lost": [
+    "shipd-2-04963-L1"
+  ],
+  "case_gained": [
+    "shipd-2-06136-L1"
+  ],
+  "errors_before": [
+    [
+      "series60-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-00045-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-00617-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-00617-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-00679-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-00683-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-00683-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-01103-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-01350-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-01410-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-01410-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-01496-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-01496-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-01618-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-02478-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03085-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03085-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03152-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03442-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03473-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03473-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03620-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03620-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03626-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03868-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03868-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-04349-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-04448-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-04593-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-04593-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-04821-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-05329-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-05560-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-06090-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-06155-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-06155-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-06172-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-06172-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-07542-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-07731-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-07927-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-07927-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-08158-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-08158-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-08196-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-08215-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-08328-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-08328-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-08681-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-08807-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-08807-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-09020-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-09020-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-09359-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-09867-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-00505-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-00580-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-00850-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-01040-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-01147-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-01943-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-02030-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-02147-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-02147-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-02216-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-02726-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-02726-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-02931-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-02931-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-03084-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-03259-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-03259-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-03478-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-03478-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-04107-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-04723-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-04723-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-04729-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-04945-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-04963-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-05051-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-05051-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-05129-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-05129-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-05829-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-06136-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-06567-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-06667-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-06667-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-06833-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-06971-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-07459-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-09252-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-09252-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00132-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00132-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00199-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00262-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00262-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00292-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00292-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00332-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00661-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00739-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00739-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00769-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00816-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00816-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00848-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-01608-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-01614-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-01614-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-01678-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-01868-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-01873-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-01873-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-01938-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-02362-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-02362-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-02890-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-03057-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-03207-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-03402-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-03625-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-03625-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-03738-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-03738-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-03976-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-05647-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-05802-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-05802-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-05805-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-05805-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-05897-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-06269-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-06871-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-06871-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-07158-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-07158-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-07423-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-07423-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-07828-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-08139-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-08154-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-08154-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-08296-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-08535-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-09336-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-09497-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-09663-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "wigley-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ]
+  ],
+  "errors_after": [
+    [
+      "series60-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-00045-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-00617-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-00617-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-00679-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-00683-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-00683-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-01103-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-01350-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-01410-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-01410-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-01496-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-01496-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-01618-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-02478-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03085-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03085-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03152-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03442-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03473-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03473-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03620-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03620-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03626-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03868-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-03868-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-04349-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-04448-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-04593-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-04593-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-04821-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-05329-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-05560-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-06090-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-06155-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-06155-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-06172-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-06172-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-07542-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-07731-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-07927-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-07927-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-08158-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-08158-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-08196-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-08215-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-08328-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-08328-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-08681-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-08807-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-08807-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-09020-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-09020-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-09359-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-1-09867-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-00505-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-00580-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-00850-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-01040-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-01147-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-01943-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-02030-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-02147-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-02147-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-02216-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-02726-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-02726-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-02931-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-02931-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-03084-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-03259-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-03259-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-03478-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-03478-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-04107-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-04723-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-04723-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-04729-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-04945-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-04963-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-05051-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-05051-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-05129-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-05129-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-05829-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-06136-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-06567-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-06667-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-06667-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-06833-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-06971-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-07459-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-09252-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-2-09252-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00132-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00132-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00199-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00262-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00262-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00292-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00292-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00332-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00661-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00739-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00739-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00769-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00816-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00816-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-00848-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-01608-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-01614-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-01614-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-01678-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-01868-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-01873-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-01873-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-01938-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-02362-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-02362-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-02890-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-03057-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-03207-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-03402-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-03625-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-03625-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-03738-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-03738-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-03976-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-05647-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-05802-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-05802-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-05805-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-05805-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-05897-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-06269-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-06871-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-06871-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-07158-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-07158-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-07423-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-07423-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-07828-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-08139-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-08154-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-08154-L2",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-08296-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-08535-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-09336-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-09497-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "shipd-3-09663-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ],
+    [
+      "wigley-L1",
+      "DrawingError: Contour candidate complexity exceeds the bounded evidence budget."
+    ]
+  ]
+}

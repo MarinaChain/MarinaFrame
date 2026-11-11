@@ -1,26 +1,17 @@
 //! Author-separated lifecycle/recovery probes. All children are controlled
 //! stdlib-only fixtures; there are no model calls, keys, or CAD operations.
-#![allow(dead_code)]
 
-#[path = "../src/controller.rs"]
-mod controller;
-#[path = "../src/provider.rs"]
-mod provider;
-#[path = "../src/store.rs"]
-mod store;
-#[path = "../src/types.rs"]
-mod types;
-#[path = "../src/util.rs"]
-mod util;
-#[path = "../src/validation.rs"]
-mod validation;
-#[path = "../src/worker.rs"]
-mod worker;
+use marinaframe_control::controller;
+use marinaframe_control::provider;
+use marinaframe_control::store;
+use marinaframe_control::types;
+use marinaframe_control::util;
+use marinaframe_control::worker;
 
 use serde_json::{json, Value};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::time::{Duration, Instant};
 use types::*;
 
@@ -41,7 +32,9 @@ fn config() -> Config {
         provider_transfer_authorized: false,
         authorization_basis: "Controlled local reliability fixture; no transfer".into(),
         model: GO_MODEL.into(),
+        fallback_models: vec![],
         binary_sha256: util::file_hash(&std::env::current_exe().unwrap()).unwrap(),
+        on_ambiguity: OnAmbiguity::Abstain,
     }
 }
 
@@ -71,9 +64,15 @@ import ctypes,json,os,pathlib,signal,subprocess,sys,threading,time
 root=pathlib.Path.cwd()
 mode=(root/'fixture-mode').read_text()
 def meta(label):
-    proc=pathlib.Path('/proc')/os.readlink('/proc/self')
-    fields=(proc/'stat').read_text().rsplit(')',1)[1].split()
-    value={'pid':os.getpid(),'pgid':os.getpgrp(),'proc_path':str(proc),'start_ticks':int(fields[19])}
+    value={'pid':os.getpid(),'pgid':os.getpgrp()}
+    if sys.platform=='linux':
+        proc=pathlib.Path('/proc')/os.readlink('/proc/self')
+        fields=(proc/'stat').read_text().rsplit(')',1)[1].split()
+        value.update(proc_path=str(proc),start_ticks=int(fields[19]))
+    else:
+        # macOS has no procfs: ps start time is the PID-reuse identity.
+        value['start_time']=subprocess.run(['/bin/ps','-o','lstart=','-p',str(os.getpid())],
+            capture_output=True,text=True,env={'LC_ALL':'C'}).stdout.strip()
     (root/(label+'.json')).write_text(json.dumps(value))
     return value
 if mode=='parent-death':
@@ -100,16 +99,23 @@ if mode=='normal-exit': sys.exit(0)
 time.sleep(30)
 "#;
 
-const NATIVE_FIXTURE: &str = r#"import ctypes,json,os,pathlib,signal,time
+const NATIVE_FIXTURE: &str = r#"import ctypes,json,os,pathlib,signal,subprocess,sys,time
 root=pathlib.Path.cwd()
 parent=os.getppid()
-if ctypes.CDLL(None).prctl(1,signal.SIGKILL,0,0,0)!=0 or os.getppid()!=parent:
+linux=sys.platform=='linux'
+if linux and ctypes.CDLL(None).prctl(1,signal.SIGKILL,0,0,0)!=0 or os.getppid()!=parent:
     raise SystemExit('parent-death fixture admission failed')
 def meta(label):
-    proc=pathlib.Path('/proc')/os.readlink('/proc/self')
-    fields=(proc/'stat').read_text().rsplit(')',1)[1].split()
-    (root/(label+'.json')).write_text(json.dumps({'pid':os.getpid(),'pgid':os.getpgrp(),
-        'proc_path':str(proc),'start_ticks':int(fields[19])}))
+    identity={'pid':os.getpid(),'pgid':os.getpgrp()}
+    if linux:
+        proc=pathlib.Path('/proc')/os.readlink('/proc/self')
+        fields=(proc/'stat').read_text().rsplit(')',1)[1].split()
+        identity.update(proc_path=str(proc),start_ticks=int(fields[19]))
+    else:
+        # macOS has no procfs: ps start time is the PID-reuse identity.
+        identity['start_time']=subprocess.run(['/bin/ps','-o','lstart=','-p',str(os.getpid())],
+            capture_output=True,text=True,env={'LC_ALL':'C'}).stdout.strip()
+    (root/(label+'.json')).write_text(json.dumps(identity))
 signal.signal(signal.SIGTERM,signal.SIG_IGN)
 meta('native')
 if os.fork()==0:
@@ -146,6 +152,25 @@ fn wait_json(path: &Path, seconds: u64) -> Value {
     }
 }
 
+#[cfg(not(target_os = "linux"))]
+fn running(meta: &Value) -> bool {
+    // Same identity rule as Linux: same start time and not a zombie.
+    let pid = meta["pid"].as_i64().unwrap().to_string();
+    let Ok(output) = Command::new("/bin/ps")
+        .args(["-o", "stat=", "-o", "lstart=", "-p", &pid])
+        .env("LC_ALL", "C")
+        .output()
+    else {
+        return false;
+    };
+    let line = String::from_utf8_lossy(&output.stdout);
+    let Some((state, start)) = line.trim().split_once(char::is_whitespace) else {
+        return false;
+    };
+    Some(start.trim()) == meta["start_time"].as_str() && !state.starts_with('Z')
+}
+
+#[cfg(target_os = "linux")]
 fn running(meta: &Value) -> bool {
     let path = PathBuf::from(meta["proc_path"].as_str().unwrap()).join("stat");
     let Ok(raw) = std::fs::read_to_string(path) else {
@@ -179,13 +204,25 @@ fn await_not_running(meta: &Value, duration: Duration) -> bool {
 
 #[test]
 fn reliability_cancellation_terminates_term_resistant_process_group() {
+    // worker::run first waits up to 120 s for the per-user, machine-wide
+    // native admission lock (worker.rs `admission`), which other MarinaFrame
+    // runs on this machine may hold. Only then does it spawn the fixture, and
+    // fixture startup (Python plus two `ps` calls on macOS) is slow under load.
+    // Neither is what this test measures, so the readiness wait covers both.
+    const ADMISSION_DEADLINE_SECONDS: u64 = 120;
+    const READY_DEADLINE_SECONDS: u64 = ADMISSION_DEADLINE_SECONDS + 60;
     let dir = tempfile::tempdir().unwrap();
-    let settings = fixture(dir.path(), "cancel");
+    let mut settings = fixture(dir.path(), "cancel");
+    // The worker timeout stays above the startup wait, so the only way this
+    // run can stop is the cancellation request.
+    settings.limits.worker_wall_seconds = 120;
     let root = dir.path().to_path_buf();
     let canceller = std::thread::spawn(move || {
-        let child = wait_json(&root.join("descendant.json"), 5);
+        // descendant.json is the readiness signal: the bridge ignores TERM
+        // before it forks, and the descendant writes this file after the fork.
+        let child = wait_json(&root.join("descendant.json"), READY_DEADLINE_SECONDS);
         std::fs::write(root.join("cancel.request"), b"controlled cancellation\n").unwrap();
-        child
+        (child, Instant::now())
     });
     let outcome = worker::run(
         dir.path(),
@@ -195,19 +232,29 @@ fn reliability_cancellation_terminates_term_resistant_process_group() {
         Path::new("unused"),
     )
     .unwrap();
-    let child = canceller.join().unwrap();
+    let returned = Instant::now();
+    let (child, cancel_requested) = canceller.join().unwrap();
     let parent = wait_json(&dir.path().join("bridge.json"), 1);
-    let stopped = await_not_running(&child, Duration::from_secs(1));
+    // A TERM-resistant descendant that survived would sleep for 30 s, so this
+    // bound still tells a killed process from a surviving one.
+    let stopped = await_not_running(&child, Duration::from_secs(5));
+    // Cancellation latency: request written -> worker::run returned. This is
+    // the 2 s TERM grace plus SIGKILL; fixture startup time is excluded.
+    let cancel_to_return = returned.duration_since(cancel_requested).as_secs_f64();
     record(
         "cancellation-process-group",
         json!({"outcome":outcome,"bridge":parent,
-        "descendant":child,"descendant_stopped":stopped,"engineering_approved":false}),
+        "descendant":child,"descendant_stopped":stopped,
+        "cancel_to_return_seconds":cancel_to_return,"engineering_approved":false}),
     );
     kill_owned_group(&child);
     assert!(matches!(outcome.state, worker::ProcessState::Cancelled));
     assert!(stopped, "TERM-resistant descendant survived cancellation");
     assert!(!running(&parent));
-    assert!(outcome.wall_seconds < 5.0);
+    assert!(
+        cancel_to_return < 5.0,
+        "cancellation took {cancel_to_return} s after the request"
+    );
 }
 
 #[test]
@@ -249,6 +296,9 @@ fn subprocess_supervisor_entry() {
     .unwrap();
 }
 
+// PR_SET_PDEATHSIG exists only on Linux. macOS has no equivalent, so this
+// guarantee is not provided there (see docs/CONTINUATION_STATUS.md).
+#[cfg(target_os = "linux")]
 #[test]
 fn reliability_parent_sigkill_delivers_pdeathsig_and_cleans_nested_group() {
     let dir = tempfile::tempdir().unwrap();
@@ -261,8 +311,8 @@ fn reliability_parent_sigkill_delivers_pdeathsig_and_cleans_nested_group() {
             "--nocapture",
         ])
         .env("MARINAFRAME_RELIABILITY_CHILD_ROOT", dir.path())
-        .stdout(Stdio::from(log.try_clone().unwrap()))
-        .stderr(Stdio::from(log))
+        .stdout(std::process::Stdio::from(log.try_clone().unwrap()))
+        .stderr(std::process::Stdio::from(log))
         .spawn()
         .unwrap();
     let child = wait_json(&dir.path().join("descendant.json"), 5);
@@ -471,6 +521,7 @@ fn reliability_unknown_provider_outcome_acknowledgement_survives_restart_without
         payload: json!({"fixture":"never transmitted","model":GO_MODEL}),
         attempt: 1,
         retry_of: None,
+        purpose: Default::default(),
     };
     util::atomic_json(&store.path.join(&intent.request_path), &input, false).unwrap();
     store.state.pending = Some(intent.clone());
@@ -506,6 +557,10 @@ fn reliability_unknown_provider_outcome_acknowledgement_survives_restart_without
         aggregate_token_cap: None,
         aggregate_spend_cap: None,
         evidence_mode: "live".into(),
+        credential_selection: None,
+        purpose: Default::default(),
+        transcription: None,
+        vision: None,
     };
     util::atomic_json(&store.path.join(&intent.response_path), &receipt, false).unwrap();
     controller::resume(&mut store, false, false, Some(0)).unwrap();

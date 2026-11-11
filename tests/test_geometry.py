@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import numpy as np
 import cadquery as cq
 import pytest
@@ -10,6 +11,7 @@ def rectangular_sections():
     return [{"id": f"s{i}", "x_m": x, "points_yz_m": [[2.0, float(z)] for z in np.linspace(0, 3, 11)]} for i, x in enumerate([0, 5, 10])]
 
 
+@pytest.mark.cad
 def test_box_hull_preserves_real_units_and_volume(tmp_path):
     shape, _ = build_hull(rectangular_sections())
     exports, metrics = export_geometry(shape, tmp_path)
@@ -22,6 +24,21 @@ def test_box_hull_preserves_real_units_and_volume(tmp_path):
     assert step.Volume() == pytest.approx(120e9)
     assert exports["step_units"] == "mm"
     assert metrics["step_roundtrip_relative_error"] < 1e-9
+
+
+@pytest.mark.cad
+def test_hull_mesh_reports_face_progress_without_changing_tessellation(tmp_path, monkeypatch):
+    from vessel_reconstruction import geometry
+    shape = cq.Solid.makeBox(1000, 2000, 3000)
+    records = []
+    monkeypatch.setattr(geometry, 'report_progress', lambda *args, **kwargs: records.append(args))
+    export_geometry(shape, tmp_path, export_cad=False)
+    parts = [record[1:] for record in records if record[0] == 'Making the mesh']
+    assert parts == [(i, 6) for i in range(7)]
+    mesh = json.loads((tmp_path / 'mesh.json').read_text())
+    vertices, triangles = shape.tessellate(2.5, 0.15)
+    assert mesh['vertices'] == [[v.x / 1000, v.y / 1000, v.z / 1000] for v in vertices]
+    assert mesh['faces'] == [list(face) for face in triangles]
 
 
 def test_degenerate_section_is_rejected():
@@ -45,6 +62,7 @@ def test_no_nan_geometry():
         build_hull(sections)
 
 
+@pytest.mark.cad
 def test_mixed_keels_and_flat_bottoms_preserve_measured_volume_and_step(tmp_path):
     # Independently specified trapezoids alternate a zero-width keel with a
     # finite flat bottom. They have unequal closed-wire edge counts, but the
@@ -80,6 +98,7 @@ def test_mixed_keels_and_flat_bottoms_preserve_measured_volume_and_step(tmp_path
     assert stl.volume / 1e9 == pytest.approx(expected, rel=1e-3)
 
 
+@pytest.mark.cad
 def test_changing_vertical_ranges_have_planar_top_bottom_and_correct_volume():
     xs = [0.0, 3.0, 8.0]
     half_widths = [1.0, 2.2, 1.5]
@@ -104,6 +123,7 @@ def test_changing_vertical_ranges_have_planar_top_bottom_and_correct_volume():
     assert shape.BoundingBox().zmax == pytest.approx(3700)
 
 
+@pytest.mark.cad
 def test_zero_area_centreline_spur_does_not_invent_material():
     # The lower metre is exactly zero-width, followed by a triangular section.
     # Removing its retraced cap-wire spur must not add an epsilon-width strip.
@@ -126,3 +146,25 @@ def test_interior_centreline_pinch_is_rejected_without_width_adjustment():
     with pytest.raises(GeometryError, match="pinch"):
         build_hull(sections)
 
+
+
+@pytest.mark.cad
+def test_a_repeated_sample_point_closes_a_triangle_instead_of_crashing(monkeypatch):
+    """A zero-length profile segment cannot be ruled (OpenCascade crashes); it becomes a triangle."""
+    from vessel_reconstruction import geometry
+    original = geometry.normalize_sections
+
+    def with_repeat(sections, *args, **kwargs):
+        normalized = original(sections, *args, **kwargs)
+        points = normalized[1]["cad_points_yz_m"]
+        middle = len(points) // 2
+        points[middle] = list(points[middle - 1])
+        return normalized
+
+    z = np.linspace(0, 3, 13)
+    sections = [{"id": f"s{i}", "x_m": x, "points_yz_m": [[float(w * (0.2 + np.sqrt(v / 3))), float(v)] for v in z]}
+                for i, (x, w) in enumerate([(0, 1.5), (5, 2.0), (10, 1.5)])]
+    monkeypatch.setattr(geometry, "normalize_sections", with_repeat)
+    shape, normalized = build_hull(sections)
+    assert len(normalized[1]["cad_points_yz_m"]) >= 3
+    assert shape.isValid() and shape.Volume() > 0

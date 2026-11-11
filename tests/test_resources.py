@@ -64,16 +64,6 @@ def test_reference_has_own_selected_page_settings_and_aggregate_budget(tmp_path)
         validate_sources(spec, tmp_path, policy=replace(DEFAULT_POLICY, aggregate_pixels=600))
 
 
-def test_table_cell_count_and_resize_amplification_are_bounded(tmp_path):
-    png(tmp_path, size=(1000, 120))
-    spec = {'source': {'file': 'source.png'}, 'input_mode': 'offset_table_ocr', 'sections': [{'roi_px': [0,0,1000,120], 'cells': [{'roi_px': [0,0,1000,1]}]}]}
-    with pytest.raises(ResourceLimitError, match='enlarged OCR'):
-        validate_sources(spec, tmp_path)
-    spec['sections'][0]['cells'] = [{'roi_px': [0,0,10,20]}] * 513
-    with pytest.raises(ResourceLimitError, match='cell count'):
-        validate_sources(spec, tmp_path)
-
-
 def test_multiframe_and_byte_budget_are_explicit(tmp_path):
     path = tmp_path/'frames.tiff'
     image = Image.new('RGB',(4,4),'white'); image.save(path, save_all=True, append_images=[image])

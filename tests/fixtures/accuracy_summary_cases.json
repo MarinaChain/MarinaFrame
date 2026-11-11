@@ -1,0 +1,548 @@
+[
+ {
+  "name": "all traced, model path",
+  "facts": {
+   "hull": {
+    "path": "model_reading",
+    "hull_type": null,
+    "labels": {
+     "traced": 9
+    },
+    "to_check": 0,
+    "fit": 0.91
+   },
+   "tanks": null,
+   "steel": null
+  },
+  "expected": {
+   "hull": {
+    "line": "Hull: measured on clean synthetic sheets only: RMS 0.8 to 14 % of half-beam, 4 of 10 within the 2 % gate; 9 of 9 sections traced; no open check items; fit score 0.91.",
+    "chip": "0.8-14 %",
+    "present": true,
+    "caution": true,
+    "detail_ids": [
+     "hull.model_reading_clean"
+    ]
+   },
+   "tanks": {
+    "line": "Tanks: none in this run.",
+    "chip": "",
+    "present": false,
+    "caution": false,
+    "detail_ids": []
+   },
+   "steel": {
+    "line": "Steel: none in this run.",
+    "chip": "",
+    "present": false,
+    "caution": false,
+    "detail_ids": []
+   }
+  }
+ },
+ {
+  "name": "many guessed values",
+  "facts": {
+   "hull": {
+    "path": "model_reading",
+    "hull_type": null,
+    "labels": {
+     "traced": 2,
+     "interpolated": 3,
+     "ai_inferred": 4,
+     "ai_corrected": 1,
+     "omitted": 1
+    },
+    "to_check": 8,
+    "fit": 0.52
+   },
+   "tanks": null,
+   "steel": null
+  },
+  "expected": {
+   "hull": {
+    "line": "Hull: measured on clean synthetic sheets only: RMS 0.8 to 14 % of half-beam, 4 of 10 within the 2 % gate; 2 of 11 sections traced, 3 interpolated, 5 by AI, 1 not modelled; 8 to check; fit score 0.52.",
+    "chip": "0.8-14 %",
+    "present": true,
+    "caution": true,
+    "detail_ids": [
+     "hull.model_reading_clean"
+    ]
+   },
+   "tanks": {
+    "line": "Tanks: none in this run.",
+    "chip": "",
+    "present": false,
+    "caution": false,
+    "detail_ids": []
+   },
+   "steel": {
+    "line": "Steel: none in this run.",
+    "chip": "",
+    "present": false,
+    "caution": false,
+    "detail_ids": []
+   }
+  }
+ },
+ {
+  "name": "scanned reader, round bilge",
+  "facts": {
+   "hull": {
+    "path": "scanned_body_plan",
+    "hull_type": "round_bilge",
+    "labels": {
+     "traced": 12,
+     "repaired": 2
+    },
+    "to_check": 1,
+    "fit": null
+   },
+   "tanks": null,
+   "steel": null
+  },
+  "expected": {
+   "hull": {
+    "line": "Hull: 1.4 mm RMS on BUE GIRL (holdout, round bilge); 14 of 14 sections traced; 1 to check.",
+    "chip": "1.4 mm",
+    "present": true,
+    "caution": true,
+    "detail_ids": [
+     "hull.scanned_bue_girl",
+     "hull.scanned_thayer",
+     "hull.scanned_pardon_me"
+    ]
+   },
+   "tanks": {
+    "line": "Tanks: none in this run.",
+    "chip": "",
+    "present": false,
+    "caution": false,
+    "detail_ids": []
+   },
+   "steel": {
+    "line": "Steel: none in this run.",
+    "chip": "",
+    "present": false,
+    "caution": false,
+    "detail_ids": []
+   }
+  }
+ },
+ {
+  "name": "scanned reader, hull type unknown",
+  "facts": {
+   "hull": {
+    "path": "scanned_body_plan",
+    "hull_type": null,
+    "labels": {
+     "traced": 12
+    },
+    "to_check": 0,
+    "fit": null
+   },
+   "tanks": null,
+   "steel": null
+  },
+  "expected": {
+   "hull": {
+    "line": "Hull: 1.4 mm RMS on BUE GIRL (holdout, round bilge); missed on PARDON ME (holdout, hard chine): 34 of 57 cells read (hull type not known); 12 of 12 sections traced; no open check items.",
+    "chip": "1.4 mm / missed",
+    "present": true,
+    "caution": true,
+    "detail_ids": [
+     "hull.scanned_bue_girl",
+     "hull.scanned_thayer",
+     "hull.scanned_pardon_me"
+    ]
+   },
+   "tanks": {
+    "line": "Tanks: none in this run.",
+    "chip": "",
+    "present": false,
+    "caution": false,
+    "detail_ids": []
+   },
+   "steel": {
+    "line": "Steel: none in this run.",
+    "chip": "",
+    "present": false,
+    "caution": false,
+    "detail_ids": []
+   }
+  }
+ },
+ {
+  "name": "scanned reader, hard chine",
+  "facts": {
+   "hull": {
+    "path": "scanned_body_plan",
+    "hull_type": "hard_chine",
+    "labels": {
+     "traced": 6
+    },
+    "to_check": 3,
+    "fit": null
+   },
+   "tanks": null,
+   "steel": null
+  },
+  "expected": {
+   "hull": {
+    "line": "Hull: missed on PARDON ME (holdout, hard chine): 34 of 57 cells read; 6 of 6 sections traced; 3 to check.",
+    "chip": "missed",
+    "present": true,
+    "caution": true,
+    "detail_ids": [
+     "hull.scanned_bue_girl",
+     "hull.scanned_thayer",
+     "hull.scanned_pardon_me"
+    ]
+   },
+   "tanks": {
+    "line": "Tanks: none in this run.",
+    "chip": "",
+    "present": false,
+    "caution": false,
+    "detail_ids": []
+   },
+   "steel": {
+    "line": "Steel: none in this run.",
+    "chip": "",
+    "present": false,
+    "caution": false,
+    "detail_ids": []
+   }
+  }
+ },
+ {
+  "name": "vector drawing",
+  "facts": {
+   "hull": {
+    "path": "vector_drawing",
+    "hull_type": null,
+    "labels": {
+     "traced": 30
+    },
+    "to_check": 0,
+    "fit": null
+   },
+   "tanks": null,
+   "steel": null
+  },
+  "expected": {
+   "hull": {
+    "line": "Hull: 13.5 mm median against a printed section (Gunnerus, development); 30 of 30 sections traced; no open check items.",
+    "chip": "13.5 mm",
+    "present": true,
+    "caution": false,
+    "detail_ids": [
+     "hull.vector_gunnerus"
+    ]
+   },
+   "tanks": {
+    "line": "Tanks: none in this run.",
+    "chip": "",
+    "present": false,
+    "caution": false,
+    "detail_ids": []
+   },
+   "steel": {
+    "line": "Steel: none in this run.",
+    "chip": "",
+    "present": false,
+    "caution": false,
+    "detail_ids": []
+   }
+  }
+ },
+ {
+  "name": "path missing, counts unknown",
+  "facts": {
+   "hull": {},
+   "tanks": null,
+   "steel": null
+  },
+  "expected": {
+   "hull": {
+    "line": "Hull: measured on clean synthetic sheets only: RMS 0.8 to 14 % of half-beam, 4 of 10 within the 2 % gate.",
+    "chip": "0.8-14 %",
+    "present": true,
+    "caution": true,
+    "detail_ids": [
+     "hull.model_reading_clean"
+    ]
+   },
+   "tanks": {
+    "line": "Tanks: none in this run.",
+    "chip": "",
+    "present": false,
+    "caution": false,
+    "detail_ids": []
+   },
+   "steel": {
+    "line": "Steel: none in this run.",
+    "chip": "",
+    "present": false,
+    "caution": false,
+    "detail_ids": []
+   }
+  }
+ },
+ {
+  "name": "tanks from a vector plan with guesses",
+  "facts": {
+   "hull": {
+    "path": "model_reading",
+    "hull_type": null,
+    "labels": {
+     "traced": 5
+    },
+    "to_check": 0,
+    "fit": null
+   },
+   "tanks": {
+    "built": 22,
+    "total": 24,
+    "path": "vector_plan",
+    "volume_labels": {
+     "traced": 18,
+     "read": 2,
+     "guessed": 2
+    }
+   },
+   "steel": null
+  },
+  "expected": {
+   "hull": {
+    "line": "Hull: measured on clean synthetic sheets only: RMS 0.8 to 14 % of half-beam, 4 of 10 within the 2 % gate; 5 of 5 sections traced; no open check items.",
+    "chip": "0.8-14 %",
+    "present": true,
+    "caution": true,
+    "detail_ids": [
+     "hull.model_reading_clean"
+    ]
+   },
+   "tanks": {
+    "line": "Tanks: median 10 % off the printed volume on a vector plan (21 tanks, development); 20 of 22 volumes traced or read, 2 guessed; 2 not built.",
+    "chip": "10 %",
+    "present": true,
+    "caution": true,
+    "detail_ids": [
+     "tanks.vector_gunnerus",
+     "tanks.raster_dev",
+     "tanks.raster_holdout",
+     "tanks.raster_after_fix"
+    ]
+   },
+   "steel": {
+    "line": "Steel: none in this run.",
+    "chip": "",
+    "present": false,
+    "caution": false,
+    "detail_ids": []
+   }
+  }
+ },
+ {
+  "name": "tanks, plan type unknown",
+  "facts": {
+   "hull": {
+    "path": "model_reading",
+    "hull_type": null,
+    "labels": {
+     "traced": 5
+    },
+    "to_check": 0,
+    "fit": null
+   },
+   "tanks": {
+    "built": 4,
+    "total": 4,
+    "path": null,
+    "volume_labels": null
+   },
+   "steel": null
+  },
+  "expected": {
+   "hull": {
+    "line": "Hull: measured on clean synthetic sheets only: RMS 0.8 to 14 % of half-beam, 4 of 10 within the 2 % gate; 5 of 5 sections traced; no open check items.",
+    "chip": "0.8-14 %",
+    "present": true,
+    "caution": true,
+    "detail_ids": [
+     "hull.model_reading_clean"
+    ]
+   },
+   "tanks": {
+    "line": "Tanks: median 10 % off the printed volume on a vector plan (21 tanks, development); scanned plan holdout missed (Huddell: 0 of 22 tanks matched).",
+    "chip": "10 % / missed",
+    "present": true,
+    "caution": true,
+    "detail_ids": [
+     "tanks.vector_gunnerus",
+     "tanks.raster_dev",
+     "tanks.raster_holdout",
+     "tanks.raster_after_fix"
+    ]
+   },
+   "steel": {
+    "line": "Steel: none in this run.",
+    "chip": "",
+    "present": false,
+    "caution": false,
+    "detail_ids": []
+   }
+  }
+ },
+ {
+  "name": "tanks from a scanned plan",
+  "facts": {
+   "hull": {
+    "path": "model_reading",
+    "hull_type": null,
+    "labels": {
+     "traced": 5
+    },
+    "to_check": 0,
+    "fit": null
+   },
+   "tanks": {
+    "built": 10,
+    "total": 12,
+    "path": "raster_plan",
+    "volume_labels": {
+     "traced": 10
+    }
+   },
+   "steel": null
+  },
+  "expected": {
+   "hull": {
+    "line": "Hull: measured on clean synthetic sheets only: RMS 0.8 to 14 % of half-beam, 4 of 10 within the 2 % gate; 5 of 5 sections traced; no open check items.",
+    "chip": "0.8-14 %",
+    "present": true,
+    "caution": true,
+    "detail_ids": [
+     "hull.model_reading_clean"
+    ]
+   },
+   "tanks": {
+    "line": "Tanks: scanned plans, development: median 9 % on one plan and 40 % on another (datum differs); scanned plan holdout missed (Huddell: 0 of 22 tanks matched); 10 of 10 volumes traced or read; 2 not built.",
+    "chip": "9-40 % / missed",
+    "present": true,
+    "caution": true,
+    "detail_ids": [
+     "tanks.vector_gunnerus",
+     "tanks.raster_dev",
+     "tanks.raster_holdout",
+     "tanks.raster_after_fix"
+    ]
+   },
+   "steel": {
+    "line": "Steel: none in this run.",
+    "chip": "",
+    "present": false,
+    "caution": false,
+    "detail_ids": []
+   }
+  }
+ },
+ {
+  "name": "steel with printed and guessed thickness",
+  "facts": {
+   "hull": {
+    "path": "model_reading",
+    "hull_type": null,
+    "labels": {
+     "traced": 5
+    },
+    "to_check": 0,
+    "fit": null
+   },
+   "tanks": null,
+   "steel": {
+    "thickness_labels": {
+     "printed": 40,
+     "guessed": 10
+    }
+   }
+  },
+  "expected": {
+   "hull": {
+    "line": "Hull: measured on clean synthetic sheets only: RMS 0.8 to 14 % of half-beam, 4 of 10 within the 2 % gate; 5 of 5 sections traced; no open check items.",
+    "chip": "0.8-14 %",
+    "present": true,
+    "caution": true,
+    "detail_ids": [
+     "hull.model_reading_clean"
+    ]
+   },
+   "tanks": {
+    "line": "Tanks: none in this run.",
+    "chip": "",
+    "present": false,
+    "caution": false,
+    "detail_ids": []
+   },
+   "steel": {
+    "line": "Steel: positions match the printed drawing: median 0.0 mm on 35 pairs (development); weight not measured against a printed weight; 40 of 50 thicknesses printed, 10 guessed or missing.",
+    "chip": "pos 0 mm / wt n/m",
+    "present": true,
+    "caution": true,
+    "detail_ids": [
+     "steel.positions",
+     "steel.members_midship",
+     "steel.weight"
+    ]
+   }
+  }
+ },
+ {
+  "name": "steel without label counts",
+  "facts": {
+   "hull": {
+    "path": "model_reading",
+    "hull_type": null,
+    "labels": {
+     "traced": 5
+    },
+    "to_check": 0,
+    "fit": null
+   },
+   "tanks": null,
+   "steel": {
+    "thickness_labels": null
+   }
+  },
+  "expected": {
+   "hull": {
+    "line": "Hull: measured on clean synthetic sheets only: RMS 0.8 to 14 % of half-beam, 4 of 10 within the 2 % gate; 5 of 5 sections traced; no open check items.",
+    "chip": "0.8-14 %",
+    "present": true,
+    "caution": true,
+    "detail_ids": [
+     "hull.model_reading_clean"
+    ]
+   },
+   "tanks": {
+    "line": "Tanks: none in this run.",
+    "chip": "",
+    "present": false,
+    "caution": false,
+    "detail_ids": []
+   },
+   "steel": {
+    "line": "Steel: positions match the printed drawing: median 0.0 mm on 35 pairs (development); weight not measured against a printed weight.",
+    "chip": "pos 0 mm / wt n/m",
+    "present": true,
+    "caution": true,
+    "detail_ids": [
+     "steel.positions",
+     "steel.members_midship",
+     "steel.weight"
+    ]
+   }
+  }
+ }
+]

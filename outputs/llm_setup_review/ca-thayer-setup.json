@@ -1,0 +1,29 @@
+{
+  "source": {
+    "source": "/Users/jonathanjie/Documents/workspace/MarinaFrame/work/sources/haer/ca_thayer/ca_thayer_s13_midship_section.tif",
+    "sha256": "5c988e96986fcd4356c2e9fb38393c45fb71b8f5737823185ea66c04d4366508",
+    "raster_sha256": "aee8bcc275fe0438d0905d72b5b4c443be6ccda3fc2aadb7debc8108a961302f"
+  },
+  "checks": {
+    "failures": [
+      {
+        "kind": "provider_no_reply",
+        "field": "overview"
+      }
+    ],
+    "spec_ready": false,
+    "engineering_approved": false,
+    "source_sha256": "aee8bcc275fe0438d0905d72b5b4c443be6ccda3fc2aadb7debc8108a961302f",
+    "usage": {
+      "requests_failed": 1,
+      "observed_cost_usd": 0.0,
+      "requests_unknown": 0,
+      "requests_without_cost": 0,
+      "requests_not_sent": 0,
+      "prompt_tokens": 1157,
+      "requests_completed": 0,
+      "requests_intended": 1,
+      "completion_tokens": 367
+    }
+  }
+}

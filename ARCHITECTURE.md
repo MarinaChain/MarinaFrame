@@ -38,11 +38,11 @@ A required view failure blocks the entire envelope: the system does not quietly 
 
 Successful geometry has status `review_required`. The hull part links to its source IDs and observed sections. Assumptions about symmetry, station interpolation, ends, top, lower closure and vessel condition remain visible. Shell thickness, material and internal structure remain unresolved rather than being inferred from appearance.
 
-`review.py` appends a separate named local review event bound to the immutable manifest only if content verification succeeds and the expected run ID matches. The result record is never edited; displayed review state derives from a validated history, not its optional cache. It records the identity as unverified and keeps engineering approval false. The review chain is useful local evidence, not an authenticated approval service or a classification society certificate.
+*Historical (removed in 0.5):* `review.py` appended a Python-side review event to the run. Review state is now kept by the Rust controller and shown by `rust_review.py`; the immutable run record still allows the old mutable review files in its allowlist so archived runs verify.
 
 ## 5. Inspect and operate locally
 
-`server.py` provides an authenticated loopback-only HTTP workbench with trusted Host/Origin values, one-time local bootstrap, session cookies and CSRF protection. `jobs.py` persists a bounded serial queue in SQLite. `isolation.py` supervises killable process groups with CPU/address-space/file/output/wall budgets and restart recovery. Browser uploads require actual source bytes and preserve their hashes. Supporting references are also confined uploads. Cross-origin mutations, traversal and symlink escapes are rejected. This local development server is not a production multi-user service.
+*Historical (removed in 0.5):* `server.py` (loopback HTTP workbench) and `jobs.py` (SQLite queue) are gone. `isolation.py` still supervises killable process groups with CPU, address-space, file, output and wall budgets; the Rust worker path uses it. The local review UI is `rust_review.py`.
 
 The packaged JavaScript viewer renders the actual mesh, offers section selection and overlays observations on the original drawing coordinate system. It supports reduced-resolution display derivatives without changing evidence coordinates. A software renderer handles environments without WebGL. The calibration editor writes metadata only.
 

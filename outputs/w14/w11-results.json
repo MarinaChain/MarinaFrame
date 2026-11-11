@@ -1,0 +1,319 @@
+[
+  {
+    "case_id": "wigley-L0",
+    "status": "no_progress",
+    "last_event": "task_terminated",
+    "selected": 9,
+    "guesses": 0,
+    "arm_record": {
+      "arm": "llm",
+      "exit": 0,
+      "wall_seconds": 97.2,
+      "commit": "22967859f8a88385fbc2c72a3b86dabcd088fc4b"
+    },
+    "supervisor_stop": null,
+    "engineering_approved": false
+  },
+  {
+    "case_id": "wigley-L1",
+    "status": "no_progress",
+    "last_event": "task_terminated",
+    "selected": 0,
+    "guesses": 0,
+    "arm_record": {
+      "arm": "llm",
+      "exit": 0,
+      "wall_seconds": 12.0,
+      "commit": "22967859f8a88385fbc2c72a3b86dabcd088fc4b"
+    },
+    "supervisor_stop": null,
+    "engineering_approved": false
+  },
+  {
+    "case_id": "wigley-L2",
+    "status": "no_progress",
+    "last_event": "task_terminated",
+    "selected": 0,
+    "guesses": 9,
+    "arm_record": {
+      "arm": "llm",
+      "exit": 0,
+      "wall_seconds": 245.9,
+      "commit": "22967859f8a88385fbc2c72a3b86dabcd088fc4b"
+    },
+    "supervisor_stop": null,
+    "engineering_approved": false
+  },
+  {
+    "case_id": "wigley-L3",
+    "status": "no_progress",
+    "last_event": "task_terminated",
+    "selected": 0,
+    "guesses": 4,
+    "arm_record": {
+      "arm": "llm",
+      "exit": 0,
+      "wall_seconds": 240.5,
+      "commit": "22967859f8a88385fbc2c72a3b86dabcd088fc4b"
+    },
+    "supervisor_stop": null,
+    "engineering_approved": false
+  },
+  {
+    "case_id": "dtmb5415-L0",
+    "status": "no_progress",
+    "last_event": "task_terminated",
+    "selected": 7,
+    "guesses": 2,
+    "arm_record": {
+      "arm": "llm",
+      "exit": 0,
+      "wall_seconds": 88.8,
+      "commit": "22967859f8a88385fbc2c72a3b86dabcd088fc4b"
+    },
+    "supervisor_stop": null,
+    "engineering_approved": false
+  },
+  {
+    "case_id": "dtmb5415-L1",
+    "status": "no_progress",
+    "last_event": "task_terminated",
+    "selected": 0,
+    "guesses": 0,
+    "arm_record": {
+      "arm": "llm",
+      "exit": 0,
+      "wall_seconds": 48.8,
+      "commit": "22967859f8a88385fbc2c72a3b86dabcd088fc4b"
+    },
+    "supervisor_stop": null,
+    "engineering_approved": false
+  },
+  {
+    "case_id": "dtmb5415-L2",
+    "status": "running",
+    "last_event": "provider_intent",
+    "selected": 0,
+    "guesses": 9,
+    "arm_record": {},
+    "supervisor_stop": {
+      "reason": "semantic_no_progress_manual_stop",
+      "detail": "Repeated label reads and enumeration without assignment progress; original attempt retained."
+    },
+    "engineering_approved": false
+  },
+  {
+    "case_id": "dtmb5415-L3",
+    "status": "interrupted",
+    "last_event": "task_terminated",
+    "selected": 0,
+    "guesses": 0,
+    "arm_record": {
+      "arm": "llm",
+      "exit": 0,
+      "wall_seconds": 183.9,
+      "supervisor_stop": "semantic_no_progress_180_seconds",
+      "engineering_approved": false
+    },
+    "supervisor_stop": {
+      "arm": "llm",
+      "exit": 0,
+      "wall_seconds": 183.9,
+      "supervisor_stop": "semantic_no_progress_180_seconds",
+      "engineering_approved": false
+    },
+    "engineering_approved": false
+  },
+  {
+    "case_id": "series60-L0",
+    "status": "no_progress",
+    "last_event": "task_terminated",
+    "selected": 0,
+    "guesses": 0,
+    "arm_record": {
+      "arm": "llm",
+      "exit": 0,
+      "wall_seconds": 40.2,
+      "supervisor_stop": null,
+      "engineering_approved": false
+    },
+    "supervisor_stop": null,
+    "engineering_approved": false
+  },
+  {
+    "case_id": "series60-L1",
+    "status": "no_progress",
+    "last_event": "task_terminated",
+    "selected": 0,
+    "guesses": 0,
+    "arm_record": {
+      "arm": "llm",
+      "exit": 0,
+      "wall_seconds": 28.1,
+      "supervisor_stop": null,
+      "engineering_approved": false
+    },
+    "supervisor_stop": null,
+    "engineering_approved": false
+  },
+  {
+    "case_id": "series60-L2",
+    "status": "no_progress",
+    "last_event": "task_terminated",
+    "selected": 0,
+    "guesses": 0,
+    "arm_record": {
+      "arm": "llm",
+      "exit": 0,
+      "wall_seconds": 38.2,
+      "supervisor_stop": null,
+      "engineering_approved": false
+    },
+    "supervisor_stop": null,
+    "engineering_approved": false
+  },
+  {
+    "case_id": "series60-L3",
+    "status": "no_progress",
+    "last_event": "task_terminated",
+    "selected": 0,
+    "guesses": 0,
+    "arm_record": {
+      "arm": "llm",
+      "exit": 0,
+      "wall_seconds": 95.4,
+      "supervisor_stop": null,
+      "engineering_approved": false
+    },
+    "supervisor_stop": null,
+    "engineering_approved": false
+  },
+  {
+    "case_id": "shipd-1-01410-L0",
+    "status": "no_progress",
+    "last_event": "task_terminated",
+    "selected": 9,
+    "guesses": 0,
+    "arm_record": {
+      "arm": "llm",
+      "exit": 0,
+      "wall_seconds": 94.4,
+      "supervisor_stop": null,
+      "engineering_approved": false
+    },
+    "supervisor_stop": null,
+    "engineering_approved": false
+  },
+  {
+    "case_id": "shipd-1-01410-L1",
+    "status": "no_progress",
+    "last_event": "task_terminated",
+    "selected": 0,
+    "guesses": 0,
+    "arm_record": {
+      "arm": "llm",
+      "exit": 0,
+      "wall_seconds": 31.1,
+      "supervisor_stop": null,
+      "engineering_approved": false
+    },
+    "supervisor_stop": null,
+    "engineering_approved": false
+  },
+  {
+    "case_id": "shipd-1-01410-L2",
+    "status": "no_progress",
+    "last_event": "task_terminated",
+    "selected": 0,
+    "guesses": 0,
+    "arm_record": {
+      "arm": "llm",
+      "exit": 0,
+      "wall_seconds": 14.1,
+      "supervisor_stop": null,
+      "engineering_approved": false
+    },
+    "supervisor_stop": null,
+    "engineering_approved": false
+  },
+  {
+    "case_id": "shipd-1-01410-L3",
+    "status": "no_progress",
+    "last_event": "task_terminated",
+    "selected": 0,
+    "guesses": 3,
+    "arm_record": {
+      "arm": "llm",
+      "exit": 0,
+      "wall_seconds": 217.1,
+      "supervisor_stop": null,
+      "engineering_approved": false
+    },
+    "supervisor_stop": null,
+    "engineering_approved": false
+  },
+  {
+    "case_id": "shipd-2-01040-L0",
+    "status": "no_progress",
+    "last_event": "task_terminated",
+    "selected": 9,
+    "guesses": 0,
+    "arm_record": {
+      "arm": "llm",
+      "exit": 0,
+      "wall_seconds": 118.6,
+      "supervisor_stop": null,
+      "engineering_approved": false
+    },
+    "supervisor_stop": null,
+    "engineering_approved": false
+  },
+  {
+    "case_id": "shipd-2-01040-L1",
+    "status": "no_progress",
+    "last_event": "task_terminated",
+    "selected": 0,
+    "guesses": 0,
+    "arm_record": {
+      "arm": "llm",
+      "exit": 0,
+      "wall_seconds": 12.1,
+      "supervisor_stop": null,
+      "engineering_approved": false
+    },
+    "supervisor_stop": null,
+    "engineering_approved": false
+  },
+  {
+    "case_id": "shipd-2-01040-L2",
+    "status": "no_progress",
+    "last_event": "task_terminated",
+    "selected": 0,
+    "guesses": 1,
+    "arm_record": {
+      "arm": "llm",
+      "exit": 0,
+      "wall_seconds": 96.4,
+      "supervisor_stop": null,
+      "engineering_approved": false
+    },
+    "supervisor_stop": null,
+    "engineering_approved": false
+  },
+  {
+    "case_id": "shipd-2-01040-L3",
+    "status": "no_progress",
+    "last_event": "task_terminated",
+    "selected": 0,
+    "guesses": 0,
+    "arm_record": {
+      "arm": "llm",
+      "exit": 0,
+      "wall_seconds": 43.2,
+      "supervisor_stop": null,
+      "engineering_approved": false
+    },
+    "supervisor_stop": null,
+    "engineering_approved": false
+  }
+]

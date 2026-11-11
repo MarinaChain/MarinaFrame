@@ -37,6 +37,12 @@ def test_ground_truth_cannot_enter_drawing_spec(tmp_path):
     assert any(g["kind"] == "geometry_in_input" for g in validate_spec(spec, tmp_path))
 
 
+def test_multi_region_geometry_cannot_enter_drawing_spec(tmp_path):
+    spec = valid_spec(tmp_path)
+    spec["sections"][0]["regions"] = [{"kind": "offset", "rows_m": [[0, 1, 2], [1, 1, 2]]}]
+    assert any(g["kind"] == "geometry_in_input" for g in validate_spec(spec, tmp_path))
+
+
 def test_source_hash_mismatch_blocks(tmp_path):
     spec = valid_spec(tmp_path)
     spec["source"]["sha256"] = "0" * 64

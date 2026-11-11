@@ -9,11 +9,20 @@ from pathlib import Path
 MAX_LOCAL_METRES = 10_000_000.0
 MAX_SPEC_BYTES = 2 * 1024 * 1024
 MAX_SECTIONS = 300
-MAX_CELLS_PER_SECTION = 256
 MAX_TOTAL_CELLS = 4096
+MIN_CELLS_PER_SECTION = 5
+# Most drawn pieces (curves) one multi-region station may declare.
+MAX_PIECES = 8
+MAX_CELLS_PER_SECTION = 256
+TABLE_VISION_MODE = "offset_table_vision"
+# Answers that must come from source pixels, never from the specification.
+VALUE_FIELDS = {"value", "value_m", "y_m", "half_breadth_m", "token", "text", "expected_text", "parsed_value_m"}
 MAX_PIXEL_COORDINATE = 1_000_000
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
-FORBIDDEN = {"points", "points_yz_m", "offsets", "ground_truth", "reference_mesh", "hull_parameters"}
+# Measured geometry, including multi-region section records (regions,
+# outline rings; see section_regions.py), is an output of reading, never input.
+FORBIDDEN = {"points", "points_yz_m", "offsets", "ground_truth", "reference_mesh", "hull_parameters",
+             "regions", "rows_m", "outline_rings_yz_m"}
 
 
 class BoundedJSONError(ValueError):
@@ -41,8 +50,10 @@ def loads_bounded_json(raw: bytes | str, *, max_bytes=MAX_SPEC_BYTES, max_depth=
     """Reject duplicate keys, nonfinite numbers and excessive trees before use."""
     if isinstance(raw, str):
         raw = raw.encode("utf-8")
-    if not isinstance(raw, bytes) or len(raw) > max_bytes:
-        raise BoundedJSONError("JSON exceeds the byte limit.")
+    if not isinstance(raw, bytes):
+        raise BoundedJSONError("JSON input must be bytes or text.")
+    if len(raw) > max_bytes:
+        raise BoundedJSONError(f"JSON has at least {len(raw):,} bytes; {max_bytes:,} is the byte limit.")
 
     def pairs(items):
         result = {}
@@ -77,8 +88,10 @@ def loads_bounded_json(raw: bytes | str, *, max_bytes=MAX_SPEC_BYTES, max_depth=
     while stack:
         item, depth = stack.pop()
         count += 1
-        if count > max_nodes or depth > max_depth:
-            raise BoundedJSONError("JSON tree exceeds the depth or item limit.")
+        if count > max_nodes:
+            raise BoundedJSONError(f"JSON has at least {count:,} items; the item limit is {max_nodes:,}.")
+        if depth > max_depth:
+            raise BoundedJSONError(f"JSON depth is at least {depth:,}; the depth limit is {max_depth:,}.")
         if isinstance(item, str) and len(item) > max_string:
             raise BoundedJSONError("JSON string exceeds the length limit.")
         if isinstance(item, dict):
@@ -95,7 +108,28 @@ def load_bounded_json(path: Path, **limits):
     limit = limits.get("max_bytes", MAX_SPEC_BYTES)
     with Path(path).open("rb") as handle:
         raw = handle.read(limit + 1)
-    return loads_bounded_json(raw, **limits)
+    try:
+        return loads_bounded_json(raw, **limits)
+    except BoundedJSONError as exc:
+        raise BoundedJSONError(f"{Path(path).name}: {exc}") from exc
+
+
+# A build can contain up to 300 sections and review samples for competing
+# contours. Budget 10,000 values per permitted section, pooled across the
+# record. The measured 72-section Gunnerus record uses 750,961 values, so
+# this gives almost four times its total. This is a hard resource ceiling,
+# not a promise that every maximal combination of evidence will fit.
+MAX_BUILD_RESULT_NODES = MAX_SECTIONS * 10_000
+MAX_BUILD_RESULT_BYTES = 64 * 1024 * 1024
+
+
+def load_build_result(path: Path):
+    """Read an untrusted build result within the shared record budget."""
+    try:
+        return load_bounded_json(path, max_bytes=MAX_BUILD_RESULT_BYTES,
+                                 max_depth=32, max_nodes=MAX_BUILD_RESULT_NODES)
+    except BoundedJSONError as exc:
+        raise BoundedJSONError(f"{exc} (build result)") from exc
 
 
 def _text(value, maximum=8192, *, optional=False):
@@ -108,8 +142,107 @@ def _rectangle(value):
             and value[2] > value[0] and value[3] > value[1])
 
 
-def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
-    """Every JSON type yields validation gaps, never a metadata type exception."""
+def _check_table_cells(sec: dict, roi, sid: str, errors: list) -> int:
+    """Check the human-declared cells of one table station; return the cell count."""
+    cells = sec.get("cells")
+    if not isinstance(cells, list) or not MIN_CELLS_PER_SECTION <= len(cells) <= MAX_CELLS_PER_SECTION:
+        errors.append(gap("insufficient_table_rows", f"Declare {MIN_CELLS_PER_SECTION}..{MAX_CELLS_PER_SECTION} source measurement cells per station.", sid))
+        return 0
+    elevations = set()
+    for cell in cells:
+        if not isinstance(cell, dict):
+            errors.append(gap("invalid_table_cell", "A cell must declare its source region and measured elevation.", sid))
+            continue
+        if VALUE_FIELDS.intersection(cell) or FORBIDDEN.intersection(cell):
+            errors.append(gap("geometry_in_input", "Half-breadths or transcriptions must be read from source pixels, not supplied.", sid))
+        extras = sorted(set(cell) - {"z_m", "roi_px"} - VALUE_FIELDS - FORBIDDEN)
+        if extras:
+            errors.append(gap("unexpected_field", f"Unsupported table cell field(s): {', '.join(extras[:8])}.", sid))
+        z = cell.get("z_m")
+        if not finite(z) or abs(z) > MAX_LOCAL_METRES or z in elevations:
+            errors.append(gap("invalid_table_elevation", "Cell elevations must be finite, bounded and unique per station.", sid))
+        else:
+            elevations.add(z)
+        box = cell.get("roi_px")
+        if not _rectangle(box) or not all(float(v).is_integer() for v in box):
+            errors.append(gap("invalid_cell_region", "Each cell requires a bounded integer source-pixel rectangle.", sid))
+        elif _rectangle(roi) and not (roi[0] <= box[0] and roi[1] <= box[1] and box[2] <= roi[2] and box[3] <= roi[3]):
+            errors.append(gap("invalid_cell_region", "A cell region falls outside its declared station column.", sid))
+    return len(cells)
+
+
+def _check_selection(selection, roi, sid: str, errors: list, unknown, label="contour_selection") -> None:
+    """Check one explicit source-pixel corridor (anchors and half width) inside the ROI."""
+    if not isinstance(selection, dict):
+        errors.append(gap("invalid_contour_selection", f"{label} must be an explicit pixel corridor object.", sid))
+        return
+    unknown(selection, {"anchors_px", "half_width_px"}, "contour selection", sid)
+    anchors, half_width = selection.get("anchors_px"), selection.get("half_width_px")
+    okay = (isinstance(anchors, list) and 2 <= len(anchors) <= 64 and finite(half_width)
+            and 0 < half_width <= 128 and _rectangle(roi))
+    if okay:
+        okay = half_width <= roi[2] - roi[0]
+        ys = set()
+        for point in anchors:
+            if not (isinstance(point, list) and len(point) == 2 and all(finite(v) for v in point)
+                    and roi[0] <= point[0] <= roi[2] and roi[1] <= point[1] <= roi[3]
+                    and point[1] not in ys):
+                okay = False
+                break
+            ys.add(point[1])
+    if not okay:
+        errors.append(gap("invalid_contour_selection", "Selection requires 2..64 finite ROI anchors at distinct rows and half_width_px in (0,128].", sid))
+
+
+def _check_pieces(sec: dict, roi, sid: str, errors: list, unknown) -> None:
+    """Check the declared pieces of a multi-piece station (see ingest.extract_pieces).
+
+    Each piece is one drawn curve, traced in its own corridor over its own
+    height interval. A piece with ``inner_selection`` is an offset piece (for
+    example a skeg): its material lies between the inner and the outer curve.
+    Pieces are declared reading evidence (where to look), never geometry.
+    """
+    pieces = sec["pieces"]
+    if "contour_selection" in sec:
+        errors.append(gap("invalid_pieces", "Declare either one contour_selection or pieces, not both.", sid))
+    if not isinstance(pieces, list) or not 1 <= len(pieces) <= MAX_PIECES:
+        errors.append(gap("invalid_pieces", f"pieces must be a list of 1..{MAX_PIECES} piece objects.", sid))
+        return
+    zlo, zhi = sec.get("z_min_m"), sec.get("z_max_m")
+    for piece in pieces:
+        if not isinstance(piece, dict):
+            errors.append(gap("invalid_pieces", "Each piece must be an object.", sid))
+            continue
+        unknown(piece, {"z_min_m", "z_max_m", "contour_selection", "inner_selection"}, "piece", sid)
+        if FORBIDDEN.intersection(piece) or VALUE_FIELDS.intersection(piece):
+            errors.append(gap("geometry_in_input", "A piece declares where to read, never geometry.", sid))
+        low, high = piece.get("z_min_m"), piece.get("z_max_m")
+        if not (finite(low) and finite(high) and high > low and finite(zlo) and finite(zhi)
+                and zlo <= low and high <= zhi):
+            errors.append(gap("invalid_pieces", "Each piece needs z_min_m < z_max_m inside the section's vertical range.", sid))
+        if "contour_selection" not in piece:
+            errors.append(gap("invalid_pieces", "Each piece needs a contour_selection corridor.", sid))
+        else:
+            _check_selection(piece["contour_selection"], roi, sid, errors, unknown)
+        if "inner_selection" in piece:
+            _check_selection(piece["inner_selection"], roi, sid, errors, unknown, "inner_selection")
+
+
+def is_sheet_only(spec) -> bool:
+    """A sheet-only intake spec: no sections yet, and an intake record of the sheets.
+
+    Only a live draft run accepts it (the model reads stations and scale in
+    phase 1; see materialize.py). Every other path still requires sections.
+    """
+    return isinstance(spec, dict) and spec.get("sections") == [] and isinstance(spec.get("intake"), dict)
+
+
+def validate_spec(spec: dict, base_dir: Path, *, allow_sheet_only: bool = False) -> list[dict]:
+    """Every JSON type yields validation gaps, never a metadata type exception.
+
+    ``allow_sheet_only`` admits a sheet-only intake spec (see is_sheet_only);
+    the default keeps the strict rule of at least three calibrated sections.
+    """
     errors = []
     if not isinstance(spec, dict):
         return [gap("invalid_spec", "A JSON object is required.")]
@@ -121,16 +254,54 @@ def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
 
     unknown(spec, {"schema_version", "vessel_id", "input_mode", "units", "source", "station_reference",
                    "symmetry", "symmetry_evidence", "end_closure", "sections", "constraints", "components",
-                   "table_value_units", "table_surface", "scope_note", "historical_date"}, "specification")
+                   "table_value_units", "table_surface", "scope_note", "historical_date", "table_reading",
+                   "draft", "intake", "design_draft_m", "design_draft_source"}, "specification")
+    if "intake" in spec:
+        intake = spec["intake"]
+        if (not isinstance(intake, dict) or set(intake) - {"file", "sha256"} or not _text(intake.get("file"), 4096)
+                or ("sha256" in intake and not (isinstance(intake["sha256"], str) and SHA256.fullmatch(intake["sha256"])))):
+            errors.append(gap("invalid_intake", "intake must be {file, optional sha256} naming the intake record."))
+    if "design_draft_m" in spec or "design_draft_source" in spec:
+        # The design draft read from the drawing or typed at intake (intake.write_spec), with
+        # its source record; exports use it for hydrostatics (exports/hydrostatics.design_draft).
+        value, source = spec.get("design_draft_m"), spec.get("design_draft_source", {})
+        if (isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
+                or value <= 0 or not isinstance(source, dict)):
+            errors.append(gap("invalid_design_draft",
+                              "design_draft_m must be a positive number of metres; design_draft_source an object."))
+    if "draft" in spec:
+        # A draft revision spec lists its open guesses; see draft.py. Its
+        # sections are the read ones only, so the guess list must be exact.
+        from .draft import check_draft
+        if not check_draft(spec["draft"]):
+            errors.append(gap("invalid_draft", "draft must be {status: draft_not_verified, guesses: [open guess records]}."))
     if FORBIDDEN.intersection(spec):
         errors.append(gap("geometry_in_input", "Drawing input must not contain target geometry or evaluation answers."))
     if spec.get("schema_version") != "1.0":
         errors.append(gap("schema_version", "schema_version must be 1.0."))
     mode = spec.get("input_mode", "calibrated_section_curves")
-    if not isinstance(mode, str) or mode not in ("calibrated_section_curves", "offset_table_ocr"):
-        errors.append(gap("unsupported_input_mode", "Choose calibrated_section_curves or offset_table_ocr."))
-    if mode == "offset_table_ocr" and spec.get("table_value_units") != "feet_inches_eighths":
-        errors.append(gap("table_units_unresolved", "Declare table_value_units='feet_inches_eighths' for this OCR adapter."))
+    # Tesseract offset_table_ocr was removed and stays rejected; archived OCR
+    # runs still verify (run_record). offset_table_vision is its replacement
+    # with different semantics: model transcriptions bound to cell crops.
+    table_mode = mode == TABLE_VISION_MODE
+    if not isinstance(mode, str) or mode not in ("calibrated_section_curves", TABLE_VISION_MODE):
+        errors.append(gap("unsupported_input_mode", f"Choose calibrated_section_curves or {TABLE_VISION_MODE}."))
+    if table_mode and spec.get("table_value_units") != "feet_inches_eighths":
+        errors.append(gap("table_units_unresolved", "Declare table_value_units='feet_inches_eighths'; units are not guessed."))
+    if "table_reading" in spec:
+        reading = spec["table_reading"]
+        if not table_mode:
+            errors.append(gap("unexpected_field", f"table_reading is supported only for {TABLE_VISION_MODE}."))
+        elif not isinstance(reading, dict) or set(reading) - {"file", "sha256"} or not _text(reading.get("file"), 4096):
+            errors.append(gap("invalid_table_reading", "table_reading must be {file, optional sha256} naming the read-table record."))
+        else:
+            if "sha256" in reading and (not isinstance(reading["sha256"], str) or not SHA256.fullmatch(reading["sha256"])):
+                errors.append(gap("invalid_table_reading", "table_reading.sha256 must be a lowercase SHA-256 digest."))
+            try:
+                if not (base_dir / reading["file"]).is_file():
+                    errors.append(gap("table_reading_missing", "The declared table_reading file does not exist."))
+            except (OSError, ValueError):
+                errors.append(gap("table_reading_missing", "The declared table_reading path is not readable."))
     for name in ("vessel_id", "table_surface", "scope_note", "historical_date"):
         if name in spec and not _text(spec[name], 256 if name == "vessel_id" else 8192):
             errors.append(gap("invalid_metadata", f"{name} must be a bounded nonempty string."))
@@ -174,7 +345,9 @@ def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
         if "roi_px" in source and not _rectangle(source["roi_px"]):
             errors.append(gap("invalid_source_region", f"{name}.roi_px must be a bounded positive pixel rectangle."))
     sections = spec.get("sections")
-    if not isinstance(sections, list) or len(sections) < 3:
+    if allow_sheet_only and is_sheet_only(spec):
+        sections = []  # The model reads stations and scale in phase 1.
+    elif not isinstance(sections, list) or len(sections) < 3:
         errors.append(gap("insufficient_sections", "At least three calibrated sections are required."))
         sections = []
     elif len(sections) > MAX_SECTIONS:
@@ -191,8 +364,15 @@ def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
         elif sid in ids:
             errors.append(gap("duplicate_identity", "Section identifiers must be unique.", sid))
         ids.add(sid)
-        unknown(sec, {"id", "x_m", "roi_px", "calibration", "z_min_m", "z_max_m", "evidence", "sample_count",
-                      "cells", "contour_selection"}, "section", sid)
+        if table_mode:
+            unknown(sec, {"id", "x_m", "roi_px", "evidence", "cells"}, "table station", sid)
+        else:
+            unknown(sec, {"id", "x_m", "roi_px", "calibration", "z_min_m", "z_max_m", "evidence", "sample_count",
+                          "cells", "contour_selection", "pieces", "authored"}, "section", sid)
+            if "authored" in sec:
+                from .section_authoring import check_authored
+                if not check_authored(sec["authored"], table_fit=sid in _table_fit_section_ids(spec)):
+                    errors.append(gap("invalid_authored_section", "authored must be {source_label, basis, points_yz_m} with a bounded fair curve.", sid))
         if FORBIDDEN.intersection(sec):
             errors.append(gap("geometry_in_input", "Drawing input must not contain target geometry or evaluation answers.", sid))
         x = sec.get("x_m")
@@ -209,53 +389,17 @@ def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
             errors.append(gap("invalid_view_region", "Declare a bounded positive drawing view region in pixels.", sid))
         if not _text(sec.get("evidence")):
             errors.append(gap("calibration_evidence_missing", "Describe the source of the view or table location and scale.", sid))
+        if table_mode:
+            total_cells += _check_table_cells(sec, roi, sid, errors)
+            continue
         if "sample_count" in sec and (type(sec["sample_count"]) is not int or not 17 <= sec["sample_count"] <= 513):
             errors.append(gap("invalid_sample_count", "sample_count must be an integer in [17, 513].", sid))
         if "contour_selection" in sec:
-            selection = sec["contour_selection"]
-            if not isinstance(selection, dict):
-                errors.append(gap("invalid_contour_selection", "contour_selection must be an explicit pixel corridor object.", sid))
-            else:
-                unknown(selection, {"anchors_px", "half_width_px"}, "contour selection", sid)
-                anchors, half_width = selection.get("anchors_px"), selection.get("half_width_px")
-                okay = (isinstance(anchors, list) and 2 <= len(anchors) <= 64 and finite(half_width)
-                        and 0 < half_width <= 128 and _rectangle(roi))
-                if okay:
-                    okay = half_width <= roi[2] - roi[0]
-                    ys = set()
-                    for point in anchors:
-                        if not (isinstance(point, list) and len(point) == 2 and all(finite(v) for v in point)
-                                and roi[0] <= point[0] <= roi[2] and roi[1] <= point[1] <= roi[3]
-                                and point[1] not in ys):
-                            okay = False
-                            break
-                        ys.add(point[1])
-                if not okay:
-                    errors.append(gap("invalid_contour_selection", "Selection requires 2..64 finite ROI anchors at distinct rows and half_width_px in (0,128].", sid))
-        if mode == "offset_table_ocr":
-            cells = sec.get("cells")
-            if not isinstance(cells, list) or not 5 <= len(cells) <= MAX_CELLS_PER_SECTION:
-                errors.append(gap("insufficient_table_rows", f"Declare 5..{MAX_CELLS_PER_SECTION} source measurement cells per station.", sid))
-            else:
-                total_cells += len(cells)
-                zs = set()
-                for cell in cells:
-                    if not isinstance(cell, dict):
-                        errors.append(gap("invalid_table_cell", "A cell must declare its source ROI and measured elevation.", sid))
-                        continue
-                    unknown(cell, {"z_m", "roi_px"}, "table cell", sid)
-                    z = cell.get("z_m")
-                    if not finite(z) or abs(z) > MAX_LOCAL_METRES or z in zs:
-                        errors.append(gap("invalid_table_elevation", "Cell elevations must be finite, bounded and unique per station.", sid))
-                    else:
-                        zs.add(z)
-                    if not _rectangle(cell.get("roi_px")):
-                        errors.append(gap("invalid_cell_region", "Each cell requires a bounded source-pixel rectangle.", sid))
-                    if any(k in cell for k in ("value", "y_m", "half_breadth_m", "ground_truth")):
-                        errors.append(gap("geometry_in_input", "Numeric half-breadths must be read from source pixels.", sid))
-            continue
+            _check_selection(sec["contour_selection"], roi, sid, errors, unknown)
+        if "pieces" in sec:
+            _check_pieces(sec, roi, sid, errors, unknown)
         if "cells" in sec:
-            errors.append(gap("unexpected_field", "cells are supported only for offset_table_ocr.", sid))
+            errors.append(gap("unexpected_field", f"Table cells are supported only for {TABLE_VISION_MODE}.", sid))
         cal = sec.get("calibration")
         if not isinstance(cal, dict):
             errors.append(gap("invalid_calibration", "calibration must be an object.", sid))
@@ -294,3 +438,12 @@ def validate_spec(spec: dict, base_dir: Path) -> list[dict]:
     if "components" in spec and (not isinstance(spec["components"], list) or spec["components"]):
         errors.append(gap("unsupported_components", "This version reconstructs the hull envelope only; components must be an empty list."))
     return errors
+
+
+def _table_fit_section_ids(spec: dict) -> set:
+    """Sections the vessel-table form fit filled: their draft guess is a bridged gap or a
+    dropped end (vessel_model.build_spec). Only these may carry the ``interpolated`` label."""
+    draft = spec.get("draft") if isinstance(spec.get("draft"), dict) else {}
+    guesses = draft.get("guesses") if isinstance(draft.get("guesses"), list) else []
+    return {g.get("section_id") for g in guesses
+            if isinstance(g, dict) and g.get("kind") in ("bridged_gap", "dropped_end")}

@@ -236,12 +236,24 @@ impl Store {
             if self.state.pending.is_some() {
                 return Err("review_ready_with_pending_operation".into());
             }
-            crate::validation::ready(
-                &self.path,
-                &self.state.last_observation,
-                &self.state.domain,
-                &self.state.last_observation["validation_context"],
-            )?;
+            let context = &self.state.last_observation["validation_context"];
+            match self.state.audit_implementation_sha256.as_deref() {
+                Some(pin) => crate::validation::ready(
+                    &self.path,
+                    &self.state.last_observation,
+                    &self.state.domain,
+                    context,
+                    Some(pin),
+                ),
+                // Finalized before the pin existed (new tasks cannot finalize
+                // without one): readable, but not re-bound to a pinned identity.
+                None => crate::validation::ready_legacy_unpinned(
+                    &self.path,
+                    &self.state.last_observation,
+                    &self.state.domain,
+                    context,
+                ),
+            }?;
         }
         Ok(
             json!({"valid":domain_ok,"pending_domain_requires_reconciliation":!domain_ok,"schema_version":self.state.schema_version,
@@ -291,7 +303,8 @@ pub fn verify_domain_identity(root: &Path, description: &Value) -> Result<()> {
     if d["version"] != "source_bound_tools_v1" {
         return Err("domain_schema".into());
     }
-    let input = util::safe_file(root, "domain/input/spec.json")?;
+    let input_name = d["active_spec_file"].as_str().unwrap_or("spec.json");
+    let input = util::safe_file(root, &format!("domain/input/{input_name}"))?;
     let input_hash = d["input_spec_sha256"]
         .as_str()
         .ok_or("input_spec_binding")?;
@@ -299,14 +312,29 @@ pub fn verify_domain_identity(root: &Path, description: &Value) -> Result<()> {
         return Err("input_spec_changed".into());
     }
     if d["input_errors"].as_array().is_some_and(|a| a.is_empty()) {
-        let spec = util::read_json(&input, 2 * 1024 * 1024)?;
+        let mut spec = util::read_json(&input, 2 * 1024 * 1024)?;
         if spec["schema_version"] != "1.0" || spec["units"] != "m" {
             return Err("input_unit_or_schema_contract".into());
         }
-        if spec["input_mode"]
-            .as_str()
-            .unwrap_or("calibrated_section_curves")
-            == "calibrated_section_curves"
+        // A sheet-only intake spec declares no sections; after phase 1 the
+        // domain writes them to a second, hash-bound file (materialize.py).
+        let sheet_only =
+            d["sheet_only"] == true && spec["sections"].as_array().is_some_and(|a| a.is_empty());
+        if sheet_only {
+            if let Some(hash) = d["materialized_spec_sha256"].as_str() {
+                let materialized = util::safe_file(root, "domain/input/materialized_spec.json")?;
+                if util::file_hash(&materialized)? != hash {
+                    return Err("materialized_spec_changed".into());
+                }
+                spec = util::read_json(&materialized, 2 * 1024 * 1024)?;
+            }
+        }
+        let awaiting_sections = sheet_only && d["materialized_spec_sha256"].is_null();
+        if !awaiting_sections
+            && spec["input_mode"]
+                .as_str()
+                .unwrap_or("calibrated_section_curves")
+                == "calibrated_section_curves"
         {
             let sections = spec["sections"]
                 .as_array()
@@ -363,10 +391,14 @@ pub fn verify_domain_identity(root: &Path, description: &Value) -> Result<()> {
         }
     }
     let manifest = util::hash_json(&json!({"spec_sha256":input_hash,"sources":sources}))?;
-    let generation = format!(
-        "generation-{}",
-        &util::hash_json(&json!({"source":input_hash,"selected":d["selected"]}))?[..24]
-    );
+    let mut identity = json!({"source":input_hash,"selected":d["selected"]});
+    // Open draft guesses are part of the generation identity, so a draft
+    // generation never equals the generation a person later confirms.
+    if let Some(guessed) = crate::validation::guessed_choices(&d)? {
+        identity["guessed"] = guessed;
+    }
+    let generation = format!("generation-{}", &util::hash_json(&identity)?[..24]);
+    crate::validation::check_guess_contract(&d, description)?;
     let revision = format!("r{:04}", d["revision"].as_u64().ok_or("revision_type")?);
     if description["source_manifest_sha256"] != manifest
         || description["generation_id"] != generation
@@ -428,6 +460,8 @@ mod tests {
             authorization_basis: String::new(),
             model: GO_MODEL.into(),
             binary_sha256: "a".repeat(64),
+            on_ambiguity: OnAmbiguity::Abstain,
+            fallback_models: vec![],
         })
     }
     #[test]

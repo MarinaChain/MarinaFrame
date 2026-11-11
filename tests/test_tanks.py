@@ -1,0 +1,349 @@
+"""Tanks: fill properties, sounding tables and the capacity plan on solids with exact answers."""
+import math
+
+import numpy as np
+import pytest
+import trimesh
+
+from vessel_reconstruction import tanks
+
+# Box tank: x 1..3 (L = 2), y -1..2 (B = 3), z 0.5..4.5 (H = 4).
+BOX_MIN, BOX_MAX = (1.0, -1.0, 0.5), (3.0, 2.0, 4.5)
+
+
+def box_triangles(low=BOX_MIN, high=BOX_MAX) -> np.ndarray:
+    """An independent box mesh (trimesh), so the prism builder is not used to test itself."""
+    extents = np.subtract(high, low)
+    mesh = trimesh.creation.box(extents=extents)
+    mesh.apply_translation(np.add(low, high) / 2)
+    return mesh.triangles
+
+
+def wedge_triangles(length=2.0) -> np.ndarray:
+    """Triangular prism in x from 0 to ``length``; section (y, z): (0, 0), (2, 0), (0, 2).
+    At height z the tank is 2 - z wide."""
+    return tanks.prism_triangles(0.0, length, [(0, 0), (2, 0), (0, 2)])
+
+
+def test_box_fill_state_is_exact():
+    triangles = box_triangles()
+    state = tanks.fill_state(triangles, 2.5)
+    assert state.volume_m3 == pytest.approx(2 * 3 * 2.0)
+    assert state.centroid_m == pytest.approx((2.0, 0.5, 1.5))
+    assert state.free_surface_m2 == pytest.approx(6.0)
+    assert state.i_transverse_m4 == pytest.approx(2 * 3 ** 3 / 12)
+    assert state.i_longitudinal_m4 == pytest.approx(3 * 2 ** 3 / 12)
+
+
+def test_inward_mesh_is_turned_outward():
+    triangles = box_triangles()[:, ::-1]
+    assert tanks.fill_state(tanks.outward(triangles), 4.5).volume_m3 == pytest.approx(24.0)
+
+
+@pytest.mark.parametrize("level", [0.0, 0.3, 1.0, 1.7, 2.0])
+def test_wedge_fill_state_is_exact(level):
+    length = 2.0
+    state = tanks.fill_state(wedge_triangles(length), level)
+    area = 2 * level - level ** 2 / 2
+    assert state.volume_m3 == pytest.approx(length * area, abs=1e-12)
+    if area > 0:
+        tcg = (8 - (2 - level) ** 3) / 6 / area
+        vcg = (level ** 2 - level ** 3 / 3) / area
+        assert state.centroid_m == pytest.approx((length / 2, tcg, vcg))
+    width = 2 - min(max(level, 1e-6), 2 - 1e-6)
+    assert state.free_surface_m2 == pytest.approx(length * width, abs=1e-5)
+    assert state.i_transverse_m4 == pytest.approx(length * width ** 3 / 12, abs=1e-5)
+
+
+def test_sounding_table_rows_and_last_level():
+    rows = tanks.sounding_table(box_triangles(), interval_m=1.5)
+    assert [r["sounding_m"] for r in rows] == pytest.approx([0.0, 1.5, 3.0, 4.0])
+    assert [r["ullage_m"] for r in rows] == pytest.approx([4.0, 2.5, 1.0, 0.0])
+    assert [r["volume_m3"] for r in rows] == pytest.approx([0.0, 9.0, 18.0, 24.0])
+    assert rows[-1]["fill_pct"] == pytest.approx(100.0)
+    assert rows[1]["vcg_m"] == pytest.approx(0.5 + 0.75)
+    # The free surface at the top is taken just inside the tank: the full box section.
+    assert rows[-1]["i_transverse_m4"] == pytest.approx(4.5)
+
+
+def test_prism_matches_box_and_triangulates_concave_outline():
+    prism = tanks.prism_triangles(1.0, 3.0, [(-1, 0.5), (2, 0.5), (2, 4.5), (-1, 4.5)])
+    assert tanks.fill_state(prism, 4.5).volume_m3 == pytest.approx(24.0)
+    # An L-shaped section (area 3) with collinear and repeated points.
+    outline = [(0, 0), (1, 0), (2, 0), (2, 1), (1, 1), (1, 2), (0, 2), (0, 2), (0, 1)]
+    state = tanks.fill_state(tanks.prism_triangles(0.0, 1.0, outline), 2.0)
+    assert state.volume_m3 == pytest.approx(3.0)
+    assert state.centroid_m == pytest.approx((0.5, (0.5 * 1 * 2 + 1.5 * 1 * 1) / 3, (1.0 * 2 + 0.5 * 1) / 3))
+
+
+def test_stacked_slabs_integrate_as_one_solid():
+    slabs = [(0.0, 1.0, [(0, 0), (1, 0), (1, 1), (0, 1)]), (1.0, 2.0, [(0, 0), (2, 0), (2, 1), (0, 1)])]
+    state = tanks.fill_state(tanks.slabs_triangles(slabs), 0.5)
+    assert state.volume_m3 == pytest.approx(0.5 + 1.0)
+    assert state.free_surface_m2 == pytest.approx(3.0)
+    x_c = (0.5 * 1 + 1.5 * 2) / 3
+    assert state.i_longitudinal_m4 == pytest.approx(1 / 12 + 1 * (0.5 - x_c) ** 2 + 2 / 12 + 2 * (1.5 - x_c) ** 2)
+
+
+def test_tank_from_outline_clipped_to_hull():
+    slicer = tanks.HullSlicer(box_triangles((0, -4, 0), (10, 4, 5)))
+    slabs = tanks.tank_slabs_in_hull(slicer, (2.0, 4.0), lambda x: (0.0, 10.0), lambda x: (1.0, 3.0),
+                                     slab_m=0.5, row_dz_m=0.1)
+    assert len(slabs) == 4
+    # The plan extent runs past the hull side at y = 4: the hull clips it.
+    assert tanks.fill_state(tanks.slabs_triangles(slabs), 3.0).volume_m3 == pytest.approx(2 * 4 * 2)
+
+
+def test_capacity_plan_rows_labels_and_totals():
+    ballast = tanks.Tank("t1", "No 1", "water ballast", box_triangles(), ("2", "6"), density_t_m3=1.025,
+                         source_labels={"geometry": "traced", "density": "read"}, printed_volume_m3=25.0)
+    fuel = tanks.Tank("t2", "No 2", "fuel oil", box_triangles(), ("6", "8"),
+                      source_labels={"geometry": "guessed"})
+    missing = tanks.Tank("t3", "No 3", "fuel oil", None, ("8", "9"), notes=["not built"])
+    rows = tanks.capacity_plan([ballast, fuel, missing])
+    assert rows[0]["volume_100_m3"] == pytest.approx(24.0)
+    assert rows[0]["volume_98_m3"] == pytest.approx(23.52)
+    assert rows[0]["weight_98_t"] == pytest.approx(23.52 * 1.025)
+    assert (rows[0]["lcg_m"], rows[0]["tcg_m"], rows[0]["vcg_m"]) == pytest.approx((2.0, 0.5, 2.5))
+    assert rows[0]["max_free_surface_moment_tm"] == pytest.approx(1.025 * 4.5)
+    assert rows[0]["source_labels"]["density"] == "read"
+    assert rows[1]["density_t_m3"] == tanks.DEFAULT_DENSITY_T_M3["fuel oil"]
+    assert rows[1]["source_labels"]["density"] == "guessed"
+    assert rows[1]["source_labels"]["volume"] == "guessed"
+    assert not rows[2]["built"] and rows[2]["volume_100_m3"] is None
+    assert all(r["engineering_approved"] is False for r in rows)
+    totals = tanks.group_totals(rows)
+    assert totals["fuel oil"]["volume_100_m3"] == pytest.approx(24.0)
+    assert (totals["fuel oil"]["tanks"], totals["fuel oil"]["built"]) == (2, 1)
+
+
+def test_sounding_levels_end_at_top():
+    assert tanks.sounding_levels(0.0, 0.25, 0.1) == pytest.approx([0.0, 0.1, 0.2, 0.25])
+    assert tanks.sounding_levels(1.0, 1.2, 0.1) == pytest.approx([1.0, 1.1, 1.2])
+    assert math.isclose(tanks.sounding_levels(0.0, 3.0, 0.1)[-1], 3.0)
+
+
+def test_capacity_row_of_a_tank_with_an_empty_mesh_has_no_volume():
+    tank = tanks.Tank("t4", "No 4", "fuel oil", np.zeros((0, 3, 3)), ("1", "2"))
+    row = tanks.capacity_row(tank)
+    assert row["volume_100_m3"] is None and row["weight_98_t"] is None
+
+
+# --- Lofted tank solids (a curved hull with a closed-form section area) ---
+
+def cone_hull_triangles(length=10.0, radius_aft=2.0, taper=0.1, segments=720, stations=101) -> np.ndarray:
+    """A closed hull of circular sections, radius ``radius_aft - taper * x``, centred on y = z = 0."""
+    xs = np.linspace(0.0, length, stations)
+    angles = np.linspace(0.0, 2 * np.pi, segments, endpoint=False)
+    rings = [np.column_stack([np.full(segments, x), (radius_aft - taper * x) * np.cos(angles),
+                              (radius_aft - taper * x) * np.sin(angles)]) for x in xs]
+    return tanks.outward(tanks.loft_run_triangles(np.stack(rings)))
+
+
+def segment_area_below(radius: float, level: float) -> float:
+    """Area of a circle of ``radius`` (centred at 0) below z = ``level`` (level < 0)."""
+    depth = -level
+    return radius ** 2 * math.acos(depth / radius) - depth * math.sqrt(radius ** 2 - depth ** 2)
+
+
+def bottom_tank_volume(x0, x1, level, radius_aft=2.0, taper=0.1) -> float:
+    xs = np.linspace(x0, x1, 2001)
+    areas = [segment_area_below(radius_aft - taper * x, level) for x in xs]
+    return float(np.trapezoid(areas, xs))
+
+
+def test_lofted_tank_matches_the_integrated_section_volume():
+    slicer = tanks.HullSlicer(cone_hull_triangles())
+    loft = tanks.tank_loft_in_hull(slicer, (1.0, 5.0), lambda x: (-10.0, 10.0), lambda x: (-3.0, -0.5),
+                                   station_m=0.10, row_dz_m=0.02)
+    assert len(loft.runs) == 1
+    triangles = loft.triangles()
+    volume = tanks.fill_state(triangles, float(triangles[:, :, 2].max())).volume_m3
+    # The same 0.5 % as the sounding-table check T1 (docs/TANKS_V1.md section 3).
+    assert volume == pytest.approx(bottom_tank_volume(1.0, 5.0, -0.5), rel=0.005)
+    # The loft is no worse than the stack of fine slabs it replaces.
+    slabs = tanks.tank_slabs_in_hull(slicer, (1.0, 5.0), lambda x: (-10.0, 10.0), lambda x: (-3.0, -0.5),
+                                     slab_m=0.10, row_dz_m=0.02)
+    slab_volume = tanks.fill_state(tanks.slabs_triangles(slabs), -0.5).volume_m3
+    exact = bottom_tank_volume(1.0, 5.0, -0.5)
+    assert abs(volume - exact) <= abs(slab_volume - exact) + 1e-3 * exact
+
+
+def test_lofted_tank_is_closed_and_smooth():
+    slicer = tanks.HullSlicer(cone_hull_triangles())
+    triangles = tanks.tank_loft_in_hull(slicer, (1.0, 5.0), lambda x: (-10.0, 10.0), lambda x: (-3.0, -0.5),
+                                        station_m=0.25, row_dz_m=0.05).triangles()
+    # A closed mesh has the same volume wherever the origin is (an open one does not).
+    shifted = triangles + np.array([5.0, 7.0, -3.0])
+    assert tanks.signed_volume(shifted) == pytest.approx(tanks.signed_volume(triangles), rel=1e-9)
+    # Points of the side lie on the hull circle within one row (no stair steps of a slab stack).
+    points = triangles.reshape(-1, 3)
+    radius = np.hypot(points[:, 1], points[:, 2])
+    on_side = points[:, 2] < -0.5 - 1e-9
+    hull_radius = 2.0 - 0.1 * points[on_side, 0]
+    assert np.all(np.abs(radius[on_side] - hull_radius) <= 0.05)
+
+
+def test_loft_splits_where_the_tank_has_no_section():
+    slicer = tanks.HullSlicer(box_triangles((0, -4, 0), (10, 4, 5)))
+    loft = tanks.tank_loft_in_hull(slicer, (2.0, 6.0), lambda x: (0.0, 10.0),
+                                   lambda x: None if 3.4 < x < 4.6 else (1.0, 3.0), station_m=0.5, row_dz_m=0.1)
+    assert len(loft.runs) == 2
+    triangles = loft.triangles()
+    # Runs x 2.0..3.0 and 5.0..6.0 (stations every 0.5 m): 2 m long in all, 4 m wide, 2 m high.
+    assert tanks.fill_state(triangles, 3.0).volume_m3 == pytest.approx(2 * 4 * 2)
+
+
+def test_loft_keeps_separate_hull_pieces_apart():
+    from vessel_reconstruction.display_mesh import loft_mesh, mesh_volume_mm3
+
+    hull = np.concatenate([box_triangles((0, -3, 0), (4, -1, 2)),
+                           box_triangles((0, 1, 0), (4, 3, 2))])
+    slicer = tanks.HullSlicer(hull)
+    loft = tanks.tank_loft_in_hull(slicer, (1, 3), lambda x: (-4, 4), lambda x: (0, 2), 0.5, 0.1)
+    vertices, faces = loft_mesh(loft.runs, tanks.cap_triangles, tolerance_mm=1.0)
+    mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=True)
+    assert len(trimesh.graph.connected_components(mesh.edges, engine="scipy")) == 2
+    assert all(not (triangle[:, 1].min() < 0 < triangle[:, 1].max()) for triangle in mesh.triangles)
+    section_area, _ = tanks.clipped_outline(slicer, 2, (-4, 4), (0, 2), 0.1)
+    assert mesh_volume_mm3(vertices, faces) / 1e9 == pytest.approx(2 * section_area, rel=0.005)
+
+
+def test_single_piece_loft_keeps_its_previous_rings():
+    slicer = tanks.HullSlicer(box_triangles((0, -3, 0), (4, 3, 2)))
+    loft = tanks.tank_loft_in_hull(slicer, (1, 3), lambda x: (-4, 4), lambda x: (0, 2), 0.5, 0.1)
+    stations = np.linspace(1, 3, 5)
+    chains = [tanks.section_chains(slicer, x, (-4, 4), (0, 2), 0.1) for x in stations]
+    expected = np.stack([tanks._ring(x, section, len(section.z)) for x, section in zip(stations, chains)])
+    np.testing.assert_array_equal(loft.runs[0], expected)
+    assert len(loft.runs) == 1
+
+
+def test_loft_splits_regions_at_a_height_where_a_section_branches():
+    outline = [(-3, 0), (3, 0), (3, 2), (1, 2), (1, 1), (-1, 1), (-1, 2), (-3, 2)]
+    slicer = tanks.HullSlicer(tanks.prism_triangles(0, 4, outline))
+    loft = tanks.tank_loft_in_hull(slicer, (1, 3), lambda x: (-4, 4), lambda x: (0, 2), 0.5, 0.1)
+    triangles = loft.triangles()
+    # The lower region ends at the branch; two upper regions start at that height.
+    assert len(loft.runs) == 3
+    above = triangles[np.all(triangles[:, :, 2] > 1.0 + 1e-9, axis=1)]
+    assert all(not (triangle[:, 1].min() < 0 < triangle[:, 1].max()) for triangle in above)
+    assert tanks.signed_volume(triangles) == pytest.approx(20.0, rel=0.005)
+
+
+def test_loft_records_the_span_where_two_pieces_join_along_the_ship():
+    # Two separate pieces aft of x = 2 m, one joined piece forward of it.
+    hull = np.concatenate([box_triangles((0, -3, 0), (2, -1, 2)), box_triangles((0, 1, 0), (2, 3, 2)),
+                           box_triangles((2, -3, 0), (4, 3, 2))])
+    slicer = tanks.HullSlicer(hull)
+    loft = tanks.tank_loft_in_hull(slicer, (1, 3), lambda x: (-4, 4), lambda x: (0, 2), 0.5, 0.1)
+    assert len(loft.omitted_spans) == 1
+    start, end = loft.omitted_spans[0]
+    assert 1.0 <= start < end <= 3.0 and start <= 2.0 <= end
+
+
+def test_loft_records_no_omitted_span_when_every_region_matches():
+    pieces = np.concatenate([box_triangles((0, -3, 0), (4, -1, 2)), box_triangles((0, 1, 0), (4, 3, 2))])
+    for hull in (box_triangles((0, -3, 0), (4, 3, 2)), pieces):
+        loft = tanks.tank_loft_in_hull(tanks.HullSlicer(hull), (1, 3), lambda x: (-4, 4),
+                                       lambda x: (0, 2), 0.5, 0.1)
+        assert loft.omitted_spans == []
+
+
+def test_loft_display_mesh_and_step_solid_hold_the_same_volume():
+    from vessel_reconstruction.display_mesh import loft_mesh, mesh_volume_mm3
+    from vessel_reconstruction.geometry import precise_volume_mm3, ruled_loft_solid
+
+    slicer = tanks.HullSlicer(cone_hull_triangles())
+    loft = tanks.tank_loft_in_hull(slicer, (1.0, 3.0), lambda x: (-1.0, 10.0), lambda x: (-3.0, -0.5),
+                                   station_m=0.25, row_dz_m=0.05)
+    volume = tanks.signed_volume(loft.triangles())
+    vertices, faces = loft_mesh(loft.runs, tanks.cap_triangles, tolerance_mm=1.0)
+    assert mesh_volume_mm3(vertices, faces) / 1e9 == pytest.approx(volume, rel=1e-3)
+    # The ring turns sharply at the y limit and the top: those edges get their own vertices.
+    assert len(vertices) > len(np.unique(vertices.round(6), axis=0))
+    solid = ruled_loft_solid(loft.runs[0])
+    assert solid is not None
+    assert precise_volume_mm3(solid) / 1e9 == pytest.approx(volume, rel=1e-3)
+
+
+# --- Colours by content ---
+
+@pytest.mark.parametrize("content, name, expected", [
+    ("fuel oil", "No 6sb fuel oil", "fuel_oil"),
+    ("fuel oil", "No 1 MGO day tank", "diesel_oil"),
+    ("misc", "No 7sb Black water", "sewage"),
+    ("misc", "Grey water new", "sewage"),
+    ("misc", "Sludge", "oily_residue"),
+    ("lube oil", "", "lube_oil"),
+    ("water ballast", "No 3p", "water_ballast"),
+    ("fresh water", "No 5", "fresh_water"),
+    ("fresh water", "Reserve feed water tank", "feed_water"),
+    ("dry", "Hold", "cargo"),
+    ("dry", "Cofferdam", "void"),
+    ("misc", "No 9", "other"),
+    (None, None, "other"),
+])
+def test_content_class_reads_the_name_first(content, name, expected):
+    assert tanks.content_class(content, name) == expected
+
+
+def test_app_tokens_use_the_same_tank_palette():
+    from pathlib import Path
+
+    css = (Path(__file__).resolve().parents[1] / "app/ui/styles.css").read_text()
+    for cls, (_, colour) in tanks.CONTENT_CLASSES.items():
+        assert f"--tank-{cls}: {colour};" in css, cls
+
+
+def test_glb_tank_has_its_content_material_and_extras(tmp_path):
+    import json
+    import struct
+
+    from vessel_reconstruction.display_mesh import tank_style, write_glb
+
+    mesh = trimesh.creation.box(extents=(1000, 1000, 1000))
+    style = tank_style("No 7sb Black water", "misc", {"outline": "traced", "height": "guessed"})
+    write_glb({"tank_no_7sb": (mesh.vertices, mesh.faces)}, tmp_path / "t.glb", {"tank_no_7sb": style})
+    data = (tmp_path / "t.glb").read_bytes()
+    length = struct.unpack_from("<I", data, 12)[0]
+    gltf = json.loads(data[20:20 + length])
+    material = gltf["materials"][gltf["meshes"][0]["primitives"][0]["material"]]
+    assert material["name"] == "tank_sewage"
+    assert material["pbrMetallicRoughness"]["baseColorFactor"][:3] == pytest.approx(tanks.content_colour("sewage"), abs=1e-3)
+    extras = gltf["meshes"][0]["extras"]
+    assert (extras["kind"], extras["label"], extras["content_class"]) == ("tank", "No 7sb Black water", "sewage")
+    assert extras["source_labels"] == {"outline": "traced", "height": "guessed", "content_class": "read"}
+    assert extras["engineering_approved"] is False
+    assert "tank_no_7sb" in [node.get("name") for node in gltf["nodes"]]
+
+
+def test_loft_outlines_follow_the_hull_in_profile_and_plan():
+    slicer = tanks.HullSlicer(cone_hull_triangles())
+    loft = tanks.tank_loft_in_hull(slicer, (1.0, 5.0), lambda x: (-10.0, 10.0), lambda x: (-3.0, -0.5),
+                                   station_m=0.5, row_dz_m=0.02)
+    outlines = loft.outlines()
+    profile, plan = outlines["profile_m"][0], outlines["plan_m"][0]
+    assert len(profile) == len(plan) == 2 * 9  # 9 stations: bottom edge forward, top edge back
+    # The bottom follows the tapering keel (radius 2 - 0.1 x) within a row; the top is the limit.
+    for x, z in profile[:9]:
+        assert z == pytest.approx(-(2.0 - 0.1 * x), abs=0.02)
+    assert all(z == pytest.approx(-0.5, abs=0.02) for _, z in profile[9:])
+    # In plan the breadth is the hull chord at z = -0.5.
+    x, y = plan[-1]
+    assert y == pytest.approx(math.sqrt((2.0 - 0.1 * x) ** 2 - 0.25), abs=0.02)
+
+
+def test_triangle_fan_repair_is_reported_and_requires_review():
+    outline = [(0, 0), (0, 1), (2, 0), (0, 2), (1, 0)]
+    result = tanks.triangulate_polygon(tanks.clean_polygon(outline))
+    assert result.fallback_reason and result.triangles
+    with pytest.raises(ValueError, match="triangle fan"):
+        tanks.prism_triangles(0, 1, outline)
+    repairs = []
+    mesh = tanks.prism_triangles(0, 1, outline, repairs=repairs)
+    tank = tanks.Tank("t1", "Tank", "fresh water", mesh, repairs=repairs)
+    row = tanks.capacity_row(tank)
+    assert row["check_items"][0]["code"] == "triangle_fan_repair"
+    assert row["check_items"][0]["status"] == "check"
+    assert row["engineering_approved"] is False

@@ -1,21 +1,56 @@
 """Exclusive local run staging and same-filesystem atomic publication (POSIX)."""
 from __future__ import annotations
 
-import fcntl
+from .artifacts import ARTIFACTS, GEOMETRY_NAMES
+
 import ctypes
 import errno
 import os
-import stat
 import re
+import stat
+import sys
 import uuid
 from pathlib import Path
 
+from .file_lock import try_lock_exclusive, unlock
 from .provenance import sync_directory, write_json
 from .schema import load_bounded_json
 
 
 class RunPublicationError(RuntimeError):
     """The run could not be durably published; no successful result is returned."""
+
+
+# Atomic no-replace rename. A check followed by an ordinary rename could
+# overwrite a concurrently created empty target, so only these kernel
+# primitives are accepted.
+_AT_FDCWD_LINUX = -100
+_RENAME_NOREPLACE_LINUX = 1  # renameat2 flag, <linux/fs.h>
+_RENAME_EXCL_DARWIN = 0x4  # renamex_np flag, <stdio.h>
+
+
+def rename_no_replace(source: Path, target: Path) -> None:
+    """Rename source to target; fail with FileExistsError if target exists."""
+    library = ctypes.CDLL(None, use_errno=True)
+    if sys.platform == "linux":
+        operation = getattr(library, "renameat2", None)
+        if operation is None:
+            raise RunPublicationError("Atomic no-replace publication requires Linux renameat2 support.")
+        operation.argtypes = (ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint)
+        arguments = (_AT_FDCWD_LINUX, os.fsencode(source), _AT_FDCWD_LINUX, os.fsencode(target),
+                     _RENAME_NOREPLACE_LINUX)
+    elif sys.platform == "darwin":
+        operation = library.renamex_np
+        operation.argtypes = (ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint)
+        arguments = (os.fsencode(source), os.fsencode(target), _RENAME_EXCL_DARWIN)
+    else:
+        raise RunPublicationError(f"Atomic no-replace publication is not supported on {sys.platform}.")
+    operation.restype = ctypes.c_int
+    if operation(*arguments) != 0:
+        code = ctypes.get_errno()
+        if code == errno.EEXIST:
+            raise FileExistsError("The final run path appeared before atomic publication.")
+        raise OSError(code, "Atomic no-replace run publication failed.")
 
 
 class RunTransaction:
@@ -38,7 +73,7 @@ class RunTransaction:
         except FileExistsError as exc:
             raise FileExistsError("A transaction already reserves this output; recover the interrupted run or use another directory.") from exc
         try:
-            fcntl.flock(self.lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            try_lock_exclusive(self.lock_fd)
             if os.path.lexists(self.out):
                 raise FileExistsError("Run output already exists.")
             self.stage.mkdir(mode=0o700)
@@ -69,19 +104,7 @@ class RunTransaction:
         # excludes all cooperating writers for this final destination.
         (self.stage / "transaction.json").unlink(missing_ok=True)
         sync_directory(self.stage)
-        # Linux renameat2 supplies atomic NOREPLACE. A check followed by ordinary
-        # rename could otherwise overwrite a concurrently created empty target.
-        library = ctypes.CDLL(None, use_errno=True)
-        operation = getattr(library, "renameat2", None)
-        if operation is None:
-            raise RunPublicationError("Atomic no-replace publication requires Linux renameat2 support.")
-        operation.argtypes = (ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint)
-        operation.restype = ctypes.c_int
-        if operation(-100, os.fsencode(self.stage), -100, os.fsencode(self.out), 1) != 0:
-            code = ctypes.get_errno()
-            if code == errno.EEXIST:
-                raise FileExistsError("The final run path appeared before atomic publication.")
-            raise OSError(code, "Atomic no-replace run publication failed.")
+        rename_no_replace(self.stage, self.out)
         self.published = True
         sync_directory(self.out.parent)
         self.durable = True
@@ -107,7 +130,7 @@ class RunTransaction:
                         # it and explicit recovery removes unpublished exports.
                         pass
             finally:
-                fcntl.flock(self.lock_fd, fcntl.LOCK_UN)
+                unlock(self.lock_fd)
                 os.close(self.lock_fd)
                 self.lock_fd = None
 
@@ -124,13 +147,15 @@ def quarantine_interrupted(output_dir: str | Path) -> dict:
     if not lock_path.exists():
         return {"recovered": False, "reason": "final_output_exists" if os.path.lexists(out) else "no_transaction", "run_dir": str(out)}
     descriptor = os.open(lock_path, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
+    locked = False  # only a lock this call took is released
     try:
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             raise ValueError("Transaction reservation is not an ordinary file.")
         try:
-            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            try_lock_exclusive(descriptor)
         except BlockingIOError:
             return {"recovered": False, "reason": "active_transaction", "run_dir": str(out)}
+        locked = True
         try:
             record = load_bounded_json(lock_path, max_bytes=16_384, max_nodes=100)
         except (OSError, ValueError):
@@ -152,7 +177,7 @@ def quarantine_interrupted(output_dir: str | Path) -> dict:
             stage = stages[0]
             # Partial geometry remains private and is removed before marking
             # the orphan as quarantined. If cleanup fails, do not publish.
-            for name in ("mesh.json", "model.step", "model.stl", "cad_sections.json", "manifest.json", "result.json"):
+            for name in GEOMETRY_NAMES | {ARTIFACTS["manifest"].name, ARTIFACTS["result"].name}:
                 (stage / name).unlink(missing_ok=True)
             quarantined = out.parent / f".{out.name}.interrupted-{uuid.uuid4().hex}"
             os.rename(stage, quarantined)
@@ -164,5 +189,6 @@ def quarantine_interrupted(output_dir: str | Path) -> dict:
                 "last_phase": record.get("phase", "unknown"),
                 "quarantine": str(quarantined) if quarantined else None}
     finally:
-        fcntl.flock(descriptor, fcntl.LOCK_UN)
+        if locked:
+            unlock(descriptor)
         os.close(descriptor)

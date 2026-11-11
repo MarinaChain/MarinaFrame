@@ -3,6 +3,7 @@ from copy import deepcopy
 import json
 from pathlib import Path
 import threading
+from uuid import UUID
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -38,6 +39,21 @@ def drawing(tmp_path, *, grid=True, faint_competitor=False, grid_only=False):
             "end_closure": "flat_at_terminal_stations", "source": {"file": "drawing.png"}, "sections": sections}
     path = tmp_path / "spec.json"; path.write_text(json.dumps(spec))
     return path, spec
+
+
+def test_vessel_uuid_is_created_once_and_survives_domain_reopen(tmp_path):
+    path, _ = drawing(tmp_path)
+    task = tmp_path / "task"
+    first = DomainTools(task, path)
+    vessel_id = first.state["vessel_uuid"]
+    assert UUID(vessel_id).version == 4
+    first.state["revision"] = 1
+    first._write_revision()
+    first._save()
+    reopened = DomainTools(task, path)
+    assert reopened.state["vessel_uuid"] == vessel_id
+    other = DomainTools(tmp_path / "other-task", path)
+    assert other.state["vessel_uuid"] != vessel_id
 
 
 def test_grid_grammar_needs_both_axes_and_does_not_assign_semantic_identity():
@@ -191,6 +207,7 @@ def test_precancelled_action_does_not_start_worker(tmp_path):
     assert not (tools.root / "inspections").exists()
 
 
+@pytest.mark.cad
 def test_actual_provisional_build_step_views_and_source_cut_validation(tmp_path):
     path, spec = drawing(tmp_path / "input")
     spec["constraints"] = {"beam_m": 2.5, "relative_tolerance": .03}

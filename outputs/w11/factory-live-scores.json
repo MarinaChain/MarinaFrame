@@ -1,0 +1,832 @@
+[
+  {
+    "case_id": "series60-L0",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "series60",
+      "length_m": 99.7580828553612,
+      "depth_m": 7.62695262409857,
+      "max_half_breadth_m": 6.346729472661332,
+      "draft_m": 4.576171574,
+      "volume_below_draft_m3": 3166.6958415563463,
+      "waterplane_area_m2": 819.5523917729321,
+      "mesh_deflection_m": 0.0005,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "series60-L1",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "series60",
+      "length_m": 99.7580828553612,
+      "depth_m": 7.62695262409857,
+      "max_half_breadth_m": 6.346729472661332,
+      "draft_m": 4.576171574,
+      "volume_below_draft_m3": 3166.6958415563463,
+      "waterplane_area_m2": 819.5523917729321,
+      "mesh_deflection_m": 0.0005,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "series60-L2",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "series60",
+      "length_m": 99.7580828553612,
+      "depth_m": 7.62695262409857,
+      "max_half_breadth_m": 6.346729472661332,
+      "draft_m": 4.576171574,
+      "volume_below_draft_m3": 3166.6958415563463,
+      "waterplane_area_m2": 819.5523917729321,
+      "mesh_deflection_m": 0.0005,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "series60-L3",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "series60",
+      "length_m": 99.7580828553612,
+      "depth_m": 7.62695262409857,
+      "max_half_breadth_m": 6.346729472661332,
+      "draft_m": 4.576171574,
+      "volume_below_draft_m3": 3166.6958415563463,
+      "waterplane_area_m2": 819.5523917729321,
+      "mesh_deflection_m": 0.0005,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-00679-L0",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-00679",
+      "length_m": 99.98074479981369,
+      "depth_m": 14.150406122207642,
+      "max_half_breadth_m": 8.604716658592224,
+      "draft_m": 8.490243673,
+      "volume_below_draft_m3": 9491.986071206939,
+      "waterplane_area_m2": 1153.0849004915756,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-00679-L1",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-00679",
+      "length_m": 99.98074479981369,
+      "depth_m": 14.150406122207642,
+      "max_half_breadth_m": 8.604716658592224,
+      "draft_m": 8.490243673,
+      "volume_below_draft_m3": 9491.986071206939,
+      "waterplane_area_m2": 1153.0849004915756,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-00679-L2",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-00679",
+      "length_m": 99.98074479981369,
+      "depth_m": 14.150406122207642,
+      "max_half_breadth_m": 8.604716658592224,
+      "draft_m": 8.490243673,
+      "volume_below_draft_m3": 9491.986071206939,
+      "waterplane_area_m2": 1153.0849004915756,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-00679-L3",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-00679",
+      "length_m": 99.98074479981369,
+      "depth_m": 14.150406122207642,
+      "max_half_breadth_m": 8.604716658592224,
+      "draft_m": 8.490243673,
+      "volume_below_draft_m3": 9491.986071206939,
+      "waterplane_area_m2": 1153.0849004915756,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-00683-L0",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-00683",
+      "length_m": 99.93008613586426,
+      "depth_m": 14.527264833450317,
+      "max_half_breadth_m": 7.924848794937134,
+      "draft_m": 8.7163589,
+      "volume_below_draft_m3": 9057.963808865083,
+      "waterplane_area_m2": 1238.4937398324387,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-00683-L1",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-00683",
+      "length_m": 99.93008613586426,
+      "depth_m": 14.527264833450317,
+      "max_half_breadth_m": 7.924848794937134,
+      "draft_m": 8.7163589,
+      "volume_below_draft_m3": 9057.963808865083,
+      "waterplane_area_m2": 1238.4937398324387,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-00683-L2",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-00683",
+      "length_m": 99.93008613586426,
+      "depth_m": 14.527264833450317,
+      "max_half_breadth_m": 7.924848794937134,
+      "draft_m": 8.7163589,
+      "volume_below_draft_m3": 9057.963808865083,
+      "waterplane_area_m2": 1238.4937398324387,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-00683-L3",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-00683",
+      "length_m": 99.93008613586426,
+      "depth_m": 14.527264833450317,
+      "max_half_breadth_m": 7.924848794937134,
+      "draft_m": 8.7163589,
+      "volume_below_draft_m3": 9057.963808865083,
+      "waterplane_area_m2": 1238.4937398324387,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-01121-L0",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-01121",
+      "length_m": 100.02578731160611,
+      "depth_m": 19.78771686553955,
+      "max_half_breadth_m": 6.298224329948425,
+      "draft_m": 11.872630119,
+      "volume_below_draft_m3": 11805.000552743048,
+      "waterplane_area_m2": 1100.8849544303528,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-01121-L1",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-01121",
+      "length_m": 100.02578731160611,
+      "depth_m": 19.78771686553955,
+      "max_half_breadth_m": 6.298224329948425,
+      "draft_m": 11.872630119,
+      "volume_below_draft_m3": 11805.000552743048,
+      "waterplane_area_m2": 1100.8849544303528,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-01121-L2",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-01121",
+      "length_m": 100.02578731160611,
+      "depth_m": 19.78771686553955,
+      "max_half_breadth_m": 6.298224329948425,
+      "draft_m": 11.872630119,
+      "volume_below_draft_m3": 11805.000552743048,
+      "waterplane_area_m2": 1100.8849544303528,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-01121-L3",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-01121",
+      "length_m": 100.02578731160611,
+      "depth_m": 19.78771686553955,
+      "max_half_breadth_m": 6.298224329948425,
+      "draft_m": 11.872630119,
+      "volume_below_draft_m3": 11805.000552743048,
+      "waterplane_area_m2": 1100.8849544303528,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-01618-L0",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-01618",
+      "length_m": 107.98436693003168,
+      "depth_m": 20.771076679229736,
+      "max_half_breadth_m": 16.482571363449097,
+      "draft_m": 12.462646008,
+      "volume_below_draft_m3": 22663.084418071983,
+      "waterplane_area_m2": 2600.1569742438182,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-01618-L1",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-01618",
+      "length_m": 107.98436693003168,
+      "depth_m": 20.771076679229736,
+      "max_half_breadth_m": 16.482571363449097,
+      "draft_m": 12.462646008,
+      "volume_below_draft_m3": 22663.084418071983,
+      "waterplane_area_m2": 2600.1569742438182,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-01618-L2",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-01618",
+      "length_m": 107.98436693003168,
+      "depth_m": 20.771076679229736,
+      "max_half_breadth_m": 16.482571363449097,
+      "draft_m": 12.462646008,
+      "volume_below_draft_m3": 22663.084418071983,
+      "waterplane_area_m2": 2600.1569742438182,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-01618-L3",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-01618",
+      "length_m": 107.98436693003168,
+      "depth_m": 20.771076679229736,
+      "max_half_breadth_m": 16.482571363449097,
+      "draft_m": 12.462646008,
+      "volume_below_draft_m3": 22663.084418071983,
+      "waterplane_area_m2": 2600.1569742438182,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-03152-L0",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-03152",
+      "length_m": 99.96459436701116,
+      "depth_m": 24.88353729248047,
+      "max_half_breadth_m": 13.495433330535889,
+      "draft_m": 14.930122375,
+      "volume_below_draft_m3": 18247.168702324747,
+      "waterplane_area_m2": 1784.2738309613906,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-03152-L1",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-03152",
+      "length_m": 99.96459436701116,
+      "depth_m": 24.88353729248047,
+      "max_half_breadth_m": 13.495433330535889,
+      "draft_m": 14.930122375,
+      "volume_below_draft_m3": 18247.168702324747,
+      "waterplane_area_m2": 1784.2738309613906,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-03152-L2",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-03152",
+      "length_m": 99.96459436701116,
+      "depth_m": 24.88353729248047,
+      "max_half_breadth_m": 13.495433330535889,
+      "draft_m": 14.930122375,
+      "volume_below_draft_m3": 18247.168702324747,
+      "waterplane_area_m2": 1784.2738309613906,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-03152-L3",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-03152",
+      "length_m": 99.96459436701116,
+      "depth_m": 24.88353729248047,
+      "max_half_breadth_m": 13.495433330535889,
+      "draft_m": 14.930122375,
+      "volume_below_draft_m3": 18247.168702324747,
+      "waterplane_area_m2": 1784.2738309613906,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "dtmb5415-L0",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "dtmb5415",
+      "length_m": 99.99999999675913,
+      "depth_m": 12.530224564639711,
+      "max_half_breadth_m": 6.703586830821121,
+      "draft_m": 7.518134739,
+      "volume_below_draft_m3": 3687.3270588738715,
+      "waterplane_area_m2": 958.7870019128718,
+      "mesh_deflection_m": 0.0005,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "dtmb5415-L1",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "dtmb5415",
+      "length_m": 99.99999999675913,
+      "depth_m": 12.530224564639711,
+      "max_half_breadth_m": 6.703586830821121,
+      "draft_m": 7.518134739,
+      "volume_below_draft_m3": 3687.3270588738715,
+      "waterplane_area_m2": 958.7870019128718,
+      "mesh_deflection_m": 0.0005,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "dtmb5415-L2",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "dtmb5415",
+      "length_m": 99.99999999675913,
+      "depth_m": 12.530224564639711,
+      "max_half_breadth_m": 6.703586830821121,
+      "draft_m": 7.518134739,
+      "volume_below_draft_m3": 3687.3270588738715,
+      "waterplane_area_m2": 958.7870019128718,
+      "mesh_deflection_m": 0.0005,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "dtmb5415-L3",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "dtmb5415",
+      "length_m": 99.99999999675913,
+      "depth_m": 12.530224564639711,
+      "max_half_breadth_m": 6.703586830821121,
+      "draft_m": 7.518134739,
+      "volume_below_draft_m3": 3687.3270588738715,
+      "waterplane_area_m2": 958.7870019128718,
+      "mesh_deflection_m": 0.0005,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-00045-L0",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-00045",
+      "length_m": 100.0,
+      "depth_m": 12.570371627807617,
+      "max_half_breadth_m": 10.783214569091797,
+      "draft_m": 7.542222977,
+      "volume_below_draft_m3": 4951.064986043824,
+      "waterplane_area_m2": 1506.0783757587283,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-00045-L1",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-00045",
+      "length_m": 100.0,
+      "depth_m": 12.570371627807617,
+      "max_half_breadth_m": 10.783214569091797,
+      "draft_m": 7.542222977,
+      "volume_below_draft_m3": 4951.064986043824,
+      "waterplane_area_m2": 1506.0783757587283,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-00045-L2",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-00045",
+      "length_m": 100.0,
+      "depth_m": 12.570371627807617,
+      "max_half_breadth_m": 10.783214569091797,
+      "draft_m": 7.542222977,
+      "volume_below_draft_m3": 4951.064986043824,
+      "waterplane_area_m2": 1506.0783757587283,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-00045-L3",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-00045",
+      "length_m": 100.0,
+      "depth_m": 12.570371627807617,
+      "max_half_breadth_m": 10.783214569091797,
+      "draft_m": 7.542222977,
+      "volume_below_draft_m3": 4951.064986043824,
+      "waterplane_area_m2": 1506.0783757587283,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-00617-L0",
+    "arm": "llm",
+    "score_status": "scored",
+    "correct": true,
+    "summary": {
+      "half_breadth_main": {
+        "stations": 9,
+        "rms_of_station_rms_m": 0.1546736225172115,
+        "median_station_rms_m": 0.09047144676463452,
+        "max_abs_m": 2.812890272798731
+      },
+      "half_breadth_below_draft": {
+        "stations": 9,
+        "rms_of_station_rms_m": 0.12186444112843059,
+        "median_station_rms_m": 0.09596131652609256,
+        "max_abs_m": 0.5021997719230771
+      },
+      "section_area_below_draft_relative": {
+        "stations": 9,
+        "mean_abs": 0.015875824469336785,
+        "max_abs": 0.029281172609497037
+      }
+    },
+    "hydro": {
+      "draft_m": 13.003396511,
+      "truth_volume_m3": 18941.49008459944,
+      "truth_volume_within_range_m3": 15711.150514464429,
+      "reconstruction_volume_m3": 15297.06325575457,
+      "volume_error_relative_full": -0.19240444191917125,
+      "volume_error_relative_within_range": -0.0263562657826128,
+      "truth_waterplane_m2": 2992.698182697703,
+      "truth_waterplane_within_range_m2": 2395.313108305342,
+      "reconstruction_waterplane_m2": 2364.433191200063,
+      "waterplane_error_relative_full": -0.20993262706207952,
+      "waterplane_error_relative_within_range": -0.012891808172471623
+    },
+    "truth": {
+      "hull_id": "shipd-1-00617",
+      "length_m": 99.99482098243789,
+      "depth_m": 21.672327518463135,
+      "max_half_breadth_m": 45.60582637786865,
+      "draft_m": 13.003396511,
+      "volume_below_draft_m3": 18941.49008459944,
+      "waterplane_area_m2": 2992.698182697703,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-00617-L1",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-00617",
+      "length_m": 99.99482098243789,
+      "depth_m": 21.672327518463135,
+      "max_half_breadth_m": 45.60582637786865,
+      "draft_m": 13.003396511,
+      "volume_below_draft_m3": 18941.49008459944,
+      "waterplane_area_m2": 2992.698182697703,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-00617-L2",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-00617",
+      "length_m": 99.99482098243789,
+      "depth_m": 21.672327518463135,
+      "max_half_breadth_m": 45.60582637786865,
+      "draft_m": 13.003396511,
+      "volume_below_draft_m3": 18941.49008459944,
+      "waterplane_area_m2": 2992.698182697703,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-00617-L3",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-00617",
+      "length_m": 99.99482098243789,
+      "depth_m": 21.672327518463135,
+      "max_half_breadth_m": 45.60582637786865,
+      "draft_m": 13.003396511,
+      "volume_below_draft_m3": 18941.49008459944,
+      "waterplane_area_m2": 2992.698182697703,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-01103-L0",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-01103",
+      "length_m": 99.97475624084473,
+      "depth_m": 15.150331258773804,
+      "max_half_breadth_m": 15.16182541847229,
+      "draft_m": 9.090198755,
+      "volume_below_draft_m3": 9326.763279723875,
+      "waterplane_area_m2": 1886.1653229548035,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-01103-L1",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-01103",
+      "length_m": 99.97475624084473,
+      "depth_m": 15.150331258773804,
+      "max_half_breadth_m": 15.16182541847229,
+      "draft_m": 9.090198755,
+      "volume_below_draft_m3": 9326.763279723875,
+      "waterplane_area_m2": 1886.1653229548035,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-01103-L2",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-01103",
+      "length_m": 99.97475624084473,
+      "depth_m": 15.150331258773804,
+      "max_half_breadth_m": 15.16182541847229,
+      "draft_m": 9.090198755,
+      "volume_below_draft_m3": 9326.763279723875,
+      "waterplane_area_m2": 1886.1653229548035,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  },
+  {
+    "case_id": "shipd-1-01103-L3",
+    "arm": "llm",
+    "score_status": "no_model",
+    "correct": false,
+    "summary": null,
+    "hydro": null,
+    "truth": {
+      "hull_id": "shipd-1-01103",
+      "length_m": 99.97475624084473,
+      "depth_m": 15.150331258773804,
+      "max_half_breadth_m": 15.16182541847229,
+      "draft_m": 9.090198755,
+      "volume_below_draft_m3": 9326.763279723875,
+      "waterplane_area_m2": 1886.1653229548035,
+      "mesh_deflection_m": null,
+      "x_step_m": 0.5,
+      "z_steps": 250
+    }
+  }
+]

@@ -1,0 +1,17 @@
+[package]
+name = "marinaframe-app"
+version = "0.5.0"
+edition = "2021"
+rust-version = "1.99"
+license-file = "../../LICENSE"
+description = "MarinaFrame desktop app (Tauri 2 shell around marinaframe-app-core)"
+
+[build-dependencies]
+tauri-build = { version = "=2.7.4", features = [] }
+
+[dependencies]
+marinaframe-app-core = { path = "../core" }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = { version = "=1.0.145", features = ["float_roundtrip"] }
+tauri = { version = "=2.12.5", features = [] }
+tauri-plugin-dialog = "=2.8.4"

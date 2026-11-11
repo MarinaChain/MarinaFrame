@@ -1,5 +1,7 @@
 # Local workbench operations
 
+> **Historical (0.5):** the workbench server, job queue, backup/restore and `vessel-reconstruct serve` described here were removed. This page records the Linux research profile at 0.2. Process isolation (`isolation.py`) remains in use.
+
 ## Supported profile
 
 MarinaFrame supports an **authenticated, single-user, loopback-only Linux research workbench**. The ordinary reconstruction path is offline after its dependencies are installed. Its queue and subprocess boundary make local work bounded, cancellable and recoverable; they do not turn document parsers or the CAD kernel into an operating-system sandbox. A resulting model still requires source review and qualified engineering assessment.

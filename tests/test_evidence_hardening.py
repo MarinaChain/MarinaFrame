@@ -16,7 +16,6 @@ from PIL import Image, ImageDraw
 from vessel_reconstruction import pipeline
 from vessel_reconstruction.pipeline import reconstruct, recover_interrupted_run, verify_run
 from vessel_reconstruction.provenance import digest_file
-from vessel_reconstruction.review import record_review, review_state
 from vessel_reconstruction.schema import loads_bounded_json, validate_spec
 from vessel_reconstruction.transaction import RunPublicationError, RunTransaction
 
@@ -41,6 +40,43 @@ def independent_spec(root):
             "end_closure": "flat_at_terminal_stations", "sections": sections}
     (root / "spec.json").write_text(json.dumps(spec))
     return spec
+
+
+def test_failed_iges_writer_keeps_other_cad_exports(tmp_path, monkeypatch):
+    from vessel_reconstruction import geometry
+
+    independent_spec(tmp_path)
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("injected IGES writer failure")
+
+    monkeypatch.setattr(geometry, "export_iges", fail)
+    result = reconstruct(tmp_path / "spec.json", tmp_path / "run", export_cad=True)
+    assert result["status"] == "review_required", result["gaps"]
+    assert result["export_results"]["iges"] == {"status": "failed", "reason": "injected IGES writer failure"}
+    for format_name in ("step", "3dm", "stl"):
+        assert result["export_results"][format_name]["status"] == "ok"
+        assert (tmp_path / "run" / result["exports"][format_name]).is_file()
+    assert "iges" not in result["exports"]
+    assert verify_run(tmp_path / "run")["exports_allowed"]
+
+
+def test_failed_step_reload_keeps_other_cad_exports(tmp_path, monkeypatch):
+    from vessel_reconstruction import geometry
+
+    independent_spec(tmp_path)
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("injected STEP reload failure")
+
+    monkeypatch.setattr(geometry.cq.importers, "importStep", fail)
+    result = reconstruct(tmp_path / "spec.json", tmp_path / "run", export_cad=True)
+    assert result["status"] == "review_required", result["gaps"]
+    assert result["export_results"]["step"]["status"] == "failed"
+    assert "step" not in result["exports"]
+    assert not (tmp_path / "run/model.step").exists()
+    assert all((tmp_path / "run" / result["exports"][name]).is_file() for name in ("iges", "3dm", "stl"))
+    assert verify_run(tmp_path / "run")["exports_allowed"]
 
 
 @pytest.fixture(scope="module")
@@ -166,14 +202,16 @@ def _reuse_valid_geometry(monkeypatch, good_run):
     reference = json.loads((good_run / "result.json").read_text())
     # Recreate the CAD representation from this test's current observations,
     # preserving actual independently built points and metrics from good_run.
-    def build(sections):
+    def build(sections, **_options):
         normalized = []
         for observed, known in zip(sections, reference["normalized_sections"]):
             normalized.append({**observed, "cad_points_yz_m": known["cad_points_yz_m"], "cad_approximation": known["cad_approximation"]})
         return object(), normalized
 
     def export(_shape, out, *, export_cad):
-        for name in ("mesh.json", "model.step", "model.stl"):
+        # Copy every file the reference export record names (mesh, STEP, IGES, 3dm, STL), not a fixed list.
+        names = [value for key, value in reference["exports"].items() if not key.endswith("_units")]
+        for name in names:
             shutil.copyfile(good_run / name, out / name)
         return copy.deepcopy(reference["exports"]), copy.deepcopy(reference["metrics"])
 
@@ -429,17 +467,6 @@ def test_implementation_replay_uses_bytecode_flag_to_preserve_original_evidence(
     assert verify_run(root)["valid"]
 
 
-def test_review_events_do_not_mutate_inference_or_manifest(good_run, tmp_path):
-    root = cloned_run(good_run, tmp_path)
-    result = json.loads((root / "result.json").read_text())
-    before = {name: digest_file(root / name) for name in ("result.json", "manifest.json")}
-    event = record_review(root, decision="accept_geometry", reviewer="Local tester", notes="Controlled geometry reviewed only.", expected_run_id=result["run_id"])
-    assert event["engineering_approved"] is False
-    assert before == {name: digest_file(root / name) for name in before}
-    assert review_state(root)["state"] == "accept_geometry"
-    assert verify_run(root)["valid"]
-
-
 @pytest.mark.parametrize("field,value", [
     ("input_mode", []), ("input_mode", {}), ("source", []), ("source", None),
     ("station_reference", []), ("sections", {}), ("symmetry_evidence", {}),
@@ -495,3 +522,20 @@ assert 'cadquery' not in sys.modules and 'OCP' not in sys.modules
 """
     completed = subprocess.run([sys.executable, "-c", script, str(tmp_path)], env=os.environ.copy(), capture_output=True, text=True, timeout=30)
     assert completed.returncode == 0, completed.stderr
+
+
+def test_artifact_table_covers_build_output(good_run):
+    from vessel_reconstruction.artifacts import ARTIFACTS
+
+    result = json.loads((good_run / "result.json").read_text())
+    fixed = {artifact.name for artifact in ARTIFACTS.values()}
+    fixed.update(artifact.draft_name for artifact in ARTIFACTS.values() if artifact.draft_name)
+    sources = {source["file"] for source in result["sources"]}
+    sources.update(source["preview_file"] for source in result["sources"] if "preview_file" in source)
+    snapshot = set(result["provenance"]["implementation_snapshot"]["files_sha256"])
+    files = {path.relative_to(good_run).as_posix() for path in good_run.rglob("*") if path.is_file()}
+    assert files <= fixed | sources | snapshot
+    assert {"mesh.json", "model.step", "model.stl", "model.iges", "model.3dm"} <= files
+    assert all(ARTIFACTS[key].name in files for key in ("result", "input_spec", "replay_spec", "manifest"))
+    assert ARTIFACTS["source"].name.format(role="source", extension=".png") in sources
+    assert all(name.startswith(ARTIFACTS["implementation"].name.split("{module}")[0]) for name in snapshot)

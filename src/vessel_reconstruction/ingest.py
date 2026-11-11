@@ -25,6 +25,66 @@ class DrawingError(ValueError):
 
 MAX_ROW_CANDIDATES = 64
 MAX_TRACE_CANDIDATES = 50_000
+# Most competing contours kept as review evidence for one panel.
+MAX_COMPETING_CANDIDATES = 64
+COMPLEXITY_REDUCTION_WARNING = ("Noise specks (small connected ink components) were removed to keep the panel within "
+                                "the bounded evidence budget; sustained strokes are kept, removed ink is counted.")
+
+
+def _row_run_counts(mask: np.ndarray) -> np.ndarray:
+    """Number of ink runs on each row (every run, broad or not)."""
+    if not mask.shape[1]:
+        return np.zeros(mask.shape[0], dtype=int)
+    return mask[:, 0].astype(int) + (mask[:, 1:] & ~mask[:, :-1]).sum(axis=1)
+
+
+def _within_run_budget(counts: np.ndarray) -> bool:
+    return int(counts.max(initial=0)) <= MAX_ROW_CANDIDATES and int(counts.sum()) <= MAX_TRACE_CANDIDATES
+
+
+def _reduce_to_run_budget(mask: np.ndarray) -> tuple[np.ndarray, dict[str, Any] | None]:
+    """Degrade a too complex mask gracefully instead of refusing it.
+
+    Speckle noise, not drawn strokes, is what usually exceeds the run budget.
+    Connected components are removed smallest first, doubling the size limit,
+    until every row has at most MAX_ROW_CANDIDATES runs and the panel at most
+    MAX_TRACE_CANDIDATES. A sustained stroke is one large component, so it
+    stays. Rows that still exceed the budget (dense hatching) are cleared, so
+    they become unobserved rows. Returns the mask unchanged and None when it
+    is already within the budget; otherwise the record says what was removed.
+    """
+    counts = _row_run_counts(mask)
+    if _within_run_budget(counts):
+        return mask, None
+    labels, count = ndimage.label(mask, structure=np.ones((3, 3), dtype=int))
+    sizes = np.bincount(labels.ravel())
+    sizes[0] = 0
+    reduced, limit = mask, 1
+    # Never remove the largest component by size alone.
+    while not _within_run_budget(counts) and limit * 2 < int(sizes.max(initial=0)):
+        limit *= 2
+        keep = sizes > limit
+        keep[0] = False
+        reduced = keep[labels]
+        counts = _row_run_counts(reduced)
+    # Clear the busiest rows until both bounds hold.
+    cleared = []
+    if not _within_run_budget(counts):
+        reduced, counts = reduced.copy(), counts.copy()
+        for row in np.argsort(-counts, kind="stable"):
+            if _within_run_budget(counts):
+                break
+            reduced[row] = False
+            counts[row] = 0
+            cleared.append(int(row))
+    # Kept pixels all carry a nonzero label; count the distinct labels.
+    kept_component_count = np.count_nonzero(np.bincount(labels[reduced]))
+    return reduced, {"method": "small_component_removal_v1",
+                     "minimum_kept_component_pixels": int(limit) + 1,
+                     "removed_component_count": int(count - kept_component_count),
+                     "removed_pixel_count": int(mask.sum() - reduced.sum()),
+                     "cleared_row_count": int(len(cleared)),
+                     "warning": COMPLEXITY_REDUCTION_WARNING}
 
 
 def _gap(section_id: str | None, kind: str, message: str) -> dict[str, Any]:
@@ -107,7 +167,10 @@ def _foreground(crop: np.ndarray) -> tuple[np.ndarray, np.ndarray, dict[str, Any
     rgb = crop.astype(float)
     luminance = rgb @ np.array([0.2126, 0.7152, 0.0722])
     background = float(np.percentile(luminance, 98))
-    chroma = rgb.max(axis=2) - rgb.min(axis=2)
+    red, green, blue = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    # Same values as rgb.max(axis=2) - rgb.min(axis=2); a reduction over a
+    # length-3 axis is much slower than elementwise maximum and minimum.
+    chroma = np.maximum(np.maximum(red, green), blue) - np.minimum(np.minimum(red, green), blue)
     # Saturated ink remains visible even when its luminance is close to paper.
     ink = np.maximum(background - luminance, 0.8 * chroma)
     # Use the same quantization for estimating and applying the threshold.
@@ -155,17 +218,72 @@ def _foreground(crop: np.ndarray) -> tuple[np.ndarray, np.ndarray, dict[str, Any
                         "raw_component_count": int(count)}
 
 
+def _run_bounds(mask: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Row, first column and stop column (exclusive) of every horizontal run.
+
+    Runs are the maximal sequences of nonzero pixels in each row of a 2D
+    mask. They come in row-major order: by row, then left to right.
+    """
+    height, width = mask.shape
+    # A zero column on each side makes every run start with +1 and stop with -1.
+    padded = np.zeros((height, width + 2), dtype=np.int8)
+    padded[:, 1:-1] = mask != 0
+    edges = np.diff(padded, axis=1)
+    # In row-major order the nonzero edges alternate: start, stop, start, ...
+    edge_rows, edge_columns = np.divmod(np.flatnonzero(edges), width + 1)
+    return edge_rows[0::2], edge_columns[0::2], edge_columns[1::2]
+
+
+def _dilate_5x5(mask: np.ndarray) -> np.ndarray:
+    """Binary dilation by a full 5x5 square, outside pixels counted as empty.
+
+    Same result as ndimage.binary_dilation(mask, np.ones((5, 5))), but faster.
+    """
+    return ndimage.maximum_filter(mask.astype(np.uint8), size=5, mode="constant", cval=0).astype(bool)
+
+
 def _runs(row: np.ndarray) -> list[tuple[int, int]]:
-    indices = np.flatnonzero(row)
-    if not len(indices):
-        return []
-    cuts = np.flatnonzero(np.diff(indices) > 1) + 1
-    groups = np.split(indices, cuts)
-    return [(int(group[0]), int(group[-1]) + 1) for group in groups]
+    _, starts, stops = _run_bounds(np.asarray(row)[None, :])
+    return list(zip(starts.tolist(), stops.tolist()))
+
+
+def _run_weight_stats(ink: np.ndarray, run_rows: np.ndarray, starts: np.ndarray,
+                      stops: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Ink-weighted centre column and mean weight of each run.
+
+    The weight of a pixel is max(1, ink). The values are bit-identical to
+    np.average(np.arange(start, stop), weights=w) and np.mean(w) for each run:
+    a sum along the last axis of a C-contiguous 2D block uses the same
+    summation order as the sum of one 1D run. Runs of one length share a block.
+    np.add.reduceat and cumulative sums use another order and change last bits.
+    """
+    lengths = stops - starts
+    centres = np.empty(len(starts))
+    mean_weights = np.empty(len(starts))
+    for length in np.unique(lengths):
+        group = np.flatnonzero(lengths == length)
+        columns = starts[group, None] + np.arange(length)
+        weights = np.maximum(1.0, ink[run_rows[group, None], columns])
+        centres[group] = (columns * weights).sum(axis=1) / weights.sum(axis=1)
+        mean_weights[group] = weights.mean(axis=1)
+    return centres, mean_weights
+
+
+def _narrow_runs(mask: np.ndarray, broad_limit: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Runs no wider than broad_limit; broad baselines and rulers are dropped."""
+    run_rows, starts, stops = _run_bounds(mask)
+    narrow = stops - starts <= broad_limit
+    return run_rows[narrow], starts[narrow], stops[narrow]
+
+
+def _row_offsets(run_rows: np.ndarray, height: int) -> np.ndarray:
+    """Index of the first run of each row; runs of row r are offsets[r]:offsets[r + 1]."""
+    return np.searchsorted(run_rows, np.arange(height + 1))
 
 
 def _trace(mask: np.ndarray, ink: np.ndarray, centre_local: float) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
     """Viterbi trace through pixel-run centres; no parametric hull prior."""
+    mask, complexity_reduction = _reduce_to_run_budget(mask)
     h, w = mask.shape
     rows: list[int] = []
     candidates: list[np.ndarray] = []
@@ -175,30 +293,21 @@ def _trace(mask: np.ndarray, ink: np.ndarray, centre_local: float) -> tuple[np.n
     # as a competitor, but allow it as the hull's measured keel endpoint.
     centre_band = max(2.0, w * 0.008)
     broad_row_limit = max(12, round(w * 0.16))
-    candidate_count = 0
-    for row_index in range(h):
-        runs = _runs(mask[row_index])
-        # Baselines and horizontal rulers cross a large part of the panel.
-        # They supply no local half-breadth observation on that row.
-        runs = [(a, b) for a, b in runs if b - a <= broad_row_limit]
-        candidate_count += len(runs)
-        if len(runs) > MAX_ROW_CANDIDATES or candidate_count > MAX_TRACE_CANDIDATES:
-            raise DrawingError("resource_limit", "Contour candidate complexity exceeds the bounded tracing budget; select a smaller panel.")
-        centres = []
-        evidence_strength = []
-        widths = []
-        for start, stop in runs:
-            pixels = np.arange(start, stop)
-            weights = np.maximum(1.0, ink[row_index, start:stop])
-            x = float(np.average(pixels, weights=weights))
-            centres.append(x)
-            evidence_strength.append(float(np.mean(weights)) / 255.0)
-            widths.append(stop - start)
-        if centres:
-            rows.append(row_index)
-            candidates.append(np.asarray(centres))
-            strengths.append(np.asarray(evidence_strength))
-            run_widths.append(np.asarray(widths))
+    # Baselines and horizontal rulers cross a large part of the panel.
+    # They supply no local half-breadth observation on that row.
+    run_rows, starts, stops = _narrow_runs(mask, broad_row_limit)
+    offsets = _row_offsets(run_rows, h)
+    if np.diff(offsets).max(initial=0) > MAX_ROW_CANDIDATES or len(starts) > MAX_TRACE_CANDIDATES:
+        raise DrawingError("resource_limit", "Contour candidate complexity exceeds the bounded tracing budget; select a smaller panel.")
+    centres, mean_weights = _run_weight_stats(ink, run_rows, starts, stops)
+    evidence_strength = mean_weights / 255.0
+    all_widths = stops - starts
+    for row_index in np.unique(run_rows).tolist():
+        first, stop = offsets[row_index], offsets[row_index + 1]
+        rows.append(row_index)
+        candidates.append(centres[first:stop])
+        strengths.append(evidence_strength[first:stop])
+        run_widths.append(all_widths[first:stop])
     if len(rows) < max(12, h * 0.5):
         raise DrawingError("missing_curve", "Too few drawing rows contain a supported section curve.")
     # Reward source contrast and only a mild outer-contour preference.  The
@@ -229,12 +338,16 @@ def _trace(mask: np.ndarray, ink: np.ndarray, centre_local: float) -> tuple[np.n
     # and from the selected stroke.  Overlaid body plans require review.
     alternatives = np.zeros_like(mask, dtype=bool)
     separation = max(5.0, 2.5 * float(np.median(widths)))
-    for index, row in enumerate(rows):
-        for candidate in candidates[index]:
-            if abs(candidate - x[index]) > separation and candidate > centre_local + centre_band:
-                col = int(round(candidate))
-                alternatives[row, max(0, col - 1):min(w, col + 2)] = True
-    linked = ndimage.binary_dilation(alternatives, structure=np.ones((5, 5), dtype=bool))
+    # Every narrow run belongs to an observed row, so x can be repeated per run.
+    selected_x = np.repeat(x, [len(c) for c in candidates])
+    away = (np.abs(centres - selected_x) > separation) & (centres > centre_local + centre_band)
+    # np.rint rounds half to even, as Python round() does.
+    away_rows, away_cols = run_rows[away], np.rint(centres[away]).astype(int)
+    for offset in (-1, 0, 1):
+        cols = away_cols + offset
+        inside = (cols >= 0) & (cols < w)
+        alternatives[away_rows[inside], cols[inside]] = True
+    linked = _dilate_5x5(alternatives)
     lab, nlab = ndimage.label(linked)
     alternative_span = 0
     for segment in ndimage.find_objects(lab):
@@ -264,7 +377,100 @@ def _trace(mask: np.ndarray, ink: np.ndarray, centre_local: float) -> tuple[np.n
                    "long_component_support_fraction": float(np.mean(long_support)),
                    "maximum_step_px_per_row": float(np.max(np.abs(slopes))) if len(slopes) else 0.0,
                    "interpolated_row_count": h - len(rows)}
+    if complexity_reduction is not None:
+        diagnostics["complexity_reduction"] = complexity_reduction
     return row_array, x, diagnostics
+
+
+def _grid_evidence(mask, origin):
+    """Detect a repeated orthogonal lattice, never engineering stroke identity."""
+    h, w = mask.shape
+    run_rows, starts, stops = _run_bounds(mask)
+    horizontal = np.unique(run_rows[stops - starts >= .72 * w]).tolist()
+
+    def groups(values):
+        if not len(values):
+            return []
+        array = np.asarray(values)
+        return [float(np.median(group)) for group in
+                np.split(array, np.flatnonzero(np.diff(array) > 2) + 1)
+                if len(group) <= 8]
+
+    ys = groups(horizontal)
+    vertical = []
+    if len(ys) >= 3:
+        low, high = int(ys[0]), int(ys[-1]) + 1
+        vertical = np.flatnonzero(np.mean(mask[low:high], axis=0) >= .82)
+    xs = groups(vertical)
+
+    def regular(values):
+        if not 3 <= len(values) <= 32:
+            return False
+        delta = np.diff(values)
+        return bool(np.median(delta) >= 8 and
+                    np.max(np.abs(delta - np.median(delta))) <= max(2, .12 * np.median(delta)))
+
+    found = regular(xs) and regular(ys)
+    return {"method": "repeated_orthogonal_lattice_v1", "lattice_detected": found,
+            "vertical_lines_px": [round(v + origin[0], 3) for v in xs] if found else [],
+            "horizontal_lines_px": [round(v + origin[1], 3) for v in ys] if found else [],
+            "minimum_lines_per_axis": 3, "unique_non_grid_candidate_id": None,
+            "non_grid_competing_components": None,
+            "interpretation": "Geometric grid hypothesis only; overlap with a true contour cannot be semantically certified."}
+
+
+def _stroke_identity(mask: np.ndarray, ink: np.ndarray, rows: np.ndarray,
+                     xs: np.ndarray, origin: tuple[int, int], grid: dict | None = None) -> dict:
+    """Refuse sustained ruler coverage; a later departure cannot certify it.
+
+    Use the original panel, not corridor-clipped pixels. A true hull side can
+    coincide with a ruler too: that is unresolved identity, not permission to
+    invent a local endpoint or to keep the ruler as hull below that endpoint.
+    Short crossings stay eligible. This is a refusal test, not a certificate.
+    """
+    if grid is None:
+        grid = _grid_evidence(mask, origin)
+    # Same sustained-span floor as the existing competing-stroke evidence.
+    minimum_span = max(16, int(math.ceil(.15 * mask.shape[0])))
+    continuations = []
+    source_rows = rows.astype(int)
+    source_columns = np.clip(np.rint(xs).astype(int), 0, mask.shape[1] - 1)
+    observed_ink = ink[source_rows, source_columns]
+    ruler_tones = []
+    for line in grid["vertical_lines_px"]:
+        column = int(round(line - origin[0]))
+        ruler_ink = ink[:, max(0, column - 1):min(mask.shape[1], column + 2)]
+        ruler_tones.append(float(np.median(np.max(ruler_ink, axis=1))))
+    # The repeated lattice supplies its median tone. One dark hull side on a
+    # ruler must not redefine the tone of the entire grid. The 24-level contrast
+    # separation matches _contrasting_subruns; it is not a semantic label.
+    ruler_tone = float(np.median(ruler_tones)) if ruler_tones else 0.
+    for line in grid["vertical_lines_px"]:
+        distance = np.abs(xs + origin[0] - line)
+        # A complete ruler is still a disclosed selectable hypothesis for an
+        # explicit operator. Refuse the mixed path: sustained ruler coverage
+        # plus departure onto another stroke, not a ruler alone.
+        if np.count_nonzero(distance > 3) < minimum_span:
+            continue
+        on_line = (distance <= 3) & (observed_ink <= ruler_tone + 24)
+        indices = np.flatnonzero(on_line)
+        if not len(indices):
+            continue
+        # Broad horizontal rulers can remove a few rows. Those source gaps
+        # must not split one sustained vertical continuation into crossings.
+        gap_limit = max(3, int(math.ceil(.025 * mask.shape[0]))) + 1
+        for group in np.split(indices, np.flatnonzero(np.diff(rows[indices]) > gap_limit) + 1):
+            first, last = int(group[0]), int(group[-1])
+            span = float(rows[last] - rows[first] + 1)
+            if span >= minimum_span and len(group) / span >= .9:
+                continuations.append({"vertical_line_px": line,
+                    "row_range_px": [float(rows[first] + origin[1]), float(rows[last] + origin[1])],
+                    "observed_row_count": len(group), "span_px": span})
+    return {"method": "whole_trace_ruler_identity_v1", "source_before_selection": True,
+            "minimum_sustained_span_px": minimum_span,
+            "ruler_continuations": continuations,
+            "status": "unresolved" if continuations else "no_sustained_ruler_continuation_detected",
+            "scope": "Sustained ruler overlap cannot establish a single hull stroke. Supply source-supported local endpoints or a separate view; absence of this overlap does not certify semantic identity."}
 
 
 def _selection_mask(section: dict, shape: tuple[int, int], origin: tuple[int, int]) -> tuple[np.ndarray | None, dict | None]:
@@ -321,6 +527,13 @@ def _contrasting_subruns(ink_row: np.ndarray, first: int, last: int) -> tuple[li
     return [(a + first, b + first) for a, b in _runs(values > threshold)], threshold
 
 
+def _adjacent_localized_ink(localized: np.ndarray, row: int, first: int, last: int) -> bool:
+    """True when ink outside broad runs touches [first, last) in the row above or below."""
+    left, right = max(0, first - 1), min(localized.shape[1], last + 1)
+    neighbours = [r for r in (row - 1, row + 1) if 0 <= r < localized.shape[0]]
+    return any(bool(localized[r, left:right].any()) for r in neighbours)
+
+
 def _eligible_trace_mask(mask: np.ndarray, selection: np.ndarray | None,
                          ink: np.ndarray | None = None) -> tuple[np.ndarray, dict]:
     """Reject broad source rulers before clipping to a selection corridor.
@@ -330,32 +543,50 @@ def _eligible_trace_mask(mask: np.ndarray, selection: np.ndarray | None,
     observation. In particular it can invent breadth below a zero-width keel.
     Horizontal-run classification must therefore use the original panel mask.
     When source contrast separates a shorter stroke from a broad ruler, retain
-    that observed subset before clipping. Sustained alternatives still come
+    that observed subset before clipping, but only when it continues into an
+    adjacent row outside the ruler. Sustained alternatives still come
     from the unmodified source mask and require explicit identity resolution.
     """
     eligible = mask.copy()
     broad_limit = max(12, round(mask.shape[1] * .16))
-    runs_removed = 0
-    rows_removed = set()
+    run_rows, starts, stops = _run_bounds(mask)
+    broad = stops - starts > broad_limit
+    broad_runs = list(zip(run_rows[broad].tolist(), starts[broad].tolist(), stops[broad].tolist()))
+    for row, first, last in broad_runs:
+        eligible[row, first:last] = False
+    runs_removed = len(broad_runs)
+    rows_removed = {row for row, _, _ in broad_runs}
+    islands = []
+    for row, first, last in (broad_runs if ink is not None else []):
+        subruns, threshold = _contrasting_subruns(ink[row], first, last)
+        # A nearly full-width high-contrast ruler is not a
+        # localized observation merely because its edges vary.
+        islands.extend((row, a, b, threshold) for a, b in subruns if b - a < .72 * mask.shape[1])
+    # A stroke that crosses, leaves or runs along a ruler is connected, row by
+    # row, to ink outside the ruler. Support starts at ink outside every broad
+    # run and grows through accepted islands in adjacent rows. An island never
+    # reached is tone variation inside the ruler itself (for example the
+    # aliased edge of a scanned 1-bit line), not a separate observation.
+    support = eligible.copy()
+    pending = islands
+    accepted = []
+    while pending:
+        reached = [_adjacent_localized_ink(support, row, a, b) for row, a, b, _ in pending]
+        if not any(reached):
+            break
+        for island, supported in zip(pending, reached):
+            if supported:
+                row, a, b, _ = island
+                support[row, a:b] = mask[row, a:b]
+                accepted.append(island)
+        pending = [island for island, supported in zip(pending, reached) if not supported]
+    unsupported_count = len(pending)
     retained_runs = []
-    retained_count = 0
-    for row in range(mask.shape[0]):
-        for first, last in _runs(mask[row]):
-            if last - first > broad_limit:
-                eligible[row, first:last] = False
-                runs_removed += 1
-                rows_removed.add(row)
-                if ink is not None:
-                    subruns, threshold = _contrasting_subruns(ink[row], first, last)
-                    for a, b in subruns:
-                        # A nearly full-width high-contrast ruler is not a
-                        # localized observation merely because its edges vary.
-                        if b - a < .72 * mask.shape[1]:
-                            eligible[row, a:b] = mask[row, a:b]
-                            retained_count += 1
-                            if len(retained_runs) < 1025:
-                                retained_runs.append({"row": row, "span": [a, b],
-                                                      "ink_threshold": threshold})
+    retained_count = len(accepted)
+    for row, a, b, threshold in sorted(accepted, key=lambda island: island[:3]):
+        eligible[row, a:b] = mask[row, a:b]
+        if len(retained_runs) < 1025:
+            retained_runs.append({"row": row, "span": [a, b], "ink_threshold": threshold})
     if selection is not None:
         eligible &= selection
     return eligible, {"horizontal_source_runs_excluded_before_selection": runs_removed,
@@ -363,6 +594,7 @@ def _eligible_trace_mask(mask: np.ndarray, selection: np.ndarray | None,
                       "retained_contrast_subruns": retained_runs,
                       "retained_contrast_subrun_count": retained_count,
                       "retained_contrast_subrun_details_omitted": retained_count > len(retained_runs),
+                      "unsupported_contrast_subrun_count": unsupported_count,
                       "selection_trace_policy": "Broad horizontal strokes are classified in the original panel; only contrast-separated source ink may be retained before corridor clipping. Contrast does not certify contour identity."}
 
 
@@ -451,29 +683,32 @@ def _candidate_evidence(mask: np.ndarray, ink: np.ndarray, rows: np.ndarray, xs:
     Full source pixels remain the evidence of record. Stored points are an
     explicitly bounded review sample of each sustained competing component.
     A selected corridor can exclude candidates, but cannot erase their record.
+    A panel over the evidence budget is reduced (``_reduce_to_run_budget``) and
+    at most MAX_COMPETING_CANDIDATES are kept, the most sustained first; the
+    result then carries ``evidence_complexity_reduction``.
     """
+    mask, complexity_reduction = _reduce_to_run_budget(mask)
     h, w = mask.shape
     proposed = np.interp(np.arange(h), rows, xs)
     alternatives = np.zeros_like(mask, dtype=bool)
-    points: list[tuple[int, int, float, bool]] = []
     separation = max(2.0, 1.25 * stroke_width)
     centre_band = max(2.0, w * .008)
     broad_limit = max(12, round(w * .16))
-    for row in range(h):
-        runs = [(a, b) for a, b in _runs(mask[row]) if b - a <= broad_limit]
-        if len(runs) > MAX_ROW_CANDIDATES:
-            raise DrawingError("resource_limit", "Contour candidate complexity exceeds the bounded evidence budget.")
-        for a, b in runs:
-            weights = np.maximum(1.0, ink[row, a:b])
-            col = int(round(float(np.average(np.arange(a, b), weights=weights))))
-            if abs(col - proposed[row]) <= separation or col <= centre_local + centre_band:
-                continue
-            active = selection is None or bool(selection[row, col])
-            points.append((row, col, float(np.mean(weights)), active))
-            alternatives[row, col] = True
-            if len(points) > MAX_TRACE_CANDIDATES:
-                raise DrawingError("resource_limit", "Contour candidate complexity exceeds the bounded evidence budget.")
-    linked = ndimage.binary_dilation(alternatives, structure=np.ones((5, 5), dtype=bool))
+    run_rows, starts, stops = _narrow_runs(mask, broad_limit)
+    if np.diff(_row_offsets(run_rows, h)).max(initial=0) > MAX_ROW_CANDIDATES:
+        raise DrawingError("resource_limit", "Contour candidate complexity exceeds the bounded evidence budget.")
+    centres, mean_weights = _run_weight_stats(ink, run_rows, starts, stops)
+    # np.rint rounds half to even, as Python round() does.
+    cols = np.rint(centres).astype(int)
+    competing = (np.abs(cols - proposed[run_rows]) > separation) & (cols > centre_local + centre_band)
+    point_rows, point_cols, point_ink = run_rows[competing], cols[competing], mean_weights[competing]
+    if len(point_rows) > MAX_TRACE_CANDIDATES:
+        raise DrawingError("resource_limit", "Contour candidate complexity exceeds the bounded evidence budget.")
+    active = np.ones(len(point_rows), dtype=bool) if selection is None else selection[point_rows, point_cols].astype(bool)
+    alternatives[point_rows, point_cols] = True
+    points: list[tuple[int, int, float, bool]] = list(zip(
+        point_rows.tolist(), point_cols.tolist(), point_ink.tolist(), active.tolist()))
+    linked = _dilate_5x5(alternatives)
     labels, count = ndimage.label(linked)
     grouped: dict[int, list[tuple[int, int, float, bool]]] = {}
     for point in points:
@@ -508,10 +743,16 @@ def _candidate_evidence(mask: np.ndarray, ink: np.ndarray, rows: np.ndarray, xs:
             "source_points_px": [[observed[i][1] + ox, observed[i][0] + oy] for i in indices],
             "point_sampling": "at most 129 evenly indexed observed pixel-run centres; complete evidence is in the immutable source image",
         })
-        if len(candidates) > 64:
-            raise DrawingError("resource_limit", "Too many sustained candidate contours for bounded review; split the panel.")
+    if len(candidates) > MAX_COMPETING_CANDIDATES:
+        candidates.sort(key=lambda c: -c["observed_row_count"])
+        complexity_reduction = {**(complexity_reduction or {"warning": COMPLEXITY_REDUCTION_WARNING}),
+                                "competing_candidates_omitted": len(candidates) - MAX_COMPETING_CANDIDATES}
+        # The unresolved count below includes only kept candidates; the
+        # alternative span keeps its maximum over all of them (conservative).
+        candidates = candidates[:MAX_COMPETING_CANDIDATES]
     selected_indices = np.unique(np.linspace(0, len(rows) - 1, min(257, len(rows))).astype(int))
-    return {"candidate_evidence": candidates, "competing_candidate_count": len(candidates),
+    reduction = {"evidence_complexity_reduction": complexity_reduction} if complexity_reduction is not None else {}
+    return {**reduction, "candidate_evidence": candidates, "competing_candidate_count": len(candidates),
             "unresolved_candidate_count": sum(c["status"] == "unresolved" for c in candidates),
             "alternative_contour_span_fraction": float(maximum_active_span / h),
             "candidate_identity_policy": "Contrast does not identify engineering semantics; sustained alternatives require explicit source-pixel selection or abstention",
@@ -519,6 +760,50 @@ def _candidate_evidence(mask: np.ndarray, ink: np.ndarray, rows: np.ndarray, xs:
                                             "minimum_component_coverage": .5, "maximum_review_points_per_candidate": 129},
             "proposed_trace_px": [[float(xs[i] + ox), float(rows[i] + oy)] for i in selected_indices],
             "proposed_trace_sampling": "at most 257 evenly indexed observed rows, for review only"}
+
+
+def _run_containing(mask_row: np.ndarray, x: float) -> tuple[int, int] | None:
+    """Return the half-open source run that contains the observed position."""
+    column = int(round(x))
+    for start, stop in _runs(mask_row):
+        if start <= column < stop:
+            return start, stop
+    return None
+
+
+def _lower_boundary_run_end(source_mask: np.ndarray, rows: np.ndarray,
+                            xs: np.ndarray) -> tuple[float, dict] | None:
+    """Bound an unobserved lower-boundary ordinate by touching source ink.
+
+    When the lowest calibrated row has no trace observation, sampling holds the
+    lowest observed centroid constant down to the boundary. If a source run on
+    the boundary row touches the run of that lowest observation, the stroke
+    continues on the boundary row and that position has no ink. The boundary
+    ordinate is then the touching end of the boundary run: the nearest position
+    that the boundary-row ink supports. This keeps the centroid interpretation;
+    it does not claim centreline contact (see _source_endpoint_hypothesis).
+    """
+    boundary = source_mask.shape[0] - 1
+    if not len(rows) or rows[-1] != boundary - 1:
+        return None
+    observed = _run_containing(source_mask[boundary - 1], xs[-1])
+    if observed is None:
+        return None
+    observed_first, observed_last = observed[0], observed[1] - 1
+    touching = []
+    for first, stop in _runs(source_mask[boundary]):
+        last = stop - 1
+        if abs(observed_first - last) <= 1 and last < observed_last:
+            touching.append(float(last))  # Stroke descends inward to the boundary.
+        elif abs(first - observed_last) <= 1 and first > observed_first:
+            touching.append(float(first))  # Stroke descends outward to the boundary.
+    if len(touching) != 1:
+        return None
+    return touching[0], {"method": "touching_boundary_run_end_v1",
+                         "boundary_row_local_px": boundary,
+                         "boundary_ordinate_local_px": touching[0],
+                         "lowest_centroid_local_px": float(xs[-1]),
+                         "scope": "The unobserved boundary ordinate is bounded by the end of connected boundary-row ink; not centreline contact and not subpixel truth."}
 
 
 def _bounded_source_samples(rows: np.ndarray, xs: np.ndarray, *, baseline: float,
@@ -576,7 +861,98 @@ def _bounded_source_samples(rows: np.ndarray, xs: np.ndarray, *, baseline: float
         "scope": "Interpolation loss relative to the measured row-centroid trace only; excludes endpoint identity, source raster error, calibration, gaps, and semantics."}
 
 
-def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, input_details: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+# --------------------------------------------------------- label tops
+# A body-plan curve ends at the deck edge, and its station number is printed
+# just above that end, often touching it. A trace that runs on past the end
+# follows the label glyphs (thin, anti-aliased, lighter than the curve) or a
+# light grid line. The curve's top is the first row, from the top of the
+# trace, that starts LABEL_SOLID_ROWS consecutive rows of solid ink: peak ink
+# within LABEL_SEARCH_PX of the trace at least LABEL_SOLID_SHARE of the
+# trace's median peak. Only rows within LABEL_TOP_SHARE of the window height
+# below the trace's top are removed; a faint stretch lower down is kept.
+LABEL_TOP_SHARE = 0.2
+LABEL_SOLID_ROWS = 8
+LABEL_SOLID_SHARE = 0.85
+LABEL_SEARCH_PX = 2
+
+
+def label_rows_above_curve(rows: np.ndarray, xs: np.ndarray, ink: np.ndarray) -> int:
+    """How many rows at the top of a trace follow label or grid ink above the curve's end.
+
+    ``rows`` and ``xs`` are the trace in ``ink`` coordinates (rows rise
+    downwards, row 0 is the top of the window), as ``_trace`` returns them.
+    """
+    if len(rows) <= LABEL_SOLID_ROWS:
+        return 0
+    peaks = np.array([float(ink[int(r), max(0, int(round(x)) - LABEL_SEARCH_PX):int(round(x)) + LABEL_SEARCH_PX + 1].max())
+                      for r, x in zip(rows, xs)])
+    solid = peaks >= LABEL_SOLID_SHARE * float(np.median(peaks))
+    limit = rows[0] + LABEL_TOP_SHARE * ink.shape[0]
+    for index in range(len(rows) - LABEL_SOLID_ROWS + 1):
+        if rows[index] > limit:
+            return 0
+        if solid[index:index + LABEL_SOLID_ROWS].all():
+            return index
+    return 0
+
+
+# --------------------------------------------------------- mirrored halves
+# An overlay body plan draws the afterbody stations left of the centreline,
+# mirrored. The tracer reads the half right of the centreline, so a section
+# whose panel lies mostly left of its centreline is traced on the image
+# flipped left to right: the flip maps source column x to (width - 1 - x).
+# Callers keep every pixel coordinate in the source frame.
+
+def drawn_left_of_centreline(section: dict[str, Any]) -> bool:
+    """True when the section's panel lies mostly left of its centreline (an afterbody curve)."""
+    if "roi_px" not in section:
+        return False
+    left, _, right, _ = section["roi_px"]
+    return 0.5 * (float(left) + float(right)) < float(section["calibration"]["centerline_px"])
+
+
+def mirror_points(points, width: int) -> list[list[float]]:
+    """[x, y] source points reflected to the flipped image, or back (the flip is its own inverse)."""
+    return [[float(width - 1 - x), float(y)] for x, y in points]
+
+
+def mirror_section(section: dict[str, Any], width: int) -> dict[str, Any]:
+    """The section in the image flipped left to right: panel, centreline and corridor anchors."""
+    left, top, right, bottom = section["roi_px"]
+    mirrored = {**section, "roi_px": [width - right, top, width - left, bottom],
+                "calibration": {**section["calibration"],
+                                "centerline_px": float(width - 1 - float(section["calibration"]["centerline_px"]))}}
+    selection = section.get("contour_selection")
+    if isinstance(selection, dict) and isinstance(selection.get("anchors_px"), list):
+        mirrored["contour_selection"] = {**selection, "anchors_px": mirror_points(selection["anchors_px"], width)}
+    return mirrored
+
+
+def _extract_mirrored(image, section, source_file, input_details, draft):
+    """Trace a left-drawn section on the flipped image; report its pixels in the source frame."""
+    width = int(image.shape[1])
+    flipped = np.ascontiguousarray(image[:, ::-1])
+    try:
+        result, diagnostic = _extract_one(flipped, mirror_section(section, width), source_file, input_details,
+                                          draft=draft)
+    except DrawingError as exc:
+        exc.diagnostics = {**exc.diagnostics, "traced_mirrored_left_half": True}
+        raise
+    for record in (result["evidence"], diagnostic):
+        bounds = record.get("pixel_trace_bounds")
+        if bounds:
+            record["pixel_trace_bounds"] = [width - bounds[2], bounds[1], width - bounds[0], bounds[3]]
+        selection = record.get("contour_selection")
+        if selection:
+            record["contour_selection"] = {**selection, "anchors_px": mirror_points(selection["anchors_px"], width)}
+    result["evidence"].update(roi_px=list(section["roi_px"]), calibration=dict(section["calibration"]))
+    diagnostic["traced_mirrored_left_half"] = True
+    result["warnings"].append("The curve is drawn left of the centreline (afterbody of an overlay body plan); it "
+                              "was traced on the image mirrored about the centreline.")
+    return result, diagnostic
+
+
+def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, input_details: dict[str, Any], *, draft: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
     section_id = str(section.get("id", "unnamed"))
     x_m = _finite_number(section.get("x_m"), "x_m")
     calibration = section.get("calibration")
@@ -603,6 +979,8 @@ def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, i
         raise DrawingError("invalid_view", "Section ROI falls outside the drawing or has no area.")
     if not left <= centre < right:
         raise DrawingError("invalid_calibration", "The declared centreline lies outside this panel.")
+    if drawn_left_of_centreline(section):
+        return _extract_mirrored(image, section, source_file, input_details, draft)
     py_top = baseline - z_max * ppm
     py_bottom = baseline - z_min * ppm
     if py_top < top - .51 or py_bottom > bottom - .49:
@@ -633,19 +1011,36 @@ def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, i
     diagnostic.update(trace_diag)
     diagnostic.update(_candidate_evidence(mask, ink, rows, xs, centre - trace_left,
                                           (trace_left, trace_top), diagnostic["median_stroke_width_px"], selection))
+    # Noise removal keeps the bounded budget, but removed specks could have
+    # been a faint competitor. Only an explicit selection or a draft accepts it.
+    complexity_reduced = "complexity_reduction" in diagnostic or "evidence_complexity_reduction" in diagnostic
+    if complexity_reduced and selection is None and not draft:
+        raise DrawingError("resource_limit", "Contour candidate complexity exceeds the bounded evidence budget; select a source-pixel corridor, a smaller panel, or use draft mode.", diagnostic)
+    identity = _stroke_identity(mask, ink, rows, xs, (trace_left, trace_top))
+    diagnostic["stroke_identity"] = identity
+    if identity["ruler_continuations"]:
+        raise DrawingError("stroke_identity_unresolved", "The trace follows a sustained grid or buttock ruler. The calibrated range may extend beyond the local hull stroke; supply source-supported local endpoints or a separate view. A corridor cannot establish whole-stroke identity.", diagnostic)
     coverage = len(rows) / mask.shape[0]
     allowed_gap = max(3, int(math.ceil(mask.shape[0] * .025)))
-    if diagnostic["max_missing_run_px"] > allowed_gap:
+    if diagnostic["max_missing_run_px"] > allowed_gap and not draft:
         raise DrawingError("missing_curve_segment", f"A curve segment is missing for {diagnostic['max_missing_run_px']} pixels (limit {allowed_gap}); long gaps are not filled.", diagnostic)
-    if coverage < .9:
+    if coverage < .9 and not draft:
         raise DrawingError("missing_curve_segment", f"Only {coverage:.1%} of calibrated rows have source evidence; at least 90% is required.", diagnostic)
     if diagnostic["unresolved_candidate_count"]:
         raise DrawingError("ambiguous_curve", "Multiple sustained source strokes remain plausible across contrast bands. Supply an explicit source-pixel contour selection or separate the views; darkness is not contour identity.", diagnostic)
-    if diagnostic["long_component_support_fraction"] < .65:
+    if diagnostic["long_component_support_fraction"] < .65 and not draft:
         raise DrawingError("unreliable_curve", "Most trace points lack sustained connected ink support; the panel may contain noise or fragmented marks.", diagnostic)
     sample_count = section.get("sample_count", 129)
     if not isinstance(sample_count, int) or isinstance(sample_count, bool) or not 65 <= sample_count <= 1025:
         raise DrawingError("invalid_view", "sample_count must be an integer between 65 and 1025.")
+    # Boundary ink is classified in the unclipped source: a selection corridor
+    # must not hide the boundary-row run or create one.
+    unclipped_mask, _ = _eligible_trace_mask(mask, None, ink)
+    boundary_end = _lower_boundary_run_end(unclipped_mask, rows, xs)
+    diagnostic["lower_boundary_run_end"] = boundary_end[1] if boundary_end else None
+    if boundary_end is not None:
+        rows = np.append(rows, float(mask.shape[0] - 1))
+        xs = np.append(xs, boundary_end[0])
     z_values, measured_x, sampling = _bounded_source_samples(rows, xs, baseline=baseline,
         trace_top=trace_top, ppm=ppm, z_min=z_min, z_max=z_max, minimum_samples=sample_count,
         centre_local=centre - trace_left)
@@ -659,11 +1054,16 @@ def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, i
     if diagnostic["interpolated_row_count"]:
         warnings.append(f"Interpolated {diagnostic['interpolated_row_count']} unsupported rows across short gaps; longest gap {diagnostic['max_missing_run_px']} pixels.")
     warnings.append("Output samples retain the observed row trace within 0.25 pixel interpolation loss; sample_count is a minimum density. No hull-family shape prior or reference geometry is used.")
+    if complexity_reduced:
+        warnings.append(COMPLEXITY_REDUCTION_WARNING)
     if selection_record is not None:
         warnings.append("Contour identity is constrained by an explicit caller-supplied source-pixel selection; excluded candidate strokes remain in diagnostics.")
     else:
         warnings.append("One sustained candidate was detected in the declared view; this is not proof of semantic identity or absence of undetectably faint features.")
     contrast = min(1.0, diagnostic["mean_trace_contrast"] / .7)
+    if draft and (diagnostic["long_component_support_fraction"] < .65 or coverage < .9
+                  or diagnostic["max_missing_run_px"] > allowed_gap):
+        warnings.append("Draft uses unreliable or fragmented measured curve as is; re-trace this section or accept the draft.")
     confidence = float(np.clip(coverage * (.65 + .2 * contrast + .15 * diagnostic["long_component_support_fraction"]) * (1 - .25 * diagnostic["alternative_contour_span_fraction"]), 0, 1))
     diagnostic["measurement_uncertainty_m"] = float(max(.75, diagnostic["median_stroke_width_px"] / 2) / ppm)
     diagnostic["coverage"] = coverage
@@ -685,6 +1085,130 @@ def _extract_one(image: np.ndarray, section: dict[str, Any], source_file: str, i
                            "uncertainty_basis": "Half detected stroke width or 0.75 pixel; excludes calibration error, scan distortion, and as-built uncertainty"},
               "warnings": warnings}
     return result, diagnostic
+
+
+# A multi-piece station keeps all its observed samples within the per-section
+# sample bound of the run record and the audit contract.
+MAX_PIECE_SAMPLES = 1025
+PIECE_READING = "explicit_piece_corridors_to_outline_regions_v1"
+
+
+def _trace_piece(image, section, selection, low, high, source_file, input_details):
+    """Trace one curve of a piece in its own corridor and height interval."""
+    piece_view = {key: value for key, value in section.items() if key not in ("pieces", "contour_selection")}
+    piece_view.update(z_min_m=low, z_max_m=high, contour_selection=selection)
+    result, diagnostic = _extract_one(image, piece_view, source_file, input_details)
+    points = np.asarray(result["points_yz_m"], dtype=float)
+    return points[np.argsort(points[:, 1], kind="stable")], result, diagnostic
+
+
+def extract_pieces(image: np.ndarray, section: dict[str, Any], source_file: str,
+                   input_details: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Read a multi-piece station into outline rings and one-interval-per-height regions.
+
+    Each declared piece is traced with the same engine as a single section, in
+    its own explicit corridor and height interval; ``section_regions``
+    decomposes the closed rings into regions for ``geometry.build_region_hull``.
+    Overlapping pieces are refused, not merged.
+    """
+    from .errors import GeometryError
+    from .section_regions import decompose_outline, piece_ring
+
+    section_id = str(section.get("id", "unnamed"))
+    pieces = section.get("pieces")
+    if not isinstance(pieces, list) or not 1 <= len(pieces) <= 8:
+        raise DrawingError("invalid_pieces", "pieces must list 1..8 declared piece corridors.")
+    records, rings, diagnostics = [], [], []
+    for index, piece in enumerate(pieces):
+        try:
+            low, high = _finite_number(piece.get("z_min_m"), "z_min_m"), _finite_number(piece.get("z_max_m"), "z_max_m")
+            outer, outer_result, outer_diag = _trace_piece(image, section, piece.get("contour_selection"), low, high,
+                                                           source_file, input_details)
+            inner = inner_result = None
+            if "inner_selection" in piece:
+                inner, inner_result, inner_diag = _trace_piece(image, section, piece["inner_selection"], low, high,
+                                                               source_file, input_details)
+                diagnostics.append({"piece": index, "outer": outer_diag, "inner": inner_diag})
+            else:
+                diagnostics.append({"piece": index, "outer": outer_diag})
+            rings.append(piece_ring(outer, inner, section_id=section_id))
+        except (DrawingError, GeometryError, AttributeError) as exc:
+            if isinstance(exc, DrawingError):
+                kind = exc.kind
+            else:
+                kind = "invalid_outline" if isinstance(exc, GeometryError) else "invalid_pieces"
+            raise DrawingError(kind, f"Piece {index}: {exc}", {"pieces": diagnostics,
+                               **(exc.diagnostics if isinstance(exc, DrawingError) else {})}) from None
+        record = {"z_range_m": [low, high], "points_yz_m": outer.tolist(),
+                  "evidence": {"contour_selection": outer_result["evidence"]["contour_selection"],
+                               "measurement_uncertainty_m": outer_result["evidence"]["measurement_uncertainty_m"]}}
+        if inner is not None:
+            record["inner_points_yz_m"] = inner.tolist()
+            record["evidence"]["inner_selection"] = inner_result["evidence"]["contour_selection"]
+            record["evidence"]["measurement_uncertainty_m"] = max(record["evidence"]["measurement_uncertainty_m"],
+                                                                  inner_result["evidence"]["measurement_uncertainty_m"])
+        records.append((record, outer_result, inner_result))
+    samples = sum(len(r["points_yz_m"]) + len(r.get("inner_points_yz_m", [])) for r, _, _ in records)
+    if samples > MAX_PIECE_SAMPLES:
+        raise DrawingError("input_limit", f"The pieces give {samples} samples; at most {MAX_PIECE_SAMPLES} per station. Lower sample_count.")
+    try:
+        regions = decompose_outline([ring.tolist() for ring in rings], section_id=section_id)
+    except GeometryError as exc:
+        raise DrawingError("invalid_outline", str(exc), {"pieces": diagnostics}) from None
+    results = [result for _, outer_result, inner_result in records for result in (outer_result, inner_result) if result]
+    first = results[0]
+    uncertainty = max(r["evidence"]["measurement_uncertainty_m"] for r in results)
+    coverage = min(r["coverage"] for r in results)
+    result = {"id": section_id, "x_m": first["x_m"],
+              "pieces": [record for record, _, _ in records],
+              "outline_rings_yz_m": [ring.tolist() for ring in rings],
+              "regions": [{"kind": region["kind"], "rows_m": region["rows_m"]} for region in regions],
+              "confidence": min(r["confidence"] for r in results), "coverage": coverage,
+              "evidence": {"roi_px": list(section["roi_px"]), "calibration": dict(section["calibration"]),
+                           "source_file": source_file, "input_form": input_details["input_form"],
+                           "human_assistance": section.get("evidence", "Caller-supplied panel and coordinate calibration"),
+                           "reading": PIECE_READING, "piece_count": len(records),
+                           "region_count": len(regions), "region_kinds": [region["kind"] for region in regions],
+                           "identity_status": "explicit_supplied_piece_selections",
+                           "measurement_uncertainty_m": uncertainty,
+                           "uncertainty_basis": "Largest piece uncertainty: half detected stroke width or 0.75 pixel; excludes calibration error, scan distortion, and as-built uncertainty"},
+              "warnings": ["Each piece is traced in an explicit caller-supplied corridor and height interval; "
+                           "which drawn curves form the station is caller evidence, not proof of contour identity.",
+                           "A piece without an inner curve is closed horizontally to the centreline at its ends; "
+                           "an offset piece holds material only between its inner and outer curves."]}
+    return result, {"pieces": diagnostics, "coverage": coverage, "measurement_uncertainty_m": uncertainty,
+                    "identity_status": "explicit_supplied_piece_selections", "region_count": len(regions)}
+
+
+def authored_section(section: dict[str, Any], source_file: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """A model-authored draft section (propose_section): its curve, not traced ink.
+
+    The schema accepts ``authored`` only in a draft specification. The curve
+    was faired and clamped by section_authoring when the model proposed it.
+    """
+    authored = section["authored"]
+    result = {"id": str(section["id"]), "x_m": float(section["x_m"]),
+              "points_yz_m": [[float(y), float(z)] for y, z in authored["points_yz_m"]],
+              "confidence": 0.0, "coverage": 0.0, "source_label": authored["source_label"],
+              "evidence": {"roi_px": list(section["roi_px"]), "calibration": dict(section["calibration"]),
+                           "source_file": source_file, "identity_status": "model_authored",
+                           "authored_basis": authored["basis"],
+                           "human_assistance": section.get("evidence", "Model-authored draft section.")},
+              "warnings": [f"Model-authored section ({authored['source_label']}); not measured from source ink. "
+                           "Basis: " + authored["basis"]]}
+    return result, {"status": "model_authored", "source_label": authored["source_label"]}
+
+
+def _section_record(section: dict, source_file: str, input_details: dict, image) -> dict:
+    """Where one section was read (docs/SOURCE_RECORD.md): its region on the rendered page."""
+    from . import source_record
+
+    place = {"page": int(input_details.get("page_index", 0)), "page_px": [int(image.shape[1]), int(image.shape[0])]}
+    if "authored" in section:
+        authored = section["authored"]
+        return source_record.authored_section(source_file, section["roi_px"], label=authored["source_label"],
+                                              basis=authored["basis"], **place)
+    return source_record.traced_section(source_file, section["roi_px"], **place)
 
 
 def extract_sections(spec: dict, base_dir: Path) -> dict:
@@ -728,8 +1252,18 @@ def extract_sections(spec: dict, base_dir: Path) -> dict:
             output["gaps"].append(_gap(section_id, "invalid_view", "Each section requires a unique nonempty id."))
             continue
         seen.add(section_id)
+        if "authored" in section:
+            result, diagnostic = authored_section(section, source["file"])
+            result["source_record"] = _section_record(section, source["file"], input_details, image)
+            output["sections"].append(result)
+            output["diagnostics"]["sections"][section_id] = diagnostic
+            continue
         try:
-            result, diagnostic = _extract_one(image, section, source["file"], input_details)
+            extract = extract_pieces if "pieces" in section else _extract_one
+            from .draft import check_draft
+            options = {"draft": True} if extract is _extract_one and check_draft(spec.get("draft")) else {}
+            result, diagnostic = extract(image, section, source["file"], input_details, **options)
+            result["source_record"] = _section_record(section, source["file"], input_details, image)
             output["sections"].append(result)
             output["diagnostics"]["sections"][section_id] = diagnostic
         except DrawingError as exc:

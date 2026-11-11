@@ -1,0 +1,2396 @@
+{
+  "implementation_commit": "4232502",
+  "saved_diagnosis_scores": [
+    {
+      "truth_cells": 57,
+      "cells_given": 34,
+      "coverage": 0.5964912280701754,
+      "extra_cells": 1,
+      "rms_m": 0.13469565346898643,
+      "max_abs_m": 0.6371791158495798,
+      "within_0_05": 0.7941176470588235,
+      "within_0_15": 0.9117647058823529,
+      "identity_errors": [
+        6,
+        10,
+        11
+      ],
+      "fairness_flags": 0
+    },
+    {
+      "truth_cells": 57,
+      "cells_given": 34,
+      "coverage": 0.5964912280701754,
+      "extra_cells": 1,
+      "rms_m": 0.12877724869004584,
+      "max_abs_m": 0.6371791158495798,
+      "within_0_05": 0.9117647058823529,
+      "within_0_15": 0.9411764705882353,
+      "identity_errors": [
+        6
+      ],
+      "fairness_flags": 0
+    }
+  ],
+  "sides": {
+    "aft": {
+      "tolerance": 11.969665868242846,
+      "spacing": 300.0,
+      "fit_rows": 30.0,
+      "pairs": [
+        {
+          "lower": 7,
+          "upper": 0,
+          "searched": false,
+          "lower_end_y_x": [
+            5301.0,
+            1876.5
+          ],
+          "upper_end_y_x": [
+            5046.0,
+            1852.5
+          ],
+          "dx": -24.0,
+          "dy": -255.0,
+          "gap": 256.12692166189794,
+          "angle": 68.64314363343054,
+          "slopes": [
+            2.9489068791767976,
+            0.04584017515051033
+          ],
+          "intersection_y_x": [
+            5299.066089470002,
+            1864.1248138987976
+          ],
+          "intersection_reach": 253.33294680680768,
+          "level_step": 2,
+          "local_rejections": [
+            "adjacent levels",
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "adjacent levels"
+        },
+        {
+          "lower": 7,
+          "upper": 1,
+          "searched": false,
+          "lower_end_y_x": [
+            5301.0,
+            1876.5
+          ],
+          "upper_end_y_x": [
+            5046.0,
+            1852.5
+          ],
+          "dx": -24.0,
+          "dy": -255.0,
+          "gap": 256.12692166189794,
+          "angle": 68.64314363343054,
+          "slopes": [
+            2.9489068791767976,
+            0.04584017515051033
+          ],
+          "intersection_y_x": [
+            5299.066089470002,
+            1864.1248138987976
+          ],
+          "intersection_reach": 253.33294680680768,
+          "level_step": 2,
+          "local_rejections": [
+            "adjacent levels",
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "adjacent levels"
+        },
+        {
+          "lower": 7,
+          "upper": 2,
+          "searched": false,
+          "lower_end_y_x": [
+            5301.0,
+            1876.5
+          ],
+          "upper_end_y_x": [
+            5046.0,
+            1861.5
+          ],
+          "dx": -15.0,
+          "dy": -255.0,
+          "gap": 255.44079548889601,
+          "angle": 69.14404865263633,
+          "slopes": [
+            2.9489068791767976,
+            0.037082649151599964
+          ],
+          "intersection_y_x": [
+            5301.358460753931,
+            1870.8848033476024
+          ],
+          "intersection_reach": 255.530855304188,
+          "level_step": 2,
+          "local_rejections": [
+            "adjacent levels",
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "adjacent levels"
+        },
+        {
+          "lower": 7,
+          "upper": 3,
+          "searched": false,
+          "lower_end_y_x": [
+            5301.0,
+            1876.5
+          ],
+          "upper_end_y_x": [
+            5046.0,
+            1861.5
+          ],
+          "dx": -15.0,
+          "dy": -255.0,
+          "gap": 255.44079548889601,
+          "angle": 69.14404865263633,
+          "slopes": [
+            2.9489068791767976,
+            0.037082649151599964
+          ],
+          "intersection_y_x": [
+            5301.358460753931,
+            1870.8848033476024
+          ],
+          "intersection_reach": 255.530855304188,
+          "level_step": 2,
+          "local_rejections": [
+            "adjacent levels",
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "adjacent levels"
+        },
+        {
+          "lower": 7,
+          "upper": 4,
+          "searched": true,
+          "lower_end_y_x": [
+            5301.0,
+            1876.5
+          ],
+          "upper_end_y_x": [
+            5357.0,
+            1911.0
+          ],
+          "dx": 34.5,
+          "dy": 56.0,
+          "gap": 65.77423507727019,
+          "angle": 64.55655419012902,
+          "slopes": [
+            2.9489068791767976,
+            0.11767119200356875
+          ],
+          "intersection_y_x": [
+            5313.082974019801,
+            1905.4593011723282
+          ],
+          "intersection_reach": 44.265161407639745,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 7,
+          "upper": 5,
+          "searched": true,
+          "lower_end_y_x": [
+            5301.0,
+            1876.5
+          ],
+          "upper_end_y_x": [
+            5357.0,
+            1911.0
+          ],
+          "dx": 34.5,
+          "dy": 56.0,
+          "gap": 65.77423507727019,
+          "angle": 64.55655419012902,
+          "slopes": [
+            2.9489068791767976,
+            0.11767119200356875
+          ],
+          "intersection_y_x": [
+            5313.082974019801,
+            1905.4593011723282
+          ],
+          "intersection_reach": 44.265161407639745,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 7,
+          "upper": 6,
+          "searched": true,
+          "lower_end_y_x": [
+            5301.0,
+            1876.5
+          ],
+          "upper_end_y_x": [
+            5368.0,
+            1960.0
+          ],
+          "dx": 83.5,
+          "dy": 67.0,
+          "gap": 107.05722768687782,
+          "angle": 59.0373599574214,
+          "slopes": [
+            2.9489068791767976,
+            0.21676300578033617
+          ],
+          "intersection_y_x": [
+            5328.749919557437,
+            1951.6596646439502
+          ],
+          "intersection_reach": 80.11886934321595,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 7,
+          "upper": 10,
+          "searched": true,
+          "lower_end_y_x": [
+            5301.0,
+            1876.5
+          ],
+          "upper_end_y_x": [
+            5364.0,
+            1893.0
+          ],
+          "dx": 16.5,
+          "dy": 63.0,
+          "gap": 65.12488003827723,
+          "angle": 73.4831673748419,
+          "slopes": [
+            2.9489068791767976,
+            -0.03868552412642983
+          ],
+          "intersection_y_x": [
+            5309.699195945883,
+            1895.4808547325429
+          ],
+          "intersection_reach": 54.35744623441768,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 7,
+          "upper": 11,
+          "searched": true,
+          "lower_end_y_x": [
+            5301.0,
+            1876.5
+          ],
+          "upper_end_y_x": [
+            5364.0,
+            1941.0
+          ],
+          "dx": 64.5,
+          "dy": 63.0,
+          "gap": 90.1623535628923,
+          "angle": 61.98455857564327,
+          "slopes": [
+            2.9489068791767976,
+            0.16345514950166865
+          ],
+          "intersection_y_x": [
+            5322.898964980402,
+            1934.4057444419796
+          ],
+          "intersection_reach": 61.908318557304575,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 8,
+          "upper": 0,
+          "searched": false,
+          "lower_end_y_x": [
+            5301.0,
+            1876.5
+          ],
+          "upper_end_y_x": [
+            5046.0,
+            1852.5
+          ],
+          "dx": -24.0,
+          "dy": -255.0,
+          "gap": 256.12692166189794,
+          "angle": 68.64314363343054,
+          "slopes": [
+            2.9489068791767976,
+            0.04584017515051033
+          ],
+          "intersection_y_x": [
+            5299.066089470002,
+            1864.1248138987976
+          ],
+          "intersection_reach": 253.33294680680768,
+          "level_step": 2,
+          "local_rejections": [
+            "adjacent levels",
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "adjacent levels"
+        },
+        {
+          "lower": 8,
+          "upper": 1,
+          "searched": false,
+          "lower_end_y_x": [
+            5301.0,
+            1876.5
+          ],
+          "upper_end_y_x": [
+            5046.0,
+            1852.5
+          ],
+          "dx": -24.0,
+          "dy": -255.0,
+          "gap": 256.12692166189794,
+          "angle": 68.64314363343054,
+          "slopes": [
+            2.9489068791767976,
+            0.04584017515051033
+          ],
+          "intersection_y_x": [
+            5299.066089470002,
+            1864.1248138987976
+          ],
+          "intersection_reach": 253.33294680680768,
+          "level_step": 2,
+          "local_rejections": [
+            "adjacent levels",
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "adjacent levels"
+        },
+        {
+          "lower": 8,
+          "upper": 2,
+          "searched": false,
+          "lower_end_y_x": [
+            5301.0,
+            1876.5
+          ],
+          "upper_end_y_x": [
+            5046.0,
+            1861.5
+          ],
+          "dx": -15.0,
+          "dy": -255.0,
+          "gap": 255.44079548889601,
+          "angle": 69.14404865263633,
+          "slopes": [
+            2.9489068791767976,
+            0.037082649151599964
+          ],
+          "intersection_y_x": [
+            5301.358460753931,
+            1870.8848033476024
+          ],
+          "intersection_reach": 255.530855304188,
+          "level_step": 2,
+          "local_rejections": [
+            "adjacent levels",
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "adjacent levels"
+        },
+        {
+          "lower": 8,
+          "upper": 3,
+          "searched": false,
+          "lower_end_y_x": [
+            5301.0,
+            1876.5
+          ],
+          "upper_end_y_x": [
+            5046.0,
+            1861.5
+          ],
+          "dx": -15.0,
+          "dy": -255.0,
+          "gap": 255.44079548889601,
+          "angle": 69.14404865263633,
+          "slopes": [
+            2.9489068791767976,
+            0.037082649151599964
+          ],
+          "intersection_y_x": [
+            5301.358460753931,
+            1870.8848033476024
+          ],
+          "intersection_reach": 255.530855304188,
+          "level_step": 2,
+          "local_rejections": [
+            "adjacent levels",
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "adjacent levels"
+        },
+        {
+          "lower": 8,
+          "upper": 4,
+          "searched": true,
+          "lower_end_y_x": [
+            5301.0,
+            1876.5
+          ],
+          "upper_end_y_x": [
+            5357.0,
+            1911.0
+          ],
+          "dx": 34.5,
+          "dy": 56.0,
+          "gap": 65.77423507727019,
+          "angle": 64.55655419012902,
+          "slopes": [
+            2.9489068791767976,
+            0.11767119200356875
+          ],
+          "intersection_y_x": [
+            5313.082974019801,
+            1905.4593011723282
+          ],
+          "intersection_reach": 44.265161407639745,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 8,
+          "upper": 5,
+          "searched": true,
+          "lower_end_y_x": [
+            5301.0,
+            1876.5
+          ],
+          "upper_end_y_x": [
+            5357.0,
+            1911.0
+          ],
+          "dx": 34.5,
+          "dy": 56.0,
+          "gap": 65.77423507727019,
+          "angle": 64.55655419012902,
+          "slopes": [
+            2.9489068791767976,
+            0.11767119200356875
+          ],
+          "intersection_y_x": [
+            5313.082974019801,
+            1905.4593011723282
+          ],
+          "intersection_reach": 44.265161407639745,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 8,
+          "upper": 6,
+          "searched": true,
+          "lower_end_y_x": [
+            5301.0,
+            1876.5
+          ],
+          "upper_end_y_x": [
+            5368.0,
+            1960.0
+          ],
+          "dx": 83.5,
+          "dy": 67.0,
+          "gap": 107.05722768687782,
+          "angle": 59.0373599574214,
+          "slopes": [
+            2.9489068791767976,
+            0.21676300578033617
+          ],
+          "intersection_y_x": [
+            5328.749919557437,
+            1951.6596646439502
+          ],
+          "intersection_reach": 80.11886934321595,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 8,
+          "upper": 10,
+          "searched": true,
+          "lower_end_y_x": [
+            5301.0,
+            1876.5
+          ],
+          "upper_end_y_x": [
+            5364.0,
+            1893.0
+          ],
+          "dx": 16.5,
+          "dy": 63.0,
+          "gap": 65.12488003827723,
+          "angle": 73.4831673748419,
+          "slopes": [
+            2.9489068791767976,
+            -0.03868552412642983
+          ],
+          "intersection_y_x": [
+            5309.699195945883,
+            1895.4808547325429
+          ],
+          "intersection_reach": 54.35744623441768,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 8,
+          "upper": 11,
+          "searched": true,
+          "lower_end_y_x": [
+            5301.0,
+            1876.5
+          ],
+          "upper_end_y_x": [
+            5364.0,
+            1941.0
+          ],
+          "dx": 64.5,
+          "dy": 63.0,
+          "gap": 90.1623535628923,
+          "angle": 61.98455857564327,
+          "slopes": [
+            2.9489068791767976,
+            0.16345514950166865
+          ],
+          "intersection_y_x": [
+            5322.898964980402,
+            1934.4057444419796
+          ],
+          "intersection_reach": 61.908318557304575,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 9,
+          "upper": 0,
+          "searched": true,
+          "lower_end_y_x": [
+            5120.0,
+            1860.5
+          ],
+          "upper_end_y_x": [
+            5046.0,
+            1852.5
+          ],
+          "dx": -8.0,
+          "dy": -74.0,
+          "gap": 74.43117626371358,
+          "angle": 1.990078106063407,
+          "slopes": [
+            0.08071613158570895,
+            0.04584017515051033
+          ],
+          "intersection_y_x": [
+            4993.073597994033,
+            1850.0980644948004
+          ],
+          "intersection_reach": 127.35192102373148,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "angle",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 9,
+          "upper": 1,
+          "searched": true,
+          "lower_end_y_x": [
+            5120.0,
+            1860.5
+          ],
+          "upper_end_y_x": [
+            5046.0,
+            1852.5
+          ],
+          "dx": -8.0,
+          "dy": -74.0,
+          "gap": 74.43117626371358,
+          "angle": 1.990078106063407,
+          "slopes": [
+            0.08071613158570895,
+            0.04584017515051033
+          ],
+          "intersection_y_x": [
+            4993.073597994033,
+            1850.0980644948004
+          ],
+          "intersection_reach": 127.35192102373148,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "angle",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 9,
+          "upper": 2,
+          "searched": true,
+          "lower_end_y_x": [
+            5120.0,
+            1860.5
+          ],
+          "upper_end_y_x": [
+            5046.0,
+            1861.5
+          ],
+          "dx": 1.0,
+          "dy": -74.0,
+          "gap": 74.00675644831355,
+          "angle": 2.490983125269201,
+          "slopes": [
+            0.08071613158570895,
+            0.037082649151599964
+          ],
+          "intersection_y_x": [
+            5207.466741205901,
+            1867.4030496533633
+          ],
+          "intersection_reach": 161.57460973452288,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "angle",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 9,
+          "upper": 3,
+          "searched": true,
+          "lower_end_y_x": [
+            5120.0,
+            1860.5
+          ],
+          "upper_end_y_x": [
+            5046.0,
+            1861.5
+          ],
+          "dx": 1.0,
+          "dy": -74.0,
+          "gap": 74.00675644831355,
+          "angle": 2.490983125269201,
+          "slopes": [
+            0.08071613158570895,
+            0.037082649151599964
+          ],
+          "intersection_y_x": [
+            5207.466741205901,
+            1867.4030496533633
+          ],
+          "intersection_reach": 161.57460973452288,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "angle",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 10,
+          "upper": 0,
+          "searched": true,
+          "lower_end_y_x": [
+            5120.0,
+            1870.0
+          ],
+          "upper_end_y_x": [
+            5046.0,
+            1852.5
+          ],
+          "dx": -17.5,
+          "dy": -74.0,
+          "gap": 76.04110730387873,
+          "angle": 3.613369253458203,
+          "slopes": [
+            0.10930551998697198,
+            0.04584017515051033
+          ],
+          "intersection_y_x": [
+            4898.004700126361,
+            1845.7400895651804
+          ],
+          "intersection_reach": 223.31694163294543,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "angle",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 10,
+          "upper": 1,
+          "searched": true,
+          "lower_end_y_x": [
+            5120.0,
+            1870.0
+          ],
+          "upper_end_y_x": [
+            5046.0,
+            1852.5
+          ],
+          "dx": -17.5,
+          "dy": -74.0,
+          "gap": 76.04110730387873,
+          "angle": 3.613369253458203,
+          "slopes": [
+            0.10930551998697198,
+            0.04584017515051033
+          ],
+          "intersection_y_x": [
+            4898.004700126361,
+            1845.7400895651804
+          ],
+          "intersection_reach": 223.31694163294543,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "angle",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 10,
+          "upper": 2,
+          "searched": true,
+          "lower_end_y_x": [
+            5120.0,
+            1870.0
+          ],
+          "upper_end_y_x": [
+            5046.0,
+            1861.5
+          ],
+          "dx": -8.5,
+          "dy": -74.0,
+          "gap": 74.48657597178165,
+          "angle": 4.114274272663997,
+          "slopes": [
+            0.10930551998697198,
+            0.037082649151599964
+          ],
+          "intersection_y_x": [
+            5039.058187411762,
+            1861.158014338887
+          ],
+          "intersection_reach": 81.42332427198426,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "angle",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 10,
+          "upper": 3,
+          "searched": true,
+          "lower_end_y_x": [
+            5120.0,
+            1870.0
+          ],
+          "upper_end_y_x": [
+            5046.0,
+            1861.5
+          ],
+          "dx": -8.5,
+          "dy": -74.0,
+          "gap": 74.48657597178165,
+          "angle": 4.114274272663997,
+          "slopes": [
+            0.10930551998697198,
+            0.037082649151599964
+          ],
+          "intersection_y_x": [
+            5039.058187411762,
+            1861.158014338887
+          ],
+          "intersection_reach": 81.42332427198426,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "angle",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 12,
+          "upper": 4,
+          "searched": true,
+          "lower_end_y_x": [
+            5476.0,
+            3225.5
+          ],
+          "upper_end_y_x": [
+            5357.0,
+            1911.0
+          ],
+          "dx": -1314.5,
+          "dy": -119.0,
+          "gap": 1319.8754676104863,
+          "angle": 6.711200656450832,
+          "slopes": [
+            -4.2058123430503784e-14,
+            0.11767119200356875
+          ],
+          "intersection_y_x": [
+            16531.12773375313,
+            3225.4999999995375
+          ],
+          "intersection_reach": 11251.17953195262,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "angle",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 12,
+          "upper": 5,
+          "searched": true,
+          "lower_end_y_x": [
+            5476.0,
+            3225.5
+          ],
+          "upper_end_y_x": [
+            5357.0,
+            1911.0
+          ],
+          "dx": -1314.5,
+          "dy": -119.0,
+          "gap": 1319.8754676104863,
+          "angle": 6.711200656450832,
+          "slopes": [
+            -4.2058123430503784e-14,
+            0.11767119200356875
+          ],
+          "intersection_y_x": [
+            16531.12773375313,
+            3225.4999999995375
+          ],
+          "intersection_reach": 11251.17953195262,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "angle",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 12,
+          "upper": 6,
+          "searched": true,
+          "lower_end_y_x": [
+            5476.0,
+            3225.5
+          ],
+          "upper_end_y_x": [
+            5368.0,
+            1960.0
+          ],
+          "dx": -1265.5,
+          "dy": -108.0,
+          "gap": 1270.100094480746,
+          "angle": 12.230394889158454,
+          "slopes": [
+            -4.2058123430503784e-14,
+            0.21676300578033617
+          ],
+          "intersection_y_x": [
+            11205.39999999919,
+            3225.4999999997617
+          ],
+          "intersection_reach": 5973.000000836259,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "angle",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 12,
+          "upper": 10,
+          "searched": true,
+          "lower_end_y_x": [
+            5476.0,
+            3225.5
+          ],
+          "upper_end_y_x": [
+            5364.0,
+            1893.0
+          ],
+          "dx": -1332.5,
+          "dy": -112.0,
+          "gap": 1337.198657642162,
+          "angle": 2.2154125282620334,
+          "slopes": [
+            -4.2058123430503784e-14,
+            -0.03868552412642983
+          ],
+          "intersection_y_x": [
+            -29070.580645222122,
+            3225.5000000014556
+          ],
+          "intersection_reach": 34546.58064522212,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "angle",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 12,
+          "upper": 11,
+          "searched": true,
+          "lower_end_y_x": [
+            5476.0,
+            3225.5
+          ],
+          "upper_end_y_x": [
+            5364.0,
+            1941.0
+          ],
+          "dx": -1284.5,
+          "dy": -112.0,
+          "gap": 1289.3735882202643,
+          "angle": 9.283196270936585,
+          "slopes": [
+            -4.2058123430503784e-14,
+            0.16345514950166865
+          ],
+          "intersection_y_x": [
+            13221.666666664329,
+            3225.4999999996767
+          ],
+          "intersection_reach": 7961.963683313738,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "angle",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        }
+      ],
+      "series": [],
+      "chains": [
+        {
+          "index": 0,
+          "nodes": {
+            "1-0-0": 0,
+            "2-0-0": 0,
+            "3-0-0": 0
+          },
+          "crossings": {
+            "1-0-0": {
+              "offset_px": 1418.305679584001,
+              "kind": "double",
+              "slope": 0.017822041221908776,
+              "notes": [
+                "width 10.0 px, two curves?"
+              ]
+            },
+            "2-0-0": {
+              "offset_px": 1420.0039383596697,
+              "kind": "curve",
+              "slope": 0.04759744093034858,
+              "notes": []
+            },
+            "3-0-0": {
+              "offset_px": 1447.9246679169107,
+              "kind": "curve",
+              "slope": 0.10237875697555829,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 1,
+          "nodes": {
+            "1-0-0": 0,
+            "2-0-0": 0,
+            "3-0-0": 1
+          },
+          "crossings": {
+            "1-0-0": {
+              "offset_px": 1418.305679584001,
+              "kind": "double",
+              "slope": 0.017822041221908776,
+              "notes": [
+                "width 10.0 px, two curves?"
+              ]
+            },
+            "2-0-0": {
+              "offset_px": 1420.0039383596697,
+              "kind": "curve",
+              "slope": 0.04759744093034858,
+              "notes": []
+            },
+            "3-0-0": {
+              "offset_px": 1421.0000000000002,
+              "kind": "curve",
+              "slope": 2.2609106707490617e-14,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 2,
+          "nodes": {
+            "1-0-0": 1,
+            "2-0-0": 1,
+            "3-0-0": 2
+          },
+          "crossings": {
+            "1-0-0": {
+              "offset_px": 1406.1106006155326,
+              "kind": "curve",
+              "slope": -0.06785566629777415,
+              "notes": []
+            },
+            "2-0-0": {
+              "offset_px": 1403.0672127507676,
+              "kind": "curve",
+              "slope": -0.07447003473641196,
+              "notes": []
+            },
+            "3-0-0": {
+              "offset_px": 1374.8839875759945,
+              "kind": "curve",
+              "slope": -0.11044467764391883,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 3,
+          "nodes": {
+            "1-0-0": 1,
+            "2-0-0": 2,
+            "3-0-0": 3
+          },
+          "crossings": {
+            "1-0-0": {
+              "offset_px": 1406.1106006155326,
+              "kind": "curve",
+              "slope": -0.06785566629777415,
+              "notes": []
+            },
+            "2-0-0": {
+              "offset_px": 1364.3524833874972,
+              "kind": "curve",
+              "slope": -0.1982120856866719,
+              "notes": []
+            },
+            "3-0-0": {
+              "offset_px": 1294.3929772944084,
+              "kind": "curve",
+              "slope": -0.274122658937798,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 4,
+          "nodes": {
+            "0-0-0": 2,
+            "1-0-0": 2,
+            "2-0-0": 2,
+            "3-0-0": 3
+          },
+          "crossings": {
+            "0-0-0": {
+              "offset_px": 1378.9450689202426,
+              "kind": "curve",
+              "slope": 0.1323571405849135,
+              "notes": []
+            },
+            "1-0-0": {
+              "offset_px": 1390.1165667004211,
+              "kind": "curve",
+              "slope": 0.1081872005785018,
+              "notes": []
+            },
+            "2-0-0": {
+              "offset_px": 1364.3524833874972,
+              "kind": "curve",
+              "slope": -0.1982120856866719,
+              "notes": []
+            },
+            "3-0-0": {
+              "offset_px": 1294.3929772944084,
+              "kind": "curve",
+              "slope": -0.274122658937798,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 5,
+          "nodes": {
+            "0-0-0": 2,
+            "1-0-0": 3,
+            "2-0-0": 3,
+            "3-0-0": 4
+          },
+          "crossings": {
+            "0-0-0": {
+              "offset_px": 1378.9450689202426,
+              "kind": "curve",
+              "slope": 0.1323571405849135,
+              "notes": []
+            },
+            "1-0-0": {
+              "offset_px": 1373.089581662258,
+              "kind": "curve",
+              "slope": -0.12828798698363447,
+              "notes": []
+            },
+            "2-0-0": {
+              "offset_px": 1304.7504061918164,
+              "kind": "curve",
+              "slope": -0.3490172263576253,
+              "notes": []
+            },
+            "3-0-0": {
+              "offset_px": 1176.7524364851433,
+              "kind": "curve",
+              "slope": -0.49583369244476905,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 6,
+          "nodes": {
+            "0-0-0": 4,
+            "1-0-0": 5,
+            "2-0-0": 5,
+            "3-0-0": 6
+          },
+          "crossings": {
+            "0-0-0": {
+              "offset_px": 1331.2758890221835,
+              "kind": "curve",
+              "slope": 0.07338796582213464,
+              "notes": []
+            },
+            "1-0-0": {
+              "offset_px": 1304.1320593631308,
+              "kind": "curve",
+              "slope": -0.2530620084967826,
+              "notes": []
+            },
+            "2-0-0": {
+              "offset_px": 1177.0389689160074,
+              "kind": "double",
+              "slope": -0.6078159381762827,
+              "notes": [
+                "width 9.4 px, two curves?"
+              ]
+            },
+            "3-0-0": {
+              "offset_px": 918.9689379867668,
+              "kind": "curve",
+              "slope": -1.1936007791910237,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 7,
+          "nodes": {
+            "-1-0-0": 0
+          },
+          "crossings": {
+            "-1-0-0": {
+              "offset_px": 715.1714048006143,
+              "kind": "double",
+              "slope": 2.2654845636492986,
+              "notes": [
+                "width 9.3 px, two curves?"
+              ]
+            }
+          }
+        },
+        {
+          "index": 8,
+          "nodes": {
+            "-1-0-0": 1
+          },
+          "crossings": {
+            "-1-0-0": {
+              "offset_px": 677.1114727740628,
+              "kind": "curve",
+              "slope": 3.561951418801713,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 9,
+          "nodes": {
+            "-1-0-0": 2,
+            "0-0-0": 0
+          },
+          "crossings": {
+            "-1-0-0": {
+              "offset_px": 557.4116272047972,
+              "kind": "curve",
+              "slope": 5.072666795282527,
+              "notes": []
+            },
+            "0-0-0": {
+              "offset_px": 1398.7927876860238,
+              "kind": "double",
+              "slope": 0.12336709701074228,
+              "notes": [
+                "width 10.9 px, two curves?"
+              ]
+            }
+          }
+        },
+        {
+          "index": 10,
+          "nodes": {
+            "0-0-0": 1
+          },
+          "crossings": {
+            "0-0-0": {
+              "offset_px": 1387.7049055413854,
+              "kind": "curve",
+              "slope": 0.11806533443404162,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 11,
+          "nodes": {
+            "0-0-0": 3,
+            "1-0-0": 4,
+            "2-0-0": 4,
+            "3-0-0": 5
+          },
+          "crossings": {
+            "0-0-0": {
+              "offset_px": 1350.1527345033858,
+              "kind": "double",
+              "slope": 0.11897719295574309,
+              "notes": [
+                "width 9.9 px, two curves?"
+              ]
+            },
+            "1-0-0": {
+              "offset_px": 1337.1211715571412,
+              "kind": "curve",
+              "slope": -0.19135858266292594,
+              "notes": []
+            },
+            "2-0-0": {
+              "offset_px": 1228.534274789003,
+              "kind": "curve",
+              "slope": -0.5434905064450154,
+              "notes": []
+            },
+            "3-0-0": {
+              "offset_px": 1017.3344456145942,
+              "kind": "curve",
+              "slope": -0.8315763891654401,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 12,
+          "nodes": {
+            "-1-0-0": 3
+          },
+          "crossings": {
+            "-1-0-0": {
+              "offset_px": 45.94017650693104,
+              "kind": "curve",
+              "slope": 0.08918454760917953,
+              "notes": []
+            }
+          }
+        }
+      ]
+    },
+    "fore": {
+      "tolerance": 11.737508278433081,
+      "spacing": 300.0,
+      "fit_rows": 30.0,
+      "pairs": [
+        {
+          "lower": 3,
+          "upper": 2,
+          "searched": true,
+          "lower_end_y_x": [
+            5074.0,
+            3270.0
+          ],
+          "upper_end_y_x": [
+            5200.0,
+            4283.5
+          ],
+          "dx": 1013.5,
+          "dy": 126.0,
+          "gap": 1021.3022324463998,
+          "angle": 93.35158952176822,
+          "slopes": [
+            10.048827690528531,
+            -0.15900383141765403
+          ],
+          "intersection_y_x": [
+            5176.632686385139,
+            4287.306214890596
+          ],
+          "intersection_reach": 1022.470245615813,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 3,
+          "upper": 11,
+          "searched": true,
+          "lower_end_y_x": [
+            5074.0,
+            3270.0
+          ],
+          "upper_end_y_x": [
+            5942.0,
+            3313.5
+          ],
+          "dx": 43.5,
+          "dy": 868.0,
+          "gap": 869.0893222218301,
+          "angle": 84.31697280863851,
+          "slopes": [
+            10.048827690528531,
+            -4.76527820579242e-15
+          ],
+          "intersection_y_x": [
+            5079.725241568621,
+            3313.5
+          ],
+          "intersection_reach": 862.2747584313793,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 4,
+          "upper": 0,
+          "searched": true,
+          "lower_end_y_x": [
+            5290.0,
+            4554.0
+          ],
+          "upper_end_y_x": [
+            5283.0,
+            4555.5
+          ],
+          "dx": 1.5,
+          "dy": -7.0,
+          "gap": 7.158910531638177,
+          "angle": 66.30156667419237,
+          "slopes": [
+            -3.4805692391898893,
+            -0.13464696223311412
+          ],
+          "intersection_y_x": [
+            5294.468346147554,
+            4554.019861438261
+          ],
+          "intersection_reach": 11.563467192934402,
+          "level_step": 1,
+          "local_rejections": [],
+          "first_rejection": "series"
+        },
+        {
+          "lower": 4,
+          "upper": 1,
+          "searched": true,
+          "lower_end_y_x": [
+            5290.0,
+            4554.0
+          ],
+          "upper_end_y_x": [
+            5245.0,
+            4453.5
+          ],
+          "dx": -100.5,
+          "dy": -45.0,
+          "gap": 110.11471291339772,
+          "angle": 64.76125242665687,
+          "slopes": [
+            -3.4805692391898893,
+            -0.16212399178469403
+          ],
+          "intersection_y_x": [
+            5327.310719319714,
+            4439.709707633247
+          ],
+          "intersection_reach": 120.22628957691592,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 4,
+          "upper": 2,
+          "searched": false,
+          "lower_end_y_x": [
+            5290.0,
+            4554.0
+          ],
+          "upper_end_y_x": [
+            5200.0,
+            4283.5
+          ],
+          "dx": -270.5,
+          "dy": -90.0,
+          "gap": 285.07937491162,
+          "angle": 64.93553127701077,
+          "slopes": [
+            -3.4805692391898893,
+            -0.15900383141765403
+          ],
+          "intersection_y_x": [
+            5380.406731482247,
+            4254.905360976682
+          ],
+          "intersection_reach": 312.4595656877738,
+          "level_step": 2,
+          "local_rejections": [
+            "adjacent levels",
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "adjacent levels"
+        },
+        {
+          "lower": 4,
+          "upper": 3,
+          "searched": true,
+          "lower_end_y_x": [
+            5290.0,
+            4554.0
+          ],
+          "upper_end_y_x": [
+            5300.0,
+            4567.5
+          ],
+          "dx": 13.5,
+          "dy": 10.0,
+          "gap": 16.80029761641144,
+          "angle": 141.00836569025256,
+          "slopes": [
+            -3.4805692391898893,
+            2.360228281547127
+          ],
+          "intersection_y_x": [
+            5292.827290605855,
+            4559.731668876502
+          ],
+          "intersection_reach": 10.573302629602807,
+          "level_step": 1,
+          "local_rejections": [
+            "gap"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 4,
+          "upper": 10,
+          "searched": true,
+          "lower_end_y_x": [
+            5290.0,
+            4554.0
+          ],
+          "upper_end_y_x": [
+            5942.0,
+            3313.5
+          ],
+          "dx": -1240.5,
+          "dy": 652.0,
+          "gap": 1401.4079527389588,
+          "angle": 73.97014799014049,
+          "slopes": [
+            -3.4805692391898893,
+            -4.76527820579242e-15
+          ],
+          "intersection_y_x": [
+            5650.881270640041,
+            3313.5
+          ],
+          "intersection_reach": 1291.9270650848564,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 5,
+          "upper": 0,
+          "searched": true,
+          "lower_end_y_x": [
+            5290.0,
+            4554.0
+          ],
+          "upper_end_y_x": [
+            5283.0,
+            4555.5
+          ],
+          "dx": 1.5,
+          "dy": -7.0,
+          "gap": 7.158910531638177,
+          "angle": 66.30156667419237,
+          "slopes": [
+            -3.4805692391898893,
+            -0.13464696223311412
+          ],
+          "intersection_y_x": [
+            5294.468346147554,
+            4554.019861438261
+          ],
+          "intersection_reach": 11.563467192934402,
+          "level_step": 1,
+          "local_rejections": [],
+          "first_rejection": "series"
+        },
+        {
+          "lower": 5,
+          "upper": 1,
+          "searched": true,
+          "lower_end_y_x": [
+            5290.0,
+            4554.0
+          ],
+          "upper_end_y_x": [
+            5245.0,
+            4453.5
+          ],
+          "dx": -100.5,
+          "dy": -45.0,
+          "gap": 110.11471291339772,
+          "angle": 64.76125242665687,
+          "slopes": [
+            -3.4805692391898893,
+            -0.16212399178469403
+          ],
+          "intersection_y_x": [
+            5327.310719319714,
+            4439.709707633247
+          ],
+          "intersection_reach": 120.22628957691592,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 5,
+          "upper": 2,
+          "searched": false,
+          "lower_end_y_x": [
+            5290.0,
+            4554.0
+          ],
+          "upper_end_y_x": [
+            5200.0,
+            4283.5
+          ],
+          "dx": -270.5,
+          "dy": -90.0,
+          "gap": 285.07937491162,
+          "angle": 64.93553127701077,
+          "slopes": [
+            -3.4805692391898893,
+            -0.15900383141765403
+          ],
+          "intersection_y_x": [
+            5380.406731482247,
+            4254.905360976682
+          ],
+          "intersection_reach": 312.4595656877738,
+          "level_step": 2,
+          "local_rejections": [
+            "adjacent levels",
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "adjacent levels"
+        },
+        {
+          "lower": 5,
+          "upper": 3,
+          "searched": true,
+          "lower_end_y_x": [
+            5290.0,
+            4554.0
+          ],
+          "upper_end_y_x": [
+            5300.0,
+            4567.5
+          ],
+          "dx": 13.5,
+          "dy": 10.0,
+          "gap": 16.80029761641144,
+          "angle": 141.00836569025256,
+          "slopes": [
+            -3.4805692391898893,
+            2.360228281547127
+          ],
+          "intersection_y_x": [
+            5292.827290605855,
+            4559.731668876502
+          ],
+          "intersection_reach": 10.573302629602807,
+          "level_step": 1,
+          "local_rejections": [
+            "gap"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 5,
+          "upper": 10,
+          "searched": true,
+          "lower_end_y_x": [
+            5290.0,
+            4554.0
+          ],
+          "upper_end_y_x": [
+            5942.0,
+            3313.5
+          ],
+          "dx": -1240.5,
+          "dy": 652.0,
+          "gap": 1401.4079527389588,
+          "angle": 73.97014799014049,
+          "slopes": [
+            -3.4805692391898893,
+            -4.76527820579242e-15
+          ],
+          "intersection_y_x": [
+            5650.881270640041,
+            3313.5
+          ],
+          "intersection_reach": 1291.9270650848564,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 6,
+          "upper": 0,
+          "searched": true,
+          "lower_end_y_x": [
+            5245.0,
+            4471.0
+          ],
+          "upper_end_y_x": [
+            5283.0,
+            4555.5
+          ],
+          "dx": 84.5,
+          "dy": 38.0,
+          "gap": 92.65122773066744,
+          "angle": 63.81032222986678,
+          "slopes": [
+            -2.9850319069068245,
+            -0.13464696223311412
+          ],
+          "intersection_y_x": [
+            5216.118988725256,
+            4564.569364408089
+          ],
+          "intersection_reach": 97.92516922622964,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 6,
+          "upper": 1,
+          "searched": true,
+          "lower_end_y_x": [
+            5245.0,
+            4471.0
+          ],
+          "upper_end_y_x": [
+            5245.0,
+            4453.5
+          ],
+          "dx": -17.5,
+          "dy": 0.0,
+          "gap": 17.5,
+          "angle": 62.27000798233128,
+          "slopes": [
+            -2.9850319069068245,
+            -0.16212399178469403
+          ],
+          "intersection_y_x": [
+            5253.963938957293,
+            4451.600980450157
+          ],
+          "intersection_reach": 21.369935917668442,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 6,
+          "upper": 2,
+          "searched": false,
+          "lower_end_y_x": [
+            5245.0,
+            4471.0
+          ],
+          "upper_end_y_x": [
+            5200.0,
+            4283.5
+          ],
+          "dx": -187.5,
+          "dy": -45.0,
+          "gap": 192.82440198273662,
+          "angle": 62.44428683268518,
+          "slopes": [
+            -2.9850319069068245,
+            -0.15900383141765403
+          ],
+          "intersection_y_x": [
+            5316.451191840049,
+            4265.074536820173
+          ],
+          "intersection_reach": 217.96919323883756,
+          "level_step": 2,
+          "local_rejections": [
+            "adjacent levels",
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "adjacent levels"
+        },
+        {
+          "lower": 6,
+          "upper": 3,
+          "searched": true,
+          "lower_end_y_x": [
+            5245.0,
+            4471.0
+          ],
+          "upper_end_y_x": [
+            5300.0,
+            4567.5
+          ],
+          "dx": 96.5,
+          "dy": 55.0,
+          "gap": 111.07317407907276,
+          "angle": 138.51712124592697,
+          "slopes": [
+            -2.9850319069068245,
+            2.360228281547127
+          ],
+          "intersection_y_x": [
+            5250.894994477259,
+            4460.761877643583
+          ],
+          "intersection_reach": 117.49182240293088,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 6,
+          "upper": 10,
+          "searched": true,
+          "lower_end_y_x": [
+            5245.0,
+            4471.0
+          ],
+          "upper_end_y_x": [
+            5942.0,
+            3313.5
+          ],
+          "dx": -1157.5,
+          "dy": 697.0,
+          "gap": 1351.1533036632077,
+          "angle": 71.47890354581489,
+          "slopes": [
+            -2.9850319069068245,
+            -4.76527820579242e-15
+          ],
+          "intersection_y_x": [
+            5635.233223823829,
+            3313.5
+          ],
+          "intersection_reach": 1221.5106299070583,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 7,
+          "upper": 2,
+          "searched": true,
+          "lower_end_y_x": [
+            5211.0,
+            4271.5
+          ],
+          "upper_end_y_x": [
+            5200.0,
+            4283.5
+          ],
+          "dx": 12.0,
+          "dy": -11.0,
+          "gap": 16.278820596099706,
+          "angle": 61.84547849647511,
+          "slopes": [
+            -2.884586352527728,
+            -0.15900383141765403
+          ],
+          "intersection_y_x": [
+            5206.7216897781955,
+            4282.521948067559
+          ],
+          "intersection_reach": 11.82316698511689,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        },
+        {
+          "lower": 7,
+          "upper": 11,
+          "searched": true,
+          "lower_end_y_x": [
+            5211.0,
+            4271.5
+          ],
+          "upper_end_y_x": [
+            5942.0,
+            3313.5
+          ],
+          "dx": -958.0,
+          "dy": 731.0,
+          "gap": 1205.041493061546,
+          "angle": 70.88009520960483,
+          "slopes": [
+            -2.884586352527728,
+            -4.76527820579242e-15
+          ],
+          "intersection_y_x": [
+            5542.652679404633,
+            3313.5000000000036
+          ],
+          "intersection_reach": 1013.7837539417691,
+          "level_step": 1,
+          "local_rejections": [
+            "gap",
+            "intersection reach"
+          ],
+          "first_rejection": "gap"
+        }
+      ],
+      "series": [
+        {
+          "level": 1,
+          "candidates": [
+            [
+              4,
+              0
+            ],
+            [
+              5,
+              0
+            ]
+          ],
+          "unique": [],
+          "accepted": []
+        }
+      ],
+      "chains": [
+        {
+          "index": 0,
+          "nodes": {
+            "0-0-0": 0,
+            "1-0-0": 0,
+            "2-0-0": 0,
+            "3-0-0": 0
+          },
+          "crossings": {
+            "0-0-0": {
+              "offset_px": 1293.2362711311034,
+              "kind": "curve",
+              "slope": -0.14778380823156786,
+              "notes": []
+            },
+            "1-0-0": {
+              "offset_px": 1337.598262464382,
+              "kind": "curve",
+              "slope": -0.13402353841957412,
+              "notes": []
+            },
+            "2-0-0": {
+              "offset_px": 1376.9290141412412,
+              "kind": "curve",
+              "slope": -0.13434421043115718,
+              "notes": []
+            },
+            "3-0-0": {
+              "offset_px": 1425.7087670205,
+              "kind": "curve",
+              "slope": -0.19717917695796694,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 1,
+          "nodes": {
+            "0-0-0": 1,
+            "1-0-0": 1,
+            "2-0-0": 1,
+            "3-0-0": 1
+          },
+          "crossings": {
+            "0-0-0": {
+              "offset_px": 1186.75207473082,
+              "kind": "curve",
+              "slope": -0.4923917855535254,
+              "notes": []
+            },
+            "1-0-0": {
+              "offset_px": 1235.5099299310868,
+              "kind": "curve",
+              "slope": -0.1777197787876,
+              "notes": []
+            },
+            "2-0-0": {
+              "offset_px": 1289.586357584185,
+              "kind": "curve",
+              "slope": -0.19969718882759543,
+              "notes": []
+            },
+            "3-0-0": {
+              "offset_px": 1361.1844855390718,
+              "kind": "curve",
+              "slope": -0.28902301856872287,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 2,
+          "nodes": {
+            "1-0-0": 2,
+            "2-0-0": 2,
+            "3-0-0": 2
+          },
+          "crossings": {
+            "1-0-0": {
+              "offset_px": 1064.4554072915935,
+              "kind": "curve",
+              "slope": -0.21266668362671032,
+              "notes": []
+            },
+            "2-0-0": {
+              "offset_px": 1133.4741157965036,
+              "kind": "curve",
+              "slope": -0.2534208093584568,
+              "notes": []
+            },
+            "3-0-0": {
+              "offset_px": 1222.771237877716,
+              "kind": "curve",
+              "slope": -0.3574637170358279,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 3,
+          "nodes": {
+            "0-0-0": 2
+          },
+          "crossings": {
+            "0-0-0": {
+              "offset_px": 1109.3613711614316,
+              "kind": "double",
+              "slope": 3.768936856814636,
+              "notes": [
+                "width 9.7 px, two curves?"
+              ]
+            }
+          }
+        },
+        {
+          "index": 4,
+          "nodes": {
+            "-2-0-0": 0,
+            "-1-0-0": 0
+          },
+          "crossings": {
+            "-2-0-0": {
+              "offset_px": 129.2242615278542,
+              "kind": "curve",
+              "slope": -1.72088963821705,
+              "notes": []
+            },
+            "-1-0-0": {
+              "offset_px": 703.707299064547,
+              "kind": "curve",
+              "slope": -1.8540022027702905,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 5,
+          "nodes": {
+            "-2-0-0": 1,
+            "-1-0-0": 0
+          },
+          "crossings": {
+            "-2-0-0": {
+              "offset_px": 124.46636653936002,
+              "kind": "curve",
+              "slope": -2.392886759862835,
+              "notes": []
+            },
+            "-1-0-0": {
+              "offset_px": 703.707299064547,
+              "kind": "curve",
+              "slope": -1.8540022027702905,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 6,
+          "nodes": {
+            "-1-0-0": 1
+          },
+          "crossings": {
+            "-1-0-0": {
+              "offset_px": 616.6336179684595,
+              "kind": "curve",
+              "slope": -1.3994672503687662,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 7,
+          "nodes": {
+            "-1-0-0": 2,
+            "0-0-0": 3
+          },
+          "crossings": {
+            "-1-0-0": {
+              "offset_px": 494.26523041599876,
+              "kind": "curve",
+              "slope": -1.0662549525990297,
+              "notes": []
+            },
+            "0-0-0": {
+              "offset_px": 950.7350112498243,
+              "kind": "curve",
+              "slope": -2.3251100132894176,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 8,
+          "nodes": {
+            "-1-0-0": 3,
+            "0-0-0": 4,
+            "1-0-0": 3,
+            "2-0-0": 3,
+            "3-0-0": 3
+          },
+          "crossings": {
+            "-1-0-0": {
+              "offset_px": 319.670584035659,
+              "kind": "curve",
+              "slope": -0.8126634755252746,
+              "notes": []
+            },
+            "0-0-0": {
+              "offset_px": 629.9893815420046,
+              "kind": "curve",
+              "slope": -1.5967221939755398,
+              "notes": []
+            },
+            "1-0-0": {
+              "offset_px": 796.4853799846369,
+              "kind": "curve",
+              "slope": -0.26429215186423577,
+              "notes": []
+            },
+            "2-0-0": {
+              "offset_px": 888.7547611165855,
+              "kind": "curve",
+              "slope": -0.3515555604951611,
+              "notes": []
+            },
+            "3-0-0": {
+              "offset_px": 1003.3941766319731,
+              "kind": "curve",
+              "slope": -0.43953411318888386,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 9,
+          "nodes": {
+            "-1-0-0": 4,
+            "0-0-0": 5,
+            "1-0-0": 4,
+            "2-0-0": 4,
+            "3-0-0": 4
+          },
+          "crossings": {
+            "-1-0-0": {
+              "offset_px": 75.64567253363293,
+              "kind": "curve",
+              "slope": -0.3892367828836413,
+              "notes": []
+            },
+            "0-0-0": {
+              "offset_px": 226.12597210711874,
+              "kind": "curve",
+              "slope": -0.6950324614717424,
+              "notes": []
+            },
+            "1-0-0": {
+              "offset_px": 368.9787153370935,
+              "kind": "curve",
+              "slope": -0.33457032025576,
+              "notes": []
+            },
+            "2-0-0": {
+              "offset_px": 481.8856803789945,
+              "kind": "curve",
+              "slope": -0.41485611898745034,
+              "notes": []
+            },
+            "3-0-0": {
+              "offset_px": 620.5425829042597,
+              "kind": "curve",
+              "slope": -0.5192463596331991,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 10,
+          "nodes": {
+            "0-0-0": 6,
+            "1-0-0": 5,
+            "2-0-0": 5,
+            "3-0-0": 5
+          },
+          "crossings": {
+            "0-0-0": {
+              "offset_px": 114.16070078473922,
+              "kind": "curve",
+              "slope": -0.3840266618615448,
+              "notes": []
+            },
+            "1-0-0": {
+              "offset_px": 232.22187364006277,
+              "kind": "curve",
+              "slope": -0.3393281891148788,
+              "notes": []
+            },
+            "2-0-0": {
+              "offset_px": 343.1420132045464,
+              "kind": "curve",
+              "slope": -0.3932867061766058,
+              "notes": []
+            },
+            "3-0-0": {
+              "offset_px": 479.6450562511336,
+              "kind": "curve",
+              "slope": -0.5177046488723765,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 11,
+          "nodes": {
+            "1-0-0": 6,
+            "2-0-0": 6,
+            "3-0-0": 6
+          },
+          "crossings": {
+            "1-0-0": {
+              "offset_px": 88.07603452146941,
+              "kind": "curve",
+              "slope": -0.3118315894720447,
+              "notes": []
+            },
+            "2-0-0": {
+              "offset_px": 189.20081911273292,
+              "kind": "curve",
+              "slope": -0.36422223505995166,
+              "notes": []
+            },
+            "3-0-0": {
+              "offset_px": 317.6230474868157,
+              "kind": "curve",
+              "slope": -0.5017527045948605,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 12,
+          "nodes": {
+            "3-0-0": 7
+          },
+          "crossings": {
+            "3-0-0": {
+              "offset_px": 138.6835855536142,
+              "kind": "curve",
+              "slope": -0.45267058117511716,
+              "notes": []
+            }
+          }
+        },
+        {
+          "index": 13,
+          "nodes": {
+            "3-0-0": 8
+          },
+          "crossings": {
+            "3-0-0": {
+              "offset_px": 85.73400633059691,
+              "kind": "curve",
+              "slope": -0.31960975211644893,
+              "notes": []
+            }
+          }
+        }
+      ]
+    }
+  }
+}

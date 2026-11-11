@@ -6,6 +6,13 @@ rust-version = "1.99"
 license-file = "../LICENSE"
 description = "Typed persistent local control plane for evidence-bound hull reconstruction"
 
+[lib]
+name = "marinaframe_control"
+path = "src/lib.rs"
+
+[features]
+test-support = []
+
 [[bin]]
 name = "marinaframe"
 path = "src/main.rs"
@@ -17,6 +24,8 @@ reqwest = { version = "=0.12.24", default-features = false, features = ["blockin
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = { version = "=1.0.145", features = ["float_roundtrip"] }
 sha2 = "=0.10.9"
+# A private working folder for each `claude` CLI request (claude_cli.rs).
+tempfile = "=3.23.0"
 
 [dev-dependencies]
-tempfile = "=3.23.0"
+marinaframe-control = { path = ".", features = ["test-support"] }

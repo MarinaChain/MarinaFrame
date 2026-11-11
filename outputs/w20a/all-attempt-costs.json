@@ -1,0 +1,32 @@
+{
+  "dtmb5415-L0": {
+    "requests": 19,
+    "known_list_cost_usd": 0.042839310000000005,
+    "missing_list_cost": 0
+  },
+  "shipd-1-00683-L2": {
+    "requests": 18,
+    "known_list_cost_usd": 0.028410319999999996,
+    "missing_list_cost": 0
+  },
+  "shipd-1-00045-L2": {
+    "requests": 14,
+    "known_list_cost_usd": 0.02899069,
+    "missing_list_cost": 0
+  },
+  "shipd-1-00679-L0": {
+    "requests": 14,
+    "known_list_cost_usd": 0.021381039999999997,
+    "missing_list_cost": 0
+  },
+  "shipd-1-00679-3v-L0": {
+    "requests": 14,
+    "known_list_cost_usd": 0.025624950000000004,
+    "missing_list_cost": 0
+  },
+  "dtmb5415-3v-L0": {
+    "requests": 14,
+    "known_list_cost_usd": 0.02584388,
+    "missing_list_cost": 0
+  }
+}

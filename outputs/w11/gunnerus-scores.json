@@ -1,0 +1,77 @@
+[
+  {
+    "arm": "abstain",
+    "status": "no_model",
+    "truth_sections_sha256": "2aeb1253a66c1828a1ac6b194659ec65580fd96a53dd97c75662fb058f2cb090",
+    "stations_read": [],
+    "station_requests": 72,
+    "metric": {
+      "units": "m",
+      "z_min_m": -0.6,
+      "z_max_m": 7.6,
+      "z_step_m": 0.005,
+      "design_draft_m": 2.5,
+      "bands": {
+        "main": [
+          "truth_bottom",
+          4.287
+        ],
+        "below_draft": [
+          "truth_bottom",
+          2.5
+        ]
+      },
+      "dense_every_truth_station": 5
+    }
+  },
+  {
+    "arm": "draft",
+    "status": "no_model",
+    "truth_sections_sha256": "2aeb1253a66c1828a1ac6b194659ec65580fd96a53dd97c75662fb058f2cb090",
+    "stations_read": [],
+    "station_requests": 72,
+    "metric": {
+      "units": "m",
+      "z_min_m": -0.6,
+      "z_max_m": 7.6,
+      "z_step_m": 0.005,
+      "design_draft_m": 2.5,
+      "bands": {
+        "main": [
+          "truth_bottom",
+          4.287
+        ],
+        "below_draft": [
+          "truth_bottom",
+          2.5
+        ]
+      },
+      "dense_every_truth_station": 5
+    }
+  },
+  {
+    "arm": "llm",
+    "status": "no_model",
+    "truth_sections_sha256": "2aeb1253a66c1828a1ac6b194659ec65580fd96a53dd97c75662fb058f2cb090",
+    "stations_read": [],
+    "station_requests": 72,
+    "metric": {
+      "units": "m",
+      "z_min_m": -0.6,
+      "z_max_m": 7.6,
+      "z_step_m": 0.005,
+      "design_draft_m": 2.5,
+      "bands": {
+        "main": [
+          "truth_bottom",
+          4.287
+        ],
+        "below_draft": [
+          "truth_bottom",
+          2.5
+        ]
+      },
+      "dense_every_truth_station": 5
+    }
+  }
+]

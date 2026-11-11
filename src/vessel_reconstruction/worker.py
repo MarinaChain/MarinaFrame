@@ -1,27 +1,41 @@
 """Private native-work entry point. Apply Linux budgets before parser/CAD imports."""
 from __future__ import annotations
+
 import argparse
 import ctypes
+import errno
 import json
 import os
-from pathlib import Path
-import resource
 import signal
 import sys
 import time
+from pathlib import Path
+
+from .process_limits import posix_resource
+from .resources import native_resource_profile, peak_rss_kib
 
 
 def apply_limits(limits: dict, parent_pid: int) -> None:
-    if sys.platform != 'linux':
-        raise RuntimeError('Linux is required for the isolated worker profile.')
+    linux = sys.platform == 'linux'
+    if not linux and sys.platform != 'darwin':
+        raise RuntimeError('Linux or macOS is required for the isolated worker profile.')
     # Kill the worker if the controller dies. Supervisor kills its process group
     # on normal exit/cancel; durable recovery handles a surviving group leader.
-    libc = ctypes.CDLL(None, use_errno=True)
-    if libc.prctl(1, signal.SIGKILL, 0, 0, 0) != 0 or os.getppid() != parent_pid:
+    # macOS has no parent-death signal; recovery handles orphaned workers.
+    if linux:
+        libc = ctypes.CDLL(None, use_errno=True)
+        if libc.prctl(1, signal.SIGKILL, 0, 0, 0) != 0:
+            raise RuntimeError('Worker parent identity could not be established.')
+    if os.getppid() != parent_pid:
         raise RuntimeError('Worker parent identity could not be established.')
+    resource = posix_resource()
     cpu_seconds = int(limits['cpu_seconds'])
-    resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds + 1))
-    for key, value in ((resource.RLIMIT_AS, int(limits['memory_bytes'])),
+    if cpu_seconds:
+        resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds + 1))
+    # On macOS RLIMIT_AS is an alias of RLIMIT_RSS: the kernel rejects lowering
+    # it and does not enforce RSS limits, so the memory limit is Linux-only.
+    memory_limit = ((resource.RLIMIT_AS, int(limits['memory_bytes'])),) if linux else ()
+    for key, value in (*memory_limit,
                        (resource.RLIMIT_FSIZE, int(limits['file_bytes'])),
                        (resource.RLIMIT_NOFILE, int(limits['open_files'])),
                        (resource.RLIMIT_CORE, 0)):
@@ -41,7 +55,9 @@ def main() -> int:
     started = time.monotonic()
     code = 1
     receipt = {}
+    resource = None
     try:
+        resource = posix_resource()  # first: Windows fails closed before any work, with a receipt
         apply_limits(json.loads(args.limits), args.parent)
         from .pipeline import reconstruct
         result = reconstruct(args.spec, args.out, export_cad=not args.no_cad)
@@ -51,14 +67,20 @@ def main() -> int:
         receipt = {'error_code': 'worker_memory_limit'}
     except FileExistsError:
         receipt = {'error_code': 'output_exists'}
+    except OSError as exc:
+        resource_errors = {errno.EFBIG: 'worker_file_size_limit', errno.EMFILE: 'worker_open_file_limit'}
+        receipt = {'error_code': resource_errors.get(exc.errno, 'worker_exception'),
+                   'exception_type': type(exc).__name__}
     except BaseException as exc:
         receipt = {'error_code': 'worker_exception', 'exception_type': type(exc).__name__}
-    usage = resource.getrusage(resource.RUSAGE_SELF)
-    children = resource.getrusage(resource.RUSAGE_CHILDREN)
-    receipt['resources'] = {'wall_seconds': round(time.monotonic() - started, 4),
-                            'cpu_seconds': round(usage.ru_utime + usage.ru_stime + children.ru_utime + children.ru_stime, 4),
-                            'peak_rss_kib': usage.ru_maxrss, 'child_peak_rss_kib': children.ru_maxrss,
-                            'resource_profile': 'linux_rlimit_process_group_v1'}
+    if resource is not None:
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        children = resource.getrusage(resource.RUSAGE_CHILDREN)
+        receipt['resources'] = {'wall_seconds': round(time.monotonic() - started, 4),
+                                'cpu_seconds': round(usage.ru_utime + usage.ru_stime + children.ru_utime + children.ru_stime, 4),
+                                'peak_rss_kib': peak_rss_kib(usage.ru_maxrss),
+                                'child_peak_rss_kib': peak_rss_kib(children.ru_maxrss),
+                                'resource_profile': native_resource_profile()}
     try:
         temporary = args.receipt.with_suffix('.tmp')
         with temporary.open('x', encoding='utf-8') as stream:

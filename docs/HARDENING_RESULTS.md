@@ -1,5 +1,7 @@
 # MarinaFrame 0.2: implementation and validation results
 
+> **Historical:** `server.py`, `jobs.py`, `review.py` and their tests (`test_server.py`, `test_review.py`, queue tests in `test_runtime.py`) cited below were removed in 0.5. Results stay as recorded.
+
 **Report date: 7 November 2026, Asia/Singapore.** Tests ran on 6 November UTC.
 This continuation implements and tests a substantially stronger local research
 system. It does not establish arbitrary ship-plan understanding, a remote

@@ -13,8 +13,10 @@ import re
 from bisect import bisect_right
 from pathlib import Path
 
+from .draft import DRAFT_EXPORT_NAMES, check_draft
+from .artifacts import ARTIFACTS, GEOMETRY_NAMES, REQUIRED_NAMES
 from .provenance import digest_file, digest_object, safe_relative_file, snapshot_hash, sync_file, write_json
-from .schema import finite, load_bounded_json, SHA256
+from .schema import finite, load_bounded_json, load_build_result, SHA256
 
 SCHEMA_VERSION = "2.0"
 TERMINAL_STATES = {"review_required", "blocked", "failed", "interrupted", "cancelled"}
@@ -22,13 +24,17 @@ MUTABLE_FILES = {"review_history.json", "review_state.json", ".review.lock"}
 MAX_RECORD_BYTES = 64 * 1024 * 1024
 MAX_ARTIFACT_BYTES = 256 * 1024 * 1024
 MAX_RUN_BYTES = 1024 * 1024 * 1024
-REQUIRED_FILES = {"result.json", "input_spec.json", "replay_spec.json"}
+REQUIRED_FILES = REQUIRED_NAMES
+# The read-table record (provider receipts) of an offset_table_vision run.
+TABLE_READING_FILE = ARTIFACTS["table_reading"].name
 LIMITATION = ("Content hashes and derived checks detect changes against this local manifest. "
               "An actor who can rewrite all evidence and the manifest can replace the record; "
               "this is not a digital signature, engineering approval, or independent source authentication.")
 
 
 def _read(root, name):
+    if name == "result.json":
+        return load_build_result(safe_relative_file(root, name))
     return load_bounded_json(safe_relative_file(root, name), max_bytes=MAX_RECORD_BYTES,
                              max_depth=40, max_nodes=3_000_000)
 
@@ -51,13 +57,28 @@ def _inventory(root: Path) -> set[str]:
 
 def identity_for(result: dict) -> dict:
     provenance = result["provenance"]
-    return {"scheme": "input-sources-implementation-request-v2",
-            "input_spec_sha256": provenance["input_spec_sha256"],
-            "submitted_spec_sha256": provenance.get("submitted_spec_sha256"),
-            "sources": [{"id": source["id"], "sha256": source["sha256"]} for source in result["sources"]],
-            "implementation_sha256": provenance.get("implementation_sha256"),
-            "requested_exports": result["requested_exports"],
-            "recovery_identity": provenance.get("recovery_identity")}
+    identity = {"scheme": "input-sources-implementation-request-v2",
+                "input_spec_sha256": provenance["input_spec_sha256"],
+                "submitted_spec_sha256": provenance.get("submitted_spec_sha256"),
+                "sources": [{"id": source["id"], "sha256": source["sha256"]} for source in result["sources"]],
+                "implementation_sha256": provenance.get("implementation_sha256"),
+                "requested_exports": result["requested_exports"],
+                "recovery_identity": provenance.get("recovery_identity")}
+    # Present only for table-vision runs, so older run identities are unchanged.
+    reading = provenance.get("table_reading")
+    if isinstance(reading, dict):
+        identity["table_reading_sha256"] = reading.get("sha256")
+    # Present only for draft runs: the guesses are part of the run identity.
+    if "draft" in result:
+        identity["draft_sha256"] = digest_object(result["draft"])
+    return identity
+
+
+def _cad_names(result: dict) -> tuple[str, str]:
+    """STEP and STL file names: a draft run tags both names."""
+    if "draft" in result:
+        return DRAFT_EXPORT_NAMES["step"], DRAFT_EXPORT_NAMES["stl"]
+    return ARTIFACTS["step"].name, ARTIFACTS["stl"].name
 
 
 def seal_run(root: Path, result: dict, *, writer=write_json) -> dict:
@@ -109,7 +130,21 @@ def _ordinate(points, elevations, z):
     return left[0] + (right[0] - left[0]) * (z - left[1]) / (right[1] - left[1])
 
 
-def _check_approximation(normalized, metrics):
+def _check_complexity_fit(record: dict, allowed, draft: bool) -> None:
+    """A requested bound of at most 1 cm; only a draft may raise it to fit the CAD limits."""
+    fit = record.get("complexity_fit")
+    if fit is None:
+        _require(finite(allowed) and 0 <= allowed <= .01, "CAD approximation exceeds its declared ordinate-error bound.")
+        return
+    _require(draft, "Only a draft may simplify curves to fit the CAD complexity limits.")
+    _require(isinstance(fit, dict) and set(fit) == {"requested_maximum_deviation_m", "reason"}
+             and isinstance(fit["reason"], str) and len(fit["reason"]) <= 200, "Invalid CAD complexity fit record.")
+    requested = fit["requested_maximum_deviation_m"]
+    _require(finite(requested) and 0 <= requested <= .01 and finite(allowed) and allowed > requested,
+             "CAD complexity fit does not raise a valid requested bound.")
+
+
+def _check_approximation(normalized, metrics, draft: bool = False):
     """Recompute whole-polyline approximation diagnostics using scalar math."""
     derived = []
     for section in normalized:
@@ -127,8 +162,8 @@ def _check_approximation(normalized, metrics):
         _require(isinstance(record, dict) and record.get("method") == "vertical_error_bounded_source_knots_v1"
                  and record.get("correspondence") == "shared_normalized_height_source_knot_union", "Unsupported or missing CAD approximation record.")
         allowed = record.get("maximum_allowed_half_breadth_deviation_m")
-        _require(finite(allowed) and 0 <= allowed <= .01 and maximum <= allowed + 1e-10,
-                 "CAD approximation exceeds its declared ordinate-error bound.")
+        _check_complexity_fit(record, allowed, draft)
+        _require(maximum <= allowed + 1e-10, "CAD approximation exceeds its declared ordinate-error bound.")
         expected = {"maximum_half_breadth_deviation_m": maximum,
                     "height_weighted_rms_deviation_m": rms, "source_section_area_m2": _area(source),
                     "cad_section_area_m2": _area(cad), "section_area_error_m2": _area(cad) - _area(source),
@@ -143,6 +178,9 @@ def _check_approximation(normalized, metrics):
         derived.append(record)
     summary = metrics.get("geometry_approximation")
     _require(isinstance(summary, dict), "Missing geometry approximation summary.")
+    _require(summary.get("complexity_fit") == derived[0].get("complexity_fit")
+             and all(r.get("complexity_fit") == derived[0].get("complexity_fit") for r in derived),
+             "CAD complexity fit disagrees between sections and summary.")
     values = {"maximum_allowed_half_breadth_deviation_m": max(r["maximum_allowed_half_breadth_deviation_m"] for r in derived),
               "maximum_half_breadth_deviation_m": max(r["maximum_half_breadth_deviation_m"] for r in derived),
               "maximum_height_weighted_rms_deviation_m": max(r["height_weighted_rms_deviation_m"] for r in derived),
@@ -153,12 +191,173 @@ def _check_approximation(normalized, metrics):
              and summary.get("estimated_face_count") == derived[0]["estimated_face_count"], "CAD summary counts are inconsistent.")
 
 
+def _check_single_curve_cad(sections: list, normalized: list, metrics: dict, draft: bool = False):
+    """CAD checks of a build_hull run: one solid lofted from single-curve sections."""
+    original = {section["id"]: section for section in sections}
+    for section in normalized:
+        _require(isinstance(section, dict) and section.get("id") in original, "Unknown CAD section identity.")
+        _require({key: value for key, value in section.items() if key not in ("cad_points_yz_m", "cad_approximation")} == original[section["id"]], "CAD section altered its recorded observations.")
+        _points(section.get("cad_points_yz_m"))
+    _require(len({section["id"] for section in normalized}) == len(sections), "Duplicate CAD section identity.")
+    xs = [section["x_m"] for section in normalized]
+    _require(all(b > a for a, b in zip(xs, xs[1:])), "CAD station ordering is invalid.")
+    n = len(normalized[0]["cad_points_yz_m"])
+    _require(all(len(section["cad_points_yz_m"]) == n for section in normalized), "CAD correspondence is inconsistent.")
+    volume = 0.0
+    for left, right in zip(normalized, normalized[1:]):
+        a, b = left["cad_points_yz_m"], right["cad_points_yz_m"]
+        midpoint = [[(p[0] + q[0]) / 2, (p[1] + q[1]) / 2] for p, q in zip(a, b)]
+        volume += (right["x_m"] - left["x_m"]) * (_area(a) + 4 * _area(midpoint) + _area(b)) / 6
+    _check_approximation(normalized, metrics, draft)
+    for name in ("volume_m3", "surface_area_m2", "length_m", "beam_m", "depth_m"):
+        _require(finite(metrics.get(name)) and metrics[name] > 0, "Invalid authoritative geometry metric.")
+    _require(_close(metrics["volume_m3"], volume), "Volume disagrees with independently integrated normalized sections.")
+    beam = 2 * max(point[0] for section in normalized for point in section["cad_points_yz_m"])
+    zmin = min(point[1] for section in normalized for point in section["cad_points_yz_m"])
+    zmax = max(point[1] for section in normalized for point in section["cad_points_yz_m"])
+    _require(_close(metrics["length_m"], xs[-1] - xs[0]) and _close(metrics["beam_m"], beam) and _close(metrics["depth_m"], zmax - zmin), "Dimensions disagree with normalized CAD bounds.")
+    _require(metrics.get("cad_valid") is True and type(metrics.get("solid_count")) is int and metrics["solid_count"] == 1,
+             "Successful CAD validity record is missing.")
+
+
+# Successful region runs (geometry.build_region_hull). The compound is checked
+# against the recorded observations: rings and regions are recomputed from the
+# traced pieces, every region is either lofted or listed as unlofted, volumes
+# agree with the exact per-solid prismatoid audit, and the dimensions agree
+# with the lofted regions.
+REGION_LOFT_METHOD = "matched_region_ruled_lofts_v1"
+REGION_VOLUME_AUDIT_TOLERANCE = 1e-6
+MAX_PIECE_SAMPLES = 1025
+
+
+def observed_geometry(section: dict) -> dict:
+    """The observed geometry of one section that the run identity binds.
+
+    A single-curve section binds its half-section points (the identity of
+    every run before multi-piece stations); a multi-piece section binds its
+    traced pieces, outline rings and regions.
+    """
+    if "points_yz_m" in section:
+        return {key: section[key] for key in ("id", "x_m", "points_yz_m")}
+    return {key: section[key] for key in ("id", "x_m", "pieces", "outline_rings_yz_m", "regions")}
+
+
+def _check_region_section(section: dict):
+    """A multi-piece section: bounded pieces whose rings and regions recompute exactly."""
+    from .errors import GeometryError
+    from .section_regions import decompose_outline, piece_ring
+    pieces = section.get("pieces")
+    _require(isinstance(pieces, list) and 1 <= len(pieces) <= 8 and "points_yz_m" not in section,
+             "Invalid multi-piece section record.")
+    samples = 0
+    for piece in pieces:
+        _require(isinstance(piece, dict) and set(piece) <= {"z_range_m", "points_yz_m", "inner_points_yz_m", "evidence"},
+                 "Invalid piece record.")
+        _points(piece.get("points_yz_m"), minimum=5)
+        samples += len(piece["points_yz_m"])
+        if "inner_points_yz_m" in piece:
+            _points(piece["inner_points_yz_m"], minimum=5)
+            samples += len(piece["inner_points_yz_m"])
+    _require(samples <= MAX_PIECE_SAMPLES, "Multi-piece section exceeds its sample bound.")
+    try:
+        rings = [piece_ring(piece["points_yz_m"], piece.get("inner_points_yz_m"), section_id=section["id"]).tolist()
+                 for piece in pieces]
+        regions = decompose_outline(rings, section_id=section["id"])
+    except GeometryError as exc:
+        raise ValueError("Multi-piece section does not decompose into regions.") from exc
+    _require(section.get("outline_rings_yz_m") == rings
+             and section.get("regions") == [{"kind": r["kind"], "rows_m": r["rows_m"]} for r in regions],
+             "Recorded rings or regions disagree with the traced pieces.")
+
+
+def _check_region_cad(sections: list, normalized: list, metrics: dict):
+    """CAD checks of a build_region_hull run: a compound of region solids."""
+    from .section_regions import region_area, section_regions
+    ordered = sorted(sections, key=lambda section: section["x_m"])
+    _require([n.get("id") for n in normalized] == [s["id"] for s in ordered], "CAD station ordering is invalid.")
+    stations = {}
+    for section, record in zip(ordered, normalized):
+        _require(isinstance(record, dict) and {k: v for k, v in record.items() if k != "cad_station"} == section,
+                 "CAD section altered its recorded observations.")
+        station = record.get("cad_station")
+        regions = section_regions(section)
+        _require(isinstance(station, dict) and set(station) == {"id", "x_m", "regions", "section_area_m2"}
+                 and station["id"] == section["id"] and station["x_m"] == section["x_m"]
+                 and isinstance(station["regions"], list) and len(station["regions"]) == len(regions),
+                 "CAD station record is inconsistent.")
+        for summary, region in zip(station["regions"], regions):
+            rows = region["rows_m"]
+            _require(isinstance(summary, dict) and summary.get("kind") == region["kind"]
+                     and summary.get("z_range_m") == [float(rows[0, 0]), float(rows[-1, 0])]
+                     and _close(summary.get("half_area_m2"), region_area(rows), absolute=1e-12),
+                     "CAD region summary disagrees with the observed regions.")
+        _require(_close(station["section_area_m2"], 2 * sum(region_area(r["rows_m"]) for r in regions), absolute=1e-12),
+                 "CAD section area disagrees with the observed regions.")
+        stations[section["id"]] = {"index": len(stations), "x_m": section["x_m"], "regions": regions}
+    loft = metrics.get("region_loft")
+    _require(isinstance(loft, dict) and loft.get("method") == REGION_LOFT_METHOD, "Missing or unsupported region loft record.")
+    allowed, deviation = loft.get("maximum_allowed_half_breadth_deviation_m"), loft.get("maximum_half_breadth_deviation_m")
+    _require(finite(allowed) and 0 <= allowed <= .01 and finite(deviation) and 0 <= deviation <= allowed + 1e-10,
+             "Region loft exceeds its declared ordinate-error bound.")
+    count, volumes = loft.get("solid_count"), loft.get("solid_volumes_m3")
+    _require(type(count) is int and 1 <= count <= 20_000 and metrics.get("solid_count") == count
+             and isinstance(volumes, list) and len(volumes) == count and all(finite(v) and v > 0 for v in volumes),
+             "Region solid inventory is inconsistent.")
+    runs = loft.get("runs")
+    _require(isinstance(runs, list) and runs, "Region loft has no runs.")
+    lofted, run_volume = set(), 0.0
+    for run in runs:
+        _require(isinstance(run, dict) and isinstance(run.get("stations"), list) and isinstance(run.get("regions"), list)
+                 and len(run["stations"]) == len(run["regions"]) >= 2, "Invalid region run record.")
+        indices = []
+        for sid, index in zip(run["stations"], run["regions"]):
+            station = stations.get(sid)
+            _require(station is not None and type(index) is int and 0 <= index < len(station["regions"])
+                     and station["regions"][index]["kind"] == run.get("kind") and (sid, index) not in lofted,
+                     "Region run names an unknown, repeated or mismatched region.")
+            lofted.add((sid, index))
+            indices.append(station["index"])
+        _require(all(b == a + 1 for a, b in zip(indices, indices[1:])), "A region run skips a station.")
+        _require(finite(run.get("volume_m3")) and finite(run.get("prismatoid_volume_m3"))
+                 and abs(run["volume_m3"] - run["prismatoid_volume_m3"]) <= REGION_VOLUME_AUDIT_TOLERANCE * max(run["prismatoid_volume_m3"], 1e-12),
+                 "A region run failed its volume audit.")
+        run_volume += run["volume_m3"]
+    unlofted = loft.get("unlofted_regions")
+    expected = sorted((sid, index) for sid, station in stations.items() for index in range(len(station["regions"]))
+                      if (sid, index) not in lofted)
+    _require(isinstance(unlofted, list) and sorted((u.get("station"), u.get("region")) for u in unlofted if isinstance(u, dict)) == expected
+             and len(unlofted) == len(expected), "Unlofted regions are not fully listed.")
+    for name in ("volume_m3", "surface_area_m2", "length_m", "beam_m", "depth_m"):
+        _require(finite(metrics.get(name)) and metrics[name] > 0, "Invalid authoritative geometry metric.")
+    _require(_close(metrics["volume_m3"], loft.get("volume_m3")) and _close(metrics["volume_m3"], run_volume)
+             and _close(metrics["volume_m3"], sum(volumes)), "Volume disagrees with the audited region runs.")
+    xs = [stations[sid]["x_m"] for sid, _ in lofted]
+    rows = [stations[sid]["regions"][index]["rows_m"] for sid, index in lofted]
+    beam = 2 * max(float(r[:, 2].max()) for r in rows)
+    depth = max(float(r[-1, 0]) for r in rows) - min(float(r[0, 0]) for r in rows)
+    _require(_close(metrics["length_m"], max(xs) - min(xs)) and _close(metrics["beam_m"], beam) and _close(metrics["depth_m"], depth),
+             "Dimensions disagree with the lofted regions.")
+    _require(metrics.get("cad_valid") is True, "Successful CAD validity record is missing.")
+
+
 def _check_record(root: Path, result: dict, manifest: dict):
     required = {"schema_version", "record_kind", "run_id", "identity", "vessel_id", "status", "method",
                 "input_mode", "review", "sources", "parts", "sections", "normalized_sections", "gaps",
                 "assumptions", "metrics", "exports", "provenance", "timing_seconds", "terminal", "requested_exports"}
-    _require(isinstance(result, dict) and required <= set(result) <= required | {"diagnostics"}, "Incomplete or unsupported inference record schema.")
+    _require(isinstance(result, dict) and required <= set(result) <= required | {"diagnostics", "draft", "export_results"}, "Incomplete or unsupported inference record schema.")
     _require(result["schema_version"] == SCHEMA_VERSION and result["record_kind"] == "immutable_inference_record", "Unsupported inference record.")
+    diagnostics = result.get("diagnostics", {})
+    _require(isinstance(diagnostics, dict), "Invalid diagnostics record.")
+    reference = diagnostics.get("sections_artifact")
+    if reference is not None:
+        entry = manifest["files"].get("extracted_sections.json", {})
+        _require("sections" not in diagnostics and reference == {"file": "extracted_sections.json",
+                 "sha256": entry.get("sha256")} and isinstance(entry.get("sha256"), str),
+                 "Section diagnostics artifact reference is invalid.")
+        extraction = _read(root, "extracted_sections.json")
+        _require(isinstance(extraction.get("diagnostics"), dict)
+                 and isinstance(extraction["diagnostics"].get("sections"), dict),
+                 "Section diagnostics are missing from the extraction artifact.")
     status = result["status"]
     _require(isinstance(status, str) and status in TERMINAL_STATES, "Nonterminal or unknown run state.")
     _require(result["terminal"] == {"state": status, "complete": True, "publication": "exclusive_staging_atomic_directory_v1"}, "Terminal state declaration is inconsistent.")
@@ -166,7 +365,8 @@ def _check_record(root: Path, result: dict, manifest: dict):
     _require(type(result["requested_exports"]) is bool and finite(result["timing_seconds"]) and result["timing_seconds"] >= 0, "Invalid request or timing metadata.")
     for field in ("vessel_id", "method"):
         _require(isinstance(result[field], str) and 0 < len(result[field]) <= 8192, "Invalid record text metadata.")
-    _require(result["input_mode"] in (None, "calibrated_section_curves", "offset_table_ocr"), "Invalid input mode metadata.")
+    # offset_table_ocr stays readable so archived OCR runs still verify.
+    _require(result["input_mode"] in (None, "calibrated_section_curves", "offset_table_ocr", "offset_table_vision"), "Invalid input mode metadata.")
     for field in ("sources", "parts", "sections", "normalized_sections", "gaps", "assumptions"):
         _require(isinstance(result[field], list), f"Invalid {field} record.")
     for field in ("metrics", "exports", "provenance"):
@@ -227,12 +427,50 @@ def _check_record(root: Path, result: dict, manifest: dict):
         expected_files.add(source["file"])
         if "preview_file" in source:
             expected_files.add(source["preview_file"])
+    reading = provenance.get("table_reading")
+    if reading is not None:
+        _require(isinstance(reading, dict) and set(reading) == {"file", "sha256"} and reading["file"] == TABLE_READING_FILE
+                 and reading["file"] in declared and reading["sha256"] == manifest["files"][TABLE_READING_FILE]["sha256"]
+                 and result["input_mode"] == "offset_table_vision", "Table reading evidence declaration mismatch.")
+        _require(isinstance(replay, dict) and isinstance(replay.get("table_reading"), dict)
+                 and replay["table_reading"].get("file") == reading["file"]
+                 and replay["table_reading"].get("sha256") == reading["sha256"], "Replay table reading binding is inconsistent.")
+        expected_files.add(TABLE_READING_FILE)
     if result["sections"] or provenance.get("extraction_complete"):
         expected_files.add("extracted_sections.json")
+    # A draft spec makes a draft record: the same guesses, no more and no less.
+    spec_draft = input_spec.get("draft") if isinstance(input_spec, dict) else None
+    if "draft" in result or check_draft(spec_draft):
+        _require(check_draft(result.get("draft")) and result.get("draft") == spec_draft,
+                 "Draft record does not list exactly the guesses of its draft specification.")
+    step_name, stl_name = _cad_names(result)
+    iges_name = DRAFT_EXPORT_NAMES["iges"] if "draft" in result else ARTIFACTS["iges"].name
+    rhino_name = DRAFT_EXPORT_NAMES["3dm"] if "draft" in result else ARTIFACTS["3dm"].name
+    # Older immutable runs predate IGES. Include it only when their record declares it.
+    has_iges = "iges" in result["exports"]
+    has_rhino = "3dm" in result["exports"]
+    export_results = result.get("export_results")
+    if export_results is not None:
+        _require(status == "review_required" and result["requested_exports"] and isinstance(export_results, dict)
+                 and set(export_results) == {"step", "iges", "3dm", "stl"}, "Invalid per-format export record.")
+        for format_name, outcome in export_results.items():
+            _require(isinstance(outcome, dict) and set(outcome) == {"status", "reason"}
+                     and outcome["status"] in ("ok", "failed"), "Invalid per-format export outcome.")
+            _require((outcome["status"] == "ok" and outcome["reason"] is None and format_name in result["exports"])
+                     or (outcome["status"] == "failed" and isinstance(outcome["reason"], str)
+                         and 0 < len(outcome["reason"]) <= 1000 and format_name not in result["exports"]),
+                     "Per-format outcome contradicts the published export.")
     if status == "review_required":
-        expected_files.update(("mesh.json", "cad_sections.json", "extracted_sections.json"))
+        expected_files.update(ARTIFACTS[key].name for key in ("mesh", "cad_sections", "extracted_sections"))
         if result["requested_exports"]:
-            expected_files.update(("model.step", "model.stl"))
+            if export_results is None or "step" in result["exports"]:
+                expected_files.add(step_name)
+            if export_results is None or "stl" in result["exports"]:
+                expected_files.add(stl_name)
+            if has_iges:
+                expected_files.add(iges_name)
+            if has_rhino:
+                expected_files.add(rhino_name)
     _require(declared == expected_files, "Immutable artifacts are not fully explained by the record's evidence and terminal state.")
     if isinstance(input_spec, dict) and isinstance(replay, dict):
         expected_replay = dict(input_spec)
@@ -240,6 +478,9 @@ def _check_record(root: Path, result: dict, manifest: dict):
             field = "source" if source["id"] == "source-1" else "station_reference"
             _require(isinstance(input_spec.get(field), dict), "Input source is not an object.")
             expected_replay[field] = {**input_spec[field], "file": source["file"], "sha256": source["sha256"]}
+        if reading is not None:
+            _require(isinstance(input_spec.get("table_reading"), dict), "Input table reading is not an object.")
+            expected_replay["table_reading"] = {**input_spec["table_reading"], **reading}
         _require(expected_replay == replay, "Replay metadata differs from the submitted inference specification.")
     else:
         _require(replay is None and not result["sources"], "Rejected input cannot contain unexplained replay evidence.")
@@ -252,7 +493,10 @@ def _check_record(root: Path, result: dict, manifest: dict):
         ids.add(section["id"])
         _require(finite(section.get("x_m")) and abs(section["x_m"]) <= 1e7, "Invalid observed station coordinate.")
         _require(section["id"] in input_sections and section["x_m"] == input_sections[section["id"]].get("x_m"), "Observed station contradicts its input calibration.")
-        _points(section.get("points_yz_m"), minimum=5)
+        if "regions" in section:
+            _check_region_section(section)
+        else:
+            _points(section.get("points_yz_m"), minimum=5)
         _require(finite(section.get("coverage")) and 0 <= section["coverage"] <= 1, "Invalid observation coverage.")
         evidence = section.get("evidence")
         _require(isinstance(evidence, dict) and evidence.get("source_id") == "source-1" and "source-1" in source_ids
@@ -261,52 +505,40 @@ def _check_record(root: Path, result: dict, manifest: dict):
         _require("extracted_sections.json" in declared, "Observed sections artifact is missing.")
         extracted = _read(root, "extracted_sections.json")
         _require(isinstance(extracted, dict) and extracted.get("sections") == sections, "Observed sections disagree with the immutable record.")
-        expected_digest = digest_object([{key: section[key] for key in ("id", "x_m", "points_yz_m")} for section in sections])
+        expected_digest = digest_object([observed_geometry(section) for section in sections])
         _require(provenance.get("extracted_geometry_sha256") == expected_digest, "Observed-geometry digest mismatch.")
     exports = result["exports"]
     if status != "review_required":
         _require(not exports and not result["parts"] and not result["metrics"] and not result["normalized_sections"], "A non-success state exposes geometry or authoritative geometry metrics.")
-        _require(not {"mesh.json", "model.step", "model.stl", "cad_sections.json"}.intersection(declared), "A non-success run retains published geometry.")
+        _require(not GEOMETRY_NAMES.intersection(declared),
+                 "A non-success run retains published geometry.")
         return
     _require(isinstance(input_spec, dict) and isinstance(replay, dict) and "source-1" in source_ids, "Successful run lacks input evidence.")
     _require(set(input_sections) == ids and len(ids) >= 3, "Required stations are missing from a successful run.")
     expected_exports = {"mesh": "mesh.json", "mesh_units": "m"}
     if result["requested_exports"]:
-        expected_exports.update(step="model.step", step_units="mm", stl="model.stl", stl_units="mm")
+        if export_results is None or "step" in exports:
+            expected_exports.update(step=step_name, step_units="mm")
+        if export_results is None or "stl" in exports:
+            expected_exports.update(stl=stl_name, stl_units="mm")
+        if has_iges:
+            expected_exports.update(iges=iges_name, iges_units="mm")
+        if has_rhino:
+            expected_exports.update({"3dm": rhino_name, "3dm_units": "mm"})
     _require(exports == expected_exports, "Export status, request, filenames or units are inconsistent.")
     _require({"mesh.json", "cad_sections.json", "extracted_sections.json"} <= declared, "Required successful geometry evidence is missing.")
     if result["requested_exports"]:
-        _require({"model.step", "model.stl"} <= declared, "Requested CAD exports are missing.")
+        if export_results is None:
+            _require({step_name, stl_name} <= declared, "Requested CAD exports are missing.")
     else:
-        _require(not {"model.step", "model.stl"}.intersection(declared), "Unrequested CAD exports present.")
+        _require(not {step_name, stl_name, iges_name, rhino_name}.intersection(declared), "Unrequested CAD exports present.")
     normalized = result["normalized_sections"]
     _require(_read(root, "cad_sections.json") == normalized and len(normalized) == len(sections), "Normalized CAD sections disagree with the record.")
-    original = {section["id"]: section for section in sections}
-    for section in normalized:
-        _require(isinstance(section, dict) and section.get("id") in original, "Unknown CAD section identity.")
-        _require({key: value for key, value in section.items() if key not in ("cad_points_yz_m", "cad_approximation")} == original[section["id"]], "CAD section altered its recorded observations.")
-        _points(section.get("cad_points_yz_m"))
-    _require(len({section["id"] for section in normalized}) == len(sections), "Duplicate CAD section identity.")
-    xs = [section["x_m"] for section in normalized]
-    _require(all(b > a for a, b in zip(xs, xs[1:])), "CAD station ordering is invalid.")
-    n = len(normalized[0]["cad_points_yz_m"])
-    _require(all(len(section["cad_points_yz_m"]) == n for section in normalized), "CAD correspondence is inconsistent.")
-    volume = 0.0
-    for left, right in zip(normalized, normalized[1:]):
-        a, b = left["cad_points_yz_m"], right["cad_points_yz_m"]
-        midpoint = [[(p[0] + q[0]) / 2, (p[1] + q[1]) / 2] for p, q in zip(a, b)]
-        volume += (right["x_m"] - left["x_m"]) * (_area(a) + 4 * _area(midpoint) + _area(b)) / 6
     metrics = result["metrics"]
-    _check_approximation(normalized, metrics)
-    for name in ("volume_m3", "surface_area_m2", "length_m", "beam_m", "depth_m"):
-        _require(finite(metrics.get(name)) and metrics[name] > 0, "Invalid authoritative geometry metric.")
-    _require(_close(metrics["volume_m3"], volume), "Volume disagrees with independently integrated normalized sections.")
-    beam = 2 * max(point[0] for section in normalized for point in section["cad_points_yz_m"])
-    zmin = min(point[1] for section in normalized for point in section["cad_points_yz_m"])
-    zmax = max(point[1] for section in normalized for point in section["cad_points_yz_m"])
-    _require(_close(metrics["length_m"], xs[-1] - xs[0]) and _close(metrics["beam_m"], beam) and _close(metrics["depth_m"], zmax - zmin), "Dimensions disagree with normalized CAD bounds.")
-    _require(metrics.get("cad_valid") is True and type(metrics.get("solid_count")) is int and metrics["solid_count"] == 1,
-             "Successful CAD validity record is missing.")
+    if any("regions" in section for section in sections):
+        _check_region_cad(sections, normalized, metrics)
+    else:
+        _check_single_curve_cad(sections, normalized, metrics, draft="draft" in result)
     _require(metrics.get("section_count") == len(normalized) and _close(metrics.get("minimum_observation_coverage"), min(s["coverage"] for s in sections)), "Observation summary disagrees with section evidence.")
     mesh = _read(root, "mesh.json")
     _require(isinstance(mesh, dict) and mesh.get("units") == "m", "Invalid mesh units/schema.")

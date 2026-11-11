@@ -1,0 +1,744 @@
+{
+  "source_sha256": "8716bc87b7d15bec27482db2c43beba24dbac973e99af2abfaa4d63665aa2c1b",
+  "sections": [
+    {
+      "section_id": "s01",
+      "grid_evidence": {
+        "method": "repeated_orthogonal_lattice_v1",
+        "lattice_detected": true,
+        "vertical_lines_px": [
+          128.0,
+          204.0,
+          279.5,
+          356.0,
+          432.0,
+          507.5
+        ],
+        "horizontal_lines_px": [
+          170.5,
+          265.5,
+          360.5,
+          455.5,
+          550.5,
+          645.5,
+          739.0
+        ],
+        "minimum_lines_per_axis": 3,
+        "unique_non_grid_candidate_id": null,
+        "non_grid_competing_components": null,
+        "interpretation": "Geometric grid hypothesis only; overlap with a true contour cannot be semantically certified."
+      },
+      "baseline_gaps": [
+        {
+          "kind": "stroke_identity_unresolved",
+          "message": "The trace follows a sustained grid or buttock ruler. The calibrated range may extend beyond the local hull stroke; supply source-supported local endpoints or a separate view. A corridor cannot establish whole-stroke identity.",
+          "section_id": "s01"
+        }
+      ],
+      "candidates": [],
+      "rejected_trace_hypotheses": [
+        {
+          "hypothesis": "all_contrast_continuity",
+          "reason": "stroke_identity_unresolved",
+          "stroke_identity": {
+            "method": "whole_trace_ruler_identity_v1",
+            "source_before_selection": true,
+            "minimum_sustained_span_px": 93,
+            "ruler_continuations": [
+              {
+                "vertical_line_px": 432.0,
+                "row_range_px": [
+                  479.0,
+                  738.0
+                ],
+                "observed_row_count": 257,
+                "span_px": 260.0
+              }
+            ],
+            "status": "unresolved",
+            "scope": "Sustained ruler overlap cannot establish a single hull stroke. Supply source-supported local endpoints or a separate view; absence of this overlap does not certify semantic identity."
+          }
+        },
+        {
+          "hypothesis": "high_contrast_continuity_hypothesis",
+          "observed_row_fraction": 0.57929,
+          "max_missing_run_px": 70,
+          "maximum_step_px_per_row": 198.0,
+          "reason": "insufficient_row_coverage"
+        }
+      ]
+    },
+    {
+      "section_id": "s02",
+      "grid_evidence": {
+        "method": "repeated_orthogonal_lattice_v1",
+        "lattice_detected": true,
+        "vertical_lines_px": [
+          754.0,
+          829.5,
+          906.0,
+          982.0,
+          1058.0,
+          1133.5
+        ],
+        "horizontal_lines_px": [
+          169.5,
+          264.5,
+          358.5,
+          454.0,
+          549.0,
+          644.0,
+          738.0
+        ],
+        "minimum_lines_per_axis": 3,
+        "unique_non_grid_candidate_id": null,
+        "non_grid_competing_components": null,
+        "interpretation": "Geometric grid hypothesis only; overlap with a true contour cannot be semantically certified."
+      },
+      "baseline_gaps": [
+        {
+          "kind": "stroke_identity_unresolved",
+          "message": "The trace follows a sustained grid or buttock ruler. The calibrated range may extend beyond the local hull stroke; supply source-supported local endpoints or a separate view. A corridor cannot establish whole-stroke identity.",
+          "section_id": "s02"
+        }
+      ],
+      "candidates": [],
+      "rejected_trace_hypotheses": [
+        {
+          "hypothesis": "all_contrast_continuity",
+          "reason": "stroke_identity_unresolved",
+          "stroke_identity": {
+            "method": "whole_trace_ruler_identity_v1",
+            "source_before_selection": true,
+            "minimum_sustained_span_px": 93,
+            "ruler_continuations": [
+              {
+                "vertical_line_px": 1058.0,
+                "row_range_px": [
+                  553.0,
+                  735.0
+                ],
+                "observed_row_count": 183,
+                "span_px": 183.0
+              }
+            ],
+            "status": "unresolved",
+            "scope": "Sustained ruler overlap cannot establish a single hull stroke. Supply source-supported local endpoints or a separate view; absence of this overlap does not certify semantic identity."
+          }
+        },
+        {
+          "hypothesis": "high_contrast_continuity_hypothesis",
+          "observed_row_fraction": 0.71845,
+          "max_missing_run_px": 127,
+          "maximum_step_px_per_row": 16.2168,
+          "reason": "insufficient_row_coverage"
+        }
+      ]
+    },
+    {
+      "section_id": "s03",
+      "grid_evidence": {
+        "method": "repeated_orthogonal_lattice_v1",
+        "lattice_detected": true,
+        "vertical_lines_px": [
+          1380.0,
+          1456.0,
+          1532.0,
+          1608.0,
+          1684.0,
+          1759.5
+        ],
+        "horizontal_lines_px": [
+          168.0,
+          263.0,
+          357.5,
+          452.5,
+          547.5,
+          642.5,
+          737.0
+        ],
+        "minimum_lines_per_axis": 3,
+        "unique_non_grid_candidate_id": "contour-df58653e7513b4d1d6ca",
+        "non_grid_competing_components": 0,
+        "interpretation": "Geometric grid hypothesis only; overlap with a true contour cannot be semantically certified."
+      },
+      "baseline_gaps": [
+        {
+          "kind": "ambiguous_curve",
+          "message": "Multiple sustained source strokes remain plausible across contrast bands. Supply an explicit source-pixel contour selection or separate the views; darkness is not contour identity.",
+          "section_id": "s03"
+        }
+      ],
+      "candidates": [
+        {
+          "candidate_id": "contour-df58653e7513b4d1d6ca",
+          "hypothesis": "grid_supported_contour_hypothesis",
+          "selectable": true,
+          "grid_supported_hypothesis": true,
+          "non_grid_competing_components": 0,
+          "source_support": {
+            "observed_row_fraction": 0.99676,
+            "max_missing_run_px": 2,
+            "maximum_step_px_per_row": 61.646,
+            "long_component_support_fraction": 0.99188,
+            "mean_trace_contrast": 0.38716
+          }
+        }
+      ],
+      "rejected_trace_hypotheses": [
+        {
+          "hypothesis": "retained_alternative_source_continuity",
+          "reason": "stroke_identity_unresolved",
+          "stroke_identity": {
+            "method": "whole_trace_ruler_identity_v1",
+            "source_before_selection": true,
+            "minimum_sustained_span_px": 93,
+            "ruler_continuations": [
+              {
+                "vertical_line_px": 1456.0,
+                "row_range_px": [
+                  121.0,
+                  736.0
+                ],
+                "observed_row_count": 598,
+                "span_px": 616.0
+              }
+            ],
+            "status": "unresolved",
+            "scope": "Sustained ruler overlap cannot establish a single hull stroke. Supply source-supported local endpoints or a separate view; absence of this overlap does not certify semantic identity."
+          }
+        },
+        {
+          "hypothesis": "high_contrast_continuity_hypothesis",
+          "observed_row_fraction": 0.87217,
+          "max_missing_run_px": 61,
+          "maximum_step_px_per_row": 18.5657,
+          "reason": "insufficient_row_coverage"
+        }
+      ]
+    },
+    {
+      "section_id": "s04",
+      "grid_evidence": {
+        "method": "repeated_orthogonal_lattice_v1",
+        "lattice_detected": true,
+        "vertical_lines_px": [
+          129.5,
+          205.5,
+          281.5,
+          357.5,
+          433.5,
+          509.0
+        ],
+        "horizontal_lines_px": [
+          921.5,
+          1016.5,
+          1111.5,
+          1206.5,
+          1301.5,
+          1396.5,
+          1490.0
+        ],
+        "minimum_lines_per_axis": 3,
+        "unique_non_grid_candidate_id": "contour-0fc9212b4df3795912ba",
+        "non_grid_competing_components": 0,
+        "interpretation": "Geometric grid hypothesis only; overlap with a true contour cannot be semantically certified."
+      },
+      "baseline_gaps": [
+        {
+          "kind": "ambiguous_curve",
+          "message": "Multiple sustained source strokes remain plausible across contrast bands. Supply an explicit source-pixel contour selection or separate the views; darkness is not contour identity.",
+          "section_id": "s04"
+        }
+      ],
+      "candidates": [
+        {
+          "candidate_id": "contour-0fc9212b4df3795912ba",
+          "hypothesis": "grid_supported_contour_hypothesis",
+          "selectable": true,
+          "grid_supported_hypothesis": true,
+          "non_grid_competing_components": 0,
+          "source_support": {
+            "observed_row_fraction": 1.0,
+            "max_missing_run_px": 0,
+            "maximum_step_px_per_row": 146.6346,
+            "long_component_support_fraction": 1.0,
+            "mean_trace_contrast": 0.42334
+          }
+        }
+      ],
+      "rejected_trace_hypotheses": [
+        {
+          "hypothesis": "retained_alternative_source_continuity",
+          "reason": "stroke_identity_unresolved",
+          "stroke_identity": {
+            "method": "whole_trace_ruler_identity_v1",
+            "source_before_selection": true,
+            "minimum_sustained_span_px": 93,
+            "ruler_continuations": [
+              {
+                "vertical_line_px": 205.5,
+                "row_range_px": [
+                  874.0,
+                  1491.0
+                ],
+                "observed_row_count": 595,
+                "span_px": 618.0
+              }
+            ],
+            "status": "unresolved",
+            "scope": "Sustained ruler overlap cannot establish a single hull stroke. Supply source-supported local endpoints or a separate view; absence of this overlap does not certify semantic identity."
+          }
+        },
+        {
+          "hypothesis": "high_contrast_continuity_hypothesis",
+          "observed_row_fraction": 0.95955,
+          "max_missing_run_px": 25,
+          "maximum_step_px_per_row": 14.8662,
+          "reason": "insufficient_row_coverage"
+        }
+      ]
+    },
+    {
+      "section_id": "s05",
+      "grid_evidence": {
+        "method": "repeated_orthogonal_lattice_v1",
+        "lattice_detected": true,
+        "vertical_lines_px": [
+          755.5,
+          831.5,
+          907.5,
+          983.5,
+          1059.5,
+          1135.0
+        ],
+        "horizontal_lines_px": [
+          920.5,
+          1015.5,
+          1110.0,
+          1205.0,
+          1300.0,
+          1395.0,
+          1489.0
+        ],
+        "minimum_lines_per_axis": 3,
+        "unique_non_grid_candidate_id": "contour-3cecf6ee04b3b79ea06b",
+        "non_grid_competing_components": 0,
+        "interpretation": "Geometric grid hypothesis only; overlap with a true contour cannot be semantically certified."
+      },
+      "baseline_gaps": [
+        {
+          "kind": "ambiguous_curve",
+          "message": "Multiple sustained source strokes remain plausible across contrast bands. Supply an explicit source-pixel contour selection or separate the views; darkness is not contour identity.",
+          "section_id": "s05"
+        }
+      ],
+      "candidates": [
+        {
+          "candidate_id": "contour-75629caa3ed21b4efcaf",
+          "hypothesis": "all_contrast_continuity",
+          "selectable": true,
+          "grid_supported_hypothesis": true,
+          "non_grid_competing_components": 0,
+          "source_support": {
+            "observed_row_fraction": 0.99838,
+            "max_missing_run_px": 1,
+            "maximum_step_px_per_row": 13.6099,
+            "long_component_support_fraction": 1.0,
+            "mean_trace_contrast": 0.44211
+          }
+        },
+        {
+          "candidate_id": "contour-3cecf6ee04b3b79ea06b",
+          "hypothesis": "grid_supported_contour_hypothesis",
+          "selectable": true,
+          "grid_supported_hypothesis": true,
+          "non_grid_competing_components": 0,
+          "source_support": {
+            "observed_row_fraction": 1.0,
+            "max_missing_run_px": 0,
+            "maximum_step_px_per_row": 13.0468,
+            "long_component_support_fraction": 1.0,
+            "mean_trace_contrast": 0.70082
+          }
+        },
+        {
+          "candidate_id": "contour-e8be24c33fd8f8a5457a",
+          "hypothesis": "source_endpoint_contact_hypothesis",
+          "selectable": true,
+          "grid_supported_hypothesis": true,
+          "non_grid_competing_components": 0,
+          "source_support": {
+            "observed_row_fraction": 1.0,
+            "max_missing_run_px": 0,
+            "maximum_step_px_per_row": 13.6099,
+            "long_component_support_fraction": 1.0,
+            "mean_trace_contrast": 0.44211
+          }
+        },
+        {
+          "candidate_id": "contour-251c45f5019802fefb21",
+          "hypothesis": "source_endpoint_contact_hypothesis",
+          "selectable": true,
+          "grid_supported_hypothesis": true,
+          "non_grid_competing_components": 0,
+          "source_support": {
+            "observed_row_fraction": 1.0,
+            "max_missing_run_px": 0,
+            "maximum_step_px_per_row": 13.0468,
+            "long_component_support_fraction": 1.0,
+            "mean_trace_contrast": 0.70082
+          }
+        }
+      ],
+      "rejected_trace_hypotheses": []
+    },
+    {
+      "section_id": "s06",
+      "grid_evidence": {
+        "method": "repeated_orthogonal_lattice_v1",
+        "lattice_detected": true,
+        "vertical_lines_px": [
+          1381.5,
+          1457.5,
+          1533.5,
+          1609.5,
+          1685.5,
+          1761.0
+        ],
+        "horizontal_lines_px": [
+          919.5,
+          1014.0,
+          1108.5,
+          1203.5,
+          1298.5,
+          1393.5,
+          1488.0
+        ],
+        "minimum_lines_per_axis": 3,
+        "unique_non_grid_candidate_id": "contour-9eb66f129b2686755768",
+        "non_grid_competing_components": 0,
+        "interpretation": "Geometric grid hypothesis only; overlap with a true contour cannot be semantically certified."
+      },
+      "baseline_gaps": [
+        {
+          "kind": "ambiguous_curve",
+          "message": "Multiple sustained source strokes remain plausible across contrast bands. Supply an explicit source-pixel contour selection or separate the views; darkness is not contour identity.",
+          "section_id": "s06"
+        }
+      ],
+      "candidates": [
+        {
+          "candidate_id": "contour-11d10df146e2831f1f89",
+          "hypothesis": "all_contrast_continuity",
+          "selectable": true,
+          "grid_supported_hypothesis": true,
+          "non_grid_competing_components": 0,
+          "source_support": {
+            "observed_row_fraction": 0.99838,
+            "max_missing_run_px": 1,
+            "maximum_step_px_per_row": 16.6145,
+            "long_component_support_fraction": 1.0,
+            "mean_trace_contrast": 0.43734
+          }
+        },
+        {
+          "candidate_id": "contour-9eb66f129b2686755768",
+          "hypothesis": "grid_supported_contour_hypothesis",
+          "selectable": true,
+          "grid_supported_hypothesis": true,
+          "non_grid_competing_components": 0,
+          "source_support": {
+            "observed_row_fraction": 0.99838,
+            "max_missing_run_px": 1,
+            "maximum_step_px_per_row": 16.4186,
+            "long_component_support_fraction": 1.0,
+            "mean_trace_contrast": 0.69353
+          }
+        },
+        {
+          "candidate_id": "contour-3e5f685154152debd914",
+          "hypothesis": "source_endpoint_contact_hypothesis",
+          "selectable": true,
+          "grid_supported_hypothesis": true,
+          "non_grid_competing_components": 0,
+          "source_support": {
+            "observed_row_fraction": 1.0,
+            "max_missing_run_px": 0,
+            "maximum_step_px_per_row": 32.0754,
+            "long_component_support_fraction": 1.0,
+            "mean_trace_contrast": 0.43734
+          }
+        },
+        {
+          "candidate_id": "contour-e1ea9e30423e1f26bddc",
+          "hypothesis": "source_endpoint_contact_hypothesis",
+          "selectable": true,
+          "grid_supported_hypothesis": true,
+          "non_grid_competing_components": 0,
+          "source_support": {
+            "observed_row_fraction": 1.0,
+            "max_missing_run_px": 0,
+            "maximum_step_px_per_row": 32.0754,
+            "long_component_support_fraction": 1.0,
+            "mean_trace_contrast": 0.69353
+          }
+        }
+      ],
+      "rejected_trace_hypotheses": []
+    },
+    {
+      "section_id": "s07",
+      "grid_evidence": {
+        "method": "repeated_orthogonal_lattice_v1",
+        "lattice_detected": true,
+        "vertical_lines_px": [
+          131.5,
+          207.5,
+          283.0,
+          359.5,
+          435.5,
+          510.5
+        ],
+        "horizontal_lines_px": [
+          1672.5,
+          1767.5,
+          1862.5,
+          1957.5,
+          2052.5,
+          2147.5,
+          2241.0
+        ],
+        "minimum_lines_per_axis": 3,
+        "unique_non_grid_candidate_id": "contour-c51cbb1ae981fe63683a",
+        "non_grid_competing_components": 0,
+        "interpretation": "Geometric grid hypothesis only; overlap with a true contour cannot be semantically certified."
+      },
+      "baseline_gaps": [
+        {
+          "kind": "ambiguous_curve",
+          "message": "Multiple sustained source strokes remain plausible across contrast bands. Supply an explicit source-pixel contour selection or separate the views; darkness is not contour identity.",
+          "section_id": "s07"
+        }
+      ],
+      "candidates": [
+        {
+          "candidate_id": "contour-c51cbb1ae981fe63683a",
+          "hypothesis": "grid_supported_contour_hypothesis",
+          "selectable": true,
+          "grid_supported_hypothesis": true,
+          "non_grid_competing_components": 0,
+          "source_support": {
+            "observed_row_fraction": 1.0,
+            "max_missing_run_px": 0,
+            "maximum_step_px_per_row": 263.9969,
+            "long_component_support_fraction": 0.99838,
+            "mean_trace_contrast": 0.43181
+          }
+        }
+      ],
+      "rejected_trace_hypotheses": [
+        {
+          "hypothesis": "retained_alternative_source_continuity",
+          "reason": "stroke_identity_unresolved",
+          "stroke_identity": {
+            "method": "whole_trace_ruler_identity_v1",
+            "source_before_selection": true,
+            "minimum_sustained_span_px": 93,
+            "ruler_continuations": [
+              {
+                "vertical_line_px": 510.5,
+                "row_range_px": [
+                  1625.0,
+                  2241.0
+                ],
+                "observed_row_count": 601,
+                "span_px": 617.0
+              }
+            ],
+            "status": "unresolved",
+            "scope": "Sustained ruler overlap cannot establish a single hull stroke. Supply source-supported local endpoints or a separate view; absence of this overlap does not certify semantic identity."
+          }
+        },
+        {
+          "hypothesis": "high_contrast_continuity_hypothesis",
+          "observed_row_fraction": 0.96117,
+          "max_missing_run_px": 24,
+          "maximum_step_px_per_row": 11.0496,
+          "reason": "insufficient_row_coverage"
+        }
+      ]
+    },
+    {
+      "section_id": "s08",
+      "grid_evidence": {
+        "method": "repeated_orthogonal_lattice_v1",
+        "lattice_detected": true,
+        "vertical_lines_px": [
+          757.5,
+          833.0,
+          909.0,
+          985.0,
+          1061.0,
+          1136.5
+        ],
+        "horizontal_lines_px": [
+          1671.5,
+          1766.5,
+          1860.5,
+          1956.0,
+          2050.5,
+          2146.0,
+          2240.0
+        ],
+        "minimum_lines_per_axis": 3,
+        "unique_non_grid_candidate_id": "contour-6a46c1e180c3537fc7a5",
+        "non_grid_competing_components": 0,
+        "interpretation": "Geometric grid hypothesis only; overlap with a true contour cannot be semantically certified."
+      },
+      "baseline_gaps": [
+        {
+          "kind": "ambiguous_curve",
+          "message": "Multiple sustained source strokes remain plausible across contrast bands. Supply an explicit source-pixel contour selection or separate the views; darkness is not contour identity.",
+          "section_id": "s08"
+        }
+      ],
+      "candidates": [
+        {
+          "candidate_id": "contour-6a46c1e180c3537fc7a5",
+          "hypothesis": "grid_supported_contour_hypothesis",
+          "selectable": true,
+          "grid_supported_hypothesis": true,
+          "non_grid_competing_components": 0,
+          "source_support": {
+            "observed_row_fraction": 1.0,
+            "max_missing_run_px": 0,
+            "maximum_step_px_per_row": 149.5038,
+            "long_component_support_fraction": 0.99191,
+            "mean_trace_contrast": 0.41234
+          }
+        }
+      ],
+      "rejected_trace_hypotheses": [
+        {
+          "hypothesis": "retained_alternative_source_continuity",
+          "reason": "stroke_identity_unresolved",
+          "stroke_identity": {
+            "method": "whole_trace_ruler_identity_v1",
+            "source_before_selection": true,
+            "minimum_sustained_span_px": 93,
+            "ruler_continuations": [
+              {
+                "vertical_line_px": 1061.0,
+                "row_range_px": [
+                  1624.0,
+                  2241.0
+                ],
+                "observed_row_count": 606,
+                "span_px": 618.0
+              }
+            ],
+            "status": "unresolved",
+            "scope": "Sustained ruler overlap cannot establish a single hull stroke. Supply source-supported local endpoints or a separate view; absence of this overlap does not certify semantic identity."
+          }
+        },
+        {
+          "hypothesis": "retained_alternative_source_continuity",
+          "reason": "stroke_identity_unresolved",
+          "stroke_identity": {
+            "method": "whole_trace_ruler_identity_v1",
+            "source_before_selection": true,
+            "minimum_sustained_span_px": 93,
+            "ruler_continuations": [
+              {
+                "vertical_line_px": 1136.5,
+                "row_range_px": [
+                  1624.0,
+                  2240.0
+                ],
+                "observed_row_count": 607,
+                "span_px": 617.0
+              }
+            ],
+            "status": "unresolved",
+            "scope": "Sustained ruler overlap cannot establish a single hull stroke. Supply source-supported local endpoints or a separate view; absence of this overlap does not certify semantic identity."
+          }
+        },
+        {
+          "hypothesis": "high_contrast_continuity_hypothesis",
+          "observed_row_fraction": 0.90777,
+          "max_missing_run_px": 39,
+          "maximum_step_px_per_row": 11.8013,
+          "reason": "insufficient_row_coverage"
+        }
+      ]
+    },
+    {
+      "section_id": "s09",
+      "grid_evidence": {
+        "method": "repeated_orthogonal_lattice_v1",
+        "lattice_detected": true,
+        "vertical_lines_px": [
+          1383.5,
+          1459.0,
+          1535.0,
+          1611.0,
+          1687.0,
+          1762.5
+        ],
+        "horizontal_lines_px": [
+          1670.0,
+          1765.5,
+          1859.5,
+          1954.5,
+          2049.5,
+          2144.5,
+          2239.0
+        ],
+        "minimum_lines_per_axis": 3,
+        "unique_non_grid_candidate_id": null,
+        "non_grid_competing_components": null,
+        "interpretation": "Geometric grid hypothesis only; overlap with a true contour cannot be semantically certified."
+      },
+      "baseline_gaps": [
+        {
+          "kind": "stroke_identity_unresolved",
+          "message": "The trace follows a sustained grid or buttock ruler. The calibrated range may extend beyond the local hull stroke; supply source-supported local endpoints or a separate view. A corridor cannot establish whole-stroke identity.",
+          "section_id": "s09"
+        }
+      ],
+      "candidates": [],
+      "rejected_trace_hypotheses": [
+        {
+          "hypothesis": "all_contrast_continuity",
+          "reason": "stroke_identity_unresolved",
+          "stroke_identity": {
+            "method": "whole_trace_ruler_identity_v1",
+            "source_before_selection": true,
+            "minimum_sustained_span_px": 93,
+            "ruler_continuations": [
+              {
+                "vertical_line_px": 1611.0,
+                "row_range_px": [
+                  2103.0,
+                  2236.0
+                ],
+                "observed_row_count": 134,
+                "span_px": 134.0
+              }
+            ],
+            "status": "unresolved",
+            "scope": "Sustained ruler overlap cannot establish a single hull stroke. Supply source-supported local endpoints or a separate view; absence of this overlap does not certify semantic identity."
+          }
+        },
+        {
+          "hypothesis": "high_contrast_continuity_hypothesis",
+          "observed_row_fraction": 0.77023,
+          "max_missing_run_px": 142,
+          "maximum_step_px_per_row": 5.476,
+          "reason": "insufficient_row_coverage"
+        }
+      ]
+    }
+  ]
+}

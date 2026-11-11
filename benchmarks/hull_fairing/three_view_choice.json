@@ -1,0 +1,16 @@
+{
+  "plan_weight": 0.5,
+  "fairness": 0.02,
+  "fit_cases": [
+    "dtmb5415-3v-L0",
+    "series60-3v-L0",
+    "shipd-1-00679-3v-L0",
+    "shipd-1-08158-3v-L0",
+    "shipd-1-09867-3v-L0"
+  ],
+  "protocol_sha256": "54de016f834399e9792d1787f9fc56f5f3eed93b3b8c3f82ee356af1d4f61a42",
+  "minimum_fit_fidelity": 0.3213859020310633,
+  "worst_fit_follow_share": 0.9931119163083145,
+  "selection": "section 8.3; no candidate met T4",
+  "engineering_approved": false
+}

@@ -1,0 +1,22 @@
+{
+  "shipd-1-01410-L0": {
+    "rms_mm": 30.820061572755527,
+    "volume_error_pct": -0.376904537648107,
+    "correct": true
+  },
+  "shipd-2-01040-L0": {
+    "rms_mm": 31.575662049805594,
+    "volume_error_pct": -0.8977879176883521,
+    "correct": true
+  },
+  "shipd-2-05051-L0": {
+    "rms_mm": 34.44163516770416,
+    "volume_error_pct": -0.807899198900368,
+    "correct": true
+  },
+  "wigley-L0": {
+    "rms_mm": 7.506758309379323,
+    "volume_error_pct": -1.3286448591014384,
+    "correct": true
+  }
+}

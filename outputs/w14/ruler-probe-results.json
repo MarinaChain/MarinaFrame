@@ -1,0 +1,524 @@
+[
+  {
+    "crop": [
+      600,
+      300,
+      2200,
+      1700
+    ],
+    "mode": "normalized_1000",
+    "image_size": [
+      966,
+      855
+    ],
+    "truth": {
+      "C": [
+        936,
+        1098
+      ],
+      "D": [
+        1992,
+        1386
+      ],
+      "F": [
+        1488,
+        774
+      ]
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black diagonal mark left of label C near (224,550)",
+          "id": "C",
+          "value": null,
+          "x": 224.0,
+          "y": 550.0
+        },
+        {
+          "evidence": "black dot left of label D near (820,727)",
+          "id": "D",
+          "value": null,
+          "x": 820.0,
+          "y": 727.0
+        },
+        {
+          "evidence": "black diagonal mark left of label F near (541,344)",
+          "id": "F",
+          "value": null,
+          "x": 541.0,
+          "y": 344.0
+        }
+      ]
+    },
+    "error_px": [
+      25.264446620712125,
+      54.97217891867495,
+      21.184979816006667
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        1.7711237643989473,
+        1.5972311684070146
+      ],
+      "offset": [
+        536.2562778092231,
+        222.9627586707431
+      ],
+      "rms_px": 5.162896673351286
+    }
+  },
+  {
+    "crop": [
+      0,
+      0,
+      2400,
+      1800
+    ],
+    "mode": "source_rulers",
+    "image_size": [
+      1038,
+      797
+    ],
+    "truth": {
+      "A": [
+        408,
+        414
+      ],
+      "B": [
+        1728,
+        324
+      ],
+      "C": [
+        936,
+        1098
+      ],
+      "D": [
+        1992,
+        1386
+      ],
+      "E": [
+        504,
+        1494
+      ],
+      "F": [
+        1488,
+        774
+      ]
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labeled A near x=204, y=200",
+          "id": "A",
+          "value": null,
+          "x": 204.0,
+          "y": 200.0
+        },
+        {
+          "evidence": "black plus mark labeled B near x=733, y=164",
+          "id": "B",
+          "value": null,
+          "x": 733.0,
+          "y": 164.0
+        },
+        {
+          "evidence": "black arrow mark labeled C near x=410, y=470",
+          "id": "C",
+          "value": null,
+          "x": 410.0,
+          "y": 470.0
+        },
+        {
+          "evidence": "black dot labeled D near x=841, y=576",
+          "id": "D",
+          "value": null,
+          "x": 841.0,
+          "y": 576.0
+        },
+        {
+          "evidence": "black plus mark labeled E near x=241, y=616",
+          "id": "E",
+          "value": null,
+          "x": 241.0,
+          "y": 616.0
+        },
+        {
+          "evidence": "black arrow mark labeled F near x=630, y=342",
+          "id": "F",
+          "value": null,
+          "x": 630.0,
+          "y": 342.0
+        }
+      ]
+    },
+    "error_px": [
+      295.6552045880471,
+      1007.7822185373187,
+      819.1825193447429,
+      1407.4448479425403,
+      916.5440524055567,
+      960.6185507265618
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        2.489107158262083,
+        2.5830699807446384
+      ],
+      "offset": [
+        -93.02979952061871,
+        -104.45161906721675
+      ],
+      "rms_px": 10.15406269218765
+    }
+  },
+  {
+    "crop": [
+      600,
+      300,
+      2200,
+      1700
+    ],
+    "mode": "source_rulers",
+    "image_size": [
+      966,
+      855
+    ],
+    "truth": {
+      "C": [
+        936,
+        1098
+      ],
+      "D": [
+        1992,
+        1386
+      ],
+      "F": [
+        1488,
+        774
+      ]
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "short diagonal stroke with label C near x=840, y=1105 in source ruler coordinates",
+          "id": "C",
+          "value": null,
+          "x": 840.0,
+          "y": 1105.0
+        },
+        {
+          "evidence": "dot with label D near x=1920, y=1375 in source ruler coordinates",
+          "id": "D",
+          "value": null,
+          "x": 1920.0,
+          "y": 1375.0
+        },
+        {
+          "evidence": "short diagonal stroke with label F near x=1440, y=790 in source ruler coordinates",
+          "id": "F",
+          "value": null,
+          "x": 1440.0,
+          "y": 790.0
+        }
+      ]
+    },
+    "error_px": [
+      96.25487000666512,
+      72.83543093852057,
+      50.59644256269407
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        0.9754098360655734,
+        1.045669291338583
+      ],
+      "offset": [
+        106.42622950819838,
+        -53.77952755905492
+      ],
+      "rms_px": 16.515761039717514
+    }
+  },
+  {
+    "crop": [
+      0,
+      0,
+      2400,
+      1800
+    ],
+    "mode": "normalized_1000",
+    "image_size": [
+      1038,
+      797
+    ],
+    "truth": {
+      "A": [
+        408,
+        414
+      ],
+      "B": [
+        1728,
+        324
+      ],
+      "C": [
+        936,
+        1098
+      ],
+      "D": [
+        1992,
+        1386
+      ],
+      "E": [
+        504,
+        1494
+      ],
+      "F": [
+        1488,
+        774
+      ]
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labeled A",
+          "id": "A",
+          "value": null,
+          "x": 201.3,
+          "y": 250.9
+        },
+        {
+          "evidence": "black plus labeled B",
+          "id": "B",
+          "value": null,
+          "x": 713.9,
+          "y": 201.4
+        },
+        {
+          "evidence": "black arrow labeled C",
+          "id": "C",
+          "value": null,
+          "x": 401.7,
+          "y": 579.7
+        },
+        {
+          "evidence": "black dot labeled D",
+          "id": "D",
+          "value": null,
+          "x": 812.1,
+          "y": 713.9
+        },
+        {
+          "evidence": "black plus labeled E",
+          "id": "E",
+          "value": null,
+          "x": 235.1,
+          "y": 763.5
+        },
+        {
+          "evidence": "black arrow labeled F",
+          "id": "F",
+          "value": null,
+          "x": 611.8,
+          "y": 420.3
+        }
+      ]
+    },
+    "error_px": [
+      22.761773325882686,
+      27.906620363837913,
+      41.63754047686504,
+      64.04969637848963,
+      73.72631074933992,
+      31.708666796445403
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        2.5834449262411185,
+        2.0857070300564424
+      ],
+      "offset": [
+        -105.34562600015757,
+        -103.415980992726
+      ],
+      "rms_px": 9.303915111741958
+    }
+  },
+  {
+    "crop": [
+      0,
+      0,
+      2400,
+      1800
+    ],
+    "mode": "attachment_pixels",
+    "image_size": [
+      1038,
+      797
+    ],
+    "truth": {
+      "A": [
+        408,
+        414
+      ],
+      "B": [
+        1728,
+        324
+      ],
+      "C": [
+        936,
+        1098
+      ],
+      "D": [
+        1992,
+        1386
+      ],
+      "E": [
+        504,
+        1494
+      ],
+      "F": [
+        1488,
+        774
+      ]
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "black dot labeled A",
+          "id": "A",
+          "value": null,
+          "x": 203.0,
+          "y": 201.0
+        },
+        {
+          "evidence": "black plus labeled B",
+          "id": "B",
+          "value": null,
+          "x": 737.0,
+          "y": 165.0
+        },
+        {
+          "evidence": "black arrow labeled C",
+          "id": "C",
+          "value": null,
+          "x": 410.0,
+          "y": 466.0
+        },
+        {
+          "evidence": "black dot labeled D",
+          "id": "D",
+          "value": null,
+          "x": 841.0,
+          "y": 565.0
+        },
+        {
+          "evidence": "black plus labeled E",
+          "id": "E",
+          "value": null,
+          "x": 241.0,
+          "y": 604.0
+        },
+        {
+          "evidence": "black arrow labeled F",
+          "id": "F",
+          "value": null,
+          "x": 630.0,
+          "y": 341.0
+        }
+      ]
+    },
+    "error_px": [
+      8.159770777935343,
+      14.115059028623405,
+      31.166331721144047,
+      73.06000661095541,
+      83.96161164906113,
+      20.742898185117014
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        2.480504554585922,
+        2.66060097888189
+      ],
+      "offset": [
+        -89.8841576903485,
+        -123.52124875689806
+      ],
+      "rms_px": 13.782583758127663
+    }
+  },
+  {
+    "crop": [
+      600,
+      300,
+      2200,
+      1700
+    ],
+    "mode": "attachment_pixels",
+    "image_size": [
+      966,
+      855
+    ],
+    "truth": {
+      "C": [
+        936,
+        1098
+      ],
+      "D": [
+        1992,
+        1386
+      ],
+      "F": [
+        1488,
+        774
+      ]
+    },
+    "raw_reply": {
+      "answers": [
+        {
+          "evidence": "short diagonal stroke immediately left of label C",
+          "id": "C",
+          "value": null,
+          "x": 218.0,
+          "y": 1118.0
+        },
+        {
+          "evidence": "small dot immediately left of label D",
+          "id": "D",
+          "value": null,
+          "x": 819.0,
+          "y": 1378.0
+        },
+        {
+          "evidence": "short diagonal stroke immediately left of label F",
+          "id": "F",
+          "value": null,
+          "x": 524.0,
+          "y": 778.0
+        }
+      ]
+    },
+    "error_px": [
+      1136.6568960751272,
+      1313.5223677077631,
+      852.8175682511286
+    ],
+    "fit": {
+      "axis_order": "xy",
+      "scale": [
+        1.7573625757111588,
+        1.016642120765832
+      ],
+      "offset": [
+        557.5856731049602,
+        -23.495434462444834
+      ],
+      "rms_px": 12.669110433023107
+    }
+  }
+]

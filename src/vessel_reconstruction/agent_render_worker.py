@@ -9,17 +9,28 @@ import argparse
 import json
 import os
 from pathlib import Path
-import resource
 import time
+
+from .process_limits import posix_resource
+from .resources import native_resource_profile, peak_rss_kib
+
+# A region run (geometry.build_region_hull) is a compound whose solids end on
+# station planes. Its audit cuts this far aft and forward of the station
+# (0.1 micrometre, in STEP millimetres) and joins both cuts, so a solid that
+# ends on the plane is cut too (as the benchmark scorer does).
+REGION_CUT_OFFSET_MM = 1e-4
+# Agreement required between each reimported solid volume and the engine's
+# solid volume; the same bound as the whole-model metric check.
+REGION_SOLID_VOLUME_TOLERANCE = 1e-6
 
 
 def _reimport(run: Path):
     from .provenance import digest_file, safe_relative_file
     from .run_record import verify_run
-    from .schema import load_bounded_json
+    from .schema import load_build_result
     if not verify_run(run).get("valid"):
         raise ValueError("The immutable engine run does not verify.")
-    record = load_bounded_json(run / "result.json", max_bytes=32 * 1024**2, max_nodes=600_000)
+    record = load_build_result(run / "result.json")
     if record["status"] != "review_required" or record["exports"].get("step_units") != "mm":
         raise ValueError("A verified millimetre STEP export is required.")
     path = safe_relative_file(run, record["exports"]["step"])
@@ -28,9 +39,11 @@ def _reimport(run: Path):
     bounds = shape.BoundingBox()
     metrics = {"length_m": bounds.xlen / 1000, "beam_m": bounds.ylen / 1000,
                "depth_m": bounds.zlen / 1000, "volume_m3": shape.Volume() / 1e9}
-    valid = shape.isValid() and len(shape.Solids()) == 1 and len(shape.Shells()) == 1 and shape.Shells()[0].Closed()
     extent_error = max(abs(metrics[k] - record["metrics"][k]) / max(abs(record["metrics"][k]), 1e-12)
                        for k in metrics)
+    if "region_loft" in record["metrics"]:
+        return shape, record, _region_audit(shape, record, path, metrics, extent_error)
+    valid = shape.isValid() and len(shape.Solids()) == 1 and len(shape.Shells()) == 1 and shape.Shells()[0].Closed()
     if not valid or extent_error > 1e-6:
         raise ValueError("Reimported STEP topology, units, or metrics conflict with the engine record.")
     audit = {"source": "independently_reimported_exported_STEP", "step_sha256": digest_file(path),
@@ -42,9 +55,97 @@ def _reimport(run: Path):
     return shape, record, audit
 
 
-def render_step(run: Path, view: str, out: Path):
+def _region_audit(shape, record: dict, path: Path, metrics: dict, extent_error: float) -> dict:
+    """Reimport audit of a region compound: every solid valid, closed and of the engine's volume.
+
+    The solid list is sorted by volume, because STEP does not keep an order
+    that the engine record could name; the engine's solid volumes are
+    compared as a sorted list.
+    """
+    from .provenance import digest_file
+    expected = record["metrics"]["solid_count"]
+    solids = []
+    for solid in shape.Solids():
+        shells = solid.Shells()
+        solids.append({"volume_m3": solid.Volume() / 1e9, "valid_shape": bool(solid.isValid()),
+                       "shell_count": len(shells), "closed_shell": len(shells) == 1 and bool(shells[0].Closed())})
+    solids.sort(key=lambda item: item["volume_m3"])
+    engine = sorted(record["metrics"]["region_loft"]["solid_volumes_m3"])
+    if len(solids) != expected or len(engine) != expected:
+        raise ValueError("Reimported STEP solid count conflicts with the engine record.")
+    volume_error = max(abs(item["volume_m3"] - volume) / max(volume, 1e-12) for item, volume in zip(solids, engine))
+    closed = all(item["closed_shell"] for item in solids)
+    valid = (shape.isValid() and closed and all(item["valid_shape"] and item["shell_count"] == 1 for item in solids)
+             and len(shape.Shells()) == expected)
+    if not valid or extent_error > 1e-6 or volume_error > REGION_SOLID_VOLUME_TOLERANCE:
+        raise ValueError("Reimported STEP topology, units, or metrics conflict with the engine record.")
+    return {"source": "independently_reimported_exported_STEP", "step_sha256": digest_file(path),
+            "step_units": "mm", "reported_units": "m", "valid_shape": bool(valid),
+            "solid_count": len(solids), "shell_count": len(shape.Shells()),
+            "closed_shell": closed, "metrics": metrics,
+            "relative_metric_error": float(extent_error),
+            "expected_solid_count": expected, "solids": solids,
+            "solid_volume_relative_error": float(volume_error),
+            "engineering_approved": False, "human_semantic_review_required": True}
+
+
+def _observed_samples(section: dict):
+    """All observed samples of a section and, for a multi-piece section, each piece's share."""
+    import numpy as np
+    if "points_yz_m" in section:
+        return np.asarray(section["points_yz_m"], dtype=float), []
+    pieces = [np.asarray(piece["points_yz_m"] + piece.get("inner_points_yz_m", []), dtype=float)
+              for piece in section["pieces"]]
+    return np.vstack(pieces), [len(piece) for piece in pieces]
+
+
+def _cut_edges(shape, x: float, regions: bool):
+    """Edges of the STEP section at station x; a region compound joins cuts on both sides."""
+    import cadquery as cq
+    offsets = (-REGION_CUT_OFFSET_MM, REGION_CUT_OFFSET_MM) if regions else (0.0,)
+    edges = []
+    for offset in offsets:
+        cut = cq.Workplane("YZ", origin=(x * 1000 + offset, 0, 0)).newObject([shape]).section().val()
+        edges.extend(cut.Edges())
+    return edges
+
+
+def station_overlay(record: dict, request: dict, out: Path, vertices_m, triangles, tolerance_m: float) -> dict:
+    """Built station cuts on the source body plan and their scoreboard (station_overlay.py).
+
+    ``request`` comes from DomainTools: the source image as PNG, every
+    declared section (id, x_m, roi_px, calibration) and, for a station that
+    the build does not contain, the best trace as its reference curve. The
+    cuts slice the render tessellation (vertices in metres).
+    """
+    import numpy as np
+    from PIL import Image
+    from .draft import section_sources
+    from .station_overlay import AUTHORED_LABELS, build_overlay, slice_mesh
+    triangles = np.asarray(triangles, dtype=int)
+    guesses = (record.get("draft") or {}).get("guesses", [])
+    labels = {row["section_id"]: row["label"] for row in section_sources(record["sections"], guesses)["sections"]}
+    built = {section["id"]: section for section in record["sections"]}
+    references = {}
+    for sid, section in built.items():
+        kind = "authored_curve" if labels.get(sid) in AUTHORED_LABELS else "built_trace"
+        references[sid] = (kind, _observed_samples(section)[0])
+    for sid, points in request.get("references", {}).items():
+        if sid not in built and points:
+            references[sid] = ("best_unbuilt_trace", np.asarray(points, dtype=float))
+    sections = [{"id": s["id"], "x_m": s["x_m"], "roi_px": s["roi_px"], "calibration": s["calibration"]}
+                for s in request["sections"]]
+    with Image.open(request["source_image"]) as opened:
+        image = np.asarray(opened.convert("L"))
+    return build_overlay(sections=sections, labels=labels, references=references, image=image,
+                         cut=lambda x: slice_mesh(vertices_m, triangles, x), out=out,
+                         cut_tolerance_m=tolerance_m)
+
+
+def render_step(run: Path, view: str, out: Path, overlay: dict | None = None):
     import numpy as np
     from PIL import Image, ImageDraw, ImageFont
+    from .fonts import dejavu_sans
     from OCP.BRepMesh import BRepMesh_IncrementalMesh
     shape, record, audit = _reimport(run)
     if view not in {"body", "plan", "profile", "oblique"}:
@@ -77,8 +178,8 @@ def render_step(run: Path, view: str, out: Path):
     canvas = Image.new("RGB", (1200, 820), "#f4f7fa")
     draw = ImageDraw.Draw(canvas)
     try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
-        small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 15)
+        font = dejavu_sans(18)
+        small = dejavu_sans(15)
     except OSError:
         font = small = ImageFont.load_default()
     draw.text((28, 20), "PROVISIONAL HULL | " + view.upper() + " | ACTUAL STEP REIMPORT", fill="#17344a", font=font)
@@ -102,16 +203,27 @@ def render_step(run: Path, view: str, out: Path):
     draw.text((28, 792), "STEP SHA-256 " + audit["step_sha256"], fill="#657581", font=small)
     canvas.save(out / "render.png")
     from .agent_tools import _model_observation_image
-    return {"geometry_audit": audit, "view": view,
-            "model_observation": _model_observation_image(out / "render.png")}
+    result = {"geometry_audit": audit, "view": view,
+              "model_observation": _model_observation_image(out / "render.png")}
+    if overlay is not None:
+        # A display aid: it never fails the render.
+        try:
+            result["station_overlay"] = station_overlay(record, overlay, out, vertices, triangles,
+                                                        tolerance / 1000)
+        except Exception as exc:
+            result["station_overlay"] = {"status": "skipped", "warning": "Station overlay skipped: "
+                                         + type(exc).__name__ + "."}
+    return result
 
 
 def audit_step(run: Path, out: Path):
     import cadquery as cq
     import numpy as np
     from PIL import Image, ImageDraw, ImageFont
+    from .fonts import dejavu_sans
     from .provenance import write_json
     shape, record, audit = _reimport(run)
+    regions = "region_loft" in record["metrics"]
     source_sections = record["sections"]
     indices = sorted(set([0, min(1, len(source_sections) - 1), len(source_sections) // 2,
                           max(0, len(source_sections) - 2), len(source_sections) - 1]))
@@ -120,8 +232,7 @@ def audit_step(run: Path, out: Path):
     for index in indices:
         section = source_sections[index]
         x = float(section["x_m"])
-        cut = cq.Workplane("YZ", origin=(x * 1000, 0, 0)).newObject([shape]).section().val()
-        edges = cut.Edges()
+        edges = _cut_edges(shape, x, regions)
         if not edges or len(edges) > 8192:
             raise ValueError("A sampled STEP section is missing or exceeds the cut complexity limit.")
         segments = []
@@ -129,7 +240,7 @@ def audit_step(run: Path, out: Path):
             points, _ = edge.sample(2 if edge.geomType() == "LINE" else 16)
             yz = np.array([[p.y / 1000, p.z / 1000] for p in points])
             segments.extend(zip(yz[:-1], yz[1:]))
-        observed = np.asarray(section["points_yz_m"], dtype=float)
+        observed, piece_counts = _observed_samples(section)
         starts = np.array([s[0] for s in segments]); ends = np.array([s[1] for s in segments])
         vectors = ends - starts
         length2 = np.sum(vectors * vectors, axis=1)
@@ -144,11 +255,17 @@ def audit_step(run: Path, out: Path):
                   "max_m": float(np.max(distance)), "max_px": float(np.max(distance) * ppm),
                   "source_measurement_uncertainty_m": section["evidence"].get("measurement_uncertainty_m"),
                   "section_edges": len(edges)}
+        if regions:
+            # Trace fidelity of each piece, so one piece cannot hide behind another.
+            bounds = np.cumsum([0, *piece_counts])
+            report["pieces"] = [{"piece": index, "sample_count": int(count),
+                                 "max_m": float(np.max(distance[bounds[index]:bounds[index + 1]]))}
+                                for index, count in enumerate(piece_counts)]
         reports.append(report)
         width, height = 950, 750
         canvas = Image.new("RGB", (width, height), "white"); draw = ImageDraw.Draw(canvas)
         try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
+            font = dejavu_sans(16)
         except OSError:
             font = ImageFont.load_default()
         draw.text((24, 18), f"{section['id']} | observed source centre vs ACTUAL STEP CUT at x={x:.6g} m", fill="#17344a", font=font)
@@ -201,20 +318,28 @@ def main():
             result = inspect_source_worker(Path(request["spec_path"]), request["section_ids"], args.out)
         else:
             args.out.mkdir(parents=True, exist_ok=False)
-            result = (render_step(Path(request["run_dir"]), request["view"], args.out)
+            result = (render_step(Path(request["run_dir"]), request["view"], args.out,
+                                  request.get("station_overlay"))
                       if args.operation == "render" else audit_step(Path(request["run_dir"]), args.out))
+        resource = posix_resource()
         usage = resource.getrusage(resource.RUSAGE_SELF)
         result["resources"] = {"wall_seconds": round(time.monotonic() - started, 4),
                                "cpu_seconds": round(usage.ru_utime + usage.ru_stime, 4),
-                               "peak_rss_kib": usage.ru_maxrss,
-                               "resource_profile": "linux_rlimit_process_group_v1"}
+                               "peak_rss_kib": peak_rss_kib(usage.ru_maxrss),
+                               "resource_profile": native_resource_profile()}
         write_json(args.out / "observation.json", result)
         return 0
     except BaseException as exc:
         # Bounded diagnostic only; no exception message, path, request or secret.
         args.out.mkdir(parents=True, exist_ok=True)
-        write_json(args.out / "worker-error.json", {"error_code": "domain_worker_failed",
-                                                   "exception_type": type(exc).__name__})
+        from .ingest import DrawingError
+        from .resources import ResourceLimitError
+        resource_limited = isinstance(exc, (DrawingError, ResourceLimitError)) and exc.kind == "resource_limit"
+        write_json(args.out / "worker-error.json", {
+            "error_code": "resource_limit" if resource_limited else "domain_worker_failed",
+            "message": "Source inspection exceeds the bounded evidence budget." if resource_limited
+                       else "The observation worker failed.",
+            "exception_type": type(exc).__name__})
         return 1
 
 
