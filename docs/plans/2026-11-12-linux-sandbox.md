@@ -112,7 +112,7 @@ CARGO_TARGET_DIR=/Users/jonathanjie/Documents/workspace/MarinaFrame/.claude/work
 - `734214e`: deny model-created symlinks, including protection for later host artifact consumers; test a trusted pre-existing symlink cannot escape.
 - Linux x86_64 launcher and native tests cross-type-check successfully on this Mac using the installed Linux Rust standard library and an ignored minimal check harness under `work/linux-sandbox-check/`. Matching Clippy driver also completes without warnings. Full workspace cross-check needs a Linux C compiler for ring, unavailable here. These checks do not execute Linux kernel policy.
 - First required quick-tier attempt passed Mac formatting, Clippy and Rust tests, then the tool killed the command after its 600-second allowance during Python tests. No test failure was reported before interruption. Re-run uses the tool's two-hour allowance; no production timeout was added.
-- Final full quick-tier result: pending.
+- Final full Mac quick tier: **exit 0**. Formatting, Clippy and Rust tests passed; Python **1958 passed, 2 skipped (Linux-only), 84 deselected**, 5 warnings, 407.61 seconds; UI **266 passed**; bounded secrets scan **0 findings** across 1203 tracked text files. After final Linux-only syscall additions: cross-target source/probes and matching Clippy check passed again; Mac targeted Rust test binaries built (0 Linux tests selected), portable Python checks **5 passed, 2 skipped**; formatting/diff checks passed.
 - Live Linux kernel/real-CAD behavior: pending Linux CI, cannot run on this Mac.
 
 ### Deployment and resume
