@@ -270,7 +270,8 @@ def consistent_ticks(ticks: list[tuple[int, float]]) -> list[tuple[int, float]]:
 
 
 def spacing_table(ticks: list[tuple[int, float]], labels: list[tuple[float, float]],
-                  boundaries: list[float]) -> tuple[FrameTable | None, str]:
+                  boundaries: list[float], _retry: bool = True,
+                  _one_frame: tuple[float, ...] = ()) -> tuple[FrameTable | None, str]:
     """The frame table of one view, or (None, reason).
 
     ``ticks``: (frame, sheet x) of the frame numbers; ``labels``: (spacing mm, sheet x) of the
@@ -318,6 +319,16 @@ def spacing_table(ticks: list[tuple[int, float]], labels: list[tuple[float, floa
             break
     locals_found: list[tuple[float, float, float]] = []  # (sheet x, local mm, main mm)
     for index, texts in enumerate(groups):
+        # The text of a short range whose drawn changes were left out (see below) is a one-frame
+        # spacing inside the range around it, when that range prints one other spacing.
+        forced = [(place, values) for place, values in texts
+                  if any(abs(place - spot) <= SAME_MARK_PX for spot in _one_frame)]
+        others = {value for place, values in texts for value in values if (place, values) not in forced}
+        if forced and len(others) == 1 and all(len(values) == 1 for _, values in forced):
+            main = next(iter(others))
+            groups[index] = [text for text in texts if text not in forced]
+            locals_found += [(place, next(iter(values)), main) for place, values in forced]
+            continue
         local = _local_intervals(texts, inside[index])
         if local is not None:
             main, places = local
@@ -404,6 +415,25 @@ def spacing_table(ticks: list[tuple[int, float]], labels: list[tuple[float, floa
                 step = px_per_m * values[region] / 1000.0
                 estimates = [cut_frames[inner] + (cuts[index] - cuts[inner]) / step]
             cut_frames[index] = int(round(float(np.median(estimates))))
+    # A short range between two drawn changes must span its frames at its printed spacing (round
+    # u10: a change drawn four frames past a one-frame "1200" made a 1200 mm range of four
+    # frames, and a hold 2 m short). Such a pair of changes is left out and the table built again:
+    # the text then counts as a one-frame spacing that the frame numbers must confirm.
+    wrong, texts_of_wrong = [], []
+    for index in range(1, len(values) - 1):
+        if len(inside[index]) >= 2:
+            continue  # its frame numbers checked it above
+        drawn_m = abs(cuts[index] - cuts[index - 1]) / abs(px_per_m)
+        expected_m = (cut_frames[index] - cut_frames[index - 1]) * values[index] / 1000.0
+        if abs(abs(drawn_m) - abs(expected_m)) > SHORT_RANGE_TOLERANCE * values[index] / 1000.0:
+            wrong += [cuts[index - 1], cuts[index]]
+            low, high = sorted((cuts[index - 1], cuts[index]))
+            texts_of_wrong += [place for mm, place in labels if low <= place <= high and mm == values[index]]
+    if wrong:
+        if not _retry:
+            return None, "a short range between two drawn changes does not span its frames at its spacing"
+        kept = [place for place in boundaries if all(abs(place - bad) > SAME_MARK_PX for bad in wrong)]
+        return spacing_table(ticks, labels, kept, _retry=False, _one_frame=tuple(texts_of_wrong))
     spans = [{"from_frame": low, "to_frame": high, "spacing_mm": value}
              for low, high, value in zip([None, *cut_frames], [*cut_frames, None], values)]
     if not bow_right:
@@ -463,6 +493,9 @@ def _spacing_from_fit(ticks: list[tuple[int, float]], px_per_m: float, printed: 
 # line through them must fit with the local frames at most this share of the residual it has
 # without them.
 LOCAL_FIT_GAIN = 0.8
+# A short range's drawn length may differ from its frames at its spacing by this share of one
+# frame (the places of its two changes are each pointed to about a quarter frame).
+SHORT_RANGE_TOLERANCE = 0.5
 
 
 def _bracket(ticks: list[tuple[int, float]], place: float) -> tuple[tuple[int, float], tuple[int, float]] | None:

@@ -380,6 +380,7 @@ lists the measured values, and the reviewer checks them):
 | 3 (u4r) | 139 | 0 | 50 | 7 | 82 |
 | 4 (u6) | 117 | 0 | 41 | 9 | 67 |
 | 5 (u6r7) | 139 | 0 | 68 | 3 | 65 |
+| 6 (u10r2) | 129 | 0 | 51 | 5 | 73 |
 
 Round 5 (on u6r7, the redraw and guessed-box rules) found more extent issues than round 4, mostly rectangles where the drawn boundary slopes or tapers, boxes that still hold a neighbour, and hatch breadths above the printed size; the frame table finding repeats because u6r7 replays the scale replies of u6 (the local-spacing prompt runs first in u8).
 
@@ -568,6 +569,13 @@ Observed cost is 0 in every round (subscription).
   measured depth in this round: the model marked all their hold boxes "uncertain", so the deck
   line could not be checked (run-to-run variance; one of them was measured in u9n2 with the same
   prompt). One ship has no fuel-tank extent (coverage warning).
+- Astra round 6 (on u10r2; 8 calls, one repeated after a router error): 129 findings, none on the
+  exam counts; extent findings 68 -> 51. Real and fixed: a 1200 mm spacing applied over four
+  frames (a change drawn four frames past a one-frame "1200"): a short range between two drawn
+  changes must now span its frames at its spacing, else the two changes are left out and its
+  text is a one-frame spacing (`u10r3`, gate 14 of 14). Open, as before: rectangles across
+  sloped boundaries, boxes over a store above a peak tank, hatch breadths above the printed
+  size (the printed-size proposal), one hold box a frame short at a local frame.
 
 ## Proposal (not built; PM 2026-11-12): printed sizes as a check of extents
 

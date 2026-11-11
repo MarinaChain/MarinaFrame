@@ -1234,3 +1234,23 @@ def test_a_hold_read_twice_with_a_note_is_one_hold():
     # Only profile readings: still one hold.
     result["spaces"] = [result["spaces"][0], result["spaces"][3]]
     assert len([s for s in gs.merged_spaces(result) if s["kind"] == "cargo_hold"]) == 1
+
+
+
+def test_a_change_drawn_frames_past_a_one_frame_spacing_is_left_out():
+    """Round u10: a change drawn four frames past a one-frame "1200" made a four-frame range."""
+    ticks, labels = _local_scale(local_frames=(67,))
+    x = dict(ticks)
+
+    def place(frame):  # sheet x of any frame, as _local_scale draws it
+        return 100 + 8.0 * frame + (4.0 if frame >= 68 else 0.0)
+
+    good = [place(67), place(68)]
+    table, reason = gs.spacing_table(ticks, labels, good)
+    assert reason == "established" and (67, 68, 1200.0) in [(s["from_frame"], s["to_frame"], s["spacing_mm"])
+                                                              for s in table.spans]
+    table, reason = gs.spacing_table(ticks, labels, [place(67), place(71)])  # the second change misplaced
+    assert reason == "established"
+    spans = [(s["from_frame"], s["to_frame"], s["spacing_mm"]) for s in table.spans]
+    assert (67, 68, 1200.0) in spans and not any(mm == 1200.0 and b - a > 1 for a, b, mm in spans)
+    assert x  # the frame numbers are the fixture's
