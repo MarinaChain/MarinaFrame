@@ -39,4 +39,7 @@ No polling watchers. At most one CI status check every five minutes, at most 40 
 
 ## Resume point and evidence
 
-2026-11-12: checked clean lane/linux-sandbox-2 at 991fb10; read common brief and current sandbox. Next: implement trace harness and stronger attestation/probes, run Mac tier, push discovery checkpoint. Allow-list selection must wait for real trace evidence.
+2026-11-12: discovery checkpoint 20443ce pushed to lane/linux-sandbox-2. Stronger attestation, account-home ancestor predicate/tests, syslog size probe and contained strace fixture implemented. Full Mac quick tier exit 0: 2011 Python passed, 4 Linux-only skips, 84 deselected; 269 UI passed; Rust format/Clippy/tests passed; secrets scan 0 findings. Linux cross-target check/Clippy passed. Next: collect trace evidence from CI, implement allow-list, repeat full checks. Allow-list selection must wait for real trace evidence.
+
+GitHub ledger:
+- Call 1/40: 2026-11-12 06:18:27 +08, `gh run list` after discovery push, no run registered yet. Next CI check scheduled once at 06:24 +08 (session-only), no watcher.
