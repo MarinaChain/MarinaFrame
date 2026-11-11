@@ -19,6 +19,10 @@ MIN_LOFT_HALF_BREADTH_M = 0.05
 DECK_CLEARANCE_M = 0.0
 # Boxes reach this far beyond the hull so that the hull, not the box, gives the shell side.
 BOX_MARGIN_M = 0.5
+# Display gap (metres) on each face of a space that is not the shell: neighbouring spaces (two
+# holds at one bulkhead) then do not share a face in the 3D view. The recorded extents are
+# unchanged.
+DISPLAY_GAP_M = 0.05
 # Mesh tolerances (metres, radians).
 MESH = (0.02, 0.3)
 
@@ -107,19 +111,25 @@ def item_solid(item: G.Item, box: G.Box, hull, size: G.HullSize, deck_prism=None
 
     if deck_prism is not None and (item.kind == "accommodation_deck"
                                    or (item.kind in G.SPACE_KINDS and G.above_deck(box, size))):
-        return _largest_solid(deck_prism.intersect(_box(box.x, box.y, box.z)))
+        return _largest_solid(deck_prism.intersect(_box(box.x, box.y, (box.z[0] + DISPLAY_GAP_M, box.z[1]))))
     if item.kind in G.SPACE_KINDS and not G.above_deck(box, size):
-        # A space whose side reaches the shell: let the hull give the side.
-        y0 = box.y[0] - BOX_MARGIN_M if box.y[0] <= -size.half_beam_m + 1e-6 else box.y[0]
-        y1 = box.y[1] + BOX_MARGIN_M if box.y[1] >= size.half_beam_m - 1e-6 else box.y[1]
-        z0 = box.z[0] - BOX_MARGIN_M if box.z[0] <= 1e-6 else box.z[0]
-        return _largest_solid(hull.intersect(_box(box.x, (y0, y1), (z0, box.z[1]))))
+        # ``hull`` here is the inner hull (G.DISPLAY_INSET_M inside the shell). A space whose side
+        # reaches the shell: let that surface give the side. Other faces move in by DISPLAY_GAP_M,
+        # so neighbouring spaces do not share a face either (display only).
+        gap = DISPLAY_GAP_M
+        y0 = box.y[0] - BOX_MARGIN_M if box.y[0] <= -size.half_beam_m + 1e-6 else box.y[0] + gap
+        y1 = box.y[1] + BOX_MARGIN_M if box.y[1] >= size.half_beam_m - 1e-6 else box.y[1] - gap
+        z0 = box.z[0] - BOX_MARGIN_M if box.z[0] <= 1e-6 else box.z[0] + gap
+        x = (box.x[0] + gap, box.x[1] - gap)
+        return _largest_solid(hull.intersect(_box(x, (y0, y1), (z0, box.z[1] - gap))))
     if item.kind == "cargo_crane":
         centre_x = 0.5 * (box.x[0] + box.x[1])
         centre_y = 0.5 * (box.y[0] + box.y[1])
         radius = max(0.3, 0.5 * min(box.x[1] - box.x[0], box.y[1] - box.y[0]))
-        return cq.Solid.makeCylinder(radius, box.z[1] - box.z[0], cq.Vector(centre_x, centre_y, box.z[0]))
-    return _box(box.x, box.y, box.z)
+        bottom = box.z[0] + DISPLAY_GAP_M
+        return cq.Solid.makeCylinder(radius, box.z[1] - bottom, cq.Vector(centre_x, centre_y, bottom))
+    # A hatch coaming stands on the deck: its bottom face moves up by the display gap.
+    return _box(box.x, box.y, (box.z[0] + DISPLAY_GAP_M, box.z[1]))
 
 
 def build(data: G.ArrangementInput):
@@ -127,6 +137,9 @@ def build(data: G.ArrangementInput):
     table, size = G.hull_table(data)
     outline = (data.hull_outline or {}).get("profile_xz_m")
     hull = hull_solid(table, outline)
+    # Spaces are cut by an inner hull (DISPLAY_INSET_M inside the shell), so no space shares a
+    # face with the hull in the 3D view.
+    inner_hull = hull_solid(G.inset_table(table), outline)
     items = {item.id: item for item in data.items}
     boxes = {item.id: G.item_box(item, data, size) for item in data.items}
     findings = G.check_proportions(size) + G.check_depth(data, boxes) + G.check_boxes(boxes, items, size)
@@ -135,7 +148,7 @@ def build(data: G.ArrangementInput):
     placed = []
     for item_id in G.carve_order(boxes, items):
         item = items[item_id]
-        solid = item_solid(item, boxes[item_id], hull, size, deck_prism)
+        solid = item_solid(item, boxes[item_id], inner_hull, size, deck_prism)
         for other in placed:
             if solid is None:
                 break

@@ -80,7 +80,11 @@ Other kinds are skipped.
    overhang aft of the AP) and keeps the length LOA.
 2. **Items.** Boxes in metres; below-deck spaces are cut by the hull and carved from the
    smallest to the largest, so a tank drawn inside a hold keeps its volume and the hold gets the
-   rest. Checks (findings, not refusals; a run with a finding is not shown until it is
+   rest. Display rule: spaces are cut by an inner hull 0.15 m inside the shell
+   (`ga_arrangement.DISPLAY_INSET_M`), their other faces move in by 0.05 m, and deck items start
+   0.05 m above the deck (`model.DISPLAY_GAP_M`), so no two parts share a face in the 3D view
+   (no z-fighting). The recorded extents (`geometry`, provenance values, arrangement CSV) are
+   unchanged; `bbox_m` and `volume_m3` are those of the displayed solids. Checks (findings, not refusals; a run with a finding is not shown until it is
    explained): L/B in 4..9 and B/D in 1.2..2.6; the depth agrees with the median top of the
    cargo holds and tanks whose z was read, within the depth's `uncertainty_m` (at least 0.3 m);
    an item outside the hull length; cargo holds that overlap by more than 1 m in x; a space with

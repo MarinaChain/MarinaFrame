@@ -104,6 +104,19 @@ def test_hull_table_is_prior_form_inside_breadth_and_depth(reading):
     assert table.stations[-1].points_yz_m[0][0] < 0.1 * 9.0
 
 
+def test_inset_table_moves_every_station_inside_the_hull(reading):
+    table, _ = G.hull_table(G.load_input(reading))
+    inner = G.inset_table(table, 0.15)
+    for outer_row, inner_row in zip(table.stations, inner.stations):
+        outer_points = np.asarray(outer_row.points_yz_m)
+        inner_points = np.asarray(inner_row.points_yz_m)
+        assert inner_row.x_m == outer_row.x_m
+        assert inner_row.keel_z_m == pytest.approx(outer_row.keel_z_m + 0.15)
+        assert inner_row.top_z_m == pytest.approx(outer_row.top_z_m - 0.15)
+        assert inner_points[:, 0].max() <= max(outer_points[:, 0].max() - 0.15, 0.1 * outer_points[:, 0].max()) + 1e-9
+    assert inner.trend["display_inset_m"] == 0.15
+
+
 def test_hull_table_follows_a_read_deck_outline(reading):
     reading["hull_outline"] = {"deck_half_breadth_m": [[-1.6, 7.0], [20.0, 9.0], [80.0, 9.0], [102.4, 0.0]]}
     table, size = G.hull_table(G.load_input(reading))
@@ -252,6 +265,9 @@ def test_build_and_run_folder(reading, tmp_path):
         if entry["ga_kind"] in G.SPACE_KINDS:
             assert np.all(np.array(entry["bbox_m"]["min"]) >= np.array(hull["min"]) - 1e-2)
             assert np.all(np.array(entry["bbox_m"]["max"]) <= np.array(hull["max"]) + 1e-2)
+            # The display inset: no space shares the shell's surface (no z-fighting in 3D).
+            assert entry["bbox_m"]["max"][1] <= hull["max"][1] - 0.1
+            assert entry["bbox_m"]["min"][1] >= hull["min"][1] + 0.1
     assert (task / "whole_vessel" / "whole-vessel-draft.glb").stat().st_size > 0
     assert (task / "intake" / "sources" / "synthetic-ga.png").exists()
     entry = result["selection_entry"]

@@ -367,6 +367,29 @@ def hull_table(data: ArrangementInput, count: int = STATION_COUNT) -> tuple[Vess
     return VesselTable(rows, waterline_grid(rows), trend, warnings), size
 
 
+# Display margin (metres) between the hull surface and the spaces inside it. A space whose side
+# is the shell would otherwise share the hull's faces, and the 3D view shows both surfaces
+# speckled (z-fighting). The margin is for display only: the recorded extents of each item are
+# unchanged; the solids (and their volumes) are the displayed ones.
+DISPLAY_INSET_M = 0.15
+
+
+def inset_table(table: VesselTable, inset_m: float = DISPLAY_INSET_M) -> VesselTable:
+    """The hull table moved inward by ``inset_m``: each station's half-breadth less the inset,
+    its keel raised and its top lowered by the inset (the inner surface the spaces are cut by)."""
+    rows = []
+    for row in table.stations:
+        points = np.asarray(row.points_yz_m, dtype=float)
+        keel, top = row.keel_z_m, row.top_z_m
+        height = top - keel
+        scale = max(height - 2 * inset_m, 1e-3) / height if height > 0 else 1.0
+        z = keel + inset_m + (points[:, 1] - keel) * scale
+        y = np.maximum(points[:, 0] - inset_m, MIN_BREADTH_SHARE * max(points[:, 0].max(), inset_m))
+        rows.append(StationRow(id=row.id, x_m=row.x_m, points_yz_m=np.column_stack([y, z]).tolist(),
+                               source=row.source, notes=[f"display inset {inset_m:g} m"]))
+    return VesselTable(rows, waterline_grid(rows), {**table.trend, "display_inset_m": inset_m}, table.warnings)
+
+
 # ------------------------------------------------------------------ item boxes
 
 def _extent_status(item: Item, axis: str) -> str:
