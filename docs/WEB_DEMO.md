@@ -154,6 +154,10 @@ Notes:
   `data:` URLs (the app's `read_artifact` shape), so `img-src` keeps `data:` and `blob:`.
 - The pilot page has a stricter meta CSP of its own (`script-src 'none'`). Both policies apply.
 - Do not turn on directory listings (`file_server browse`).
+- Copy with world-readable modes. Some run files are mode 600 in the bundle, and `rsync -a`
+  keeps that mode, so Caddy answers 403 for them (the home-page drawing thumbnails broke this
+  way on 2026-11-12). Use `rsync -a --chmod=D755,F644`, or run `chmod -R a+rX` on the site
+  folder after the copy. Then check that no image on the home page is broken.
 - Caddy serves `.glb`, `.step` and `.pdf` files as downloads; the app reads models with `fetch`,
   so their MIME type does not matter.
 
