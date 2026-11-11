@@ -58,7 +58,8 @@ result is seen.
   (declined). Fix: a level bottom must run on to the centreline, its inner end within `CENTRE_CLEAR_WIDTHS`
   (existing constant: "this close to the centre column is the centreline or keel") line widths of the centre
   column (Cama's level bottoms end 0 to 3 px from it). Synthetic test: a box corner below a flat-bottom half.
-- [ ] After run 2 (`work/polyline-engage/after2.json`), gates against the same baseline.
+- [x] After run 2 (`work/polyline-engage/after2.json`, sha256 `3cd23e5b22ebc17b...`; baseline `before.json`
+  `6e22bb5ecedec67e...`), reader sha256 `735d2209b76bd398...`: **all gates pass** (section 5).
 
 **Truth files (PM, 2026-11-12).** The legacy truth of C.A. Thayer (`thayer/truth_s4.json`) and Balclutha
 (`balclutha/truth_s7.json`) was deleted from the shared scratchpad (`wv-agent/`) in a disk cleanup; no backup
@@ -73,7 +74,7 @@ reproduces the published values exactly** (Thayer 149 of 151 cells, 0 wrong, RMS
 151, 1 wrong, RMS 0.148012 m). So the fallback was reverted (`6afc0b2`), and after run 2 was stopped and started
 again with both truth roots at `work/dev-truth`: every sheet is scored against its truth. The baseline used the
 old Thayer and Balclutha files; with the restored truth reproducing them exactly, the comparison holds.
-- [ ] After run with `--baseline`: `work/polyline-engage/after.json`; per-sheet table in section 5.
+- [x] Reader change and tests committed after the gates passed.
 - [ ] Quick test tier; push the branch (no merge).
 
 Resume: read the checkboxes; result files are in `work/polyline-engage/` (git-ignored). Uncommitted work at a
@@ -151,4 +152,41 @@ show which calibration it used, and the baseline is rerun if they show the old o
 No vessel name or truth value; one new constant with its reason. Synthetic tests: flat-bottom half on both sides
 (traced, named 4-3-2-1, knuckles, rabbets; one bottom 5 px from an undrawn measuring row), its table, `drawn_rows`,
 and a V-bottom with a level line through its knuckles that keeps its descending bottoms. Before the fix the
-flat-bottom half was declined ("no bottom branch" for 3 of 4 lines), as on Cama.
+flat-bottom half was declined ("no bottom branch" for 3 of 4 lines), as on Cama. Rule 4 (after run 1, COLLEEN):
+a level bottom must end within `CENTRE_CLEAR_WIDTHS` line widths of the centre column (a box corner below a
+flat-bottom half is the synthetic test).
+
+### After the fix (after run 2; development cases only)
+
+Polyline product rule, cells given / correct / wrong per sheet (wrong = error > 0.15 m; kinds summed). Baseline:
+reader at `1a33fee`, Cama calibration corrected (`aa88271`). **Cama Beach numbers are development numbers, not
+holdout numbers** (spent holdout; truth-informed calibration; the published FAIL stands). Thayer and Balclutha are
+scored against the restored truth in `work/dev-truth`, which reproduces the published values exactly.
+
+| Sheet | Before (given / correct / wrong) | After | Gate 1 | Gate 3 (round bilge: table unchanged) |
+|---|---|---|---|---|
+| PARDON ME | 43 / 42 / 1 | 43 / 42 / 1 | pass | - |
+| BUE GIRL | 37 / 37 / 0 | 37 / 37 / 0 | pass | pass |
+| C.A. Thayer | 149 / 149 / 0 | 149 / 149 / 0 | pass | pass |
+| Balclutha | 151 / 150 / 1 | 151 / 150 / 1 | pass | pass |
+| BUMBLE BEE (corrected) | 50 / 37 / 13 | 50 / 37 / 13 | pass | pass |
+| E. C. COLLIER | 22 / 20 / 2 | 22 / 20 / 2 | pass | - |
+| WHITE GULL | 53 / 51 / 2 | 53 / 51 / 2 | pass | - |
+| COLLEEN | 43 / 43 / 0 | 43 / 43 / 0 | pass | - |
+| CALEB JONES | 21 / 21 / 0 | 21 / 21 / 0 | pass | - |
+| CAMA BEACH (development) | 32 / 22 / 10 | **33 / 33 / 0** | pass | - |
+| Davis Boat | 40 / 40 / 0 | 40 / 40 / 0 | pass | pass |
+| **Total** | **641 / 612 / 29** | **642 / 623 / 19** | gate 2: 19 <= 29, pass | |
+
+Cama Beach after: both halves read as a whole (aft 7, 8; fore 6, 5, 4, 3; before: both declined, fore station 1
+engaged). Waterline 24 of 36 cells, RMS 0.055 m, 0 wrong; point (sheer, chine) 9 of 18, RMS 0.053 m, 0 wrong. The
+harness identity check still lists fore 3, 4, 5 (no wrong cell). Not read: aft 9 and 10 (their sides end where the
+traces reach no level bottom: 'no bottom branch'); fore 2 is traced (chine within 2 px of the printed one) but
+left unnamed by the half's naming checks (cause not investigated); fore 1 and 0 near the stem are not traced. The
+other ten sheets give the same cells as before; the
+round-bilge tables are byte-identical to the baseline and the frozen reader.
+
+Open items: Cama aft 9 and 10 and fore 0 to 2 are not read (fore 2 traced, not named); Cama fore identity flags at 3 to 5 not investigated;
+the fore crossing-reader fragment chains below the base line (the misnaming cause on halves that polyline does
+not read) are not changed; a flat bottom that ends at a keel outline off the centreline (more than 4 line
+widths) is not read as a level bottom.
