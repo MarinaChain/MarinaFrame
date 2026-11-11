@@ -1057,3 +1057,34 @@ def test_a_note_of_the_same_kind_inside_a_hatch_box_is_not_a_neighbour():
         {"id": "n", "kind": "cargo_hatch", "label": "STEEL HATCH COVER", "status": "read", "view_id": "v2",
          "source_record": {"regions": [{"box_px": [40, 40, 60, 60]}]}}]}
     assert gs.covered_labels(result) == {}
+
+
+
+def test_a_crane_box_above_the_deck_reaches_down_to_the_deck():
+    """Lane W, round u6r8: crane posts started 8 m above the deck."""
+    crane = {"id": "c", "kind": "cargo_crane", "label": "DECK CRANE", "status": "read",
+             "extent": {"x_m": [30.0, 34.0], "z_m": [19.8, 31.0], "status": {"x": "measured_from_scale",
+                                                                            "z": "measured_from_scale"}}}
+    on_deck = gs._deck_equipment_on_the_deck([crane], {"depth_m": {"value": 12.0}})[0]
+    assert on_deck["extent"]["z_m"] == [12.0, 31.0] and on_deck["extent"]["status"]["z"] == "guessed"
+    assert on_deck["extent"]["status"]["x"] == "measured_from_scale"
+
+
+def test_a_clean_scale_reply_is_read_alone_when_the_earlier_marks_spoil_it(tmp_path):
+    """Round u8: the first reply drew changes on one side of a local spacing only."""
+    result = _result(tmp_path)
+    attempts = []
+
+    def call(request_dir, provider_dir):
+        if request_dir.name.startswith("scale"):
+            attempts.append(request_dir.name)
+            reply = _scale_reply(request_dir)
+            if request_dir.name == "scale":  # a second spacing in the 800 range, no change drawn
+                labels = reply["reply"]["ga_scale"]["spacing_labels"]
+                middle = next(label for label in labels if label["printed"].startswith("800"))
+                labels.append({**middle, "printed": "650 MM", "x": middle["x"] + 200})
+            return reply
+        return _extent_reply(request_dir)
+
+    gs.scale_pass(result, tmp_path / "S-1_GA.png", tmp_path / "scale", call)
+    assert attempts == ["scale", "scale-2"] and result["frames"]["status"] == "read"

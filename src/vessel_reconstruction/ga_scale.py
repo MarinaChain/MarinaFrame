@@ -416,9 +416,12 @@ def spacing_table(ticks: list[tuple[int, float]], labels: list[tuple[float, floa
 
 
 # A local spacing printed for one frame inside a range of another spacing ("1200" under two
-# close bulkheads in a range of 800; review round 4) lengthens the gap between the frame numbers
-# around it by (local / main - 1) frames. The gap must show that within this share of it.
-LOCAL_GAP_TOLERANCE = 0.5
+# close bulkheads in a range of 800; review round 4) lengthens the scale after it by
+# (local / main - 1) frames. One such frame is a few pixels, about the scatter of the frame
+# numbers (round u8: 5 px against +-3 px), so the frame numbers of the whole range decide: a
+# line through them must fit with the local frames at most this share of the residual it has
+# without them.
+LOCAL_FIT_GAIN = 0.8
 
 
 def _bracket(ticks: list[tuple[int, float]], place: float) -> tuple[tuple[int, float], tuple[int, float]] | None:
@@ -430,34 +433,37 @@ def _bracket(ticks: list[tuple[int, float]], place: float) -> tuple[tuple[int, f
     return None
 
 
+def _line_rms(frames: list[float], places: list[float]) -> float:
+    """The residual (pixels) of the least-squares line through (frame, place)."""
+    slope, offset = np.polyfit(frames, places, 1)
+    return float(np.sqrt(np.mean((np.polyval([slope, offset], frames) - np.asarray(places)) ** 2)))
+
+
 def _local_intervals(texts: list[tuple[float, set]], ticks: list[tuple[int, float]]):
     """(main mm, [(place, local mm)]) when a range prints a second spacing only for single
     frames, which its frame numbers confirm; else None.
 
-    Each of the two values is tried as the main spacing: the other value must then show, at each
-    of its places, the gap the local frame adds between the frame numbers around it.
+    Each of the two values is tried as the main spacing; the other value's frames must make the
+    frame numbers of the range fit one line clearly better (``LOCAL_FIT_GAIN``).
     """
     values = {next(iter(values)) for _, values in texts if len(values) == 1}
     if len(values) != 2 or any(len(values_here) != 1 for _, values_here in texts) or len(ticks) < MIN_RANGE_TICKS:
         return None
-    per_frame = abs(_range_slope(ticks))
+    frames = [float(frame) for frame, _ in ticks]
+    places = [place for _, place in ticks]
+    plain = _line_rms(frames, places)
+    best = None
     for main in values:
-        places = [(place, next(iter(here))) for place, here in texts if here != {main}]
-        confirmed = True
-        for place, mm in places:
-            around = _bracket(ticks, place)
-            if around is None:
-                confirmed = False
-                break
-            (frame_a, x_a), (frame_b, x_b) = around
-            extra = abs(x_b - x_a) - abs(frame_b - frame_a) * per_frame
-            want = (mm / main - 1) * per_frame
-            if abs(extra - want) > LOCAL_GAP_TOLERANCE * abs(want):
-                confirmed = False
-                break
-        if confirmed:
-            return main, places
-    return None
+        locals_here = [(place, next(iter(here))) for place, here in texts if here != {main}]
+        if any(_bracket(ticks, place) is None for place, _ in locals_here):
+            continue
+        starts = [(_local_frame(ticks, place, mm / main), mm / main) for place, mm in locals_here]
+        # A frame number forward of a local frame k..k+1 lies (ratio - 1) main frames further on.
+        stretched = [frame + sum(ratio - 1 for start, ratio in starts if frame >= start + 1) for frame in frames]
+        fit = _line_rms(stretched, places)
+        if fit <= LOCAL_FIT_GAIN * plain and (best is None or fit < best[0]):
+            best = (fit, main, locals_here)
+    return None if best is None else (best[1], best[2])
 
 
 def _local_frame(ticks: list[tuple[int, float]], place: float, ratio: float) -> int:
@@ -1557,7 +1563,16 @@ def scale_pass(result: dict, sheet_path: Path, out: Path, call) -> dict:
         if attempt > 1:
             prepare_scale(result, sheet_path, out / name, result["frames"].get("reason"))
         readings.append(call(out / name, out / f"{name}-provider"))
-        work = read_scale(result, readings[-1], out / name, work)
+        combined = read_scale(result, readings[-1], out / name, work)
+        if combined.get("table") is None and work is not None:
+            # The marks of earlier replies can spoil a clean reply (round u8: changes of spacing
+            # drawn on one side of a local spacing only in the first reply); this reply alone.
+            alone = read_scale(result, readings[-1], out / name)
+            if alone.get("table") is not None:
+                combined = alone
+            else:
+                combined = read_scale(result, readings[-1], out / name, work)  # its reason is kept
+        work = combined
         if work.get("table") is not None:
             break
     stats["scale_attempts"] = attempt
@@ -1872,6 +1887,7 @@ def arrangement_input(result: dict, case_id: str) -> dict:
     spaces, dropped = _without_same_boxes(merged_spaces(result), particulars)
     spaces = _without_outboard_extents(spaces, particulars)
     spaces = _centred_when_off_centre(spaces, particulars)
+    spaces = _deck_equipment_on_the_deck(spaces, particulars)
     spaces = _side_boxes_without_height(spaces, particulars)
     spaces = _without_guessed_over_cargo(spaces, particulars)
     return {"schema": INPUT_SCHEMA, "case_id": case_id, "engineering_approved": False,
@@ -1930,6 +1946,29 @@ OFF_CENTRE_SHARE = 0.10
 UPPER_BAND_SHARE = 0.3
 # A tank in the lower part of the hull ("D.B.", "BTM", "HOPPER"): it gets no upper band.
 LOWER_TANK = re.compile(r"\bD\s*\.?\s*B\b|\bD/B\b|BTM|BOTTOM|HOPPER|LOWER|DOUBLE")
+
+
+# A crane or hatch box whose bottom is more than this above the deck is the crane house or a
+# part of the hatch cover, not the whole (lane W, round u6r8: crane posts started 8 m above the
+# deck); a hatch coaming or a crane pedestal stands on the deck.
+DECK_EQUIPMENT_GAP_M = 1.0
+
+
+def _deck_equipment_on_the_deck(spaces: list[dict], particulars: dict) -> list[dict]:
+    """Cranes and hatches reach down to the deck; the extended bottom is guessed."""
+    depth = (particulars.get("depth_m") or {}).get("value")
+    if not depth:
+        return spaces
+    kept = []
+    for space in spaces:
+        extent = space.get("extent") or {}
+        z = extent.get("z_m")
+        if space["kind"] in DECK_EQUIPMENT and z and z[0] > depth + DECK_EQUIPMENT_GAP_M:
+            extent = {**extent, "z_m": [round(depth, 2), z[1]], "status": {**extent["status"], "z": "guessed"},
+                      "z_note": "the box began above the deck; extended down to the deck it stands on"}
+            space = {**space, "extent": extent}
+        kept.append(space)
+    return kept
 
 
 def _centred_when_off_centre(spaces: list[dict], particulars: dict) -> list[dict]:

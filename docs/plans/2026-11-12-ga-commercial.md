@@ -515,6 +515,17 @@ Observed cost is 0 in every round (subscription).
   centreline was marked measured. Fixed (Method, step 5, guessed boxes) and replayed without
   new calls: **`u6r8`, gate 14 of 14 pass** (largest cargo loss 0.175). For lane W:
   `work/ga-internal-23/dev-runs/u6r8/<case>/ga_arrangement_input.json`.
+- Live round `u8` (all rules up to u6r7, the local-spacing prompt; 126 Claude requests, then one
+  ship again with 13 after a scale fix) replayed through the current code as `u8f`. **Gate: 14
+  of 14 pass.** The container ship's frame table now has its four printed 1200 mm frames: its
+  measured hold spans now equal the printed spans (they were 0.4 m short). Two fixes from this
+  round: when the marks of earlier scale replies spoil a clean reply, that reply is read alone;
+  the local frames are confirmed by the fit of all frame numbers of the range (one local frame is
+  about the scatter of the numbers). Cranes and hatches whose box begins more than 1 m above
+  the deck reach down to the deck (z guessed; lane W, round u6r8). Against s3b per ship: more
+  spaces and extents on most ships; one ship has fewer spaces (accommodation rooms the fine pass
+  did not read this time) and one lost its two fuel-tank extents (run-to-run variance); both are
+  open.
 
 ## Proposal (not built; PM 2026-11-12): printed sizes as a check of extents
 
@@ -526,12 +537,25 @@ measured length and breadth; a difference above 0.5 m or 3 % would make that axi
 with a check entry. The geometry would not be replaced by the printed value. This changes the
 model contract (Rust `ScaleReply`, CLI schema, prompt), so it waits for a PM decision.
 
+## Proposal (not built; for a PM decision): outlines for sloped and tapered boundaries
+
+Astra round 5 has 68 extent findings; most are rectangles where the drawn boundary slopes or
+tapers (bow and stern tanks, hopper and topside tanks, cargo tanks beside tapered wing tanks).
+A box cannot follow such a boundary. Proposal: an optional `outline` per extent in the
+`ga_scale` reply, 3 to 8 points of the drawn boundary in image pixels, asked only for a space
+whose boundary is not a rectangle. Code turns the points into metres of the view (x and z in
+a profile, x and y in a plan), keeps the box as the bounding box, and checks that the outline
+lies inside the box, holds the space's own label and holds no other label (else the outline is
+dropped). The arrangement input would get an optional `outline_m` beside `x_m`, `y_m` and
+`z_m`. This changes the model contract (Rust `ScaleReply`, CLI schema, prompt) and lane W's
+input (docs/GA_ARRANGEMENT_INPUT.md), so it waits for a PM decision.
+
 ## Resume point
 
 Done: two Opus/Astra cycles; the Fable 5.2 step; the Opus check of it (regression found and fixed,
 overnight rounds u1-u6, overlap and fragment rules replayed as u6r, fittings, outboard boxes and
 deck top-up replayed as u6r3; redraw of boxes over labels, guessed-box rules and local frame
-spacings as u6r7; side, off-centre and hatch rules as u6r8). **Not frozen; the exam was not run; the PM said not to freeze or prepare
+spacings as u6r7; side, off-centre and hatch rules as u6r8; live round u8 as u8f). **Not frozen; the exam was not run; the PM said not to freeze or prepare
 the exam until told.** Next: a full live round (scale requests with the local-spacing prompt,
 all extents rules) and its gate; Astra review; then recover spaces whose only label is a
 fragment (a wider crop read again) if it fits the per-ship ceiling, boxes along sloped and
