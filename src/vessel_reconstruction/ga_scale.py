@@ -340,6 +340,8 @@ def spacing_table(ticks: list[tuple[int, float]], labels: list[tuple[float, floa
     anchor = max(sure, key=lambda index: len(inside[index]))
     px_per_m = _range_slope(inside[anchor]) / (next(iter(found[anchor])) / 1000.0)  # negative: bow to the left
     values: list[float | None] = []
+    chosen_by_fit: list[tuple[int, int, float]] = []  # (first frame, last frame, mm) of a range
+    printed = set().union(*found) if found else set()
     for index, candidates in enumerate(found):
         # The frame numbers of a range show its spacing: they decide between two readings of
         # the printed value (two requests can read "600" and "800" at one place), and they
@@ -351,7 +353,12 @@ def spacing_table(ticks: list[tuple[int, float]], labels: list[tuple[float, floa
             fitting = {mm for mm in candidates
                        if abs(slope / (px_per_m * mm / 1000.0) - 1) <= RANGE_SLOPE_TOLERANCE}
             if candidates and not fitting:
-                return None, "the frame numbers of a range do not fit its printed spacing"
+                chosen = _spacing_from_fit(inside[index], px_per_m, printed)
+                if chosen is None:
+                    return None, "the frame numbers of a range do not fit its printed spacing"
+                fitting = {chosen}
+                frames_here = [frame for frame, _ in inside[index]]
+                chosen_by_fit.append((min(frames_here), max(frames_here), chosen))
         if len(fitting) > 1:
             return None, "two different frame spacings are printed with no change drawn between them"
         values.append(next(iter(fitting)) if fitting else None)
@@ -408,11 +415,45 @@ def spacing_table(ticks: list[tuple[int, float]], labels: list[tuple[float, floa
     numbers = [frame for frame, _ in ticks]
     spans[0]["from_frame"] = min(numbers + inner)
     spans[-1]["to_frame"] = max(numbers + inner)
+    for first, last, mm in chosen_by_fit:
+        for span in spans:
+            if span["spacing_mm"] == mm and span["from_frame"] <= last and first <= span["to_frame"]:
+                span["status"] = CHOSEN_BY_FIT
     for place, mm, main in locals_found:
         spans = _with_local_interval(spans, _local_frame(ticks, place, mm / main), mm)
         if spans is None:
             return None, "a local frame spacing does not lie inside a range of its main spacing"
     return FrameTable(spans), "established"
+
+
+# When the frame numbers of a range contradict its printed spacing in every reply (round u9n2:
+# a printed "800" read as "600" three times), the spacing the numbers fit is taken, if it is one
+# of these (or another value printed on the scale) and fits clearly better than the rest. Its
+# span is marked as chosen by the fit, not read.
+STANDARD_SPACINGS_MM = (500.0, 550.0, 600.0, 650.0, 700.0, 750.0, 800.0, 850.0, 900.0, 950.0, 1000.0)
+CHOSEN_BY_FIT = "chosen_by_frame_number_fit"
+FIT_CHOICE_ERROR = 0.03     # the chosen spacing is within 3 % of what the numbers show
+FIT_CHOICE_MARGIN = 0.05    # and every other spacing is off by at least 5 % (and twice as much)
+# The two halves of the range must show one spacing: a range that holds two spacings (a change
+# not drawn) fits neither, and its mean would fit a wrong one (600 and 800 average to 750).
+STRAIGHT_RUN_TOLERANCE = 0.06
+
+
+def _spacing_from_fit(ticks: list[tuple[int, float]], px_per_m: float, printed: set[float]) -> float | None:
+    """The spacing (mm) that the frame numbers of one range show clearly, or None."""
+    if len(ticks) < MIN_RANGE_TICKS:
+        return None
+    ordered = sorted(ticks)
+    half = len(ordered) // 2
+    first, second = _range_slope(ordered[:half + 1]), _range_slope(ordered[half:])
+    if second == 0 or abs(first / second - 1) > STRAIGHT_RUN_TOLERANCE:
+        return None
+    shown_mm = abs(_range_slope(ordered) / px_per_m) * 1000.0
+    errors = sorted((abs(shown_mm / mm - 1), mm) for mm in set(STANDARD_SPACINGS_MM) | set(printed))
+    (best, chosen), (runner_up, _) = errors[0], errors[1]
+    if best <= FIT_CHOICE_ERROR and runner_up >= max(FIT_CHOICE_MARGIN, 2 * best):
+        return chosen
+    return None
 
 
 # A local spacing printed for one frame inside a range of another spacing ("1200" under two
@@ -1919,6 +1960,8 @@ def _joined(plan: dict | None, profile: dict | None) -> dict:
 # cargo space losing more of its volume to smaller spaces than in round s3b (worst: 56 % of a
 # hold, 58 % of a cargo tank).
 GATE_MAX_CARGO_LOSS = 0.58
+# Kinds whose missing extents the gate reports as a coverage warning, not a failure.
+COVERAGE_KINDS = ("fuel_tank", "ballast_tank")
 GATE_GRID = 20
 GATE_KINDS = ("cargo_hold", "cargo_tank", "slop_tank", "ballast_tank", "fuel_tank", "other_tank", "engine_room",
               "other_space")
@@ -1973,6 +2016,11 @@ def arrangement_gate(data: dict) -> dict:
             if space["kind"] in ("cargo_hold", "cargo_tank"):
                 report["cargo_loss"][space["id"]] = round(loss, 3)
         report["max_cargo_loss"] = max(report["cargo_loss"].values(), default=None)
+    # Coverage warnings (not failures): a kind of tank with no extent on a ship whose other
+    # spaces have extents; the fine pass reads different labels from run to run (PM, round u9n2).
+    boxed = {s["kind"] for s in data["spaces"] if s.get("extent")}
+    report["warnings"] = [f"no {kind.replace('_', ' ')} has an extent" for kind in COVERAGE_KINDS
+                          if boxed and kind not in boxed]
     report["passed"] = (not report["fragments"] and not report["no_volume"] and not report["guessed_over_cargo"]
                         and (report["max_cargo_loss"] or 0.0) <= GATE_MAX_CARGO_LOSS)
     return report

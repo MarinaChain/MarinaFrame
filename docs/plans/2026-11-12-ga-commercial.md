@@ -207,6 +207,17 @@ requests a ship; **off by default**, so the exam run is unchanged.
    with the crop as `near` and the label text, in requests of their own after the labels with a
    known place (mixed in one request, the model marked most boxes "uncertain": round u9n), and
    get no label place for the overlap rules.
+   **Spacing chosen by the fit** (PM, round u9n2): when the frame numbers of a range contradict
+   its printed spacing, the spacing they show is taken if it is a standard spacing (500-1000 mm
+   in steps of 50) or another value printed on the scale, within 3 % of what the numbers show,
+   and every other candidate is off by at least 5 % and twice as much; the two halves of the
+   range must show one spacing (a range with an undrawn change is refused). The span is marked
+   `chosen_by_frame_number_fit`. Otherwise the scale is refused as before. On the round-u9n2
+   ship the numbers show 782 mm, between 750 and 800 (2.2 % and 4.3 %): not clear enough, so it
+   is still refused.
+   **Coverage warnings:** the gate reports a ship whose other spaces have extents but whose fuel
+   or ballast tanks have none as a warning, not a failure (the fine pass reads different labels
+   from run to run).
    **Local frame spacings** (review round 4): a spacing printed for one frame inside a range of
    another ("1200" between close bulkheads in a range of 800) is a one-frame interval of the
    table when the frame numbers around it show the extra length; otherwise the scale is refused

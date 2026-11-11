@@ -1177,3 +1177,37 @@ def test_the_mirror_of_a_traced_tank_gets_the_mirrored_outline():
     assert first["extent"]["outline_m"][0]["points"][2] == [20.0, 15.0]
     assert second["extent"]["outline_m"][0]["points"][2] == [20.0, -15.0]
     assert second["extent"]["outline_m"][0]["status"] == "guessed"
+
+
+
+def _misread_scale(spacing_b, kink=None):
+    """Frames 0-50 at 800 mm (8 px a frame, printed "800"), frames 50-100 printed "600" but drawn
+    at ``spacing_b`` (or at ``kink`` from frame 75 on, with no change drawn there)."""
+    def x(frame):
+        place = 100 + 8.0 * min(frame, 50)
+        for start, end, mm in ((50, 75, spacing_b), (75, 100, kink or spacing_b)):
+            place += max(0, min(frame, end) - start) * mm / 100.0
+        return place
+
+    ticks = [(frame, x(frame)) for frame in range(0, 101, 5)]
+    return ticks, [(800.0, x(25)), (600.0, x(75))], [x(50)]
+
+
+def test_a_spacing_the_frame_numbers_contradict_is_chosen_from_the_fit():
+    """Round u9n2: a printed "800" read as "600" in every reply refused the whole scale."""
+    table, reason = gs.spacing_table(*_misread_scale(700.0))
+    assert reason == "established"
+    assert [(s["spacing_mm"], s.get("status")) for s in table.spans] == [
+        (800.0, None), (700.0, gs.CHOSEN_BY_FIT)]
+
+
+def test_a_range_holding_two_spacings_is_still_refused():
+    table, reason = gs.spacing_table(*_misread_scale(700.0, kink=900.0))
+    assert table is None and "do not fit" in reason
+
+
+
+def test_a_missing_fuel_tank_extent_is_a_coverage_warning_not_a_failure():
+    spaces, particulars = _guessed_tank_over_a_hold()
+    report = gs.arrangement_gate({"spaces": [spaces[0]], "particulars": particulars})
+    assert report["passed"] and report["warnings"] == ["no fuel tank has an extent", "no ballast tank has an extent"]
