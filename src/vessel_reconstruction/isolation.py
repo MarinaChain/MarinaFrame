@@ -58,6 +58,14 @@ def safe_worker_environment() -> dict[str, str]:
     env = {key: os.environ[key] for key in ('PATH', 'LANG', 'LC_ALL', 'TZ', 'MARINAFRAME_HULL_FAIRING',
            'MARINAFRAME_PROGRESS_PATH', 'MARINAFRAME_PROGRESS_REQUEST')
            if key in os.environ}
+    if sys.platform == 'linux':
+        import sysconfig
+        # Hosted/relocatable Python may otherwise load a distro libpython with
+        # the same SONAME but a different site layout. Never copy the caller's
+        # arbitrary loader path; derive the one trusted interpreter library dir.
+        library = sysconfig.get_config_var('LIBDIR')
+        if library and Path(library).is_absolute() and Path(library).is_dir():
+            env['LD_LIBRARY_PATH'] = str(Path(library).resolve())
     env.update(PYTHONPATH=str(Path(__file__).resolve().parent.parent), PYTHONUNBUFFERED='1',
                OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1', OMP_THREAD_LIMIT='1', MKL_NUM_THREADS='1')
     return env

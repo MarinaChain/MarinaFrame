@@ -87,6 +87,9 @@ def linux_runtime_paths() -> list[Path]:
     paths.update(Path(value) for value in ('/lib', '/lib64', '/usr/lib', '/usr/lib64',
                                           '/usr/local/lib', '/etc/ld.so.cache',
                                           '/etc/localtime', '/dev/null', '/dev/urandom', '/dev/random'))
+    library = sysconfig.get_config_var('LIBDIR')
+    if library and Path(library).is_absolute():
+        paths.add(Path(library))
     for prefix in (sys.prefix, sys.base_prefix):
         paths.add(Path(prefix)/'pyvenv.cfg')
     return sorted({path.resolve() for path in paths if path.exists()})

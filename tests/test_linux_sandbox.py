@@ -15,6 +15,16 @@ from vessel_reconstruction import ship_cad_worker as worker
 from vessel_reconstruction.isolation import SANDBOX_MODEL_LIMITS
 
 
+def test_linux_library_path_comes_from_interpreter_not_environment(monkeypatch, tmp_path):
+    from vessel_reconstruction.isolation import safe_worker_environment
+    monkeypatch.setattr(sys, 'platform', 'linux')
+    library = tmp_path/'runtime-lib'
+    library.mkdir()
+    monkeypatch.setattr(sysconfig, 'get_config_var', lambda key: str(library) if key == 'LIBDIR' else None)
+    monkeypatch.setenv('LD_LIBRARY_PATH', '/untrusted/inherited')
+    assert safe_worker_environment()['LD_LIBRARY_PATH'] == str(library)
+
+
 def test_linux_launcher_missing_fails_closed(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, 'platform', 'linux')
     monkeypatch.setenv('MARINAFRAME_SANDBOX_LAUNCHER', str(tmp_path/'missing'))
