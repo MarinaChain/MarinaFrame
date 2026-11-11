@@ -559,6 +559,15 @@ Observed cost is 0 in every round (subscription).
   One ship lost its frame scale in u9n2: all three scale replies read a printed "800" as "600",
   which its frame numbers contradict, so the scale was refused (run-to-run variance in the
   reading of small print; the same ship read correctly in u8).
+- Live round `u10` (outlines, labels from a shared crop, re-read, the fit-chosen spacing and
+  coverage warnings; 141 Claude requests), replayed after two fixes as `u10r2`. **Gate: 14 of
+  14 pass.** Fixes from this round: a numbered hold is one hold, whatever note follows its label
+  ("(PORT USE W. B.)" was read as a port side and gave a second hold); profile-only readings of a
+  space are checked against each other; "NO.I T." (a capital I for 1, then one letter) is cut.
+  Extents rose on most ships (for example 20 -> 41 and 40 -> 63). Open: three ships have no
+  measured depth in this round: the model marked all their hold boxes "uncertain", so the deck
+  line could not be checked (run-to-run variance; one of them was measured in u9n2 with the same
+  prompt). One ship has no fuel-tank extent (coverage warning).
 
 ## Proposal (not built; PM 2026-11-12): printed sizes as a check of extents
 

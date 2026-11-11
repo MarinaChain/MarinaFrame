@@ -578,7 +578,9 @@ def fragment_reason(space: dict, others: list[dict], vocabulary: set[str],
         return "no words: only a number"
     if label.count("(") != label.count(")"):
         return "an unclosed parenthesis: the label is cut"
-    if re.search(r"\d\s*\.?\s*[A-Z]\.?$", label.upper()) and len(words[-1]) == 1 and len(words) <= 2:
+    if ((re.search(r"\d\s*\.?\s*[A-Z]\.?$", label.upper()) and len(words[-1]) == 1 and len(words) <= 2)
+            or re.fullmatch(r"NO\.?\s*(?:\d+|I)\s*\.?\s*[A-Z]\.?", label.upper().strip())):
+        # Also "NO.I T.": a capital I read for the number 1 (round u10).
         return "a single letter after the number: the label is cut"
     is_room = bool(_named_words(label)) and _named_words(label)[-1] in ROOM_NOUNS
     if space.get("kind") in ("other_space", "other_tank") and not is_room and (

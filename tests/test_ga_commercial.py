@@ -434,6 +434,7 @@ def test_a_piece_read_where_a_longer_label_is_printed_is_dropped_with_its_reason
     ("FOAM", None, [], True),                                # a system word without its room noun
     ("FOAM ROOM", None, [], False),
     ("UPPER DECK", None, [], True),                          # a deck name (review round 4)
+    ("NO.I T.", "I", [], True),                              # a capital I for 1, then one letter (round u10)
     ("DECK STORE", None, [], False),
     ("CHANGING ROOM (DECK)", None, [], False),
     ("FOLDING TYPE", None, [], True),                        # a note beside a hatch cover

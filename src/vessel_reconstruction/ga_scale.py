@@ -1804,6 +1804,11 @@ def merged_spaces(result: dict) -> list[dict]:
         used_profiles = set()
         seen = []
         for plan in plans:
+            if plan["kind"] == "cargo_hold" and seen:
+                # A hold spans the breadth and is not split by side: a second plan entry of the same
+                # numbered hold is a second reading, whatever its note says ("(PORT USE W. B.)"
+                # read as a port side; round u10).
+                continue
             side = plan["extent"].get("side")
             # The same space in a second plan view: its sides are already given over the same
             # frames ("(P&S)" on the tank top repeats "(P)" and "(S)" of the deck plan).
@@ -1824,6 +1829,7 @@ def merged_spaces(result: dict) -> list[dict]:
             if any(_overlap(profile["extent"], entry["extent"]) > 0.5 for entry in group):
                 continue  # a second reading of a space already given over the same frames (round u6)
             merged.append(_joined(None, profile))
+            group.append(merged[-1])  # a later profile reading of the same space is checked against it
     kinds_of_view = {v["view_id"]: v["kind"] for v in result.get("views", [])}
     cargo_footprints = [e["extent"] for e in merged
                         if e["kind"] in ("cargo_hold", "cargo_tank") and "y_m" in e["extent"]]

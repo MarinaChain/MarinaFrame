@@ -1211,3 +1211,26 @@ def test_a_missing_fuel_tank_extent_is_a_coverage_warning_not_a_failure():
     spaces, particulars = _guessed_tank_over_a_hold()
     report = gs.arrangement_gate({"spaces": [spaces[0]], "particulars": particulars})
     assert report["passed"] and report["warnings"] == ["no fuel tank has an extent", "no ballast tank has an extent"]
+
+
+
+def test_a_hold_read_twice_with_a_note_is_one_hold():
+    """Round u10: "NO. 5 HOLD (PORT USE W. B.)" beside "NO. 5 HOLD" gave two holds."""
+    def hold(space_id, label, view, extent):
+        return {"id": space_id, "kind": "cargo_hold", "label": label, "number": "5", "status": "read",
+                "view_id": view, "source_record": source_record.read([source_record.region(
+                    "S-1_GA.png", view="plan", box_px=[0, 0, 10, 10], page_px=[100, 100])]),
+                "extent": {**extent, "view_id": view, "basis": "outline",
+                           "status": {axis: "measured_from_scale" for axis in "xyz"}}}
+
+    profile = {"frames": [20, 50], "x_m": [24.0, 54.0], "z_m": [6.0, 16.0]}
+    plan = {"frames": [20, 50], "x_m": [24.0, 54.0], "y_m": [-8.0, 8.0], "side": "centre"}
+    result = {"views": [{"view_id": "v1", "kind": "profile"}, {"view_id": "v3", "kind": "tank_top_plan"}],
+              "spaces": [hold("a", "NO. 5 HOLD", "v1", profile), hold("b", "NO. 5 HOLD", "v3", plan),
+                         hold("c", "NO. 5 HOLD (PORT USE W. B.)", "v3", {**plan, "side": "port"}),
+                         hold("d", "NO. 5 HOLD (PORT USE W. B.)", "v1", profile)]}
+    holds = [s for s in gs.merged_spaces(result) if s["kind"] == "cargo_hold"]
+    assert len(holds) == 1 and holds[0]["extent"]["y_m"] == [-8.0, 8.0]
+    # Only profile readings: still one hold.
+    result["spaces"] = [result["spaces"][0], result["spaces"][3]]
+    assert len([s for s in gs.merged_spaces(result) if s["kind"] == "cargo_hold"]) == 1
