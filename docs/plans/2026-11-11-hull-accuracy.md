@@ -112,6 +112,66 @@ Run-to-run variance from the model reading is large (dtmb 5.07 vs 8.92 % on one 
    replay (02216, first reading); blockers 1 and 2 should be fixed first (tasks/lessons.md, DTMB
    L0-L3 and early stop).
 
+## Round 2 (branch `lane/hull-accuracy-2` from ad14160; round 1 not yet merged)
+
+PM order: (1) best-of-2 choice, (2) 02216 close strokes, (3) 00679 bottoms (ingest.py now
+allowed), replay after each, one live L0 round, then the 24 development cases if L0 holds at 3+
+of 6. Not touched: body_plan_polyline.py, body_plan_reader.py, body_plan_crossings.py.
+
+### R2-1. Best-of-2 by the fit of the delivered hull (2767009)
+
+The two dtmb live readings had identical section shapes; reading 2's built tops were 0.08 m
+lower at every station (8.92 % against 5.07 %). The reading choice scored the form-fit table, but
+traced rows are rebuilt from ink, so the table is not the delivered hull. Each first hull now
+records `built_draft_fit` (draft fit of the build's `extracted_sections.json`, `built_table`);
+`better_reading` compares on it first. The edit keep rule still compares table fits.
+Check (`benchmarks/hull_accuracy/reading_choice.py`, every stored case with two distinct
+readings, truth only to judge): built fit keeps the truth-better reading 3 of 3, table fit 2 of 3.
+
+| Case (round) | Reading 1: table / built fit / RMS | Reading 2: table / built fit / RMS |
+|---|---|---|
+| dtmb5415 (fix-5b8a9d5) | 0.721 / 0.7455 / 5.07 % | 0.7365 / 0.7445 / 8.92 % |
+| shipd-2-02216 (fix-5b8a9d5) | 0.7662 / 0.7721 / 3.47 % | 0.7033 / 0.7616 / 7.18 % |
+| shipd-1-08158 (base2) | 0.8427 / 0.8456 / 0.78 % | 0.8428 / 0.8459 / 0.76 % |
+
+Three cases is a small sample; the margin on dtmb is 0.001.
+
+### R2-2. Own ink judged against all remaining strokes (e2f795e)
+
+02216's second reading: curves 7 and 8 share their top; an enumerated stroke ran on 8's middle
+and 7's bottom (matches no truth section, 0.6-1.0 m RMS). The true curve 7 (an inspected line,
+0.04 m RMS against truth x 70) was removed by the mixed-line filter because the mixed stroke
+carried 65 % of it. Now inspected lines join the pool, and `strokes_with_own_ink` removes the
+weakest stroke under 15 % own ink (measured against all remaining strokes and grid columns), one
+at a time, then measures again. Test: `test_a_mixed_stroke_more_hull_like_than_the_curve_it_borrows_from_still_leaves`.
+
+Replay of all ten stored L0 readings (RMS % / volume %):
+
+| Case (round) | Round-1 code | e2f795e |
+|---|---|---|
+| dtmb5415 (base) | 5.07 / +0.7 | 5.07 / +0.7 |
+| shipd-1-00679 (base) | 4.43 / +0.6 | 4.43 / +0.6 |
+| shipd-1-09867 (base) | 0.87 / +1.8 | 0.87 / +1.8 |
+| series60 (base2) | 1.39 / +1.1 | **1.24 / +0.9** |
+| shipd-1-08158 (base2) | 0.75 / -2.1 | 0.75 / -2.1 |
+| shipd-2-02216 (base2) | 0.59 / -1.7 | 0.59 / -1.7 |
+| dtmb5415 (fix) | 5.07 / +0.7 | 5.07 / +0.7 |
+| shipd-1-00679 (fix) | 4.43 / +0.6 | 4.43 / +0.6 |
+| shipd-1-09867 (fix) | 0.87 / +1.7 | 0.87 / +1.7 |
+| shipd-2-02216 (fix) | 3.47 / -2.0 | **1.47 / -2.0 (pass)** |
+
+### R2-3. 00679 bottoms: not an ingest problem; not changed
+
+Truth sections drawn over the fore panel (diagnosis only) show s05 and s06 leaving the bilge and
+running down a sloped floor to about 1 m half-breadth at the keel, while a wide flat floor (another
+station, likely s07) runs below them; the curves cross, so the panel is not nested. The panel
+assignment gives s05, s06 and s07 one shared stroke whose bottom follows the flat floor (s05
+5.3 m against truth 1.07 m at z 0.06). The row-wise Viterbi in `ingest._trace` traces each branch
+correctly; the wrong branch is chosen in `panel_assignment` (sharing one stroke over stations
+whose curves split at the bottom). A fix belongs there: let stations that share a stroke's top
+take different bottom branches, ordered by station distance from midship. Not attempted in this
+round; `ingest.py` unchanged.
+
 ## Resume point
 
 Branch `lane/hull-accuracy` at the commit after 5b8a9d5 (doc), pushed; quick tier passed on
