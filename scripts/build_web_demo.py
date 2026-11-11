@@ -57,6 +57,10 @@ ALLOWED_LICENCES = {
     # Licence not confirmed; the owner of MarinaFrame approved showing it on the demo site
     # (2026-11-11: R/V Gunnerus, MiDShip development cases). Never committed to git.
     "owner-approved-display",
+    # GA drawings of the partner test pack (development cases only, never sealed or holdout),
+    # cleared by the user for the public demo (2026-11-11). Shown only as an estimated
+    # arrangement run (benchmarks/ga_arrangement) with its label as the credit line.
+    "owner-cleared-ga",
 }
 # Name parts that mark data the demo must never carry: holdout or benchmark truth, sealed
 # sets and benchmark scores. Checked against slugs, every file in the bundle and every source name.

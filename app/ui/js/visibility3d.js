@@ -149,7 +149,8 @@ export const STEEL_SHELL_OPACITY = 0.35;
 export function shellPartOpacity({ state, isHull, insideShown, seeThroughHull }) {
   if (state === PART_STATES.hidden) return 0;
   if (state === PART_STATES.ghost) return GHOST_OPACITY;
-  if (seeThroughHull && isHull) return SEE_THROUGH_HULL_OPACITY;
+  // The See-through switch alone sets the hull: faint when on, solid when off (also with tanks or steel shown).
+  if (isHull) return seeThroughHull ? SEE_THROUGH_HULL_OPACITY : 1;
   return insideShown ? SHELL_OPACITY_WITH_INSIDES : 1;
 }
 
@@ -159,6 +160,16 @@ export function steelPartOpacity({ state, isShellPlating, seeThroughHull }) {
   if (state === PART_STATES.ghost) return GHOST_OPACITY;
   if (!isShellPlating) return 1;
   return seeThroughHull ? SEE_THROUGH_HULL_OPACITY : STEEL_SHELL_OPACITY;
+}
+
+/**
+ * True when the solid hull of the section lines (the STL) is drawn. While the whole vessel
+ * shows, the whole vessel has its own hull part, and the solid STL hull would cover it: the
+ * See-through switch and the faint shell would then change nothing on screen. This holds in
+ * whichever order the two models load (the web demo loads the whole vessel first).
+ */
+export function sectionHullShown({ wholeVesselShown }) {
+  return !wholeVesselShown;
 }
 
 /**
