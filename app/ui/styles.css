@@ -3821,6 +3821,10 @@ body:not([data-costs="shown"]) :is(.workspace, .inspector) .cost-timing { displa
 .ga-read .ga-row-status { color: var(--brand); }
 .ga-guessed .ga-row-status { color: var(--ai-text); font-style: italic; }
 .ga-unknown .ga-row-value { color: var(--text-2); }
+.ga-measured_from_scale .ga-row-status { color: var(--brand); }
+.ga-derived_from_space_tops .ga-row-status, .ga-unconfirmed_from_uncertain_boxes .ga-row-status {
+  color: var(--ai-text); font-style: italic;
+}
 
 /* ============================================================ Public web demo (docs/WEB_DEMO.md)
    js/app.js sets [data-demo="read-only"] on <html> with the static backend. The demo shows

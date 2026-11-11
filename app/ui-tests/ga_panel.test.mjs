@@ -68,3 +68,19 @@ test('the source view finds a GA row by its id', () => {
 test('status words never claim approval', () => {
   for (const word of Object.values(STATUS_WORDS)) assert.doesNotMatch(word, /approv|verif/i);
 });
+
+test('measured values show their own status, an unconfirmed depth included', () => {
+  const data = reading();
+  data.measured = {
+    lbp_m: { value: 168.05, status: 'measured_from_scale', method: 'frame 0 to the F.P. mark' },
+    depth_m: { value: 11.97, status: 'unconfirmed_from_uncertain_boxes', note: 'not confirmed' },
+    breadth_m: { value: null, status: 'unknown', reason: 'no shell side pointed' },
+  };
+  const rows = gaRows(data);
+  const byKey = Object.fromEntries(rows.measured.map((r) => [r.id.split(':').pop(), r]));
+  assert.deepEqual([byKey.lbp_m.value, STATUS_WORDS[byKey.lbp_m.status]], ['168.05 m', 'Measured']);
+  assert.deepEqual([byKey.depth_m.value, STATUS_WORDS[byKey.depth_m.status]], ['11.97 m', 'Unconfirmed']);
+  assert.deepEqual([byKey.breadth_m.status, byKey.breadth_m.note], ['unknown', 'no shell side pointed']);
+  // Without the frame-scale pass there is no measured section.
+  assert.equal(gaRows(reading()).measured.length, 0);
+});

@@ -362,7 +362,8 @@ def test_labels_with_a_known_place_and_labels_near_a_crop_go_in_separate_request
     assert len([s for s in gs.merged_spaces(result) if s["kind"] == "cargo_hold" and "extent" in s]) == 1
 
 
-def _depth_run(tmp_path, deck_shift_px=0.0, deck_frame=100, tier=True, tall_ballast=False, ballast_at_deck=False):
+def _depth_run(tmp_path, deck_shift_px=0.0, deck_frame=100, tier=True, tall_ballast=False, ballast_at_deck=False,
+               uncertain_below=False):
     """A run with three cargo holds; the deck point is moved by ``deck_shift_px`` (up is negative)
     or pointed at ``deck_frame``."""
     tmp_path.mkdir(parents=True, exist_ok=True)
@@ -403,6 +404,10 @@ def _depth_run(tmp_path, deck_shift_px=0.0, deck_frame=100, tier=True, tall_ball
                 twin["box"] = [first["box"][0] + shift * width, first["box"][1], first["box"][2] + shift * width,
                                first["box"][3]]
                 extents.append(twin)
+            if uncertain_below:  # the model is not sure of any boundary below the deck
+                for extent in extents:
+                    if extent["image_id"] == "v1":
+                        extent["basis"] = "uncertain"
             if tier:  # the lowest deckhouse tier stands on the upper deck
                 x0, y0 = _image_xy(request_dir, "v1", _px(10), DECK_Y - 36)
                 x1, y1 = _image_xy(request_dir, "v1", _px(30), DECK_Y)
@@ -1254,3 +1259,31 @@ def test_a_change_drawn_frames_past_a_one_frame_spacing_is_left_out():
     spans = [(s["from_frame"], s["to_frame"], s["spacing_mm"]) for s in table.spans]
     assert (67, 68, 1200.0) in spans and not any(mm == 1200.0 and b - a > 1 for a, b, mm in spans)
     assert x  # the frame numbers are the fixture's
+
+
+
+def test_uncertain_boxes_that_agree_with_the_deck_line_give_an_unconfirmed_depth(tmp_path):
+    """PM decision, round u10: a depth with its own status, never measured, never evidence."""
+    agreed = _depth_run(tmp_path / "a", uncertain_below=True)
+    depth = agreed["measured"]["depth_m"]
+    assert depth["status"] == gs.UNCONFIRMED and depth["value"] == pytest.approx(15.0, abs=0.15)
+    assert "extent_above_the_deck" not in {c["code"] for c in agreed["checks"]}  # confirms no box
+    assert gs.arrangement_input(agreed, "S-1")["particulars"]["depth_m"]["status"] == gs.UNCONFIRMED
+    apart = _depth_run(tmp_path / "b", uncertain_below=True, deck_shift_px=-60.0)
+    assert apart["measured"]["depth_m"]["value"] is None
+
+
+
+def test_two_cargo_tanks_with_different_numbers_at_one_place_both_lose_their_extents():
+    """Round u10: one place read as NO.2, NO.3 and NO.5 in three views."""
+    spaces, particulars = _guessed_tank_over_a_hold()
+    hold = spaces[0]
+    other = json.loads(json.dumps(hold))
+    other.update(id="cargo_hold-009", label="NO.5 CARGO HOLD", number="5")
+    hold["number"] = "2"
+    kept = gs._without_cargo_number_conflicts([hold, other, spaces[2]], particulars)
+    assert ["extent" in s for s in kept] == [False, False, True]
+    assert "different number" in kept[0]["extent_withheld"]
+    # Two tanks of one number (port and starboard) are not a conflict.
+    other["number"] = "2P"
+    assert all("extent" in s for s in gs._without_cargo_number_conflicts([hold, other], particulars))

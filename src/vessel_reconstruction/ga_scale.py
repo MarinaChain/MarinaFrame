@@ -49,6 +49,8 @@ MEASURED = "measured_from_scale"
 # the place of a pointed line that was the deck at the centreline, a rail, or missing. It is an
 # estimate; downstream must not treat it as measured (and must not check it against those tops).
 DERIVED = "derived_from_space_tops"
+# A pointed depth that only boxes with an uncertain boundary agree with: shown, never measured.
+UNCONFIRMED = "unconfirmed_from_uncertain_boxes"
 
 # Frame spacings of commercial ships (mm): ordinary frames from about 500 mm, numbered web frames
 # of large tankers up to a few metres. A printed spacing outside this range is a misreading.
@@ -1527,6 +1529,14 @@ def resolve_overlaps(result: dict) -> dict:
     return stats
 
 
+def tops_of_uncertain_cargo(result: dict, kinds: dict) -> list[float]:
+    """The tops of cargo holds and tanks boxed in the profile with an "uncertain" boundary."""
+    return [space["extent"]["z_m"][1] for space in result["spaces"]
+            if space["kind"] in ("cargo_hold", "cargo_tank") and "z_m" in space.get("extent", {})
+            and space["extent"].get("basis") == "uncertain"
+            and kinds.get(space["extent"]["view_id"]) == "profile"]
+
+
 def check_depth(result: dict, work: dict) -> None:
     """Check the measured depth against the tops of the spaces below the deck (profile).
 
@@ -1614,6 +1624,24 @@ def check_depth(result: dict, work: dict) -> None:
         # in the profile and none of them is higher than the deck line.
         if highest is None:
             reason = "the deck line could not be checked: no space below the deck was boxed in the profile"
+            unsure = tops_of_uncertain_cargo(result, kinds)
+            middle = float(np.median(unsure)) if unsure else None
+            if (len(unsure) >= MIN_DECK_TOPS and all(abs(top - middle) <= allowed for top in unsure)
+                    and abs(pointed - middle) <= allowed):
+                # Boxes the model marked "uncertain" agree with the pointed line: a depth with its
+                # own status, never measured or derived, and never used to confirm a box (PM, round
+                # u10; the circular-check lesson).
+                result["measured"]["depth_m"] = {
+                    "value": pointed, "status": UNCONFIRMED, "uncertainty_m": round(allowed, 2),
+                    "method": "the pointed deck line at side, agreeing with the tops of cargo spaces boxed "
+                              "in the profile with an uncertain boundary",
+                    "scale_basis": axis.basis, "pointed_depth_m": pointed, "reason": reason,
+                    "note": "not confirmed: no space below the deck has a clear boundary in the profile",
+                    "cross_check": {**seen, "uncertain_cargo_tops_m": sorted(unsure),
+                                    "result": "agrees with the tops of uncertain cargo boxes"},
+                    "source_record": depth["source_record"]}
+                result["checks"].append({"code": "depth_unconfirmed_from_uncertain_boxes", "status": "check"})
+                return
             result["measured"]["depth_m"] = {**_unknown(reason), "pointed_depth_m": pointed,
                                              "cross_check": {**seen, "result": "not checked"}}
             result["checks"].append({"code": "depth_not_checked", "status": "check"})
@@ -2036,6 +2064,7 @@ def arrangement_gate(data: dict) -> dict:
                  if fragment_reason(s, [o for o in data["spaces"] if o is not s], vocabulary_of(s),
                                     {"".join(_words(o["label"])) for o in data["spaces"] if o is not s})]
     report = {"fragments": fragments, "no_volume": [], "cargo_loss": {}, "max_cargo_loss": None,
+              "depth_status": (particulars.get("depth_m") or {}).get("status"),
               "guessed_over_cargo": []}
     if breadth and depth:
         report["guessed_over_cargo"] = [s["label"] for s in _guessed_over_cargo(spaces, breadth, depth)]
@@ -2093,6 +2122,7 @@ def arrangement_input(result: dict, case_id: str) -> dict:
     spaces = _deck_equipment_on_the_deck(spaces, particulars)
     spaces = _side_boxes_without_height(spaces, particulars)
     spaces = _without_guessed_over_cargo(spaces, particulars)
+    spaces = _without_cargo_number_conflicts(spaces, particulars)
     return {"schema": INPUT_SCHEMA, "case_id": case_id, "engineering_approved": False,
             "sources": result["sources"], "ship_type": result.get("ship_type"),
             "particulars": particulars, "frames": frames, "spaces": spaces, "dropped": dropped}
@@ -2219,6 +2249,41 @@ def _side_boxes_without_height(spaces: list[dict], particulars: dict) -> list[di
                           "status": {**extent["status"], "z": "guessed"},
                           "z_note": "no height drawn: placed in the upper part, under the deck"}
                 space = {**space, "extent": extent}
+        kept.append(space)
+    return kept
+
+
+# Two cargo spaces of different numbers that share this share of the smaller box are one place
+# read with two numbers.
+CARGO_CONFLICT_SHARE = 0.5
+
+
+def _without_cargo_number_conflicts(spaces: list[dict], particulars: dict) -> list[dict]:
+    """Two cargo spaces with different numbers boxed at one place: the views read the number
+    differently (round u10: "NO.2", "NO.3" and "NO.5" at the same frames in three views), and
+    code cannot tell which reading is right, so both lose their extents."""
+    from .ga_commercial import _base_number
+    breadth = (particulars.get("breadth_m") or {}).get("value")
+    depth = (particulars.get("depth_m") or {}).get("value")
+    if not breadth or not depth:
+        return spaces
+    cargo = [(space, box) for space in spaces if space["kind"] in CARGO_KINDS and space.get("number")
+             and (box := _gate_box(space, breadth, depth)) is not None and np.all(box[:, 1] > box[:, 0])]
+    conflicting = set()
+    for index, (a, box_a) in enumerate(cargo):
+        for b, box_b in cargo[index + 1:]:
+            if a["kind"] != b["kind"] or _base_number(a["number"]) == _base_number(b["number"]):
+                continue
+            shared = float(np.prod(np.clip(np.minimum(box_a[:, 1], box_b[:, 1])
+                                           - np.maximum(box_a[:, 0], box_b[:, 0]), 0.0, None)))
+            smaller = min(float(np.prod(box_a[:, 1] - box_a[:, 0])), float(np.prod(box_b[:, 1] - box_b[:, 0])))
+            if shared > CARGO_CONFLICT_SHARE * smaller:
+                conflicting.update((id(a), id(b)))
+    kept = []
+    for space in spaces:
+        if id(space) in conflicting:
+            space = {key: value for key, value in space.items() if key != "extent"}
+            space["extent_withheld"] = "another cargo space with a different number is boxed at the same place"
         kept.append(space)
     return kept
 

@@ -215,6 +215,16 @@ requests a ship; **off by default**, so the exam run is unchanged.
    `chosen_by_frame_number_fit`. Otherwise the scale is refused as before. On the round-u9n2
    ship the numbers show 782 mm, between 750 and 800 (2.2 % and 4.3 %): not clear enough, so it
    is still refused.
+   **Unconfirmed depth** (PM decision, round u10): when no box with a clear boundary can check
+   the deck line, at least three cargo boxes marked "uncertain" whose tops agree with the pointed
+   deck line give the pointed depth with the status `unconfirmed_from_uncertain_boxes`: never
+   measured or derived, and never used to confirm a box (the circular-check lesson). The card
+   shows it in a section "Measured on the drawing" with the word "Unconfirmed", and the gate
+   summary prints the depth status. No cheap code-only change was found that makes the model
+   mark hold boxes as clear more often (the deck line is pointed in its own request already).
+   **Cargo number conflicts:** two cargo spaces with different numbers boxed at one place (more
+   than half of the smaller box) both lose their extents in the arrangement input; the views
+   read the number differently and code cannot tell which is right.
    **Coverage warnings:** the gate reports a ship whose other spaces have extents but whose fuel
    or ballast tanks have none as a warning, not a failure (the fine pass reads different labels
    from run to run).
@@ -576,6 +586,11 @@ Observed cost is 0 in every round (subscription).
   text is a one-frame spacing (`u10r3`, gate 14 of 14). Open, as before: rectangles across
   sloped boundaries, boxes over a store above a peak tank, hatch breadths above the printed
   size (the printed-size proposal), one hold box a frame short at a local frame.
+- `u10r5` (u10 replayed with the unconfirmed depth and the cargo-number rule): gate 14 of 14;
+  two of the three ships without a depth now have an unconfirmed one; on one of them the gate
+  could then compute the cargo losses and found two tanks read with different numbers at one
+  place (now withheld). The PM kept the margin of the spacing chosen by the fit as set: the
+  round-u9n2 ship stays refused in that run.
 
 ## Proposal (not built; PM 2026-11-12): printed sizes as a check of extents
 

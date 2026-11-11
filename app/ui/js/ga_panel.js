@@ -31,7 +31,15 @@ const SHIP_TYPES = {
   other: 'Other ship type',
 };
 /** Words for a status; never "approved" or "verified". */
-export const STATUS_WORDS = { read: 'Read', guessed: 'Best guess', unknown: 'Not read' };
+export const STATUS_WORDS = {
+  read: 'Read', guessed: 'Best guess', unknown: 'Not read',
+  // Values measured on the drawing with its frame scale (never printed particulars).
+  measured_from_scale: 'Measured', derived_from_space_tops: 'Derived', unconfirmed_from_uncertain_boxes: 'Unconfirmed',
+};
+const MEASURED = [
+  ['lbp_m', 'Length between perpendiculars'], ['loa_m', 'Length overall'],
+  ['breadth_m', 'Breadth (moulded)'], ['depth_m', 'Depth (moulded)'],
+];
 
 function number(value, unit) {
   if (value === null || value === undefined) return '—';
@@ -77,12 +85,21 @@ export function gaRows(reading) {
       note: viewNames.get(space.view_id) ? `In ${viewNames.get(space.view_id)}` : '', record: space.source_record,
     });
   }
+  // Measured on the drawing (the frame-scale pass): shown only when the pass ran.
+  const measured = reading.measured ? MEASURED.map(([key, label]) => {
+    const item = reading.measured[key] || {};
+    const known = item.value !== null && item.value !== undefined;
+    return {
+      id: `${GA_PREFIX}measured:${key}`, label, value: number(item.value, 'm'), status: known ? item.status : 'unknown',
+      note: known ? (item.note || item.method || '') : (item.reason || ''), record: item.source_record || null,
+    };
+  }) : [];
   const order = Object.keys(KIND_NAMES);
   groups.sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
   const type = reading.ship_type || {};
   return {
     shipType: type.value ? (SHIP_TYPES[type.value] || type.value) : 'Ship type not read',
-    particulars, counts, groups,
+    particulars, counts, measured, groups,
   };
 }
 
@@ -90,7 +107,7 @@ export function gaRows(reading) {
 export function gaRecords(reading) {
   const rows = gaRows(reading);
   if (!rows) return [];
-  return [...rows.particulars, ...rows.counts, ...rows.groups.flatMap((g) => g.rows)]
+  return [...rows.particulars, ...rows.counts, ...rows.measured, ...rows.groups.flatMap((g) => g.rows)]
     .map((row) => ({ id: row.id, label: row.label, record: row.record }));
 }
 
@@ -143,6 +160,7 @@ export function createGaPanel({ onHover, onSelect }) {
           el('p', { class: 'ga-meta' }, `${rows.shipType} · a reading of the drawing for engineers to check; not approved`)),
         section('Principal particulars', rows.particulars),
         section('Counts', rows.counts),
+        ...(rows.measured.length ? [section('Measured on the drawing (not printed values)', rows.measured)] : []),
         ...rows.groups.map((group) => section(`${group.label} (${group.rows.length})`, group.rows)));
     },
   };
