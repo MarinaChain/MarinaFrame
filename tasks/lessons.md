@@ -40,6 +40,7 @@
 - **Trigger:** W13 file/network tests first passed on Python import-path denial; socket construction was also mistaken for a network operation.
 - **Rule:** Use isolated Python for direct OS probes, require the expected forbidden-operation failure, and mutation-check the exact file or network permission. Test bind/connect, not only socket construction.
 - **Why:** An earlier permission error can hide a missing guard; Seatbelt permits socket construction without permitting network use.
+- **Artifact correction (2026-11-12):** Landlock target checks protect the worker, not later unsandboxed artifact consumers. Deny model-created symlinks (MAKE_SYM) unless every host consumer opens all path components and the final regular file through no-follow descriptors. Test a trusted pre-existing symlink for target escape separately from model symlink-creation denial.
 
 ### Repartitioned holdouts are hull-disjoint, not family-disjoint
 - **Date:** 2026-11-08
