@@ -1414,3 +1414,52 @@ reported as a failure; after the run the sheet is a development case.
 round-bilge hull: smooth body-plan sections, diagonals and buttocks, and no chine row in its table.
 It is not a hard-chine holdout; no truth was made from it. Its table was looked at in the sheet
 overview only, so it is not a clean blind holdout for a round-bilge test either.
+
+**Run start (lane M, 2026-11-11).** Pins checked on `99ce579`: all files of the lane I and lane L
+amendments, the sheet and `truth.json` (hash only) match; no re-pin. The one run uses code commit
+`c473190965e042d53f9a9e6e69315b639495363c` (`scripts/measure_deadrise_holdout.py --boat cama-beach-skiff-22`);
+command, environment and resume point in `docs/plans/2026-11-11-published-holdouts.md`.
+
+### HOLDOUT RESULT: CAMA BEACH SKIFF No. 22 (one run, no tuning) - FAIL
+
+One run on 2026-11-11 by lane M at code commit `c473190965e042d53f9a9e6e69315b639495363c` (pins as above,
+all checked). Command (worktree root, `PYTHONPATH=src:.`, `W=/Users/jonathanjie/Documents/workspace/MarinaFrame/work`):
+`python scripts/measure_deadrise_holdout.py --boat cama-beach-skiff-22 --sheet $W/holdout/cama_beach_skiff_22/master-pnp-habshaer-wa-wa0800-wa0881-sheet-00001a.tif --truth $W/holdout/cama_beach_skiff_22/truth.json --out $W/published-holdout/cama.json --overlay $W/published-holdout/cama-overlay.png`.
+Environment: Python 3.12.9, numpy 2.3.5, Pillow 13.0.0, macOS 27.0.1 arm64; no model calls. Exit 0.
+Outputs (not in git): `cama.json` `4288419a8ecba515507f00da389fe81a94d14a4dd3a812ce81d7fc4ca6fed44a`,
+`cama-overlay.png` `6254ee7533b6ec14f2d20250cfb8f6783b90ee4d1fd40106ff8ba862f5663025`,
+`cama.stdout` `9deefcc1bfb851000d2daf60308312529c7e7e083b27240a8311605933f193f1`.
+
+| Arm | Kind | Cells given | RMS (m) | Max (m) | Wrong (> 0.15 m) | Identity errors | Extra |
+|---|---|---|---|---|---|---|---|
+| frozen | waterline | 22 / 36 | 0.0616 | 0.113 | 0 | 2, 3, 8, 9 | 0 |
+| v2 | waterline | 22 / 36 | 0.0616 | 0.113 | 0 | 2, 3, 8, 9 | 0 |
+| polyline (product rule) | waterline | 22 / 36 | 0.0618 | 0.113 | 0 | 2, 3, 8, 9 | 0 |
+| frozen | point | 5 / 18 | 0.0506 | 0.096 | 0 | 9 | 0 |
+| v2 | point | 5 / 18 | 0.0506 | 0.096 | 0 | 9 | 0 |
+| polyline (product rule) | point | 5 / 18 | 0.0506 | 0.096 | 0 | 9 | 0 |
+
+Chine cells only: 3 / 9 given for every arm, RMS 0.065 m. Polyline reader: both halves declined (too few
+sharp knuckles: aft 1 of 11 traced lines, fore 2 of 15); fore station 2 engaged on its own. Reader v2 found
+no chine line on either half.
+
+Per-station waterline cells (polyline arm; frozen is the same to 1 mm): station 1 none of 4; 2 four of 4,
+error +0.10 to +0.11 m; 3 four of 4, +0.06 to +0.08 m; 4 one of 4; 5 one of 4; 6 two of 4; 7 two of 4
+(stations 4 to 7 within 0.025 m); 8 four of 4, +0.04 m; 9 four of 4, +0.05 m. The missing cells are the low
+waterlines (W0 to W3) of stations 1 and 4 to 7. The constant positive error at 2, 3, 8, 9 with identity
+errors at the same stations suggests those curves carry a neighbour's name; not investigated (no tuning).
+
+| Gate (polyline product rule vs frozen) | Waterline | Point |
+|---|---|---|
+| cells >= frozen | pass (22 = 22) | pass (5 = 5) |
+| RMS not worse | **fail** (0.06176 > 0.06157) | pass (0.05061 <= 0.05062) |
+| wrong cells not worse | pass (0 = 0) | pass (0 = 0) |
+| wrong cells <= 10 % of given | pass (0) | pass (0) |
+| no extra cell on a blank printed cell | pass | pass |
+| by eye: every named or engaged knuckle on a drawn station corner | pass (one engaged knuckle, fore station 2, at the meeting of its traced side and its drawn flat bottom; one reading, lane M) | |
+
+**Result: FAIL** (all gates must hold; the waterline RMS gate fails by 0.0002 m). The product rule did not
+read the hard chine on this sheet: it declined both halves and gave the frozen reader's cells with one
+engaged station, and coverage is 61 % of waterline cells and 28 % of point cells. Reader v2 passes its own
+code gates only because it equals the frozen reader here. This sheet is now a development case.
+`engineering_approved` stays false.
