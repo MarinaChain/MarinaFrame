@@ -298,3 +298,9 @@
 - **Trigger:** An archive upload to `gdrive-mc:MarinaFrame Data/...` without a flag went to the personal My Drive, and a re-check of verified uploads showed every file as missing.
 - **Rule:** For MarinaFrame Data, always pass `--drive-team-drive 0AIHWIsMcKqIRUk9PVA` to every rclone call on `gdrive-mc` (copy, check, lsf, purge). Before you upload, confirm with `rclone lsf` that the destination folder exists on the shared drive. Archive to Drive only data that we still need; scratch runs of merged lanes do not go to Drive.
 - **Why:** The remote config has an empty `team_drive`, so without the flag rclone uses My Drive. The user wants Drive kept organized and small.
+
+### Check untracked files before you remove a worktree
+- **Date:** 2026-11-12
+- **Trigger:** A disk cleanup removed "merged and clean" worktrees with `git worktree remove --force`. The clean check used `--untracked-files=no`, so an uncommitted Sol design file (docs/plans/2026-11-12-linux-sandbox.md) was deleted.
+- **Rule:** A worktree is removable only when `git status --porcelain --untracked-files=normal` is empty (ignored files such as target/ and work/ may go). Tell lanes to commit design files when they write them.
+- **Why:** `--force` deletes untracked files, and "HEAD is merged" says nothing about files that were never committed.
