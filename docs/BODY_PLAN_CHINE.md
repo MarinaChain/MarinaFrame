@@ -1148,17 +1148,117 @@ array, and `measure_side` gives identical readings on both halves (frozen vs pro
 script, now importing the frozen copy, reproduces the published result exactly: 7 of 31 point cells, RMS 0.912 m,
 3 wrong cells, for both arms. The three frozen files are byte-identical to the pinned product files.
 
-### Reader thresholds scaled by stroke width (code-review item 8, partial, 2026-11-11)
+### Reader thresholds scaled by stroke width (code-review item 8, 2026-11-11)
 
-Five fixed pixel distances in the crossings reader now scale with `factor = measured stroke width / 5 px`
-(the 1700 x 2300 synthetic reference): tracing band, minimum diagonal length, centreline exclusion,
-link tolerance and the search margin. Gap and minimum-run thresholds are not scaled yet.
+Branch `lane/reader-thresholds`; plan and gates: `docs/plans/2026-11-11-reader-thresholds.md`. Development
+sheets only. Earlier partial version (`2f4086a`): five distances scaled by a factor from horizontal ink runs;
+its E. C. COLLIER score was the same as frozen v1 (7 of 31 cells, RMS 0.912 m). COLLIER is not in
+`work/sources` of this checkout and was not run again here.
 
-- Gunnerus lines plan (development sheet): factor 1.00, so readings are unchanged.
-- E. C. COLLIER (holdout, scored once, no tuning after): factor 2.00. The score is unchanged:
-  7 of 31 point cells, RMS 0.912 m, 3 wrong cells, the same as the frozen v1 reader.
+**What was wrong with the partial version.** Its factor (75th percentile of horizontal ink runs / 5 px)
+reads 1.8 to 2.6 on the five HAER development sheets at native size, but the reader measures their curve
+strokes at 4.8 to 6.6 px: they are at the 5 px reference. Horizontal runs through oblique lines, lettering and
+other views are long. So `continue/v0.5` scaled its five distances up about 2x on the sheets they were tuned
+on; its native reading differed from frozen v1 on all five, and on Balclutha cells within 5 cm fell from
+149 to 32 (RMS 0.148 m to 0.905 m, 16 identity errors). At 50 % size both readers failed mainly because
+`typical_width` accepts only 3.5 to 8 px crossings: a 2.5 px curve is classed as a thin grid line.
 
-The change is a robustness fix for scans at other resolutions. It does not improve the COLLIER score.
+**Method.** Stroke width = 75th percentile of the perpendicular widths of the crossings the reader measures
+on a half (at least 8 crossings; the upper quartile skips thin grid lines). Resolution factor = stroke / 5 px.
+Threshold scale = stroke / clip(stroke, 4.0, 7.5 px): the tuned thresholds were checked on strokes of 4.7 to
+6.6 px (five HAER sheets, two synthetic fixtures), so inside that band they stay exactly as tuned; outside it
+every drawing distance scales with the stroke (`scaled_pixels`, `scaled_rows`). `measure_side` measures the
+stroke in a first pass at the tuned thresholds and repeats the pass only when the scale is not 1.0.
+`calibrate` takes the same measure at the drawn horizontal lines of the body-plan box, before the waterlines
+are known; it sets `resolution_factor`, scales its own distances, and flags `low_resolution` when the factor
+is below 0.75 or when no stroke can be measured. Crossings functions take `scale` explicitly (default 1.0,
+the frozen behaviour) instead of scanning the whole sheet on each call.
+
+**Every fixed pixel threshold in the product reader path, and the decision.**
+
+| Module | Scaled with the stroke (drawing distances) | Not scaled, and why |
+|---|---|---|
+| `body_plan_crossings` | `BAND_ROWS` 40; `WATERLINE_SEARCH_ROWS` 20; `WATERLINE_BLOCK_PX` 256; `WATERLINE_MARGIN_PX` 2; fallback waterline half-thickness 3; `MIN_ROWS_PER_SIDE` 5 (at least 3); `MAX_COAST_ROWS` 3 (at least 1); `QUADRATIC_FIT_ROWS` 30; same-line distance 3; `STRAIGHT_MAX_DEVIATION_PX` 2.5; `STRAIGHT_STEP_ROWS` 4; `DIAGONAL_MIN_LENGTH_PX` 1500; `DIAGONAL_MAX_DEVIATION_PX` 5; `DIAGONAL_CENTRE_REACH_PX` 60; `CENTRELINE_STRUCTURE_PX` 70; `GRID_COLUMN_TOLERANCE_PX` 6; `typical_width` window 3.5 to 8 and default 5; `FOLLOW_START_OFFSET_ROWS` 10; `FOLLOW_STOP_MARGIN_ROWS` 10; `FOLLOW_FIT_ROWS` 20 (at least 3); `FOLLOW_MAX_MISSES` 8; `FOLLOW_MAX_COAST_ROWS` 60; `FOLLOW_REACH_PX` 3; wide-run allowance 2; `LINK_TOLERANCE_PX` 8 | `INK_THRESHOLD` 128: grey level. `RUN_JOIN_GAP_PX` 1: a one-sensor-pixel break. Track prediction slack 1.5/2/3 px: row-to-row pixel adjacency. Fit minimums (3 points, 2 rows, last 12 points), `max_gap_steps` 1: sample counts. Width ratios (0.70, 1.55, 2.2, `FOLLOW_WIDE_RUN_RATIO` 2.0): relative to the measured curve width. Slopes (`STRAIGHT_SLOPES`, `POST_MAX_SLOPE`, `SHALLOW_SLOPE`, grid slopes): dimensionless. `POST_MIN_SPACINGS`, `SHORT_STROKE_SPACINGS`, `POST_INNER_FRACTION`: shares of the waterline spacing or half-span |
+| `body_plan_reader` | `CENTRE_CLEARANCE_PX` 10 (search start); `PATH_EXTENSION_ROWS` 1200 | Smoothness limits: metres. `ONE_WATERLINE_MIN_SPACINGS`: share of spacing. Spacing fallback `BAND_ROWS` x 8: only for a layout with one waterline |
+| `sheet_calibration` | `SYMMETRY_TOL_PX` 4; `MAX_OFFSET_MARGIN_PX` 120; `SNAP_ROWS` 20; `FRAME_CLEARANCE_PX` 20; `DASH_GAP_ROWS` 40; `CENTRELINE_END_TOLERANCE_ROWS` 40; `BASELINE_SKIP_ROWS` 3 | Fills (`LINE_MIN_FILL`, `FRAME_MIN_FILL`, `VERTICAL_FRAME_FILL`), shares (`SYMMETRY_TOL_SHARE`, `GRID_MIN_OFFSET_SHARE`, `SCALE_AGREEMENT`, `LATTICE_TOLERANCE`, spacing tolerance 0.015), counts (`MIN_AXIS_PAIRS`, `MIN_LABELLED_FOR_FIT`): not distances. Column windows of +-1 and +-2 px around one line: must keep a pixel either side at any resolution |
+| `ingest` (section tracer) | none | Panel-size limits (`max(12, 0.16 w)`, `max(2, 0.008 w)`, `max(6, 0.012 h)`, `max(8, 0.08 h)`, `max(16, 0.15 h)`, `max(12, 0.12 h)`, `max(3, 0.025 h)`, `max(12, 0.5 h)`) already scale with the drawing; their integer floors are minimum evidence, and a lower floor at low resolution would accept weaker evidence. Stroke-relative limits (`2.5 w`, `1.25 w`, `1.5 w`, `2 w`, `3 w`) already scale. Resolution floors (33 x 8 px panel, 0.75 px uncertainty, 0.25 px resampling): quantisation limits. Pixel-adjacency windows (5 x 5 linking, +-1 to +-3 px, grid group gap 2, grid spacing at least 8, endpoint rows 3, 7, 8): at least one pixel either side at any resolution. Grey levels (12, 24, 35, 60) and resource budgets (64, 50 000, 1025): not distances. Measured: ingest needs no scaling on the development drawings (below) |
+
+**Results: body-plan reader, five development sheets.** Same harness calibrations (mapped to the reduced
+grid), rank identity, harness scorers. Reduced sheet = native ink area-averaged and thresholded at half.
+Cells: given / within 5 cm of truth / RMS m. "Reading = frozen": SHA-256 of the repr of both full
+`SideReading`s equals frozen v1. Factor and flag are those `calibrate` sets on a box built from the layout.
+
+| Sheet (truth cells) | Size | Factor | Flag | Frozen v1 | continue/v0.5 | This branch | Reading = frozen |
+|---|---:|---:|---|---|---|---|---|
+| PARDON ME (57) | 100 % | 1.19 | no | 34 / 27 / 0.135 | 34 / 27 / 0.135 | 34 / 27 / 0.135 | yes |
+| PARDON ME (57) | 50 % | 0.57 | yes | 20 / 9 / 0.133 | 20 / 9 / 0.133 | 36 / 18 / 0.179 | no |
+| PARDON ME (57) | 35 % | 0.39 | yes | 6 / 2 / 0.237 | 0 / 0 / - | 40 / 39 / 0.026 | no |
+| BUE GIRL (39) | 100 % | 1.20 | no | 37 / 37 / 0.001 | 37 / 37 / 0.002 | 37 / 37 / 0.001 | yes |
+| BUE GIRL (39) | 50 % | 0.58 | yes | 12 / 6 / 0.229 | 2 / 0 / 0.548 | 32 / 27 / 0.036 | no |
+| BUE GIRL (39) | 35 % | 0.40 | yes | 0 / 0 / - | 0 / 0 / - | 37 / 37 / 0.001 | no |
+| C.A. Thayer (151) | 100 % | 1.28 | no | 149 / 148 / 0.012 | 150 / 149 / 0.012 | 149 / 148 / 0.012 | yes |
+| C.A. Thayer (151) | 50 % | 0.57 | yes | 7 / 0 / 2.094 | 27 / 0 / 2.384 | 101 / 16 / 0.676 | no |
+| C.A. Thayer (151) | 35 % | 0.40 | yes | 0 / 0 / - | 0 / 0 / - | 149 / 3 / 1.281 | no |
+| Balclutha (151) | 100 % | 0.98 | no | 151 / 149 / 0.148 | 151 / 32 / 0.905 | 151 / 149 / 0.148 | yes |
+| Balclutha (151) | 50 % | 0.40 | yes | 0 / 0 / - | 0 / 0 / - | 132 / 21 / 1.686 | no |
+| Balclutha (151) | 35 % | 0.39 | yes | 0 / 0 / - | 0 / 0 / - | 75 / 8 / 2.834 | no |
+| BUMBLE BEE, corrected sides (54) | 100 % | 1.21 | no | 50 / 30 / 0.149 | 50 / 30 / 0.146 | 50 / 30 / 0.149 | yes |
+| BUMBLE BEE, corrected sides (54) | 50 % | 0.56 | yes | 0 / 0 / - | 0 / 0 / - | 45 / 45 / 0.005 | no |
+| BUMBLE BEE, corrected sides (54) | 35 % | 0.40 | yes | 0 / 0 / - | 0 / 0 / - | 47 / 27 / 0.151 | no |
+
+Totals, cells within 5 cm (of 452): native 391 / 275 / 391 (frozen / `continue/v0.5` / this branch);
+50 % 15 / 9 / 127; 35 % 2 / 0 / 114.
+
+Gates (written before the run): G1 native reading byte-identical to frozen v1 on all five sheets and both
+synthetic fixtures: **pass**. G2 at 50 % and 35 %, cells within 5 cm at least frozen v1 and `continue/v0.5`:
+**pass**, on every sheet as well as in total. G3 `low_resolution` on every reduced sheet and on no native
+sheet: **pass** (native 0.98 to 1.28, reduced 0.39 to 0.58).
+
+Limits, not hidden:
+
+- More cells are not all good cells. On Thayer and Balclutha at reduced size most stations have rank
+  identity errors (Thayer 35 %: 149 cells, only 3 within 5 cm, 18 identity-error stations; Balclutha 50 %:
+  14). Frozen v1 gives no cells there. The flag is set on all of these sheets, and a flagged calibration is
+  not used for the build without a person (`reader_anchors` reports the warning).
+- The measured stroke saturates at about 2 px, so the threshold scale stops near 0.71 (50 %) and 0.5 (35 %).
+  Results do not fall steadily with size: PARDON ME and BUE GIRL read better at 35 % than at 50 %.
+- The calibration-stage factor was measured on a box built from the harness layout; the model-located box of
+  a live run can differ. `calibrate` itself was checked only on the synthetic fixtures.
+- Other callers of the crossings functions (`body_plan_chine_line`, `body_plan_reader_v2`) use scale 1.0,
+  the frozen behaviour; they are not part of the product path and are not scaled.
+- The tuned values were set and checked at native HAER resolution; no threshold was tuned on the reduced
+  sheets. The design was revised once before the new reader ran (median to 75th percentile, band 4.0 to
+  6.5 px to 4.0 to 7.5 px), after the median read 2.0 px on the calibration fixture.
+
+**Results: section tracer (ingest).** Development family `development_wigley`, seeds 17, 23, 41, clean and
+drafting styles (the corridor proposal refuses the degraded style), 25 sections each, with the benchmark's
+pixel-corridor proposal made at native size and mapped to the reduced grid. G4, extraction output
+byte-identical to `continue/v0.5`: **pass**, at every size (no ingest code changed).
+
+| Size | Sections read / 150 | Abstained (kind) | Worst RMS / beam | Mean of case means, RMS / beam |
+|---:|---:|---|---:|---:|
+| 100 % | 146 | 4 (`ambiguous_curve`, seed 17) | 0.0043 | 0.0031 |
+| 50 % | 138 | 12 (`missing_curve_segment`) | 0.0062 | 0.0041 |
+| 35 % | 140 | 10 (`missing_curve_segment`) | 0.0082 | 0.0055 |
+
+The tracer abstains rather than misreads at reduced size; every read section stays within the 0.01
+RMS/beam clean gate of `benchmarks/holdout_contract.json`.
+
+Reproduce (outputs in `work/reader-thresholds/`, git-ignored; run once per arm, `--reader frozen` for v1):
+
+```bash
+set -o pipefail
+PYTHONPATH=src:. .venv/bin/python scripts/measure_reader_resolution.py --reader product --label scaled \
+  --sources /Users/jonathanjie/Documents/workspace/MarinaFrame/work/sources \
+  --truth-root /private/tmp/claude-501 \
+  --legacy-truth-root /private/tmp/claude-501/-Users-jonathanjie-Documents-workspace/31a3f286-f3b9-4116-93bc-756e11ead9ee/scratchpad/wv-agent \
+  --out work/reader-thresholds
+PYTHONPATH=src:. .venv/bin/python scripts/measure_ingest_resolution.py --label scaled \
+  --cases work/reader-thresholds/ingest-cases --out work/reader-thresholds/ingest
+```
+
+Tests: `tests/test_reader_scale.py` (scale band, frozen equivalence at the reference stroke, reduced synthetic
+drawing read at 50 % and 35 % where frozen v1 loses the cells, flag including unknown resolution).
 
 ### Holdout protocol: CAMA BEACH SKIFF No. 22 (written before any run; lane E, 2026-11-11)
 

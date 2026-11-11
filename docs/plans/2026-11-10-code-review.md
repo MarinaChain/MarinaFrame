@@ -31,7 +31,7 @@ P0 = wrong result or unprotected boundary; P1 = structural debt that blocks prog
 | 5 | P0 | App starts Python five ways; export and part-revise kill only the leader on timeout (orphans, full env); intake has no timeout and cannot be cancelled | Done in `f66f5ff`: one supervised spawn builder (`rust-control/src/supervised.rs`) for all five sites; progress watchdog, no wall timer; intake Cancel | M |
 | 6 | P0 | `part_revise.py` calls the model directly (hardcoded model, no budget/receipts, regex JSON) | Done in `32e0067`: route through the Rust provider worker | M |
 | 7 | P1 | Product reader source pinned by sha256 in three holdout tests, so every improvement became a wrapper; three hard-chine readers exist, none in the product path | freeze a benchmark copy or git tag; choose one reader by benchmark, integrate, move the rest out | S + M |
-| 8 | P1 | Fixed pixel thresholds in the product reader path (`body_plan_crossings.py:25,48,52,78`, `sheet_calibration.py:44`) tuned on HAER scans; low-res uploads can misread with no flag | Partial: scale the five listed distances by measured ink width and flag low resolution; other fixed pixel thresholds and real-sheet equivalence remain open | M |
+| 8 | P1 | Fixed pixel thresholds in the product reader path (`body_plan_crossings.py:25,48,52,78`, `sheet_calibration.py:44`) tuned on HAER scans; low-res uploads can misread with no flag | Done on `lane/reader-thresholds`: stroke measured from the reader's own crossings; every drawing distance in the crossings, reader and calibration modules scales outside the checked 4.0-7.5 px band (ingest needs none, measured); native readings byte-identical to frozen v1 on five development sheets; at 50 %/35 % size 127/114 cells within 5 cm vs 15/2 (frozen v1); low resolution flagged. See `docs/BODY_PLAN_CHINE.md` | M |
 | 9 | P1 | Tool catalog defined in Rust and Python (texts differ); third operation list in `rust_worker.py` | Done: `src/vessel_reconstruction/tool_catalog.json`, read by Rust and Python | M |
 | 10 | P1 | Revision export can package another revision's display GLB (`exports/spatial.py:23`) | `32333d6` plus follow-up: bind producer outputs to the build and check their hashes | M |
 | 11 | P1 | One export-format failure drops all CAD (`geometry.py:745`, `pipeline.py:230`) | Done in `082725f`: per-format results; keep valid formats | M |
@@ -48,7 +48,7 @@ P0 = wrong result or unprotected boundary; P1 = structural debt that blocks prog
 ## Reader work status
 
 - Item 7: benchmark reader isolation started in `b90c166`. Real-sheet equivalence and published-score reproduction are still pending.
-- Item 8: not started; scale-relative thresholds and the low-resolution flag are still required.
+- Item 8: done on `lane/reader-thresholds` (results and limits in `docs/BODY_PLAN_CHINE.md`). Reduced Thayer and Balclutha sheets still read with many identity errors; they are flagged and not used without a person.
 
 ## Well designed (keep)
 

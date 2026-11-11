@@ -199,16 +199,6 @@ def test_overlay_png_draws_flags():
     assert png.startswith(b'\x89PNG')
 
 
-def test_reader_modules_are_not_changed_by_this_work():
-    import hashlib
-    from pathlib import Path
-    frozen = {'src/vessel_reconstruction/body_plan_reader.py':
-              '327c9f141876dc1945383ebe35023b6e7baaacc34306c5eecf26ffb16ba94e11'}
-    root = Path(__file__).resolve().parents[1]
-    for name, digest in frozen.items():
-        assert hashlib.sha256((root / name).read_bytes()).hexdigest() == digest
-
-
 def test_longest_line_next_to_a_mistagged_centreline_is_used():
     keel_edge = sc.Line(1000.0 - 15, 3, 0.2)  # within 2 % of the box width
     centre = sc.Line(1000.0, 3, 0.9)

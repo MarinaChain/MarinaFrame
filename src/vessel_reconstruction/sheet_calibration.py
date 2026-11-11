@@ -9,8 +9,9 @@ independent side checks. Every value carries a source label. Two scale measures 
 two side checks must agree; otherwise the calibration is flagged for a person, never silently
 accepted. A flagged calibration still gives a provisional layout, so that the person sees it.
 
-The reader modules (`body_plan_reader`, `body_plan_crossings`, `body_plan_identity`) are frozen;
-this module only builds their `SheetLayout` and calls them.
+This module builds the readers' `SheetLayout` and calls them. Pixel distances (px, rows) are
+tuned at the 5 px reference stroke and scale with the stroke measured on the sheet
+(`body_plan_crossings.threshold_scale`); shares, counts and fills do not scale.
 """
 from __future__ import annotations
 
@@ -35,7 +36,7 @@ FRAME_MIN_FILL = 0.98
 # A grid symmetry axis that contradicts the tagged centreline needs this many mirrored pairs (a
 # grid drawn on one half only mirrors about its own middle).
 MIN_AXIS_PAIRS = 3
-# Mirror tolerance of a vertical grid line about the centreline: px, or a share of its offset.
+# Mirror tolerance of a vertical grid line about the centreline: px (scaled), or a share of its offset.
 SYMMETRY_TOL_PX = 4.0
 SYMMETRY_TOL_SHARE = 0.004
 # Vertical lines closer than this share of the box width to the centreline are keel or post
@@ -43,23 +44,29 @@ SYMMETRY_TOL_SHARE = 0.004
 GRID_MIN_OFFSET_SHARE = 0.02
 # Two scale measures agree when they differ by at most this share.
 SCALE_AGREEMENT = 0.01
-# Margin outside the outermost station crossing for the reader's search half-span (px); the hand
-# calibrations used 70 to 160 px.
+# Margin outside the outermost station crossing for the reader's search half-span (px, scaled); the
+# hand calibrations used 70 to 160 px.
 MAX_OFFSET_MARGIN_PX = 120
-# A waterline row lies on a drawn horizontal line within this many rows (the reader searches as far).
+# A waterline row lies on a drawn horizontal line within this many rows (scaled; the reader searches as far).
 SNAP_ROWS = 20
 # A line is on the waterline lattice within this share of the grid spacing.
 LATTICE_TOLERANCE = 0.03
 # A vertical line through this share of the body-plan box is a frame, not a buttock.
 VERTICAL_FRAME_FILL = 0.9
-# The reader's search stops this far inside a frame line (px).
+# The reader's search stops this far inside a frame line (px, scaled).
 FRAME_CLEARANCE_PX = 20
-# Gaps of a dashed or dash-dot line, in rows.
+# Gaps of a dashed or dash-dot line, in rows (scaled).
 DASH_GAP_ROWS = 40
-# Rows below the baseline where the centreline's own ink may stop (dash-dot lines have gaps).
+# Rows below the baseline where the centreline's own ink may stop (dash-dot lines have gaps; scaled).
 CENTRELINE_END_TOLERANCE_ROWS = 40
+# An unlabelled line this close (rows, scaled) to the baseline is the baseline itself.
+BASELINE_SKIP_ROWS = 3
 # A labelled height fit needs this many labelled lines to set the baseline by itself.
 MIN_LABELLED_FOR_FIT = 3
+# A sheet whose stroke width is below this share of the 5 px reference stroke is flagged for a person.
+LOW_RESOLUTION_FACTOR = 0.75
+# The column windows of +-1 and +-2 px around one drawn line (vertical_extent, centreline_bottom) are
+# not scaled: they must keep at least one pixel either side at any resolution.
 # Purpose-drawn scales first, then labelled grids, then grids with a printed (rounded) spacing.
 SCALE_PRIORITY = ('scale_bar', 'scale_ratio', 'waterline_labels', 'buttock_grid', 'waterline_spacing')
 
@@ -98,7 +105,13 @@ class Calibration:
     flags: list = field(default_factory=list)  # open problems: a person must look before use
     notes: list = field(default_factory=list)  # weaker sources and side remarks, not blocking
     engineering_approved: bool = False
-    resolution_factor: float | None = None
+    resolution_factor: float | None = None  # measured stroke / 5 px reference; None when not measured
+
+    def threshold_scale(self) -> float:
+        """Scale of the tuned pixel distances on this sheet (1.0 when the stroke was not measured)."""
+        if self.resolution_factor is None:
+            return 1.0
+        return bpc.threshold_scale(self.resolution_factor * bpc.REFERENCE_STROKE_PX)
 
     def flag(self, name: str, message: str) -> None:
         self.flags.append(Flag(name, message[:400]))
@@ -116,7 +129,8 @@ class Calibration:
     def row_at(self, height_ft: float) -> int:
         """Image row of a height above the baseline, on the drawn line when one is that close."""
         row = self.baseline_row - height_ft * self.pixels_per_ft
-        near = [r for r in self.grid_rows if abs(r - row) <= SNAP_ROWS]
+        snap = bpc.scaled_pixels(SNAP_ROWS, self.threshold_scale())
+        near = [r for r in self.grid_rows if abs(r - row) <= snap]
         if near:
             row = min(near, key=lambda r: abs(r - row))
         return int(round(row))
@@ -158,11 +172,11 @@ def straight_lines(ink: np.ndarray, box: list, axis: str) -> list[Line]:
     return lines
 
 
-def _mirror_tolerance(offset: float) -> float:
-    return max(SYMMETRY_TOL_PX, SYMMETRY_TOL_SHARE * abs(offset))
+def _mirror_tolerance(offset: float, scale: float = 1.0) -> float:
+    return max(bpc.scaled_pixels(SYMMETRY_TOL_PX, scale), SYMMETRY_TOL_SHARE * abs(offset))
 
 
-def mirrored_pairs(lines: list[Line], centre: float) -> list[tuple[Line, Line]]:
+def mirrored_pairs(lines: list[Line], centre: float, scale: float = 1.0) -> list[tuple[Line, Line]]:
     """Pairs (left, right) of lines mirrored about `centre`, each line used once, nearest first."""
     left = [line for line in lines if line.position < centre - 1]
     right = [line for line in lines if line.position > centre + 1]
@@ -170,7 +184,7 @@ def mirrored_pairs(lines: list[Line], centre: float) -> list[tuple[Line, Line]]:
     for line in sorted(left, key=lambda l: centre - l.position):
         target = 2 * centre - line.position
         candidates = [r for r in right if id(r) not in used
-                      and abs(r.position - target) <= _mirror_tolerance(centre - line.position)]
+                      and abs(r.position - target) <= _mirror_tolerance(centre - line.position, scale)]
         if candidates:
             best = min(candidates, key=lambda r: abs(r.position - target))
             used.add(id(best))
@@ -178,7 +192,7 @@ def mirrored_pairs(lines: list[Line], centre: float) -> list[tuple[Line, Line]]:
     return pairs
 
 
-def find_centreline(verticals: list[Line], box: list) -> tuple[float | None, str, dict]:
+def find_centreline(verticals: list[Line], box: list, scale: float = 1.0) -> tuple[float | None, str, dict]:
     """The centreline column: the vertical line about which most vertical grid lines mirror.
 
     Returns (column, source, evidence). The evidence holds the median midpoint of the mirrored
@@ -187,14 +201,14 @@ def find_centreline(verticals: list[Line], box: list) -> tuple[float | None, str
     width = box[2] - box[0]
     best, best_key = None, None
     for line in verticals:
-        pairs = [p for p in mirrored_pairs(verticals, line.position)
+        pairs = [p for p in mirrored_pairs(verticals, line.position, scale)
                  if line.position - p[0].position >= GRID_MIN_OFFSET_SHARE * width]
         key = (len(pairs), line.fill)
         if best_key is None or key > best_key:
             best, best_key = line, key
     if best is None or best_key[0] == 0:
         return None, 'code:none', {'pairs': 0}
-    pairs = [p for p in mirrored_pairs(verticals, best.position)
+    pairs = [p for p in mirrored_pairs(verticals, best.position, scale)
              if best.position - p[0].position >= GRID_MIN_OFFSET_SHARE * width]
     midpoints = [(a.position + b.position) / 2 for a, b in pairs]
     evidence = {'pairs': len(pairs), 'line_fill': best.fill,
@@ -202,23 +216,25 @@ def find_centreline(verticals: list[Line], box: list) -> tuple[float | None, str
     return best.position, 'code:vertical line at the symmetry axis of the buttock grid', evidence
 
 
-def choose_centreline(verticals: list[Line], box: list, tagged: Line | None) -> tuple[float | None, str, dict]:
+def choose_centreline(verticals: list[Line], box: list, tagged: Line | None,
+                      scale: float = 1.0) -> tuple[float | None, str, dict]:
     """The centreline from two sources: the line the model tagged as the centreline, and the
     symmetry axis of the vertical grid (code). The tagged line wins; a different axis is a flag
     when the grid has at least two mirrored pairs (a one-sided grid has no axis to compare)."""
-    axis, axis_source, evidence = find_centreline(verticals, box)
+    axis, axis_source, evidence = find_centreline(verticals, box, scale)
     if tagged is None:
         if axis is not None:
             evidence['disagreement'] = 'centreline from grid symmetry only (no tagged centreline)'
         return axis, axis_source, evidence
     width = box[2] - box[0]
-    pairs = [p for p in mirrored_pairs(verticals, tagged.position)
+    pairs = [p for p in mirrored_pairs(verticals, tagged.position, scale)
              if tagged.position - p[0].position >= GRID_MIN_OFFSET_SHARE * width]
     evidence = dict(evidence, tagged=tagged.position, pairs_about_tagged=len(pairs))
     source = 'model:tagged centreline / code:line column'
     if pairs:
         source += f', {len(pairs)} grid pairs mirror about it'
-    if axis is not None and abs(axis - tagged.position) > SYMMETRY_TOL_PX and evidence['pairs'] >= MIN_AXIS_PAIRS \
+    if axis is not None and abs(axis - tagged.position) > bpc.scaled_pixels(SYMMETRY_TOL_PX, scale) \
+            and evidence['pairs'] >= MIN_AXIS_PAIRS \
             and evidence['pairs'] > len(pairs):
         if abs(axis - tagged.position) <= GRID_MIN_OFFSET_SHARE * width:
             # The model tagged a neighbouring line (keel or post edge); the grid axis is the centreline.
@@ -428,8 +444,13 @@ def fore_half_from_numbering(left: list[int], right: list[int], lowest_at: str) 
 
 # ---------------------------------------------------------------- calibrate
 
-def vertical_extent(ink: np.ndarray, column: float, box: list, gap: int = DASH_GAP_ROWS) -> tuple[int, int]:
-    """(top, bottom) rows of the longest ink run on a column (+-1 px) in the box; dashes join."""
+def vertical_extent(ink: np.ndarray, column: float, box: list, gap: int | None = None,
+                    scale: float = 1.0) -> tuple[int, int]:
+    """(top, bottom) rows of the longest ink run on a column (+-1 px) in the box; dashes join.
+
+    `gap` defaults to DASH_GAP_ROWS at this scale.
+    """
+    gap = round(bpc.scaled_pixels(DASH_GAP_ROWS, scale)) if gap is None else gap
     x = int(round(column))
     rows = np.flatnonzero(ink[box[1]:box[3], max(0, x - 1):x + 2].any(axis=1))
     if rows.size == 0:
@@ -463,15 +484,23 @@ def calibrate(ink: np.ndarray, reading, dpi: float | None = None) -> Calibration
         cal.flag('body_plan_box', 'the body plan was not located')
         return cal
     cal = Calibration(box=[int(v) for v in box])
-    cal.resolution_factor = bpc.sheet_resolution_factor(ink)
-    if cal.resolution_factor < 0.75:
-        cal.flag('low_resolution', f'Low resolution ({cal.resolution_factor:.2f} of reference); check the reading.')
     cal.sources['box'] = located.get('source', 'model:coarse box')
     verticals = straight_lines(ink, cal.box, 'v')
     horizontals = straight_lines(ink, cal.box, 'h')
+    stroke = stroke_width(ink, cal.box, horizontals)
+    if stroke is None:
+        # Nothing to measure (no drawn lines found, or a tiny image): the resolution is unknown.
+        cal.flag('low_resolution', 'Resolution unknown: too few drawn lines to measure the stroke width; '
+                                   'check the reading.')
+    else:
+        cal.resolution_factor = round(bpc.resolution_factor(stroke), 3)
+        cal.sources['resolution_factor'] = 'code:stroke width at the drawn horizontal lines / 5 px'
+        if low_resolution(cal.resolution_factor):
+            cal.flag('low_resolution', f'Low resolution ({cal.resolution_factor:.2f} of reference); check the reading.')
+    scale = cal.threshold_scale()
     labels = reading.label_lines(ink, cal.box, horizontals, verticals)
     cal.measures['labels'] = labels.get('raw', {})
-    centre, source, evidence = choose_centreline(verticals, cal.box, labels.get('centreline'))
+    centre, source, evidence = choose_centreline(verticals, cal.box, labels.get('centreline'), scale)
     cal.measures['centreline'] = evidence
     if centre is None:
         cal.flag('centre_column', 'no centreline: no tagged line and no symmetric vertical grid')
@@ -532,8 +561,9 @@ def calibrate(ink: np.ndarray, reading, dpi: float | None = None) -> Calibration
     else:
         frames = [line for line in horizontals if line.fill >= FRAME_MIN_FILL]
         bottom = centreline_bottom(ink, centre, cal.box, frames)
+        end_tolerance = bpc.scaled_pixels(CENTRELINE_END_TOLERANCE_ROWS, scale)
         below = [line for line in horizontals
-                 if line.fill < FRAME_MIN_FILL and abs(line.position - bottom) <= CENTRELINE_END_TOLERANCE_ROWS]
+                 if line.fill < FRAME_MIN_FILL and abs(line.position - bottom) <= end_tolerance]
         if below:
             cal.baseline_row = min(below, key=lambda l: abs(l.position - bottom)).position
             cal.sources['baseline_row'] = 'code:line where the centreline ends (no base label)'
@@ -542,7 +572,7 @@ def calibrate(ink: np.ndarray, reading, dpi: float | None = None) -> Calibration
             cal.flag('baseline_row', 'no baseline found')
             return cal
     labelled_rows = {id(line): feet for line, feet in labels.get('horizontal_ft', [])}
-    grid_top = min((vertical_extent(ink, line.position, cal.box)[0] for line in grid[-1] + grid[1]),
+    grid_top = min((vertical_extent(ink, line.position, cal.box, scale=scale)[0] for line in grid[-1] + grid[1]),
                    default=cal.box[1])
     frames = [l for l in horizontals if l.fill >= FRAME_MIN_FILL]
     lighter = [l for l in horizontals if l.fill < FRAME_MIN_FILL]
@@ -556,11 +586,12 @@ def calibrate(ink: np.ndarray, reading, dpi: float | None = None) -> Calibration
         candidates = waterline_lattice(candidates)
     for line in candidates:
         height = (cal.baseline_row - line.position) / cal.pixels_per_ft
-        if abs(line.position - cal.baseline_row) < 3 and id(line) not in labelled_rows:
+        if abs(line.position - cal.baseline_row) < bpc.scaled_pixels(BASELINE_SKIP_ROWS, scale) \
+                and id(line) not in labelled_rows:
             continue  # the baseline itself, at the keel
         if height < -0.5 * (cal.baseline_row - cal.box[1]) / cal.pixels_per_ft:
             continue
-        if line.position < grid_top - SNAP_ROWS and id(line) not in labelled_rows:
+        if line.position < grid_top - bpc.scaled_pixels(SNAP_ROWS, scale) and id(line) not in labelled_rows:
             continue  # above the buttock grid: another view or the title, not a waterline
         source = 'model:height label / code:row' if id(line) in labelled_rows else 'code:row, height from scale'
         cal.waterlines.append({'label': feet_inches(height), 'row': line.position, 'height_ft': round(height, 4),
@@ -603,9 +634,11 @@ def calibrate(ink: np.ndarray, reading, dpi: float | None = None) -> Calibration
 def search_half_span(ink: np.ndarray, cal: Calibration, frame_lines: list[Line] = ()) -> int:
     """Outermost station-curve crossing at the found waterlines (reader, first pass) + margin."""
     limit = int(min(cal.centre_column - cal.box[0], cal.box[2] - cal.centre_column))
+    scale = cal.threshold_scale()
     frames = [abs(line.position - cal.centre_column) for line in frame_lines]
     if frames:
-        limit = int(min([limit] + frames)) - FRAME_CLEARANCE_PX  # stop inside the nearest frame line
+        # Stop inside the nearest frame line.
+        limit = int(min([limit] + frames)) - round(bpc.scaled_pixels(FRAME_CLEARANCE_PX, scale))
     if not cal.waterlines:
         return limit
     cal.max_offset_px = limit
@@ -619,9 +652,24 @@ def search_half_span(ink: np.ndarray, cal: Calibration, frame_lines: list[Line] 
             for waterline, index in chain.nodes.items():
                 crossing = reading.stations[waterline][index]
                 outermost = max(outermost, crossing.offset_px(layout.centre_column, side.sign))
-    # Reference: 120 px margin at 5 px line width (1700 x 2300 scan).
-    margin = bpc.scaled_pixels(MAX_OFFSET_MARGIN_PX, bpc.sheet_resolution_factor(ink))
+    margin = bpc.scaled_pixels(MAX_OFFSET_MARGIN_PX, scale)
     return int(min(limit, outermost + margin)) if outermost else limit
+
+
+def stroke_width(ink: np.ndarray, box: list, horizontals: list[Line]) -> float | None:
+    """Stroke width (px) of the body plan: crossings at its drawn horizontal lines, frames left out.
+
+    The same measure as the reader's (`body_plan_crossings.stroke_width_px`), taken before the
+    waterlines are known.
+    """
+    crossings = [crossing for line in horizontals if line.fill < FRAME_MIN_FILL
+                 for crossing in bpc.find_crossings(ink, int(round(line.position)), (box[0], box[2]))]
+    return bpc.stroke_width_px(crossings)
+
+
+def low_resolution(resolution_factor: float) -> bool:
+    """True when the sheet's strokes are too thin for a reliable reading (see LOW_RESOLUTION_FACTOR)."""
+    return resolution_factor < LOW_RESOLUTION_FACTOR
 
 
 def feet_inches(height_ft: float) -> str:

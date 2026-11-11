@@ -13,6 +13,11 @@ A model then answers only small, discrete questions about these crossings (see
 `body_plan_identity`); the half-breadth values always come from the code measurement.
 
 Image convention: a 2D array, row 0 at the top; `ink` is True where the drawing has ink.
+
+Resolution: the pixel distances below were tuned on HAER scans and a synthetic sheet whose station
+curves are about 5 px wide. Functions that use them take `scale` (see `threshold_scale`): 1.0 keeps
+them as tuned; a scan with thinner or thicker strokes scales the drawing distances with the stroke.
+Grey levels, ratios, slopes, waterline-spacing shares and single-pixel noise tolerances do not scale.
 """
 from __future__ import annotations
 
@@ -21,6 +26,15 @@ from pathlib import Path
 
 import numpy as np
 
+# Stroke width (px) of the reference sheets: resolution factor = measured stroke / REFERENCE_STROKE_PX.
+REFERENCE_STROKE_PX = 5.0
+# The thresholds were checked on strokes of 4.7 to 6.6 px (75th percentile of crossing widths on the
+# five HAER development sheets and the synthetic fixtures); inside this band they are used as tuned.
+CHECKED_STROKE_PX = (4.0, 7.5)
+# The stroke is the 75th percentile of crossing widths (the upper quartile skips thin grid lines) and
+# needs at least this many crossings.
+STROKE_PERCENTILE = 75
+MIN_STROKE_CROSSINGS = 8
 # A grey pixel darker than this is ink (the scans are near black and white; 128 splits them).
 INK_THRESHOLD = 128
 # Rows above and below the waterline that the tracer reads.
@@ -34,8 +48,10 @@ WATERLINE_MARGIN_PX = 2.0
 MIN_ROWS_PER_SIDE = 5
 # Rows a track may coast without ink before it ends (small breaks in a scanned line).
 MAX_COAST_ROWS = 3
-# Runs of one row closer than this (px) are one line split by scan noise.
+# Runs of one row closer than this (px) are one line split by scan noise (a sensor pixel; not scaled).
 RUN_JOIN_GAP_PX = 1
+# Two tracks whose predicted centres are this close (px) with the same slope follow one line.
+SAME_LINE_PX = 3.0
 # Line kinds by perpendicular width, as multiples of the typical curve width on the sheet.
 GRID_MAX_WIDTH_RATIO = 0.70
 DOUBLE_MIN_WIDTH_RATIO = 1.55  # reported only: chains find curves drawn on top of each other
@@ -45,9 +61,13 @@ LETTERING_MIN_WIDTH_RATIO = 2.2
 # curve may be nearly straight for a long way, but it does not run straight to the centreline.
 STRAIGHT_SLOPES = (0.3, 3.0)
 STRAIGHT_MAX_DEVIATION_PX = 2.5
+# A straight line is followed in steps of this many rows (one missing step is a scan break).
+STRAIGHT_STEP_ROWS = 4
 DIAGONAL_MIN_LENGTH_PX = 1500
 DIAGONAL_MAX_DEVIATION_PX = 5.0
 DIAGONAL_CENTRE_REACH_PX = 60
+# A crossing this close (px) to a known grid column (buttock) lies on it.
+GRID_COLUMN_TOLERANCE_PX = 6
 # Vertical lines this close to the centreline are the stem, keel or sternpost outline.
 CENTRELINE_STRUCTURE_PX = 70
 # A stem or sternpost may be drawn further out (its siding, or the outside of the planking): it is
@@ -74,8 +94,14 @@ FOLLOW_FIT_ROWS = 20
 FOLLOW_MAX_MISSES = 8
 FOLLOW_MAX_COAST_ROWS = 60
 FOLLOW_WIDE_RUN_RATIO = 2.0
+# The next ink run continues the curve within this many columns of the prediction, plus 0.6 x slope.
+FOLLOW_REACH_PX = 3.0
+# A run is "wide" (another line crosses) beyond FOLLOW_WIDE_RUN_RATIO line widths plus this (px).
+FOLLOW_WIDE_RUN_ALLOWANCE_PX = 2
 # A followed curve links to a crossing of the next waterline within this many columns.
 LINK_TOLERANCE_PX = 8.0
+# A crossing fit is quadratic when its measured rows span at least this many rows (enough to show curvature).
+QUADRATIC_FIT_ROWS = 30
 # Slope (columns per row) above which a crossing is too shallow to place well.
 SHALLOW_SLOPE = 6.0
 
@@ -111,22 +137,38 @@ def load_ink(sheet: Path) -> np.ndarray:
     return np.logical_not(white, out=white)
 
 
-def sheet_resolution_factor(ink: np.ndarray) -> float:
-    """Estimate scan scale from the upper quartile of short horizontal ink runs.
+def stroke_width_px(crossings: list) -> float | None:
+    """Width of the drawn curves: upper quartile of the crossings' perpendicular widths, all kinds.
 
-    The synthetic reference scan has 5 px station strokes (1700 x 2300 pixels).
-    Sampling many rows and using a quartile reduces the effect of thin grid lines and blobs.
-    A blank sheet has no measurable scale and conservatively receives the lowest factor.
+    None when fewer than MIN_STROKE_CROSSINGS crossings were measured.
     """
-    rows = np.linspace(0, ink.shape[0] - 1, min(128, ink.shape[0]), dtype=int)
-    widths = [end - start for row in ink[rows] for start, end in ink_runs(row)
-              if 1 <= end - start <= 30]
-    return float(np.percentile(widths, 75) / 5.0) if widths else 0.2
+    widths = [crossing.width_px for crossing in crossings]
+    if len(widths) < MIN_STROKE_CROSSINGS:
+        return None
+    return float(np.percentile(widths, STROKE_PERCENTILE))
 
 
-def scaled_pixels(reference_pixels: float, factor: float) -> float:
-    """Scale a reference pixel distance by measured stroke width / 5 px."""
-    return reference_pixels * factor
+def resolution_factor(stroke_width: float) -> float:
+    """Measured stroke width as a share of the reference stroke (1.0 = reference resolution)."""
+    return stroke_width / REFERENCE_STROKE_PX
+
+
+def threshold_scale(stroke_width: float | None) -> float:
+    """Scale for the tuned pixel distances: 1.0 inside CHECKED_STROKE_PX, else stroke / nearest band edge."""
+    if stroke_width is None:
+        return 1.0
+    low, high = CHECKED_STROKE_PX
+    return stroke_width / min(max(stroke_width, low), high)
+
+
+def scaled_pixels(reference_pixels: float, scale: float) -> float:
+    """A tuned pixel distance at this sheet's scale (`threshold_scale`)."""
+    return reference_pixels * scale
+
+
+def scaled_rows(reference_rows: int, scale: float, minimum: int = 1) -> int:
+    """A tuned whole number of rows (or columns) at this sheet's scale, at least `minimum`."""
+    return max(minimum, round(reference_rows * scale))
 
 
 @dataclass
@@ -197,12 +239,12 @@ def _merged_runs(row_pixels: np.ndarray, offset: int) -> list[tuple[int, int]]:
     return merged
 
 
-def _same_line(first: _Track, second: _Track, row: int) -> bool:
+def _same_line(first: _Track, second: _Track, row: int, scale: float = 1.0) -> bool:
     """Two tracks that follow one line (one was started by a scan break): same place, same slope."""
     first_slope, second_slope = first.slope(), second.slope()
     first_low, first_high = first.predicted_interval(row)
     second_low, second_high = second.predicted_interval(row)
-    near = abs((first_low + first_high) / 2 - (second_low + second_high) / 2) <= 3.0
+    near = abs((first_low + first_high) / 2 - (second_low + second_high) / 2) <= scaled_pixels(SAME_LINE_PX, scale)
     if first_slope is None or second_slope is None:
         return near
     return near and abs(first_slope - second_slope) <= 0.15 * (1 + abs(first_slope))
@@ -240,14 +282,17 @@ class WaterlineTrace:
         return self.intercept + self.gradient * (x - self.x_origin)
 
 
-def locate_waterline(ink: np.ndarray, row: int, x_range: tuple[int, int], search: int = WATERLINE_SEARCH_ROWS,
-                     block: int = WATERLINE_BLOCK_PX) -> WaterlineTrace:
+def locate_waterline(ink: np.ndarray, row: int, x_range: tuple[int, int], search: int | None = None,
+                     block: int | None = None, scale: float = 1.0) -> WaterlineTrace:
     """Fit the drawn waterline near the nominal `row` (a scanned sheet is slightly skewed).
 
     In each block of columns, the waterline rows are the rows within `search` of the nominal row
     whose ink fills at least half the block; a straight line is fitted through the block centres.
-    Falls back to the nominal row when no block shows the line.
+    Falls back to the nominal row when no block shows the line. `search` and `block` default to
+    WATERLINE_SEARCH_ROWS and WATERLINE_BLOCK_PX at this scale.
     """
+    search = scaled_rows(WATERLINE_SEARCH_ROWS, scale) if search is None else search
+    block = scaled_rows(WATERLINE_BLOCK_PX, scale, minimum=4) if block is None else block
     x_low, x_high = x_range
     top = max(0, row - search)
     centres, thicknesses = [], []
@@ -261,14 +306,14 @@ def locate_waterline(ink: np.ndarray, row: int, x_range: tuple[int, int], search
             centres.append(((left + right) / 2, top + float(np.mean(full))))
             thicknesses.append(float(full.max() - full.min() + 1))
     if not centres:
-        return WaterlineTrace(float(row), 0.0, float(x_low), 3.0)
+        return WaterlineTrace(float(row), 0.0, float(x_low), scaled_pixels(3.0, scale))
     xs, rows = np.array(centres).T
     gradient, intercept = np.polyfit(xs - x_low, rows, 1) if len(centres) >= 2 else (0.0, rows[0])
     return WaterlineTrace(float(intercept), float(gradient), float(x_low), float(np.median(thicknesses)) / 2)
 
 
 def _track_band(ink: np.ndarray, waterline: WaterlineTrace, x_low: int, x_high: int, band: int,
-                margin: float) -> list[_Track]:
+                margin: float, scale: float = 1.0) -> list[_Track]:
     """Follow every ink line through the band of rows around the waterline.
 
     The waterline's own ink (within `margin` rows of the traced line) is masked out. Runs of
@@ -276,7 +321,9 @@ def _track_band(ink: np.ndarray, waterline: WaterlineTrace, x_low: int, x_high: 
     serves two tracks (two lines cross or touch), each track keeps its prediction and the row is
     left out of its fit; a track that is only a copy of another (started at a scan break) is
     dropped. A track coasts through the masked rows and through up to MAX_COAST_ROWS other rows.
+    The row-to-row prediction slack (`_Track.predicted_interval`) is pixel adjacency and is not scaled.
     """
+    max_coast = scaled_rows(MAX_COAST_ROWS, scale)
     centre_row = int(round(waterline.row_at((x_low + x_high) / 2)))
     first = max(0, centre_row - band - int(abs(waterline.gradient) * (x_high - x_low)))
     last = min(ink.shape[0] - 1, centre_row + band + int(abs(waterline.gradient) * (x_high - x_low)))
@@ -296,7 +343,7 @@ def _track_band(ink: np.ndarray, waterline: WaterlineTrace, x_low: int, x_high: 
         for t_indices in claims.values():
             ordered = sorted(t_indices, key=lambda index: -len(active[index].clean()))
             for later in ordered[1:]:
-                if any(_same_line(active[earlier], active[later], r) for earlier in ordered if earlier not in dropped
+                if any(_same_line(active[earlier], active[later], r, scale) for earlier in ordered if earlier not in dropped
                        and earlier != later and len(active[earlier].clean()) >= len(active[later].clean())):
                     dropped.add(later)
         claimed_tracks: set[int] = set()
@@ -326,7 +373,7 @@ def _track_band(ink: np.ndarray, waterline: WaterlineTrace, x_low: int, x_high: 
                 low, high = track.predicted_interval(r)
                 if not masked(r, (low + high) / 2):
                     track.misses += 1
-            (finished if track.misses > MAX_COAST_ROWS else still).append(track)
+            (finished if track.misses > max_coast else still).append(track)
         active = still
         for r_index, (start, end) in enumerate(runs):
             if r_index not in claims:
@@ -335,20 +382,22 @@ def _track_band(ink: np.ndarray, waterline: WaterlineTrace, x_low: int, x_high: 
     return finished + active
 
 
-def _fit_crossing(track: _Track, waterline: WaterlineTrace, band: int) -> Crossing | None:
+def _fit_crossing(track: _Track, waterline: WaterlineTrace, band: int, scale: float = 1.0) -> Crossing | None:
     clean = track.clean()
-    if len(clean) < 2 * MIN_ROWS_PER_SIDE:
+    # A line fit needs at least 3 rows on each side of the waterline.
+    min_rows = scaled_rows(MIN_ROWS_PER_SIDE, scale, minimum=3)
+    if len(clean) < 2 * min_rows:
         return None
     x_guess = float(np.median([p[1] for p in clean]))
     line_row = waterline.row_at(x_guess)
     near = [p for p in clean if abs(p[0] - line_row) <= band]
     above = sum(1 for r, _, _ in near if r < line_row)
     below = len(near) - above
-    if above < MIN_ROWS_PER_SIDE or below < MIN_ROWS_PER_SIDE:
+    if above < min_rows or below < min_rows:
         return None
     rows = np.array([p[0] for p in near], dtype=float) - line_row
     centres = np.array([p[1] for p in near])
-    degree = 2 if np.ptp(rows) >= 30 else 1
+    degree = 2 if np.ptp(rows) >= scaled_pixels(QUADRATIC_FIT_ROWS, scale) else 1
     coefficients = np.polyfit(rows, centres, degree)
     residual = float(np.sqrt(np.mean((np.polyval(coefficients, rows) - centres) ** 2)))
     # Intersect the fitted line with the (slightly skewed) waterline.
@@ -364,25 +413,26 @@ def _fit_crossing(track: _Track, waterline: WaterlineTrace, band: int) -> Crossi
                     fit_residual_px=residual)
 
 
-def find_crossings(ink: np.ndarray, row: int, x_range: tuple[int, int], band: int | None = None) -> list[Crossing]:
+def find_crossings(ink: np.ndarray, row: int, x_range: tuple[int, int], band: int | None = None,
+                   scale: float = 1.0) -> list[Crossing]:
     """Every ink line that crosses the drawn waterline near image row `row` within columns x_range.
 
-    Sorted by column. Kinds are not set here (all `curve`); see `classify`.
+    Sorted by column. Kinds are not set here (all `curve`); see `classify`. `band` defaults to
+    BAND_ROWS at this scale.
     """
     if band is None:
-        # Reference: 40 rows at 5 px line width (1700 x 2300 synthetic scan).
-        band = max(1, round(scaled_pixels(BAND_ROWS, sheet_resolution_factor(ink))))
+        band = scaled_rows(BAND_ROWS, scale)
     x_low, x_high = max(0, x_range[0]), min(ink.shape[1], x_range[1])
-    waterline = locate_waterline(ink, row, (x_low, x_high))
-    margin = waterline.half_thickness + WATERLINE_MARGIN_PX
-    tracks = _track_band(ink, waterline, x_low, x_high, band, margin)
-    crossings = [c for c in (_fit_crossing(t, waterline, band) for t in tracks) if c is not None]
+    waterline = locate_waterline(ink, row, (x_low, x_high), scale=scale)
+    margin = waterline.half_thickness + scaled_pixels(WATERLINE_MARGIN_PX, scale)
+    tracks = _track_band(ink, waterline, x_low, x_high, band, margin, scale)
+    crossings = [c for c in (_fit_crossing(t, waterline, band, scale) for t in tracks) if c is not None]
     crossings = [c for c in crossings if x_low <= c.x_px < x_high]
     return sorted(crossings, key=lambda c: c.x_px)
 
 
-def straight_ends(ink: np.ndarray, row: float, x_px: float, slope: float, step: int = 4,
-                  max_gap_steps: int = 1) -> tuple[float, float, float]:
+def straight_ends(ink: np.ndarray, row: float, x_px: float, slope: float, step: int | None = None,
+                  max_gap_steps: int = 1, scale: float = 1.0) -> tuple[float, float, float]:
     """Columns of the two ends of the straight ink line through (row, x_px), and its straightness.
 
     Straightness is the largest distance (columns) of a found point from one line fitted to all.
@@ -390,7 +440,10 @@ def straight_ends(ink: np.ndarray, row: float, x_px: float, slope: float, step: 
     The line is followed in both directions; at each step the straight line fitted through all
     points found so far predicts the next column, and ink must lie within
     STRAIGHT_MAX_DEVIATION_PX columns of it. One missing sample (a scan break) is allowed.
+    `step` defaults to STRAIGHT_STEP_ROWS at this scale.
     """
+    step = scaled_rows(STRAIGHT_STEP_ROWS, scale) if step is None else step
+    deviation_limit = scaled_pixels(STRAIGHT_MAX_DEVIATION_PX, scale)
     height, width = ink.shape
     start_row = int(round(row))
     points = [(float(start_row), x_px + slope * (start_row - row))]
@@ -406,8 +459,8 @@ def straight_ends(ink: np.ndarray, row: float, x_px: float, slope: float, step: 
             x = line[0] * r + line[1]
             if not (0 <= r < height and 0 <= x < width):
                 break
-            low = max(0, int(np.floor(x - STRAIGHT_MAX_DEVIATION_PX)))
-            high = min(width, int(np.ceil(x + STRAIGHT_MAX_DEVIATION_PX)) + 1)
+            low = max(0, int(np.floor(x - deviation_limit)))
+            high = min(width, int(np.ceil(x + deviation_limit)) + 1)
             columns = np.flatnonzero(ink[r, low:high])
             if columns.size:
                 misses = 0
@@ -428,42 +481,44 @@ def straight_ends(ink: np.ndarray, row: float, x_px: float, slope: float, step: 
     return ends[0], ends[1], deviation
 
 
-def is_diagonal(ink: np.ndarray, crossing: Crossing, centre_column: float,
-                resolution_factor: float | None = None) -> bool:
+def is_diagonal(ink: np.ndarray, crossing: Crossing, centre_column: float, scale: float = 1.0) -> bool:
     """A body-plan diagonal: an oblique straight line that runs to the centreline."""
     if not STRAIGHT_SLOPES[0] <= abs(crossing.slope) <= STRAIGHT_SLOPES[1]:
         return False
-    *ends, deviation = straight_ends(ink, crossing.row, crossing.x_px, crossing.slope)
+    *ends, deviation = straight_ends(ink, crossing.row, crossing.x_px, crossing.slope, scale=scale)
     length = abs(ends[1] - ends[0]) * float(np.sqrt(1 + crossing.slope ** -2))
-    reaches_centre = min(abs(end - centre_column) for end in ends) <= DIAGONAL_CENTRE_REACH_PX
-    # Reference: 1500 px diagonal length at 5 px line width (1700 x 2300 scan).
-    factor = sheet_resolution_factor(ink) if resolution_factor is None else resolution_factor
-    return reaches_centre and length >= scaled_pixels(DIAGONAL_MIN_LENGTH_PX, factor) and deviation <= DIAGONAL_MAX_DEVIATION_PX
+    reaches_centre = min(abs(end - centre_column) for end in ends) <= scaled_pixels(DIAGONAL_CENTRE_REACH_PX, scale)
+    return (reaches_centre and length >= scaled_pixels(DIAGONAL_MIN_LENGTH_PX, scale)
+            and deviation <= scaled_pixels(DIAGONAL_MAX_DEVIATION_PX, scale))
 
 
-def typical_width(crossings: list[Crossing]) -> float:
-    """The usual curve width: the median width of the crossings between 3.5 and 8 px wide."""
-    widths = [c.width_px for c in crossings if 3.5 <= c.width_px <= 8.0]
-    return float(np.median(widths)) if widths else 5.0
+def typical_width(crossings: list[Crossing], scale: float = 1.0) -> float:
+    """The usual curve width: the median width of the crossings between 3.5 and 8 px wide (at this scale)."""
+    low, high = scaled_pixels(3.5, scale), scaled_pixels(8.0, scale)
+    widths = [c.width_px for c in crossings if low <= c.width_px <= high]
+    return float(np.median(widths)) if widths else scaled_pixels(REFERENCE_STROKE_PX, scale)
 
 
 def is_post(ink: np.ndarray, crossing: Crossing, centre_column: float, waterline_spacing_px: float,
-            max_offset_px: float) -> bool:
+            max_offset_px: float, scale: float = 1.0) -> bool:
     """A stem or sternpost outline: a long, straight, near-vertical line in the inner part of the plan."""
     if abs(crossing.slope) >= POST_MAX_SLOPE:
         return False
     if abs(crossing.x_px - centre_column) > POST_INNER_FRACTION * max_offset_px:
         return False
-    top, bottom, deviation = straight_line_rows(ink, crossing)
-    return bottom - top >= POST_MIN_SPACINGS * waterline_spacing_px and deviation <= DIAGONAL_MAX_DEVIATION_PX
+    top, bottom, deviation = straight_line_rows(ink, crossing, scale=scale)
+    return (bottom - top >= POST_MIN_SPACINGS * waterline_spacing_px
+            and deviation <= scaled_pixels(DIAGONAL_MAX_DEVIATION_PX, scale))
 
 
-def straight_line_rows(ink: np.ndarray, crossing: Crossing, step: int = 4,
-                       max_gap_steps: int = 1) -> tuple[float, float, float]:
+def straight_line_rows(ink: np.ndarray, crossing: Crossing, step: int | None = None,
+                       max_gap_steps: int = 1, scale: float = 1.0) -> tuple[float, float, float]:
     """First and last row of the near-vertical straight ink line through a crossing, and its straightness.
 
     Like `straight_ends`, but measured in rows (a vertical line has no extent in columns).
     """
+    step = scaled_rows(STRAIGHT_STEP_ROWS, scale) if step is None else step
+    deviation_limit = scaled_pixels(STRAIGHT_MAX_DEVIATION_PX, scale)
     height, width = ink.shape
     start_row = int(round(crossing.row))
     found = [(float(start_row), crossing.x_px)]
@@ -477,8 +532,8 @@ def straight_line_rows(ink: np.ndarray, crossing: Crossing, step: int = 4,
             x = line[0] * r + line[1]
             if not (0 <= r < height and 0 <= x < width):
                 break
-            low = max(0, int(np.floor(x - STRAIGHT_MAX_DEVIATION_PX)))
-            high = min(width, int(np.ceil(x + STRAIGHT_MAX_DEVIATION_PX)) + 1)
+            low = max(0, int(np.floor(x - deviation_limit)))
+            high = min(width, int(np.ceil(x + deviation_limit)) + 1)
             columns = np.flatnonzero(ink[r, low:high])
             if not columns.size:
                 misses += 1
@@ -497,18 +552,19 @@ def straight_line_rows(ink: np.ndarray, crossing: Crossing, step: int = 4,
     return reach[0], reach[1], deviation
 
 
-def is_short_stroke(ink: np.ndarray, crossing: Crossing, curve_width: float, waterline_spacing_px: float) -> bool:
+def is_short_stroke(ink: np.ndarray, crossing: Crossing, curve_width: float, waterline_spacing_px: float,
+                    scale: float = 1.0) -> bool:
     """A line that ends close above and close below its crossing (lettering or a short leader)."""
     distance = SHORT_STROKE_SPACINGS * waterline_spacing_px
     for target in (crossing.row - distance, crossing.row + distance):
-        if follow_curve(ink, crossing, target, curve_width, stop_margin=0) is not None:
+        if follow_curve(ink, crossing, target, curve_width, stop_margin=0, scale=scale) is not None:
             return False
     return True
 
 
 def classify(ink: np.ndarray, crossings: list[Crossing], curve_width: float, centre_column: float,
              grid_columns: tuple[float, ...] = (), waterline_spacing_px: float | None = None,
-             max_offset_px: float | None = None) -> None:
+             max_offset_px: float | None = None, scale: float = 1.0) -> None:
     """Set each crossing's kind in place.
 
     grid_columns: known vertical grid lines (buttocks); a thin, vertical crossing on one is `grid`.
@@ -516,27 +572,26 @@ def classify(ink: np.ndarray, crossings: list[Crossing], curve_width: float, cen
     sternpost drawn away from the centreline and for short strokes (lettering, leader lines).
     """
     shape_rules = waterline_spacing_px is not None and max_offset_px is not None
-    factor = sheet_resolution_factor(ink)
-    # Reference: 70 px centreline offset at 5 px line width (1700 x 2300 scan).
-    centreline_offset = scaled_pixels(CENTRELINE_STRUCTURE_PX, factor)
+    centreline_offset = scaled_pixels(CENTRELINE_STRUCTURE_PX, scale)
+    grid_tolerance = scaled_pixels(GRID_COLUMN_TOLERANCE_PX, scale)
     for crossing in crossings:
         ratio = crossing.width_px / curve_width
-        on_grid = any(abs(crossing.x_px - column) <= 6 for column in grid_columns)
+        on_grid = any(abs(crossing.x_px - column) <= grid_tolerance for column in grid_columns)
         if abs(crossing.x_px - centre_column) <= centreline_offset and abs(crossing.slope) < 0.03:
             crossing.kind, crossing.notes = KIND_GRID, ['vertical line at the centreline (stem or sternpost)']
         elif ratio <= GRID_MAX_WIDTH_RATIO or (on_grid and abs(crossing.slope) < 0.02 and ratio < 0.9):
             crossing.kind, crossing.notes = KIND_GRID, ['thin line' if not on_grid else 'on a grid column']
         elif on_grid and abs(crossing.slope) < 0.05:
             crossing.kind, crossing.notes = KIND_CURVE, ['on a grid column: a curve along the grid line?']
-        elif shape_rules and is_post(ink, crossing, centre_column, waterline_spacing_px, max_offset_px):
+        elif shape_rules and is_post(ink, crossing, centre_column, waterline_spacing_px, max_offset_px, scale):
             crossing.kind, crossing.notes = KIND_GRID, ['long straight vertical line (stem or sternpost)']
         elif ratio >= LETTERING_MIN_WIDTH_RATIO:
             crossing.kind, crossing.notes = KIND_LETTERING, [f'width {crossing.width_px:.1f} px']
         elif abs(crossing.slope) > SHALLOW_SLOPE:
             crossing.kind, crossing.notes = KIND_SHALLOW, [f'slope {crossing.slope:.1f} columns per row']
-        elif is_diagonal(ink, crossing, centre_column, factor):
+        elif is_diagonal(ink, crossing, centre_column, scale):
             crossing.kind, crossing.notes = KIND_STRAIGHT, ['straight line to the centreline (diagonal)']
-        elif shape_rules and is_short_stroke(ink, crossing, curve_width, waterline_spacing_px):
+        elif shape_rules and is_short_stroke(ink, crossing, curve_width, waterline_spacing_px, scale):
             crossing.kind, crossing.notes = KIND_LETTERING, ['short stroke (lettering or leader line)']
         elif ratio >= DOUBLE_MIN_WIDTH_RATIO:
             crossing.kind, crossing.notes = KIND_DOUBLE, [f'width {crossing.width_px:.1f} px, two curves?']
@@ -551,7 +606,7 @@ def station_crossings(crossings: list[Crossing], centre_column: float, sign: int
 
 
 def follow_curve(ink: np.ndarray, crossing: Crossing, target_row: float, curve_width: float,
-                 stop_margin: int = FOLLOW_STOP_MARGIN_ROWS, path: list | None = None) -> float | None:
+                 stop_margin: int | None = None, path: list | None = None, scale: float = 1.0) -> float | None:
     """Column where the curve through `crossing` reaches `target_row`, by following its ink.
 
     Row by row, the line fitted through the last FOLLOW_FIT_ROWS points found predicts the next
@@ -559,9 +614,16 @@ def follow_curve(ink: np.ndarray, crossing: Crossing, target_row: float, curve_w
     (another line crosses or touches it here) is passed with the prediction. Following stops
     `stop_margin` rows short of the target (its waterline ink) and extrapolates. Returns None when
     the ink is lost. When `path` is a list, the (row, column) points found are appended to it.
+    `stop_margin` defaults to FOLLOW_STOP_MARGIN_ROWS; all FOLLOW_* distances are taken at this scale.
     """
+    if stop_margin is None:
+        stop_margin = scaled_rows(FOLLOW_STOP_MARGIN_ROWS, scale)
+    fit_rows = scaled_rows(FOLLOW_FIT_ROWS, scale, minimum=3)
+    max_misses = scaled_rows(FOLLOW_MAX_MISSES, scale)
+    max_coast = scaled_rows(FOLLOW_MAX_COAST_ROWS, scale)
+    reach_px = scaled_pixels(FOLLOW_REACH_PX, scale)
     direction = -1 if target_row < crossing.row else 1
-    start = int(round(crossing.row)) + direction * FOLLOW_START_OFFSET_ROWS
+    start = int(round(crossing.row)) + direction * scaled_rows(FOLLOW_START_OFFSET_ROWS, scale)
     end = int(round(target_row)) - direction * stop_margin
     height, width = ink.shape
     points: list[tuple[float, float]] = [(crossing.row, crossing.x_px)]
@@ -570,13 +632,13 @@ def follow_curve(ink: np.ndarray, crossing: Crossing, target_row: float, curve_w
     for r in range(start, end + direction, direction):
         if not 0 <= r < height:
             return None
-        recent = points[-FOLLOW_FIT_ROWS:]
+        recent = points[-fit_rows:]
         if len(recent) >= 3 and np.ptp([p[0] for p in recent]) >= 2:
             slope, intercept = np.polyfit([p[0] for p in recent], [p[1] for p in recent], 1)
             predicted = slope * r + intercept
         else:
             predicted = points[-1][1] + slope * (r - points[-1][0])
-        reach = 3.0 + 0.6 * abs(slope)
+        reach = reach_px + 0.6 * abs(slope)
         expected_run = curve_width * float(np.sqrt(1 + slope ** 2))
         low = max(0, int(predicted - reach - 4 * expected_run))
         high = min(width, int(predicted + reach + 4 * expected_run) + 1)
@@ -587,14 +649,14 @@ def follow_curve(ink: np.ndarray, crossing: Crossing, target_row: float, curve_w
                 best = (distance, run_start, run_end)
         if best is None:
             misses += 1
-            if misses > FOLLOW_MAX_MISSES:
+            if misses > max_misses:
                 return None
             continue
         misses = 0
         _, run_start, run_end = best
-        if run_end - run_start > FOLLOW_WIDE_RUN_RATIO * expected_run + 2:
+        if run_end - run_start > FOLLOW_WIDE_RUN_RATIO * expected_run + scaled_pixels(FOLLOW_WIDE_RUN_ALLOWANCE_PX, scale):
             coasting += 1
-            if coasting > FOLLOW_MAX_COAST_ROWS:
+            if coasting > max_coast:
                 return None
             points.append((float(r), float(predicted)))
             continue
@@ -602,7 +664,7 @@ def follow_curve(ink: np.ndarray, crossing: Crossing, target_row: float, curve_w
         points.append((float(r), (run_start + run_end - 1) / 2))
         if path is not None:
             path.append(points[-1])
-    recent = points[-FOLLOW_FIT_ROWS:]
+    recent = points[-fit_rows:]
     if len(recent) >= 3:
         slope, intercept = np.polyfit([p[0] for p in recent], [p[1] for p in recent], 1)
         return float(slope * target_row + intercept)
@@ -610,7 +672,7 @@ def follow_curve(ink: np.ndarray, crossing: Crossing, target_row: float, curve_w
 
 
 def link_waterlines(lower: list[Crossing], upper: list[Crossing], ink: np.ndarray,
-                    curve_width: float) -> list[tuple[int, int, float]]:
+                    curve_width: float, scale: float = 1.0) -> list[tuple[int, int, float]]:
     """Links (lower index, upper index, error px) between station crossings of two waterlines.
 
     Both lists are outermost first. Each crossing is followed along its ink to the other
@@ -619,15 +681,14 @@ def link_waterlines(lower: list[Crossing], upper: list[Crossing], ink: np.ndarra
     that would cross (break the nesting order) are removed, worst first.
     """
     links: dict[tuple[int, int], float] = {}
-    # Reference: 8 px link tolerance at 5 px line width (1700 x 2300 scan).
-    link_tolerance = scaled_pixels(LINK_TOLERANCE_PX, sheet_resolution_factor(ink))
+    link_tolerance = scaled_pixels(LINK_TOLERANCE_PX, scale)
 
     def link_from(sources: list[Crossing], targets: list[Crossing], upward: bool) -> None:
         if not targets:
             return
         target_row = float(np.mean([t.row for t in targets]))
         for s_index, source in enumerate(sources):
-            arrival = follow_curve(ink, source, target_row, curve_width)
+            arrival = follow_curve(ink, source, target_row, curve_width, scale=scale)
             if arrival is None:
                 continue
             errors = [(abs(arrival + t.slope * (t.row - target_row) - t.x_px), t_index)
