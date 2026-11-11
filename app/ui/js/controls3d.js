@@ -5,16 +5,81 @@ import { el, icon } from './dom.js';
 import { tipAttributes } from './tooltip.js';
 import { CUT_AXES, cutLabel } from './reference3d.js';
 
-/** The tool bar: a row of button groups. `add(...nodes)` appends a group. */
+/**
+ * How many tool bar groups stay in the one row: the leading groups whose widths, with the gaps
+ * between them, fit in `available` px. When not all fit, the row also keeps room for the More
+ * button (`moreWidth`). The first group always stays. Hidden groups have width 0 and add no gap.
+ */
+export function splitToolbar(widths, available, { gap = 6, moreWidth = 36 } = {}) {
+  const used = (count) => {
+    const shown = widths.slice(0, count).filter((w) => w > 0);
+    return shown.reduce((sum, w) => sum + w, 0) + gap * Math.max(0, shown.length - 1);
+  };
+  if (used(widths.length) <= available) return widths.length;
+  let keep = widths.length - 1;
+  while (keep > 1 && used(keep) + gap + moreWidth > available) keep -= 1;
+  return keep;
+}
+
+/**
+ * The tool bar: one row of button groups over the 3D view. `add(label, ...nodes)` appends a
+ * group. `fit(available)` keeps the row on one line: the groups that do not fit move, in order,
+ * into the More menu at the end of the row (the same buttons, so keys and state carry over).
+ */
 export function createToolbar() {
   const element = el('div', { class: 'model-tools', role: 'group', 'aria-label': '3D view tools' });
+  const groups = [];
+  const menuId = `model-tools-more-${Math.random().toString(36).slice(2, 8)}`;
+  const menu = el('div', { class: 'model-tools-menu', id: menuId, role: 'group', 'aria-label': 'More 3D view tools', hidden: true });
+  const moreButton = toolButton({ iconName: 'more', label: 'More tools', onClick: () => setMenu(menu.hidden) });
+  moreButton.setAttribute('aria-expanded', 'false');
+  moreButton.setAttribute('aria-controls', menuId);
+  const more = el('div', { class: 'model-tools-group model-tools-more', hidden: true }, moreButton, menu);
+  element.append(more);
+  menu.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    setMenu(false);
+    moreButton.focus();
+  });
+  element.addEventListener('focusout', (event) => {
+    if (!more.contains(event.relatedTarget)) setMenu(false);
+  });
+
+  function setMenu(open) {
+    menu.hidden = !open;
+    moreButton.setAttribute('aria-expanded', String(open));
+    moreButton.setAttribute('aria-pressed', String(open));
+  }
+
+  // A group shown or hidden later (Parts and spaces) changes the row: fit it again.
+  let lastAvailable = null;
+  const refit = new MutationObserver(() => { if (lastAvailable !== null) fit(lastAvailable); });
+
+  function fit(available) {
+    lastAvailable = available;
+    refit.disconnect();
+    for (const group of groups) more.before(group);
+    more.hidden = true;
+    const gap = parseFloat(getComputedStyle(element).columnGap) || 6;
+    const widths = groups.map((group) => (group.hidden ? 0 : group.getBoundingClientRect().width));
+    const keep = splitToolbar(widths, available, { gap, moreWidth: 36 });
+    const moved = groups.slice(keep);
+    menu.replaceChildren(...moved);
+    more.hidden = !moved.some((group) => !group.hidden);
+    if (more.hidden) setMenu(false);
+    for (const group of groups) refit.observe(group, { attributes: true, attributeFilter: ['hidden'] });
+  }
+
   return {
     element,
     add(label, ...nodes) {
       const group = el('div', { class: 'model-tools-group', role: 'group', 'aria-label': label }, ...nodes);
-      element.append(group);
+      groups.push(group);
+      more.before(group);
       return group;
     },
+    fit,
   };
 }
 

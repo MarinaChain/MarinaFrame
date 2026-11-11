@@ -474,7 +474,8 @@ code { font-family: var(--font-mono); }
 .app[data-rail="collapsed"] .brand { justify-content: center; padding-left: 0; }
 .brand-mark { height: 20px; width: auto; flex: none; }
 .brand-name { font-weight: 600; font-size: var(--fs-md); color: var(--ink); letter-spacing: -0.01em; white-space: nowrap; }
-.app[data-rail="collapsed"] .brand-name { display: none; }
+/* Collapsed: the name leaves the screen but stays the brand's accessible text. */
+.app[data-rail="collapsed"] .brand-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 
 .crumbs {
   display: flex;
@@ -1099,6 +1100,112 @@ code { font-family: var(--font-mono); }
   min-height: 0;
   background: var(--surface);
 }
+
+/* ---- Run bar (js/run_header.js): one row above the panes. The status sentence with its action
+   and Next, the section tiles (compact), Watch again and the fit. The geometry keeps the rest. */
+.run-bar {
+  position: relative;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex: none;
+  min-width: 0;
+  /* 36 px: one 28 px control row; at 1280 x 800 the panes then keep 80 % of the window. */
+  height: 36px;
+  padding: 0 var(--space-sm);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.run-bar[hidden] { display: none; }
+.run-status { display: flex; align-items: center; gap: var(--space-xs); flex: 0 1 auto; min-width: 0; }
+.run-status:empty { display: none; }
+.run-status-toggle {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0; height: 28px; padding: 0 6px 0 8px;
+  border: 0; border-radius: var(--radius-md); background: transparent;
+  color: var(--text); font: inherit; font-size: var(--fs-md); cursor: pointer;
+}
+.run-status-toggle:hover { background: var(--hover); }
+.run-status-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.run-status-toggle > .icon { flex: none; width: 15px; height: 15px; }
+.run-status-toggle[data-tone="attention"] > .icon:first-child { color: var(--warn); }
+.run-status-toggle[data-tone="calm"] > .icon:first-child { color: var(--pass); }
+.run-status-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.run-status-chevron { transform: rotate(90deg); color: var(--text-3); transition: transform var(--dur-fast); }
+.run-status-toggle[aria-expanded="true"] .run-status-chevron { transform: rotate(-90deg); }
+.run-status .btn { flex: none; gap: 6px; }
+
+/* The section tiles in the run bar: one line each (shape, place, state and source glyphs, ink). */
+/* The tiles and the sentence shrink together (the sentence ends in "…"); about three tiles show. */
+.run-bar .strip-row { flex: 1 1 280px; min-width: 120px; border: 0; background: transparent; }
+/* The status sentence already says how many sections need the person. */
+.run-bar .strip-head { display: none; }
+.run-bar .strip {
+  --strip-bar-h: 4px;
+  min-height: 0;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 0 var(--space-xs);
+  border-left: 1px solid var(--line);
+}
+.run-bar .strip::-webkit-scrollbar { height: var(--strip-bar-h); }
+.run-bar .tile {
+  display: flex; align-items: center; gap: 6px;
+  width: auto; height: 28px; padding: 0 8px 0 4px;
+}
+.run-bar .tile-shape { grid-row: auto; width: 16px; height: 22px; max-height: none; }
+.run-bar .tile-x { font-size: var(--fs-md); }
+.run-bar .tile-chips { min-height: 0; }
+.run-bar .tile-placeholder { width: 96px; height: 28px; }
+.run-bar .strip-empty { padding: 0 var(--space-sm); white-space: nowrap; }
+.run-bar-end { display: flex; align-items: center; gap: var(--space-sm); flex: none; }
+.run-bar-end:empty { display: none; }
+.run-bar .watch-again { height: 28px; padding: 0 8px; font-size: var(--fs-sm); }
+/* A narrow bar (details column open in a laptop window): tiles keep place and state only, and
+   Watch again keeps its icon (its name stays in aria-label). */
+.run-bar { container: runbar / inline-size; }
+@container runbar (max-width: 960px) {
+  .run-bar .tile-chips { display: none; }
+  .run-bar .watch-again > span { display: none; }
+}
+
+/* The run drawer: the detail behind the sentence, over the top of the panes. */
+.run-drawer {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: var(--space-sm);
+  width: min(600px, calc(100% - 2 * var(--space-sm)));
+  max-height: min(70vh, 600px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sheet);
+  font-size: var(--fs-md);
+}
+.run-drawer[hidden] { display: none; }
+.drawer-group { display: flex; flex-direction: column; gap: var(--space-xs); }
+.drawer-title { margin: 0; color: var(--text-3); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.02em; }
+.drawer-line { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-xs) var(--space-sm); margin: 0; }
+.drawer-accuracy { align-self: flex-start; cursor: help; }
+.drawer-accuracy[data-caution="true"] { color: var(--guess-text); }
+.drawer-key { min-width: 44px; color: var(--text-3); }
+.run-drawer .sheet-review { padding: 0; border: 0; font-size: var(--fs-sm); }
+.drawer-sheets:has(> #sheet-review:empty) { display: none; }
+.run-drawer .revision-ladder { flex-wrap: wrap; overflow: visible; }
+.run-drawer .revision-facts { flex-wrap: wrap; margin-left: 0; overflow: visible; }
+.run-drawer .draft-warnings summary { color: var(--warn); }
+
+/* The narration row shows while the run works or a replay is open; the bottom strip only holds
+   the replay transport. A finished run gives both rows to the geometry. */
+.workspace:not([data-running="true"]):not(:has(.live-transport:not([hidden]))) > .narration { display: none; }
+.revision-strip:not(:has(> .live-transport:not([hidden]))) { display: none; }
+
+/* Costs and timings on the Run tab: shown only with Settings > "Show costs and timings". */
+body:not([data-costs="shown"]) :is(.workspace, .inspector) .cost-timing { display: none !important; }
 
 .segmented {
   display: inline-flex;
@@ -2015,7 +2122,7 @@ code { font-family: var(--font-mono); }
 @media (max-width: 900px) {
   :root { --inspector-w: 264px; --rail-w: 72px; }
   .rail { padding-left: 6px; padding-right: 6px; }
-  .brand-name { display: none; }
+  .brand-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .crumbs { font-size: var(--fs-md); }
   .home-scroll { padding: var(--space-lg); }
   .home-head h1, .settings-form h1 { font-size: var(--fs-xl); }
@@ -2051,13 +2158,7 @@ code { font-family: var(--font-mono); }
 /* ---- AI draft view: source labels, warnings, model activity ---- */
 .draft-summary { display: flex; flex-direction: column; flex: none; }
 .draft-summary:empty { display: none; }
-.source-counts {
-  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs);
-  margin: 0; padding: var(--space-xs) var(--space-md); font-size: var(--fs-sm);
-  border-bottom: 1px solid var(--line);
-}
-.source-counts-title { color: var(--text-3); font-weight: 600; margin-right: 2px; }
-.parts-link { margin-left: auto; gap: var(--space-xs); color: var(--brand); }
+.parts-link { align-self: flex-start; gap: var(--space-xs); color: var(--brand); }
 .draft-warnings { min-width: 0; }
 .draft-warnings[open] { flex-basis: 100%; }
 .draft-warnings summary { display: flex; align-items: center; gap: var(--space-xs); cursor: pointer; list-style: none; color: var(--text-3); }
@@ -2157,28 +2258,24 @@ code { font-family: var(--font-mono); }
 .live-follow[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand); }
 .live-follow .icon { margin-right: 4px; }
 
-/* ---- 3D: fit dial and caption. */
+/* ---- Fit of the shown revision: a small text chip at the end of the run bar ("fit 0.90"),
+   not a dial over the 3D view. The ring stays in the markup for the live lane; it is not drawn. */
 .fit-dial {
-  position: absolute;
-  top: 40px;
-  right: var(--space-sm);
-  display: grid;
-  justify-items: center;
-  gap: 2px;
-  padding: 6px 6px 4px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 1px 8px;
   border: 1px solid var(--rule);
   border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  background: var(--surface);
+  white-space: nowrap;
 }
 .fit-dial[hidden] { display: none; }
-/* 64 px: the ring's inner width (about 48 px) holds "0.81" in the mono font without touching it. */
-.fit-dial svg { grid-area: 1 / 1; width: 64px; height: 64px; transform: rotate(-90deg); }
-.dial-track, .dial-arc { fill: none; stroke-width: 4; }
-.dial-track { stroke: var(--rule); }
-.dial-arc { stroke: var(--brand); stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
-.dial-value { grid-area: 1 / 1; align-self: center; font: 500 var(--fs-md) var(--font-mono); color: var(--ink); }
-.dial-label { font-size: var(--fs-xs); color: var(--ink-3); white-space: nowrap; }
-.dial-delta { font-family: var(--font-mono); }
+.fit-dial svg { display: none; }
+.dial-value { font: 500 var(--fs-sm) var(--font-mono); color: var(--ink); }
+.dial-label { font-size: var(--fs-xs); color: var(--ink-3); }
+.dial-delta { font: var(--fs-xs) var(--font-mono); }
+.dial-delta:empty { display: none; }
 .dial-delta[data-tone="better"] { color: var(--pass); }
 .dial-delta[data-tone="worse"] { color: var(--warn); }
 .fit-dial[data-flash="better"] { animation: dial-better 900ms var(--ease-out); }
@@ -3345,20 +3442,7 @@ code { font-family: var(--font-mono); }
 .legend-list dt { display: flex; align-items: center; gap: var(--space-sm); font-weight: 600; color: var(--ink); white-space: nowrap; }
 .legend-list dd { margin: 0; color: var(--ink-2); }
 
-/* Run summary row: the one review status, then icon-and-count facts. */
-.review-status {
-  display: inline-flex; align-items: center; gap: var(--space-sm);
-  margin-right: var(--space-sm); padding: 2px 4px 2px 8px;
-  border: 1px dashed var(--guess-ink); border-radius: var(--radius-lg);
-  background: var(--guess-soft); color: var(--guess-text);
-}
-.review-count { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; cursor: help; }
-.review-count strong { font: 600 var(--fs-lg)/1 var(--font-mono); }
-.review-status .btn { gap: 6px; }
-.source-counts .legend-pop { margin-left: 2px; }
 .parts-link .icon { width: 14px; height: 14px; }
-.parts-link-check { display: inline-flex; align-items: center; gap: 2px; margin-left: 4px; color: var(--warn); }
-.draft-warnings > summary.badge { cursor: pointer; }
 
 /* Strip head: flag, open count, total. */
 .strip-head .strip-count { display: inline-flex; align-items: center; gap: 4px; cursor: help; }
@@ -3401,11 +3485,18 @@ code { font-family: var(--font-mono); }
 
 /* ---- 3D view tools (js/controls3d.js): the tool bar at the top left and the section cut panel. */
 .model-controls {
-  position: absolute; top: var(--space-sm); left: var(--space-sm); max-width: calc(100% - 120px);
+  position: absolute; top: var(--space-sm); left: var(--space-sm); max-width: calc(100% - 2 * var(--space-sm));
   display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
   pointer-events: none;
 }
-.model-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+/* One row: groups that do not fit go into the More menu (createToolbar().fit in controls3d.js). */
+.model-tools { display: flex; flex-wrap: nowrap; gap: 6px; }
+.model-tools-more { position: relative; }
+.model-tools-menu {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 3;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+}
+.model-tools-menu[hidden] { display: none; }
 .model-tools-group {
   display: inline-flex; gap: 1px; padding: 2px;
   border-radius: var(--radius-md); border: 1px solid var(--line);
@@ -3439,7 +3530,7 @@ code { font-family: var(--font-mono); }
 .model-tools-group[hidden] { display: none; }
 /* The part list and the fact card share one column at the right of the 3D view. */
 .model-side {
-  position: absolute; top: 76px; right: var(--space-sm); bottom: 44px; z-index: 2;
+  position: absolute; top: 48px; right: var(--space-sm); bottom: 44px; z-index: 2;
   width: min(256px, calc(100% - 2 * var(--space-sm))); display: flex; flex-direction: column; gap: 6px;
   pointer-events: none;
 }
@@ -3563,7 +3654,6 @@ code { font-family: var(--font-mono); }
   pointer-events: none;
 }
 .model-readout[hidden], .model-corner[hidden] { display: none; }
-.pane-model:has(.fit-dial:not([hidden])) .model-readout { top: 108px; }
 .model-corner {
   position: absolute; right: var(--space-sm); bottom: var(--space-sm);
   display: flex; flex-direction: column; align-items: flex-end; gap: 2px;

@@ -160,6 +160,29 @@ export function summaryOf(record) {
 // ---------------------------------------------------------------- view
 
 /** A smooth line from `a` to `b` (stage pixels) that leaves and arrives horizontally. */
+/** Size of the "best guess" label (px), centred on its point. */
+export const GUESS_LABEL_SIZE = Object.freeze({ width: 76, height: 20 });
+/** Places along the line (fraction from the part) where the label may sit, nearest first. */
+const GUESS_LABEL_STOPS = [0.22, 0.35, 0.5, 0.65, 0.8];
+/** The label sits this far above its line, so it does not hide the dashes. */
+const GUESS_LABEL_LIFT_PX = 10;
+
+/**
+ * Where the "best guess" label sits on the line from `from` (the part) to `to` (the sheet): the
+ * first stop whose label box is clear of every `avoid` box (the 3D tool bar), else the first stop.
+ * Boxes are { left, top, right, bottom } in the same coordinates as the points.
+ */
+export function labelSpot(from, to, avoid = [], size = GUESS_LABEL_SIZE) {
+  const spotAt = (t) => ({ x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t - GUESS_LABEL_LIFT_PX });
+  const covers = (spot, box) => spot.x + size.width / 2 > box.left && spot.x - size.width / 2 < box.right
+    && spot.y + size.height / 2 > box.top && spot.y - size.height / 2 < box.bottom;
+  for (const t of GUESS_LABEL_STOPS) {
+    const spot = spotAt(t);
+    if (!avoid.some((box) => covers(spot, box))) return spot;
+  }
+  return spotAt(GUESS_LABEL_STOPS[0]);
+}
+
 function linkPath(a, b) {
   const bend = Math.max(40, Math.abs(b.x - a.x) * 0.45);
   const direction = b.x < a.x ? -1 : 1;
@@ -261,10 +284,14 @@ export function createSourceView({ stage, pane, anchorOf, loadSheet, labelOf = (
     nodes.push(svg('circle', { class: `source-dot ${tone}`, cx: from.x, cy: from.y, r: 4 }));
     const first = ends[0] || rings[0];
     if (guess && first) {
-      // The label sits on the first line, a little way from the part.
-      const at = { x: from.x + (first.x - from.x) * 0.22, y: from.y + (first.y - from.y) * 0.22 - 10 };
+      // The label sits on the first line, a little way from the part, and off the 3D tool bar.
+      const avoid = [...stage.querySelectorAll('.model-tools-group:not([hidden])')]
+        .map((node) => node.getBoundingClientRect())
+        .filter((rect) => rect.width > 0 && rect.height > 0)
+        .map((rect) => ({ left: rect.left - box.left, top: rect.top - box.top, right: rect.right - box.left, bottom: rect.bottom - box.top }));
+      const at = labelSpot(from, first, avoid);
       nodes.push(svg('g', { class: 'source-guess-label', transform: `translate(${at.x} ${at.y})` },
-        svg('rect', { x: -38, y: -11, width: 76, height: 20, rx: 10 }),
+        svg('rect', { x: -GUESS_LABEL_SIZE.width / 2, y: -11, width: GUESS_LABEL_SIZE.width, height: GUESS_LABEL_SIZE.height, rx: 10 }),
         svg('text', { x: 0, y: 3, 'text-anchor': 'middle' }, 'best guess')));
     }
     links.replaceChildren(...nodes);

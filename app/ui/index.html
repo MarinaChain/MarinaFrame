@@ -120,7 +120,7 @@
   <div class="app" id="app">
     <!-- Title bar: traffic-light inset, breadcrumb Vessel › Run › rN, run actions. -->
     <header class="titlebar" data-tauri-drag-region>
-      <div class="brand" aria-label="MarinaFrame">
+      <div class="brand">
         <img class="brand-mark" src="assets/mark.svg" alt="" width="24" height="20">
         <span class="brand-name">MarinaFrame</span>
       </div>
@@ -239,8 +239,41 @@
         <h1 class="visually-hidden" id="run-title">Run</h1>
         <div class="workspace" id="workspace">
           <div class="notices" id="notices" aria-live="polite"></div>
-          <div class="draft-summary" id="draft-summary"></div>
-          <div id="sheet-review"></div>
+          <!-- The run bar (js/run_header.js): one status sentence with its action and Next, the
+               section tiles, and Watch again with the fit. The sentence opens the run drawer. -->
+          <div class="run-bar" id="run-bar">
+            <div class="run-status" id="run-status" aria-live="polite"></div>
+            <!-- Review counter (sections still to check) and the section tiles. -->
+            <div class="strip-row">
+              <div class="strip-head" id="strip-head" aria-live="polite"></div>
+              <div class="strip" id="strip" role="listbox" aria-label="Sections" aria-orientation="horizontal" tabindex="0"></div>
+            </div>
+            <div class="run-bar-end" id="run-bar-end">
+              <!-- HOOK(M3 live): the fit of the shown revision as a small text chip; it counts to a new value. -->
+              <div class="fit-dial" id="fit-dial" role="img" aria-label="Fit" hidden>
+                <svg viewBox="0 0 48 48" aria-hidden="true">
+                  <circle class="dial-track" cx="24" cy="24" r="20" />
+                  <circle class="dial-arc" cx="24" cy="24" r="20" pathLength="1" />
+                </svg>
+                <span class="dial-label">fit</span>
+                <span class="dial-value"></span>
+                <span class="dial-delta"></span>
+              </div>
+            </div>
+            <!-- The run drawer: the detail behind the status sentence, over the top of the panes. -->
+            <section class="run-drawer" id="run-drawer" aria-label="Run status details" hidden>
+              <div class="draft-summary" id="draft-summary"></div>
+              <div class="drawer-group drawer-sheets">
+                <h2 class="drawer-title">Sheets and requests</h2>
+                <div id="sheet-review"></div>
+              </div>
+              <div class="drawer-group drawer-revisions">
+                <h2 class="drawer-title">Revisions</h2>
+                <div class="revision-ladder" id="revision-ladder" data-hook="revision-ladder"></div>
+              </div>
+              <div class="revision-facts" id="revision-facts"></div>
+            </section>
+          </div>
 
           <div class="stage" id="stage" data-view="split">
             <section class="pane pane-drawing" aria-label="Drawing">
@@ -273,36 +306,18 @@
                 </div>
               </div>
               <div class="model-host" id="model-host" tabindex="0" role="region" aria-label="3D model. Drag to rotate, scroll to zoom, click a section plane to pick it. Keys: 1 to 5 standard views, P orthographic, F fit, C section cut, S section planes, X see-through hull, G grid, W waterline, E edges."></div>
-              <!-- HOOK(M3 live): fit dial and a one-line caption over the 3D view. -->
-              <div class="fit-dial" id="fit-dial" role="img" aria-label="Fit" hidden>
-                <svg viewBox="0 0 48 48" aria-hidden="true">
-                  <circle class="dial-track" cx="24" cy="24" r="20" />
-                  <circle class="dial-arc" cx="24" cy="24" r="20" pathLength="1" />
-                </svg>
-                <span class="dial-value"></span>
-                <span class="dial-label">fit <span class="dial-delta"></span></span>
-              </div>
+              <!-- HOOK(M3 live): a one-line caption over the 3D view. -->
               <p class="model-caption" id="model-caption" hidden></p>
             </section>
           </div>
 
-          <!-- HOOK(M3 live): narration strip. Two short lines under both panes: what the agent
-               does now. M1 shows the latest recorded step; the live lane streams into it. -->
+          <!-- HOOK(M3 live): narration strip under both panes: what the agent does now. It shows
+               while the run works or a replay is open (the run bar says the rest). -->
           <div class="narration" id="narration" data-hook="narration" role="status" aria-live="polite"></div>
 
-          <!-- Review counter (sections still to check, Next) beside the section tiles. -->
-          <div class="strip-row">
-            <div class="strip-head" id="strip-head" aria-live="polite"></div>
-            <div class="strip" id="strip" role="listbox" aria-label="Sections" aria-orientation="horizontal" tabindex="0"></div>
-          </div>
-
-          <!-- HOOK(M3 live, M7 compare): revision and timeline strip. M1 shows the current
-               revision and the model cost; the live lane adds the revision ladder, the fit
-               sparkline and replay/scrub here. -->
+          <!-- HOOK(M3 live): the replay transport (play, scrub, speed), open after Watch again. -->
           <div class="revision-strip" id="revision-strip" data-hook="revision-strip">
-            <div class="revision-ladder" id="revision-ladder" data-hook="revision-ladder"></div>
             <div class="live-transport" id="live-transport" hidden></div>
-            <div class="revision-facts" id="revision-facts"></div>
           </div>
         </div>
 
@@ -388,6 +403,14 @@
                 <span class="setting-label" id="notify-label">Notify when a run stops</span>
                 <label class="switch" title="A desktop notification with the run name and its outcome, once per run. It never shows drawing content.">
                   <input type="checkbox" name="notify_finished" role="switch" aria-labelledby="notify-label">
+                  <span class="switch-track" aria-hidden="true"></span>
+                </label>
+              </div>
+              <!-- Per viewer, applied at once (js/settings_view.js); History always shows them. -->
+              <div class="setting-row">
+                <span class="setting-label" id="show-costs-label">Show costs and timings</span>
+                <label class="switch" title="Step times and costs, tool durations and the list cost on the Run tab. History always shows them.">
+                  <input type="checkbox" name="show_costs" role="switch" aria-labelledby="show-costs-label">
                   <span class="switch-track" aria-hidden="true"></span>
                 </label>
               </div>

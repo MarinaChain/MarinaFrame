@@ -1,5 +1,5 @@
-// The run view around the panes: breadcrumb, run actions, notices, the draft summary row,
-// the narration strip and the revision strip.
+// The run view around the panes: breadcrumb, run actions, notices, the run bar (status
+// sentence, its drawer), the narration strip and the revision facts.
 
 import { state, isRunning, dropNotice } from './app_state.js';
 import { invoke } from './api.js';
@@ -7,12 +7,13 @@ import { el, fill, icon } from './dom.js';
 import * as fmt from './format.js';
 import { $, chip, showError } from './ui_kit.js';
 import { vesselOfTask, vesselNameOf, runNumber, needsCheck, partsToCheck } from './run_facts.js';
-import { accuracyChips } from './accuracy.js';
-import { glyphChip, sourceGlyph, legendPopover } from './glyphs.js';
+import { summarise, factsOfView, detailText, OUTPUT_NAMES } from './accuracy.js';
+import { glyphChip, legendPopover } from './glyphs.js';
 import { tipAttributes } from './tooltip.js';
 import { navigate } from './router.js';
 import { nextToCheck } from './run_strip.js';
-import { openTask } from './run.js';
+import { openTask, replaceSheet } from './run.js';
+import { statusSentence, reviewWords, errorWords, costWords } from './run_status.js';
 import { renderStatusbar } from './settings_view.js';
 import { renderVesselPage, setVesselTab } from './vessel_pages.js';
 import { live } from './workspace.js';
@@ -94,6 +95,8 @@ function policyChip(policy) {
 
 /** HOOK(M3 live): narration strip. M1 shows the latest recorded step in plain words. */
 export function renderNarration() {
+  // The narration row shows only while the run works (or a replay is open, styles.css).
+  $('workspace').dataset.running = String(isRunning());
   if (live.hasSteps()) {
     live.renderNarration();
     return;
@@ -113,8 +116,10 @@ export function renderNarration() {
 }
 
 /**
- * HOOK(M3 live, M7 compare): revision and timeline strip. M1 shows the current revision,
- * the run mode, when it changed, and the model requests and cost (small; accuracy leads).
+ * HOOK(M3 live, M7 compare): the run's revisions and facts, in the run drawer. Without live
+ * steps the ladder shows the current revision; the live lane draws the full ladder. The facts:
+ * Draft only, the run mode, the model requests and list cost (a cost-timing fact: hidden on the
+ * Run tab unless the person shows costs), and when the run changed.
  */
 export function renderRevisionStrip() {
   const view = state.view;
@@ -128,14 +133,12 @@ export function renderRevisionStrip() {
     fill($('revision-facts'));
     return;
   }
-  const activity = view.activity;
-  const cost = activity ? (activity.list_cost_complete ? fmt.usd(activity.list_cost_usd) : `≥ ${fmt.usd(activity.list_cost_usd)}`) : null;
+  const cost = costWords(view);
   fill($('revision-facts'),
     chip('Draft only', { dot: false, small: true, title: 'Engineering approval is never automatic. A naval architect signs off outside this app.' }),
     policyChip(view.summary.policy),
-    activity ? el('span', { class: 'rev-fact', ...tipAttributes(`${fmt.plural(activity.requests, 'model request')}, ${cost}`, 'List cost of the model requests.', { label: false }).attrs },
-      `${activity.requests} · ${cost}`) : null,
-    el('span', { class: 'rev-fact', title: `Updated ${fmt.fullTime(view.summary.updated_ms)}` }, fmt.relativeTime(view.summary.updated_ms)));
+    cost ? el('span', { class: 'rev-fact cost-timing' }, cost) : null,
+    el('span', { class: 'rev-fact', title: `Updated ${fmt.fullTime(view.summary.updated_ms)}` }, `Updated ${fmt.relativeTime(view.summary.updated_ms)}`));
 }
 
 /** Relative times in the revision strip and status bar stay current. */
@@ -154,8 +157,8 @@ export function installClock() {
  */
 const ENGINEERING_NOTICE_ID = 'engineering-approval';
 /**
- * The backend's draft banner ("Draft: 2 guesses to check. ..."). The review status in the
- * summary row says the same thing once, with this text as its tooltip detail.
+ * The backend's draft banner ("Draft: 2 guesses to check. ..."). The run bar's status
+ * sentence says the same thing, so the banner does not show as a notice.
  */
 const DRAFT_NOTICE_PREFIX = 'draft-guesses:';
 
@@ -200,66 +203,123 @@ async function dismissNotice(notice, row) {
   }
 }
 
+// ---------------------------------------------------------------- run bar and run drawer
+
+/** The drawer under the status sentence is open (kept across renders of the run bar). */
+let drawerOpen = false;
+
 /**
- * The run's one review status, then compact facts: sections per source label, the build's
- * warnings and the parts. Each fact is an icon and a count; the words are in its tooltip.
+ * The run bar's status sentence ("Draft · 2 sections need you · Lines plan: lines too faint"),
+ * its primary action (Replace a sheet) and Next; then the drawer's detail in words: the review,
+ * the warnings, the hull error band and the parts.
  */
 export function renderDraftSummary() {
   const view = state.view;
-  const counts = view?.source_counts || [];
-  const warnings = view?.warnings || [];
-  const sections = view?.sections || [];
-  const parts = view?.components || [];
-  const open = sections.filter(needsCheck).length;
-  const accuracy = accuracyChips(view);
-  if (!counts.length && !warnings.length && !parts.length && !open && !accuracy) {
+  $('run-bar').hidden = !view;
+  if (!view) {
+    fill($('run-status'));
     fill($('draft-summary'));
+    setDrawer(false);
     return;
   }
-  fill($('draft-summary'), el('div', { class: 'source-counts' },
-    reviewStatus(view, open, sections.length),
-    ...counts.map((c) => sourceGlyph(c.label, { count: c.count })),
-    warnings.length ? warningsToggle(warnings) : null,
-    counts.length ? legendPopover() : null,
-    accuracy,
-    parts.length ? partsLink(view, parts.length) : null));
-}
-
-/** "2 to check" and Next: the one place the run says what waits for a person. */
-function reviewStatus(view, open, total) {
-  if (!open) return null;
-  const banner = (view.notices || []).find((n) => n.id.startsWith(DRAFT_NOTICE_PREFIX));
-  const tip = tipAttributes(`${open} of ${fmt.plural(total, 'section')} to check`, banner?.text || null);
-  return el('span', { class: 'review-status' },
-    el('span', { class: 'review-count', role: 'img', tabindex: '0', ...tip.attrs },
-      icon('flag'), el('strong', { 'aria-hidden': 'true' }, String(open)), el('span', { 'aria-hidden': 'true' }, 'to check'), tip.describer),
+  const { parts, action } = statusSentence(view);
+  const open = (view.sections || []).filter(needsCheck).length;
+  const sentence = parts.join(' · ');
+  const needsPerson = Boolean(open || action);
+  // No tooltip: it would repeat the sentence over the drawer it opens.
+  fill($('run-status'),
     el('button', {
-      class: 'btn btn-small',
+      class: 'run-status-toggle',
+      id: 'run-status-toggle',
+      type: 'button',
+      'aria-expanded': String(drawerOpen),
+      'aria-controls': 'run-drawer',
+      dataset: { tone: needsPerson ? 'attention' : 'calm' },
+      onclick: () => setDrawer(!drawerOpen),
+    }, icon(needsPerson ? 'flag' : 'checks'), el('span', { class: 'run-status-text' }, sentence), icon('chevron', 'run-status-chevron')),
+    action ? el('button', {
+      class: 'btn btn-small run-status-action',
+      type: 'button',
+      disabled: Boolean(state.busy) || isRunning(),
+      ...tipAttributes(`Replace ${action.label}`, 'Keep the draft and retry this sheet’s outputs.', { label: false }).attrs,
+      onclick: () => replaceSheet(action.sheetId),
+    }, 'Replace') : null,
+    open ? el('button', {
+      class: 'btn btn-small run-status-next',
       type: 'button',
       disabled: isRunning(),
       ...tipAttributes('Next section to check (N)', null, { label: false }).attrs,
       onclick: nextToCheck,
-    }, 'Next', el('kbd', { class: 'key-hint' }, 'N')));
+    }, 'Next', el('kbd', { class: 'key-hint' }, 'N')) : null);
+  fill($('draft-summary'), drawerSummary(view));
 }
 
-/** Warnings of the draft build: an icon and a count; the list opens below the row. */
-function warningsToggle(warnings) {
-  const name = fmt.plural(warnings.length, 'warning');
-  return el('details', { class: 'draft-warnings' },
-    el('summary', { class: 'badge badge-small badge-glyphchip', dataset: { tone: 'warn' }, ...tipAttributes(name, 'Warnings of the draft build. Click to list them.').attrs },
-      icon('warn'), el('span', { class: 'badge-count', 'aria-hidden': 'true' }, String(warnings.length))),
-    el('ul', { class: 'selectable-text' }, ...warnings.map((w) => el('li', {}, w))));
+/** The drawer's first group: the review in words, the warnings, the error band, the parts. */
+function drawerSummary(view) {
+  const warnings = view.warnings || [];
+  const parts = view.components || [];
+  const review = reviewWords(view);
+  const accuracy = accuracyLines(view);
+  if (!review && !accuracy.length && !parts.length) return null;
+  return el('div', { class: 'drawer-group' },
+    el('h2', { class: 'drawer-title' }, 'Draft'),
+    review ? el('p', { class: 'drawer-line' }, el('span', {}, review), view.source_counts?.length ? legendPopover() : null) : null,
+    warnings.length ? el('details', { class: 'draft-warnings' },
+      el('summary', {}, `Show the ${fmt.plural(warnings.length, 'warning')}`),
+      el('ul', { class: 'selectable-text' }, ...warnings.map((w) => el('li', {}, w)))) : null,
+    ...accuracy,
+    parts.length ? partsLink(view, parts.length) : null);
+}
+
+/** "Hull 0.8–14 % from the drawing", one line per output; the tooltip says what it means. */
+function accuracyLines(view) {
+  if (!view?.revision) return [];
+  return Object.values(summarise(factsOfView(view))).filter((s) => s.present).map((summary) => {
+    const name = OUTPUT_NAMES[summary.output];
+    const tip = tipAttributes(`${name}: ${errorWords(summary.chip)}`,
+      `Measured on other ships, not on this run: how far the ${name.toLowerCase()} usually is from the drawing.\n${detailText(summary)}`);
+    return el('p', { class: 'drawer-line drawer-accuracy', tabindex: '0', ...tip.attrs, dataset: { caution: String(summary.caution) } },
+      el('span', { class: 'drawer-key', 'aria-hidden': 'true' }, name),
+      el('span', { 'aria-hidden': 'true' }, errorWords(summary.chip)), tip.describer);
+  });
 }
 
 /** Whole-vessel parts: one button to the Parts tab, with how many still need a look. */
 function partsLink(view, count) {
   const toCheck = partsToCheck(view);
-  const title = `${fmt.plural(count, 'part')}${toCheck ? `, ${toCheck} to check` : ''}`;
   return el('button', {
     class: 'btn btn-ghost btn-small parts-link',
     type: 'button',
-    ...tipAttributes(title, 'Open the Parts tab: hull, decks, deckhouses and appendages.').attrs,
-    onclick: () => setVesselTab('parts'),
-  }, icon('cube'), el('span', { 'aria-hidden': 'true' }, String(count)),
-  toCheck ? el('span', { class: 'parts-link-check', 'aria-hidden': 'true' }, icon('flag'), String(toCheck)) : null);
+    ...tipAttributes('Open the Parts tab', 'Hull, decks, deckhouses and appendages.', { label: false }).attrs,
+    onclick: () => { setDrawer(false); setVesselTab('parts'); },
+  }, icon('cube'), `${fmt.plural(count, 'part')}${toCheck ? `, ${toCheck} to check` : ''}`);
+}
+
+/** Open or close the run drawer; closing gives the focus back to the sentence if it was inside. */
+function setDrawer(open) {
+  const drawer = $('run-drawer');
+  const toggle = document.getElementById('run-status-toggle');
+  const hadFocus = drawer.contains(document.activeElement);
+  drawerOpen = open;
+  drawer.hidden = !open;
+  toggle?.setAttribute('aria-expanded', String(open));
+  if (!open && hadFocus) toggle?.focus();
+}
+
+/** The drawer closes with Escape (focus in it or on the sentence) and a click outside the bar. */
+export function installRunDrawer() {
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || !drawerOpen) return;
+    const target = event.target;
+    if (!$('run-drawer').contains(target) && target.id !== 'run-status-toggle') return;
+    event.preventDefault();
+    event.stopPropagation();
+    setDrawer(false);
+    document.getElementById('run-status-toggle')?.focus();
+  }, true);
+  document.addEventListener('pointerdown', (event) => {
+    if (!drawerOpen) return;
+    if ($('run-drawer').contains(event.target) || $('run-status').contains(event.target)) return;
+    setDrawer(false);
+  });
 }

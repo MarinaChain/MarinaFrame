@@ -53,14 +53,26 @@ another user.
    name, status chip, time. A "New run" button (pick a spec file). With AI drafting on (the default) and a model route
    found (the `claude` CLI or an OpenCode Go key), the run uses the live policy in draft mode; otherwise the deterministic draft.
    Section "Datasets" lists `work/sources/*` folders read-only (v1: name and size only).
-2. **Workspace (centre).** Drawing and 3D model side by side, resizable split.
+2. **Workspace (centre).** Drawing and 3D model side by side, resizable split. Geometry first:
+   at 1440 x 900 and 1280 x 800 the two panes take at least 80 % of the window (on the Run view a
+   window under 1800 px starts with the sidebar collapsed; the person's choice there is kept).
+   - Run bar above the panes, one row: a status sentence ("Draft · 2 sections need you · Lines
+     plan: lines too faint") with its one action inline (Replace) and Next (N); the section tiles
+     (one line each); Watch again and the fit ("fit 0.90"). The sentence opens a drawer with the
+     detail in words: the review ("1 traced · 1 interpolated · 2 warnings"), the error band
+     ("0.8–14 % from the drawing"), parts, sheets and requests, revisions, run facts.
+   - Costs and timings (step times and costs, tool durations, list cost) are hidden on the Run
+     tab unless Settings > "Show costs and timings" is on; History always shows them. The
+     narration row shows only while the run works or a replay is open.
+   - The 3D tool bar is one row; groups that do not fit go into its More menu.
    - Drawing: the source page image with the section regions. For the selected section,
      every candidate line drawn as an overlay: chosen = solid accent, others = thin grey;
      hover shows its plain-language label and reason. Zoom and pan.
    - 3D: the current build's `model.stl` in a three.js orbit view (rotate, zoom, reset,
      a plane at the selected section; Section planes (S) shows one at every station; See-through
      (X) makes the hull faint over the parts and tanks). Empty state when no build exists yet.
-   - Section strip below: one tile per section with its status (chosen / declined / not read).
+   - Section tiles (in the run bar): one tile per section with its status (chosen / declined /
+     not read).
 3. **Inspector (right panel)**, folds to a rail of icons (⌘4; remembered per viewer; windows
    under 1800 px start folded; a section that needs a decision opens it). A picked 3D part's fact
    card shows at its top; folded, a compact card docks in a 3D corner clear of the part and its

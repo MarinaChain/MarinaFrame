@@ -11,6 +11,7 @@ import { renderChanges, buildChanges } from './changes.js';
 import { createExport } from './export.js';
 import { createParts } from './parts.js';
 import { renderSheetHistory } from './sheets.js';
+import { costWords } from './run_status.js';
 import { createSources } from './sources.js';
 import { sectionPlace, placesIn } from './run_strip.js';
 import { openTask, loadTaskSoon, refreshTasksSoon } from './run.js';
@@ -85,6 +86,9 @@ export function renderHistory() {
     runs.length
       ? el('ul', { class: 'history-list' }, ...runs.map(row))
       : el('div', { class: 'page-empty' }, icon('queue'), el('p', {}, 'No runs of this vessel yet.')),
+    // Costs and timings: hidden on the Run tab by default, always here.
+    costWords(state.view) ? el('p', { class: 'history-cost' },
+      `Run ${vessel ? runNumber(vessel, state.task) : 1}: ${costWords(state.view)}`) : null,
     renderSheetHistory(state.view?.sheet_review?.history),
     state.task ? changesSection(vessel) : null));
 }

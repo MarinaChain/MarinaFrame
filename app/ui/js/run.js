@@ -123,6 +123,17 @@ export async function loadTask({ fresh = false } = {}) {
 }
 export const loadTaskSoon = debounce(() => loadTask(), REFRESH_DEBOUNCE_MS);
 
+/** Replace one sheet of the drawing set: keep the draft and retry that sheet's outputs. */
+export async function replaceSheet(sheetId) {
+  const task = state.task;
+  const files = await pickDrawingFiles({ multiple: false });
+  if (!files.length || task !== state.task) return;
+  if (files.length !== 1) { showError(new Error('Choose one replacement file.')); return; }
+  if (await runAction('Replacing the sheet…', () => invoke('replace_sheet', { task, sheet_id: sheetId, file: files[0] }))) {
+    await loadTask({ fresh: true });
+  }
+}
+
 function renderTask({ fresh = false } = {}) {
   renderCrumbs();
   renderActions();
@@ -130,15 +141,7 @@ function renderTask({ fresh = false } = {}) {
   renderDraftSummary();
   fill($('sheet-review'), renderSheetReview(state.view?.sheet_review, {
     busy: state.busy || isRunning(),
-    onReplace: async (sheetId) => {
-      const task = state.task;
-      const files = await pickDrawingFiles({ multiple: false });
-      if (!files.length || task !== state.task) return;
-      if (files.length !== 1) { showError(new Error('Choose one replacement file.')); return; }
-      if (await runAction('Replacing the sheet…', () => invoke('replace_sheet', { task, sheet_id: sheetId, file: files[0] }))) {
-        await loadTask({ fresh: true });
-      }
-    },
+    onReplace: replaceSheet,
   }));
   renderNarration();
   renderStrip();

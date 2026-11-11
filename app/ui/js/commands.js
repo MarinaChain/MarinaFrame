@@ -32,14 +32,23 @@ function setRail(mode, { remember = true } = {}) {
   const label = collapsed ? 'Expand the sidebar (⌘\\)' : 'Collapse the sidebar (⌘\\)';
   toggle.title = label;
   toggle.setAttribute('aria-label', label.replace(/ \(.*\)$/, ''));
-  if (remember) prefs.set('rail', collapsed ? 'collapsed' : 'expanded');
+  if (remember) prefs.set(railPrefKey(), collapsed ? 'collapsed' : 'expanded');
 }
 // A narrow window (under 1100 px) starts with the sidebar collapsed; the person's own choice
 // comes back when the window is wide again.
 const narrowWindow = window.matchMedia('(max-width: 1100px)');
-function applyRailForWidth() {
+// The Run view gives its width to the drawing and the 3D model (lane K): under 1800 px it starts
+// with the sidebar collapsed. A choice made on the Run view is kept apart from the other places.
+const runRailWindow = window.matchMedia('(max-width: 1799px)');
+const onRunView = () => document.body.dataset.route === 'run';
+/** The pref that holds the sidebar choice for the place and window shown now. */
+function railPrefKey() {
+  return onRunView() && runRailWindow.matches ? 'railRun' : 'rail';
+}
+function applyRailForPlace() {
   if (narrowWindow.matches) setRail('collapsed', { remember: false });
-  else setRail(prefs.get('rail', 'expanded'));
+  else if (railPrefKey() === 'railRun') setRail(prefs.get('railRun', 'collapsed'), { remember: false });
+  else setRail(prefs.get('rail', 'expanded'), { remember: false });
 }
 
 // ---------------------------------------------------------------- command palette (⌘K)
@@ -113,8 +122,11 @@ export function installShellControls() {
 
 /** The sidebar starts collapsed in a narrow window; its toggle button. */
 export function installRail() {
-  applyRailForWidth();
-  narrowWindow.addEventListener('change', applyRailForWidth);
+  applyRailForPlace();
+  narrowWindow.addEventListener('change', applyRailForPlace);
+  runRailWindow.addEventListener('change', applyRailForPlace);
+  // The router marks the place on the body (router.js applyRoute); the sidebar follows it.
+  new MutationObserver(applyRailForPlace).observe(document.body, { attributes: true, attributeFilter: ['data-route'] });
   $('rail-toggle').addEventListener('click', () => setRail($('app').dataset.rail === 'collapsed' ? 'expanded' : 'collapsed'));
 }
 

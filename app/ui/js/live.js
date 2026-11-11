@@ -739,7 +739,7 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
       el('div', { class: 'tool-head' },
         el('code', { class: 'tool-name' }, tool.tool),
         ...targetChips(step),
-        tool.duration_ms !== null ? el('span', { class: 'tool-duration' }, toolDuration(tool.duration_ms)) : null),
+        tool.duration_ms !== null ? el('span', { class: 'tool-duration cost-timing' }, toolDuration(tool.duration_ms)) : null),
       tone !== 'working' && tool.text.length > LONG_RESULT_CHARS
         ? clampedText('tool-result', tool.text, { lines: 2 })
         : el('p', { class: 'tool-result' }, tone === 'working' ? 'Working…' : tool.text));
@@ -771,7 +771,7 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
         el('button', { class: 'thought-line', type: 'button', onclick: seekHere, title: step.text },
           el('span', { class: 'thought-line-title' }, fmt.splitStepTitle(step, stepTitle(step))[0]),
           step.tool?.text && step.kind !== 'repeat_collapsed' ? el('span', { class: 'thought-line-result' }, placesIn(step.tool.text)) : null,
-          el('time', { class: 'thought-time' }, clockDuration(step.time_ms))));
+          el('time', { class: 'thought-time cost-timing' }, clockDuration(step.time_ms))));
     }
     const previousNotes = steps.slice(0, index).reverse().find((s) => s.notes)?.notes || null;
     const notes = step.notes && step.notes !== previousNotes ? step.notes : null;
@@ -806,7 +806,7 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
     },
     disclosureMark(),
     el('span', { class: 'thought-title' }, step.actor === 'person' ? el('span', { class: 'thought-who' }, 'You') : null, heading),
-    el('span', { class: 'thought-meta' },
+    el('span', { class: 'thought-meta cost-timing' },
       el('time', {}, clockDuration(step.time_ms)),
       step.cost_usd ? el('span', { title: 'List cost of this model answer' }, fmt.usd(step.cost_usd)) : null));
     return el('li', { class: 'thought', dataset: { category, sequence: String(step.sequence) } },
@@ -1016,13 +1016,15 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
       } }, icon('close'));
     fill(nodes.transport, playButton, el('div', { class: 'scrub' }, ticks, scrub), speeds, live, close);
     const watchAgain = el('button', { class: 'btn btn-ghost watch-again', type: 'button', hidden: true,
-      title: 'Replay this run from the start',
+      title: 'Replay this run from the start', 'aria-label': 'Watch again',
       onclick: () => {
         replayOpen = true;
         seek(0);
         play();
       } }, icon('play'), el('span', {}, 'Watch again'));
-    nodes.transport.after(watchAgain);
+    // Watch again sits in the run bar when the page gives it a place, else after the transport.
+    if (nodes.watchAgainHost) nodes.watchAgainHost.prepend(watchAgain);
+    else nodes.transport.after(watchAgain);
     nodes.transport.addEventListener('keydown', (event) => {
       if (event.key === ' ' && event.target !== scrub) return;
       if (event.key === ' ') {

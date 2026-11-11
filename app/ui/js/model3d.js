@@ -42,6 +42,8 @@ const GUESS_BAND_MARGIN = 0.04;
 const HOME_DIRECTION = new THREE.Vector3(...STANDARD_VIEWS.iso.direction).normalize();
 /** Highest pixel ratio the view draws at. */
 const MAX_PIXEL_RATIO = 2;
+/** The tool bar's inset from the left and right edges of the 3D view (2 x --space-sm). */
+const TOOLBAR_SIDE_MARGINS_PX = 16;
 /** A pointer that moves less than this (CSS px) between press and release is a click, not a drag. */
 const CLICK_SLOP_PX = 4;
 /** The CAD worker's GLB is in millimetres. */
@@ -1243,6 +1245,8 @@ export function createModelView({
     const width = host.clientWidth;
     const height = host.clientHeight;
     if (!width || !height) return;
+    // The tool bar stays one row; what does not fit goes into its More menu.
+    toolbar.fit(width - TOOLBAR_SIDE_MARGINS_PX);
     renderer.setSize(width, height);
     perspective.aspect = width / height;
     perspective.updateProjectionMatrix();

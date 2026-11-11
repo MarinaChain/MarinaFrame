@@ -156,6 +156,16 @@ export function isRunning() {
 
 // ---------------------------------------------------------------- per-viewer preferences
 
+/**
+ * Costs and timings (step costs and times, tool durations, list cost) on the Run tab: hidden
+ * unless the person turns them on in Settings. CSS hides every `.cost-timing` node of the Run
+ * tab while `body[data-costs]` is not "shown"; History shows them always.
+ */
+export function applyShowCosts(show = prefs.get('showCosts', false) === true, { remember = false } = {}) {
+  document.body.dataset.costs = show ? 'shown' : 'hidden';
+  if (remember) prefs.set('showCosts', show);
+}
+
 // Per-viewer conveniences only (layout, last tab). Wrapped: storage can be blocked.
 export const prefs = (() => {
   let values = {};
