@@ -130,8 +130,12 @@ function markBox(entry) {
 /** Size of a mark thumbnail in CSS pixels, and the space around the mark (part of its size). */
 const THUMB = { width: 168, height: 120, pad: 0.35 };
 
-/** A small crop of the drawing page around the person's mark, with the mark in brand blue. */
-function markThumbnail(entry, pageUrl) {
+/**
+ * A small crop of the drawing page around the person's mark, with the mark in brand blue.
+ * Marks are in drawing pixels; `page` ({ width, height }) is the page in drawing pixels, and the
+ * image is drawn at that size (it may be a scaled render).
+ */
+function markThumbnail(entry, pageUrl, page) {
   const box = markBox(entry);
   if (!box || !pageUrl) return null;
   const canvas = el('canvas', { class: 'change-thumb', 'aria-hidden': 'true', width: String(THUMB.width * 2), height: String(THUMB.height * 2) });
@@ -139,19 +143,21 @@ function markThumbnail(entry, pageUrl) {
     if (!url) return;
     const image = new Image();
     image.onload = () => {
+      const pageWidth = page?.width || image.naturalWidth;
+      const pageHeight = page?.height || image.naturalHeight;
       const [x0, y0, x1, y1] = box;
       const padX = Math.max(20, (x1 - x0) * THUMB.pad);
       const padY = Math.max(20, (y1 - y0) * THUMB.pad);
       const sx = Math.max(0, x0 - padX);
       const sy = Math.max(0, y0 - padY);
-      const sw = Math.min(image.naturalWidth - sx, x1 - x0 + 2 * padX);
-      const sh = Math.min(image.naturalHeight - sy, y1 - y0 + 2 * padY);
+      const sw = Math.min(pageWidth - sx, x1 - x0 + 2 * padX);
+      const sh = Math.min(pageHeight - sy, y1 - y0 + 2 * padY);
       const scale = Math.min(canvas.width / sw, canvas.height / sh);
       const g = canvas.getContext('2d');
       g.fillStyle = '#F7F5F0';
       g.fillRect(0, 0, canvas.width, canvas.height);
       g.setTransform(scale, 0, 0, scale, -sx * scale, -sy * scale);
-      g.drawImage(image, 0, 0);
+      g.drawImage(image, 0, 0, pageWidth, pageHeight);
       g.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--ink-chosen').trim() || '#06448E';
       g.lineWidth = 2.5 / scale;
       g.setLineDash([6 / scale, 4 / scale]);
@@ -179,14 +185,14 @@ const OUTCOME = {
 };
 
 /** One Mark and revise pass: what the person asked, where, what the AI did and the keep rule's answer. */
-function markEntry(entry, pageUrl, placeOf) {
+function markEntry(entry, pageUrl, placeOf, page) {
   const result = entry.result;
   const outcome = entry.forced ? { word: 'Kept anyway', tone: 'brand' } : result ? (OUTCOME[result.outcome] || { word: result.outcome, tone: '' }) : { word: 'Working', tone: 'ai' };
   let fitText = null;
   if (result?.fit_change) fitText = `fit ${result.fit_change > 0 ? '+' : '−'}${Math.abs(result.fit_change).toFixed(3)}`;
   else if (result?.not_kept_fit_change) fitText = `would have been ${result.not_kept_fit_change > 0 ? '+' : '−'}${Math.abs(result.not_kept_fit_change).toFixed(3)}`;
   return el('li', { class: 'change change-mark', dataset: { outcome: result?.outcome || 'working' } },
-    markThumbnail(entry, pageUrl),
+    markThumbnail(entry, pageUrl, page),
     el('div', { class: 'change-mark-body' },
       el('div', { class: 'change-head' },
         el('span', { class: 'change-who' }, 'You marked'),
@@ -198,13 +204,16 @@ function markEntry(entry, pageUrl, placeOf) {
       result?.detail && result.outcome !== 'kept' ? el('p', { class: 'change-cause' }, `Why: ${result.detail}`) : null));
 }
 
-/** The Changes list for the History tab. `pageUrl()` gives the drawing page image for mark thumbnails. */
-export function renderChanges(entries, { pageUrl = null, placeOf = (id) => id, placesIn = (text) => text } = {}) {
+/**
+ * The Changes list for the History tab. `pageUrl()` gives the drawing page image for mark
+ * thumbnails, `page` its size in drawing pixels.
+ */
+export function renderChanges(entries, { pageUrl = null, page = null, placeOf = (id) => id, placesIn = (text) => text } = {}) {
   if (!entries.length) {
     return el('p', { class: 'panel-empty' }, 'This run has no scored revisions yet.');
   }
   return el('ol', { class: 'change-list' }, ...entries.map((entry) => {
-    if (entry.kind === 'mark') return markEntry(entry, pageUrl, placeOf);
+    if (entry.kind === 'mark') return markEntry(entry, pageUrl, placeOf, page);
     if (entry.kind === 'not_kept') {
       return el('li', { class: 'change change-not-kept' },
         el('div', { class: 'change-head' },

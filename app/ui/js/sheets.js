@@ -24,7 +24,7 @@ export function renderSheetReview(review, { onReplace, busy = false } = {}) {
         glyphChip(glyph, `${sheet.label}: ${word}`, { tone, detail: sheet.reason || word }),
         el('span', { class: 'sheet-name' }, sheet.label),
         sheet.reason ? el('span', { class: 'sheet-reason' }, sheet.reason) : null,
-        needsFile ? el('button', { type: 'button', class: 'btn btn-ghost btn-small', disabled: busy,
+        needsFile ? el('button', { type: 'button', class: 'btn btn-ghost btn-small write-action', disabled: busy,
           ...tipAttributes(`Replace ${sheet.label}`, 'Keep the draft and retry this sheet’s outputs.').attrs,
           onclick: () => onReplace?.(sheet.id) }, 'Replace') : null);
     })),

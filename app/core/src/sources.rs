@@ -8,6 +8,7 @@
 //! - `intake/intake.json` and `intake/sources/`: the files dropped for a run started from a
 //!   drawing set, with the sheet type and scale the intake read for each page.
 //! - `domain/input/submitted_spec.json` and the captured intake record: the spec inputs.
+//! - `sources/sheets.json`: sheets added after the run was made (`ADDED_SHEETS_FILE`).
 //!
 //! The UI names a source only by its `id`. `read_source_page` lists the sources again and uses
 //! the recorded location, checked by `artifact::guard_inside_task` (no `..`, no symlink, a
@@ -496,6 +497,72 @@ fn drawing_sources(records: &Records) -> Vec<SourceFile> {
     sources
 }
 
+/// The record of sheets added to a run after it was made (`vessel_reconstruction.run_sheets`):
+/// drawings a later stage read straight from the drawing set, kept in the run as page images.
+pub const ADDED_SHEETS_FILE: &str = "sources/sheets.json";
+const ADDED_SHEETS_SCHEMA: &str = "marinaframe.run-sheets.v1";
+const ADDED_SHEETS_MAX_BYTES: usize = 2 * 1024 * 1024;
+/// Most sheets one record may add.
+const MAX_ADDED_SHEETS: usize = 64;
+
+/// The entries of the added-sheets record, or none when the run has no valid record.
+pub fn added_sheet_entries(task: &Path) -> Vec<Value> {
+    let Some(record) = artifact::guard_inside_task(task, ADDED_SHEETS_FILE)
+        .ok()
+        .and_then(|path| util::read_bounded(&path, ADDED_SHEETS_MAX_BYTES).ok())
+        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+        .filter(|record| record["schema"] == ADDED_SHEETS_SCHEMA)
+    else {
+        return vec![];
+    };
+    record["sheets"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|sheet| text(&sheet["name"]).is_some() && text(&sheet["file"]).is_some())
+        .take(MAX_ADDED_SHEETS)
+        .cloned()
+        .collect()
+}
+
+/// The sheets added to the run. The UI finds a source record's sheet by its `name`, which is
+/// the sheet as the records name it ("polarkonsult/GA Gunnerus Rev1.dxf").
+fn added_sheets(records: &Records) -> Vec<SourceFile> {
+    added_sheet_entries(records.task)
+        .iter()
+        .map(|sheet| {
+            let location = text(&sheet["file"]);
+            let role = text(&sheet["role"]);
+            SourceFile {
+                id: source_id(location.as_deref().unwrap_or_default()),
+                name: text(&sheet["name"]).unwrap_or_default(),
+                kind: SourceKind::Drawing,
+                role: role.clone().unwrap_or_else(|| "Sheet".into()),
+                status: SourceStatus::Current,
+                version: 1,
+                pages: vec![SourcePageFacts {
+                    index: 0,
+                    sheet_type: role,
+                    scale: None,
+                    width_px: sheet["width_px"].as_u64().map(|n| n as u32),
+                    height_px: sheet["height_px"].as_u64().map(|n| n as u32),
+                    dpi: None,
+                    replaced: false,
+                }],
+                size_bytes: None,
+                sha256: text(&sheet["sha256"]),
+                added_ms: sheet["added_ms"].as_u64(),
+                used_from: Some(FIRST_REVISION.into()),
+                used_to: None,
+                replaced_by: None,
+                note: text(&sheet["note"]),
+                previewable: false,
+                location,
+            }
+        })
+        .collect()
+}
+
 /// The run spec as given and the drawing-set record.
 fn spec_inputs(records: &Records) -> Vec<SourceFile> {
     let from_intake = records.intake.is_some();
@@ -579,6 +646,7 @@ pub fn list_sources(task: &Path) -> AppResult<SourceList> {
     }
     let records = Records::read(task);
     let mut sources = drawing_sources(&records);
+    sources.extend(added_sheets(&records));
     sources.extend(spec_inputs(&records));
     for source in &mut sources {
         add_file_facts(task, source);

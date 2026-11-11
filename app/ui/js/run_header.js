@@ -238,7 +238,7 @@ export function renderDraftSummary() {
       onclick: () => setDrawer(!drawerOpen),
     }, icon(needsPerson ? 'flag' : 'checks'), el('span', { class: 'run-status-text' }, sentence), icon('chevron', 'run-status-chevron')),
     action ? el('button', {
-      class: 'btn btn-small run-status-action',
+      class: 'btn btn-small run-status-action write-action',
       type: 'button',
       disabled: Boolean(state.busy) || isRunning(),
       ...tipAttributes(`Replace ${action.label}`, 'Keep the draft and retry this sheet’s outputs.', { label: false }).attrs,

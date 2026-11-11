@@ -297,21 +297,21 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
     const reviewed = part.review === 'accepted' || part.review === 'marked';
     return el('div', { class: 'decision-bar' },
       part.built && !reviewed ? el('button', {
-        class: 'btn btn-primary',
+        class: 'btn btn-primary write-action',
         type: 'button',
         disabled: busy,
         title: 'Accept this part as a draft part (A)',
         onclick: () => decide(part, 'accepted'),
       }, 'Accept', el('kbd', { class: 'key-hint' }, 'A')) : null,
       !reviewed ? el('button', {
-        class: 'btn',
+        class: 'btn write-action',
         type: 'button',
         disabled: busy,
         title: 'Say what is wrong with this part (M)',
         onclick: () => { marking = true; render(); host.querySelector('.parts-mark textarea')?.focus(); },
       }, 'Mark', el('kbd', { class: 'key-hint' }, 'M')) : null,
       reviewed ? el('button', {
-        class: 'btn',
+        class: 'btn write-action',
         type: 'button',
         disabled: busy,
         title: 'Open this part again for review',
@@ -427,12 +427,12 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
               el('td', { class: 'parts-value' }, c.after || '—', c.after_source ? [' ', sourceChip(c.after_source)] : null)))))
           : el('p', {}, 'No value changed.'),
         el('p', { class: 'parts-revision-hint' }, 'AI values are drafts. Keep the new part, or undo to put back the old part and its STEP file.'),
-        el('div', { class: 'decision-bar' },
+        el('div', { class: 'decision-bar write-action' },
           el('button', { class: 'btn btn-primary', type: 'button', disabled: busy, onclick: () => settleRevision(part, true) }, 'Keep'),
           el('button', { class: 'btn', type: 'button', disabled: busy, onclick: () => settleRevision(part, false) }, 'Undo')));
     }
     if (canRerun(part) && revisePart) {
-      return el('div', { class: 'parts-rerun-offer' },
+      return el('div', { class: 'parts-rerun-offer write-action' },
         el('button', { class: 'btn btn-primary', type: 'button', disabled: busy, onclick: () => rerunPart(part) }, 'Re-run with this note'),
         el('span', { class: 'parts-revision-hint' }, 'The AI rebuilds only this part from your note (1 to 5 minutes).'));
     }
@@ -503,13 +503,13 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
       return el('section', { class: 'parts-signoff is-signed', 'aria-label': 'Sign-off' },
         icon('check'),
         el('p', {}, el('strong', {}, `Signed off by ${signedOff.name}, ${date}: `), signedOff.statement, '. ', draftLine),
-        el('button', { class: 'btn', type: 'button', disabled: busy, onclick: () => submitSignOff('') }, 'Withdraw'));
+        el('button', { class: 'btn write-action', type: 'button', disabled: busy, onclick: () => submitSignOff('') }, 'Withdraw'));
     }
     // Until every part is reviewed, the review progress in the head says so (its tooltip).
     if (open) return null;
     const name = el('input', { type: 'text', maxlength: '80', placeholder: 'Your name', 'aria-label': 'Your name for the sign-off', value: nameDraft ?? lastName(), oninput: (event) => { nameDraft = event.target.value; } });
     const form = el('form', {
-      class: 'parts-signoff',
+      class: 'parts-signoff write-action',
       'aria-label': 'Sign-off',
       onsubmit: (event) => { event.preventDefault(); submitSignOff(name.value); },
     },

@@ -1,7 +1,7 @@
 // Vessel tabs in the title bar: Run | Parts | Sources | Export | History, and their pages.
 
 import { setVesselTabState, state } from './app_state.js';
-import { invoke } from './api.js';
+import { invoke, readOnly, READ_ONLY_NOTE } from './api.js';
 import { el, fill, icon } from './dom.js';
 import * as fmt from './format.js';
 import { $, statusBadge, chip, showError } from './ui_kit.js';
@@ -98,7 +98,7 @@ function changesSection(vessel) {
   const task = state.task;
   const body = el('div', { class: 'changes-body' }, el('p', { class: 'panel-empty' }, 'Reading the steps…'));
   invoke('get_live_steps', { task, after_sequence: 0 })
-    .then((live) => { if (task === state.task) fill(body, renderChanges(buildChanges(live.steps), { pageUrl: evidencePageUrl, placeOf: sectionPlace, placesIn })); })
+    .then((live) => { if (task === state.task) fill(body, renderChanges(buildChanges(live.steps), { pageUrl: evidencePageUrl, page: state.view?.source_page || null, placeOf: sectionPlace, placesIn })); })
     .catch(() => fill(body, el('p', { class: 'panel-empty' }, 'The steps of this run could not be read.')));
   const run = vessel ? `Run ${runNumber(vessel, task)}` : 'this run';
   return el('section', { class: 'changes', 'aria-labelledby': 'changes-title' },
@@ -122,6 +122,7 @@ export function createVesselPages() {
   exporter = createExport({
     host: $('vessel-page-export'),
     invoke,
+    readOnlyNote: readOnly ? READ_ONLY_NOTE : null,
     captureView: (task, revision) => (state.task === task && state.modelKey?.startsWith(`${task}|${revision}|`) ? model.captureImage() : null),
   });
   // Sources tab (js/sources.js): the files the run was given, and a large view of each page.

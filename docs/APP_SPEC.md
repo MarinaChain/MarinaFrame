@@ -721,7 +721,7 @@ ComponentView {
 ```
 
 Command: `review_component { task, component_id, decision: "accepted"|"marked"|"open", note?: string }` →
-`{ ok: true }`; saved in the app config folder (`part_reviews.json`), not in the run folder. A part with guessed values can be accepted as a draft part; nothing is ever
+`{ ok: true }`; saved in the run folder (`review/part_reviews.json`), so it moves with a copied run (a review kept in the app config by an earlier version is read and moved at the next review). A part with guessed values can be accepted as a draft part; nothing is ever
 "approved" (`engineering_approved` stays false). "marked" needs a note of 1 to 500 characters (what to change).
 
 ### Re-run one part from a mark (2026-11-09)

@@ -329,3 +329,36 @@ fn a_verified_task_has_no_draft_and_keeps_the_verified_model_name() {
         "model.stl"
     );
 }
+
+/// A PNG header of `width` x `height` pixels (all `png_size` reads).
+fn png_header(path: &Path, width: u32, height: u32) {
+    let mut bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR".to_vec();
+    bytes.extend(width.to_be_bytes());
+    bytes.extend(height.to_be_bytes());
+    fs::write(path, bytes).unwrap();
+}
+
+#[test]
+fn a_scaled_page_render_is_sized_in_drawing_pixels() {
+    let tmp = fixture("abstained");
+    let task = tmp.path().join("task");
+    fs::create_dir_all(task.join("domain/inspections/i1")).unwrap();
+    png_header(&task.join("domain/input/source.png"), 3594, 3473);
+    let render = "domain/inspections/i1/source-page.png";
+    png_header(&task.join(render), 3000, 2899);
+    let state = json!({"inspection_artifacts":[{"kind":"source_page","path":render}]});
+    let page = source_page(&task, Some(&state)).unwrap();
+    // The render's image, at the input page's size: section boxes are in drawing pixels.
+    assert_eq!(page.path, render);
+    assert_eq!((page.width, page.height), (3594, 3473));
+    // A render of another shape is not a scaled copy and keeps its own size.
+    png_header(&task.join(render), 3000, 2000);
+    let page = source_page(&task, Some(&state)).unwrap();
+    assert_eq!((page.width, page.height), (3000, 2000));
+    // Without a recorded render, the input page is the page.
+    let page = source_page(&task, None).unwrap();
+    assert_eq!(
+        (page.path.as_str(), page.width, page.height),
+        (INPUT_PAGE, 3594, 3473)
+    );
+}

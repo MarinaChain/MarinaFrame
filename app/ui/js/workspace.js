@@ -31,10 +31,16 @@ let drawingEmpty;
 /** The source view: the sheet a part came from, beside the 3D model (js/provenance.js). */
 let sources;
 
+/** A part for the source view; a steel group carries its member ids (their records show). */
+function partItem(id) {
+  return { kind: 'part', id, members: model?.steelMembersOf(id) || null };
+}
+
 /** Create the panes. Their callbacks reach the rest of the run view only after start. */
 export function createWorkspace() {
   evidence = createEvidenceCard({
     pageUrl: evidencePageUrl,
+    pageSize: () => state.view?.source_page || null,
     inkOf: (id) => live.latestInk().get(id) ?? null,
   });
 
@@ -57,7 +63,7 @@ export function createWorkspace() {
     },
     // The source view follows the pointer in 3D (after a short pause) and the selected part.
     onItemHover: (item) => sources?.hover(item),
-    onPartPick: (id) => sources?.select(id ? { kind: 'part', id } : null),
+    onPartPick: (id) => sources?.select(id ? partItem(id) : null),
     // What the run knows of a part, for its fact card in 3D: the capacity plan row of a tank, the
     // part record, and the source it was read from (the drawing opens beside the model).
     partContext: (id) => {
@@ -69,7 +75,7 @@ export function createWorkspace() {
           label: [summary.title, basis, component.view ? `${component.view} view` : null].filter(Boolean).join(' · '),
           open: () => {
             setLayout('split');
-            sources.select({ kind: 'part', id });
+            sources.select(partItem(id));
           },
         }
         : null;
@@ -305,7 +311,44 @@ export async function showWholeVessel(part) {
   const tanks = (state.view?.components || []).filter((component) => component.op === 'tank');
   model.setSpacesContext({ tankParts: tanks.length, builtTanks: tanks.filter((tank) => tank.built).length });
   $('hull-only').hidden = !model.showsWholeVessel;
+  // The run's caption names the build of the section lines, not the whole vessel (live.js).
+  $('model-caption').hidden = model.showsWholeVessel || !$('model-caption').textContent;
   setPartOutline(part);
+}
+
+/**
+ * The web demo's first view of a run (static/backend.js `view.demo`): the whole vessel, the
+ * section lines off and the hull see-through when the demo says so. The Section lines and
+ * See-through switches change them back.
+ *
+ * `prepareDemoView` runs before the run view draws: until the whole vessel shows, the 3D pane
+ * shows only "Loading the 3D model…", never the hull of the section lines or the lines.
+ * `showDemoView` loads the whole vessel and removes the cover.
+ */
+function demoOpensWholeVessel(demo) {
+  return demo?.whole_vessel_first === true && Boolean(state.view?.whole_vessel_model);
+}
+
+export function prepareDemoView(demo) {
+  if (!demoOpensWholeVessel(demo)) return;
+  if (demo.section_lines === false) model.setSectionLinesShown(false);
+  const pane = $('model-host').closest('.pane-model');
+  pane.classList.add('is-demo-loading');
+  if (!pane.querySelector('.demo-model-loading')) {
+    pane.append(el('p', { class: 'demo-model-loading', role: 'status' }, 'Loading the 3D model…'));
+  }
+}
+
+export async function showDemoView(demo) {
+  if (!demoOpensWholeVessel(demo)) return;
+  try {
+    await showWholeVessel(null);
+    if (demo.see_through === true) model.setSeeThroughHull(true);
+  } finally {
+    const pane = $('model-host').closest('.pane-model');
+    pane.classList.remove('is-demo-loading');
+    pane.querySelector('.demo-model-loading')?.remove();
+  }
 }
 
 /**
@@ -371,6 +414,7 @@ export function installWorkspaceControls() {
   $('hull-only').addEventListener('click', async () => {
     await model.setWholeVessel(null);
     $('hull-only').hidden = true;
+    $('model-caption').hidden = !$('model-caption').textContent;
   });
   $('clear-outline').addEventListener('click', () => setPartOutline(null));
   $('zoom-in').addEventListener('click', () => { live.userMovedCamera(); drawing.zoomIn(); });
