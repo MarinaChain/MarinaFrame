@@ -161,6 +161,11 @@ fn native_slots() -> usize {
         .unwrap_or_else(default_native_slots)
 }
 
+/// Largest inspection worker bound a run may set (each worker holds the drawing).
+/// Without a bound the Python worker pool (parallel.py) shares cores - 2 workers
+/// between all running inspections on the machine.
+pub const MAX_INSPECTION_WORKERS: u32 = 32;
+
 fn open_slot(dir: &Path, slot: usize) -> Result<std::fs::File> {
     let uid = unsafe { libc::geteuid() };
     let name = if slot == 0 {
@@ -487,6 +492,10 @@ fn python_command(
             progress_path(root, &pending.id),
         )
         .env("MARINAFRAME_PROGRESS_REQUEST", &pending.id);
+    // The worker environment is cleared, so the bound is an argument.
+    if let Some(workers) = config.inspection_workers {
+        command.arg("--inspection-workers").arg(workers.to_string());
+    }
     command
 }
 
@@ -508,6 +517,7 @@ fn log_bytes(stdout: &Path, stderr: &Path) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{OnAmbiguity, OperationalLimits, Policy};
 
     #[test]
     fn resource_limit_message_names_stage_and_progress() {
@@ -585,6 +595,49 @@ mod tests {
         assert_eq!(limits.worker_wall_seconds, 0);
         limits.worker_wall_seconds = 86_400;
         limits.validate().unwrap();
+    }
+
+    #[test]
+    fn the_worker_gets_the_inspection_worker_bound_as_an_argument() {
+        let config = |inspection_workers| Config {
+            worker_python: "/not/executed".into(),
+            worker_source: None,
+            source_spec: "/not/executed.json".into(),
+            policy: Policy::Deterministic,
+            limits: OperationalLimits::default(),
+            provider_transfer_authorized: false,
+            authorization_basis: String::new(),
+            model: "m".into(),
+            binary_sha256: "a".repeat(64),
+            on_ambiguity: OnAmbiguity::Draft,
+            fallback_models: vec![],
+            inspection_workers,
+        };
+        let pending = Pending {
+            kind: "worker".into(),
+            id: "worker-1".into(),
+            operation: "inspect_source".into(),
+            response_path: "receipts/worker-1.json".into(),
+            request_path: "requests/worker-1.json".into(),
+            domain_before: None,
+            started_ms: 0,
+        };
+        let count = |inspection_workers| {
+            let argv = python_command(
+                Path::new("/task"),
+                &config(inspection_workers),
+                &pending,
+                Path::new("/spec.json"),
+                Path::new("/response.json"),
+            )
+            .argv();
+            argv.iter()
+                .position(|a| a == "--inspection-workers")
+                .map(|at| argv[at + 1].clone())
+        };
+        assert_eq!(count(Some(3)).as_deref(), Some("3"));
+        // Unset: no bound; the machine-wide pool decides (parallel.py).
+        assert_eq!(count(None), None);
     }
 
     #[test]

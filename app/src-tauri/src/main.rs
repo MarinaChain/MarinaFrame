@@ -286,6 +286,8 @@ async fn set_settings(
                 theme: theme.unwrap_or(current.theme),
                 ai_drafting: ai_drafting.unwrap_or(current.ai_drafting),
                 notify_finished: notify_finished.unwrap_or(current.notify_finished),
+                // No control in the settings page yet: keep the stored value.
+                inspection_workers: current.inspection_workers,
             }
         });
         b.set_settings(next)

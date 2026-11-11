@@ -261,6 +261,13 @@
 - **Trigger:** The Gunnerus display mesh took 60 to 100 s for 3,151 hull faces, even with the triangulation already built. cProfile misattributed the time.
 - **Rule:** In loops over faces or edges, use `vessel_reconstruction.topology` (indexed `FindKey` access) instead of CadQuery `Faces()`, `Edges()`, `Wires()`, `innerWires()` or `tessellate()`. Time OCP-heavy code with direct timers, not only cProfile.
 - **Why:** Ending a Python iteration over an OCP map or array raises `StopIteration` through every OCP exception translator: about 6 ms per call (80 ms the first time), whatever the size.
+- **Recurrence (2026-11-11, lane S):** `rhino_exports.export_3dm` called `face.Wires()` for each of the 19,172 Gunnerus app-hull faces: 256 s of a 377 s hull build (now 10 s). cProfile showed only about 100 s of that build. When fixing this pattern, `rg '\.(Faces|Wires|Edges|innerWires|tessellate)\(\)'` over every exporter, not only the module in hand.
+
+### Read ink for a whole fan at once in stroke tracking (MarinaFrame)
+- **Date:** 2026-11-11
+- **Trigger:** `investigation._track` read ink one sample at a time (`sum(_ink_at(...) for r in radii)` per angle): 49 M calls and 100 M `round()` calls, 300-480 s of the Gunnerus `build_draft`.
+- **Rule:** In per-step search loops over angles and radii, compute all sample points in one array and read the mask once (`_ink_hits`). Keep the result bit-identical: take trig values from the same `math` functions, keep elementwise multiply/add (no reductions that reorder sums), round with `np.rint` (half to even, like `round`), and keep the choice loop in its original order. Check identity on a real drawing (byte compare of the enumerated strokes).
+- **Why:** The panel enumeration fell from 524 s to 139 s with byte-identical output.
 
 ### Test a new spec field through validate_spec (MarinaFrame)
 - **Date:** 2026-11-11

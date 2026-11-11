@@ -37,6 +37,7 @@ impl AppPaths {
             theme: Theme::System,
             ai_drafting: true,
             notify_finished: true,
+            inspection_workers: None,
         }
     }
 }

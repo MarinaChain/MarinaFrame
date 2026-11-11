@@ -23,6 +23,7 @@ fn controlled_config() -> Config {
         authorization_basis: "Explicit no-network protocol fixture".into(),
         model: GO_MODEL.into(),
         fallback_models: vec![],
+        inspection_workers: None,
         binary_sha256: util::file_hash(&std::env::current_exe().unwrap()).unwrap(),
         on_ambiguity: OnAmbiguity::Abstain,
     }

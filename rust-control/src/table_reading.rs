@@ -362,6 +362,7 @@ pub fn read_table(crops_dir: &Path, out: &Path, basis: &str) -> Result<Value> {
         binary_sha256: util::file_hash(&std::env::current_exe().map_err(|_| "binary_path")?)?,
         on_ambiguity: OnAmbiguity::Abstain,
         fallback_models: vec![],
+        inspection_workers: None,
     };
     let mut run = Run {
         out,

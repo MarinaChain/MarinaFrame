@@ -558,6 +558,25 @@ def _ink_at(mask: np.ndarray, x: float, y: float) -> bool:
     return 0 <= row < mask.shape[0] and 0 <= column < mask.shape[1] and bool(mask[row, column])
 
 
+def _ink_hits(mask: np.ndarray, points: np.ndarray) -> np.ndarray:
+    """Ink at many points (..., 2) as (x, y); the same values as _ink_at for each point.
+
+    np.rint rounds half to even, as Python round() does.
+    """
+    columns = np.rint(points[..., 0]).astype(np.int64)
+    rows = np.rint(points[..., 1]).astype(np.int64)
+    inside = (rows >= 0) & (rows < mask.shape[0]) & (columns >= 0) & (columns < mask.shape[1])
+    hits = np.zeros(inside.shape, dtype=bool)
+    hits[inside] = mask[rows[inside], columns[inside]]
+    return hits
+
+
+def _fan_directions(heading: np.ndarray, cosines: np.ndarray, sines: np.ndarray) -> np.ndarray:
+    """Unit directions (n, 2) of the heading turned by each angle; the same values as _rotate."""
+    return np.column_stack([cosines * heading[0] - sines * heading[1],
+                            sines * heading[0] + cosines * heading[1]])
+
+
 def _rotate(vector: np.ndarray, angle: float) -> np.ndarray:
     cos, sin = math.cos(angle), math.sin(angle)
     return np.array([cos * vector[0] - sin * vector[1], sin * vector[0] + cos * vector[1]])
@@ -582,7 +601,8 @@ def _stroke_width(mask: np.ndarray, point: np.ndarray, direction: np.ndarray) ->
 def _recentre(mask: np.ndarray, point: np.ndarray, direction: np.ndarray, radius: int) -> np.ndarray:
     """Move a point across the stroke to the centre of the ink run nearest to it."""
     normal = np.array([-direction[1], direction[0]])
-    offsets = [k for k in range(-radius, radius + 1) if _ink_at(mask, *(point + k * normal))]
+    steps = np.arange(-radius, radius + 1)
+    offsets = steps[_ink_hits(mask, point + steps[:, None] * normal)].tolist()
     if not offsets:
         return point
     # Keep only the contiguous run that is nearest to the point, so that a
@@ -613,16 +633,23 @@ def _track(primary: np.ndarray, full: np.ndarray, start: np.ndarray, heading: np
     searches = ((primary, angles, needed, near),
                 (full, angles[np.abs(angles) <= math.radians(RULER_FOLLOW_FAN_DEG) + 1e-9], len(near), near),
                 (primary, angles, TRACK_MIN_HITS, far))
+    # Per search: the fan's cosines and sines (math.cos and math.sin, as in
+    # _rotate), the turn cost of each angle, and the look-ahead radii. The ink
+    # at every (angle, radius) sample is then read in one array operation.
+    fans = [(mask, np.array([math.cos(a) for a in fan]), np.array([math.sin(a) for a in fan]),
+             [TRACK_TURN_COST_PER_DEG * abs(math.degrees(a)) for a in fan], needed, np.array(radii, dtype=float))
+            for mask, fan, needed, radii in searches]
     points, last_ink, gap, turn, visited = [point], 1, 0.0, 0.0, {}
     for step in range(4 * (height + width)):
         best, search = None, None
-        for search, (mask, fan, needed, radii) in enumerate(searches):
-            for angle in fan:
-                direction = _rotate(heading, angle)
-                hits = sum(_ink_at(mask, *(point + r * direction)) for r in radii)
-                score = hits - TRACK_TURN_COST_PER_DEG * abs(math.degrees(angle))
+        for search, (mask, cosines, sines, turn_costs, needed, radii) in enumerate(fans):
+            directions = _fan_directions(heading, cosines, sines)
+            samples = point + radii[None, :, None] * directions[:, None, :]
+            hit_counts = _ink_hits(mask, samples).sum(axis=1).tolist()
+            for index, hits in enumerate(hit_counts):
+                score = hits - turn_costs[index]
                 if hits >= needed and (best is None or score > best[0]):
-                    best = (score, direction, mask)
+                    best = (score, directions[index], mask)
             if best is not None:
                 break
         on_ink = best is not None and search < 2

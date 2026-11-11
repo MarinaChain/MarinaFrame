@@ -121,6 +121,7 @@ fn app_run_config(
     source_spec: String,
     binary_sha256: String,
     use_model: bool,
+    inspection_workers: Option<u32>,
 ) -> Config {
     Config {
         worker_python,
@@ -145,6 +146,7 @@ fn app_run_config(
         // answer moves the run to Crouton, then DeepSeek (founder decision
         // 2026-11-09). Settings may choose models later.
         fallback_models: DEFAULT_MODELS[1..].iter().map(|m| m.to_string()).collect(),
+        inspection_workers,
     }
 }
 
@@ -155,6 +157,7 @@ fn prepare_run(
     worker_source: Option<&Path>,
     spec_path: &str,
     use_model: bool,
+    inspection_workers: Option<u32>,
 ) -> AppResult<(Config, PathBuf)> {
     let source = util::absolute(Path::new(spec_path))?;
     if !source.is_file() || source.is_symlink() {
@@ -174,6 +177,7 @@ fn prepare_run(
         source.to_string_lossy().into_owned(),
         util::file_hash(&std::env::current_exe().map_err(|_| "binary_path")?)?,
         use_model,
+        inspection_workers,
     );
     let stem = source
         .file_stem()
@@ -208,6 +212,7 @@ pub fn start_run(
     worker_source: Option<&Path>,
     spec_path: &str,
     use_model: bool,
+    inspection_workers: Option<u32>,
 ) -> AppResult<String> {
     let (config, task) = prepare_run(
         runs_folder,
@@ -215,6 +220,7 @@ pub fn start_run(
         worker_source,
         spec_path,
         use_model,
+        inspection_workers,
     )?;
     let location = task.clone();
     spawn_with_store(
@@ -240,7 +246,15 @@ pub fn run_deterministic_now(
     worker_source: Option<&Path>,
     spec_path: &str,
 ) -> AppResult<PathBuf> {
-    let (config, task) = prepare_run(runs_folder, worker_python, worker_source, spec_path, false)?;
+    // No inspection worker bound: the machine-wide worker pool shares the cores.
+    let (config, task) = prepare_run(
+        runs_folder,
+        worker_python,
+        worker_source,
+        spec_path,
+        false,
+        None,
+    )?;
     run_controller(&task, config).map_err(AppError::from_code)?;
     Ok(task)
 }
@@ -446,6 +460,7 @@ mod tests {
             "spec.json".into(),
             "a".repeat(64),
             false,
+            Some(3),
         );
         let mut store = Store::create(&task, controller::new_state(config)).unwrap();
         store.state.status = marinaframe_control::types::Status::Stalled;
@@ -475,6 +490,7 @@ mod tests {
             "spec.json".into(),
             String::new(),
             true,
+            Some(3),
         );
         assert_eq!(ai.on_ambiguity, OnAmbiguity::Draft);
         assert_eq!(ai.policy, Policy::Live);
@@ -488,9 +504,12 @@ mod tests {
             "spec.json".into(),
             String::new(),
             false,
+            Some(3),
         );
         assert_eq!(fallback.on_ambiguity, OnAmbiguity::Draft);
         assert_eq!(fallback.policy, Policy::Deterministic);
         assert!(!fallback.provider_transfer_authorized);
+        // The app passes the inspection worker bound explicitly to the controller.
+        assert_eq!(fallback.inspection_workers, Some(3));
     }
 }
