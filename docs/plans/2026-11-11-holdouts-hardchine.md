@@ -11,7 +11,19 @@ table into the truth format of `benchmarks/deadrise_holdout/score.py` (`parse_tr
 bow/stern side assignment twice (lesson of 2026-11-09), and commit one protocol per boat with
 pinned SHA-256 values before any run.
 
-## State: BLOCKED at the download step (no sheet, no truth, no protocol)
+## Update (2026-11-11, after the PM download)
+
+The PM downloaded two sheets through a normal browser. Both SHA-256 values match SOURCE.md.
+- Cama Beach Skiff No. 22 (WA-199): hard-chine. Truth frozen (`work/holdout/cama_beach_skiff_22/truth.json`,
+  SHA-256 `473ef776...1b1e`; two blind readings agree on all 77 cells). Sides read twice and in
+  agreement. Protocol committed: `docs/BODY_PLAN_CHINE.md`, "Holdout protocol: CAMA BEACH SKIFF No. 22".
+- Davis Boat (WA-227): round-bilge double-ender, dropped.
+- KATHRYN: not downloaded (rounded chine).
+
+**Resume point:** calibration of CAMA BEACH SKIFF No. 22 by an agent that has not seen the truth
+(step 1 of its protocol), then one run. No reader has run on it.
+
+## Earlier state: BLOCKED at the download step (no sheet, no truth, no protocol)
 
 Access checks from this host on 2026-11-11:
 
