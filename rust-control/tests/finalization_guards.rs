@@ -174,6 +174,7 @@ fn prepare_template() -> tempfile::TempDir {
         authorization_basis: "Controlled finalization-guard fixture; no transfer".into(),
         model: GO_MODEL.into(),
         fallback_models: vec![],
+        inspection_workers: None,
         binary_sha256: util::file_hash(&std::env::current_exe().unwrap()).unwrap(),
         on_ambiguity: OnAmbiguity::Abstain,
     };

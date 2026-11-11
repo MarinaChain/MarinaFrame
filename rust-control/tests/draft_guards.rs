@@ -88,6 +88,7 @@ fn config(directory: &Path, on_ambiguity: OnAmbiguity) -> Config {
         authorization_basis: "Draft guard fixture; no transfer".into(),
         model: GO_MODEL.into(),
         fallback_models: vec![],
+        inspection_workers: None,
         binary_sha256: util::file_hash(&std::env::current_exe().unwrap()).unwrap(),
         on_ambiguity,
     }

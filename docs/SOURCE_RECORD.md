@@ -59,8 +59,37 @@ beside `<stem>_capacity_plan.csv`.
 
 ## Older runs
 
-A run made before source records has none. The app reads such a run as before and says
-"No source record. Run again to record where this came from."
+A run made before source records can be refreshed without rebuilding geometry:
+
+```sh
+vessel-reconstruct re-export RUN --revision r1
+# Or the desktop executable, without opening a window:
+MarinaFrame re-export RUN --revision r1
+# Explicitly translate existing STEP to newer formats (can take longer):
+vessel-reconstruct re-export RUN --revision r1 --cad-format iges --cad-format 3dm
+```
+
+Only the current finished revision is accepted. The command holds `controller.lock`
+through atomic directory exchange and checks ownership afterwards. The same locked
+inode is present in both directories. A post-publication check failure rolls back
+the exchange. If the filesystem also refuses rollback, the original snapshot is
+retained in the sibling `.RUN.reexport-*` directory for recovery, never deleted.
+
+The refresh writes `sources/records.json` with section and component records, the
+selected revision and the original result digest. App readers use it only as a
+fallback for missing native records and reject it after the revision changes.
+Stored component argument provenance can supply source regions; missing section
+regions stay `unknown`. Sealed build records and all existing geometry stay unchanged.
+The command creates missing portable review/presentation defaults, retains registered
+sheets, and creates an empty sheet registry if none exists. It does not locate or
+render missing drawings; use `scripts/add_run_sheets.py` with explicit hash-pinned
+sources separately. Legacy app review decisions remain available.
+
+Current packages go in `exports/`; changes and protected hashes go in
+`reexport/history.json` and `reexport/manifest.json`. Missing tank/structure inputs
+are not inferred. Missing native formats stay absent unless explicitly requested.
+Rhino conversion can use the existing exporter's labelled mesh fallback; it does
+not alter the source STEP. Without a refresh, the app still shows no source record.
 
 ## In the app
 

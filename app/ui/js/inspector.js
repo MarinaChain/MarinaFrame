@@ -182,7 +182,7 @@ function bodyPlanCheckCard(check) {
     ...check.flags.map((flag) => el('p', { class: 'body-plan-check-flag selectable-text' }, flag)),
     ...check.notes.concat(check.warnings).map((note) => el('p', { class: 'check-value selectable-text' }, note)),
     image,
-    el('p', { class: 'chip-row' },
+    el('p', { class: 'chip-row write-action' },
       el('button', { type: 'button', class: 'btn', onclick: () => save('accepted') }, 'Calibration is right'),
       el('button', { type: 'button', class: 'btn', onclick: choose }, 'Something is wrong'),
       decision !== 'open' ? el('button', { type: 'button', class: 'btn', onclick: () => save('open') }, 'Undo') : null),

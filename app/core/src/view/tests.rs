@@ -343,7 +343,7 @@ fn a_ga_reading_run_opens_with_its_reading_and_page() {
     let domain =
         json!({"inspection_artifacts":[{"kind":"source_page","path":"ga_reading/X_GA.png"}]});
     fs::write(task.join("domain/state.json"), domain.to_string()).unwrap();
-    fs::write(task.join("ga_reading/X_GA.png"), png_header(40, 20)).unwrap();
+    png_header(&task.join("ga_reading/X_GA.png"), 40, 20);
     let reading = json!({"schema":crate::ga_reading::SCHEMA,"engineering_approved":false,
         "particulars":{},"counts":{},"spaces":[]});
     fs::write(
@@ -361,11 +361,35 @@ fn a_ga_reading_run_opens_with_its_reading_and_page() {
     assert!(view.model.is_none() && view.sections.is_empty());
 }
 
-/// A minimal PNG header of `width` x `height` (the view reads only its header).
-fn png_header(width: u32, height: u32) -> Vec<u8> {
-    let mut bytes = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec();
-    bytes.extend_from_slice(&width.to_be_bytes());
-    bytes.extend_from_slice(&height.to_be_bytes());
-    bytes.extend_from_slice(&[8, 0, 0, 0, 0, 0, 0, 0, 0]);
-    bytes
+/// A PNG header of `width` x `height` pixels (all `png_size` reads).
+fn png_header(path: &Path, width: u32, height: u32) {
+    let mut bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR".to_vec();
+    bytes.extend(width.to_be_bytes());
+    bytes.extend(height.to_be_bytes());
+    fs::write(path, bytes).unwrap();
+}
+
+#[test]
+fn a_scaled_page_render_is_sized_in_drawing_pixels() {
+    let tmp = fixture("abstained");
+    let task = tmp.path().join("task");
+    fs::create_dir_all(task.join("domain/inspections/i1")).unwrap();
+    png_header(&task.join("domain/input/source.png"), 3594, 3473);
+    let render = "domain/inspections/i1/source-page.png";
+    png_header(&task.join(render), 3000, 2899);
+    let state = json!({"inspection_artifacts":[{"kind":"source_page","path":render}]});
+    let page = source_page(&task, Some(&state)).unwrap();
+    // The render's image, at the input page's size: section boxes are in drawing pixels.
+    assert_eq!(page.path, render);
+    assert_eq!((page.width, page.height), (3594, 3473));
+    // A render of another shape is not a scaled copy and keeps its own size.
+    png_header(&task.join(render), 3000, 2000);
+    let page = source_page(&task, Some(&state)).unwrap();
+    assert_eq!((page.width, page.height), (3000, 2000));
+    // Without a recorded render, the input page is the page.
+    let page = source_page(&task, None).unwrap();
+    assert_eq!(
+        (page.path.as_str(), page.width, page.height),
+        (INPUT_PAGE, 3594, 3473)
+    );
 }

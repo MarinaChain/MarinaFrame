@@ -462,6 +462,7 @@ mod tests {
             binary_sha256: "a".repeat(64),
             on_ambiguity: OnAmbiguity::Abstain,
             fallback_models: vec![],
+            inspection_workers: None,
         })
     }
     #[test]

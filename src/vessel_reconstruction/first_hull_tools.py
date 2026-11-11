@@ -59,6 +59,26 @@ def prior_dimensions(spec: dict, sections: list[dict]) -> PriorDimensions | None
     return panel_dimensions(sections)
 
 
+def half_beam_limit(description: dict | None, prior: PriorDimensions | None) -> float | None:
+    """Half-beam that fitted rows may not exceed (form_fit.fitted_breadth_cap), or None.
+
+    The beam printed on the sheet and transcribed by the model comes first,
+    also when blurred panels measured otherwise (shipd-1-08158-3v-L2: printed
+    19.70 m, panels 24.8 and 27.9 m) and the description therefore left it out
+    of the spec. A misread large value limits nothing, and the widest traced
+    anchor always raises the limit. Else the description's beam that sized the
+    prior; never the panel extents (an upper estimate).
+    """
+    beam = ((description or {}).get("principal") or {}).get("beam")
+    if isinstance(beam, dict):
+        printed = [m.get("value") for m in beam.get("measurements", []) if m.get("view_id") == "printed_dimension"]
+        if printed and isinstance(printed[0], (int, float)) and printed[0] > 0:
+            return float(printed[0]) / 2
+    if prior is not None and prior.source == "vessel description":
+        return float(prior.half_beam_m)
+    return None
+
+
 # A body-plan top more than this many body-plan pixels above the profile's deck
 # line ran on into other ink (a label, a neighbouring curve); it is cut at the deck.
 DECK_TOP_TOLERANCE_PX = 3.0
@@ -397,8 +417,9 @@ def build_first_hull(tools):
             return True
         return build_failure(outcome)
 
-    table, success, left_out = first_hull(sections, anchors, base_spec, build,
-                                          prior=prior_dimensions(base_spec, sections), extend=extend)
+    prior = prior_dimensions(base_spec, sections)
+    table, success, left_out = first_hull(sections, anchors, base_spec, build, prior=prior, extend=extend,
+                                          half_beam_limit_m=half_beam_limit(description, prior))
     if not success:
         reason = getattr(success, "reason", "build_failed")
         return tools._observation(False, "blocked", error_code=f"first_hull_{reason}",

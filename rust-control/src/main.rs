@@ -48,7 +48,7 @@ fn execute() -> Result<serde_json::Value> {
     if command == "help" || command == "--help" {
         return Ok(
             json!({"program":"MarinaFrame 0.4.0 Rust authoritative controller","commands":{
-        "run":"--task DIR --source SPEC --worker-python PYTHON [--worker-source SRC] [--policy deterministic|live] [--on-ambiguity abstain|draft] [--provider-transfer-basis TEXT] [--model deepseek-v4.1-flash|crouton-alpha-free[,FALLBACK]] [--model-review true] [--context stateless|conversation] [--max-context-tokens 8000..120000] [--investigation-thinking disabled|enabled] [--max-output-tokens 16..32768] [--request-wall-seconds 1..600] [--investigation-temperature 0..2] [--phase1-only true] [--steps N]",
+        "run":"--task DIR --source SPEC --worker-python PYTHON [--worker-source SRC] [--policy deterministic|live] [--on-ambiguity abstain|draft] [--provider-transfer-basis TEXT] [--model deepseek-v4.1-flash|crouton-alpha-free[,FALLBACK]] [--model-review true] [--context stateless|conversation] [--max-context-tokens 8000..120000] [--investigation-thinking disabled|enabled] [--max-output-tokens 16..32768] [--request-wall-seconds 1..600] [--investigation-temperature 0..2] [--phase1-only true] [--inspection-workers 1..32] [--steps N]",
         "resume":"--task DIR [--continue-after-unknown true] [--clear-cancel true] [--steps N]",
         "step":"--task DIR --intervention JSON --actor human_operator|assistant_operator --note TEXT",
         "revise":"--task DIR --request FILE.json (operator mark-and-revise request; one focused model pass, see docs/APP_SPEC.md)",
@@ -208,6 +208,17 @@ fn execute() -> Result<serde_json::Value> {
             None => models::DEFAULT_MODELS.map(String::from).to_vec(),
         };
         let model = models.remove(0);
+        // Unset: no bound; the machine-wide worker pool shares the cores.
+        let inspection_workers = args
+            .remove("inspection-workers")
+            .map(|value| {
+                value
+                    .parse::<u32>()
+                    .ok()
+                    .filter(|n| (1..=worker::MAX_INSPECTION_WORKERS).contains(n))
+                    .ok_or("invalid_inspection_workers")
+            })
+            .transpose()?;
         let count = steps(&mut args)?;
         no_extra(&args)?;
         let config = Config {
@@ -222,6 +233,7 @@ fn execute() -> Result<serde_json::Value> {
             fallback_models: models,
             binary_sha256: util::file_hash(&std::env::current_exe().map_err(|_| "binary_path")?)?,
             on_ambiguity,
+            inspection_workers,
         };
         let mut store = store::Store::create(&task, controller::new_state(config))?;
         if model_review {

@@ -21,6 +21,7 @@ pub mod model_usage;
 pub mod notify;
 pub mod part_revise;
 pub mod parts;
+pub mod presentation;
 pub mod provider_view;
 pub mod release_ui;
 pub mod run_tables;

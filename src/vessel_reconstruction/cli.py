@@ -16,7 +16,21 @@ def main(argv=None) -> int:
     p.add_argument("--no-cad", action="store_true", help="Skip STEP/STL exports for fast evaluations; geometry kernel and mesh still run.")
     p = sub.add_parser("verify", help="Check the source and export hashes of a run.")
     p.add_argument("run", type=Path)
+    p = sub.add_parser("re-export", help="Refresh a finished app run without rebuilding geometry.")
+    p.add_argument("run", type=Path)
+    p.add_argument("--revision", required=True)
+    p.add_argument("--cad-format", action="append", choices=("iges", "3dm"), default=[])
     args = parser.parse_args(argv)
+    if args.command == "re-export":
+        from .reexport import refresh
+        from .exports.source import ExportError
+        try:
+            result = refresh(args.run, args.revision, cad_formats=args.cad_format)
+        except (OSError, ValueError, RuntimeError, ExportError) as error:
+            print(json.dumps({"error": str(error)}), file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2))
+        return 0
     if args.command == "reconstruct":
         from .isolation import run_isolated
         try:

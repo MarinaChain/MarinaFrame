@@ -182,13 +182,16 @@ def _mesh_face(face: cq.Face) -> rhino.Mesh:
     import rhino3dm as rhino
     from OCP.BRepMesh import BRepMesh_IncrementalMesh
 
+    from . import topology
+
     BRepMesh_IncrementalMesh(face.wrapped, MESH_DEFLECTION_MM, False, MESH_ANGULAR_DEFLECTION_RAD, False)
-    vertices, triangles = face.tessellate(MESH_DEFLECTION_MM, MESH_ANGULAR_DEFLECTION_RAD)
+    # The same values as face.tessellate, without its slow OCP iteration end.
+    vertices, triangles = topology.face_triangulation(face, MESH_DEFLECTION_MM, MESH_ANGULAR_DEFLECTION_RAD)
     mesh = rhino.Mesh()
     mesh.Vertices.UseDoublePrecisionVertices = True
-    for vertex in vertices:
-        mesh.Vertices.AddPoint3d(vertex.x, vertex.y, vertex.z)
-    for triangle in triangles:
+    for x, y, z in vertices.tolist():
+        mesh.Vertices.AddPoint3d(x, y, z)
+    for triangle in triangles.tolist():
         mesh.Faces.AddFace(*triangle)
     if not mesh.IsValid:
         raise GeometryError("The 3dm trimmed face mesh is invalid.")
@@ -198,6 +201,7 @@ def _mesh_face(face: cq.Face) -> rhino.Mesh:
 def export_3dm(parts: Iterable[CadPart], path: Path) -> dict[str, int]:
     """Write named, layered faces in millimetres and return representation counts."""
     import rhino3dm as rhino
+    from . import topology
 
     model = rhino.File3dm()
     model.Settings.ModelUnitSystem = rhino.UnitSystem.Millimeters
@@ -214,12 +218,14 @@ def export_3dm(parts: Iterable[CadPart], path: Path) -> dict[str, int]:
             layer = rhino.Layer()
             layer.Name = part.layer
             layers[part.layer] = model.Layers.Add(layer)
-        for index, face in enumerate(part.shape.Faces()):
+        # topology lists the same faces and wires as Faces() and Wires(), by index:
+        # the end of an OCP iteration costs about 6 ms, once per call (topology.py).
+        for index, face in enumerate(topology.faces(part.shape)):
             attributes = rhino.ObjectAttributes()
             attributes.Name = part.part_id
             attributes.LayerIndex = layers[part.layer]
             attributes.SetUserString("source_face_index", str(index))
-            inner_holes = max(0, len(face.Wires()) - 1)
+            inner_holes = max(0, len(topology.wires(face)) - 1)
             if not inner_holes and not _is_trimmed(face):
                 model.Objects.AddSurface(_nurbs_surface(face), attributes)
                 counts["exact_untrimmed"] += 1

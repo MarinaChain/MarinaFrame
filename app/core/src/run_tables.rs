@@ -408,6 +408,34 @@ pub fn structure_role(name: &str) -> Option<&'static str> {
         .map(|(_, role)| *role)
 }
 
+/// The largest steel source-record file read (one record per member; a ship has thousands).
+const STEEL_RECORDS_MAX_BYTES: usize = 16 * 1024 * 1024;
+
+/// The source records of the steel members (`structure/<stem>_source_records.json`, schema
+/// source-record/v1): the `records` object, member id -> record. None without such a file.
+pub fn steel_records(task: &Path) -> Option<Value> {
+    let folder = task.join(STRUCTURE_FOLDER);
+    let mut names: Vec<String> = std::fs::read_dir(&folder)
+        .ok()?
+        .filter_map(Result::ok)
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter(|name| name.ends_with(crate::source_record::TANK_RECORDS_SUFFIX))
+        .collect();
+    names.sort();
+    let path = folder.join(names.first()?);
+    if std::fs::symlink_metadata(&path)
+        .ok()?
+        .file_type()
+        .is_symlink()
+    {
+        return None;
+    }
+    let bytes = marinaframe_control::util::read_bounded(&path, STEEL_RECORDS_MAX_BYTES).ok()?;
+    let mut file: Value = serde_json::from_slice(&bytes).ok()?;
+    let records = file.get_mut("records")?.take();
+    records.is_object().then_some(records)
+}
+
 /// The steel tables and OCX files of the run's structure folder, by name.
 pub fn structure_files(task: &Path) -> Vec<StructureFile> {
     let mut files: Vec<StructureFile> = std::fs::read_dir(task.join(STRUCTURE_FOLDER))

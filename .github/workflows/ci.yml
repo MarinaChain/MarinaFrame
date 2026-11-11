@@ -94,7 +94,8 @@ jobs:
           # Split its test cases; assign every other file as a unit.
           slow_file = Path('tests/test_body_plan_polyline.py')
           files = sorted(p for p in Path('tests').rglob('*.py')
-                         if p.name.startswith('test_') or p.name.endswith('_test.py'))
+                         if (p.name.startswith('test_') or p.name.endswith('_test.py'))
+                         and p.name != 'test_linux_sandbox_live.py')
           selected = [str(p) for i, p in enumerate(files) if i % 4 == shard or p == slow_file]
           if not selected:
               raise SystemExit('Empty shard')
@@ -154,7 +155,8 @@ jobs:
           from pathlib import Path
           import pytest
           files = sorted(p for p in Path('tests').rglob('*.py')
-                         if p.name.startswith('test_') or p.name.endswith('_test.py'))
+                         if (p.name.startswith('test_') or p.name.endswith('_test.py'))
+                         and p.name != 'test_linux_sandbox_live.py')
           selected = [str(p) for i, p in enumerate(files) if i % 2 == int(os.environ['SHARD'])]
           if not selected:
               raise SystemExit('Empty shard')
@@ -196,6 +198,12 @@ jobs:
             ~/.cargo/git
             target
           key: rust-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.job }}
+      - name: Build Linux sandbox launcher
+        run: cargo build --locked -p marinaframe-control --bin marinaframe-sandbox
+      - name: Test live Linux sandbox policy (required kernel features)
+        run: |
+          cargo test --locked -p marinaframe-control --test linux_sandbox
+          MARINAFRAME_SANDBOX_LAUNCHER="$PWD/target/debug/marinaframe-sandbox" python -m pytest -q -p no:cacheprovider tests/test_linux_sandbox.py tests/test_linux_sandbox_live.py
       - run: cargo test --locked --workspace --exclude marinaframe-app
   rust-cad:
     name: Rust real CAD

@@ -40,6 +40,7 @@
 - **Trigger:** W13 file/network tests first passed on Python import-path denial; socket construction was also mistaken for a network operation.
 - **Rule:** Use isolated Python for direct OS probes, require the expected forbidden-operation failure, and mutation-check the exact file or network permission. Test bind/connect, not only socket construction.
 - **Why:** An earlier permission error can hide a missing guard; Seatbelt permits socket construction without permitting network use.
+- **Artifact correction (2026-11-12):** Landlock target checks protect the worker, not later unsandboxed artifact consumers. Deny model-created symlinks (MAKE_SYM) unless every host consumer opens all path components and the final regular file through no-follow descriptors. Test a trusted pre-existing symlink for target escape separately from model symlink-creation denial.
 
 ### Repartitioned holdouts are hull-disjoint, not family-disjoint
 - **Date:** 2026-11-08
@@ -261,6 +262,13 @@
 - **Trigger:** The Gunnerus display mesh took 60 to 100 s for 3,151 hull faces, even with the triangulation already built. cProfile misattributed the time.
 - **Rule:** In loops over faces or edges, use `vessel_reconstruction.topology` (indexed `FindKey` access) instead of CadQuery `Faces()`, `Edges()`, `Wires()`, `innerWires()` or `tessellate()`. Time OCP-heavy code with direct timers, not only cProfile.
 - **Why:** Ending a Python iteration over an OCP map or array raises `StopIteration` through every OCP exception translator: about 6 ms per call (80 ms the first time), whatever the size.
+- **Recurrence (2026-11-11, lane S):** `rhino_exports.export_3dm` called `face.Wires()` for each of the 19,172 Gunnerus app-hull faces: 256 s of a 377 s hull build (now 10 s). cProfile showed only about 100 s of that build. When fixing this pattern, `rg '\.(Faces|Wires|Edges|innerWires|tessellate)\(\)'` over every exporter, not only the module in hand.
+
+### Read ink for a whole fan at once in stroke tracking (MarinaFrame)
+- **Date:** 2026-11-11
+- **Trigger:** `investigation._track` read ink one sample at a time (`sum(_ink_at(...) for r in radii)` per angle): 49 M calls and 100 M `round()` calls, 300-480 s of the Gunnerus `build_draft`.
+- **Rule:** In per-step search loops over angles and radii, compute all sample points in one array and read the mask once (`_ink_hits`). Keep the result bit-identical: take trig values from the same `math` functions, keep elementwise multiply/add (no reductions that reorder sums), round with `np.rint` (half to even, like `round`), and keep the choice loop in its original order. Check identity on a real drawing (byte compare of the enumerated strokes).
+- **Why:** The panel enumeration fell from 524 s to 139 s with byte-identical output.
 
 ### Test a new spec field through validate_spec (MarinaFrame)
 - **Date:** 2026-11-11
@@ -291,3 +299,21 @@
 - **Trigger:** GA extents regressed between development rounds (lane W). The request gave label places in the planned image size, but the byte limit shrank the images afterwards, so places were 11 % off; the model wrote "label positions do not match the drawing" and boxed fewer spaces. It also boxed 20 of 71 spaces asked in one request (43 of 43 when asked 43).
 - **Rule:** Compute every pixel value that a request states (places, boxes) after encoding, from the sizes of the images written, and test it with a forced shrink. Read the model's free-text note of each reply: it named both causes. Ask a model for at most about 20 items per request, most useful first. Compare each development round per ship with the last good round before calling it better.
 - **Why:** A coordinate frame that is off by a resize looks like model weakness, and a long list silently returns a partial answer.
+
+### Keep truth and benchmark inputs out of temporary folders; never clean temp folders by age (MarinaFrame)
+- **Date:** 2026-11-11
+- **Trigger:** To free disk space, the PM deleted every session-scratchpad folder unchanged for 3 hours. One of them (`scratchpad/wv-agent/`) held the only copies of the C.A. Thayer and Balclutha development truth files, which lane N still needed; other truth files lived under `/private/tmp/claude-501/<boat>/`. They had to be re-transcribed.
+- **Rule:** Store every truth file, calibration and benchmark input in the git-ignored `work/` tree (truth: `work/dev-truth/<boat>/`, holdouts: `work/holdout/<boat>/`) with a SHA256SUMS file, never in a scratchpad or `/tmp`. When freeing space, delete only build output (`target/`) and folders you made yourself and know are unused; never delete by age in shared temporary folders while lanes run.
+- **Why:** Temporary folders look disposable, and an age rule cannot tell a lane's long-lived input from leftover work.
+
+### The gdrive-mc remote needs the shared-drive flag
+- **Date:** 2026-11-12
+- **Trigger:** An archive upload to `gdrive-mc:MarinaFrame Data/...` without a flag went to the personal My Drive, and a re-check of verified uploads showed every file as missing.
+- **Rule:** For MarinaFrame Data, always pass `--drive-team-drive 0AIHWIsMcKqIRUk9PVA` to every rclone call on `gdrive-mc` (copy, check, lsf, purge). Before you upload, confirm with `rclone lsf` that the destination folder exists on the shared drive. Archive to Drive only data that we still need; scratch runs of merged lanes do not go to Drive.
+- **Why:** The remote config has an empty `team_drive`, so without the flag rclone uses My Drive. The user wants Drive kept organized and small.
+
+### Check untracked files before you remove a worktree
+- **Date:** 2026-11-12
+- **Trigger:** A disk cleanup removed "merged and clean" worktrees with `git worktree remove --force`. The clean check used `--untracked-files=no`, so an uncommitted Sol design file (docs/plans/2026-11-12-linux-sandbox.md) was deleted.
+- **Rule:** A worktree is removable only when `git status --porcelain --untracked-files=normal` is empty (ignored files such as target/ and work/ may go). Tell lanes to commit design files when they write them.
+- **Why:** `--force` deletes untracked files, and "HEAD is merged" says nothing about files that were never committed.

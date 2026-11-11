@@ -39,7 +39,7 @@ const round = (value) => Math.round(value * 10) / 10;
  */
 export function createMarkTool({ invoke, drawing, drawingHost, strip, context, onSent, onError }) {
   const button = el('button', {
-    class: 'btn btn-ghost btn-small mark-toggle',
+    class: 'btn btn-ghost btn-small mark-toggle write-action',
     type: 'button',
     'aria-pressed': 'false',
     title: 'Mark part of the drawing, or pick a section below or in 3D, and say what to fix (M)',
@@ -289,7 +289,7 @@ export function createMarkTool({ invoke, drawing, drawingHost, strip, context, o
     if (revision.operator_forced) return el('p', { class: 'mark-forced' }, 'Kept by a person; the fit did not improve.');
     if (!revision.can_keep_anyway) return null;
     const keep = el('button', {
-      class: 'btn btn-small mark-keep', type: 'button',
+      class: 'btn btn-small mark-keep write-action', type: 'button',
       title: 'Use this edit although the drawing fit did not improve. It is recorded as kept by a person.',
       onclick: async () => {
         keep.disabled = true;

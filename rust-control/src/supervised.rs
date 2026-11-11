@@ -194,6 +194,10 @@ impl WorkerCommand {
         for key in BASE_ENVIRONMENT {
             worker.pass_through(key);
         }
+        // Trusted deployment setting, not a credential. Nested CAD revision
+        // workers must retain the explicit native sandbox executable location.
+        #[cfg(target_os = "linux")]
+        worker.pass_through("MARINAFRAME_SANDBOX_LAUNCHER");
         worker
             .env("PYTHONDONTWRITEBYTECODE", "1")
             .env("PYTHONUNBUFFERED", "1")
@@ -227,6 +231,15 @@ impl WorkerCommand {
     pub fn env(&mut self, key: impl AsRef<OsStr>, value: impl AsRef<OsStr>) -> &mut Self {
         self.command.env(key, value);
         self
+    }
+
+    /// The arguments after the program, for tests.
+    #[cfg(test)]
+    pub(crate) fn argv(&self) -> Vec<String> {
+        self.command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect()
     }
 
     pub fn arg(&mut self, arg: impl AsRef<OsStr>) -> &mut Self {
