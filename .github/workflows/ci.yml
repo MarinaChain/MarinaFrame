@@ -203,7 +203,10 @@ jobs:
       - name: Build Linux sandbox launcher
         run: cargo build --locked -p marinaframe-control --bin marinaframe-sandbox
       - name: Trace contained real CAD syscall usage
-        run: MARINAFRAME_SANDBOX_LAUNCHER="$PWD/target/debug/marinaframe-sandbox" python scripts/trace_linux_cad.py --out work/linux-cad-trace
+        run: |
+          mkdir -p work
+          MARINAFRAME_SANDBOX_LAUNCHER="$PWD/target/debug/marinaframe-sandbox" strace -f -c -o work/linux-cad-syscalls.txt python scripts/trace_linux_cad.py --out work/linux-cad-trace
+          cat work/linux-cad-syscalls.txt
       - name: Test live Linux sandbox policy (required kernel features)
         run: |
           cargo test --locked -p marinaframe-control --test linux_sandbox

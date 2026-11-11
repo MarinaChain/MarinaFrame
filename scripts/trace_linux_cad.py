@@ -39,10 +39,10 @@ def main():
     payload = [*command[:5], '-c', CAD_PROBE]
     environment = safe_worker_environment()
     environment.update(HOME=str(task/'work'), TMPDIR=str(task/'work'), PYTHONDONTWRITEBYTECODE='1')
-    summary = root/'syscalls.txt'
-    result = subprocess.run(['strace', '-f', '-c', '-o', str(summary), '--', *payload], env=environment)
+    # CI traces this trusted supervisor with -f, preserving the launcher's
+    # expected parent PID. Wrapping only the launcher would insert strace as parent.
+    result = subprocess.run(payload, env=environment)
     print(f'Architecture: {platform.machine()}; policy: {label}; exit: {result.returncode}', flush=True)
-    print(summary.read_text(), flush=True)
     if result.returncode or not (task/'work'/'finished').is_file():
         raise SystemExit('Contained CAD trace fixture failed')
     return 0
