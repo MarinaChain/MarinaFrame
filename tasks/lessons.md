@@ -292,3 +292,9 @@
 - **Trigger:** To free disk space, the PM deleted every session-scratchpad folder unchanged for 3 hours. One of them (`scratchpad/wv-agent/`) held the only copies of the C.A. Thayer and Balclutha development truth files, which lane N still needed; other truth files lived under `/private/tmp/claude-501/<boat>/`. They had to be re-transcribed.
 - **Rule:** Store every truth file, calibration and benchmark input in the git-ignored `work/` tree (truth: `work/dev-truth/<boat>/`, holdouts: `work/holdout/<boat>/`) with a SHA256SUMS file, never in a scratchpad or `/tmp`. When freeing space, delete only build output (`target/`) and folders you made yourself and know are unused; never delete by age in shared temporary folders while lanes run.
 - **Why:** Temporary folders look disposable, and an age rule cannot tell a lane's long-lived input from leftover work.
+
+### The gdrive-mc remote needs the shared-drive flag
+- **Date:** 2026-11-12
+- **Trigger:** An archive upload to `gdrive-mc:MarinaFrame Data/...` without a flag went to the personal My Drive, and a re-check of verified uploads showed every file as missing.
+- **Rule:** For MarinaFrame Data, always pass `--drive-team-drive 0AIHWIsMcKqIRUk9PVA` to every rclone call on `gdrive-mc` (copy, check, lsf, purge). Before you upload, confirm with `rclone lsf` that the destination folder exists on the shared drive. Archive to Drive only data that we still need; scratch runs of merged lanes do not go to Drive.
+- **Why:** The remote config has an empty `team_drive`, so without the flag rclone uses My Drive. The user wants Drive kept organized and small.
