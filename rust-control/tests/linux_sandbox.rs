@@ -95,6 +95,8 @@ fn unsupported_and_broad_configurations_fail_before_payload() {
     for config in [
         json!({"minimum_landlock_abi": 999}),
         json!({"runtime_paths": ["/"]}),
+        json!({"runtime_paths": [std::env::var_os("HOME").unwrap()]}),
+        json!({"task": "/opt", "work": "/opt/work"}),
     ] {
         let output = probe("print('PAYLOAD')", config);
         assert_eq!(output.status.code(), Some(125));
@@ -159,6 +161,50 @@ fn cross_process_resource_and_scheduler_syscalls_are_denied() {
         // seccomp before the kernel checks those arguments.
         success(&format!("import ctypes,errno\nlibc=ctypes.CDLL(None,use_errno=True)\nprint('REACHED',flush=True)\nassert libc.syscall(ctypes.c_long({number}), -1, None, 0, 0) == -1\nassert ctypes.get_errno() == errno.EPERM"));
     }
+}
+
+#[test]
+fn asynchronous_signal_ownership_is_denied() {
+    // Use this sandbox's own PID, never a controller/runner PID. Even if the
+    // guard regresses, the probe cannot signal the host test runner.
+    success("import os,fcntl,signal,ctypes,errno\nprint('REACHED',flush=True)\nr,w=os.pipe()\nlibc=ctypes.CDLL(None,use_errno=True)\nfor cmd,arg in [(fcntl.F_SETOWN,os.getpid()),(fcntl.F_SETOWN,-os.getpid()),(10,signal.SIGKILL),(15,0)]:\n try: fcntl.fcntl(r,cmd,arg)\n except OSError as e: assert e.errno==errno.EPERM\n else: raise AssertionError('async signal command allowed')\nfor request in [0x8901,0x8902]:\n target=ctypes.c_int(os.getpid())\n assert libc.ioctl(r,ctypes.c_ulong(request),ctypes.byref(target))==-1\n assert ctypes.get_errno()==errno.EPERM\nfcntl.fcntl(r,fcntl.F_SETFL,os.O_ASYNC|os.O_NONBLOCK)\nos.write(w,b'x')\nassert os.read(r,1)==b'x'");
+}
+
+#[test]
+fn host_ipc_and_cross_process_calls_are_denied() {
+    for number in [
+        libc::SYS_shmget,
+        libc::SYS_shmat,
+        libc::SYS_shmctl,
+        libc::SYS_shmdt,
+        libc::SYS_msgget,
+        libc::SYS_msgsnd,
+        libc::SYS_msgrcv,
+        libc::SYS_msgctl,
+        libc::SYS_semget,
+        libc::SYS_semop,
+        libc::SYS_semtimedop,
+        libc::SYS_semctl,
+        libc::SYS_mq_open,
+        libc::SYS_mq_unlink,
+        libc::SYS_mq_timedsend,
+        libc::SYS_mq_timedreceive,
+        libc::SYS_mq_notify,
+        libc::SYS_mq_getsetattr,
+        libc::SYS_ioprio_set,
+        libc::SYS_move_pages,
+        libc::SYS_migrate_pages,
+        libc::SYS_kcmp,
+        libc::SYS_syslog,
+        libc::SYS_personality,
+    ] {
+        success(&format!("import ctypes,errno\nlibc=ctypes.CDLL(None,use_errno=True)\nprint('REACHED',flush=True)\nassert libc.syscall(ctypes.c_long({number}),-1,0,0,0,0,0)==-1\nassert ctypes.get_errno()==errno.EPERM"));
+    }
+}
+
+#[test]
+fn child_can_attest_kernel_controls_but_not_read_host_proc() {
+    success("from pathlib import Path\nprint('REACHED',flush=True)\ns=Path('/proc/self/status').read_text()\nf=dict(line.split(':',1) for line in s.splitlines() if ':' in line)\nassert f['Seccomp'].strip()=='2'\nassert f['NoNewPrivs'].strip()=='1'\ntry: Path('/proc/1/status').read_text()\nexcept PermissionError: pass\nelse: raise AssertionError('host proc readable')");
 }
 
 #[test]

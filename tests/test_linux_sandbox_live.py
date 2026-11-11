@@ -47,6 +47,42 @@ def test_linux_supervisor_stop_kills_sandbox_group(tmp_path):
         os.killpg(outcome['process']['pgid'], 0)
 
 
+def test_live_run_denies_model_read_outside_task(monkeypatch, tmp_path):
+    outside = tmp_path/'private-input'
+    outside.write_text('host private data')
+    original_command = worker.sandbox_command
+    def probe_command(task, limits):
+        command, label = original_command(task, limits)
+        # Inject only the model executor for this test. run(), the actual native
+        # launcher, child main/attestation and result reader remain production code.
+        code = ("import json\nfrom pathlib import Path\n"
+                "from vessel_reconstruction import ship_cad,ship_cad_worker\n"
+                "def execute(program, measurements, output, **kwargs):\n"
+                f" try: Path({str(outside)!r}).read_text()\n"
+                " except PermissionError: pass\n"
+                " else: raise AssertionError('model read escaped')\n"
+                " output.mkdir()\n"
+                " (output/'provenance.json').write_text(json.dumps({'read_denied':True}))\n"
+                "ship_cad.execute=execute\n"
+                "raise SystemExit(ship_cad_worker.main())\n")
+        return [*command[:5], '-c', code, *command[7:]], label
+    monkeypatch.setattr(worker, 'sandbox_command', probe_command)
+    outcome = worker.run({'schema': 'ship-cad/v1', 'components': []}, {}, tmp_path/'task')
+    assert outcome['exit_code'] == 0, outcome
+    assert outcome['result'] == {'read_denied': True}
+
+
+def test_wrong_launcher_cannot_reach_executor(monkeypatch, tmp_path):
+    launcher = tmp_path/'not-a-sandbox'
+    launcher.write_text('#!/bin/sh\nshift 3\nexec "$@"\n')
+    launcher.chmod(0o700)
+    monkeypatch.setenv('MARINAFRAME_SANDBOX_LAUNCHER', str(launcher))
+    outcome = worker.run({'schema': 'ship-cad/v1', 'components': []}, {}, tmp_path/'task')
+    assert outcome['exit_code'] != 0
+    assert outcome['result'] is None
+    assert not (tmp_path/'task'/'work'/'output').exists()
+
+
 def test_linux_runtime_imports_real_cad(tmp_path):
     import subprocess
     task, command = make_probe(tmp_path,

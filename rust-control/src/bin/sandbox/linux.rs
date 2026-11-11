@@ -91,7 +91,26 @@ fn broad(path: &Path) -> bool {
                 | "/sys"
                 | "/dev"
         )
-    ) || std::env::var_os("HOME").is_some_and(|home| path == Path::new(&home))
+    ) || matches!(
+        path.to_str(),
+        Some("/opt" | "/mnt" | "/srv" | "/run" | "/var/tmp" | "/dev/shm")
+    ) || path.parent() == Some(Path::new("/home"))
+        || real_home().is_some_and(|home| path == home)
+}
+
+fn real_home() -> Option<PathBuf> {
+    // HOME is deliberately task/work by launch time. Query the account database
+    // before Landlock is installed; do not use that overwritten environment.
+    let account = unsafe { libc::getpwuid(libc::getuid()) };
+    if account.is_null() {
+        return None;
+    }
+    let directory = unsafe { (*account).pw_dir };
+    if directory.is_null() {
+        return None;
+    }
+    let bytes = unsafe { std::ffi::CStr::from_ptr(directory) }.to_bytes();
+    Some(PathBuf::from(std::ffi::OsStr::from_bytes(bytes)))
 }
 
 impl Config {
@@ -103,6 +122,7 @@ impl Config {
             || !self.work.is_dir()
             || self.work != self.task.join("work")
             || broad(&self.task)
+            || broad(&self.work)
             || self.executable != canonical(executable)?
             || !self.executable.is_file()
         {
@@ -171,6 +191,8 @@ fn resource_limits(limits: &Limits) -> io::Result<()> {
 #[repr(C)]
 struct Ruleset {
     handled_access_fs: u64,
+    handled_access_net: u64,
+    scoped: u64,
 }
 // Kernel UAPI uses a packed structure: parent_fd starts at byte 8 and total
 // size is 12, not the default Rust ABI's padded 16 bytes.
@@ -220,16 +242,18 @@ fn filesystem(config: &Config) -> io::Result<()> {
     };
     let attr = Ruleset {
         handled_access_fs: handled,
+        handled_access_net: 0, // seccomp denies every network family
+        // ABI 6 scopes signals and abstract UNIX sockets to this domain.
+        scoped: if abi >= 6 { (1 << 0) | (1 << 1) } else { 0 },
+    };
+    // Older kernels reject structure extensions they do not understand.
+    let attribute_size = if abi >= 6 {
+        std::mem::size_of::<Ruleset>()
+    } else {
+        8
     };
     let fd = checked(
-        unsafe {
-            libc::syscall(
-                LL_CREATE,
-                &attr as *const Ruleset,
-                std::mem::size_of::<Ruleset>(),
-                0,
-            )
-        },
+        unsafe { libc::syscall(LL_CREATE, &attr as *const Ruleset, attribute_size, 0) },
         "landlock_create_ruleset",
     )?;
     let ruleset = unsafe { OwnedFd::from_raw_fd(fd as i32) };
@@ -241,6 +265,9 @@ fn filesystem(config: &Config) -> io::Result<()> {
         };
         add_path(&ruleset, path, READ | extra)?;
     }
+    // The Python child checks these two kernel fields before model imports.
+    // This proc inode survives exec; no other process or procfs subtree is granted.
+    add_path(&ruleset, Path::new("/proc/self/status"), ACCESS_READ_FILE)?;
     add_path(&ruleset, &config.task, READ)?;
     add_path(&ruleset, &config.work, WORK)?;
     add_path(
@@ -277,6 +304,20 @@ fn instruction(code: u16, jt: u8, jf: u8, k: u32) -> libc::sock_filter {
     libc::sock_filter { code, jt, jf, k }
 }
 
+fn deny_commands(filter: &mut Vec<libc::sock_filter>, syscall: libc::c_long, commands: &[u32]) {
+    // seccomp_data.args[1] starts at byte 24 (64-bit args, little-endian
+    // x86_64/aarch64). The kernel consumes the low command word as an int.
+    // Non-matching syscalls skip the whole block; matching ones reload nr.
+    let block_length = 2 * commands.len() + 2;
+    filter.push(instruction(JMP_EQ, 0, block_length as u8, syscall as u32));
+    filter.push(instruction(LD_ABS, 0, 0, 24));
+    for command in commands {
+        filter.push(instruction(JMP_EQ, 0, 1, *command));
+        filter.push(instruction(RET, 0, 0, DENY));
+    }
+    filter.push(instruction(LD_ABS, 0, 0, 0));
+}
+
 fn syscalls() -> io::Result<()> {
     #[cfg(target_arch = "x86_64")]
     let arch = 0xc000003e;
@@ -299,7 +340,45 @@ fn syscalls() -> io::Result<()> {
         // (includes cachestat, fchmodat2, new mount and cross-process APIs).
         filter.push(instruction(0x35, 0, 1, 449));
         filter.push(instruction(RET, 0, 0, DENY));
+        deny_commands(
+            &mut filter,
+            libc::SYS_fcntl,
+            &[
+                libc::F_SETOWN as u32,
+                15, /* F_SETOWN_EX */
+                10, /* F_SETSIG */
+            ],
+        );
+        deny_commands(
+            &mut filter,
+            libc::SYS_ioctl,
+            &[0x8901 /* FIOSETOWN */, 0x8902 /* SIOCSPGRP */],
+        );
         let mut denied = vec![
+            libc::SYS_shmget,
+            libc::SYS_shmat,
+            libc::SYS_shmctl,
+            libc::SYS_shmdt,
+            libc::SYS_msgget,
+            libc::SYS_msgsnd,
+            libc::SYS_msgrcv,
+            libc::SYS_msgctl,
+            libc::SYS_semget,
+            libc::SYS_semop,
+            libc::SYS_semtimedop,
+            libc::SYS_semctl,
+            libc::SYS_mq_open,
+            libc::SYS_mq_unlink,
+            libc::SYS_mq_timedsend,
+            libc::SYS_mq_timedreceive,
+            libc::SYS_mq_notify,
+            libc::SYS_mq_getsetattr,
+            libc::SYS_ioprio_set,
+            libc::SYS_move_pages,
+            libc::SYS_migrate_pages,
+            libc::SYS_kcmp,
+            libc::SYS_syslog,
+            libc::SYS_personality,
             libc::SYS_socket,
             libc::SYS_socketpair,
             libc::SYS_connect,
