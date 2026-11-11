@@ -1,4 +1,4 @@
-name: Six-target native build and quick tests
+name: Native build and quick tests (macOS desktop, Linux web)
 on:
   schedule:
     - cron: '41 3 * * *'
@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: six-targets-${{ github.ref }}
+  group: native-targets-${{ github.ref }}
   cancel-in-progress: false
 env:
   OMP_NUM_THREADS: '1'
@@ -20,42 +20,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: windows-x86_64
-            runner: windows-2022
-            arch: X64
-            target: x86_64-pc-windows-msvc
-            python: versions
-            unsupported: ''
-          - platform: windows-arm64
-            runner: windows-11-arm
-            arch: ARM64
-            target: aarch64-pc-windows-msvc
-            python: unsupported
-            unsupported: 'No pinned arm64 wheels for OCP, VTK, CasADi, NLopt, PyMuPDF or test-only OpenCV; no conda-forge win-arm64 CAD stack.'
+          # Desktop app.
           - platform: macos-arm64
             runner: macos-15
             arch: ARM64
             target: aarch64-apple-darwin
             python: macos-lock
-            unsupported: ''
-          - platform: macos-x86_64
-            runner: macos-15-intel
-            arch: X64
-            target: x86_64-apple-darwin
-            python: unsupported
-            unsupported: 'NLopt 2.11.0 has no CPython 3.12 macOS x86_64 wheel; source build or separate conda lock needed.'
+          # Web demo host.
           - platform: linux-x86_64
             runner: ubuntu-24.04
             arch: X64
             target: x86_64-unknown-linux-gnu
             python: linux-lock
-            unsupported: ''
-          - platform: linux-arm64
-            runner: ubuntu-24.04-arm
-            arch: ARM64
-            target: aarch64-unknown-linux-gnu
-            python: unsupported
-            unsupported: 'OCP 7.8.1.1.post1 and VTK 9.3.1 have no CPython 3.12 linux-aarch64 wheels; conda-forge needs a separately solved lock.'
+        # Windows and arm64 Linux / x86_64 macOS are deferred; see docs/plans/2026-11-12-six-targets.md.
     defaults:
       run:
         shell: bash
@@ -69,13 +46,6 @@ jobs:
           EXPECTED_ARCH: ${{ matrix.arch }}
           ACTUAL_ARCH: ${{ runner.arch }}
         run: test "$ACTUAL_ARCH" = "$EXPECTED_ARCH"
-      - name: Python quick tier unsupported on this target
-        if: matrix.python == 'unsupported'
-        env:
-          REASON: ${{ matrix.unsupported }}
-        run: |
-          printf '::warning::Python quick tier unsupported on this target: %s\n' "$REASON"
-          printf '## Python quick tier: UNSUPPORTED\n\n%s\n' "$REASON" >> "$GITHUB_STEP_SUMMARY"
       - name: Install Linux desktop and worker libraries
         id: system
         if: runner.os == 'Linux'
@@ -88,7 +58,7 @@ jobs:
         run: rustup toolchain install 1.99.1 --profile minimal --target '${{ matrix.target }}'
       - name: Set up native Python
         id: python
-        if: ${{ !cancelled() && matrix.python != 'unsupported' }}
+        if: ${{ !cancelled() }}
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.12.10'
@@ -101,21 +71,8 @@ jobs:
         run: |
           if [ "$STACK" = linux-lock ]; then
             python -m pip install --only-binary=:all: --require-hashes -r requirements-linux-py312.lock -r requirements-data-linux-py312.lock
-          elif [ "$STACK" = macos-lock ]; then
-            python -m pip install --only-binary=:all: --require-hashes -r requirements-worker-macos-arm64-py312.lock -r requirements-worker-tools-macos-arm64-py312.lock
           else
-            # Existing hashes select Linux wheels, not Windows wheels. Retain every
-            # exact version; this portability probe is not a release hash lock.
-            mkdir -p work/six-targets
-            python - <<'PY'
-          from pathlib import Path
-          locks = ('requirements-linux-py312.lock', 'requirements-data-linux-py312.lock')
-          pins = [line.split(' --hash=', 1)[0] for lock in locks
-                  for line in Path(lock).read_text().splitlines()
-                  if line.strip() and not line.startswith('#')]
-          Path('work/six-targets/pins.txt').write_text('\n'.join(pins) + '\n')
-          PY
-            python -m pip install --only-binary=:all: -r work/six-targets/pins.txt
+            python -m pip install --only-binary=:all: --require-hashes -r requirements-worker-macos-arm64-py312.lock -r requirements-worker-tools-macos-arm64-py312.lock
           fi
           python -m pip install --no-build-isolation --no-deps -e .
           python -m pip check
@@ -133,8 +90,7 @@ jobs:
         id: rust
         if: ${{ !cancelled() && steps.toolchain.outcome == 'success' && (runner.os != 'Linux' || steps.system.outcome == 'success') }}
         env:
-          # Require real workers when installed; unsupported Python targets still
-          # exercise Rust-only tests and the source's existing optional-worker paths.
+          # Require real workers when the Python stack installed.
           MARINAFRAME_REQUIRE_WORKER: ${{ steps.dependencies.outcome == 'success' && '1' || '0' }}
         run: cargo test --locked --workspace --target '${{ matrix.target }}'
       - name: Run Python quick tier
@@ -161,5 +117,5 @@ jobs:
             printf '| Rust quick tests | %s |\n' "$RUST"
             printf '| Python stack | %s (%s) |\n' "$STACK" "$DEPENDENCIES"
             printf '| Python quick tests | %s |\n' "$QUICK"
-            printf '\nUnsupported Python is not a test pass. Failed setup/download steps require log inspection to distinguish infrastructure from source failures. This does not test release bundles or signing.\n'
+            printf '\nFailed setup/download steps require log inspection to distinguish infrastructure from source failures. This does not test release bundles or signing.\n'
           } >> "$GITHUB_STEP_SUMMARY"

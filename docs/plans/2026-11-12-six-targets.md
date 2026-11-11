@@ -110,3 +110,7 @@ This is a **GitHub workflow-registration blocker**, not a DNS outage, source fai
 | Linux arm64 | Not run: dispatch registration blocked | Unsupported pinned OCP/VTK; explicit workflow step |
 
 **Resume point:** the PM must first make this workflow available on the default branch through the normal reviewed process, then dispatch it on `lane/six-target-ci` and inspect each step. This task does not authorize merging. Keep build, test, install/download, runner allocation and unsupported outcomes distinct. No local `target/` folder was created, so there is no lane build folder to remove. `engineering_approved` remains false. No six-target build-support or release-support claim is made.
+
+## Scope change (2026-11-12)
+
+To keep CI fast while we iterate, the workflow now builds only the two product targets: the macOS arm64 desktop app and the Ubuntu x86_64 web host. It is renamed `.github/workflows/native-targets.yml`. Windows x86_64/arm64, macOS x86_64 and Linux arm64 are deferred; the evidence above on their missing wheels still applies when we add them again.
