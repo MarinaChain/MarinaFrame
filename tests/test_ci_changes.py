@@ -20,6 +20,7 @@ ALL = {"python", "rust", "ui", "wheel"}
         (["app/src-tauri/src/main.rs"], {"rust", "wheel"}),
         (["docs/guide.md", "app/ui/index.html"], {"ui"}),
         ([".github/workflows/ci.yml"], ALL),
+        (["docs/dependency-scope-exclusions.json"], ALL),
         (["app/package-lock.json"], ALL),
         (["app/package.json"], ALL),
         (["crates/control/Cargo.toml"], ALL),

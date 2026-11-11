@@ -304,3 +304,9 @@
 - **Trigger:** A disk cleanup removed "merged and clean" worktrees with `git worktree remove --force`. The clean check used `--untracked-files=no`, so an uncommitted Sol design file (docs/plans/2026-11-12-linux-sandbox.md) was deleted.
 - **Rule:** A worktree is removable only when `git status --porcelain --untracked-files=normal` is empty (ignored files such as target/ and work/ may go). Tell lanes to commit design files when they write them.
 - **Why:** `--force` deletes untracked files, and "HEAD is merged" says nothing about files that were never committed.
+
+### Route audit policy before documentation in CI filters
+- **Date:** 2026-11-12
+- **Trigger:** The broad `docs/*` CI skip also skipped `docs/dependency-scope-exclusions.json`, which controls the dependency audit.
+- **Rule:** Classify executable configuration by its consumers, not its folder. Route audit policy as shared configuration before documentation skips, and keep a regression test.
+- **Why:** A documentation directory can contain policy that changes a required security check.

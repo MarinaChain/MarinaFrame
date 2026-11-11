@@ -63,12 +63,14 @@ Resumed from WIP a6c4227. The saved classifier and workflow changes are present;
 
 - Baseline CI run [43080449506](https://github.com/MarinaChain/MarinaFrame/actions/runs/43080449506): push at `8f0d026`, **13 executed / 0 skipped jobs**, **349 seconds** (2026-11-11 18:43:24Z–18:49:13Z).
 - Wall time means workflow creation to final completion, including runner queue and setup. Counts include matrix children and the Linux aggregate; skipped matrix jobs may appear as one unexpanded placeholder.
-- Classifier tests: **20 passed**. The prior run's red-before-green test step cannot be established from the saved WIP; no historical failure is claimed.
+- Classifier tests: **21 passed**. Review found that `docs/dependency-scope-exclusions.json` is audit policy, not documentation. A new regression test failed before the explicit shared-configuration rule was added, then passed. The prior run's red-before-green test step cannot be established from the saved WIP; no historical failure is claimed.
 - All three workflow YAML files parse. All action references have full 40-character commit SHAs. **52 Bash run blocks** and `scripts/ci_changes.sh` pass `bash -n` (Actions expressions replaced with inert text for syntax checking).
 - `actionlint` is not installed, so that check was not run.
 - Executed the actual detector Bash against isolated Git histories: **10 cases passed** (docs, UI, deleted whitespace path, multi-commit range, PR merge-base, new-branch fallback, missing history, main, continue/v0.5, manual dispatch).
 - Executed the actual aggregate Bash: **6 cases passed** (intentional skip accepted; failure, cancellation, failed/skipped detector, and skipped scan rejected).
-- Full local quick tier and live-run evidence: pending.
+- Initial `make test-quick PY=/Users/jonathanjie/Documents/workspace/MarinaFrame/.venv/bin/python` completed with exit 0: **1,998 Python tests passed**, 84 CAD tests deselected; **269 UI tests passed**; Rust fmt, Clippy, quick tests, and secret scan passed (0 findings). A fresh quick-tier run is in progress after the audit-policy regression fix; no push until it passes.
+- Stable pre-existing job IDs and display names checked against `8f0d026`; no new `continue-on-error`.
+- Live-run evidence: pending.
 
 ### Limits fixed before live runs
 

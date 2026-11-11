@@ -7,6 +7,9 @@ ui=false
 wheel=false
 while IFS= read -r -d '' path; do
   case "$path" in
+    # This file is executable audit policy, despite its documentation location.
+    docs/dependency-scope-exclusions.json)
+      python=true; rust=true; ui=true; wheel=true ;;
     .github/workflows/*|*.lock|*/Cargo.toml|Cargo.toml|*/package.json|package.json|*/package-lock.json|package-lock.json|*/pyproject.toml|pyproject.toml|requirements*.txt|rust-toolchain.toml|Makefile)
       python=true; rust=true; ui=true; wheel=true ;;
     docs/*|*.md|tasks/*|work/pm-briefs/*) ;;
