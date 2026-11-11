@@ -2,25 +2,43 @@
   "purpose": "Runs the public web demo shows (scripts/build_web_demo.py, docs/WEB_DEMO.md). Public sources only; a drawing whose SHA-256 is not listed here fails the build.",
   "runs": [
     {
+      "slug": "gunnerus",
+      "name": "R/V Gunnerus",
+      "tagline": "Real ship, built from its drawings",
+      "licence": "owner-approved-display",
+      "source": "Lines plan of R/V Gunnerus (NTNU research vessel), rendered from its PDF.",
+      "credit": "R/V Gunnerus drawings: NTNU (Norwegian University of Science and Technology), used under licence.",
+      "drawing_sha256": [
+        "2acd43a729eeb15505ab8dd94d9acaef2d03cd2071d9869246aa8c0cfc25f56e"
+      ],
+      "file_stem": "R-V-Gunnerus"
+    },
+    {
       "slug": "dtmb5415-3v-L0",
       "name": "DTMB 5415 (research hull)",
       "licence": "mit",
       "source": "Lines drawing generated from the DTMB 5415 surface of mathLab/WaveBEMapp-DTMB-5415 (MIT licence, (c) 2017 Marco Tezzele).",
-      "drawing_sha256": ["90fd03a542cb698f2dbe0a7925eebc591b1cdccaa1f3cd09c3d99b2045bb0f8a"]
+      "drawing_sha256": [
+        "90fd03a542cb698f2dbe0a7925eebc591b1cdccaa1f3cd09c3d99b2045bb0f8a"
+      ]
     },
     {
       "slug": "series60-3v-L0",
       "name": "Series 60 (research hull)",
       "licence": "cc-by-3.0",
       "source": "Lines drawing generated from the Series 60 example of the FreeCAD Ship workbench (s60.fcstd, CC BY 3.0, Jose Luis Cercos Pita).",
-      "drawing_sha256": ["334b90cf0ddacea9b4454f9075506c85a2db686caacf81b6e9bc13e27d1a070d"]
+      "drawing_sha256": [
+        "334b90cf0ddacea9b4454f9075506c85a2db686caacf81b6e9bc13e27d1a070d"
+      ]
     },
     {
       "slug": "sample-hull",
       "name": "Sample hull (synthetic)",
       "licence": "synthetic",
       "source": "MarinaFrame's built-in sample drawing, made for the app.",
-      "drawing_sha256": ["51c48ba18c7affe611655079c64b1dd2cbd0b5cb7102a8d3070bda519b842fb7"]
+      "drawing_sha256": [
+        "51c48ba18c7affe611655079c64b1dd2cbd0b5cb7102a8d3070bda519b842fb7"
+      ]
     }
   ]
 }

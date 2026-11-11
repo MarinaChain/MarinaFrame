@@ -3827,3 +3827,5 @@ body:not([data-costs="shown"]) :is(.workspace, .inspector) .cost-timing { displa
 .demo-pilot-card { text-decoration: none; color: inherit; }
 .demo-pilot-thumb { display: grid; place-items: center; }
 .demo-pilot-stages { color: var(--brand); font-size: var(--fs-sm); font-weight: 600; line-height: 1.9; }
+/* Controls that change a run carry .write-action (js/parts.js and the run views); the demo has none. */
+[data-demo="read-only"] .write-action { display: none !important; }

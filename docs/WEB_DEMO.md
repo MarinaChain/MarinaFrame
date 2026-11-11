@@ -63,6 +63,13 @@ A run may have a `credit` line in `scripts/web_demo_runs.json` (for example "R/V
 drawings: NTNU (Norwegian University of Science and Technology), used under licence."). It shows
 as a strip on every page of that run. A concept-preview run shows its label there instead.
 
+### Display name
+
+The demo shows each run under its `name` from `scripts/web_demo_runs.json`. The build replaces the
+run's own name in its JSON, CSV and STEP files. With `file_stem` it also renames the export files,
+which the app names after the run (Gunnerus: `R-V-Gunnerus_r0001_DRAFT_*`). A PDF report keeps
+the run's own title. The name gates run after the rename.
+
 ### Home order
 
 Home lists the runs in the order of `scripts/web_demo_runs.json`. Runs with a `tagline` are the

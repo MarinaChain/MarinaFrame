@@ -201,6 +201,33 @@ def downscale_images(run_dir: Path) -> list[dict]:
     return changed
 
 
+EXPORT_FILE = re.compile(r"^(?P<stem>.+?)(?P<rest>_r\d{4}_DRAFT.*)$")
+
+
+def rename_run(run_dir: Path, original_name: str, entry: dict) -> None:
+    """Show the run under its listed name: in its JSON, and (with "file_stem") in the names of
+    its export files, which the app makes from the run's own name. The name gates then check
+    the renamed files."""
+    renames = {}
+    stem = entry.get("file_stem")
+    if stem:
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]*", stem):
+            raise BuildError(f"{entry['slug']}: a file_stem is letters, digits and '-'")
+        for export in sorted(run_dir.glob("exports/*/*")):
+            match = EXPORT_FILE.match(export.name)
+            if match:
+                renames[export.name] = stem + match["rest"]
+                export.rename(export.with_name(renames[export.name]))
+    # JSON for the app; CSV and STEP (plain text, no byte offsets) exports for download.
+    for path in sorted([*run_dir.rglob("*.json"), *run_dir.rglob("*.csv"), *run_dir.rglob("*.step")]):
+        text = path.read_text(errors="replace")
+        changed = text.replace(original_name, entry["name"]) if original_name else text
+        for old, new in renames.items():
+            changed = changed.replace(old, new)
+        if changed != text:
+            path.write_text(changed)
+
+
 def write_manifest(data: Path, selection: list[dict], downscaled: dict[str, list[dict]]) -> None:
     summaries = {summary["task"].rsplit("/", 1)[-1]: summary for summary in json.loads((data / "tasks.json").read_text())}
     (data / "tasks.json").unlink()
@@ -247,7 +274,11 @@ def build(runs_folder: Path, out: Path, selection_path: Path, worker_python: str
     data = out / "data"
     export_runs(runs_folder, data, selection, worker_python, config)
     downscaled = {}
+    original_names = {
+        summary["task"].rsplit("/", 1)[-1]: summary["name"] for summary in json.loads((data / "tasks.json").read_text())
+    }
     for entry in selection:
+        rename_run(data / "runs" / entry["slug"], original_names.get(entry["slug"], ""), entry)
         check_sources(data, entry)
         downscaled[entry["slug"]] = downscale_images(data / "runs" / entry["slug"])
     write_manifest(data, selection, downscaled)

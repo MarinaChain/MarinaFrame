@@ -109,3 +109,20 @@ def test_large_images_are_scaled_down_and_recorded(tmp_path):
     }]
     with Image.open(tmp_path / "big.png") as image:
         assert image.size == (build.MAX_IMAGE_EDGE_PX, 50)
+
+
+def test_rename_run_uses_the_listed_name_in_views_and_export_files(tmp_path):
+    original = "Vessel (sealed benchmark, raster path)"
+    exports = tmp_path / "exports" / "r0001"
+    exports.mkdir(parents=True)
+    old_file = "Vessel-sealed-benchmark-raster-path_r0001_DRAFT_offsets.csv"
+    (exports / old_file).write_text(f"# {original}\n1,2\n")
+    listing = {"r0001": {"files": [{"file": old_file, "path": f"exports/r0001/{old_file}"}]}}
+    (tmp_path / "exports.json").write_text(json.dumps(listing))
+    (tmp_path / "task.json").write_text(json.dumps({"summary": {"name": original}}))
+    build.rename_run(tmp_path, original, entry(name="Demo vessel", file_stem="Demo-vessel"))
+    new_file = "Demo-vessel_r0001_DRAFT_offsets.csv"
+    assert [path.name for path in exports.iterdir()] == [new_file]
+    assert "sealed" not in (exports / new_file).read_text()
+    assert new_file in (tmp_path / "exports.json").read_text()
+    assert json.loads((tmp_path / "task.json").read_text())["summary"]["name"] == "Demo vessel"
