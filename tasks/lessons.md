@@ -279,3 +279,9 @@
 - **Trigger:** The polyline reader dropped crowded stations whose bottoms ran into an outer station's bottom, and counted a short transom outline as a station. On CALEB JONES every inner name shifted (identity errors at stations 4-9; 10 wrong of 16 point cells).
 - **Rule:** When names come from nesting rank, a drawn line with its own side keeps its rank even when a part of it (the bottom) is lost; keep the part that is its own and flag it. Remove only lines that are not stations (short outlines) before ranking. Read the per-trace log on the worst sheet before changing thresholds.
 - **Why:** One missing or extra member of a rank order shifts every name inside it; partial evidence for a station is better than none.
+
+### Keep truth and benchmark inputs out of temporary folders; never clean temp folders by age (MarinaFrame)
+- **Date:** 2026-11-11
+- **Trigger:** To free disk space, the PM deleted every session-scratchpad folder unchanged for 3 hours. One of them (`scratchpad/wv-agent/`) held the only copies of the C.A. Thayer and Balclutha development truth files, which lane N still needed; other truth files lived under `/private/tmp/claude-501/<boat>/`. They had to be re-transcribed.
+- **Rule:** Store every truth file, calibration and benchmark input in the git-ignored `work/` tree (truth: `work/dev-truth/<boat>/`, holdouts: `work/holdout/<boat>/`) with a SHA256SUMS file, never in a scratchpad or `/tmp`. When freeing space, delete only build output (`target/`) and folders you made yourself and know are unused; never delete by age in shared temporary folders while lanes run.
+- **Why:** Temporary folders look disposable, and an age rule cannot tell a lane's long-lived input from leftover work.
