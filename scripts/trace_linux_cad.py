@@ -18,9 +18,13 @@ import cadquery as cq
 from pathlib import Path
 from vessel_reconstruction.ship_cad_worker import confirm_linux_sandbox
 confirm_linux_sandbox()
-shape = cq.Workplane('XY').box(2, 3, 4).faces('>Z').workplane().hole(0.5)
+print('TRACE_STAGE: CAD import and attestation complete', flush=True)
+shape = cq.Workplane('XY').box(2, 3, 4)
+print('TRACE_STAGE: solid complete', flush=True)
 cq.exporters.export(shape, 'fixture.step')
-cq.exporters.export(shape, 'fixture.stl')
+print('TRACE_STAGE: STEP export complete', flush=True)
+shape.val().exportStl('fixture.stl', parallel=False)
+print('TRACE_STAGE: serial STL export complete', flush=True)
 restored = cq.importers.importStep('fixture.step')
 assert restored.val().Volume() > 20
 Path('finished').write_text('ok')

@@ -205,8 +205,19 @@ jobs:
       - name: Trace contained real CAD syscall usage
         run: |
           mkdir -p work
-          MARINAFRAME_SANDBOX_LAUNCHER="$PWD/target/debug/marinaframe-sandbox" strace -f -c -o work/linux-cad-syscalls.txt python scripts/trace_linux_cad.py --out work/linux-cad-trace
-          cat work/linux-cad-syscalls.txt
+          MARINAFRAME_SANDBOX_LAUNCHER="$PWD/target/debug/marinaframe-sandbox" strace -f -o work/linux-cad-syscalls.txt python scripts/trace_linux_cad.py --out work/linux-cad-trace
+          python - <<'PY'
+          import re
+          from collections import Counter
+          from pathlib import Path
+          calls = Counter()
+          for line in Path('work/linux-cad-syscalls.txt').read_text().splitlines():
+              match = re.match(r'\d+\s+([a-zA-Z_][a-zA-Z_0-9]*)\(', line)
+              if match:
+                  calls[match[1]] += 1
+          print('MEASURED_SYSCALLS:', ', '.join(sorted(calls)))
+          print('CALL_COUNTS:', dict(sorted(calls.items())))
+          PY
       - name: Test live Linux sandbox policy (required kernel features)
         run: |
           cargo test --locked -p marinaframe-control --test linux_sandbox
