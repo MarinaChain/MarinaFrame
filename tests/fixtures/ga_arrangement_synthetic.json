@@ -1,0 +1,42 @@
+{
+ "schema": "marinaframe.ga_reading.v1",
+ "case_id": "SYNTHETIC-1",
+ "test_fixture": true,
+ "note": "TEST DATA: a made-up small bulk carrier for unit tests. Not a reading of any drawing; never shown in a demo.",
+ "engineering_approved": false,
+ "sources": {"ga": {"file": "synthetic-ga.png", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "size_px": [1000, 600]}},
+ "ship_type": {"value": "bulk_carrier", "status": "read"},
+ "particulars": {
+  "lbp_m": {"value": 100.0, "status": "read"},
+  "loa_m": {"value": 104.0, "status": "read"},
+  "breadth_m": {"value": 18.0, "status": "read"},
+  "depth_m": {"value": 9.0, "status": "read"},
+  "draft_m": {"value": null, "status": "unknown", "reason": "not printed"}
+ },
+ "frames": {"spacings": [{"from_frame": 0, "to_frame": 20, "spacing_mm": 600}, {"from_frame": 20, "to_frame": 160, "spacing_mm": 700}]},
+ "spaces": [
+  {"id": "engine_room-001", "kind": "engine_room", "label": "ENGINE ROOM", "status": "read",
+   "extent": {"frames": [8, 26], "z_m": [0.0, 9.0]},
+   "source_record": {"kind": "read", "regions": [{"sheet": "synthetic-ga.png", "page": 0, "view": "profile", "box_px": [80, 300, 200, 420], "page_px": [1000, 600]}]}},
+  {"id": "cargo_hold-001", "kind": "cargo_hold", "label": "NO.2 CARGO HOLD", "status": "read",
+   "extent": {"x_m": [16.0, 50.0], "z_m": [1.2, 9.0]},
+   "source_record": {"kind": "read", "regions": [{"sheet": "synthetic-ga.png", "page": 0, "view": "profile", "box_px": [200, 300, 500, 420], "page_px": [1000, 600]}]}},
+  {"id": "cargo_hold-002", "kind": "cargo_hold", "label": "NO.1 CARGO HOLD", "status": "read",
+   "extent": {"x_m": [50.0, 88.0], "z_m": [1.2, 9.0]},
+   "source_record": {"kind": "read", "regions": [{"sheet": "synthetic-ga.png", "page": 0, "view": "profile", "box_px": [500, 300, 850, 420], "page_px": [1000, 600]}]}},
+  {"id": "ballast_tank-001", "kind": "ballast_tank", "label": "NO.1 W.B.T. (P)", "status": "read",
+   "extent": {"x_m": [50.0, 88.0], "y_m": [0.0, 9.0], "z_m": [0.0, 1.2], "side": "port"},
+   "source_record": {"kind": "read", "regions": [{"sheet": "synthetic-ga.png", "page": 0, "view": "plan", "box_px": [500, 450, 850, 520], "page_px": [1000, 600]}]}},
+  {"id": "accommodation_deck-001", "kind": "accommodation_deck", "label": "A-DECK", "status": "read",
+   "extent": {"frames": [2, 24], "tier": 1, "status": {"y": "guessed"}},
+   "source_record": {"kind": "read", "regions": [{"sheet": "synthetic-ga.png", "page": 0, "view": "profile", "box_px": [60, 200, 200, 300], "page_px": [1000, 600]}]}},
+  {"id": "cargo_hatch-001", "kind": "cargo_hatch", "label": "NO.1 HATCH", "status": "read",
+   "extent": {"x_m": [56.0, 82.0], "y_m": [-5.0, 5.0], "z_m": [9.0, 10.5]},
+   "source_record": {"kind": "read", "regions": [{"sheet": "synthetic-ga.png", "page": 0, "view": "plan", "box_px": [560, 460, 820, 540], "page_px": [1000, 600]}]}},
+  {"id": "cargo_crane-001", "kind": "cargo_crane", "label": "NO.1 DECK CRANE", "status": "read",
+   "extent": {"x_m": [49.0, 51.0], "y_m": [-1.0, 1.0], "z_m": [9.0, 20.0]},
+   "source_record": {"kind": "read", "regions": [{"sheet": "synthetic-ga.png", "page": 0, "view": "profile", "box_px": [490, 100, 520, 300], "page_px": [1000, 600]}]}},
+  {"id": "other_space-001", "kind": "other_space", "label": "BOSUN STORE", "status": "read",
+   "source_record": {"kind": "read", "regions": [{"sheet": "synthetic-ga.png", "page": 0, "view": "profile", "box_px": [900, 300, 950, 330], "page_px": [1000, 600]}]}}
+ ]
+}
