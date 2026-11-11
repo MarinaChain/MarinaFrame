@@ -1,13 +1,24 @@
-// The run-details column (selection review, Thinking, Steps, Checks, Calls, Evidence, Sources) can be
-// hidden, for people who only want the results. The pure rules live here; js/inspector.js wires them
-// to the page.
+// The run-details column (selection review, Thinking, Steps, Checks, Calls, Evidence, Sources) folds
+// to a thin rail of icons, so the drawing and the 3D model get the width. The pure rules live here;
+// js/inspector.js wires them to the page.
 
 /** Key that toggles the column together with ⌘ (Ctrl). 1, 2 and 3 pick the layout. */
 export const DETAILS_KEY = '4';
 
-/** Stored choice -> open or not. Anything but "closed" (missing, broken storage) means open. */
-export function isDetailsOpen(stored) {
-  return stored !== 'closed';
+/**
+ * With no stored choice, a window at least this wide (CSS px) starts with the column open; a
+ * laptop window starts with the rail, so the drawing and the model get the width.
+ */
+export const WIDE_WINDOW_PX = 1800;
+
+/**
+ * Stored choice -> open or not. "open" and "closed" are a person's choice; anything else (none
+ * yet, broken storage) follows the window width.
+ */
+export function isDetailsOpen(stored, windowWidth = WIDE_WINDOW_PX) {
+  if (stored === 'open') return true;
+  if (stored === 'closed') return false;
+  return windowWidth >= WIDE_WINDOW_PX;
 }
 
 /** The value to store for a choice. */
@@ -27,6 +38,23 @@ export function toggleNames(open, count) {
   const items = reviewBadge(count).items;
   const spoken = `${open ? 'Hide' : 'Show'} details${items ? `, ${items} to check` : ''}`;
   return { title, spoken };
+}
+
+/** Name of the rail's review button: "2 to check (N)"; null hides it when nothing is open. */
+export function reviewRailName(count) {
+  const badge = reviewBadge(count);
+  if (badge.hidden) return null;
+  return { title: `${badge.items} to check (N)`, spoken: `Review, ${badge.items} to check` };
+}
+
+/**
+ * Whether a step row of the Thinking tab shows its detail: as the person last left it, else
+ * open only when the step waits for the person (it offers a button, such as Keep anyway).
+ */
+export function stepStartsOpen(sequence, { expanded, collapsed, waits }) {
+  if (expanded.has(sequence)) return true;
+  if (collapsed.has(sequence)) return false;
+  return waits;
 }
 
 /** The run-detail tabs: an icon each; the word is the tooltip title and the spoken name. */

@@ -15,7 +15,7 @@ import { createMarkTool } from './mark.js';
 import { createModelView } from './model3d.js';
 import { baseName, createSourceController, createSourceView, sourceForSheet, sourceOf, summaryOf } from './provenance.js';
 import { capacityRowOf } from './tanks.js';
-import { renderThinking } from './inspector.js';
+import { renderThinking, detailsAreOpen, onDetailsChange, showPartCard } from './inspector.js';
 import { renderNarration, renderRevisionStrip } from './run_header.js';
 import { selectSection, placesIn, renderStrip } from './run_strip.js';
 import { loadTask, runAction } from './run.js';
@@ -75,7 +75,13 @@ export function createWorkspace() {
         : null;
       return { row: capacityRowOf(state.view?.capacity_plan, id), component, source };
     },
+    // The picked part's card shows in the details column when it is open, else docked in 3D.
+    cardInColumn: () => detailsAreOpen(),
+    onCard: (card) => showPartCard(card),
+    // The card and the hover label keep clear of the source lines and the "best guess" label.
+    avoidRects: () => [...document.querySelectorAll('.source-links path, .source-links g')].map((node) => node.getBoundingClientRect()),
   });
+  onDetailsChange(() => model.refreshCard());
 
   /** HOOK(M3 live): the live run (js/live.js) owns narration, Thinking and the ladder when it has steps. */
   live = createLiveRun({
@@ -131,6 +137,9 @@ export function createWorkspace() {
   });
   // Both panes must show: the line runs from the part to its sheet.
   sources = createSourceController({ view: () => state.view, sourceView, canShow: () => $('stage').dataset.view === 'split' });
+  // New or moved source lines: the docked card and the hover label move off them.
+  const links = $('stage').querySelector('.source-links');
+  if (links) new MutationObserver(() => model.placeOverlays()).observe(links, { childList: true });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !sourceView.element.hidden) sources.dismiss();
   });

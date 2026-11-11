@@ -73,6 +73,7 @@
   --rail-w: 76px;
   --dur-details: 140ms;
   --inspector-w: clamp(340px, 22vw, 420px); /* wider on large screens: the Thinking text reads better */
+  --details-rail-w: 40px; /* the folded details column: one 30 px icon button with a margin */
   --strip-h: 80px;
   --narration-h: 32px;
   --revision-h: 36px;
@@ -872,9 +873,12 @@ code { font-family: var(--font-mono); }
   /* Hide or show the details column: short, and the panes follow the width. */
   transition: grid-template-columns var(--dur-details) ease-out;
 }
-:root[data-details="closed"] { --inspector-w: 0px; }
+:root[data-details="closed"] { --inspector-w: var(--details-rail-w); }
 :root[data-details="closed"] .inspector { visibility: hidden; border-left-width: 0; overflow: hidden; transition: visibility 0s linear var(--dur-details); }
 .inspector { min-width: 0; }
+/* The rail and the column share the second grid column; only one shows. */
+.view-run > .inspector, .view-run > .details-rail { grid-column: 2; grid-row: 1; }
+.view-run:not([data-vtab="run"]) > .details-rail { display: none; }
 
 /* Titlebar toggle and the edge handle that reopens the column. Badge: review items still open. */
 .details-toggle { position: relative; }
@@ -893,27 +897,45 @@ code { font-family: var(--font-mono); }
   box-sizing: border-box;
 }
 .details-count[hidden] { display: none; }
-.details-edge {
-  position: absolute;
-  top: 50%;
-  right: 0;
-  z-index: 5;
-  margin-top: -18px;
-  display: inline-flex;
+/* The folded column: a thin rail of icons (show, review with its count, one per tab). */
+.details-rail {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 36px;
+  gap: 2px;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--space-sm) 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--line);
+  background: var(--bg);
+}
+.details-rail[hidden] { display: none; }
+.details-rail-tabs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-top: var(--space-xs);
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--line);
+}
+.details-rail-item {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
   padding: 0;
-  border: 1px solid var(--line);
-  border-right: 0;
-  border-radius: var(--radius-md) 0 0 var(--radius-md);
-  background: var(--surface);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
   color: var(--ink-2);
 }
-.details-edge:hover { color: var(--ink); background: var(--raised); }
-.details-edge[hidden] { display: none; }
-.details-edge .details-count { top: -6px; left: -6px; right: auto; }
+.details-rail-item:hover { color: var(--ink); background: var(--hover); }
+.details-rail-item[hidden] { display: none; }
+#details-review { color: var(--warn); }
+.details-rail-item .details-count { top: -3px; right: -3px; }
 @media (prefers-reduced-motion: reduce) {
   .view-run, :root[data-details="closed"] .inspector { transition: none; }
 }
@@ -2261,6 +2283,37 @@ code { font-family: var(--font-mono); }
   cursor: pointer;
 }
 .thought-title:hover { color: var(--brand); }
+/* One line per step: chevron, title (cut), time and cost. A press opens the detail below. */
+.thought-card:has(.thought-detail[hidden]) { padding-block: 5px; }
+.thought-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.thought-row .thought-title { flex: 1 1 auto; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--fs-sm); }
+.thought-row[aria-expanded="true"] .thought-title { white-space: normal; overflow-wrap: anywhere; }
+.thought-row:hover .thought-title { color: var(--brand); }
+.thought-row .chevron { flex: none; width: 12px; height: 12px; color: var(--ink-3); transition: transform var(--dur-fast); }
+.thought-row[aria-expanded="true"] .chevron { transform: rotate(90deg); }
+.thought-detail { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.thought-detail[hidden] { display: none; }
+.thought-seek {
+  display: inline-flex; align-items: center; gap: 4px; width: fit-content; padding: 0; border: 0; background: none;
+  color: var(--ink-3); font-size: var(--fs-xs); cursor: pointer;
+}
+.thought-seek:hover { color: var(--brand); }
+.thought-seek .icon { width: 12px; height: 12px; }
+@media (prefers-reduced-motion: reduce) {
+  .thought-row .chevron { transition: none; }
+}
 .thought-who { margin-right: 6px; color: var(--brand); }
 .thought-meta { display: inline-flex; gap: 6px; flex: none; color: var(--ink-3); font: var(--fs-xs) var(--font-mono); }
 .thought-quote { margin: 0; color: var(--ink-2); font-size: var(--fs-md); font-style: italic; line-height: 1.45; overflow-wrap: anywhere; }
@@ -3473,6 +3526,26 @@ code { font-family: var(--font-mono); }
 .model-card-link:hover { background: var(--hover); }
 .model-card-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .model-card-link .icon { width: 14px; height: 14px; flex: none; }
+/* Docked in a free corner of the 3D pane while the details column is folded (js/model3d.js places it). */
+.model-card.is-docked {
+  position: absolute; z-index: 2; width: min(240px, calc(100% - 2 * var(--space-sm)));
+  max-height: calc(100% - 140px); margin: 0;
+}
+.model-card.is-docked .model-card-toggle:hover strong { text-decoration: underline; }
+/* In the details column: the picked part above the section review. */
+.inspector-part { flex: none; max-height: 40%; overflow-y: auto; padding: var(--space-sm) var(--space-lg); border-bottom: 1px solid var(--line); }
+.inspector-part[hidden] { display: none; }
+.model-card.is-column { padding: 0; border: 0; background: transparent; font-size: var(--fs-sm); }
+.model-card.is-column .model-card-facts dd { font-size: var(--fs-xs); }
+/* Hover in 3D: the part's name and source chip only, beside the part (js/model3d.js places it). */
+.model-hover-tag {
+  position: absolute; z-index: 3; display: inline-flex; align-items: center; gap: 6px; max-width: 220px;
+  padding: 2px 4px 2px 7px; border-radius: var(--radius-sm); border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 94%, transparent); color: var(--ink); font-size: 12px; line-height: 18px;
+  white-space: nowrap; pointer-events: none;
+}
+.model-hover-tag[hidden] { display: none; }
+.model-hover-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
 
 /* ---- 3D overlays (js/overlay3d.js): frame numbers, pointer readout, scale, axes and stamp. */
 .model-frame-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }

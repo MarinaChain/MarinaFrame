@@ -1,7 +1,7 @@
 // The fact card of a picked part (js/factcard3d.js). Run: npm run test:ui
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cardFor, dominantSource, framesText, sizeText, thicknessText } from '../ui/js/factcard3d.js';
+import { cardFor, dominantSource, framesText, KEY_FACTS, keyFacts, sizeText, thicknessText } from '../ui/js/factcard3d.js';
 import { hullReference } from '../ui/js/reference3d.js';
 
 const REFERENCE = hullReference({ min: [0, -3.6, 0], max: [24, 3.6, 3.4] }, { frameSpacingM: 0.5, frameZeroX: 0 });
@@ -66,4 +66,20 @@ test('small formatters', () => {
   assert.equal(framesText(5, 5.1, REFERENCE), 'Fr 10');
   assert.equal(framesText(0, 1, null), '—');
   assert.equal(sizeText(null), '—');
+});
+
+test('a docked card shows the first 3 facts with a value and counts the rest', () => {
+  const card = cardFor({ entry: TANK, box: BOX, reference: REFERENCE, context: { row: ROW } });
+  const { facts, more } = keyFacts(card);
+  assert.equal(KEY_FACTS, 3);
+  assert.equal(facts.length, 3);
+  assert.deepEqual(facts.map((fact) => fact.name), card.facts.slice(0, 3).map((fact) => fact.name));
+  assert.equal(more, card.facts.length - 3);
+});
+
+test('key facts skip facts without a value, and a short pane can show none', () => {
+  const card = { facts: [{ name: 'Frames', value: '—' }, { name: 'Top', value: '3.40 m' }, { name: 'Size', value: '1 × 2 × 3 m' }] };
+  assert.deepEqual(keyFacts(card).facts.map((fact) => fact.name), ['Top', 'Size']);
+  assert.equal(keyFacts(card).more, 1);
+  assert.deepEqual(keyFacts(card, 0), { facts: [], more: 3 });
 });

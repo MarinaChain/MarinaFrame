@@ -104,27 +104,52 @@ export function cardFor({ entry, extras = {}, box = null, reference = null, cont
   return { ...base, source: weakest, facts, note: '' };
 }
 
-/** The card as DOM. `onClose()` clears the pick; a link's `open()` runs when it is pressed. */
-export function renderFactCard(card, { onClose, collapsible = false, collapsed = false, onToggle = () => {} }) {
+/** A docked card shows this many facts until it is expanded. */
+export const KEY_FACTS = 3;
+
+/**
+ * The facts a docked card shows folded: the first `count` with a value (the card lists the
+ * important ones first: the part record's values, the capacity plan's content, frames, volume).
+ * Returns { facts, more } with `more` the number of facts left for the expanded card.
+ */
+export function keyFacts(card, count = KEY_FACTS) {
+  const known = card.facts.filter((fact) => fact.value && fact.value !== '—');
+  const facts = known.slice(0, count);
+  return { facts, more: card.facts.length - facts.length };
+}
+
+/**
+ * The card as DOM. `onClose()` clears the pick; a link's `open()` runs when it is pressed.
+ * In the details column the card is whole. Docked in the 3D pane (`docked`) it shows its title
+ * row and `keyCount` key facts; the title row is a button that expands it to every fact.
+ */
+export function renderFactCard(card, { onClose, docked = false, expanded = false, keyCount = KEY_FACTS, onToggle = () => {} }) {
   const close = el('button', { class: 'model-part-tool', type: 'button', 'aria-label': 'Close the card', onclick: () => onClose(), ...tipAttributes('Close the card').attrs }, icon('close'));
-  const link = card.link
+  const whole = !docked || expanded;
+  const shown = whole ? { facts: card.facts, more: 0 } : keyFacts(card, keyCount);
+  const link = whole && card.link
     ? el('button', { class: 'model-card-link', type: 'button', onclick: () => card.link.open?.() }, icon('drawing'), el('span', {}, card.link.label || 'Source'))
     : null;
-  const title = [el('strong', {}, card.name), el('span', {}, card.kindWord)];
-  // In a short pane the title row is a button that expands or collapses the card.
-  const titleNode = collapsible
-    ? el('button', { class: 'model-card-title model-card-toggle', type: 'button', 'aria-expanded': String(!collapsed), onclick: () => onToggle() }, ...title)
+  const more = shown.more ? `${shown.more} more` : 'Fewer';
+  const title = [el('strong', {}, card.name), el('span', {}, card.kindWord, docked && (shown.more || expanded) ? ` · ${more}` : '')];
+  const titleNode = docked
+    ? el('button', {
+      class: 'model-card-title model-card-toggle', type: 'button', 'aria-expanded': String(expanded),
+      ...tipAttributes(expanded ? 'Show the key facts only' : 'Show every fact').attrs, 'aria-label': `${card.name}, ${card.kindWord}`,
+      onclick: () => onToggle(),
+    }, ...title)
     : el('div', { class: 'model-card-title' }, ...title);
-  return el('section', { class: `model-card${collapsed ? ' is-collapsed' : ''}`, 'aria-label': `${card.name}, ${card.kindWord}` },
+  const classes = ['model-card', docked ? 'is-docked' : 'is-column', shown.facts.length ? '' : 'is-collapsed'].filter(Boolean).join(' ');
+  return el('section', { class: classes, 'aria-label': `${card.name}, ${card.kindWord}` },
     el('header', { class: 'model-card-head' },
       el('span', { class: 'model-swatch', style: { background: `var(${card.token})` }, 'aria-hidden': 'true' }),
       titleNode,
       sourceChip(card.source),
       close),
-    collapsed ? null : el('dl', { class: 'model-card-facts' }, ...card.facts.flatMap((fact) => [
+    shown.facts.length ? el('dl', { class: 'model-card-facts' }, ...shown.facts.flatMap((fact) => [
       el('dt', {}, fact.name),
       el('dd', {}, fact.value, ' ', sourceChip(fact.source)),
-    ])),
-    !collapsed && card.note ? el('p', { class: 'model-card-note' }, card.note) : null,
-    collapsed ? null : link);
+    ])) : null,
+    whole && card.note ? el('p', { class: 'model-card-note' }, card.note) : null,
+    link);
 }

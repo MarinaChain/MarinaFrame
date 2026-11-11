@@ -14,6 +14,7 @@ import { el, svg, fill, icon, prefersReducedMotion } from './dom.js';
 import { readArtifactAsDataUrl } from './api.js';
 import * as fmt from './format.js';
 import { workerProgressView, renderWorkerProgress } from './progress.js';
+import { stepStartsOpen } from './details.js';
 
 /** Poll interval while a run is active (task-changed events also poll at once). */
 const POLL_MS = 1000;
@@ -51,6 +52,13 @@ const AI_KINDS = new Set(['look', 'read', 'strokes', 'trace', 'corridor', 'assig
 const BUILD_KINDS = new Set(['build', 'render', 'score', 'survey']);
 
 /** Tick and dot category of a step, for the scrub bar and the Thinking cards. */
+/** The chevron of a row that opens: it turns when the row's aria-expanded is true (styles.css). */
+function disclosureMark() {
+  const node = icon('chevron');
+  node.classList.add('chevron');
+  return node;
+}
+
 function stepCategory(step) {
   if (step.kind === 'refused' || step.tool?.kept === false || step.tool?.state === 'refused') return 'refused';
   if (step.kind === 'repeat_collapsed' || step.kind === 'system') return 'quiet';
@@ -147,6 +155,9 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
   let revisionToken = 0;
   /** sequence -> { last_sequence, node } for the Thinking cards. */
   const cards = new Map();
+  /** Steps the person opened or closed in the Thinking tab (kept when a card is built again). */
+  const expandedSteps = new Set();
+  const collapsedSteps = new Set();
   let dialValue = null;
   let dialFrame = 0;
   let dialDeltaTimer = 0;
@@ -192,6 +203,8 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
     dialValue = null;
     hullCache.clear();
     cards.clear();
+    expandedSteps.clear();
+    collapsedSteps.clear();
     stopPlaying();
     stopPolling();
     clearInterval(clockTimer);
@@ -763,24 +776,42 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
     const previousNotes = steps.slice(0, index).reverse().find((s) => s.notes)?.notes || null;
     const notes = step.notes && step.notes !== previousNotes ? step.notes : null;
     const [heading, rest] = fmt.splitStepTitle(step, stepTitle(step));
+    // Mark and revise: "Keep anyway" on a result the keep rule did not keep (mark.js).
+    const actions = cardActions(step);
+    // One line per step (title, time, cost); a press opens its quote, tool and the rest.
+    const waits = Boolean(actions && (actions.matches('button') || actions.querySelector('button')));
+    const open = stepStartsOpen(step.sequence, { expanded: expandedSteps, collapsed: collapsedSteps, waits });
+    const bodyId = `thought-detail-${step.sequence}`;
+    const body = el('div', { class: 'thought-detail', id: bodyId, hidden: !open },
+      rest ? clampedText('thought-sub', rest) : null,
+      step.text ? clampedText('thought-quote', step.text, { quote: true }) : null,
+      toolCard(step),
+      notes ? el('details', { class: 'thought-more' },
+        el('summary', {}, icon('chevron'), 'Why'),
+        el('p', { class: 'thought-notes selectable-text' }, notes)) : null,
+      imagesBlock(step),
+      el('button', { class: 'thought-seek', type: 'button', onclick: seekHere }, icon('follow'), 'Show this step'),
+      actions);
+    const row = el('button', {
+      class: 'thought-row', type: 'button', 'aria-expanded': String(open), 'aria-controls': bodyId,
+      title: open ? 'Show less' : 'Show the quote and the tool',
+      onclick: () => {
+        const opening = body.hidden;
+        body.hidden = !opening;
+        row.setAttribute('aria-expanded', String(opening));
+        row.title = opening ? 'Show less' : 'Show the quote and the tool';
+        (opening ? expandedSteps : collapsedSteps).add(step.sequence);
+        (opening ? collapsedSteps : expandedSteps).delete(step.sequence);
+      },
+    },
+    disclosureMark(),
+    el('span', { class: 'thought-title' }, step.actor === 'person' ? el('span', { class: 'thought-who' }, 'You') : null, heading),
+    el('span', { class: 'thought-meta' },
+      el('time', {}, clockDuration(step.time_ms)),
+      step.cost_usd ? el('span', { title: 'List cost of this model answer' }, fmt.usd(step.cost_usd)) : null));
     return el('li', { class: 'thought', dataset: { category, sequence: String(step.sequence) } },
       el('span', { class: 'thought-dot', 'aria-hidden': 'true' }),
-      el('article', { class: 'thought-card' },
-        el('header', { class: 'thought-head' },
-          el('button', { class: 'thought-title', type: 'button', onclick: seekHere, title: 'Show this step' },
-            step.actor === 'person' ? el('span', { class: 'thought-who' }, 'You') : null, heading),
-          el('span', { class: 'thought-meta' },
-            el('time', {}, clockDuration(step.time_ms)),
-            step.cost_usd ? el('span', { title: 'List cost of this model answer' }, fmt.usd(step.cost_usd)) : null)),
-        rest ? clampedText('thought-sub', rest) : null,
-        step.text ? clampedText('thought-quote', step.text, { quote: true }) : null,
-        toolCard(step),
-        notes ? el('details', { class: 'thought-more' },
-          el('summary', {}, icon('chevron'), 'Why'),
-          el('p', { class: 'thought-notes selectable-text' }, notes)) : null,
-        imagesBlock(step),
-        // Mark and revise: "Keep anyway" on a result the keep rule did not keep (mark.js).
-        cardActions(step)));
+      el('article', { class: 'thought-card' }, el('header', { class: 'thought-head' }, row), body));
   }
 
   function cardFor(step, index) {
