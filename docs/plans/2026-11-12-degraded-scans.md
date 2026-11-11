@@ -60,8 +60,10 @@ seen (sheets are 1668-2462 px wide; the model's body crops are upscaled 3-4x).
 Base replay of the stored readings at 3865d8c (current code, `work/degraded-lane/replay-base.json`),
 RMS % / volume %: dtmb-L2 32.33 / +36.7, dtmb-L3 59.03 / +61.6, series60-L2 36.73 / -29.7,
 series60-L3 45.98 / +56.5 (delivered 20.39 came from later model-authored edits), 00679-L2
-28.45 / +11.9, 00679-L3 44.21 / -22.5; 08158-L2 47.77 (single probe run, delivered 17.38 at
-e2f795e: stations 2-7 all took one 0.6-5.5 m stroke); rest paused (see resume point).
+28.45 / +11.9, 00679-L3 44.21 / -22.5, 08158-L2 47.77 / +3.8 (delivered 17.38 at e2f795e;
+stations 2-7 all took one 0.6-5.5 m stroke), 08158-L3 17.70 / +5.2, 09867-L2 12.72 / +5.1,
+09867-L3 39.10 / -49.5 (delivered 35.68 after model edits), 02216-L2 20.35 / +17.1 (delivered
+17.42), 02216-L3 46.79 / -8.4. All 12 fail.
 
 ## Fix 1: shared fragments go to the form fit (`first_hull_tools.shared_fragments`)
 
@@ -78,6 +80,42 @@ Commit gate check (written before the replay; probe stops right after the rule,
 6 L1 stored readings, so those hulls are unchanged (L0 stays 4 of 6, L1 passes 08158 and 09867
 untouched). It acts on 02216-L1 (50.26 %, a scale misreading): stations 2, 3, 4, 6, 7 shared one
 0.7-5.0 m piece of an 8 m section.
+
+### Fix 1 replay (`work/degraded-lane/replay-fix.json`, code 6951d08)
+
+| Case | Base replay RMS / vol % | Fix 1 replay RMS / vol % |
+|---|---|---|
+| dtmb5415-L2 | 32.33 / +36.7 | 32.33 / +36.7 (unchanged) |
+| dtmb5415-L3 | 59.03 / +61.6 | 59.03 / +61.6 (unchanged) |
+| series60-L2 | 36.73 / -29.7 | 36.73 / -29.7 (unchanged) |
+| series60-L3 | 45.98 / +56.5 | 45.98 / +56.5 (unchanged) |
+| 00679-L2 | 28.45 / +11.9 | 28.45 / +11.9 (unchanged) |
+| 00679-L3 | 44.21 / -22.5 | **30.50 / -11.9** |
+| 08158-L2 | 47.77 / +3.8 | **23.63** / +42.3 (volume worse: fitted fills too full) |
+| 08158-L3 | 17.70 / +5.2 | 17.70 / +5.2 (unchanged) |
+| 09867-L2 | 12.72 / +5.1 | 12.72 / +5.1 (unchanged) |
+| 09867-L3 | 39.10 / -49.5 | **19.53 / +23.4** |
+| 02216-L2 | 20.35 / +17.1 | 20.35 / +17.1 (unchanged) |
+| 02216-L3 | 46.79 / -8.4 | 46.79 / -8.4 (unchanged) |
+| 02216-L1 | 50.26 (lane A, round-1 code) | **12.98 / -9.3** |
+
+RMS better on 3 of 12 L2/L3 and on 02216-L1, unchanged elsewhere; no new pass. Mean L2/L3 RMS
+36.0 -> 31.2 %. L0/L1 gates hold (probe above).
+
+Live gate (written before the live round): one live round, Claude Sonnet 5.5 only, sheet-only,
+`--policy live --on-ambiguity draft --context conversation`, on the three cases the rule acts on
+(08158-L2, 00679-L3, 09867-L3). Report delivered RMS/volume against the e2f795e live numbers
+(17.38, 44.21, 35.68). The full L2/L3 set runs once afterwards only if the live round shows no
+case worse by more than the run-to-run spread lane A saw (about 4 points).
+
+Gate amendment (PM, written before the next replay): the hull gate is 2 % RMS AND 5 % volume, and
+fix 1 made volume worse (08158-L2 +3.8 -> +42.3 %; 09867-L3 |-49.5| -> |+23.4| is better in size
+but the fill is too full). Before any push or live run:
+1. Find why the stations fix 1 hands to the form fit come out too full and fix it.
+2. Volume condition, on replay and on the live round: no case may get worse in |volume error| by
+   more than 2 points against its base, and L0/L1 volume errors must stay unchanged.
+3. Replay again (all 12 L2/L3 and 02216-L1; the L0/L1 probe again if the change can reach them),
+   then the live round on the three cases as planned.
 
 ## Resume point
 
