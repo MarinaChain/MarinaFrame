@@ -1068,6 +1068,11 @@ class ReadView:
     baseline_row: float | None = None  # profiles
     notes: list[str] = field(default_factory=list)
     name: str = ''  # the view's name in the reading record (with the sheet prefix of a case)
+    # Its sheet (index in ``read_sheets``), the sheet size in pixels and the deskew angle removed:
+    # source records place labels on the sheet with these (docs/SOURCE_RECORD.md).
+    sheet_number: int = 0
+    page_px: tuple[int, int] | None = None
+    skew_removed_deg: float = 0.0
 
     @property
     def record_name(self) -> str:
@@ -1088,6 +1093,8 @@ class PlanTank:
     x_range: tuple[float, float]
     side: int | None = None
     role: str | None = None  # the plan role of its view; None for a tank found in the profile
+    # Where it was read: {'sheet_number', 'view' kind, 'box_px' (label, sheet pixels) or None, 'page_px'}.
+    place: dict | None = None
 
     @property
     def kind(self) -> str | None:
@@ -1361,7 +1368,7 @@ def plan_tanks(view: ReadView, labels: list[RegionLabel], schedule: list[dict] =
             continue
         for side, text in split_both_sides(label.text, label.side, view.centre_row is not None):
             tank = PlanTank(view.record_name, text, tank_key(text), label.region, {}, (0.0, 0.0), side,
-                            view.ink.spec.role)
+                            view.ink.spec.role, place=sheet_place(view, label.blocks))
             _restrict(view, tank)
             if tank.columns:
                 found.append(tank)
@@ -1757,7 +1764,8 @@ def profile_tanks(profile: ReadView, labels: list[RegionLabel], regions: list[Pr
             if len(columns) < 2:
                 continue
             xs = sorted(columns)
-            tank = PlanTank(profile.record_name, text, tank_key(text), -1, columns, (xs[0], xs[-1]), side)
+            tank = PlanTank(profile.record_name, text, tank_key(text), -1, columns, (xs[0], xs[-1]), side,
+                            place=sheet_place(profile, []))
             found.append((tank, region))
     return found
 
@@ -1850,6 +1858,7 @@ def _read_views(ink: np.ndarray, dpi: float, sheet: SheetSpec, ask: Asker, prefi
         name = prefix + spec.name
         view = read_view(ink, spec, px_per_mm, sheet, ask, bar_axis)
         view.name = name
+        view.sheet_number, view.page_px, view.skew_removed_deg = number, (ink.shape[1], ink.shape[0]), angle
         if view.axis is None:
             reading['views'][name] = {'error': 'no axis or scale', 'notes': view.notes}
             continue
@@ -1869,7 +1878,8 @@ def _read_views(ink: np.ndarray, dpi: float, sheet: SheetSpec, ask: Asker, prefi
 
 
 def read_sheets(sheets: list[tuple[np.ndarray, float, SheetSpec]], ask: Asker,
-                slicer: tanks.HullSlicer | None = None) -> tuple[list[RasterTank], dict]:
+                slicer: tanks.HullSlicer | None = None,
+                sheet_files: list[tuple[str, int]] | None = None) -> tuple[list[RasterTank], dict]:
     """Read the views of one or more sheets (a profile on one sheet, plans on others) and build
     the tanks. The first profile is the profile of every plan. Views without frame numbers are
     aligned to it by their bulkheads (``align_to_profile``): within ALIGN_SEARCH_M on the same
@@ -1941,7 +1951,7 @@ def read_sheets(sheets: list[tuple[np.ndarray, float, SheetSpec]], ask: Asker,
             results.append(RasterTank(tank, content, tank.label, row.get('key') if row else None, 'guessed',
                                       z_basis, profile_label, triangles, volume, repairs=repairs,
                                       loft_omitted_spans=omitted))
-    reading['tanks'] = [tank_record(t) for t in results]
+    reading['tanks'] = [tank_record(t, sheet_files) for t in results]
     return results, reading
 
 
@@ -1971,8 +1981,56 @@ def read_scale_bar(ink: np.ndarray, window, px_per_mm: float, unit_m: float, ask
     return fit_scale_bar(row, ticks, unit_m)
 
 
-def tank_record(tank: RasterTank) -> dict:
-    return {'label': tank.plan.label, 'key': tank.plan.key, 'view': tank.plan.view, 'name': tank.name,
+def unturn_box(box: list[float], page_px: tuple[int, int], skew_removed_deg: float) -> list[float]:
+    """A box [left, top, right, bottom] of the deskewed sheet, on the sheet as drawn: its corners
+    turned back by the inverse of ``deskew`` (rotation about the sheet centre), then boxed."""
+    if not skew_removed_deg:
+        return box
+    width, height = page_px
+    centre = np.array([width / 2, height / 2])
+    # deskew turned the sheet with cv2.getRotationMatrix2D(centre, -angle): [[c, -s], [s, c]].
+    # Its inverse (the transpose) turns a point back to the sheet as drawn.
+    theta = math.radians(skew_removed_deg)
+    alpha, beta = math.cos(theta), math.sin(theta)
+    turn_back = np.array([[alpha, beta], [-beta, alpha]])
+    left, top, right, bottom = box
+    corners = np.array([[left, top], [right, top], [right, bottom], [left, bottom]]) - centre
+    drawn = corners @ turn_back.T + centre
+    return [float(drawn[:, 0].min()), float(drawn[:, 1].min()), float(drawn[:, 0].max()), float(drawn[:, 1].max())]
+
+
+def sheet_place(view: ReadView, blocks: list[TextBlock]) -> dict:
+    """Where label ``blocks`` of ``view`` are on the sheet as drawn (no box without blocks)."""
+    box = None
+    if blocks and view.page_px:
+        row0, col0, row1, col1 = _box_of(blocks)
+        top, left = view.ink.origin
+        box = unturn_box([left + col0, top + row0, left + col1, top + row1], view.page_px, view.skew_removed_deg)
+    return {'sheet_number': view.sheet_number, 'view': view.ink.spec.kind, 'box_px': box,
+            'page_px': list(view.page_px) if view.page_px else None}
+
+
+def tank_source_record(tank: RasterTank, sheet_files: list[tuple[str, int]] | None) -> dict:
+    """Where a raster tank came from: the label region of its plan (read), or a guess that used it.
+
+    ``sheet_files`` gives the file and page of each sheet, in ``read_sheets`` order.
+    """
+    from . import source_record
+
+    place = tank.plan.place
+    if place is None or not sheet_files or place['sheet_number'] >= len(sheet_files):
+        return source_record.unknown('The tank reader was not told which file each sheet is.')
+    sheet, page = sheet_files[place['sheet_number']]
+    where = source_record.region(sheet, view=place['view'], page=page, box_px=place['box_px'],
+                                 page_px=place['page_px'])
+    if tank.z_source != 'traced':
+        return source_record.guessed(f'Height: {tank.z_basis}', [where])
+    return source_record.read([where])
+
+
+def tank_record(tank: RasterTank, sheet_files: list[tuple[str, int]] | None = None) -> dict:
+    return {'source_record': tank_source_record(tank, sheet_files),
+            'label': tank.plan.label, 'key': tank.plan.key, 'view': tank.plan.view, 'name': tank.name,
             'schedule_key': tank.schedule_key, 'content': tank.content,
             'x_m': [round(v, 3) for v in tank.plan.x_range], 'volume_m3': round(tank.volume_m3, 4),
             'built': tank.triangles is not None, 'profile_label': tank.profile_label,

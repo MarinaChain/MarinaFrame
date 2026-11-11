@@ -45,6 +45,11 @@ pub fn build_record(task: &Path, build: &Value) -> Option<Value> {
     if build["draft"] != true {
         return None;
     }
+    result_record(task, build)
+}
+
+/// The `result.json` of a build, draft or not.
+pub fn result_record(task: &Path, build: &Value) -> Option<Value> {
     let file = guard_inside_task(task, &format!("{}/result.json", build["path"].as_str()?)).ok()?;
     let bytes = util::read_bounded(&file, MAX_BUILD_RECORD_BYTES).ok()?;
     serde_json::from_slice(&bytes).ok()

@@ -1199,6 +1199,18 @@ def authored_section(section: dict[str, Any], source_file: str) -> tuple[dict[st
     return result, {"status": "model_authored", "source_label": authored["source_label"]}
 
 
+def _section_record(section: dict, source_file: str, input_details: dict, image) -> dict:
+    """Where one section was read (docs/SOURCE_RECORD.md): its region on the rendered page."""
+    from . import source_record
+
+    place = {"page": int(input_details.get("page_index", 0)), "page_px": [int(image.shape[1]), int(image.shape[0])]}
+    if "authored" in section:
+        authored = section["authored"]
+        return source_record.authored_section(source_file, section["roi_px"], label=authored["source_label"],
+                                              basis=authored["basis"], **place)
+    return source_record.traced_section(source_file, section["roi_px"], **place)
+
+
 def extract_sections(spec: dict, base_dir: Path) -> dict:
     """Measure supported starboard half-sections and return structured gaps.
 
@@ -1242,6 +1254,7 @@ def extract_sections(spec: dict, base_dir: Path) -> dict:
         seen.add(section_id)
         if "authored" in section:
             result, diagnostic = authored_section(section, source["file"])
+            result["source_record"] = _section_record(section, source["file"], input_details, image)
             output["sections"].append(result)
             output["diagnostics"]["sections"][section_id] = diagnostic
             continue
@@ -1250,6 +1263,7 @@ def extract_sections(spec: dict, base_dir: Path) -> dict:
             from .draft import check_draft
             options = {"draft": True} if extract is _extract_one and check_draft(spec.get("draft")) else {}
             result, diagnostic = extract(image, section, source["file"], input_details, **options)
+            result["source_record"] = _section_record(section, source["file"], input_details, image)
             output["sections"].append(result)
             output["diagnostics"]["sections"][section_id] = diagnostic
         except DrawingError as exc:

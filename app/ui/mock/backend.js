@@ -141,7 +141,7 @@ function mockSources(task, view) {
       pages: [{ ...page(0, 'Lines plan', '1:50'), replaced: true }, page(1, 'Other')],
       used_to: 'r0001', replaced_by: 'mock-lines-2',
     }),
-    file('mock-ga', { name: 'survey-launch-ga.png', kind: 'drawing', role: 'Sheet', pages: [page(0, 'General arrangement', '1:100')], size_bytes: 412_000 }),
+    file('mock-ga', { name: 'survey-launch-ga.png', kind: 'drawing', role: 'Sheet', image: 'ga-1.png', pages: [page(0, 'General arrangement', '1:50')], size_bytes: 412_000 }),
     file('mock-midship', {
       name: 'survey-launch-midship.tif', kind: 'drawing', role: 'Sheet', image: 'crop-st12.png',
       pages: [page(0, 'Midship section', '1:25', crop)], size_bytes: 96_000,
@@ -186,6 +186,41 @@ const MOCK_COMPONENTS = (() => {
       null, null, []),
   ];
 })();
+
+/**
+ * Source records of the survey launch (docs/SOURCE_RECORD.md). Part regions are on the mock GA
+ * sheet mock/files/ga-1.png (mock/make_ga_mock.py draws it: column = 200 + 50 x, profile row =
+ * 480 - 50 z, plan row = 770 - 50 y, in metres). Hull regions are the body plan sections.
+ */
+const MOCK_GA = 'survey-launch-ga.png';
+const MOCK_LINES = 'survey-launch-lines.pdf';
+const MOCK_SHEET_PX = [MOCK_PAGE.width, MOCK_PAGE.height];
+/** A GA region around ship ranges [x0, x1] and [z0, z1] (profile) or [y0, y1] (plan), with 8 px of space. */
+function gaRegion(view, [x0, x1], [v0, v1]) {
+  const row = view === 'profile' ? (z) => 480 - 50 * z : (y) => 770 - 50 * y;
+  return { sheet: MOCK_GA, page: 0, view, box_px: [200 + 50 * x0 - 8, row(v1) - 8, 200 + 50 * x1 + 8, row(v0) + 8], page_px: MOCK_SHEET_PX };
+}
+const MOCK_SOURCE_RECORDS = {
+  hull: { kind: 'read', regions: [[120, 250, 560, 830], [580, 250, 1020, 830], [1040, 250, 1480, 830]].map((box) => ({ sheet: MOCK_LINES, page: 0, view: 'body plan', box_px: box, page_px: MOCK_SHEET_PX })) },
+  main_deck: { kind: 'guessed', method: 'thickness: typical deck plate (no plate label read)', inputs: [gaRegion('profile', [0, 24], [3.4, 3.6]), gaRegion('plan', [0, 24], [-3.6, 3.6])] },
+  house_t1: { kind: 'read', regions: [gaRegion('profile', [9, 17], [3.4, 5.8]), gaRegion('plan', [9, 17], [-2.6, 2.6])] },
+  wheelhouse: { kind: 'guessed', method: 'outline: the tier below gives the breadth; the wheelhouse plan has no scale', inputs: [gaRegion('profile', [11, 15.5], [5.8, 8.2]), { part: 'house_t1' }] },
+  aft_bulwark: { kind: 'guessed', method: 'thickness: typical bulwark plate', inputs: [gaRegion('profile', [0, 9], [3.4, 4.4]), { part: 'main_deck' }] },
+  rudder: { kind: 'unknown', reason: 'Not built: no view of the stern below the waterline was found.' },
+  tank_fw1: { kind: 'guessed', method: 'Height: the tank height is not drawn', inputs: [gaRegion('plan', [4, 7], [-1.5, 1.5]), gaRegion('profile', [4, 7], [0.2, 1.4])] },
+  tank_wb1: { kind: 'read', regions: [gaRegion('plan', [13, 16], [0.2, 2.4])] },
+  tank_wb2: { kind: 'read', regions: [gaRegion('plan', [13, 16], [-2.4, -0.2])] },
+  tank_do1: { kind: 'read', regions: [gaRegion('plan', [17, 19.5], [-2, 2]), gaRegion('profile', [17, 19.5], [0.2, 1.2])] },
+  tank_fo1: { kind: 'unknown', reason: 'No plan region holds its label: not built.' },
+};
+
+/** The record of a mock section: its region on the page the drawing pane shows. */
+function mockSectionRecord(section, page) {
+  const region = { sheet: page.path.split('/').pop(), page: 0, view: 'body plan', box_px: section.roi_px, page_px: [page.width, page.height] };
+  return section.state === 'guessed'
+    ? { kind: 'guessed', method: section.reason, inputs: [region] }
+    : { kind: 'read', regions: [region] };
+}
 
 /** Metres aft of frame 0 where ?mocksections starts, so the strip also shows a "-1.0 m" tile. */
 const MOCK_SECTIONS_START_M = -1;
@@ -516,6 +551,13 @@ export function mockTransport() {
       const mockTanks = task.endsWith('survey-launch') && new URLSearchParams(location.search).has('mocktanks');
       if (mockTanks) view.components.push(mockPart(MOCK_TANK_PART));
       view.capacity_plan = mockTanks ? clone(MOCK_CAPACITY_PLAN) : null;
+      // The survey launch has source records; the other mock runs are older runs without them.
+      if (task.endsWith('survey-launch')) {
+        for (const item of [...(view.components || []), ...(view.capacity_plan?.rows || [])]) {
+          if (MOCK_SOURCE_RECORDS[item.id]) item.source_record = clone(MOCK_SOURCE_RECORDS[item.id]);
+        }
+        if (view.source_page) for (const section of view.sections) section.source_record = mockSectionRecord(section, view.source_page);
+      }
       view.tank_model = mockTanks;
       // ?mockstructure (with a structure GLB placed in mock/files; none is shipped): the survey
       // launch has a steel structure for the 3D view.

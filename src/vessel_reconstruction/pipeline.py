@@ -435,6 +435,8 @@ def _extract_sections(input_spec, replay_spec, transaction, stage, result, phase
         observed_sections = result["sections"]
         result["sections"] = _faired_sections(observed_sections, result)
 
+    from .source_record import finish_sections
+    finish_sections(result["sections"], faired=observed_sections is not None and result["sections"] is not observed_sections)
     _bind_section_evidence(result["sections"], result, assistance)
     _record_extraction(stage, extracted, result)
     return extracted, assistance, observed_sections
@@ -463,6 +465,8 @@ def _construct_hull(input_spec, transaction, stage, result, phase, extracted, as
             # Happy path: a faired hull that cannot be built falls back to the
             # hull through the sections as observed, with a check item.
             result["sections"] = observed_sections
+            from .source_record import finish_sections
+            finish_sections(result["sections"])
             _bind_section_evidence(result["sections"], result, assistance)
             result["gaps"].append(gap("fairing_fallback", f"The faired hull could not be built ({exc}); "
                                       "the hull goes through the sections as observed.", severity="warning"))

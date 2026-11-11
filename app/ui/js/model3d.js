@@ -106,7 +106,7 @@ function scaleToMetres(geometry, lengthM) {
   if (Math.abs(factor - 1) > 1e-6) geometry.scale(factor, factor, factor);
 }
 
-export function createModelView({ host, onPick = null, onPartPick = null, partContext = () => ({}) }) {
+export function createModelView({ host, onPick = null, onPartPick = null, onItemHover = null, partContext = () => ({}) }) {
   const empty = el('div', { class: 'pane-empty' });
   host.append(empty);
 
@@ -116,7 +116,7 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
     renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true });
   } catch {
     showEmpty('3D view not available', 'This computer did not allow a WebGL view.');
-    return { setModel() {}, setSpacesContext() {}, captureImage: () => null, setSelected() {}, partList: () => [], hidePart() {}, isolatePart() {}, showAllParts() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, showsWholeVessel: false, hasTanks: false };
+    return { setModel() {}, setSpacesContext() {}, captureImage: () => null, setSelected() {}, partList: () => [], hidePart() {}, isolatePart() {}, showAllParts() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, anchorOf: () => null, showsWholeVessel: false, hasTanks: false };
   }
   /** Pixel ratio cap: a 3x screen draws at 2x, which looks the same and costs 2.25 times less. */
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
@@ -790,6 +790,7 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
     const event = readoutEvent;
     readoutEvent = null;
     if (!event) return;
+    reportHover(event);
     const targets = pickTargets();
     if (!targets.length) {
       overlays.setReadout(null);
@@ -812,7 +813,47 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
   renderer.domElement.addEventListener('pointerleave', () => {
     readoutEvent = null;
     overlays.setReadout(null);
+    reportHover(null);
   });
+
+  // ---- Hover for the source view (provenance.js): the section plane or part under the pointer,
+  // found once a frame with the readout, reported only when it changes.
+  let hoveredItemKey = null;
+  function reportHover(event) {
+    if (!onItemHover) return;
+    let item = null;
+    const sectionId = event && planeAt(event);
+    if (sectionId) item = { kind: 'section', id: sectionId };
+    else if (event && wholeVessel) {
+      const partId = partAt(event);
+      if (partId) item = { kind: 'part', id: partId };
+    }
+    const key = item ? `${item.kind}:${item.id}` : null;
+    if (key === hoveredItemKey) return;
+    hoveredItemKey = key;
+    onItemHover(item);
+  }
+
+  /** World centres of parts and section planes, kept per object (they do not move). */
+  const anchorCentres = new WeakMap();
+  const anchorPoint = new THREE.Vector3();
+  /** The point of a part or section on screen in client pixels, or null when it is not shown. */
+  function anchorOf(item) {
+    const object = item.kind === 'section' ? planes.get(item.id) : meshById.get(item.id);
+    if (!object || !object.visible) return null;
+    if (item.kind !== 'section' && !isShown(object)) return null;
+    let centre = anchorCentres.get(object);
+    if (!centre) {
+      const box = new THREE.Box3().setFromObject(object);
+      if (box.isEmpty()) return null;
+      centre = box.getCenter(new THREE.Vector3());
+      anchorCentres.set(object, centre);
+    }
+    anchorPoint.copy(centre).project(camera);
+    if (Math.abs(anchorPoint.z) > 1) return null;
+    const rect = renderer.domElement.getBoundingClientRect();
+    return { x: rect.left + ((anchorPoint.x + 1) / 2) * rect.width, y: rect.top + ((1 - anchorPoint.y) / 2) * rect.height };
+  }
   renderer.domElement.addEventListener('pointerleave', () => {
     if (!hoveredTankId) return;
     hoveredTankId = null;
@@ -1573,6 +1614,8 @@ export function createModelView({ host, onPick = null, onPartPick = null, partCo
       layers.structure = true;
       restyle();
     },
+    /** The point of a part or section ({ kind, id }) on screen in client pixels, or null. */
+    anchorOf,
     /** Tint one part of the whole-vessel model in the selection blue (null: none). */
     highlightPart(id) {
       highlightedId = id;

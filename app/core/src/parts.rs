@@ -285,6 +285,7 @@ fn component_view(entry: &Value, reviews: &HashMap<String, PartReview>) -> Optio
             && has_previous(entry),
         changes,
         display: display_of(entry, built),
+        source_record: crate::source_record::checked(&entry["source_record"]),
         id,
     })
 }
@@ -422,7 +423,8 @@ mod tests {
                          "plan_m": [[[4, -1.5], [7, -1.2], [7, 1.2], [4, 1.5]]], "content_class": "fresh_water"}},
             {"id": "rudder", "label": "Rudder blade", "op": "appendage", "status": "draft_guess", "built": false,
              "reason": "ValueError: no view", "source": {"view": "profile", "region": "r2", "method": "label"},
-             "source_labels": {}, "geometry": null, "provenance": {}}
+             "source_labels": {}, "geometry": null, "provenance": {},
+             "source_record": {"kind": "unknown", "reason": "The reader did not record the sheet."}}
         ]}});
         std::fs::write(task.join(EXECUTION_FILE), execution.to_string()).unwrap();
         task
@@ -436,6 +438,9 @@ mod tests {
         assert_eq!(parts.len(), 3);
         let deck = &parts[0];
         assert!(deck.display.is_none());
+        // A part without a record (an older run) has none; one with a record keeps it.
+        assert!(deck.source_record.is_none());
+        assert_eq!(parts[2].source_record.as_ref().unwrap()["kind"], "unknown");
         assert_eq!(
             (deck.label.as_str(), deck.op.as_str(), deck.review.as_str()),
             ("Aft deck", "deck", "open")

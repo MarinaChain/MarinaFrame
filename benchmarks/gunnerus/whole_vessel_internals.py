@@ -859,6 +859,43 @@ def part_display(part: Part) -> dict | None:
     return {**part.loft.outlines(), 'content_class': content_class(part.geometry.get('group'), part.label)}
 
 
+# The sheet and view each traced argument of an internal part is read from (docs/SOURCE_RECORD.md).
+# Both are DXF files: the records name the sheet and view, never a pixel box.
+ARGUMENT_SHEETS = {
+    ('deck', 'level'): (LONG_SECTION, 'profile'),
+    ('deck', 'extent'): (LONG_SECTION, 'profile'),
+    ('bulkhead', 'position'): (TANK_PLAN, 'profile'),
+    ('tank', 'outline'): (TANK_PLAN, 'plan'),
+}
+
+
+def _argument_sheet(part: Part, argument: str):
+    if part.op == 'tank' and argument == 'height':
+        # Double-bottom tanks take their height from the longitudinal section, the others from
+        # the floor line of the tank-arrangement profile.
+        return (LONG_SECTION if part.geometry.get('plan') == 'below_tank_top' else TANK_PLAN), 'profile'
+    return ARGUMENT_SHEETS.get((part.op, argument))
+
+
+def part_source_record(part: Part) -> dict:
+    """Where an internal part came from: its traced arguments' sheets, or the guesses it used."""
+    from vessel_reconstruction import source_record
+
+    regions, guesses = [], []
+    for argument, record in part.provenance.items():
+        if record.get('source') == 'traced':
+            place = _argument_sheet(part, argument)
+            if place:
+                regions.append(source_record.region(place[0], view=place[1]))
+        else:
+            guesses.append(f'{argument}: {record.get("basis") or record.get("source")}')
+    if guesses:
+        return source_record.guessed('; '.join(guesses), regions)
+    if regions:
+        return source_record.read(regions)
+    return source_record.unknown('; '.join(part.notes) or 'The construction plan reader recorded no source.')
+
+
 def component_entry(part: Part, solid) -> dict:
     built = solid is not None
     guessed = any(v == 'guessed' for v in part.source_labels.values())
@@ -875,6 +912,7 @@ def component_entry(part: Part, solid) -> dict:
             'source': {'view': 'plan' if part.op == 'tank' else 'profile', 'region': part.id,
                        'method': 'construction_plan_reader'},
             'source_labels': part.source_labels, 'provenance': part.provenance,
+            'source_record': part_source_record(part),
             'args': {name: f'{part.id}_{name}' for name in part.source_labels},
             'geometry': part.geometry, 'bbox_m': box, 'volume_m3': volume,
             'display': part_display(part) if built else None,

@@ -79,6 +79,7 @@ class RasterReader:
         self.labels = {}  # The PDF text is outlines: no printed-label snapping.
         self.crops, self.plans = {}, {}
         ink = (gray < INK_THRESHOLD).astype(np.uint8) * 255
+        self.page_px = [int(gray.shape[1]), int(gray.shape[0])]
         for name in RASTER_VIEWS:
             crop = self.crop(name, calibration[name], ink.shape)
             self.crops[name] = crop
@@ -112,6 +113,18 @@ class RasterReader:
 
     def evidence(self, view) -> str:
         return f'{VIEW_ALIASES.get(view, view)}: raster ink'
+
+    def sheet_region(self, view, points_m) -> dict:
+        """The page box (pixels of the rendered PDF page) around ship points of one view."""
+        name = VIEW_ALIASES.get(view, view)
+        crop = self.crops[name]
+        place = {'sheet': self.source_file, 'page': 0, 'view': VIEWS[name].kind}
+        if not points_m:
+            return place
+        x0, v0 = crop['x_of_column'](0), crop['v_of_row'](0)
+        columns = [crop['col0'] + (x - x0) / crop['pixel_m'] for x, _ in points_m]
+        rows = [crop['row0'] + (v0 - v) / crop['pixel_m'] for _, v in points_m]
+        return {**place, 'box_px': [min(columns), min(rows), max(columns), max(rows)], 'page_px': self.page_px}
 
     def end_walls(self, deck_view, x_range, min_length_m):
         crop = self.crops[VIEW_ALIASES.get(deck_view, deck_view)]

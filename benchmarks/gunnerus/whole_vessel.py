@@ -116,6 +116,12 @@ def outline_record(region, view, outline, evidence, sha) -> dict:
             'entity_ids': [evidence], 'plan_view': view}
 
 
+def level_points(low, high) -> list:
+    """Profile points (x, z) of the drawn ends of two levels: the ink a height interval was read from."""
+    xs = [x for level in (low, high) for x in (level.get('extent') or level.get('x_range') or [])]
+    return [[x, level['z']] for x in xs for level in (low, high)]
+
+
 class VectorReader:
     """Drawing evidence from the GA DXF: levels, printed labels, footprints and end walls."""
 
@@ -133,6 +139,10 @@ class VectorReader:
 
     def evidence(self, view) -> str:
         return f'{view}:{len(self.plans[view].entity_ids)} entities'
+
+    def sheet_region(self, view, points_m) -> dict:
+        """The GA sheet and view of a measurement. A DXF has no pixels: the box stays unknown."""
+        return {'sheet': self.source_file, 'page': 0, 'view': VIEWS[view].kind}
 
     def end_walls(self, deck_view, x_range, min_length_m):
         view = VIEWS[deck_view]
@@ -158,6 +168,7 @@ def build_inputs(sources: Path, reader=None) -> dict:
         polygon = reader.footprint(view, x_range, mode, peel) if view else None
         if polygon:
             measurements[f'{region}_outline'] = outline_record(region, view, polygon, reader.evidence(view), sha)
+            measurements[f'{region}_outline']['sheet_region'] = reader.sheet_region(view, polygon)
         else:
             guesses[f'{region}_outline'] = {'kind': 'outline', 'value': fallback, 'source': 'guessed',
                                             'basis': basis}
@@ -166,6 +177,7 @@ def build_inputs(sources: Path, reader=None) -> dict:
     def height(region, low, high):
         record = interval_record(region, lv[low], lv[high], sha)
         if record:
+            record['sheet_region'] = reader.sheet_region('profile', level_points(lv[low], lv[high]))
             measurements[f'{region}_height'] = record
         else:
             guesses[f'{region}_height'] = {'kind': 'interval', 'value': [lv[low]['z'], lv[high]['z']],

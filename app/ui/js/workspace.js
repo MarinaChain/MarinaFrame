@@ -13,6 +13,7 @@ import { createEvidenceCard } from './evidence.js';
 import { createLiveRun } from './live.js';
 import { createMarkTool } from './mark.js';
 import { createModelView } from './model3d.js';
+import { baseName, createSourceController, createSourceView, sourceForSheet, sourceOf, summaryOf } from './provenance.js';
 import { capacityRowOf } from './tanks.js';
 import { renderThinking } from './inspector.js';
 import { renderNarration, renderRevisionStrip } from './run_header.js';
@@ -27,6 +28,8 @@ const SPLIT_MAX = 0.8;
 
 export let evidence, drawing, model, live, markTool;
 let drawingEmpty;
+/** The source view: the sheet a part came from, beside the 3D model (js/provenance.js). */
+let sources;
 
 /** Create the panes. Their callbacks reach the rest of the run view only after start. */
 export function createWorkspace() {
@@ -52,13 +55,23 @@ export function createWorkspace() {
       if (markTool.pickSection(id)) return;
       if (state.view?.sections.some((s) => s.id === id)) selectSection(id, { focusDrawing: true });
     },
+    // The source view follows the pointer in 3D (after a short pause) and the selected part.
+    onItemHover: (item) => sources?.hover(item),
+    onPartPick: (id) => sources?.select(id ? { kind: 'part', id } : null),
     // What the run knows of a part, for its fact card in 3D: the capacity plan row of a tank, the
     // part record, and the source it was read from (the drawing opens beside the model).
     partContext: (id) => {
       const component = state.view?.components?.find((part) => part.id === id) || null;
       const basis = component?.arguments?.find((argument) => argument.basis)?.basis;
-      const source = component && (basis || component.view)
-        ? { label: [basis, component.view ? `${component.view} view` : null].filter(Boolean).join(' · '), open: () => setLayout('split') }
+      const summary = summaryOf(sourceOf(state.view, { kind: 'part', id })?.record);
+      const source = component && (basis || component.view || summary.tone !== 'none')
+        ? {
+          label: [summary.title, basis, component.view ? `${component.view} view` : null].filter(Boolean).join(' · '),
+          open: () => {
+            setLayout('split');
+            sources.select({ kind: 'part', id });
+          },
+        }
         : null;
       return { row: capacityRowOf(state.view?.capacity_plan, id), component, source };
     },
@@ -108,12 +121,67 @@ export function createWorkspace() {
 
   drawingEmpty = el('div', { class: 'pane-empty', hidden: true });
   $('drawing-host').append(drawingEmpty);
+
+  const sourceView = createSourceView({
+    stage: $('stage'),
+    pane: $('drawing-host').parentElement,
+    anchorOf: (item) => model.anchorOf(item),
+    loadSheet,
+    labelOf: (id) => sourceOf(state.view, { kind: 'part', id })?.label || id,
+  });
+  // Both panes must show: the line runs from the part to its sheet.
+  sources = createSourceController({ view: () => state.view, sourceView, canShow: () => $('stage').dataset.view === 'split' });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !sourceView.element.hidden) sources.dismiss();
+  });
+}
+
+// ---------------------------------------------------------------- source sheets
+
+/** Sheet images of the source view by task, file and page; the source list by task. */
+const sheetImages = new Map();
+const sourceLists = new Map();
+
+/** One sheet of the run as `{ url, width, height }`, or null when the run does not have it. */
+function loadSheet(sheet, page) {
+  const task = state.task;
+  const key = `${task}|${sheet}|${page}`;
+  if (!sheetImages.has(key)) {
+    sheetImages.set(key, fetchSheet(task, sheet, page).catch((failure) => {
+      sheetImages.delete(key);
+      throw failure;
+    }));
+  }
+  return sheetImages.get(key);
+}
+
+async function fetchSheet(task, sheet, page) {
+  // The page the drawing pane reads is already loaded.
+  const current = state.view?.source_page;
+  if (current && baseName(current.path) === baseName(sheet)) {
+    return { url: await cachedArtifact('image', task, current.path), width: current.width, height: current.height };
+  }
+  if (!sourceLists.has(task)) sourceLists.set(task, invoke('list_sources', { task }));
+  const listing = await sourceLists.get(task);
+  const source = sourceForSheet(listing.sources || [], sheet);
+  if (!source || !source.previewable) return null;
+  const shown = await invoke('read_source_page', { task, source_id: source.id, page, size: 'full' });
+  return shown.base64 ? { url: `data:${shown.mime};base64,${shown.base64}`, width: shown.width, height: shown.height } : null;
 }
 
 // ---------------------------------------------------------------- drawing and model
 
+let sourcesTask = null;
+
 export async function renderDrawing({ fresh = false } = {}) {
   const view = state.view;
+  if (state.task !== sourcesTask) {
+    // Another run: its parts and sheets are other ones.
+    sourcesTask = state.task;
+    sources.dismiss();
+    sourceLists.clear();
+    sheetImages.clear();
+  }
   const page = view?.source_page || null;
   if (!page) {
     drawing.setPage(null, null);
@@ -186,6 +254,7 @@ const stage = $('stage');
 
 export function setLayout(layout) {
   stage.dataset.view = layout;
+  if (layout !== 'split') sources?.dismiss();
   prefs.set('layout', layout);
   for (const button of $('view-switch').querySelectorAll('button')) {
     button.setAttribute('aria-checked', String(button.dataset.view === layout));

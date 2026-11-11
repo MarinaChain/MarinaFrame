@@ -179,7 +179,9 @@ fn draft_fixture() -> tempfile::TempDir {
         build.join("result.json"),
         json!({"exports":{"stl":"model-draft.stl","step":"model-draft.step"},
             "sections":[{"id":"s0","source_label":"ai_corrected",
-                "evidence":{"authored_basis":"Trace crossed the grid."},"warnings":["Fairing moved the curve."]}],
+                "evidence":{"authored_basis":"Trace crossed the grid."},"warnings":["Fairing moved the curve."],
+                "source_record":{"kind":"guessed","method":"Draft ai_corrected section from its drawn curve",
+                    "inputs":[{"sheet":"lines.png","page":0,"view":"body plan","box_px":[1,2,30,40],"page_px":[100,80]}]}}],
             "gaps":[{"severity":"warning","kind":"draft_interpolated","section_id":"s1",
                 "message":"Missing section interpolated."}]})
         .to_string(),
@@ -235,6 +237,9 @@ fn draft_task_shows_guessed_sections_draft_model_and_banner() {
     assert_eq!(s1.state, SectionState::Guessed);
     assert_eq!(s1.guess.as_ref().unwrap().x_range_m, Some([0.0, 4.0]));
     assert!(s1.candidates.is_empty());
+    // Where each section was read: s0 from its record; s1 has none (no source record).
+    assert_eq!(s0.source_record.as_ref().unwrap()["kind"], "guessed");
+    assert!(s1.source_record.is_none());
     // Source labels, counts and warnings of the draft build.
     let source = s0.source.as_ref().unwrap();
     assert_eq!(source.label, "ai_corrected");

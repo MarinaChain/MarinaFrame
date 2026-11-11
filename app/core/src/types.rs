@@ -112,6 +112,10 @@ pub struct SectionView {
     /// Where the draft's curve for this section came from. Only in a draft build.
     pub source: Option<SectionSource>,
     pub candidates: Vec<CandidateView>,
+    /// Where the build read this section (docs/SOURCE_RECORD.md); None in a run made before
+    /// source records.
+    #[serde(default)]
+    pub source_record: Option<Value>,
 }
 
 /// Source label of one section of a draft build: `traced`, `repaired`,
@@ -333,6 +337,9 @@ pub struct ComponentView {
     /// Outlines for the profile and plan sketches (tanks), when the worker wrote them.
     #[serde(default)]
     pub display: Option<PartDisplay>,
+    /// Where the part was read, or the guess it is (docs/SOURCE_RECORD.md); None in an older run.
+    #[serde(default)]
+    pub source_record: Option<Value>,
 }
 
 /// Outlines of a part for the 2D sketches, in metres: polygons [[x, z], ...] in the profile and
