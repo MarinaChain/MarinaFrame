@@ -83,11 +83,31 @@ def _largest_solid(shape):
     return cq.Compound.makeCompound(solids)
 
 
-def item_solid(item: G.Item, box: G.Box, hull, size: G.HullSize):
-    """The item's solid before carving: below-deck spaces are box and hull; deck items are boxes
-    (a crane is a cylinder post)."""
+# Height of the deck-outline prism above the deck (higher than any deckhouse or crane).
+DECK_PRISM_HEIGHT_M = 80.0
+
+
+def deck_outline_prism(table, size: G.HullSize):
+    """A vertical prism of the hull's deck outline (the stations' deck half-breadths), from just
+    below the deck upward: what stands on the deck stays inside the ship side."""
     import cadquery as cq
 
+    port = [(row.x_m, max(max(p[0] for p in row.points_yz_m), MIN_LOFT_HALF_BREADTH_M)) for row in table.stations]
+    outline = port + [(x, -y) for x, y in reversed(port)]
+    bottom = size.depth_m - 1.0
+    wire = cq.Wire.makePolygon([cq.Vector(x, y, bottom) for x, y in outline], close=True)
+    return cq.Solid.extrudeLinear(cq.Face.makeFromWires(wire), cq.Vector(0, 0, DECK_PRISM_HEIGHT_M))
+
+
+def item_solid(item: G.Item, box: G.Box, hull, size: G.HullSize, deck_prism=None):
+    """The item's solid before carving: below-deck spaces are box and hull; deckhouse tiers and
+    spaces above the deck are boxes kept inside the deck outline; hatches are boxes and a crane
+    is a cylinder post."""
+    import cadquery as cq
+
+    if deck_prism is not None and (item.kind == "accommodation_deck"
+                                   or (item.kind in G.SPACE_KINDS and G.above_deck(box, size))):
+        return _largest_solid(deck_prism.intersect(_box(box.x, box.y, box.z)))
     if item.kind in G.SPACE_KINDS and not G.above_deck(box, size):
         # A space whose side reaches the shell: let the hull give the side.
         y0 = box.y[0] - BOX_MARGIN_M if box.y[0] <= -size.half_beam_m + 1e-6 else box.y[0]
@@ -111,10 +131,11 @@ def build(data: G.ArrangementInput):
     boxes = {item.id: G.item_box(item, data, size) for item in data.items}
     findings = G.check_proportions(size) + G.check_depth(data, boxes) + G.check_boxes(boxes, items, size)
     solids = [Solid("hull", "hull", G.HULL_LABEL, hull, None, None)]
+    deck_prism = deck_outline_prism(table, size)
     placed = []
     for item_id in G.carve_order(boxes, items):
         item = items[item_id]
-        solid = item_solid(item, boxes[item_id], hull, size)
+        solid = item_solid(item, boxes[item_id], hull, size, deck_prism)
         for other in placed:
             if solid is None:
                 break
@@ -125,9 +146,13 @@ def build(data: G.ArrangementInput):
         placed.append(solid)
         solids.append(Solid(item_id, item.kind, item.label, solid, boxes[item_id], item))
     for item in data.items:
-        if item.kind in G.DECK_KINDS:
-            solids.append(Solid(item.id, item.kind, item.label, item_solid(item, boxes[item.id], hull, size),
-                                boxes[item.id], item))
+        if item.kind not in G.DECK_KINDS:
+            continue
+        solid = item_solid(item, boxes[item.id], hull, size, deck_prism)
+        if solid is None:
+            findings.append(f"{item.id}: lies outside the deck outline")
+            continue
+        solids.append(Solid(item.id, item.kind, item.label, solid, boxes[item.id], item))
     return table, size, solids, findings
 
 

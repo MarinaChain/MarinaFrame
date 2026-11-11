@@ -40,6 +40,8 @@ CREATED_MS = int(datetime(2026, 11, 12, tzinfo=timezone.utc).timestamp() * 1000)
 MM_PER_M = 1000.0
 HULL_MESH = (0.01, 0.2)
 LICENCE = "owner-cleared-ga"
+# Particulars as a run page names them.
+PARTICULAR_NAMES = {"lbp_m": "LBP", "loa_m": "LOA", "breadth_m": "breadth", "depth_m": "depth"}
 KIND_LABELS = {"cargo_hold": "Cargo hold", "cargo_tank": "Cargo tank", "slop_tank": "Slop tank",
                "ballast_tank": "Ballast tank", "fuel_tank": "Fuel tank", "other_tank": "Tank",
                "engine_room": "Engine room", "other_space": "Space", "accommodation_deck": "Deckhouse tier",
@@ -352,8 +354,11 @@ def generate(reading: dict, image: Path, out: Path, slug: str, run_name: str, so
     note = (f"{len(components) - 1} parts placed from the GA; each part's card says which extents were read "
             f"and which guessed. Hull {metrics['length_m']:.0f} x {metrics['beam_m']:.1f} x {metrics['depth_m']:.1f} m, "
             "estimated.")
-    if data.estimated():
-        note += " Not from the drawing: " + ", ".join(data.estimated()) + "."
+    estimated = [name for name in PARTICULAR_NAMES
+                 if data.value(name) is not None and data.status(name) not in G.FROM_DRAWING]
+    if estimated:
+        note += " Not from the drawing: " + ", ".join(
+            f"{PARTICULAR_NAMES[name]} ({data.status(name).replace('_', ' ')})" for name in estimated) + "."
     write_presentation(task, note)
     summary = {"label": ESTIMATE_LABEL, "generator": GENERATOR, "generator_commit": _git_commit(),
                "reading_source": source or {}, "particulars_estimated": data.estimated(),

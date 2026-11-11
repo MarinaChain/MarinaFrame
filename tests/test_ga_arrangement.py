@@ -242,6 +242,10 @@ def test_build_and_run_folder(reading, tmp_path):
     # Carving: the hold above the double-bottom tank does not overlap it.
     hold, tank = components["cargo_hold-002"]["bbox_m"], components["ballast_tank-001"]["bbox_m"]
     assert hold["min"][2] >= tank["max"][2] - 1e-3
+    # The deckhouse (guessed full breadth less 1 m a side) stays inside the deck outline, which
+    # narrows towards the transom.
+    house = components["accommodation_deck-001"]["bbox_m"]
+    assert house["max"][1] <= 8.0 + 1e-3 and house["min"][0] >= -1.6 - 1e-3
     # The hull is the estimate and every space lies inside it.
     hull = components["hull"]["bbox_m"]
     for entry in components.values():
