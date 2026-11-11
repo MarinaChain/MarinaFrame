@@ -659,3 +659,22 @@ extents, and `ga_arrangement_input.json` is beside it.
 - Lane U's unpushed prompt experiment (clear/uncertain marking) is not part of the frozen code.
 - The exam runs once, as written in "What the evaluator runs": Claude Sonnet 5.5 only, at most
   54 requests, no `--measure`, scorer and tolerance unchanged.
+
+## Holdout exam result (one frozen run, 2026-11-12)
+
+Frozen commit a66e0e7 (code a0fdf2b). Claude Sonnet 5.5 only, 51 of 54 requests, 15 min, list cost
+USD 2.35 (subscription). All 9 holdout cases ran; none failed.
+
+| Group | Scored | Correct | Wrong | Abstained | Accuracy when answered |
+|---|---|---|---|---|---|
+| Particulars (LOA, LBP, B, D) | 36 | 29 | 0 | 7 | 100% |
+| Counts (holds, hatches, cranes) | 6 | 6 | 0 | 0 | 100% |
+
+- No wrong answer in 42 scored items. 35 correct (83%), 7 abstentions; no answer expected an abstention.
+- Cause of the 7 abstentions (from the run's own output, not from images): a deterministic check
+  after the model reply set the value to null. Three LOA values printed with "ABT." and a decimal
+  comma failed the unit and number check; on one table all four values failed the "box holds no ink"
+  check. In all 7, the model's own text agreed with the answer. This does not change the score.
+- Limits: 9 ships. The counts are scored on 2 bulk carriers only, and the PM had seen their count
+  answers before the run (logged in EXAM_LOG.md); the lane got only general counting rules.
+- The holdout is now used. A later version needs new unseen ships for a blind score.
