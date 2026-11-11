@@ -2,7 +2,7 @@
 
 The existing worker supervisor supplies process cleanup and resource limits.
 Seatbelt adds file and network containment. Runtime libraries are read-only;
-only the fresh task directory is writable. Linux requires a future equivalent.
+only the fresh task directory is writable. Linux uses Landlock and seccomp.
 """
 from __future__ import annotations
 
@@ -74,6 +74,65 @@ def runtime_paths() -> list[Path]:
     return sorted(paths)
 
 
+def linux_runtime_paths() -> list[Path]:
+    """Grant library/source trees, never a whole system or user prefix."""
+    import sysconfig
+    paths = {Path(__file__).resolve().parent.parent}
+    for name in ('stdlib', 'platstdlib', 'purelib', 'platlib'):
+        value = sysconfig.get_path(name)
+        if value:
+            paths.add(Path(value))
+    # Loader dependencies and distro extension modules. /etc is deliberately
+    # absent: hostname, resolver, credentials and other host configuration stay private.
+    paths.update(Path(value) for value in ('/lib', '/lib64', '/usr/lib', '/usr/lib64',
+                                          '/usr/local/lib', '/etc/ld.so.cache',
+                                          '/etc/localtime', '/dev/null', '/dev/urandom', '/dev/random'))
+    library = sysconfig.get_config_var('LIBDIR')
+    if library and Path(library).is_absolute():
+        paths.add(Path(library))
+    for prefix in (sys.prefix, sys.base_prefix):
+        paths.add(Path(prefix)/'pyvenv.cfg')
+    return sorted({path.resolve() for path in paths if path.exists()})
+
+
+def linux_launcher() -> Path:
+    configured = os.environ.get('MARINAFRAME_SANDBOX_LAUNCHER')
+    if configured:
+        launcher = Path(configured).absolute()
+    else:
+        # Packaged deployments put both executables together. Source builds can
+        # point at their Cargo output explicitly; never search an inherited PATH.
+        launcher = Path(sys.executable).absolute().parent/'marinaframe-sandbox'
+    if not launcher.is_file() or not os.access(launcher, os.X_OK):
+        raise RuntimeError('Linux sandbox launcher is missing; set MARINAFRAME_SANDBOX_LAUNCHER to the built marinaframe-sandbox. No unsafe fallback.')
+    return launcher
+
+
+def require_sandbox() -> None:
+    if sys.platform == 'linux':
+        linux_launcher()
+    elif sys.platform != 'darwin' or not Path('/usr/bin/sandbox-exec').is_file():
+        raise RuntimeError('ship CAD requires the supported OS sandbox; no unsafe fallback')
+
+
+def sandbox_command(task: Path, limits) -> tuple[list[str], str]:
+    arguments = [sys.executable, '-m', 'vessel_reconstruction.ship_cad_worker',
+                 '--task', str(task), '--limits', json.dumps(asdict(limits)),
+                 '--parent', str(os.getpid())]
+    if sys.platform == 'linux':
+        config = task/'worker-linux.json'
+        config.write_text(json.dumps({'task': str(task), 'work': str(task/'work'),
+                                     'runtime_paths': [str(p) for p in linux_runtime_paths()],
+                                     'executable': sys.executable, 'limits': asdict(limits),
+                                     'parent_pid': os.getpid()}))
+        return ([str(linux_launcher()), '--config', str(config), '--', *arguments],
+                'linux-landlock-seccomp-deny-list')
+    require_sandbox()
+    profile = task/'worker.sb'
+    profile.write_text(sandbox_profile(task, runtime_paths()))
+    return ['/usr/bin/sandbox-exec', '-f', str(profile), *arguments], 'macos-seatbelt-deny-default'
+
+
 MAX_RESULT_BYTES = 16 * 1024 * 1024  # provenance JSON; far above a normal report
 
 
@@ -111,8 +170,8 @@ def run(program: dict, measurements: dict, task: Path, *, audit=None, limits=SAN
     from .ship_cad import triage_program
 
     triage_program(program)  # Header strict; a bad component is reported, not fatal.
-    if sys.platform != 'darwin' or not Path('/usr/bin/sandbox-exec').is_file():
-        raise RuntimeError('ship CAD requires the supported OS sandbox; no unsafe fallback')
+    require_sandbox()
+    limits.validate()
     if task.exists():
         raise FileExistsError('Choose a fresh ship task directory')
     task.mkdir(parents=True)
@@ -120,24 +179,42 @@ def run(program: dict, measurements: dict, task: Path, *, audit=None, limits=SAN
     (task/'work').mkdir()
     (task/'input.json').write_text(json.dumps({'program': program, 'measurements': measurements, 'audit': audit,
                                                'guesses': guesses or {}, 'detail': detail}))
-    profile = task/'worker.sb'
-    profile.write_text(sandbox_profile(task, runtime_paths()))
+    command, sandbox = sandbox_command(task, limits)
     env = safe_worker_environment()
     env.update(HOME=str(task/'work'), TMPDIR=str(task/'work'), PYTHONDONTWRITEBYTECODE='1')
     # Keep all sandbox writes inside work, including standalone progress.
     env['MARINAFRAME_PROGRESS_PATH'] = str(task/'work'/'progress.json')
     env.setdefault('MARINAFRAME_PROGRESS_REQUEST', task.name)
-    command = ['/usr/bin/sandbox-exec', '-f', str(profile), sys.executable, '-m',
-               'vessel_reconstruction.ship_cad_worker', '--task', str(task),
-               '--limits', json.dumps(asdict(limits)), '--parent', str(os.getpid())]
     outcome = supervise_process(command, limits=limits, output_dir=task/'work', env=env,
                                 sandboxed_model_code=True)
     # supervise_process has killed the worker group, so these files no longer change.
     outcome['result'] = (None if outcome['state'] in ('sandbox_safety_cap', 'stalled') else
                          read_worker_json(task/'work', Path('output/provenance.json')))
-    outcome['sandbox'] = 'macos-seatbelt-deny-default'
+    outcome['sandbox'] = sandbox
+    setup_failed = sys.platform == 'linux' and outcome.get('exit_code') == 125
+    if setup_failed:
+        outcome.update(error_code='sandbox_setup_failed',
+                       error='Linux sandbox setup failed: Landlock ABI >=3, seccomp and hard limits are required; no unsafe fallback.',
+                       result=None)
     (task/'worker-receipt.json').write_text(json.dumps(outcome, indent=2) + '\n')
+    if setup_failed:
+        raise RuntimeError(outcome['error'])
     return outcome
+
+
+def confirm_linux_sandbox() -> None:
+    """Check kernel state in the child before importing any model executor.
+
+    This is a minimum boundary check, not proof of the complete filter policy.
+    Landlock grants only this process's status file, never the procfs tree.
+    """
+    try:
+        fields = dict(line.split(':', 1) for line in
+                      Path('/proc/self/status').read_text().splitlines() if ':' in line)
+    except OSError as exc:
+        raise RuntimeError('Linux sandbox attestation failed: cannot read child kernel status') from exc
+    if fields.get('Seccomp', '').strip() != '2' or fields.get('NoNewPrivs', '').strip() != '1':
+        raise RuntimeError('Linux sandbox attestation failed: Seccomp 2 and NoNewPrivs 1 are required')
 
 
 def main(argv=None):
@@ -146,8 +223,15 @@ def main(argv=None):
     parser.add_argument('--limits', required=True)
     parser.add_argument('--parent', type=int, required=True)
     args = parser.parse_args(argv)
-    from .worker import apply_limits
-    apply_limits(json.loads(args.limits), args.parent)
+    if sys.platform == 'linux':
+        confirm_linux_sandbox()
+        # The native launcher has already installed hard limits and parent-death
+        # handling. Its seccomp policy forbids changing prctl settings afterward.
+        if os.getppid() != args.parent:
+            raise RuntimeError('Worker parent identity could not be established.')
+    else:
+        from .worker import apply_limits
+        apply_limits(json.loads(args.limits), args.parent)
     from .ship_cad import execute
     data = json.loads((args.task/'input.json').read_text())
     execute(data['program'], data['measurements'], args.task/'work'/'output', audit=data.get('audit'),

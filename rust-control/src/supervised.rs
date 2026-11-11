@@ -194,6 +194,10 @@ impl WorkerCommand {
         for key in BASE_ENVIRONMENT {
             worker.pass_through(key);
         }
+        // Trusted deployment setting, not a credential. Nested CAD revision
+        // workers must retain the explicit native sandbox executable location.
+        #[cfg(target_os = "linux")]
+        worker.pass_through("MARINAFRAME_SANDBOX_LAUNCHER");
         worker
             .env("PYTHONDONTWRITEBYTECODE", "1")
             .env("PYTHONUNBUFFERED", "1")
