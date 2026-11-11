@@ -245,44 +245,6 @@ def extend_tops_to_deck(anchors: list[Anchor], decks: dict) -> None:
         anchor.notes.append(f"top continued from z {top:.3f} to the profile deck line at z {deck:.3f} m")
 
 
-def snap_tops_to_deck(anchors: list[Anchor], decks: dict) -> None:
-    """Set traced tops that end within DECK_TOP_TOLERANCE_PX of the profile deck line to the deck height.
-
-    Within that tolerance the body-plan curve end and the profile deck line
-    give the same point; the deck line is the better measurement: its centre
-    is read across several columns of one long line, while a curve end is a pen
-    cap among crowded curve tops. On dtmb5415-3v-L0 the deck line put 7 of 9
-    station tops in the right 0.05 m height sample of the truth, the curve ends
-    4 of 9 (a top one sample off costs about 6.5 % of half-beam at that
-    station). Used only when the deck agrees with most traced tops. Changes
-    ``anchors`` in place; tops farther off are left to cap_tops_at_deck and
-    extend_tops_to_deck.
-    """
-    import numpy as np
-    tops = {a.id: max(p[1] for p in a.points_yz_m) for a in anchors if a.points_yz_m}
-    differences = [abs(tops[sid] - deck) for sid, deck in decks.items() if sid in tops]
-    if not differences or float(np.median(differences)) > DECK_AGREEMENT_M:
-        return
-    for anchor in anchors:
-        deck = decks.get(anchor.id)
-        points = np.asarray(anchor.points_yz_m, dtype=float)
-        if deck is None or not anchor.pixels_per_metre or len(points) < 2:
-            continue
-        points = points[np.argsort(points[:, 1], kind="stable")]
-        top = float(points[-1, 1])
-        if top == deck or abs(top - deck) > DECK_TOP_TOLERANCE_PX / anchor.pixels_per_metre:
-            continue
-        if top > deck:
-            from .form_fit import _clip_top
-            points = _clip_top(points, deck)
-        else:
-            points = np.vstack([points, [points[-1, 0], deck]])
-        anchor.points_yz_m = points.tolist()
-        # The deck height is the line's centre already: no pen-cap correction.
-        anchor.stroke_width_px = None
-        anchor.notes.append(f"top set from z {top:.3f} to the profile deck line at z {deck:.3f} m")
-
-
 # A top continued to the deck follows the direction of its upper part: the
 # points within this share of the deck height below the traced top.
 EXTEND_FIT_SHARE = 0.1
@@ -307,7 +269,6 @@ def cap_at_profile_outline(sections: list[dict], anchors: list[Anchor], heights:
     extend_bottoms_to_keel(anchors, keels)
     sections = cap_tops_at_deck(sections, anchors, decks)
     extend_tops_to_deck(anchors, decks)
-    snap_tops_to_deck(anchors, decks)
     return sections, anchors
 
 
