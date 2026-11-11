@@ -78,3 +78,16 @@ Resumed from WIP a6c4227 and preserved its implementation. Clean commits `e890db
 - A feature push deliberately omits macOS even when all Linux suites are selected. A manual dispatch on this lane will test the new full workflow, including macOS, without changing the protected base.
 - Protected-branch push behavior cannot be demonstrated with the new workflow until the PM merges. No base branch push or repository setting change is permitted.
 - Python changes retain Rust worker integrations and wheel smoke. UI remains independent. Unknown paths select every suite rather than risk a missed check.
+
+## Results (PM, 2026-11-12)
+
+Measured on GitHub after the API limit reset. Wall time is from run creation to the last job.
+
+| Push | Run | Jobs run | Wall time | Result |
+|---|---|---|---|---|
+| Baseline, every push before the filters | 43080449506 | 13 | 349 s | pass |
+| Docs-only (f0027cb) | 43107591061 | 3 (changes, secret scan, summary) | 19 s | pass |
+| UI-only comment (949c60e) | 43111052872 | 4 (adds UI tests) | 34 s | pass |
+| Manual full run (949c60e) | 43111245477 | 15 (all suites, including macOS) | 396 s | pass |
+
+Pushes to continue/v0.5 and main still run every suite. The validation used one check every 5 minutes; the earlier `gh run watch` loops (every 3 seconds) used up the shared API limit and must not be used again.
