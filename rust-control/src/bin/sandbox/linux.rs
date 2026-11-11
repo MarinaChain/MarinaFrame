@@ -27,6 +27,7 @@ const WORK: u64 = READ
     | (1 << 5)
     | (1 << 7)
     | (1 << 8)
+    | (1 << 12) // symlinks stay subject to target access checks
     | (1 << 13)
     | ACCESS_TRUNCATE;
 const LL_CREATE: libc::c_long = 444;
