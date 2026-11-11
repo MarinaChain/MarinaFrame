@@ -205,8 +205,14 @@ def main(argv=None):
     parser.add_argument('--limits', required=True)
     parser.add_argument('--parent', type=int, required=True)
     args = parser.parse_args(argv)
-    from .worker import apply_limits
-    apply_limits(json.loads(args.limits), args.parent)
+    if sys.platform == 'linux':
+        # The native launcher has already installed hard limits and parent-death
+        # handling. Its seccomp policy forbids changing prctl settings afterward.
+        if os.getppid() != args.parent:
+            raise RuntimeError('Worker parent identity could not be established.')
+    else:
+        from .worker import apply_limits
+        apply_limits(json.loads(args.limits), args.parent)
     from .ship_cad import execute
     data = json.loads((args.task/'input.json').read_text())
     execute(data['program'], data['measurements'], args.task/'work'/'output', audit=data.get('audit'),
