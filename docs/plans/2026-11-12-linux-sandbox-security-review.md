@@ -30,5 +30,5 @@ PM requested fixes before merge. Branch: `lane/linux-sandbox`. Do not merge. Bas
 
 - Portable Python review tests: 11 passed, 4 Linux-only skips.
 - Native Linux source and tests: cross-target type check and matching Clippy driver completed on Mac without warnings.
-- Full Mac quick tier: pending.
-- Live Linux CI and macOS CI: pending push.
+- Full Mac quick tier: exit 0. Python 1964 passed, 4 Linux-only skips, 84 deselected, 5 warnings (600.56 seconds). UI 266 passed. Rust formatting, Clippy and tests passed. Secrets scan: 0 findings across 1204 tracked text files.
+- Pushed lane/linux-sandbox through 46971f6; live Linux and macOS CI pending.
