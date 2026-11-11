@@ -248,3 +248,9 @@
 - **Date:** 2026-11-10
 - **Trigger:** The particulars reader read 1897 from the C.A. Thayer title notes, which say the builder built another vessel in that year. C.A. Thayer's own construction year is 1895.
 - **Rule:** Require a labelled construction-year field or explicit vessel identity before accepting a year in prose. Keep the other-vessel sentence as a negative fixture and report missed prose fields in development results.
+
+### Do not iterate OCP collections in per-face loops
+- **Date:** 2026-11-11
+- **Trigger:** The Gunnerus display mesh took 60 to 100 s for 3,151 hull faces, even with the triangulation already built. cProfile misattributed the time.
+- **Rule:** In loops over faces or edges, use `vessel_reconstruction.topology` (indexed `FindKey` access) instead of CadQuery `Faces()`, `Edges()`, `Wires()`, `innerWires()` or `tessellate()`. Time OCP-heavy code with direct timers, not only cProfile.
+- **Why:** Ending a Python iteration over an OCP map or array raises `StopIteration` through every OCP exception translator: about 6 ms per call (80 ms the first time), whatever the size.
