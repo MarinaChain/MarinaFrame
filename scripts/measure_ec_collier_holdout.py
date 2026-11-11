@@ -18,10 +18,10 @@ from PIL import Image, ImageDraw
 from benchmarks.balclutha import crossing_value as cv
 from benchmarks.ec_collier import holdout_value as cal
 from benchmarks.ec_collier import point_score as ps
-from vessel_reconstruction import body_plan_chine_line as chine_line
+from benchmarks.hard_chine import chine_line as chine_line
 from benchmarks.frozen_readers.v1 import body_plan_crossings as crossings
 from benchmarks.frozen_readers.v1 import body_plan_reader as reader
-from vessel_reconstruction import body_plan_reader_v2 as v2
+from benchmarks.hard_chine import reader_v2 as v2
 
 # Body-plan region drawn in the overlay (full-sheet rows and columns).
 TOP, BOTTOM, LEFT, RIGHT = 6250, 7800, 1650, 4750

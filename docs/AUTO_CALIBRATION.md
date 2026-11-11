@@ -155,9 +155,10 @@ the `claude` CLI on the subscription (API key variables removed). Never print ke
   `python -m vessel_reconstruction.intake write-spec`). Off by default: the intake then makes up to
   six `claude -p` label questions on the subscription (about 1 to 2 minutes per sheet).
 - Intake (`intake.write_spec` -> `body_plan_intake.read_at_intake`): calibrates the spec page,
-  runs the frozen reader with code-only identity (nesting order), and stores
+  reads each half with `body_plan_sides.read_side` (the crossing reader with code-only identity by
+  nesting order, and the hard-chine polyline reader where it engages), and stores
   `body_plan_reading` in `intake.json` (calibration with source labels, flags and notes; per station
-  the waterline cells and the drawn curve in metres). The overlay PNG and the cached answers stay in
+  the waterline cells, the drawn curve in metres and its `identity_source`; per half `hard_chine`). The overlay PNG and the cached answers stay in
   the intake folder. A failure is recorded, never raised.
 - Worker (`first_hull_tools.build_first_hull` -> `body_plan_intake.reader_anchors`): when the
   calibration has no open flag, each section whose id names a station the reader read

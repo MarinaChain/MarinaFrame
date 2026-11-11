@@ -13,7 +13,7 @@ import numpy as np
 
 from benchmarks.balclutha import crossing_value as round8
 from benchmarks.pardon_me import holdout_value as hv
-from vessel_reconstruction import body_plan_chine_line as chine
+from benchmarks.hard_chine import chine_line as chine
 from vessel_reconstruction import body_plan_crossings as bpc
 
 PIXELS_PER_FT = hv.PIXELS_PER_FT

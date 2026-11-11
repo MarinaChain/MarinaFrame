@@ -272,3 +272,9 @@
 - **Trigger:** dtmb5415-3v-L0 scored 5.07 % RMS, but every station was 0.3-2.1 % except one 0.05 m height sample at the deck edge: a top 0.004-0.04 m (under 1 px) on the wrong side of a truth sample costs a full half-breadth there, about 6.5 % of half-beam at that station.
 - **Rule:** Before changing shape code, print each station's error at its worst sample and its truth/reconstruction top and bottom heights (`benchmarks/hull_accuracy/replay_readings.py` gives per-station rows). Treat single-sample deck or keel misses as a height-measurement problem (which line gives the height), not a section-shape problem. Replay every stored reading before committing a height rule: snapping tops to the profile deck line helped dtmb (5.07 -> 3.10 %) but broke shipd-1-09867 (0.87 -> 8.54 %): its deck line read low under a flat deck at the grid top, where a high top costs nothing and a low one costs a sample at every station (reverted, 5b8a9d5).
 - **Why:** The frozen scorer samples heights on a fixed grid; sub-pixel datum errors become large station errors, and the cost is asymmetric at the grid top.
+
+### Never drop a traced station from a rank order (MarinaFrame)
+- **Date:** 2026-11-11
+- **Trigger:** The polyline reader dropped crowded stations whose bottoms ran into an outer station's bottom, and counted a short transom outline as a station. On CALEB JONES every inner name shifted (identity errors at stations 4-9; 10 wrong of 16 point cells).
+- **Rule:** When names come from nesting rank, a drawn line with its own side keeps its rank even when a part of it (the bottom) is lost; keep the part that is its own and flag it. Remove only lines that are not stations (short outlines) before ranking. Read the per-trace log on the worst sheet before changing thresholds.
+- **Why:** One missing or extra member of a rank order shifts every name inside it; partial evidence for a station is better than none.

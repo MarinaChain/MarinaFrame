@@ -18,7 +18,7 @@ from benchmarks.bue_girl import holdout_value as bue
 from benchmarks.bumble_bee import holdout_value as bumble
 from benchmarks.pardon_me import holdout_value as pardon
 from benchmarks.thayer import holdout_value as thayer
-from vessel_reconstruction import body_plan_chine as chine
+from benchmarks.hard_chine import chine_joining as chine
 from benchmarks.frozen_readers.v1 import body_plan_crossings as crossings
 from benchmarks.frozen_readers.v1 import body_plan_reader as reader
 

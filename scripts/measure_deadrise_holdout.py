@@ -22,7 +22,7 @@ from benchmarks.deadrise_holdout import score as sc
 from benchmarks.frozen_readers.v1 import body_plan_crossings as crossings
 from vessel_reconstruction import body_plan_polyline as polyline
 from benchmarks.frozen_readers.v1 import body_plan_reader as reader
-from vessel_reconstruction import body_plan_reader_v2 as v2
+from benchmarks.hard_chine import reader_v2 as v2
 
 BOATS = {'white-gull': 'benchmarks.white_gull.holdout_value', 'colleen': 'benchmarks.colleen.holdout_value',
          'caleb-jones': 'benchmarks.caleb_jones.holdout_value'}  # calibration committed before its one run

@@ -24,9 +24,9 @@ from benchmarks.deadrise_holdout import score as sc  # noqa: E402
 from benchmarks.ec_collier import point_score as collier_points  # noqa: E402
 from benchmarks.frozen_readers.v1 import body_plan_crossings as crossings  # noqa: E402
 from benchmarks.frozen_readers.v1 import body_plan_reader as reader  # noqa: E402
-from vessel_reconstruction import body_plan_chine as chine  # noqa: E402
+from benchmarks.hard_chine import chine_joining as chine  # noqa: E402
 from vessel_reconstruction import body_plan_polyline as polyline  # noqa: E402
-from vessel_reconstruction import body_plan_reader_v2 as v2  # noqa: E402
+from benchmarks.hard_chine import reader_v2 as v2  # noqa: E402
 
 # boat folder under the holdout root -> (calibration module, sheet file name)
 SHEETS = {

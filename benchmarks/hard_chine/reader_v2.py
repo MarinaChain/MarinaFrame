@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from vessel_reconstruction import body_plan_chine_line as chine_line
+from benchmarks.hard_chine import chine_line as chine_line
 from vessel_reconstruction import body_plan_crossings as bpc
 from vessel_reconstruction import body_plan_reader as bpr
 

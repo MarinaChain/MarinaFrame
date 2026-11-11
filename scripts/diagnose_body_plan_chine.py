@@ -13,7 +13,7 @@ import numpy as np
 
 from benchmarks.pardon_me import diagnose as diagnosis
 from benchmarks.pardon_me import holdout_value as hv
-from vessel_reconstruction import body_plan_chine as chine
+from benchmarks.hard_chine import chine_joining as chine
 
 
 def inspect(reading, layout):

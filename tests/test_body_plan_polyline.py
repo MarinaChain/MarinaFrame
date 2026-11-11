@@ -236,6 +236,76 @@ def test_an_inner_station_does_not_keep_the_outer_bottom_through_its_knuckle():
     assert any('traced again' in note for note in kept[1].notes)
 
 
+def _on_outer_bottom(offset):
+    """Row of the outermost station's bottom (STATIONS[0]) at `offset`: its line from the knuckle to the keel."""
+    _, knuckle, knuckle_row, rabbet_row = STATIONS[0]
+    return knuckle_row + (knuckle - offset) / (knuckle - RABBET_OFFSET) * (rabbet_row - knuckle_row)
+
+
+def _crowded(sign=1):
+    """Four stations; the second's side ends on the outermost bottom and it has no bottom of its own."""
+    second_knuckle = 1000
+    second = (1050, second_knuckle, _on_outer_bottom(second_knuckle))
+    ink, sheet, side = v_bottom(sign, stations=(STATIONS[0], STATIONS[2], STATIONS[3]), chine_curve=False)
+    centre = sheet.centre_column
+
+    def side_only(draw):
+        sheer, knuckle, knuckle_row = second
+        draw.line([(centre + sign * sheer, SHEER_ROW), (centre + sign * knuckle, knuckle_row)], fill=0, width=LINE)
+
+    sheet, side = _layout(centre, sign, 4)
+    return _with(ink, side_only), sheet, side, second
+
+
+def test_a_station_whose_bottom_is_an_outer_stations_keeps_its_side_and_knuckle():
+    ink, sheet, side, (sheer, knuckle, knuckle_row) = _crowded()
+    width = bpp.line_width(ink, sheet, side)
+    outer_sheer, outer_knuckle, outer_knuckle_row, outer_rabbet_row = STATIONS[0]
+    outer = _straight_station(sheet, side, [(RABBET_OFFSET, outer_rabbet_row), (outer_knuckle, outer_knuckle_row),
+                                            (outer_sheer, SHEER_ROW)], 1)
+    # The inner trace ran on along the outer bottom from its knuckle; there is no other bottom line.
+    inner = _straight_station(sheet, side, [(RABBET_OFFSET, STATIONS[0][3]), (knuckle, knuckle_row),
+                                            (sheer, SHEER_ROW)], 1)
+    inner.seed = (400.0, _side_column(sheet, side, sheer, knuckle, knuckle_row, 400))
+    kept, without_bottom = bpp._own_bottoms(ink, sheet, side, width, [inner, outer])
+    assert without_bottom == 1 and len(kept) == 2
+    assert kept[0] is outer
+    assert kept[1].knuckle_index == 0  # side and knuckle only: the polyline starts at the knuckle
+    assert kept[1].rabbet[0] == pytest.approx(knuckle_row, abs=3)
+    assert kept[1].sheer[0] == pytest.approx(SHEER_ROW, abs=3)
+
+
+@pytest.mark.parametrize('sign', [1, -1])
+def test_crowded_stations_sharing_one_bottom_keep_their_ranks(sign):
+    ink, sheet, side, (sheer, knuckle, knuckle_row) = _crowded(sign)
+    half = bpp.read_half(ink, sheet, side)
+    assert half.read
+    assert [s.station for s in half.stations] == [4, 3, 2, 1]
+    offsets = [s.offset_px(s.chine[1], sheet.centre_column) for s in half.stations]
+    expected = [STATIONS[0][1], knuckle, STATIONS[2][1], STATIONS[3][1]]
+    assert offsets == pytest.approx(expected, abs=4)
+    assert half.station(3).knuckle_index == 0  # its bottom is station 4's
+    assert any('side and knuckle only' in note for note in half.notes)
+
+
+def test_a_short_side_outline_with_a_corner_takes_no_station_rank():
+    # A transom-like outline inside the innermost station: a short side, a corner, a bottom to the keel.
+    # Without the rule the half has five knuckled lines for four stations and is declined.
+    ink, sheet, side = v_bottom(stations=STATIONS)
+    centre = sheet.centre_column
+
+    def outline(draw):
+        draw.line([(centre + 300, 520), (centre + 280, 650), (centre + RABBET_OFFSET, 700)], fill=0, width=LINE)
+
+    ink = _with(ink, outline)
+    half = bpp.read_half(ink, sheet, side)
+    assert half.read
+    assert [s.station for s in half.stations] == [4, 3, 2, 1]
+    offsets = [s.offset_px(s.chine[1], centre) for s in half.stations]
+    assert offsets == pytest.approx([knuckle for _, knuckle, _, _ in STATIONS], abs=4)
+    assert any('an outline, not a station' in note for s in half.unnamed for note in s.notes)
+
+
 def test_an_engaged_station_with_other_lines_through_its_knuckle_gives_its_side_only():
     drawn = (STATIONS[0], STATIONS[2])
     ink, sheet, side = v_bottom(1, stations=drawn)
