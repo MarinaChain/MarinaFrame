@@ -78,3 +78,18 @@ cells, 0.134 m off. Sheer and rabbet points were reported only: 3 of 14 given.
 - Both sheets are now development cases and cannot be used as holdouts again.
 - `engineering_approved` is false for both results. These are research measurements, not an engineering
   sign-off.
+
+## Erratum (2026-11-11, after the run)
+
+The published results above are unchanged and are not re-scored. Cama Beach stays **FAIL**.
+
+A later diagnosis on the Cama Beach sheet, which became a development case after its one run, found
+that the truth-blind calibration gave every station the wrong number. On both halves of the body plan,
+each curve's printed station number is its drawn label minus one: the aft curves are stations 7, 8, 9
+and 10 (the heavy line read as the transom outline is station 10), and the fore curves are stations 6
+down to 0. This error came from the calibration, not from the reader, and it explains most of the
+constant offsets at stations 2, 3, 8 and 9 described above. The diagnosis used the printed offsets, so
+the corrected calibration (commit `aa88271`, branch `lane/polyline-engage`) is for development only.
+
+What we change for the next holdout: the truth-blind calibration gets an independent check of station
+identity against the profile and half-breadth plan views, before any reader runs.
