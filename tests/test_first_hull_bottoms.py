@@ -54,33 +54,6 @@ def test_model_path_keeps_original_bottom_chord_and_notes():
     ]
 
 
-def _section(sid):
-    return {"id": sid, "z_min_m": 0.0, "z_max_m": 10.0}
-
-
-def _same_ink(first, second):
-    return first == second
-
-
-def test_short_piece_shared_by_stations_is_left_to_the_form_fit():
-    from vessel_reconstruction.first_hull_tools import shared_fragments
-    piece = [[3.0, 0.6], [5.0, 3.0], [6.0, 5.5]]
-    full = [[0.5, 0.0], [5.0, 3.0], [6.0, 10.0]]
-    end = [[1.0, 4.0], [2.0, 8.8]]  # a cut-up end station: short, on its own ink
-    anchors = [Anchor("1", 10.0, end, {}), Anchor("2", 20.0, piece, {}), Anchor("3", 30.0, piece, {}),
-               Anchor("5", 50.0, full, {}), Anchor("6", 60.0, full, {})]
-    ink = {"1": "end", "2": "piece", "3": "piece", "5": "full", "6": "full"}
-    left_out = shared_fragments(anchors, ink, [_section(a.id) for a in anchors], _same_ink)
-    assert left_out == ["2", "3"]
-
-
-def test_reader_anchors_are_never_left_out_as_fragments():
-    from vessel_reconstruction.first_hull_tools import shared_fragments
-    piece = [[3.0, 0.6], [6.0, 5.5]]
-    anchors = [Anchor("2", 20.0, piece, {}, source="read"), Anchor("3", 30.0, piece, {}, source="read")]
-    assert shared_fragments(anchors, {"2": "p", "3": "p"}, [_section("2"), _section("3")], _same_ink) == []
-
-
 def test_model_path_keeps_original_profile_cut_of_off_centre_points():
     anchors = _anchors("traced")
     cut_bottoms_at_keel(anchors, {"1": 0.0, "2": 1.0, "3": 0.0})

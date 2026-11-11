@@ -117,16 +117,53 @@ but the fill is too full). Before any push or live run:
 3. Replay again (all 12 L2/L3 and 02216-L1; the L0/L1 probe again if the change can reach them),
    then the live round on the three cases as planned.
 
+## Fix 2: fitted rows within the printed half-beam (`form_fit.fitted_breadth_cap`)
+
+Why fix 1 overfilled: with anchors, `fit_vessel` ignored the vessel size, so a breadth trend through
+three anchors ran to 11.9 m half-breadth on 08158-L2 (printed beam 19.70 m, half-beam 9.85 m; the
+description left the printed beam out of the spec because blurred panels measured 24.8 and
+27.9 m). Fix 2: fitted rows are no wider than half the printed beam (else the description beam that
+sized the prior; never the panel extents), raised to the widest traced anchor
+(`first_hull_tools.half_beam_limit`). Tests in `tests/test_form_fit.py` (three).
+Probe on all 24 stored readings (`work/degraded-lane/cap-probe2.log`): the limit changes no L0
+or L1 hull except 02216-L1, and only rows that fix 1 had left to the fit.
+
+### Replay with fixes 1+2 (`work/degraded-lane/replay-fix2.json`, base on current code with both
+off: `replay-base.json`, `replay-base-02216-L1.json`)
+
+| Case | Base RMS / vol % | Fixes 1+2 RMS / vol % | Volume condition |
+|---|---|---|---|
+| 00679-L3 | 44.21 / -22.5 | 30.50 / -11.9 | met |
+| 08158-L2 | 47.77 / +3.8 | 22.40 / +37.8 | **failed** (+34 points) |
+| 09867-L3 | 39.10 / -49.5 | 19.53 / +23.4 | met |
+| 02216-L1 | 50.26 / -4.4 | 12.62 / -9.3 | **failed** (+4.9 points) |
+
+The other 8 L2/L3 readings and all L0/L1 except 02216-L1 have unchanged hulls (probe).
+08158-L2 stays overfull because the anchors that fix 1 keeps (s01, s08, s09) are wrong curves
+themselves (shape error 23-29 %); in the base, those over-wide anchors and the fragments cut off at
+5.5 m cancelled in volume by chance.
+
+Verdict against the committed gate: fix 1 fails the volume condition on two cases. Fix 1 is
+removed (no live round with it). Fix 2 stays: it changes no stored hull without fix 1 and limits
+any future fit that runs past the printed beam.
+
+## Results for this lane
+
+L2/L3 pass rate unchanged: 0 of 12 (replay, current code). L0 4 of 6 and L1 2 of 6 unchanged
+(fix 2 changes no L0/L1 hull). No live model calls were made in this lane (cost 0); the stored
+round that was diagnosed cost $43.29 list (lane A).
+
 ## Resume point
 
-Fix 1 committed on `lane/degraded-scans` (not pushed; quick tier not yet run). The PM paused the
-base replay (pid 67509) for a demo build and asked for no new heavy jobs. When released:
-1. Let the base replay finish (`work/degraded-lane/replay-base.json`).
-2. Replay with fix 1: the 12 L2/L3 readings and 02216-L1 (command in
-   `benchmarks/hull_accuracy/replay_readings.py` docstring; `--rounds work/round-hull2-dev-e2f795e`,
-   out `work/degraded-lane/replay-fix.json`), at most 2 cases at a time.
-3. Quick tier, push. Live round (2-4 cases) only if the replay improves L2/L3; then the full
-   L2/L3 set once.
-Next candidate fixes (not started): scale cross-check of the model's title-block scale against the
-measured station-line spacing (series60-L2, 00679-L3); keel-agreement rule on blurred profiles
-(08158-L2 profile keel/deck heights wrong).
+Branch `lane/degraded-scans`: diagnosis, fix 2, fix 1 removed. Quick tier, then push. Next work, in
+order of cases affected (diagnosis table):
+1. Identity of the anchors themselves on blurred panels (08158-L2 s01/s08/s09, dtmb-L2 s05-s08):
+   no rule that hands stations to the fit helps while the remaining anchors are wrong curves. A
+   per-station check of each anchor against the plan-view waterline breadths at its x (code
+   reading, no model call) would flag wrong curves before the fit.
+2. Model scale misreads (series60-L2 16.465 read as 18.465; 00679-L3 title unread): cross-check the
+   title scale against the station-line spacing in the profile (stations x spacing / px spacing)
+   in `propose_sheet_setup` and tell the model when they disagree by more than 2 %.
+3. Blurred profile outline (08158-L2 keel 7.51 = deck at s02): keel and deck heights are wrong
+   on L2/L3 profiles, so bottom and top completion rules stay off there.
+Each step: replay all 24 stored readings with the volume condition before any live round.

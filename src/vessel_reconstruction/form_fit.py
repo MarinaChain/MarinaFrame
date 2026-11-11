@@ -447,9 +447,9 @@ def fitted_breadth_cap(kept: list[Anchor], half_beam_limit_m: float | None) -> f
     """Largest half-breadth a fitted row may reach, or None for no limit.
 
     The breadth trend is fitted through the kept anchors; with few anchors it
-    can run far past the vessel's beam between them (shipd-1-08158-3v-L2:
-    anchors at 7.0, 9.1 and 4.5 m gave fitted rows of 11.9 m against a
-    printed half-beam of 9.85 m, +42 % volume). ``half_beam_limit_m`` is the
+    can run far past the vessel's beam between them (shipd-1-08158-3v-L2, in a
+    trial that left six stations to the fit: anchors at 7.0, 9.1 and 4.5 m
+    gave fitted rows of 11.9 m against a printed half-beam of 9.85 m). ``half_beam_limit_m`` is the
     vessel's half-beam from its description (first_hull_tools.half_beam_limit);
     the widest kept anchor raises it, so traced ink is never contradicted.
     """

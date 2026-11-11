@@ -271,41 +271,6 @@ def extend_tops_to_deck(anchors: list[Anchor], decks: dict) -> None:
 EXTEND_FIT_SHARE = 0.1
 
 
-# A traced anchor that covers less than this share of its section's height is
-# a fragment when other stations carry the same ink: a shared station curve
-# runs from keel to deck (stations near midship can share a full curve).
-SHARED_FRAGMENT_HEIGHT_SHARE = 0.6
-
-
-def shared_fragments(anchors: list[Anchor], ink_of: dict, sections: list[dict], same_ink) -> list[str]:
-    """Ids of traced anchors that are short pieces of ink other stations also carry.
-
-    On a blurred overlay body plan the stroke enumeration often finds fewer
-    strokes than stations, and the panel assignment then gives one broken
-    piece to several stations (shipd-1-08158-3v-L2 replay: one stroke from
-    z 0.6 to 5.5 m of a 10 m section anchored stations 2-7). Built as drawn,
-    each of those stations has no breadth above or below the piece. Left out,
-    the form fit fills them from their neighbours and the described size.
-    A short anchor on ink of its own (a cut-up end station) is kept.
-    ``ink_of`` maps anchor ids to their catalog candidates; ``same_ink(a, b)``
-    says whether two candidates follow the same ink.
-    """
-    heights = {s["id"]: float(s["z_max_m"]) - float(s["z_min_m"]) for s in sections}
-    short = []
-    for anchor in anchors:
-        if anchor.source != "traced" or not anchor.points_yz_m or heights.get(anchor.id, 0.0) <= 0:
-            continue
-        zs = [float(point[1]) for point in anchor.points_yz_m]
-        if max(zs) - min(zs) >= SHARED_FRAGMENT_HEIGHT_SHARE * heights[anchor.id]:
-            continue
-        mine = ink_of.get(anchor.id)
-        shared = any(other.id != anchor.id and ink_of.get(other.id) is not None
-                     and same_ink(mine, ink_of[other.id]) for other in anchors) if mine is not None else False
-        if shared:
-            short.append(anchor.id)
-    return short
-
-
 def cap_at_profile_outline(sections: list[dict], anchors: list[Anchor], heights: dict) -> tuple[list, list]:
     """Apply the profile outline (vessel_description.station_outline_heights).
 
@@ -400,7 +365,6 @@ def build_first_hull(tools):
     chosen = {g["section_id"]: g["chosen_candidate_id"] for g in guesses}
     chosen.update(tools.state["selected"])
     anchors = []
-    ink_of = {}
     for section in sections:
         candidate = next((c for c in tools.state["catalog"].get(section["id"], {}).get("candidates", [])
                           if c["candidate_id"] == chosen.get(section["id"])), None)
@@ -423,9 +387,6 @@ def build_first_hull(tools):
         selected["contour_selection"] = copy.deepcopy(candidate["contour_selection"])
         anchors.append(Anchor(section["id"], section["x_m"], points, selected,
             z_max_m=section["z_max_m"], pixels_per_metre=cal["pixels_per_metre"], stroke_width_px=width))
-        ink_of[section["id"]] = candidate
-    fragments = set(shared_fragments(anchors, ink_of, sections, inv.same_ink))
-    anchors = [a for a in anchors if a.id not in fragments]
     # Stations the body-plan reader measured replace the model path's anchors (body_plan_intake).
     from .body_plan_intake import reader_anchors, write_check
     body_plan = tools.body_plan_reading()
