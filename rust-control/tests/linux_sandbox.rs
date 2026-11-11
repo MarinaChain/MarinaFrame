@@ -11,6 +11,9 @@ fn probe(script: &str, override_config: serde_json::Value) -> Output {
     fs::create_dir_all(&work).unwrap();
     fs::write(task.join("input"), "declared").unwrap();
     fs::write(root.path().join("private"), "private").unwrap();
+    // Trusted test fixture plants the link before restrictions; models cannot
+    // create symlinks for later host artifact consumers to follow.
+    std::os::unix::fs::symlink(root.path().join("private"), work.join("link")).unwrap();
     // System Python has a fixed runtime; end-to-end Python tests exercise the
     // configured CAD interpreter and its discovered runtime paths separately.
     let python = "/usr/bin/python3";
@@ -58,7 +61,7 @@ fn permitted_reads_and_work_writes() {
 
 #[test]
 fn outside_and_input_writes_and_symlink_escape_are_denied() {
-    success("import os\nfrom pathlib import Path\nprint('REACHED', flush=True)\nfor p in [Path(os.environ['PROBE_OUTSIDE']), Path('../input')]:\n try: p.write_text('bad')\n except PermissionError: pass\n else: raise AssertionError('write escaped')\nos.symlink(os.environ['PROBE_OUTSIDE'], 'link')\ntry: Path('link').write_text('bad')\nexcept PermissionError: pass\nelse: raise AssertionError('symlink escaped')");
+    success("import os\nfrom pathlib import Path\nprint('REACHED', flush=True)\nfor p in [Path(os.environ['PROBE_OUTSIDE']), Path('../input')]:\n try: p.write_text('bad')\n except PermissionError: pass\n else: raise AssertionError('write escaped')\ntry: os.symlink(os.environ['PROBE_OUTSIDE'], 'new-link')\nexcept PermissionError: pass\nelse: raise AssertionError('model symlink allowed')\ntry: Path('link').write_text('bad')\nexcept PermissionError: pass\nelse: raise AssertionError('symlink escaped')");
 }
 
 #[test]
