@@ -36,6 +36,16 @@ Run: `PYTHONPATH=src:. .venv/bin/python -m benchmarks.concept_launch --out work/
 - Lane Q's exporter (`lane/web-demo`, built in a scratch copy) reads the run: 11 sections chosen
   with `read` records, 33 parts (wheelhouse and tank_fw1 `guessed` with inputs), 6 tanks, 3
   previewable sheets, exports (STEP, STL, hydrostatics CSV, tank tables).
+- `scripts/build_web_demo.py` (lane Q, scratch copy, selection holding only this run) builds an
+  18.4 MB bundle with every gate passed. In the browser: Parts tab, whole vessel in 3D (see-through
+  hull, coloured tanks), hover a tank -> lines to its profile, plan and table-row regions; hover
+  the wheelhouse -> dashed "best guess" with "Also used: Deckhouse tier 1".
+- Entry for `scripts/web_demo_runs.json`: `<out>/manifest-entry.json` (slug, name, licence
+  `synthetic`, source = the concept label, `drawing_sha256` of the three sheets; the lines plan
+  is also the run's `domain/input/source.png`, same bytes).
+- In the run page itself the app shows only the manifest name "(concept preview)"; the full label
+  is on the Home card, every sheet, part reasons and the capacity stamp. A banner on the run page
+  is lane Q's UI.
 - Found in the exporter (lane Q owns it): `sounding_tables` collects `tank_id` fields from the
   view, but capacity rows name the tank `id`, so `tables.json` is empty for any run with tanks.
 

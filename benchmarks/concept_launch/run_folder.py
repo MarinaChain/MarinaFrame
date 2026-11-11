@@ -372,15 +372,13 @@ def write_metadata(task: Path, model: S.Model, table: list[dict], sheet_list: li
 
 
 def manifest_entry(sheet_list: list[S.Sheet], drawings: Path) -> dict:
-    """The entry for scripts/web_demo_runs.json (lane web-demo owns that file)."""
+    """The run's entry for scripts/web_demo_runs.json (lane web-demo owns that file), in its form."""
     return {
         "slug": SLUG,
+        "name": "Survey launch 24 m (concept preview)",
         "licence": "synthetic",
-        "title": "Survey launch 24 m (concept preview)",
-        "notice": CONCEPT_LABEL,
-        "generator": GENERATOR,
-        "concept_preview": True,
-        "drawings": {sheet.file_name: _sha256(drawings / sheet.file_name) for sheet in sheet_list},
+        "source": f"{CONCEPT_LABEL} Made by {GENERATOR}.",
+        "drawing_sha256": sorted({_sha256(drawings / sheet.file_name) for sheet in sheet_list}),
     }
 
 
