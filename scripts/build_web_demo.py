@@ -134,12 +134,21 @@ def stage_ui(out: Path) -> None:
 
 
 def export_runs(runs_folder: Path, data: Path, selection: list[dict], worker_python: str, config: Path | None) -> None:
+    """Export every listed run. A run may name its own runs folder ("runs_folder", relative to
+    --runs), for example a concept run made by another lane; data/tasks.json lists them all."""
     reviewed = ["--config", str(config)] if config else []
-    run([
-        str(EXPORTER), "--runs", str(runs_folder), "--out", str(data),
-        "--worker-python", worker_python, "--worker-source", str(REPO / "src"), *reviewed,
-        *[entry["slug"] for entry in selection],
-    ])
+    folders: dict[Path, list[str]] = {}
+    for entry in selection:
+        folder = (runs_folder / entry.get("runs_folder", ".")).resolve()
+        folders.setdefault(folder, []).append(entry["slug"])
+    summaries = []
+    for folder, slugs in folders.items():
+        run([
+            str(EXPORTER), "--runs", str(folder), "--out", str(data),
+            "--worker-python", worker_python, "--worker-source", str(REPO / "src"), *reviewed, *slugs,
+        ])
+        summaries += json.loads((data / "tasks.json").read_text())
+    (data / "tasks.json").write_text(json.dumps(summaries, indent=2) + "\n")
 
 
 def check_sources(data: Path, entry: dict) -> list[dict]:
