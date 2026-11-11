@@ -515,6 +515,47 @@ def above_deck(box: Box, size: HullSize) -> bool:
     return box.z[0] >= size.depth_m - ABOVE_DECK_TOLERANCE_M
 
 
+# Deck equipment stands on the surface under it. When the read bottom of a crane or a hatch
+# coaming is higher than that surface by more than PEDESTAL_MIN_GAP_M (the reader measured the
+# crane house, not its pedestal), a guessed pedestal fills the gap, so nothing floats.
+STANDING_KINDS = ("cargo_crane", "cargo_hatch")
+# Surfaces equipment can stand on besides the upper deck: the tops of deckhouse tiers.
+SUPPORT_KINDS = ("accommodation_deck",)
+PEDESTAL_MIN_GAP_M = 0.5
+
+
+def _footprints_overlap(a: Box, b: Box) -> bool:
+    return a.x[0] < b.x[1] and b.x[0] < a.x[1] and a.y[0] < b.y[1] and b.y[0] < a.y[1]
+
+
+def support_level(box: Box, boxes: dict[str, Box], items: dict[str, "Item"], size: HullSize) -> tuple[float, str]:
+    """The surface directly under ``box``: the highest deckhouse top under its footprint that is
+    not above its bottom, else the upper deck. Returns (height, what it is)."""
+    level, name = size.depth_m, "upper deck"
+    for other_id, other in boxes.items():
+        if items[other_id].kind not in SUPPORT_KINDS or not _footprints_overlap(box, other):
+            continue
+        top = other.z[1]
+        if level < top <= box.z[0] + PEDESTAL_MIN_GAP_M:
+            level, name = top, f"top of {items[other_id].label}"
+    return level, name
+
+
+def pedestal_box(item_id: str, boxes: dict[str, Box], items: dict[str, "Item"], size: HullSize) -> Box | None:
+    """A guessed pedestal under a standing item whose read bottom is above the surface under it,
+    or None when it stands on that surface."""
+    item, box = items[item_id], boxes[item_id]
+    if item.kind not in STANDING_KINDS:
+        return None
+    level, name = support_level(box, boxes, items, size)
+    if box.z[0] - level <= PEDESTAL_MIN_GAP_M:
+        return None
+    status = {"x": box.status["x"], "y": box.status["y"], "z": "guessed"}
+    # The pedestal keeps the footprint of the item, with its bases (a guessed y stays explained).
+    basis = {**box.basis, "z": f"pedestal from the {name} to the read bottom of the {item.label}"}
+    return Box(box.x, box.y, (level, box.z[0]), status, basis)
+
+
 def carve_order(boxes: dict[str, Box], items: dict[str, Item]) -> list[str]:
     """Below-deck spaces from the smallest box to the largest: each space is cut by the spaces
     placed before it, so a tank drawn inside a hold (a topside or double-bottom tank) keeps its

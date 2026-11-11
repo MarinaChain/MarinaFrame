@@ -166,6 +166,11 @@ def build(data: G.ArrangementInput):
             findings.append(f"{item.id}: lies outside the deck outline")
             continue
         solids.append(Solid(item.id, item.kind, item.label, solid, boxes[item.id], item))
+        # A crane or coaming read above the surface under it gets a guessed pedestal.
+        pedestal = G.pedestal_box(item.id, boxes, items, size)
+        if pedestal is not None:
+            solids.append(Solid(f"{item.id}-pedestal", item.kind, f"{item.label} pedestal",
+                                item_solid(item, pedestal, hull, size), pedestal, item))
     return table, size, solids, findings
 
 

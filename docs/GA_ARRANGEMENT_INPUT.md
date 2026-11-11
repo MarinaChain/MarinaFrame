@@ -66,6 +66,7 @@ Other kinds are skipped.
 | deckhouse tier | breadth less 1.0 m a side | tier n: deck + 2.8 (n-1) to deck + 2.8 n |
 | hatch coaming | (required) | deck to deck + 1.5 m |
 | crane post | on the centreline | deck to deck + 0.6 B |
+| pedestal (added part) | the crane's or coaming's own | from the surface under it (the highest deckhouse top under its footprint, else the upper deck) to its read bottom, when that bottom is more than 0.5 m above the surface |
 
 ## Method
 
