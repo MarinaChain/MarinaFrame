@@ -36,6 +36,8 @@ def test_wheel_contains_shared_catalog(tmp_path):
     shutil.copytree(ROOT / 'src', project / 'src', ignore=shutil.ignore_patterns('__pycache__', '*.egg-info'))
     wheel_dir = tmp_path / 'wheel'
     wheel_dir.mkdir()
-    subprocess.run([sys.executable, '-m', 'pip', 'wheel', '--no-deps', '--no-build-isolation', '--no-index', '--wheel-dir', str(wheel_dir), str(project)], check=True, capture_output=True, text=True)
+    # --no-build-isolation: the build backend (setuptools, wheel) must already be installed here.
+    build = subprocess.run([sys.executable, '-m', 'pip', 'wheel', '--no-deps', '--no-build-isolation', '--no-index', '--wheel-dir', str(wheel_dir), str(project)], capture_output=True, text=True)
+    assert build.returncode == 0, f'pip wheel failed ({build.returncode}):\n{build.stderr}\n{build.stdout}'
     with zipfile.ZipFile(next(wheel_dir.glob('*.whl'))) as wheel:
         assert json.loads(wheel.read('vessel_reconstruction/tool_catalog.json')) == json.loads(CATALOG.read_text())
