@@ -96,6 +96,7 @@ MAX_SPACES = 150
 # Spaces asked in one extents request. Asked for 71 spaces at once the model boxed 20 (round u1;
 # 43 of 43 when asked for 43), so the spaces go out in requests of this size, most useful first.
 EXTENT_SPACES_PER_REQUEST = 20
+DECK_EQUIPMENT = ("cargo_crane", "cargo_hatch")
 MAX_EXTENT_REQUESTS = 4
 # The order in which spaces are asked: holds and cargo tanks, then the tanks beside them (a wing
 # ballast tank makes a cargo tank narrower than the hull), then the rest.
@@ -573,7 +574,8 @@ def missing_places(work: dict) -> list[str]:
     return missing
 
 
-def prepare_extents(result: dict, sheet_path: Path, out: Path, missing: list[str] = ()) -> list[Path]:
+def prepare_extents(result: dict, sheet_path: Path, out: Path, missing: list[str] = (),
+                    only_ids: set[str] | None = None) -> list[Path]:
     """The requests that box the drawn boundary of each read space: one image per whole view.
 
     The spaces go out in requests of ``EXTENT_SPACES_PER_REQUEST`` (at most
@@ -601,7 +603,7 @@ def prepare_extents(result: dict, sheet_path: Path, out: Path, missing: list[str
         key = tuple(space["source_record"].get("regions", [{}])[0].get("box_px") or ())
         shared[key] = shared.get(key, 0) + 1
     for space in result["spaces"]:
-        if space["status"] != "read":
+        if space["status"] != "read" or (only_ids is not None and space["id"] not in only_ids):
             continue
         if shared[tuple(space["source_record"]["regions"][0]["box_px"] or ())] > 1:
             continue
@@ -1347,7 +1349,19 @@ def scale_pass(result: dict, sheet_path: Path, out: Path, call) -> dict:
             part = read_extents(result, work, readings[-1], directory)
             for key, value in part.items():
                 totals[key] = totals.get(key, 0) + value if isinstance(value, int) else value
-        totals["requests"] = len(directories)
+        # Deck equipment (cranes, hatch covers) is few and comes late in the priority order; when
+        # the spaces fill the requests it is left without an extent (lane W, round u6r: three cranes
+        # skipped). One more request asks for the cranes and hatches still without one.
+        deck = {space["id"] for space in result["spaces"]
+                if space["kind"] in DECK_EQUIPMENT and space["status"] == "read" and "extent" not in space}
+        if deck:
+            for directory in prepare_extents(result, sheet_path, out / "extents-deck", only_ids=deck)[:1]:
+                readings.append(call(directory, directory.with_name(f"{directory.name}-provider")))
+                part = read_extents(result, work, readings[-1], directory)
+                for key, value in part.items():
+                    totals[key] = totals.get(key, 0) + value if isinstance(value, int) else value
+                totals["deck_requests"] = 1
+        totals["requests"] = len(directories) + totals.get("deck_requests", 0)
         stats["extents"] = totals
         if any(work["kinds"].get(view) == "profile" for view in work["axes"]):
             check_depth(result, work)
@@ -1626,9 +1640,29 @@ def arrangement_input(result: dict, case_id: str) -> dict:
             particulars[field] = _unknown(reason)
     frames = result.get("frames") or {"status": "unknown", "spacings": []}
     spaces, dropped = _without_same_boxes(merged_spaces(result), particulars)
+    spaces = _without_outboard_extents(spaces, particulars)
     return {"schema": INPUT_SCHEMA, "case_id": case_id, "engineering_approved": False,
             "sources": result["sources"], "ship_type": result.get("ship_type"),
             "particulars": particulars, "frames": frames, "spaces": spaces, "dropped": dropped}
+
+
+def _without_outboard_extents(spaces: list[dict], particulars: dict) -> list[dict]:
+    """No space extent outside the hull: a box whose breadth lies mostly outboard of the half
+    breadth (a ladder or a boat beside the ship; lane W, round u6r) loses its extent."""
+    breadth = (particulars.get("breadth_m") or {}).get("value")
+    if not breadth:
+        return spaces
+    half = breadth / 2
+    kept = []
+    for space in spaces:
+        y = (space.get("extent") or {}).get("y_m")
+        if y and y[1] > y[0]:
+            outside = max(0.0, y[1] - max(y[0], half)) + max(0.0, min(y[1], -half) - y[0])
+            if outside / (y[1] - y[0]) > 0.5:
+                space = {key: value for key, value in space.items() if key != "extent"}
+                space["extent_withheld"] = "outboard of the hull: not a space inside the ship"
+        kept.append(space)
+    return kept
 
 
 # Two entries whose boxes share this share of each other's volume are one space read twice.

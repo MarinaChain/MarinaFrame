@@ -542,6 +542,21 @@ def _words(label: str) -> list[str]:
     return re.findall(r"[A-Z]+", text)
 
 
+# Words that name a fitting or an opening, not a space (lane W, round u6r: accommodation ladders
+# outboard of the ship side ended with no volume).
+FITTING_WORDS = {"LADDER", "GANGWAY", "DAVIT", "OPENING", "OPEN", "MANIFOLD", "WINCH", "WINDLASS", "MOORING",
+                 "BOLLARD", "FAIRLEAD", "RAFT", "LIFEBOAT", "BOAT", "CAPSTAN", "CHOCK"}
+# Words that name a system and need a room noun to be a space ("FOAM" for "FOAM ROOM").
+SYSTEM_WORDS = {"FOAM", "CO", "FIRE", "FAN", "HYD", "PAINT", "LAMP", "ROPE", "CHAIN", "BATT", "ELEC", "EMERG",
+                "EMG", "PUMP"}
+
+
+def _named_words(label: str) -> list[str]:
+    """The words of a label without "NO" and without its side marks in parentheses ("(P&S)")."""
+    without_sides = re.sub(r"\(\s*(?:P\s*[&/,]?\s*S|P|S|C)\s*\)?", " ", label.upper())
+    return [word for word in _words(without_sides) if word != "NO"]
+
+
 def fragment_reason(space: dict, others: list[dict], vocabulary: set[str],
                     whole_labels: set[str] = frozenset()) -> str | None:
     """Why a label is a piece of a label, not a space; None for a whole label.
@@ -558,8 +573,35 @@ def fragment_reason(space: dict, others: list[dict], vocabulary: set[str],
         return "an unclosed parenthesis: the label is cut"
     if re.search(r"\d\s*\.?\s*[A-Z]\.?$", label.upper()) and len(words[-1]) == 1 and len(words) <= 2:
         return "a single letter after the number: the label is cut"
+    if space.get("kind") in ("other_space", "other_tank") and FITTING_WORDS & set(words):
+        return "a fitting or an opening, not a space"
+    # A last word cut inside a fitting word ("HATCH OPENI" for "HATCH OPENING"). Four letters at
+    # least, so that a short word of a real room is not taken for the start of a fitting word.
+    if space.get("kind") in ("other_space", "other_tank") and len(words[-1]) >= 4 and any(
+            fitting.startswith(words[-1]) and fitting != words[-1] for fitting in FITTING_WORDS):
+        return f"'{words[-1]}' is the start of a fitting word: a cut fitting or opening label"
+    if len(words) == 1 and space.get("kind") in ("other_space", "other_tank") and words[0] in SYSTEM_WORDS:
+        return f"'{words[0]}' names a system; the room noun of the label is missing"
     last = words[-1]
     raw_last = label.upper().split()[-1] if label.split() else ""
+    named = _named_words(label)
+    if space.get("number") and "." in raw_last and named and not re.search(r"\(", raw_last):
+        # A dotted abbreviation that is the start of a word in another label of the same number
+        # ("NO. 2 F.O." beside "NO.2 F.O.T.").
+        base = re.sub(r"[^0-9]", "", str(space["number"]))
+        for other in others:
+            if base and re.sub(r"[^0-9]", "", str(other.get("number") or "")) == base:
+                if any(word.startswith(named[-1]) and len(word) > len(named[-1]) for word in _words(other["label"])):
+                    return f"'{raw_last}' is the start of '{other['label'][:30]}': the label is cut"
+    family = "".join(named)
+    # Only an untyped label without a number (two dotted letters and a side, "X. Y. (P)"): a numbered or typed tank whose letters
+    # end another family ("W.B.T." and "T.S.W.B.T.") is a tank of its own.
+    if 2 <= len(family) <= 4 and space.get("kind") in ("other_space", "other_tank") and not space.get("number"):
+        for other in others:
+            other_family = "".join(_named_words(other["label"]))
+            if (other_family != family and other_family.endswith(family)
+                    and len(other_family) - len(family) <= 3 and not other_family.endswith("S" + family[-1:])):
+                return f"the end of the label '{other['label'][:40]}': the label is cut at its start"
     # A dotted abbreviation ("O.T.") is not a cut word, only a plain word of three letters or more.
     if (len(last) >= 3 and "." not in raw_last and last not in vocabulary
             and any(word.startswith(last) and len(word) > len(last) for word in vocabulary)):

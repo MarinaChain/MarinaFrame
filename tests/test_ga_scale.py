@@ -836,3 +836,42 @@ def test_the_marks_of_two_scale_requests_are_read_together(tmp_path):
     assert stats["scale_attempts"] == 2 and result["frames"]["status"] == "read"
     assert [s["spacing_mm"] for s in result["frames"]["spacings"]] == [700.0, 800.0, 700.0]
     assert result["measured"]["lbp_m"]["value"] == pytest.approx(_x_m(FP_FRAME), abs=0.2)
+
+
+def test_a_box_outboard_of_the_hull_gets_no_space_extent():
+    ladder = {"id": "x", "kind": "other_space", "label": "BOAT DECK STORE", "number": None, "status": "read",
+              "source_record": {"kind": "unknown", "reason": "test"},
+              "extent": {"x_m": [10.0, 18.0], "y_m": [12.5, 14.0], "side": "port", "status": {}}}
+    inside = json.loads(json.dumps(ladder))
+    inside["id"], inside["extent"]["y_m"] = "y", [8.0, 11.0]
+    kept = gs._without_outboard_extents([ladder, inside], {"breadth_m": {"value": 24.0}})
+    assert "extent" not in kept[0] and "outboard" in kept[0]["extent_withheld"] and "extent" in kept[1]
+
+
+def test_cranes_left_without_an_extent_get_one_more_request(tmp_path):
+    """Deck equipment comes late in the extents order (lane W, round u6r: three cranes skipped)."""
+    result = _result(tmp_path)
+    crane = json.loads(json.dumps(next(s for s in result["spaces"] if s["id"] == "cargo_hold-001")))
+    crane.update(id="cargo_crane-050", kind="cargo_crane", label="DECK CRANE", number=None)
+    crane["source_record"]["regions"][0]["box_px"] = [_px(100), 380.0, _px(102), 400.0]
+    result["spaces"].append(crane)
+    asked = []
+
+    def call(request_dir, provider_dir):
+        if request_dir.name.startswith("extents"):
+            asked.append((request_dir.name, [s["space_id"] for s in json.loads(
+                (request_dir / "request.json").read_text())["context"]["spaces"]]))
+            reply = _extent_reply(request_dir)
+            if request_dir.name != "extents-deck":  # the main request leaves the crane out
+                reply["reply"]["ga_scale"]["extents"] = [e for e in reply["reply"]["ga_scale"]["extents"]
+                                                         if e["space_id"] != "cargo_crane-050"]
+            else:
+                reply["reply"]["ga_scale"]["extents"] = [dict(reply["reply"]["ga_scale"]["extents"][0],
+                                                              space_id="cargo_crane-050")]
+            return reply
+        return _scale_reply(request_dir)
+
+    stats = gs.scale_pass(result, tmp_path / "S-1_GA.png", tmp_path / "scale", call)
+    assert asked[-1] == ("extents-deck", ["cargo_crane-050"])
+    assert "extent" in next(s for s in result["spaces"] if s["id"] == "cargo_crane-050")
+    assert stats["extents"]["deck_requests"] == 1

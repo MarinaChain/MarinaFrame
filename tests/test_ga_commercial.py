@@ -423,3 +423,26 @@ def test_a_piece_read_where_a_longer_label_is_printed_is_dropped_with_its_reason
     assert ga.drop_fragments(result) == 1
     assert [s["label"] for s in result["spaces"]] == ["COOL. W. T. (C)", "SLOP TK(P)", "SLOP TK(P) O.T.H."]
     assert result["checks"][0]["code"] == "fragment_label_dropped" and "COOL" in result["checks"][0]["reason"]
+
+
+@pytest.mark.parametrize("label, number, others, dropped", [
+    ("PILOT LADDER", None, [], True),                        # a fitting, not a space (lane W, round u6r)
+    ("HATCH OPEN.", None, [], True),                         # an opening
+    ("HATCH OPENI", None, [], True),                         # an opening label cut inside its word
+    ("BOATSWAIN STORE", None, [], False),
+    ("RESCUE BOAT", None, [], True),
+    ("FOAM", None, [], True),                                # a system word without its room noun
+    ("FOAM ROOM", None, [], False),
+    ("NO. 2 F.O.", "2", [("2 F. O. T. (P/S)", "2")], True),  # cut dotted abbreviation of the same tank
+    ("NO.4 C.O.T(P&S)", "4", [("NO.4 C.O.T(P&S) X", "4")], False),
+    ("C02 RM", None, [("S/G RM", None)], False),             # "C" of CO2 is not a side mark
+])
+def test_fittings_systems_and_cut_abbreviations_are_not_spaces(label, number, others, dropped):
+    space = {"label": label, "kind": "other_space", "number": number,
+             "source_record": {"kind": "read", "regions": [{"box_px": [0, 0, 10, 10]}]}}
+    other_spaces = [{"label": o, "kind": "fuel_tank", "number": n,
+                     "source_record": {"kind": "read", "regions": [{"box_px": [500, 500, 510, 510]}]}}
+                    for o, n in others]
+    vocabulary = {w for o, _ in others for w in ga._words(o)}
+    wholes = {"".join(ga._words(o)) for o, _ in others}
+    assert (ga.fragment_reason(space, other_spaces, vocabulary, wholes) is not None) is dropped

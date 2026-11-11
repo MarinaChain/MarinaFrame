@@ -167,7 +167,14 @@ requests a ship; **off by default**, so the exam run is unchanged.
    "NO", an unclosed parenthesis, a single cut letter after the number, a last word that is the
    start of a longer word on the sheet, a single word printed only inside longer labels, or an
    untyped piece read where a longer label is printed is not a space; it is listed in `checks`
-   (`fragment_label_dropped`) with its reason.
+   (`fragment_label_dropped`) with its reason. A fitting or an opening (ladder, gangway, davit,
+   boat, winch, opening; also a last word cut inside one of these words) and a lone system word
+   without its room noun ("FOAM" without "ROOM") are not spaces either.
+   **Outboard boxes:** a box whose breadth lies mostly outside half the moulded breadth loses its
+   extent (`extent_withheld`); nothing outside the hull is a space.
+   **Deck equipment top-up:** cranes and hatch covers still without an extent after the extents
+   requests get one more request (`extents-deck`), so that they are not lost when the spaces
+   fill the requests.
    **Gate** (`arrangement_gate`, `scripts/ga_arrangement_gate.py`): the arrangement step's
    checks as a regression check of each round: no space left without volume after smaller
    spaces are cut out, no fragment label, no cargo space losing more than 58 % (round s3b).
@@ -457,6 +464,15 @@ Observed cost is 0 in every round (subscription).
 - **Gate on `u6r`: 14 of 14 development ships pass** (no space without volume, no fragment,
   largest cargo-space loss 0.25; the same gate on round s3b fails 11 ships). For lane W:
   `work/ga-internal-23/dev-runs/u6r/<case>/ga_arrangement_input.json`.
+- Lane W tested u6r: accommodation ladders (outboard, no volume) were spaces, some fragments
+  remained, and the cranes of one ship had lost their extents (they come last in the extents
+  order). Fixed as general rules (fittings and openings, lone system words, cut dotted
+  abbreviations, outboard boxes, deck-equipment top-up). Replay `u6r3`: stored u6 replies plus
+  one live deck top-up request per ship that needed it (`u6r2`); no other new calls.
+- **Gate on `u6r3`: 14 of 14 development ships pass**; the cranes have extents again. One known
+  miss: a two-letter untyped tank label (two dotted letters) stays, because a general rule for it would also
+  drop real two-letter tanks ("B.T."). For lane W:
+  `work/ga-internal-23/dev-runs/u6r3/<case>/ga_arrangement_input.json`.
 
 ## Proposal (not built; PM 2026-11-12): printed sizes as a check of extents
 
@@ -471,7 +487,8 @@ model contract (Rust `ScaleReply`, CLI schema, prompt), so it waits for a PM dec
 ## Resume point
 
 Done: two Opus/Astra cycles; the Fable 5.2 step; the Opus check of it (regression found and fixed,
-overnight rounds u1-u6, overlap and fragment rules replayed as u6r). **Not frozen; the exam
+overnight rounds u1-u6, overlap and fragment rules replayed as u6r, fittings, outboard boxes and
+deck top-up replayed as u6r3). **Not frozen; the exam
 was not run; the PM said not to freeze or prepare the exam until told.** Next: a new round with
 the overlap and fragment rules in the live run (u7) and its gate; Astra review; then cut
 diagonal labels (merge pieces into whole labels instead of dropping them), boxes along sloped
