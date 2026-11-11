@@ -4,19 +4,12 @@
 
 /** A pane shorter than this (CSS px) shows the fact card collapsed to its title row. */
 export const COMPACT_HOST_PX = 360;
-/** The fact card is at most this share of the pane's height. */
-export const CARD_MAX_SHARE = 0.4;
 /** The part of the pane's width and height a framed part may use is never smaller than this. */
 const MIN_USABLE = 0.35;
 
 /** True when the pane is short enough that the card starts collapsed. */
 export function isCompactHost(height) {
   return height < COMPACT_HOST_PX;
-}
-
-/** The tallest the fact card may be (CSS px) in a pane of this height. */
-export function cardMaxHeight(height) {
-  return Math.round(height * CARD_MAX_SHARE);
 }
 
 /**

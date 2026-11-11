@@ -58,7 +58,8 @@ another user.
      every candidate line drawn as an overlay: chosen = solid accent, others = thin grey;
      hover shows its plain-language label and reason. Zoom and pan.
    - 3D: the current build's `model.stl` in a three.js orbit view (rotate, zoom, reset,
-     section planes at the station positions). Empty state when no build exists yet.
+     a plane at the selected section; Section planes (S) shows one at every station; See-through
+     (X) makes the hull faint over the parts and tanks). Empty state when no build exists yet.
    - Section strip below: one tile per section with its status (chosen / declined / not read).
 3. **Inspector (right panel), tabs:**
    - **Timeline**: events in plain language, newest at the bottom, live.

@@ -1,7 +1,9 @@
 // Hide, isolate and the part list of the 3D view (js/visibility3d.js). Run: npm run test:ui
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createPartVisibility, describeParts, filterParts, humanName, steelPartId } from '../ui/js/visibility3d.js';
+import {
+  createPartVisibility, describeParts, filterParts, humanName, PART_STATES, sectionPlaneShown, shellPartOpacity, steelPartId, steelPartOpacity,
+} from '../ui/js/visibility3d.js';
 
 test('with no hide and no isolate every part shows', () => {
   const v = createPartVisibility();
@@ -93,4 +95,46 @@ test('a search needs every word to start a word of the name, kind or detail', ()
 test('a node name reads as a title', () => {
   assert.equal(humanName('hull_body'), 'Hull body');
   assert.equal(humanName(''), '');
+});
+
+// ---- See-through hull and section planes.
+
+const shell = (over) => shellPartOpacity({ state: PART_STATES.shown, isHull: true, insideShown: false, seeThroughHull: false, ...over });
+
+test('with no tanks or steel and See-through hull off, the hull and every part are solid', () => {
+  assert.equal(shell({}), 1);
+  assert.equal(shell({ isHull: false }), 1);
+});
+
+test('See-through hull makes the hull faint and keeps the parts inside it solid', () => {
+  const hull = shell({ seeThroughHull: true });
+  assert.ok(hull > 0 && hull < 0.2, `hull opacity ${hull}`);
+  assert.equal(shell({ seeThroughHull: true, isHull: false }), 1);
+});
+
+test('See-through hull makes the hull fainter than the shell is with tanks inside', () => {
+  assert.ok(shell({ seeThroughHull: true, insideShown: true }) < shell({ insideShown: true }));
+  assert.ok(shell({ insideShown: true }) < 1);
+});
+
+test('a ghost part stays ghost and a hidden part is not drawn, with See-through hull on or off', () => {
+  for (const seeThroughHull of [false, true]) {
+    assert.ok(shell({ state: PART_STATES.ghost, seeThroughHull }) < 0.1);
+    assert.equal(shell({ state: PART_STATES.hidden, seeThroughHull }), 0);
+  }
+});
+
+test('steel members stay solid; See-through hull makes the shell plating fainter', () => {
+  const steel = (over) => steelPartOpacity({ state: PART_STATES.shown, isShellPlating: false, seeThroughHull: false, ...over });
+  assert.equal(steel({}), 1);
+  assert.equal(steel({ seeThroughHull: true }), 1);
+  assert.ok(steel({ isShellPlating: true, seeThroughHull: true }) < steel({ isShellPlating: true }));
+});
+
+test('only the selected section has a plane until Section planes is on', () => {
+  const ids = Array.from({ length: 72 }, (_, i) => `st${i}`);
+  const drawn = (allPlanes, selectedId) => ids.filter((id) => sectionPlaneShown({ id, selectedId, allPlanes }));
+  assert.deepEqual(drawn(false, 'st10'), ['st10']);
+  assert.deepEqual(drawn(false, null), []);
+  assert.equal(drawn(true, 'st10').length, 72);
 });

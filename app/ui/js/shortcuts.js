@@ -36,6 +36,8 @@ const GROUPS = [
     ['F', 'Fit the selected part'],
     ['C', 'Section cut panel (Esc ends the cut)'],
     ['G W E', 'Grid, design waterline plane, feature edges'],
+    ['S', 'Section planes at every section, or at the selected one only'],
+    ['X', 'See-through hull: the hull faint, the parts and tanks inside solid'],
     ['Z', 'Fairness: zebra stripes, curvature map, off'],
   ]],
   ['Review parts (Parts tab)', [

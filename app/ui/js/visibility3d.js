@@ -129,3 +129,43 @@ export function filterParts(entries, query) {
     return words.every((word) => haystack.some((token) => token.startsWith(word)));
   });
 }
+
+// ---- How faint a part is drawn. Faint parts are transparent, cast no shadow and show no cut face.
+
+/** Opacity of a ghost part (every part but the isolated one): present, but out of the way. */
+export const GHOST_OPACITY = 0.07;
+/** Opacity of the hull and the other parts while tanks or steel show, so what is inside is seen. */
+export const SHELL_OPACITY_WITH_INSIDES = 0.22;
+/** Opacity of the hull with See-through hull on: only a trace of the outside shape stays. */
+export const SEE_THROUGH_HULL_OPACITY = 0.1;
+/** Steel shell plating is see-through, so the frames and floors behind it show. */
+export const STEEL_SHELL_OPACITY = 0.35;
+
+/**
+ * Opacity of a whole-vessel part that is not a tank (the hull, decks, superstructure). `isHull`:
+ * the hull itself (HULL_NAME). `insideShown`: a tank or a steel group shows. `seeThroughHull`:
+ * the See-through hull switch. A hidden part is not drawn (0).
+ */
+export function shellPartOpacity({ state, isHull, insideShown, seeThroughHull }) {
+  if (state === PART_STATES.hidden) return 0;
+  if (state === PART_STATES.ghost) return GHOST_OPACITY;
+  if (seeThroughHull && isHull) return SEE_THROUGH_HULL_OPACITY;
+  return insideShown ? SHELL_OPACITY_WITH_INSIDES : 1;
+}
+
+/** Opacity of a steel member group. `isShellPlating`: the group "shell" (the plating). */
+export function steelPartOpacity({ state, isShellPlating, seeThroughHull }) {
+  if (state === PART_STATES.hidden) return 0;
+  if (state === PART_STATES.ghost) return GHOST_OPACITY;
+  if (!isShellPlating) return 1;
+  return seeThroughHull ? SEE_THROUGH_HULL_OPACITY : STEEL_SHELL_OPACITY;
+}
+
+/**
+ * True when the section plane of station `id` is drawn. By default only the selected section
+ * has a plane; `allPlanes` (the Section planes switch) draws one at every station. A ship with
+ * a section at every frame would otherwise sit in a stack of planes.
+ */
+export function sectionPlaneShown({ id, selectedId, allPlanes }) {
+  return allPlanes || id === selectedId;
+}

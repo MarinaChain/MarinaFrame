@@ -1,7 +1,7 @@
 // Named spaces of the 3D view (js/spaces3d.js). Run: npm run test:ui
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { boxHas, boxPlanes, bulkheadChoices, bulkheadPositions, bulkheadSpace, padBox, tankSpaces, OPEN_CONSTANT } from '../ui/js/spaces3d.js';
+import { boxHas, boxPlanes, bulkheadChoices, bulkheadPositions, bulkheadSpace, padBox, spacesEmptyReason, tankSpaces, OPEN_CONSTANT } from '../ui/js/spaces3d.js';
 import { hullReference } from '../ui/js/reference3d.js';
 
 const keeps = (plane, point) => plane.normal.reduce((sum, n, i) => sum + n * point[i], 0) + plane.constant >= 0;
@@ -90,4 +90,24 @@ test('the space between two bulkheads spans the hull beam and depth, in either o
   assert.equal(space.id, bulkheadSpace(a, b, hull).id);
   assert.equal(bulkheadSpace(a, a, hull), null);
   assert.equal(bulkheadSpace(a, null, hull), null);
+});
+
+test('an empty space list says the run has no tank arrangement when it lists no tank', () => {
+  const reason = spacesEmptyReason({ tankParts: 0, builtTanks: 0, taggedTanks: 0 });
+  assert.match(reason.title, /no tank arrangement/);
+  assert.match(reason.text, /tank or capacity plan/);
+});
+
+test('an empty space list says no tank was built when the run built none', () => {
+  assert.match(spacesEmptyReason({ tankParts: 3, builtTanks: 0, taggedTanks: 0 }).title, /No tank was built/);
+});
+
+test('an empty space list names an older 3D model when built tanks are not marked as tanks in it', () => {
+  const reason = spacesEmptyReason({ tankParts: 3, builtTanks: 2, taggedTanks: 0 });
+  assert.match(reason.title, /older build/);
+  assert.match(reason.text, /Run again/);
+});
+
+test('with marked tanks in the model the plain empty text stays', () => {
+  assert.equal(spacesEmptyReason({ tankParts: 2, builtTanks: 2, taggedTanks: 2 }).title, 'No spaces yet.');
 });

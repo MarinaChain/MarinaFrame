@@ -222,6 +222,9 @@ export async function showWholeVessel(part) {
       await showStructure(task);
     });
   }
+  // The space list says why it is empty from the run's tank parts.
+  const tanks = (state.view?.components || []).filter((component) => component.op === 'tank');
+  model.setSpacesContext({ tankParts: tanks.length, builtTanks: tanks.filter((tank) => tank.built).length });
   $('hull-only').hidden = !model.showsWholeVessel;
   setPartOutline(part);
 }

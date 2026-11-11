@@ -14,7 +14,9 @@ export function createSpacesPanel({ onEnter, onExit, onAdd, onRemove }) {
   let rows = new Map();
   let choices = [];
   const list = el('ul', { class: 'model-part-list', 'aria-label': 'Spaces' });
-  const none = el('p', { class: 'model-part-none' }, 'No spaces yet. A space comes from each built tank.');
+  const noneTitle = el('strong', {}, 'No spaces yet.');
+  const noneText = el('span', {}, 'A space comes from each built tank.');
+  const none = el('p', { class: 'model-part-none model-space-none' }, noneTitle, noneText);
   const exitTip = tipAttributes('Exit space', 'Show the whole model again and return the camera.', { label: false });
   const exit = el('button', { class: 'model-tool', type: 'button', ...exitTip.attrs, 'aria-label': 'Exit space', disabled: true, onclick: () => onExit() },
     icon('close'), el('span', {}, 'Exit space'), exitTip.describer);
@@ -53,6 +55,11 @@ export function createSpacesPanel({ onEnter, onExit, onAdd, onRemove }) {
         list.append(row);
       }
       none.hidden = spaces.length > 0;
+    },
+    /** Why the list is empty: { title, text } (spaces3d.js spacesEmptyReason). */
+    setEmptyReason({ title, text }) {
+      noneTitle.textContent = title;
+      noneText.textContent = text;
     },
     /** The bulkheads of the steel model: [{ x, label }]; fewer than two hides the row to add a box. */
     setBulkheads(next) {

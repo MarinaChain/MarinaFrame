@@ -248,3 +248,9 @@
 - **Date:** 2026-11-10
 - **Trigger:** The particulars reader read 1897 from the C.A. Thayer title notes, which say the builder built another vessel in that year. C.A. Thayer's own construction year is 1895.
 - **Rule:** Require a labelled construction-year field or explicit vessel identity before accepting a year in prose. Keep the other-vessel sentence as a negative fixture and report missed prose fields in development results.
+
+### Give a sideways-scrolling UI strip explicit room for its scroll bar
+- **Date:** 2026-11-11
+- **Trigger:** The section strip (`overflow-x: auto`, height from its tiles) showed cut tiles and a vertical scroll bar in the app's WebKit view on a 72-section run. Headless Chromium checks passed, because Chromium adds a horizontal scroll bar to a flex item's height and WebKit does not.
+- **Rule:** For a horizontal scroller, style its scroll bar to a fixed height, include that height in the min-height, and set `overflow-y: hidden`. Check long lists (70+ items) on the mock, not only the three-section fixture.
+- **Why:** Scroll bar sizing differs between web views and with system scroll bar settings; a layout that depends on it fails only on some machines.
