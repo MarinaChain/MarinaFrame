@@ -119,6 +119,45 @@ run on this sheet; this lane did not open its folder. For this round-bilge sheet
 | `benchmarks/balclutha/model_value.py` | `aa3786c262434e8451f7659e2885c2fecbd6b3a285c922113c93409d638a71e0` | unchanged |
 | `scripts/measure_deadrise_holdout.py` | `a31fc6854823fd76add2e3c6dbf2e91f8751cd324fed60c9d303f4c631f0e115` | reader v2 import path only |
 
+**Amendment: calibration written truth-blind, before any run (lane L, 2026-11-11).** Step 1 of section 6.
+Lane L did not open, list or hash `truth.json` or any other file in the folder except the sheet TIFF and
+`SOURCE.md` (sections 2 and 3 of this file were read; they hold no cell values), and viewed the table of offsets only in whole-sheet overviews downsampled 16 times (digits
+not legible); every lane L crop was at columns 6600 and above or rows 6300 and below. No reader, intake,
+pipeline or scorer ran on the sheet. Values and how each was read are in the calibration file:
+
+- Scale 600.0 px/ft: feet bar ticks at columns 8123-8125, 8723-8725, 9323-9325 (0, 1, 2 ft); checked by the
+  profile station lines 2876 (8) to 11426 (0), (10357 - 3945) / 6 = 1068.67 px = 21 3/8" (599.95 px/ft).
+- Centreline column 8450.0 (keel / stem lines symmetric at +-19 and +-50 px); base line row 3243.0 (dashed,
+  one row, zero slope).
+- Measuring rows: the drawn WL 3 to WL 24 at rows 3093, 2943, 2793, 2643, 2493, 2343, 2193, 2043, labels
+  `0-3-0` to `2-0-0`. Buttock grid columns 8150 / 7850 / 7550 / 7250 (left) and 8750 / 9050 / 9350 / 9650.
+- Sides: left = aft, outer first 5, 6, 7, 7.5; right = fore, outer first 4, 3, 2, 1, 0.5 (names from the
+  "STA n" labels; 4 is outside 3 at every waterline). The half stations carry placeholders 1075 and 1005
+  and are never scored; scored stations 1 to 7. Bow side from the drawing alone is a convention (station 0
+  at the right end of the profile and conventionally forward; forebody conventionally right of the
+  body-plan centreline); it agrees with section 3 and changes no cell.
+- Reach `MAX_OFFSET_PX` 1270 (outermost hull ink 1250 right at station 4, 1200 left at station 5).
+
+**Second check (independent, truth-blind).** A separate agent with its own crops, not given these values,
+measured: scale 600 px/ft (ticks 8124 / 8724 / 9324; station lines 2876, 3410, 3945, then 1068-1069 px
+apart to 11426), centreline 8450, base line 3243 (flat), WL 3 to WL 24 at rows 3093 to 2043 every 150 px,
+right half 4, 3, 2, 1, 0.5 and left half 5, 6, 7, 7.5 from the outside in, outermost ink +1252 / about
+-1196 to -1199 px. Bow: "probably right (low confidence)", by the same station-0 convention; it found no
+drawing evidence that decides it. **Agreement** on scale, axes, waterlines, station naming and reach; the
+bow side is agreed but rests on convention in both readings (the table headers of section 3 decide it).
+Disclosure: one of the checker's crops (rows 3500 to 9000, columns 2600 to 4600) caught the bottom row of
+the table of offsets, which runs below row 3450, at a legible scale; the checker reports that it did not
+use those digits, and no value in the calibration comes from the checker. The checker develops no reader
+and did not see `truth.json`.
+
+| File | SHA-256 |
+|---|---|
+| `benchmarks/davis_boat/holdout_value.py` | `e9f416bf1730883b28f3487f8278c797ecc9ae1ae6bf0f3de3b506766735132b` |
+| `benchmarks/davis_boat/__init__.py` (empty) | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` |
+| `tests/test_holdout_calibrations.py` (synthetic, no sheet, no truth) | `534852126cf200cc11ad072b1907fc15d18beecfb086356816d13ec14f14a3f2` |
+
+The round-bilge run script is not written yet; it must read this calibration unchanged.
+
 ## 6. Order of work
 
 1. **Calibration** (`benchmarks/davis_boat/holdout_value.py`) by an agent that has not seen
