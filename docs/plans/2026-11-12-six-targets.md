@@ -88,6 +88,25 @@ Evidence endpoints (substitute each exact pin above):
 
 ## Results and resume point
 
-Implementation complete in `.github/workflows/six-targets.yml` (six native matrix entries, only schedule/manual triggers). YAML structure, six unique native triples, pinned action SHAs, every Bash block's syntax, and `git diff --check` pass. `ci.yml` and `ci-watch.yml` are unchanged. `cargo fmt --all --check` passes without compiling. UI: 266 passed, zero failed. Secret scan: 1,197 tracked text files, zero findings. Local `make test-quick ... CARGO=true` is running Python; Cargo compile/clippy/tests are deliberately not run locally because of the disk constraint. This command is not a full Rust quick-tier pass.
+Implementation complete in `.github/workflows/six-targets.yml` (six native matrix entries, only schedule/manual triggers). YAML structure, six unique native triples, pinned action SHAs, every Bash block's syntax, and `git diff --check` pass. `ci.yml` and `ci-watch.yml` are unchanged. `cargo fmt --all --check` passes without compiling. `actionlint` is not installed; no actionlint result is claimed.
 
-Resume after the local Python quick result, then commit/push/dispatch and append hosted outcomes or the exact dispatch infrastructure/registration error. `engineering_approved` remains false. No release-support claim follows from a green controller build or an unsupported Python step.
+Local `make test-quick PY=<main-venv>/bin/python CARGO=true` exited 0: **1,953 Python tests passed, 84 CAD tests deselected, five warnings, 321.52 seconds**; **266 UI tests passed, zero failed**; secret scan: **1,199 tracked text files, zero findings**. Cargo compilation/clippy/tests were deliberately not run locally because of the disk constraint. This command is not a full Rust quick-tier pass.
+
+Commit `4e713e4` was pushed to `origin/lane/six-target-ci`. One dispatch was attempted with `gh workflow run six-targets.yml --ref lane/six-target-ci` and exited 1:
+
+```text
+HTTP 404: workflow six-targets.yml not found on the default branch
+```
+
+This is a **GitHub workflow-registration blocker**, not a DNS outage, source failure, or evidence of target support. No six-target run ID exists and no target executed. No merge or default-branch change was attempted. GitHub repository/auth API calls and the branch push succeeded. The automated security review hook after push also reported HTTP 404; its review did not complete (details in the local security log).
+
+| Target | Hosted Rust build/tests | Hosted Python quick |
+|---|---|---|
+| Windows x86_64 | Not run: dispatch registration blocked | Not run: dispatch registration blocked |
+| Windows arm64 | Not run: dispatch registration blocked | Unsupported pinned stack; explicit workflow step |
+| macOS arm64 | Not run: dispatch registration blocked | Not run: dispatch registration blocked |
+| macOS x86_64 | Not run: dispatch registration blocked | Unsupported pinned NLopt; explicit workflow step |
+| Linux x86_64 | Not run: dispatch registration blocked | Not run: dispatch registration blocked |
+| Linux arm64 | Not run: dispatch registration blocked | Unsupported pinned OCP/VTK; explicit workflow step |
+
+**Resume point:** the PM must first make this workflow available on the default branch through the normal reviewed process, then dispatch it on `lane/six-target-ci` and inspect each step. This task does not authorize merging. Keep build, test, install/download, runner allocation and unsupported outcomes distinct. No local `target/` folder was created, so there is no lane build folder to remove. `engineering_approved` remains false. No six-target build-support or release-support claim is made.
