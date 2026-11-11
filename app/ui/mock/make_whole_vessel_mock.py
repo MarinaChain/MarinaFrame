@@ -28,6 +28,14 @@ TANKS = [
     ("tank_do1", "Diesel oil", "diesel oil", (17.0, 19.5), (-2.0, 2.0), (0.2, 1.2)),
 ]
 BULKHEAD_X = [3.5, 7.5, 12.5, 16.5, 20.0]
+# Parts above the hull (the ids of MOCK_COMPONENTS in mock/backend.js), so the source view can be
+# checked on them: (id, label, boxes as (x, y, z) ranges in metres).
+PARTS = [
+    ("main_deck", "Main deck", [((0.3, 23.7), (-3.4, 3.4), (3.39, 3.42))]),
+    ("house_t1", "Deckhouse tier 1", [((9.0, 17.0), (-2.6, 2.6), (3.42, 5.8))]),
+    ("wheelhouse", "Wheelhouse", [((11.0, 15.5), (-2.0, 2.0), (5.8, 8.2))]),
+    ("aft_bulwark", "Aft bulwark", [((0.3, 9.0), (3.3, 3.36), (3.42, 4.4)), ((0.3, 9.0), (-3.36, -3.3), (3.42, 4.4))]),
+]
 
 
 def box(x, y, z) -> trimesh.Trimesh:
@@ -46,6 +54,9 @@ def main() -> None:
     hull = trimesh.load(FILES / "model.stl")
     meshes = {"hull": (np.asarray(hull.vertices) * MM, np.asarray(hull.faces))}
     styles = {"hull": PartStyle((0.55, 0.6, 0.66), "hull", {"kind": "hull", "label": "Hull"}, 1.0)}
+    for part_id, label, boxes in PARTS:
+        meshes[part_id] = merged([box(*ranges) for ranges in boxes])
+        styles[part_id] = PartStyle((0.78, 0.8, 0.84), part_id, {"kind": "part", "label": label}, 1.0)
     for tank_id, name, content, x, y, z in TANKS:
         vertices, faces = merged([box(x, y, z)])
         meshes[tank_id] = (vertices, faces)

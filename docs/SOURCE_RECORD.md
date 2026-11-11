@@ -61,3 +61,13 @@ beside `<stem>_capacity_plan.csv`.
 
 A run made before source records has none. The app reads such a run as before and says
 "No source record. Run again to record where this came from."
+
+## In the app
+
+`app/ui/js/provenance.js`. Hover a part or a section plane in the 3D view (after about 0.2 s), or
+select a part (also from the 3D part list, with the keyboard), with the drawing and the model side
+by side. The drawing pane shows up to three source sheets, zoomed to their regions and outlined, and
+a line runs from the part to each region: solid blue for `read`, dashed amber labelled "best guess"
+for `guessed`, with a ring on each other part the guess used. `unknown` and a missing record show a
+short note and no line. Escape closes the view. With reduced motion the sheets switch without the
+stacked-sheets animation.
