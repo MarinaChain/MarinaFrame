@@ -22,8 +22,15 @@ Piece = TypeVar("Piece")
 Result = TypeVar("Result")
 
 
-def worker_count(pieces: int) -> int:
-    """Processes for ``pieces`` independent pieces: the setting, else cores - 2; 1 to ``pieces``."""
+def worker_count(pieces: int, workers: int | None = None) -> int:
+    """Processes for ``pieces`` independent pieces, 1 to ``pieces``.
+
+    ``workers`` is the count the caller was given (the controller passes it to its worker:
+    it shares the cores between concurrent runs). Without it: MARINAFRAME_WORKERS (command-line
+    scripts), else cores - 2.
+    """
+    if workers is not None and 1 <= workers <= MAX_WORKERS:
+        return max(1, min(workers, pieces))
     configured = os.environ.get(WORKERS_ENVIRONMENT_VARIABLE, "").strip()
     workers = int(configured) if configured.isdigit() and 1 <= int(configured) <= MAX_WORKERS else 0
     if not workers:

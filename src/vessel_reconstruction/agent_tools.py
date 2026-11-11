@@ -120,6 +120,10 @@ class DomainTools(InvestigationTools):
     this class also bounds each parser/CAD worker and serializes mutations.
     """
 
+    # Worker processes of one source inspection; the controller sets it (it shares
+    # the cores between concurrent runs). None: parallel.worker_count's own default.
+    inspection_workers: int | None = None
+
     def __init__(self, task_dir: Path, spec_path: Path, *, cancel_event=None):
         self.task_dir = Path(task_dir).resolve()
         self.root = self.task_dir / "domain"
@@ -651,7 +655,7 @@ class DomainTools(InvestigationTools):
             requested = [s["id"] for s in self.spec["sections"]]
         # Sections are independent: the batch is split over parallel worker
         # processes, each with the single-worker budget (parallel.worker_count).
-        workers = parallel.worker_count(INSPECTION_BATCH)
+        workers = parallel.worker_count(INSPECTION_BATCH, self.inspection_workers)
         ids = self._inspection_batch(requested, workers)
         missing = [sid for sid in ids if sid not in self.state["catalog"]]
         resources = {}

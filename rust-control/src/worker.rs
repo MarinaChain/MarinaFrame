@@ -147,18 +147,45 @@ const MAX_NATIVE_SLOTS: usize = 8;
 
 fn default_native_slots() -> usize {
     let cores = std::thread::available_parallelism().map_or(2, |n| n.get());
+    native_slots_for(cores)
+}
+
+/// The default native slot count on `cores` cores: half of them, 1 to MAX_NATIVE_SLOTS.
+fn native_slots_for(cores: usize) -> usize {
     (cores / 2).clamp(1, MAX_NATIVE_SLOTS)
 }
 /// How long a native step waits for a free slot before it gives up (seconds). Many
 /// concurrent tasks queue here; 120 s ended runs needlessly under load.
 pub const ADMISSION_DEADLINE_SECONDS: u64 = 1800;
 
-fn native_slots() -> usize {
+pub fn native_slots() -> usize {
     std::env::var("MARINAFRAME_NATIVE_SLOTS")
         .ok()
         .and_then(|value| value.parse::<usize>().ok())
         .filter(|slots| (1..=MAX_NATIVE_SLOTS).contains(slots))
         .unwrap_or_else(default_native_slots)
+}
+
+/// Cores kept free of inspection workers (the controllers, the app and the system).
+pub const RESERVED_CORES: usize = 2;
+/// Largest inspection worker count a run may set (each worker holds the drawing).
+pub const MAX_INSPECTION_WORKERS: u32 = 32;
+
+/// Inspection workers per run when `slots` runs may do native work at once on
+/// `cores` cores: the free cores (cores - RESERVED_CORES) shared between the
+/// slots, at least 1. An inspection is native work and holds an admission slot,
+/// so at most `slots` runs inspect at once; with the default slot count (half the
+/// cores) they start at most max(1, cores - RESERVED_CORES) workers in total.
+pub fn inspection_workers_for(cores: usize, slots: usize) -> u32 {
+    let free = cores.saturating_sub(RESERVED_CORES);
+    let shared = free / slots.max(1);
+    (shared.max(1) as u32).min(MAX_INSPECTION_WORKERS)
+}
+
+/// Inspection workers per run on this machine with its native slot count.
+pub fn default_inspection_workers() -> u32 {
+    let cores = std::thread::available_parallelism().map_or(2, |n| n.get());
+    inspection_workers_for(cores, native_slots())
 }
 
 fn open_slot(dir: &Path, slot: usize) -> Result<std::fs::File> {
@@ -480,6 +507,14 @@ fn python_command(
         .arg(source_spec)
         .arg("--response")
         .arg(response)
+        // The worker environment is cleared, so the count is an argument.
+        .arg("--inspection-workers")
+        .arg(
+            config
+                .inspection_workers
+                .unwrap_or_else(default_inspection_workers)
+                .to_string(),
+        )
         // A hull build setting (Python fairing.SETTING), not a secret.
         .pass_through("MARINAFRAME_HULL_FAIRING")
         .env(
@@ -508,6 +543,7 @@ fn log_bytes(stdout: &Path, stderr: &Path) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{OnAmbiguity, OperationalLimits, Policy};
 
     #[test]
     fn resource_limit_message_names_stage_and_progress() {
@@ -585,6 +621,78 @@ mod tests {
         assert_eq!(limits.worker_wall_seconds, 0);
         limits.worker_wall_seconds = 86_400;
         limits.validate().unwrap();
+    }
+
+    #[test]
+    fn concurrent_runs_never_exceed_the_free_cores_by_default() {
+        for cores in 1..=128 {
+            let slots = native_slots_for(cores);
+            let per_run = inspection_workers_for(cores, slots) as usize;
+            let free = cores.saturating_sub(RESERVED_CORES);
+            assert!(per_run >= 1, "{cores} cores");
+            // At most `slots` runs hold an admission slot (inspect) at once.
+            assert!(
+                slots * per_run <= free.max(1),
+                "{cores} cores: {slots} runs x {per_run} workers"
+            );
+            if slots >= 2 {
+                assert!(2 * per_run <= free, "{cores} cores: two runs");
+            }
+        }
+        // Explicit slot counts (MARINAFRAME_NATIVE_SLOTS) share the free cores too.
+        for cores in 4..=128 {
+            for slots in 1..=MAX_NATIVE_SLOTS.min(cores - RESERVED_CORES) {
+                let per_run = inspection_workers_for(cores, slots) as usize;
+                assert!(
+                    slots * per_run <= cores - RESERVED_CORES,
+                    "{cores} cores, {slots} slots"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_worker_gets_the_inspection_worker_count_as_an_argument() {
+        let config = |inspection_workers| Config {
+            worker_python: "/not/executed".into(),
+            worker_source: None,
+            source_spec: "/not/executed.json".into(),
+            policy: Policy::Deterministic,
+            limits: OperationalLimits::default(),
+            provider_transfer_authorized: false,
+            authorization_basis: String::new(),
+            model: "m".into(),
+            binary_sha256: "a".repeat(64),
+            on_ambiguity: OnAmbiguity::Draft,
+            fallback_models: vec![],
+            inspection_workers,
+        };
+        let pending = Pending {
+            kind: "worker".into(),
+            id: "worker-1".into(),
+            operation: "inspect_source".into(),
+            response_path: "receipts/worker-1.json".into(),
+            request_path: "requests/worker-1.json".into(),
+            domain_before: None,
+            started_ms: 0,
+        };
+        let count = |inspection_workers| {
+            let argv = python_command(
+                Path::new("/task"),
+                &config(inspection_workers),
+                &pending,
+                Path::new("/spec.json"),
+                Path::new("/response.json"),
+            )
+            .argv();
+            let at = argv
+                .iter()
+                .position(|a| a == "--inspection-workers")
+                .unwrap();
+            argv[at + 1].clone()
+        };
+        assert_eq!(count(Some(3)), "3");
+        assert_eq!(count(None), default_inspection_workers().to_string());
     }
 
     #[test]

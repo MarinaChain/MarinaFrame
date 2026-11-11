@@ -18,6 +18,7 @@ from importlib import metadata
 from pathlib import Path
 
 from .agent_tools import DomainTools, _artifact, _model_observation_image
+from .parallel import MAX_WORKERS
 from .tool_catalog import catalog
 from .provenance import digest_file, digest_object, write_json
 from .process_limits import posix_resource
@@ -63,7 +64,7 @@ def parse_request(raw):
     return value
 
 
-def execute(request, task_root, source_spec, cancel):
+def execute(request, task_root, source_spec, cancel, inspection_workers=None):
     task_root = Path(task_root).absolute()
     if task_root.is_symlink() or not task_root.is_dir():
         raise ValueError("Task root must be an existing ordinary directory")
@@ -84,6 +85,8 @@ def execute(request, task_root, source_spec, cancel):
     if cancel.is_set():
         raise InterruptedError("Worker cancelled before operation")
     domain = DomainTools(task_root, Path(source_spec), cancel_event=cancel)
+    # The controller's count for this run (it shares the cores between concurrent runs).
+    domain.inspection_workers = inspection_workers
     if request["operation"] in {"initialize", "observe"}:
         result = {"ok": True, "status": "observed", "artifacts": [],
                   "engineering_approved": False, "human_semantic_review_required": True,
@@ -125,11 +128,20 @@ def execute(request, task_root, source_spec, cancel):
             "implementation_sha256": implementation}
 
 
+def _worker_count(value: str) -> int:
+    count = int(value)
+    if not 1 <= count <= MAX_WORKERS:
+        raise argparse.ArgumentTypeError(f"inspection workers must be 1 to {MAX_WORKERS}")
+    return count
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--task-root", required=True, type=Path)
     p.add_argument("--source-spec", required=True, type=Path)
     p.add_argument("--response", required=True, type=Path)
+    p.add_argument("--inspection-workers", type=_worker_count, default=None,
+                   help="Worker processes of one source inspection (set by the controller).")
     args = p.parse_args(argv)
     cancel = threading.Event()
     signal.signal(signal.SIGTERM, lambda *_: cancel.set())
@@ -147,7 +159,8 @@ def main(argv=None):
         envelope.update(request_id=request["request_id"], operation=request["operation"])
         stage = request['operation'].replace('_', ' ').capitalize()
         with Heartbeat(stage):
-            envelope.update(execute(request, args.task_root, args.source_spec, cancel))
+            envelope.update(execute(request, args.task_root, args.source_spec, cancel,
+                                    args.inspection_workers))
         envelope["execution_state"] = "completed"
     except InterruptedError:
         envelope.update(execution_state="cancelled", error_code="worker_cancelled")

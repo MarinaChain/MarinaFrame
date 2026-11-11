@@ -848,6 +848,7 @@ pub fn standalone_config(basis: &str, source: &Path) -> Result<Config> {
         binary_sha256: util::file_hash(&std::env::current_exe().map_err(|_| "binary_path")?)?,
         on_ambiguity: OnAmbiguity::Abstain,
         fallback_models: vec![],
+        inspection_workers: None,
     })
 }
 

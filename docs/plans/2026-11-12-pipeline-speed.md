@@ -106,13 +106,31 @@ CPU seconds (receipts): inspection 238.9 -> 268.2 (parallel startup cost), build
 | Hull build (`pipeline.reconstruct`), of which 3dm export | 377.1, 256.0 | 98.6, 10.0 |
 | Whole-vessel assembly (side by side, load 5-17) | 446.7 | 390.7 |
 
+## 4a. Worker count set by the controller (PM request, 2026-11-11)
+
+The controller clears the worker environment, so `MARINAFRAME_WORKERS` never reached the app's
+worker. Now:
+
+- `Config.inspection_workers: Option<u32>` (not serialized when unset: older ledger hashes
+  stay). The app sets it from `Settings.inspection_workers` (optional; unset = the default) in
+  `app_run_config`; the CLI takes `marinaframe run --inspection-workers 1..32`.
+- Default (`worker::default_inspection_workers`): max(1, (cores - 2) / native slots). An
+  inspection holds a native admission slot, so at most `slots` runs inspect at once and together
+  they use at most max(1, cores - 2) workers (Rust test
+  `concurrent_runs_never_exceed_the_free_cores_by_default`, 1-128 cores, also two concurrent runs).
+- The controller always passes `--inspection-workers N` to `rust_worker`, which sets
+  `DomainTools.inspection_workers`; that wins over `MARINAFRAME_WORKERS` (kept for CLI scripts).
+
+**Effect on one app run on this Mac:** 10 cores give 5 native slots, so the default is
+max(1, 8 / 5) = 1 inspection worker per run: inspection is back to about its old time (309.6 s
+measured through the controller), while the build_draft gains stay (722.7 -> 289.7 s). One run at
+a time gets the parallel inspection back with the setting (for example 8), or with
+`MARINAFRAME_NATIVE_SLOTS=1`. Option for later: a machine-wide pool of cores - 2 worker tokens
+(lock files, like the admission slots), so a lone run uses 8 workers and concurrent runs share.
+
 ## 5. Not done / follow-ups
 
-- **Rust controller environment.** `rust-control/src/supervised.rs` clears the worker
-  environment, so `MARINAFRAME_WORKERS` does not reach the Python worker under the app; the default
-  (cores - 2) applies. Add it to the allowlist if a setting is needed. With batch runs
-  (`MARINAFRAME_NATIVE_SLOTS`, up to 5 runs at once) the default can start 8 inspect workers per
-  run: consider worker count = cores / native slots.
+- Settings page control for `inspection_workers` (the field exists; the page does not show it).
 - **Lane O (panel_assignment.py):** the shared panels are enumerated one after the other; they are
   independent and could run in parallel processes (2 panels: about half of the remaining 139 s).
   Not changed (lane O's file).

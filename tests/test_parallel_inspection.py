@@ -23,6 +23,24 @@ def test_worker_count_uses_setting_then_cores_and_stays_within_pieces(monkeypatc
     assert parallel.worker_count(12) == 1
 
 
+def test_the_controller_count_wins_over_the_environment(tmp_path, monkeypatch):
+    monkeypatch.setenv(parallel.WORKERS_ENVIRONMENT_VARIABLE, "5")
+    assert parallel.worker_count(12, 2) == 2
+    assert parallel.worker_count(1, 2) == 1
+    assert parallel.worker_count(12, None) == 5
+    # The Rust controller passes --inspection-workers; the worker sets it on the domain.
+    from vessel_reconstruction import rust_worker
+    with __import__("pytest").raises(SystemExit):
+        rust_worker.main(["--task-root", str(tmp_path), "--source-spec", str(tmp_path / "s"),
+                          "--response", str(tmp_path / "r.json"), "--inspection-workers", "0"])
+    path, _ = drawing(tmp_path / "input")
+    monkeypatch.setenv(parallel.WORKERS_ENVIRONMENT_VARIABLE, "1")
+    tools = DomainTools(tmp_path / "task", path)
+    tools.inspection_workers = 2
+    observed = tools.execute("inspect_source", {})
+    assert observed["ok"] and observed["resources"]["workers"] == 2
+
+
 def test_split_evenly_and_run_in_order_keep_the_order():
     assert parallel.split_evenly(list("abcde"), 3) == [["a", "b"], ["c", "d"], ["e"]]
     assert parallel.split_evenly(list("ab"), 5) == [["a"], ["b"]]
