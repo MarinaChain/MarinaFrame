@@ -29,3 +29,19 @@ the run with the exact executable. Scripts used to make the kit: `work/desktop-k
 - Reviews from the web demo config show in the copied runs.
 - The installer never uses sudo, xattr or security settings and never overwrites a run folder.
 - `engineering_approved` stays false in every run.
+
+## Results (2026-11-11)
+
+- Code commit a4b7c7c; `make test-quick` passed (Rust, 1930 Python, UI 266 incl. new tests, secret scan 0).
+- DMG built from a4b7c7c (app executable SHA-256 c32e4d37...). Kit runs made with that app (`make-run`):
+  Gunnerus, DTMB 5415, Series 60 all `draft_not_verified`, same build; concept run has no controller binary.
+- The shipped worker reads the Gunnerus body plan differently from the web demo's older worker
+  (hull 450.2 against 446.8 m3), so the whole-vessel stages were rebuilt on the kit run
+  (`work/desktop-kit/make/gunnerus_whole_vessel.sh`): 48 parts, 24 tanks, display model bound to
+  the kit run's r0001. The aft_bulwark part revision of the web run is not in the kit run.
+- Clean-user check (temporary HOME, app from the DMG, installer run twice): 4 runs installed, then
+  "already there" for all 4. Both showcase runs open with no other-build notice; Gunnerus on its
+  whole vessel with its credit line; a tank hover shows the Tank Arrangement sheet with the tank
+  framed; Sources lists 11 drawings; concept run opens see-through with its concept label. A review
+  saved in one HOME shows (1/48 reviewed) after the run is copied to a second HOME.
+- Kit: `work/desktop-kit/` (MarinaFrame-demo-kit.zip and its parts; scripts in `make/`).
