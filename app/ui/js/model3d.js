@@ -22,7 +22,7 @@ import { createBatch, HIDDEN_MATERIAL } from './batch3d.js';
 import { createSectionCut } from './cut3d.js';
 import { createCutPanel, createToolbar, toolButton } from './controls3d.js';
 import {
-  createPartVisibility, describeParts, GHOST_OPACITY, HULL_NAME, PART_STATES, sectionPlaneShown, shellPartOpacity, steelPartId, steelPartOpacity,
+  createPartVisibility, describeParts, GHOST_OPACITY, HULL_NAME, PART_STATES, sectionHullShown, sectionPlaneShown, shellPartOpacity, steelPartId, steelPartOpacity,
 } from './visibility3d.js';
 import { createPartsPanel } from './parts_panel3d.js';
 import { tipAttributes } from './tooltip.js';
@@ -1714,6 +1714,8 @@ export function createModelView({
       scaleToMetres(geometry, lengthM);
       geometry.computeVertexNormals();
       hull = new THREE.Mesh(geometry, hullMaterial);
+      // A hull that arrives after the whole vessel stays hidden, or it covers the whole vessel.
+      hull.visible = sectionHullShown({ wholeVesselShown: Boolean(wholeVessel) });
       hull.castShadow = true;
       hull.receiveShadow = true;
       // A hull that arrives while the fairness view is on gets the smooth normals at once.
@@ -1787,7 +1789,7 @@ export function createModelView({
         renderLegend();
         updateLabels();
       }
-      if (hull) hull.visible = true;
+      if (hull) hull.visible = sectionHullShown({ wholeVesselShown: false });
       overlays.setEdgesLayer('hull', true);
       if (!buffer) {
         // Back to the hull: move to its home view. With no whole vessel shown, the view
@@ -1851,7 +1853,7 @@ export function createModelView({
           }
           rebuildParts();
           styleWholeVessel();
-          if (hull) hull.visible = false;
+          if (hull) hull.visible = sectionHullShown({ wholeVesselShown: true });
           empty.hidden = true;
           renderer.domElement.hidden = false;
           resize();

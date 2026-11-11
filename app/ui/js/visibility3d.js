@@ -162,6 +162,16 @@ export function steelPartOpacity({ state, isShellPlating, seeThroughHull }) {
 }
 
 /**
+ * True when the solid hull of the section lines (the STL) is drawn. While the whole vessel
+ * shows, the whole vessel has its own hull part, and the solid STL hull would cover it: the
+ * See-through switch and the faint shell would then change nothing on screen. This holds in
+ * whichever order the two models load (the web demo loads the whole vessel first).
+ */
+export function sectionHullShown({ wholeVesselShown }) {
+  return !wholeVesselShown;
+}
+
+/**
  * True when the section plane of station `id` is drawn. By default only the selected section
  * has a plane; `allPlanes` (the Section planes switch) draws one at every station. A ship with
  * a section at every frame would otherwise sit in a stack of planes.
