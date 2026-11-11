@@ -1352,6 +1352,43 @@ the integration run showed equal to `body_plan_sides` on all nine development sh
 | `benchmarks/balclutha/model_value.py` | `aa3786c262434e8451f7659e2885c2fecbd6b3a285c922113c93409d638a71e0` | unchanged |
 | `scripts/measure_deadrise_holdout.py` | `a31fc6854823fd76add2e3c6dbf2e91f8751cd324fed60c9d303f4c631f0e115` | reader v2 import path only; the BOATS entry for the sheet is still to be added and recorded |
 
+**Amendment: calibration written truth-blind, before any run (lane L, 2026-11-11).** Step 1 of the order of
+work. Lane L did not open, list or hash `truth.json` or any other file in the folder except the sheet TIFF
+and `SOURCE.md`, did not read lane E's transcription, and viewed the table of offsets (rows 1680 to 3440,
+columns 5680 to 12320) only in whole-sheet overviews downsampled 16 times (digits not legible). No reader,
+intake, pipeline or scorer ran on the sheet. Values and how each was read (full-sheet pixels, row / column)
+are in the calibration file:
+
+- Scale 600.0 px/ft: feet bar ticks at columns 11361-11364, 11961-11964, 12561-12564 (0, 1, 2 ft); checked
+  by the profile station lines 800 px apart (3586.5 to 10786.5, "1'-4"") and the "13'-7"" length (extension
+  lines 3006 and 11160: 600.3 px/ft).
+- Centreline column 3885.0 (dash-dot, 3884-3886); base line row 3235.0 (3234-3236, zero slope); drawn W1,
+  W2, W3 rows 3085, 2935, 2785.
+- Measuring rows (in above base): -3.5, -2.5, -1.5, -0.5 (rows 3410 to 3260, clear of the drawn section
+  bottoms), 0, 3, 6, 9 (drawn W0 to W3), 10.5, 14, 15.5, 17 (rows 2710 to 2385, each at least 27 px from
+  every station top corner). The top 0.6 in of station 1 is above the top row.
+- Sides: left = aft, outer first 8, 9, 10; right = fore, outer first 7, 6, 5, 4, 3, 2, 1; scored stations
+  1 to 9 (station 10 is named so that rank naming does not shift, and it has no printed cells). The heavy
+  transom outline, the thin line beside it, the notch line and the two stem lines are not stations. Check:
+  the half-breadth plan's W3 offsets at the ten profile station lines equal the body-plan curves within 4 px.
+- Reach `MAX_OFFSET_PX` 1250 (outermost hull ink 1238 left / 1239 right; labels "8" from 1255, "Baseline"
+  from 1262).
+
+**Second check (independent, truth-blind).** A separate agent with its own crops, not given these values,
+measured: scale 600 px/ft (bar ticks 11362.5 / 11962.5 / 12562.5; station lines 800 px; 13'-7" about 601
+px/ft), centreline 3885, base line 3235 (no slope), W1 / W2 / W3 rows 3085 / 2935 / 2785, bow at the right
+(plan comes to a point at the right, raked transom at the left, stations numbered 1 at the right), right
+half = forebody 7, 6, 5, 4, 3, 2, 1, left half = aftbody 8, 9, 10, unlabelled stem lines at 3901 and 3934
+and a transom outline, outermost ink about 1237 px each side, labels "7" from about 1295 and "8" from about
+1255. **Full agreement** on scale, axes, waterlines, bow side, half naming and reach.
+
+| File | SHA-256 |
+|---|---|
+| `benchmarks/cama_beach_skiff_22/holdout_value.py` | `b072ea454563bee10f8863199cb49c7d0cf881b9398d923c922803c9d966adee` |
+| `benchmarks/cama_beach_skiff_22/__init__.py` (empty) | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` |
+| `scripts/measure_deadrise_holdout.py` (BOATS entry `cama-beach-skiff-22` added; replaces the pin above) | `d42a325e6a7187ba7b0ffd3e4ea71f64b65eb793abca247da4bae12c515e2e3a` |
+| `tests/test_holdout_calibrations.py` (synthetic, no sheet, no truth) | `534852126cf200cc11ad072b1907fc15d18beecfb086356816d13ec14f14a3f2` |
+
 **Order of work (each step committed before the next).**
 1. **Calibration** in `benchmarks/cama_beach_skiff_22/holdout_value.py` by an agent that has not
    seen `truth.json`, the table crops or this lane's transcription (lane E read the table, so it

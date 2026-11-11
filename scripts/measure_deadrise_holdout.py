@@ -25,7 +25,8 @@ from benchmarks.frozen_readers.v1 import body_plan_reader as reader
 from benchmarks.hard_chine import reader_v2 as v2
 
 BOATS = {'white-gull': 'benchmarks.white_gull.holdout_value', 'colleen': 'benchmarks.colleen.holdout_value',
-         'caleb-jones': 'benchmarks.caleb_jones.holdout_value'}  # calibration committed before its one run
+         'caleb-jones': 'benchmarks.caleb_jones.holdout_value',
+         'cama-beach-skiff-22': 'benchmarks.cama_beach_skiff_22.holdout_value'}  # calibration committed before its one run
 ARMS = ('frozen', 'v2', 'polyline')
 
 
