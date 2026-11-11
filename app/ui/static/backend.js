@@ -119,11 +119,22 @@ export function createStaticBackend({ fetchImpl = (...args) => fetch(...args), b
   const commands = {
     async list_tasks() {
       const { runs } = await manifest();
-      // Home shows where each drawing came from (the licence credit) under its card.
-      return runs.map((run) => ({ ...structuredClone(run.summary), demo_source: run.source }));
+      // Home shows the runs in the manifest's order, each with its line and where its
+      // drawings came from (the licence credit).
+      return runs.map((run, index) => ({
+        ...structuredClone(run.summary),
+        demo_order: index,
+        demo_tagline: run.tagline || null,
+        demo_concept: run.concept === true,
+        demo_source: run.source,
+      }));
     },
     async get_task({ task }) {
       const view = structuredClone(await runJson(task, 'task.json'));
+      const slug = await slugOf(task);
+      const { runs } = await manifest();
+      // A concept-preview run (made-up vessel and drawings) carries its flag to every page.
+      view.demo = { concept: runs.find((run) => run.slug === slug)?.concept === true };
       // As in app/core/src/view.rs, a dismissed notice is left out.
       view.notices = (view.notices || []).filter((notice) => !dismissed.has(notice.id));
       return view;

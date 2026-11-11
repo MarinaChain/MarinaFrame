@@ -62,6 +62,20 @@ test('list_tasks gives the manifest runs with their source credit', async () => 
   assert.equal(tasks[0].demo_source, 'Made for the test.');
 });
 
+test('a concept-preview run is flagged in the list and on its view; the list keeps the demo order', async () => {
+  const files = demoFiles();
+  const manifest = files['data/manifest.json'];
+  const concept = { ...structuredClone(manifest.runs[0]), slug: 'concept-launch', concept: true, tagline: 'Concept preview: Survey launch' };
+  concept.summary.task = `${DEMO_RUNS_FOLDER}/concept-launch`;
+  manifest.runs.unshift(concept);
+  files['data/runs/concept-launch/task.json'] = { summary: { task: concept.summary.task }, notices: [] };
+  const demo = backend(files);
+  const tasks = await demo.invoke('list_tasks');
+  assert.deepEqual(tasks.map((t) => [t.demo_order, t.demo_concept, t.demo_tagline]), [[0, true, 'Concept preview: Survey launch'], [1, false, null]]);
+  assert.equal((await demo.invoke('get_task', { task: concept.summary.task })).demo.concept, true);
+  assert.equal((await demo.invoke('get_task', { task: TASK })).demo.concept, false);
+});
+
 test('get_task answers from task.json and leaves out notices dismissed in this page', async () => {
   const demo = backend();
   assert.equal((await demo.invoke('get_task', { task: TASK })).notices.length, 2);

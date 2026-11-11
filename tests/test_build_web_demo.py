@@ -41,6 +41,14 @@ def test_selection_refuses_unknown_licences_bad_slugs_and_forbidden_names(tmp_pa
         build.load_selection(write_selection(tmp_path, [bad]))
 
 
+def test_generated_example_licence_goes_with_concept_runs_only(tmp_path):
+    concept = entry(licence="generated-example", concept=True)
+    assert build.load_selection(write_selection(tmp_path, [concept]))[0]["concept"] is True
+    for bad in [entry(licence="generated-example"), entry(licence="synthetic", concept=True)]:
+        with pytest.raises(build.BuildError):
+            build.load_selection(write_selection(tmp_path, [bad]))
+
+
 def test_selection_refuses_a_run_named_twice(tmp_path):
     with pytest.raises(build.BuildError):
         build.load_selection(write_selection(tmp_path, [entry(), entry()]))

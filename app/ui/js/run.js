@@ -103,6 +103,8 @@ export async function loadTask({ fresh = false } = {}) {
       fresh ? invoke('get_events', { task, after_sequence: 0 }) : Promise.resolve(null),
     ]);
     if (token !== state.loadToken) return;
+    // The web demo marks a concept-preview run (static/backend.js); styles.css shows its label.
+    document.documentElement.toggleAttribute('data-demo-concept', view.demo?.concept === true);
     setView(view);
     if (events) {
       setEvents(events);

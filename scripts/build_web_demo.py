@@ -48,6 +48,7 @@ ALLOWED_LICENCES = {
     # attribution is shown with the run, from its "source" text).
     "cc-by-3.0",
     "synthetic",  # the built-in sample hull and generated drawings of the above
+    "generated-example",  # a concept-preview run: vessel and drawings made for the demo (concept runs only)
     # Licence not confirmed; the owner of MarinaFrame approved showing it on the demo site
     # (2026-11-11: R/V Gunnerus, MiDShip development cases). Never committed to git.
     "owner-approved-display",
@@ -92,6 +93,10 @@ def load_selection(path: Path) -> list[dict]:
             raise BuildError(f"{entry['slug']}: a slug is letters, digits and '-'")
         if entry.get("licence") not in ALLOWED_LICENCES:
             raise BuildError(f"{entry['slug']}: licence {entry.get('licence')!r} is not allowed in the demo")
+        # A made-up vessel is shown only with its concept-preview label, and only a made-up
+        # vessel is labelled so: the two always go together.
+        if (entry.get("licence") == "generated-example") != (entry.get("concept") is True):
+            raise BuildError(f"{entry['slug']}: 'generated-example' goes with \"concept\": true, and only with it")
         check_name(entry["slug"], "run")
     return runs
 
@@ -208,6 +213,8 @@ def write_manifest(data: Path, selection: list[dict], downscaled: dict[str, list
             "name": entry["name"],
             "licence": entry["licence"],
             "source": entry["source"],
+            "tagline": entry.get("tagline"),
+            "concept": entry.get("concept") is True,
             "summary": summary,
             "downscaled_images": downscaled[slug],
         })

@@ -51,10 +51,17 @@ The same runs, config and commit give the same bytes (`built_from_commit` is in 
 | `mit` | DTMB 5415 surface (mathLab/WaveBEMapp-DTMB-5415) |
 | `cc-by-3.0` | Series 60 example hull (FreeCAD Ship workbench); the credit is shown under its card |
 | `synthetic` | the built-in sample hull |
+| `generated-example` | a concept-preview run (`"concept": true`): a made-up vessel and drawings made for the demo. The build refuses this licence without `"concept": true` and the reverse. Every page of the run shows "Concept preview - example vessel and drawings made for this demo. ..." |
 | `owner-approved-display` | R/V Gunnerus and MiDShip (development split only, never sealed): licence not confirmed. They stay out of git. |
 
 Approval for `owner-approved-display` (2026-11-11): the PM asked the user "Can we show Gunnerus
 (and MiDShip tanker sections) on a public site?" and the user answered "1. Yes".
+
+### Home order
+
+Home lists the runs in the order of `scripts/web_demo_runs.json`. Runs with a `tagline` are the
+showcases (the real ship, then the concept preview); the pilot proposal card follows them, then
+the other runs.
 
 ## Local check
 
