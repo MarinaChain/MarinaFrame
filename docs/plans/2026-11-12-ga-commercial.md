@@ -1,6 +1,6 @@
 # GA reading for commercial ships: method, exam protocol and results (lane U, 2026-11-12)
 
-Status: development on the 14 development ships; **not frozen** (the PM decides when; the code is
+Status: **frozen 2026-11-12 07:20 SGT** for the holdout exam (see "Frozen" below); development on the 14 development ships continues on lane/ga-commercial. Earlier status: (the PM decides when; the code is
 then frozen at the commit that adds this file's "Frozen" section). The holdout is scored once by the
 evaluator lane, not by this lane.
 
@@ -651,3 +651,11 @@ tapered boundaries, the printed-size proposal (above) if the PM accepts it.
 To repeat a development round: `ga_commercial batch --measure --max-requests 65` on groups of
 the 14 development cases; each `ga_reading.json` has `passes`, `frames`, `measured` and the space
 extents, and `ga_arrangement_input.json` is beside it.
+
+## Frozen
+
+- Frozen on 2026-11-12 at 07:20 SGT by the PM, at the user's request ("run the exam").
+- Code: commit a0fdf2b (lane/ga-commercial), plus only this section. Branch: lane/ga-exam.
+- Lane U's unpushed prompt experiment (clear/uncertain marking) is not part of the frozen code.
+- The exam runs once, as written in "What the evaluator runs": Claude Sonnet 5.5 only, at most
+  54 requests, no `--measure`, scorer and tolerance unchanged.
