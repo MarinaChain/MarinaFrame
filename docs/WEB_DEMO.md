@@ -88,9 +88,8 @@ frame.marinachain.io {
 		-Server
 	}
 
-	# Run data changes only with a new build; the UI files are small.
-	header /data/* Cache-Control "public, max-age=3600"
-	header /index.html Cache-Control "no-cache"
+	# Revalidate every file (ETag), so a new build shows at once after a redeploy.
+	header Cache-Control "no-cache"
 
 	file_server
 }

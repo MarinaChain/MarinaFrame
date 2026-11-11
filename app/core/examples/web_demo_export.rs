@@ -39,6 +39,8 @@ use std::path::{Path, PathBuf};
 
 /// The task id the demo shows instead of the local run folder.
 const DEMO_RUNS_FOLDER: &str = "/MarinaFrame/runs";
+/// The notice id of "A different build of MarinaFrame made this run" (app/core/src/view.rs).
+const OTHER_BUILD_NOTICE: &str = "other-build";
 /// Export kinds that are copied for download: CAD, mesh, report and table files. The
 /// package manifest and the zip package are left out (the manifest names local paths).
 const DOWNLOAD_EXTENSIONS: [&str; 8] = ["step", "stp", "glb", "stl", "pdf", "csv", "dxf", "iges"];
@@ -177,7 +179,12 @@ impl RunExporter<'_> {
     fn export(&self) -> Result<Value, String> {
         let backend = self.backend;
         let task = self.task.as_str();
-        let view = to_value(backend.get_task(task).map_err(|e| e.message)?)?;
+        let mut view = to_value(backend.get_task(task).map_err(|e| e.message)?)?;
+        // "A different build made this run" compares the run with this exporter's own binary;
+        // on the web nothing can be continued anyway, so the notice would only mislead.
+        if let Some(notices) = view["notices"].as_array_mut() {
+            notices.retain(|notice| notice["id"] != OTHER_BUILD_NOTICE);
+        }
         let events = to_value(backend.get_events(task, 0).map_err(|e| e.message)?)?;
         let live = to_value(backend.get_live_steps(task, 0).map_err(|e| e.message)?)?;
         let sources = backend
