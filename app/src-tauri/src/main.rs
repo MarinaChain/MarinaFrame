@@ -447,8 +447,58 @@ fn run_provider_worker_if_asked() -> Option<i32> {
     Some(if finished { 0 } else { 1 })
 }
 
+/// `<exe> make-run --runs-folder DIR --spec FILE`: the app's deterministic draft run of a spec
+/// (the same configuration as "Start a run" with AI drafting off), without a window. It makes
+/// demo runs that this exact app build opens as its own (docs/DESKTOP_KIT.md). Prints the task
+/// folder and its status. Returns the process exit code when this was such a call.
+fn run_make_run_if_asked() -> Option<i32> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) != Some("make-run") {
+        return None;
+    }
+    let value = |flag: &str| {
+        args.iter()
+            .position(|a| a == flag)
+            .and_then(|i| args.get(i + 1))
+            .cloned()
+    };
+    let (Some(runs_folder), Some(spec)) = (value("--runs-folder"), value("--spec")) else {
+        eprintln!("usage: MarinaFrame make-run --runs-folder DIR --spec FILE");
+        return Some(2);
+    };
+    let python = marinaframe_app_core::worker_python::find("", development_checkout().as_deref());
+    let worker_source = std::env::var_os("MARINAFRAME_WORKER_SOURCE").map(PathBuf::from);
+    let runs_folder = PathBuf::from(runs_folder);
+    if std::fs::create_dir_all(&runs_folder).is_err() {
+        eprintln!("The runs folder could not be created.");
+        return Some(1);
+    }
+    let made = marinaframe_app_core::actions::run_deterministic_now(
+        &runs_folder,
+        &python.path,
+        worker_source.as_deref(),
+        &spec,
+    );
+    match made {
+        Ok(task) => {
+            let status = marinaframe_app_core::files::read_state(&task)
+                .and_then(|state| state["status"].as_str().map(String::from))
+                .unwrap_or_default();
+            println!("{} {status}", task.display());
+            Some(0)
+        }
+        Err(error) => {
+            eprintln!("{}: {}", error.code, error.message);
+            Some(1)
+        }
+    }
+}
+
 fn main() {
     if let Some(code) = run_provider_worker_if_asked() {
+        std::process::exit(code);
+    }
+    if let Some(code) = run_make_run_if_asked() {
         std::process::exit(code);
     }
     tauri::Builder::default()

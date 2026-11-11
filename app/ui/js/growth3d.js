@@ -418,6 +418,11 @@ export function createSectionGrowth({ scene, hullMaterial, renderer, requestRend
     refreshColours() {
       for (const curve of curves.values()) restyleCurve(curve);
     },
+    /** Draw the section lines, or keep them loaded but not drawn. */
+    setVisible(on) {
+      group.visible = on;
+      requestRender();
+    },
     bounds,
   };
 }

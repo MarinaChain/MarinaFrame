@@ -1,7 +1,7 @@
 // Home (Needs you, vessel cards) and the Queue, with the Queue count in the sidebar.
 
 import { state, setQueue } from './app_state.js';
-import { invoke } from './api.js';
+import { invoke, readOnly } from './api.js';
 import { el, icon, fill, svg } from './dom.js';
 import * as fmt from './format.js';
 import { statusBadge, chip, $ } from './ui_kit.js';
@@ -104,7 +104,30 @@ function vesselCard(vessel) {
     el('strong', { class: 'vessel-name' }, vessel.name),
     statusBadge(run.status)),
   meta,
+  // The demo's line for a showcase run, and where each drawing came from (static/backend.js).
+  run.demo_tagline ? el('span', { class: 'vessel-tagline' }, run.demo_tagline) : null,
+  run.demo_source ? el('span', { class: 'vessel-source' }, run.demo_source) : null,
   run.status === 'running' ? el('span', { class: 'vessel-progress', 'aria-hidden': 'true' }) : null);
+}
+
+/**
+ * Home of the web demo: the runs in the order the demo lists them (static/backend.js), with
+ * the pilot proposal after the showcase runs (those with their own line: the real ship and
+ * the concept preview).
+ */
+function demoCards(vessels) {
+  const ordered = [...vessels].sort((a, b) => (a.latest.demo_order ?? 0) - (b.latest.demo_order ?? 0));
+  const showcases = ordered.filter((v) => v.latest.demo_tagline);
+  const others = ordered.filter((v) => !v.latest.demo_tagline);
+  return [...showcases.map(vesselCard), pilotCard(), ...others.map(vesselCard)];
+}
+
+function pilotCard() {
+  return el('a', { class: 'vessel-card demo-pilot-card', href: 'static/pilot.html' },
+    el('span', { class: 'vessel-thumb demo-pilot-thumb' },
+      el('span', { class: 'demo-pilot-stages', 'aria-hidden': 'true' }, '1  Baseline', el('br'), '2  Bounded task', el('br'), '3  Deliverable')),
+    el('span', { class: 'vessel-row' }, el('strong', { class: 'vessel-name' }, 'Proposed: GA revision pilot')),
+    el('span', { class: 'vessel-tagline' }, 'One tanker, one bounded compartment change, engineer time measured.'));
 }
 
 /** Grey placeholder cards while the run list loads, so Home does not flash "No runs yet". */
@@ -133,11 +156,15 @@ export function renderHome() {
     : [el('p', { class: 'home-empty' }, state.tasks.length ? 'Nothing waiting for you.' : 'No runs yet. Drop a drawing set to start.')]));
   const grid = $('vessel-grid');
   const dropTile = $('drop-tile');
-  fill(grid, ...vessels.map(vesselCard), dropTile);
+  if (readOnly) {
+    fill(grid, ...demoCards(vessels), dropTile);
+  } else {
+    fill(grid, ...vessels.map(vesselCard), dropTile);
+  }
   // First start: no runs. Home becomes one large drop target with the four steps ahead.
   const empty = !state.tasks.length;
   $('view-home').dataset.empty = String(empty);
-  $('home-needs-title').textContent = empty ? 'Your first vessel' : 'Needs you';
+  $('home-needs-title').textContent = readOnly ? 'MarinaFrame demo' : empty ? 'Your first vessel' : 'Needs you';
   const queued = state.queue?.waiting.length || 0;
   const link = $('home-queue-link');
   link.hidden = queued === 0;

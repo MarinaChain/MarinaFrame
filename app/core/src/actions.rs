@@ -148,17 +148,14 @@ fn app_run_config(
     }
 }
 
-/// Start a run of `spec_path` in draft mode. The task folder is created inside
-/// `runs_folder`. With `use_model` the AI reads the drawing and builds the draft
-/// (live policy); without it the deterministic draft runs.
-pub fn start_run(
-    registry: &ActionRegistry,
+/// The configuration and the new task folder of a run of `spec_path` (see `start_run`).
+fn prepare_run(
     runs_folder: &Path,
     worker_python: &str,
     worker_source: Option<&Path>,
     spec_path: &str,
     use_model: bool,
-) -> AppResult<String> {
+) -> AppResult<(Config, PathBuf)> {
     let source = util::absolute(Path::new(spec_path))?;
     if !source.is_file() || source.is_symlink() {
         return Err(AppError::from_code("source_spec_missing_or_symlink"));
@@ -189,6 +186,36 @@ pub fn start_run(
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "run".into());
     let task = runs_folder.join(format!("{stem}-{}", util::now_ms()));
+    Ok((config, task))
+}
+
+/// Create the task and run the controller until it stops.
+fn run_controller(task: &Path, config: Config) -> Result<(), String> {
+    let mut store = Store::create(task, controller::new_state(config))?;
+    if controller::initialize(&mut store)? {
+        controller::run_loop(&mut store, None)?;
+    }
+    Ok(())
+}
+
+/// Start a run of `spec_path` in draft mode. The task folder is created inside
+/// `runs_folder`. With `use_model` the AI reads the drawing and builds the draft
+/// (live policy); without it the deterministic draft runs.
+pub fn start_run(
+    registry: &ActionRegistry,
+    runs_folder: &Path,
+    worker_python: &str,
+    worker_source: Option<&Path>,
+    spec_path: &str,
+    use_model: bool,
+) -> AppResult<String> {
+    let (config, task) = prepare_run(
+        runs_folder,
+        worker_python,
+        worker_source,
+        spec_path,
+        use_model,
+    )?;
     let location = task.clone();
     spawn_with_store(
         registry,
@@ -202,6 +229,20 @@ pub fn start_run(
         },
     )?;
     Ok(task.to_string_lossy().into_owned())
+}
+
+/// The deterministic draft run of `start_run` (no model), on this thread: returns the task
+/// folder when the controller stops. For `MarinaFrame make-run`, which makes runs whose
+/// `config.binary_sha256` is this app's own executable (docs/DESKTOP_KIT.md).
+pub fn run_deterministic_now(
+    runs_folder: &Path,
+    worker_python: &str,
+    worker_source: Option<&Path>,
+    spec_path: &str,
+) -> AppResult<PathBuf> {
+    let (config, task) = prepare_run(runs_folder, worker_python, worker_source, spec_path, false)?;
+    run_controller(&task, config).map_err(AppError::from_code)?;
+    Ok(task)
 }
 
 /// Ask a running task to stop, as `marinaframe cancel` does. This takes no lock.

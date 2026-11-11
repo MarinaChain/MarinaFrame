@@ -614,7 +614,8 @@ export function createLiveRun({ invoke, drawing, model, nodes, isRunning, onStep
       text = 'First hull from the traced lines';
     }
     caption.textContent = text;
-    caption.hidden = !text;
+    // The whole-vessel model is not that build: no caption while it shows.
+    caption.hidden = !text || model.showsWholeVessel;
   }
 
   function renderDial(animate) {

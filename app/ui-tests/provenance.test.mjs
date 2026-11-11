@@ -3,7 +3,7 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  HOVER_DELAY_MS, LEAVE_DELAY_MS, MAX_SHEETS, NO_RECORD, STEEL_RECORD,
+  HOVER_DELAY_MS, LEAVE_DELAY_MS, MAX_SHEETS, NO_RECORD, STEEL_RECORD, steelGroupRecord,
   createSourceController, partInputs, scaleBox, sheetsOf, sourceForSheet, sourceOf, summaryOf, viewBoxFor,
 } from '../ui/js/provenance.js';
 
@@ -152,4 +152,21 @@ test('a source view lookup is fast on a run with many sections and parts', () =>
   assert.ok(performance.now() - started < 200);
   assert.equal(sourceOf(big, { kind: 'part', id: 'p599' }).label, 'P599');
   mock.reset();
+});
+
+test('a steel group shows where its members were read, else that its source is not known', () => {
+  const region = (sheet, x) => ({ sheet, page: 0, view: 'profile', box_px: [x, 0, x + 1, 1], page_px: [10, 10] });
+  const records = {
+    bhd_fr07: { kind: 'read', regions: [region('ga.png', 1), region('construction.png', 1)] },
+    bhd_fr18: { kind: 'read', regions: [region('ga.png', 5)] },
+    floor_fr19: { kind: 'unknown', reason: 'not read' },
+  };
+  const group = steelGroupRecord(records, ['bhd_fr07', 'bhd_fr18', 'floor_fr19']);
+  assert.equal(group.kind, 'read');
+  assert.equal(group.regions.length, 3);
+  assert.equal(steelGroupRecord(records, ['floor_fr19']), STEEL_RECORD);
+  assert.equal(steelGroupRecord(null, ['bhd_fr07']), STEEL_RECORD);
+  const view = { steel_records: records, components: [] };
+  const shown = sourceOf(view, { kind: 'part', id: 'steel:bulkhead', members: ['bhd_fr18'] });
+  assert.deepEqual(shown.record.regions.map((r) => r.sheet), ['ga.png']);
 });
