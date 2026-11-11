@@ -79,6 +79,42 @@ Outputs: `work/hull-lane/replay-*.json`.
 L0 passes on the same readings: 2 of 6 -> 4 of 6 (series60 counted as passing in the base only
 with fix 1; at 4f03667 it was blocked at input).
 
+## Results: live check at 5b8a9d5 (Sonnet 5.5, sheet-only)
+
+Round `work/round-hull-L0-fix-5b8a9d5` (snapshot `work/snap-hull-5b8a9d5`), the four failing
+cases. Delivered draft, RMS % / volume %:
+
+| Case | Live baseline | Live 5b8a9d5 | Note |
+|---|---|---|---|
+| shipd-1-09867-3v-L0 | 3.63 / +1.6 | **0.87 / +1.7 (pass)** | first hull 0.87 %, as the replay |
+| shipd-2-02216-3v-L0 | 3.17 / -1.5 | 3.47 / -2.0 | new reading put s05 in the aft panel; two close fore strokes (72 % same ink) both keep >15 % own rows and s07 takes the wrong one (9.4 %) |
+| dtmb5415-3v-L0 | 5.07 / +0.7 | 8.92 / +0.7 | reading 1 first hull 5.07 % (= baseline); best of 2 kept reading 2 by drawing fit (0.7365 vs 0.721), profile x origin 165 px vs 160, errors 7-11 % at every station: selection, not this change |
+| shipd-1-00679-3v-L0 | 4.39 / +0.5 | 4.43 / +0.6 | bottom bundle (unchanged) |
+
+Live L0 (6 cases, series60 and 08158 from the base2 round): 3 of 6 pass (series60, 08158,
+09867) against 1 of 6 at 4f03667 (series60 blocked, 08158) and 2 of 6 with fix 1 only.
+Run-to-run variance from the model reading is large (dtmb 5.07 vs 8.92 % on one code).
+
+## Open (next blockers, in order)
+
+1. **Best-of-2 picks the worse reading** (dtmb live: fit 0.7365 kept 8.92 % over 0.721 / 5.07 %).
+   Owner: best-of-N lane (`draft_fit`). A datum check of the profile x origin against the
+   outline's aft end (165 vs 160 px) would have flagged reading 2.
+2. **Close fore strokes** (02216 second reading): two strokes 72 % same ink, both kept. A rule
+   from the curve tops would help: each station curve ends at the deck at its own half-breadth
+   (station labels sit there); not tried.
+3. **00679 bottoms**: the fore curves run into one bundle along a rising floor near the keel;
+   the trace jumps between them (s05 bottom 5.3 m vs truth 1.07 m at z 0.06). This is corridor
+   measurement in `ingest.py` (other lane). Proposed there: inside a crowded bottom band, follow
+   the stroke whose slope continues the curve above the band, not the nearest ink run.
+4. **dtmb deck samples**: see fix 3 above; a lower-only, non-flat-deck variant is untried.
+5. **24 development cases**: not run. The L0 gain is one case live (09867) and one more on
+   replay (02216, first reading); blockers 1 and 2 should be fixed first (tasks/lessons.md, DTMB
+   L0-L3 and early stop).
+
 ## Resume point
 
-(updated at each step)
+Branch `lane/hull-accuracy` at the commit after 5b8a9d5 (doc), pushed; quick tier passed on
+5b8a9d5 (1850 Python tests, Rust, UI, lint, secrets). Next: open item 2 or 1, check each with
+`benchmarks/hull_accuracy/replay_readings.py` on the stored readings in
+`work/round-hull-L0-{base-4f03667,base2-4354b28,fix-5b8a9d5}` before any live round.
