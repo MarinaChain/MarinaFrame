@@ -276,6 +276,45 @@ const MOCK_CAPACITY_PLAN = {
   ],
 };
 
+/** The mock run with many stations, most of them guessed (as on a real 72-station drawing). */
+export const MOCK_MANY_GUESSES_TASK = '/Users/demo/MarinaFrame/runs/2026-11-07-research-vessel';
+const MOCK_MANY_GUESSES_STATIONS = 72;
+/** Every this-many-th station of that run was read; the others are guesses. */
+const MOCK_MANY_GUESSES_READ_EVERY = 18;
+
+/**
+ * Add the many-guesses run to `data` (the fixtures): a copy of the survey launch with 72 stations
+ * from 0 m to the bow, all guessed but every 18th. Each guess is the best candidate at its own
+ * station (no x range), so the 3D view spreads it half way to the next station, as on a real run.
+ */
+export function addManyGuessesRun(data) {
+  const fromTask = Object.keys(data.views).find((task) => task.endsWith('survey-launch'));
+  const from = data.views[fromTask];
+  const guessed = from.sections.find((s) => s.guess && !s.guess.x_range_m);
+  const read = from.sections.find((s) => s.state === 'chosen');
+  const lengthM = from.model.length_m;
+  const view = JSON.parse(JSON.stringify(from));
+  const step = lengthM / (MOCK_MANY_GUESSES_STATIONS - 1);
+  view.sections = Array.from({ length: MOCK_MANY_GUESSES_STATIONS }, (_, index) => {
+    const template = index % MOCK_MANY_GUESSES_READ_EVERY === 0 ? read : guessed;
+    const copy = JSON.parse(JSON.stringify(template));
+    const x = Number((index * step).toFixed(3));
+    const suffix = `-rv${index}`;
+    for (const candidate of copy.candidates || []) candidate.id += suffix;
+    if (copy.guess) {
+      copy.guess.id += suffix;
+      if (copy.guess.chosen_candidate_id) copy.guess.chosen_candidate_id += suffix;
+      copy.guess.alternatives = (copy.guess.alternatives || []).map((alt) => alt + suffix);
+    }
+    return { ...copy, id: `st${index}`, x_m: x };
+  });
+  const name = 'Research vessel, 72 stations';
+  view.summary = { ...view.summary, task: MOCK_MANY_GUESSES_TASK, name, policy: 'deterministic', updated_ms: view.summary.updated_ms - 600_000, sections: MOCK_MANY_GUESSES_STATIONS };
+  data.views[MOCK_MANY_GUESSES_TASK] = view;
+  data.events[MOCK_MANY_GUESSES_TASK] = JSON.parse(JSON.stringify(data.events[fromTask] || []));
+  data.tasks.push({ task: MOCK_MANY_GUESSES_TASK, name, status: view.summary.status, policy: 'deterministic', updated_ms: view.summary.updated_ms, sections: MOCK_MANY_GUESSES_STATIONS });
+}
+
 export function mockTransport() {
   const listeners = new Set();
   let fixtures = null;
@@ -285,6 +324,7 @@ export function mockTransport() {
     if (!fixtures) {
       const response = await fetch(MOCK_FIXTURES_URL);
       fixtures = await response.json();
+      addManyGuessesRun(fixtures);
       shiftTimesToNow(fixtures);
     }
     return fixtures;
