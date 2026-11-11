@@ -91,6 +91,36 @@ def test_fill_follows_the_trend_better_than_a_straight_blend():
     assert breadth_error(fitted.points_yz_m, 20.0) <= breadth_error(blend.tolist(), 20.0) + 1e-6
 
 
+def test_fitted_rows_stay_within_the_described_half_beam():
+    """Few anchors must not carry the fitted breadth past the vessel's beam (shipd-1-08158-3v-L2)."""
+    kept = [anchor("s01", 10.0, hull_section(10.0)), anchor("s08", 80.0, hull_section(80.0)),
+            anchor("s09", 90.0, [[y * 0.5, z] for y, z in hull_section(90.0)])]
+    widest_anchor = max(p[0] for a in kept for p in a.points_yz_m)
+    free = F.fit_vessel(declared(), [copy.deepcopy(a) for a in kept])
+    assert max(p[0] for r in free.stations for p in r.points_yz_m) > widest_anchor + 0.1
+    capped = F.fit_vessel(declared(), [copy.deepcopy(a) for a in kept], None, widest_anchor)
+    assert max(p[0] for r in capped.stations for p in r.points_yz_m) <= widest_anchor + 1e-9
+
+
+def test_breadth_cap_never_cuts_traced_ink():
+    kept = synthetic_anchors()
+    widest = max(p[0] for a in kept for p in a.points_yz_m)
+    assert F.fitted_breadth_cap(kept, widest / 2) == pytest.approx(widest)
+    assert F.fitted_breadth_cap(kept, widest * 2) == pytest.approx(widest * 2)
+    assert F.fitted_breadth_cap(kept, None) is None
+
+
+def test_half_beam_limit_prefers_the_printed_beam_and_ignores_panel_extents():
+    from vessel_reconstruction.first_hull_tools import half_beam_limit
+    printed = {"principal": {"beam": {"value": 19.7, "measurements": [
+        {"view_id": "body", "value": 27.9}, {"view_id": "printed_dimension", "value": 19.7}]}}}
+    panels = F.PriorDimensions(half_beam_m=14.3, source="calibrated panel extents")
+    assert half_beam_limit(printed, panels) == pytest.approx(9.85)
+    assert half_beam_limit({"principal": {}}, panels) is None
+    described = F.PriorDimensions(half_beam_m=6.7, source="vessel description")
+    assert half_beam_limit(None, described) == pytest.approx(6.7)
+
+
 def test_wrong_stroke_and_straight_line_are_dropped_and_filled():
     anchors = synthetic_anchors()
     anchors[4].points_yz_m = (np.asarray(hull_section(50.0)) * [2.2, 1.0]).tolist()  # far too wide
