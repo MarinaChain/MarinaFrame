@@ -23,6 +23,8 @@ from vessel_reconstruction import body_plan_crossings as bpc
 # A chain's path is followed past its last waterline crossing by at most this many rows, so that a
 # station label drawn above or below the waterlines lies on the highlighted curve.
 PATH_EXTENSION_ROWS = 1200
+# The reader's search on each half starts this many columns out from the centreline.
+CENTRE_CLEARANCE_PX = 10
 # Fairness: largest second difference of a station's half-breadth over three waterlines, and
 # largest departure of a cell from the mean of its two neighbouring stations, in metres. A bilge
 # turn or a stern counter bends by up to about 0.9 m between waterlines 4 ft apart (1.2 m), so
@@ -84,27 +86,48 @@ class SideReading:
 
 def measure_side(ink: np.ndarray, sheet: SheetLayout, side: SideLayout,
                  curve_width: float | None = None) -> SideReading:
-    """Crossings, links and chains of one half of the body plan (code only)."""
+    """Crossings, links and chains of one half of the body plan (code only).
+
+    The pixel thresholds follow the drawn stroke width (`side_threshold_scale`): a first pass at
+    the tuned thresholds measures the stroke; the crossings are measured again only when the
+    scale is not 1.0.
+    """
     centre = sheet.centre_column
-    span = sorted((int(centre + side.sign * 10), int(centre + side.sign * sheet.max_offset_px)))
     waterlines = sheet.waterlines_low_to_high()
-    crossings = {w: bpc.find_crossings(ink, sheet.waterline_rows[w], (span[0], span[1])) for w in waterlines}
+    crossings = _find_side_crossings(ink, sheet, side, 1.0)
+    scale = bpc.threshold_scale(bpc.stroke_width_px([c for found in crossings.values() for c in found]))
+    if scale != 1.0:
+        crossings = _find_side_crossings(ink, sheet, side, scale)
     if curve_width is None:
-        curve_width = bpc.typical_width([c for found in crossings.values() for c in found])
+        curve_width = bpc.typical_width([c for found in crossings.values() for c in found], scale)
     spacing = waterline_spacing(sheet)
     for found in crossings.values():
         bpc.classify(ink, found, curve_width, centre, grid_columns=side.grid_columns,
-                     waterline_spacing_px=spacing, max_offset_px=sheet.max_offset_px)
+                     waterline_spacing_px=spacing, max_offset_px=sheet.max_offset_px, scale=scale)
     stations = {w: bpc.station_crossings(crossings[w], centre, side.sign) for w in waterlines}
     links = {}
     for lower, upper in zip(waterlines, waterlines[1:]):
-        found = bpc.link_waterlines(stations[lower], stations[upper], ink, curve_width)
+        found = bpc.link_waterlines(stations[lower], stations[upper], ink, curve_width, scale)
         links[(lower, upper)] = infer_enclosed_links(found, stations[lower], stations[upper])
     chains = build_chains(side.name, waterlines, stations, links)
     chains = order_chains(chains, stations, centre, side.sign)
     for chain in chains:
-        chain.path = chain_path(ink, chain, stations, waterlines, curve_width)
+        chain.path = chain_path(ink, chain, stations, waterlines, curve_width, scale)
     return SideReading(side, crossings, stations, links, chains, spacing)
+
+
+def _find_side_crossings(ink: np.ndarray, sheet: SheetLayout, side: SideLayout, scale: float) -> dict:
+    """Every crossing at each waterline of one half, with the pixel thresholds at `scale`."""
+    centre = sheet.centre_column
+    clearance = bpc.scaled_pixels(CENTRE_CLEARANCE_PX, scale)
+    span = sorted((int(centre + side.sign * clearance), int(centre + side.sign * sheet.max_offset_px)))
+    return {w: bpc.find_crossings(ink, sheet.waterline_rows[w], (span[0], span[1]), scale=scale)
+            for w in sheet.waterlines_low_to_high()}
+
+
+def side_stroke_width(reading: SideReading) -> float | None:
+    """The drawn stroke width (px) of one measured half (see `body_plan_crossings.stroke_width_px`)."""
+    return bpc.stroke_width_px([c for found in reading.crossings.values() for c in found])
 
 
 def waterline_spacing(sheet: SheetLayout) -> float:
@@ -222,20 +245,22 @@ def order_chains(chains: list[Chain], stations: dict, centre_column: float, sign
     return sorted(chains, key=cmp_to_key(compare))
 
 
-def chain_path(ink: np.ndarray, chain: Chain, stations: dict, waterlines: list, curve_width: float) -> list:
+def chain_path(ink: np.ndarray, chain: Chain, stations: dict, waterlines: list, curve_width: float,
+               scale: float = 1.0) -> list:
     """Points along the drawn curve of a chain, from below its lowest crossing to above its highest."""
     ordered = [w for w in waterlines if w in chain.nodes]
     lowest, highest = stations[ordered[0]][chain.nodes[ordered[0]]], stations[ordered[-1]][chain.nodes[ordered[-1]]]
+    extension = bpc.scaled_pixels(PATH_EXTENSION_ROWS, scale)
     path: list = []
-    bpc.follow_curve(ink, lowest, lowest.row + PATH_EXTENSION_ROWS, curve_width, stop_margin=0, path=path)
+    bpc.follow_curve(ink, lowest, lowest.row + extension, curve_width, stop_margin=0, path=path, scale=scale)
     path.reverse()
     for lower, upper in zip(ordered, ordered[1:]):
         start = stations[lower][chain.nodes[lower]]
         end = stations[upper][chain.nodes[upper]]
         path.append((start.row, start.x_px))
-        bpc.follow_curve(ink, start, end.row, curve_width, path=path)
+        bpc.follow_curve(ink, start, end.row, curve_width, path=path, scale=scale)
     path.append((highest.row, highest.x_px))
-    bpc.follow_curve(ink, highest, highest.row - PATH_EXTENSION_ROWS, curve_width, stop_margin=0, path=path)
+    bpc.follow_curve(ink, highest, highest.row - extension, curve_width, stop_margin=0, path=path, scale=scale)
     return path
 
 

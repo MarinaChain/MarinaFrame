@@ -108,7 +108,18 @@ def main() -> None:
     reader = importlib.import_module(f'{package}.body_plan_reader')
     crossings = importlib.import_module(f'{package}.body_plan_crossings')
     from vessel_reconstruction import body_plan_crossings as product_crossings
+    from vessel_reconstruction import body_plan_reader as product_reader
     from vessel_reconstruction import sheet_calibration
+
+    def calibration_factor(ink: np.ndarray, layout) -> float:
+        """The factor `sheet_calibration.calibrate` sets, on a body-plan box built from the layout."""
+        rows = sorted(layout.waterline_rows.values())
+        spacing = float(np.median(np.diff(rows)))
+        box = [max(0, int(layout.centre_column - layout.max_offset_px)), max(0, int(rows[0] - spacing)),
+               min(ink.shape[1], int(layout.centre_column + layout.max_offset_px)),
+               min(ink.shape[0], int(rows[-1] + spacing))]
+        stroke = sheet_calibration.stroke_width(ink, box, sheet_calibration.straight_lines(ink, box, 'h'))
+        return product_crossings.resolution_factor(stroke)
 
     scales = [float(value) for value in args.scales.split(',')]
     wanted = {name.strip() for name in args.only.split(',') if name.strip()}
@@ -132,10 +143,14 @@ def main() -> None:
             text = repr({side: asdict(reading) for side, reading in readings.items()})
             stem = f"{name.split(' (')[0].replace(' ', '_').replace('.', '')}_{scale:g}_{args.label}"
             (args.out / f'{stem}.reading.txt').write_text(text)
-            factor = product_crossings.sheet_resolution_factor(ink)
+            factor = calibration_factor(ink, scaled_layout)
+            side_strokes = {side: product_reader.side_stroke_width(reading) for side, reading in readings.items()}
             result = score_readings(readings, scaled_layout, truth, scorer, reader)
             case = {'sheet': name, 'scale': scale, 'shape': list(ink.shape), 'resolution_factor': factor,
                     'low_resolution_flag': sheet_calibration.low_resolution(factor),
+                    'reader_stroke_px': side_strokes,
+                    'reader_threshold_scale': {side: product_crossings.threshold_scale(stroke)
+                                               for side, stroke in side_strokes.items()},
                     'reading_sha256': hashlib.sha256(text.encode()).hexdigest(), 'score': result,
                     'seconds': round(time.monotonic() - started, 1)}
             summary['cases'].append(case)

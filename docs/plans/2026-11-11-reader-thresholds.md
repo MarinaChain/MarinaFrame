@@ -22,6 +22,9 @@ Branch `lane/reader-thresholds` from `continue/v0.5` (`4f03667`). Development sh
   (five HAER sheets) and 4.7 px (synthetic reference); inside the band the thresholds stay exactly as
   tuned, outside they scale from the nearest band edge.
 - Crossings functions take the scale explicitly (default 1.0 = frozen v1 behaviour).
+- Revision before the new reader ran: the median crossing width read 2.0 px on the calibration fixture
+  (its many 2 px grid lines), so the stroke is the 75th percentile of crossing widths (native 4.7 to 6.6 px,
+  reduced 1.9 to 3.0 px) and the band is 4.0 to 7.5 px.
 
 ## Gates (written before the runs)
 
@@ -33,14 +36,16 @@ Branch `lane/reader-thresholds` from `continue/v0.5` (`4f03667`). Development sh
 - G3 flag: `low_resolution` is set for every reduced sheet whose factor is below 0.75, and for no native
   sheet.
 - G4 ingest: development_wigley seeds 17, 23, 41 (clean and degraded): `extract_sections` output at native
-  size is byte-identical to `continue/v0.5`.
+  size is byte-identical to `continue/v0.5`. Run with clean and drafting instead: the benchmark's corridor
+  proposal, needed to pass the grid-line ambiguity, refuses the degraded style.
 
 ## Steps and resume point
 
 1. Measure frozen and base arms (`scripts/measure_reader_resolution.py`, output in `work/reader-thresholds/`,
    git-ignored). Done.
-2. Implement the stroke-based scale, list and decide every fixed pixel threshold, tests. 
-3. Run the new arm; check G1 to G4; write the table in `docs/BODY_PLAN_CHINE.md`; update item 8.
+2. Implement the stroke-based scale, list and decide every fixed pixel threshold, tests. Done.
+3. Run the new arm; check G1 to G4; write the table in `docs/BODY_PLAN_CHINE.md`; update item 8. Done:
+   G1 to G4 pass (table and limits in `docs/BODY_PLAN_CHINE.md`).
 4. Quick tier; push the branch.
 
 Resume: check `git log` on the branch; rerun step 3 from `work/reader-thresholds/` if outputs are missing.
