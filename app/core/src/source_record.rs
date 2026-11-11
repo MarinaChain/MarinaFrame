@@ -88,6 +88,34 @@ pub fn read_tank_records(capacity: &Path) -> HashMap<String, Value> {
         .collect()
 }
 
+/// Task-level records added by re-export, without changing sealed build evidence.
+pub fn run_records(task: &Path, kind: &str) -> HashMap<String, Value> {
+    let Some(record) = crate::artifact::guard_inside_task(task, "sources/records.json")
+        .ok()
+        .and_then(|path| util::read_bounded(&path, MAX_FILE_BYTES).ok())
+        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+        .filter(|record| record["schema"] == "marinaframe.run-source-records.v1")
+    else {
+        return HashMap::new();
+    };
+    let domain = crate::files::read_domain(task).unwrap_or_default();
+    let revision = domain["revision"].as_u64().map(|n| format!("r{n:04}"));
+    let result_matches = record["result_file"]
+        .as_str()
+        .and_then(|relative| crate::artifact::guard_inside_task(task, relative).ok())
+        .and_then(|path| util::file_hash(&path).ok())
+        .is_some_and(|hash| record["result_sha256"] == hash);
+    if revision.as_deref() != record["revision"].as_str() || !result_matches {
+        return HashMap::new();
+    }
+    record[kind]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .filter_map(|(id, value)| Some((id.clone(), checked(value)?)))
+        .collect()
+}
+
 /// The section records of a build record (`result.json`), by section id.
 pub fn section_records(record: &Value) -> HashMap<String, Value> {
     record["sections"]
@@ -105,6 +133,32 @@ pub fn section_records(record: &Value) -> HashMap<String, Value> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn refresh_sidecar_checks_schema_and_records() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir(tmp.path().join("sources")).unwrap();
+        std::fs::create_dir(tmp.path().join("domain")).unwrap();
+        std::fs::write(tmp.path().join("domain/state.json"), r#"{"revision":1}"#).unwrap();
+        std::fs::write(tmp.path().join("result.json"), "{}").unwrap();
+        std::fs::write(
+            tmp.path().join("sources/records.json"),
+            json!({
+                "schema": "marinaframe.run-source-records.v1",
+                "revision": "r0001", "result_file": "result.json",
+                "result_sha256": util::hash(b"{}"),
+                "sections": {"s1": {"kind": "unknown", "reason": "Not recorded"},
+                             "s2": {"kind": "approved"}}
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let records = run_records(tmp.path(), "sections");
+        assert_eq!(records.len(), 1);
+        assert_eq!(records["s1"]["kind"], "unknown");
+        std::fs::write(tmp.path().join("domain/state.json"), r#"{"revision":2}"#).unwrap();
+        assert!(run_records(tmp.path(), "sections").is_empty());
+    }
 
     fn region() -> Value {
         json!({"sheet": "ga.pdf", "page": 0, "view": "plan", "box_px": [1, 2, 30, 40], "page_px": [100, 80]})

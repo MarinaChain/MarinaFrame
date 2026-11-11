@@ -496,7 +496,35 @@ fn run_make_run_if_asked() -> Option<i32> {
     }
 }
 
+/// Refresh records without starting the reconstruction controller. The Python service
+/// holds controller.lock through staging, publication and ownership verification.
+fn run_reexport_if_asked() -> Option<i32> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) != Some("re-export") {
+        return None;
+    }
+    let python = marinaframe_app_core::worker_python::find("", development_checkout().as_deref());
+    let mut command = std::process::Command::new(&python.path);
+    command.arg("-m").arg("vessel_reconstruction").args(&args);
+    if let Some(source) = std::env::var_os("MARINAFRAME_WORKER_SOURCE")
+        .map(PathBuf::from)
+        .or_else(|| development_checkout().map(|root| root.join("src")))
+    {
+        command.env("PYTHONPATH", source);
+    }
+    match command.status() {
+        Ok(status) => Some(status.code().unwrap_or(1)),
+        Err(error) => {
+            eprintln!("Cannot start re-export: {error}");
+            Some(1)
+        }
+    }
+}
+
 fn main() {
+    if let Some(code) = run_reexport_if_asked() {
+        std::process::exit(code);
+    }
     if let Some(code) = run_provider_worker_if_asked() {
         std::process::exit(code);
     }
