@@ -75,7 +75,8 @@ reproduces the published values exactly** (Thayer 149 of 151 cells, 0 wrong, RMS
 again with both truth roots at `work/dev-truth`: every sheet is scored against its truth. The baseline used the
 old Thayer and Balclutha files; with the restored truth reproducing them exactly, the comparison holds.
 - [x] Reader change and tests committed after the gates passed.
-- [ ] Quick test tier; push the branch (no merge).
+- [x] Quick test tier at `762e0a9` (exit 0; Python 1910 passed, 76 deselected; Rust and UI ok; a first attempt
+  was stopped from outside by SIGTERM and run again); branch `lane/polyline-engage` pushed (no merge).
 
 Resume: read the checkboxes; result files are in `work/polyline-engage/` (git-ignored). Uncommitted work at a
 pause is in the worktree (`git diff`): `body_plan_polyline.py` and `tests/test_body_plan_polyline.py`.
