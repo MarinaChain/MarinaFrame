@@ -60,6 +60,8 @@ DASH_GAP_ROWS = 40
 CENTRELINE_END_TOLERANCE_ROWS = 40
 # A labelled height fit needs this many labelled lines to set the baseline by itself.
 MIN_LABELLED_FOR_FIT = 3
+# A sheet whose stroke width is below this share of the 5 px reference stroke is flagged for a person.
+LOW_RESOLUTION_FACTOR = 0.75
 # Purpose-drawn scales first, then labelled grids, then grids with a printed (rounded) spacing.
 SCALE_PRIORITY = ('scale_bar', 'scale_ratio', 'waterline_labels', 'buttock_grid', 'waterline_spacing')
 
@@ -464,7 +466,7 @@ def calibrate(ink: np.ndarray, reading, dpi: float | None = None) -> Calibration
         return cal
     cal = Calibration(box=[int(v) for v in box])
     cal.resolution_factor = bpc.sheet_resolution_factor(ink)
-    if cal.resolution_factor < 0.75:
+    if low_resolution(cal.resolution_factor):
         cal.flag('low_resolution', f'Low resolution ({cal.resolution_factor:.2f} of reference); check the reading.')
     cal.sources['box'] = located.get('source', 'model:coarse box')
     verticals = straight_lines(ink, cal.box, 'v')
@@ -622,6 +624,11 @@ def search_half_span(ink: np.ndarray, cal: Calibration, frame_lines: list[Line] 
     # Reference: 120 px margin at 5 px line width (1700 x 2300 scan).
     margin = bpc.scaled_pixels(MAX_OFFSET_MARGIN_PX, bpc.sheet_resolution_factor(ink))
     return int(min(limit, outermost + margin)) if outermost else limit
+
+
+def low_resolution(resolution_factor: float) -> bool:
+    """True when the sheet's strokes are too thin for a reliable reading (see LOW_RESOLUTION_FACTOR)."""
+    return resolution_factor < LOW_RESOLUTION_FACTOR
 
 
 def feet_inches(height_ft: float) -> str:
