@@ -534,6 +534,76 @@ def _highest_number(numbers: set) -> int | None:
     return max(leading, default=None)
 
 
+def _words(label: str) -> list[str]:
+    """The words of a label in capitals, letter-spaced words joined ('T. S. W. B. T.' -> 'TSWBT')."""
+    from .ga_labels import joined_letters
+    text = joined_letters(label.upper())
+    text = re.sub(r"(?<=\b[A-Z])\.\s?(?=[A-Z]\b)", "", text)  # 'W.B.T' -> 'WBT'
+    return re.findall(r"[A-Z]+", text)
+
+
+def fragment_reason(space: dict, others: list[dict], vocabulary: set[str],
+                    whole_labels: set[str] = frozenset()) -> str | None:
+    """Why a label is a piece of a label, not a space; None for a whole label.
+
+    ``vocabulary`` is every word of the other labels on the sheet, ``whole_labels`` their word
+    sequences joined; ``others`` are the other spaces (for a piece read at the place of a longer
+    label).
+    """
+    label = space["label"].strip()
+    words = _words(label)
+    if not [word for word in words if word != "NO"]:
+        return "no words: only a number"
+    if label.count("(") != label.count(")"):
+        return "an unclosed parenthesis: the label is cut"
+    if re.search(r"\d\s*\.?\s*[A-Z]\.?$", label.upper()) and len(words[-1]) == 1 and len(words) <= 2:
+        return "a single letter after the number: the label is cut"
+    last = words[-1]
+    raw_last = label.upper().split()[-1] if label.split() else ""
+    # A dotted abbreviation ("O.T.") is not a cut word, only a plain word of three letters or more.
+    if (len(last) >= 3 and "." not in raw_last and last not in vocabulary
+            and any(word.startswith(last) and len(word) > len(last) for word in vocabulary)):
+        return f"'{last}' is the start of a longer word printed on the sheet: the label is cut"
+    if (len(words) == 1 and space.get("kind") in ("other_space", "other_tank") and words[0] in vocabulary
+            and words[0] not in whole_labels):
+        return f"'{words[0]}' is printed only as a part of longer labels on the sheet"
+    region = (space["source_record"].get("regions") or [{}])[0].get("box_px")
+    for other in others:
+        other_region = (other["source_record"].get("regions") or [{}])[0].get("box_px")
+        other_words = _words(other["label"])
+        if (region and other_region and len(other_words) > len(words)
+                and space.get("kind") in ("other_space", "other_tank") and not space.get("number")
+                and any(other_words[i:i + len(words)] == words for i in range(len(other_words) - len(words) + 1))
+                and region[0] < other_region[2] and other_region[0] < region[2]
+                and region[1] < other_region[3] and other_region[1] < region[3]):
+            return f"a part of the label '{other['label'][:40]}' read at the same place"
+    return None
+
+
+def drop_fragments(result: dict) -> int:
+    """Remove spaces whose label is a piece of a label (lane W: "NO. 4", "NO. 2 CARG", "GEAR").
+
+    Each removal is listed in ``checks`` (``fragment_label_dropped``) with its reason; counts are
+    recomputed. Returns the number removed.
+    """
+    spaces = result["spaces"]
+    removed = []
+    for space in list(spaces):
+        others = [other for other in spaces if other is not space and other not in removed]
+        vocabulary = {word for other in others for word in _words(other["label"])}
+        whole_labels = {"".join(_words(other["label"])) for other in others}
+        reason = fragment_reason(space, others, vocabulary, whole_labels)
+        if reason:
+            removed.append(space)
+            result["checks"].append({"code": "fragment_label_dropped", "status": "dropped",
+                                     "label": space["label"][:64], "reason": reason[:160]})
+    for space in removed:
+        spaces.remove(space)
+    if removed and "model_counts" in result:
+        finish_counts(result)
+    return len(removed)
+
+
 def finish_counts(result: dict) -> None:
     """Counts from the model's counts, checked against the numbered spaces and across views.
 
@@ -705,6 +775,8 @@ def read_one(ga: Path | None, particulars: Path | None, out: Path, binary: Path,
         for fine_reading in readings:
             result["usage"] = add_usage(result["usage"], usage_of(fine_reading))
         result["passes"]["fine"] = stats
+    if reading.get("reply") is not None:
+        result["passes"]["fragments_dropped"] = drop_fragments(result)
     if measure and ga is not None and reading.get("reply") is not None:
         measure_one(result, Path(ga).resolve(), out, binary, basis, model, case_id or out.name)
     write_json(out / "ga_reading.json", result)

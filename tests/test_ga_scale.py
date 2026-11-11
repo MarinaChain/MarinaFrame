@@ -466,8 +466,112 @@ def test_a_pair_boxed_on_one_side_is_two_tanks_in_the_arrangement_input():
         "starboard", [-16.0, -9.5], "guessed")
     assert port["id"] != starboard["id"] and entry["extent"]["side"] == "both"  # the reading is unchanged
     across = json.loads(json.dumps(entry))
-    across["extent"]["y_m"] = [-12.0, 12.0]  # one space across the centreline stays one
-    assert gs._split_pair(across) == [across]
+    across["extent"]["y_m"] = [-12.0, 12.0]  # a pair boxed across the centreline: split there
+    assert [(s["extent"]["side"], s["extent"]["y_m"]) for s in gs._split_pair(across)] == [
+        ("port", [0.0, 12.0]), ("starboard", [-12.0, 0.0])]
+    profile_only = json.loads(json.dumps(entry))
+    del profile_only["extent"]["y_m"]  # no plan breadth: one tank each side (lane W, round u6)
+    assert [s["extent"]["side"] for s in gs._split_pair(profile_only)] == ["port", "starboard"]
+    unlabelled = json.loads(json.dumps(across))
+    unlabelled["label"] = "ENGINE ROOM"  # a space across the centreline without a pair label stays one
+    assert gs._split_pair(unlabelled) == [unlabelled]
+
+
+def test_the_arrangement_gate_finds_spaces_without_volume_fragments_and_cargo_losses():
+    def space(space_id, kind, label, x, y, z):
+        return {"id": space_id, "kind": kind, "label": label, "number": None, "status": "read",
+                "source_record": {"kind": "unknown", "reason": "test"},
+                "extent": {"x_m": list(x), "y_m": list(y), "z_m": list(z), "side": "both", "status": {}}}
+    particulars = {"breadth_m": {"value": 20.0}, "depth_m": {"value": 10.0}}
+    good = {"particulars": particulars, "spaces": [
+        space("h", "cargo_hold", "NO.1 CARGO HOLD", (10, 30), (-10, 10), (1, 10)),
+        space("t", "ballast_tank", "NO.1 W.B.T.", (10, 30), (-10, 10), (0, 1))]}
+    assert gs.arrangement_gate(good)["passed"]
+    swallowed = {"particulars": particulars, "spaces": [
+        space("h", "cargo_hold", "NO.1 CARGO HOLD", (10, 30), (-10, 10), (0, 10)),
+        space("t", "ballast_tank", "NO.1 W.B.T.", (10, 30), (-10, 10), (0, 9))]}
+    report = gs.arrangement_gate(swallowed)
+    assert not report["passed"] and report["max_cargo_loss"] > 0.85
+    covered = {"particulars": particulars, "spaces": [
+        space("p", "other_tank", "F.W.T. (P)", (0, 5), (0, 2), (0, 5)),
+        space("s", "other_tank", "F.W.T. (S)", (0, 5), (-2, 0), (0, 5)),
+        space("b", "other_tank", "NO. 4", (0, 5), (-2, 2), (0, 5))]}
+    report = gs.arrangement_gate(covered)
+    assert report["fragments"] == ["NO. 4"] and report["no_volume"] == ["b"] and not report["passed"]
+
+
+def test_one_compartment_with_two_labels_is_one_space_in_the_arrangement_input():
+    entry = lambda i, kind, label, number: {
+        "id": i, "kind": kind, "label": label, "number": number, "status": "read",
+        "source_record": {"kind": "unknown", "reason": "test"},
+        "extent": {"x_m": [20.7, 24.2], "y_m": [0.1, 10.0], "z_m": [0.0, 11.5], "side": "port", "status": {}}}
+    spaces = [entry("a", "other_tank", "E.Q.T. (P)", None), entry("b", "fuel_tank", "NO.2 F.O.T. (P)", "2P")]
+    kept, dropped = gs._without_same_boxes(spaces, {"breadth_m": {"value": 20.0}, "depth_m": {"value": 11.5}})
+    assert [s["id"] for s in kept] == ["b"] and dropped[0]["id"] == "a" and "same box" in dropped[0]["reason"]
+
+
+def _space(space_id, kind, label, x, v, at, axis="z_m", view="v1", frames=None):
+    extent = {"frames": frames or [int(x[0]), int(x[1])], "x_m": list(x), "x_measured_m": list(x), axis: list(v),
+              "status": {"x": "measured_from_scale", axis[0]: "measured_from_scale"}, "view_id": view,
+              "label_at_m": list(at), "basis": "outline"}
+    return {"id": space_id, "kind": kind, "label": label, "number": None, "status": "read",
+            "source_record": {"kind": "read", "regions": [{"sheet": "S_GA.png", "page": 0, "view": None, "box_px": [1.0, 1.0, 9.0, 9.0], "page_px": [100, 100]}]},
+            "extent": extent}
+
+
+def test_a_box_ends_at_a_labelled_strip_inside_it():
+    """A hold boxed down to the base line over its double-bottom tank (lane W, round u4r: holds
+    lost most of their volume) ends at the tank top."""
+    hold = _space("cargo_hold-1", "cargo_hold", "NO.2 CARGO HOLD", (40, 60), (0.0, 18.0), (50, 10))
+    tank = _space("ballast_tank-2", "ballast_tank", "NO.2 W.B.T. (P/S)", (40, 60), (0.0, 1.8), (50, 0.9))
+    result = {"spaces": [hold, tank], "checks": []}
+    stats = gs.resolve_overlaps(result)
+    assert hold["extent"]["z_m"] == [1.8, 18.0] and hold["extent"]["status"]["z"] == "measured_from_scale"
+    assert stats["trimmed"] == 1 and hold["extent"]["trimmed_by"] == ["ballast_tank-2"]
+    assert tank["extent"]["z_m"] == [0.0, 1.8]
+
+
+def test_a_box_that_takes_in_a_neighbour_it_cannot_be_cut_from_is_a_guess():
+    room = _space("other_space-1", "other_space", "BOSUN STORE", (180, 200), (10.0, 20.0), (190, 18))
+    void = _space("other_space-2", "other_space", "VOID SPACE", (186, 194), (11.0, 14.0), (190, 12))
+    result = {"spaces": [room, void], "checks": []}
+    gs.resolve_overlaps(result)
+    assert room["extent"]["status"] == {"x": "guessed", "z": "guessed"} and room["extent"]["covers"] == ["other_space-2"]
+    assert "extent_covers_a_labelled_neighbour" in {c["code"] for c in result["checks"]}
+
+
+def test_a_tank_drawn_over_a_cargo_tank_in_the_profile_gets_no_full_breadth_extent():
+    """A wing ballast tank drawn over a cargo tank in the profile, with no plan breadth, would take
+    the cargo tank's volume as a full-breadth box (lane W, round u4r: 99 % lost)."""
+    cot = _space("cargo_tank-1", "cargo_tank", "NO.1 C.O.T. (P&S)", (150, 170), (2.0, 21.0), (158, 12))
+    wbt = _space("ballast_tank-2", "ballast_tank", "NO.1 W.B.T. (P&S)", (150, 170), (0.0, 21.5), (162, 8))
+    result = {"spaces": [cot, wbt], "checks": [], "views": [{"view_id": "v1", "kind": "profile"}]}
+    gs.resolve_overlaps(result)
+    assert wbt["extent"]["projection_of"] == "cargo_tank-1" and "projection_of" not in cot["extent"]
+    merged = {entry["id"]: entry for entry in gs.merged_spaces(result)}
+    assert "extent" not in merged["ballast_tank-2"] and "extent_withheld" in merged["ballast_tank-2"]
+    assert merged["cargo_tank-1"]["extent"]["z_m"] == [2.0, 21.0]
+
+
+def test_a_tank_labelled_per_side_on_one_plan_and_as_a_pair_on_another_is_one_pair():
+    """Deck plan: NO.6 C.O.TK(P) and (S); tank top: NO.6 C.O.TK(P&S). Two tanks, not four."""
+    port = _space("cargo_tank-1", "cargo_tank", "NO.6 C.O.TK(P)", (36, 57), (0.2, 15.6), (46, 8), "y_m", "v8")
+    starboard = _space("cargo_tank-2", "cargo_tank", "NO.6 C.O.TK(S)", (36, 57), (-15.8, -0.7), (46, -8), "y_m", "v8")
+    pair = _space("cargo_tank-3", "cargo_tank", "NO.6 C.O.TK(P&S)", (36, 57), (0.3, 11.1), (46, 6), "y_m", "v9")
+    for space, number, side in ((port, "6P", "port"), (starboard, "6S", "starboard"), (pair, "6", "both")):
+        space["number"], space["extent"]["side"] = number, side
+    result = {"spaces": [port, starboard, pair], "checks": [],
+              "views": [{"view_id": "v8", "kind": "deck_plan"}, {"view_id": "v9", "kind": "tank_top_plan"}]}
+    tanks = [s for s in gs.merged_spaces(result) if s["kind"] == "cargo_tank"]
+    assert sorted(s["extent"]["side"] for s in tanks) == ["port", "starboard"]
+
+
+def test_two_plan_boxes_that_hold_each_others_labels_are_guessed_across():
+    cot = _space("cargo_tank-1", "cargo_tank", "NO.3 C.O.T. (P)", (80, 100), (0.0, 16.0), (90, 6), "y_m", "v2")
+    wbt = _space("ballast_tank-2", "ballast_tank", "NO.3 W.B.T. (P)", (80, 100), (2.0, 16.0), (90, 14), "y_m", "v2")
+    result = {"spaces": [cot, wbt], "checks": []}
+    gs.resolve_overlaps(result)
+    assert cot["extent"]["status"]["y"] == "guessed" and wbt["extent"]["status"]["y"] == "guessed"
 
 
 def test_a_scale_reply_without_hull_ends_is_measured_without_them(tmp_path):

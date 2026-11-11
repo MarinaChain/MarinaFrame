@@ -38,6 +38,7 @@ import numpy as np
 from PIL import Image
 
 from . import source_record
+from .ga_labels import label_family
 from .provenance import write_json
 
 PURPOSE = "ga_scale"
@@ -1025,6 +1026,14 @@ def read_extents(result: dict, work: dict, reading: dict, request_dir: Path) -> 
             sides = sorted((sign * (centre - top) / abs(axis.px_per_m), sign * (centre - bottom) / abs(axis.px_per_m)))
             extent["y_m"] = [round(sides[0], 2), round(sides[1], 2)]
             extent["status"]["y"] = status
+        region = (space["source_record"].get("regions") or [{}])[0].get("box_px")
+        if region:
+            # Where the label of this space is printed, in the metres of the extent (overlap rules).
+            cx, cy = (region[0] + region[2]) / 2, (region[1] + region[3]) / 2
+            if "z_m" in extent:
+                extent["label_at_m"] = [round(axis.x_m(cx), 2), round((base - cy) / abs(axis.px_per_m), 2)]
+            elif "y_m" in extent:
+                extent["label_at_m"] = [round(axis.x_m(cx), 2), round(sign * (centre - cy) / abs(axis.px_per_m), 2)]
         side = side_of_label(space["label"])
         if side is None and "y_m" in extent:
             low, high = extent["y_m"]
@@ -1033,6 +1042,139 @@ def read_extents(result: dict, work: dict, reading: dict, request_dir: Path) -> 
             extent["side"] = side
         space["extent"] = extent
         stats["with_extent"] += 1
+    return stats
+
+
+# Overlap rules: a box that takes in a labelled neighbour (lane W, round u4r: holds lost 80-92 % of
+# their volume to tank boxes drawn over them).
+STRIP_COVER = 0.8  # a neighbour that spans this share of a box along one axis is a strip of it
+EDGE_TOLERANCE_M = 0.5
+
+
+def _span(extent: dict) -> tuple[str, list[float], list[float]] | None:
+    """The other axis name and the x and other-axis ranges of an extent, or None."""
+    other = "z_m" if "z_m" in extent else "y_m" if "y_m" in extent else None
+    if other is None:
+        return None
+    return other, list(extent.get("x_measured_m") or extent["x_m"]), list(extent[other])
+
+
+def _holds(extent: dict, point) -> bool:
+    span = _span(extent)
+    if span is None or point is None:
+        return False
+    _, xs, vs = span
+    return xs[0] < point[0] < xs[1] and vs[0] < point[1] < vs[1]
+
+
+def _cover(outer: list[float], inner: list[float]) -> float:
+    """The share of ``outer`` that ``inner`` covers."""
+    length = outer[1] - outer[0]
+    return max(0.0, min(outer[1], inner[1]) - max(outer[0], inner[0])) / length if length > 0 else 0.0
+
+
+def resolve_overlaps(result: dict) -> dict:
+    """Keep each extent off the labelled spaces beside it, per view; return statistics.
+
+    - A box that holds another space's label while that space's box does not hold its own label
+      takes in a neighbour. When the neighbour is a strip at one edge of the box (a double-bottom
+      tank under a hold, a wing tank beside a cargo tank, a peak at a hold end), the box ends at
+      the neighbour's boundary. Otherwise its axes become ``guessed``.
+    - Two boxes that hold each other's labels in a profile are a projection (a wing tank drawn
+      over a cargo tank): the space that is not cargo is marked ``projection_of`` and gets no
+      extent in the arrangement input unless a plan gives its breadth. In a plan, both boxes are
+      wrong and their y becomes ``guessed``.
+    """
+    stats = {"trimmed": 0, "guessed": 0, "projections": 0}
+    spaces = [s for s in result["spaces"] if _span(s.get("extent", {})) and s["extent"].get("label_at_m")]
+    by_view: dict[str, list[dict]] = {}
+    for space in spaces:
+        by_view.setdefault(space["extent"]["view_id"], []).append(space)
+    cargo = ("cargo_hold", "cargo_tank")
+    for members in by_view.values():
+        # A tank printed for the sides that overlaps a cargo space in the profile (topside, wing or
+        # hopper tanks; round u6: topside tanks over two holds) is a projection, whichever hold
+        # its label lies over.
+        for tank in members:
+            span = _span(tank["extent"])
+            if (span[0] != "z_m" or tank["kind"] in cargo
+                    or side_of_label(tank["label"]) not in ("both", "port", "starboard")):
+                continue
+            for hold in members:
+                if hold["kind"] not in cargo:
+                    continue
+                _, hxs, hvs = _span(hold["extent"])
+                if (_cover(hxs, span[1]) > 0.2 and _cover(hvs, span[2]) > 0.2
+                        and not (span[2][1] <= hvs[0] + EDGE_TOLERANCE_M)):  # not a tank under the hold
+                    tank["extent"]["projection_of"] = hold["id"]
+                    stats["projections"] += 1
+                    break
+        def area(space):
+            _, xs, vs = _span(space["extent"])
+            return (xs[1] - xs[0]) * (vs[1] - vs[0])
+        members.sort(key=area, reverse=True)
+        for big in members:
+            for small in members:
+                if small is big or area(small) > area(big):
+                    continue
+                a, b = big["extent"], small["extent"]
+                if label_family(big["label"]) == label_family(small["label"]) and big["kind"] == small["kind"]:
+                    continue  # the same space read twice
+                a_holds_b, b_holds_a = _holds(a, b["label_at_m"]), _holds(b, a["label_at_m"])
+                other, axs, avs = _span(a)
+                if a_holds_b and b_holds_a:
+                    if other == "z_m":
+                        for this, that in ((big, small), (small, big)):
+                            if this["kind"] not in cargo and that["kind"] in cargo:
+                                this["extent"]["projection_of"] = that["id"]
+                                stats["projections"] += 1
+                    else:
+                        for this in (big, small):
+                            this["extent"]["status"]["y"] = "guessed"
+                        stats["guessed"] += 2
+                        result["checks"].append({"code": "plan_boxes_hold_each_others_labels", "status": "changed",
+                                                 "label": f"{big['label'][:30]} / {small['label'][:30]}"})
+                    continue
+                if not a_holds_b:
+                    continue
+                _, bxs, bvs = _span(b)
+                trimmed = False
+                if _span(b)[0] == other and _cover(axs, bxs) >= STRIP_COVER:
+                    if bvs[0] <= avs[0] + EDGE_TOLERANCE_M < bvs[1] < avs[1]:
+                        a[other][0] = round(bvs[1], 2)  # the neighbour is a strip along the bottom or one side
+                        trimmed = True
+                    elif avs[0] < bvs[0] < avs[1] - EDGE_TOLERANCE_M <= bvs[1]:
+                        a[other][1] = round(bvs[0], 2)  # along the top or the other side
+                        trimmed = True
+                elif _span(b)[0] == other and _cover(avs, bvs) >= STRIP_COVER and "frames" in b:
+                    if bxs[0] <= axs[0] + EDGE_TOLERANCE_M < bxs[1] < axs[1]:
+                        a["frames"][0], a["x_m"][0] = b["frames"][1], b["x_m"][1]
+                        a["x_measured_m"] = [round(bxs[1], 2), a["x_measured_m"][1]] if "x_measured_m" in a else None
+                        trimmed = True
+                    elif axs[0] < bxs[0] < axs[1] - EDGE_TOLERANCE_M <= bxs[1]:
+                        a["frames"][1], a["x_m"][1] = b["frames"][0], b["x_m"][0]
+                        a["x_measured_m"] = [a["x_measured_m"][0], round(bxs[0], 2)] if "x_measured_m" in a else None
+                        trimmed = True
+                if a.get("x_measured_m") is None:
+                    a.pop("x_measured_m", None)
+                if trimmed:
+                    a.setdefault("trimmed_by", []).append(small["id"])
+                    stats["trimmed"] += 1
+                elif (other == "z_m" and big["kind"] in cargo and small["kind"] not in cargo
+                        and side_of_label(small["label"]) in ("both", "port", "starboard")):
+                    # A tank printed for the sides ("(P/S)") inside a cargo space in the profile, and
+                    # not a strip at its edge, is a wing, topside or hopper tank seen in projection
+                    # (round u6: topside fuel tanks boxed over the holds).
+                    b["projection_of"] = big["id"]
+                    stats["projections"] += 1
+                    continue
+                if _holds(a, b["label_at_m"]):
+                    for axis in a["status"]:
+                        a["status"][axis] = "guessed"
+                    a.setdefault("covers", []).append(small["id"])
+                    stats["guessed"] += 1
+                    result["checks"].append({"code": "extent_covers_a_labelled_neighbour", "status": "changed",
+                                             "label": f"{big['label'][:30]} / {small['label'][:30]}"})
     return stats
 
 
@@ -1210,6 +1352,9 @@ def scale_pass(result: dict, sheet_path: Path, out: Path, call) -> dict:
         if any(work["kinds"].get(view) == "profile" for view in work["axes"]):
             check_depth(result, work)
             checked = True
+    if any("extent" in space for space in result["spaces"]):
+        # After the depth check: a trimmed hold ends at a topside tank, not at the deck.
+        stats["overlaps"] = resolve_overlaps(result)
     if not checked and result["measured"]["depth_m"]["status"] == MEASURED:
         # A depth that the space tops could not check is not given (see check_depth).
         pointed = result["measured"]["depth_m"]["value"]
@@ -1230,6 +1375,10 @@ def _identity(space: dict) -> tuple:
     from .ga_commercial import _base_number, COUNT_KINDS
     if space["kind"] in COUNT_KINDS.values() and space.get("number"):
         return space["kind"], _base_number(space["number"])
+    if space.get("number"):
+        # A numbered tank: its number and the words of its label ("NO. 4 W. B. TK (P)" in a plan
+        # is "4 W. B. TK (P&S)" in the profile; round u6).
+        return space["kind"], _base_number(space["number"]), label_family(space["label"])
     text = space["label"].upper()
     for pattern, _ in SIDE_WORDS:
         text = re.sub(pattern, "", text)
@@ -1265,18 +1414,50 @@ def merged_spaces(result: dict) -> list[dict]:
         seen = []
         for plan in plans:
             side = plan["extent"].get("side")
-            if any(side == other.get("side") and _overlap(plan["extent"], other) > 0.5 for other in seen):
-                continue  # the same space in a second plan view
+            # The same space in a second plan view: its sides are already given over the same
+            # frames ("(P&S)" on the tank top repeats "(P)" and "(S)" of the deck plan).
+            covered = set().union(*[_sides({"extent": other}) for other in seen
+                                    if _overlap(plan["extent"], other) > 0.5])
+            if _sides(plan) and _sides(plan) <= covered:
+                continue
             seen.append(plan["extent"])
             partner = next((p for p in profiles if _overlap(plan["extent"], p["extent"]) > 0.5
                             and (not _sides(p) or not side or side in _sides(p) or side == "centre")), None)
             merged.append(_joined(plan, partner))
             if partner:
                 used_profiles.add(partner["id"])
+        group = [entry for entry in merged if any(m["id"] == entry["id"] for m in members)]
         for profile in profiles:
-            if profile["id"] not in used_profiles:
-                merged.append(_joined(None, profile))
-    return [part for entry in merged for part in _split_pair(entry)] + plain
+            if profile["id"] in used_profiles:
+                continue
+            if any(_overlap(profile["extent"], entry["extent"]) > 0.5 for entry in group):
+                continue  # a second reading of a space already given over the same frames (round u6)
+            merged.append(_joined(None, profile))
+    kinds_of_view = {v["view_id"]: v["kind"] for v in result.get("views", [])}
+    cargo_footprints = [e["extent"] for e in merged
+                        if e["kind"] in ("cargo_hold", "cargo_tank") and "y_m" in e["extent"]]
+    out = []
+    for entry in merged:
+        extent = entry["extent"]
+        if (entry["kind"] == "other_space" and "z_m" not in extent and "y_m" in extent
+                and all(kinds_of_view.get(view) == "deck_plan" for view in entry.get("views", []))
+                and any(_footprint_share(extent, cargo) >= 0.5 for cargo in cargo_footprints)):
+            # A room seen only on a deck plan over a hold or cargo tank stands on the deck (a store,
+            # a deck house) or is a cut label; as a box from the base line it would take the cargo
+            # space's volume (round u6).
+            entry = {key: value for key, value in entry.items() if key != "extent"}
+            entry["extent_withheld"] = "seen only on the deck plan, over a cargo space; its height is not known"
+            out.append(entry)
+            continue
+        if entry["extent"].get("projection_of") and "y_m" not in entry["extent"]:
+            # A tank drawn over a cargo space in the profile, with no plan to give its breadth:
+            # as a full-breadth box it would take the cargo space's volume.
+            entry = {key: value for key, value in entry.items() if key != "extent"}
+            entry["extent_withheld"] = "drawn over a cargo space in the profile; no plan gives its breadth"
+            out.append(entry)
+            continue
+        out.extend(_split_pair(entry))
+    return out + plain
 
 
 def _split_pair(entry: dict) -> list[dict]:
@@ -1288,11 +1469,18 @@ def _split_pair(entry: dict) -> list[dict]:
     a pair given as one, so the cargo tank between them looked full breadth).
     """
     extent = entry["extent"]
-    if extent.get("side") != "both" or "y_m" not in extent:
+    if extent.get("side") != "both" or side_of_label(entry["label"]) != "both":
         return [entry]
+    if "y_m" not in extent:
+        # No plan breadth: one tank on each side (the arrangement step then gives each half the
+        # breadth). As one "both" entry it reads as one space (lane W, round u6).
+        return [{**entry, "id": f"{entry['id']}-{side[0]}", "extent": {**extent, "side": side}}
+                for side in ("port", "starboard")]
     low, high = extent["y_m"]
     if low < -CENTRE_TOLERANCE_M and high > CENTRE_TOLERANCE_M:
-        return [entry]  # one space across the centreline
+        # Boxed across the centreline: the label says two tanks, split at the centreline.
+        return [{**entry, "id": f"{entry['id']}-p", "extent": {**extent, "side": "port", "y_m": [0.0, high]}},
+                {**entry, "id": f"{entry['id']}-s", "extent": {**extent, "side": "starboard", "y_m": [low, 0.0]}}]
     boxed = "port" if low >= -CENTRE_TOLERANCE_M else "starboard"
     other = "starboard" if boxed == "port" else "port"
     first = {**entry, "id": f"{entry['id']}-{boxed[0]}", "extent": {**extent, "side": boxed}}
@@ -1301,6 +1489,14 @@ def _split_pair(entry: dict) -> list[dict]:
                      "y_note": "mirror of the other tank of the pair about the centreline"}
     second = {**entry, "id": f"{entry['id']}-{other[0]}", "extent": mirror_extent}
     return [first, second]
+
+
+def _footprint_share(a: dict, b: dict) -> float:
+    """The share of extent ``a``'s plan footprint (x by y) that lies over extent ``b``'s."""
+    xa, ya, xb, yb = a["x_m"], a["y_m"], b["x_m"], b["y_m"]
+    area = (xa[1] - xa[0]) * (ya[1] - ya[0])
+    shared = (max(0.0, min(xa[1], xb[1]) - max(xa[0], xb[0])) * max(0.0, min(ya[1], yb[1]) - max(ya[0], yb[0])))
+    return shared / area if area > 0 else 0.0
 
 
 def _overlap(a: dict, b: dict) -> float:
@@ -1338,11 +1534,73 @@ def _joined(plan: dict | None, profile: dict | None) -> dict:
     side = (plan or profile)["extent"].get("side")
     if side:
         extent["side"] = side
+    if profile and profile["extent"].get("projection_of"):
+        extent["projection_of"] = profile["extent"]["projection_of"]
     regions = [region for space in (plan, profile) if space
                for region in space["source_record"].get("regions", [])][:source_record.MAX_REGIONS]
     return {"id": first["id"], "kind": first["kind"], "label": first["label"], "number": first.get("number"),
             "status": first["status"], "source_record": source_record.validate(source_record.read(regions)),
             "views": [s["extent"]["view_id"] for s in (plan, profile) if s], "extent": extent}
+
+
+# The arrangement step's gate (lane W): no space left without volume, no fragment labels, and no
+# cargo space losing more of its volume to smaller spaces than in round s3b (worst: 56 % of a
+# hold, 58 % of a cargo tank).
+GATE_MAX_CARGO_LOSS = 0.58
+GATE_GRID = 20
+GATE_KINDS = ("cargo_hold", "cargo_tank", "slop_tank", "ballast_tank", "fuel_tank", "other_tank", "engine_room",
+              "other_space")
+
+
+def _gate_box(space: dict, breadth: float, depth: float) -> np.ndarray | None:
+    """A space's box with the arrangement step's rules for a missing y or z."""
+    extent = space.get("extent")
+    if not extent or "x_m" not in extent:
+        return None
+    side = extent.get("side", "both")
+    y = extent.get("y_m") or {"port": [0.0, breadth / 2], "starboard": [-breadth / 2, 0.0],
+                              "centre": [-0.15 * breadth, 0.15 * breadth]}.get(side, [-breadth / 2, breadth / 2])
+    z = extent.get("z_m") or [0.0, depth]
+    return np.array([sorted(extent["x_m"]), sorted(y), sorted(z)], dtype=float)
+
+
+def arrangement_gate(data: dict) -> dict:
+    """The arrangement step's gate on an arrangement input, for regression checks.
+
+    Spaces are cut from the smallest to the largest (each loses the parts that smaller spaces
+    cover); the hull is not modelled. Returns the spaces left without volume, the fragment
+    labels, each cargo space's loss, and ``passed``.
+    """
+    from .ga_commercial import _words, fragment_reason
+    particulars = data.get("particulars", {})
+    breadth = (particulars.get("breadth_m") or {}).get("value")
+    depth = (particulars.get("depth_m") or {}).get("value")
+    spaces = [s for s in data["spaces"] if s["kind"] in GATE_KINDS]
+    vocabulary_of = lambda space: {w for o in data["spaces"] if o is not space for w in _words(o["label"])}
+    fragments = [s["label"] for s in data["spaces"]
+                 if fragment_reason(s, [o for o in data["spaces"] if o is not s], vocabulary_of(s),
+                                    {"".join(_words(o["label"])) for o in data["spaces"] if o is not s})]
+    report = {"fragments": fragments, "no_volume": [], "cargo_loss": {}, "max_cargo_loss": None}
+    if breadth and depth:
+        boxes = [(s, _gate_box(s, breadth, depth)) for s in spaces]
+        boxes = [(s, b) for s, b in boxes if b is not None and np.all(b[:, 1] > b[:, 0])]
+        volume = lambda b: float(np.prod(b[:, 1] - b[:, 0]))
+        for space, own in boxes:
+            grid = np.meshgrid(*[np.linspace(own[i, 0], own[i, 1], GATE_GRID + 2)[1:-1] for i in range(3)],
+                               indexing="ij")
+            taken = np.zeros(grid[0].shape, dtype=bool)
+            for other, box in boxes:
+                if other is not space and volume(box) < volume(own):
+                    taken |= np.all([(grid[i] > box[i, 0]) & (grid[i] < box[i, 1]) for i in range(3)], axis=0)
+            loss = float(taken.mean())
+            if loss >= 0.999:
+                report["no_volume"].append(space["id"])
+            if space["kind"] in ("cargo_hold", "cargo_tank"):
+                report["cargo_loss"][space["id"]] = round(loss, 3)
+        report["max_cargo_loss"] = max(report["cargo_loss"].values(), default=None)
+    report["passed"] = (not report["fragments"] and not report["no_volume"]
+                        and (report["max_cargo_loss"] or 0.0) <= GATE_MAX_CARGO_LOSS)
+    return report
 
 
 def arrangement_input(result: dict, case_id: str) -> dict:
@@ -1367,6 +1625,45 @@ def arrangement_input(result: dict, case_id: str) -> dict:
             reason = measured.get("reason") or printed.get("reason") or "not printed and not measured"
             particulars[field] = _unknown(reason)
     frames = result.get("frames") or {"status": "unknown", "spacings": []}
+    spaces, dropped = _without_same_boxes(merged_spaces(result), particulars)
     return {"schema": INPUT_SCHEMA, "case_id": case_id, "engineering_approved": False,
             "sources": result["sources"], "ship_type": result.get("ship_type"),
-            "particulars": particulars, "frames": frames, "spaces": merged_spaces(result)}
+            "particulars": particulars, "frames": frames, "spaces": spaces, "dropped": dropped}
+
+
+# Two entries whose boxes share this share of each other's volume are one space read twice.
+SAME_BOX_SHARE = 0.85
+
+
+def _without_same_boxes(spaces: list[dict], particulars: dict) -> tuple[list[dict], list[dict]]:
+    """One entry per box: two labels on one compartment (a misread repeat, a cut label) give
+    two boxes, and the arrangement step would leave one of them without volume (round u6).
+
+    The entry kept is the one with a counted or named kind, then a printed number, then the
+    longer label; the other is listed in ``dropped`` with the reason.
+    """
+    breadth = (particulars.get("breadth_m") or {}).get("value")
+    depth = (particulars.get("depth_m") or {}).get("value")
+    if not breadth or not depth:
+        return spaces, []
+    boxes = {id(s): _gate_box(s, breadth, depth) for s in spaces if s["kind"] in GATE_KINDS}
+
+    def rank(space):
+        return (not space["kind"].startswith("other_"), bool(space.get("number")), len(space["label"]))
+
+    dropped_ids, dropped = set(), []
+    order = sorted((s for s in spaces if boxes.get(id(s)) is not None), key=rank, reverse=True)
+    for index, keep in enumerate(order):
+        if id(keep) in dropped_ids:
+            continue
+        a = boxes[id(keep)]
+        for other in order[index + 1:]:
+            if id(other) in dropped_ids:
+                continue
+            b = boxes[id(other)]
+            shared = float(np.prod(np.clip(np.minimum(a[:, 1], b[:, 1]) - np.maximum(a[:, 0], b[:, 0]), 0, None)))
+            if min(shared / float(np.prod(a[:, 1] - a[:, 0])), shared / float(np.prod(b[:, 1] - b[:, 0]))) >= SAME_BOX_SHARE:
+                dropped_ids.add(id(other))
+                dropped.append({"id": other["id"], "label": other["label"],
+                                "reason": f"the same box as {keep['id']} ({keep['label'][:40]})"})
+    return [s for s in spaces if id(s) not in dropped_ids], dropped

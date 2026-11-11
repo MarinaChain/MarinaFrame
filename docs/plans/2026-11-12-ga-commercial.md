@@ -152,7 +152,25 @@ requests a ship; **off by default**, so the exam run is unchanged.
 5. **Arrangement input.** `ga_arrangement_input.json` (schema of docs/GA_ARRANGEMENT_INPUT.md on
    lane W): particulars are the printed value when there is one, else the measured one with its
    status; `frames.spacings`; one entry per physical space (the views of one space are joined:
-   x and z from the profile, y from the plan).
+   x and z from the profile, y from the plan; a numbered space is matched by kind, number and
+   label family). A "(P&S)" pair is two tanks: boxed on one side, the other is its mirror (y
+   `guessed`); boxed across the centreline, it is split there; without a plan, one tank each
+   side. Two entries with the same box are one space (the other is listed in `dropped`).
+   **Overlap rules** (`resolve_overlaps`, after the depth check; lane W, round u4r/u6: holds lost
+   most of their volume to boxes drawn over them): a box that takes in a labelled neighbour ends
+   at it when the neighbour is a strip at one of its edges (a double-bottom tank under a hold),
+   else its axes become `guessed`; a tank printed for the sides that is drawn over a cargo space
+   in the profile is a projection and gets no extent unless a plan gives its breadth; plan boxes
+   that hold each other's labels get a guessed y; a room seen only on the deck plan over a cargo
+   space gets no extent (its height is not known).
+   **Fragment labels** (`drop_fragments`, after the fine pass): a label with no words besides
+   "NO", an unclosed parenthesis, a single cut letter after the number, a last word that is the
+   start of a longer word on the sheet, a single word printed only inside longer labels, or an
+   untyped piece read where a longer label is printed is not a space; it is listed in `checks`
+   (`fragment_label_dropped`) with its reason.
+   **Gate** (`arrangement_gate`, `scripts/ga_arrangement_gate.py`): the arrangement step's
+   checks as a regression check of each round: no space left without volume after smaller
+   spaces are cut out, no fragment label, no cargo space losing more than 58 % (round s3b).
 6. **Exam guard.** `ga_reading.json` `particulars` holds printed values only. The scorer takes a
    particular only when its status is `read` (test
    `test_a_measured_value_is_never_an_exam_answer`).
@@ -432,18 +450,32 @@ Observed cost is 0 in every round (subscription).
   points in one run and not in the next (an F.P. mark, a shell side, a misread spacing), not
   code that lost coverage. Replaying an earlier round's replies through the final code gives
   that round's coverage back (checked on two ships).
-- For lane W: `work/ga-internal-23/dev-runs/u6/<group>/<case>/ga_arrangement_input.json` (the
-  two ships lane W asked about have all four dimensions measured and checked there; u4r is the
-  earlier set).
+- Lane W tested u6 and refused it (round u6 trial in `work/ga-arrangement-u6`): holds still lost
+  up to 89 % of their volume, fragment labels became spaces, and "(P&S)" cargo tanks were not
+  split where no plan gave their breadth. Fixed (Method, step 5: overlap rules, fragments,
+  pairs, same-box entries, tank matching across views) and replayed without new calls: `u6r`.
+- **Gate on `u6r`: 14 of 14 development ships pass** (no space without volume, no fragment,
+  largest cargo-space loss 0.25; the same gate on round s3b fails 11 ships). For lane W:
+  `work/ga-internal-23/dev-runs/u6r/<case>/ga_arrangement_input.json`.
+
+## Proposal (not built; PM 2026-11-12): printed sizes as a check of extents
+
+Astra rounds 3 and 4 found measured hatch lengths 1-2 m above the size printed in the hatch
+(for example "15.47 x 20.40") and hold spans that differ from the printed dimension chain. A
+check needs the printed text: an optional `printed_size` per extent in the `ga_scale` reply (the
+text as printed, never converted), parsed by code (metres or millimetres) and compared with the
+measured length and breadth; a difference above 0.5 m or 3 % would make that axis `guessed`
+with a check entry. The geometry would not be replaced by the printed value. This changes the
+model contract (Rust `ScaleReply`, CLI schema, prompt), so it waits for a PM decision.
 
 ## Resume point
 
 Done: two Opus/Astra cycles; the Fable 5.2 step; the Opus check of it (regression found and fixed,
-overnight rounds u1-u6). **Not frozen; the exam was not run; the PM said not to freeze or
-prepare the exam until told.** Next: Astra review of round u6; then the open items: extents that take in neighbouring
-compartments, a check of measured hatch and hold sizes against the dimensions printed on the
-drawing (needs the printed dimension text read), short web-frame ranges placed one frame off,
-and cut diagonal labels.
+overnight rounds u1-u6, overlap and fragment rules replayed as u6r). **Not frozen; the exam
+was not run; the PM said not to freeze or prepare the exam until told.** Next: a new round with
+the overlap and fragment rules in the live run (u7) and its gate; Astra review; then cut
+diagonal labels (merge pieces into whole labels instead of dropping them), boxes along sloped
+and tapered boundaries, the printed-size proposal (above) if the PM accepts it.
 To repeat a development round: `ga_commercial batch --measure --max-requests 65` on groups of
 the 14 development cases; each `ga_reading.json` has `passes`, `frames`, `measured` and the space
 extents, and `ga_arrangement_input.json` is beside it.

@@ -388,3 +388,38 @@ def test_a_measured_value_is_never_an_exam_answer(tmp_path):
     (tmp_path / "S-1" / "ga_reading.json").write_text(json.dumps(reading))
     row = scorer.load_predictions(tmp_path)["S-1"]
     assert row["lbp_m"] is None and row["breadth_m"] is None and row["loa_m"] == 139.9 and row["cargo_holds"] == 4
+
+
+@pytest.mark.parametrize("label, others, cut", [
+    ("NO. 4", [], True),                                     # only a number
+    ("T. S. W. B. T. (", [], True),                          # unclosed parenthesis
+    ("NO. 2 F", [], True),                                   # a cut letter after the number
+    ("NO. 5 W.", [], True),
+    ("NO. 2 CARG", ["NO.2 CARGO HOLD"], True),               # the start of a longer word
+    ("GEAR", ["STEERING GEAR ROOM"], True),                  # a word printed only inside longer labels
+    ("STORE", ["STORE", "BOSUN STORE"], False),              # printed alone elsewhere: a room name
+    ("SLOP O.T.", ["SLOP TK(P) O.T.H."], False),             # a dotted abbreviation is not a cut word
+    ("NO.3 C.O.T. (P)", ["NO.3 C.O.T. (S)"], False),
+])
+def test_a_cut_or_untyped_label_is_not_a_space(label, others, cut):
+    """Lane W round u6: "NO. 4", "NO. 2 CARG", "GEAR", "T. S. W. B. T. (" became spaces."""
+    space = {"label": label, "kind": "other_space", "number": None,
+             "source_record": {"kind": "read", "regions": [{"box_px": [0, 0, 10, 10]}]}}
+    other_spaces = [{"label": o, "kind": "other_space", "number": None,
+                     "source_record": {"kind": "read", "regions": [{"box_px": [500, 500, 510, 510]}]}}
+                    for o in others]
+    vocabulary = {w for o in others for w in ga._words(o)}
+    wholes = {"".join(ga._words(o)) for o in others}
+    assert (ga.fragment_reason(space, other_spaces, vocabulary, wholes) is not None) is cut
+
+
+def test_a_piece_read_where_a_longer_label_is_printed_is_dropped_with_its_reason():
+    def space(label, box, kind="other_space"):
+        return {"id": label, "label": label, "kind": kind, "number": None, "status": "read", "view_id": None,
+                "source_record": {"kind": "read", "regions": [{"box_px": box}]}}
+    result = {"spaces": [space("COOL. W. T. (C)", [0, 0, 100, 20]), space("W. T. (C)", [40, 0, 100, 20]),
+                         space("SLOP TK(P)", [200, 0, 260, 20], "slop_tank"),
+                         space("SLOP TK(P) O.T.H.", [200, 0, 300, 20], "slop_tank")], "checks": []}
+    assert ga.drop_fragments(result) == 1
+    assert [s["label"] for s in result["spaces"]] == ["COOL. W. T. (C)", "SLOP TK(P)", "SLOP TK(P) O.T.H."]
+    assert result["checks"][0]["code"] == "fragment_label_dropped" and "COOL" in result["checks"][0]["reason"]
