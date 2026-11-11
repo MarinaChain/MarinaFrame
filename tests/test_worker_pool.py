@@ -108,10 +108,52 @@ def test_a_waiting_run_stops_when_cancelled(pool):
                 pass
 
 
-def test_the_pool_folder_must_be_private(tmp_path, monkeypatch):
-    shared = tmp_path / "shared"
-    shared.mkdir(mode=0o755)
-    shared.chmod(0o755)
-    monkeypatch.setenv(parallel.POOL_DIRECTORY_ENVIRONMENT_VARIABLE, str(shared))
-    with pytest.raises(PermissionError):
-        parallel.pool_directory()
+def _unsafe_folder(kind, tmp_path, monkeypatch):
+    """A pool folder another local user could have prepared: shared mode, a link, or not ours."""
+    folder = tmp_path / "pool"
+    if kind == "shared_mode":
+        folder.mkdir()
+        folder.chmod(0o755)
+    elif kind == "symlink":
+        (tmp_path / "elsewhere").mkdir(mode=0o700)
+        folder.symlink_to(tmp_path / "elsewhere")
+    elif kind == "foreign_owner":
+        folder.mkdir(mode=0o700)
+        real = parallel.os.getuid()
+        monkeypatch.setattr(parallel.os, "getuid", lambda: real + 1)
+    elif kind == "symlinked_token":
+        folder.mkdir(mode=0o700)
+        (folder / "token-0.lock").symlink_to(tmp_path / "victim")
+    monkeypatch.setenv(parallel.POOL_DIRECTORY_ENVIRONMENT_VARIABLE, str(folder))
+    return folder
+
+
+@pytest.mark.parametrize("kind", ["shared_mode", "symlink", "foreign_owner", "symlinked_token"])
+def test_an_unsafe_pool_folder_means_no_shared_limit_not_an_error(kind, tmp_path, monkeypatch, caplog):
+    _unsafe_folder(kind, tmp_path, monkeypatch)
+    if kind != "symlinked_token":
+        with pytest.raises(PermissionError):
+            parallel.pool_directory()
+    with caplog.at_level("WARNING", logger=parallel.__name__):
+        with parallel.worker_tokens(3, size=4) as granted:
+            assert granted == 3  # the run's own bound, without the pool
+    assert "Worker pool not used" in caplog.text
+    assert not (tmp_path / "victim").exists()  # a token link is never followed
+
+
+def test_an_inspection_runs_when_the_pool_folder_is_unsafe(tmp_path, monkeypatch):
+    from test_agent_tools import drawing
+    from vessel_reconstruction.agent_tools import DomainTools
+    path, _ = drawing(tmp_path / "input")
+    _unsafe_folder("shared_mode", tmp_path, monkeypatch)
+    monkeypatch.setenv(parallel.WORKERS_ENVIRONMENT_VARIABLE, "2")
+    observed = DomainTools(tmp_path / "task", path).execute("inspect_source", {})
+    assert observed["ok"] and observed["resources"]["workers"] == 2
+
+
+def test_the_default_pool_folder_is_in_the_users_home_cache(monkeypatch):
+    monkeypatch.delenv(parallel.POOL_DIRECTORY_ENVIRONMENT_VARIABLE, raising=False)
+    folder = parallel.pool_directory()
+    home = Path(parallel.pwd.getpwuid(os.getuid()).pw_dir)
+    assert folder.is_relative_to(home) and folder.name == "worker-pool"
+    assert not str(folder).startswith("/tmp")

@@ -113,8 +113,14 @@ worker. A per-slot split (cores - 2 divided by the native slots) gave 1 worker p
 10-core Mac (5 slots), so the PM chose a machine-wide pool:
 
 - `parallel.worker_tokens`: max(1, cores - 2) tokens, each an exclusive `flock` on one file in
-  `/tmp/marinaframe-worker-pool-<uid>/` (mode 0700; owner, mode and links checked; a fixed path
-  because the controller clears `TMPDIR`). An inspection call takes every free token up to what it
+  the user's home cache, which other users cannot create: macOS
+  `~/Library/Caches/io.marinachain.marinaframe/worker-pool`, else `~/.cache/marinaframe/worker-pool`
+  (home from the password database, not HOME or XDG_RUNTIME_DIR: the controller clears the worker
+  environment). Mode 0700, owner and links checked; token files opened with O_NOFOLLOW. If the
+  folder or a token cannot be used safely (security review: a shared /tmp path could be
+  pre-created by another user), the call logs a warning and runs with its own bound, without the
+  shared limit; the pool never fails an inspection (tests: shared mode, symlinked folder, foreign
+  owner, symlinked token). An inspection call takes every free token up to what it
   can use (at least 1; it waits while none is free; cancellation stops the wait) and gives them back
   when its workers end. The kernel drops the locks of a process that ends, so a crashed run's
   tokens come back at once; nothing expires on a clock. Every inspection on the machine (app,
