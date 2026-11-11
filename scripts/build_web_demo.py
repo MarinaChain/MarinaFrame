@@ -259,6 +259,9 @@ def write_manifest(data: Path, selection: list[dict], downscaled: dict[str, list
             "tagline": entry.get("tagline"),
             "concept": entry.get("concept") is True,
             "credit": entry.get("credit"),
+            "note": entry.get("note"),
+            "whole_vessel_first": entry.get("whole_vessel_first") is True,
+            "section_lines": entry.get("section_lines") is not False,
             "summary": summary,
             "downscaled_images": downscaled[slug],
         })

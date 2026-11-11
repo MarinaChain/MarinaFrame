@@ -144,7 +144,7 @@ export function createModelView({
     renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true });
   } catch {
     showEmpty('3D view not available', 'This computer did not allow a WebGL view.');
-    return { setModel() {}, setSpacesContext() {}, captureImage: () => null, setSelected() {}, partList: () => [], hidePart() {}, isolatePart() {}, showAllParts() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, anchorOf: () => null, refreshCard() {}, placeOverlays() {}, showsWholeVessel: false, hasTanks: false };
+    return { setModel() {}, setSpacesContext() {}, captureImage: () => null, setSelected() {}, partList: () => [], hidePart() {}, isolatePart() {}, showAllParts() {}, resetView() {}, refreshTheme() {}, showSections() {}, setSectionLinesShown() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, anchorOf: () => null, refreshCard() {}, placeOverlays() {}, showsWholeVessel: false, hasTanks: false };
   }
   /** Pixel ratio cap: a 3x screen draws at 2x, which looks the same and costs 2.25 times less. */
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
@@ -749,6 +749,16 @@ export function createModelView({
     for (const [id, plane] of planes) styleSectionPlane(id, plane);
     requestRender();
   }
+  // Section lines: the build's section curves (read from the drawing) on the model.
+  const sectionLinesButton = toolButton({
+    iconName: 'drawing', label: 'Section lines', pressed: true,
+    detail: 'The section lines the run read from the drawing, on the model. Off: the model only.',
+    onClick: () => setSectionLinesShown(sectionLinesButton.getAttribute('aria-pressed') !== 'true'),
+  });
+  function setSectionLinesShown(on) {
+    sectionLinesButton.setAttribute('aria-pressed', String(on));
+    growth.setVisible(on);
+  }
   const guessesButton = toolButton({
     iconName: 'st-guessed', label: 'Guessed ranges', pressed: true,
     detail: 'Amber where the draft guessed. When most of the hull is guessed, a bar along the base line.',
@@ -768,6 +778,7 @@ export function createModelView({
   }
   toolbar.add('Show',
     sectionPlanesButton,
+    sectionLinesButton,
     guessesButton,
     overlaySwitch('grid', 'grid', 'Reference grid', 'G'),
     overlaySwitch('waterline', 'waterline', 'Design waterline plane', 'W'),
@@ -1979,6 +1990,8 @@ export function createModelView({
      * "update" (changed sections morph and flash) or "instant". Null clears them.
      */
     showSections: (sections, options) => growth.show(sections, options),
+    /** Draw the section lines on the model, or not (the Section lines switch). */
+    setSectionLinesShown: (on) => setSectionLinesShown(on),
     /** HOOK(M3 live): show or hide the review overlays (guessed ranges) during a replay. */
     setReviewOverlays(visible) {
       reviewOverlays = visible;

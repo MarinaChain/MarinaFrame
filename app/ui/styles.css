@@ -3829,3 +3829,7 @@ body:not([data-costs="shown"]) :is(.workspace, .inspector) .cost-timing { displa
 .demo-pilot-stages { color: var(--brand); font-size: var(--fs-sm); font-weight: 600; line-height: 1.9; }
 /* Controls that change a run carry .write-action (js/parts.js and the run views); the demo has none. */
 [data-demo="read-only"] .write-action { display: none !important; }
+[data-demo-note] body[data-route="run"] .demo-run-note[data-kind="note"] { border-left: 3px solid var(--guess-ink); color: var(--ink); }
+/* A run note and its credit take up to two lines. */
+:root[data-demo-note="note"] { --demo-note-h: 48px; }
+[data-demo-note] body[data-route="run"] .demo-run-note[data-kind="note"] { white-space: normal; line-height: 1.35; }

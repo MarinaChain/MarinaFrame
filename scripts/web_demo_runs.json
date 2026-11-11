@@ -11,7 +11,25 @@
       "drawing_sha256": [
         "2acd43a729eeb15505ab8dd94d9acaef2d03cd2071d9869246aa8c0cfc25f56e"
       ],
-      "file_stem": "R-V-Gunnerus"
+      "file_stem": "R-V-Gunnerus",
+      "whole_vessel_first": true,
+      "section_lines": false,
+      "note": "Hull from the vector lines plan (DXF). The scanned-drawing reading of the bow (about Fr 46–62) is flagged for review."
+    },
+    {
+      "slug": "concept-survey-launch",
+      "runs_folder": "../concept-survey-launch/runs",
+      "name": "Survey launch 24 m (concept preview)",
+      "tagline": "Concept preview: Survey launch",
+      "concept": true,
+      "licence": "generated-example",
+      "source": "Made-up vessel: the 3D model and its drawings were generated for this demo (benchmarks/concept_launch).",
+      "file_stem": "Survey-launch-concept",
+      "drawing_sha256": [
+        "2b4d94f3a89e2d392c100b84e5a7c2c19d46b37c8c7a324ab3fcd4f0c09cfea9",
+        "4c6c68a074af8314c0757566dd548f82d9c7907a491c59af1a28fa805f2ffe35",
+        "a877737a7c5fbb51b84430de25b52ec6000f5bb346c1bebbdf2b00748b902ae5"
+      ]
     },
     {
       "slug": "dtmb5415-3v-L0",

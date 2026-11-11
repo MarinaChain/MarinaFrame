@@ -18,7 +18,7 @@ import {
 } from './run_header.js';
 import { renderSelection, renderStrip } from './run_strip.js';
 import { renderHistory } from './vessel_pages.js';
-import { live, setPartOutline, model, markTool, renderDrawing, renderModel } from './workspace.js';
+import { live, setPartOutline, model, markTool, renderDrawing, renderModel, showDemoView } from './workspace.js';
 
 /** Delay before re-reading a task after a burst of task-changed events. */
 const REFRESH_DEBOUNCE_MS = 250;
@@ -98,14 +98,17 @@ export const CONCEPT_NOTE = 'Concept preview - example vessel and drawings made 
 
 /**
  * The web demo's note for the open run (static/backend.js gives `view.demo`): the concept
- * label, else the credit of its drawings, else none. styles.css shows it on every run page.
+ * label, else the run's note and the credit of its drawings, else none. styles.css shows it on
+ * every run page.
  */
 function showDemoNote(demo) {
-  const text = demo?.concept ? CONCEPT_NOTE : demo?.credit || '';
+  const text = demo?.concept ? CONCEPT_NOTE : [demo?.note, demo?.credit].filter(Boolean).join(' ');
   const note = document.getElementById('demo-run-note');
   note.textContent = text;
-  note.dataset.kind = demo?.concept ? 'concept' : 'credit';
-  document.documentElement.toggleAttribute('data-demo-note', Boolean(text));
+  const kind = demo?.concept ? 'concept' : demo?.note ? 'note' : 'credit';
+  note.dataset.kind = kind;
+  if (text) document.documentElement.setAttribute('data-demo-note', kind);
+  else document.documentElement.removeAttribute('data-demo-note');
 }
 
 /** Read the open task again. `fresh` resets the view to its defaults. */
@@ -125,6 +128,7 @@ export async function loadTask({ fresh = false } = {}) {
     }
     if (!view.sections.some((s) => s.id === state.sectionId)) setSectionId(defaultSection(view));
     renderTask({ fresh });
+    if (fresh) showDemoView(view.demo);
     live.statusChanged();
     // Step cards name sections by place; when the places are known or change, draw them again.
     const placesKey = view.sections.map((s) => `${s.id}@${s.x_m}`).join(',');

@@ -136,7 +136,13 @@ export function createStaticBackend({ fetchImpl = (...args) => fetch(...args), b
       // A concept-preview run (made-up vessel and drawings) carries its flag to every page,
       // and a run whose drawings need a credit carries that line.
       const listed = runs.find((run) => run.slug === slug);
-      view.demo = { concept: listed?.concept === true, credit: listed?.credit || null };
+      view.demo = {
+        concept: listed?.concept === true,
+        credit: listed?.credit || null,
+        note: listed?.note || null,
+        whole_vessel_first: listed?.whole_vessel_first === true,
+        section_lines: listed?.section_lines !== false,
+      };
       // As in app/core/src/view.rs, a dismissed notice is left out.
       view.notices = (view.notices || []).filter((notice) => !dismissed.has(notice.id));
       return view;

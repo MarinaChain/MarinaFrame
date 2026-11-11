@@ -306,7 +306,19 @@ export async function showWholeVessel(part) {
   const tanks = (state.view?.components || []).filter((component) => component.op === 'tank');
   model.setSpacesContext({ tankParts: tanks.length, builtTanks: tanks.filter((tank) => tank.built).length });
   $('hull-only').hidden = !model.showsWholeVessel;
+  // The run's caption names the build of the section lines, not the whole vessel (live.js).
+  $('model-caption').hidden = model.showsWholeVessel || !$('model-caption').textContent;
   setPartOutline(part);
+}
+
+/**
+ * The web demo's first view of a run (static/backend.js `view.demo`): the whole vessel, and the
+ * section lines off when the demo says so. The Section lines switch brings them back.
+ */
+export async function showDemoView(demo) {
+  if (!demo?.whole_vessel_first || !state.view?.whole_vessel_model) return;
+  await showWholeVessel(null);
+  if (demo.section_lines === false) model.setSectionLinesShown(false);
 }
 
 /**
@@ -372,6 +384,7 @@ export function installWorkspaceControls() {
   $('hull-only').addEventListener('click', async () => {
     await model.setWholeVessel(null);
     $('hull-only').hidden = true;
+    $('model-caption').hidden = !$('model-caption').textContent;
   });
   $('clear-outline').addEventListener('click', () => setPartOutline(null));
   $('zoom-in').addEventListener('click', () => { live.userMovedCamera(); drawing.zoomIn(); });
