@@ -152,6 +152,14 @@ def ui_source(status: str) -> str:
     return "guessed" if status == "guessed" else "traced"
 
 
+def default_basis(axis: str, status: str) -> str:
+    """The basis of an extent that no rule here filled: taken from the GA by the reader, or
+    guessed by the reader (it gave a value but marked it guessed)."""
+    if status == "guessed":
+        return f"{axis} extent guessed by the GA reader"
+    return f"{axis} extent from the GA reading"
+
+
 def component_entry(part: M.Solid, record: dict) -> dict:
     box = M.bbox_of(part.solid)
     entry = {"id": part.id, "op": OPS.get(part.kind, "tank" if part.kind in G.TANK_KINDS else "other"),
@@ -170,7 +178,7 @@ def component_entry(part: M.Solid, record: dict) -> dict:
             f"{part.id}_{axis}": {
                 "status": "guessed" if part.box.status[axis] == "guessed" else "measured",
                 "source": ui_source(part.box.status[axis]), "value": _round(list(getattr(part.box, axis)), 2),
-                "basis": part.box.basis.get(axis, f"{axis} extent from the GA reading"), "method": "ga_estimate"}
+                "basis": part.box.basis.get(axis, default_basis(axis, part.box.status[axis])), "method": "ga_estimate"}
             for axis in ("x", "y", "z")}
         entry["reason"] = ESTIMATE_LABEL + "".join(f" {axis} guessed: {text}." for axis, text in part.box.basis.items())
     else:

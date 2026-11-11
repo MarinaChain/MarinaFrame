@@ -214,6 +214,48 @@ def test_a_space_above_the_deck_is_not_cut_by_the_hull(reading):
     assert G.above_deck(store, size) and not G.above_deck(hold, size)
 
 
+def _crane_case(reading, crane_z, house=None):
+    """Boxes of the synthetic ship with the crane at ``crane_z`` (and a deckhouse tier box)."""
+    reading["spaces"][6]["extent"]["z_m"] = crane_z
+    if house is not None:
+        reading["spaces"][4]["extent"] = house
+    data = G.load_input(reading)
+    size = G.hull_size(data)
+    items = {item.id: item for item in data.items}
+    return {item_id: G.item_box(item, data, size) for item_id, item in items.items()}, items, size
+
+
+def test_a_crane_read_above_the_deck_gets_a_guessed_pedestal(reading):
+    boxes, items, size = _crane_case(reading, [16.0, 20.0])
+    pedestal = G.pedestal_box("cargo_crane-001", boxes, items, size)
+    assert pedestal.z == pytest.approx((9.0, 16.0))
+    assert pedestal.x == boxes["cargo_crane-001"].x and pedestal.y == boxes["cargo_crane-001"].y
+    assert pedestal.status["z"] == "guessed" and "upper deck" in pedestal.basis["z"]
+    # A crane post placed on the centreline by rule: the pedestal keeps that guessed y and why.
+    del reading["spaces"][6]["extent"]["y_m"]
+    boxes, items, size = _crane_case(reading, [16.0, 20.0])
+    pedestal = G.pedestal_box("cargo_crane-001", boxes, items, size)
+    assert pedestal.status["y"] == "guessed" and pedestal.basis["y"] == "post on the centreline"
+
+
+def test_a_crane_standing_on_the_deck_gets_no_pedestal(reading):
+    boxes, items, size = _crane_case(reading, [9.0, 20.0])
+    assert G.pedestal_box("cargo_crane-001", boxes, items, size) is None
+    assert G.pedestal_box("cargo_hold-001", boxes, items, size) is None  # not deck equipment
+
+
+def test_a_crane_on_a_deckhouse_top_stands_there(reading):
+    # A deckhouse tier under the crane, top at 12.0 m: the crane on its top keeps its place.
+    house = {"x_m": [45.0, 55.0], "y_m": [-3.0, 3.0], "z_m": [9.0, 12.0]}
+    boxes, items, size = _crane_case(reading, [12.0, 20.0], house)
+    assert G.support_level(boxes["cargo_crane-001"], boxes, items, size)[0] == pytest.approx(12.0)
+    assert G.pedestal_box("cargo_crane-001", boxes, items, size) is None
+    # Read 3 m above that top: the pedestal reaches down to the top, not to the upper deck.
+    boxes, items, size = _crane_case(reading, [15.0, 20.0], house)
+    pedestal = G.pedestal_box("cargo_crane-001", boxes, items, size)
+    assert pedestal.z == pytest.approx((12.0, 15.0)) and "top of A-DECK" in pedestal.basis["z"]
+
+
 def test_carve_order_puts_small_tanks_before_holds(reading):
     data = G.load_input(reading)
     size = G.hull_size(data)
@@ -250,6 +292,11 @@ def test_build_and_run_folder(reading, tmp_path):
         assert regions and all(region["sheet"] == "synthetic-ga.png" for region in regions)
         assert entry["engineering_approved"] is False
     assert components["ballast_tank-001"]["source_record"]["kind"] == "read"
+    # The card's basis follows the status: a guessed extent never says "from the GA reading".
+    for entry in components.values():
+        for argument in (entry.get("provenance") or {}).values():
+            if argument["status"] == "guessed":
+                assert "from the GA reading" not in argument["basis"]
     assert components["cargo_hold-002"]["source_record"]["kind"] == "guessed"
     assert "full breadth" in components["cargo_hold-002"]["source_record"]["method"]
     # Carving: the hold above the double-bottom tank does not overlap it.
