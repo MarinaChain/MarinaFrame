@@ -282,6 +282,66 @@ def _stroke_of(candidate: dict, section: dict, grid_columns_px=None) -> dict | N
             "hull_likeness": likeness, "kind": kind}
 
 
+# A stroke must have at least this share of its rows on ink of its own: not on a
+# vertical grid column and not on a kept, more hull-like stroke of the panel.
+# A stroke made only of other strokes' pieces (the outer curve's top joined to
+# the next curve's bottom where they touch at the bilge) or of a grid line and a
+# piece of another curve adds no station curve (shipd-1-09867-3v-L0: two such
+# strokes took two stations and moved every inner station one curve outwards).
+# A wall-sided curve drawn on a grid line keeps its own bilge.
+OWN_INK_MIN_SHARE = 0.15
+
+
+def _on_grid(xs: np.ndarray, grid_columns_px) -> np.ndarray:
+    """Rows of a stroke that lie on a vertical grid column."""
+    from . import investigation as inv
+    if grid_columns_px is None or not len(grid_columns_px):
+        return np.zeros(len(xs), dtype=bool)
+    columns = np.asarray(grid_columns_px, dtype=float)
+    return np.min(np.abs(xs[:, None] - columns[None, :]), axis=1) <= inv.GRID_RIDE_TOLERANCE_PX
+
+
+def _on_stroke(rows: np.ndarray, xs: np.ndarray, other: dict) -> np.ndarray:
+    """Rows of a stroke that lie on the ink of ``other`` (same-ink distance)."""
+    from . import investigation as inv
+    other_rows, other_xs = np.asarray(other["rows"], dtype=float), np.asarray(other["xs"], dtype=float)
+    inside = (rows >= other_rows[0]) & (rows <= other_rows[-1])
+    close = np.abs(np.interp(rows, other_rows, other_xs) - xs) <= inv.SAME_INK_DISTANCE_PX
+    return inside & close
+
+
+def strokes_with_own_ink(strokes: list[dict], grid_columns_px) -> list[dict]:
+    """The strokes that bring ink of their own (OWN_INK_MIN_SHARE), in their given order.
+
+    Strokes are taken from the most hull-like down; rows on a grid column do not
+    count towards likeness here, so a stroke that mostly rides a grid line is
+    judged after the curves whose pieces it borrows. Grid-line strokes are kept
+    as they are (assign_panel skips them) and never cover another stroke.
+    """
+    def order_key(index):
+        stroke = strokes[index]
+        xs = np.asarray(stroke["xs"], dtype=float)
+        off_grid = 1.0 - float(np.mean(_on_grid(xs, grid_columns_px))) if len(xs) else 0.0
+        return -float(stroke.get("hull_likeness", 0.0)) * off_grid
+
+    kept, covering = [], []
+    for index in sorted(range(len(strokes)), key=order_key):
+        stroke = strokes[index]
+        if stroke.get("kind") == "straight_grid_line":
+            kept.append(index)
+            continue
+        rows, xs = np.asarray(stroke["rows"], dtype=float), np.asarray(stroke["xs"], dtype=float)
+        if not len(rows):
+            continue
+        borrowed = _on_grid(xs, grid_columns_px)
+        for other in covering:
+            borrowed |= _on_stroke(rows, xs, other)
+        if float(np.mean(~borrowed)) >= OWN_INK_MIN_SHARE:
+            kept.append(index)
+            covering.append(stroke)
+    return [strokes[index] for index in sorted(kept)]
+
+
 def follows_several_strokes(candidate: dict, strokes: list[dict]) -> bool:
     """True when a candidate's trace jumps between strokes of the panel (a mixed line).
 
@@ -416,6 +476,9 @@ def assign_shared_panels(image, sections: list[dict], catalog: dict, source_file
             if stroke is not None and not any(inv.same_ink(candidate, other) for other in pool):
                 pool.append(candidate)
                 strokes.append(stroke)
+        own = {s["candidate_id"] for s in strokes_with_own_ink(strokes, grid)}
+        pool = [c for c in pool if c["candidate_id"] in own]
+        strokes = [s for s in strokes if s["candidate_id"] in own]
         recommendations = assign_panel(members, sections, strokes, _pins(members, entries, pool, pinned))
         by_id = {c["candidate_id"]: c for c in pool}
         for member, entry in zip(members, entries):
