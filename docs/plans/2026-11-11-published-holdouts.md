@@ -36,7 +36,7 @@ python scripts/measure_round_bilge_holdout.py --boat davis-boat \
 3. [x] Run start note (this file), committed (`b42dbed`).
 4. [x] One run each (both exit 0); outputs and SHA-256 values in `work/published-holdout/`.
 5. [x] Results in both protocols (`720e9ca`); public summary `docs/results/2026-11-11-published-holdouts.md`.
-6. [ ] Quick test tier; push branch (no merge).
+6. [x] Quick test tier (exit 0; Python 1904 passed, 76 deselected); branch pushed (no merge).
 
 ## Results
 
