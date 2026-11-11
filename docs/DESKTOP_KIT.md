@@ -37,7 +37,7 @@ that the run already holds.
 ### `make-run`
 
 ```sh
-MarinaFrame.app/Contents/MacOS/MarinaFrame make-run --runs-folder DIR --spec FILE
+MarinaFrame.app/Contents/MacOS/marinaframe-app make-run --runs-folder DIR --spec FILE
 ```
 
 Same configuration as "Start a run" with AI drafting off (deterministic draft, no model calls),
