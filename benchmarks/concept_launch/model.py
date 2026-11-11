@@ -55,7 +55,7 @@ BODY_PLAN_STATIONS = tuple((f"st{i:02d}" if i == int(i) else f"st{int(i):02d}h",
 
 # --- arrangement --------------------------------------------------------------------------------
 INNER_BOTTOM_Z_M = 1.0
-INNER_BOTTOM_X_M = (3.5, 20.0)
+INNER_BOTTOM_X_M = (9.0, 20.0)  # forward of the engine room to the collision bulkhead
 PLATE_M = 0.010  # plate thickness of decks, bulkheads and frames
 FRAME_WEB_M = 0.20  # web depth of a ring frame
 FRAME_FLOOR_M = 0.25  # floor depth of a ring frame
@@ -63,11 +63,11 @@ BULWARK_HEIGHT_M = 1.0
 BULWARK_PLATE_M = 0.06
 BULKHEADS = (  # (id, label, frame number)
     ("bhd_fr07", "Aft peak bulkhead (fr 7)", 7),
-    ("bhd_fr25", "Engine room fwd bulkhead (fr 25)", 25),
+    ("bhd_fr18", "Engine room fwd bulkhead (fr 18)", 18),
     ("bhd_fr33", "Survey lab bulkhead (fr 33)", 33),
     ("bhd_fr40", "Collision bulkhead (fr 40)", 40),
 )
-WEB_FRAMES = (4, 8, 12, 16, 20, 24, 28, 32, 36, 44)  # frame numbers of the ring frames
+WEB_FRAMES = (4, 12, 22, 26, 30, 36, 44)  # frame numbers of the ring frames
 
 
 @dataclass(frozen=True)
@@ -79,16 +79,28 @@ class TankSpec:
     y_m: tuple[float, float]  # port is positive
     top_z_m: float
     density_t_m3: float
+    bottom_z_m: float = -1.0  # below the keel: the tank reaches the shell
+    free_standing: bool = False  # a box tank, not clipped by the hull
 
 
 TANKS = (
-    TankSpec("tank_fw1", "No 1 fresh water", "fresh water", (4.0, 7.0), (-1.5, 1.5), 0.99, 1.000),
-    TankSpec("tank_fo1", "No 1 fuel oil", "fuel oil", (7.5, 12.0), (-4.0, 4.0), 0.99, 0.850),
+    TankSpec("tank_apt", "Aft peak ballast", "water ballast", (0.3, 3.45), (-4.0, 4.0), 2.6, 1.025),
+    TankSpec("tank_fop", "Fuel oil side tank port", "fuel oil", (4.0, 7.8), (2.2, 4.0), 2.8, 0.850, 0.5),
+    TankSpec("tank_fos", "Fuel oil side tank starboard", "fuel oil", (4.0, 7.8), (-4.0, -2.2), 2.8, 0.850, 0.5),
+    TankSpec("tank_do1", "Diesel oil day tank", "diesel oil", (7.9, 8.9), (-1.9, -0.7), 2.9, 0.840, 1.7, True),
+    TankSpec("tank_fw1", "No 1 fresh water", "fresh water", (9.5, 12.5), (-1.5, 1.5), 0.99, 1.000),
     TankSpec("tank_wb1", "No 1 ballast port", "water ballast", (13.0, 16.0), (0.15, 4.0), 0.99, 1.025),
     TankSpec("tank_wb2", "No 1 ballast starboard", "water ballast", (13.0, 16.0), (-4.0, -0.15), 0.99, 1.025),
-    TankSpec("tank_do1", "Diesel oil day tank", "diesel oil", (17.0, 19.5), (-2.0, 2.0), 0.99, 0.840),
+    TankSpec("tank_fo1", "No 1 fuel oil (double bottom)", "fuel oil", (16.6, 19.9), (-4.0, 4.0), 0.99, 0.850),
     TankSpec("tank_fpt", "Fore peak ballast", "water ballast", (20.05, 23.6), (-4.0, 4.0), 2.6, 1.025),
 )
+# Machinery (made up): a main engine on its seating, a gearbox, the shaft line and the propeller.
+ENGINE_X_M = (4.7, 7.6)
+GEARBOX_X_M = (4.15, 4.7)
+SHAFT_AFT = (1.75, 0.45)  # (x, z) of the shaft at the propeller
+SHAFT_FWD = (4.15, 0.62)  # (x, z) at the gearbox flange
+PROPELLER_X_M = 1.55
+PROPELLER_RADIUS_M = 0.42
 
 
 # --- the hull form ----------------------------------------------------------------------------
@@ -358,7 +370,7 @@ def build_parts() -> list[Part]:
     rudder = _profile_prism([(0.25, -0.35), (1.15, -0.35), (1.15, 0.75), (0.25, 0.75)], -0.07, 0.07)
     parts.append(Part("rudder", "appendage", "Rudder", rudder, {
         "outline": traced("4 points", ga, "profile")}, [(ga, "profile")]))
-    skeg = _profile_prism([(1.6, -0.35), (1.6, 0.35), (9.5, 0.05), (9.5, 0.0)], -0.10, 0.10)
+    skeg = _profile_prism([(2.2, -0.35), (2.2, 0.3), (9.5, 0.05), (9.5, 0.0)], -0.10, 0.10)
     parts.append(Part("skeg", "appendage", "Skeg", skeg, {"outline": traced("4 points", ga, "profile")},
                       [(ga, "profile")]))
     gondola = cq.Workplane().add(_box(14.0, 16.5, -0.25, 0.25, -0.45, 0.10)).edges("|Y").fillet(0.2).val()
@@ -374,12 +386,15 @@ def build_parts() -> list[Part]:
     parts.append(Part("mast", "other", "Survey mast", cq.Compound.makeCompound([mast_post, yard]), {
         "height": traced([8.2, 11.6], ga, "profile")}, [(ga, "profile")]))
 
+    parts += machinery_parts(ga, traced)
+
     for spec in TANKS:
         x0_t, x1_t = spec.x_m
         y0_t, y1_t = spec.y_m
-        solid = hull.intersect(_box(x0_t, x1_t, y0_t, y1_t, -1.0, spec.top_z_m))
+        box = _box(x0_t, x1_t, y0_t, y1_t, spec.bottom_z_m, spec.top_z_m)
+        solid = box if spec.free_standing else hull.intersect(box)
         arguments = {"outline": traced([[x0_t, y0_t], [x1_t, y1_t]], tank_plan, "plan"),
-                     "height": traced([0.0, spec.top_z_m], tank_plan, "profile")}
+                     "height": traced([max(0.0, spec.bottom_z_m), spec.top_z_m], tank_plan, "profile")}
         guess = None
         if spec.id == "tank_fw1":
             arguments["height"] = Argument([0.0, spec.top_z_m], "guessed",
@@ -389,6 +404,35 @@ def build_parts() -> list[Part]:
                           [(tank_plan, "plan"), (tank_plan, "profile"), (tank_plan, "table")],
                           guess=guess, guess_parts=["inner_bottom"] if guess else [], tank=spec))
     return parts
+
+
+def machinery_parts(ga: str, traced) -> list[Part]:
+    """Main engine, gearbox, shaft line and propeller of the engine room (frames 7 to 18)."""
+    import cadquery as cq
+
+    x0, x1 = ENGINE_X_M
+    engine_box = cq.Workplane().add(_box(x0, x1, -0.55, 0.55, 0.55, 1.75)).edges("|X").fillet(0.12).val()
+    rocker_cover = _box(x0 + 0.2, x1 - 0.2, -0.35, 0.35, 1.75, 2.05)
+    seatings = [_box(x0 - 0.1, x1 + 0.1, y - 0.06, y + 0.06, 0.25, 0.55) for y in (-0.45, 0.45)]
+    engine = cq.Compound.makeCompound([engine_box, rocker_cover, *seatings])
+    g0, g1 = GEARBOX_X_M
+    gearbox = _box(g0, g1, -0.4, 0.4, 0.35, 1.15)
+    (xa, za), (xf, zf) = SHAFT_AFT, SHAFT_FWD
+    length = math.hypot(xf - xa, zf - za)
+    shaft = cq.Solid.makeCylinder(0.07, length, cq.Vector(xa, 0, za), cq.Vector(xf - xa, 0, zf - za))
+    hub = cq.Solid.makeCylinder(0.13, 0.35, cq.Vector(PROPELLER_X_M - 0.1, 0, za), cq.Vector(1, 0, 0))
+    disc = cq.Solid.makeCylinder(PROPELLER_RADIUS_M, 0.08, cq.Vector(PROPELLER_X_M, 0, za), cq.Vector(1, 0, 0))
+    propeller = cq.Compound.makeCompound([hub, disc])
+    return [
+        Part("main_engine", "other", "Main engine", engine, {
+            "outline": traced([[x0, 0.55], [x1, 2.05]], ga, "profile")}, [(ga, "profile")]),
+        Part("gearbox", "other", "Gearbox", gearbox, {"outline": traced([[g0, 0.35], [g1, 1.15]], ga, "profile")},
+             [(ga, "profile")]),
+        Part("shaft_line", "other", "Shaft line", shaft, {"line": traced([[xa, za], [xf, zf]], ga, "profile")},
+             [(ga, "profile")]),
+        Part("propeller", "appendage", "Propeller", propeller, {
+            "diameter": traced(2 * PROPELLER_RADIUS_M, ga, "profile")}, [(ga, "profile")]),
+    ]
 
 
 SHEET_NAMES_SHORT = {"ga": "general arrangement", "lines": "lines plan", "tanks": "tank arrangement"}

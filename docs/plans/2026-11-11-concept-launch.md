@@ -16,8 +16,9 @@ The run records the generator (`benchmarks/concept_launch`), `read_by_marinafram
 
 | File | What |
 |---|---|
-| `benchmarks/concept_launch/model.py` | Analytic hull offsets, CadQuery loft, 33 parts (decks, deckhouse, wheelhouse, bulwarks, 4 bulkheads, 10 web frames, girder, rudder, skeg, sonar gondola, A-frame, mast, 6 tanks), hydrostatics |
-| `benchmarks/concept_launch/sheets.py` | GA, lines plan, tank arrangement (PIL, 3960 x 2800 px) drawn from the meshes; exact region per item |
+| `benchmarks/concept_launch/model.py` | Analytic hull offsets, CadQuery loft, 37 parts (decks, deckhouse, wheelhouse, bulwarks, 4 bulkheads, 7 web frames, girder, machinery, appendages, A-frame, mast, 9 tanks), hydrostatics |
+| `benchmarks/concept_launch/structure.py` | 139 steel members (structure member form) |
+| `benchmarks/concept_launch/sheets.py` | GA, lines plan, tank arrangement, construction (PIL, 3960 x 2800 px) drawn from the meshes; exact region per item |
 | `benchmarks/concept_launch/run_folder.py` | App run folder: state, domain catalog, hull build, intake sheets, whole_vessel parts + GLB, tank tables, exports |
 | `tests/test_concept_launch.py` | Quick: offsets, cuts, region clipping, labels. Cad: volumes vs CAD, regions on sheets, records |
 
@@ -48,6 +49,24 @@ Run: `PYTHONPATH=src:. .venv/bin/python -m benchmarks.concept_launch --out work/
   is lane Q's UI.
 - Found in the exporter (lane Q owns it): `sounding_tables` collects `tank_id` fields from the
   view, but capacity rows name the tank `id`, so `tables.json` is empty for any run with tanks.
+
+## Round 2 (PM feedback: internals too thin)
+
+- Arrangement: engine room fr 7 to 18 (main engine, gearbox, shaft line, propeller), 4 watertight
+  bulkheads (fr 7, 18, 33, 40), inner bottom fr 18 to 40, 9 tanks at different heights: aft peak,
+  fuel side tanks P/S (z 0.5 to 2.8), a free-standing diesel day tank (z 1.7 to 2.9), double-bottom
+  FW1, WB1/WB2, FO1, and the fore peak.
+- Steel (`structure.py`): 139 members (bulkheads, inner bottom, centre girder, 7 web frames, 16
+  floors, 68 side frames, 34 deck beams, 8 longitudinals), written with
+  `structure.display.write_structure_glb` and `structure.steel.write_steel_tables` to
+  `structure/Survey_launch_CONCEPT_DRAFT_structure.glb` (1.0 MB, 4 member groups) plus steel CSVs:
+  the app shows "Steel 139". Bulkheads, web frames, girder and inner bottom keep their part entry
+  and source record; their mesh is only in the steel GLB (no double drawing).
+- Sheet 4, construction profile and midship section at fr 24: one region per steel member;
+  `structure/..._source_records.json` holds a `read` record per member. The app shows its fixed
+  "unknown" for steel groups in 3D (`STEEL_RECORD` in provenance.js); the part records of the steel
+  parts show in the Parts tab.
+- Bundle (scratch build with only this run): 20.7 MB. Tests: 15 pass (both tiers).
 
 ## Not done
 

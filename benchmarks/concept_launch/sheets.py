@@ -41,6 +41,7 @@ CONTENT_FILL = {  # light fills of the tank plan, by content
     "water ballast": (196, 236, 204),
 }
 DATE = "2026-11-11"
+SHEET_COUNT = 4
 # Sheet frame: border inset, the banner row and the standard title-block box.
 BORDER_PX = 40
 BANNER_ROWS = (60, 140)
@@ -272,7 +273,7 @@ def draw_title_block(sheet: Sheet, notes: list[str]) -> None:
     sheet.text((left + 20, rows[0] + 18), "SURVEY LAUNCH 24 m", size=34)
     sheet.text((left + 20, rows[0] + 60), "Example vessel (made up)", size=22)
     sheet.text((left + 20, rows[1] + 18), sheet.title.upper(), size=34)
-    sheet.text((left + 20, rows[1] + 60), f"Sheet {sheet.number} of 3", size=22)
+    sheet.text((left + 20, rows[1] + 60), f"Sheet {sheet.number} of {SHEET_COUNT}", size=22)
     sheet.text((left + 20, rows[2] + 18), "Drawn from the MarinaFrame concept 3D model", size=22)
     sheet.text((left + 20, rows[2] + 50), f"Dimensions in metres. Date {DATE}.", size=22)
     for index, note in enumerate(notes[:6]):
@@ -329,6 +330,7 @@ class Model:
     triangles: dict  # id -> (n, 3, 3)
     capacity: dict  # tank id -> capacity row (vessel_reconstruction.tanks.capacity_row)
     hydrostatics: dict  # at the design draft
+    members: list = field(default_factory=list)  # steel members (structure.members())
 
 
 def _part_outline(sheet: Sheet, view: View, model: Model, part_id: str, a_axis: str, b_axis: str,
@@ -371,16 +373,19 @@ def draw_ga(model: Model, file_name: str) -> Sheet:
 
     # Superstructure, bulwarks, deck equipment and appendages, each a silhouette of its mesh.
     for part_id in ("house_t1", "wheelhouse", "aft_bulwark", "fwd_bulwark", "a_frame", "mast", "rudder", "skeg",
-                    "sonar_gondola"):
+                    "sonar_gondola", "main_engine", "gearbox", "shaft_line", "propeller"):
         _part_outline(sheet, profile, model, part_id, "x", "z")
     _ga_windows(sheet, profile)
     sheet.text(profile.px(12.6, 3.85), "SURVEY LAB", size=24, anchor="mm")
     sheet.text(profile.px(13.1, 6.4), "WHEELHOUSE", size=24, anchor="mm")
     sheet.text(profile.px(1.6, 7.6), "A-FRAME", size=20, anchor="lm")
     sheet.text(profile.px(13.5, 11.3), "MAST", size=20, anchor="lm")
+    sheet.text(profile.px(6.15, 2.6), "ENGINE ROOM", size=22, anchor="mm")
+    sheet.text(profile.px(6.15, 1.15), "MAIN ENGINE", size=18, anchor="mm")
+    sheet.text(profile.px(2.4, 0.95), "SHAFT", size=17, anchor="mm")
     sheet.text(profile.px(16.7, -0.25), "SONAR GONDOLA", size=19, anchor="lm")
     sheet.text(profile.px(0.7, 1.1), "RUDDER", size=19, anchor="mm")
-    sheet.text(profile.px(5.0, 0.6), "SKEG", size=19, anchor="mm")
+    sheet.text(profile.px(9.7, -0.25), "SKEG", size=19, anchor="lm")
 
     # Bulkheads (full lines) and web frames (thin dash-dot), as the model has them.
     for part_id, _, frame in M.BULKHEADS:
@@ -607,7 +612,7 @@ def draw_tank_plan(model: Model, file_name: str) -> Sheet:
     ib = [profile.px(ib0, M.INNER_BOTTOM_Z_M), profile.px(ib1, M.INNER_BOTTOM_Z_M)]
     sheet.line(ib, width=2.5)
     sheet.add_region("inner_bottom", "profile", _px_box(ib))
-    sheet.text(profile.px(ib0 - 0.1, M.INNER_BOTTOM_Z_M + 0.05), f"INNER BOTTOM {M.INNER_BOTTOM_Z_M:.2f}", size=18, anchor="rd")
+    sheet.text(profile.px(ib0 + 0.15, M.INNER_BOTTOM_Z_M + 0.08), f"INNER BOTTOM {M.INNER_BOTTOM_Z_M:.2f}", size=18, anchor="ld")
     girder = [profile.px(ib0, 0.02), profile.px(ib1, 0.02)]
     sheet.line(girder, width=1.2, fill=(90, 96, 110), dash=(10, 6))
     sheet.add_region("centre_girder", "profile", _px_box(ib + girder))
@@ -617,15 +622,15 @@ def draw_tank_plan(model: Model, file_name: str) -> Sheet:
         sheet.line(points, width=3.5)
         sheet.add_region(part_id, "profile", _px_box(points))
         sheet.text(profile.px(x, M.DEPTH_M + 0.12), f"BHD FR {frame}", size=18, anchor="md")
-    profile_labels = {"tank_fw1": "FW1", "tank_fo1": "FO1", "tank_wb1": "WB1 / WB2 (P/S)", "tank_do1": "DO1",
-                      "tank_fpt": "FPT"}
+    # One label per profile shape: a port and starboard pair share theirs ("FOP / FOS").
+    shapes: dict[tuple, list] = {}
     for part in tanks:
-        if part.id not in profile_labels:
-            continue
-        x0, x1 = part.tank.x_m
-        label_x = (x0 + x1) / 2 + (0.6 if part.id == "tank_fpt" else 0.0)
-        label_z = 2.1 if part.id == "tank_fpt" else 0.6
-        sheet.text(profile.px(label_x, label_z), profile_labels[part.id], size=18, anchor="mm")
+        key = (part.tank.x_m, part.tank.top_z_m, part.tank.bottom_z_m)
+        shapes.setdefault(key, []).append(part)
+    for pair in shapes.values():
+        centre = _outline_centre(silhouette(model.triangles[pair[0].id], 0, 2))
+        sheet.text(profile.px(*centre), " / ".join(tank_code(part.id) for part in pair), size=18, anchor="mm")
+    sheet.text(profile.px(6.25, 3.05), "ENGINE ROOM", size=20, anchor="mm")
     draw_frame_scale(sheet, profile, 770)
 
     # Plan: hull at the inner bottom (solid) and the deck edge (dashed); tanks as projections.
@@ -640,11 +645,9 @@ def draw_tank_plan(model: Model, file_name: str) -> Sheet:
         points = [plan.px(a, b) for a, b in silhouette(model.triangles[part.id], 0, 1)]
         sheet.polygon(points, fill=fill, width=2)
         sheet.add_region(part.id, "plan", _px_box(points))
-        x0, x1 = part.tank.x_m
-        y0, y1 = part.tank.y_m
-        centre_y = (max(y0, -2.0) + min(y1, 2.0)) / 2
-        sheet.text(plan.px((x0 + x1) / 2, centre_y + 0.18), part.id.replace("tank_", "").upper(), size=20, anchor="mm")
-        sheet.text(plan.px((x0 + x1) / 2, centre_y - 0.22), f"{model.capacity[part.id]['volume_100_m3']:.1f} m3",
+        centre_x, centre_y = _outline_centre(silhouette(model.triangles[part.id], 0, 1))
+        sheet.text(plan.px(centre_x, centre_y + 0.18), tank_code(part.id), size=20, anchor="mm")
+        sheet.text(plan.px(centre_x, centre_y - 0.22), f"{model.capacity[part.id]['volume_100_m3']:.1f} m3",
                    size=18, anchor="mm")
     for part_id, _, frame in M.BULKHEADS:
         x = M.frame_x(frame)
@@ -660,6 +663,18 @@ def draw_tank_plan(model: Model, file_name: str) -> Sheet:
     return sheet
 
 
+def tank_code(tank_id: str) -> str:
+    """'tank_fw1' -> 'FW1'."""
+    return tank_id.replace("tank_", "").upper()
+
+
+def _outline_centre(outline) -> tuple[float, float]:
+    """Centre of the bounding box of an outline [(a, b), ...]."""
+    a = [p[0] for p in outline]
+    b = [p[1] for p in outline]
+    return (min(a) + max(a)) / 2, (min(b) + max(b)) / 2
+
+
 def _tank_table(sheet: Sheet, model: Model, tanks) -> None:
     col, row = TABLE_ORIGIN
     width = 2100
@@ -672,7 +687,7 @@ def _tank_table(sheet: Sheet, model: Model, tanks) -> None:
         sheet.line([(col, top), (col + width, top)], width=1.2)
         capacity = model.capacity[part.id]
         frames = f"{round(part.tank.x_m[0] / M.FRAME_SPACING_M)} to {round(part.tank.x_m[1] / M.FRAME_SPACING_M)}"
-        cells = [f"{part.id.replace('tank_', '').upper()}  {part.label}", part.tank.content, frames,
+        cells = [f"{tank_code(part.id)}  {part.label}", part.tank.content, frames,
                  f"{capacity['volume_100_m3']:.2f} m3", f"{capacity['weight_98_t']:.2f} t",
                  f"{capacity['lcg_m']:.2f} m", f"{capacity['vcg_m']:.2f} m"]
         for (_, offset), cell in zip(TABLE_COLUMNS, cells):
@@ -689,6 +704,139 @@ def _legend(sheet: Sheet, origin) -> None:
         sheet.text((col + 80, top + 4), content, size=21)
 
 
+# --- sheet 4: construction (steel) -------------------------------------------------------------------
+
+STEEL_SCALE = 125.0
+STEEL_PROFILE = View("profile", 250, 700, STEEL_SCALE)
+SECTION_SCALE = 220.0
+SECTION_FRAME = 24
+MIDSHIP_SECTION = View("section", 1150, 1760, SECTION_SCALE)
+# Ink of each member kind in the profile: line width, colour and dash.
+STEEL_INK = {
+    "bulkhead": (3.5, INK, None),
+    "web": (2.6, (150, 80, 50), (14, 6)),
+    "floor": (1.6, (150, 80, 50), None),
+    "inner_bottom": (2.6, INK, None),
+    "girder": (1.4, (150, 80, 50), (10, 6)),
+    "frame": (1.1, (60, 110, 85), None),
+    "beam": (1.1, (60, 110, 85), None),
+    "longitudinal": (1.4, (60, 110, 85), (18, 8)),
+}
+
+
+def _profile_ink(member: dict, kind: str) -> list[tuple[float, float]]:
+    """Points (x, z) of a member as the profile draws it."""
+    from . import structure as T
+
+    low, high = T.bounds(member)
+    x = (low[0] + high[0]) / 2
+    if kind in ("bulkhead", "web", "floor", "frame"):
+        return [(x, low[2]), (x, high[2])]
+    if kind == "beam":
+        return [(x, M.DEPTH_M), (x, M.DEPTH_M - 0.1)]
+    if kind == "inner_bottom":
+        return [(low[0], M.INNER_BOTTOM_Z_M), (high[0], M.INNER_BOTTOM_Z_M)]
+    if kind == "girder":
+        return [(low[0], 0.05), (high[0], 0.05)]
+    if member.get("member_id", "").startswith("deck_long"):
+        return [(low[0], M.DEPTH_M - 0.05), (high[0], M.DEPTH_M - 0.05)]
+    return [(p[0], p[2] + 0.05) for p in member["trace"]]  # a bottom longitudinal follows the shell
+
+
+def draw_construction(model: Model, file_name: str) -> Sheet:
+    from . import structure as T
+
+    sheet = Sheet("construction", file_name, "Construction profile and midship section", 4)
+    draw_frame_and_banner(sheet)
+    profile, section = STEEL_PROFILE, MIDSHIP_SECTION
+    view_title(sheet, (250, 170), "CONSTRUCTION PROFILE")
+    view_title(sheet, (250, 860), f"MIDSHIP SECTION AT FR {SECTION_FRAME} (LOOKING FORWARD)")
+    sheet.polygon([profile.px(x, z) for x, z in hull_profile_outline()], width=3)
+    for member in model.members:
+        kind = T.kind_of(member)
+        width, colour, dash = STEEL_INK[kind]
+        points = [profile.px(a, b) for a, b in _profile_ink(member, kind)]
+        sheet.line(points, width=width, fill=colour, dash=dash)
+        sheet.add_region(member["member_id"], "profile", _px_box(points), pad=6)
+    for part_id, _, frame in M.BULKHEADS:
+        sheet.text(profile.px(M.frame_x(frame), M.DEPTH_M + 0.12), f"WT BHD FR {frame}", size=17, anchor="md")
+    sheet.text(profile.px(6.25, 2.2), "ENGINE ROOM", size=20, anchor="mm")
+    draw_frame_scale(sheet, profile, 770)
+
+    # Midship section: the members at the section frame, each with its own region.
+    x = M.frame_x(SECTION_FRAME)
+    hull_points = M.section_points(x)
+    outline = [section.px(-y, z) for y, z in hull_points[::-1]] + [section.px(y, z) for y, z in hull_points[1:]]
+    sheet.line(outline, width=3.5)
+    sheet.line([section.px(-M.HALF_BEAM_M, M.DEPTH_M), section.px(M.HALF_BEAM_M, M.DEPTH_M)], width=3.5)
+    sheet.line([section.px(0, -0.15), section.px(0, M.DEPTH_M + 0.25)], width=1, fill=FAINT, dash=(30, 8))
+    at_frame = [m for m in model.members if abs((T.bounds(m)[0][0] + T.bounds(m)[1][0]) / 2 - x) < 1e-6
+                or T.kind_of(m) in ("inner_bottom", "girder", "longitudinal")]
+    at_frame.sort(key=lambda m: T.kind_of(m) != "floor")  # the floor fill first, the other ink over it
+    for member in at_frame:
+        kind = T.kind_of(member)
+        if kind == "floor":
+            ink = [section.px(p[1], p[2]) for p in member["contour"]]
+            sheet.polygon(ink, fill=(240, 222, 210), outline=(150, 80, 50), width=1.6)
+        elif kind == "inner_bottom":
+            half = T.half_breadth_at(x, M.INNER_BOTTOM_Z_M)
+            ink = [section.px(-half, M.INNER_BOTTOM_Z_M), section.px(half, M.INNER_BOTTOM_Z_M)]
+            sheet.line(ink, width=3.5)
+        elif kind == "girder":
+            ink = [section.px(0, M.keel_height(x)), section.px(0, M.INNER_BOTTOM_Z_M)]
+            sheet.line(ink, width=3, fill=(150, 80, 50))
+        elif kind == "frame":
+            sign = 1.0 if member["member_id"].endswith("p") else -1.0
+            ink = [section.px(p[1] - sign * 0.06, p[2]) for p in member["trace"]]
+            sheet.line(ink, width=3, fill=(60, 110, 85))
+        elif kind == "beam":
+            y = member["trace"][0][1]
+            ink = [section.px(-y, M.DEPTH_M - 0.05), section.px(y, M.DEPTH_M - 0.05)]
+            sheet.line(ink, width=4, fill=(60, 110, 85))
+        elif kind == "longitudinal":
+            y = member["trace"][0][1]
+            z = M.DEPTH_M - 0.1 if member["member_id"].startswith("deck") else T.bottom_height_at(x, y)
+            z_top = z + 0.1
+            ink = [section.px(y - 0.03, z), section.px(y + 0.03, z_top)]
+            sheet.rect(_px_box(ink), fill=(60, 110, 85), outline=(60, 110, 85), width=1)
+        else:
+            continue
+        sheet.add_region(member["member_id"], "section", _px_box(ink), pad=8)
+    callouts = [((-2.9, 2.3), "SIDE FRAME FB 120x8"), ((1.2, 3.15), "DECK BEAM FB 100x8"),
+                ((1.7, 1.15), "INNER BOTTOM 10 mm"), ((-1.2, 0.55), "FLOOR 8 mm"),
+                ((0.15, 0.75), "CENTRE GIRDER 10 mm"), ((2.4, 2.95), "DECK LONG. FB 100x8"),
+                ((1.25, 0.25), "BOTTOM LONG. FB 100x8")]
+    for (y, z), text in callouts:
+        sheet.text(section.px(y, z), text, size=18, anchor="lm")
+    _steel_schedule(sheet, model, (2250, 950))
+    draw_scale_bar(sheet, 3110, 2050, STEEL_SCALE, 5)
+    draw_title_block(sheet, ["Scantlings made up for the demo.", "Steel model in the run: structure GLB",
+                             "with member groups and steel tables."])
+    return sheet
+
+
+def _steel_schedule(sheet: Sheet, model: Model, origin) -> None:
+    from . import structure as T
+
+    col, row = origin
+    names = {"bulkhead": "Watertight bulkheads", "web": "Web frames", "floor": "Floors", "inner_bottom": "Inner bottom",
+             "girder": "Centre girder", "frame": "Side frames (P and S)", "beam": "Deck beams",
+             "longitudinal": "Longitudinals (deck, bottom)"}
+    counts: dict[str, int] = {}
+    for member in model.members:
+        kind = T.kind_of(member)
+        counts[kind] = counts.get(kind, 0) + 1
+    sheet.text((col, row - 50), "STEEL MEMBER SCHEDULE", size=26)
+    for index, (kind, name) in enumerate(names.items()):
+        top = row + 46 * index
+        sheet.line([(col, top - 8), (col + 760, top - 8)], width=1, fill=GRID)
+        width, colour, dash = STEEL_INK[kind]
+        sheet.line([(col, top + 12), (col + 50, top + 12)], width=width + 1, fill=colour, dash=dash)
+        sheet.text((col + 70, top), name, size=21)
+        sheet.text((col + 760, top), str(counts.get(kind, 0)), size=21, anchor="ra")
+
+
 def draw_all(model: Model, names: dict[str, str]) -> list[Sheet]:
-    """The three sheets; ``names`` gives the file name of each sheet key."""
-    return [draw_ga(model, names["ga"]), draw_lines(model, names["lines"]), draw_tank_plan(model, names["tanks"])]
+    """The four sheets; ``names`` gives the file name of each sheet key."""
+    return [draw_ga(model, names["ga"]), draw_lines(model, names["lines"]), draw_tank_plan(model, names["tanks"]),
+            draw_construction(model, names["construction"])]

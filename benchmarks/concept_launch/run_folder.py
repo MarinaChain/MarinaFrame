@@ -35,6 +35,7 @@ import numpy as np
 from . import CONCEPT_LABEL, GENERATOR, SHEET_LABEL
 from . import model as M
 from . import sheets as S
+from . import structure as T
 
 SLUG = "concept-survey-launch"
 RUN_NAME = "Concept preview: Survey launch 24 m (example vessel made for this demo)"
@@ -46,8 +47,10 @@ SHEET_FILES = {
     "ga": "concept-survey-launch-general-arrangement.png",
     "lines": "concept-survey-launch-lines-plan.png",
     "tanks": "concept-survey-launch-tank-arrangement.png",
+    "construction": "concept-survey-launch-construction.png",
 }
-SHEET_TYPES = {"ga": "General arrangement", "lines": "Lines plan", "tanks": "Tank arrangement"}
+SHEET_TYPES = {"ga": "General arrangement", "lines": "Lines plan", "tanks": "Tank arrangement",
+               "construction": "Construction plan"}
 # A fixed time (2026-11-11 00:00 UTC), so the same code writes the same files.
 CREATED_MS = int(datetime(2026, 11, 11, tzinfo=timezone.utc).timestamp() * 1000)
 MM_PER_M = 1000.0
@@ -74,7 +77,7 @@ def build_model():
     capacity = {row["id"]: row for row in tanks.capacity_plan(tank_model)}
     table = M.hydrostatic_table(by_id["hull"].solid)
     design = next(row for row in table if abs(row["draft_m"] - M.DESIGN_DRAFT_M) < 1e-9)
-    return S.Model(by_id, triangles, capacity, design), tank_model, table
+    return S.Model(by_id, triangles, capacity, design, T.members()), tank_model, table
 
 
 def tank_of(part: M.Part, triangles: np.ndarray):
@@ -193,10 +196,14 @@ def write_whole_vessel(task: Path, model: S.Model, records: dict[str, dict]) -> 
     components = []
     meshes = {}
     styles = {}
+    # Steel parts (bulkheads, web frames, girder, inner bottom) are drawn by the structure GLB;
+    # they keep their part entry and source record, but no second mesh here.
+    steel_ids = {member["member_id"] for member in model.members}
     for part in model.parts.values():
         _export_step(part.solid, folder / f"{part.id}.step")
-        vertices, faces = M.mesh_of(part.solid)
-        meshes[part.id] = (vertices * MM_PER_M, faces)
+        if part.id not in steel_ids:
+            vertices, faces = M.mesh_of(part.solid)
+            meshes[part.id] = (vertices * MM_PER_M, faces)
         if part.op == "tank":
             styles[part.id] = tank_style(part.label, part.tank.content, {"name": "read", "content": "read"})
         components.append(component_entry(part, records[part.id], model))
@@ -218,6 +225,21 @@ def write_tank_tables(task: Path, tank_model: list, records: dict[str, dict]) ->
     source_record.write_records(task / "tank_tables" / f"{TABLE_STEM}{source_record.TANK_RECORDS_SUFFIX}",
                                 {tank.id: records[tank.id] for tank in tank_model})
     return [path for path, _, _ in entries]
+
+
+def write_structure(task: Path, members: list[dict], regions: dict[str, list[dict]]) -> list[Path]:
+    """Structure GLB (member groups), steel tables and one source record per member."""
+    from vessel_reconstruction import source_record
+    from vessel_reconstruction.structure.display import write_structure_glb
+    from vessel_reconstruction.structure.steel import write_steel_tables
+
+    folder = task / "structure"
+    folder.mkdir(parents=True)
+    write_structure_glb(members, folder / f"{TABLE_STEM}_structure.glb")
+    tables = write_steel_tables({"members": members}, folder, TABLE_STEM)
+    records = {member["member_id"]: source_record.read(regions[member["member_id"]]) for member in members}
+    source_record.write_records(folder / f"{TABLE_STEM}{source_record.TANK_RECORDS_SUFFIX}", records)
+    return [tables["members"], tables["totals"]]
 
 
 HYDRO_COLUMNS = ("draft_m", "volume_m3", "displacement_t", "lcb_m", "kb_m", "bm_m", "km_m", "waterplane_area_m2",
@@ -364,6 +386,7 @@ def write_metadata(task: Path, model: S.Model, table: list[dict], sheet_list: li
                             "model_volume_m3": round(model.parts[tank_id].solid.Volume(), 4)}
                   for tank_id, row in model.capacity.items()},
         "hydrostatics": [{k: round(v, 4) for k, v in row.items()} for row in table],
+        "steel_members": len(model.members),
         "sheets": [{"file": sheet.file_name, "sha256": _sha256(drawings / sheet.file_name), "page_px": list(S.SHEET_PX),
                     "regions": len(sheet.regions)} for sheet in sheet_list],
     }
@@ -406,7 +429,8 @@ def generate(out: Path) -> dict:
     write_intake(task, sheet_list, drawings)
     write_whole_vessel(task, model, records)
     tank_files = write_tank_tables(task, tank_model, records)
-    write_exports(task, model, table, tank_files)
+    steel_files = write_structure(task, model.members, regions)
+    write_exports(task, model, table, tank_files + steel_files)
     write_state(task, metrics)
     metadata = write_metadata(task, model, table, sheet_list, drawings)
     shutil.copyfile(task / "whole_vessel" / "whole-vessel-draft.glb", model_dir / "concept-survey-launch.glb")

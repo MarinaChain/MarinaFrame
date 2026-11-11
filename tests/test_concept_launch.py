@@ -152,3 +152,29 @@ def test_records_are_valid_and_two_parts_are_guessed(built):
     guessed = sorted(part_id for part_id, record in records.items() if record["kind"] == "guessed")
     assert guessed == ["tank_fw1", "wheelhouse"]
     assert {"part": "house_t1"} in records["wheelhouse"]["inputs"]
+
+
+@pytest.mark.cad
+def test_every_steel_member_is_drawn_and_grouped(built):
+    from benchmarks.concept_launch import structure as T
+    from vessel_reconstruction.structure.display import group_meshes
+
+    run_folder, model, _, _, sheet_list = built
+    regions = run_folder.regions_by_item(sheet_list)
+    members = model.members
+    assert len({m["member_id"] for m in members}) == len(members)
+    for member in members:
+        assert any(r["sheet"] == run_folder.SHEET_FILES["construction"] for r in regions[member["member_id"]])
+        T.kind_of(member)
+    # Bulkheads, web frames, the girder and the inner bottom are also parts with the same id.
+    part_ids = set(model.parts)
+    assert {"bhd_fr07", "web_fr12", "centre_girder", "inner_bottom"} <= part_ids & {m["member_id"] for m in members}
+    groups = set(group_meshes(members))
+    assert {"bulkhead", "deck", "primary", "stiffener"} <= groups
+
+
+@pytest.mark.cad
+def test_tanks_stand_at_different_heights(built):
+    _, model, _, _, _ = built
+    tops = {round(model.parts[spec.id].solid.BoundingBox().zmax, 1) for spec in M.TANKS}
+    assert len(tops) >= 3
