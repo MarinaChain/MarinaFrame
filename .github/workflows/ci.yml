@@ -7,14 +7,67 @@ permissions:
   contents: read
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/continue/v0.5' }}
 env:
   OMP_NUM_THREADS: '1'
   OPENBLAS_NUM_THREADS: '1'
   PYTHONDONTWRITEBYTECODE: '1'
   MARINAFRAME_REQUIRE_WORKER: '1'
 jobs:
+  changes:
+    name: Changes
+    runs-on: ubuntu-24.04
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      rust: ${{ steps.filter.outputs.rust }}
+      ui: ${{ steps.filter.outputs.ui }}
+      wheel: ${{ steps.filter.outputs.wheel }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select suites from the complete change range
+        id: filter
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          BEFORE: ${{ github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          all_suites() {
+            printf 'python=true\nrust=true\nui=true\nwheel=true\n' >> "$GITHUB_OUTPUT"
+          }
+          if [[ "$EVENT" == workflow_dispatch || "$REF" == refs/heads/main || "$REF" == refs/heads/continue/v0.5 ]]; then
+            all_suites
+            exit 0
+          fi
+          if [[ "$EVENT" == pull_request ]]; then
+            base=$(git merge-base "$PR_BASE" "$HEAD") || { all_suites; exit 0; }
+          elif [[ -n "$BEFORE" && ! "$BEFORE" =~ ^0+$ ]]; then
+            base=$BEFORE
+          else
+            base=$(git merge-base origin/continue/v0.5 "$HEAD") || { all_suites; exit 0; }
+          fi
+          # Missing force-push history must select all, not silently skip tests.
+          if ! git diff --name-only --no-renames -z "$base" "$HEAD" > "$RUNNER_TEMP/ci-paths"; then
+            all_suites
+            exit 0
+          fi
+          bash scripts/ci_changes.sh < "$RUNNER_TEMP/ci-paths" >> "$GITHUB_OUTPUT"
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - run: python3 scripts/scan_secrets.py
   lint-secrets:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     name: Lint and secrets
     runs-on: ubuntu-24.04
     # No prior CI lint timing; allow 25 min for a cold Rust compile.
@@ -50,8 +103,10 @@ jobs:
             ~/.cargo/git
             target
           key: rust-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.job }}
-      - run: make lint-ci secrets PY="$(command -v python)"
+      - run: make lint-ci PY="$(command -v python)"
   python-quick:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
     name: Python quick / shard ${{ matrix.shard }}
     runs-on: ubuntu-24.04
     # Full suite measured 418-917 s; allow 25 min per shard including setup.
@@ -118,6 +173,8 @@ jobs:
           ))
           EOF
   python-cad:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
     name: Python real CAD / shard ${{ matrix.shard }}
     runs-on: ubuntu-24.04
     # Full suite measured 418-917 s; allow 30 min for CAD and setup.
@@ -161,6 +218,8 @@ jobs:
           raise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', '-m', 'cad', *selected]))
           EOF
   rust-controller:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     name: Rust controller and app core
     runs-on: ubuntu-24.04
     # Rust build and tests measured 93-145 s; allow 30 min for cold builds.
@@ -198,6 +257,8 @@ jobs:
           key: rust-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.job }}
       - run: cargo test --locked --workspace --exclude marinaframe-app
   rust-cad:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     name: Rust real CAD
     runs-on: ubuntu-24.04
     # Real-CAD Rust tests measured 202-326 s; allow 30 min including cold builds.
@@ -235,6 +296,8 @@ jobs:
           key: rust-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.job }}
       - run: make rust-cad PY="$(command -v python)"
   ui:
+    needs: changes
+    if: needs.changes.outputs.ui == 'true'
     name: UI tests
     runs-on: ubuntu-24.04
     # Local 182-test run took 1.4 s; allow 10 min including Node setup.
@@ -246,8 +309,13 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '26.12.1'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci --prefix app --ignore-scripts
       - run: make ui-quick
   wheel:
+    needs: changes
+    if: needs.changes.outputs.wheel == 'true'
     name: Wheel install and dependency audits
     runs-on: ubuntu-24.04
     # Wheel smoke measured 90-150 s; allow 25 min for Rust build and audits.
@@ -300,6 +368,11 @@ jobs:
           python scripts/audit_dependencies.py --out artifacts/dependency-audit.json
           python scripts/audit_dependencies.py --lock requirements-data-linux-py312.lock --out artifacts/data-dependency-audit.json
   macos-test-protection:
+    needs: changes
+    if: >-
+      (needs.changes.outputs.rust == 'true' || needs.changes.outputs.python == 'true') &&
+      (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' ||
+       github.ref == 'refs/heads/main' || github.ref == 'refs/heads/continue/v0.5')
     name: Required macOS / sandbox and real workers
     runs-on: macos-latest
     # Measured about 7-9 min; allow cold Rust builds and runner variance.
@@ -350,7 +423,7 @@ jobs:
   test:
     name: Locked Linux / Python 3.12.14
     if: always()
-    needs: [lint-secrets, python-quick, python-cad, rust-controller, rust-cad, ui, wheel]
+    needs: [changes, secrets, lint-secrets, python-quick, python-cad, rust-controller, rust-cad, ui, wheel]
     runs-on: ubuntu-24.04
     # Aggregates completed jobs only; one minute normally suffices.
     timeout-minutes: 5
@@ -362,7 +435,9 @@ jobs:
           python3 - <<'EOF'
           import json, os
           results = json.loads(os.environ['RESULTS'])
-          failed = [name for name, result in results.items() if result['result'] != 'success']
+          failed = [name for name, result in results.items()
+                    if result['result'] not in ('success', 'skipped')
+                    or (name in ('changes', 'secrets') and result['result'] != 'success')]
           if failed:
               raise SystemExit('Required jobs did not pass: ' + ', '.join(failed))
           EOF
