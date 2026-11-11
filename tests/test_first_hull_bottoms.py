@@ -31,6 +31,29 @@ def test_reader_bottom_completion_keeps_four_measured_waterlines_and_their_direc
     assert all(list(p) in anchors[1].points_yz_m for p in original)
 
 
+def test_tops_within_the_deck_tolerance_take_the_profile_deck_height():
+    # dtmb5415-3v-L0: body-plan curve ends sat up to 1 px off the profile deck line; each such top
+    # misses the truth deck by one 0.05 m height sample (about 6.5 % of half-beam at that station).
+    from vessel_reconstruction.first_hull_tools import snap_tops_to_deck
+    side = [[1.0, 0.0], [1.2, 1.0], [1.3, 2.0]]
+    anchors = [Anchor("low", 0.0, side + [[1.3, 2.99]], {}, pixels_per_metre=100.0, stroke_width_px=2.0),
+               Anchor("high", 1.0, side + [[1.3, 3.02]], {}, pixels_per_metre=100.0, stroke_width_px=2.0),
+               Anchor("far", 2.0, side + [[1.3, 2.5]], {}, pixels_per_metre=100.0, stroke_width_px=2.0)]
+    snap_tops_to_deck(anchors, {"low": 3.0, "high": 3.0, "far": 3.0})
+    tops = {a.id: max(p[1] for p in a.points_yz_m) for a in anchors}
+    assert tops["low"] == pytest.approx(3.0) and tops["high"] == pytest.approx(3.0)
+    assert anchors[0].stroke_width_px is None and anchors[1].stroke_width_px is None
+    # A top far below the deck (more than DECK_TOP_TOLERANCE_PX) is left to extend_tops_to_deck.
+    assert tops["far"] == pytest.approx(2.5) and anchors[2].stroke_width_px == 2.0
+
+
+def test_tops_are_not_snapped_to_a_deck_line_that_disagrees_with_them():
+    from vessel_reconstruction.first_hull_tools import snap_tops_to_deck
+    anchors = [Anchor(str(i), float(i), [[1.0, 0.0], [1.3, 2.99]], {}, pixels_per_metre=100.0) for i in range(3)]
+    snap_tops_to_deck(anchors, {str(i): 4.0 for i in range(3)})
+    assert all(max(p[1] for p in a.points_yz_m) == pytest.approx(2.99) for a in anchors)
+
+
 def test_profile_bottom_handling_does_not_cut_reader_cells():
     anchors = _anchors("read")
     original = copy.deepcopy(anchors[1].points_yz_m)
