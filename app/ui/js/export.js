@@ -55,7 +55,11 @@ export function canExport(view) {
  * `captureView(task, revision)` gives the 3D view as base64 PNG text (or null) for the report's
  * hero picture. Errors show inside the page.
  */
-export function createExport({ host, invoke, captureView = () => null }) {
+/**
+ * `readOnlyNote` is set in the web demo (static/backend.js): the page then writes nothing; each
+ * file that exists is a download link, and the note says why there is no Export button.
+ */
+export function createExport({ host, invoke, captureView = () => null, readOnlyNote = null }) {
   let task = null;
   let view = null;
   let revision = null;
@@ -99,7 +103,7 @@ export function createExport({ host, invoke, captureView = () => null }) {
     } else {
       state = el('span', { class: 'export-size export-size-none' }, '—');
     }
-    const finder = el('button', {
+    const finder = readOnlyNote ? downloadLinks(output, written) : el('button', {
       class: `btn btn-ghost btn-icon${written.length ? '' : ' export-finder-none'}`,
       type: 'button',
       title: 'Show in Finder',
@@ -126,6 +130,17 @@ export function createExport({ host, invoke, captureView = () => null }) {
         filesSummary(output.kind, written) ? el('span', { class: 'export-hint' }, `Written: ${filesSummary(output.kind, written)}.`) : null)),
       state,
       finder);
+  }
+
+  /** The demo's download links of the files of one output (the static backend gives their addresses). */
+  function downloadLinks(output, written) {
+    return el('span', { class: 'export-downloads' }, ...written.map((file) => el('a', {
+      class: 'btn btn-ghost btn-small',
+      href: file.path,
+      download: file.file,
+      title: `Download ${file.file}`,
+      'aria-label': `Download ${output.name}: ${file.file}`,
+    }, icon('export'), file.file.split('.').pop().toUpperCase())));
   }
 
   /** Why the page cannot export now, in plain words; null when it can. */
@@ -184,7 +199,9 @@ export function createExport({ host, invoke, captureView = () => null }) {
       view?.sign_off ? el('p', { class: 'export-signoff' }, el('strong', {}, `Signed off by ${view.sign_off.name}, ${new Date(view.sign_off.time_ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}: `), `${view.sign_off.statement}. The files stay drafts.`) : null,
       el('div', { class: 'export-list', role: 'group', 'aria-label': 'Outputs to export' }, ...outputsOf(view, files).map(outputRow)),
       error ? el('p', { class: 'form-error', role: 'alert' }, error) : null,
-      el('div', { class: 'export-actions' }, folderButton, el('span', { class: 'export-actions-spacer' }), exportButton)));
+      readOnlyNote
+        ? el('p', { class: 'export-readonly' }, readOnlyNote, ' The files already made for this run can be downloaded.')
+        : el('div', { class: 'export-actions' }, folderButton, el('span', { class: 'export-actions-spacer' }), exportButton)));
   }
 
   function apply(result) {

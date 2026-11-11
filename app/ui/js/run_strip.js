@@ -258,7 +258,7 @@ function decisionBar(section) {
   const accept = acceptCandidate(section);
   const other = otherCandidate(section);
   const key = (letter) => el('kbd', { class: 'key-hint' }, letter);
-  return el('div', { class: 'decision-bar', role: 'group', 'aria-label': 'Decide this section' },
+  return el('div', { class: 'decision-bar write-action', role: 'group', 'aria-label': 'Decide this section' },
     accept ? el('button', {
       class: 'btn btn-primary',
       type: 'button',
@@ -287,7 +287,7 @@ function decisionBar(section) {
 
 function chooseButton(section, candidate, label, canChoose, primary) {
   return el('button', {
-    class: primary ? 'btn btn-small btn-primary' : 'btn btn-small',
+    class: primary ? 'btn btn-small btn-primary write-action' : 'btn btn-small write-action',
     type: 'button',
     disabled: !canChoose,
     title: isRunning() ? 'Available when the run stops' : `${label}: the ${candidate.label.toLowerCase()}`,

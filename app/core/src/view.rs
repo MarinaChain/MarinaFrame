@@ -196,6 +196,7 @@ pub fn get_task(task: &Path, context: &ViewContext) -> Result<TaskView, String> 
         capacity_plan: crate::run_tables::read_capacity_plan(task),
         tank_model: crate::run_tables::tank_model_path(task).is_some(),
         structure_files: crate::run_tables::structure_files(task),
+        steel_records: crate::run_tables::steel_records(task),
         body_plan_check: crate::body_plan_check::read(task, &context.part_reviews),
         draft,
         sections,
@@ -387,23 +388,49 @@ fn model_view(task: &Path, build: &Value) -> Option<ModelView> {
     })
 }
 
+/// The drawing page the run read, as input to the worker (drawing pixels).
+const INPUT_PAGE: &str = "domain/input/source.png";
+
+/// The page image of the drawing pane. `width` and `height` are in drawing pixels, the
+/// units of section boxes and lines: a recorded page that is a scaled render of the input
+/// page (large scans are rendered at most 3000 px wide) keeps its image, and the UI draws it
+/// at the input page's size.
 fn source_page(task: &Path, domain: Option<&Value>) -> Option<SourcePage> {
     let recorded = domain
         .and_then(|d| d["inspection_artifacts"].as_array())
         .and_then(|list| list.iter().rev().find(|a| a["kind"] == "source_page"))
         .and_then(|a| a["path"].as_str());
-    [recorded, Some("domain/input/source.png")]
+    let input_size = crate::artifact::guard_artifact_path(task, INPUT_PAGE)
+        .ok()
+        .and_then(|_| files::png_size(&task.join(INPUT_PAGE)));
+    [recorded, Some(INPUT_PAGE)]
         .into_iter()
         .flatten()
         .find_map(|path| {
             crate::artifact::guard_artifact_path(task, path).ok()?;
-            let (width, height) = files::png_size(&task.join(path))?;
+            let image_size = files::png_size(&task.join(path))?;
+            let (width, height) = match input_size {
+                Some(input) if is_scaled_copy(image_size, input) => input,
+                _ => image_size,
+            };
             Some(SourcePage {
                 path: path.into(),
                 width,
                 height,
             })
         })
+}
+
+/// True when an image of `small` pixels is `large` scaled down evenly (the same shape, within
+/// one pixel of rounding on each side).
+fn is_scaled_copy(small: (u32, u32), large: (u32, u32)) -> bool {
+    let (small_w, small_h) = (f64::from(small.0), f64::from(small.1));
+    let (large_w, large_h) = (f64::from(large.0), f64::from(large.1));
+    if small_w <= 0.0 || small_h <= 0.0 || large_w <= small_w {
+        return false;
+    }
+    let scale = small_w / large_w;
+    (large_h * scale - small_h).abs() <= 1.0
 }
 
 // ---- sections and candidates ----

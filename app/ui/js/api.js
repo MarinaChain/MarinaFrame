@@ -10,7 +10,10 @@
 //              /api/events, one `task-changed` event per change with { task, sequence }.
 //              Uploads (the browser has no paths): POST /api/upload_spec?name= gives
 //              { spec_path }; POST /api/upload_drawing?name= gives { path }.
-//   3. Mock:   neither of the above. mock/backend.js, loaded with a dynamic import only in
+//   3. Static: <meta name="marinaframe-backend" content="static"> is present (the public web
+//              demo, docs/WEB_DEMO.md). static/backend.js, loaded with a dynamic import only in
+//              this case, answers read commands from exported files and refuses every change.
+//   4. Mock:   none of the above. mock/backend.js, loaded with a dynamic import only in
 //              this case, serves fixtures from mock/fixtures.json. The release UI leaves
 //              out ui/mock, so the desktop bundle carries no mock code or data.
 //
@@ -169,6 +172,10 @@ function httpTransport() {
 async function chooseTransport() {
   if (window.__TAURI__) return tauriTransport(window.__TAURI__);
   if (document.querySelector('meta[name="marinaframe-backend"][content="http"]')) return httpTransport();
+  if (document.querySelector('meta[name="marinaframe-backend"][content="static"]')) {
+    const { staticTransport } = await import('../static/backend.js');
+    return staticTransport();
+  }
   // Only the browser preview reaches this line; the desktop and web builds never load the mock.
   const { mockTransport } = await import('../mock/backend.js');
   return mockTransport();
@@ -176,8 +183,14 @@ async function chooseTransport() {
 
 const transport = await chooseTransport();
 
-/** "tauri", "http" or "mock". */
+/** "tauri", "http", "static" or "mock". */
 export const transportName = transport.name;
+
+/** True in the public web demo: runs are shown, nothing can be changed or started. */
+export const readOnly = transport.readOnly === true;
+
+/** What the demo says wherever a control that would change a run is left out. */
+export const READ_ONLY_NOTE = 'Demo: read-only. Install the desktop app to build your own.';
 
 /** Call one backend command. Rejects with BackendError. */
 export function invoke(command, args) {

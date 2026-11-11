@@ -148,3 +148,24 @@ fn structure_files_are_the_steel_tables_and_ocx_files() {
     assert_eq!(files[0].path, "structure/b_DRAFT.3docx");
     assert_eq!(files[0].bytes, 1);
 }
+
+#[test]
+fn steel_records_come_from_the_structure_folder() {
+    let tmp = tempfile::tempdir().unwrap();
+    let task = tmp.path().join("task");
+    assert!(steel_records(&task).is_none());
+    std::fs::create_dir_all(task.join(STRUCTURE_FOLDER)).unwrap();
+    assert!(steel_records(&task).is_none());
+    let records = serde_json::json!({"schema": "source-record/v1", "records": {
+        "bhd_fr07": {"kind": "read", "regions": [{"sheet": "ga.png", "page": 0, "view": "profile",
+            "box_px": [1.0, 2.0, 3.0, 4.0], "page_px": [10, 10]}]}}});
+    std::fs::write(
+        task.join(STRUCTURE_FOLDER)
+            .join("ship_DRAFT_source_records.json"),
+        records.to_string(),
+    )
+    .unwrap();
+    let found = steel_records(&task).unwrap();
+    assert_eq!(found["bhd_fr07"]["kind"], "read");
+    assert_eq!(found["bhd_fr07"]["regions"][0]["sheet"], "ga.png");
+}

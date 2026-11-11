@@ -1,0 +1,131 @@
+{
+  "purpose": "Runs the public web demo shows (scripts/build_web_demo.py, docs/WEB_DEMO.md). Public sources only; a drawing whose SHA-256 is not listed here fails the build.",
+  "runs": [
+    {
+      "slug": "gunnerus",
+      "name": "R/V Gunnerus",
+      "tagline": "Real ship, built from its drawings",
+      "licence": "owner-approved-display",
+      "source": "Lines plan of R/V Gunnerus (NTNU research vessel), rendered from its PDF.",
+      "credit": "R/V Gunnerus drawings: NTNU (Norwegian University of Science and Technology), used under licence.",
+      "drawing_sha256": [
+        "2acd43a729eeb15505ab8dd94d9acaef2d03cd2071d9869246aa8c0cfc25f56e"
+      ],
+      "file_stem": "R-V-Gunnerus",
+      "whole_vessel_first": true,
+      "section_lines": false,
+      "note": "Hull from the vector lines plan (DXF). The scanned-drawing reading of the bow (about Fr 46–62) is flagged for review.",
+      "extra_sheets": {
+        "root": "../../sources/gunnerus",
+        "sheets": [
+          {
+            "sheet": "polarkonsult/GA Gunnerus Rev1.dxf",
+            "sha256": "c443cb5f4ba8cbc4aeacd9b0bd53aa6ce3e36ee9c0b79f025512fd33ebac1bd5",
+            "role": "General arrangement"
+          },
+          {
+            "sheet": "polarkonsult/Lines Plan Rev0.dxf",
+            "sha256": "fd39569c94ed1b6a73d62016d9667186207c9e1d2574b005977de1d93015a667",
+            "role": "Lines plan"
+          },
+          {
+            "sheet": "polarkonsult/Profile and Plan Rev0.dxf",
+            "sha256": "b801d09ab425bd1d822f142fbaad40727702e3252a6e61a67caa20c589c7c322",
+            "role": "Profile and plan"
+          },
+          {
+            "sheet": "polarkonsult/Tank Plan Rev1.dxf",
+            "sha256": "014d1a1f05878abc4b3db4b8f0c9b0737035583abe4065647b53fe654d6c188f",
+            "role": "Tank plan"
+          },
+          {
+            "sheet": "polarkonsult/Midship Section Rev0.dxf",
+            "sha256": "6d405ce1cde4205ced86403375ddb3377b512e35591b5b86a3eb1850e062ef37",
+            "role": "Midship section"
+          },
+          {
+            "sheet": "polarkonsult/Shell Expansion Rev0.dxf",
+            "sha256": "ffde3aaee2141688c7dfd66251835c398b8bec4e49125ab52fd82108dc425f48",
+            "role": "Shell expansion"
+          },
+          {
+            "sheet": "extended/CJOB/Tank Arrangement Rev0.dxf",
+            "sha256": "17b7f7ec9890a60d1206d8ae73a057495e98ff978d6a4de37577a46809ccc94f",
+            "role": "Tank arrangement",
+            "dxf_boxes_view": "plan"
+          },
+          {
+            "sheet": "extended/CJOB/Construction Plan Longitudinal Section Rev0.dxf",
+            "sha256": "863b64b6fa8fa982c248d10e4afd0fcc11d870a4caecb69d388d29837ce48a46",
+            "role": "Construction plan, longitudinal section"
+          },
+          {
+            "sheet": "extended/CJOB/Construction Plan Transverse Section Rev0.dxf",
+            "sha256": "06e5e0a60bf220d6a5d1be3e3199f9b5b495c571938cfeb5059d3af4e0f35bdc",
+            "role": "Construction plan, transverse sections"
+          },
+          {
+            "sheet": "extended/CJOB/Construction Plan Deck and Double Bottom Rev0.dxf",
+            "sha256": "d9cf16b367612622391b9465dc054747ff803d349bb7d4982c04cbbe016ccb6b",
+            "role": "Construction plan, deck and double bottom"
+          }
+        ]
+      }
+    },
+    {
+      "slug": "concept-survey-launch",
+      "runs_folder": "../concept-survey-launch/runs",
+      "name": "Survey launch 24 m (concept preview)",
+      "tagline": "Concept preview: Survey launch",
+      "concept": true,
+      "licence": "generated-example",
+      "source": "Made-up vessel: the 3D model and its drawings were generated for this demo.",
+      "file_stem": "Survey-launch-concept",
+      "drawing_sha256": [
+        "0f398e36506451e753ddf8435ed86de1c2cbaefd8348dc1856c1c2e0cd636e8d",
+        "95a512c3c11703da82b5bb06936f3f1e4c42f1a14032bcad9cdc0299d7c5ea47",
+        "eceb2c129c31c5ff6321d14e5b17567fef87dad2dab31291789346c9f7d3a3d9",
+        "efce40af849aa2843c6364348f61090e89a499aa2342f725641060af639f88a9"
+      ],
+      "whole_vessel_first": true,
+      "section_lines": false,
+      "see_through": true
+    },
+    {
+      "slug": "dtmb5415-3v-L0",
+      "name": "DTMB 5415 (research hull)",
+      "licence": "mit",
+      "source": "Lines drawing generated from the DTMB 5415 surface of mathLab/WaveBEMapp-DTMB-5415 (MIT licence, (c) 2017 Marco Tezzele).",
+      "drawing_sha256": [
+        "90fd03a542cb698f2dbe0a7925eebc591b1cdccaa1f3cd09c3d99b2045bb0f8a"
+      ]
+    },
+    {
+      "slug": "series60-3v-L0",
+      "name": "Series 60 (research hull)",
+      "licence": "cc-by-3.0",
+      "source": "Lines drawing generated from the Series 60 example of the FreeCAD Ship workbench (s60.fcstd, CC BY 3.0, Jose Luis Cercos Pita).",
+      "drawing_sha256": [
+        "334b90cf0ddacea9b4454f9075506c85a2db686caacf81b6e9bc13e27d1a070d"
+      ]
+    },
+    {
+      "slug": "bue-girl",
+      "name": "BUE GIRL (HAER drawing)",
+      "licence": "public-domain-us-government",
+      "source": "BUE GIRL lines drawing, sheet 2: Historic American Engineering Record, Library of Congress item hhh.or0590 (US Government work, public domain).",
+      "drawing_sha256": [
+        "f8950140c4ff2683801363acd7e60c126fa322ad4e571dcceb6e39d9c9f12196"
+      ]
+    },
+    {
+      "slug": "sample-hull",
+      "name": "Sample hull (synthetic)",
+      "licence": "synthetic",
+      "source": "MarinaFrame's built-in sample drawing, made for the app.",
+      "drawing_sha256": [
+        "51c48ba18c7affe611655079c64b1dd2cbd0b5cb7102a8d3070bda519b842fb7"
+      ]
+    }
+  ]
+}

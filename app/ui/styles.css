@@ -3794,3 +3794,46 @@ body:not([data-costs="shown"]) :is(.workspace, .inspector) .cost-timing { displa
 }
 .model-guess-note[hidden] { display: none; }
 .model-guess-note .icon { width: 14px; height: 14px; flex: none; }
+
+/* ============================================================ Public web demo (docs/WEB_DEMO.md)
+   js/app.js sets [data-demo="read-only"] on <html> with the static backend. The demo shows
+   finished runs: every control that starts or changes a run is left out, and the backend
+   refuses those commands with "Demo: read-only" anyway. */
+.demo-intro, .demo-only { display: none; }
+[data-demo="read-only"] .demo-intro {
+  display: block; max-width: 68ch; margin: 0 0 var(--space-lg); color: var(--ink-2); font-size: var(--fs-md); line-height: 1.5;
+}
+[data-demo="read-only"] .demo-only { display: revert; }
+[data-demo="read-only"] :is(#new-vessel, #home-more, #drop-tile, #needs-row, #home-queue-link, #try-sample) { display: none; }
+.vessel-source { padding: 0 var(--space-xs); color: var(--ink-3); font-size: var(--fs-xs, 11px); line-height: 1.35; }
+.demo-pilot-link { margin-left: 4px; color: var(--brand); font-weight: 600; white-space: nowrap; }
+.export-downloads { display: inline-flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+.export-readonly { margin-top: var(--space-lg); color: var(--ink-2); }
+/* The demo writes no files: the outputs are a list, not choices. */
+[data-demo="read-only"] .export-toggle { pointer-events: none; }
+[data-demo="read-only"] .export-check { visibility: hidden; }
+.demo-run-note { display: none; }
+[data-demo-note] body[data-route="run"] .demo-run-note {
+  display: flex; align-items: center; position: absolute; inset: 0 0 auto 0; height: var(--demo-note-h); z-index: 5;
+  margin: 0; padding: 0 16px; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--ink-2);
+  font-size: var(--fs-sm); overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+[data-demo-note] body[data-route="run"] .demo-run-note[data-kind="concept"] {
+  border-bottom: 1px dashed var(--guess-ink); background: var(--guess-soft); color: var(--guess-text); font-weight: 600;
+}
+:root { --demo-note-h: 34px; }
+[data-demo-note] body[data-route="run"] #view-run { top: var(--demo-note-h); }
+.vessel-tagline { padding: 0 var(--space-xs); color: var(--ink); font-size: var(--fs-sm); font-weight: 600; }
+.demo-pilot-card { text-decoration: none; color: inherit; }
+.demo-pilot-thumb { display: grid; place-items: center; }
+.demo-pilot-stages { color: var(--brand); font-size: var(--fs-sm); font-weight: 600; line-height: 1.9; }
+/* Controls that change a run carry .write-action (js/parts.js and the run views); the demo has none. */
+[data-demo="read-only"] .write-action { display: none !important; }
+[data-demo-note] body[data-route="run"] .demo-run-note[data-kind="note"] { border-left: 3px solid var(--guess-ink); color: var(--ink); }
+/* A run note and its credit take up to two lines. */
+:root[data-demo-note="note"] { --demo-note-h: 48px; }
+[data-demo-note] body[data-route="run"] .demo-run-note[data-kind="note"] { white-space: normal; line-height: 1.35; }
+/* The web demo while a run's whole-vessel model loads (js/workspace.js prepareDemoView). */
+.pane-model.is-demo-loading .model-host { visibility: hidden; }
+.demo-model-loading { position: absolute; inset: 50% 0 auto 0; margin: 0; text-align: center; color: var(--ink-3); font-size: var(--fs-md); }
+.pane-model.is-demo-loading :is(.model-controls, .model-corner, .model-readout, .model-frame-labels, .model-caption) { visibility: hidden; }
