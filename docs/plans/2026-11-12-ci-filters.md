@@ -55,7 +55,7 @@ Files: `.github/workflows/ci.yml`; `.github/workflows/ci-watch.yml` only for con
 
 ## Resume point
 
-Resumed from WIP a6c4227. The saved classifier and workflow changes are present; do not recreate them. Baseline 43080449506 completed successfully at 8f0d026. Local classifier and workflow syntax checks passed. The full local quick tier is running. Next: finish review, reword the unpublished WIP, and push only after the quick tier passes. Then collect separate full, docs-only, and UI-only runs before cleanup.
+Resumed from WIP a6c4227 and preserved its implementation. Clean commits `e890dbc` and `fb87cea` are pushed to lane/ci-filters. The fresh local quick tier passed. Implementation push run `43095522151` is in progress. Next: collect that run, then push this docs-only checkpoint, a harmless UI-only comment, and dispatch a full run on this lane. Wait for each run before another push to avoid feature-run cancellation. Record results, push the final report after quick checks, then delete only this worktree's target/.
 
 ## Results
 
@@ -68,9 +68,10 @@ Resumed from WIP a6c4227. The saved classifier and workflow changes are present;
 - `actionlint` is not installed, so that check was not run.
 - Executed the actual detector Bash against isolated Git histories: **10 cases passed** (docs, UI, deleted whitespace path, multi-commit range, PR merge-base, new-branch fallback, missing history, main, continue/v0.5, manual dispatch).
 - Executed the actual aggregate Bash: **6 cases passed** (intentional skip accepted; failure, cancellation, failed/skipped detector, and skipped scan rejected).
-- Initial `make test-quick PY=/Users/jonathanjie/Documents/workspace/MarinaFrame/.venv/bin/python` completed with exit 0: **1,998 Python tests passed**, 84 CAD tests deselected; **269 UI tests passed**; Rust fmt, Clippy, quick tests, and secret scan passed (0 findings). A fresh quick-tier run is in progress after the audit-policy regression fix; no push until it passes.
+- Initial `make test-quick PY=/Users/jonathanjie/Documents/workspace/MarinaFrame/.venv/bin/python` completed with exit 0: **1,998 Python tests passed**, 84 CAD tests deselected; **269 UI tests passed**; Rust fmt, Clippy, quick tests, and secret scan passed (0 findings). The fresh quick tier after the audit-policy regression fix also completed with exit 0: **1,999 Python tests passed**, 84 deselected (543.91 seconds); **269 UI tests passed**; Rust checks and secret scan passed (0 findings). Only then was the lane pushed.
 - Stable pre-existing job IDs and display names checked against `8f0d026`; no new `continue-on-error`.
-- Live-run evidence: pending.
+- Docs-checkpoint local quick tier also passed; its commit/push was blocked by the subsequent remote-status check, not a local test failure.
+- Live-run evidence: pending. At 2026-11-11 21:45Z, both overlapping default `gh run watch` commands stopped with HTTP 403 (shared 5,000-request API limit). This does not establish CI failure. Stop three-second watchers; resume after the 21:56:55Z reset with sparse checks. Implementation run `43095522151` remains the target. No docs-only push has occurred yet.
 
 ### Limits fixed before live runs
 
