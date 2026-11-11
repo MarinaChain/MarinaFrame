@@ -208,3 +208,35 @@ def test_a_label_is_another_space_only_when_its_family_differs(first, second, sa
 
 def test_a_hoist_crane_is_not_a_cargo_crane():
     assert ga_labels.checked_kind("cargo_crane", "HOIST CRANE") == "other_space"
+
+
+
+def test_a_label_dropped_as_cut_is_read_again_from_a_wider_crop(tmp_path):
+    """The re-read of cut labels uses only the requests a ship has left, with new crop ids."""
+    path = _sheet(tmp_path, 0.0)
+    result = {"sources": {"ga": {"file": "S_GA.png"}}, "checks": [], "counts": {}, "views": [], "spaces": [],
+              "model_counts": {name: {"missing": "x"} for name in
+                               ("cargo_holds", "cargo_hatches", "cargo_cranes", "cargo_tanks", "slop_tanks",
+                                "container_bays")}}
+    fine_crops = [{"crop_id": "c07", "blob_px": [300, 300, 420, 360], "angle_deg": 0.0, "glyphs": 8,
+                   "box_px": [290, 290, 430, 370]}]
+    cut = {"id": "other_tank-c07-1", "label": "NO.3 W", "kind": "other_tank",
+           "source_record": {"kind": "read", "regions": [{"box_px": [290, 290, 430, 370]}]}}
+    fitting = {"id": "other_space-c07-2", "label": "PILOT LADDER", "kind": "other_space",
+               "source_record": {"kind": "read", "regions": [{"box_px": [290, 290, 430, 370]}]}}
+    asked = []
+
+    def call(request_dir, provider_dir):
+        crops = json.loads((request_dir / "request.json").read_text())["context"]["crops"]
+        asked.append([c["crop_id"] for c in crops])
+        return {"reply": {"ga_labels": {"crops": [{"crop_id": c["crop_id"], "evidence": "x", "labels": [
+            {"text": "NO.3 W.B.T. (P)", "kind": "ballast_tank", "number": "3P"}]} for c in crops]}}}
+
+    dropped = [(cut, "'W' is the start of a longer word printed on the sheet: the label is cut"),
+               (fitting, "a fitting or an opening, not a space")]
+    stats = ga_labels.reread_cut_labels(result, dropped, path, tmp_path / "reread", call, 1, fine_crops)
+    assert asked == [["c08"]]  # one crop (the fitting is not read again), numbered after the fine pass
+    assert stats["requests"] == 1 and [s["label"] for s in result["spaces"]] == ["NO.3 W.B.T. (P)"]
+    asked.clear()
+    assert ga_labels.reread_cut_labels(result, dropped, path, tmp_path / "none", call, 0, fine_crops)["requests"] == 0
+    assert asked == []

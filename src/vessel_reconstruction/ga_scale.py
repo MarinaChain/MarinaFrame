@@ -692,10 +692,17 @@ def prepare_extents(result: dict, sheet_path: Path, out: Path, missing: list[str
     for space in result["spaces"]:
         if space["status"] != "read" or (only_ids is not None and space["id"] not in only_ids):
             continue
-        if shared[tuple(space["source_record"]["regions"][0]["box_px"] or ())] > 1:
-            continue
+        in_shared_crop = shared[tuple(space["source_record"]["regions"][0]["box_px"] or ())] > 1
         entry = {"space_id": space["id"], "kind": space["kind"], "label": space["label"][:64]}
-        if space["view_id"] in boxes:
+        if space["view_id"] in boxes and in_shared_crop:
+            # Several labels were read from one crop of the fine pass: the place of this label
+            # in it is not known. The crop goes as "near" with the label text (round u8: 457
+            # read spaces, 48 of them fuel tanks, were never asked for).
+            entry.update(image_id=space["view_id"], at=None,
+                         near=tuple(space["source_record"]["regions"][0]["box_px"]))
+        elif in_shared_crop:
+            continue
+        elif space["view_id"] in boxes:
             region = space["source_record"]["regions"][0]["box_px"]
             # The label centre in sheet pixels; it is put in image pixels once the image size is known.
             entry.update(image_id=space["view_id"],
@@ -711,11 +718,18 @@ def prepare_extents(result: dict, sheet_path: Path, out: Path, missing: list[str
     if not spaces:
         return []
     order = {kind: index for index, kind in enumerate(EXTENT_PRIORITY)}
+    # Stable: within a kind, labels with a known place first, then reading order.
     spaces.sort(key=lambda entry: order.get(entry["kind"], len(order)))  # stable: reading order within a kind
-    spaces = spaces[:min(MAX_SPACES, EXTENT_SPACES_PER_REQUEST * MAX_EXTENT_REQUESTS)]
+    # Labels with a known place and labels from a shared crop ("near") go in separate requests,
+    # the known ones first: mixed in one request, the model marked most boxes "uncertain"
+    # (round u9n: outline boxes fell from 23 of 52 to 10 of 77 on one ship).
+    known = [entry for entry in spaces if "near" not in entry]
+    near = [entry for entry in spaces if "near" in entry]
+    chunks = ([known[i:i + EXTENT_SPACES_PER_REQUEST] for i in range(0, len(known), EXTENT_SPACES_PER_REQUEST)]
+              + [near[i:i + EXTENT_SPACES_PER_REQUEST] for i in range(0, len(near), EXTENT_SPACES_PER_REQUEST)])
+    chunks = chunks[:MAX_EXTENT_REQUESTS]
     directories = []
-    for index in range(0, len(spaces), EXTENT_SPACES_PER_REQUEST):
-        chunk = spaces[index:index + EXTENT_SPACES_PER_REQUEST]
+    for index, chunk in enumerate(chunks):
         want = ["extents", "points"] if index == 0 else ["extents"]
         note = None
         if index == 0 and missing:
@@ -737,13 +751,21 @@ def prepare_extents(result: dict, sheet_path: Path, out: Path, missing: list[str
                     entry = {**entry, "at": in_image(entry["at"])}
                     if "exclude" in entry:
                         entry["exclude"] = [{**other, "at": in_image(other["at"])} for other in entry["exclude"]]
+                if entry.get("near") is not None:
+                    (left, top, right, bottom), _ = boxes[entry["image_id"]]
+                    width, height = sizes[entry["image_id"]]
+                    near = entry["near"]
+                    entry = {**entry, "near": [round((near[0] - left) * width / (right - left)),
+                                               round((near[1] - top) * height / (bottom - top)),
+                                               round((near[2] - left) * width / (right - left)),
+                                               round((near[3] - top) * height / (bottom - top))]}
                 placed.append(entry)
             context = {"want": want, "spaces": placed}
             if note:
                 context["missing"] = note
             return context
 
-        directory = out if index == 0 else out.with_name(f"{out.name}-{index // EXTENT_SPACES_PER_REQUEST + 1}")
+        directory = out if index == 0 else out.with_name(f"{out.name}-{index + 1}")
         _write_request(plan, sheet_path, directory, context)
         directories.append(directory)
     return directories
@@ -1124,6 +1146,9 @@ def read_extents(result: dict, work: dict, reading: dict, request_dir: Path) -> 
             extent["y_m"] = [round(sides[0], 2), round(sides[1], 2)]
             extent["status"]["y"] = status
         region = (space["source_record"].get("regions") or [{}])[0].get("box_px")
+        if region and sum((s["source_record"].get("regions") or [{}])[0].get("box_px") == region
+                          for s in result["spaces"]) > 1:
+            region = None  # read from a crop shared with other labels: its own place is not known
         if region:
             # Where the label of this space is printed, in the metres of the extent (overlap rules).
             cx, cy = (region[0] + region[2]) / 2, (region[1] + region[3]) / 2
@@ -1137,9 +1162,69 @@ def read_extents(result: dict, work: dict, reading: dict, request_dir: Path) -> 
             side = ("port" if low >= -CENTRE_TOLERANCE_M else "starboard" if high <= CENTRE_TOLERANCE_M else "centre")
         if side:
             extent["side"] = side
+        if entry.get("outline"):
+            def to_metres(px, py, axis=axis, named=named, view=view):
+                if "z_m" in extent:
+                    return [round(axis.x_m(px), 2), round((named["base_line"][1] - py) / abs(axis.px_per_m), 2)]
+                return [round(axis.x_m(px), 2), round(sign * (named["centre_line"][1] - py) / abs(axis.px_per_m), 2)]
+
+            points_px = [_to_sheet(tile, x, y) for x, y in entry["outline"]]
+            reason = _outline_problem(points_px, extent["outline_box_px"], space, result["spaces"], view)
+            if reason is None and ("z_m" in extent or "y_m" in extent):
+                extent["outline"] = {"plane": "xz" if "z_m" in extent else "xy",
+                                     "points_m": [to_metres(x, y) for x, y in points_px],
+                                     "points_px": [[round(x, 1), round(y, 1)] for x, y in points_px],
+                                     "status": OUTLINE_STATUS}
+                stats["outlines"] = stats.get("outlines", 0) + 1
+            else:
+                result["checks"].append({"code": "outline_dropped", "status": "dropped", "label": space["label"][:64],
+                                         "reason": reason or "the view has no base line or centre line"})
         space["extent"] = extent
         stats["with_extent"] += 1
     return stats
+
+
+# An outline is a trace of the drawn boundary by the model: its points are placed with the
+# frame scale but the trace itself is not measured, so it has its own status and changes no
+# axis status (PM decision, 2026-11-12).
+OUTLINE_STATUS = "traced"
+# Points of an outline may lie this far outside its box (pixels of the sheet) for the line width.
+OUTLINE_BOX_TOLERANCE_PX = 3.0
+
+
+def _inside_polygon(point, polygon) -> bool:
+    """Whether ``point`` lies inside ``polygon`` (even-odd rule)."""
+    x, y = point
+    inside = False
+    for (x0, y0), (x1, y1) in zip(polygon, polygon[1:] + polygon[:1]):
+        if (y0 > y) != (y1 > y) and x < x0 + (y - y0) * (x1 - x0) / (y1 - y0):
+            inside = not inside
+    return inside
+
+
+def _outline_problem(points, box, space: dict, spaces: list[dict], view: str) -> str | None:
+    """Why an outline is not kept, or None: it must lie inside its box, hold the space's own
+    label and hold no other label of the view (a label of the same family or a note of the same
+    kind is the same space, as for the boxes)."""
+    left, top, right, bottom = box
+    tolerance = OUTLINE_BOX_TOLERANCE_PX
+    if not all(left - tolerance <= x <= right + tolerance and top - tolerance <= y <= bottom + tolerance
+               for x, y in points):
+        return "the outline leaves its box"
+    own = _label_centre(space)
+    if own is None or not _inside_polygon(own, points):
+        return "the outline does not hold the space's own label"
+    for other in spaces:
+        if other is space or other["status"] != "read" or other.get("view_id") != view:
+            continue
+        if label_family(other["label"]) == label_family(space["label"]):
+            continue
+        if other["kind"] == space["kind"] and other["kind"] not in ("other_space", "other_tank"):
+            continue
+        centre = _label_centre(other)
+        if centre is not None and _inside_polygon(centre, points):
+            return f"the outline holds the label of '{other['label'][:40]}'"
+    return None
 
 
 # Overlap rules: a box that takes in a labelled neighbour (lane W, round u4r: holds lost 80-92 % of
@@ -1356,6 +1441,15 @@ def resolve_overlaps(result: dict) -> dict:
         stats["guessed"] += 1
         result["checks"].append({"code": "extent_covers_a_labelled_neighbour", "status": "changed",
                                  "label": f"{spaces[big_id]['label'][:30]} / {neighbours[0]['label'][:30]}"})
+    # An outline traced inside the first box no longer fits a box the rules changed.
+    for space in result["spaces"]:
+        extent = space.get("extent") or {}
+        changed = (extent.get("trimmed_by") or extent.get("covers") or extent.get("projection_of")
+                   or (extent.get("basis") == "outline" and "guessed" in extent.get("status", {}).values()))
+        if "outline" in extent and changed:
+            extent.pop("outline")
+            result["checks"].append({"code": "outline_dropped", "status": "dropped", "label": space["label"][:64],
+                                     "reason": "the overlap rules changed its box"})
     return stats
 
 
@@ -1735,16 +1829,30 @@ def _split_pair(entry: dict) -> list[dict]:
     low, high = extent["y_m"]
     if low < -CENTRE_TOLERANCE_M and high > CENTRE_TOLERANCE_M:
         # Boxed across the centreline: the label says two tanks, split at the centreline.
-        return [{**entry, "id": f"{entry['id']}-p", "extent": {**extent, "side": "port", "y_m": [0.0, high]}},
-                {**entry, "id": f"{entry['id']}-s", "extent": {**extent, "side": "starboard", "y_m": [low, 0.0]}}]
+        halves = _without_outline(extent, "xy")
+        return [{**entry, "id": f"{entry['id']}-p", "extent": {**halves, "side": "port", "y_m": [0.0, high]}},
+                {**entry, "id": f"{entry['id']}-s", "extent": {**halves, "side": "starboard", "y_m": [low, 0.0]}}]
     boxed = "port" if low >= -CENTRE_TOLERANCE_M else "starboard"
     other = "starboard" if boxed == "port" else "port"
     first = {**entry, "id": f"{entry['id']}-{boxed[0]}", "extent": {**extent, "side": boxed}}
     mirror_extent = {**extent, "side": other, "y_m": [round(-high, 2), round(-low, 2)],
                      "status": {**extent["status"], "y": "guessed"},
                      "y_note": "mirror of the other tank of the pair about the centreline"}
+    if extent.get("outline_m"):
+        mirror_extent["outline_m"] = [
+            {**outline, "points": [[x, round(-v, 2)] for x, v in outline["points"]], "status": "guessed"}
+            if outline["plane"] == "xy" else outline for outline in extent["outline_m"]]
     second = {**entry, "id": f"{entry['id']}-{other[0]}", "extent": mirror_extent}
     return [first, second]
+
+
+def _without_outline(extent: dict, plane: str) -> dict:
+    """The extent without its outline in ``plane`` (an axis of that plane was changed)."""
+    kept = [outline for outline in extent.get("outline_m", []) if outline["plane"] != plane]
+    extent = {key: value for key, value in extent.items() if key != "outline_m"}
+    if kept:
+        extent["outline_m"] = kept
+    return extent
 
 
 def _footprint_share(a: dict, b: dict) -> float:
@@ -1792,6 +1900,14 @@ def _joined(plan: dict | None, profile: dict | None) -> dict:
         extent["side"] = side
     if profile and profile["extent"].get("projection_of"):
         extent["projection_of"] = profile["extent"]["projection_of"]
+    # Optional traces of a boundary that is not a rectangle: x and z from the profile, x and y
+    # from the plan (lane W's builder may ignore them; an entry without them is as before).
+    outlines = [{"plane": source["extent"]["outline"]["plane"], "points": source["extent"]["outline"]["points_m"],
+                 "status": source["extent"]["outline"]["status"]}
+                for source, plane in ((profile, "xz"), (plan, "xy"))
+                if source and source["extent"].get("outline", {}).get("plane") == plane]
+    if outlines:
+        extent["outline_m"] = outlines
     regions = [region for space in (plan, profile) if space
                for region in space["source_record"].get("regions", [])][:source_record.MAX_REGIONS]
     return {"id": first["id"], "kind": first["kind"], "label": first["label"], "number": first.get("number"),
@@ -1964,7 +2080,8 @@ def _deck_equipment_on_the_deck(spaces: list[dict], particulars: dict) -> list[d
         extent = space.get("extent") or {}
         z = extent.get("z_m")
         if space["kind"] in DECK_EQUIPMENT and z and z[0] > depth + DECK_EQUIPMENT_GAP_M:
-            extent = {**extent, "z_m": [round(depth, 2), z[1]], "status": {**extent["status"], "z": "guessed"},
+            extent = {**_without_outline(extent, "xz"), "z_m": [round(depth, 2), z[1]],
+                      "status": {**extent["status"], "z": "guessed"},
                       "z_note": "the box began above the deck; extended down to the deck it stands on"}
             space = {**space, "extent": extent}
         kept.append(space)
@@ -1984,7 +2101,7 @@ def _centred_when_off_centre(spaces: list[dict], particulars: dict) -> list[dict
         on_centre = space["kind"] == "cargo_hold" or extent.get("side") in ("centre", "both")
         if y and on_centre and abs(y[0] + y[1]) > OFF_CENTRE_SHARE * breadth:
             half = min((y[1] - y[0]) / 2, breadth / 2)
-            extent = {**extent, "y_m": [round(-half, 2), round(half, 2)],
+            extent = {**_without_outline(extent, "xy"), "y_m": [round(-half, 2), round(half, 2)],
                       "status": {**extent.get("status", {}), "y": "guessed"},
                       "y_note": "boxed off the centreline; centred with the same breadth"}
             space = {**space, "extent": extent}

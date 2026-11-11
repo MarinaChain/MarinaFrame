@@ -332,7 +332,7 @@ def _write_request(directory: Path, pages: list, by_id: dict, sheet: Image.Image
 
 
 def prepare(sheet_path: Path, candidates: list[Candidate], out: Path,
-            max_requests: int = MAX_FINE_REQUESTS, call=None) -> tuple[list[dict], list[dict]]:
+            max_requests: int = MAX_FINE_REQUESTS, call=None, first_crop: int = 1) -> tuple[list[dict], list[dict]]:
     """Write (and with ``call`` send) the ``ga_labels`` requests; return (crop map, readings).
 
     Crops go out in priority order, one request after the other, up to ``max_requests``. A crop
@@ -341,7 +341,7 @@ def prepare(sheet_path: Path, candidates: list[Candidate], out: Path,
     row per crop sent, with the last request that showed it.
     """
     sheet = Image.open(sheet_path).convert("L")
-    by_id = {f"c{index + 1:02d}": c for index, c in enumerate(candidates)}
+    by_id = {f"c{index + first_crop:02d}": c for index, c in enumerate(candidates)}
     images = {crop_id: crop_image(sheet, c) for crop_id, c in by_id.items()}
     source_sha = hashlib.sha256(Path(sheet_path).read_bytes()).hexdigest()
     pending, asked_again = list(by_id), set()
@@ -472,6 +472,67 @@ def merge(result: dict, crop_map: list[dict], readings: list[dict], sheet_name: 
     finish_counts(result)
     return {"crops": len(crop_map), "answered": sum(c["crop_id"] in answers for c in crop_map),
             "spaces_added": added, "requests": len(readings)}
+
+
+# A dropped label whose reason says it was cut may be read whole from a wider crop.
+CUT_REASONS = ("the label is cut", "unclosed parenthesis", "start of a longer word", "single letter",
+               "the end of the label", "a part of the label")
+# The wider crop: the label's blob with this many glyph heights more on every side.
+REREAD_PAD_GLYPHS = 6.0
+# Crop ids are "c" and at most three digits (the ga_labels contract).
+MAX_CROP_NUMBER = 999
+
+
+def reread_cut_labels(result: dict, dropped: list[tuple[dict, str]], sheet_path: Path, out: Path, call,
+                      max_requests: int, fine_crops: list[dict]) -> dict:
+    """Read the labels dropped as cut once more from wider crops, within the requests left.
+
+    ``dropped`` is (space, reason) from ``drop_fragments``; ``fine_crops`` the crop map of the
+    fine pass (a fine-pass label keeps its blob's direction and size). New labels join the
+    spaces as in the fine pass; the caller drops fragments again.
+    """
+    stats = {"cut_labels": 0, "crops": 0, "requests": 0, "spaces_added": 0}
+    rows = {row["crop_id"]: row for row in fine_crops}
+    candidates, seen = [], set()
+    for space, reason in dropped:
+        if not any(words in reason for words in CUT_REASONS):
+            continue
+        stats["cut_labels"] += 1
+        match = re.search(r"-(c\d+)-\d+$", space["id"])
+        row = rows.get(match[1]) if match else None
+        if row:
+            left, top, right, bottom = row["blob_px"]
+            angle, glyphs = row["angle_deg"], row["glyphs"]
+        else:
+            box = (space["source_record"].get("regions") or [{}])[0].get("box_px")
+            if not box:
+                continue
+            left, top, right, bottom = box
+            angle, glyphs = 0.0, 3
+        # The glyph height: the short side of a level blob; a diagonal blob's short side holds
+        # more than one glyph height, so half of it.
+        short_side = min(right - left, bottom - top)
+        glyph = max(MIN_GLYPH_PX, short_side if abs(angle) <= LEVEL_TOLERANCE_DEG else short_side / 2)
+        key = (round(left), round(top), round(right), round(bottom))
+        if key in seen:
+            continue
+        seen.add(key)
+        pad = REREAD_PAD_GLYPHS * glyph
+        candidates.append(Candidate(box=(int(left - pad), int(top - pad), int(right + pad), int(bottom + pad)),
+                                    angle_deg=angle, glyphs=glyphs, glyph_height=float(glyph)))
+    first = 1 + max([int(row["crop_id"][1:]) for row in fine_crops] or [0])
+    candidates = candidates[:max(0, MAX_CROP_NUMBER - first + 1)]
+    if not candidates or max_requests < 1:
+        return stats
+    sheet = Image.open(sheet_path)
+    candidates = [Candidate(box=(max(0, c.box[0]), max(0, c.box[1]), min(sheet.width, c.box[2]),
+                                 min(sheet.height, c.box[3])), angle_deg=c.angle_deg, glyphs=c.glyphs,
+                            glyph_height=c.glyph_height) for c in candidates]
+    crop_map, readings = prepare(sheet_path, candidates, out, max_requests, call, first_crop=first)
+    write_json(Path(out) / "crops.json", {"crops": crop_map})
+    merged = merge(result, crop_map, readings, Path(sheet_path).name, [sheet.width, sheet.height])
+    stats.update(crops=len(crop_map), requests=len(readings), spaces_added=merged.get("spaces_added", 0))
+    return stats
 
 
 def fine_pass(result: dict, sheet_path: Path, out: Path, call, max_requests: int = MAX_FINE_REQUESTS) -> dict:

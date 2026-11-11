@@ -195,6 +195,18 @@ requests a ship; **off by default**, so the exam run is unchanged.
    direction. W's gate fails a box guessed on every axis that breaks these limits.
    Deck names ("UPPER DECK"), notes ("FOLDING TYPE"), access hatches ("A/H"), and an untyped
    label that is a numbered tank read without its number are not spaces.
+   **Re-read of cut labels** (PM priority 3): a label dropped as cut (an unclosed parenthesis, a
+   cut word, the start or end of a longer label) is read once more from a wider crop (6 glyph
+   heights more on every side, in the direction of the first crop), only with the requests the
+   ship has left under its ceiling of 6 (coarse and fine passes together); a whole label joins
+   the spaces as in the fine pass and the fragment rules run again. Nine of the 14 development
+   ships use the whole ceiling already, so it reads labels on the others only.
+   **Labels from a shared crop** (round u8): several labels read from one crop of the fine
+   pass share its region, so the place of each is not known; they used to be left out of the
+   extents requests (457 read spaces on the 14 ships, 48 of them fuel tanks). They are now asked
+   with the crop as `near` and the label text, in requests of their own after the labels with a
+   known place (mixed in one request, the model marked most boxes "uncertain": round u9n), and
+   get no label place for the overlap rules.
    **Local frame spacings** (review round 4): a spacing printed for one frame inside a range of
    another ("1200" between close bulkheads in a range of 800) is a one-frame interval of the
    table when the frame numbers around it show the extra length; otherwise the scale is refused
@@ -526,6 +538,16 @@ Observed cost is 0 in every round (subscription).
   spaces and extents on most ships; one ship has fewer spaces (accommodation rooms the fine pass
   did not read this time) and one lost its two fuel-tank extents (run-to-run variance); both are
   open.
+- Live samples `u9s` (outlines; 4 ships, 45 requests) and `u9n2` (labels from a shared crop and
+  the re-read of cut labels; 4 ships, 36 requests). Outlines: the model gave 26, the checks kept
+  14 and dropped 11 with a reason (4 held another space's label); a kept outline follows a
+  sloped boundary that the box could not (a forepeak along the stem, a cargo tank beside a
+  tapered wing tank). Labels from a shared crop: extents per ship rose by about half on the
+  ships with a scale (for example 41 -> 70); the depth stayed measured. The re-read used one
+  request left under the ceiling on one ship and added 8 spaces. Gate: pass on all 8 ship runs.
+  One ship lost its frame scale in u9n2: all three scale replies read a printed "800" as "600",
+  which its frame numbers contradict, so the scale was refused (run-to-run variance in the
+  reading of small print; the same ship read correctly in u8).
 
 ## Proposal (not built; PM 2026-11-12): printed sizes as a check of extents
 
@@ -537,18 +559,41 @@ measured length and breadth; a difference above 0.5 m or 3 % would make that axi
 with a check entry. The geometry would not be replaced by the printed value. This changes the
 model contract (Rust `ScaleReply`, CLI schema, prompt), so it waits for a PM decision.
 
-## Proposal (not built; for a PM decision): outlines for sloped and tapered boundaries
+## Outlines for sloped and tapered boundaries (PM decision 2026-11-12: approved, conditions)
 
 Astra round 5 has 68 extent findings; most are rectangles where the drawn boundary slopes or
-tapers (bow and stern tanks, hopper and topside tanks, cargo tanks beside tapered wing tanks).
-A box cannot follow such a boundary. Proposal: an optional `outline` per extent in the
-`ga_scale` reply, 3 to 8 points of the drawn boundary in image pixels, asked only for a space
-whose boundary is not a rectangle. Code turns the points into metres of the view (x and z in
-a profile, x and y in a plan), keeps the box as the bounding box, and checks that the outline
-lies inside the box, holds the space's own label and holds no other label (else the outline is
-dropped). The arrangement input would get an optional `outline_m` beside `x_m`, `y_m` and
-`z_m`. This changes the model contract (Rust `ScaleReply`, CLI schema, prompt) and lane W's
-input (docs/GA_ARRANGEMENT_INPUT.md), so it waits for a PM decision.
+tapers (bow and stern tanks, hopper and top-side tanks, tanks beside the narrowing hull).
+
+- **Contract** (`rust-control/src/ga_reading.rs`): an extent of the `ga_scale` reply may carry
+  `outline`, 3 to 8 points [x, y] on its image, asked only for a space whose drawn boundary is
+  not a rectangle. It is optional in the CLI schema; the strict parse still refuses unknown
+  keys; an outline with too few or too many points or a point off its image is dropped alone
+  (the box stays) and counted in `refused`. No extra request: the outline comes in the same
+  extents requests (the per-ship ceiling and the exam budget are unchanged).
+- **Checks** (`_outline_problem`): the outline is kept only when it lies inside its box (3 px for
+  the line width), holds the space's own label and holds no other label of the view (a label of
+  the same family, or a note of the same kind, is the same space, as for the boxes); otherwise
+  it is dropped with a reason in `checks` (`outline_dropped`). An outline whose box the overlap
+  rules changed (trimmed, guessed, a projection) is dropped too.
+- **Status:** an outline is a trace by the model; its points are placed with the frame scale,
+  but it has its own status `traced` and changes no axis status. The mirrored outline of the
+  other tank of a pair is `guessed`.
+- **Arrangement input:** an optional `outline_m` list per space extent; each item is
+  `{"plane": "xz" | "xy", "points": [[x, z or y], ...], "status": "traced" | "guessed"}` (x
+  and z from a profile, x and y from a plan, metres). It is given only when an outline was kept;
+  a step that changes an axis (a pair split at the centreline, a centred off-centre space, a
+  crane brought down to the deck) drops the outline of that plane. An input without
+  `outline_m` is exactly as before (test, and the 13 replayed development ships are unchanged
+  byte for byte). Lane W's builder ignores the field until W adopts it.
+
+Text for `docs/GA_ARRANGEMENT_INPUT.md` (lane W's file, on lane W's branch; to apply when W
+adopts the field):
+
+> `extent.outline_m` (optional, list): traces of a boundary that is not a rectangle. Each item
+> has `plane` (`xz` from the profile, `xy` from a plan), `points` (3 to 8 [x, z] or [x, y] in
+> metres, in order) and `status` (`traced`, or `guessed` for the mirror of a pair). The points
+> lie inside the extent's box. A builder that does not read `outline_m` builds the box as
+> before.
 
 ## Resume point
 

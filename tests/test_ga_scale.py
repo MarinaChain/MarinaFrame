@@ -323,7 +323,7 @@ def test_the_exam_run_does_not_measure_by_default(tmp_path):
     assert calls == ["ga_reading"] and "measured" not in result
 
 
-def test_a_space_listed_twice_in_one_view_is_one_space_and_shared_label_crops_are_not_asked(tmp_path):
+def test_a_space_listed_twice_in_one_view_is_one_space_and_shared_label_crops_are_asked_near(tmp_path):
     result = _result(tmp_path)
     twin = json.loads(json.dumps(next(s for s in result["spaces"] if s["id"] == "cargo_hold-001")))
     twin["id"], twin["found_by"] = "cargo_hold-c01-1", "fine"
@@ -334,9 +334,26 @@ def test_a_space_listed_twice_in_one_view_is_one_space_and_shared_label_crops_ar
         room.update(id=f"other_space-c02-{name}", label=name)
         room["source_record"]["regions"][0]["box_px"] = [500.0, 1000.0, 600.0, 1050.0]
         result["spaces"].append(room)
-    gs.prepare_extents(result, tmp_path / "S-1_GA.png", tmp_path / "extents")
-    asked = json.loads((tmp_path / "extents" / "request.json").read_text())["context"]["spaces"]
-    assert not any(s["label"] in ("GALLEY", "MESS") for s in asked)
+    directories = gs.prepare_extents(result, tmp_path / "S-1_GA.png", tmp_path / "extents")
+    asked = [s for d in directories for s in json.loads((d / "request.json").read_text())["context"]["spaces"]]
+    # Asked with the crop as "near" and no label place (round u8: such spaces were never asked).
+    shared = [s for s in asked if s["label"] in ("GALLEY", "MESS")]
+    assert len(shared) == 2 and all(s["at"] is None and len(s["near"]) == 4 for s in shared)
+    assert asked.index(shared[0]) > asked.index(next(s for s in asked if s["label"] == "STORE"))
+
+
+def test_labels_with_a_known_place_and_labels_near_a_crop_go_in_separate_requests(tmp_path):
+    """Round u9n: mixed in one request, the model marked most boxes uncertain."""
+    result = _result(tmp_path)
+    for index in range(gs.EXTENT_SPACES_PER_REQUEST + 3):
+        room = json.loads(json.dumps(next(s for s in result["spaces"] if s["id"] == "other_space-006")))
+        room.update(id=f"other_space-c02-{index}", label=f"ROOM {index}")
+        room["source_record"]["regions"][0]["box_px"] = [500.0, 1000.0, 600.0, 1050.0]
+        result["spaces"].append(room)
+    directories = gs.prepare_extents(result, tmp_path / "S-1_GA.png", tmp_path / "extents")
+    kinds = [{"near" in s for s in json.loads((d / "request.json").read_text())["context"]["spaces"]}
+             for d in directories]
+    assert kinds == [{False}, {True}, {True}]
     for space in result["spaces"]:
         if space["kind"] == "cargo_hold" and space["view_id"] == "v1":
             space["extent"] = {"frames": [80, 120], "x_m": [62.0, 94.0], "z_m": [2.0, 15.0], "view_id": "v1",
@@ -1088,3 +1105,75 @@ def test_a_clean_scale_reply_is_read_alone_when_the_earlier_marks_spoil_it(tmp_p
 
     gs.scale_pass(result, tmp_path / "S-1_GA.png", tmp_path / "scale", call)
     assert attempts == ["scale", "scale-2"] and result["frames"]["status"] == "read"
+
+
+
+def _outline_run(tmp_path, outline_px):
+    """The test sheet with an outline traced for the port ballast tank of the tank-top plan."""
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    result = _result(tmp_path)
+
+    def call(request_dir, provider_dir):
+        if request_dir.name != "extents":
+            return _scale_reply(request_dir)
+        reply = _extent_reply(request_dir)
+        if outline_px is not None:
+            for entry in reply["reply"]["ga_scale"]["extents"]:
+                if entry["space_id"] == "ballast_tank-004":
+                    entry["outline"] = [list(_image_xy(request_dir, "v2", x, y)) for x, y in outline_px]
+        return reply
+
+    gs.scale_pass(result, tmp_path / "S-1_GA.png", tmp_path / "scale", call)
+    result["particulars"] = {}
+    tank = next(s for s in result["spaces"] if s["id"] == "ballast_tank-004")
+    return result, tank
+
+
+TAPERED = [(_px(80), 922.0), (_px(120), 922.0), (_px(120), 1095.0), (_px(84), 1095.0)]
+
+
+def test_an_outline_traced_in_its_box_is_kept_as_a_trace():
+    """PM decision 2026-11-12: an optional outline for a boundary that is not a rectangle."""
+    import tempfile
+    result, tank = _outline_run(Path(tempfile.mkdtemp()), TAPERED)
+    outline = tank["extent"]["outline"]
+    assert outline["plane"] == "xy" and outline["status"] == "traced" and len(outline["points_m"]) == 4
+    assert tank["extent"]["status"]["y"] == gs.MEASURED  # the trace adds no measured status
+    entry = next(s for s in gs.arrangement_input(result, "S-1")["spaces"] if s["label"] == "NO.2 W.B.T. (P)")
+    assert entry["extent"]["outline_m"][0]["plane"] == "xy"
+
+
+@pytest.mark.parametrize("outline_px, reason", [
+    # Down over the centreline to the hold's label: it takes in a labelled neighbour.
+    ([(_px(80), 922.0), (_px(120), 922.0), (_px(120), 1102.0), (_px(80), 1102.0)], "holds the label of"),
+    ([(_px(70), 922.0), (_px(120), 922.0), (_px(120), 1095.0)], "leaves its box"),
+    ([(_px(80), 990.0), (_px(120), 990.0), (_px(120), 1095.0)], "own label"),
+])
+def test_an_outline_that_takes_in_a_neighbours_label_or_leaves_its_box_is_dropped(tmp_path, outline_px, reason):
+    result, tank = _outline_run(tmp_path, outline_px)
+    assert "outline" not in tank["extent"] and "extent" in tank
+    assert any(c["code"] == "outline_dropped" and reason in c["reason"] for c in result["checks"])
+
+
+def test_an_arrangement_input_without_outlines_is_as_before(tmp_path):
+    plain, _ = _outline_run(tmp_path / "a", None)
+    traced, _ = _outline_run(tmp_path / "b", TAPERED)
+
+    def without_outlines(data):
+        for space in data["spaces"]:
+            space.get("extent", {}).pop("outline_m", None)
+        return data["spaces"]
+
+    assert not any("outline_m" in s.get("extent", {}) for s in gs.arrangement_input(plain, "S-1")["spaces"])
+    assert without_outlines(gs.arrangement_input(traced, "S-1")) == gs.arrangement_input(plain, "S-1")["spaces"]
+
+
+def test_the_mirror_of_a_traced_tank_gets_the_mirrored_outline():
+    entry = {"id": "t", "kind": "ballast_tank", "label": "NO.2 W.B.T. (P&S)", "number": "2", "status": "read",
+             "extent": {"x_m": [10.0, 20.0], "y_m": [5.0, 15.0], "side": "both", "status": {"x": "m", "y": "m"},
+                        "outline_m": [{"plane": "xy", "points": [[10.0, 5.0], [20.0, 5.0], [20.0, 15.0]],
+                                       "status": "traced"}]}}
+    first, second = gs._split_pair(entry)
+    assert first["extent"]["outline_m"][0]["points"][2] == [20.0, 15.0]
+    assert second["extent"]["outline_m"][0]["points"][2] == [20.0, -15.0]
+    assert second["extent"]["outline_m"][0]["status"] == "guessed"

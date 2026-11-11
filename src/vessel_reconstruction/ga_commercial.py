@@ -648,7 +648,7 @@ def fragment_reason(space: dict, others: list[dict], vocabulary: set[str],
     return None
 
 
-def drop_fragments(result: dict) -> int:
+def drop_fragments(result: dict, removed_out: list | None = None) -> int:
     """Remove spaces whose label is a piece of a label (lane W: "NO. 4", "NO. 2 CARG", "GEAR").
 
     Each removal is listed in ``checks`` (``fragment_label_dropped``) with its reason; counts are
@@ -663,6 +663,8 @@ def drop_fragments(result: dict) -> int:
         reason = fragment_reason(space, others, vocabulary, whole_labels)
         if reason:
             removed.append(space)
+            if removed_out is not None:
+                removed_out.append((space, reason))
             result["checks"].append({"code": "fragment_label_dropped", "status": "dropped",
                                      "label": space["label"][:64], "reason": reason[:160]})
     for space in removed:
@@ -844,7 +846,28 @@ def read_one(ga: Path | None, particulars: Path | None, out: Path, binary: Path,
             result["usage"] = add_usage(result["usage"], usage_of(fine_reading))
         result["passes"]["fine"] = stats
     if reading.get("reply") is not None:
-        result["passes"]["fragments_dropped"] = drop_fragments(result)
+        dropped: list = []
+        result["passes"]["fragments_dropped"] = drop_fragments(result, dropped)
+        fine_stats = result["passes"].get("fine") or {}
+        left = max_requests - 1 - fine_stats.get("requests", 0)
+        crops_path = out / "fine" / "crops.json"
+        if fine and ga is not None and left > 0 and crops_path.exists():
+            # Labels dropped as cut are read once more from wider crops, only with the requests
+            # the ship has left (the ceiling and the exam budget are unchanged).
+            reread_readings = []
+
+            def reread_call(request_dir: Path, provider_dir: Path) -> dict:
+                reread_readings.append(call_model(binary, request_dir, provider_dir, basis, model))
+                return reread_readings[-1]
+
+            from .ga_labels import reread_cut_labels
+            stats = reread_cut_labels(result, dropped, Path(ga).resolve(), out / "reread", reread_call, left,
+                                      json.loads(crops_path.read_text())["crops"])
+            for extra in reread_readings:
+                result["usage"] = add_usage(result["usage"], usage_of(extra))
+            result["passes"]["reread"] = stats
+            if stats["requests"]:
+                result["passes"]["fragments_dropped"] += drop_fragments(result)
     if measure and ga is not None and reading.get("reply") is not None:
         measure_one(result, Path(ga).resolve(), out, binary, basis, model, case_id or out.name)
     write_json(out / "ga_reading.json", result)
