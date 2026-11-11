@@ -51,9 +51,6 @@ SHARE_PENALTY = 1.5
 # An alternative within this likeness of the chosen stroke is a near tie.
 NEAR_TIE = 0.05
 MAX_ALTERNATIVES = 3
-# An inspection trace that follows two enumerated strokes, each on at least
-# this share of its rows, jumps between station curves (follows_several_strokes).
-MIXED_STROKE_ROW_SHARE = 0.2
 # Confidence factors (a ranking aid, not a probability).
 SHARED_FACTOR = 0.4
 NEAR_TIE_FACTOR = 0.6
@@ -283,7 +280,7 @@ def _stroke_of(candidate: dict, section: dict, grid_columns_px=None) -> dict | N
 
 
 # A stroke must have at least this share of its rows on ink of its own: not on a
-# vertical grid column and not on a kept, more hull-like stroke of the panel.
+# vertical grid column and not on another remaining stroke of the panel.
 # A stroke made only of other strokes' pieces (the outer curve's top joined to
 # the next curve's bottom where they touch at the bilge) or of a grid line and a
 # piece of another curve adds no station curve (shipd-1-09867-3v-L0: two such
@@ -313,59 +310,39 @@ def _on_stroke(rows: np.ndarray, xs: np.ndarray, other: dict) -> np.ndarray:
 def strokes_with_own_ink(strokes: list[dict], grid_columns_px) -> list[dict]:
     """The strokes that bring ink of their own (OWN_INK_MIN_SHARE), in their given order.
 
-    Strokes are taken from the most hull-like down; rows on a grid column do not
-    count towards likeness here, so a stroke that mostly rides a grid line is
-    judged after the curves whose pieces it borrows. Grid-line strokes are kept
-    as they are (assign_panel skips them) and never cover another stroke.
+    A stroke's own share is measured against every other remaining stroke and
+    the grid columns. While some stroke is below OWN_INK_MIN_SHARE, the weakest
+    of those (lowest hull likeness times its off-grid share) leaves and the
+    shares are measured again. One stroke at a time, so two curves that cover
+    each other through a mixed stroke do not both leave (shipd-1-09867-3v-L0:
+    curve 8 was covered by a mixed stroke above and a grid rider below until
+    those two left). Not by likeness order: a mixed stroke can be more
+    hull-like than the curve it borrows from (shipd-2-02216-3v-L0 live).
+    Grid-line strokes are kept as they are (assign_panel skips them) and never
+    cover another stroke.
     """
-    def order_key(index):
-        stroke = strokes[index]
-        xs = np.asarray(stroke["xs"], dtype=float)
+    def weight(index):
+        xs = np.asarray(strokes[index]["xs"], dtype=float)
         off_grid = 1.0 - float(np.mean(_on_grid(xs, grid_columns_px))) if len(xs) else 0.0
-        return -float(stroke.get("hull_likeness", 0.0)) * off_grid
+        return float(strokes[index].get("hull_likeness", 0.0)) * off_grid
 
-    kept, covering = [], []
-    for index in sorted(range(len(strokes)), key=order_key):
-        stroke = strokes[index]
-        if stroke.get("kind") == "straight_grid_line":
-            kept.append(index)
-            continue
-        rows, xs = np.asarray(stroke["rows"], dtype=float), np.asarray(stroke["xs"], dtype=float)
-        if not len(rows):
-            continue
+    def own_share(index, others):
+        rows = np.asarray(strokes[index]["rows"], dtype=float)
+        xs = np.asarray(strokes[index]["xs"], dtype=float)
         borrowed = _on_grid(xs, grid_columns_px)
-        for other in covering:
-            borrowed |= _on_stroke(rows, xs, other)
-        if float(np.mean(~borrowed)) >= OWN_INK_MIN_SHARE:
-            kept.append(index)
-            covering.append(stroke)
+        for other in others:
+            if other != index:
+                borrowed |= _on_stroke(rows, xs, strokes[other])
+        return float(np.mean(~borrowed))
+
+    curves = [i for i, s in enumerate(strokes) if s.get("kind") != "straight_grid_line" and len(s["rows"])]
+    while True:
+        short = [i for i in curves if own_share(i, curves) < OWN_INK_MIN_SHARE]
+        if not short:
+            break
+        curves.remove(min(short, key=weight))
+    kept = set(curves) | {i for i, s in enumerate(strokes) if s.get("kind") == "straight_grid_line"}
     return [strokes[index] for index in sorted(kept)]
-
-
-def follows_several_strokes(candidate: dict, strokes: list[dict]) -> bool:
-    """True when a candidate's trace jumps between strokes of the panel (a mixed line).
-
-    A whole-window inspection trace in an overlay panel can run along one
-    station's curve, cross over and continue on another. It is mixed when no
-    single enumerated stroke carries it (SAME_INK_ROW_SHARE of its rows) but at
-    least two strokes each carry MIXED_STROKE_ROW_SHARE of its rows.
-    """
-    from . import investigation as inv
-    trace = inv.dense_trace(candidate)
-    if trace is None:
-        return False
-    rows, xs = trace
-    shares = []
-    for stroke in strokes:
-        other = inv.dense_trace(stroke)
-        if other is None:
-            continue
-        common = np.intersect1d(rows, other[0])
-        close = np.abs(np.interp(common, rows, xs) - np.interp(common, *other)) <= inv.SAME_INK_DISTANCE_PX
-        shares.append(float(close.sum()) / len(rows))
-    if not shares or max(shares) >= inv.SAME_INK_ROW_SHARE:
-        return False
-    return sum(share >= MIXED_STROKE_ROW_SHARE for share in shares) >= 2
 
 
 def panel_stroke_candidate(traced: dict, source_sha: str, key: str, others: int) -> dict:
@@ -456,15 +433,16 @@ def assign_shared_panels(image, sections: list[dict], catalog: dict, source_file
             failure = None
         key = panel_key(section)
         found = [panel_stroke_candidate(stroke, source_sha, key, max(0, len(traced) - 1)) for stroke in traced]
-        # Inspected lines of the panel join the enumerated strokes, unless they
-        # jump between strokes. One ink is pooled once (each section has its
-        # own ids for it): the most hull-like version is kept, so a full line
-        # beats its fragment.
-        enumerated = list(found)
+        # Inspected lines of the panel join the enumerated strokes. One ink is
+        # pooled once (each section has its own ids for it): the most hull-like
+        # version is kept, so a full line beats its fragment. A line that jumps
+        # between curves (enumerated or inspected) has no ink of its own and
+        # leaves the pool (strokes_with_own_ink); judging inspected lines only
+        # against enumerated strokes dropped the true curve 7 of
+        # shipd-2-02216-3v-L0, which a mixed enumerated stroke carried for 65 %.
         found += [c for entry in entries for c in entry.get("candidates", [])
                   if c.get("selectable") is True and "contour_selection" in c
-                  and "authored" not in c and not c.get("model_traced") and not c.get("panel_stroke")
-                  and not follows_several_strokes(c, enumerated)]
+                  and "authored" not in c and not c.get("model_traced") and not c.get("panel_stroke")]
         try:
             grid = inv.grid_columns(image, section)
         except Exception:  # noqa: BLE001 - a hint only; never refuse

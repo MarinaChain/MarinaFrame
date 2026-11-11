@@ -111,20 +111,19 @@ def test_left_strokes_nest_outwards_to_the_left():
     assert {sid: r["candidate_id"] for sid, r in result.items()} == {"s3": "wide", "s2": "middle", "s1": "narrow"}
 
 
-def _candidate(cid, xs):
-    rows = np.arange(TOP, BOTTOM + 1)
-    anchors = [[float(x), float(r)] for x, r in zip(np.asarray(xs)[::10], rows[::10])]
-    return {"candidate_id": cid, "contour_selection": {"anchors_px": anchors, "half_width_px": 2.75}}
-
-
 def test_a_trace_that_jumps_between_two_curves_is_mixed():
+    # An inspected line that jumps between two station curves brings no ink of its own and
+    # leaves the panel pool; a distinct curve between them stays (strokes_with_own_ink).
     rows = np.arange(TOP, BOTTOM + 1)
     outer, inner = CENTRE + _half_breadth_px(rows, 160), CENTRE + _half_breadth_px(rows, 60)
-    strokes = [_candidate("outer", outer), _candidate("inner", inner)]
     jumping = np.where(rows < (TOP + BOTTOM) / 2, outer, inner)
-    assert pa.follows_several_strokes(_candidate("jumping", jumping), strokes)
-    assert not pa.follows_several_strokes(_candidate("copy", outer), strokes)
-    assert not pa.follows_several_strokes(_candidate("own", CENTRE + _half_breadth_px(rows, 110)), strokes)
+
+    def stroke(cid, xs, likeness):
+        return {"candidate_id": cid, "rows": rows, "xs": xs, "hull_likeness": likeness, "kind": "candidate_stroke"}
+    pool = [stroke("outer", outer, 0.6), stroke("inner", inner, 0.6), stroke("jumping", jumping, 0.9),
+            stroke("own", CENTRE + _half_breadth_px(rows, 110), 0.5)]
+    kept = [s["candidate_id"] for s in pa.strokes_with_own_ink(pool, [])]
+    assert kept == ["outer", "inner", "own"]
 
 
 def test_a_trace_stops_at_the_curve_top_below_its_station_label(tmp_path):

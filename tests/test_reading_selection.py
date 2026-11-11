@@ -36,7 +36,8 @@ def test_first_hull_starts_a_second_reading_and_keeps_the_hull(tmp_path):
     assert started["reading"] == 2 and started["of"] == T.READINGS
     assert tools.state["description_phase"] == "views" and tools.state["sheet_setups"] == {}
     assert tools.state["vessel_table"] == {"stations": []}  # the first hull stays the draft
-    assert tools.state["readings"] == [{"draft_fit": None, "combined_fit": 0.8, "station_count": 2, "kept": True}]
+    assert tools.state["readings"] == [{"built_draft_fit": None, "draft_fit": None, "combined_fit": 0.8,
+                                       "station_count": 2, "kept": True}]
     assert T.start_next_reading(tools) is None  # only once
 
 
@@ -54,7 +55,8 @@ def test_the_earlier_reading_is_kept_when_the_new_hull_fits_worse(tmp_path):
     materialized = json.dumps({"sections": [{"id": "old"}]}).encode()
     selection = T.keep_better_reading(tools, earlier, materialized, {"ok": True})
     assert selection == {"kept": "earlier", "fit_earlier": None, "fit_new": None,
-                         "body_fit_earlier": 0.8, "body_fit_new": 0.6}
+                         "body_fit_earlier": 0.8, "body_fit_new": 0.6,
+                         "built_fit_earlier": None, "built_fit_new": None}
     assert tools.state["last_valid_candidate"] == {"id": "first"}
     # The set-aside reading's builds are history only: a later build must never reuse one.
     assert [b["id"] for b in tools.state["builds"]] == ["first"]
@@ -101,6 +103,32 @@ def test_better_reading_compares_like_with_like():
     # One reading without a draft fit: both are compared on the body-plan fit.
     assert not T.better_reading({"draft_fit": None, "combined_fit": 0.9}, {"draft_fit": 0.8, "combined_fit": 0.5})
     assert not T.better_reading({"draft_fit": 0.7, "combined_fit": 0.9}, {"draft_fit": None, "combined_fit": None})
+
+
+def test_better_reading_prefers_the_fit_of_the_delivered_hull():
+    # dtmb5415-3v-L0 live: the form-fit table fits kept reading 2 (0.7365 over 0.721), whose built
+    # tops were 0.08 m lower at every station (8.92 % RMS over 5.07 %); the built fits rank them right.
+    old = {"built_draft_fit": 0.7455, "draft_fit": 0.721, "combined_fit": 0.82}
+    new = {"built_draft_fit": 0.7445, "draft_fit": 0.7365, "combined_fit": 0.80}
+    assert not T.better_reading(old, new)
+    assert T.better_reading(new, old)
+    # A reading scored before built fits existed: both fall back to the table fit.
+    assert T.better_reading({**old, "built_draft_fit": None}, new)
+
+
+def test_built_table_holds_the_built_sections(tmp_path):
+    from vessel_reconstruction.vessel_model import StationRow, VesselTable, waterline_grid
+    rows = [StationRow("1", 10.0, [[0.0, 0.0], [1.0, 2.0], [1.2, 3.0]], "traced"),
+            StationRow("2", 20.0, [[0.0, 0.0], [1.5, 3.0]], "fitted")]
+    table = VesselTable(rows, waterline_grid(rows))
+    (tmp_path / "extracted_sections.json").write_text(json.dumps(
+        {"sections": [{"id": "1", "x_m": 10.0, "points_yz_m": [[1.19, 2.92], [0.0, 0.0], [1.0, 2.0]]}]}))
+    built = T.built_table(table, tmp_path)
+    assert built.stations[0].points_yz_m == [[0.0, 0.0], [1.0, 2.0], [1.19, 2.92]]
+    assert built.stations[0].top_z_m == 2.92
+    assert built.stations[1].points_yz_m == rows[1].points_yz_m
+    assert table.stations[0].top_z_m == 3.0  # the task's table is not changed
+    assert T.built_table(table, tmp_path / "missing") is table
 
 
 def test_a_reading_with_the_same_setup_is_recorded_and_the_next_one_starts(tmp_path, monkeypatch):
