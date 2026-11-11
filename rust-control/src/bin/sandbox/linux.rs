@@ -117,24 +117,6 @@ fn real_home() -> Option<PathBuf> {
     Some(PathBuf::from(std::ffi::OsStr::from_bytes(bytes)))
 }
 
-#[cfg(test)]
-mod home_tests {
-    use super::*;
-
-    #[test]
-    fn account_lookup_is_required_for_nonstandard_home_and_ancestors() {
-        // Fixed /home and /root strings cannot make this test pass. A mutation
-        // removing the account-home predicate or lookup fails these assertions.
-        let home = PathBuf::from("/data/accounts/person");
-        for root in ["/data", "/data/accounts", "/data/accounts/person"] {
-            assert!(broad_with_account(Path::new(root), || Some(home.clone())));
-            assert!(!broad_with_account(Path::new(root), || None));
-        }
-        let actual = real_home().expect("Linux test account must resolve via getpwuid");
-        assert!(broad(&actual));
-    }
-}
-
 impl Config {
     fn validate(&mut self, executable: &Path) -> io::Result<()> {
         self.task = canonical(&self.task)?;
@@ -575,4 +557,22 @@ pub fn launch() -> io::Result<std::convert::Infallible> {
     syscalls()?;
     // exec preserves PID, process group, hard limits, Landlock and seccomp.
     Err(Command::new(&arguments[3]).args(&arguments[4..]).exec())
+}
+
+#[cfg(test)]
+mod home_tests {
+    use super::*;
+
+    #[test]
+    fn account_lookup_is_required_for_nonstandard_home_and_ancestors() {
+        // Fixed /home and /root strings cannot make this test pass. A mutation
+        // removing the account-home predicate or lookup fails these assertions.
+        let home = PathBuf::from("/data/accounts/person");
+        for root in ["/data", "/data/accounts", "/data/accounts/person"] {
+            assert!(broad_with_account(Path::new(root), || Some(home.clone())));
+            assert!(!broad_with_account(Path::new(root), || None));
+        }
+        let actual = real_home().expect("Linux test account must resolve via getpwuid");
+        assert!(broad(&actual));
+    }
 }
