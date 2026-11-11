@@ -1159,3 +1159,88 @@ link tolerance and the search margin. Gap and minimum-run thresholds are not sca
   7 of 31 point cells, RMS 0.912 m, 3 wrong cells, the same as the frozen v1 reader.
 
 The change is a robustness fix for scans at other resolutions. It does not improve the COLLIER score.
+
+### Holdout protocol: CAMA BEACH SKIFF No. 22 (written before any run; lane E, 2026-11-11)
+
+`work/holdout/cama_beach_skiff_22/` is an **UNSCORED HOLDOUT**: a 14 ft flat-bottom, hard-chine
+rowing skiff (built 1934), HAER WA-199 sheet 1 of 2, "Lines Plans with Table of Offsets", drawn by
+Todd A. Croteau, 2011. Source: https://www.loc.gov/resource/hhh.wa0881.sheet/ (US Government work;
+LoC: no known restrictions). Downloaded by the PM through a normal browser. No reader has run on it.
+
+| File (not in git) | SHA-256 |
+|---|---|
+| `work/holdout/cama_beach_skiff_22/master-pnp-habshaer-wa-wa0800-wa0881-sheet-00001a.tif` (14400 x 9600) | `db390a25fcd033c1912d4cbce248cb91cbe4b2e736203ecfcc3e34f395cc6e42` |
+| `work/holdout/cama_beach_skiff_22/truth.json` | `473ef776bd3d0d022e4c5e7ee47dc223853cf5a2ae6e08c984ca0ba9f8651b1e` |
+
+**Truth (frozen).** The printed table, in the `parse_truth` format (`units` ft-in-eighths, values as
+printed). Stations printed "0.000" to "10.000"; rows: heights SHEER and CHINE; half-breadths
+WL 0-9-0, WL 0-6-0, WL 0-3-0, WL 0-0-0, SHEER, CHINE (no RABBET row). CHINE heights are printed
+negative (the flat bottom is below the baseline). Column 10.000 has only its x-position (all
+cells blank); column 0.000 has no CHINE and no WL 0-0-0 cell. The stem and transom cells (SHEER /
+CHINE AT STEM / AT TRANSOM) are not per-station and are kept in `notes` only, not scored. Two
+transcriptions: reading A (lane E) and reading B (a separate agent with its own crops, blind to
+A); they agree on all 77 filled cells, so `unsure` is empty. Parse check with the pinned loader and
+stations 1 to 9: 36 waterline cells and 18 point cells (9 sheer, 9 chine).
+
+**Sides (read twice, agree).**
+- Reading 1 (lane E, labels and profile): body-plan left half labelled 8 (outermost), 9, 10; right
+  half 7 (outermost) to 1, with an unlabelled near-vertical line just right of the centreline
+  (probably the stem / station 0). Profile: raked stem at the right end with station 1 next to it,
+  transom at the left end with station 10 next to it. So right half = forebody (1 to 7), left half
+  = aftbody (8 to 10).
+- Reading 2 (separate agent, own crops, table not read): right half labelled 1 to 7 (outermost 7;
+  curves 6 and 7 almost coincide and cross near the chine), left half 8, 9, 10 (outermost 8) plus
+  an unlabelled heavy line (about column 2850) and a thin line (about column 2895) that look like
+  the transom outline; no station labelled on both halves. Stem at the right of the profile (about
+  column 11080), transom at the left (about column 3000); right-half sections narrow and V-like,
+  left-half sections wide with flat bottoms below the baseline. Right = forebody, left = aftbody.
+  Approximate centreline column 3885, baseline row 3234 (for the calibrating agent to measure).
+- Note for calibration: station 10 is labelled in the body plan but has no printed offsets, so it
+  can give no truth cell; the unlabelled transom outline and the near-centreline line must not be
+  named as stations.
+
+**Reader under test (pinned at `4f03667`).** The run is valid only with these files at these
+SHA-256 values; an edit before the run is recorded here and the protocol committed again:
+
+| File | SHA-256 |
+|---|---|
+| `src/vessel_reconstruction/body_plan_polyline.py` | `14ab4e82386c1bd11c3626ccf58b7b8ba3ab7dee222ddb7d69c6067fc299494b` |
+| `src/vessel_reconstruction/body_plan_reader_v2.py` | `61c6e834ed4df675b96cafd50fc4e77d811f85ef205354697cadb8eaa5a8174f` |
+| `src/vessel_reconstruction/body_plan_chine_line.py` | `ef2bd68f4f9e1f65d185dbc8de1896c6383134b6df9c8558200bfd83bf239223` |
+| `src/vessel_reconstruction/body_plan_crossings.py` | `8c0ffde62d5913cfbbba33fff8eecb7e08862439c9edc4063ec691e285c5987c` |
+| `src/vessel_reconstruction/body_plan_reader.py` | `327c9f141876dc1945383ebe35023b6e7baaacc34306c5eecf26ffb16ba94e11` |
+| `src/vessel_reconstruction/body_plan_identity.py` | `ba738892696025364c3a58664bdf3fbf46e3c7d1a72df7eca31bcc441e9a0c34` |
+| `benchmarks/frozen_readers/v1/body_plan_reader.py` | `327c9f141876dc1945383ebe35023b6e7baaacc34306c5eecf26ffb16ba94e11` |
+| `benchmarks/frozen_readers/v1/body_plan_crossings.py` | `c6553371691121cd934b0991f273f9ff3a41963d46fd4238034f818aaf6fcf97` |
+| `benchmarks/frozen_readers/v1/body_plan_identity.py` | `ba738892696025364c3a58664bdf3fbf46e3c7d1a72df7eca31bcc441e9a0c34` |
+| `benchmarks/deadrise_holdout/score.py` | `1bc962218d25b86c6006a23c2e5567e241ad169cd430f2bdcb73a92793f58be1` |
+| `benchmarks/ec_collier/point_score.py` | `b38bbda707c921f3d930cebf7ad37cb73e025a29af5e9dabac36a17755df2158` |
+| `benchmarks/balclutha/crossing_value.py` | `f5ab03b178508c1cf9232417c38d2888cc1fb94b07d519e830c9fb5c9df82536` |
+| `benchmarks/balclutha/model_value.py` | `aa3786c262434e8451f7659e2885c2fecbd6b3a285c922113c93409d638a71e0` |
+| `scripts/measure_deadrise_holdout.py` | `40e4bd8c1ad32e3278d2f5b194056def13a688e0c77afb6cf9e4e0fa727e174e` |
+
+**Order of work (each step committed before the next).**
+1. **Calibration** in `benchmarks/cama_beach_skiff_22/holdout_value.py` by an agent that has not
+   seen `truth.json`, the table crops or this lane's transcription (lane E read the table, so it
+   must not calibrate). Same interface as `benchmarks/caleb_jones/holdout_value.py`, with
+   `TRUTH_SHA256` set to the value above. Scale from the printed bar ("SCALE: 1 1/2" = 1'-0"")
+   checked against a drawn dimension (the profile station spacing 1'-4" or the length 13'-7");
+   measuring rows on the printed waterlines (W0 baseline, W1, W2, W3 = 0, 3, 6, 9 in) plus a fixed
+   grid below the baseline for the chines; sides as above. Adding the boat to `BOATS` in
+   `scripts/measure_deadrise_holdout.py` is the only code change; it changes that file's pinned
+   hash, which is then recorded here before the run.
+2. **One run**, no tuning, as on CALEB JONES; JSON, overlay and stdout kept in `work/` with their
+   SHA-256 values.
+
+**Cells, metrics and gates** are those of "Holdout protocol: CALEB JONES" with both kinds of cell:
+waterline cells (36) and point cells (sheer and chine; 18). Gates (polyline product rule against
+the frozen reader; pass only if all hold): cells >= frozen; RMS not worse; wrong cells (> 0.15 m)
+not worse; wrong cells <= 10 % of cells given; no extra cell where the printed cell is blank; by
+eye on the overlay, every named or engaged knuckle lies on a drawn station corner. A failure is
+reported as a failure; after the run the sheet is a development case.
+
+**Dropped: 14'-3" Double Ended Davis Boat (HAER WA-227).** Sheet `work/holdout/davis_boat/`
+(SHA-256 `728ea5130529fbd9945fd4045a42bc274085ad89d8cf5a9dea1415d2271b7465`) shows a double-ended
+round-bilge hull: smooth body-plan sections, diagonals and buttocks, and no chine row in its table.
+It is not a hard-chine holdout; no truth was made from it. Its table was looked at in the sheet
+overview only, so it is not a clean blind holdout for a round-bilge test either.
