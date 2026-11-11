@@ -183,9 +183,16 @@ requests a ship; **off by default**, so the exam run is unchanged.
    first box's area (smaller cuts were boxes cut to strips to avoid a label printed over the
    space). Otherwise the first box stays with guessed axes and a check entry.
    **Guessed boxes** (lane W, round u6r3): a box guessed on every axis that covers a cargo space
-   (missing y and z filled as the arrangement step fills them) loses its extent, unless it lies
-   against the shell (a side tank beside a cargo box drawn to the shell). A short untyped label
-   (four letters or fewer) keeps a guessed box only up to twice its label box in each direction.
+   (missing y and z filled as the arrangement step fills them) loses its extent. A box against
+   the shell (a side tank beside a cargo box drawn to the shell) may take at most 15 % of a
+   cargo space; such a box with no height drawn in a profile goes in the upper 30 % of the depth
+   (top-side and wing tanks under the deck), or loses its extent when its label names a lower
+   tank (double bottom, hopper). Hatches and cranes stand on the deck and are not counted. A
+   hold or centreline space boxed off the centreline (|y_min + y_max| > 10 % of B) is centred
+   with the same breadth and its y becomes guessed. A label of the same kind inside a box (a
+   hatch-cover note in a hatch box) is part of that space, not a neighbour. A short untyped
+   label (four letters or fewer) keeps a guessed box only up to twice its label box in each
+   direction. W's gate fails a box guessed on every axis that breaks these limits.
    Deck names ("UPPER DECK"), notes ("FOLDING TYPE"), access hatches ("A/H"), and an untyped
    label that is a numbered tank read without its number are not spaces.
    **Local frame spacings** (review round 4): a spacing printed for one frame inside a range of
@@ -349,6 +356,9 @@ lists the measured values, and the reviewer checks them):
 |---|---:|---:|---:|---:|---:|
 | 3 (u4r) | 139 | 0 | 50 | 7 | 82 |
 | 4 (u6) | 117 | 0 | 41 | 9 | 67 |
+| 5 (u6r7) | 139 | 0 | 68 | 3 | 65 |
+
+Round 5 (on u6r7, the redraw and guessed-box rules) found more extent issues than round 4, mostly rectangles where the drawn boundary slopes or tapers, boxes that still hold a neighbour, and hatch breadths above the printed size; the frame table finding repeats because u6r7 replays the scale replies of u6 (the local-spacing prompt runs first in u8).
 
 Real after my check (round 3 and 4): extent boxes that take in neighbouring compartments (holds
 down to the base line, one box for a pair, boxes across sloped boundaries); measured hatch
@@ -500,6 +510,11 @@ Observed cost is 0 in every round (subscription).
   kept). **Gate: 14 of 14 development ships pass**; measured boxes that hold another space's
   label 40 -> 3; fully measured extents 167 -> 160 (boxes that still cover a neighbour are now
   guessed). For lane W: `work/ga-internal-23/dev-runs/u6r7/<case>/ga_arrangement_input.json`.
+- Lane W tested the bulk carrier on u6r7: guessed wing tanks became full-height columns in a
+  hold, one hatch lost its box (a hatch-cover note inside it), and a hold boxed off the
+  centreline was marked measured. Fixed (Method, step 5, guessed boxes) and replayed without
+  new calls: **`u6r8`, gate 14 of 14 pass** (largest cargo loss 0.175). For lane W:
+  `work/ga-internal-23/dev-runs/u6r8/<case>/ga_arrangement_input.json`.
 
 ## Proposal (not built; PM 2026-11-12): printed sizes as a check of extents
 
@@ -516,7 +531,7 @@ model contract (Rust `ScaleReply`, CLI schema, prompt), so it waits for a PM dec
 Done: two Opus/Astra cycles; the Fable 5.2 step; the Opus check of it (regression found and fixed,
 overnight rounds u1-u6, overlap and fragment rules replayed as u6r, fittings, outboard boxes and
 deck top-up replayed as u6r3; redraw of boxes over labels, guessed-box rules and local frame
-spacings as u6r7). **Not frozen; the exam was not run; the PM said not to freeze or prepare
+spacings as u6r7; side, off-centre and hatch rules as u6r8). **Not frozen; the exam was not run; the PM said not to freeze or prepare
 the exam until told.** Next: a full live round (scale requests with the local-spacing prompt,
 all extents rules) and its gate; Astra review; then recover spaces whose only label is a
 fragment (a wider crop read again) if it fits the per-ship ceiling, boxes along sloped and

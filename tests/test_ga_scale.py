@@ -259,8 +259,10 @@ def test_the_arrangement_input_joins_the_views_of_one_space(tmp_path):
         by_label.setdefault(space["label"], []).append(space)
     holds = [s for s in data["spaces"] if s["kind"] == "cargo_hold"]
     assert len(holds) == 1 and set(holds[0]["extent"]) >= {"frames", "x_m", "y_m", "z_m"}
-    assert holds[0]["extent"]["status"] == {"x": "measured_from_scale", "y": "measured_from_scale",
-                                            "z": "measured_from_scale"}
+    # The plan box of the hold ends at the port tank drawn over half the breadth: one-sided, so
+    # its y is centred and guessed (lane W, round u6r7).
+    assert holds[0]["extent"]["status"] == {"x": "measured_from_scale", "y": "guessed", "z": "measured_from_scale"}
+    assert holds[0]["extent"]["y_m"] == [-6.25, 6.25] and "off the centreline" in holds[0]["extent"]["y_note"]
     assert len(holds[0]["source_record"]["regions"]) == 2
     tanks = [s for s in data["spaces"] if s["kind"] == "ballast_tank"]
     assert sorted(t["extent"]["side"] for t in tanks) == ["port", "starboard"]
@@ -1015,3 +1017,43 @@ def test_a_redrawn_box_cut_to_a_strip_is_refused(tmp_path):
     """Rounds u6r5 and u6r6: holds and cargo tanks were cut to strips to leave out a label."""
     _, stats, _, hold = _redraw_run(tmp_path, redrawn_bottom_px=418.0, redrawn_top_px=400.0)
     assert stats["extents"]["redraw_kept"] == 0 and "redrawn" not in hold["extent"]
+
+
+
+@pytest.mark.parametrize("label, z, withheld", [("X.W.T. (P)", [12.6, 18.0], False), ("D.B. W.B.T. (P)", None, True)])
+def test_a_guessed_side_tank_without_a_drawn_height_is_not_full_height(label, z, withheld):
+    """Lane W, round u6r7: side tanks guessed on every axis became full-height columns in a hold."""
+    spaces, particulars = _guessed_tank_over_a_hold()
+    spaces[1]["label"] = label
+    spaces[1]["extent"]["y_m"] = [13.8, 16.0]
+    tank = gs._side_boxes_without_height(spaces, particulars)[1]
+    assert ("extent" not in tank) is withheld
+    if z:
+        assert tank["extent"]["z_m"] == z and tank["extent"]["status"]["z"] == "guessed"
+
+
+def test_the_gate_limits_a_guessed_box_to_a_small_share_of_a_hold_also_at_the_shell():
+    spaces, particulars = _guessed_tank_over_a_hold()
+    spaces[0]["extent"]["y_m"] = [-16.0, 16.0]
+    spaces[1]["extent"]["y_m"] = [10.0, 16.0]  # against the shell, full height: 17 % of the hold
+    report = gs.arrangement_gate({"spaces": spaces, "particulars": particulars})
+    assert report["guessed_over_cargo"] == ["X. Y. (P)"] and not report["passed"]
+
+
+def test_a_hold_boxed_off_the_centreline_is_centred_and_guessed():
+    spaces, particulars = _guessed_tank_over_a_hold()
+    spaces[0]["extent"]["y_m"] = [-7.0, 12.0]
+    hold = gs._centred_when_off_centre(spaces, particulars)[0]
+    assert hold["extent"]["y_m"] == [-9.5, 9.5] and hold["extent"]["status"]["y"] == "guessed"
+    assert hold["extent"]["status"]["x"] == "measured_from_scale"
+
+
+def test_a_note_of_the_same_kind_inside_a_hatch_box_is_not_a_neighbour():
+    """Lane W, round u6r7: a hatch-cover note inside a hatch box took the hatch's extent."""
+    result = {"views": [{"view_id": "v2", "kind": "deck_plan"}], "spaces": [
+        {"id": "h", "kind": "cargo_hatch", "label": "NO. 2 CARGO HATCH", "status": "read", "view_id": "v2",
+         "source_record": {"regions": [{"box_px": [10, 10, 20, 20]}]},
+         "extent": {"outline_box_px": [0, 0, 100, 100], "view_id": "v2", "status": {"x": "measured_from_scale"}}},
+        {"id": "n", "kind": "cargo_hatch", "label": "STEEL HATCH COVER", "status": "read", "view_id": "v2",
+         "source_record": {"regions": [{"box_px": [40, 40, 60, 60]}]}}]}
+    assert gs.covered_labels(result) == {}

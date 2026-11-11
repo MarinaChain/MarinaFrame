@@ -1196,6 +1196,8 @@ def covered_labels(result: dict) -> dict[str, list[dict]]:
                 continue
             if label_family(small["label"]) == label_family(big["label"]):
                 continue
+            if small["kind"] == big["kind"] and small["kind"] not in ("other_space", "other_tank"):
+                continue  # a note on the same hatch or hold ("STEEL HATCH COVER"; lane W, round u6r7)
             if kinds.get(extent["view_id"]) == "profile" and side_of_label(small["label"]) in ("both", "port", "starboard"):
                 continue
             found.setdefault(big["id"], []).append(small)
@@ -1869,6 +1871,8 @@ def arrangement_input(result: dict, case_id: str) -> dict:
     frames = result.get("frames") or {"status": "unknown", "spacings": []}
     spaces, dropped = _without_same_boxes(merged_spaces(result), particulars)
     spaces = _without_outboard_extents(spaces, particulars)
+    spaces = _centred_when_off_centre(spaces, particulars)
+    spaces = _side_boxes_without_height(spaces, particulars)
     spaces = _without_guessed_over_cargo(spaces, particulars)
     return {"schema": INPUT_SCHEMA, "case_id": case_id, "engineering_approved": False,
             "sources": result["sources"], "ship_type": result.get("ship_type"),
@@ -1883,31 +1887,97 @@ CARGO_KINDS = ("cargo_hold", "cargo_tank")
 # topside or side tank beside the cargo space (often inside a cargo box drawn to the shell). It
 # is not a small space guessed over the cargo space.
 AT_SHELL_SHARE = 0.85
+# Such a box against the shell may still take at most this share of a cargo space's volume (lane
+# W, round u6r7; development ships: side, topside and bottom tanks took up to 12 %, boxes drawn
+# from the shell to near the centreline 34-80 %).
+SHELL_BOX_MAX_CARGO_SHARE = 0.15
 
 
 def _guessed_over_cargo(spaces: list[dict], breadth: float, depth: float) -> list[dict]:
     """The spaces (not cargo) whose extent is guessed on every axis and covers a cargo space,
     with the missing y and z filled by the arrangement step's rules. A box against the shell (a
-    side tank) is not counted."""
+    side tank) counts only when it takes more than ``SHELL_BOX_MAX_CARGO_SHARE`` of the cargo
+    space."""
     cargo = [box for space in spaces if space["kind"] in CARGO_KINDS
              and (box := _gate_box(space, breadth, depth)) is not None]
     found = []
     for space in spaces:
         extent = space.get("extent")
-        if not extent or space["kind"] in CARGO_KINDS or not _all_guessed(extent):
-            continue
+        if not extent or space["kind"] in CARGO_KINDS + DECK_EQUIPMENT or not _all_guessed(extent):
+            continue  # a hatch or crane stands on the deck above the cargo space
         own = _gate_box(space, breadth, depth)
         if own is None or not np.all(own[:, 1] > own[:, 0]):
             continue
-        if max(abs(own[1, 0]), abs(own[1, 1])) >= AT_SHELL_SHARE * breadth / 2:
-            continue
+        at_shell = max(abs(own[1, 0]), abs(own[1, 1])) >= AT_SHELL_SHARE * breadth / 2
         volume = float(np.prod(own[:, 1] - own[:, 0]))
         for box in cargo:
-            shared = np.clip(np.minimum(own[:, 1], box[:, 1]) - np.maximum(own[:, 0], box[:, 0]), 0.0, None)
-            if float(np.prod(shared)) > GUESSED_OVER_CARGO_SHARE * volume:
+            shared = float(np.prod(np.clip(np.minimum(own[:, 1], box[:, 1]) - np.maximum(own[:, 0], box[:, 0]),
+                                           0.0, None)))
+            if (shared > SHELL_BOX_MAX_CARGO_SHARE * float(np.prod(box[:, 1] - box[:, 0])) if at_shell
+                    else shared > GUESSED_OVER_CARGO_SHARE * volume):
                 found.append(space)
                 break
     return found
+
+
+# A hold or a space on the centreline whose y range is off the centreline by more than this share
+# of the breadth (|y_min + y_max| / B) is not a measured breadth (lane W, round u6r7: a hold
+# boxed from -7 to +12 m).
+OFF_CENTRE_SHARE = 0.10
+# A tank against the shell guessed on every axis, with no height drawn in a profile, is placed in
+# this upper share of the depth: top-side, upper wing and gravity wing tanks lie under the deck
+# (lane W, round u6r7: such tanks filled to full height became wing columns in a hold).
+UPPER_BAND_SHARE = 0.3
+# A tank in the lower part of the hull ("D.B.", "BTM", "HOPPER"): it gets no upper band.
+LOWER_TANK = re.compile(r"\bD\s*\.?\s*B\b|\bD/B\b|BTM|BOTTOM|HOPPER|LOWER|DOUBLE")
+
+
+def _centred_when_off_centre(spaces: list[dict], particulars: dict) -> list[dict]:
+    """A hold, or a space on the centreline, boxed clearly off the centreline: its y is centred
+    with the same breadth and becomes guessed."""
+    breadth = (particulars.get("breadth_m") or {}).get("value")
+    if not breadth:
+        return spaces
+    kept = []
+    for space in spaces:
+        extent = space.get("extent") or {}
+        y = extent.get("y_m")
+        on_centre = space["kind"] == "cargo_hold" or extent.get("side") in ("centre", "both")
+        if y and on_centre and abs(y[0] + y[1]) > OFF_CENTRE_SHARE * breadth:
+            half = min((y[1] - y[0]) / 2, breadth / 2)
+            extent = {**extent, "y_m": [round(-half, 2), round(half, 2)],
+                      "status": {**extent.get("status", {}), "y": "guessed"},
+                      "y_note": "boxed off the centreline; centred with the same breadth"}
+            space = {**space, "extent": extent}
+        kept.append(space)
+    return kept
+
+
+def _side_boxes_without_height(spaces: list[dict], particulars: dict) -> list[dict]:
+    """A tank against the shell guessed on every axis with no drawn height (no profile box) goes
+    in an upper band under the deck; one named as a lower tank (double bottom, hopper) loses its
+    extent instead."""
+    breadth = (particulars.get("breadth_m") or {}).get("value")
+    depth = (particulars.get("depth_m") or {}).get("value")
+    if not breadth or not depth:
+        return spaces
+    kept = []
+    for space in spaces:
+        extent = space.get("extent") or {}
+        y = extent.get("y_m")
+        if (extent and y and "z_m" not in extent and _all_guessed(extent)
+                and space["kind"] not in CARGO_KINDS + DECK_EQUIPMENT
+                and max(abs(y[0]), abs(y[1])) >= AT_SHELL_SHARE * breadth / 2):
+            if LOWER_TANK.search(space["label"].upper()):
+                space = {key: value for key, value in space.items() if key != "extent"}
+                space["extent_withheld"] = "guessed against the shell with no height drawn"
+            else:
+                extent = {**extent, "z_m": [round(depth * (1 - UPPER_BAND_SHARE), 2), round(depth, 2)],
+                          "status": {**extent["status"], "z": "guessed"},
+                          "z_note": "no height drawn: placed in the upper part, under the deck"}
+                space = {**space, "extent": extent}
+        kept.append(space)
+    return kept
 
 
 def _without_guessed_over_cargo(spaces: list[dict], particulars: dict) -> list[dict]:
