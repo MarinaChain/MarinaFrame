@@ -99,6 +99,10 @@ Script: `benchmarks/steel_t3/run.py` (metrics) and `benchmarks/steel_t3/scantlin
    several cells. Fix it in `src/vessel_reconstruction/structure` with a unit test on synthetic
    data. A guess changes only when a printed or drawn value replaces it, never from the BOM.
 3. Re-run the same sample and metrics. Repeat while a fix moves a pooled metric.
+   Amendment (2026-11-11, after the baseline, before fix 1; no target changed): "never from the
+   BOM" means never from the BOM of a sample design. A generator convention may come from a BOM
+   survey of designs outside the sample and outside the W3 sealed split, as the section 4.3.1
+   guesses did. Fix 1 uses such a survey (812 loose BOMs).
 4. The targets above do not change. Lane boundaries: no edits to body_plan readers,
    `panel_assignment.py`, `form_fit.py` or the model reading path.
 

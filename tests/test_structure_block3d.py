@@ -89,3 +89,16 @@ def test_truth_labels_cover_transverse_classes():
 def test_scorer_refuses_w3_sealed_designs(tmp_path):
     with pytest.raises(SystemExit):
         block_eval.evaluate(tmp_path, [118])
+
+
+def test_guessed_block_length_holds_the_printed_web_spaces():
+    # Small spacing: the holds (27 web spaces) fit in 40 m with at least 0.8 web spaces each end.
+    assert block3d.guess_block_length(1.30) == pytest.approx(40.0)
+    assert block3d.guess_block_length(1.38) == pytest.approx(40.0)  # 27 x 1.38 + 1.6 x 1.38 = 39.5 m
+    # Just too large for that: the block is the holds plus 1.2 web spaces at each end.
+    assert block3d.guess_block_length(1.40) == pytest.approx((27 + 2 * 1.2) * 1.40)
+    # Large spacing: 27 x 2.5 m = 67.5 m of holds, plus 1.2 web spaces at each end.
+    assert block3d.guess_block_length(2.5) == pytest.approx((27 + 2 * 1.2) * 2.5)
+    st = block3d.stations(2.5, length_m=block3d.guess_block_length(2.5))
+    assert st.bulkheads[0] == pytest.approx(1.2 * 2.5)
+    assert st.bulkheads[-1] < block3d.guess_block_length(2.5)

@@ -35,6 +35,13 @@ GUESS_BLOCK_LENGTH_M = 40.0  # 239 of 488 designs; the others 40.0 to 43.7 m
 GUESS_HOLDS = 3  # 4 transverse bulkheads in all 488 designs
 GUESS_WEB_SPACES_PER_HOLD = 9  # all 488 designs
 GUESS_FRAME_SPACES_PER_WEB = 5  # 269 designs; 4 in 204, 3 in 15
+# Block length when the holds need more than 40 m. From a BOM survey of 812 loose SGLD and Repaired
+# designs outside the tranche 3 sample and the W3 sealed split: the end margin beyond the end
+# bulkheads is 0.7 to 1.5 web spaces (median 1.2 in the 639 blocks longer than 40 m). The block
+# is 40 m whenever the holds fit with a margin of at least 0.8 web spaces at each end: this
+# threshold gives the most exact block lengths on the survey (plateau from 0.7 to 0.85).
+GUESS_END_MARGIN_WEB_SPACES = 1.2
+GUESS_MIN_END_MARGIN_WEB_SPACES = 0.8
 # Bracket legs as a share of the printed web-frame depth (drawn in view 2, not printed;
 # seen on development design 379: lower 1.18 m and upper 0.98 m for a 1.96 m web).
 GUESS_LOWER_BRACKET_LEG = 0.6
@@ -188,6 +195,18 @@ class Stations:
     frames: list[float]
     web_spacing_m: float
     frame_spacing_m: float
+
+
+def guess_block_length(web_spacing_m: float) -> float:
+    """Guessed block length: 40 m when the holds fit in it, else the holds plus an end margin.
+
+    The holds are holds x web spaces x the printed web spacing. With a large spacing they do not
+    fit in 40 m with the minimum end margin, and the block is the holds plus the median margin.
+    """
+    holds_length = GUESS_HOLDS * GUESS_WEB_SPACES_PER_HOLD * web_spacing_m
+    if holds_length + 2 * GUESS_MIN_END_MARGIN_WEB_SPACES * web_spacing_m <= GUESS_BLOCK_LENGTH_M:
+        return GUESS_BLOCK_LENGTH_M
+    return holds_length + 2 * GUESS_END_MARGIN_WEB_SPACES * web_spacing_m
 
 
 def stations(web_spacing_m: float, length_m: float = GUESS_BLOCK_LENGTH_M,
@@ -392,17 +411,20 @@ def label_thickness_and_material(members: list[BlockMember], materials: dict[str
             m.material, m.material_source = own or common_material, "guessed"
 
 
-def build_block(sheets: dict[str, Path], length_m: float = GUESS_BLOCK_LENGTH_M,
+def build_block(sheets: dict[str, Path], length_m: float | None = None,
                 frames_per_web: int = GUESS_FRAME_SPACES_PER_WEB) -> dict:
     """Read the three sheets and lay out the block. Returns the member list and the reading.
 
-    ``length_m`` and ``frames_per_web`` are the guesses of values the drawings do not print; a
-    caller passes other values only for a diagnostic of what the guesses cost.
+    ``length_m`` (default: ``guess_block_length`` of the printed web spacing) and
+    ``frames_per_web`` are the guesses of values the drawings do not print; a caller passes other
+    values only for a diagnostic of what the guesses cost.
     """
     reading = read_sheets(sheets)
     web = reading.rows.get("Webframe") or reading.rows.get("Floor")
     if not web or not web.spacing_m:
         raise ValueError("no printed web-frame spacing (rows 'Webframe' and 'Floor')")
+    if length_m is None:
+        length_m = guess_block_length(web.spacing_m)
     st = stations(web.spacing_m, length_m=length_m, frames_per_web=frames_per_web)
     members = longitudinal_members(reading, length_m) + transverse_members(reading, st)
     label_thickness_and_material(members, reading.materials)
