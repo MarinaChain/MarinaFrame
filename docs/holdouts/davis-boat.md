@@ -197,3 +197,33 @@ for the hard-chine lane, before this protocol. Lane E develops no reader.
 
 **Run start (lane M, 2026-11-11).** The one run uses code commit `c473190965e042d53f9a9e6e69315b639495363c`;
 command, environment and resume point in `docs/plans/2026-11-11-published-holdouts.md`.
+
+## 7. HOLDOUT RESULT (one run, no tuning) - PASS by rule 3.5.9
+
+One run on 2026-11-11 by lane M at code commit `c473190965e042d53f9a9e6e69315b639495363c` (pins of section 5,
+all checked). Command (worktree root, `PYTHONPATH=src:.`, `W=/Users/jonathanjie/Documents/workspace/MarinaFrame/work`):
+`python scripts/measure_round_bilge_holdout.py --boat davis-boat --sheet $W/holdout/davis_boat/master-pnp-habshaer-wa-wa0900-wa0928-sheet-00001a.tif --truth $W/holdout/davis_boat/truth.json --out $W/published-holdout/davis.json`.
+Environment: Python 3.12.9, numpy 2.3.5, Pillow 13.0.0, macOS 27.0.1 arm64; no model calls. Exit 0.
+Outputs (not in git): `davis.json` `671c700239f3ed142642ed471b45313d2cf1b95fa40a147def276ed220837cc1`,
+`davis.stdout` `f6e89f2878c320978e8f3b20e00a8e9df87b2550944840c024bc223be84b35b4`.
+
+| Arm | Cells given (of 44) | Coverage | RMS (m) | Max (m) | Within 0.05 m | Within 0.15 m | Identity errors | Extra | Rule 3.5.9 |
+|---|---|---|---|---|---|---|---|---|---|
+| **product** (`body_plan_sides`) | 37 | 84 % | 0.0221 | 0.134 | 97 % | 100 % | none | 4 | **PASS** |
+| frozen | 37 | 84 % | 0.0221 | 0.134 | 97 % | 100 % | none | 4 | PASS |
+| polyline_rule | 37 | 84 % | 0.0221 | 0.134 | 97 % | 100 % | none | 4 | PASS |
+
+Rule (section 4, unchanged): coverage >= 60 % (84 %) and median RMS <= 0.15 m (0.022 m; one deterministic
+run). The polyline reader declined both halves (round bilge, no knuckle), so the product reading is the
+crossing reader's rank table, as section 5 expected; the three arms differ by less than 0.0001 m.
+
+Per-station cells (product arm): stations 1 to 6 give 36 of 37 printed cells, every error within 0.003 m
+(station 4 misses WL 1-6-0, the row that passes about 10 px under its sheer corner). Station 7 gives 1 of 7
+printed cells, error 0.134 m; that one cell sets most of the RMS. The 4 extra cells are reader values
+where the printed cell is blank (stations 2 and 3 at WL 1-9-0 / WL 2-0-0, station 7 at WL 2-0-0); rule 3.5.9
+does not gate them, and they are reported here. Point cells (reported, not gated): 3 of 14 for the frozen
+and polyline_rule arms, RMS 0.033 m, max 0.057 m.
+
+Limits: one small boat, waterline cells only, the bow side rests on the table headers (section 3), and the
+crop disclosure of the lane L amendment applies. This sheet is now a development case.
+`engineering_approved` stays false.
