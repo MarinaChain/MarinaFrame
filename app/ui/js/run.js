@@ -18,6 +18,7 @@ import {
 } from './run_header.js';
 import { renderSelection, renderStrip } from './run_strip.js';
 import { renderHistory } from './vessel_pages.js';
+import { presentationOf } from './presentation.js';
 import {
   live, setPartOutline, model, markTool, renderDrawing, renderModel, prepareDemoView, showDemoView,
 } from './workspace.js';
@@ -123,15 +124,16 @@ export async function loadTask({ fresh = false } = {}) {
       fresh ? invoke('get_events', { task, after_sequence: 0 }) : Promise.resolve(null),
     ]);
     if (token !== state.loadToken) return;
-    showDemoNote(view.demo);
+    const shown = presentationOf(view);
+    showDemoNote(shown);
     setView(view);
     if (events) {
       setEvents(events);
     }
     if (!view.sections.some((s) => s.id === state.sectionId)) setSectionId(defaultSection(view));
-    if (fresh) prepareDemoView(view.demo);
+    if (fresh) prepareDemoView(shown);
     renderTask({ fresh });
-    if (fresh) showDemoView(view.demo);
+    if (fresh) showDemoView(shown);
     live.statusChanged();
     // Step cards name sections by place; when the places are known or change, draw them again.
     const placesKey = view.sections.map((s) => `${s.id}@${s.x_m}`).join(',');

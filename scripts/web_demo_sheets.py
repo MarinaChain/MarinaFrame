@@ -91,7 +91,11 @@ def add_extra_sheets(run_dir: Path, sheets_root: Path, listed: list[dict], cache
     view = json.loads(task_file.read_text())
     added = []
     renders = {}
+    # A run that holds its sheets itself (scripts/add_run_sheets.py) lists them already.
+    held = {source["name"] for source in sources["sources"]}
     for sheet in listed:
+        if sheet["sheet"] in held:
+            continue
         path = sheets_root / sheet["sheet"]
         if not path.is_file():
             raise SheetError(f"{sheet['sheet']}: not found under {sheets_root}")

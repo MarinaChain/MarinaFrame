@@ -168,9 +168,13 @@ controller. Runs made with the `marinaframe` CLI, or with another app build, the
 "A different build of MarinaFrame made this run, so it can be viewed here but not continued or
 changed." This is true even when the CLI and the app come from the same commit, because they
 are different executables. Only a run made by the identical app binary opens without the
-notice. Viewing works in all cases. The check is unchanged.
+notice. Viewing works in all cases. The check is unchanged. `MarinaFrame make-run` makes runs
+with the app's own executable (docs/DESKTOP_KIT.md).
 
-Part reviews ("accepted", "marked" with a note) are kept in the app config folder, in
-`part_reviews.json`, keyed by the absolute path of the run folder (`app/core/src/parts.rs`). A
-run folder copied to another Mac therefore shows its parts as not reviewed. The part revisions
-themselves (History, before and after) are in the run folder and do come along.
+Part reviews ("accepted", "marked" with a note) are kept in the run folder
+(`review/part_reviews.json`, `app/core/src/parts.rs`), so they come along with a copied run.
+Reviews saved by an earlier version are in the app config folder, keyed by the run folder's
+path; the app still reads them and moves them into the run at the next review.
+
+The desktop kit (docs/DESKTOP_KIT.md) keeps a run's added sheets and its first view in the run
+folder, so a copied run opens as it does here.

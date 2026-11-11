@@ -333,3 +333,57 @@ fn recorded_paths_outside_the_task_or_through_a_symlink_are_never_read() {
     symlink(&task, &linked).unwrap();
     assert_eq!(list_sources(&linked).unwrap_err().code, "invalid_task_root");
 }
+
+#[test]
+fn sheets_added_to_a_run_are_listed_and_shown() {
+    let tmp = tempfile::tempdir().unwrap();
+    let task = tmp.path().join("task");
+    write_json(
+        &task.join("state.json"),
+        &json!({"state": {"created_ms": 1000}}),
+    );
+    write(&task.join("sources/sheets/ga.png"), &png(30, 20));
+    write_json(
+        &task.join(ADDED_SHEETS_FILE),
+        &json!({"schema": "marinaframe.run-sheets.v1", "sheets": [
+            {"name": "polarkonsult/GA Rev1.dxf", "role": "General arrangement", "file": "sources/sheets/ga.png",
+             "sha256": "a".repeat(64), "width_px": 30, "height_px": 20, "note": "Rendered from its DXF."},
+            {"name": "outside.dxf", "file": "../secret.png"},
+            {"role": "no name", "file": "sources/sheets/ga.png"}
+        ]}),
+    );
+    let list = list_sources(&task).unwrap();
+    let names: Vec<&str> = list.sources.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, vec!["polarkonsult/GA Rev1.dxf", "outside.dxf"]);
+    let ga = &list.sources[0];
+    let expected_hash = "a".repeat(64);
+    assert_eq!(
+        (
+            ga.kind,
+            ga.role.as_str(),
+            ga.previewable,
+            ga.sha256.as_deref()
+        ),
+        (
+            SourceKind::Drawing,
+            "General arrangement",
+            true,
+            Some(expected_hash.as_str())
+        )
+    );
+    assert_eq!(
+        (ga.pages[0].width_px, ga.pages[0].height_px),
+        (Some(30), Some(20))
+    );
+    let page = read_source_page(&task, &no_worker(), &ga.id, 0, PreviewSize::Full).unwrap();
+    assert_eq!((page.width, page.height), (30, 20));
+    // A file outside the run is listed but never read.
+    assert!(!list.sources[1].previewable);
+
+    // A record of another schema adds nothing.
+    write_json(
+        &task.join(ADDED_SHEETS_FILE),
+        &json!({"schema": "other", "sheets": []}),
+    );
+    assert!(added_sheet_entries(&task).is_empty());
+}
