@@ -142,7 +142,7 @@
           <button type="button" role="radio" data-view="model" data-tip-title="Model (⌘3)" aria-label="Model only"><svg class="icon"><use href="#i-cube" /></svg></button>
         </div>
         <button class="btn btn-ghost btn-icon details-toggle" id="details-toggle" type="button" aria-controls="inspector" aria-expanded="true" aria-label="Hide details" data-tip-title="Hide details (⌘4)">
-          <svg class="icon"><use href="#i-panel-right" /></svg><b class="details-count" id="details-count" hidden></b>
+          <svg class="icon"><use href="#i-panel-right" /></svg>
         </button>
         <button class="btn" id="resume-task" type="button" hidden>Resume</button>
         <button class="btn btn-danger-quiet" id="cancel-task" type="button" hidden>Stop</button>
@@ -306,10 +306,19 @@
           </div>
         </div>
 
-        <button class="details-edge" id="details-edge" type="button" aria-controls="inspector" aria-label="Show details" data-tip-title="Show details (⌘4)" hidden>
-          <svg class="icon"><use href="#i-panel-right" /></svg><b class="details-count" id="details-edge-count" hidden></b>
-        </button>
+        <!-- The folded details column: show it, go to the review, or open it at one tab. -->
+        <nav class="details-rail" id="details-rail" aria-label="Run details" hidden>
+          <button class="details-rail-item" id="details-edge" type="button" aria-controls="inspector" aria-expanded="false" aria-label="Show details" data-tip-title="Show details (⌘4)">
+            <svg class="icon"><use href="#i-panel-right" /></svg>
+          </button>
+          <button class="details-rail-item" id="details-review" type="button" aria-controls="inspector" hidden>
+            <svg class="icon"><use href="#i-flag" /></svg><b class="details-count" id="details-edge-count" aria-hidden="true"></b>
+          </button>
+          <div class="details-rail-tabs" id="details-rail-tabs"></div>
+        </nav>
         <section class="inspector" id="inspector" aria-label="Inspector">
+          <!-- The picked part's fact card (js/factcard3d.js); hidden with no part picked. -->
+          <section class="inspector-part" id="part-card" aria-label="Picked part" hidden></section>
           <header class="inspector-head" id="selection-head"></header>
           <section class="selection" id="selection" aria-live="polite"></section>
           <div class="tabs" role="tablist" aria-label="Run details" id="tabs">

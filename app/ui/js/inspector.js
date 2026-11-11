@@ -1,21 +1,21 @@
 // The run-details column: its tabs (Thinking, Steps, Checks, Calls, Evidence, Sources) and
 // hiding and showing the column.
 
-import { state, isRunning, setTab, prefs, addEvents } from './app_state.js';
+import { state, isRunning, setTab, prefs, addEvents, currentSection } from './app_state.js';
 import { invoke } from './api.js';
 import { fill, el, icon } from './dom.js';
 import * as fmt from './format.js';
 import { $, showError, chip, chevron } from './ui_kit.js';
-import { toCheckCount, partsToCheck } from './run_facts.js';
+import { toCheckCount, partsToCheck, needsCheck } from './run_facts.js';
 import { cachedArtifact } from './artifacts.js';
 import { createAreas } from './areas.js';
 import { calibrationChoice } from './calibration.js';
 import {
-  TAB_META, TABS, tabAfter, tabName, storedDetails, reviewBadge, toggleNames, isDetailsOpen,
+  TAB_META, TABS, tabAfter, tabName, storedDetails, reviewBadge, toggleNames, isDetailsOpen, reviewRailName,
 } from './details.js';
 import { tipAttributes } from './tooltip.js';
 import { renderNarration } from './run_header.js';
-import { placesIn, selectSection } from './run_strip.js';
+import { placesIn, selectSection, nextToCheck } from './run_strip.js';
 import { sources, sourcesKey, setVesselTab, afterPartsChange } from './vessel_pages.js';
 import { live } from './workspace.js';
 
@@ -308,21 +308,31 @@ export function detailsAreOpen() {
   return document.documentElement.dataset.details !== 'closed';
 }
 
+/** Listeners told when the column opens or folds (the 3D view moves the part card). */
+const detailsListeners = new Set();
+export function onDetailsChange(listener) {
+  detailsListeners.add(listener);
+}
+
+/**
+ * Open or fold the column. `remember` stores a person's choice; an automatic open (a section
+ * that needs a decision) does not, so the next run starts as the person left it.
+ */
 function setDetails(open, { remember = true } = {}) {
+  const changed = detailsAreOpen() !== open || !document.documentElement.dataset.details;
   document.documentElement.dataset.details = open ? 'open' : 'closed';
   $('inspector').inert = !open;
-  $('details-edge').hidden = open;
+  $('details-rail').hidden = open;
   if (remember) prefs.set('details', storedDetails(open));
   renderDetailsBadge();
   // The panes follow the freed width through their own resize observers.
+  if (changed) for (const listener of detailsListeners) listener(open);
 }
 
-/** Names and badge of the toggle and the edge handle. The badge shows only while hidden. */
+/** Names of the toggle and the rail, and the rail's review count (the rail shows only while folded). */
 export function renderDetailsBadge() {
   const open = detailsAreOpen();
-  const count = openReviewItems(state.view);
-  const badge = reviewBadge(count);
-  const names = toggleNames(open, count);
+  const names = toggleNames(open, openReviewItems(state.view));
   const toggle = $('details-toggle');
   toggle.setAttribute('aria-expanded', String(open));
   toggle.setAttribute('aria-label', names.spoken);
@@ -330,10 +340,15 @@ export function renderDetailsBadge() {
   const edge = $('details-edge');
   edge.setAttribute('aria-label', names.spoken);
   edge.dataset.tipTitle = names.title;
-  for (const id of ['details-count', 'details-edge-count']) {
-    const node = $(id);
-    node.hidden = open || badge.hidden;
-    node.textContent = badge.text;
+  // The rail's review button counts the sections to check: a press goes to the next one.
+  const sections = toCheckCount(state.view);
+  const review = $('details-review');
+  const reviewName = reviewRailName(sections);
+  review.hidden = !reviewName;
+  if (reviewName) {
+    review.setAttribute('aria-label', reviewName.spoken);
+    review.dataset.tipTitle = reviewName.title;
+    $('details-edge-count').textContent = reviewBadge(sections).text;
   }
 }
 
@@ -341,14 +356,54 @@ export function toggleDetails() {
   setDetails(!detailsAreOpen());
 }
 
-/** The details toggle, the edge handle and the remembered choice. */
+/** Open the column for a section that needs a decision, without changing the stored choice. */
+export function openDetailsForReview() {
+  if (!detailsAreOpen()) setDetails(true, { remember: false });
+}
+
+/** The rail's tab icons: a press opens the column at that tab. */
+function renderRailTabs() {
+  fill($('details-rail-tabs'), ...TABS.map((tab) => {
+    const meta = TAB_META[tab];
+    const tip = tipAttributes(`Show ${meta.word}`, meta.detail);
+    return el('button', {
+      class: 'details-rail-item', type: 'button', 'aria-controls': 'inspector', dataset: { tab }, ...tip.attrs,
+      onclick: () => {
+        setDetails(true);
+        selectTab(tab, { focus: true });
+      },
+    }, icon(meta.icon), tip.describer);
+  }));
+}
+
+/** The details toggle, the rail and the remembered choice. */
 export function installDetails() {
   $('details-toggle').addEventListener('click', toggleDetails);
   $('details-edge').addEventListener('click', () => {
     setDetails(true);
     $('details-toggle').focus();
   });
-  setDetails(isDetailsOpen(prefs.get('details', 'open')), { remember: false });
+  $('details-review').addEventListener('click', () => {
+    openDetailsForReview();
+    if (!needsCheck(currentSection() || {})) nextToCheck();
+    // The decision bar (Accept, Other line, Mark) is the first thing to reach.
+    ($('selection').querySelector('.decision-bar button:not([disabled])') || $('details-toggle')).focus();
+  });
+  renderRailTabs();
+  setDetails(isDetailsOpen(prefs.get('details', null), window.innerWidth), { remember: false });
+}
+
+// ---------------------------------------------------------------- picked part
+
+/**
+ * Show the picked part's fact card at the top of the column (`card` is a DOM node from
+ * js/factcard3d.js), or clear it with null.
+ */
+export function showPartCard(card) {
+  const slot = $('part-card');
+  if (card) fill(slot, card);
+  else fill(slot);
+  slot.hidden = !card;
 }
 
 /** Tab buttons and arrow keys in the tab list. */

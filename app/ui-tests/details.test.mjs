@@ -2,16 +2,66 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { DETAILS_KEY, isDetailsOpen, storedDetails, reviewBadge, toggleNames } from '../ui/js/details.js';
+import {
+  DETAILS_KEY, WIDE_WINDOW_PX, isDetailsOpen, stepStartsOpen, storedDetails, reviewBadge, reviewRailName, toggleNames,
+} from '../ui/js/details.js';
 import { shortcutCommand } from '../ui/js/keymap.js';
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
-test('the column is open by default and after broken storage', () => {
-  assert.equal(isDetailsOpen(undefined), true);
-  assert.equal(isDetailsOpen(null), true);
-  assert.equal(isDetailsOpen('open'), true);
-  assert.equal(isDetailsOpen('garbage'), true);
+test('with no stored choice a laptop window starts with the rail and a wide window with the column', () => {
+  for (const stored of [undefined, null, 'garbage']) {
+    assert.equal(isDetailsOpen(stored, 1440), false, `1440, ${stored}`);
+    assert.equal(isDetailsOpen(stored, 1280), false, `1280, ${stored}`);
+    assert.equal(isDetailsOpen(stored, 2000), true, `2000, ${stored}`);
+  }
+  assert.equal(WIDE_WINDOW_PX, 1800);
+  assert.equal(isDetailsOpen(null, WIDE_WINDOW_PX), true);
+  assert.equal(isDetailsOpen(null, WIDE_WINDOW_PX - 1), false);
+});
+
+test('a stored choice wins over the window width', () => {
+  assert.equal(isDetailsOpen('open', 1280), true);
+  assert.equal(isDetailsOpen('closed', 2560), false);
+});
+
+test('the rail review button counts the sections to check and hides at zero', () => {
+  assert.equal(reviewRailName(0), null);
+  assert.equal(reviewRailName(undefined), null);
+  assert.deepEqual(reviewRailName(2), { title: '2 to check (N)', spoken: 'Review, 2 to check' });
+});
+
+test('the rail has the show button, the review button and a place for the tab icons', () => {
+  const html = read('../ui/index.html');
+  assert.match(html, /<nav class="details-rail" id="details-rail" aria-label="Run details" hidden>/);
+  assert.match(html, /id="details-edge"[^>]*aria-controls="inspector"/);
+  assert.match(html, /id="details-review"[^>]*hidden/);
+  assert.ok(html.includes('id="details-rail-tabs"'));
+  // The picked part's card has its place at the top of the column.
+  assert.match(html, /<section class="inspector" id="inspector"[^>]*>\s*<!--[^>]*-->\s*<section class="inspector-part" id="part-card"[^>]*hidden>/);
+});
+
+test('the rail takes the column\'s place: thin, and only on the Run tab', () => {
+  const css = read('../ui/styles.css');
+  assert.match(css, /--details-rail-w: 40px/);
+  assert.match(css, /:root\[data-details="closed"\] \{ --inspector-w: var\(--details-rail-w\); \}/);
+  assert.match(css, /\.view-run:not\(\[data-vtab="run"\]\) > \.details-rail \{ display: none; \}/);
+});
+
+test('a step row opens as the person left it, else only when the step waits for the person', () => {
+  const none = new Set();
+  assert.equal(stepStartsOpen(7, { expanded: none, collapsed: none, waits: false }), false);
+  assert.equal(stepStartsOpen(7, { expanded: none, collapsed: none, waits: true }), true);
+  assert.equal(stepStartsOpen(7, { expanded: new Set([7]), collapsed: none, waits: false }), true);
+  assert.equal(stepStartsOpen(7, { expanded: none, collapsed: new Set([7]), waits: true }), false);
+});
+
+test('a step row is a button that says whether it is open, and its detail hides', () => {
+  const css = read('../ui/styles.css');
+  const live = read('../ui/js/live.js');
+  assert.match(live, /class: 'thought-row', type: 'button', 'aria-expanded': String\(open\), 'aria-controls': bodyId/);
+  assert.match(css, /\.thought-detail\[hidden\] \{ display: none; \}/);
+  assert.match(css, /prefers-reduced-motion: reduce\) \{\s*\.thought-row \.chevron \{ transition: none; \}/);
 });
 
 test('a hidden column is remembered', () => {
@@ -44,11 +94,11 @@ test('the toggle names say the action and the shortcut; the spoken name carries 
   assert.deepEqual(toggleNames(false, 2), { title: 'Show details (⌘4)', spoken: 'Show details, 2 to check' });
 });
 
-test('the page has the toggle, the edge handle and a named column', () => {
+test('the page has the toggle, the rail and a named column', () => {
   const html = read('../ui/index.html');
-  for (const id of ['details-toggle', 'details-edge', 'details-count', 'inspector']) assert.ok(html.includes(`id="${id}"`), id);
+  for (const id of ['details-toggle', 'details-rail', 'details-edge', 'details-edge-count', 'inspector']) assert.ok(html.includes(`id="${id}"`), id);
   assert.match(html, /id="details-toggle"[^>]*data-tip-title="Hide details \(⌘4\)"/);
-  assert.match(html, /id="details-edge"[^>]*hidden/);
+  assert.match(html, /id="details-rail"[^>]*hidden/);
 });
 
 test('the transition is short and off under reduced motion', () => {

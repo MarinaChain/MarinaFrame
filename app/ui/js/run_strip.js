@@ -8,7 +8,7 @@ import { $, chevron } from './ui_kit.js';
 import { needsCheck, sectionShapePath } from './run_facts.js';
 import { stateGlyph, sourceGlyph, glyphChip } from './glyphs.js';
 import { tipAttributes } from './tooltip.js';
-import { areas } from './inspector.js';
+import { areas, openDetailsForReview } from './inspector.js';
 import { runAction, loadTask, refreshTasksSoon } from './run.js';
 import { live, evidence, drawing, model, markTool } from './workspace.js';
 
@@ -118,6 +118,8 @@ export function selectSection(id, { focusDrawing = true } = {}) {
   $('strip').setAttribute('aria-activedescendant', `tile-${id}`);
   document.getElementById(`tile-${id}`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   renderSelection();
+  // A section that needs a decision opens the folded column at Accept, Other line and Mark.
+  if (needsCheck(currentSection() || {})) openDetailsForReview();
   drawing.setSections(state.view.sections, id, { focus: focusDrawing });
   model.setSelected(id);
   areas.show(state.task, state.view, id);

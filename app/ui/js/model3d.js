@@ -10,7 +10,7 @@ import { GLTFLoader } from '../vendor/three/GLTFLoader.js';
 import { el, fill as fillNode, icon, prefersReducedMotion } from './dom.js';
 import { createSectionGrowth } from './growth3d.js';
 import { createAnimation } from './animation.js';
-import { placeLabels, steelLegend, steelToken, tankLegend, tankToken } from './tanks.js';
+import { placeLabels, sourceChip, steelLegend, steelToken, tankLegend, tankToken } from './tanks.js';
 import { configureOrbit } from './orbit3d.js';
 import { CAPTURE_SIZE, captureFraming, pngBase64 } from './capture3d.js';
 import { createFairness, nextFairnessMode, useSmoothNormals, withFairnessOff } from './fairness3d.js';
@@ -25,10 +25,12 @@ import {
 } from './visibility3d.js';
 import { createPartsPanel } from './parts_panel3d.js';
 import { tipAttributes } from './tooltip.js';
-import { cardFor, renderFactCard } from './factcard3d.js';
+import { cardFor, KEY_FACTS, renderFactCard } from './factcard3d.js';
 import { bulkheadChoices, bulkheadPositions, bulkheadSpace, spacesEmptyReason, tankSpaces } from './spaces3d.js';
 import { createSpacesPanel } from './spaces_panel3d.js';
-import { freeRegion, isCompactHost, reachesCovered } from './dock3d.js';
+import {
+  besideBoxes, cornerBoxes, freeRegion, isCompactHost, overlapArea, placeClear, reachesCovered,
+} from './dock3d.js';
 
 /** Extra size of a section plane around the hull, as a fraction of beam and depth. */
 const PLANE_MARGIN = 0.25;
@@ -50,6 +52,14 @@ const HOME_MOVE_MS = 360;
 const TANK_EDGE_SHADE = 0.55;
 /** Size of a tank name label (CSS px) for the overlap test; long names are cut in CSS. */
 const LABEL_BOX = { charWidth: 6.4, padding: 22, height: 20, maxWidth: 180 };
+/** Gap (CSS px) between the docked card or the hover label and what they keep clear of. */
+const DOCK_GAP_PX = 8;
+/** The docked card keeps this far (CSS px) above the pane's bottom: the scale bar, its label and the draft stamp. */
+const DOCK_BOTTOM_PX = 60;
+/** After a camera move for the docked card, the card holds its corner this much longer (ms). */
+const DOCK_SETTLE_MS = 120;
+/** Rays (columns, rows) cast inside a candidate box to find how much of a part it covers. */
+const COVER_SAMPLES = [6, 4];
 
 /** The background of a captured picture. */
 const WHITE = new THREE.Color(0xffffff);
@@ -106,7 +116,15 @@ function scaleToMetres(geometry, lengthM) {
   if (Math.abs(factor - 1) > 1e-6) geometry.scale(factor, factor, factor);
 }
 
-export function createModelView({ host, onPick = null, onPartPick = null, onItemHover = null, partContext = () => ({}) }) {
+/**
+ * The 3D view. Fact card of a picked part: `cardInColumn()` says whether the details column is
+ * open to show it; `onCard(node)` puts it there (null clears it). `avoidRects()` gives client
+ * rects the card and the hover label must not cover (the source lines to the drawing).
+ */
+export function createModelView({
+  host, onPick = null, onPartPick = null, onItemHover = null, partContext = () => ({}),
+  cardInColumn = () => false, onCard = null, avoidRects = () => [],
+}) {
   const empty = el('div', { class: 'pane-empty' });
   host.append(empty);
 
@@ -116,7 +134,7 @@ export function createModelView({ host, onPick = null, onPartPick = null, onItem
     renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true });
   } catch {
     showEmpty('3D view not available', 'This computer did not allow a WebGL view.');
-    return { setModel() {}, setSpacesContext() {}, captureImage: () => null, setSelected() {}, partList: () => [], hidePart() {}, isolatePart() {}, showAllParts() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, anchorOf: () => null, showsWholeVessel: false, hasTanks: false };
+    return { setModel() {}, setSpacesContext() {}, captureImage: () => null, setSelected() {}, partList: () => [], hidePart() {}, isolatePart() {}, showAllParts() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, anchorOf: () => null, refreshCard() {}, placeOverlays() {}, showsWholeVessel: false, hasTanks: false };
   }
   /** Pixel ratio cap: a 3x screen draws at 2x, which looks the same and costs 2.25 times less. */
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
@@ -287,33 +305,200 @@ export function createModelView({ host, onPick = null, onPartPick = null, onItem
     if (tab === 'parts') partsPanel.reveal(highlightedId);
   }
   const togglePanel = (tab) => showPanel(panelTab === tab ? null : tab);
-  // The panel and the fact card share one column at the right, so they never cover each other.
+  // The part list sits in a column at the right of the pane.
   const sideColumn = el('div', { class: 'model-side' }, panel);
   host.append(sideColumn);
+
+  // ---- The picked part's fact card. With the details column open it shows there (`onCard`);
+  // folded, a compact card docks in a corner of the pane that covers neither the part, its
+  // source lines (`avoidRects`) nor the open part list.
   /** The id the fact card shows now (rebuilt only when it changes or the run's data does). */
   let cardId = null;
-  let cardElement = null;
-  /** The card shows its title row only: a short pane starts so, and a click on the title expands it. */
-  let cardCollapsed = false;
-  function updateCard(force = false) {
-    if (!force && cardId === highlightedId) return;
-    if (cardId !== highlightedId) cardCollapsed = isCompactHost(host.clientHeight);
-    cardId = highlightedId;
-    cardElement?.remove();
-    cardElement = null;
-    const mesh = cardId ? meshById.get(cardId) : null;
-    if (!mesh) return;
-    const entry = partList().find((item) => item.id === cardId);
-    if (!entry) return;
+  /** The docked card, or null when the card is in the column or no part is picked. */
+  let dockedCard = null;
+  /** The docked card shows every fact (the person pressed its title row). */
+  let cardExpanded = false;
+  /** The docked card's corner, kept until that corner starts to cover something. */
+  let dockCorner = null;
+  /** The card of one part as data (js/factcard3d.js), or null when the part is not in the model. */
+  function cardData(id) {
+    const mesh = id ? meshById.get(id) : null;
+    const entry = mesh ? partList().find((item) => item.id === id) : null;
+    if (!entry) return null;
     const box3 = new THREE.Box3().setFromObject(mesh);
     const box = box3.isEmpty() ? null : { min: box3.min.toArray(), max: box3.max.toArray() };
-    cardElement = renderFactCard(cardFor({ entry, extras: mesh.userData, box, reference, context: partContext(cardId) || {} }), {
-      onClose: () => pickPart(null),
-      collapsible: isCompactHost(host.clientHeight),
-      collapsed: cardCollapsed && isCompactHost(host.clientHeight),
-      onToggle: () => { cardCollapsed = !cardCollapsed; updateCard(true); },
+    return cardFor({ entry, extras: mesh.userData, box, reference, context: partContext(id) || {} });
+  }
+  function updateCard(force = false) {
+    if (!force && cardId === highlightedId) return;
+    if (cardId !== highlightedId) {
+      cardExpanded = false;
+      dockCorner = null;
+    }
+    cardId = highlightedId;
+    dockedCard?.remove();
+    dockedCard = null;
+    const card = cardData(cardId);
+    if (!card) {
+      onCard?.(null);
+      return;
+    }
+    const onClose = () => pickPart(null);
+    if (cardInColumn()) {
+      onCard?.(renderFactCard(card, { onClose }));
+      return;
+    }
+    onCard?.(null);
+    dockedCard = renderFactCard(card, {
+      onClose,
+      docked: true,
+      expanded: cardExpanded,
+      // A short pane shows the title row only until the card is expanded.
+      keyCount: isCompactHost(host.clientHeight) ? 0 : KEY_FACTS,
+      onToggle: () => {
+        cardExpanded = !cardExpanded;
+        updateCard(true);
+        dockedCard?.querySelector('.model-card-toggle')?.focus();
+      },
     });
-    sideColumn.append(cardElement);
+    host.append(dockedCard);
+    placeDockedCard();
+  }
+
+  /** A client rect as a box in pane pixels. */
+  function paneBox(rect) {
+    const hostBox = host.getBoundingClientRect();
+    return { left: rect.left - hostBox.left, top: rect.top - hostBox.top, right: rect.right - hostBox.left, bottom: rect.bottom - hostBox.top };
+  }
+  /** A shown part's box on screen (pane pixels), or null. */
+  function partScreenBox(id) {
+    const mesh = id ? meshById.get(id) : null;
+    if (!mesh || !isShown(mesh)) return null;
+    const box = new THREE.Box3().setFromObject(mesh);
+    return box.isEmpty() ? null : screenBox(box);
+  }
+  /**
+   * The area (pane px²) of a box that covers the part's pixels. A part's screen box overstates
+   * it (a deck spans the whole hull's box), so a grid of rays inside the box counts real hits.
+   */
+  const coverSample = new THREE.Vector2();
+  function partCover(box, id) {
+    const part = partScreenBox(id);
+    if (!part || overlapArea(box, part) === 0) return 0;
+    const mesh = meshById.get(id);
+    const [columns, rows] = COVER_SAMPLES;
+    let hits = 0;
+    for (let i = 0; i < columns; i += 1) {
+      for (let j = 0; j < rows; j += 1) {
+        const x = box.left + ((i + 0.5) / columns) * (box.right - box.left);
+        const y = box.top + ((j + 0.5) / rows) * (box.bottom - box.top);
+        raycaster.setFromCamera(coverSample.set((x / host.clientWidth) * 2 - 1, -(y / host.clientHeight) * 2 + 1), camera);
+        if (raycaster.intersectObject(mesh, false).some((hit) => cut.keeps(hit.point))) hits += 1;
+      }
+    }
+    return (hits / (columns * rows)) * (box.right - box.left) * (box.bottom - box.top);
+  }
+  /** Boxes an overlay must not cover besides the part: its source lines, the part list, the fit dial. */
+  function keepClearBoxes() {
+    const boxes = avoidRects().map(paneBox);
+    if (!panel.hidden) boxes.push(paneBox(panel.getBoundingClientRect()));
+    // The live fit dial floats over the pane's top right.
+    const dial = host.parentElement?.querySelector('.fit-dial:not([hidden])');
+    if (dial) boxes.push(paneBox(dial.getBoundingClientRect()));
+    return boxes;
+  }
+  /** The pane's margins for the docked card: below the tool bar, above the scale and stamp. */
+  function dockInsets() {
+    const controls = host.querySelector('.model-controls');
+    const top = controls ? paneBox(controls.getBoundingClientRect()).bottom + DOCK_GAP_PX : DOCK_GAP_PX;
+    return { top, right: DOCK_GAP_PX, bottom: DOCK_BOTTOM_PX, left: DOCK_GAP_PX };
+  }
+  /** The part the camera last moved for, so it moves once per pick and not against the person. */
+  let dockFramedId = null;
+  /** The docked card holds its corner until this time (ms): the camera is moving for it. */
+  let dockHoldUntil = 0;
+  function setDockBox(box) {
+    dockCorner = box.corner;
+    dockedCard.dataset.corner = box.corner;
+    dockedCard.style.left = `${Math.round(box.left)}px`;
+    dockedCard.style.top = `${Math.round(box.top)}px`;
+  }
+  /**
+   * Put the docked card in a free corner; it stays where it is while that corner is free. When
+   * every corner covers the picked part (a part framed to fill the pane), the card docks at the
+   * bottom right and the camera moves the part into the free area beside it, once per pick.
+   */
+  function placeDockedCard() {
+    if (!dockedCard) return;
+    const size = { width: dockedCard.offsetWidth, height: dockedCard.offsetHeight };
+    const corners = cornerBoxes({ width: host.clientWidth, height: host.clientHeight, size, insets: dockInsets() });
+    const current = corners.find((box) => box.corner === dockCorner);
+    if (current && performance.now() < dockHoldUntil) {
+      setDockBox(current);
+      return;
+    }
+    const avoid = keepClearBoxes();
+    const cover = (box) => partCover(box, cardId);
+    if (current && avoid.every((box) => overlapArea(current, box) === 0) && cover(current) === 0) {
+      setDockBox(current);
+      return;
+    }
+    const chosen = placeClear(corners, avoid, cover);
+    if (cover(chosen) > 0 && dockFramedId !== cardId) {
+      dockFramedId = cardId;
+      const corner = corners[0];
+      setDockBox(corner);
+      dockHoldUntil = performance.now() + HOME_MOVE_MS + DOCK_SETTLE_MS;
+      cameraAtHome = false;
+      markView(null);
+      const occupied = { left: corner.left - DOCK_GAP_PX, top: corner.top - DOCK_GAP_PX };
+      fitView({
+        direction: currentDirection(), box: new THREE.Box3().setFromObject(meshById.get(cardId)), animate: true,
+        free: freeRegion({ width: host.clientWidth, height: host.clientHeight, occupied }),
+      });
+      return;
+    }
+    setDockBox(chosen);
+  }
+
+  // ---- Hover label: the name of the part under the pointer and its source chip, beside the part
+  // on the side away from its source lines. The full card is for a picked part only.
+  const hoverTag = el('div', { class: 'model-hover-tag', 'aria-hidden': 'true', hidden: true });
+  host.append(hoverTag);
+  let hoverTagId = null;
+  function showHoverTag(id) {
+    // The picked part already has its card; a pointer passing over it adds nothing.
+    const shownId = id && id !== highlightedId ? id : null;
+    if (shownId === hoverTagId) return;
+    hoverTagId = shownId;
+    const card = cardData(shownId);
+    hoverTag.hidden = !card;
+    if (!card) {
+      hoverTag.replaceChildren();
+      return;
+    }
+    hoverTag.replaceChildren(
+      el('span', { class: 'model-swatch', style: { background: `var(${card.token})` } }),
+      el('span', { class: 'model-hover-name' }, card.name),
+      sourceChip(card.source));
+    placeHoverTag();
+    requestFrame();
+  }
+  function placeHoverTag() {
+    if (!hoverTagId || hoverTag.hidden) return;
+    const mesh = meshById.get(hoverTagId);
+    if (!mesh || !isShown(mesh)) {
+      hoverTag.hidden = true;
+      return;
+    }
+    const part = screenBox(new THREE.Box3().setFromObject(mesh));
+    const size = { width: hoverTag.offsetWidth, height: hoverTag.offsetHeight };
+    const spots = besideBoxes({ part, size, bounds: { width: host.clientWidth, height: host.clientHeight }, gap: DOCK_GAP_PX });
+    const avoid = keepClearBoxes();
+    if (dockedCard) avoid.push(paneBox(dockedCard.getBoundingClientRect()));
+    const spot = placeClear(spots, avoid, (box) => partCover(box, hoverTagId));
+    hoverTag.style.left = `${Math.round(spot.left)}px`;
+    hoverTag.style.top = `${Math.round(spot.top)}px`;
   }
   /** The part list entries (no state), in list order. */
   function partList() {
@@ -453,6 +638,8 @@ export function createModelView({ host, onPick = null, onPartPick = null, onItem
     // A pick in the 3D view closes the list, so it does not cover the part just picked.
     if (fromView && id) showPanel(null);
     highlightedId = id;
+    // The picked part gets its card; its hover label goes.
+    if (id && id === hoverTagId) showHoverTag(null);
     restyle();
     partsPanel.reveal(id);
     if (id) keepClearOfPanels(meshById.get(id));
@@ -701,10 +888,12 @@ export function createModelView({ host, onPick = null, onPartPick = null, onItem
     empty.hidden = false;
   }
 
-  /** Render one frame and move the tank labels with it. */
+  /** Render one frame and move the tank labels, the docked card and the hover label with it. */
   function draw() {
     renderer.render(scene, camera);
     updateLabels();
+    placeDockedCard();
+    placeHoverTag();
     overlays.update(camera, renderer.domElement.clientWidth, renderer.domElement.clientHeight, metresPerPixel());
   }
 
@@ -820,7 +1009,6 @@ export function createModelView({ host, onPick = null, onPartPick = null, onItem
   // found once a frame with the readout, reported only when it changes.
   let hoveredItemKey = null;
   function reportHover(event) {
-    if (!onItemHover) return;
     let item = null;
     const sectionId = event && planeAt(event);
     if (sectionId) item = { kind: 'section', id: sectionId };
@@ -831,7 +1019,8 @@ export function createModelView({ host, onPick = null, onPartPick = null, onItem
     const key = item ? `${item.kind}:${item.id}` : null;
     if (key === hoveredItemKey) return;
     hoveredItemKey = key;
-    onItemHover(item);
+    showHoverTag(item?.kind === 'part' ? item.id : null);
+    onItemHover?.(item);
   }
 
   /** World centres of parts and section planes, kept per object (they do not move). */
@@ -1016,8 +1205,8 @@ export function createModelView({ host, onPick = null, onPartPick = null, onItem
     requestRender();
   }
 
-  /** Tank name labels: the hovered and the selected tank, or every tank with Names on (labels
-   * that would overlap are left out; the hovered one wins). */
+  /** Tank name labels: every tank with Names on (labels that would overlap are left out; the
+   * hovered one wins). Without Names, the hover label and the fact card name a tank, beside it. */
   function updateLabels() {
     if (!wholeVessel || !pickable.tanks.length) {
       if (labelLayer.childElementCount) labelLayer.replaceChildren();
@@ -1028,8 +1217,9 @@ export function createModelView({ host, onPick = null, onPartPick = null, onItem
     const candidates = [];
     for (const mesh of pickable.tanks) {
       const id = mesh.userData.partId;
+      // The hover label names the hovered tank already.
+      if (!layers.names || id === hoverTagId) continue;
       const priority = id === hoveredTankId ? 2 : id === highlightedId ? 1 : 0;
-      if (!layers.names && !priority) continue;
       // A tank outside the space or behind the section cut has no label.
       if (!cut.keeps(mesh.userData.labelAnchor)) continue;
       const point = mesh.userData.labelAnchor.clone().project(camera);
@@ -1058,12 +1248,8 @@ export function createModelView({ host, onPick = null, onPartPick = null, onItem
     perspective.updateProjectionMatrix();
     setOrthoHeight(orthographic.top);
     if (cameraAtHome) fitView({ direction: viewDirection });
-    // The card follows the pane's height: its limit, and collapsed or not when the pane turns short or tall.
-    if (cardElement) {
-      const compact = isCompactHost(height);
-      if (compact !== cardWasCompact) cardCollapsed = compact;
-      updateCard(true);
-    }
+    // The docked card shows its key facts or, in a short pane, its title row only.
+    if (dockedCard && isCompactHost(height) !== cardWasCompact) updateCard(true);
     cardWasCompact = isCompactHost(height);
     requestRender();
   }
@@ -1717,6 +1903,13 @@ export function createModelView({ host, onPick = null, onPartPick = null, onItem
       requestRender();
     },
     resetView: () => resetView({ animate: true }),
+    /** The details column opened or folded: the fact card moves between it and the pane. */
+    refreshCard: () => updateCard(true),
+    /** Something to keep clear of moved (the source lines): place the card and the label again. */
+    placeOverlays() {
+      placeDockedCard();
+      placeHoverTag();
+    },
     captureImage,
     /**
      * HOOK(M3 live): section curves of a build, coloured and patterned by source label.
