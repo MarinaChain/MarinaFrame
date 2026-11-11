@@ -119,8 +119,11 @@ their folders.
 - [x] Recommendation and integration plan (sections 10, 11).
 - [x] Quick test tier (make test-quick: 1845 Python, 191 UI passed; lint, Rust, secret scan clean); branch pushed.
 
-Next action for whoever resumes: section 11, step 0 (PM decision on the confirmatory run). Do not rerun the
-selection on the five sheets; the run is spent.
+- [x] Amendment (section 12) committed before the runs; correction and confirmatory runs at base `14125aa`
+  (section 13). Decision: do not integrate reader v2; integrate no reader.
+
+Next action for whoever resumes: none on this plan. Both runs are spent; do not rerun them. Optional follow-up:
+remove `body_plan_chine.py` (section 11 table, first rows) and open a design item for a combined reader.
 
 Resume: check `git log` on `lane/reader-selection`; if the runner exists and `work/reader-selection/result.json`
 exists, do not rerun; fill the tables from it.
@@ -249,3 +252,89 @@ Tests that change:
 - `tests/test_body_plan_reader_v2.py`, `tests/test_body_plan_chine_line.py`: unchanged.
 - `tests/test_frozen_readers.py` and the three holdout-value tests: unchanged (they pin the frozen copy, not src).
 - `tests/test_body_plan_chine.py`: deleted. `tests/test_body_plan_polyline.py`: import path only.
+
+## 12. Amendment: confirmatory run on four V-bottom sheets (written before the run)
+
+Approval: the user approved one confirmatory run ("Yes, run it"), relayed by the PM on 2026-11-11. Scope: only
+the folders `work/holdout/ec-collier`, `work/holdout/white-gull`, `work/holdout/colleen` and
+`work/holdout/caleb-jones`. No other holdout folder and nothing sealed is opened.
+
+**Status of the four sheets.** E. C. COLLIER, WHITE GULL, COLLEEN and CALEB JONES were each scored once as a
+holdout on 2026-11-10 (`docs/BODY_PLAN_CHINE.md`). From this amendment on they are **development, formerly
+holdout**. Results on them, including this run, must not be quoted as holdout results. Record:
+`benchmarks/spent_real_sheet_holdouts.json`. (`benchmarks/holdout_contract.json` is the synthetic-family contract;
+its SHA-256 is pinned in `benchmarks/confirmation_contract_v2.json`, so it is not edited.)
+
+**Correction run first (lane B defect).** Lane B found that the partial item-8 scaling in src
+`body_plan_crossings.py` (`sheet_resolution_factor`) scales five distances about 2x too large on HAER sheets.
+In section 9's run every arm worked from the frozen reading; no arm reached the scaled code (`find_crossings`,
+`is_diagonal`, classify, `link_waterlines`), and all 20 results equal the pre-scaling published values. Even so,
+after the PM merges the fix (`lane/reader-thresholds`), this branch is rebased onto that commit and the five-sheet
+selection (sections 3-6, unchanged) is run once more. This is a correction for a defect in shared code, not
+tuning. Both base commits are recorded. If the corrected run changes the section 6 winner, that is reported; the
+confirmatory run below still tests reader v2, as agreed.
+
+**Confirmatory run.** Runner `scripts/confirm_hard_chine_reader.py`, one run, after the correction run, at the
+same base commit. No reader code, constant, calibration or scorer change after this commit.
+
+- Sheets and calibrations (committed): COLLIER `benchmarks/ec_collier/holdout_value.py`; WHITE GULL, COLLEEN,
+  CALEB JONES `benchmarks/<boat>/holdout_value.py`. Each sheet's SHA-256 is checked against its calibration
+  before reading; each truth file's SHA-256 is checked by its loader.
+- Arms: the same four (frozen v1, A joining, B reader v2, C polyline with the product rule), each from one frozen
+  reading, as in section 9. Truth is read after all arms have read the sheet.
+- Metric M1, existing scorers: point cells by `benchmarks/deadrise_holdout/score.score_points` with each arm's
+  station curves (`frozen_curves`, `v2_curves`, `polyline_curves`; the joining arm uses `frozen_curves` on its
+  joined reading). COLLIER's truth is parsed by its own `point_score.load_truth`, which gives the same cell shape.
+  Waterline cells (WHITE GULL, COLLEEN) by `score_waterlines`. Wrong = error > 0.15 m. Correct = given - wrong.
+- Metric M2: per-section ink distance as in section 5, on each arm's waterline table. Reported, not in the rule.
+
+**Decision rule (fixed).** Sum over the four sheets and over both kinds of cell (point cells on all four,
+waterline cells on WHITE GULL and COLLEEN; 196 truth cells if the truth files are as recorded):
+
+- the next-best arm is the arm among frozen, A and C with the most correct cells (on a tie: fewer wrong cells,
+  then the order frozen, A, C);
+- **integrate reader v2 only if its correct cells >= the next-best arm's correct cells and its wrong cells <= the
+  next-best arm's wrong cells.** Otherwise integrate no reader (section 10).
+
+Per-sheet and total tables go in section 13. A crash is reported; only a fix to the measuring script is allowed.
+
+## 13. Results: correction run and confirmatory run (2026-11-11)
+
+Base commit for both runs: `14125aa` (continue/v0.5 with lane B's threshold fix); branch head `67aedbb` (the
+amendment, rebased; it was `c76ed4e` before the rebase). Both runs exit 0, one run each, no change after either.
+Evidence (git-ignored, `work/reader-selection/`): `correction_result.json` (sha256 `b699e5d5e83c251e...`),
+`confirm_result.json` (sha256 `5d9cccf1de1053ae...`), and their stdout files.
+
+**Correction run (five development sheets, sections 3-6).** The output is identical, line for line, to the
+section 9 run. Winner unchanged: reader v2 (PARDON ME 45 correct vs polyline 42).
+
+**Confirmatory run (four sheets, development, formerly holdout; not holdout results).** Correct = given - wrong
+(> 0.15 m). WL = waterline cells, Pt = point cells.
+
+| Sheet | Kind | Frozen v1 | A. Joining | B. Reader v2 | C. Polyline |
+|---|---|---|---|---|---|
+| COLLIER | Pt (31) | 7 given, 4 correct, 3 wrong | same as frozen | same as frozen | 22, **20**, 2 |
+| WHITE GULL | WL (53) | 45, 45, 0 | same as frozen | 42, 42, 0 | 43, 43, 0 |
+| WHITE GULL | Pt (30) | 8, 6, 2 | same as frozen | 6, 4, 2 | 10, **8**, 2 |
+| COLLEEN | WL (26) | 15, 12, 3 | same as frozen | 9, 6, 3 | 22, **22**, 0 |
+| COLLEEN | Pt (26) | 3, 3, 0 | same as frozen | 2, 0, 2 | 17, **17**, 0 |
+| CALEB JONES | Pt (30) | 5, 1, 4 | same as frozen | 1, 0, 1 | 16, **6**, 10 |
+| **Total (196)** | | 83 given, **71 correct, 12 wrong** | 71, 12 | 67 given, **56 correct, 11 wrong** | 130 given, **116 correct, 14 wrong** |
+
+RMS (m), frozen / v2 / polyline: COLLIER Pt 0.912 / 0.912 / 0.069; WHITE GULL WL 0.026 / 0.018 / 0.027,
+Pt 0.134 / 0.150 / 0.117; COLLEEN WL 0.164 / 0.523 / 0.0007, Pt 0.026 / 1.042 / 0.007; CALEB JONES Pt
+0.589 / 0.193 / 0.660. Polyline identity errors on CALEB JONES: stations 4-9 (rank naming shift, as recorded).
+These values equal the published results in `docs/BODY_PLAN_CHINE.md` (polyline v1.1, v2 with the step-4
+guard). Ink distance (M2, not in the rule): section medians are 0 to 9.2 mm for every arm and sheet; the highest
+(polyline, CALEB JONES, 9.2 mm, 3 off-ink sections) is consistent with its misnamed stations.
+
+**Decision by the rule.** Next-best arm among frozen, A and C: **C, polyline** (116 correct). Reader v2: 56
+correct < 116. **Integrate reader v2: NO.** (v2's 11 wrong cells <= 14 does not matter; both conditions must
+hold.) Per section 10: integrate no hard-chine reader; the product keeps frozen v1 behind
+`MARINAFRAME_BODY_PLAN_READER`. Section 11's integration plan is withdrawn for v2. The joining module (A) remains
+dead code and can still be removed as section 11 lists.
+
+Observation for the PM, not a decision: polyline leads on correct cells (116 vs frozen 71) but has 2 more wrong
+cells than frozen (14 vs 12), all from CALEB JONES naming. Reader v2 leads on PARDON ME only. No single reader
+is better than frozen on both counts across all nine sheets. A combined rule, or polyline with non-rank station
+naming, would be a new reader and needs its own protocol.
