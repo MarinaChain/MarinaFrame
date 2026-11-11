@@ -1,16 +1,11 @@
 // Docking of the panels over the 3D view (js/dock3d.js). Run: npm run test:ui
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cardMaxHeight, freeRegion, isCompactHost, reachesCovered } from '../ui/js/dock3d.js';
+import { freeRegion, isCompactHost, reachesCovered } from '../ui/js/dock3d.js';
 
 test('a pane under 360 px tall shows the card collapsed', () => {
   assert.equal(isCompactHost(359), true);
   assert.equal(isCompactHost(360), false);
-});
-
-test('the card is at most 40 % of the pane', () => {
-  assert.equal(cardMaxHeight(500), 200);
-  assert.equal(cardMaxHeight(330), 132);
 });
 
 test('with nothing covered the whole pane is free and nothing shifts', () => {

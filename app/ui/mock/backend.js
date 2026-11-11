@@ -187,6 +187,25 @@ const MOCK_COMPONENTS = (() => {
   ];
 })();
 
+/** Metres aft of frame 0 where ?mocksections starts, so the strip also shows a "-1.0 m" tile. */
+const MOCK_SECTIONS_START_M = -1;
+
+/**
+ * `count` copies of `sections` (taken in turn), spread evenly from MOCK_SECTIONS_START_M to
+ * `lengthM`. Each copy gets its own section and candidate ids.
+ */
+function spreadSections(sections, count, lengthM) {
+  const step = (lengthM - MOCK_SECTIONS_START_M) / (count - 1);
+  return Array.from({ length: count }, (_, index) => {
+    const copy = JSON.parse(JSON.stringify(sections[index % sections.length]));
+    const id = `${copy.id}-${index}`;
+    for (const candidate of copy.candidates || []) candidate.id = `${candidate.id}-${index}`;
+    if (copy.guess?.chosen_candidate_id) copy.guess.chosen_candidate_id = `${copy.guess.chosen_candidate_id}-${index}`;
+    if (copy.guess?.alternatives) copy.guess.alternatives = copy.guess.alternatives.map((alt) => `${alt}-${index}`);
+    return { ...copy, id, x_m: Number((MOCK_SECTIONS_START_M + index * step).toFixed(2)) };
+  });
+}
+
 /**
  * With ?mocktanks the survey launch has one tank part and a capacity plan (made-up values in the
  * shape of app/core run_tables.rs), so the tank tables can be checked on the mock.
@@ -518,6 +537,12 @@ export function mockTransport() {
           view.model = null;
           view.components = null;
         }
+      }
+      // ?mocksections=72: the survey launch has that many sections (a long strip, as on a real
+      // ship), copies of its three sections spread from 1 m aft of frame 0 to the bow.
+      const sectionCount = Number(glbParam.get('mocksections'));
+      if (task.endsWith('survey-launch') && sectionCount > view.sections.length) {
+        view.sections = spreadSections(view.sections, sectionCount, view.model?.length_m || 24);
       }
       const dismissed = new Set(readStored(MOCK_DISMISSED_KEY, []));
       view.notices = view.notices.filter((n) => !dismissed.has(n.id));

@@ -17,6 +17,34 @@ const MIN_AREA_SHARE = 0.25;
 /** ...and a face counts as transverse when its normal is this close to the x axis. */
 const TRANSVERSE_COSINE = 0.9;
 
+/**
+ * Why the space list is empty, and what to do, for a whole vessel with no tank and no bulkhead
+ * space. `tankParts`: tank parts the run lists (components with op "tank"); `taggedTanks`: tank
+ * meshes in the 3D model (GLB extras kind "tank"); `builtTanks`: tank parts the run built.
+ * Returns { title, text }.
+ */
+export function spacesEmptyReason({ tankParts = 0, builtTanks = 0, taggedTanks = 0 }) {
+  if (tankParts === 0) {
+    return {
+      title: 'This run has no tank arrangement.',
+      text: 'Spaces come from the tanks on the tank plan. Add the tank or capacity plan to the drawing set and run again.',
+    };
+  }
+  if (builtTanks === 0) {
+    return {
+      title: 'No tank was built.',
+      text: 'The run read tanks from the tank plan but built none, so there is no space. The Parts tab says why for each tank.',
+    };
+  }
+  if (taggedTanks === 0) {
+    return {
+      title: 'This 3D model is from an older build.',
+      text: 'Its tanks are not marked as tanks, so they give no spaces. Run again to make a new 3D model.',
+    };
+  }
+  return { title: 'No spaces yet.', text: 'A space comes from each built tank.' };
+}
+
 /** The box widened by `pad` metres on every side. */
 export function padBox(box, pad = SPACE_PAD_M) {
   return { min: box.min.map((v) => v - pad), max: box.max.map((v) => v + pad) };

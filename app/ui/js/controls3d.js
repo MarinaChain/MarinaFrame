@@ -20,9 +20,9 @@ export function createToolbar() {
 
 /**
  * A tool bar button: an icon or short text, a name, a tooltip title with its key (tooltip.js),
- * an optional tooltip detail, and a click action.
+ * an optional tooltip detail, and a click action. `short`: a narrow pane shows the icon only.
  */
-export function toolButton({ text, iconName = null, label, keyHint = null, detail = null, onClick, pressed = null }) {
+export function toolButton({ text, iconName = null, label, keyHint = null, detail = null, onClick, pressed = null, short = false }) {
   const tip = tipAttributes(keyHint ? `${label} (${keyHint})` : label, detail, { label: false });
   const button = el('button', {
     class: 'model-tool',
@@ -30,8 +30,9 @@ export function toolButton({ text, iconName = null, label, keyHint = null, detai
     'aria-label': label,
     ...tip.attrs,
     'aria-pressed': pressed === null ? null : String(pressed),
+    'data-short': short && iconName ? '' : null,
     onclick: onClick,
-  }, iconName ? icon(iconName) : null, text ? el('span', {}, text) : null, tip.describer);
+  }, iconName ? icon(iconName) : null, text ? el('span', { class: 'model-tool-text' }, text) : null, tip.describer);
   return button;
 }
 

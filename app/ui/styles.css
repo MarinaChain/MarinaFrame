@@ -1368,16 +1368,24 @@ code { font-family: var(--font-mono); }
 .strip-count-label { color: var(--text-3); font-size: var(--fs-xs); white-space: nowrap; }
 .strip-head .btn { margin-top: 2px; }
 .strip {
+  /* Room for the sideways scroll bar under the tiles. The bar is styled, so it has this height
+     in every web view; WebKit leaves a plain bar out of the strip's height and then cut the
+     tiles and added a vertical scroll bar. */
+  --strip-bar-h: 10px;
   display: flex;
   gap: var(--space-sm);
-  min-height: var(--strip-h);
+  min-height: calc(var(--strip-h) + var(--strip-bar-h));
   flex: 1 1 auto;
   min-width: 0;
   align-items: flex-start;
-  /* Height follows the tiles; a horizontal scroll bar adds its own room below them. */
   padding: var(--space-sm) var(--space-md);
   overflow-x: auto;
+  overflow-y: hidden;
 }
+.strip::-webkit-scrollbar { height: var(--strip-bar-h); }
+.strip::-webkit-scrollbar-track { background: transparent; }
+.strip::-webkit-scrollbar-thumb { border: 2px solid var(--bg); border-radius: 5px; background: var(--line-strong); }
+.strip::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
 .strip:focus-visible { outline-offset: -2px; border-radius: 0; }
 .strip-empty { display: flex; align-items: center; gap: var(--space-sm); flex: none; align-self: center; color: var(--text-3); font-size: var(--fs-sm); padding: 0 var(--space-sm) 0 var(--space-xs); }
 .tile-placeholder { height: 62px; border-style: dashed; background: transparent; cursor: default; }
@@ -3438,8 +3446,11 @@ code { font-family: var(--font-mono); }
 .model-part[data-state="ghost"] .model-part-main { color: var(--ink-2); font-style: italic; }
 .model-part-none { margin: 4px 6px; color: var(--text-3); }
 .model-part-none[hidden] { display: none; }
+.model-space-none { display: flex; flex-direction: column; gap: 2px; }
+.model-space-none strong { color: var(--ink); font-weight: 600; }
 .model-part-summary { margin: 0 2px; min-height: 0; color: var(--text-3); font-size: 11px; }
 .model-part-summary:empty { display: none; }
+/* The card grows to its content inside the side column; it scrolls only when the pane is too short. */
 .model-card {
   flex: 0 1 auto; min-height: 0; margin-top: auto; overflow-y: auto; padding: 6px 8px 8px; border-radius: var(--radius-md); border: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface) 96%, transparent); color: var(--ink); font-size: 12px; cursor: default;
@@ -3511,6 +3522,8 @@ code { font-family: var(--font-mono); }
   /* A narrow pane keeps the scale, axes and stamp; the reference line is in the readout title. */
   .model-reference-text { display: none; }
   .model-tool { padding: 0 5px; }
+  /* Parts and Spaces show their icons only, so See-through, Parts and Spaces stay on one row. */
+  .model-tool[data-short] .model-tool-text { display: none; }
 }
 
 /* History and export: icon facts in a line of text. */
