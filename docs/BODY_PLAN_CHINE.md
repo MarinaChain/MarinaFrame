@@ -1414,3 +1414,8 @@ reported as a failure; after the run the sheet is a development case.
 round-bilge hull: smooth body-plan sections, diagonals and buttocks, and no chine row in its table.
 It is not a hard-chine holdout; no truth was made from it. Its table was looked at in the sheet
 overview only, so it is not a clean blind holdout for a round-bilge test either.
+
+**Run start (lane M, 2026-11-11).** Pins checked on `99ce579`: all files of the lane I and lane L
+amendments, the sheet and `truth.json` (hash only) match; no re-pin. The one run uses code commit
+`c473190965e042d53f9a9e6e69315b639495363c` (`scripts/measure_deadrise_holdout.py --boat cama-beach-skiff-22`);
+command, environment and resume point in `docs/plans/2026-11-11-published-holdouts.md`.

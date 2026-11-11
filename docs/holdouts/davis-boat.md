@@ -194,3 +194,6 @@ only new file is the run script, written without reading the sheet or the truth:
 
 Disclosure: lane E saw this sheet's table in a whole-sheet overview while checking the hull form
 for the hard-chine lane, before this protocol. Lane E develops no reader.
+
+**Run start (lane M, 2026-11-11).** The one run uses code commit `c473190965e042d53f9a9e6e69315b639495363c`;
+command, environment and resume point in `docs/plans/2026-11-11-published-holdouts.md`.
