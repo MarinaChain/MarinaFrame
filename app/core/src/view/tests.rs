@@ -329,3 +329,43 @@ fn a_verified_task_has_no_draft_and_keeps_the_verified_model_name() {
         "model.stl"
     );
 }
+
+/// A GA reading run (`ga_commercial.write_app_run`): no build, no sections, the GA as its page.
+#[test]
+fn a_ga_reading_run_opens_with_its_reading_and_page() {
+    let tmp = tempfile::tempdir().unwrap();
+    let task = tmp.path().join("task");
+    fs::create_dir_all(task.join("domain")).unwrap();
+    fs::create_dir_all(task.join("ga_reading")).unwrap();
+    let state = json!({"state":{"task_id":"GA-X","status":"awaiting_human_review","kind":"ga_reading",
+        "engineering_approved":false,"config":{"source_spec":"/GA-X/spec.json","policy":"deterministic","model":"claude-sonnet-5-5"}}});
+    fs::write(task.join("state.json"), state.to_string()).unwrap();
+    let domain =
+        json!({"inspection_artifacts":[{"kind":"source_page","path":"ga_reading/X_GA.png"}]});
+    fs::write(task.join("domain/state.json"), domain.to_string()).unwrap();
+    fs::write(task.join("ga_reading/X_GA.png"), png_header(40, 20)).unwrap();
+    let reading = json!({"schema":crate::ga_reading::SCHEMA,"engineering_approved":false,
+        "particulars":{},"counts":{},"spaces":[]});
+    fs::write(
+        task.join(crate::ga_reading::READING_FILE),
+        reading.to_string(),
+    )
+    .unwrap();
+    let view = get_task(&task, &ViewContext::default()).unwrap();
+    assert!(view.ga_reading.is_some());
+    let page = view.source_page.unwrap();
+    assert_eq!(
+        (page.path.as_str(), page.width, page.height),
+        ("ga_reading/X_GA.png", 40, 20)
+    );
+    assert!(view.model.is_none() && view.sections.is_empty());
+}
+
+/// A minimal PNG header of `width` x `height` (the view reads only its header).
+fn png_header(width: u32, height: u32) -> Vec<u8> {
+    let mut bytes = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec();
+    bytes.extend_from_slice(&width.to_be_bytes());
+    bytes.extend_from_slice(&height.to_be_bytes());
+    bytes.extend_from_slice(&[8, 0, 0, 0, 0, 0, 0, 0, 0]);
+    bytes
+}

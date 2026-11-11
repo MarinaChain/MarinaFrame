@@ -13,6 +13,7 @@ import { createEvidenceCard } from './evidence.js';
 import { createLiveRun } from './live.js';
 import { createMarkTool } from './mark.js';
 import { createModelView } from './model3d.js';
+import { createGaPanel } from './ga_panel.js';
 import { baseName, createSourceController, createSourceView, sourceForSheet, sourceOf, summaryOf } from './provenance.js';
 import { capacityRowOf } from './tanks.js';
 import { renderThinking, detailsAreOpen, onDetailsChange, showPartCard } from './inspector.js';
@@ -30,6 +31,8 @@ export let evidence, drawing, model, live, markTool;
 let drawingEmpty;
 /** The source view: the sheet a part came from, beside the 3D model (js/provenance.js). */
 let sources;
+/** The GA reading of a run (ga_panel.js), shown in the 3D pane when the run has one. */
+let gaPanel;
 
 /** Create the panes. Their callbacks reach the rest of the run view only after start. */
 export function createWorkspace() {
@@ -138,6 +141,8 @@ export function createWorkspace() {
   });
   // Both panes must show: the line runs from the part to its sheet.
   sources = createSourceController({ view: () => state.view, sourceView, canShow: () => $('stage').dataset.view === 'split' });
+  gaPanel = createGaPanel({ onHover: (item) => sources.hover(item), onSelect: (item) => sources.select(item) });
+  $('model-host').parentElement.append(gaPanel.element);
   // New or moved source lines: the docked card and the hover label move off them.
   const links = $('stage').querySelector('.source-links');
   if (links) new MutationObserver(() => model.placeOverlays()).observe(links, { childList: true });
@@ -222,6 +227,13 @@ export async function renderDrawing({ fresh = false } = {}) {
 export async function renderModel() {
   const view = state.view;
   const meta = $('model-meta');
+  gaPanel.set(view?.ga_reading || null);
+  if (!view?.model && view?.ga_reading) {
+    setModelKey(null);
+    meta.textContent = 'GA reading';
+    model.setModel(null, [], { emptyTitle: '', emptyText: '' });
+    return;
+  }
   if (!view?.model) {
     setModelKey(null);
     meta.textContent = '';

@@ -55,7 +55,7 @@ fn execute() -> Result<serde_json::Value> {
         "force-keep":"--task DIR --revision ID (keep the not-kept edits of a revision anyway; recorded as operator-forced)",
         "status":"--task DIR","verify":"--task DIR","cancel":"--task DIR","recover-checkpoint":"--task DIR",
         "read-table":"--crops DIR --out NEW_DIR --provider-transfer-basis TEXT (live offset-table cell transcription; see docs/VISION_TABLE_READING.md)",
-        "vision-request":"--request DIR --out NEW_DIR --provider-transfer-basis TEXT (one sheet_setup or build_review request; see docs/LLM_SETUP_AND_REVIEW.md)"},
+        "vision-request":"--request DIR --out NEW_DIR --provider-transfer-basis TEXT [--model ID] (one vision request; ga_reading goes to Claude only; see docs/LLM_SETUP_AND_REVIEW.md)"},
         "automated_engineering_approval":false,"live_campaign_aggregate_caps":null}),
         );
     }
@@ -90,8 +90,9 @@ fn execute() -> Result<serde_json::Value> {
         let request = util::absolute(Path::new(&take(&mut args, "request")?))?;
         let out = util::absolute(Path::new(&take(&mut args, "out")?))?;
         let basis = take(&mut args, "provider-transfer-basis")?;
+        let model = args.remove("model");
         no_extra(&args)?;
-        return provider::vision::vision_request(&request, &out, &basis);
+        return provider::vision::vision_request(&request, &out, &basis, model.as_deref());
     }
     let task = PathBuf::from(take(&mut args, "task")?);
     if command == "check-validation" {

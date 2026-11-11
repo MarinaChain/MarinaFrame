@@ -214,6 +214,39 @@ const MOCK_SOURCE_RECORDS = {
   tank_fo1: { kind: 'unknown', reason: 'No plan region holds its label: not built.' },
 };
 
+/**
+ * A GA reading (src/vessel_reconstruction/ga_commercial.py) of the mock survey launch with ?mockga.
+ * Made-up values; regions are on the mock GA sheet like the part records above.
+ */
+const MOCK_GA_READING = (() => {
+  const read = (view, xs, vs) => ({ kind: 'read', regions: [gaRegion(view, xs, vs)] });
+  const unknown = (reason) => ({ value: null, status: 'unknown', reason, source_record: { kind: 'unknown', reason } });
+  const space = (id, kind, label, number, status, record) => ({ id, kind, label, number, status, source_record: record });
+  return {
+    schema: 'marinaframe.ga_reading.v1', engineering_approved: false, model: 'claude-sonnet-5-5',
+    ship_type: { value: 'other', status: 'read', evidence: 'Survey launch: no cargo spaces' },
+    particulars: {
+      loa_m: { value: 24.0, status: 'read', printed: '24.00 m', unit_context: null, evidence: 'L.O.A. on the profile', source_record: read('profile', [0, 24], [0, 0.6]) },
+      lbp_m: unknown('not found printed'),
+      breadth_m: { value: 7.2, status: 'read', printed: '7.20 m', unit_context: null, evidence: 'B on the plan', source_record: read('plan', [10, 14], [-3.6, 3.6]) },
+      depth_m: unknown('not found printed'), draft_m: unknown('not found printed'),
+      scantling_draft_m: unknown('not found printed'), deadweight_t: unknown('not found printed'),
+    },
+    counts: {
+      cargo_holds: { value: 0, status: 'read', evidence: 'No cargo hold drawn', labelled_items: 0, source_record: { kind: 'guessed', method: 'count judged by the model from the drawing', inputs: [{ sheet: MOCK_GA, page: 0, view: null, box_px: null }] } },
+      cargo_hatches: unknown('No hatch covers drawn'), cargo_cranes: unknown('Davit only; no cargo crane'),
+      cargo_tanks: unknown('Not a tanker'), slop_tanks: unknown('Not a tanker'), container_bays: unknown('Not a container ship'),
+    },
+    spaces: [
+      space('accommodation_deck-001', 'accommodation_deck', 'MAIN DECK', null, 'read', read('profile', [9, 17], [3.4, 5.8])),
+      space('accommodation_deck-002', 'accommodation_deck', 'A DECK', null, 'guessed', { kind: 'guessed', method: 'identified from the drawn outline by the model; no printed label', inputs: [gaRegion('profile', [11, 15.5], [5.8, 8.2])] }),
+      space('fuel_tank-003', 'fuel_tank', 'D.O. TANK', '1', 'read', read('plan', [17, 19.5], [-2, 2])),
+      space('ballast_tank-004', 'ballast_tank', 'W.B. TANK (P)', '1P', 'read', read('plan', [13, 16], [0.2, 2.4])),
+    ],
+    checks: [],
+  };
+})();
+
 /** The record of a mock section: its region on the page the drawing pane shows. */
 function mockSectionRecord(section, page) {
   const region = { sheet: page.path.split('/').pop(), page: 0, view: 'body plan', box_px: section.roi_px, page_px: [page.width, page.height] };
@@ -599,6 +632,21 @@ export function mockTransport() {
         if (view.source_page) for (const section of view.sections) section.source_record = mockSectionRecord(section, view.source_page);
       }
       view.tank_model = mockTanks;
+      // ?mockga: the survey launch is a GA reading run (made-up values on the mock GA sheet), with no
+      // 3D model, so the 3D pane shows the GA panel. ?mockgafile: the reading and sheet of a real
+      // development run copied into the git-ignored mock/files/ga-local.json and ga-local.png
+      // (local screenshots only; never committed).
+      const gaParams = new URLSearchParams(location.search);
+      if (task.endsWith('survey-launch') && (gaParams.has('mockga') || gaParams.has('mockgafile'))) {
+        const local = gaParams.has('mockgafile')
+          ? await fetch('mock/files/ga-local.json').then((r) => (r.ok ? r.json() : null)).catch(() => null)
+          : null;
+        view.ga_reading = clone(local?.reading || MOCK_GA_READING);
+        view.source_page = local ? clone(local.page) : { path: 'ga_reading/ga-1.png', ...MOCK_PAGE };
+        view.model = null;
+        view.sections = [];
+        view.components = null;
+      }
       // ?mockstructure (with a structure GLB placed in mock/files; none is shipped): the survey
       // launch has a steel structure for the 3D view.
       view.structure_files = task.endsWith('survey-launch') && new URLSearchParams(location.search).has('mockstructure')

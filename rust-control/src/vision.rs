@@ -78,6 +78,8 @@ impl Purpose {
             Purpose::Localisation => Some("localisation_image"),
             Purpose::ShipCad => Some("ship_cad_drawing"),
             Purpose::PartRevision => Some(part_revision::EVIDENCE_KIND),
+            Purpose::GaReading => Some(provider::ga_reading::EVIDENCE_KIND),
+            Purpose::GaLabels => Some(provider::ga_reading::LABELS_EVIDENCE_KIND),
             _ => None,
         }
     }
@@ -363,6 +365,8 @@ pub enum VisionReply {
     Localisation(LocalisationReply),
     ShipCad(ShipReply),
     PartRevision(PartProgram),
+    GaReading(provider::ga_reading::GaReply),
+    GaLabels(provider::ga_reading::LabelsReply),
 }
 
 fn bounded_text(text: &str, max: usize) -> bool {
@@ -486,6 +490,12 @@ pub fn parse_reply(
             Ok(VisionReply::ShipCad(reply))
         }
         Purpose::PartRevision => Ok(VisionReply::PartRevision(part_revision::parse(content)?)),
+        Purpose::GaReading => Ok(VisionReply::GaReading(provider::ga_reading::parse(
+            content, images,
+        )?)),
+        Purpose::GaLabels => Ok(VisionReply::GaLabels(provider::ga_reading::parse_labels(
+            content,
+        )?)),
         Purpose::Localisation => {
             let reply: LocalisationReply = util::parse(content.as_bytes(), 32_768)?;
             let mut ids = BTreeSet::new();
@@ -644,6 +654,12 @@ fn response_schema(purpose: Purpose, view: &str) -> Value {
         Purpose::PartRevision => {
             json!({"schema":"ship-cad/v1","components":[{"id":"the part id given in context","op":"the operation given in context","source":{"view":"plan, or profile for an appendage","region":"the part id","method":"closed_outline"},"args":{"ARGUMENT":{"value":"the value in the argument form given in context","source":"ai_inferred","basis":"short reason"}}}]})
         }
+        Purpose::GaReading => {
+            serde_json::from_str(provider::ga_reading::CLI_SCHEMA).unwrap_or(Value::Null)
+        }
+        Purpose::GaLabels => {
+            serde_json::from_str(provider::ga_reading::LABELS_CLI_SCHEMA).unwrap_or(Value::Null)
+        }
         Purpose::Localisation => {
             json!({"answers":[{"id":"question id","x":"number or null","y":"number or null","value":"number or null","evidence":"visible mark or missing reason"}]})
         }
@@ -694,6 +710,8 @@ pub fn payload(
         Purpose::ShipCad => "write_measured_ship_program",
         Purpose::Localisation => "measure_localisation",
         Purpose::PartRevision => "revise_one_part",
+        Purpose::GaReading => "read_general_arrangement",
+        Purpose::GaLabels => "read_label_crops",
         _ if manifest.images[0].view == OVERVIEW_VIEW => "overview",
         _ => "panel",
     };
@@ -730,11 +748,16 @@ pub fn payload(
     let tokens = match purpose {
         Purpose::BuildReview => REVIEW_OUTPUT_TOKENS,
         Purpose::PartRevision => part_revision::OUTPUT_TOKENS,
+        Purpose::GaReading => provider::ga_reading::OUTPUT_TOKENS,
+        Purpose::GaLabels => provider::ga_reading::LABELS_OUTPUT_TOKENS,
         _ => SETUP_OUTPUT_TOKENS,
     };
     let messages =
         json!([{"role":"system","content":purpose.prompt()},{"role":"user","content":content}]);
-    let payload = crate::models::payload(model, tokens, false, 0., messages)?;
+    // Reading a GA is judgment (which outline is which space), so the model
+    // reasons first; the other vision purposes answer directly.
+    let thinking = purpose == Purpose::GaReading;
+    let payload = crate::models::payload(model, tokens, thinking, 0., messages)?;
     Ok((payload, prompt, receipts))
 }
 
@@ -1143,18 +1166,25 @@ pub struct ReadingRecord {
 
 /// `marinaframe vision-request`: send one prepared request and write
 /// `out/vision_reading.json` with every receipt and the validated reply.
-pub fn vision_request(request_dir: &Path, out: &Path, basis: &str) -> Result<Value> {
+pub fn vision_request(
+    request_dir: &Path,
+    out: &Path,
+    basis: &str,
+    model: Option<&str>,
+) -> Result<Value> {
     if basis.trim().is_empty() || basis.chars().count() > 1024 {
         return Err("live_provider_transfer_basis_required".into());
     }
     let (manifest, manifest_sha256, images) = load_request(request_dir)?;
+    let model = request_model(manifest.purpose, model)?;
     if out.exists() {
         return Err("vision_request_output_exists".into());
     }
     for directory in ["requests", "receipts"] {
         std::fs::create_dir_all(out.join(directory)).map_err(|_| "vision_output_create")?;
     }
-    let config = standalone_config(basis, &request_dir.join("request.json"))?;
+    let mut config = standalone_config(basis, &request_dir.join("request.json"))?;
+    config.model = model.into();
     let started_ms = util::now_ms();
     let template = template(
         &config.model,
@@ -1178,7 +1208,10 @@ pub fn vision_request(request_dir: &Path, out: &Path, basis: &str) -> Result<Val
         request_manifest_sha256: manifest_sha256,
         request_images: manifest.images.clone(),
         source_sha256: manifest.source_sha256.clone(),
-        endpoint: GO_ENDPOINT.into(),
+        endpoint: crate::models::settings(&config.model)?
+            .transport
+            .endpoint()
+            .into(),
         requested_model: config.model.clone(),
         prompt_sha256: util::hash(manifest.purpose.prompt().as_bytes()),
         authorization_basis: basis.into(),
@@ -1196,9 +1229,105 @@ pub fn vision_request(request_dir: &Path, out: &Path, basis: &str) -> Result<Val
     )
 }
 
+/// The model of a standalone vision request. Without `--model` it is the
+/// OpenCode Go model, as before, except for `ga_reading`: GA drawings are
+/// partner data released to Claude only, so that purpose takes Claude Sonnet
+/// 5.5 by default and refuses every model that is not on the Claude
+/// subscription transport.
+pub fn request_model(purpose: Purpose, model: Option<&str>) -> Result<&'static str> {
+    let partner_data = matches!(purpose, Purpose::GaReading | Purpose::GaLabels);
+    let default = if partner_data {
+        crate::models::CLAUDE_SONNET_5_5
+    } else {
+        GO_MODEL
+    };
+    let settings = crate::models::settings(model.unwrap_or(default))?;
+    if partner_data && settings.transport != crate::models::Transport::ClaudeSubscription {
+        return Err("ga_reading_requires_claude_subscription".into());
+    }
+    Ok(settings.id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The live failure of 2026-11-12: a checked GA reply must survive the receipt written by
+    /// the provider worker and read back by the controller.
+    #[test]
+    fn a_ga_reading_is_sent_receipted_and_read_back() {
+        use crate::models::CLAUDE_SONNET_5_5;
+        let mut png = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec();
+        png.extend_from_slice(&400u32.to_be_bytes());
+        png.extend_from_slice(&300u32.to_be_bytes());
+        png.extend_from_slice(&[8, 0, 0, 0, 0, 0, 0, 0, 0]);
+        let manifest = RequestManifest {
+            schema_version: REQUEST_VERSION.into(),
+            purpose: Purpose::GaReading,
+            source_sha256: "b".repeat(64),
+            engineering_approved: false,
+            context: json!({"coordinate_frame":"attachment_pixels"}),
+            images: vec![RequestImage {
+                image_id: "sheet".into(),
+                file: "sheet.png".into(),
+                sha256: util::hash(&png),
+                bytes: png.len() as u64,
+                width: 400,
+                height: 300,
+                view: "sheet_overview".into(),
+                crop_box_px: [0, 0, 4000, 3000],
+            }],
+        };
+        let template = template(
+            CLAUDE_SONNET_5_5,
+            &manifest,
+            &"c".repeat(64),
+            &[png],
+            "vision_request",
+        )
+        .unwrap();
+        let out = tempfile::tempdir().unwrap();
+        for directory in ["requests", "receipts"] {
+            std::fs::create_dir_all(out.path().join(directory)).unwrap();
+        }
+        let mut config = standalone_config("test", Path::new("/nonexistent/request.json")).unwrap();
+        config.model = CLAUDE_SONNET_5_5.into();
+        // One item lies off the image: it is refused alone and the reply is kept.
+        let content = r#"{"ship_type":{"value":"tanker","evidence":"C.O.T."},"views":[],"particulars":[],
+            "items":[{"kind":"cargo_tank","label":"NO.1 C.O.T.","number":"1","basis":"read","image_id":"sheet","box":[10,10,50,30]},
+                     {"kind":"cargo_tank","label":"NO.2 C.O.T.","number":"2","basis":"read","image_id":"t5","box":[10,10,50,30]}],
+            "counts":{"cargo_holds":{"value":0,"evidence":"tanker"},"cargo_hatches":{"value":0,"evidence":"tanker"},
+                      "cargo_cranes":{"value":0,"evidence":"hose crane only"},"cargo_tanks":{"missing":"partial"},
+                      "slop_tanks":{"missing":"partial"},"container_bays":{"missing":"tanker"}}}"#;
+        let answer = |_: &ProviderInput| recorded_body(CLAUDE_SONNET_5_5, content).unwrap();
+        let mut usage = Usage::default();
+        let sent = send_with(
+            out.path(),
+            "",
+            &config,
+            &template,
+            &mut usage,
+            Responder::Recorded(&answer),
+        )
+        .unwrap();
+        let Some(VisionReply::GaReading(reply)) = sent.reply else {
+            panic!("a GA reply is expected: {:?}", sent.stop)
+        };
+        assert_eq!((reply.items.len(), reply.refused.len()), (1, 1));
+        assert_eq!(usage.requests_completed, 1);
+    }
+
+    #[test]
+    fn ga_reading_goes_only_to_claude() {
+        use crate::models::{CLAUDE_SONNET_5_5, CROUTON_ALPHA_FREE, DEEPSEEK_V4_1_FLASH};
+        for purpose in [Purpose::GaReading, Purpose::GaLabels] {
+            assert_eq!(request_model(purpose, None).unwrap(), CLAUDE_SONNET_5_5);
+            for model in [DEEPSEEK_V4_1_FLASH, CROUTON_ALPHA_FREE] {
+                assert!(request_model(purpose, Some(model)).is_err());
+            }
+        }
+        assert_eq!(request_model(Purpose::ShipCad, None).unwrap(), GO_MODEL);
+    }
 
     fn image(id: &str, view: &str, kind: &str) -> ImageReceipt {
         ImageReceipt {
