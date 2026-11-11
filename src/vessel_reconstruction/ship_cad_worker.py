@@ -126,7 +126,7 @@ def sandbox_command(task: Path, limits) -> tuple[list[str], str]:
                                      'executable': sys.executable, 'limits': asdict(limits),
                                      'parent_pid': os.getpid()}))
         return ([str(linux_launcher()), '--config', str(config), '--', *arguments],
-                'linux-landlock-seccomp-deny-default')
+                'linux-landlock-seccomp-deny-list')
     require_sandbox()
     profile = task/'worker.sb'
     profile.write_text(sandbox_profile(task, runtime_paths()))
@@ -202,6 +202,21 @@ def run(program: dict, measurements: dict, task: Path, *, audit=None, limits=SAN
     return outcome
 
 
+def confirm_linux_sandbox() -> None:
+    """Check kernel state in the child before importing any model executor.
+
+    This is a minimum boundary check, not proof of the complete filter policy.
+    Landlock grants only this process's status file, never the procfs tree.
+    """
+    try:
+        fields = dict(line.split(':', 1) for line in
+                      Path('/proc/self/status').read_text().splitlines() if ':' in line)
+    except OSError as exc:
+        raise RuntimeError('Linux sandbox attestation failed: cannot read child kernel status') from exc
+    if fields.get('Seccomp', '').strip() != '2' or fields.get('NoNewPrivs', '').strip() != '1':
+        raise RuntimeError('Linux sandbox attestation failed: Seccomp 2 and NoNewPrivs 1 are required')
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--task', type=Path, required=True)
@@ -209,6 +224,7 @@ def main(argv=None):
     parser.add_argument('--parent', type=int, required=True)
     args = parser.parse_args(argv)
     if sys.platform == 'linux':
+        confirm_linux_sandbox()
         # The native launcher has already installed hard limits and parent-death
         # handling. Its seccomp policy forbids changing prctl settings afterward.
         if os.getppid() != args.parent:

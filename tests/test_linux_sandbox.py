@@ -43,7 +43,7 @@ def test_linux_command_uses_native_launcher(monkeypatch, tmp_path):
     command, label = worker.sandbox_command(task, SANDBOX_MODEL_LIMITS)
     assert command[:3] == [str(launcher), '--config', str(task/'worker-linux.json')]
     assert command[3:5] == ['--', sys.executable]
-    assert label == 'linux-landlock-seccomp-deny-default'
+    assert label == 'linux-landlock-seccomp-deny-list'
     config = json.loads((task/'worker-linux.json').read_text())
     assert config['task'] == str(task)
     assert config['work'] == str(task/'work')
@@ -59,6 +59,20 @@ def test_linux_runtime_never_grants_system_prefix_or_home(monkeypatch):
     assert Path('/') not in paths
     assert Path.home() not in paths
     assert Path('/etc') not in paths
+
+
+@pytest.mark.parametrize('status', ['Seccomp:\t0\nNoNewPrivs:\t0\n',
+                                         'Seccomp:\t2\nNoNewPrivs:\t0\n',
+                                         'Seccomp:\t0\nNoNewPrivs:\t1\n', ''])
+def test_child_attestation_refuses_missing_controls(monkeypatch, status):
+    monkeypatch.setattr(Path, 'read_text', lambda self: status)
+    with pytest.raises(RuntimeError, match='sandbox attestation'):
+        worker.confirm_linux_sandbox()
+
+
+def test_child_attestation_accepts_required_controls(monkeypatch):
+    monkeypatch.setattr(Path, 'read_text', lambda self: 'Seccomp:\t2\nNoNewPrivs:\t1\n')
+    worker.confirm_linux_sandbox()
 
 
 def test_unsupported_platform_fails_closed(monkeypatch):
