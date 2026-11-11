@@ -66,10 +66,13 @@ exists. The baseline and after run 1 used the old files. The runner (`0d8eda0`) 
 a sheet whose truth file is missing only when both arms' tables are byte-identical to the baseline (equal tables
 give equal scores; PM confirmed), and stops otherwise. From after run 2's restart on, both truth roots are
 `work/dev-truth` (PARDON ME, BUE GIRL and BUMBLE BEE there are byte-identical to the files the baseline used;
-after run 2 itself was started with the old paths, which give the same bytes). A new lane is re-transcribing
-Thayer sheet 4 and Balclutha sheet 7 into `work/dev-truth`; when those files exist the two sheets may be
-rescored, and **their numbers then use a re-transcribed truth and may differ slightly from older published
-values**.
+after run 2 itself was started with the old paths, which give the same bytes). A new lane re-transcribed
+Thayer sheet 4 and Balclutha sheet 7 into `work/dev-truth` (two blind transcriptions agree on every cell; all
+files match `work/dev-truth/SHA256SUMS`). PM check: on the current product reader the **restored truth
+reproduces the published values exactly** (Thayer 149 of 151 cells, 0 wrong, RMS 0.011616 m; Balclutha 151 of
+151, 1 wrong, RMS 0.148012 m). So the fallback was reverted (`6afc0b2`), and after run 2 was stopped and started
+again with both truth roots at `work/dev-truth`: every sheet is scored against its truth. The baseline used the
+old Thayer and Balclutha files; with the restored truth reproducing them exactly, the comparison holds.
 - [ ] After run with `--baseline`: `work/polyline-engage/after.json`; per-sheet table in section 5.
 - [ ] Quick test tier; push the branch (no merge).
 
