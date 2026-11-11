@@ -1,0 +1,337 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://marinaframe.invalid/schemas/candidate-validation-v1.schema.json",
+  "title": "MarinaFrame candidate validation v1",
+  "description": "Strict report structure. Current identity, raw audit arithmetic, artifact bytes and complete finalization are additionally checked by each controller.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "marinaframe.validation.v1"
+    },
+    "binding": {
+      "type": "object",
+      "properties": {
+        "source_manifest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "input_spec_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "selection_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "revision_spec_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "run_manifest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "run_result_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "step_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "audit_implementation_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "generation_id": {
+          "type": "string",
+          "pattern": "^generation-[0-9a-f]{24}$"
+        },
+        "revision_id": {
+          "type": "string",
+          "pattern": "^r[0-9]{4,8}$"
+        },
+        "run_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{20}$"
+        }
+      },
+      "required": [
+        "source_manifest_sha256",
+        "input_spec_sha256",
+        "selection_sha256",
+        "revision_spec_sha256",
+        "run_manifest_sha256",
+        "run_result_sha256",
+        "step_sha256",
+        "audit_implementation_sha256",
+        "generation_id",
+        "revision_id",
+        "run_id"
+      ],
+      "additionalProperties": false
+    },
+    "checks": {
+      "type": "object",
+      "properties": {
+        "worker_execution": {
+          "type": "string",
+          "const": "succeeded"
+        },
+        "artifact_integrity": {
+          "type": "string",
+          "const": "passed"
+        },
+        "cad_validity": {
+          "type": "string",
+          "enum": [
+            "passed",
+            "failed"
+          ]
+        },
+        "trace_fidelity": {
+          "type": "string",
+          "enum": [
+            "passed",
+            "failed"
+          ]
+        }
+      },
+      "required": [
+        "worker_execution",
+        "artifact_integrity",
+        "cad_validity",
+        "trace_fidelity"
+      ],
+      "additionalProperties": false
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "passed",
+        "failed"
+      ]
+    },
+    "units": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string",
+          "const": "m"
+        },
+        "step": {
+          "type": "string",
+          "const": "mm"
+        },
+        "reported": {
+          "type": "string",
+          "const": "m"
+        }
+      },
+      "required": [
+        "input",
+        "step",
+        "reported"
+      ],
+      "additionalProperties": false
+    },
+    "tolerances": {
+      "type": "object",
+      "properties": {
+        "max_section_distance_m": {
+          "type": "number",
+          "const": 0.0011
+        },
+        "max_relative_metric_error": {
+          "type": "number",
+          "const": 1e-06
+        }
+      },
+      "required": [
+        "max_section_distance_m",
+        "max_relative_metric_error"
+      ],
+      "additionalProperties": false
+    },
+    "sampling": {
+      "type": "object",
+      "properties": {
+        "policy": {
+          "type": "string",
+          "const": "first_two_middle_last_two_v1"
+        },
+        "section_ids": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "total_section_count": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 300
+        }
+      },
+      "required": [
+        "policy",
+        "section_ids",
+        "total_section_count"
+      ],
+      "additionalProperties": false
+    },
+    "measurements": {
+      "type": "object",
+      "properties": {
+        "max_section_distance_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "relative_metric_error": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "max_section_distance_m",
+        "relative_metric_error"
+      ],
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 536870912
+          }
+        },
+        "required": [
+          "kind",
+          "path",
+          "sha256",
+          "bytes"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "audit_contract_version": {
+      "type": "string",
+      "const": "step_source_sections_v1"
+    },
+    "semantic_review": {
+      "type": "string",
+      "const": "required"
+    },
+    "engineering_approved": {
+      "type": "boolean",
+      "const": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "binding",
+    "checks",
+    "outcome",
+    "units",
+    "tolerances",
+    "sampling",
+    "measurements",
+    "evidence",
+    "audit_contract_version",
+    "semantic_review",
+    "engineering_approved"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "checks": {
+            "properties": {
+              "cad_validity": {
+                "const": "passed"
+              },
+              "trace_fidelity": {
+                "const": "passed"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "outcome": {
+            "const": "passed"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "outcome": {
+            "const": "failed"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "measurements": {
+            "properties": {
+              "max_section_distance_m": {
+                "maximum": 0.0011
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "checks": {
+            "properties": {
+              "trace_fidelity": {
+                "const": "passed"
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "checks": {
+            "properties": {
+              "trace_fidelity": {
+                "const": "failed"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

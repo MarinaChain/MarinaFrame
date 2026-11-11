@@ -50,7 +50,11 @@ def test_measures_pixel_curve(tmp_path, degraded, color):
     expected=3.6*np.sqrt(1-(1-points[:,1]/5)**2)
     # Raster quantization and the steep near-keel curve bound accuracy.
     assert np.sqrt(np.mean((points[:,0]-expected)**2)) < .045
-    assert np.max(np.abs(points[3:,0]-expected[3:])) < .055
+    # Preserve the original physical evaluation range (old samples 3..128).
+    # Adaptive source knots can insert points below that height; an index cut
+    # would silently change which near-keel raster uncertainty is evaluated.
+    evaluated = points[:, 1] >= 5 * 3 / 128
+    assert np.max(np.abs(points[evaluated,0]-expected[evaluated])) < .055
     assert len(points)>=65
     assert section['coverage']>.95
     assert section['x_m']==12.5

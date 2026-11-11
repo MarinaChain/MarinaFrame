@@ -373,9 +373,19 @@ class Harness:
                         timed_out=self._deadline_triggered or elapsed+time.monotonic()-started>=self.limits.wall_seconds
                         return self._terminate('budget_exhausted' if timed_out else 'cancelled',
                                                'Final validation stopped after deadline or cancellation',started,elapsed)
-                    if not check.get('ok'):
-                        return self._terminate('blocked','Final deterministic validation refused the candidate',started,elapsed)
-                    return self._terminate('awaiting_human_review',decision['arguments']['summary'],started,elapsed)
+                    from .validation_contract import ready_for_review
+                    try:
+                        with self.domain.validation_guard() as context:
+                            ready=ready_for_review(check,context,self.store.path)
+                            if self.cancel.is_set() or elapsed+time.monotonic()-started>=self.limits.wall_seconds:
+                                timed_out=self._deadline_triggered or elapsed+time.monotonic()-started>=self.limits.wall_seconds
+                                return self._terminate('budget_exhausted' if timed_out else 'cancelled',
+                                                       'Finalization stopped after deadline or cancellation',started,elapsed)
+                            if ready:
+                                return self._terminate('awaiting_human_review',decision['arguments']['summary'],started,elapsed)
+                    except (AttributeError,OSError,ValueError,TypeError,KeyError):
+                        pass
+                    return self._terminate('blocked','Final deterministic validation refused the candidate',started,elapsed)
                 return self._terminate('blocked',decision['arguments']['summary'],started,elapsed)
             if decision['tool']=='build_provisional':
                 if s['builds']>=self.limits.max_builds:

@@ -155,4 +155,10 @@ def test_corridor_clipping_cannot_turn_a_baseline_into_positive_keel_breadth(tmp
     assert observed[0, 0] == 0
     diagnostic = selected["diagnostics"]["sections"]["keel"]
     assert diagnostic["horizontal_source_rows_with_exclusions"] == 6
-    assert diagnostic["max_missing_run_px"] == 1
+    # The source contrast now retains the actual one-pixel curve where it
+    # crosses each pale ruler. No part of a uniformly shaded ruler is turned
+    # into a curve by corridor clipping.
+    assert diagnostic["max_missing_run_px"] == 0
+    assert len(diagnostic["retained_contrast_subruns"]) == 6
+    assert all(item["span"][1] - item["span"][0] == 1
+               for item in diagnostic["retained_contrast_subruns"])

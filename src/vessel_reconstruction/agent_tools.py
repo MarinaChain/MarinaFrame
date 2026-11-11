@@ -7,6 +7,7 @@ All image/native work runs in the existing bounded worker profile.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import asdict, replace
 import copy
 import fcntl
@@ -114,6 +115,7 @@ class DomainTools:
         write_json(self.state_path, state)
 
     def _verify_inputs(self):
+        self.revision_id  # Reject malformed checkpoint revisions before any operation.
         path = safe_relative_file(self.root, "input/spec.json")
         if digest_file(path) != self.state["input_spec_sha256"]:
             raise ValueError("Captured specification changed after task admission.")
@@ -125,7 +127,10 @@ class DomainTools:
 
     @property
     def revision_id(self):
-        return f"r{self.state['revision']:04d}"
+        revision = self.state.get("revision")
+        if type(revision) is not int or not 0 <= revision <= 99_999_999:
+            raise ValueError("Domain revision must be an exact bounded nonnegative integer.")
+        return f"r{revision:04d}"
 
     @property
     def generation_id(self):
@@ -141,7 +146,7 @@ class DomainTools:
                      "inspected": s.get("id") in self.state["catalog"]}
                     for s in self.spec.get("sections", []) if isinstance(s, dict)]
         current = next((b for b in reversed(self.state["builds"])
-                        if b["generation_id"] == self.generation_id), None)
+                        if b["generation_id"] == self.generation_id and b["revision_id"] == self.revision_id), None)
         ordered = sorted(self.state["catalog"].values(),
                          key=lambda s: (s["section_id"] in self.state["selected"], s["section_id"]))
         inspected = [{"section_id": item["section_id"],
@@ -241,8 +246,13 @@ class DomainTools:
                                      exception_type=type(exc).__name__)
 
     def _observation(self, ok, status, **values):
-        return {"ok": ok, "status": status, "revision_id": self.revision_id,
-                "generation_id": self.generation_id, "selected_count": len(self.state["selected"]),
+        try:
+            revision = self.revision_id
+        except (ValueError, TypeError, KeyError):
+            revision = None
+        return {"ok": ok, "status": status, "revision_id": revision,
+                "generation_id": self.generation_id if revision is not None else None,
+                "selected_count": len(self.state["selected"]),
                 "remaining_count": len(self.spec.get("sections", [])) - len(self.state["selected"]),
                 **SEMANTIC_FLAGS, **values}
 
@@ -363,7 +373,8 @@ class DomainTools:
         return directory / "spec.json"
 
     def _build_provisional(self):
-        previous = next((b for b in reversed(self.state["builds"]) if b["generation_id"] == self.generation_id), None)
+        previous = next((b for b in reversed(self.state["builds"]) if b["generation_id"] == self.generation_id
+                         and b["revision_id"] == self.revision_id), None)
         if previous:
             return self._observation(previous["valid"], previous["status"], candidate=previous,
                                      reused=True, changed=False, validation_errors=previous.get("gaps", []))
@@ -396,15 +407,16 @@ class DomainTools:
 
     def _verified_candidate(self, *, allow_previous=False):
         from .run_record import verify_run
-        candidate = next((b for b in reversed(self.state["builds"]) if b["generation_id"] == self.generation_id), None)
-        if not candidate or not candidate["valid"]:
+        candidate = next((b for b in reversed(self.state["builds"]) if b["generation_id"] == self.generation_id
+                          and b["revision_id"] == self.revision_id), None)
+        if not candidate or candidate.get("valid") is not True:
             if allow_previous:
                 candidate = self.state["last_valid_candidate"]
-            if not candidate or not candidate["valid"]:
+            if not candidate or candidate.get("valid") is not True:
                 raise ToolInputError("No valid provisional STEP exists for this revision; build or revise the source selections.")
-        path = self.task_dir / candidate["path"]
+        path = safe_relative_file(self.task_dir, candidate["path"] + "/result.json").parent
         verification = verify_run(path)
-        if not verification.get("valid"):
+        if verification.get("valid") is not True:
             raise ToolInputError("Candidate evidence changed or failed immutable-run verification.")
         return candidate, path
 
@@ -414,7 +426,7 @@ class DomainTools:
         outcome, result = self._worker("render", {"run_dir": str(run), "view": view}, out, native=True)
         if result is None:
             return self._observation(False, outcome["state"], error_code="render_worker_failed")
-        stale = candidate["generation_id"] != self.generation_id
+        stale = candidate["generation_id"] != self.generation_id or candidate["revision_id"] != self.revision_id
         if not stale and view not in self.state["rendered_views"]:
             self.state["rendered_views"].append(view)
             self._save()
@@ -428,22 +440,87 @@ class DomainTools:
                                                       **{k: v for k, v in result["model_observation"].items() if k != "file"})],
                                  resources={"wall_seconds": outcome["elapsed_seconds"]})
 
+    def _validation_context(self, candidate, run):
+        from .validation_contract import build_context
+        return build_context(self.task_dir, self.root, self.state, self.spec, candidate, run)
+
+    def validation_context(self):
+        """Fresh identity/evidence context for an independent finalization gate.
+
+        This operation never computes a new audit or clears a cached failure.
+        It reloads the checkpoint and rechecks current bytes under the domain
+        lock, so finalization cannot depend only on a tool response envelope.
+        """
+        with self.validation_guard() as context:
+            return context
+
+    @contextmanager
+    def validation_guard(self):
+        """Keep a current validation context stable through controller commit.
+
+        The caller must retain this guard until its review-ready event has been
+        committed. All allowed domain mutation operations acquire the same lock.
+        A snapshot returned after releasing this guard is not an atomic finish.
+        """
+        with (self.root / "lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.state = load_bounded_json(self.state_path, max_bytes=MAX_INSPECTION_BYTES,
+                                           max_nodes=600_000)
+            self._verify_inputs()
+            candidate, run = self._verified_candidate()
+            yield self._validation_context(candidate, run)
+
     def _validate_candidate(self):
+        from .validation_contract import (ValidationContractError, make_contract,
+                                           verify_validation)
         candidate, run = self._verified_candidate()
-        if self.state.get("validation") and self.state["validation"].get("generation_id") == self.generation_id:
-            return self._observation(True, "validated_review_required", validation=self.state["validation"], reused=True)
+        context = self._validation_context(candidate, run)
+        if self.state.get("validation") is not None:
+            validation = self.state["validation"]
+            try:
+                assessment = verify_validation(validation, context, self.task_dir)
+            except (ValidationContractError, ValueError, OSError, TypeError, KeyError) as exc:
+                return self._observation(False, "validation_failed", error_code="validation_cache_invalid",
+                                         exception_type=type(exc).__name__, reused=True,
+                                         message="Cached audit is stale, malformed, incomplete or changed; original evidence is retained.")
+            return self._observation(assessment.passed,
+                                     "validated_review_required" if assessment.passed else "validation_failed",
+                                     validation=validation, artifacts=validation["artifacts"], reused=True)
         out = self.root / "validation" / uuid4().hex
         outcome, result = self._worker("audit", {"run_dir": str(run)}, out, native=True)
         if result is None:
             return self._observation(False, outcome["state"], error_code="validation_worker_failed")
-        validation = {**result["validation"], "generation_id": self.generation_id,
-                      "revision_id": self.revision_id, **SEMANTIC_FLAGS}
-        validation["artifacts"] = [_artifact(out / a["file"], self.task_dir, kind=a["kind"],
-                                            **{k: v for k, v in a.items() if k not in {"file", "kind"}})
-                                   for a in result.get("artifacts", [])]
+        if self.cancel_event is not None and self.cancel_event.is_set():
+            return self._observation(False, "cancelled", error_code="validation_cancelled")
+        artifacts = []
+        try:
+            if type(result) is not dict or set(result) != {"validation", "artifacts", "resources"}:
+                raise ValidationContractError("Native audit result is incomplete or has unknown fields.")
+            if type(result["artifacts"]) is not list:
+                raise ValidationContractError("Native audit artifact list is malformed.")
+            for item in result["artifacts"]:
+                if (type(item) is not dict or set(item) not in ({"file", "kind"}, {"file", "kind", "section_id"})
+                        or type(item["file"]) is not str or Path(item["file"]).name != item["file"]):
+                    raise ValidationContractError("Native audit artifact path or metadata is invalid.")
+                artifacts.append(_artifact(out / item["file"], self.task_dir, kind=item["kind"],
+                                           **{k: v for k, v in item.items() if k not in {"file", "kind"}}))
+            artifacts.append(_artifact(out / "observation.json", self.task_dir, kind="validation_worker_receipt"))
+            current_candidate, current_run = self._verified_candidate()
+            if self._validation_context(current_candidate, current_run) != context:
+                raise ValidationContractError("Candidate or source changed while validation was running.")
+            contract = make_contract(result["validation"], context, artifacts, outcome, self.task_dir)
+            validation = {**result["validation"], "generation_id": self.generation_id,
+                          "revision_id": self.revision_id, **SEMANTIC_FLAGS,
+                          "artifacts": artifacts, "contract": contract}
+            assessment = verify_validation(validation, context, self.task_dir)
+        except (ValidationContractError, ValueError, OSError, TypeError, KeyError) as exc:
+            return self._observation(False, "validation_failed", error_code="invalid_validation_contract",
+                                     exception_type=type(exc).__name__, artifacts=artifacts,
+                                     message="Native audit evidence cannot support validation; failed artifacts are retained.")
         self.state["validation"] = validation
         self._save()
-        return self._observation(validation["geometry_checks_passed"], "validated_review_required",
+        return self._observation(assessment.passed,
+                                 "validated_review_required" if assessment.passed else "validation_failed",
                                  validation=validation, artifacts=validation["artifacts"],
                                  resources={"wall_seconds": outcome["elapsed_seconds"]})
 
@@ -515,7 +592,7 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
     import numpy as np
     from PIL import Image, ImageDraw
     from .ingest import (DrawingError, _candidate_evidence, _eligible_trace_mask, _extract_one,
-                         _foreground, _read_image, _trace)
+                         _foreground, _read_image, _source_endpoint_hypothesis, _trace)
     from .resources import validate_sources
     spec = load_bounded_json(spec_path)
     validate_sources(spec, spec_path.parent)
@@ -559,7 +636,7 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
         left, top, right, bottom = bounds
         crop = image[top:bottom, left:right]
         mask, ink, _ = _foreground(crop)
-        eligible, _ = _eligible_trace_mask(mask, None)
+        eligible, _ = _eligible_trace_mask(mask, None, ink)
         grid = _grid_evidence(mask, (left, top))
         entry["grid_evidence"] = grid
         centre = section["calibration"]["centerline_px"] - left
@@ -586,11 +663,37 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
             path = np.interp(np.arange(len(mask)), unique, xx)
             corridor = np.abs(np.arange(mask.shape[1])[None, :] - path[:, None]) <= 3
             variants.append(("retained_alternative_source_continuity", eligible & corridor))
+        traced_variants = []
+        endpoint_variants = []
         for hypothesis, candidate_mask in variants:
             try:
                 rows, xs, quality = _trace(candidate_mask, ink, centre)
             except DrawingError:
                 continue
+            traced_variants.append((hypothesis, rows, xs, quality, None, None))
+            endpoint = _source_endpoint_hypothesis(mask, ink, rows, xs, centre,
+                                                    quality["median_stroke_width_px"])
+            if endpoint is not None:
+                erows, exs = endpoint["rows"], endpoint["xs"]
+                revised_quality = {**quality, "observed_row_count": len(erows),
+                    "interpolated_row_count": len(mask) - len(erows),
+                    "max_missing_run_px": max(int(erows[0]), int(len(mask) - 1 - erows[-1]),
+                        int(np.max(np.diff(erows) - 1))),
+                    "maximum_step_px_per_row": float(np.max(np.abs(np.diff(exs) / np.diff(erows))))}
+                evidence = endpoint["evidence"]
+                # Coordinates remain explicitly in original source pixels.
+                evidence = {**evidence,
+                    "contact_px": [evidence["contact_local_px"][0] + left,
+                                   evidence["contact_local_px"][1] + top],
+                    "source_run_px": [evidence["source_run_local_px"][0] + left,
+                                      evidence["source_run_local_px"][1] + left],
+                    "coordinate_origin_px": [left, top]}
+                endpoint_variants.append(("source_endpoint_contact_hypothesis", erows, exs,
+                                          revised_quality, evidence,
+                                          np.interp(np.arange(len(mask)), rows, xs)))
+        # Existing alternatives retain priority in the bounded catalog. New
+        # interpretations may not crowd a faint rival out of the evidence.
+        for hypothesis, rows, xs, quality, endpoint_evidence, parent_dense in traced_variants + endpoint_variants:
             coverage = len(rows) / len(mask)
             max_gap = quality["max_missing_run_px"]
             if coverage < .9 or max_gap > max(3, math.ceil(len(mask) * .025)):
@@ -605,6 +708,9 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
                               if float(np.max(np.abs(t["dense"] - dense))) < 1.1), None)
             if duplicate is not None:
                 entry["candidates"][duplicate]["generated_by"].append(hypothesis)
+                continue
+            if len(entry["candidates"]) >= MAX_CANDIDATES:
+                entry["additional_endpoint_hypotheses_omitted"] = True
                 continue
             selection = {"anchors_px": anchors, "half_width_px": 2.75}
             cid = "contour-" + digest_object({"source": source_sha, "section": section,
@@ -641,7 +747,13 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
                          "contour_selection": selection,
                          "source_points_px": [[float(x), float(y)] for x, y in zip(absolute_xs, absolute_rows)],
                          "identity_certified": False}
-            traces.append({"dense": dense})
+            if endpoint_evidence is not None:
+                parent = next((t for t in traces
+                               if float(np.max(np.abs(t["dense"] - parent_dense))) < 1.1), None)
+                candidate["endpoint_evidence"] = {**endpoint_evidence,
+                    "centroid_alternative_id": parent["candidate_id"] if parent else None}
+                candidate["endpoint_interpretation_requires_review"] = True
+            traces.append({"dense": dense, "candidate_id": cid})
             entry["candidates"].append(candidate)
         acceptable = [c for c in entry["candidates"] if c["grid_supported_hypothesis"]]
         # Prefer the best observed continuity only within the fully disclosed
@@ -650,7 +762,8 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
             acceptable.sort(key=lambda c: (c["source_support"]["maximum_step_px_per_row"],
                                            -c["source_support"]["observed_row_fraction"]))
             winner = acceptable[0]
-            winner["hypothesis"] = "grid_supported_contour_hypothesis"
+            if "endpoint_evidence" not in winner:
+                winner["hypothesis"] = "grid_supported_contour_hypothesis"
             grid["unique_non_grid_candidate_id"] = winner["candidate_id"]
             grid["non_grid_competing_components"] = 0
         else:
