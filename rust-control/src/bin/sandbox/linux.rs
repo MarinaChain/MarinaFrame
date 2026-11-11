@@ -377,6 +377,7 @@ fn syscalls() -> io::Result<()> {
             libc::SYS_sched_setaffinity,
             libc::SYS_sched_setparam,
             libc::SYS_sched_setscheduler,
+            libc::SYS_sched_setattr,
             libc::SYS_setpriority,
             libc::SYS_prctl,
             libc::SYS_seccomp,

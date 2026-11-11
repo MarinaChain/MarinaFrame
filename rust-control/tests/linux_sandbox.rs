@@ -153,6 +153,15 @@ fn direct_bind_and_connect_syscalls_are_denied() {
 }
 
 #[test]
+fn cross_process_resource_and_scheduler_syscalls_are_denied() {
+    for number in [libc::SYS_prlimit64, libc::SYS_sched_setattr] {
+        // Invalid arguments cannot mutate any process. EPERM must come from
+        // seccomp before the kernel checks those arguments.
+        success(&format!("import ctypes,errno\nlibc=ctypes.CDLL(None,use_errno=True)\nprint('REACHED',flush=True)\nassert libc.syscall(ctypes.c_long({number}), -1, None, 0, 0) == -1\nassert ctypes.get_errno() == errno.EPERM"));
+    }
+}
+
+#[test]
 fn descriptor_limit_is_enforced() {
     success("import errno\nprint('REACHED', flush=True)\nfiles=[]\ntry:\n for i in range(64): files.append(open('file-'+str(i), 'w'))\nexcept OSError as e: assert e.errno == errno.EMFILE\nelse: raise AssertionError('descriptors unlimited')");
 }
