@@ -58,6 +58,11 @@ FRAME_HOSTS = {"Bottom": "Bot. Stiff.", "Inner_Bottom": "Inner Bot. Stiff.", "De
                "Side_Shell": "Side Shell Stiff.", "Inner_Side_Shell": "Inner Side Shell Stiff.",
                "Longitudinal_Bulkhead": "Long. BLKHD Stiff."}
 
+# Stiffener rows of the transverse bulkhead. The web-frame sheet also prints a
+# "Vert. BLKHD Stiff." row for another member (often 1 at the web spacing); the bulkhead
+# sheet's row is the one that describes the transverse bulkhead.
+BULKHEAD_SHEET_ROWS = {"Vert. BLKHD Stiff.", "Trans. BLKHD Stiff."}
+
 Box = tuple[float, float, float, float, float, float]  # x0, y0, z0, x1, y1, z1 (metres)
 
 
@@ -148,6 +153,11 @@ def read_sheets(sheets: dict[str, Path]) -> BlockReading:
             if material:
                 materials.setdefault(name, material)
         for name, row in read_rows(words).items():
+            if name in BULKHEAD_SHEET_ROWS and key == "bulkhead":
+                rows[name] = row  # the bulkhead sheet owns these rows
+                if row.material:
+                    materials[name] = row.material
+                continue
             rows.setdefault(name, row)
             if row.material:
                 materials.setdefault(name, row.material)

@@ -125,3 +125,23 @@ def test_brackets_fill_the_hopper_spaces_and_beams_span_the_deck_plate():
     # Without hopper plates the bracket legs stay guessed.
     plain = block3d.transverse_members(reading(), block3d.stations(1.4))
     assert next(m for m in plain if m.member_id.endswith("bracket_low")).sources["size"] == "guessed"
+
+
+def test_bulkhead_stiffener_rows_come_from_the_bulkhead_sheet(monkeypatch):
+    sheets = {"longitudinal": "long", "web_frame": "web", "bulkhead": "bhd"}
+    tables = {
+        "long": {},
+        "web": {"Vert. BLKHD Stiff.": block3d.PrintedRow("Vert. BLKHD Stiff.", 1, 1.8, "L", 0.13, 0.13, 7.0, "A"),
+                "Webframe": block3d.PrintedRow("Webframe", 1, 1.8, "I", 2.0, 0.0, 20.0, "A")},
+        "bhd": {"Vert. BLKHD Stiff.": block3d.PrintedRow("Vert. BLKHD Stiff.", 35, 0.308, "T", 0.23, 0.03, 9.0, "B"),
+                "Webframe": block3d.PrintedRow("Webframe", 1, 9.9, "I", 9.9, 0.0, 99.0, "B")},
+    }
+    base = reading()
+    monkeypatch.setattr(block3d, "read_section_pdf", lambda path, mode: base.section)
+    monkeypatch.setattr(block3d, "read_pdf_words", lambda path: path)
+    monkeypatch.setattr(block3d, "read_plate_rows", lambda words: {})
+    monkeypatch.setattr(block3d, "read_rows", lambda words: tables[words])
+    result = block3d.read_sheets(sheets)
+    assert result.rows["Vert. BLKHD Stiff."].count == 35  # bulkhead sheet, read last, wins
+    assert result.materials["Vert. BLKHD Stiff."] == "B"
+    assert result.rows["Webframe"].spacing_m == 1.8  # other rows: first sheet still wins
