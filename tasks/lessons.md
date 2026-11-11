@@ -149,6 +149,7 @@
 - **Trigger:** Round 13 (BUMBLE BEE 47): the operator agent read the station labels and set the forebody (1-6) left and the aftbody (7-14) right; the chains fit the opposite halves within 2-6 mm. Code misnamed 10 of 14 stations and the models could not fix it, because each half's candidate stations were wrong. The round had to be reported as run.
 - **Rule:** Before a holdout protocol commit, have a second, independent check of which half is bow and which is stern (a different agent reading the labels in its own crops, or the profile's stem/stern position against the body plan), and record both readings in the protocol. If they disagree, stop and resolve before any run.
 - **Why:** One agent's reading of small station labels is a single point of failure, and a side swap turns a good reading into a systematic naming error that no later step can see.
+- **Recurrence (2026-11-11, Cama Beach published holdout):** the sides were checked twice and agreed, but the truth-blind calibration named every curve one station off on both halves (the printed station number was the drawn label minus one; the heavy "transom" line was station 10). The one-run holdout failed mostly on this. Rule addition: the second check must also confirm station identity, not only sides: match each body-plan curve to a station position in the profile or half-breadth plan (x along the hull) and to the station count in the table header, and record that match in the protocol before any run.
 
 ### A wait loop must not match itself (MarinaFrame)
 - **Date:** 2026-11-09
