@@ -61,7 +61,10 @@ another user.
      a plane at the selected section; Section planes (S) shows one at every station; See-through
      (X) makes the hull faint over the parts and tanks). Empty state when no build exists yet.
    - Section strip below: one tile per section with its status (chosen / declined / not read).
-3. **Inspector (right panel), tabs:**
+3. **Inspector (right panel)**, folds to a rail of icons (⌘4; remembered per viewer; windows
+   under 1800 px start folded; a section that needs a decision opens it). A picked 3D part's fact
+   card shows at its top; folded, a compact card docks in a 3D corner clear of the part and its
+   source lines. Tabs:
    - **Timeline**: events in plain language, newest at the bottom, live.
    - **Checks**: each validation check with value and limit, e.g. "Trace fidelity 0.86 mm,
      limit 1.1 mm: pass".

@@ -54,12 +54,27 @@ steps are done. Screenshot script: `node work/run-view-space/shots.mjs <label>` 
 server on `app/ui` at port 4317 (`python3 -m http.server 4317 --directory app/ui`) and the local
 mock GLB copied to `app/ui/mock/files/whole-vessel-draft.glb` (ignored by git).
 
-## Status
+## Status (2026-11-11)
 
-- [ ] 1 Placement rules
-- [ ] 2 Rail
-- [ ] 3 Card
-- [ ] 4 Hover label
-- [ ] 5 Steps
-- [ ] 6 Screenshots
-- [ ] 7 Tests, push
+- [x] 1 Placement rules: `overlapArea`, `placeClear` (with an extra-cover cost), `cornerBoxes`,
+  `besideBoxes`. A part's screen box overstates it (a deck spans the hull's box), so the 3D view
+  counts the part's real pixels under a candidate with a 6 x 4 ray grid (`partCover`).
+- [x] 2 Rail: `#details-rail`; review button counts sections to check and focuses the first
+  enabled decision button; the titlebar badge is gone (the rail carries the count).
+- [x] 3 Card: `#part-card` in the column; docked card in the pane otherwise. When no corner is
+  clear of the part, the card docks bottom right and the camera frames the part beside it, once
+  per pick.
+- [x] 4 Hover label (`.model-hover-tag`), right of the part first.
+- [x] 5 One-line steps (`.thought-row`, `stepStartsOpen` in `js/details.js`).
+- [x] 6 Screenshots: `work/run-view-space/{before,after}-<size>-*.png` in the main checkout's
+  `work/` (ignored). After-only: `pick-other-column-state`, `pick-hovered-part`, `steps`.
+- [x] 7 `node --test app/ui-tests`: 226 pass. `node app/ui-tests/a11y.mjs`: no violations.
+
+Base: `origin/continue/v0.5` at 5b6019b (includes the lane H merge), rebased cleanly.
+
+## Notes for review
+
+- The 3D tool bar still wraps to three rows in a 1280 px window and covers the model's top;
+  out of scope here.
+- Lane H's "best guess" label on the source line can sit over the 3D tool bar at 1280 px.
+- Not checked in the Tauri desktop shell; checked in Chrome on the mock backend only.
