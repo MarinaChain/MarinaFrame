@@ -303,7 +303,7 @@ def main() -> None:
     if args.in_process:
         from vessel_reconstruction.ship_cad import execute
         result = execute(inputs['program'], inputs['measurements'], out / 'task' / 'work' / 'output',
-                         guesses=inputs['guesses'], detail=inputs.get('detail'))
+                         guesses=inputs['guesses'], detail=inputs.get('detail'), workers=None)
         execution = {'exit_code': 0, 'result': result, 'sandbox': 'none (development, --in-process)'}
     else:
         from vessel_reconstruction.ship_cad_worker import run

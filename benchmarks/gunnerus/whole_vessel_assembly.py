@@ -250,6 +250,20 @@ def write_brep(shape, path: Path) -> None:
     BinTools.Write_s(shape.wrapped, str(path))
 
 
+def load_part(path: Path):
+    """Import and integrate one independent part, without changing reduction order."""
+    from vessel_reconstruction.geometry import precise_volume_mm3
+
+    shape = read_shape(path)
+    return shape, precise_volume_mm3(shape) / 1e9
+
+
+def display_part(shape):
+    from vessel_reconstruction.display_mesh import shape_mesh
+
+    return shape_mesh(shape, DISPLAY_TOLERANCE_MM, DISPLAY_ANGULAR_RAD, DISPLAY_SMOOTH_TOLERANCE_MM)
+
+
 def export_all(shapes: dict, out: Path, *, task: Path | None = None,
                revision: str | None = None) -> tuple[dict, dict]:
     """STEP per part and for the assembly (no pcurves: about half the size), plus a GLB mesh view.
@@ -259,7 +273,8 @@ def export_all(shapes: dict, out: Path, *, task: Path | None = None,
     """
     import cadquery as cq
 
-    from vessel_reconstruction.display_mesh import mesh_volume_mm3, shape_mesh, write_glb
+    from vessel_reconstruction.display_mesh import mesh_volume_mm3, write_glb
+    from vessel_reconstruction.parallel import process_parts
     from vessel_reconstruction.display_provenance import bind_display_output, display_record_path, write_display_record
 
     mesh = out / 'whole-vessel-draft.glb'
@@ -275,8 +290,7 @@ def export_all(shapes: dict, out: Path, *, task: Path | None = None,
     step = out / 'whole-vessel-draft.step'
     cq.exporters.export(cq.Compound.makeCompound(list(shapes.values())), str(step), opt={'write_pcurves': False})
     sizes[step.name] = step.stat().st_size
-    meshes = {name: shape_mesh(shape, DISPLAY_TOLERANCE_MM, DISPLAY_ANGULAR_RAD, DISPLAY_SMOOTH_TOLERANCE_MM)
-              for name, shape in shapes.items()}
+    meshes = dict(zip(shapes, process_parts(display_part, list(shapes.values()), out)))
     display_record_path(mesh).unlink(missing_ok=True)
     write_glb(meshes, mesh)
     if binding is not None:
@@ -386,39 +400,42 @@ def main() -> None:
     # The hull to deck needs only the read sections: with two or more workers it is built
     # in a second process while this one lofts the panel hull (parallel.worker_count).
     from vessel_reconstruction import parallel
-    job = None
-    if args.hull_brep:
-        hull_path = args.hull_brep.resolve()
-    else:
-        job = HullToDeckJob(deck, out) if parallel.worker_count(2) > 1 else None
-        hull_path = build_hull(args.sources, out, deck, after_read=job.start if job else None)
-        if job is not None and job.thread is None:
-            job = None  # the sections were not read; nothing was started
-    record = {'engineering_approved': False, 'status': 'draft_only', 'hull_source': str(hull_path),
-              'hull_station_cap': deck, 'hull_seconds': time.time() - started}
-    shapes, volumes, hull_box = {}, {}, None
-    if hull_path.is_file():
-        record['hull_loft_volume_m3'] = read_shape(hull_path).Volume() / 1e9
-        if job is not None:
-            to_deck, record['hull_to_deck'] = job.result()
-        else:
-            to_deck, record['hull_to_deck'] = build_hull_to_deck(hull_path.parent / 'sections.json', deck, out)
-        hull = read_shape(to_deck)
-        shapes['hull'] = hull
-        # The default kernel volume is not exact on the B-spline hull sides.
-        volumes['hull'] = precise_volume_mm3(hull) / 1e9
-        box = hull.BoundingBox()
-        hull_box = {'min': [box.xmin / 1000, box.ymin / 1000, box.zmin / 1000],
-                    'max': [box.xmax / 1000, box.ymax / 1000, box.zmax / 1000]}
-    elif job is not None:
-        job.discard()  # no panel hull: the sequential build makes no hull to deck either
+    with parallel.worker_tokens(parallel.worker_count(2)) as hull_workers:
+        job = None
+        try:
+            if args.hull_brep:
+                hull_path = args.hull_brep.resolve()
+            else:
+                job = HullToDeckJob(deck, out) if hull_workers > 1 else None
+                hull_path = build_hull(args.sources, out, deck, after_read=job.start if job else None)
+                if job is not None and job.thread is None:
+                    job = None  # the sections were not read; nothing was started
+            record = {'engineering_approved': False, 'status': 'draft_only', 'hull_source': str(hull_path),
+                      'hull_station_cap': deck, 'hull_seconds': time.time() - started}
+            shapes, volumes, hull_box = {}, {}, None
+            if hull_path.is_file():
+                record['hull_loft_volume_m3'] = read_shape(hull_path).Volume() / 1e9
+                if job is not None:
+                    to_deck, record['hull_to_deck'] = job.result()
+                else:
+                    to_deck, record['hull_to_deck'] = build_hull_to_deck(hull_path.parent / 'sections.json', deck, out)
+                hull = read_shape(to_deck)
+                shapes['hull'] = hull
+                # The default kernel volume is not exact on the B-spline hull sides.
+                volumes['hull'] = precise_volume_mm3(hull) / 1e9
+                box = hull.BoundingBox()
+                hull_box = {'min': [box.xmin / 1000, box.ymin / 1000, box.zmin / 1000],
+                            'max': [box.xmax / 1000, box.ymax / 1000, box.zmax / 1000]}
+            elif job is not None:
+                job.discard()  # no panel hull: the sequential build makes no hull to deck either
+        finally:
+            if job is not None:
+                job.discard()
     parts = step1 / 'task' / 'work' / 'output'
-    for part in PART_IDS:
-        path = parts / f'{part}.step'
-        if path.is_file():
-            shapes[part] = read_shape(path)
-            # Smooth B-spline walls need the adaptive integration too.
-            volumes[part] = precise_volume_mm3(shapes[part]) / 1e9
+    paths = [parts / f'{part}.step' for part in PART_IDS if (parts / f'{part}.step').is_file()]
+    for path, (shape, volume) in zip(paths, parallel.process_parts(load_part, paths, out)):
+        shapes[path.stem] = shape
+        volumes[path.stem] = volume
     record.update(volumes_m3=volumes, sum_of_parts_m3=sum(volumes.values()))
     if 'hull' in volumes and 'house_t1' in volumes:
         # The truth STEP holds the hull and the first tier only (docs/plans/...-scope.md, 3.3).

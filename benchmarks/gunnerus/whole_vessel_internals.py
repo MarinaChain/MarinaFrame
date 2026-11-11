@@ -943,6 +943,13 @@ def write_internals_display(meshes: dict, parts: list[Part], base: Path, target:
         write_display_record(target, binding)
 
 
+def build_internal_part(part: Part):
+    """Build one solid and its display mesh from the already placed part."""
+    solid = part_solid(part)
+    mesh = part_mesh(part, solid) if solid is not None else None
+    return solid, mesh, component_entry(part, solid)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--sources', type=Path, required=True)
@@ -969,12 +976,14 @@ def main() -> None:
     record = json.loads((folder / 'execution.json').read_text())
     components = [c for c in record['result']['components'] if c.get('kind') != 'structure']
     meshes = {}
-    for part in parts:
-        solid = part_solid(part)
+    from vessel_reconstruction.parallel import process_parts
+
+    built = process_parts(build_internal_part, parts, out)
+    for part, (solid, mesh, entry) in zip(parts, built):
         if solid is not None:
             cq.exporters.export(cq.Workplane().add(solid), str(folder / f'{part.id}.step'), exportType='STEP')
-            meshes[part.id] = part_mesh(part, solid)
-        components.append(component_entry(part, solid))
+            meshes[part.id] = mesh
+        components.append(entry)
     record['result']['components'] = components
     (folder / 'execution.json').write_text(json.dumps(record, indent=2) + '\n')
     if binding != bind_display_output(out / 'whole-vessel-draft.glb', args.task, args.revision):
@@ -994,4 +1003,6 @@ def main() -> None:
 
 
 if __name__ == '__main__':
+    # Keep Part's module name importable when transported to a worker.
+    from benchmarks.gunnerus.whole_vessel_internals import main
     main()
