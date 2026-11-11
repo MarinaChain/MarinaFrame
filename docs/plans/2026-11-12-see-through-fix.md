@@ -41,12 +41,17 @@ reads the source; the browser check below covers the behaviour.
 - Section cut, Section lines, Fairness (zebra, curvature, off): STL hull stays hidden; no
   console errors.
 
-## Note (not changed)
+## Rule change (PM decision, 2026-11-12)
 
-With tanks shown, See-through off draws the hull at 0.22 opacity and on at 0.1
-(`SHELL_OPACITY_WITH_INSIDES`, an existing tested rule). The difference is small. The button
-text says "Press again for a solid hull", which is true only when no tanks or steel show.
-A product decision is needed if off must mean a solid hull.
+Before: with tanks or steel shown, See-through off drew the hull at 0.22 and on at 0.1, so
+the switch looked like it did nothing. PM decision: off is always a solid hull; on is the faint
+hull with the inside solid. `shellPartOpacity` now sets the hull part (HULL_NAME) from the
+switch alone. Other parts (decks, superstructure) still go faint while tanks or steel show.
+Runs whose demo entry has `see_through: true` still open with the switch on.
+
+Browser check of the rule change (demo build with GA runs, hull opacity read from the
+material): Gunnerus (opens off), concept survey launch and GA-005 (open on). Each one,
+dark and light: on = 0.1 with the inside visible, off = 1.0 solid, also with tanks shown.
 
 ## Resume point
 

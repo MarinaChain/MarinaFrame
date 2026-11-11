@@ -113,9 +113,17 @@ test('See-through hull makes the hull faint and keeps the parts inside it solid'
   assert.equal(shell({ seeThroughHull: true, isHull: false }), 1);
 });
 
-test('See-through hull makes the hull fainter than the shell is with tanks inside', () => {
-  assert.ok(shell({ seeThroughHull: true, insideShown: true }) < shell({ insideShown: true }));
-  assert.ok(shell({ insideShown: true }) < 1);
+test('See-through hull off keeps the hull solid, also with tanks or steel shown', () => {
+  assert.equal(shell({ insideShown: true }), 1);
+  // The other parts (decks, superstructure) still go faint so the inside shows through them.
+  assert.ok(shell({ insideShown: true, isHull: false }) < 1);
+});
+
+test('See-through hull on makes the hull faint, with or without tanks or steel shown', () => {
+  for (const insideShown of [false, true]) {
+    const hull = shell({ seeThroughHull: true, insideShown });
+    assert.ok(hull > 0 && hull < 0.2, `hull opacity ${hull}`);
+  }
 });
 
 test('a ghost part stays ghost and a hidden part is not drawn, with See-through hull on or off', () => {

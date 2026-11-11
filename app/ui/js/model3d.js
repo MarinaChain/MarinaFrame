@@ -1142,8 +1142,8 @@ export function createModelView({
     material.depthWrite = !faint;
   }
 
-  /** Colour the whole vessel: tanks by content (capacity-plan tokens), the shell translucent
-   * while tanks show or See-through hull is on, the highlighted part in the selection blue,
+  /** Colour the whole vessel: tanks by content (capacity-plan tokens), the hull faint only while
+   * See-through hull is on, the other parts translucent while tanks or steel show, the highlighted part in the selection blue,
    * hidden parts out and ghost parts faint (the opacity rules are in visibility3d.js). */
   function styleWholeVessel() {
     insideShown = tankMeshes.some(isShown) || steelMeshes.some(isShown);

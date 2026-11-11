@@ -149,7 +149,8 @@ export const STEEL_SHELL_OPACITY = 0.35;
 export function shellPartOpacity({ state, isHull, insideShown, seeThroughHull }) {
   if (state === PART_STATES.hidden) return 0;
   if (state === PART_STATES.ghost) return GHOST_OPACITY;
-  if (seeThroughHull && isHull) return SEE_THROUGH_HULL_OPACITY;
+  // The See-through switch alone sets the hull: faint when on, solid when off (also with tanks or steel shown).
+  if (isHull) return seeThroughHull ? SEE_THROUGH_HULL_OPACITY : 1;
   return insideShown ? SHELL_OPACITY_WITH_INSIDES : 1;
 }
 
