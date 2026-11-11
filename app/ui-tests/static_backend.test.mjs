@@ -74,17 +74,17 @@ test('a concept-preview run is flagged in the list and on its view; the list kee
   assert.deepEqual(tasks.map((t) => [t.demo_order, t.demo_concept, t.demo_tagline]), [[0, true, 'Concept preview: Survey launch'], [1, false, null]]);
   assert.equal((await demo.invoke('get_task', { task: concept.summary.task })).demo.concept, true);
   assert.deepEqual((await demo.invoke('get_task', { task: TASK })).demo,
-    { concept: false, credit: null, note: null, whole_vessel_first: false, section_lines: true });
+    { concept: false, credit: null, note: null, whole_vessel_first: false, section_lines: true, see_through: false });
 });
 
 test('a run with a credit line carries it on its view', async () => {
   const files = demoFiles();
   Object.assign(files['data/manifest.json'].runs[0], {
-    credit: 'Drawings: someone, used under licence.', note: 'Bow flagged.', whole_vessel_first: true, section_lines: false,
+    credit: 'Drawings: someone, used under licence.', note: 'Bow flagged.', whole_vessel_first: true, section_lines: false, see_through: true,
   });
   const view = await backend(files).invoke('get_task', { task: TASK });
   assert.deepEqual(view.demo, {
-    concept: false, credit: 'Drawings: someone, used under licence.', note: 'Bow flagged.', whole_vessel_first: true, section_lines: false,
+    concept: false, credit: 'Drawings: someone, used under licence.', note: 'Bow flagged.', whole_vessel_first: true, section_lines: false, see_through: true,
   });
 });
 

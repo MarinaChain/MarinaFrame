@@ -312,13 +312,38 @@ export async function showWholeVessel(part) {
 }
 
 /**
- * The web demo's first view of a run (static/backend.js `view.demo`): the whole vessel, and the
- * section lines off when the demo says so. The Section lines switch brings them back.
+ * The web demo's first view of a run (static/backend.js `view.demo`): the whole vessel, the
+ * section lines off and the hull see-through when the demo says so. The Section lines and
+ * See-through switches change them back.
+ *
+ * `prepareDemoView` runs before the run view draws: until the whole vessel shows, the 3D pane
+ * shows only "Loading the 3D model…", never the hull of the section lines or the lines.
+ * `showDemoView` loads the whole vessel and removes the cover.
  */
-export async function showDemoView(demo) {
-  if (!demo?.whole_vessel_first || !state.view?.whole_vessel_model) return;
-  await showWholeVessel(null);
+function demoOpensWholeVessel(demo) {
+  return demo?.whole_vessel_first === true && Boolean(state.view?.whole_vessel_model);
+}
+
+export function prepareDemoView(demo) {
+  if (!demoOpensWholeVessel(demo)) return;
   if (demo.section_lines === false) model.setSectionLinesShown(false);
+  const pane = $('model-host').closest('.pane-model');
+  pane.classList.add('is-demo-loading');
+  if (!pane.querySelector('.demo-model-loading')) {
+    pane.append(el('p', { class: 'demo-model-loading', role: 'status' }, 'Loading the 3D model…'));
+  }
+}
+
+export async function showDemoView(demo) {
+  if (!demoOpensWholeVessel(demo)) return;
+  try {
+    await showWholeVessel(null);
+    if (demo.see_through === true) model.setSeeThroughHull(true);
+  } finally {
+    const pane = $('model-host').closest('.pane-model');
+    pane.classList.remove('is-demo-loading');
+    pane.querySelector('.demo-model-loading')?.remove();
+  }
 }
 
 /**

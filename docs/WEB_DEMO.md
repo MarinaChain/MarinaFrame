@@ -63,6 +63,14 @@ A run may have a `credit` line in `scripts/web_demo_runs.json` (for example "R/V
 drawings: NTNU (Norwegian University of Science and Technology), used under licence."). It shows
 as a strip on every page of that run. A concept-preview run shows its label there instead.
 
+### First view
+
+`whole_vessel_first: true` opens a run on its whole-vessel model (the app otherwise opens the
+hull of the section lines; the Parts tab has "Whole vessel in 3D"). `section_lines: false`
+starts with the Section lines switch off, `see_through: true` with See-through hull on. The
+viewer can change both. Gunnerus opens on the hull from the vector lines plan with the section
+lines off; the concept run opens see-through.
+
 ### Display name
 
 The demo shows each run under its `name` from `scripts/web_demo_runs.json`. The build replaces the

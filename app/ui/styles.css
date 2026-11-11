@@ -3833,3 +3833,7 @@ body:not([data-costs="shown"]) :is(.workspace, .inspector) .cost-timing { displa
 /* A run note and its credit take up to two lines. */
 :root[data-demo-note="note"] { --demo-note-h: 48px; }
 [data-demo-note] body[data-route="run"] .demo-run-note[data-kind="note"] { white-space: normal; line-height: 1.35; }
+/* The web demo while a run's whole-vessel model loads (js/workspace.js prepareDemoView). */
+.pane-model.is-demo-loading .model-host { visibility: hidden; }
+.demo-model-loading { position: absolute; inset: 50% 0 auto 0; margin: 0; text-align: center; color: var(--ink-3); font-size: var(--fs-md); }
+.pane-model.is-demo-loading :is(.model-controls, .model-corner, .model-readout, .model-frame-labels, .model-caption) { visibility: hidden; }

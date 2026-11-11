@@ -142,6 +142,7 @@ export function createStaticBackend({ fetchImpl = (...args) => fetch(...args), b
         note: listed?.note || null,
         whole_vessel_first: listed?.whole_vessel_first === true,
         section_lines: listed?.section_lines !== false,
+        see_through: listed?.see_through === true,
       };
       // As in app/core/src/view.rs, a dismissed notice is left out.
       view.notices = (view.notices || []).filter((notice) => !dismissed.has(notice.id));

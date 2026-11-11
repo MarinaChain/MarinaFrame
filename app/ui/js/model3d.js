@@ -144,7 +144,7 @@ export function createModelView({
     renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true });
   } catch {
     showEmpty('3D view not available', 'This computer did not allow a WebGL view.');
-    return { setModel() {}, setSpacesContext() {}, captureImage: () => null, setSelected() {}, partList: () => [], hidePart() {}, isolatePart() {}, showAllParts() {}, resetView() {}, refreshTheme() {}, showSections() {}, setSectionLinesShown() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, anchorOf: () => null, refreshCard() {}, placeOverlays() {}, showsWholeVessel: false, hasTanks: false };
+    return { setModel() {}, setSpacesContext() {}, captureImage: () => null, setSelected() {}, partList: () => [], hidePart() {}, isolatePart() {}, showAllParts() {}, resetView() {}, refreshTheme() {}, showSections() {}, setSectionLinesShown() {}, setSeeThroughHull() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, anchorOf: () => null, refreshCard() {}, placeOverlays() {}, showsWholeVessel: false, hasTanks: false };
   }
   /** Pixel ratio cap: a 3x screen draws at 2x, which looks the same and costs 2.25 times less. */
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
@@ -1992,6 +1992,8 @@ export function createModelView({
     showSections: (sections, options) => growth.show(sections, options),
     /** Draw the section lines on the model, or not (the Section lines switch). */
     setSectionLinesShown: (on) => setSectionLinesShown(on),
+    /** The hull faint and the parts inside it solid, or not (the See-through switch). */
+    setSeeThroughHull: (on) => setSeeThroughHull(on),
     /** HOOK(M3 live): show or hide the review overlays (guessed ranges) during a replay. */
     setReviewOverlays(visible) {
       reviewOverlays = visible;

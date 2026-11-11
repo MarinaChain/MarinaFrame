@@ -18,7 +18,9 @@ import {
 } from './run_header.js';
 import { renderSelection, renderStrip } from './run_strip.js';
 import { renderHistory } from './vessel_pages.js';
-import { live, setPartOutline, model, markTool, renderDrawing, renderModel, showDemoView } from './workspace.js';
+import {
+  live, setPartOutline, model, markTool, renderDrawing, renderModel, prepareDemoView, showDemoView,
+} from './workspace.js';
 
 /** Delay before re-reading a task after a burst of task-changed events. */
 const REFRESH_DEBOUNCE_MS = 250;
@@ -127,6 +129,7 @@ export async function loadTask({ fresh = false } = {}) {
       setEvents(events);
     }
     if (!view.sections.some((s) => s.id === state.sectionId)) setSectionId(defaultSection(view));
+    if (fresh) prepareDemoView(view.demo);
     renderTask({ fresh });
     if (fresh) showDemoView(view.demo);
     live.statusChanged();
