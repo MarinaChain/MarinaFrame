@@ -98,7 +98,7 @@ function changesSection(vessel) {
   const task = state.task;
   const body = el('div', { class: 'changes-body' }, el('p', { class: 'panel-empty' }, 'Reading the steps…'));
   invoke('get_live_steps', { task, after_sequence: 0 })
-    .then((live) => { if (task === state.task) fill(body, renderChanges(buildChanges(live.steps), { pageUrl: evidencePageUrl, placeOf: sectionPlace, placesIn })); })
+    .then((live) => { if (task === state.task) fill(body, renderChanges(buildChanges(live.steps), { pageUrl: evidencePageUrl, page: state.view?.source_page || null, placeOf: sectionPlace, placesIn })); })
     .catch(() => fill(body, el('p', { class: 'panel-empty' }, 'The steps of this run could not be read.')));
   const run = vessel ? `Run ${runNumber(vessel, task)}` : 'this run';
   return el('section', { class: 'changes', 'aria-labelledby': 'changes-title' },

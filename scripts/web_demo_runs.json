@@ -32,6 +32,15 @@
       ]
     },
     {
+      "slug": "bue-girl",
+      "name": "BUE GIRL (HAER drawing)",
+      "licence": "public-domain-us-government",
+      "source": "BUE GIRL lines drawing, sheet 2: Historic American Engineering Record, Library of Congress item hhh.or0590 (US Government work, public domain).",
+      "drawing_sha256": [
+        "f8950140c4ff2683801363acd7e60c126fa322ad4e571dcceb6e39d9c9f12196"
+      ]
+    },
+    {
       "slug": "sample-hull",
       "name": "Sample hull (synthetic)",
       "licence": "synthetic",

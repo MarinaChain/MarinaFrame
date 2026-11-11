@@ -35,6 +35,7 @@ let sources;
 export function createWorkspace() {
   evidence = createEvidenceCard({
     pageUrl: evidencePageUrl,
+    pageSize: () => state.view?.source_page || null,
     inkOf: (id) => live.latestInk().get(id) ?? null,
   });
 

@@ -379,10 +379,11 @@ impl RunExporter<'_> {
     /// Replace this computer's run folder with the demo's, in every string.
     fn scrub(&self, value: Value) -> Value {
         match value {
-            Value::String(text) => Value::String(
-                text.replace(&self.task, &self.demo_task)
+            Value::String(text) => Value::String(only_file_names(
+                &text
+                    .replace(&self.task, &self.demo_task)
                     .replace(&self.runs_folder, DEMO_RUNS_FOLDER),
-            ),
+            )),
             Value::Array(items) => Value::Array(items.into_iter().map(|v| self.scrub(v)).collect()),
             Value::Object(map) => Value::Object(
                 map.into_iter()
@@ -392,6 +393,34 @@ impl RunExporter<'_> {
             other => other,
         }
     }
+}
+
+/// Folders whose absolute paths name this computer (its user, temporary or mounted folders).
+const LOCAL_ROOTS: [&str; 6] = [
+    "/Users/",
+    "/home/",
+    "/private/",
+    "/tmp/",
+    "/var/folders/",
+    "/Volumes/",
+];
+
+/// Replace every other absolute local path in `text` (for example the input sheet a run
+/// spec names) with its file name alone. A path ends at white space, a quote or a comma.
+fn only_file_names(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = LOCAL_ROOTS.iter().filter_map(|root| rest.find(root)).min() {
+        out.push_str(&rest[..start]);
+        let path_len = rest[start..]
+            .find(|c: char| c.is_whitespace() || matches!(c, '"' | '\'' | ',' | ')'))
+            .unwrap_or(rest.len() - start);
+        let path = &rest[start..start + path_len];
+        out.push_str(path.rsplit('/').find(|part| !part.is_empty()).unwrap_or(""));
+        rest = &rest[start + path_len..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Copy the files of `from` into `to`, recursively; links are skipped.
