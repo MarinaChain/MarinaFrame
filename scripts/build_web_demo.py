@@ -53,8 +53,11 @@ ALLOWED_LICENCES = {
     # (2026-11-11: R/V Gunnerus, MiDShip development cases). Never committed to git.
     "owner-approved-display",
 }
-# Name parts that mark data the demo must never carry: holdout truth and sealed sets. Checked against slugs, every file in the bundle and every source name.
-FORBIDDEN_NAME_PARTS = ("truth", "holdout_value", "sealed")
+# Name parts that mark data the demo must never carry: holdout or benchmark truth, sealed
+# sets and benchmark scores. Checked against slugs, every file in the bundle and every source name.
+FORBIDDEN_NAME_PARTS = ("truth", "holdout_value", "sealed", "score")
+# The run views never mention truth data; a JSON file that does carries benchmark data.
+TRUTH_TEXT = re.compile(r"truth", re.IGNORECASE)
 # A local path of the computer that built the runs (the exporter replaces the run folder).
 LOCAL_PATH = re.compile(r"/(Users|home|private|tmp|var/folders|Volumes)/")
 # Source kinds that are written by the app itself (spec inputs), not drawings someone gave.
@@ -164,8 +167,12 @@ def check_files(out: Path) -> int:
             continue
         relative = path.relative_to(out).as_posix()
         check_name(relative, "file")
-        if path.suffix == ".json" and LOCAL_PATH.search(path.read_text(errors="replace")):
-            raise BuildError(f"{relative}: names a local path of this computer")
+        if path.suffix == ".json":
+            text = path.read_text(errors="replace")
+            if LOCAL_PATH.search(text):
+                raise BuildError(f"{relative}: names a local path of this computer")
+            if TRUTH_TEXT.search(text):
+                raise BuildError(f"{relative}: mentions truth data, which the demo never carries")
         total += path.stat().st_size
     if total > MAX_BUNDLE_BYTES:
         raise BuildError(f"bundle is {total / 1e6:.1f} MB, over the {MAX_BUNDLE_BYTES / 1e6:.0f} MB budget")
@@ -215,6 +222,7 @@ def write_manifest(data: Path, selection: list[dict], downscaled: dict[str, list
             "source": entry["source"],
             "tagline": entry.get("tagline"),
             "concept": entry.get("concept") is True,
+            "credit": entry.get("credit"),
             "summary": summary,
             "downscaled_images": downscaled[slug],
         })

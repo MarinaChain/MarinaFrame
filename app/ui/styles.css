@@ -3812,14 +3812,17 @@ body:not([data-costs="shown"]) :is(.workspace, .inspector) .cost-timing { displa
 /* The demo writes no files: the outputs are a list, not choices. */
 [data-demo="read-only"] .export-toggle { pointer-events: none; }
 [data-demo="read-only"] .export-check { visibility: hidden; }
-.demo-concept-label { display: none; }
-[data-demo-concept] body[data-route="run"] .demo-concept-label {
-  display: flex; align-items: center; position: absolute; inset: 0 0 auto 0; height: var(--demo-concept-h); z-index: 5;
-  margin: 0; padding: 0 16px; border-bottom: 1px dashed var(--guess-ink); background: var(--guess-soft); color: var(--guess-text);
-  font-size: var(--fs-sm); font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+.demo-run-note { display: none; }
+[data-demo-note] body[data-route="run"] .demo-run-note {
+  display: flex; align-items: center; position: absolute; inset: 0 0 auto 0; height: var(--demo-note-h); z-index: 5;
+  margin: 0; padding: 0 16px; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--ink-2);
+  font-size: var(--fs-sm); overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
-:root { --demo-concept-h: 34px; }
-[data-demo-concept] body[data-route="run"] #view-run { top: var(--demo-concept-h); }
+[data-demo-note] body[data-route="run"] .demo-run-note[data-kind="concept"] {
+  border-bottom: 1px dashed var(--guess-ink); background: var(--guess-soft); color: var(--guess-text); font-weight: 600;
+}
+:root { --demo-note-h: 34px; }
+[data-demo-note] body[data-route="run"] #view-run { top: var(--demo-note-h); }
 .vessel-tagline { padding: 0 var(--space-xs); color: var(--ink); font-size: var(--fs-sm); font-weight: 600; }
 .demo-pilot-card { text-decoration: none; color: inherit; }
 .demo-pilot-thumb { display: grid; place-items: center; }

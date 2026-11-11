@@ -57,6 +57,12 @@ The same runs, config and commit give the same bytes (`built_from_commit` is in 
 Approval for `owner-approved-display` (2026-11-11): the PM asked the user "Can we show Gunnerus
 (and MiDShip tanker sections) on a public site?" and the user answered "1. Yes".
 
+### Run notes
+
+A run may have a `credit` line in `scripts/web_demo_runs.json` (for example "R/V Gunnerus
+drawings: NTNU (Norwegian University of Science and Technology), used under licence."). It shows
+as a strip on every page of that run. A concept-preview run shows its label there instead.
+
 ### Home order
 
 Home lists the runs in the order of `scripts/web_demo_runs.json`. Runs with a `tagline` are the

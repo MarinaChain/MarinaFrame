@@ -73,7 +73,14 @@ test('a concept-preview run is flagged in the list and on its view; the list kee
   const tasks = await demo.invoke('list_tasks');
   assert.deepEqual(tasks.map((t) => [t.demo_order, t.demo_concept, t.demo_tagline]), [[0, true, 'Concept preview: Survey launch'], [1, false, null]]);
   assert.equal((await demo.invoke('get_task', { task: concept.summary.task })).demo.concept, true);
-  assert.equal((await demo.invoke('get_task', { task: TASK })).demo.concept, false);
+  assert.deepEqual((await demo.invoke('get_task', { task: TASK })).demo, { concept: false, credit: null });
+});
+
+test('a run with a credit line carries it on its view', async () => {
+  const files = demoFiles();
+  files['data/manifest.json'].runs[0].credit = 'Drawings: someone, used under licence.';
+  const view = await backend(files).invoke('get_task', { task: TASK });
+  assert.deepEqual(view.demo, { concept: false, credit: 'Drawings: someone, used under licence.' });
 });
 
 test('get_task answers from task.json and leaves out notices dismissed in this page', async () => {

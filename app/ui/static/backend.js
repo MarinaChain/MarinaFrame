@@ -133,8 +133,10 @@ export function createStaticBackend({ fetchImpl = (...args) => fetch(...args), b
       const view = structuredClone(await runJson(task, 'task.json'));
       const slug = await slugOf(task);
       const { runs } = await manifest();
-      // A concept-preview run (made-up vessel and drawings) carries its flag to every page.
-      view.demo = { concept: runs.find((run) => run.slug === slug)?.concept === true };
+      // A concept-preview run (made-up vessel and drawings) carries its flag to every page,
+      // and a run whose drawings need a credit carries that line.
+      const listed = runs.find((run) => run.slug === slug);
+      view.demo = { concept: listed?.concept === true, credit: listed?.credit || null };
       // As in app/core/src/view.rs, a dismissed notice is left out.
       view.notices = (view.notices || []).filter((notice) => !dismissed.has(notice.id));
       return view;

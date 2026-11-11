@@ -82,7 +82,12 @@ def test_sources_refuse_unlisted_drawings_and_truth_names(tmp_path, source):
 def test_files_refuse_local_paths_forbidden_names_and_links(tmp_path):
     (tmp_path / "ok.json").write_text('{"task": "/MarinaFrame/runs/demo-hull"}')
     assert build.check_files(tmp_path) > 0
-    for name, text in [("leak.json", '{"path": "/Users/someone/runs/x"}'), ("holdout_value.json", "{}")]:
+    for name, text in [
+        ("leak.json", '{"path": "/Users/someone/runs/x"}'),
+        ("holdout_value.json", "{}"),
+        ("appendage_score.json", "{}"),
+        ("notes.json", '{"file": "work/holdout/x/Truth.json"}'),
+    ]:
         bad = tmp_path / name
         bad.write_text(text)
         with pytest.raises(build.BuildError):

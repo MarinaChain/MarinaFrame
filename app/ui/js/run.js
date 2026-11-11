@@ -93,6 +93,21 @@ export async function openTask(task) {
   await loadTask({ fresh: true });
 }
 
+/** The label every page of a concept-preview run carries in the web demo. */
+export const CONCEPT_NOTE = 'Concept preview - example vessel and drawings made for this demo. Shows how MarinaFrame presents a finished model; not a reading of real drawings.';
+
+/**
+ * The web demo's note for the open run (static/backend.js gives `view.demo`): the concept
+ * label, else the credit of its drawings, else none. styles.css shows it on every run page.
+ */
+function showDemoNote(demo) {
+  const text = demo?.concept ? CONCEPT_NOTE : demo?.credit || '';
+  const note = document.getElementById('demo-run-note');
+  note.textContent = text;
+  note.dataset.kind = demo?.concept ? 'concept' : 'credit';
+  document.documentElement.toggleAttribute('data-demo-note', Boolean(text));
+}
+
 /** Read the open task again. `fresh` resets the view to its defaults. */
 export async function loadTask({ fresh = false } = {}) {
   const token = nextLoadToken();
@@ -103,8 +118,7 @@ export async function loadTask({ fresh = false } = {}) {
       fresh ? invoke('get_events', { task, after_sequence: 0 }) : Promise.resolve(null),
     ]);
     if (token !== state.loadToken) return;
-    // The web demo marks a concept-preview run (static/backend.js); styles.css shows its label.
-    document.documentElement.toggleAttribute('data-demo-concept', view.demo?.concept === true);
+    showDemoNote(view.demo);
     setView(view);
     if (events) {
       setEvents(events);
