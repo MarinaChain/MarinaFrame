@@ -88,8 +88,8 @@ def load_selection(path: Path) -> list[dict]:
     if len(set(slugs)) != len(slugs):
         raise BuildError("scripts/web_demo_runs.json names a run twice")
     for entry in runs:
-        if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", entry["slug"]):
-            raise BuildError(f"{entry['slug']}: a slug is lower-case letters, digits and '-'")
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]*", entry["slug"]):
+            raise BuildError(f"{entry['slug']}: a slug is letters, digits and '-'")
         if entry.get("licence") not in ALLOWED_LICENCES:
             raise BuildError(f"{entry['slug']}: licence {entry.get('licence')!r} is not allowed in the demo")
         check_name(entry["slug"], "run")
