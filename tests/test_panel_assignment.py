@@ -237,6 +237,19 @@ def test_a_wall_sided_curve_on_a_grid_line_keeps_its_own_bilge():
     assert [s["candidate_id"] for s in kept] == ["wall", "inner"]
 
 
+def test_a_mixed_stroke_more_hull_like_than_the_curve_it_borrows_from_still_leaves():
+    # shipd-2-02216-3v-L0 live: curves 7 and 8 share their top; a mixed stroke ran on 8's
+    # middle and 7's bottom and was more hull-like than curve 7 itself. Judged one by one from
+    # the most hull-like, the mixed stroke kept "own" ink and curve 7 lost all of it.
+    seven, eight = _stroke("seven", 120, likeness=0.30), _stroke("eight", 150, likeness=0.62)
+    top, middle = ROWS < 90, (ROWS >= 90) & (ROWS < 150)
+    eight["xs"][top] = seven["xs"][top]
+    mixed = _pieces("mixed", [(ROWS[top | middle], eight["xs"][top | middle]),
+                              (ROWS[~(top | middle)], seven["xs"][~(top | middle)])], 0.53)
+    kept = pa.strokes_with_own_ink([eight, mixed, seven], [])
+    assert [s["candidate_id"] for s in kept] == ["eight", "seven"]
+
+
 def test_distinct_nested_curves_and_grid_lines_stay_in_the_pool():
     strokes = [_stroke("wide", 180), _stroke("middle", 120), _stroke("narrow", 60),
                _stroke("ruler", 0, likeness=0.05, kind="straight_grid_line")]
