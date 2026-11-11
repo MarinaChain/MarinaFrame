@@ -202,6 +202,19 @@ def run(program: dict, measurements: dict, task: Path, *, audit=None, limits=SAN
     return outcome
 
 
+def _linux_kcmp_errno() -> int:
+    import ctypes
+    import platform
+    number = {'x86_64': 312, 'aarch64': 272}.get(platform.machine())
+    if number is None:
+        raise RuntimeError('Linux sandbox attestation failed: unsupported architecture')
+    libc = ctypes.CDLL(None, use_errno=True)
+    # Invalid PIDs never touch another process. The filter must reject before
+    # kernel argument/ptrace checks; root listing is the independent FS challenge.
+    result = libc.syscall(ctypes.c_long(number), -1, -1, 0, 0, 0)
+    return ctypes.get_errno() if result == -1 else 0
+
+
 def confirm_linux_sandbox() -> None:
     """Check kernel state in the child before importing any model executor.
 
@@ -215,6 +228,16 @@ def confirm_linux_sandbox() -> None:
         raise RuntimeError('Linux sandbox attestation failed: cannot read child kernel status') from exc
     if fields.get('Seccomp', '').strip() != '2' or fields.get('NoNewPrivs', '').strip() != '1':
         raise RuntimeError('Linux sandbox attestation failed: Seccomp 2 and NoNewPrivs 1 are required')
+    import errno
+    try:
+        os.listdir('/')
+    except OSError as exc:
+        if exc.errno != errno.EACCES:
+            raise RuntimeError('Linux sandbox attestation failed: unexpected root-list result') from exc
+    else:
+        raise RuntimeError('Linux sandbox attestation failed: root listing was not denied')
+    if _linux_kcmp_errno() != errno.EPERM:
+        raise RuntimeError('Linux sandbox attestation failed: syscall policy challenge was not denied')
 
 
 def main(argv=None):

@@ -196,11 +196,17 @@ fn host_ipc_and_cross_process_calls_are_denied() {
         libc::SYS_move_pages,
         libc::SYS_migrate_pages,
         libc::SYS_kcmp,
-        libc::SYS_syslog,
         libc::SYS_personality,
     ] {
         success(&format!("import ctypes,errno\nlibc=ctypes.CDLL(None,use_errno=True)\nprint('REACHED',flush=True)\nassert libc.syscall(ctypes.c_long({number}),-1,0,0,0,0,0)==-1\nassert ctypes.get_errno()==errno.EPERM"));
     }
+}
+
+#[test]
+fn syslog_size_query_is_denied_before_kernel_argument_checks() {
+    // SIZE_BUFFER (10) is not gated by dmesg_restrict. Invalid action -1
+    // checks capability first and can falsely pass without our filter.
+    success(&format!("import ctypes,errno\nlibc=ctypes.CDLL(None,use_errno=True)\nprint('REACHED',flush=True)\nassert libc.syscall(ctypes.c_long({}),10,None,0)==-1\nassert ctypes.get_errno()==errno.EPERM", libc::SYS_syslog));
 }
 
 #[test]

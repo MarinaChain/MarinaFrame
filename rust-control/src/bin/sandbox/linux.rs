@@ -76,6 +76,10 @@ fn canonical(path: &Path) -> io::Result<PathBuf> {
     fs::canonicalize(path)
 }
 fn broad(path: &Path) -> bool {
+    broad_with_account(path, real_home)
+}
+
+fn broad_with_account(path: &Path, account_home: impl FnOnce() -> Option<PathBuf>) -> bool {
     matches!(
         path.to_str(),
         Some(
@@ -95,7 +99,7 @@ fn broad(path: &Path) -> bool {
         path.to_str(),
         Some("/opt" | "/mnt" | "/srv" | "/run" | "/var/tmp" | "/dev/shm")
     ) || path.parent() == Some(Path::new("/home"))
-        || real_home().is_some_and(|home| path == home)
+        || account_home().is_some_and(|home| home.starts_with(path))
 }
 
 fn real_home() -> Option<PathBuf> {
@@ -111,6 +115,24 @@ fn real_home() -> Option<PathBuf> {
     }
     let bytes = unsafe { std::ffi::CStr::from_ptr(directory) }.to_bytes();
     Some(PathBuf::from(std::ffi::OsStr::from_bytes(bytes)))
+}
+
+#[cfg(test)]
+mod home_tests {
+    use super::*;
+
+    #[test]
+    fn account_lookup_is_required_for_nonstandard_home_and_ancestors() {
+        // Fixed /home and /root strings cannot make this test pass. A mutation
+        // removing the account-home predicate or lookup fails these assertions.
+        let home = PathBuf::from("/data/accounts/person");
+        for root in ["/data", "/data/accounts", "/data/accounts/person"] {
+            assert!(broad_with_account(Path::new(root), || Some(home.clone())));
+            assert!(!broad_with_account(Path::new(root), || None));
+        }
+        let actual = real_home().expect("Linux test account must resolve via getpwuid");
+        assert!(broad(&actual));
+    }
 }
 
 impl Config {
