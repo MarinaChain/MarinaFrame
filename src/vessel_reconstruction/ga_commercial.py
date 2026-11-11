@@ -678,7 +678,7 @@ def read_one(ga: Path | None, particulars: Path | None, out: Path, binary: Path,
              max_requests: int = MAX_REQUESTS_PER_SHIP, definitions: dict | None = None) -> dict:
     """Coarse request, interpretation, the fine pass and the frame-scale pass; writes ``out/ga_reading.json``.
 
-    With ``measure`` the frame-scale pass (``ga_scale``, two more requests) adds ``frames``,
+    With ``measure`` the frame-scale pass (``ga_scale``, up to seven more requests) adds ``frames``,
     ``measured`` and the extent of each space, and writes ``out/ga_arrangement_input.json``.
 
     ``result["passes"]`` records per ship the requests and crops each pass needed.
@@ -714,7 +714,7 @@ def read_one(ga: Path | None, particulars: Path | None, out: Path, binary: Path,
 
 
 def measure_one(result: dict, ga: Path, out: Path, binary: Path, basis: str, model: str, case_id: str) -> dict:
-    """The frame-scale pass on a reading: ``frames``, ``measured`` and space extents (two requests).
+    """The frame-scale pass on a reading: ``frames``, ``measured`` and space extents (up to seven requests).
 
     Measured values are kept apart from the printed particulars; ``out/ga_arrangement_input.json``
     is the file for the arrangement step (see ``ga_scale``).
@@ -750,7 +750,7 @@ def main(argv=None) -> int:
     batch.add_argument("--cases", required=True, nargs="+")
     batch.add_argument("--max-requests", required=True, type=int,
                        help="Campaign budget: stop before a case when this many requests were sent.")
-    measure = commands.add_parser("measure", help="Frame-scale pass on an existing reading (two requests).")
+    measure = commands.add_parser("measure", help="Frame-scale pass on an existing reading (up to seven requests).")
     measure.add_argument("--reading", required=True, type=Path, help="A ga_reading.json of this GA.")
     measure.add_argument("--ga", required=True, type=Path)
     measure.add_argument("--case", required=True)
@@ -758,7 +758,7 @@ def main(argv=None) -> int:
         # Off by default: the GA exam run (plan, "What the evaluator runs") sends three requests
         # a ship and reads printed values only.
         command.add_argument("--measure", action="store_true",
-                             help="Also measure with the printed frame scale (two more requests a ship).")
+                             help="Also measure with the printed frame scale (up to seven more requests a ship).")
         command.add_argument("--max-requests-per-ship", type=int, default=MAX_REQUESTS_PER_SHIP,
                              help="Ceiling of requests for one ship: one coarse request, then fine requests "
                                   "until every label blob is read (default %(default)s).")

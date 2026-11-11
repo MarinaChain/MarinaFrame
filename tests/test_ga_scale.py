@@ -53,7 +53,7 @@ def test_scale_marks_are_frame_numbers_or_perpendiculars(label, expected):
 @pytest.mark.parametrize("printed,expected", [
     ("800 MM", 800.0), ("700mm", 700.0), ("FR. SP. = 910 MM", 910.0), ("0.80 M", 800.0),
     ("F.S. 0.70", 700.0), ("F.S. 3.64", 3640.0), ("FRAME SPACE 600mm", 600.0), ("FR. SP. 800", 800.0),
-    ("FS ~720", 720.0), ("2,640 mm", 2640.0), ("0,80 M", 800.0),
+    ("FS ~720", 720.0), ("3,200 mm", 3200.0), ("0,80 M", 800.0),
     ("25200", None), ("12 mm", None), ("frame space", None), ("52", None)])
 def test_a_frame_spacing_is_parsed_only_in_its_range(printed, expected):
     assert gs.parse_spacing_mm(printed) == expected
@@ -241,7 +241,7 @@ def test_space_extents_come_in_frames_and_metres_with_a_status_per_axis(tmp_path
     assert port["side"] == "port" and port["y_m"] == [pytest.approx(0.0, abs=0.1), pytest.approx(15.0, abs=0.1)]
     assert spaces["ballast_tank-005"]["extent"]["y_m"][0] == pytest.approx(-15.0, abs=0.1)
     assert spaces["other_space-006"]["extent"]["status"] == {"x": "guessed", "y": "guessed"}
-    assert stats["extents"] == {"asked": 6, "boxed": 6, "with_extent": 6}
+    assert stats["extents"] == {"asked": 6, "boxed": 6, "with_extent": 6, "requests": 1}
     assert any(c["code"] == "extent_of_unknown_space" for c in result["checks"])
 
 
@@ -343,7 +343,7 @@ def test_a_space_listed_twice_in_one_view_is_one_space_and_shared_label_crops_ar
     assert len([s for s in gs.merged_spaces(result) if s["kind"] == "cargo_hold" and "extent" in s]) == 1
 
 
-def _depth_run(tmp_path, deck_shift_px=0.0, deck_frame=100, tier=True):
+def _depth_run(tmp_path, deck_shift_px=0.0, deck_frame=100, tier=True, tall_ballast=False, ballast_at_deck=False):
     """A run with three cargo holds; the deck point is moved by ``deck_shift_px`` (up is negative)
     or pointed at ``deck_frame``."""
     tmp_path.mkdir(parents=True, exist_ok=True)
@@ -371,6 +371,12 @@ def _depth_run(tmp_path, deck_shift_px=0.0, deck_frame=100, tier=True):
         else:
             reply = _extent_reply(request_dir)
             extents = reply["reply"]["ga_scale"]["extents"]
+            if tall_ballast:  # the profile ballast tank boxed up past the deck
+                tank = next(e for e in extents if e["space_id"] == "ballast_tank-003")
+                tank["box"][1] = _image_xy(request_dir, "v1", _px(80), DECK_Y - 60)[1]
+            if ballast_at_deck:  # the profile ballast tank ends at the pointed deck line
+                tank = next(e for e in extents if e["space_id"] == "ballast_tank-003")
+                tank["box"][1] = _image_xy(request_dir, "v1", _px(80), DECK_Y + deck_shift_px)[1]
             first = extents[0]
             width = first["box"][2] - first["box"][0]
             for index, shift in enumerate((-1.0, 1.0)):
@@ -410,11 +416,13 @@ def test_the_depth_is_taken_amidships_and_checked_against_the_spaces_below_the_d
     assert "rail" in depth["reason"]
     assert rail["passes_scale"]["derived"] == ["depth_m"] and "depth_m" not in rail["passes_scale"]["measured"]
     assert gs.arrangement_input(rail, "S-1")["particulars"]["depth_m"]["status"] == "derived_from_space_tops"
-    # A deck line below the top of a hold: the line or the boxes are wrong. Kept and flagged.
+    # A deck line below the top of a hold: the line or the boxes are wrong, so it is never a
+    # measured depth. The holds agree on one top, which becomes the (derived) depth.
     below = _depth_run(tmp_path / "c", deck_shift_px=60.0)
-    assert below["measured"]["depth_m"]["value"] == pytest.approx(10.0, abs=0.2)
-    assert "depth_below_a_space_top" in codes(below) and "NOT CONFIRMED" in below["measured"]["depth_m"]["note"]
-    assert "contradicted" in below["measured"]["depth_m"]["cross_check"]["result"]
+    depth = below["measured"]["depth_m"]
+    assert "depth_below_a_space_top" in codes(below)
+    assert depth["status"] == "derived_from_space_tops" and depth["value"] == pytest.approx(15.0, abs=0.15)
+    assert depth["pointed_depth_m"] == pytest.approx(10.0, abs=0.2) and "below the top" in depth["reason"]
     # Pointed near the stern (a poop deck): not used; the holds and the lowest tier give the depth.
     aft = _depth_run(tmp_path / "d", deck_shift_px=-36.0, deck_frame=13)
     assert "deck_point_not_amidships" in codes(aft)
@@ -424,6 +432,120 @@ def test_the_depth_is_taken_amidships_and_checked_against_the_spaces_below_the_d
     # The same without anything else that ends at the hold tops: null.
     alone = _depth_run(tmp_path / "e", deck_shift_px=-36.0, deck_frame=13, tier=False)
     assert alone["measured"]["depth_m"]["value"] is None
+
+
+def test_many_spaces_go_out_in_short_requests_holds_and_tanks_first(tmp_path):
+    """Asked for 71 spaces at once the model boxed 20 (round u1): short lists, most useful first."""
+    result = _result(tmp_path)
+    template = next(s for s in result["spaces"] if s["id"] == "other_space-006")
+    for index in range(50):
+        room = json.loads(json.dumps(template))
+        room.update(id=f"other_space-r{index:02d}", label=f"ROOM {index}")
+        room["source_record"]["regions"][0]["box_px"] = [100.0 + 10 * index, 1000.0, 105.0 + 10 * index, 1010.0]
+        result["spaces"].append(room)
+    directories = gs.prepare_extents(result, tmp_path / "S-1_GA.png", tmp_path / "extents")
+    contexts = [json.loads((d / "request.json").read_text())["context"] for d in directories]
+    assert [d.name for d in directories] == ["extents", "extents-2", "extents-3"]
+    assert all(len(c["spaces"]) <= gs.EXTENT_SPACES_PER_REQUEST for c in contexts)
+    assert contexts[0]["want"] == ["extents", "points"] and contexts[1]["want"] == ["extents"]
+    first = [s["kind"] for s in contexts[0]["spaces"]]
+    assert first[0] == "cargo_hold" and first.index("ballast_tank") < first.index("other_space")
+
+
+def test_a_scale_reply_without_hull_ends_is_measured_without_them(tmp_path):
+    """No hull end pointed (development round u1: a crash): the table keeps the drawn scale ends."""
+    result = _result(tmp_path)
+
+    def call(request_dir, provider_dir):
+        if request_dir.name == "extents":
+            return _extent_reply(request_dir)
+        reply = _scale_reply(request_dir)
+        points = reply["reply"]["ga_scale"]["points"]
+        points[:] = [p for p in points if p["name"] not in ("hull_aft_end", "hull_fore_end")]
+        return reply
+
+    gs.scale_pass(result, tmp_path / "S-1_GA.png", tmp_path / "scale", call)
+    assert result["frames"]["status"] == "read"
+    assert result["measured"]["loa_m"]["value"] is None and result["measured"]["lbp_m"]["value"] is not None
+
+
+def test_places_the_scale_request_left_out_are_asked_for_and_used(tmp_path):
+    """No F.P. in the scale reply: the first extents request names it and its reply gives it
+    (development round u3: an LBP lost to a missing F.P. mark)."""
+    result = _result(tmp_path)
+
+    def call(request_dir, provider_dir):
+        if request_dir.name.startswith("extents"):
+            reply = _extent_reply(request_dir)
+            if request_dir.name == "extents":
+                x, y = _image_xy(request_dir, "v1", _px(FP_FRAME), BASE_Y + 30)
+                reply["reply"]["ga_scale"]["ticks"] = [{"image_id": "v1", "label": "F.P.", "x": x, "y": y}]
+            return reply
+        return _scale_reply(request_dir, fp=False)
+
+    gs.scale_pass(result, tmp_path / "S-1_GA.png", tmp_path / "scale", call)
+    context = json.loads((tmp_path / "scale" / "extents" / "request.json").read_text())["context"]
+    assert context["missing"]["places"] == ["F.P."]
+    assert result["measured"]["lbp_m"]["value"] == pytest.approx(_x_m(FP_FRAME), abs=0.15)
+
+
+def test_a_tank_boxed_above_the_deck_that_the_holds_confirm_is_the_wrong_box(tmp_path):
+    """The holds agree on one top and the pointed deck line lies there: a ballast tank boxed
+    above it is a wrong box (development round u3), not a wrong deck line."""
+    result = _depth_run(tmp_path, tall_ballast=True)
+    depth = result["measured"]["depth_m"]
+    assert depth["status"] == "measured_from_scale" and depth["value"] == pytest.approx(15.0, abs=0.15)
+    assert "agrees with the tops of the cargo spaces" in depth["cross_check"]["result"]
+    tank = next(s for s in result["spaces"] if s["id"] == "ballast_tank-003")
+    assert tank["extent"]["status"]["z"] == "guessed" and "z_note" in tank["extent"]
+    assert "extent_above_the_deck" in {c["code"] for c in result["checks"]}
+    # Without holds that confirm the deck line, a box above it still refuses the line.
+    below = _depth_run(tmp_path / "b", deck_shift_px=60.0, tall_ballast=True)
+    assert below["measured"]["depth_m"]["status"] != "measured_from_scale"
+    # Holds boxed above a deck line that a ballast tank ends at (cargo boxes up to the rail,
+    # round u4): the boxes disagree, so the hold tops do not replace the line; no depth.
+    mixed = _depth_run(tmp_path / "m", deck_shift_px=60.0, ballast_at_deck=True)
+    depth = mixed["measured"]["depth_m"]
+    assert depth["value"] is None and "boxes disagree" in depth["reason"]
+
+
+def test_a_depth_that_no_space_can_check_is_not_given(tmp_path):
+    result = _result(tmp_path)
+
+    def call(request_dir, provider_dir):
+        if request_dir.name == "extents":  # the extents reply boxes nothing
+            return {"reply": {"ga_scale": {"ticks": [], "spacing_labels": [], "spacing_boundaries": [],
+                                           "points": [], "extents": [], "note": "", "refused": 0}}}
+        return _scale_reply(request_dir)
+
+    gs.scale_pass(result, tmp_path / "S-1_GA.png", tmp_path / "scale", call)
+    depth = result["measured"]["depth_m"]
+    assert depth["value"] is None and depth["status"] == "unknown"
+    assert depth["pointed_depth_m"] == pytest.approx(15.0, abs=0.15)
+    assert "depth_not_checked" in {c["code"] for c in result["checks"]}
+    assert result["measured"]["lbp_m"]["status"] == "measured_from_scale"  # the other values stay
+
+
+def test_label_places_follow_the_image_actually_sent(tmp_path, monkeypatch):
+    """Images can be sent smaller than planned (request size); a label place sent to the model
+    must be in the pixels of the image it gets (development round 3: places 11 % off)."""
+    result = _result(tmp_path)
+    monkeypatch.setattr(ga, "MAX_TOTAL_IMAGE_BYTES", 40_000)  # forces smaller images
+    gs.prepare_extents(result, tmp_path / "S-1_GA.png", tmp_path / "extents")
+    request = json.loads((tmp_path / "extents" / "request.json").read_text())
+    images = {image["image_id"]: image for image in request["images"]}
+    checked = 0
+    for asked in request["context"]["spaces"]:
+        if asked["at"] is None:
+            continue
+        image = images[asked["image_id"]]
+        left, top, right, bottom = image["crop_box_px"]
+        region = next(s for s in result["spaces"] if s["id"] == asked["space_id"])["source_record"]["regions"][0]
+        centre = ((region["box_px"][0] + region["box_px"][2]) / 2, (region["box_px"][1] + region["box_px"][3]) / 2)
+        assert asked["at"][0] == pytest.approx((centre[0] - left) * image["width"] / (right - left), abs=1)
+        assert asked["at"][1] == pytest.approx((centre[1] - top) * image["height"] / (bottom - top), abs=1)
+        checked += 1
+    assert checked >= 3
 
 
 def test_web_frame_spacings_with_several_changes_between_two_numbers():
@@ -443,6 +565,26 @@ def test_web_frame_spacings_with_several_changes_between_two_numbers():
     assert [(s["from_frame"], s["to_frame"], s["spacing_mm"]) for s in table.spans] == spans
     axis, _ = gs.fit_axis(ticks, table)
     assert axis.px_per_m == pytest.approx(9.0, rel=2e-3) and axis.ticks_used == len(ticks) - 1
+
+
+def test_the_text_of_a_one_frame_range_printed_beside_it_belongs_to_it():
+    """A web-frame range of one frame is too short for its text, which is printed in the next
+    range (development round u2: the scale was refused three times)."""
+    def x_m(frame):
+        return 0.7 * min(frame, 30) + 0.9 * min(max(frame - 30, 0), 1) + 0.7 * max(frame - 31, 0)
+
+    def px(frame):
+        return 300.0 + 12.0 * x_m(frame)
+
+    ticks = [(frame, px(frame)) for frame in range(0, 61, 5)]
+    labels = [(700.0, px(15)), (900.0, px(33)), (700.0, px(50))]
+    table, reason = gs.spacing_table(ticks, labels, [px(30), px(31)])
+    assert table is not None, reason
+    assert [(s["from_frame"], s["to_frame"], s["spacing_mm"]) for s in table.spans] == [
+        (0, 30, 700.0), (30, 31, 900.0), (31, 60, 700.0)]
+    # Without the short range drawn, the two texts in one range are still refused.
+    table, reason = gs.spacing_table(ticks, labels, [px(30)])
+    assert table is None
 
 
 def test_a_number_out_of_order_is_left_out():
@@ -498,6 +640,11 @@ def test_a_second_scale_request_can_establish_the_scale(tmp_path):
     stats = gs.scale_pass(result, tmp_path / "S-1_GA.png", tmp_path / "scale", call)
     assert stats["requests"] == 3 and stats["scale_attempts"] == 2 and result["frames"]["status"] == "read"
     assert result["measured"]["lbp_m"]["value"] == pytest.approx(_x_m(FP_FRAME), abs=0.15)
+    # The second request says why the first reading was refused; the first says nothing of the kind.
+    first = json.loads((tmp_path / "scale" / "scale" / "request.json").read_text())["context"]
+    second = json.loads((tmp_path / "scale" / "scale-2" / "request.json").read_text())["context"]
+    assert "previous_attempt" not in first
+    assert "spacing" in second["previous_attempt"] and "refused" in second["previous_attempt"]
 
 
 def test_the_frame_numbers_check_the_printed_spacing_of_a_range():

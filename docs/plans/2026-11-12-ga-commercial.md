@@ -1,7 +1,7 @@
 # GA reading for commercial ships: method, exam protocol and results (lane U, 2026-11-12)
 
-Status: development on the 14 development ships, three rounds; **not frozen yet** (the code is
-frozen at the commit that adds this file's "Frozen" section). The holdout is scored once by the
+Status: development on the 14 development ships; **not frozen** (the PM decides when; the code is
+then frozen at the commit that adds this file's "Frozen" section). The holdout is scored once by the
 evaluator lane, not by this lane.
 
 Why: HJ Shipbuilding / J.Ocean want "GA AI" (docs/POSITIONING.md); pilot idea: AI-assisted
@@ -106,7 +106,7 @@ settings of a run are recorded in `ga_reading.json` (`definitions`).
 
 Code: `src/vessel_reconstruction/ga_scale.py`; model contract `ga_scale` in
 `rust-control/src/ga_reading.rs`. Run with `read --measure`, `batch --measure`, or
-`measure --reading ga_reading.json --ga IMAGE --case ID` on an existing reading. Two more
+`measure --reading ga_reading.json --ga IMAGE --case ID` on an existing reading. Up to seven more
 requests a ship; **off by default**, so the exam run is unchanged.
 
 1. **Scale request (model points, code measures).** Images: the profile, the upper deck plan and
@@ -114,31 +114,38 @@ requests a ship; **off by default**, so the exam run is unchanged.
    printed frame number, of "A.P." and "F.P.", of every printed frame spacing and of every drawn
    change of spacing, and named places: hull aft end, hull fore end, base line, upper deck at
    side at mid-length (profile); centreline and both shell sides (plan).
-2. **Frame table (code).** Printed spacings are parsed (`800 MM`, `0.70`, `2,640 mm`; range
+2. **Frame table (code).** Printed spacings are parsed (`800 MM`, `0.70`, `3,200 mm`; range
    300-5,000 mm; a unitless value below 10 is metres). The range with the most frame numbers
    gives pixels per metre; each change of spacing is put on a whole frame from the frame numbers
    next to it. Frame numbers out of order are left out. Then pixels are fitted to metres on every
    view that has frame numbers (Theil-Sen, then least squares without outliers). The scale is
    **not established** (every measured value null, with the reason) when: no spacing is printed;
    a range of the scale has frame numbers but no spacing; fewer than 4 numbers fit; more than a
-   third are outliers; or the fit error is above one frame width. A plan without frame numbers
+   third are outliers; every number of one spacing range is off the fit (a misread spacing makes
+   the other ranges fit and leaves that range out); or the fit error is above one frame width. A plan without frame numbers
    takes the profile's scale only when its hull is drawn as long as the profile's hull (2 %).
 3. **Principal dimensions** (`measured.{lbp_m,loa_m,breadth_m,depth_m}`): status
    `measured_from_scale`, `uncertainty_m`, `method`, a `source_record` with the pointed regions
    and the frame scale. LBP: frame 0 to the F.P. mark (null when F.P. is not marked or the A.P.
    mark is not at frame 0). LOA: hull end to hull end in the profile. Breadth: shell to shell in
    a plan. Depth: base line to the upper deck **at side, at mid-length** (the pointed place must
-   lie in the middle half of the hull). The depth is checked against the tops of the spaces
-   below the deck: below a top, null; far above them, kept and flagged "not confirmed" (topside
-   tanks above the holds). **A substituted value is never `measured_from_scale`:** when the
-   pointed line lies a rail or camber height (up to 1.5 m) above at least 3 cargo spaces that
-   agree, or when no deck line was pointed amidships and another space or the lowest deckhouse
-   tier ends at the cargo-space tops, the depth is the median top with status
-   `derived_from_space_tops`, and the record keeps `pointed_depth_m` and the `reason`. It is an
+   lie in the middle half of the hull). **A depth is `measured_from_scale` only when it passes
+   the check against the tops of the spaces boxed below the deck in the profile:** at least one
+   such top exists and none is higher than the deck line (a deck line far above them is kept and
+   flagged "not confirmed": topside tanks above the holds). A deck line that no boxed space can
+   check is null (`depth_not_checked`). A deck line below a space top is never used: the depth
+   is then the median cargo-space top when the cargo spaces agree, else null.
+   **A substituted value is never `measured_from_scale`:** when the pointed line lies below the
+   tops, or a rail or camber height (up to 1.5 m) above at least 3 cargo spaces that agree, or
+   when no deck line was pointed amidships and another space or the lowest deckhouse tier ends at
+   the cargo-space tops, the depth is the median top with status `derived_from_space_tops`, and
+   the record keeps `pointed_depth_m` and the `reason`. It is an
    estimate; a consumer must not check it against the same space tops. Sanity bounds on
    LBP/LOA, L/B and B/D refuse a set that cannot be a ship.
 4. **Extents request.** Images: whole views. For each read space with a known label place the
-   model boxes its drawn boundary (`outline`) or places a box from the label (`uncertain`).
+   model boxes its drawn boundary (`outline`) or places a box from the label (`uncertain`). The
+   label place is given in pixels of the image actually sent (an image can be sent smaller than
+   planned to fit the request size).
    Code gives `spaces[].extent`: `frames` (nearest frame), `x_m`, `z_m` (profile) or `y_m`
    (plan; port positive, from the bow direction), `side` (from the label, else from y), and a
    status per axis: `measured_from_scale` for `outline`, `guessed` for `uncertain`.
@@ -166,8 +173,8 @@ requests a ship; **off by default**, so the exam run is unchanged.
   Blobs beyond the ceiling are counted (`passes.fine.crops_not_read`). The controller retries
   only HTTP 429/502/503/504, at most 3 attempts. `batch --max-requests N` stops before a case
   once N requests were sent; requests of a failed case still count (read from its receipts).
-  Holdout budget: **54 requests** (9 cases x 6). `--measure` adds 2 requests a ship and is not
-  part of the exam run.
+  Holdout budget: **54 requests** (9 cases x 6). `--measure` adds up to 7 requests a ship (up to
+  3 scale attempts and up to 4 extents requests of 20 spaces) and is not part of the exam run.
 - **Usage recorded per ship:** `ga_reading.json` `usage` (requests, tokens, `observed_cost_usd`,
   CLI `list_cost_usd`) and `passes` (coarse images; fine text blobs, crops, answered, spaces
   added, requests); `batch.json` sums them.
@@ -253,10 +260,10 @@ the source run is in `SOURCES.json`):
   has no named view; 1 container sheet's frame numbers do not fit its printed spacings.
 - Fit: 19-44 frame numbers a ship, error 0.4-2.7 px (sheet pixels; a frame is 6-30 px).
   Stated uncertainty 0.3-0.7 m on lengths and breadth, 0.3-0.6 m on depth.
-- Checks by eye and by the drawing's own printed dimensions: hold bulkheads fall on frames that
-  give the printed hold lengths exactly on one bulk carrier (4 holds of 36 frames x 700 mm =
-  25,200 mm, printed); its LBP agrees with the printed dimension chain within 0.1 m; a hatch
-  measured 18.2 m long is printed 18.200. There is no truth file for the principal dimensions.
+- Checks by eye and by the drawing's own printed dimensions: on one bulk carrier the measured
+  hold bulkheads give its printed hold lengths exactly, its LBP agrees with the printed
+  dimension chain within 0.1 m, and a measured hatch length agrees with the printed one within
+  0.05 m. There is no truth file for the principal dimensions.
 - **Repeatability:** the same ship measured in 3 separate runs gives LBP within 0.6 m and
   breadth within 0.5 m. Whether the scale is established varies between runs on small print
   (8, 9 and 10 ships of 14 in three runs before the retry; the final code sends the scale
@@ -330,15 +337,38 @@ Input: `work/ga-internal-23/review/round-2/` (133 findings). What was changed, g
 No ship-specific rule or constant was added. The product model is unchanged (Claude Sonnet 5.5,
 one setting). A new Astra review of round 3 was not run.
 
+## Opus check of the Fable 5.2 step (2026-11-12, lane U)
+
+The Fable step's WIP (frame scale, extents, definitions, adaptive budget, promotions) was reviewed
+line by line for general rules, tests and honest statuses. Kept: all of it, except what is fixed
+below. The exam path stays printed values only (`--measure` is off by default; the scorer takes a
+particular only with status `read`). No ship-specific rule was found.
+
+Regression found by lane W (rounds s4 and r9 against s3b: fewer space extents, depths lost or
+unchecked) and its causes:
+
+| Cause | Fix | Test |
+|---|---|---|
+| The extents request gave label places in the planned image size; images are shrunk to fit the request size, so places were up to 11 % off ("label positions do not match the drawing", model note) | places computed from the size of the image actually sent | `test_label_places_follow_the_image_actually_sent` |
+| Asked for 71 spaces in one request, the model boxed 20 (43 of 43 in s3b) | extents in requests of 20 spaces, at most 4, holds and tanks first, then ballast and fuel tanks | `test_many_spaces_go_out_in_short_requests_holds_and_tanks_first` |
+| A depth below a boxed space top was kept as `measured_from_scale` and flagged; a depth with no space to check it was kept | contradicted: the agreeing cargo-space top as `derived_from_space_tops`, else null; unchecked: null (`depth_not_checked`) | `test_the_depth_is_taken_amidships_...`, `test_a_depth_that_no_space_can_check_is_not_given` |
+| A misread spacing range was accepted: the other ranges fit and the whole range was dropped as outliers (failing test in the WIP) | a spacing range whose numbers are all off the fit refuses the scale | `test_the_frame_numbers_check_the_printed_spacing_of_a_range` |
+| A scale reply without hull ends crashed the batch | the frame table keeps the drawn scale ends | `test_a_scale_reply_without_hull_ends_is_measured_without_them` |
+| A retried scale request repeated the same miss (tanker: a change of spacing not marked in 3 attempts) | the retry says why the previous reading was refused | `test_a_second_scale_request_can_establish_the_scale` |
+| (round u2) A web-frame range of one frame has its spacing text printed beside it, in the next range, which then held two spacings: the scale was refused | a range with at most one frame number and no text takes the nearest text of a neighbour that holds two different spacings | `test_the_text_of_a_one_frame_range_printed_beside_it_belongs_to_it` |
+| (round u3) Wing ballast tanks boxed 3.6 m above a deck line that six cargo-tank tops confirm made the depth null | when at least 3 cargo spaces agree and the pointed deck line lies at their top, other spaces boxed above it get a guessed height (`extent_above_the_deck`) and the depth stands | `test_a_tank_boxed_above_the_deck_that_the_holds_confirm_is_the_wrong_box` |
+| (round u3) LBP or breadth lost because one run's scale reply left out F.P. or a shell side | the first extents request names the places and marks still missing; A.P./F.P. marks from that reply are used | `test_places_the_scale_request_left_out_are_asked_for_and_used` |
+
 ## Open issues (for the next step)
 
 1. Space list coverage: 52 of the 94 round-2 missing labels are still not listed (dense tanker
    sheets), and 334 crops were not read at the ceiling of 6 requests. Follow-up (out of scope
    on 2026-11-12, PM): an agentic zoom step, where the model chooses crops with parallel tool
    calls instead of code-chosen contact sheets.
-2. Frame scale on small print: on 2 tankers with one-frame web-frame ranges (1,500 mm, 2,950 mm
+2. Frame scale on small print: on 2 tankers with one-frame web-frame ranges (a long spacing
    between two printed numbers) the model sometimes misses a change of spacing; the scale is
-   then refused. A code fit of the change from the frame numbers alone was not built. One
+   then refused. A retried scale request now says why the previous reading was refused (Opus
+   check, below); a code fit of the change from the frame numbers alone was not built. One
    container sheet's numbers never fitted its spacings (not investigated on the sheet).
 3. Count rule (c) (views end at different numbers) abstained once in round 3 where the hold
    count is clear on the sheet. The rule was kept: relaxing it after one development case
@@ -347,19 +377,44 @@ one setting). A new Astra review of round 3 was not run.
    ends are not snapped to detected bulkhead lines. y and z come from one view each, so only 42
    spaces have all three axes. Hull outline polygons (`hull_outline` of the arrangement input)
    are not produced.
-5. A contradicted depth (a space boxed higher than the deck line) is kept and flagged
-   (`depth_below_a_space_top`), not nulled: either the line or the box is wrong.
+5. (Closed in the Opus check) A contradicted or unchecked depth is no longer kept as measured.
 6. The particulars-table path has not seen a real table image.
 7. Fable 5.2: `claude -p --model claude-fable-5-2` answers `unrecognized_model` on this machine
    (2026-11-12); `fable` resolves to `claude-fable-5-1`. The product arm is Sonnet 5.5 only.
 
+## Overnight rounds u1-u4 (2026-11-12, lane U; measurement pass, development ships)
+
+Per round: reading and `--measure` on the 14 development ships, three parallel batches. Coverage is
+compared per ship with round s3b (measured principal dimensions, spaces with an extent, and the
+frame scale). Aggregate only; per-ship files stay in `work/`.
+
+| Round | Requests | CLI list estimate | Ships with frame scale | Dimensions measured / derived (of 56) | Spaces with an extent | Ships below s3b on some item |
+|---|---:|---:|---:|---:|---:|---:|
+| s3b (reference) | - | - | 10 | 36 / 1 | 268 | - |
+| u1 (Fable code + first fixes; one batch of 4 ships crashed) | 66 | 3.29 USD | 6 of 10 | 22 / 0 | 147 | (crash) |
+| u2 (label places, short extents requests) | 119 | 5.90 USD | 9 | 35 / 0 | 455 | 3 |
+| u3 (short web-frame range texts) | 124 | 5.78 USD | 10 | 36 / 0 | 473 | 4 |
+| u4 (missing places named; cargo-confirmed deck) | 122 | 5.71 USD | 9 | 35 / 1 | 442 | 2 |
+| u4r (u4 replayed through the final rules) | 0 | - | 9 | 35 / 0 | 442 | 3 |
+
+Observed cost is 0 in every round (subscription).
+
+- Every measured depth passes the check against the boxed space tops; otherwise it is null or
+  derived with its reason. `u4r` is u4 replayed through the final rules without new calls (one
+  depth that the u4 rule derived wrongly from cargo boxes drawn to the rail is null there).
+- The shortfalls move between ships from round to round: they are places or ranges the model
+  points in one run and not in the next (an F.P. mark, a shell side, a misread spacing), not
+  code that lost coverage. Replaying an earlier round's replies through the final code gives
+  that round's coverage back (checked on two ships).
+- For lane W: `work/ga-internal-23/dev-runs/u4r/<case>/ga_arrangement_input.json` (the two
+  ships lane W asked about have all four dimensions measured and checked there).
+
 ## Resume point
 
-Done: two Opus/Astra cycles; the Fable 5.2 review-and-fix step (this file's round 3); the exam
-protocol now has the adaptive budget (54 requests). **Not frozen; the exam was not run.**
-Next (PM): decide open issue 3; then this lane adds the "Frozen" section at the commit to
-evaluate and the evaluator runs the command in "What the evaluator runs" once. Lane W reads
-`work/ga-internal-23/dev-runs/final/<case>/ga_arrangement_input.json` (development ships).
-To repeat the development run: `ga_commercial batch --measure --max-requests 200` on the 14
-development cases; each `ga_reading.json` has `passes`, `frames`, `measured` and the space
+Done: two Opus/Astra cycles; the Fable 5.2 step; the Opus check of it (regression found and fixed,
+overnight rounds u1-u4). **Not frozen; the exam was not run; the PM said not to freeze or
+prepare the exam until told.** Next: Astra review of the latest round; then the PM priorities
+(missing ballast and fuel tanks, extents of wing ballast tanks, cut diagonal labels).
+To repeat a development round: `ga_commercial batch --measure --max-requests 65` on groups of
+the 14 development cases; each `ga_reading.json` has `passes`, `frames`, `measured` and the space
 extents, and `ga_arrangement_input.json` is beside it.
