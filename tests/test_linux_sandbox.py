@@ -72,6 +72,7 @@ def test_linux_setup_failure_is_not_a_successful_empty_result(monkeypatch, tmp_p
     monkeypatch.setattr(sys, 'platform', 'linux')
     monkeypatch.setattr(ship_cad, 'triage_program', lambda value: None)
     monkeypatch.setattr(worker, 'require_sandbox', lambda: None)
+    monkeypatch.setattr(sysconfig, 'get_config_var', lambda key: None)
     monkeypatch.setattr(worker, 'sandbox_command', lambda *args: (['launcher'], 'linux-test'))
     monkeypatch.setattr(worker, 'supervise_process', lambda *args, **kwargs:
                         {'state': 'exited', 'exit_code': 125})
