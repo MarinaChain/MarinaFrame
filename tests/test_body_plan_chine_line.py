@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 from PIL import Image, ImageDraw
 
-from vessel_reconstruction import body_plan_chine_line as chine_line
+from benchmarks.hard_chine import chine_line as chine_line
 from vessel_reconstruction import body_plan_reader as bpr
 
 CENTRE = 100

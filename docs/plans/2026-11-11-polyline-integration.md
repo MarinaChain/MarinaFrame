@@ -65,8 +65,8 @@ reader (rank names). The runner is pointed at the entry point; the per-sheet num
 - [x] Baseline run at `15fc1f0`: `work/polyline-integration/before.json` (sha256 `4215993d76bf64f5...`).
 - [x] Cause of the CALEB JONES naming errors from the traces; general fix in the naming step with unit tests.
 - [x] After run with `--baseline`: `work/polyline-integration/after.json` (sha256 `df6e637c7508645f...`); all gates pass; per-sheet table in section 5; fix commit.
-- [ ] Integration: one product entry point for the body-plan side reading; v2 and chine joining out of `src/`;
-  tests; integration run; integration commit.
+- [x] Integration: one product entry point for the body-plan side reading; v2 and chine joining out of `src/`;
+  tests; integration run (`work/polyline-integration/integrated.json`, sha256 `b7140ef6ddb763e0...`); commit.
 - [ ] Re-pin the Cama Beach (`docs/BODY_PLAN_CHINE.md`) and Davis Boat (`docs/holdouts/davis-boat.md`) protocols
   to the integrated reader files' sha256, as an amendment before any run. No run on those sheets.
 - [ ] Quick test tier, push the branch.
@@ -140,3 +140,28 @@ half now keeps its station 9 (side and knuckle, its bottom ends on station 8's),
 stations and is read as a whole (7, 8, 9) instead of engaging 7 and 8 one by one: waterline cells 22 -> 23, point
 cells 17 -> 20, all correct. The other seven sheets are unchanged. These are development results, not holdout
 results (all nine sheets have been seen).
+
+### Integration (section 3 integration gate)
+
+- Entry point: `src/vessel_reconstruction/body_plan_sides.py`, `read_side(ink, layout, reading) -> SideResult`
+  (`table`, `curves` per station as image points, `identity_source` per station, the polyline `half`,
+  `fairness_flags`), and `read_sheet` for all halves. It takes the crossing reader's `SideReading` of the half,
+  names it by nesting rank, reads the half with the polyline reader, engages clear-knuckle stations on a declined
+  half and builds the product table (`body_plan_polyline.half_table`).
+- Intake: `body_plan_intake.read_with_calibration` calls `read_side` for each half. **Output schema addition**
+  (`marinaframe/body-plan-reading/v1`, additive): each station record has `identity_source`; the record has
+  `hard_chine` per half (`read_as_whole`, `engaged_stations`, `notes`). Calibration flags (including
+  `low_resolution`), `usable_for_build`, the review item and `fairness_flags` are unchanged. A rank-named curve is
+  still trimmed to one waterline spacing past its cells; a polyline curve is kept whole (rabbet to sheer).
+- Moved out of `src/` (benchmarks only): `body_plan_reader_v2.py` -> `benchmarks/hard_chine/reader_v2.py`,
+  `body_plan_chine_line.py` -> `benchmarks/hard_chine/chine_line.py`, `body_plan_chine.py` ->
+  `benchmarks/hard_chine/chine_joining.py`. Scripts and tests import the new paths; their tests pass unchanged.
+- Tests: `tests/test_body_plan_sides.py` (round-bilge half gives the crossing reader's table, curves and flags;
+  V-bottom half gives polyline names; crowded stations keep names through the entry point);
+  `tests/test_body_plan_intake.py` (round sections are rank-named and say so).
+
+Integration run (runner reads the polyline arm through `body_plan_sides.read_sheet` on the frozen reading;
+`--reference after.json`): on all nine sheets the scores and the table sha256 equal the fix run, and the entry
+point's table equals the benchmark rule (`deadrise_holdout.score`). With the src crossing reader (the product's),
+on every half where polyline neither reads nor engages (all eight round-bilge halves and PARDON ME aft) the product
+table and curves equal the crossing reader's rank table and chain paths. `all_equal: true`.

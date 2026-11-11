@@ -44,6 +44,14 @@ def test_reading_of_a_synthetic_body_plan():
     json.dumps(record)
 
 
+def test_round_sections_are_named_by_the_crossing_reader_and_say_so():
+    record, _ = bpi.read_body_plan(synthetic_sheet(), FakeReading(), dpi=100.0)
+    assert {s['identity_source'] for s in record['stations']} == {bpi.body_plan_sides.IDENTITY_RANK}
+    assert set(record['hard_chine']) == {'fore', 'aft'}
+    for half in record['hard_chine'].values():
+        assert half['read_as_whole'] is False and half['engaged_stations'] == []
+
+
 def test_flagged_calibration_is_not_used_for_the_build():
     record, _ = bpi.read_body_plan(synthetic_sheet(), FakeReading(shape_fore='left'), dpi=100.0)
     assert record['usable_for_build'] is False and 'flags' in record['reason']

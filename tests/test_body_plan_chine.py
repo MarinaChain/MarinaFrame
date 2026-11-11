@@ -30,7 +30,7 @@ def drawing(sign=1, count=3, chine=True, gap=0):
 
 @pytest.mark.parametrize('sign', [1, -1])
 def test_joins_one_waterline_bottoms_without_changing_measured_cells(sign):
-    from vessel_reconstruction import body_plan_chine as chine
+    from benchmarks.hard_chine import chine_joining as chine
     ink, sheet, side = drawing(sign)
     frozen = bpr.measure_side(ink, sheet, side)
     assert len(bpr.identities_by_rank(frozen.chains, side.stations_outer_first)) == 3
@@ -49,14 +49,14 @@ def test_joins_one_waterline_bottoms_without_changing_measured_cells(sign):
 
 @pytest.mark.parametrize('kwargs', [{'chine': False}, {'count': 1}, {'gap': 35}])
 def test_leaves_smooth_isolated_or_separated_pieces_unchanged(kwargs):
-    from vessel_reconstruction import body_plan_chine as chine
+    from benchmarks.hard_chine import chine_joining as chine
     ink, sheet, side = drawing(**kwargs)
     frozen = bpr.measure_side(ink, sheet, side)
     assert chine.join_chine(ink, sheet, frozen) is frozen
 
 
 def test_wrapper_measures_then_joins_station_cells():
-    from vessel_reconstruction import body_plan_chine as chine
+    from benchmarks.hard_chine import chine_joining as chine
     ink, sheet, side = drawing()
     reading = chine.measure_side(ink, sheet, side)
     assert len(reading.chains) == 3

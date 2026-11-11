@@ -19,6 +19,8 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from measure_chine_reader_v2 import summarise  # noqa: E402
 from select_hard_chine_reader import development_cases  # noqa: E402
@@ -28,6 +30,8 @@ from benchmarks.ec_collier import point_score as collier_points  # noqa: E402
 from benchmarks.frozen_readers.v1 import body_plan_crossings as crossings  # noqa: E402
 from benchmarks.frozen_readers.v1 import body_plan_reader as reader  # noqa: E402
 from vessel_reconstruction import body_plan_polyline as polyline  # noqa: E402
+from vessel_reconstruction import body_plan_reader as src_reader  # noqa: E402
+from vessel_reconstruction import body_plan_sides  # noqa: E402
 
 ARMS = ('frozen', 'polyline')
 ROUND_BILGE = ('BUE GIRL', 'C.A. Thayer', 'Balclutha', 'BUMBLE BEE (corrected sides)')
@@ -61,18 +65,45 @@ def read_arms(ink, layout, cal=None) -> tuple[dict, dict, dict]:
     frozen = cv.measure(ink, layout)
     identities = {name: reader.identities_by_rank(r.chains, r.layout.stations_outer_first)
                   for name, r in frozen.items()}
-    halves = polyline.read_sheet(ink, layout)
-    sc.engage(halves, frozen, identities, layout, ink)
+    # The polyline arm is the product entry point (`body_plan_sides`) on the frozen reading.
+    product = body_plan_sides.read_sheet(ink, layout, frozen)
+    halves = {name: result.half for name, result in product.items()}
     tables = {'frozen': cv.table_and_flags(frozen, identities, layout)[0],
-              'polyline': sc.polyline_table(halves, frozen, identities, layout)}
+              'polyline': {key: value for result in product.values() for key, value in result.table.items()}}
     curves = {}
     if cal is not None:
         curves = {'frozen': sc.frozen_curves(frozen, identities, layout, cal),
                   'polyline': sc.polyline_curves(halves, frozen, identities, layout, cal)}
+    # The benchmark product rule (`deadrise_holdout.score`) on fresh polyline halves must give the same table.
+    rule_halves = polyline.read_sheet(ink, layout)
+    sc.engage(rule_halves, frozen, identities, layout, ink)
     notes = {name: {'read': half.read, 'named': [s.station for s in half.stations],
-                    'engaged': [s.station for s in half.engaged], 'notes': half.notes}
+                    'engaged': [s.station for s in half.engaged], 'notes': half.notes,
+                    'identity_source': {str(k): v for k, v in product[name].identity_source.items()}}
              for name, half in halves.items()}
+    notes['entry_point_table_equals_rule'] = (
+        tables['polyline'] == sc.polyline_table(rule_halves, frozen, identities, layout))
+    notes['src_reader_unchanged_where_polyline_declines'] = src_reader_unchanged(ink, layout)
     return tables, curves, notes
+
+
+def src_reader_unchanged(ink, layout) -> dict:
+    """Per half, with the src crossing reader (the product's): when polyline neither reads the half nor engages a
+    station, the product table and curves equal the crossing reader's rank-named table and chain paths."""
+    result = {}
+    for side in layout.sides:
+        reading = src_reader.measure_side(ink, layout, side)
+        identities = src_reader.identities_by_rank(reading.chains, side.stations_outer_first)
+        table = src_reader.table_from_identities(reading, identities, layout.pixels_per_metre, layout.centre_column)
+        product = body_plan_sides.read_side(ink, layout, reading)
+        if product.polyline_used:
+            result[side.name] = 'polyline used'
+            continue
+        same_curves = (set(product.curves) == set(identities.values()) and all(
+            np.array_equal(product.curves[station], np.asarray(reading.chains[index].path, dtype=float).reshape(-1, 2))
+            for index, station in identities.items()))
+        result[side.name] = product.table == table and same_curves
+    return result
 
 
 def _kind_summary(result: dict) -> dict:
@@ -164,6 +195,24 @@ def check_gates(cases: list[dict], baseline: list[dict]) -> dict:
             'all_gates_pass': passed}
 
 
+def check_equal(cases: list[dict], reference: list[dict]) -> dict:
+    """Integration gate: the entry point gives the reference run's per-sheet totals, kinds and tables."""
+    before = {case['sheet']: case for case in reference}
+    per_sheet = {}
+    for case in cases:
+        old = before[case['sheet']]
+        per_sheet[case['sheet']] = {
+            'scores_equal': case['arms']['polyline'] == old['arms']['polyline'],
+            'table_sha256_equal': case['table_sha256']['polyline'] == old['table_sha256']['polyline'],
+            'entry_point_table_equals_rule': case['polyline_halves']['entry_point_table_equals_rule'],
+            'src_reader_unchanged_where_polyline_declines':
+                case['polyline_halves']['src_reader_unchanged_where_polyline_declines']}
+    passed = all(e['scores_equal'] and e['table_sha256_equal'] and e['entry_point_table_equals_rule']
+                 and all(v in (True, 'polyline used') for v in e['src_reader_unchanged_where_polyline_declines'].values())
+                 for e in per_sheet.values())
+    return {'per_sheet': per_sheet, 'all_equal': passed}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--sources', required=True, type=Path)
@@ -172,6 +221,7 @@ def main():
     parser.add_argument('--holdout-root', required=True, type=Path, help='the work/holdout folder')
     parser.add_argument('--out', required=True, type=Path)
     parser.add_argument('--baseline', type=Path, help='an earlier result of this script: check the gates')
+    parser.add_argument('--reference', type=Path, help='an earlier result of this script: check equal results')
     args = parser.parse_args()
     commit = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
     report = {'engineering_approved': False, 'status': 'development cases only',
@@ -187,6 +237,9 @@ def main():
     if args.baseline:
         report['gates'] = check_gates(report['cases'], json.loads(args.baseline.read_text())['cases'])
         print('gates', json.dumps(report['gates'], indent=1), flush=True)
+    if args.reference:
+        report['equal_to_reference'] = check_equal(report['cases'], json.loads(args.reference.read_text())['cases'])
+        print('equal to reference', json.dumps(report['equal_to_reference'], indent=1), flush=True)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2, default=float) + '\n')
 

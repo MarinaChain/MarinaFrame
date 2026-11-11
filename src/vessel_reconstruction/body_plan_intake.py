@@ -2,9 +2,12 @@
 
 At intake (`intake.write_spec`), when the setting MARINAFRAME_BODY_PLAN_READER=1 is on, the
 spec page is calibrated automatically (`sheet_calibration`, label questions through the Claude
-CLI) and read by the frozen body-plan reader with code-only station identity (nesting order).
-The result goes into `intake.json` as `body_plan_reading`: the calibration with its source labels
-and flags, and per station the code-measured waterline cells and the drawn curve in metres.
+CLI) and each half is read by `body_plan_sides.read_side`: the crossing reader with code-only
+station identity (nesting order), and the hard-chine polyline reader where it engages (a half
+read as a whole, or single stations with a clear chine knuckle). The result goes into
+`intake.json` as `body_plan_reading`: the calibration with its source labels and flags, per
+station the code-measured waterline cells, the drawn curve in metres and where its name came
+from (`identity_source`), and per half what the hard-chine reader did (`hard_chine`).
 
 In the worker, the first hull (`first_hull_tools.build_first_hull`) uses these station curves
 as anchors for the stations it read, labelled as code-traced from the body plan, when the
@@ -13,7 +16,7 @@ candidates, form fit). A flagged calibration is not used; the person sees why. I
 the worker writes the calibration overlay and a summary into the task (`domain/body-plan-check.*`)
 for the review UI, where a person confirms it as one item.
 
-The reader modules are frozen; this module only calls them.
+This module only calls the readers; it does not change their output.
 """
 from __future__ import annotations
 
@@ -26,6 +29,7 @@ from pathlib import Path
 import numpy as np
 
 from vessel_reconstruction import body_plan_reader as bpr
+from vessel_reconstruction import body_plan_sides
 from vessel_reconstruction import calibration_reading as cr
 from vessel_reconstruction import sheet_calibration as sc
 
@@ -48,11 +52,12 @@ def enabled(environment=None) -> bool:
 
 # ---------------------------------------------------------------- intake
 
-def _curve_m(chain: bpr.Chain, cal: sc.Calibration) -> list[list[float]]:
-    """A chain's drawn path as [half-breadth m, height m] points, low to high, one per height."""
+def _curve_m(path, cal: sc.Calibration) -> list[list[float]]:
+    """A drawn station curve, image points (row, column), as [half-breadth m, height m] points, low to
+    high, one per height."""
     per_metre = cal.pixels_per_ft / sc.FEET_M
     by_height = {}
-    for row, column in chain.path:
+    for row, column in path:
         z = round((cal.baseline_row - float(row)) / per_metre, 4)
         y = abs(float(column) - cal.centre_column) / per_metre
         by_height.setdefault(z, []).append(y)
@@ -84,26 +89,28 @@ def read_with_calibration(ink: np.ndarray, cal: sc.Calibration) -> dict:
         record['reason'] = 'calibration incomplete'
         return record
     layout = cal.layout()
+    heights = {w['label']: w['height_ft'] * sc.FEET_M for w in cal.waterlines}
     for side in layout.sides:
-        side_reading = bpr.measure_side(ink, layout, side)
-        identities = bpr.identities_by_rank(side_reading.chains, side.stations_outer_first)
-        table = bpr.table_from_identities(side_reading, identities, layout.pixels_per_metre, layout.centre_column)
-        heights = {w['label']: w['height_ft'] * sc.FEET_M for w in cal.waterlines}
-        for index, station in sorted(identities.items(), key=lambda item: item[1]):
-            cells = sorted([[round(heights[w], 4), round(value, 4)] for (s, w), value in table.items()
+        result = body_plan_sides.read_side(ink, layout, bpr.measure_side(ink, layout, side))
+        for station in sorted(result.curves):
+            cells = sorted([[round(heights[w], 4), round(value, 4)] for (s, w), value in result.table.items()
                             if s == station and w in heights])
-            curve = _curve_m(side_reading.chains[index], cal)
-            if cells:
+            curve = _curve_m(result.curves[station], cal)
+            source = result.identity_source[station]
+            if cells and source == body_plan_sides.IDENTITY_RANK:
                 # The followed ink beyond the waterlines can run onto rails, deck lines or a
                 # neighbour; keep one waterline spacing past the measured cells (the first hull
-                # continues the curve to the keel and deck from the profile).
+                # continues the curve to the keel and deck from the profile). A traced polyline
+                # ends at its own sheer and rabbet, so it is kept whole.
                 margin = waterline_spacing_m(cal)
                 low, high = cells[0][0] - margin, cells[-1][0] + margin
                 curve = [p for p in curve if low <= p[1] <= high]
             record['stations'].append({'station': station, 'side': side.name, 'cells_z_y_m': cells,
-                                       'curve_y_z_m': curve})
-        flags = bpr.fairness_flags(table, side.stations_outer_first, layout.waterlines_low_to_high())
-        record.setdefault('fairness_flags', []).extend(dict(flag, side=side.name) for flag in flags)
+                                       'curve_y_z_m': curve, 'identity_source': source})
+        record.setdefault('fairness_flags', []).extend(dict(flag, side=side.name) for flag in result.fairness_flags)
+        record.setdefault('hard_chine', {})[side.name] = {
+            'read_as_whole': result.half.read, 'engaged_stations': [s.station for s in result.half.engaged],
+            'notes': list(result.half.notes)}
     record['stations'].sort(key=lambda s: s['station'])
     record['usable_for_build'] = not cal.flags and bool(record['stations'])
     if cal.flags:

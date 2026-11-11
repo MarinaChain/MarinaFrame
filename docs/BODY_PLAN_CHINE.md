@@ -2,15 +2,19 @@
 
 ## Product reader and next step
 
-When `MARINAFRAME_BODY_PLAN_READER=1`, intake uses `body_plan_reader` with
-`body_plan_crossings` and code-only nesting-rank station identity. None of the
-hard-chine readers is in this product path. The historical benchmark reader is
-preserved separately in `benchmarks/frozen_readers/v1`.
+When `MARINAFRAME_BODY_PLAN_READER=1`, intake reads each half with
+`body_plan_sides.read_side` (2026-11-11, `docs/plans/2026-11-11-polyline-integration.md`):
+the crossing reader (`body_plan_reader` with `body_plan_crossings`, nesting-rank names)
+and the hard-chine polyline reader (`body_plan_polyline`) where it engages (a half read as
+a whole, or single stations with a clear knuckle). Each station record states its
+`identity_source`. Round-bilge halves give the crossing reader's reading unchanged. The
+other hard-chine arms (reader v2 with its chine line, and chine joining) are not in the
+product path; they are kept for benchmarks in `benchmarks/hard_chine/`. The historical
+benchmark reader is preserved separately in `benchmarks/frozen_readers/v1`.
 
-Before integrating a chine reader, compare the existing candidates on the same
-calibrated development and independent holdout sheets. Check coverage, value and
-identity errors, and the traced corners. Integrate only a candidate that meets
-predefined gates; otherwise keep the present product reader.
+The polyline reader was chosen by the user after the reader-selection runs
+(`docs/plans/2026-11-11-reader-selection.md`), and its station naming was fixed on the nine
+development sheets before integration (CALEB JONES 6 correct / 10 wrong -> 21 / 0 point cells).
 
 ## Metrics and acceptance
 

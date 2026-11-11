@@ -4,7 +4,7 @@ import pytest
 
 from tests.test_body_plan_chine_line import CENTRE, STATION_COLUMNS, WATERLINES, chine_row, drawing
 from vessel_reconstruction import body_plan_reader as bpr
-from vessel_reconstruction import body_plan_reader_v2 as v2
+from benchmarks.hard_chine import reader_v2 as v2
 
 
 def read(sign=1, **options):

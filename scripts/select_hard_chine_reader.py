@@ -35,9 +35,9 @@ from benchmarks.frozen_readers.v1 import body_plan_crossings as crossings  # noq
 from benchmarks.frozen_readers.v1 import body_plan_reader as reader  # noqa: E402
 from benchmarks.pardon_me import holdout_value as pardon  # noqa: E402
 from benchmarks.thayer import holdout_value as thayer  # noqa: E402
-from vessel_reconstruction import body_plan_chine as chine  # noqa: E402
+from benchmarks.hard_chine import chine_joining as chine  # noqa: E402
 from vessel_reconstruction import body_plan_polyline as polyline  # noqa: E402
-from vessel_reconstruction import body_plan_reader_v2 as v2  # noqa: E402
+from benchmarks.hard_chine import reader_v2 as v2  # noqa: E402
 
 ARMS = ('frozen', 'joining', 'reader_v2', 'polyline')
 # Protocol section 5: samples per chord between two cells, the margin round a section's bounding box for the
