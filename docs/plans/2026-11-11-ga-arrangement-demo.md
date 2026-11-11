@@ -59,19 +59,42 @@ upper-deck plan). Not GA-121 (bow cut off at the sheet edge), not GA-023 (owner 
   ("Read from the drawing"). Fixes found this way: the GA is now the drawing pane's page
   (domain/input/source.png), the spec lists no estimated stations (the pane fitted an empty box),
   and extents use the app's source words (traced / guessed) so the hover chip reads "Read".
-- Quick tier: 1953 passed; the one failure was this lane's test run while a file was mid-edit
-  (stale import); tests/test_ga_arrangement.py: 19 passed after the edit.
+- Quick tier on 538b52d: 1955 passed, 0 failed.
+- Lane U rounds (work/ga-internal-23/dev-runs): s1 measured the GA-005 depth under the poop deck
+  (reported; fixed in s2). s3b first measured the GA-120 depth to the deck at centre (above its own
+  cargo-tank tops by more than the tolerance); lane U then marked that depth `derived_from_space_tops`. PM rule: per
+  ship, the newest round that passes the depth check; the round and reader commit are in each
+  run's ga_estimate.json.
+- Builder fixes found on lane U's data: depth check (G7 below), hull aft end at the aftmost read
+  item (bounded by the overhang), spaces above the deck built on the deck, deckhouse tiers and
+  above-deck spaces kept inside the deck outline, estimated particulars named on the page.
+- Demo runs (round s3b for both): no findings. GA-005 (bulk carrier): holds, hatch coamings,
+  crane posts, engine room, double-bottom and other tanks, five deckhouse tiers. GA-120 (tanker):
+  slop and six cargo tanks, engine room, deckhouse tiers; depth estimated from the space tops.
+  Many of lane U's spaces have no extent yet and are skipped (listed in ga_estimate.json),
+  among them the tanker's ballast (W.B.T.) tanks, so the cargo tanks are full breadth (guessed).
+- Web build of both runs passes every gate; screenshots of the 3D views and of hover-to-source on
+  a hold, a cargo tank and a deckhouse tier are in work/ga-arrangement-demo/screenshots/.
+- Known limits (outside this lane): the 3D view's "DWL" and "frames" values are always guessed by
+  the UI from the hull size (app/ui/js/reference3d.js has no stated input), so the frame numbers it
+  shows in 3D are not the GA's frames.
+
+Gate added after the first lane U reading (before any demo run was accepted):
+- G7 depth: a depth from the drawing agrees with the median top of the read cargo holds/tanks
+  within its uncertainty (at least 0.3 m); a derived depth is not checked against itself.
 
 ## Resume point
 
-When lane U pushes readings with extents (`work/ga-internal-23/dev-runs/<round>/<case>/ga_reading.json`):
+Rebuild from a newer lane U round (for example the final `r9/<part>/<case>/`), then the web
+check and screenshots (helper scripts kept in work/ga-arrangement-demo/):
 
 ```sh
-PYTHONPATH=src:. .venv/bin/python -m benchmarks.ga_arrangement --reading <ga_reading.json> \
-  --image work/ga-internal-23/inputs/GA-005_GA.png --out work/ga-arrangement-demo \
-  --split work/ga-internal-23/SPLIT.json
+bash work/ga-arrangement-demo/rebuild.sh <round for GA-005> <round for GA-120> "<lane U commit>"
+python work/ga-arrangement-demo/serve.py work/ga-arrangement-demo/web-check 8773 &
+node work/ga-arrangement-demo/shots.js http://127.0.0.1:8773/ work/ga-arrangement-demo/screenshots runs
+node work/ga-arrangement-demo/shots.js http://127.0.0.1:8773/ work/ga-arrangement-demo/screenshots hover
 ```
 
-Then check G3/G5/G6, build the web bundle with only these runs into a scratch folder, take
-screenshots (3D view, hover-to-source) into work/ga-arrangement-demo/screenshots/, and hand the
-run folders and `*.web-selection-entry.json` to the PM.
+rebuild.sh takes the round directory names under dev-runs (for r9 use `r9/<part>`). Keep a ship
+on its last passing round when the new one has a finding. Hand the PM `runs/`, the two
+`*.web-selection-entry.json` files and the screenshots.

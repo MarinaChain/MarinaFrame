@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -369,6 +370,10 @@ def generate(reading: dict, image: Path, out: Path, slug: str, run_name: str, so
                                     for name in ("lbp_m", "loa_m", "breadth_m", "depth_m")},
                "parts": len(components), "parts_read": read_count, "skipped": data.skipped, "findings": findings}
     _write_json(task / "ga_estimate.json", summary)
-    entry = selection_entry(slug, data.case_id, run_name, sheet, note, f"../{out.name}/runs")
+    # scripts/build_web_demo.py reads "runs_folder" relative to its --runs folder, which
+    # docs/WEB_DEMO.md puts at work/web-demo-runs/runs (a sibling of this output folder).
+    web_runs = out.resolve().parent / "web-demo-runs" / "runs"
+    entry = selection_entry(slug, data.case_id, run_name, sheet, note,
+                            os.path.relpath((out / "runs").resolve(), web_runs))
     _write_json(out / f"{slug}.web-selection-entry.json", entry)
     return {"task": str(task), "summary": summary, "selection_entry": entry}

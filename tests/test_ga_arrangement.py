@@ -256,5 +256,7 @@ def test_build_and_run_folder(reading, tmp_path):
     assert (task / "intake" / "sources" / "synthetic-ga.png").exists()
     entry = result["selection_entry"]
     assert entry["credit"] == ESTIMATE_LABEL and entry["file_stem"] == "SYNTHETIC-1"
+    # The web build reads runs_folder relative to work/web-demo-runs/runs (a sibling of the output).
+    assert entry["runs_folder"] == "../../out/runs"
     summary = json.loads((task / "ga_estimate.json").read_text())
     assert summary["test_fixture"] is True and summary["skipped"][0]["id"] == "other_space-001"
