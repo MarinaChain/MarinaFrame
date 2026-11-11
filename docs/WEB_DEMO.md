@@ -156,8 +156,9 @@ Notes:
 - Do not turn on directory listings (`file_server browse`).
 - Copy with world-readable modes. Some run files are mode 600 in the bundle, and `rsync -a`
   keeps that mode, so Caddy answers 403 for them (the home-page drawing thumbnails broke this
-  way on 2026-11-12). Use `rsync -a --chmod=D755,F644`, or run `chmod -R a+rX` on the site
-  folder after the copy. Then check that no image on the home page is broken.
+  way on 2026-11-12). The macOS `rsync` has no `--chmod` option, so run `chmod -R a+rX` on
+  the site folder on the server after the copy. Then check that no image on the home page is
+  broken.
 - Caddy serves `.glb`, `.step` and `.pdf` files as downloads; the app reads models with `fetch`,
   so their MIME type does not matter.
 
