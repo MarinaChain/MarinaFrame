@@ -67,7 +67,10 @@ def test_live_run_denies_model_read_outside_task(monkeypatch, tmp_path):
                 "raise SystemExit(ship_cad_worker.main())\n")
         return [*command[:5], '-c', code, *command[7:]], label
     monkeypatch.setattr(worker, 'sandbox_command', probe_command)
-    outcome = worker.run({'schema': 'ship-cad/v1', 'components': []}, {}, tmp_path/'task')
+    outcome = worker.run({'schema': 'ship-cad/v1', 'components': [
+        {'id': 'house', 'op': 'deckhouse',
+         'source': {'view': 'plan', 'region': 'house', 'method': 'closed_outline'},
+         'args': {'outline': 'house_outline', 'height': 'house_height'}}]}, {}, tmp_path/'task')
     assert outcome['exit_code'] == 0, outcome
     assert outcome['result'] == {'read_denied': True}
 
@@ -77,7 +80,10 @@ def test_wrong_launcher_cannot_reach_executor(monkeypatch, tmp_path):
     launcher.write_text('#!/bin/sh\nshift 3\nexec "$@"\n')
     launcher.chmod(0o700)
     monkeypatch.setenv('MARINAFRAME_SANDBOX_LAUNCHER', str(launcher))
-    outcome = worker.run({'schema': 'ship-cad/v1', 'components': []}, {}, tmp_path/'task')
+    outcome = worker.run({'schema': 'ship-cad/v1', 'components': [
+        {'id': 'house', 'op': 'deckhouse',
+         'source': {'view': 'plan', 'region': 'house', 'method': 'closed_outline'},
+         'args': {'outline': 'house_outline', 'height': 'house_height'}}]}, {}, tmp_path/'task')
     assert outcome['exit_code'] != 0
     assert outcome['result'] is None
     assert not (tmp_path/'task'/'work'/'output').exists()
