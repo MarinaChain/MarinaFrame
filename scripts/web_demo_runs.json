@@ -14,7 +14,63 @@
       "file_stem": "R-V-Gunnerus",
       "whole_vessel_first": true,
       "section_lines": false,
-      "note": "Hull from the vector lines plan (DXF). The scanned-drawing reading of the bow (about Fr 46–62) is flagged for review."
+      "note": "Hull from the vector lines plan (DXF). The scanned-drawing reading of the bow (about Fr 46–62) is flagged for review.",
+      "extra_sheets": {
+        "root": "../../sources/gunnerus",
+        "sheets": [
+          {
+            "sheet": "polarkonsult/GA Gunnerus Rev1.dxf",
+            "sha256": "c443cb5f4ba8cbc4aeacd9b0bd53aa6ce3e36ee9c0b79f025512fd33ebac1bd5",
+            "role": "General arrangement"
+          },
+          {
+            "sheet": "polarkonsult/Lines Plan Rev0.dxf",
+            "sha256": "fd39569c94ed1b6a73d62016d9667186207c9e1d2574b005977de1d93015a667",
+            "role": "Lines plan"
+          },
+          {
+            "sheet": "polarkonsult/Profile and Plan Rev0.dxf",
+            "sha256": "b801d09ab425bd1d822f142fbaad40727702e3252a6e61a67caa20c589c7c322",
+            "role": "Profile and plan"
+          },
+          {
+            "sheet": "polarkonsult/Tank Plan Rev1.dxf",
+            "sha256": "014d1a1f05878abc4b3db4b8f0c9b0737035583abe4065647b53fe654d6c188f",
+            "role": "Tank plan"
+          },
+          {
+            "sheet": "polarkonsult/Midship Section Rev0.dxf",
+            "sha256": "6d405ce1cde4205ced86403375ddb3377b512e35591b5b86a3eb1850e062ef37",
+            "role": "Midship section"
+          },
+          {
+            "sheet": "polarkonsult/Shell Expansion Rev0.dxf",
+            "sha256": "ffde3aaee2141688c7dfd66251835c398b8bec4e49125ab52fd82108dc425f48",
+            "role": "Shell expansion"
+          },
+          {
+            "sheet": "extended/CJOB/Tank Arrangement Rev0.dxf",
+            "sha256": "17b7f7ec9890a60d1206d8ae73a057495e98ff978d6a4de37577a46809ccc94f",
+            "role": "Tank arrangement",
+            "dxf_boxes_view": "plan"
+          },
+          {
+            "sheet": "extended/CJOB/Construction Plan Longitudinal Section Rev0.dxf",
+            "sha256": "863b64b6fa8fa982c248d10e4afd0fcc11d870a4caecb69d388d29837ce48a46",
+            "role": "Construction plan, longitudinal section"
+          },
+          {
+            "sheet": "extended/CJOB/Construction Plan Transverse Section Rev0.dxf",
+            "sha256": "06e5e0a60bf220d6a5d1be3e3199f9b5b495c571938cfeb5059d3af4e0f35bdc",
+            "role": "Construction plan, transverse sections"
+          },
+          {
+            "sheet": "extended/CJOB/Construction Plan Deck and Double Bottom Rev0.dxf",
+            "sha256": "d9cf16b367612622391b9465dc054747ff803d349bb7d4982c04cbbe016ccb6b",
+            "role": "Construction plan, deck and double bottom"
+          }
+        ]
+      }
     },
     {
       "slug": "concept-survey-launch",
@@ -26,9 +82,10 @@
       "source": "Made-up vessel: the 3D model and its drawings were generated for this demo.",
       "file_stem": "Survey-launch-concept",
       "drawing_sha256": [
-        "2b4d94f3a89e2d392c100b84e5a7c2c19d46b37c8c7a324ab3fcd4f0c09cfea9",
-        "4c6c68a074af8314c0757566dd548f82d9c7907a491c59af1a28fa805f2ffe35",
-        "a877737a7c5fbb51b84430de25b52ec6000f5bb346c1bebbdf2b00748b902ae5"
+        "0f398e36506451e753ddf8435ed86de1c2cbaefd8348dc1856c1c2e0cd636e8d",
+        "95a512c3c11703da82b5bb06936f3f1e4c42f1a14032bcad9cdc0299d7c5ea47",
+        "eceb2c129c31c5ff6321d14e5b17567fef87dad2dab31291789346c9f7d3a3d9",
+        "efce40af849aa2843c6364348f61090e89a499aa2342f725641060af639f88a9"
       ],
       "whole_vessel_first": true,
       "section_lines": false,

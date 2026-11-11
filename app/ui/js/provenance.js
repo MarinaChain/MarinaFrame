@@ -24,10 +24,23 @@ const STACK_STAGGER_MS = 60;
 const STACK_CARD_MS = 260;
 
 export const NO_RECORD = 'No source record. Run again to record where this came from.';
-/** Steel groups: the structure reader does not write records yet (docs/SOURCE_RECORD.md). */
+/** Steel groups whose members have no records (the structure reader of the run wrote none). */
 export const STEEL_RECORD = Object.freeze({
   kind: 'unknown', reason: 'The structure reader does not record its source sheets yet.',
 });
+
+/**
+ * The record of a steel group: the regions its members were read from (`records` is the
+ * TaskView's steel_records, member id -> record), or STEEL_RECORD when none was read.
+ */
+export function steelGroupRecord(records, members) {
+  const regions = [];
+  for (const id of members || []) {
+    const record = records?.[id];
+    if (record?.kind === 'read') regions.push(...(record.regions || []));
+  }
+  return regions.length ? { kind: 'read', regions } : STEEL_RECORD;
+}
 
 // ---------------------------------------------------------------- records
 
@@ -68,7 +81,7 @@ export function sourceOf(view, item) {
     return { record: index.sections.get(item.id) || null, label };
   }
   if (item.id.startsWith('steel:')) {
-    return { record: STEEL_RECORD, label: item.label || `Steel ${item.id.slice(6)}` };
+    return { record: steelGroupRecord(view?.steel_records, item.members), label: item.label || `Steel ${item.id.slice(6)}` };
   }
   return { record: index.parts.get(item.id) || null, label: index.labels.get(item.id) || item.label || item.id };
 }

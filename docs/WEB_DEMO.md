@@ -63,6 +63,28 @@ A run may have a `credit` line in `scripts/web_demo_runs.json` (for example "R/V
 drawings: NTNU (Norwegian University of Science and Technology), used under licence."). It shows
 as a strip on every page of that run. A concept-preview run shows its label there instead.
 
+### Extra sheets
+
+Some stages read drawings straight from the data set, so the run folder lists fewer sources than
+the source records name (R/V Gunnerus: the whole-vessel stage read its DXF sheets). For such a
+run, `extra_sheets` lists each sheet with its SHA-256 (`root` is relative to `--runs`).
+`scripts/web_demo_sheets.py` checks the hash, renders the DXF (its sheet frame, else its extents
+without outlier groups) to a PNG of at most 4000 px, adds it to the run's sources and gives every
+region on it the page size. On the sheet marked `dxf_boxes_view`, a part's "DXF box" (model
+units, from its outline basis) becomes its box in pixels on the region of that view. Renders are
+cached by hash under `work/web-demo-runs/sheet-cache`.
+
+Gunnerus: the 6 Polarkonsult sheets (GA, lines plan, profile and plan, tank plan, midship section,
+shell expansion) and the 4 C-JOB sheets (tank arrangement, construction plan longitudinal and
+transverse sections, deck and double bottom). 17 tank regions get a box on the tank
+arrangement; decks and deckhouses name their GA sheet without a box ("Region not recorded").
+
+### Steel records
+
+A structure reader that writes `structure/<stem>_source_records.json` (member id -> record) gives
+the TaskView's `steel_records`. A steel group in 3D shows the regions of its members; without
+records it says "Source not known". Gunnerus has none; the concept run has 139.
+
 ### First view
 
 `whole_vessel_first: true` opens a run on its whole-vessel model (the app otherwise opens the

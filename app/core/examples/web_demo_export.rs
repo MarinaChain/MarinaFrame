@@ -342,8 +342,13 @@ impl RunExporter<'_> {
 
     /// The sounding table of every tank the view names.
     fn sounding_tables(&self, view: &Value) -> Result<Value, String> {
-        let mut tanks = BTreeSet::new();
-        collect_field(view, "tank_id", &mut tanks);
+        // The capacity plan's rows name the tanks (CapacityRow.id), as sounding_table takes them.
+        let tanks: BTreeSet<String> = view["capacity_plan"]["rows"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|row| row["id"].as_str().map(String::from))
+            .collect();
         let mut found = Map::new();
         for tank in tanks {
             if let Ok(table) = self.backend.sounding_table(&self.task, &tank) {
@@ -451,24 +456,6 @@ fn collect_strings(value: &Value, out: &mut BTreeSet<String>) {
         }
         Value::Array(items) => items.iter().for_each(|v| collect_strings(v, out)),
         Value::Object(map) => map.values().for_each(|v| collect_strings(v, out)),
-        _ => {}
-    }
-}
-
-/// Every string value of the fields named `field`, at any depth.
-fn collect_field(value: &Value, field: &str, out: &mut BTreeSet<String>) {
-    match value {
-        Value::Array(items) => items.iter().for_each(|v| collect_field(v, field, out)),
-        Value::Object(map) => {
-            for (key, v) in map {
-                if key == field {
-                    if let Some(text) = v.as_str() {
-                        out.insert(text.to_string());
-                    }
-                }
-                collect_field(v, field, out);
-            }
-        }
         _ => {}
     }
 }

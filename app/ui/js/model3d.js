@@ -144,7 +144,7 @@ export function createModelView({
     renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true });
   } catch {
     showEmpty('3D view not available', 'This computer did not allow a WebGL view.');
-    return { setModel() {}, setSpacesContext() {}, captureImage: () => null, setSelected() {}, partList: () => [], hidePart() {}, isolatePart() {}, showAllParts() {}, resetView() {}, refreshTheme() {}, showSections() {}, setSectionLinesShown() {}, setSeeThroughHull() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, anchorOf: () => null, refreshCard() {}, placeOverlays() {}, showsWholeVessel: false, hasTanks: false };
+    return { setModel() {}, setSpacesContext() {}, captureImage: () => null, setSelected() {}, partList: () => [], hidePart() {}, isolatePart() {}, showAllParts() {}, resetView() {}, refreshTheme() {}, showSections() {}, setSectionLinesShown() {}, setSeeThroughHull() {}, steelMembersOf: () => null, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, anchorOf: () => null, refreshCard() {}, placeOverlays() {}, showsWholeVessel: false, hasTanks: false };
   }
   /** Pixel ratio cap: a 3x screen draws at 2x, which looks the same and costs 2.25 times less. */
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
@@ -1050,6 +1050,12 @@ export function createModelView({
     reportHover(null);
   });
 
+  /** The member ids of a steel group part (GLB extras), or null for any other part. */
+  function steelMembersOf(partId) {
+    const mesh = steelMeshes.find((o) => o.userData.partId === partId);
+    return mesh ? (mesh.userData.members || []).map((member) => member.id).filter(Boolean) : null;
+  }
+
   // ---- Hover for the source view (provenance.js): the section plane or part under the pointer,
   // found once a frame with the readout, reported only when it changes.
   let hoveredItemKey = null;
@@ -1059,7 +1065,7 @@ export function createModelView({
     if (sectionId) item = { kind: 'section', id: sectionId };
     else if (event && wholeVessel) {
       const partId = partAt(event);
-      if (partId) item = { kind: 'part', id: partId };
+      if (partId) item = { kind: 'part', id: partId, members: steelMembersOf(partId) };
     }
     const key = item ? `${item.kind}:${item.id}` : null;
     if (key === hoveredItemKey) return;
@@ -1994,6 +2000,8 @@ export function createModelView({
     setSectionLinesShown: (on) => setSectionLinesShown(on),
     /** The hull faint and the parts inside it solid, or not (the See-through switch). */
     setSeeThroughHull: (on) => setSeeThroughHull(on),
+    /** The member ids of a steel group part, or null for any other part. */
+    steelMembersOf: (partId) => steelMembersOf(partId),
     /** HOOK(M3 live): show or hide the review overlays (guessed ranges) during a replay. */
     setReviewOverlays(visible) {
       reviewOverlays = visible;

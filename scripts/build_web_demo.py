@@ -7,7 +7,9 @@ Steps:
 1. Stage app/ui by the desktop release rules (app/core/src/release_ui.rs, through the
    exporter's --stage-ui mode) into build/web-demo/, add the static backend
    (app/ui/static/backend.js) and switch index.html to it with a web CSP.
-   The demo's pages in app/ui/static (the pilot proposal) come along.
+   The demo's pages in app/ui/static (the pilot proposal) come along. Sheets a run's source
+   records name but its folder does not hold ("extra_sheets", scripts/web_demo_sheets.py) are
+   rendered and added to its sources.
 2. Export the runs named in scripts/web_demo_runs.json with the app's own backend
    (app/core/examples/web_demo_export.rs) into build/web-demo/data/.
 3. Refuse the bundle when a run is not listed with an allowed licence, when a drawing is not
@@ -31,6 +33,9 @@ import sys
 from pathlib import Path
 
 from PIL import Image
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from web_demo_sheets import SheetError, add_extra_sheets  # noqa: E402  (beside this script)
 
 REPO = Path(__file__).resolve().parent.parent
 SELECTION = REPO / "scripts" / "web_demo_runs.json"
@@ -151,10 +156,11 @@ def export_runs(runs_folder: Path, data: Path, selection: list[dict], worker_pyt
     (data / "tasks.json").write_text(json.dumps(summaries, indent=2) + "\n")
 
 
-def check_sources(data: Path, entry: dict) -> list[dict]:
-    """Every drawing of the run is one of the listed public sheets; returns the sources."""
+def check_sources(data: Path, entry: dict, extra: list[str] = ()) -> list[dict]:
+    """Every drawing of the run is one of the listed sheets (its own, or an extra sheet whose
+    file matched its listed SHA-256); returns the sources."""
     sources = json.loads((data / "runs" / entry["slug"] / "sources.json").read_text())["sources"]
-    allowed = set(entry.get("drawing_sha256", []))
+    allowed = set(entry.get("drawing_sha256", [])) | set(extra)
     for source in sources:
         check_name(source["name"], f"{entry['slug']}: source")
         if source["kind"] in GENERATED_SOURCE_KINDS:
@@ -278,6 +284,8 @@ def write_manifest(data: Path, selection: list[dict], downscaled: dict[str, list
 
 
 def build(runs_folder: Path, out: Path, selection_path: Path, worker_python: str, config: Path | None, skip_cargo: bool) -> int:
+    # Rendered extra sheets are kept beside the runs folder, by the SHA-256 of their DXF.
+    sheet_cache = runs_folder.parent / "sheet-cache"
     selection = load_selection(selection_path)
     if not skip_cargo:
         run(["cargo", "build", "--release", "--locked", "-p", "marinaframe-app-core", "--example", "web_demo_export"])
@@ -291,8 +299,16 @@ def build(runs_folder: Path, out: Path, selection_path: Path, worker_python: str
         summary["task"].rsplit("/", 1)[-1]: summary["name"] for summary in json.loads((data / "tasks.json").read_text())
     }
     for entry in selection:
-        rename_run(data / "runs" / entry["slug"], original_names.get(entry["slug"], ""), entry)
-        check_sources(data, entry)
+        run_dir = data / "runs" / entry["slug"]
+        rename_run(run_dir, original_names.get(entry["slug"], ""), entry)
+        extra = []
+        if entry.get("extra_sheets"):
+            listed = entry["extra_sheets"]
+            try:
+                extra = add_extra_sheets(run_dir, (runs_folder / listed["root"]).resolve(), listed["sheets"], sheet_cache)
+            except SheetError as error:
+                raise BuildError(f"{entry['slug']}: {error}") from error
+        check_sources(data, entry, extra)
         downscaled[entry["slug"]] = downscale_images(data / "runs" / entry["slug"])
     write_manifest(data, selection, downscaled)
     return check_files(out)

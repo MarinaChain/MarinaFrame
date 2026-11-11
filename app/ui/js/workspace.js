@@ -31,6 +31,11 @@ let drawingEmpty;
 /** The source view: the sheet a part came from, beside the 3D model (js/provenance.js). */
 let sources;
 
+/** A part for the source view; a steel group carries its member ids (their records show). */
+function partItem(id) {
+  return { kind: 'part', id, members: model?.steelMembersOf(id) || null };
+}
+
 /** Create the panes. Their callbacks reach the rest of the run view only after start. */
 export function createWorkspace() {
   evidence = createEvidenceCard({
@@ -58,7 +63,7 @@ export function createWorkspace() {
     },
     // The source view follows the pointer in 3D (after a short pause) and the selected part.
     onItemHover: (item) => sources?.hover(item),
-    onPartPick: (id) => sources?.select(id ? { kind: 'part', id } : null),
+    onPartPick: (id) => sources?.select(id ? partItem(id) : null),
     // What the run knows of a part, for its fact card in 3D: the capacity plan row of a tank, the
     // part record, and the source it was read from (the drawing opens beside the model).
     partContext: (id) => {
@@ -70,7 +75,7 @@ export function createWorkspace() {
           label: [summary.title, basis, component.view ? `${component.view} view` : null].filter(Boolean).join(' · '),
           open: () => {
             setLayout('split');
-            sources.select({ kind: 'part', id });
+            sources.select(partItem(id));
           },
         }
         : null;

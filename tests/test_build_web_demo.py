@@ -111,6 +111,23 @@ def test_large_images_are_scaled_down_and_recorded(tmp_path):
         assert image.size == (build.MAX_IMAGE_EDGE_PX, 50)
 
 
+def test_a_dxf_box_lands_in_the_rendered_sheet_pixels():
+    from web_demo_sheets import Render, dxf_box_of
+
+    # A 1000 x 500 unit drawing from (100, 200), rendered at 2 px per unit.
+    render = Render(Path("sheet.png"), 2000, 1000, (100.0, 200.0, 1100.0, 700.0))
+    # x from the left edge; y flipped: DXF y grows up, pixels grow down.
+    assert render.box_px((100, 200, 1100, 700)) == [0.0, 0.0, 2000.0, 1000.0]
+    assert render.box_px((600, 450, 700, 650)) == [1000.0, 100.0, 1200.0, 500.0]
+    assert render.box_px((700, 650, 600, 450)) == [1000.0, 100.0, 1200.0, 500.0]
+    part = {"arguments": [
+        {"name": "height", "basis": "from the hull bottom"},
+        {"name": "outline", "basis": 'enclosed region at the label "No 1" (DXF box (34079, 9721, 35579, 13985))'},
+    ]}
+    assert dxf_box_of(part) == (34079.0, 9721.0, 35579.0, 13985.0)
+    assert dxf_box_of({"arguments": [{"name": "outline", "basis": "no box"}]}) is None
+
+
 def test_rename_run_uses_the_listed_name_in_views_and_export_files(tmp_path):
     original = "Vessel (sealed benchmark, raster path)"
     exports = tmp_path / "exports" / "r0001"

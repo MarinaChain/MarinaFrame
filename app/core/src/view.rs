@@ -196,6 +196,7 @@ pub fn get_task(task: &Path, context: &ViewContext) -> Result<TaskView, String> 
         capacity_plan: crate::run_tables::read_capacity_plan(task),
         tank_model: crate::run_tables::tank_model_path(task).is_some(),
         structure_files: crate::run_tables::structure_files(task),
+        steel_records: crate::run_tables::steel_records(task),
         body_plan_check: crate::body_plan_check::read(task, &context.part_reviews),
         draft,
         sections,
