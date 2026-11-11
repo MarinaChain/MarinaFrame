@@ -95,6 +95,6 @@ the mock GLB (`PYTHONPATH=src .venv/bin/python app/ui/mock/make_whole_vessel_moc
 - At 1280 px with the details column open, the bar shows about two section tiles; the strip
   scrolls. The sentence ends in "…" first.
 - 2000 x 1300 stays under 80 % because the details column starts open at >= 1800 px (lane J).
-- Screenshots are in this worktree's `work/run-view-focus/` (the isolated agent could not write
-  to the main checkout).
+- Screenshots and the two scripts (`shots.mjs`, `guess_label.mjs`) are in the main checkout's
+  `work/run-view-focus/` (git-ignored).
 - Not checked in the Tauri shell; Chrome on the mock backend only.
