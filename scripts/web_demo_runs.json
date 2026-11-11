@@ -92,6 +92,40 @@
       "see_through": true
     },
     {
+      "credit": "Estimated 3D arrangement from a single GA drawing. The hull shape is estimated (no lines plan); compartments are read from the GA. Not a CAD model; not for construction.",
+      "drawing_sha256": [
+        "d40760164d461f86e10ac0f752dce67ee9141e07cd61bea7f786ff197e60d4a8"
+      ],
+      "file_stem": "GA-005",
+      "licence": "owner-cleared-ga",
+      "name": "GA-005 estimated arrangement",
+      "note": "37 parts placed from the GA; each part's card says which extents were read and which guessed. Hull 140 x 24.8 x 12.1 m, estimated.",
+      "runs_folder": "../../ga-arrangement-demo/runs",
+      "section_lines": false,
+      "see_through": true,
+      "slug": "ga-005-ga-estimate",
+      "source": "General arrangement drawing of development case GA-005, shown with the owner's permission.",
+      "tagline": "GA to estimated 3D arrangement",
+      "whole_vessel_first": true
+    },
+    {
+      "credit": "Estimated 3D arrangement from a single GA drawing. The hull shape is estimated (no lines plan); compartments are read from the GA. Not a CAD model; not for construction.",
+      "drawing_sha256": [
+        "b2dd1ca0323dde96cdacddfe8ff692a782f0a6a7fc6e8a0883ece13c60eab4d7"
+      ],
+      "file_stem": "GA-120",
+      "licence": "owner-cleared-ga",
+      "name": "GA-120 estimated arrangement",
+      "note": "23 parts placed from the GA; each part's card says which extents were read and which guessed. Hull 127 x 20.3 x 11.4 m, estimated. Not from the drawing: depth (derived from space tops).",
+      "runs_folder": "../../ga-arrangement-demo/runs",
+      "section_lines": false,
+      "see_through": true,
+      "slug": "ga-120-ga-estimate",
+      "source": "General arrangement drawing of development case GA-120, shown with the owner's permission.",
+      "tagline": "GA to estimated 3D arrangement",
+      "whole_vessel_first": true
+    },
+    {
       "slug": "dtmb5415-3v-L0",
       "name": "DTMB 5415 (research hull)",
       "licence": "mit",
