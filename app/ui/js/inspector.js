@@ -227,16 +227,18 @@ function renderActivity(activity) {
   const cost = activity.list_cost_complete
     ? fmt.usd(activity.list_cost_usd)
     : `at least ${fmt.usd(activity.list_cost_usd)}`;
+  const costChip = chip(cost, { dot: false, small: true, title: 'List cost of the model requests' });
+  // Costs and timings show on the Run tab only when the person turns them on (Settings).
+  costChip.classList.add('cost-timing');
   const facts = [
     [fmt.plural(activity.requests, 'request'), 'Requests to the model'],
     [`${fmt.integer(activity.prompt_tokens)} sent`, 'Tokens sent to the model'],
     [`${fmt.integer(activity.completion_tokens)} received`, 'Tokens received from the model'],
-    [cost, 'List cost of the model requests'],
   ];
   return el('details', { class: 'activity' },
     el('summary', { title: 'What the AI did in this run' }, chevron(), 'Model activity',
       chip(fmt.plural(activity.steps.length, 'step'), { dot: false, small: true })),
-    el('p', { class: 'chip-row' }, ...facts.map(([text, title]) => chip(text, { dot: false, small: true, title }))),
+    el('p', { class: 'chip-row' }, ...facts.map(([text, title]) => chip(text, { dot: false, small: true, title })), costChip),
     el('ol', { class: 'activity-steps selectable-text' }, ...activity.steps.map((step) => el('li', {},
       el('strong', {}, step.tool),
       step.reason ? `: ${step.reason}` : null))));
@@ -255,12 +257,14 @@ function renderModelCalls() {
     return;
   }
   const totalCost = calls.reduce((sum, c) => sum + (c.cost_usd || 0), 0);
+  const totalChip = chip(fmt.usd(totalCost), { dot: false, small: true, title: 'Cost of all calls' });
+  totalChip.classList.add('cost-timing');
   const task = state.task;
   fill(panel,
     renderActivity(state.view.activity),
     el('p', { class: 'call-total chip-row' },
       chip(fmt.plural(calls.length, 'call'), { dot: false, small: true }),
-      chip(fmt.usd(totalCost), { dot: false, small: true, title: 'Cost of all calls' })),
+      totalChip),
     ...calls.map((call) => {
       const images = el('div', { class: 'call-images' }, ...call.images.map((image) => {
         const img = el('img', { alt: image.label });
@@ -270,7 +274,7 @@ function renderModelCalls() {
       const facts = [
         call.prompt_tokens !== null && `${fmt.integer(call.prompt_tokens)} tokens sent`,
         call.completion_tokens !== null && `${fmt.integer(call.completion_tokens)} received`,
-        call.cost_usd !== null && fmt.usd(call.cost_usd),
+        call.cost_usd !== null && el('span', { class: 'cost-timing' }, fmt.usd(call.cost_usd)),
         call.key_slot !== null && `Key ${call.key_slot}`,
       ].filter(Boolean);
       const verdict = call.state === 'completed'
@@ -280,7 +284,7 @@ function renderModelCalls() {
         el('div', { class: 'call-head' }, verdict),
         call.images.length ? images : null,
         call.answer ? el('p', { class: 'call-answer selectable-text' }, call.answer) : null,
-        facts.length ? el('p', { class: 'call-facts' }, ...facts.map((f) => el('span', {}, f))) : null);
+        facts.length ? el('p', { class: 'call-facts' }, ...facts.map((f) => (typeof f === 'string' ? el('span', {}, f) : f))) : null);
     }),
   );
 }

@@ -14,7 +14,7 @@
 //   router.js         routes
 //   ui_kit.js, artifacts.js, run_facts.js  shared helpers; run_facts.js has no DOM (tested)
 
-import { prefs, setSettings, state } from './app_state.js';
+import { prefs, setSettings, state, applyShowCosts } from './app_state.js';
 import { invoke } from './api.js';
 import { showError } from './ui_kit.js';
 import { installTooltips } from './tooltip.js';
@@ -27,7 +27,7 @@ import {
 } from './inspector.js';
 import { createStartFlows, installStartControls, needsWelcome } from './new_vessel.js';
 import { installRouter, routeFromHash, applyRoute, openRememberedTask } from './router.js';
-import { installClock } from './run_header.js';
+import { installClock, installRunDrawer } from './run_header.js';
 import { installStripKeys } from './run_strip.js';
 import { installLiveUpdates, installRunActions, refreshDatasets, refreshTasks } from './run.js';
 import {
@@ -42,6 +42,8 @@ import {
 function install() {
   createWorkspace();
   installClock();
+  installRunDrawer();
+  applyShowCosts();
   createAreaCurve();
   installLiveUpdates();
   installLayout();

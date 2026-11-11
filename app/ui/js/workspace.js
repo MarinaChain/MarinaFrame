@@ -95,6 +95,7 @@ export function createWorkspace() {
       thinking: $('panel-thinking'),
       ladder: $('revision-ladder'),
       transport: $('live-transport'),
+      watchAgainHost: $('run-bar-end'),
       follow: $('live-follow'),
       dial: $('fit-dial'),
       caption: $('model-caption'),
