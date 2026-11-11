@@ -51,7 +51,10 @@ The same runs, config and commit give the same bytes (`built_from_commit` is in 
 | `mit` | DTMB 5415 surface (mathLab/WaveBEMapp-DTMB-5415) |
 | `cc-by-3.0` | Series 60 example hull (FreeCAD Ship workbench); the credit is shown under its card |
 | `synthetic` | the built-in sample hull |
-| `owner-approved-display` | R/V Gunnerus and MiDShip development cases: licence not confirmed; the owner approved showing them on the demo site (2026-11-11). They stay out of git. |
+| `owner-approved-display` | R/V Gunnerus and MiDShip (development split only, never sealed): licence not confirmed. They stay out of git. |
+
+Approval for `owner-approved-display` (2026-11-11): the PM asked the user "Can we show Gunnerus
+(and MiDShip tanker sections) on a public site?" and the user answered "1. Yes".
 
 ## Local check
 
