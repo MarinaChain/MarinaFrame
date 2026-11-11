@@ -43,7 +43,7 @@ def test_linux_command_uses_native_launcher(monkeypatch, tmp_path):
     command, label = worker.sandbox_command(task, SANDBOX_MODEL_LIMITS)
     assert command[:3] == [str(launcher), '--config', str(task/'worker-linux.json')]
     assert command[3:5] == ['--', sys.executable]
-    assert label == 'linux-landlock-seccomp-deny-list'
+    assert label == 'linux-landlock-seccomp-allow-list'
     config = json.loads((task/'worker-linux.json').read_text())
     assert config['task'] == str(task)
     assert config['work'] == str(task/'work')
@@ -70,9 +70,32 @@ def test_child_attestation_refuses_missing_controls(monkeypatch, status):
         worker.confirm_linux_sandbox()
 
 
-def test_child_attestation_accepts_required_controls(monkeypatch):
+def test_host_seccomp_state_alone_does_not_attest_sandbox(monkeypatch):
     monkeypatch.setattr(Path, 'read_text', lambda self: 'Seccomp:\t2\nNoNewPrivs:\t1\n')
+    monkeypatch.setattr(os, 'listdir', lambda path: [])
+    with pytest.raises(RuntimeError, match='sandbox attestation'):
+        worker.confirm_linux_sandbox()
+
+
+def test_child_attestation_accepts_required_controls(monkeypatch):
+    import errno
+    monkeypatch.setattr(Path, 'read_text', lambda self: 'Seccomp:\t2\nNoNewPrivs:\t1\n')
+    def denied_listing(path):
+        raise PermissionError(errno.EACCES, 'Landlock')
+    monkeypatch.setattr(os, 'listdir', denied_listing)
+    monkeypatch.setattr(worker, '_linux_kcmp_errno', lambda: errno.EPERM)
     worker.confirm_linux_sandbox()
+
+
+def test_child_attestation_rejects_missing_syscall_policy(monkeypatch):
+    import errno
+    monkeypatch.setattr(Path, 'read_text', lambda self: 'Seccomp:\t2\nNoNewPrivs:\t1\n')
+    def denied_listing(path):
+        raise PermissionError(errno.EACCES, 'Landlock')
+    monkeypatch.setattr(os, 'listdir', denied_listing)
+    monkeypatch.setattr(worker, '_linux_kcmp_errno', lambda: errno.EINVAL)
+    with pytest.raises(RuntimeError, match='sandbox attestation'):
+        worker.confirm_linux_sandbox()
 
 
 def test_unsupported_platform_fails_closed(monkeypatch):

@@ -196,7 +196,6 @@ fn host_ipc_and_cross_process_calls_are_denied() {
         libc::SYS_move_pages,
         libc::SYS_migrate_pages,
         libc::SYS_kcmp,
-        libc::SYS_syslog,
         libc::SYS_personality,
     ] {
         success(&format!("import ctypes,errno\nlibc=ctypes.CDLL(None,use_errno=True)\nprint('REACHED',flush=True)\nassert libc.syscall(ctypes.c_long({number}),-1,0,0,0,0,0)==-1\nassert ctypes.get_errno()==errno.EPERM"));
@@ -204,8 +203,22 @@ fn host_ipc_and_cross_process_calls_are_denied() {
 }
 
 #[test]
+fn syslog_size_query_is_denied_before_kernel_argument_checks() {
+    // SIZE_BUFFER (10) is not gated by dmesg_restrict. Invalid action -1
+    // checks capability first and can falsely pass without our filter.
+    success(&format!("import ctypes,errno\nlibc=ctypes.CDLL(None,use_errno=True)\nprint('REACHED',flush=True)\nassert libc.syscall(ctypes.c_long({}),10,None,0)==-1\nassert ctypes.get_errno()==errno.EPERM", libc::SYS_syslog));
+}
+
+#[test]
 fn child_can_attest_kernel_controls_but_not_read_host_proc() {
     success("from pathlib import Path\nprint('REACHED',flush=True)\ns=Path('/proc/self/status').read_text()\nf=dict(line.split(':',1) for line in s.splitlines() if ':' in line)\nassert f['Seccomp'].strip()=='2'\nassert f['NoNewPrivs'].strip()=='1'\ntry: Path('/proc/1/status').read_text()\nexcept PermissionError: pass\nelse: raise AssertionError('host proc readable')");
+}
+
+#[test]
+fn unlisted_harmless_syscall_is_denied_by_default() {
+    // getcpu succeeds without special privileges and was permitted by the old
+    // deny-list. No host security setting should produce a false-positive EPERM.
+    success(&format!("import ctypes,errno\nlibc=ctypes.CDLL(None,use_errno=True)\nprint('REACHED',flush=True)\nassert libc.syscall(ctypes.c_long({}),None,None,None)==-1\nassert ctypes.get_errno()==errno.EPERM", libc::SYS_getcpu));
 }
 
 #[test]

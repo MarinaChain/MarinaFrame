@@ -76,6 +76,10 @@ fn canonical(path: &Path) -> io::Result<PathBuf> {
     fs::canonicalize(path)
 }
 fn broad(path: &Path) -> bool {
+    broad_with_account(path, real_home)
+}
+
+fn broad_with_account(path: &Path, account_home: impl FnOnce() -> Option<PathBuf>) -> bool {
     matches!(
         path.to_str(),
         Some(
@@ -95,7 +99,7 @@ fn broad(path: &Path) -> bool {
         path.to_str(),
         Some("/opt" | "/mnt" | "/srv" | "/run" | "/var/tmp" | "/dev/shm")
     ) || path.parent() == Some(Path::new("/home"))
-        || real_home().is_some_and(|home| path == home)
+        || account_home().is_some_and(|home| home.starts_with(path))
 }
 
 fn real_home() -> Option<PathBuf> {
@@ -333,7 +337,7 @@ fn syscalls() -> io::Result<()> {
             instruction(RET, 0, 0, KILL),
             instruction(LD_ABS, 0, 0, 0),
         ];
-        // Reject x32 and unknown syscall encodings before the deny list.
+        // Reject x32 and unknown syscall encodings before the allow-list.
         filter.push(instruction(0x35, 0, 1, 0x40000000)); // BPF_JGE
         filter.push(instruction(RET, 0, 0, KILL));
         // Fail closed for newer APIs until their security effects are reviewed
@@ -354,136 +358,114 @@ fn syscalls() -> io::Result<()> {
             libc::SYS_ioctl,
             &[0x8901 /* FIOSETOWN */, 0x8902 /* SIOCSPGRP */],
         );
-        let mut denied = vec![
-            libc::SYS_shmget,
-            libc::SYS_shmat,
-            libc::SYS_shmctl,
-            libc::SYS_shmdt,
-            libc::SYS_msgget,
-            libc::SYS_msgsnd,
-            libc::SYS_msgrcv,
-            libc::SYS_msgctl,
-            libc::SYS_semget,
-            libc::SYS_semop,
-            libc::SYS_semtimedop,
-            libc::SYS_semctl,
-            libc::SYS_mq_open,
-            libc::SYS_mq_unlink,
-            libc::SYS_mq_timedsend,
-            libc::SYS_mq_timedreceive,
-            libc::SYS_mq_notify,
-            libc::SYS_mq_getsetattr,
-            libc::SYS_ioprio_set,
-            libc::SYS_move_pages,
-            libc::SYS_migrate_pages,
-            libc::SYS_kcmp,
-            libc::SYS_syslog,
-            libc::SYS_personality,
-            libc::SYS_socket,
-            libc::SYS_socketpair,
-            libc::SYS_connect,
-            libc::SYS_bind,
-            libc::SYS_listen,
-            libc::SYS_accept,
-            libc::SYS_accept4,
-            libc::SYS_sendto,
-            libc::SYS_sendmsg,
-            libc::SYS_sendmmsg,
-            libc::SYS_recvfrom,
-            libc::SYS_recvmsg,
-            libc::SYS_recvmmsg,
-            libc::SYS_shutdown,
-            libc::SYS_clone,
-            libc::SYS_setsid,
-            libc::SYS_setpgid,
-            libc::SYS_unshare,
-            libc::SYS_setns,
-            libc::SYS_mount,
-            libc::SYS_umount2,
-            libc::SYS_pivot_root,
-            libc::SYS_chroot,
-            libc::SYS_ptrace,
-            libc::SYS_process_vm_readv,
-            libc::SYS_process_vm_writev,
-            libc::SYS_kill,
-            libc::SYS_tkill,
-            libc::SYS_tgkill,
-            libc::SYS_rt_sigqueueinfo,
-            libc::SYS_rt_tgsigqueueinfo,
-            libc::SYS_bpf,
-            libc::SYS_perf_event_open,
-            libc::SYS_keyctl,
-            libc::SYS_add_key,
-            libc::SYS_request_key,
-            libc::SYS_open_by_handle_at,
-            libc::SYS_name_to_handle_at,
-            libc::SYS_init_module,
-            libc::SYS_finit_module,
-            libc::SYS_delete_module,
-            libc::SYS_reboot,
-            libc::SYS_kexec_load,
-            libc::SYS_swapon,
-            libc::SYS_swapoff,
-            libc::SYS_userfaultfd,
-            libc::SYS_setuid,
-            libc::SYS_setgid,
-            libc::SYS_setreuid,
-            libc::SYS_setregid,
-            libc::SYS_setresuid,
-            libc::SYS_setresgid,
-            libc::SYS_setfsuid,
-            libc::SYS_setfsgid,
-            libc::SYS_setgroups,
-            libc::SYS_capset,
-            // Landlock does not mediate metadata changes. Deny them globally
-            // rather than letting a model chmod/chown unrelated same-uid files.
-            libc::SYS_fchmod,
-            libc::SYS_fchmodat,
-            libc::SYS_fchown,
-            libc::SYS_fchownat,
-            libc::SYS_setxattr,
-            libc::SYS_lsetxattr,
-            libc::SYS_fsetxattr,
-            libc::SYS_removexattr,
-            libc::SYS_lremovexattr,
-            libc::SYS_fremovexattr,
-            libc::SYS_utimensat,
-            libc::SYS_acct,
-            libc::SYS_quotactl,
-            // prlimit64 accepts another same-uid PID: it must not be usable to
-            // change the trusted supervisor's budgets.
-            libc::SYS_prlimit64,
-            libc::SYS_sched_setaffinity,
-            libc::SYS_sched_setparam,
-            libc::SYS_sched_setscheduler,
-            libc::SYS_sched_setattr,
-            libc::SYS_setpriority,
-            libc::SYS_prctl,
-            libc::SYS_seccomp,
+        // Evidence: CI 43116216695, x86_64 CPython 3.12 + OCP 7.8,
+        // import, box, serial STL export, STEP export/reimport. Supervisor-only
+        // setup and observed denied calls are deliberately NOT permissions:
+        // socket/connect/kcmp, clone/vfork/wait, unshare/prctl/prlimit, Landlock.
+        let mut allowed = vec![
+            libc::SYS_brk,
+            libc::SYS_chdir,
+            libc::SYS_close,
+            libc::SYS_close_range,
+            libc::SYS_epoll_create1,
+            libc::SYS_execve,
+            libc::SYS_exit_group,
+            libc::SYS_fcntl,
+            libc::SYS_fstat,
+            libc::SYS_futex,
+            libc::SYS_getcwd,
+            libc::SYS_getdents64,
+            libc::SYS_getegid,
+            libc::SYS_geteuid,
+            libc::SYS_getgid,
+            libc::SYS_getpid,
+            libc::SYS_getppid,
+            libc::SYS_getrandom,
+            libc::SYS_gettid,
+            libc::SYS_getuid,
+            libc::SYS_ioctl,
+            libc::SYS_lseek,
+            libc::SYS_mmap,
+            libc::SYS_mprotect,
+            libc::SYS_mremap,
+            libc::SYS_munmap,
+            libc::SYS_newfstatat,
+            libc::SYS_openat,
+            libc::SYS_pipe2,
+            libc::SYS_pread64,
+            libc::SYS_read,
+            libc::SYS_rseq,
+            libc::SYS_rt_sigaction,
+            libc::SYS_rt_sigprocmask,
+            libc::SYS_sched_getaffinity,
+            libc::SYS_set_robust_list,
+            libc::SYS_set_tid_address,
+            libc::SYS_sigaltstack,
+            libc::SYS_statx,
+            libc::SYS_times,
+            libc::SYS_uname,
+            libc::SYS_write,
+            libc::SYS_writev,
+            // Beyond trace: vDSO normally hides CPython clocks; libc fallback
+            // must work on kernels/architectures without the matching vDSO.
+            libc::SYS_clock_gettime,
+            libc::SYS_clock_getres,
+            libc::SYS_gettimeofday,
+            // Beyond trace: Python time.sleep and the stop/progress probes.
+            libc::SYS_clock_nanosleep,
+            libc::SYS_nanosleep,
+            // Beyond trace: ordinary single-process exit and Python signal return.
+            libc::SYS_exit,
+            libc::SYS_rt_sigreturn,
+            // Beyond trace: Python buffered/vector I/O and CAD atomic output
+            // publication; Landlock still confines mutations to task/work.
+            libc::SYS_readv,
+            libc::SYS_pwrite64,
+            libc::SYS_ftruncate,
+            libc::SYS_fsync,
+            libc::SYS_fdatasync,
+            libc::SYS_mkdirat,
+            libc::SYS_unlinkat,
+            libc::SYS_renameat,
+            libc::SYS_renameat2,
+            // Beyond trace: CPython pathlib/os and ELF loader equivalents on
+            // aarch64, whose ABI has no access/readlink/mkdir/poll/dup2 calls.
+            libc::SYS_faccessat,
+            libc::SYS_faccessat2,
+            libc::SYS_readlinkat,
+            libc::SYS_ppoll,
+            libc::SYS_pselect6,
+            libc::SYS_dup,
+            libc::SYS_dup3,
         ];
         #[cfg(target_arch = "x86_64")]
-        denied.extend([
-            libc::SYS_fork,
-            libc::SYS_vfork,
-            libc::SYS_iopl,
-            libc::SYS_ioperm,
-            libc::SYS_chmod,
-            libc::SYS_chown,
-            libc::SYS_lchown,
-            libc::SYS_utime,
-            libc::SYS_utimes,
-            libc::SYS_futimesat,
+        allowed.extend([
+            // Measured legacy x86_64 entry points; absent on aarch64.
+            libc::SYS_access,
+            libc::SYS_arch_prctl,
+            libc::SYS_mkdir,
+            libc::SYS_dup2,
+            libc::SYS_poll,
+            libc::SYS_readlink,
+            libc::SYS_stat,
+            // Beyond trace: libc/Python compatibility and atomic CAD publication.
+            libc::SYS_open,
+            libc::SYS_lstat,
+            libc::SYS_unlink,
+            libc::SYS_rmdir,
+            libc::SYS_rename,
+            libc::SYS_select,
+            libc::SYS_time,
         ]);
-        // Modern syscall numbers shared by x86_64 and aarch64. Deny APIs that
-        // bypass path checks, create processes, or mutate mounts/namespaces.
-        denied.extend([
-            424, 425, 426, 427, 428, 429, 430, 431, 432, 434, 435, 438, 440, 442, 448,
-        ]);
-        for number in denied {
+        // No aarch64 run has been measured on this Mac. Shared names above
+        // resolve to native libc syscall numbers, not x86_64 numeric aliases.
+        allowed.sort_unstable();
+        allowed.dedup();
+        for number in allowed {
             filter.push(instruction(JMP_EQ, 0, 1, number as u32));
-            filter.push(instruction(RET, 0, 0, DENY));
+            filter.push(instruction(RET, 0, 0, ALLOW));
         }
-        filter.push(instruction(RET, 0, 0, ALLOW));
+        filter.push(instruction(RET, 0, 0, DENY));
         let program = libc::sock_fprog {
             len: filter.len() as u16,
             filter: filter.as_mut_ptr(),
@@ -553,4 +535,22 @@ pub fn launch() -> io::Result<std::convert::Infallible> {
     syscalls()?;
     // exec preserves PID, process group, hard limits, Landlock and seccomp.
     Err(Command::new(&arguments[3]).args(&arguments[4..]).exec())
+}
+
+#[cfg(test)]
+mod home_tests {
+    use super::*;
+
+    #[test]
+    fn account_lookup_is_required_for_nonstandard_home_and_ancestors() {
+        // Fixed /home and /root strings cannot make this test pass. A mutation
+        // removing the account-home predicate or lookup fails these assertions.
+        let home = PathBuf::from("/data/accounts/person");
+        for root in ["/data", "/data/accounts", "/data/accounts/person"] {
+            assert!(broad_with_account(Path::new(root), || Some(home.clone())));
+            assert!(!broad_with_account(Path::new(root), || None));
+        }
+        let actual = real_home().expect("Linux test account must resolve via getpwuid");
+        assert!(broad(&actual));
+    }
 }
