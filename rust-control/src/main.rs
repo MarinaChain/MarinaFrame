@@ -207,8 +207,7 @@ fn execute() -> Result<serde_json::Value> {
             None => models::DEFAULT_MODELS.map(String::from).to_vec(),
         };
         let model = models.remove(0);
-        // Unset: the controller shares the cores between concurrent runs
-        // (worker::default_inspection_workers).
+        // Unset: no bound; the machine-wide worker pool shares the cores.
         let inspection_workers = args
             .remove("inspection-workers")
             .map(|value| {

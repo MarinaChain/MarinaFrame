@@ -2,6 +2,7 @@
 import copy
 
 import numpy as np
+import pytest
 
 from vessel_reconstruction import parallel
 from vessel_reconstruction.agent_tools import DomainTools
@@ -11,16 +12,21 @@ from vessel_reconstruction.investigation import _ink_at, _ink_hits
 from test_agent_tools import drawing
 
 
+@pytest.fixture(autouse=True)
+def private_pool(tmp_path, monkeypatch):
+    """Each test has its own worker pool of 8 (CI runners have fewer cores)."""
+    monkeypatch.setenv(parallel.POOL_DIRECTORY_ENVIRONMENT_VARIABLE, str(tmp_path / "pool"))
+    monkeypatch.setattr(parallel, "pool_size", lambda: 8)
+
+
 def test_worker_count_uses_setting_then_cores_and_stays_within_pieces(monkeypatch):
     monkeypatch.setenv(parallel.WORKERS_ENVIRONMENT_VARIABLE, "3")
     assert parallel.worker_count(12) == 3
     assert parallel.worker_count(2) == 2
     monkeypatch.setenv(parallel.WORKERS_ENVIRONMENT_VARIABLE, "0")  # invalid: taken as unset
-    monkeypatch.setattr(parallel.os, "cpu_count", lambda: 10)
-    assert parallel.worker_count(12) == 8
+    assert parallel.worker_count(12) == 8  # the pool size (cores - 2; 8 in these tests)
     monkeypatch.delenv(parallel.WORKERS_ENVIRONMENT_VARIABLE)
-    monkeypatch.setattr(parallel.os, "cpu_count", lambda: 2)
-    assert parallel.worker_count(12) == 1
+    assert parallel.worker_count(3) == 3
 
 
 def test_the_controller_count_wins_over_the_environment(tmp_path, monkeypatch):
@@ -83,3 +89,18 @@ def test_parallel_inspection_matches_one_worker(tmp_path, monkeypatch):
     assert len(pages) == 1
     kinds = [a["kind"] for a in three.state["inspection_artifacts"]]
     assert kinds == [a["kind"] for a in one.state["inspection_artifacts"]]
+
+
+def test_a_run_takes_only_the_free_workers_of_the_pool(tmp_path, monkeypatch):
+    """Another run holds 1 of 2 workers: this one inspects with the free one, same catalog."""
+    path, _ = drawing(tmp_path / "input")
+    monkeypatch.setattr(parallel, "pool_size", lambda: 2)
+    alone = DomainTools(tmp_path / "alone", path)
+    assert alone.execute("inspect_source", {})["resources"]["workers"] == 2
+    with parallel.worker_tokens(1, wait=False) as held:
+        assert held == 1
+        shared = DomainTools(tmp_path / "shared", path)
+        observed = shared.execute("inspect_source", {})
+    assert observed["ok"] and observed["resources"]["workers"] == 1
+    assert observed["returned_section_ids"] == ["s0", "s1", "s2"]  # the batch does not depend on load
+    assert _catalog(shared) == _catalog(alone)

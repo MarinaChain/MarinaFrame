@@ -713,14 +713,13 @@ fn folder_bytes(path: &Path, depth: usize) -> u64 {
         .sum()
 }
 
-/// Inspection workers a new run gets: the setting, else the free cores shared between
-/// the runs that may do native work at once. The app passes it to the controller
-/// explicitly; the controller's worker environment is cleared.
-pub fn inspection_workers(settings: &Settings) -> u32 {
+/// The inspection worker bound a new run gets: the setting when it is valid, else none
+/// (the machine-wide worker pool shares cores - 2 workers between running inspections).
+/// The app passes it to the controller explicitly; the worker environment is cleared.
+pub fn inspection_workers(settings: &Settings) -> Option<u32> {
     settings
         .inspection_workers
         .filter(|n| (1..=marinaframe_control::worker::MAX_INSPECTION_WORKERS).contains(n))
-        .unwrap_or_else(marinaframe_control::worker::default_inspection_workers)
 }
 
 #[cfg(test)]

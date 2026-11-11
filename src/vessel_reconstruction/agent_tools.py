@@ -120,8 +120,9 @@ class DomainTools(InvestigationTools):
     this class also bounds each parser/CAD worker and serializes mutations.
     """
 
-    # Worker processes of one source inspection; the controller sets it (it shares
-    # the cores between concurrent runs). None: parallel.worker_count's own default.
+    # Most worker processes of one source inspection (the app setting, passed by
+    # the controller). None: no bound of its own; the machine-wide worker pool
+    # (parallel.worker_tokens) shares cores - 2 workers between running inspections.
     inspection_workers: int | None = None
 
     def __init__(self, task_dir: Path, spec_path: Path, *, cancel_event=None):
@@ -654,17 +655,21 @@ class DomainTools(InvestigationTools):
         if not requested:
             requested = [s["id"] for s in self.spec["sections"]]
         # Sections are independent: the batch is split over parallel worker
-        # processes, each with the single-worker budget (parallel.worker_count).
+        # processes. The batch depends only on the bound (not on the machine's
+        # load), so the calls a controller makes stay the same.
         workers = parallel.worker_count(INSPECTION_BATCH, self.inspection_workers)
         ids = self._inspection_batch(requested, workers)
         missing = [sid for sid in ids if sid not in self.state["catalog"]]
         resources = {}
         if missing:
-            groups = parallel.split_evenly(missing, workers)
             started = time.monotonic()
-            runs = parallel.run_in_order(
-                lambda group: self._inspection_worker(group, page_section_ids=missing if group is groups[0] else []),
-                groups, len(groups))
+            # Workers from the machine-wide pool: every free one up to the bound,
+            # at least one (waiting while all are taken); back when the workers end.
+            with parallel.worker_tokens(min(workers, len(missing)), self.cancel_event) as granted:
+                groups = parallel.split_evenly(missing, granted)
+                runs = parallel.run_in_order(
+                    lambda group: self._inspection_worker(group, page_section_ids=missing if group is groups[0] else []),
+                    groups, len(groups))
             failed = [(group, outcome) for group, (outcome, result, _) in zip(groups, runs) if result is None]
             resources = {"worker_state": failed[0][1]["state"] if failed else runs[0][0]["state"],
                          "wall_seconds": round(time.monotonic() - started, 4), "workers": len(groups)}

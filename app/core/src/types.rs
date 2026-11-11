@@ -432,11 +432,10 @@ pub struct Settings {
     /// A desktop notification when a run stops (js Settings > Notifications). On by default.
     #[serde(default = "notify_finished_default")]
     pub notify_finished: bool,
-    /// Worker processes of one source inspection in a run. Unset: the free cores
-    /// (cores - 2) shared between the runs that may do native work at once
-    /// (`marinaframe_control::worker::default_inspection_workers`), so a batch of
-    /// runs does not start cores - 2 workers each. A speed setting: results do not
-    /// depend on it.
+    /// Most worker processes of one source inspection in a run. Unset: no bound of
+    /// its own; the machine-wide worker pool shares cores - 2 workers between all
+    /// running inspections, so a lone run gets all of them and a batch shares them.
+    /// A speed setting: results do not depend on it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub inspection_workers: Option<u32>,
 }

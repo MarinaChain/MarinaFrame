@@ -106,27 +106,35 @@ CPU seconds (receipts): inspection 238.9 -> 268.2 (parallel startup cost), build
 | Hull build (`pipeline.reconstruct`), of which 3dm export | 377.1, 256.0 | 98.6, 10.0 |
 | Whole-vessel assembly (side by side, load 5-17) | 446.7 | 390.7 |
 
-## 4a. Worker count set by the controller (PM request, 2026-11-11)
+## 4a. Machine-wide worker pool (PM decisions, 2026-11-11)
 
 The controller clears the worker environment, so `MARINAFRAME_WORKERS` never reached the app's
-worker. Now:
+worker. A per-slot split (cores - 2 divided by the native slots) gave 1 worker per run on this
+10-core Mac (5 slots), so the PM chose a machine-wide pool:
 
-- `Config.inspection_workers: Option<u32>` (not serialized when unset: older ledger hashes
-  stay). The app sets it from `Settings.inspection_workers` (optional; unset = the default) in
-  `app_run_config`; the CLI takes `marinaframe run --inspection-workers 1..32`.
-- Default (`worker::default_inspection_workers`): max(1, (cores - 2) / native slots). An
-  inspection holds a native admission slot, so at most `slots` runs inspect at once and together
-  they use at most max(1, cores - 2) workers (Rust test
-  `concurrent_runs_never_exceed_the_free_cores_by_default`, 1-128 cores, also two concurrent runs).
-- The controller always passes `--inspection-workers N` to `rust_worker`, which sets
-  `DomainTools.inspection_workers`; that wins over `MARINAFRAME_WORKERS` (kept for CLI scripts).
-
-**Effect on one app run on this Mac:** 10 cores give 5 native slots, so the default is
-max(1, 8 / 5) = 1 inspection worker per run: inspection is back to about its old time (309.6 s
-measured through the controller), while the build_draft gains stay (722.7 -> 289.7 s). One run at
-a time gets the parallel inspection back with the setting (for example 8), or with
-`MARINAFRAME_NATIVE_SLOTS=1`. Option for later: a machine-wide pool of cores - 2 worker tokens
-(lock files, like the admission slots), so a lone run uses 8 workers and concurrent runs share.
+- `parallel.worker_tokens`: max(1, cores - 2) tokens, each an exclusive `flock` on one file in
+  `/tmp/marinaframe-worker-pool-<uid>/` (mode 0700; owner, mode and links checked; a fixed path
+  because the controller clears `TMPDIR`). An inspection call takes every free token up to what it
+  can use (at least 1; it waits while none is free; cancellation stops the wait) and gives them back
+  when its workers end. The kernel drops the locks of a process that ends, so a crashed run's
+  tokens come back at once; nothing expires on a clock. Every inspection on the machine (app,
+  `marinaframe run`, scripts) uses the same pool.
+- The batch of a call depends only on the bound, never on the free tokens, so the calls a
+  controller makes do not depend on machine load; the tokens only decide how many processes
+  share the batch (same catalog: tested).
+- Upper bound: `Settings.inspection_workers` (app, optional) -> `Config.inspection_workers` (not
+  serialized when unset; older ledger hashes stay) -> `--inspection-workers` (only when set) ->
+  `DomainTools.inspection_workers`. `marinaframe run --inspection-workers 1..32` sets it on the CLI.
+  `MARINAFRAME_WORKERS` stays for command-line scripts.
+- Tests (`tests/test_worker_pool.py`, `tests/test_parallel_inspection.py`): a lone run gets
+  cores - 2 (8 of 8 with 10 cores); 2 and 5 concurrent runs (separate processes) never hold more
+  than the pool; a SIGKILLed holder's tokens come back; a waiting run stops on cancel; the pool
+  folder must be private; a run that finds 1 of 2 tokens free inspects with 1 and gets the same
+  catalog and batch. Rust: the bound reaches the worker as an argument only when set.
+- Single run, Gunnerus inspection step in process (`work/pipeline-speed/inspect_only.py`):
+  6 calls, 8 workers each: **95.0 s** at load average 11-23, and 161.0 s at load 24-30 (other
+  lanes compiling); every inspected candidate identical to the earlier runs. Through the controller at load 7-10 the same path took
+  91.4 s (section 4.1).
 
 ## 5. Not done / follow-ups
 

@@ -121,7 +121,7 @@ fn app_run_config(
     source_spec: String,
     binary_sha256: String,
     use_model: bool,
-    inspection_workers: u32,
+    inspection_workers: Option<u32>,
 ) -> Config {
     Config {
         worker_python,
@@ -146,7 +146,7 @@ fn app_run_config(
         // answer moves the run to Crouton, then DeepSeek (founder decision
         // 2026-11-09). Settings may choose models later.
         fallback_models: DEFAULT_MODELS[1..].iter().map(|m| m.to_string()).collect(),
-        inspection_workers: Some(inspection_workers),
+        inspection_workers,
     }
 }
 
@@ -160,7 +160,7 @@ pub fn start_run(
     worker_source: Option<&Path>,
     spec_path: &str,
     use_model: bool,
-    inspection_workers: u32,
+    inspection_workers: Option<u32>,
 ) -> AppResult<String> {
     let source = util::absolute(Path::new(spec_path))?;
     if !source.is_file() || source.is_symlink() {
@@ -409,7 +409,7 @@ mod tests {
             "spec.json".into(),
             "a".repeat(64),
             false,
-            3,
+            Some(3),
         );
         let mut store = Store::create(&task, controller::new_state(config)).unwrap();
         store.state.status = marinaframe_control::types::Status::Stalled;
@@ -439,7 +439,7 @@ mod tests {
             "spec.json".into(),
             String::new(),
             true,
-            3,
+            Some(3),
         );
         assert_eq!(ai.on_ambiguity, OnAmbiguity::Draft);
         assert_eq!(ai.policy, Policy::Live);
@@ -453,12 +453,12 @@ mod tests {
             "spec.json".into(),
             String::new(),
             false,
-            3,
+            Some(3),
         );
         assert_eq!(fallback.on_ambiguity, OnAmbiguity::Draft);
         assert_eq!(fallback.policy, Policy::Deterministic);
         assert!(!fallback.provider_transfer_authorized);
-        // The app sets the inspection worker count explicitly for the controller.
+        // The app passes the inspection worker bound explicitly to the controller.
         assert_eq!(fallback.inspection_workers, Some(3));
     }
 }

@@ -85,7 +85,7 @@ def execute(request, task_root, source_spec, cancel, inspection_workers=None):
     if cancel.is_set():
         raise InterruptedError("Worker cancelled before operation")
     domain = DomainTools(task_root, Path(source_spec), cancel_event=cancel)
-    # The controller's count for this run (it shares the cores between concurrent runs).
+    # The run's bound from the app setting (None: the machine-wide pool decides).
     domain.inspection_workers = inspection_workers
     if request["operation"] in {"initialize", "observe"}:
         result = {"ok": True, "status": "observed", "artifacts": [],
