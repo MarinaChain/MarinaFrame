@@ -104,4 +104,21 @@ CARGO_TARGET_DIR=/Users/jonathanjie/Documents/workspace/MarinaFrame/.claude/work
 
 ## Results
 
-Pending implementation.
+### Implementation checkpoints
+
+- `f0dfbea`: restored plan committed before implementation.
+- `b206fce`: Python platform selection and fail-closed receipts; targeted tests: 41 passed, 9 CAD tests deselected.
+- `c604dee`: Linux-only native launcher, native policy probes, Python runtime/stop probes, and explicit Linux CI step.
+- `734214e`: deny model-created symlinks, including protection for later host artifact consumers; test a trusted pre-existing symlink cannot escape.
+- Linux x86_64 launcher and native tests cross-type-check successfully on this Mac using the installed Linux Rust standard library and an ignored minimal check harness under `work/linux-sandbox-check/`. Matching Clippy driver also completes without warnings. Full workspace cross-check needs a Linux C compiler for ring, unavailable here. These checks do not execute Linux kernel policy.
+- First required quick-tier attempt passed Mac formatting, Clippy and Rust tests, then the tool killed the command after its 600-second allowance during Python tests. No test failure was reported before interruption. Re-run uses the tool's two-hour allowance; no production timeout was added.
+- Final full quick-tier result: pending.
+- Live Linux kernel/real-CAD behavior: pending Linux CI, cannot run on this Mac.
+
+### Deployment and resume
+
+Build `marinaframe-sandbox` with the controller. Set `MARINAFRAME_SANDBOX_LAUNCHER` to its absolute installed path, or install it beside the worker Python executable. Rust's Linux worker environment retains that trusted deployment setting for nested part revisions. Python does not pass it into model code. Missing launcher or kernel policy support refuses execution.
+
+Landlock ABI 3 or newer, seccomp filters, and close_range are mandatory. Runtime grants come from Python sysconfig and explicit library/device paths, not the whole interpreter prefix. Model process/thread creation is denied; numeric library thread settings remain one. New syscall numbers >=449 are denied until reviewed. User namespaces are not entered because credential changes would invalidate existing same-uid supervisor identity/stop assumptions; a network namespace is attempted without credential changes and seccomp is required regardless of availability.
+
+The Linux controller CI job builds the launcher, runs all native policy tests, then runs portable command-selection tests plus live Python stop/real-CAD tests. Live tests are excluded from generic Python shards without a launcher and skipped only on non-Linux. Required Linux features are never a skip condition. No local `target/` folder was created; the shared target is retained.
