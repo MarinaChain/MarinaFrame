@@ -5,6 +5,7 @@ Synthetic images only; no model is called and no partner drawing is used.
 from __future__ import annotations
 
 import json
+import math
 
 import numpy as np
 import pytest
@@ -43,7 +44,7 @@ def test_a_label_is_found_and_its_direction_measured(tmp_path, angle):
 def test_crops_reach_beyond_the_blob_and_cells_fit_the_provider(tmp_path):
     path = _sheet(tmp_path, 30.0)
     candidates = ga_labels.text_candidates(np.asarray(Image.open(path).convert("L")))
-    crop_map = ga_labels.prepare(path, candidates * 10, tmp_path / "fine")
+    crop_map, _ = ga_labels.prepare(path, candidates * 10, tmp_path / "fine")
     assert len(crop_map) == 10
     first = crop_map[0]
     assert first["box_px"][0] < first["blob_px"][0] and first["box_px"][2] > first["blob_px"][2]
@@ -51,7 +52,7 @@ def test_crops_reach_beyond_the_blob_and_cells_fit_the_provider(tmp_path):
     along = first["blob_px"][0] - first["box_px"][0]
     level = ga_labels.Candidate((400, 400, 500, 420), 0.0, 5, 10.0)
     box = ga_labels.crop_box(level, 1200, 800)
-    assert 400 - box[0] > 2 * (400 - box[1]) and along > 0
+    assert 400 - box[0] > 1.5 * (400 - box[1]) and along > 0
     request = json.loads((tmp_path / "fine" / "labels-1" / "request.json").read_text())
     assert request["purpose"] == "ga_labels" and request["engineering_approved"] is False
     for image in request["images"]:
@@ -63,10 +64,13 @@ def test_the_fine_pass_never_needs_more_than_its_request_budget(tmp_path):
     path = _sheet(tmp_path, 30.0)
     candidate = ga_labels.text_candidates(np.asarray(Image.open(path).convert("L")))[0]
     big = ga_labels.Candidate(candidate.box, candidate.angle_deg, candidate.glyphs, 6.0)  # large cells
-    crop_map = ga_labels.prepare(path, [big] * 200, tmp_path / "fine")
+    crop_map, _ = ga_labels.prepare(path, [big] * 400, tmp_path / "fine")
     requests = {c["request"] for c in crop_map}
     assert len(requests) <= ga_labels.MAX_FINE_REQUESTS
-    assert 0 < len(crop_map) < 200
+    assert 0 < len(crop_map) < 400
+    # The ceiling is a setting: with two fine requests fewer crops are read.
+    fewer, _ = ga_labels.prepare(path, [big] * 400, tmp_path / "fewer", max_requests=2)
+    assert len({c["request"] for c in fewer}) == 2 and len(fewer) < len(crop_map)
     assert [c["crop_id"] for c in crop_map] == [f"c{i + 1:02d}" for i in range(len(crop_map))]  # priority order
 
 
@@ -92,3 +96,102 @@ def test_accommodation_blobs_go_last():
 ])
 def test_counted_kinds_need_their_word_in_the_label(kind, text, expected):
     assert ga_labels.checked_kind(kind, text) == expected
+
+
+def test_every_unexplained_blob_is_a_candidate():
+    """No fixed cap of crops: the request ceiling alone bounds the fine pass."""
+    blobs = [ga_labels.Candidate((x, 10, x + 50, 20), 0.0, 6, 10.0) for x in range(0, 9000, 60)]
+    assert len(ga_labels.unexplained(blobs, [])) == len(blobs) == 150
+    assert len(ga_labels.unexplained(blobs, [], limit=48)) == 48
+
+
+def test_the_pieces_of_a_letter_spaced_label_are_one_blob():
+    """'NO. 5    W. B.   TK (P&S)' drawn with wide gaps along a slope is one label, not three."""
+    slope = math.tan(math.radians(-12.0))
+
+    def piece(x, width, glyphs):  # text that rises to the right: its box runs from the right end's top
+        return ga_labels.Candidate((x, int(500 + slope * (x + width)), x + width, int(500 + slope * x) + 12),
+                                   -12.0, glyphs, 10.0)
+
+    pieces = [piece(100, 50, 4), piece(190, 40, 3), piece(270, 80, 7)]
+    other_line = ga_labels.Candidate((100, 700, 180, 712), 0.0, 6, 10.0)   # a label on another line
+    far = piece(600, 80, 6)
+    joined = ga_labels.join_collinear([*pieces, other_line, far])
+    assert len(joined) == 3
+    label = max(joined, key=lambda c: c.glyphs)
+    assert label.glyphs == 14 and label.box[0] == 100 and label.box[2] == 350
+    # Level text beside a diagonal piece is not on its line.
+    level = ga_labels.Candidate((360, 390, 420, 402), 0.0, 5, 10.0)
+    assert len(ga_labels.join_collinear([pieces[2], level])) == 2
+
+
+@pytest.mark.parametrize("kind, text, expected", [
+    ("other_tank", "NO.4 C.T.(P)", "cargo_tank"),
+    ("other_tank", "NO.6 C.O.T.(P&S)", "cargo_tank"),
+    ("other_space", "NO.9 H O L D", "cargo_hold"),
+    ("other_space", "HOLD OR W. B.", "other_space"),          # no hold number: not a hold
+    ("other_space", "A/H FOR NO.6 HOLD", "other_space"),      # an access hatch for a hold
+    ("other_tank", "NO.3 W.B.T.(S)", "ballast_tank"),
+    ("other_space", "NO.5 TOP-SIDE W.B.TK (P)", "ballast_tank"),
+    ("other_tank", "A.P.T.", "ballast_tank"),
+    ("other_tank", "NO.1 F.O.T.(S)", "fuel_tank"),
+    ("other_tank", "H.F.O.TK(P)", "fuel_tank"),
+    ("other_tank", "SLOP HOLDING TK.(C)", "slop_tank"),
+    ("other_tank", "RESIDUE TK", "other_tank"),
+    ("other_tank", "L.O.S.T.", "other_tank"),
+    ("other_space", "ACCESS HATCH", "other_space"),
+    ("ballast_tank", "NO.2 C.O.T.(P)", "ballast_tank"),       # a kind the model named is not overruled
+])
+def test_a_label_that_names_its_kind_gets_that_kind(kind, text, expected):
+    assert ga_labels.promoted_kind(kind, text) == expected
+
+
+def test_the_slop_definition_is_a_setting():
+    from vessel_reconstruction.ga_commercial import DEFINITIONS
+    assert ga_labels.label_kind("slop_tank", "SLOP HOLDING TK.(C)", DEFINITIONS) == "slop_tank"
+    strict = {**DEFINITIONS, "slop_holding_tank_is_slop": False}
+    assert ga_labels.label_kind("slop_tank", "SLOP HOLDING TK.(C)", strict) == "other_tank"
+    assert ga_labels.label_kind("slop_tank", "SLOP TK.(P)", strict) == "slop_tank"
+    assert ga_labels.label_kind("slop_tank", "RESIDUE TK", DEFINITIONS) == "other_tank"
+
+
+def test_a_crop_that_a_reply_leaves_out_is_asked_once_more(tmp_path):
+    """Review of the adaptive fine pass: one reply answered 4 of 35 cells."""
+    path = _sheet(tmp_path, 0.0)
+    candidate = ga_labels.text_candidates(np.asarray(Image.open(path).convert("L")))[0]
+    asked = []
+
+    def call(request_dir, provider_dir):
+        crops = [c["crop_id"] for c in json.loads((request_dir / "request.json").read_text())["context"]["crops"]]
+        asked.append(crops)
+        answered = crops[:2] if len(asked) == 1 else crops  # the first reply stops after two cells
+        return {"reply": {"ga_labels": {"crops": [{"crop_id": c, "labels": [], "evidence": "x"} for c in answered]}}}
+
+    crop_map, readings = ga_labels.prepare(path, [candidate] * 5, tmp_path / "fine", max_requests=3, call=call)
+    assert asked == [["c01", "c02", "c03", "c04", "c05"], ["c03", "c04", "c05"]]
+    assert len(readings) == 2 and {row["crop_id"]: row["request"] for row in crop_map}["c04"] == "labels-2"
+    # With one request only, the crops left out stay unread; nothing is asked a third time.
+    asked.clear()
+    ga_labels.prepare(path, [candidate] * 5, tmp_path / "one", max_requests=1, call=call)
+    assert len(asked) == 1
+
+
+def test_a_diagonal_crop_is_cut_to_its_text_band(tmp_path):
+    path = _sheet(tmp_path, 30.0)
+    candidate = ga_labels.text_candidates(np.asarray(Image.open(path).convert("L")))[0]
+    cell = ga_labels.crop_image(Image.open(path).convert("L"), candidate)
+    assert cell.width > 3 * cell.height   # a band along the text, not the square box of the diagonal
+
+
+def test_a_fine_label_of_a_hold_without_its_number_is_not_a_hold():
+    from vessel_reconstruction import source_record
+    result = {"sources": {"ga": {"file": "S_GA.png"}}, "checks": [], "counts": {}, "views": [], "spaces": [],
+              "model_counts": {name: {"missing": "x"} for name in
+                               ("cargo_holds", "cargo_hatches", "cargo_cranes", "cargo_tanks", "slop_tanks",
+                                "container_bays")}}
+    crop_map = [{"crop_id": "c01", "box_px": [10, 10, 90, 40]}]
+    reading = {"reply": {"ga_labels": {"crops": [{"crop_id": "c01", "evidence": "x", "labels": [
+        {"text": "HOLD", "kind": "cargo_hold", "number": None},
+        {"text": "NO.3 HOLD", "kind": "cargo_hold", "number": "3"}]}]}}}
+    ga_labels.merge(result, crop_map, [reading], "S_GA.png", [100, 100])
+    assert [(s["label"], s["kind"]) for s in result["spaces"]] == [("HOLD", "other_space"), ("NO.3 HOLD", "cargo_hold")]

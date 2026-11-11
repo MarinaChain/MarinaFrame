@@ -80,6 +80,7 @@ impl Purpose {
             Purpose::PartRevision => Some(part_revision::EVIDENCE_KIND),
             Purpose::GaReading => Some(provider::ga_reading::EVIDENCE_KIND),
             Purpose::GaLabels => Some(provider::ga_reading::LABELS_EVIDENCE_KIND),
+            Purpose::GaScale => Some(provider::ga_reading::SCALE_EVIDENCE_KIND),
             _ => None,
         }
     }
@@ -367,6 +368,7 @@ pub enum VisionReply {
     PartRevision(PartProgram),
     GaReading(provider::ga_reading::GaReply),
     GaLabels(provider::ga_reading::LabelsReply),
+    GaScale(provider::ga_reading::ScaleReply),
 }
 
 fn bounded_text(text: &str, max: usize) -> bool {
@@ -495,6 +497,9 @@ pub fn parse_reply(
         )?)),
         Purpose::GaLabels => Ok(VisionReply::GaLabels(provider::ga_reading::parse_labels(
             content,
+        )?)),
+        Purpose::GaScale => Ok(VisionReply::GaScale(provider::ga_reading::parse_scale(
+            content, images,
         )?)),
         Purpose::Localisation => {
             let reply: LocalisationReply = util::parse(content.as_bytes(), 32_768)?;
@@ -660,6 +665,9 @@ fn response_schema(purpose: Purpose, view: &str) -> Value {
         Purpose::GaLabels => {
             serde_json::from_str(provider::ga_reading::LABELS_CLI_SCHEMA).unwrap_or(Value::Null)
         }
+        Purpose::GaScale => {
+            serde_json::from_str(provider::ga_reading::SCALE_CLI_SCHEMA).unwrap_or(Value::Null)
+        }
         Purpose::Localisation => {
             json!({"answers":[{"id":"question id","x":"number or null","y":"number or null","value":"number or null","evidence":"visible mark or missing reason"}]})
         }
@@ -712,6 +720,7 @@ pub fn payload(
         Purpose::PartRevision => "revise_one_part",
         Purpose::GaReading => "read_general_arrangement",
         Purpose::GaLabels => "read_label_crops",
+        Purpose::GaScale => "measure_frame_scale_and_extents",
         _ if manifest.images[0].view == OVERVIEW_VIEW => "overview",
         _ => "panel",
     };
@@ -750,13 +759,14 @@ pub fn payload(
         Purpose::PartRevision => part_revision::OUTPUT_TOKENS,
         Purpose::GaReading => provider::ga_reading::OUTPUT_TOKENS,
         Purpose::GaLabels => provider::ga_reading::LABELS_OUTPUT_TOKENS,
+        Purpose::GaScale => provider::ga_reading::SCALE_OUTPUT_TOKENS,
         _ => SETUP_OUTPUT_TOKENS,
     };
     let messages =
         json!([{"role":"system","content":purpose.prompt()},{"role":"user","content":content}]);
     // Reading a GA is judgment (which outline is which space), so the model
     // reasons first; the other vision purposes answer directly.
-    let thinking = purpose == Purpose::GaReading;
+    let thinking = matches!(purpose, Purpose::GaReading | Purpose::GaScale);
     let payload = crate::models::payload(model, tokens, thinking, 0., messages)?;
     Ok((payload, prompt, receipts))
 }
@@ -1235,7 +1245,10 @@ pub fn vision_request(
 /// 5.5 by default and refuses every model that is not on the Claude
 /// subscription transport.
 pub fn request_model(purpose: Purpose, model: Option<&str>) -> Result<&'static str> {
-    let partner_data = matches!(purpose, Purpose::GaReading | Purpose::GaLabels);
+    let partner_data = matches!(
+        purpose,
+        Purpose::GaReading | Purpose::GaLabels | Purpose::GaScale
+    );
     let default = if partner_data {
         crate::models::CLAUDE_SONNET_5_5
     } else {
@@ -1320,7 +1333,7 @@ mod tests {
     #[test]
     fn ga_reading_goes_only_to_claude() {
         use crate::models::{CLAUDE_SONNET_5_5, CROUTON_ALPHA_FREE, DEEPSEEK_V4_1_FLASH};
-        for purpose in [Purpose::GaReading, Purpose::GaLabels] {
+        for purpose in [Purpose::GaReading, Purpose::GaLabels, Purpose::GaScale] {
             assert_eq!(request_model(purpose, None).unwrap(), CLAUDE_SONNET_5_5);
             for model in [DEEPSEEK_V4_1_FLASH, CROUTON_ALPHA_FREE] {
                 assert!(request_model(purpose, Some(model)).is_err());

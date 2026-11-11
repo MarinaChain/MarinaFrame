@@ -1,7 +1,8 @@
 # GA reading for commercial ships: method, exam protocol and results (lane U, 2026-11-12)
 
-Status: development done on the 14 development ships; code frozen at the commit that adds this
-file's "Frozen" section. The holdout is scored once by the evaluator lane, not by this lane.
+Status: development on the 14 development ships, three rounds; **not frozen yet** (the code is
+frozen at the commit that adds this file's "Frozen" section). The holdout is scored once by the
+evaluator lane, not by this lane.
 
 Why: HJ Shipbuilding / J.Ocean want "GA AI" (docs/POSITIONING.md); pilot idea: AI-assisted
 preparation and checking of one GA revision for a tanker.
@@ -56,14 +57,20 @@ folder, command line), `src/vessel_reconstruction/ga_labels.py` (fine pass),
    gaps up to one glyph height in any direction; the direction of a blob comes from its glyph
    centres (turned level only when the centres are clearly one line, spread ratio 12, and 8-60
    degrees off level). Blobs that no coarse space or particular explains are kept: blobs outside
-   accommodation deck plans first, then diagonal, then the longest; at most 48 per ship. Each
+   accommodation deck plans first, then diagonal, then the longest. Pieces of one letter-spaced
+   label on one text line (gap up to 5 glyph heights, directions within 15 degrees) are joined
+   into one blob first. There is no fixed number of crops: requests go out until every kept blob
+   is read, up to the request ceiling of the ship (below). Each
    crop reaches 3 glyph heights beyond its blob, is turned level and enlarged (at most 4x, the
    investigation tools' `MAX_ZOOM`, at most 1,024 px) into a numbered cell of a contact sheet
    (up to 8 cells, 6 sheets per request). The model returns the space labels printed in each
    cell (several in a dense cell). Each label becomes a `read` space whose source region is its
    crop's sheet box. A fine-pass label counts as a hold, hatch, crane, cargo tank or slop tank
    only when its text says so (HOLD, HATCH, CRANE, C.O.T./C.T./CARGO TK, SLOP); otherwise it is
-   an other space or tank (`fine_kind_not_in_text` check).
+   an other space or tank (`fine_kind_not_in_text` check). In both passes a label that names its
+   kind gets that kind when the model gave a general one (`ga_labels.PROMOTIONS`: "NO.4 C.T.(P)"
+   is a cargo tank, "NO.9 H O L D" a cargo hold, W.B.T. / A.P.T. a ballast tank, F.O.T. / H.F.O. a
+   fuel tank, SLOP a slop tank); a hatch is never promoted (an access hatch is not a cargo hatch).
 5. **Counts with cross-view check (code).** A count is kept only when (a) the model gave a value,
    (b) no single view shows more differently numbered spaces of that kind than the count (views
    write tanks differently, "1 (P&S)" in the profile and "1P", "1S" on the tank top, so labels
@@ -71,6 +78,8 @@ folder, command line), `src/vessel_reconstruction/ga_labels.py` (fine pass),
    more numbered spaces of the kind ends at the same highest number (profile up to No.5 and tank
    top up to No.4 contradict; a view that misses a label in between does not; fine-pass labels
    do not decide where a view ends). Otherwise null with the reason.
+   On a bulk carrier, holds and hatches that differ are listed (`holds_and_hatches_differ`), not
+   refused.
 6. **Provenance.** Every particular, count, view and space carries a `source-record/v1`
    (docs/SOURCE_RECORD.md): `read` with its sheet region, `guessed` with its input region, or
    `unknown` with the reason.
@@ -81,20 +90,84 @@ folder, command line), `src/vessel_reconstruction/ga_labels.py` (fine pass),
    Pointing at or focusing a row shows its region on the GA in the drawing pane
    (`provenance.js` source view).
 
+## Counting definitions (decided by the PM, 2026-11-12; each is a setting)
+
+| Setting (`ga_commercial.DEFINITIONS`) | Default | Rule | Other value (CLI flag) |
+|---|---|---|---|
+| `split_holds_are_separate` | true | A cargo hold is a cargo space that transverse bulkheads separate and that has its own main hatch. "No.4A" and "No.4F" are two holds when a bulkhead separates them and each has its own hatch; one hold when they are one space with one label or hatch. | `--one-hold-per-number`: halves of one number are one hold |
+| `slop_holding_tank_is_slop` | true | A tank is a slop tank only when its label says SLOP, also "SLOP HOLDING TK" on the centreline. Residue, waste-oil, sludge and other tanks are not. | `--slop-holding-tank-not-slop` |
+
+The sentences go to the model in the request context (`context.definitions`, built by
+`definition_sentences`), with: "on a bulk carrier holds and main hatches are usually equal; when
+your counts differ, look again". Code counts by the same rule (`_count_key`, `label_kind`). The
+settings of a run are recorded in `ga_reading.json` (`definitions`).
+
+## Measured from the frame scale (for the arrangement step; never an exam answer)
+
+Code: `src/vessel_reconstruction/ga_scale.py`; model contract `ga_scale` in
+`rust-control/src/ga_reading.rs`. Run with `read --measure`, `batch --measure`, or
+`measure --reading ga_reading.json --ga IMAGE --case ID` on an existing reading. Two more
+requests a ship; **off by default**, so the exam run is unchanged.
+
+1. **Scale request (model points, code measures).** Images: the profile, the upper deck plan and
+   the tank top plan in high-resolution parts (6 images). The model gives the place of every
+   printed frame number, of "A.P." and "F.P.", of every printed frame spacing and of every drawn
+   change of spacing, and named places: hull aft end, hull fore end, base line, upper deck at
+   side at mid-length (profile); centreline and both shell sides (plan).
+2. **Frame table (code).** Printed spacings are parsed (`800 MM`, `0.70`, `2,640 mm`; range
+   300-5,000 mm; a unitless value below 10 is metres). The range with the most frame numbers
+   gives pixels per metre; each change of spacing is put on a whole frame from the frame numbers
+   next to it. Frame numbers out of order are left out. Then pixels are fitted to metres on every
+   view that has frame numbers (Theil-Sen, then least squares without outliers). The scale is
+   **not established** (every measured value null, with the reason) when: no spacing is printed;
+   a range of the scale has frame numbers but no spacing; fewer than 4 numbers fit; more than a
+   third are outliers; or the fit error is above one frame width. A plan without frame numbers
+   takes the profile's scale only when its hull is drawn as long as the profile's hull (2 %).
+3. **Principal dimensions** (`measured.{lbp_m,loa_m,breadth_m,depth_m}`): status
+   `measured_from_scale`, `uncertainty_m`, `method`, a `source_record` with the pointed regions
+   and the frame scale. LBP: frame 0 to the F.P. mark (null when F.P. is not marked or the A.P.
+   mark is not at frame 0). LOA: hull end to hull end in the profile. Breadth: shell to shell in
+   a plan. Depth: base line to the upper deck **at side, at mid-length** (the pointed place must
+   lie in the middle half of the hull). The depth is checked against the tops of the spaces
+   below the deck: below a top, null; far above them, kept and flagged "not confirmed" (topside
+   tanks above the holds). **A substituted value is never `measured_from_scale`:** when the
+   pointed line lies a rail or camber height (up to 1.5 m) above at least 3 cargo spaces that
+   agree, or when no deck line was pointed amidships and another space or the lowest deckhouse
+   tier ends at the cargo-space tops, the depth is the median top with status
+   `derived_from_space_tops`, and the record keeps `pointed_depth_m` and the `reason`. It is an
+   estimate; a consumer must not check it against the same space tops. Sanity bounds on
+   LBP/LOA, L/B and B/D refuse a set that cannot be a ship.
+4. **Extents request.** Images: whole views. For each read space with a known label place the
+   model boxes its drawn boundary (`outline`) or places a box from the label (`uncertain`).
+   Code gives `spaces[].extent`: `frames` (nearest frame), `x_m`, `z_m` (profile) or `y_m`
+   (plan; port positive, from the bow direction), `side` (from the label, else from y), and a
+   status per axis: `measured_from_scale` for `outline`, `guessed` for `uncertain`.
+5. **Arrangement input.** `ga_arrangement_input.json` (schema of docs/GA_ARRANGEMENT_INPUT.md on
+   lane W): particulars are the printed value when there is one, else the measured one with its
+   status; `frames.spacings`; one entry per physical space (the views of one space are joined:
+   x and z from the profile, y from the plan).
+6. **Exam guard.** `ga_reading.json` `particulars` holds printed values only. The scorer takes a
+   particular only when its status is `read` (test
+   `test_a_measured_value_is_never_an_exam_answer`).
+
 ## Model, transport and budget
 
 - **Model arm: Claude Sonnet 5.5 only** (`claude-sonnet-5-5`). It is one setting (`--model`,
   default in `ga_commercial.MODEL`) passed to `marinaframe vision-request --model`. The controller
-  refuses every model for `ga_reading` and `ga_labels` that is not on the Claude subscription
+  refuses every model for `ga_reading`, `ga_labels` and `ga_scale` that is not on the Claude subscription
   transport (`vision::request_model`). A later arm (Opus, then Fable, only by a later decision) is
   a `--model` value plus one row in the controller's model allow-list (`models::MODELS`).
 - **Transport:** the `claude` CLI on the subscription, through the Rust provider worker
   (no tools, no MCP, no session file). Every request has a request file, a receipt and the raw
   response body (`<out>/<case>/provider`, `<out>/<case>/fine/labels-N-provider`).
-- **Budget per ship:** 1 coarse request + at most 2 fine requests (48 crops / 8 per sheet /
-  6 sheets). The controller retries only HTTP 429/502/503/504, at most 3 attempts.
-  `batch --max-requests N` stops before a case once N requests were sent; requests of a failed
-  case still count (read from its receipts). Holdout budget: **27 requests** (9 cases x 3).
+- **Budget per ship (adaptive, PM decision 2026-11-12):** 1 coarse request, then fine requests
+  (up to 72 crops each: up to 12 per sheet, 6 sheets) until every kept text blob is read, with a ceiling of
+  **6 requests a ship** (`ga_commercial.MAX_REQUESTS_PER_SHIP`, flag `--max-requests-per-ship`).
+  Blobs beyond the ceiling are counted (`passes.fine.crops_not_read`). The controller retries
+  only HTTP 429/502/503/504, at most 3 attempts. `batch --max-requests N` stops before a case
+  once N requests were sent; requests of a failed case still count (read from its receipts).
+  Holdout budget: **54 requests** (9 cases x 6). `--measure` adds 2 requests a ship and is not
+  part of the exam run.
 - **Usage recorded per ship:** `ga_reading.json` `usage` (requests, tokens, `observed_cost_usd`,
   CLI `list_cost_usd`) and `passes` (coarse images; fine text blobs, crops, answered, spaces
   added, requests); `batch.json` sums them.
@@ -123,7 +196,7 @@ cargo build --release --locked -p marinaframe-control
 W=work/ga-internal-23
 PYTHONPATH=src .venv/bin/python -m vessel_reconstruction.ga_commercial batch \
   --inputs $W/inputs --cases GA-002 GA-003 GA-014 GA-018 GA-124 GA-125 GA-201 GA-202 GA-203 \
-  --max-requests 27 --out $W/holdout-run --binary target/release/marinaframe \
+  --max-requests 54 --out $W/holdout-run --binary target/release/marinaframe \
   --basis "GA internal test pack holdout, frozen evaluation; user approved Claude subscription calls"
 .venv/bin/python scripts/score_ga_exam.py --predictions $W/holdout-run \
   --answers <answers file converted from sealed/> --out $W/holdout-run/score.json
@@ -143,6 +216,55 @@ the sheets (overlays of every box) and by the reviewers below; there is no truth
 |---|---:|---:|---:|---:|---:|---:|
 | 1 (r6: coarse + fine, first count rules) | 40 | 2-3 | 15-48 | 357k / 102k | 3.39 USD | 0 (subscription) |
 | 2 (r7: round-1 fixes) | 48 (42 + 6; budget stop tested) | 2-4, then capped at 3 | 11-48 | 458k / 100k | 3.83 USD | 0 |
+| 3 (r9: Fable 5.2 review step; adaptive budget, definitions, joined labels) | 71 reading + 22 frame-scale | reading 2-6 (9 ships at the ceiling of 6; 3 strips need 2) | 14-167 | 901k / 271k (all 93) | 4.51 USD | 0 |
+
+### Round 3 (r9, 2026-11-12; reading by Claude Sonnet 5.5, one batch)
+
+- **Spaces:** 1,161 spaces listed on 14 ships (round 2: 683). Recheck of the 94 labels that the
+  round-2 review listed as missing (label match by code, `work/` script; not a new review): 42
+  are now in the lists, 52 are not (the same match finds 15 in round 2, 79 not). The 52 are on
+  10 ships, most on 3 dense tanker sheets. Crops not read at the ceiling: 334 on 8 ships
+  (accommodation cabins go last).
+- **Exam fields on the 6 development bulk carriers:** the 4 full sheets with unchanged values
+  keep them (holds, hatches, cranes). The hold strip now answers 8 holds (definition: 4A and 4F
+  are two holds). One full sheet abstains on holds in this run (hatches 4 and cranes 3 are
+  answered): the coarse pass did not list the last hold label of the tank top plan, so the views
+  end at different numbers and rule (c) refuses. This is an abstention, not a wrong answer; see
+  open issue 3.
+- **Slop tanks:** the tanker with a centreline "SLOP HOLDING TK" now answers 3 (definition).
+- **Counts changed against round 2 on other ships:** 2 counts answered that were abstained
+  (hatches on a tanker strip and a container sheet), 2 not-applicable counts abstained on a
+  container strip; no answered count changed its value except the two definition cases.
+
+### Measured from the frame scale (development ships; aggregate)
+
+Final code, scale pass on the round-3 readings (`work/ga-internal-23/dev-runs/final/`; per ship
+the source run is in `SOURCES.json`):
+
+| | Ships of 14 |
+|---|---:|
+| Frame scale established (frame table and pixel-to-metre fit) | 10 |
+| LBP / LOA / breadth / depth measured | 10 / 9 / 9 / 9 |
+| Depth derived from space tops (status `derived_from_space_tops`) | 0 in the final set (1 in an earlier run) |
+| Ships with space extents | 10 |
+| Spaces with an extent / with x measured from a drawn boundary / with x, y and z | 266 / 119 / 42 |
+
+- Not established (null, with the reason): 2 single-plan strips print no frame spacing; 1 strip
+  has no named view; 1 container sheet's frame numbers do not fit its printed spacings.
+- Fit: 19-44 frame numbers a ship, error 0.4-2.7 px (sheet pixels; a frame is 6-30 px).
+  Stated uncertainty 0.3-0.7 m on lengths and breadth, 0.3-0.6 m on depth.
+- Checks by eye and by the drawing's own printed dimensions: hold bulkheads fall on frames that
+  give the printed hold lengths exactly on one bulk carrier (4 holds of 36 frames x 700 mm =
+  25,200 mm, printed); its LBP agrees with the printed dimension chain within 0.1 m; a hatch
+  measured 18.2 m long is printed 18.200. There is no truth file for the principal dimensions.
+- **Repeatability:** the same ship measured in 3 separate runs gives LBP within 0.6 m and
+  breadth within 0.5 m. Whether the scale is established varies between runs on small print
+  (8, 9 and 10 ships of 14 in three runs before the retry; the final code sends the scale
+  request a second time when the first does not establish the scale).
+- Found and fixed in development (lane W relays): a deck point under the poop (now: mid-length
+  only), a deck line at the rail or centreline (now: replaced by the median cargo-space top with
+  its own status when within 1.5 m above agreeing tops), an engine-room box under the poop used
+  as a deck check (now: only spaces at mid-length).
 
 - Exam fields on the 6 development bulk carriers: on 5 full sheets holds, hatches and cranes
   were answered in both rounds with the same values and agree with the drawings by eye (15 of
@@ -191,25 +313,53 @@ words; holds compared on 2 views on both bulk carriers; the hose crane is no lon
 crane. Recount of round 2 with the final count rule (no new calls): exam counts unchanged;
 every tanker sheet answers cargo and slop tanks.
 
+## Fable 5.2 review-and-fix step (2026-11-12)
+
+Input: `work/ga-internal-23/review/round-2/` (133 findings). What was changed, generally:
+
+| Finding (round 2) | Change | Test |
+|---|---|---|
+| 93 missing labelled spaces | adaptive fine budget: requests until every text blob is read, ceiling 6 a ship; crops a reply leaves out are asked once more; diagonal crops cut to their text band (more cells a sheet) | `test_every_unexplained_blob_is_a_candidate`, `test_a_crop_that_a_reply_leaves_out_is_asked_once_more`, `test_a_diagonal_crop_is_cut_to_its_text_band` |
+| cut labels ("NO. 5 W", "TK (P&S)", unnumbered W.B. TK) | pieces of a letter-spaced label on one text line are joined before cropping | `test_the_pieces_of_a_letter_spaced_label_are_one_blob` |
+| cargo tank typed other_tank; "NO.9 H O L D" typed other_space; ballast and fuel tanks typed other | kind from the label's own words (`PROMOTIONS`), both passes | `test_a_label_that_names_its_kind_gets_that_kind` |
+| slop holding tank; 4A/4F holds | definitions as settings (above) | `test_hold_halves_...`, `test_the_slop_definition_is_a_setting`, `test_the_definitions_go_to_the_model_...` |
+| (new in round 3) a bare number beside the same number with sides counted as another tank; number token without the side printed in the label | `_number_with_side`; bare duplicates left out of the per-view count | `test_a_cut_label_without_its_side_is_not_another_tank` |
+| (new in round 3) fragment "HOLD" typed cargo hold by the fine pass | a fine-pass hold or cargo tank needs its number | `test_a_fine_label_of_a_hold_without_its_number_is_not_a_hold` |
+| (new) fine labels may complete a view the coarse pass listed | rule (c) reads them for such a view only | `test_a_fine_label_completes_a_view_that_the_coarse_pass_listed` |
+
+No ship-specific rule or constant was added. The product model is unchanged (Claude Sonnet 5.5,
+one setting). A new Astra review of round 3 was not run.
+
 ## Open issues (for the next step)
 
-1. Space list coverage: about 100 labelled spaces per round are still missing across 14 ships
-   (mostly rooms; some ballast and fuel tanks). The fine pass reads at most 48 blobs in 2
-   requests per ship.
-2. Cut labels remain on long letter-spaced diagonal labels; a source region is the crop box, so
-   hover shows the whole label, but the text can be partial.
-3. The model sometimes types a cargo tank as `other_tank` in the fine pass; code does not
-   promote kinds from text.
-4. Definitions to confirm with the PM: a centreline slop holding tank in the slop count; holds
-   numbered with A/F halves (4A, 4F) as separate holds.
-5. The particulars-table path has not seen a real table image.
-6. Fable 5.2: `claude -p --model claude-fable-5-2` answers `unrecognized_model` on this machine
+1. Space list coverage: 52 of the 94 round-2 missing labels are still not listed (dense tanker
+   sheets), and 334 crops were not read at the ceiling of 6 requests. Follow-up (out of scope
+   on 2026-11-12, PM): an agentic zoom step, where the model chooses crops with parallel tool
+   calls instead of code-chosen contact sheets.
+2. Frame scale on small print: on 2 tankers with one-frame web-frame ranges (1,500 mm, 2,950 mm
+   between two printed numbers) the model sometimes misses a change of spacing; the scale is
+   then refused. A code fit of the change from the frame numbers alone was not built. One
+   container sheet's numbers never fitted its spacings (not investigated on the sheet).
+3. Count rule (c) (views end at different numbers) abstained once in round 3 where the hold
+   count is clear on the sheet. The rule was kept: relaxing it after one development case
+   could turn abstentions into wrong answers on the holdout. PM decision.
+4. Extents: a box is `outline` (measured) or `uncertain` (guessed) by the model's own word; the
+   ends are not snapped to detected bulkhead lines. y and z come from one view each, so only 42
+   spaces have all three axes. Hull outline polygons (`hull_outline` of the arrangement input)
+   are not produced.
+5. A contradicted depth (a space boxed higher than the deck line) is kept and flagged
+   (`depth_below_a_space_top`), not nulled: either the line or the box is wrong.
+6. The particulars-table path has not seen a real table image.
+7. Fable 5.2: `claude -p --model claude-fable-5-2` answers `unrecognized_model` on this machine
    (2026-11-12); `fable` resolves to `claude-fable-5-1`. The product arm is Sonnet 5.5 only.
 
-## Resume point (step 3 of the development loop)
+## Resume point
 
-Done: two Opus/Astra cycles. Next (PM): a Fable 5.2 agent reviews and fixes in this worktree with
-the evidence package `work/ga-internal-23/review/round-2/` (per ship: view crops with boxes and
-`answers.txt`; `index.json`; Astra findings `astra-*.txt`). Then this lane checks its changes
-(make test-quick, a development batch, diff review), adds the "Frozen" section and commits it;
-only then does the evaluator run the command above. Do not run the holdout before that.
+Done: two Opus/Astra cycles; the Fable 5.2 review-and-fix step (this file's round 3); the exam
+protocol now has the adaptive budget (54 requests). **Not frozen; the exam was not run.**
+Next (PM): decide open issue 3; then this lane adds the "Frozen" section at the commit to
+evaluate and the evaluator runs the command in "What the evaluator runs" once. Lane W reads
+`work/ga-internal-23/dev-runs/final/<case>/ga_arrangement_input.json` (development ships).
+To repeat the development run: `ga_commercial batch --measure --max-requests 200` on the 14
+development cases; each `ga_reading.json` has `passes`, `frames`, `measured` and the space
+extents, and `ga_arrangement_input.json` is beside it.

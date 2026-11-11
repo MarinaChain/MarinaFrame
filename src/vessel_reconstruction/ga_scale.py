@@ -1,0 +1,1159 @@
+"""Measure a commercial GA with its own printed frame scale.
+
+Plan: docs/plans/2026-11-12-ga-commercial.md ("Measured from the frame scale").
+
+A GA prints a frame scale: frame numbers along the base line of the profile (and often along
+the centreline of the plans) and the frame spacings ("FR. SP. = 800 MM") with the places where
+the spacing changes. With them, drawn ink can be measured in metres.
+
+Division of work:
+
+- The model (purpose ``ga_scale``, two requests a ship) only points: at frame numbers, at the
+  marks A.P. and F.P., at the spacing texts and the places where the spacing changes, at a few
+  named places of the hull, and at the drawn boundary of each space that was read.
+- Code builds the frame-spacing table, fits pixels to metres on every view with a frame scale
+  (robust to a misread number), and measures LBP, LOA, depth, breadth and the extent of each
+  space. When the scale cannot be established (no spacing printed, too few frame numbers, the
+  numbers do not fit the spacings) every measured value is null with the reason.
+
+A measured value has status ``measured_from_scale``. It is never a printed particular: the
+``particulars`` of a reading hold printed values only (the GA exam scores those), and measured
+values live in ``measured``. ``arrangement_input`` writes the file the arrangement step reads
+(docs/GA_ARRANGEMENT_INPUT.md), where a particular is the printed value when there is one and
+else the measured one, with its status.
+
+Axes: metres; x forward from the aft perpendicular (frame 0), y to port, z up from the base line.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+import hashlib
+import json
+import math
+from pathlib import Path
+import re
+
+import numpy as np
+from PIL import Image
+
+from . import source_record
+from .provenance import write_json
+
+PURPOSE = "ga_scale"
+REQUEST_SCHEMA = "marinaframe.vision_request.v1"
+INPUT_SCHEMA = "marinaframe.ga_reading.v1"
+MEASURED = "measured_from_scale"
+# A depth that was not measured at the deck line: the median top of the read cargo spaces took
+# the place of a pointed line that was the deck at the centreline, a rail, or missing. It is an
+# estimate; downstream must not treat it as measured (and must not check it against those tops).
+DERIVED = "derived_from_space_tops"
+
+# Frame spacings of commercial ships (mm): ordinary frames from about 500 mm, numbered web frames
+# of large tankers up to a few metres. A printed spacing outside this range is a misreading.
+SPACING_RANGE_MM = (300.0, 5000.0)
+# A spacing printed without a unit is metres below this value ("F.S. 0.70") and millimetres
+# above it ("FR. SP. 800"); only one of the two lies in the range above.
+UNITLESS_METRES_BELOW = 10.0
+# A frame scale needs this many frame numbers that fit the spacings.
+MIN_TICKS = 4
+# A tick whose place is further from the fitted scale than this is a misread number or a place
+# pointed wrongly; it is left out of the fit (pixels of the sheet, and frame widths).
+MIN_OUTLIER_PX = 4.0
+OUTLIER_FRAMES = 1.5
+# A range with this many frame numbers is checked against its printed spacing: the pixels per
+# frame of the numbers must give the printed spacing within the tolerance (a range with fewer
+# numbers is too short for this: three numbers at a ship's end were 17 % off on a good table).
+MIN_RANGE_TICKS = 5
+RANGE_SLOPE_TOLERANCE = 0.15
+# Two readings of one printed spacing text (from two requests) lie this close (sheet pixels).
+SAME_LABEL_PX = 40.0
+# This many neighbouring frame numbers off the fitted scale are not misreadings: the table is wrong.
+MAX_OUTLIER_RUN = 2
+# At most this share of the ticks may be left out; with more, the scale is not established.
+MAX_OUTLIER_SHARE = 0.34
+# The fitted scale must place its own ticks within one frame width (root mean square).
+MAX_RMS_FRAMES = 1.0
+# Two marks of the same thing on overlapping images are one mark when this close (sheet pixels).
+SAME_MARK_PX = 10.0
+# Scale requests for one ship: another is sent only while the scale is not established. The
+# marks of all attempts are read together (a change of spacing that one reply leaves out is in
+# the next; the frame numbers decide between two readings of a printed spacing).
+SCALE_ATTEMPTS = 3
+# A plan without frame numbers takes the scale of the profile only when its hull is drawn as
+# long as the profile's hull, within this share (one sheet, one drawing scale; four pointed hull
+# ends of about 1 % each).
+SAME_SCALE_TOLERANCE = 0.04
+# A place pointed by the model is taken to be this exact (pixels of the attached image).
+POINT_SIGMA_IMAGE_PX = 2.0
+# Room around a view's box in its images: the frame scale and the spacing line lie below the
+# profile, outside a tight view box.
+VIEW_PAD_X = 0.04
+VIEW_PAD_Y = 0.30
+MAX_IMAGES = 6
+MAX_SPACES = 150
+# Sanity bounds of commercial hull proportions; a measured set outside them is not used.
+LBP_OVER_LOA = (0.85, 1.001)
+LENGTH_OVER_BREADTH = (3.0, 12.0)
+BREADTH_OVER_DEPTH = (1.0, 4.5)
+# The moulded depth is taken amidships: the pointed deck line must lie in this part of the hull
+# length (clear of the poop, the forecastle and, on most ships, the deckhouse).
+MIDSHIP_SHARE = (0.25, 0.75)
+# Spaces that lie below the upper deck: the deck is not lower than the top of any of them.
+BELOW_DECK_KINDS = ("cargo_hold", "cargo_tank", "slop_tank", "ballast_tank", "fuel_tank", "engine_room")
+# Without a pointed deck line, the depth is taken from the tops of the cargo spaces only when
+# this many of them agree and another kind of space (or the lowest deckhouse tier) ends there too.
+MIN_DECK_TOPS = 3
+# A deck line pointed this little above the tops of the cargo spaces is the deck at the
+# centreline (camber) or the top of the rail or bulwark, not the deck at side: bulwarks are
+# about 1.0 to 1.4 m high and camber is below 1 m. Higher than this, the cargo spaces end
+# below the deck (topside tanks).
+RAIL_OR_CAMBER_M = 1.5
+# The A.P. mark and frame 0 are the same place; they may be pointed this many frame widths apart.
+AP_MARK_FRAMES = 2.0
+# A space whose box ends this close to the centreline (metres) ends on it.
+CENTRE_TOLERANCE_M = 0.6
+
+PLAN_KINDS = ("deck_plan", "tank_top_plan")
+
+
+# ------------------------------------------------------------------ printed text
+
+def parse_tick(label: str):
+    """('frame', n), ('ap', None), ('fp', None) or None for the printed text of a scale mark."""
+    text = re.sub(r"[\s.]", "", label.upper())
+    if text in ("AP", "A/P"):
+        return "ap", None
+    if text in ("FP", "F/P"):
+        return "fp", None
+    match = re.fullmatch(r"(?:FR|F)?(-?\d{1,3})", text)
+    return ("frame", int(match[1])) if match else None
+
+
+def parse_spacing_mm(printed: str) -> float | None:
+    """Millimetres of a printed frame spacing, or None.
+
+    '800 MM', '700mm', '0.80 M', 'F.S. 0.70', 'FS ~720', '2,640 mm'. A comma can be a decimal
+    or a thousands mark; the value is used only when exactly one reading lies in the range.
+    """
+    text = re.sub(r"\b(?:F\.?\s?S\.?|FR\.?\s?SP\.?|FRAME\s+SPAC(?:E|ING))", " ", printed.upper())
+    match = re.fullmatch(r"[\s:=~≈]*(\d+(?:[.,]\d+)?)\s*(MM|M)?\.?\s*", text)
+    if not match:
+        return None
+    number = match[1]
+    readings = {float(number.replace(",", "."))}
+    if re.fullmatch(r"\d{1,3},\d{3}", number):
+        readings.add(float(number.replace(",", "")))
+    in_range = set()
+    for value in readings:
+        if match[2] == "M" or (match[2] is None and value < UNITLESS_METRES_BELOW):
+            value *= 1000.0
+        if SPACING_RANGE_MM[0] <= value <= SPACING_RANGE_MM[1]:
+            in_range.add(value)
+    return in_range.pop() if len(in_range) == 1 else None
+
+
+# ------------------------------------------------------------------ the frame-spacing table
+
+class FrameTable:
+    """Frame spacings [{from_frame, to_frame, spacing_mm}] in rising frame order; frame 0 is the AP.
+
+    The first and last spans have open ends for the mathematics (``from_frame`` / ``to_frame``
+    are then the ends of the drawn scale, kept for the output).
+    """
+
+    def __init__(self, spans: list[dict]):
+        if not spans:
+            raise ValueError("a frame table needs a span")
+        self.spans = spans
+
+    def spacing_m(self, frame: float) -> float:
+        """The spacing forward of ``frame``."""
+        for span in self.spans[:-1]:
+            if frame < span["to_frame"]:
+                return span["spacing_mm"] / 1000.0
+        return self.spans[-1]["spacing_mm"] / 1000.0
+
+    def _knots(self) -> list[tuple[float, float]]:
+        """(frame, x) at every change of spacing, with x = 0 at frame 0."""
+        inner = [float(span["to_frame"]) for span in self.spans[:-1]]
+        knots, x = [], 0.0
+        # Walk aft and forward from frame 0 over the inner boundaries.
+        forward = sorted(f for f in inner if f > 0)
+        aft = sorted((f for f in inner if f <= 0), reverse=True)
+        at = 0.0
+        for boundary in forward:
+            x += (boundary - at) * self.spacing_m((at + boundary) / 2)
+            knots.append((boundary, x))
+            at = boundary
+        at, x = 0.0, 0.0
+        for boundary in aft:
+            x -= (at - boundary) * self.spacing_m((at + boundary) / 2)
+            knots.append((boundary, x))
+            at = boundary
+        knots.append((0.0, 0.0))
+        return sorted(set(knots))
+
+    def x_m(self, frame: float) -> float:
+        """Metres forward of frame 0 (negative aft of it)."""
+        knots = self._knots()
+        if frame <= knots[0][0]:
+            return knots[0][1] - (knots[0][0] - frame) * self.spans[0]["spacing_mm"] / 1000.0
+        for (f0, x0), (f1, x1) in zip(knots, knots[1:]):
+            if frame <= f1:
+                return x0 + (frame - f0) * (x1 - x0) / (f1 - f0)
+        return knots[-1][1] + (frame - knots[-1][0]) * self.spans[-1]["spacing_mm"] / 1000.0
+
+    def frame_at(self, x_m: float) -> float:
+        """The (fractional) frame at ``x_m``."""
+        knots = self._knots()
+        if x_m <= knots[0][1]:
+            return knots[0][0] - (knots[0][1] - x_m) / (self.spans[0]["spacing_mm"] / 1000.0)
+        for (f0, x0), (f1, x1) in zip(knots, knots[1:]):
+            if x_m <= x1:
+                return f0 + (x_m - x0) * (f1 - f0) / (x1 - x0)
+        return knots[-1][0] + (x_m - knots[-1][1]) / (self.spans[-1]["spacing_mm"] / 1000.0)
+
+
+def _theil_sen(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
+    """A line y = a + b x that a few wrong points do not move (median of the pairwise slopes)."""
+    i, j = np.triu_indices(len(x), 1)
+    apart = x[i] != x[j]
+    slope = float(np.median((y[j] - y[i])[apart] / (x[j] - x[i])[apart]))
+    return float(np.median(y - slope * x)), slope
+
+
+def _range_slope(ticks: list[tuple[int, float]]) -> float:
+    """Sheet pixels per frame of the frame numbers of one range (a few wrong ones do not move it)."""
+    frames = np.array([t[0] for t in ticks], float)
+    places = np.array([t[1] for t in ticks], float)
+    return _theil_sen(frames, places)[1]
+
+
+def consistent_ticks(ticks: list[tuple[int, float]]) -> list[tuple[int, float]]:
+    """Frame numbers whose places rise (or fall) with the numbers: (frame, sheet x) sorted by x.
+
+    The spacing can change several times along a ship, so the places are not on one straight
+    line; but they are in order. The longest ordered run of the numbers is kept; a misread
+    number that breaks the order is left out (one that keeps the order is left to ``fit_axis``).
+    """
+    unique = {}
+    for frame, x in ticks:
+        unique.setdefault(frame, []).append(x)
+    # The same number pointed twice at different places is not used.
+    points = sorted(((frame, float(np.mean(xs))) for frame, xs in unique.items()
+                     if max(xs) - min(xs) <= SAME_MARK_PX), key=lambda p: p[1])
+    if len(points) < 2:
+        return []
+
+    def longest_rising(values: list[float]) -> list[int]:
+        best = [[index] for index in range(len(values))]
+        for index, value in enumerate(values):
+            for before in range(index):
+                if values[before] < value and len(best[before]) + 1 > len(best[index]):
+                    best[index] = best[before] + [index]
+        return max(best, key=len)
+
+    frames = [float(frame) for frame, _ in points]
+    rising, falling = longest_rising(frames), longest_rising([-f for f in frames])
+    return [points[index] for index in (rising if len(rising) >= len(falling) else falling)]
+
+
+def spacing_table(ticks: list[tuple[int, float]], labels: list[tuple[float, float]],
+                  boundaries: list[float]) -> tuple[FrameTable | None, str]:
+    """The frame table of one view, or (None, reason).
+
+    ``ticks``: (frame, sheet x) of the frame numbers; ``labels``: (spacing mm, sheet x) of the
+    printed spacings; ``boundaries``: sheet x of every drawn change of spacing.
+
+    The range with the most frame numbers gives the scale (pixels per metre) from its printed
+    spacing. Each change of spacing is then placed on a frame from the frame numbers next to it
+    (or, in a range without numbers, from the change before it and the printed spacing).
+    """
+    ticks = consistent_ticks(ticks)
+    if len(ticks) < 2:
+        return None, "fewer than two frame numbers were read on the frame scale"
+    if not labels:
+        return None, "no frame spacing is printed"
+    bow_right = ticks[-1][0] > ticks[0][0]
+    cuts = []
+    for place in sorted(boundaries):
+        if not cuts or place - cuts[-1] > SAME_MARK_PX:
+            cuts.append(place)
+    edges = [-math.inf, *cuts, math.inf]
+    inside = [[t for t in ticks if low < t[1] <= high] for low, high in zip(edges, edges[1:])]
+    found = []
+    for low, high in zip(edges, edges[1:]):
+        # Texts at one place are readings of one printed value; texts at two places with two
+        # values are two printed spacings, and the change between them was not marked.
+        here = sorted((place, mm) for mm, place in labels if low < place <= high)
+        texts: list[set] = []
+        for index, (place, mm) in enumerate(here):
+            if index and place - here[index - 1][0] <= SAME_LABEL_PX:
+                texts[-1].add(mm)
+            else:
+                texts.append({mm})
+        agreed = set.intersection(*texts) if texts else set()
+        if texts and not agreed:
+            return None, "two different frame spacings are printed with no change drawn between them"
+        found.append(agreed)
+    # Pixels per metre from the range with the most frame numbers among those with one spacing.
+    sure = [index for index in range(len(found)) if len(found[index]) == 1 and len(inside[index]) >= 2]
+    if not sure:
+        return None, ("two different frame spacings are printed with no change drawn between them"
+                      if any(len(f) > 1 for f in found) else "no range of the frame scale has two frame numbers")
+    anchor = max(sure, key=lambda index: len(inside[index]))
+    px_per_m = _range_slope(inside[anchor]) / (next(iter(found[anchor])) / 1000.0)  # negative: bow to the left
+    values: list[float | None] = []
+    for index, candidates in enumerate(found):
+        # The frame numbers of a range show its spacing: they decide between two readings of
+        # the printed value (two requests can read "600" and "800" at one place), and they
+        # refuse a printed value that the numbers contradict (a misread value, or a change
+        # of spacing that was not marked).
+        fitting = candidates
+        if len(inside[index]) >= (2 if len(candidates) > 1 else MIN_RANGE_TICKS):
+            slope = _range_slope(inside[index])
+            fitting = {mm for mm in candidates
+                       if abs(slope / (px_per_m * mm / 1000.0) - 1) <= RANGE_SLOPE_TOLERANCE}
+            if candidates and not fitting:
+                return None, "the frame numbers of a range do not fit its printed spacing"
+        if len(fitting) > 1:
+            return None, "two different frame spacings are printed with no change drawn between them"
+        values.append(next(iter(fitting)) if fitting else None)
+    # A range without a printed spacing: at an end of the scale it takes no part; between two
+    # ranges, or with frame numbers inside it, the scale is not established.
+    for index, value in enumerate(values):
+        if value is not None:
+            continue
+        low, high = edges[index], edges[index + 1]
+        if index not in (0, len(values) - 1) or any(low < place <= high for _, place in ticks):
+            return None, "a part of the frame scale has no printed spacing"
+    while values[0] is None:
+        values.pop(0)
+        cuts.pop(0)
+    while values[-1] is None:
+        values.pop()
+        cuts.pop()
+    # The same spacing on both sides of a mark is no change.
+    for index in range(len(values) - 1, 0, -1):
+        if values[index] == values[index - 1]:
+            values.pop(index)
+            cuts.pop(index - 1)
+    edges = [-math.inf, *cuts, math.inf]
+    inside = [[t for t in ticks if low < t[1] <= high] for low, high in zip(edges, edges[1:])]
+    anchor = max(range(len(values)), key=lambda index: len(inside[index]))
+
+    def frame_from_ticks(cut: float, region: int) -> list[float]:
+        """The frame at ``cut`` as the three nearest frame numbers of ``region`` place it: near
+        numbers need a short step along the scale, and three outvote one misread number."""
+        step = px_per_m * values[region] / 1000.0
+        nearest = sorted(inside[region], key=lambda tick: abs(tick[1] - cut))[:3]
+        return [frame + (cut - place) / step for frame, place in nearest]
+
+    cut_frames: list[int | None] = [None] * len(cuts)
+    # Outward from the anchor range: first the cuts ahead of it on the sheet, then those before.
+    for order in (range(anchor, len(cuts)), range(anchor - 1, -1, -1)):
+        for index in order:
+            estimates = frame_from_ticks(cuts[index], index) + frame_from_ticks(cuts[index], index + 1)
+            if not estimates:
+                # No frame number on either side: from the neighbouring change and the spacing between.
+                inner = index - 1 if index >= anchor else index + 1
+                region = index if index >= anchor else index + 1
+                step = px_per_m * values[region] / 1000.0
+                estimates = [cut_frames[inner] + (cuts[index] - cuts[inner]) / step]
+            cut_frames[index] = int(round(float(np.median(estimates))))
+    spans = [{"from_frame": low, "to_frame": high, "spacing_mm": value}
+             for low, high, value in zip([None, *cut_frames], [*cut_frames, None], values)]
+    if not bow_right:
+        spans = [{"from_frame": s["to_frame"], "to_frame": s["from_frame"], "spacing_mm": s["spacing_mm"]}
+                 for s in reversed(spans)]
+    inner = [s["to_frame"] for s in spans[:-1]]
+    if inner != sorted(set(inner)):
+        return None, "the changes of frame spacing are not in frame order"
+    numbers = [frame for frame, _ in ticks]
+    spans[0]["from_frame"] = min(numbers + inner)
+    spans[-1]["to_frame"] = max(numbers + inner)
+    return FrameTable(spans), "established"
+
+
+@dataclass(frozen=True)
+class Axis:
+    """Sheet x of one view as metres: ``px = offset + px_per_m * x_m`` (negative when the bow is left)."""
+    offset: float
+    px_per_m: float
+    rms_px: float
+    ticks_used: int
+    ticks_read: int
+    basis: str  # "frame scale of this view" or "scale of the profile; hull ends matched"
+
+    def x_m(self, px: float) -> float:
+        return (px - self.offset) / self.px_per_m
+
+    def length_m(self, pixels: float) -> float:
+        return abs(pixels / self.px_per_m)
+
+
+def fit_axis(ticks: list[tuple[int, float]], table: FrameTable) -> tuple[Axis | None, str]:
+    """Fit sheet pixels to metres from the frame numbers of one view, or (None, reason)."""
+    ticks = consistent_ticks(ticks)
+    read = len(ticks)
+    if read < MIN_TICKS:
+        return None, f"only {read} frame numbers fit one scale"
+    metres = np.array([table.x_m(frame) for frame, _ in ticks])
+    places = np.array([place for _, place in ticks])
+    offset, slope = _theil_sen(metres, places)
+    frame_px = abs(slope) * min(s["spacing_mm"] for s in table.spans) / 1000.0
+    keep = np.abs(places - (offset + slope * metres)) <= max(MIN_OUTLIER_PX, OUTLIER_FRAMES * frame_px)
+    run = longest = 0
+    for kept in keep[np.argsort(places)]:
+        run = 0 if kept else run + 1
+        longest = max(longest, run)
+    if keep.sum() < MIN_TICKS or keep.sum() < (1 - MAX_OUTLIER_SHARE) * read or longest > MAX_OUTLIER_RUN:
+        return None, "the frame numbers do not fit the printed spacings"
+    slope, offset = np.polyfit(metres[keep], places[keep], 1)
+    rms = float(np.sqrt(np.mean((places[keep] - (offset + slope * metres[keep])) ** 2)))
+    if rms > MAX_RMS_FRAMES * frame_px:
+        return None, "the frame numbers do not fit the printed spacings"
+    return Axis(float(offset), float(slope), rms, int(keep.sum()), read, "frame scale of this view"), "fitted"
+
+
+# ------------------------------------------------------------------ request images
+
+def _pad(box, sheet_size) -> tuple[int, int, int, int]:
+    left, top, right, bottom = box
+    pad_x, pad_y = (right - left) * VIEW_PAD_X, max(40.0, (bottom - top) * VIEW_PAD_Y)
+    return (max(0, math.floor(left - pad_x)), max(0, math.floor(top - pad_y)),
+            min(sheet_size[0], math.ceil(right + pad_x)), min(sheet_size[1], math.ceil(bottom + pad_y)))
+
+
+def chosen_views(result: dict) -> dict[str, dict]:
+    """The largest profile, deck plan and tank top plan of a reading, by kind."""
+    def area(view):
+        left, top, right, bottom = view["box_px"]
+        return (right - left) * (bottom - top)
+    chosen = {}
+    for kind in ("profile", *PLAN_KINDS):
+        views = [v for v in result.get("views", []) if v["kind"] == kind]
+        if views:
+            chosen[kind] = max(views, key=area)
+    return chosen
+
+
+def _write_request(plan: list[tuple[str, str, tuple, float]], sheet_path: Path, out: Path, context: dict) -> None:
+    """One ``ga_scale`` request directory: (image_id, view, sheet box, scale) images of the sheet."""
+    from . import ga_commercial as ga
+    out.mkdir(parents=True, exist_ok=False)
+    sheet = Image.open(sheet_path).convert("L")
+    for grey_levels, shrink in [(None, 1.0), (ga.REDUCED_GREY_LEVELS, 1.0),
+                                *[(ga.REDUCED_GREY_LEVELS, 0.9 ** k) for k in range(1, 12)]]:
+        encoded = [ga._png(sheet.crop(box), scale * shrink, grey_levels) for _, _, box, scale in plan]
+        if sum(len(data) for data, _, _ in encoded) <= ga.MAX_TOTAL_IMAGE_BYTES:
+            break
+    else:
+        raise ValueError("the images do not fit the provider request size")
+    entries, tiles = [], []
+    for (image_id, view, box, _), (data, width, height) in zip(plan, encoded):
+        (out / f"{image_id}.png").write_bytes(data)
+        entries.append({"image_id": image_id, "file": f"{image_id}.png", "sha256": hashlib.sha256(data).hexdigest(),
+                        "bytes": len(data), "width": width, "height": height, "view": view,
+                        "crop_box_px": list(box)})
+        tiles.append({"image_id": image_id, "view": view, "sheet": Path(sheet_path).name,
+                      "crop_box_px": list(box), "width": width, "height": height})
+    write_json(out / "request.json", {
+        "schema_version": REQUEST_SCHEMA, "purpose": PURPOSE,
+        "source_sha256": hashlib.sha256(Path(sheet_path).read_bytes()).hexdigest(),
+        "engineering_approved": False, "context": context, "images": entries})
+    write_json(out / "sources.json", {"tiles": tiles})
+
+
+def prepare_scale(result: dict, sheet_path: Path, out: Path) -> bool:
+    """The request that reads the frame scale: the profile and the plans in high-resolution parts."""
+    from . import ga_commercial as ga
+    views = chosen_views(result)
+    wanted = [views[kind] for kind in ("profile", "deck_plan", "tank_top_plan") if kind in views]
+    if not wanted:
+        return False
+    sheet_size = Image.open(sheet_path).size
+    plan = []
+    for view in wanted:
+        left, top, right, bottom = _pad(view["box_px"], sheet_size)
+        limit = MAX_IMAGES // len(wanted)  # the images of a request are shared equally by the views
+        best = (1, ga._fit_scale(right - left, bottom - top))
+        for columns in range(2, limit + 1):
+            width = (right - left) / columns * (1 + ga.TILE_OVERLAP)
+            scale = ga._fit_scale(width, bottom - top) * ga.SCALE_MARGIN
+            if scale > best[1] * 1.05:
+                best = (columns, scale)
+        columns, scale = best
+        for part, box in enumerate(ga.tile_boxes(right - left, bottom - top, columns, 1)):
+            plan.append((f"{view['view_id']}p{part + 1}", f"{view['kind']}:{view['view_id']}:part{part + 1}",
+                         (left + box[0], top + box[1], left + box[2], top + box[3]), scale))
+    _write_request(plan, sheet_path, out, {"want": ["scale"]})
+    return True
+
+
+def prepare_extents(result: dict, sheet_path: Path, out: Path) -> bool:
+    """The request that boxes the drawn boundary of each read space: one image per whole view."""
+    from . import ga_commercial as ga
+    views = chosen_views(result)
+    if not views:
+        return False
+    sheet_size = Image.open(sheet_path).size
+    plan, boxes = [], {}
+    for view in views.values():
+        box = _pad(view["box_px"], sheet_size)
+        scale = ga._fit_scale(box[2] - box[0], box[3] - box[1])
+        boxes[view["view_id"]] = (box, scale)
+        plan.append((view["view_id"], f"{view['kind']}:{view['view_id']}", box, scale))
+    profile = views.get("profile")
+    spaces = []
+    # Several labels read from one crop of the fine pass share its region; the place of each
+    # label is then not known, so its boundary cannot be asked for.
+    shared: dict[tuple, int] = {}
+    for space in result["spaces"]:
+        key = tuple(space["source_record"].get("regions", [{}])[0].get("box_px") or ())
+        shared[key] = shared.get(key, 0) + 1
+    for space in result["spaces"]:
+        if space["status"] != "read":
+            continue
+        if shared[tuple(space["source_record"]["regions"][0]["box_px"] or ())] > 1:
+            continue
+        entry = {"space_id": space["id"], "kind": space["kind"], "label": space["label"][:64]}
+        if space["view_id"] in boxes:
+            (left, top, _, _), scale = boxes[space["view_id"]]
+            region = space["source_record"]["regions"][0]["box_px"]
+            entry.update(image_id=space["view_id"],
+                         at=[round(((region[0] + region[2]) / 2 - left) * scale),
+                             round(((region[1] + region[3]) / 2 - top) * scale)])
+        elif space["kind"] == "accommodation_deck" and profile:
+            entry.update(image_id=profile["view_id"], at=None)
+        else:
+            continue
+        spaces.append(entry)
+    if not spaces:
+        return False
+    _write_request(plan, sheet_path, out, {"want": ["extents", "points"], "spaces": spaces[:MAX_SPACES]})
+    return True
+
+
+# ------------------------------------------------------------------ interpretation
+
+def _tiles(request_dir: Path) -> dict[str, dict]:
+    return {t["image_id"]: t for t in json.loads((Path(request_dir) / "sources.json").read_text())["tiles"]}
+
+
+def _to_sheet(tile: dict, x: float, y: float) -> tuple[float, float]:
+    left, top, right, bottom = tile["crop_box_px"]
+    return left + x * (right - left) / tile["width"], top + y * (bottom - top) / tile["height"]
+
+
+def _view_id(tile: dict) -> str:
+    return tile["view"].split(":")[1]
+
+
+def _unknown(reason: str) -> dict:
+    return {"value": None, "status": "unknown", "reason": reason, "source_record": source_record.unknown(reason)}
+
+
+def _point_region(sheet: str, page_px, view: str | None, *points) -> dict:
+    """A region that holds the given sheet points (with a little room), for hover-to-source."""
+    xs, ys = [p[0] for p in points], [p[1] for p in points]
+    return source_record.region(sheet, view=view, page_px=page_px,
+                                box_px=[min(xs) - 12, min(ys) - 12, max(xs) + 12, max(ys) + 12])
+
+
+def read_scale(result: dict, reading: dict, request_dir: Path, earlier: dict | None = None) -> dict:
+    """The frame table, the axis of every view and the measured principal dimensions.
+
+    Sets ``result["frames"]`` and ``result["measured"]`` and returns the working data
+    (axes and named points per view) for ``read_extents``. ``earlier`` is the working data of
+    an earlier scale request of the same ship: its marks are read together with this reply's.
+    """
+    sheet = result["sources"]["ga"]["file"]
+    page_px = result["sources"]["ga"]["size_px"]
+    kinds = {v["view_id"]: v["kind"] for v in result.get("views", [])}
+    reply = (reading.get("reply") or {}).get(PURPOSE)
+    work = {"axes": {}, "points": {}, "table": None, "sheet": sheet, "page_px": page_px, "kinds": kinds}
+    before = (earlier or {}).get("raw")
+    if reply is None and before:
+        work["raw"] = before
+        return _measure(result, work)
+    if reply is None:
+        reason = reading.get("stop_reason") or "the model gave no valid reply for the frame scale"
+        result["frames"] = {"status": "unknown", "spacings": [], "reason": reason,
+                            "source_record": source_record.unknown(reason)}
+        result["measured"] = {field: _unknown(reason) for field in MEASURED_FIELDS}
+        return work
+    tiles = _tiles(request_dir)
+    ticks: dict[str, list] = {}
+    marks: dict[str, dict] = {}
+    spacing_labels: dict[str, list] = {}
+    cuts: dict[str, list] = {}
+    points: dict[str, dict] = {}
+    sigma_px = 0.0
+    for tile in tiles.values():
+        sigma_px = max(sigma_px, POINT_SIGMA_IMAGE_PX * (tile["crop_box_px"][2] - tile["crop_box_px"][0]) / tile["width"])
+    for tick in reply["ticks"]:
+        view = _view_id(tiles[tick["image_id"]])
+        x, y = _to_sheet(tiles[tick["image_id"]], tick["x"], tick["y"])
+        parsed = parse_tick(tick["label"])
+        if parsed is None:
+            result["checks"].append({"code": "scale_mark_not_understood", "status": "dropped", "label": tick["label"][:16]})
+        elif parsed[0] == "frame":
+            ticks.setdefault(view, []).append((parsed[1], x, y))
+        else:
+            marks.setdefault(view, {}).setdefault(parsed[0], []).append((x, y))
+    for label in reply["spacing_labels"]:
+        view = _view_id(tiles[label["image_id"]])
+        x, _ = _to_sheet(tiles[label["image_id"]], label["x"], label["y"])
+        mm = parse_spacing_mm(label["printed"])
+        if mm is None:
+            result["checks"].append({"code": "frame_spacing_not_understood", "status": "dropped",
+                                     "label": label["printed"][:32]})
+        else:
+            spacing_labels.setdefault(view, []).append((mm, x))
+    for cut in reply["spacing_boundaries"]:
+        view = _view_id(tiles[cut["image_id"]])
+        cuts.setdefault(view, []).append(_to_sheet(tiles[cut["image_id"]], cut["x"], cut["y"])[0])
+    for point in reply["points"]:
+        view = _view_id(tiles[point["image_id"]])
+        points.setdefault(view, {}).setdefault(point["name"], []).append(
+            _to_sheet(tiles[point["image_id"]], point["x"], point["y"]))
+    if before:
+        for view, found in before["ticks"].items():
+            ticks.setdefault(view, []).extend(found)
+        for view, named in before["marks"].items():
+            for name, places in named.items():
+                marks.setdefault(view, {}).setdefault(name, []).extend(places)
+        for view, found in before["spacing_labels"].items():
+            spacing_labels.setdefault(view, []).extend(found)
+        for view, found in before["cuts"].items():
+            cuts.setdefault(view, []).extend(found)
+        # A named place keeps its first pointing (two pointings of a hull end differ by more
+        # than two pointings of a printed mark).
+        for view, named in before["points"].items():
+            points.setdefault(view, {}).update(named)
+        sigma_px = max(sigma_px, before["sigma_px"])
+    work["raw"] = {"ticks": ticks, "marks": marks, "spacing_labels": spacing_labels, "cuts": cuts,
+                   "points": points, "sigma_px": sigma_px}
+    return _measure(result, work)
+
+
+# Checks that ``_measure`` writes; it runs again when the extents request adds named places.
+MEASURE_CHECKS = ("frame_scale_not_fitted", "ap_mark_not_at_frame_0", "deck_point_not_amidships",
+                  "measured_value_implausible", "measured_lengths_disagree", "measured_breadth_disagrees",
+                  "measured_depth_disagrees")
+MEASURED_FIELDS = ("lbp_m", "loa_m", "breadth_m", "depth_m")
+
+
+def _measure(result: dict, work: dict) -> dict:
+    """The frame table, the axes and the principal dimensions from the marks collected in ``work``."""
+    from .ga_commercial import PLAUSIBLE, RECORD_VIEWS
+    fields = MEASURED_FIELDS
+    sheet, page_px, kinds = work["sheet"], work["page_px"], work["kinds"]
+    raw = work["raw"]
+    ticks, marks, spacing_labels, cuts, points = (raw[key] for key in ("ticks", "marks", "spacing_labels",
+                                                                       "cuts", "points"))
+    sigma_px = raw["sigma_px"]
+    result["checks"] = [c for c in result["checks"] if c.get("code") not in MEASURE_CHECKS]
+    work.update(axes={}, points={}, table=None)
+
+    def abstain(reason: str) -> dict:
+        result["frames"] = {"status": "unknown", "spacings": [], "reason": reason,
+                            "source_record": source_record.unknown(reason)}
+        result["measured"] = {field: _unknown(reason) for field in fields}
+        return work
+
+    def one(places: list | None):
+        """One place from marks of the same thing on overlapping images; None when they differ."""
+        if not places:
+            return None
+        xs, ys = [p[0] for p in places], [p[1] for p in places]
+        if max(xs) - min(xs) > SAME_MARK_PX or max(ys) - min(ys) > SAME_MARK_PX:
+            return None
+        return float(np.mean(xs)), float(np.mean(ys))
+
+    work["points"] = {view: {name: place for name, places in named.items() if (place := one(places))}
+                      for view, named in points.items()}
+    # The frame table: from the profile when it prints the spacings, else from a plan.
+    order = sorted(spacing_labels, key=lambda view: kinds.get(view) != "profile")
+    table, reason, table_view = None, "no frame spacing is printed", None
+    for view in order:
+        table, reason = spacing_table([(f, x) for f, x, _ in ticks.get(view, [])], spacing_labels[view],
+                                      cuts.get(view, []))
+        if table:
+            table_view = view
+            break
+    if table is None:
+        return abstain(reason)
+    for view, found in ticks.items():
+        axis, why = fit_axis([(f, x) for f, x, _ in found], table)
+        if axis:
+            work["axes"][view] = axis
+        else:
+            result["checks"].append({"code": "frame_scale_not_fitted", "status": "check", "view": view, "reason": why})
+    primary = next((view for view in [table_view, *work["axes"]] if view in work["axes"]), None)
+    if primary is None:
+        return abstain("the frame numbers do not fit the printed spacings")
+    axis = work["axes"][primary]
+    work["table"] = table
+    # A plan without its own frame numbers: the scale of the primary view, when both views draw
+    # the hull equally long (one sheet, one scale); its origin comes from the hull's aft end.
+    primary_ends = work["points"].get(primary, {})
+    for view, named in work["points"].items():
+        if view in work["axes"] or not {"hull_aft_end", "hull_fore_end"} <= named.keys():
+            continue
+        if not {"hull_aft_end", "hull_fore_end"} <= primary_ends.keys():
+            continue
+        own = named["hull_fore_end"][0] - named["hull_aft_end"][0]
+        reference = primary_ends["hull_fore_end"][0] - primary_ends["hull_aft_end"][0]
+        if reference and abs(own / reference - 1) <= SAME_SCALE_TOLERANCE:
+            aft_m = axis.x_m(primary_ends["hull_aft_end"][0])
+            work["axes"][view] = Axis(named["hull_aft_end"][0] - axis.px_per_m * aft_m, axis.px_per_m, axis.rms_px,
+                                      0, 0, "scale of the frame-scale view; hull ends matched")
+    # The table reaches from the aft end to the fore end of the hull (and holds frame 0).
+    ends = [table.frame_at(axis.x_m(primary_ends[name][0])) for name in ("hull_aft_end", "hull_fore_end")
+            if name in primary_ends]
+    # (A hull end a little past a frame does not add a frame.)
+    table.spans[0]["from_frame"] = min(table.spans[0]["from_frame"], 0, *(math.floor(f + 0.25) for f in ends))
+    table.spans[-1]["to_frame"] = max(table.spans[-1]["to_frame"], *(math.ceil(f - 0.25) for f in ends))
+    tick_xy = [(x, y) for _, x, y in ticks[primary]]
+    scale_region = _point_region(sheet, page_px, RECORD_VIEWS.get(kinds.get(primary)), *tick_xy)
+    span_px = max(x for x, _ in tick_xy) - min(x for x, _ in tick_xy)
+    result["frames"] = {
+        "status": "read", "spacings": table.spans, "frame_zero": "aft perpendicular",
+        "boundaries_status": MEASURED,
+        "scale": {"view_id": primary, "px_per_m": round(abs(axis.px_per_m), 4),
+                  "direction": "bow_right" if axis.px_per_m > 0 else "bow_left",
+                  "ticks_used": axis.ticks_used, "ticks_read": axis.ticks_read, "rms_px": round(axis.rms_px, 2)},
+        "source_record": source_record.validate(source_record.read([scale_region]))}
+
+    def measured(pixels: float, view_axis: Axis, how: str, regions: list[dict]) -> dict:
+        value = view_axis.length_m(pixels)
+        # Two pointed places and the fit of the scale itself.
+        sigma = math.hypot(sigma_px, view_axis.rms_px)
+        uncertainty = 2 * sigma / abs(view_axis.px_per_m) + value * axis.rms_px / max(span_px, 1.0)
+        return {"value": round(value, 2), "status": MEASURED, "uncertainty_m": round(uncertainty, 2),
+                "method": how, "scale_basis": view_axis.basis,
+                "note": "measured on the drawing with its printed frame scale; not a printed particular",
+                "source_record": source_record.validate(source_record.read([*regions, scale_region]))}
+
+    out = {}
+    profile = next((view for view in work["axes"] if kinds.get(view) == "profile"), None)
+    named = work["points"].get(profile, {}) if profile else {}
+    record_view = "profile"
+    ap, fp = one(marks.get(profile, {}).get("ap")), one(marks.get(profile, {}).get("fp"))
+    if profile is None:
+        for field in ("lbp_m", "loa_m", "depth_m"):
+            out[field] = _unknown("the profile has no fitted frame scale")
+    else:
+        profile_axis = work["axes"][profile]
+        if fp is None:
+            out["lbp_m"] = _unknown("the forward perpendicular (F.P.) is not marked on the frame scale")
+        else:
+            # Frame 0 is the AP by the table; a printed A.P. mark must agree with it.
+            ap_px = profile_axis.offset
+            frame_px = abs(profile_axis.px_per_m) * table.spacing_m(0)
+            if ap is not None and abs(ap[0] - ap_px) > max(SAME_MARK_PX, AP_MARK_FRAMES * frame_px):
+                result["checks"].append({"code": "ap_mark_not_at_frame_0", "status": "check"})
+                out["lbp_m"] = _unknown("the A.P. mark does not lie at frame 0 of the frame scale")
+            else:
+                out["lbp_m"] = measured(fp[0] - ap_px, profile_axis, "frame 0 (A.P.) to the F.P. mark on the frame scale",
+                                        [_point_region(sheet, page_px, record_view, fp, (ap_px, fp[1]))])
+        if {"hull_aft_end", "hull_fore_end"} <= named.keys():
+            aft, fore = named["hull_aft_end"], named["hull_fore_end"]
+            out["loa_m"] = measured(fore[0] - aft[0], profile_axis, "aft end to fore end of the hull in the profile",
+                                    [_point_region(sheet, page_px, record_view, aft),
+                                     _point_region(sheet, page_px, record_view, fore)])
+        else:
+            out["loa_m"] = _unknown("the profile does not show both ends of the hull")
+        hull = sorted(named[name][0] for name in ("hull_aft_end", "hull_fore_end") if name in named)
+        if len(hull) < 2:  # without both hull ends, the ends of the frame scale
+            hull = [min(x for _, x, _ in ticks[profile]), max(x for _, x, _ in ticks[profile])]
+        if {"base_line", "upper_deck_at_side"} <= named.keys() and not (
+                MIDSHIP_SHARE[0] <= (named["upper_deck_at_side"][0] - hull[0]) / (hull[1] - hull[0]) <= MIDSHIP_SHARE[1]):
+            # A deck line pointed near an end of the ship can be the poop or forecastle deck. It
+            # is dropped, so that the extents request can point the deck line again.
+            raw["points"][profile].pop("upper_deck_at_side")
+            out["depth_m"] = _unknown("the upper deck line was not pointed amidships")
+            result["checks"].append({"code": "deck_point_not_amidships", "status": "check"})
+        elif {"base_line", "upper_deck_at_side"} <= named.keys():
+            base, deck = named["base_line"], named["upper_deck_at_side"]
+            out["depth_m"] = measured(base[1] - deck[1], profile_axis,
+                                      "base line to the upper deck at side amidships in the profile",
+                                      [_point_region(sheet, page_px, record_view, base),
+                                       _point_region(sheet, page_px, record_view, deck)])
+        else:
+            out["depth_m"] = _unknown("the base line or the upper deck at side was not found in the profile")
+    out["breadth_m"] = _unknown("no plan view with a scale shows both sides of the shell")
+    for view, view_axis in work["axes"].items():
+        sides = work["points"].get(view, {})
+        if kinds.get(view) in PLAN_KINDS and {"shell_side_a", "shell_side_b"} <= sides.keys():
+            a, b = sides["shell_side_a"], sides["shell_side_b"]
+            out["breadth_m"] = measured(a[1] - b[1], view_axis, "shell side to shell side amidships in the plan",
+                                        [_point_region(sheet, page_px, "plan", a),
+                                         _point_region(sheet, page_px, "plan", b)])
+            break
+
+    def refuse(names, reason, code):
+        for name in names:
+            out[name] = _unknown(reason)
+        result["checks"].append({"code": code, "status": "check"})
+
+    def value(name):
+        return out[name]["value"]
+
+    for name in fields:
+        if value(name) is not None and not PLAUSIBLE[name][0] <= value(name) <= PLAUSIBLE[name][1]:
+            refuse([name], f"the measured {name} is not plausible", "measured_value_implausible")
+    if value("lbp_m") and value("loa_m") and not LBP_OVER_LOA[0] <= value("lbp_m") / value("loa_m") <= LBP_OVER_LOA[1]:
+        refuse(["lbp_m", "loa_m"], "measured LBP and LOA do not fit each other", "measured_lengths_disagree")
+    length = value("lbp_m") or value("loa_m")
+    if length and value("breadth_m") and not (LENGTH_OVER_BREADTH[0] <= length / value("breadth_m")
+                                              <= LENGTH_OVER_BREADTH[1]):
+        refuse(["breadth_m"], "the measured breadth does not fit the measured length", "measured_breadth_disagrees")
+    if value("breadth_m") and value("depth_m") and not (BREADTH_OVER_DEPTH[0] <= value("breadth_m") / value("depth_m")
+                                                        <= BREADTH_OVER_DEPTH[1]):
+        refuse(["depth_m"], "the measured depth does not fit the measured breadth", "measured_depth_disagrees")
+    result["measured"] = out
+    return work
+
+
+SIDE_WORDS = [(r"\(?\bP\s?[&/]\s?S\b\)?|\(P,\s?S\)", "both"), (r"\(P\)|\bPORT\b", "port"),
+              (r"\(S\)|\bSTBD\b|\bSTARBOARD\b", "starboard"), (r"\(C\)|\bCENT(?:RE|ER)\b", "centre")]
+
+
+def side_of_label(label: str) -> str | None:
+    """'both', 'port', 'starboard' or 'centre' when the printed label says the side."""
+    text = label.upper()
+    for pattern, side in SIDE_WORDS:
+        if re.search(pattern, text):
+            return side
+    return None
+
+
+def read_extents(result: dict, work: dict, reading: dict, request_dir: Path) -> dict:
+    """Give each boxed space its ``extent`` (frames, metres and status per axis); return statistics."""
+    stats = {"asked": 0, "boxed": 0, "with_extent": 0}
+    reply = (reading.get("reply") or {}).get(PURPOSE)
+    if reply is not None and work.get("table") is not None and reply["points"]:
+        # Named places that the scale request left out (a plan it did not look at) come from
+        # the whole-view images; a place already pointed at high resolution is kept.
+        tiles = _tiles(request_dir)
+        raw, added = work["raw"], 0
+        for point in reply["points"]:
+            tile = tiles[point["image_id"]]
+            named = raw["points"].setdefault(_view_id(tile), {})
+            if point["name"] not in named:
+                named[point["name"]] = [_to_sheet(tile, point["x"], point["y"])]
+                raw["sigma_px"] = max(raw["sigma_px"], POINT_SIGMA_IMAGE_PX
+                                      * (tile["crop_box_px"][2] - tile["crop_box_px"][0]) / tile["width"])
+                added += 1
+        if added:
+            stats["points_added"] = added
+            _measure(result, work)
+    table = work.get("table")
+    if reply is None or table is None:
+        stats["reason"] = ("the frame scale was not established" if table is None
+                           else reading.get("stop_reason") or "the model gave no valid reply for the extents")
+        return stats
+    tiles = _tiles(request_dir)
+    request = json.loads((Path(request_dir) / "request.json").read_text())
+    stats["asked"] = len(request["context"]["spaces"])
+    asked = {s["space_id"]: s for s in request["context"]["spaces"]}
+    spaces = {s["id"]: s for s in result["spaces"]}
+    kinds = work["kinds"]
+    for entry in reply["extents"]:
+        space = spaces.get(entry["space_id"])
+        tile = tiles[entry["image_id"]]
+        view = _view_id(tile)
+        if space is None or entry["space_id"] not in asked or asked[entry["space_id"]]["image_id"] != view:
+            result["checks"].append({"code": "extent_of_unknown_space", "status": "dropped",
+                                     "label": entry["space_id"][:64]})
+            continue
+        stats["boxed"] += 1
+        axis = work["axes"].get(view)
+        if axis is None or "extent" in space:
+            continue
+        left, top = _to_sheet(tile, entry["box"][0], entry["box"][1])
+        right, bottom = _to_sheet(tile, entry["box"][2], entry["box"][3])
+        status = MEASURED if entry["basis"] == "outline" else "guessed"
+        ends = sorted((axis.x_m(left), axis.x_m(right)))
+        frames = [int(round(table.frame_at(x))) for x in ends]
+        if frames[0] == frames[1]:
+            continue
+        extent = {"frames": frames, "x_m": [round(table.x_m(f), 3) for f in frames],
+                  "x_measured_m": [round(x, 2) for x in ends], "status": {"x": status},
+                  "view_id": view, "outline_box_px": [round(v, 1) for v in (left, top, right, bottom)],
+                  "basis": entry["basis"],
+                  "method": "ends of the drawn boundary measured on the frame scale, given to the nearest frame"}
+        named = work["points"].get(view, {})
+        if kinds.get(view) == "profile" and "base_line" in named:
+            base = named["base_line"][1]
+            low, high = (base - bottom) / abs(axis.px_per_m), (base - top) / abs(axis.px_per_m)
+            extent["z_m"] = [round(max(low, 0.0), 2), round(high, 2)]
+            extent["status"]["z"] = status
+        elif kinds.get(view) in PLAN_KINDS and "centre_line" in named:
+            centre = named["centre_line"][1]
+            # Seen from above with the bow to the right, port is up the sheet; bow left, down.
+            sign = 1.0 if axis.px_per_m > 0 else -1.0
+            sides = sorted((sign * (centre - top) / abs(axis.px_per_m), sign * (centre - bottom) / abs(axis.px_per_m)))
+            extent["y_m"] = [round(sides[0], 2), round(sides[1], 2)]
+            extent["status"]["y"] = status
+        side = side_of_label(space["label"])
+        if side is None and "y_m" in extent:
+            low, high = extent["y_m"]
+            side = ("port" if low >= -CENTRE_TOLERANCE_M else "starboard" if high <= CENTRE_TOLERANCE_M else "centre")
+        if side:
+            extent["side"] = side
+        space["extent"] = extent
+        stats["with_extent"] += 1
+    return stats
+
+
+def check_depth(result: dict, work: dict) -> None:
+    """Check the measured depth against the tops of the spaces below the deck (profile).
+
+    The upper deck is not lower than the top of any hold or tank below it. The top of a hold
+    can be lower than the deck (topside tanks above it), so a pointed deck line above the tops
+    is kept and marked "not confirmed"; one below a top is a contradiction and is not used.
+    Without a deck line pointed amidships, the depth is the median top of the cargo spaces when
+    at least three agree and another kind of space, or the lowest deckhouse tier, ends there too.
+    """
+    kinds = work["kinds"]
+
+    table = work["table"]
+    ends = [table.x_m(span_end) for span_end in (table.spans[0]["from_frame"], table.spans[-1]["to_frame"])]
+    midship = [ends[0] + share * (ends[1] - ends[0]) for share in MIDSHIP_SHARE]
+
+    def tops_of(wanted, amidships_only=False) -> list[float]:
+        tops = []
+        for space in result["spaces"]:
+            extent = space.get("extent", {})
+            if (space["kind"] not in wanted or "z_m" not in extent or extent["basis"] != "outline"
+                    or kinds.get(extent["view_id"]) != "profile"):
+                continue
+            centre = (extent["x_m"][0] + extent["x_m"][1]) / 2
+            if amidships_only and not midship[0] <= centre <= midship[1]:
+                continue  # a space under the poop or the forecastle ends above the upper deck
+            tops.append(extent["z_m"][1])
+        return tops
+
+    cargo = tops_of(("cargo_hold", "cargo_tank"))
+    others = tops_of([kind for kind in BELOW_DECK_KINDS if kind not in ("cargo_hold", "cargo_tank")], True)
+    tiers = [s["extent"]["z_m"][0] for s in result["spaces"]
+             if s["kind"] == "accommodation_deck" and "z_m" in s.get("extent", {})]
+    depth = result["measured"]["depth_m"]
+    own = ("depth_below_a_space_top", "depth_not_confirmed_by_space_tops", "depth_taken_from_cargo_space_tops")
+    result["checks"] = [c for c in result["checks"] if c.get("code") not in own]
+    seen = {"cargo_space_tops_m": sorted(cargo), "other_space_tops_m": sorted(others),
+            "lowest_deckhouse_tier_m": min(tiers, default=None)}
+    axis = work["axes"][next(view for view in work["axes"] if kinds.get(view) == "profile")]
+    # Two measurements, each two pointed places on the fitted scale.
+    one = (2 * POINT_SIGMA_IMAGE_PX + 2 * axis.rms_px) / abs(axis.px_per_m)
+    allowed = 2 * max(depth.get("uncertainty_m") or 0.0, one)
+    highest = max(cargo + others, default=None)
+    pointed = depth["value"]
+    reference = float(np.median(cargo)) if cargo else None
+    # The cargo spaces agree on one top, nothing below the deck is higher, and there are enough of them.
+    tops_agree = (len(cargo) >= MIN_DECK_TOPS and all(abs(top - reference) <= allowed for top in cargo)
+                  and highest <= reference + allowed)
+
+    def from_tops(why: str, how: str) -> dict:
+        regions = [s["source_record"]["regions"][0] for s in result["spaces"]
+                   if s["kind"] in ("cargo_hold", "cargo_tank") and "z_m" in s.get("extent", {})]
+        return {"value": round(reference, 2), "status": DERIVED, "uncertainty_m": round(allowed, 2),
+                "method": f"median top of {len(cargo)} cargo spaces boxed in the profile, on the frame scale; " + how,
+                "scale_basis": axis.basis, "pointed_depth_m": pointed, "reason": why,
+                "note": "an estimate from the read spaces, not a measured deck line and not a printed particular",
+                "cross_check": {**seen, "pointed_depth_m": pointed, "result": "taken from the tops of the cargo spaces"},
+                "source_record": source_record.validate(source_record.read(
+                    [*regions[:source_record.MAX_REGIONS - 1], result["frames"]["source_record"]["regions"][0]]))}
+
+    if pointed is not None:
+        if highest is None:
+            depth["cross_check"] = {**seen, "result": "not checked: no space below the deck was boxed in the profile"}
+        elif pointed < highest - allowed:
+            # The deck line or the boxes are wrong; the pointed line is kept and the case is flagged.
+            depth["cross_check"] = {**seen, "result": "contradicted: a space under the deck is boxed higher than "
+                                                      "the measured deck line"}
+            depth["note"] += "; NOT CONFIRMED: a space below the deck is boxed higher than this deck line"
+            result["checks"].append({"code": "depth_below_a_space_top", "status": "check"})
+        elif pointed <= highest + allowed:
+            depth["cross_check"] = {**seen, "result": "agrees with the top of the spaces below the deck"}
+        elif tops_agree and pointed - reference <= RAIL_OR_CAMBER_M:
+            # The moulded depth is to the deck AT SIDE, where the cargo spaces end.
+            result["measured"]["depth_m"] = from_tops(
+                f"the pointed deck line ({pointed} m) lies a rail or camber height above the cargo spaces: "
+                "the deck at the centreline or a rail, not the deck at side",
+                "the pointed line lay a rail or camber height above them")
+            result["checks"].append({"code": "depth_taken_from_cargo_space_tops", "status": "check"})
+        else:
+            depth["cross_check"] = {**seen, "result": "not confirmed: the deck line lies above the tops of the "
+                                                      "boxed spaces (topside tanks, or another deck)"}
+            result["checks"].append({"code": "depth_not_confirmed_by_space_tops", "status": "check"})
+        return
+    support = [top for top in [*others, *tiers] if reference is not None and abs(top - reference) <= allowed]
+    if tops_agree and support:
+        result["measured"]["depth_m"] = from_tops(
+            "no deck line was measured at side amidships (" + depth.get("reason", "") + ")",
+            "another space or the lowest deckhouse tier ends at the same height")
+
+
+def scale_pass(result: dict, sheet_path: Path, out: Path, call) -> dict:
+    """Run both ``ga_scale`` requests for one ship. ``call(request_dir, out_dir)`` sends one request."""
+    stats = {"requests": 0}
+    readings = []
+    if "ga" not in result.get("sources", {}) or not prepare_scale(result, sheet_path, out / "scale"):
+        reason = "no profile or plan view was found on the sheet"
+        result["frames"] = {"status": "unknown", "spacings": [], "reason": reason,
+                            "source_record": source_record.unknown(reason)}
+        result["measured"] = {field: _unknown(reason) for field in ("lbp_m", "loa_m", "breadth_m", "depth_m")}
+        return stats
+    # Small print is read differently from one request to the next: while the scale is not
+    # established, the scale request is sent again and the marks of all replies are read together.
+    work = None
+    for attempt in range(1, SCALE_ATTEMPTS + 1):
+        name = "scale" if attempt == 1 else f"scale-{attempt}"
+        if attempt > 1:
+            prepare_scale(result, sheet_path, out / name)
+        readings.append(call(out / name, out / f"{name}-provider"))
+        work = read_scale(result, readings[-1], out / name, work)
+        if work.get("table") is not None:
+            break
+    stats["scale_attempts"] = attempt
+    stats["frames"] = result["frames"]["status"]
+    stats["measured"] = sorted(k for k, v in result["measured"].items() if v["status"] == MEASURED)
+    if work.get("table") is not None and prepare_extents(result, sheet_path, out / "extents"):
+        readings.append(call(out / "extents", out / "extents-provider"))
+        stats["extents"] = read_extents(result, work, readings[-1], out / "extents")
+        if any(work["kinds"].get(view) == "profile" for view in work["axes"]):
+            check_depth(result, work)
+            stats["measured"] = sorted(k for k, v in result["measured"].items() if v["status"] == MEASURED)
+            stats["derived"] = sorted(k for k, v in result["measured"].items() if v["status"] == DERIVED)
+    stats["requests"] = len(readings)
+    return stats
+
+
+# ------------------------------------------------------------------ the arrangement input
+
+def _identity(space: dict) -> tuple:
+    """What makes two labels the same physical space in two views (the side left out)."""
+    from .ga_commercial import _base_number, COUNT_KINDS
+    if space["kind"] in COUNT_KINDS.values() and space.get("number"):
+        return space["kind"], _base_number(space["number"])
+    text = space["label"].upper()
+    for pattern, _ in SIDE_WORDS:
+        text = re.sub(pattern, "", text)
+    return space["kind"], re.sub(r"[^A-Z0-9]", "", text)
+
+
+def _sides(space: dict) -> set[str]:
+    side = space["extent"].get("side")
+    return {"port", "starboard"} if side == "both" else {side} if side else set()
+
+
+def merged_spaces(result: dict) -> list[dict]:
+    """One entry per physical space: x and z from the profile, y from a plan.
+
+    A reading lists a numbered hold or tank once in each view. Views of the same space are
+    joined by kind and number (or label); a plan entry of one side takes the profile entry
+    that is printed for both sides.
+    """
+    kinds = {v["view_id"]: v["kind"] for v in result.get("views", [])}
+    groups: dict[tuple, list[dict]] = {}
+    plain = []
+    for space in result["spaces"]:
+        if "extent" in space:
+            groups.setdefault(_identity(space), []).append(space)
+        else:
+            plain.append({key: space[key] for key in ("id", "kind", "label", "number", "status", "source_record")})
+    merged = []
+    for members in groups.values():
+        members = _without_repeats(members)
+        profiles = [s for s in members if kinds.get(s["extent"]["view_id"]) == "profile"]
+        plans = [s for s in members if s not in profiles]
+        used_profiles = set()
+        seen = []
+        for plan in plans:
+            side = plan["extent"].get("side")
+            if any(side == other.get("side") and _overlap(plan["extent"], other) > 0.5 for other in seen):
+                continue  # the same space in a second plan view
+            seen.append(plan["extent"])
+            partner = next((p for p in profiles if _overlap(plan["extent"], p["extent"]) > 0.5
+                            and (not _sides(p) or not side or side in _sides(p) or side == "centre")), None)
+            merged.append(_joined(plan, partner))
+            if partner:
+                used_profiles.add(partner["id"])
+        for profile in profiles:
+            if profile["id"] not in used_profiles:
+                merged.append(_joined(None, profile))
+    return merged + plain
+
+
+def _overlap(a: dict, b: dict) -> float:
+    """The shared length of two extents as a share of the shorter one."""
+    shared = min(a["x_m"][1], b["x_m"][1]) - max(a["x_m"][0], b["x_m"][0])
+    shorter = min(a["x_m"][1] - a["x_m"][0], b["x_m"][1] - b["x_m"][0])
+    return shared / shorter if shorter > 0 else 0.0
+
+
+def _without_repeats(members: list[dict]) -> list[dict]:
+    """One entry where a view lists the same space twice (both passes read its label)."""
+    kept: list[dict] = []
+    # A boundary that was seen goes before one placed from the label.
+    for space in sorted(members, key=lambda s: s["extent"]["basis"] != "outline"):
+        extent = space["extent"]
+        if not any(extent["view_id"] == other["extent"]["view_id"] and extent.get("side") == other["extent"].get("side")
+                   and _overlap(extent, other["extent"]) > 0.5 for other in kept):
+            kept.append(space)
+    return kept
+
+
+def _joined(plan: dict | None, profile: dict | None) -> dict:
+    first = plan or profile
+    extent = {"status": {}}
+    x_source = profile or plan
+    extent["frames"] = x_source["extent"]["frames"]
+    extent["x_m"] = x_source["extent"]["x_m"]
+    extent["status"]["x"] = x_source["extent"]["status"]["x"]
+    if profile and "z_m" in profile["extent"]:
+        extent["z_m"] = profile["extent"]["z_m"]
+        extent["status"]["z"] = profile["extent"]["status"]["z"]
+    if plan and "y_m" in plan["extent"]:
+        extent["y_m"] = plan["extent"]["y_m"]
+        extent["status"]["y"] = plan["extent"]["status"]["y"]
+    side = (plan or profile)["extent"].get("side")
+    if side:
+        extent["side"] = side
+    regions = [region for space in (plan, profile) if space
+               for region in space["source_record"].get("regions", [])][:source_record.MAX_REGIONS]
+    return {"id": first["id"], "kind": first["kind"], "label": first["label"], "number": first.get("number"),
+            "status": first["status"], "source_record": source_record.validate(source_record.read(regions)),
+            "views": [s["extent"]["view_id"] for s in (plan, profile) if s], "extent": extent}
+
+
+def arrangement_input(result: dict, case_id: str) -> dict:
+    """The reading in the form of docs/GA_ARRANGEMENT_INPUT.md.
+
+    A particular is the printed value (status ``read``) when the drawing prints it, else the
+    value measured with the frame scale (status ``measured_from_scale``), else null. This file
+    is for the arrangement step only; the GA exam reads ``ga_reading.json``.
+    """
+    particulars = {}
+    for field in ("loa_m", "lbp_m", "breadth_m", "depth_m"):
+        printed = result.get("particulars", {}).get(field) or {}
+        measured = (result.get("measured") or {}).get(field) or {}
+        if printed.get("value") is not None:
+            particulars[field] = {key: printed[key] for key in ("value", "status", "source_record")}
+        elif measured.get("value") is not None:
+            # The status says what the value is: measured_from_scale, or derived_from_space_tops.
+            particulars[field] = {key: measured[key] for key in
+                                  ("value", "status", "uncertainty_m", "method", "note", "reason", "pointed_depth_m",
+                                   "cross_check", "source_record") if key in measured}
+        else:
+            reason = measured.get("reason") or printed.get("reason") or "not printed and not measured"
+            particulars[field] = _unknown(reason)
+    frames = result.get("frames") or {"status": "unknown", "spacings": []}
+    return {"schema": INPUT_SCHEMA, "case_id": case_id, "engineering_approved": False,
+            "sources": result["sources"], "ship_type": result.get("ship_type"),
+            "particulars": particulars, "frames": frames, "spaces": merged_spaces(result)}

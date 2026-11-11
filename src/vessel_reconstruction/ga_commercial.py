@@ -73,6 +73,42 @@ PLAUSIBLE = {"loa_m": (20.0, 500.0), "lbp_m": (20.0, 500.0), "breadth_m": (4.0, 
              "deadweight_t": (100.0, 600_000.0)}
 COUNT_KINDS = {"cargo_holds": "cargo_hold", "cargo_hatches": "cargo_hatch", "cargo_cranes": "cargo_crane",
                "cargo_tanks": "cargo_tank", "slop_tanks": "slop_tank", "container_bays": "container_bay"}
+# Requests for one ship in a reading (the product setting; ``--max-requests-per-ship``): one
+# coarse request, then fine requests until every unexplained text blob is read, up to this total.
+MAX_REQUESTS_PER_SHIP = 6
+
+# Counting definitions (decided by the PM, 2026-11-12). Each is a setting with the default
+# below; the sentences go to the model in the request context and code counts by the same rule.
+DEFINITIONS = {
+    # Holds numbered with halves (No.4A, No.4F) are two holds when a transverse bulkhead
+    # separates them and each has its own main hatch. False: one hold per number.
+    "split_holds_are_separate": True,
+    # A tank whose label says SLOP is a slop tank, also a centreline "slop holding tank".
+    # False: a slop holding tank is not counted.
+    "slop_holding_tank_is_slop": True,
+}
+
+
+def definition_sentences(definitions: dict) -> list[str]:
+    """The counting rules of a run as sentences for the model."""
+    holds = ("A cargo hold is a cargo space that transverse bulkheads separate from the next one and that has its "
+             "own main hatch. ")
+    if definitions["split_holds_are_separate"]:
+        holds += ("Holds labelled as halves of one number (No.4A, No.4F) are two holds when a transverse bulkhead "
+                  "separates them and each has its own main hatch; they are one hold when they are one space with "
+                  "one label or one hatch.")
+    else:
+        holds += "Holds labelled as halves of one number (No.4A, No.4F) count as one hold."
+    slop = "A slop tank is a tank whose printed label says SLOP (SLOP TK, SLOP TANK"
+    if definitions["slop_holding_tank_is_slop"]:
+        slop += ", SLOP HOLDING TK, also on the centreline)."
+    else:
+        slop += "); a slop holding tank is not counted."
+    slop += " Residue, waste-oil, sludge and other tanks are not slop tanks."
+    return [holds,
+            "On a bulk carrier the cargo holds and the main cargo hatches are usually equal in number; when your "
+            "two counts differ, look again at both before you answer.",
+            slop]
 
 
 # ------------------------------------------------------------------ images
@@ -166,7 +202,7 @@ def _plan_images(ga: Path | None, particulars: Path | None) -> list[tuple[str, s
     return plan
 
 
-def prepare(ga: Path | None, out: Path, particulars: Path | None = None) -> dict:
+def prepare(ga: Path | None, out: Path, particulars: Path | None = None, definitions: dict | None = None) -> dict:
     """Write one ``ga_reading`` request directory (request.json and PNG images)."""
     if ga is None and particulars is None:
         raise ValueError("a GA or a particulars table image is required")
@@ -192,11 +228,13 @@ def prepare(ga: Path | None, out: Path, particulars: Path | None = None) -> dict
         tiles.append(Tile(image_id, view, path.name, tuple(box), w, h))
     primary = Path(ga or particulars)
     width, height = opened[primary].size
+    definitions = {**DEFINITIONS, **(definitions or {})}
     manifest = {"schema_version": REQUEST_SCHEMA, "purpose": PURPOSE,
                 "source_sha256": _sha256(primary.read_bytes()), "engineering_approved": False,
                 "context": {"coordinate_frame": "attachment_pixels",
                             "sheet_size_px": [width, height],
-                            "note": "Tiles overlap; list an item seen in two tiles once."},
+                            "note": "Tiles overlap; list an item seen in two tiles once.",
+                            "definitions": definition_sentences(definitions)},
                 "images": entries}
     write_json(out / "request.json", manifest)
     # The host-side record of which file each image shows; never sent to the model.
@@ -207,7 +245,8 @@ def prepare(ga: Path | None, out: Path, particulars: Path | None = None) -> dict
         table_size = Image.open(particulars).size
         sources["particulars"] = {"file": Path(particulars).name, "sha256": _sha256(Path(particulars).read_bytes()),
                                   "size_px": list(table_size)}
-    write_json(out / "sources.json", {"sources": sources, "tiles": [t.__dict__ for t in tiles]})
+    write_json(out / "sources.json", {"sources": sources, "tiles": [t.__dict__ for t in tiles],
+                                      "definitions": definitions})
     return manifest
 
 
@@ -346,6 +385,7 @@ def interpret(reading: dict, request_dir: Path, sources_dir: Path) -> dict:
     ink = {name: np.asarray(Image.open(sources_dir / name).convert("L")) < INK_LEVEL for name in sizes}
     result = {"schema": SCHEMA, "engineering_approved": False, "model": reading.get("requested_model"),
               "sources": meta["sources"], "usage": usage_of(reading),
+              "definitions": {**DEFINITIONS, **meta.get("definitions", {})},
               "particulars": {}, "ship_type": {"value": None, "status": "unknown"},
               "counts": {}, "views": [], "spaces": [], "checks": []}
     reply = (reading.get("reply") or {}).get(PURPOSE)
@@ -417,8 +457,8 @@ def interpret(reading: dict, request_dir: Path, sources_dir: Path) -> dict:
         kind = item["kind"]
         if item["basis"] == "read":
             # The same text check as the fine pass: a label read as a cargo crane must not say HOSE.
-            from .ga_labels import checked_kind
-            kind = checked_kind(kind, item["label"])
+            from .ga_labels import label_kind
+            kind = label_kind(kind, item["label"], result["definitions"])
             if kind != item["kind"]:
                 result["checks"].append({"code": "coarse_kind_not_in_text", "status": "changed",
                                          "label": item["label"][:64], "kind": item["kind"]})
@@ -447,6 +487,7 @@ def add_space(result: dict, space_id: str, kind: str, label: str, number: str | 
     """Add one space with its source record and the view it lies in."""
     view = view_of(result, region["sheet"], region["box_px"])
     region = {**region, "view": RECORD_VIEWS.get(view["kind"]) if view else None}
+    number = _number_with_side(number, label)
     if status == "read":
         record = source_record.read([region])
     else:
@@ -458,12 +499,33 @@ def add_space(result: dict, space_id: str, kind: str, label: str, number: str | 
     return space
 
 
+def _number_with_side(number: str | None, label: str) -> str | None:
+    """The number token with the side that the label prints: ("3", "NO.3 C.O.TK(P)") -> "3P".
+
+    The model sometimes gives the bare number of a label that prints its side; the views are
+    compared by number and side, so the side comes from the label.
+    """
+    if not number or not re.fullmatch(r"(?:NO\.?\s*)?\d+", number.strip(), re.I):
+        return number
+    side = re.search(r"\(\s*([PSC])\s*\)", label.upper())
+    return f"{number.strip()}{side[1]}" if side else number
+
+
 def _base_number(number: str | None) -> str | None:
     """The space number without its side: '1P', '1 (S)', '1P&S' -> '1'; '4A' stays '4A'."""
     key = _number_key(number)
     if key is None:
         return None
     return re.sub(r"\(?(?:P&S|P/S|PS|P|S|C)\)?$", "", key) or key
+
+
+def _count_key(number: str | None, kind: str, definitions: dict) -> str | None:
+    """The number under which a space is counted: '4A' and '4F' are one hold when the
+    definition says that halves of one number are one hold."""
+    key = _number_key(number)
+    if key and kind == "cargo_hold" and not definitions["split_holds_are_separate"]:
+        return re.sub(r"(?<=\d)[A-Z]$", "", key)
+    return key
 
 
 def _highest_number(numbers: set) -> int | None:
@@ -481,6 +543,8 @@ def finish_counts(result: dict) -> None:
     tank top plan). A view that misses some labels in between is not a contradiction.
     """
     ga_name = (result["sources"].get("ga") or result["sources"].get("particulars"))["file"]
+    definitions = result.get("definitions") or DEFINITIONS
+    result["checks"] = [c for c in result["checks"] if c.get("code") != "holds_and_hatches_differ"]
     for name, kind in COUNT_KINDS.items():
         reading_count = result["model_counts"][name]
         spaces = [s for s in result["spaces"] if s["kind"] == kind]
@@ -491,12 +555,23 @@ def finish_counts(result: dict) -> None:
         base_by_view: dict[str, set] = {}
         for space in numbered:
             view = space["view_id"] or "?"  # spaces outside every named view form one group
-            full_by_view.setdefault(view, set()).add(_number_key(space["number"]))
+            full_by_view.setdefault(view, set()).add(_count_key(space["number"], kind, definitions))
             # Where a view's numbering ends comes from the coarse pass only: it lists every
             # numbered hold, hatch and tank per view. The fine pass reads only some crops, so a
             # view it saw two labels in is not a view that ends there (review round 2).
             if space.get("found_by", "coarse") == "coarse":
                 base_by_view.setdefault(view, set()).add(_base_number(space["number"]))
+        # A fine-pass label adds its number to a view that the coarse pass listed (the coarse
+        # pass can miss the last label of a view; the label is printed there all the same).
+        # It does not make a view of its own.
+        for space in numbered:
+            view = space["view_id"] or "?"
+            if space.get("found_by") == "fine" and len(base_by_view.get(view, ())) >= 2:
+                base_by_view[view].add(_base_number(space["number"]))
+        # A bare number beside the same number with a side ("6" and "6P", "6S" in one view) is a
+        # second label of those tanks (a cut label), not another tank.
+        for found in full_by_view.values():
+            found -= {key for key in found if any(f"{key}{side}" in found for side in "PSC")}
         labelled = max((len(found) for found in full_by_view.values()), default=0)
         # A view may miss a label (hidden by other ink, not listed); that is not a contradiction.
         # Views contradict when their highest space number differs (profile up to No.5, tank top up
@@ -529,6 +604,12 @@ def finish_counts(result: dict) -> None:
                 "count judged by the model from the drawing: " + reading_count["evidence"],
                 [source_record.region(ga_name, view=None)])
         result["counts"][name] = entry
+    # Holds and main hatches are usually equal on a bulk carrier. A difference is not refused
+    # (a hold can have two hatches); it is listed for the reader.
+    holds, hatches = result["counts"]["cargo_holds"]["value"], result["counts"]["cargo_hatches"]["value"]
+    if ((result.get("ship_type") or {}).get("value") == "bulk_carrier" and holds is not None and hatches is not None
+            and holds != hatches):
+        result["checks"].append({"code": "holds_and_hatches_differ", "status": "check"})
 
 
 # ------------------------------------------------------------------ app run folder
@@ -592,18 +673,24 @@ def add_usage(total: dict, more: dict) -> dict:
 
 
 def read_one(ga: Path | None, particulars: Path | None, out: Path, binary: Path, basis: str,
-             model: str = MODEL, app_task: Path | None = None, fine: bool = True) -> dict:
-    """Coarse request, interpretation, then the fine pass on the GA; writes ``out/ga_reading.json``.
+             model: str = MODEL, app_task: Path | None = None, fine: bool = True,
+             measure: bool = False, case_id: str | None = None,
+             max_requests: int = MAX_REQUESTS_PER_SHIP, definitions: dict | None = None) -> dict:
+    """Coarse request, interpretation, the fine pass and the frame-scale pass; writes ``out/ga_reading.json``.
+
+    With ``measure`` the frame-scale pass (``ga_scale``, two more requests) adds ``frames``,
+    ``measured`` and the extent of each space, and writes ``out/ga_arrangement_input.json``.
 
     ``result["passes"]`` records per ship the requests and crops each pass needed.
     """
     from .ga_labels import fine_pass
     out = Path(out).resolve()
-    prepare(ga, out / "request", particulars)
+    prepare(ga, out / "request", particulars, definitions)
     binary = Path(binary).resolve()
     reading = call_model(binary, out / "request", out / "provider", basis, model)
     sources_dir = Path(ga or particulars).resolve().parent
     result = interpret(reading, out / "request", sources_dir)
+    result["case_id"] = case_id or out.name
     images = len(json.loads((out / "request" / "request.json").read_text())["images"])
     result["passes"] = {"coarse": {"requests": result["usage"]["requests"], "images": images}}
     if fine and ga is not None and reading.get("reply") is not None:
@@ -613,13 +700,37 @@ def read_one(ga: Path | None, particulars: Path | None, out: Path, binary: Path,
             readings.append(call_model(binary, request_dir, provider_dir, basis, model))
             return readings[-1]
 
-        stats = fine_pass(result, Path(ga).resolve(), out / "fine", call)
+        # The coarse request is one of the ship's requests; the fine pass gets the rest.
+        stats = fine_pass(result, Path(ga).resolve(), out / "fine", call, max_requests - 1)
         for fine_reading in readings:
             result["usage"] = add_usage(result["usage"], usage_of(fine_reading))
         result["passes"]["fine"] = stats
+    if measure and ga is not None and reading.get("reply") is not None:
+        measure_one(result, Path(ga).resolve(), out, binary, basis, model, case_id or out.name)
     write_json(out / "ga_reading.json", result)
     if app_task:
         write_app_run(result, sources_dir, app_task, out.name)
+    return result
+
+
+def measure_one(result: dict, ga: Path, out: Path, binary: Path, basis: str, model: str, case_id: str) -> dict:
+    """The frame-scale pass on a reading: ``frames``, ``measured`` and space extents (two requests).
+
+    Measured values are kept apart from the printed particulars; ``out/ga_arrangement_input.json``
+    is the file for the arrangement step (see ``ga_scale``).
+    """
+    from . import ga_scale
+    readings = []
+    result["case_id"] = case_id
+
+    def call(request_dir: Path, provider_dir: Path) -> dict:
+        readings.append(call_model(binary, request_dir, provider_dir, basis, model))
+        return readings[-1]
+
+    result.setdefault("passes", {})["scale"] = ga_scale.scale_pass(result, ga, Path(out) / "scale", call)
+    for reading in readings:
+        result["usage"] = add_usage(result["usage"], usage_of(reading))
+    write_json(Path(out) / "ga_arrangement_input.json", ga_scale.arrangement_input(result, case_id))
     return result
 
 
@@ -639,7 +750,23 @@ def main(argv=None) -> int:
     batch.add_argument("--cases", required=True, nargs="+")
     batch.add_argument("--max-requests", required=True, type=int,
                        help="Campaign budget: stop before a case when this many requests were sent.")
+    measure = commands.add_parser("measure", help="Frame-scale pass on an existing reading (two requests).")
+    measure.add_argument("--reading", required=True, type=Path, help="A ga_reading.json of this GA.")
+    measure.add_argument("--ga", required=True, type=Path)
+    measure.add_argument("--case", required=True)
     for command in (read, batch):
+        # Off by default: the GA exam run (plan, "What the evaluator runs") sends three requests
+        # a ship and reads printed values only.
+        command.add_argument("--measure", action="store_true",
+                             help="Also measure with the printed frame scale (two more requests a ship).")
+        command.add_argument("--max-requests-per-ship", type=int, default=MAX_REQUESTS_PER_SHIP,
+                             help="Ceiling of requests for one ship: one coarse request, then fine requests "
+                                  "until every label blob is read (default %(default)s).")
+        command.add_argument("--one-hold-per-number", action="store_true",
+                             help="Definition: holds numbered as halves (4A, 4F) count as one hold.")
+        command.add_argument("--slop-holding-tank-not-slop", action="store_true",
+                             help="Definition: a slop holding tank is not counted as a slop tank.")
+    for command in (read, batch, measure):
         command.add_argument("--out", required=True, type=Path)
         command.add_argument("--binary", required=True, type=Path)
         command.add_argument("--basis", required=True)
@@ -649,8 +776,19 @@ def main(argv=None) -> int:
         manifest = prepare(args.ga, args.out, args.particulars)
         print(json.dumps({"ok": True, "images": len(manifest["images"]), "engineering_approved": False}))
         return 0
+    if args.command == "measure":
+        result = json.loads(args.reading.read_text())
+        args.out.mkdir(parents=True, exist_ok=False)
+        measure_one(result, args.ga.resolve(), args.out.resolve(), args.binary.resolve(), args.basis, args.model,
+                    args.case)
+        write_json(args.out / "ga_reading.json", result)
+        print(json.dumps({"ok": True, "scale": result["passes"]["scale"], "engineering_approved": False}))
+        return 0
+    definitions = {"split_holds_are_separate": not args.one_hold_per_number,
+                   "slop_holding_tank_is_slop": not args.slop_holding_tank_not_slop}
     if args.command == "read":
-        result = read_one(args.ga, args.particulars, args.out, args.binary, args.basis, args.model, args.app_task)
+        result = read_one(args.ga, args.particulars, args.out, args.binary, args.basis, args.model, args.app_task,
+                          measure=args.measure, max_requests=args.max_requests_per_ship, definitions=definitions)
         print(json.dumps({"ok": bool(result["spaces"] or result["counts"].get("cargo_holds", {}).get("status") == "read"),
                           "usage": result["usage"], "engineering_approved": False}))
         return 0
@@ -663,7 +801,9 @@ def main(argv=None) -> int:
             continue
         try:
             ga, particulars = case_files(args.inputs, case)
-            result = read_one(ga, particulars, args.out / case, args.binary, args.basis, args.model)
+            result = read_one(ga, particulars, args.out / case, args.binary, args.basis, args.model,
+                              measure=args.measure, case_id=case, max_requests=args.max_requests_per_ship,
+                              definitions=definitions)
             sent += result["usage"]["requests"]
             ledger["cases"][case] = {"status": "read", "usage": result["usage"]}
         except (OSError, ValueError, RuntimeError) as error:

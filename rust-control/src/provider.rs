@@ -67,6 +67,8 @@ pub enum Purpose {
     GaReading,
     /// The fine pass of a GA reading: printed labels on crops (see `ga_reading`).
     GaLabels,
+    /// The frame scale and the extents of spaces of a GA (see `ga_reading`).
+    GaScale,
 }
 impl Purpose {
     fn is_model_decision(&self) -> bool {
@@ -84,6 +86,7 @@ impl Purpose {
             Purpose::PartRevision => part_revision::PROMPT,
             Purpose::GaReading => ga_reading::PROMPT,
             Purpose::GaLabels => ga_reading::LABELS_PROMPT,
+            Purpose::GaScale => ga_reading::SCALE_PROMPT,
         }
     }
     /// Decision purposes return a tool call; table reading returns cells.
@@ -250,7 +253,8 @@ pub fn check_input(input: &ProviderInput) -> Result<Vec<u8>> {
         | Purpose::ShipCad
         | Purpose::PartRevision
         | Purpose::GaReading
-        | Purpose::GaLabels => vision::check_input(input)?,
+        | Purpose::GaLabels
+        | Purpose::GaScale => vision::check_input(input)?,
     }
     let messages = p["messages"]
         .as_array()
@@ -485,7 +489,8 @@ fn interpret_content(receipt: &mut Receipt, content: &str) -> Result<()> {
         | Purpose::ShipCad
         | Purpose::PartRevision
         | Purpose::GaReading
-        | Purpose::GaLabels => {
+        | Purpose::GaLabels
+        | Purpose::GaScale => {
             receipt.vision = Some(vision::parse_reply(
                 receipt.purpose,
                 content,

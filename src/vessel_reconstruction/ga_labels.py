@@ -63,20 +63,31 @@ LEVEL_TOLERANCE_DEG = 8.0
 # blob so the rest of the label is in the cell (review round 1: the last word of a label was read
 # alone).
 CROP_PAD_PX = 6
-# The crop reaches far along the text line (a long letter-spaced tank label still split into
-# blobs in review round 2) and little across it (a neighbouring label is another space).
-CROP_PAD_ALONG_GLYPHS = 8.0
+# The crop reaches along the text line (the pieces of a letter-spaced label are joined before,
+# ``join_collinear``; this room is for a piece that was not) and little across it (a
+# neighbouring label is another space).
+CROP_PAD_ALONG_GLYPHS = 4.0
 CROP_PAD_ACROSS_GLYPHS = 2.0
 # Glyphs closer than this many glyph heights join into one blob (letters and words of a label).
 JOIN_GAP_GLYPHS = 1.0
+# Height of the band kept from a diagonal crop after it is turned level, in glyph heights,
+# besides the room across the line: two lines of text and the space between them.
+ROTATED_BAND_GLYPHS = 3.5
 ID_BAND_PX = 20
-# Bounds per ship: crops read in the fine pass and requests sent for them.
-MAX_CANDIDATES = 48
-CELLS_PER_IMAGE = 8
+# Pieces of one label on one text line join when the gap between them along the line is at
+# most this many glyph heights ("NO. 5   W.  B.  TK (P&S)" is drawn with wide gaps; review
+# round 2: the number and the tank name were read as two spaces).
+JOIN_ALONG_GLYPHS = 5.0
+JOIN_ANGLE_DEG = 15.0
+JOIN_HEIGHT_RATIO = 1.5
+# Crops per request: six contact sheets of up to twelve cells (the controller's limit is 72).
+CELLS_PER_IMAGE = 12
 IMAGES_PER_REQUEST = 6
-# Fine requests per ship (the protocol budget is one coarse and at most two fine requests).
-# Crops are packed in priority order; crops that do not fit these sheets are not read.
-MAX_FINE_REQUESTS = 2
+# Fine requests per ship: requests go out until every text blob that the coarse pass does not
+# explain is read, up to this many (the product setting is ``ga_commercial.MAX_REQUESTS_PER_SHIP``:
+# one coarse request and this many fine requests). Crops are packed in priority order; crops
+# beyond the ceiling are not read and are counted in ``crops_not_read``.
+MAX_FINE_REQUESTS = 5
 MAX_IMAGE_BYTES = 1_048_576
 MAX_TOTAL_IMAGE_BYTES = 1_400_000
 
@@ -144,7 +155,62 @@ def text_candidates(gray: np.ndarray) -> list[Candidate]:
             angle = (angle + 90) % 180 - 90  # -90..90: reading direction left to right
         candidates.append(Candidate((left, top, right, bottom), round(angle, 1), len(found),
                                     float(np.median([h for _, _, h in found]))))
-    return candidates
+    return join_collinear(candidates)
+
+
+def _same_line(a: Candidate, b: Candidate) -> bool:
+    """True when two blobs are pieces of one text line with a short gap between them."""
+    if max(a.glyph_height, b.glyph_height) > JOIN_HEIGHT_RATIO * min(a.glyph_height, b.glyph_height):
+        return False
+    ax, ay = (a.box[0] + a.box[2]) / 2, (a.box[1] + a.box[3]) / 2
+    bx, by = (b.box[0] + b.box[2]) / 2, (b.box[1] + b.box[3]) / 2
+    dx, dy = bx - ax, by - ay
+    distance = math.hypot(dx, dy)
+    if distance == 0:
+        return False
+    line = (math.degrees(math.atan2(dy, dx)) + 90) % 180 - 90
+    # Both pieces run along the line that joins them.
+    for piece in (a, b):
+        if abs((piece.angle_deg - line + 90) % 180 - 90) > JOIN_ANGLE_DEG:
+            return False
+    cos, sin = abs(dx) / distance, abs(dy) / distance
+
+    def half_length(c: Candidate) -> float:
+        # The piece is a thin strip along the line; its box projects to about its length.
+        return min((c.box[2] - c.box[0]) / max(cos, 1e-6), (c.box[3] - c.box[1]) / max(sin, 1e-6)) / 2
+
+    gap = distance - half_length(a) - half_length(b)
+    return gap <= JOIN_ALONG_GLYPHS * max(a.glyph_height, b.glyph_height)
+
+
+def join_collinear(candidates: list[Candidate]) -> list[Candidate]:
+    """Join the pieces of letter-spaced labels: blobs on one text line with short gaps."""
+    parent = list(range(len(candidates)))
+
+    def root(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for i, a in enumerate(candidates):
+        for j in range(i + 1, len(candidates)):
+            if root(i) != root(j) and _same_line(a, candidates[j]):
+                parent[root(j)] = root(i)
+    groups: dict[int, list[Candidate]] = {}
+    for index, candidate in enumerate(candidates):
+        groups.setdefault(root(index), []).append(candidate)
+    joined = []
+    for members in groups.values():
+        box = (min(c.box[0] for c in members), min(c.box[1] for c in members),
+               max(c.box[2] for c in members), max(c.box[3] for c in members))
+        if len(members) == 1 or max(box[2] - box[0], box[3] - box[1]) > MAX_BLOB_PX:
+            joined.extend(members)
+            continue
+        longest = max(members, key=lambda c: c.glyphs)
+        joined.append(Candidate(box, longest.angle_deg, sum(c.glyphs for c in members),
+                                float(np.median([c.glyph_height for c in members]))))
+    return joined
 
 
 def _covered(box, boxes, margin: float = 10.0) -> bool:
@@ -153,7 +219,7 @@ def _covered(box, boxes, margin: float = 10.0) -> bool:
 
 
 def unexplained(candidates: list[Candidate], explained_boxes: list[list[float]],
-                later_boxes: list[list[float]] = ()) -> list[Candidate]:
+                later_boxes: list[list[float]] = (), limit: int | None = None) -> list[Candidate]:
     """Blobs no coarse space or particular explains: diagonal first, then the longest.
 
     Blobs inside ``later_boxes`` (accommodation deck plans: cabins and stores) go last, so the
@@ -165,7 +231,7 @@ def unexplained(candidates: list[Candidate], explained_boxes: list[list[float]],
         diagonal = LEVEL_TOLERANCE_DEG < abs(c.angle_deg) <= MAX_TEXT_ANGLE_DEG
         return (_covered(c.box, later_boxes, 0.0), steep, not diagonal, -c.glyphs, c.box[1], c.box[0])
     kept.sort(key=order)
-    return kept[:MAX_CANDIDATES]
+    return kept[:limit]
 
 
 def crop_box(candidate: Candidate, width: int, height: int) -> tuple[int, int, int, int]:
@@ -188,6 +254,13 @@ def crop_image(sheet: Image.Image, candidate: Candidate) -> Image.Image:
     crop = sheet.crop(crop_box(candidate, sheet.width, sheet.height))
     if LEVEL_TOLERANCE_DEG < abs(candidate.angle_deg) <= MAX_TEXT_ANGLE_DEG:
         crop = crop.rotate(candidate.angle_deg, resample=Image.Resampling.BICUBIC, expand=True, fillcolor=255)
+        # The box of a diagonal label holds much paper beside the text line; after the turn the
+        # text is a level band through the centre. Keep that band (room for a second line), so
+        # more cells fit one contact sheet.
+        band = int((2 * CROP_PAD_ACROSS_GLYPHS + ROTATED_BAND_GLYPHS) * candidate.glyph_height) + 2 * CROP_PAD_PX
+        if crop.height > band:
+            top = (crop.height - band) // 2
+            crop = crop.crop((0, top, crop.width, top + band))
     zoom = min(MAX_ZOOM, max(1.0, TARGET_GLYPH_PX / max(candidate.glyph_height, 1.0)))
     cell_limit = max(CELL_SIDE_PX, MIN_CELL_GLYPH_PX / max(candidate.glyph_height, 1.0) * max(crop.size))
     zoom = min(zoom, min(cell_limit, MAX_VIEW_SIDE_PX - 8) / max(crop.size))
@@ -230,41 +303,64 @@ def contact_sheets(crops: list[tuple[str, Image.Image]]) -> list[tuple[Image.Ima
     return sheets
 
 
-def prepare(sheet_path: Path, candidates: list[Candidate], out: Path) -> list[dict]:
-    """Write the ``ga_labels`` request directories; return the crop map (host side only)."""
+def _write_request(directory: Path, pages: list, by_id: dict, sheet: Image.Image, source_sha: str) -> list[dict]:
+    """One ``ga_labels`` request directory from contact sheets; returns its crop-map rows."""
+    directory.mkdir(parents=True, exist_ok=False)
+    images, listing, rows = [], [], []
+    for page_index, (canvas, cells) in enumerate(pages):
+        image_id = f"p{page_index + 1}"
+        buffer = BytesIO()
+        canvas.quantize(colors=32).save(buffer, format="PNG", optimize=True)
+        data = buffer.getvalue()
+        (directory / f"{image_id}.png").write_bytes(data)
+        images.append({"image_id": image_id, "file": f"{image_id}.png", "sha256": hashlib.sha256(data).hexdigest(),
+                       "bytes": len(data), "width": canvas.width, "height": canvas.height,
+                       "view": "label_crops", "crop_box_px": [0, 0, canvas.width, canvas.height]})
+        for cell in cells:
+            listing.append({"crop_id": cell["crop_id"], "image_id": image_id, "cell": cell["cell"]})
+            candidate = by_id[cell["crop_id"]]
+            rows.append({"crop_id": cell["crop_id"], "request": directory.name, "image_id": image_id,
+                         "box_px": list(crop_box(candidate, sheet.width, sheet.height)),
+                         "blob_px": list(candidate.box), "angle_deg": candidate.angle_deg,
+                         "glyphs": candidate.glyphs})
+    if sum(i["bytes"] for i in images) > MAX_TOTAL_IMAGE_BYTES:
+        raise ValueError("label crops exceed the provider request size")
+    write_json(directory / "request.json", {
+        "schema_version": REQUEST_SCHEMA, "purpose": PURPOSE, "source_sha256": source_sha,
+        "engineering_approved": False, "context": {"crops": listing}, "images": images})
+    return rows
+
+
+def prepare(sheet_path: Path, candidates: list[Candidate], out: Path,
+            max_requests: int = MAX_FINE_REQUESTS, call=None) -> tuple[list[dict], list[dict]]:
+    """Write (and with ``call`` send) the ``ga_labels`` requests; return (crop map, readings).
+
+    Crops go out in priority order, one request after the other, up to ``max_requests``. A crop
+    that a reply leaves out is asked once more in a later request while the budget lasts
+    (a reply sometimes answers only the first cells). The crop map (host side only) has one
+    row per crop sent, with the last request that showed it.
+    """
     sheet = Image.open(sheet_path).convert("L")
-    crops = [(f"c{index + 1:02d}", crop_image(sheet, c)) for index, c in enumerate(candidates)]
-    pages = contact_sheets(crops)[:MAX_FINE_REQUESTS * IMAGES_PER_REQUEST]
-    crop_map = []
     by_id = {f"c{index + 1:02d}": c for index, c in enumerate(candidates)}
+    images = {crop_id: crop_image(sheet, c) for crop_id, c in by_id.items()}
     source_sha = hashlib.sha256(Path(sheet_path).read_bytes()).hexdigest()
-    for request_index in range(math.ceil(len(pages) / IMAGES_PER_REQUEST)):
-        directory = Path(out) / f"labels-{request_index + 1}"
-        directory.mkdir(parents=True, exist_ok=False)
-        images, listing = [], []
-        for page_index, (canvas, cells) in enumerate(pages[request_index * IMAGES_PER_REQUEST:
-                                                          (request_index + 1) * IMAGES_PER_REQUEST]):
-            image_id = f"p{page_index + 1}"
-            buffer = BytesIO()
-            canvas.quantize(colors=32).save(buffer, format="PNG", optimize=True)
-            data = buffer.getvalue()
-            (directory / f"{image_id}.png").write_bytes(data)
-            images.append({"image_id": image_id, "file": f"{image_id}.png", "sha256": hashlib.sha256(data).hexdigest(),
-                           "bytes": len(data), "width": canvas.width, "height": canvas.height,
-                           "view": "label_crops", "crop_box_px": [0, 0, canvas.width, canvas.height]})
-            for cell in cells:
-                listing.append({"crop_id": cell["crop_id"], "image_id": image_id, "cell": cell["cell"]})
-                candidate = by_id[cell["crop_id"]]
-                crop_map.append({"crop_id": cell["crop_id"], "request": directory.name, "image_id": image_id,
-                                 "box_px": list(crop_box(candidate, sheet.width, sheet.height)),
-                                 "blob_px": list(candidate.box), "angle_deg": candidate.angle_deg,
-                                 "glyphs": candidate.glyphs})
-        if sum(i["bytes"] for i in images) > MAX_TOTAL_IMAGE_BYTES:
-            raise ValueError("label crops exceed the provider request size")
-        write_json(directory / "request.json", {
-            "schema_version": REQUEST_SCHEMA, "purpose": PURPOSE, "source_sha256": source_sha,
-            "engineering_approved": False, "context": {"crops": listing}, "images": images})
-    return crop_map
+    pending, asked_again = list(by_id), set()
+    rows: dict[str, dict] = {}
+    readings = []
+    while pending and len(readings) < max_requests:
+        pages = contact_sheets([(crop_id, images[crop_id]) for crop_id in pending])[:IMAGES_PER_REQUEST]
+        directory = Path(out) / f"labels-{len(readings) + 1}"
+        sent = _write_request(directory, pages, by_id, sheet, source_sha)
+        rows.update({row["crop_id"]: row for row in sent})
+        pending = pending[len(sent):]
+        reading = call(directory, Path(out) / f"{directory.name}-provider") if call else {}
+        readings.append(reading)
+        if call:
+            answered = {crop["crop_id"] for crop in ((reading.get("reply") or {}).get(PURPOSE) or {}).get("crops", [])}
+            again = [row["crop_id"] for row in sent if row["crop_id"] not in answered | asked_again]
+            asked_again.update(again)
+            pending += again
+    return list(rows.values()), readings
 
 
 # Words a label must contain before a fine-pass reading of it counts as a counted kind. A cell
@@ -293,9 +389,42 @@ def checked_kind(kind: str, text: str) -> str:
     return "other_tank" if kind.endswith("_tank") else "other_space"
 
 
+# A label whose text names its kind gets that kind when the model gave a general one (review
+# round 2: "NO.4 C.T.(P)" came back as other_tank, "NO.9 H O L D" as other_space). A numbered
+# hold or cargo tank needs its number in the label; a hatch is never promoted (an access hatch
+# is not a cargo hatch).
+PROMOTIONS = [
+    ("slop_tank", ("other_tank",), r"\bSLOP\b"),
+    ("cargo_tank", ("other_tank",), r"^(?:NO\.?\s*)?\d+\s*(?:C\.\s?O\.\s?T|C\.\s?T|COT|CARGO\s+(?:OIL\s+)?T(?:AN)?K)\b"),
+    ("cargo_hold", ("other_space",), r"^(?:NO\.?\s*)?\d+\s*[A-Z]?\s*(?:CARGO\s+)?HOLD\b"),
+    ("ballast_tank", ("other_tank", "other_space"),
+     r"W\.?\s?B\.?\s?T|B\.?\s?W\.?\s?T|\bBALLAST\b|\b[AF]\.\s?P\.\s?T\b|\bPEAK\s+T(?:AN)?K"),
+    ("fuel_tank", ("other_tank",), r"\bF\.\s?O\.\s?T|\bH\.?\s?F\.?\s?O\b|\bD\.\s?O\.\s?T|\bM\.?\s?[DG]\.?\s?O\b|\bFUEL\s+OIL\b"),
+]
+
+
+def promoted_kind(kind: str, text: str) -> str:
+    """The kind that the label's own words name, when the model gave a general kind."""
+    upper = joined_letters(text.upper())
+    for target, sources, pattern in PROMOTIONS:
+        if kind in sources and re.search(pattern, upper):
+            return target
+    return kind
+
+
+def label_kind(kind: str, text: str, definitions: dict) -> str:
+    """The kind of a read label after the text checks, the promotions and the counting definitions."""
+    kind = promoted_kind(checked_kind(kind, text), text)
+    if (kind == "slop_tank" and not definitions["slop_holding_tank_is_slop"]
+            and re.search(r"\bHOLDING\b", joined_letters(text.upper()))):
+        return "other_tank"
+    return kind
+
+
 def merge(result: dict, crop_map: list[dict], readings: list[dict], sheet_name: str, page_px) -> dict:
     """Add the labels read to the spaces; return the per-ship fine-pass statistics."""
-    from .ga_commercial import add_space, finish_counts
+    from .ga_commercial import DEFINITIONS, add_space, finish_counts
+    definitions = result.get("definitions") or DEFINITIONS
     answers = {}
     for reading in readings:
         for crop in ((reading.get("reply") or {}).get(PURPOSE) or {}).get("crops", []):
@@ -312,7 +441,10 @@ def merge(result: dict, crop_map: list[dict], readings: list[dict], sheet_name: 
         if region["box_px"] is None:
             continue
         for index, label in enumerate(answer["labels"]):
-            kind = checked_kind(label["kind"], label["text"])
+            kind = label_kind(label["kind"], label["text"], definitions)
+            if kind in ("cargo_hold", "cargo_tank") and not re.search(r"\d", label["text"]):
+                # A crop that shows only "HOLD" or "C.O.TK" is a piece of a numbered label.
+                kind = "other_tank" if kind.endswith("_tank") else "other_space"
             if kind != label["kind"]:
                 result["checks"].append({"code": "fine_kind_not_in_text", "status": "changed",
                                          "label": label["text"][:64], "kind": label["kind"]})
@@ -330,8 +462,11 @@ def merge(result: dict, crop_map: list[dict], readings: list[dict], sheet_name: 
             "spaces_added": added, "requests": len(readings)}
 
 
-def fine_pass(result: dict, sheet_path: Path, out: Path, call) -> dict:
-    """Run the fine pass for one ship. ``call(request_dir, out_dir)`` sends one request."""
+def fine_pass(result: dict, sheet_path: Path, out: Path, call, max_requests: int = MAX_FINE_REQUESTS) -> dict:
+    """Run the fine pass for one ship. ``call(request_dir, out_dir)`` sends one request.
+
+    Requests go out until every unexplained text blob is read, at most ``max_requests``.
+    """
     gray = np.asarray(Image.open(sheet_path).convert("L"))
     explained = [s["source_record"]["regions"][0]["box_px"] for s in result["spaces"]
                  if s["source_record"]["kind"] == "read"]
@@ -343,12 +478,11 @@ def fine_pass(result: dict, sheet_path: Path, out: Path, call) -> dict:
     accommodation = [v["box_px"] for v in result.get("views", []) if v["kind"] == "accommodation_plan"]
     chosen = unexplained(all_candidates, explained, accommodation)
     stats = {"text_blobs": len(all_candidates), "crops": 0, "answered": 0, "spaces_added": 0, "requests": 0}
-    if not chosen:
+    if not chosen or max_requests < 1:
+        stats["crops_not_read"] = len(chosen)
         return stats
-    crop_map = prepare(sheet_path, chosen, out)
+    crop_map, readings = prepare(sheet_path, chosen, out, max_requests, call)
     write_json(Path(out) / "crops.json", {"crops": crop_map})
-    readings = [call(Path(out) / name, Path(out) / f"{name}-provider")
-                for name in sorted({c["request"] for c in crop_map})]
     stats.update(merge(result, crop_map, readings, Path(sheet_path).name, list(gray.shape[::-1])))
     stats["text_blobs"] = len(all_candidates)
     # Chosen blobs left out because they did not fit the fine requests of the budget.

@@ -100,7 +100,15 @@ def load_answers(path: Path) -> dict[str, dict[str, float | None]]:
 
 
 def _from_reading(reading: dict) -> dict[str, float | None]:
-    row = {field: reading.get("particulars", {}).get(field, {}).get("value") for field in PARTICULARS}
+    """The exam answers of one reading: printed particulars and counts.
+
+    Only a particular with status ``read`` (printed on the drawing) is an answer. A value
+    measured with the frame scale (``measured`` block, status ``measured_from_scale``) is
+    never an exam answer, also when a file carries it under ``particulars``.
+    """
+    printed = reading.get("particulars", {})
+    row = {field: printed.get(field, {}).get("value") if printed.get(field, {}).get("status", "read") == "read"
+           else None for field in PARTICULARS}
     row.update({field: reading.get("counts", {}).get(field, {}).get("value") for field in COUNTS})
     return row
 

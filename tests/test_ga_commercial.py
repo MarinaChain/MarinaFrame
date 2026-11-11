@@ -230,6 +230,69 @@ def test_fine_pass_numbers_do_not_end_a_view():
     assert result["counts"]["cargo_tanks"]["views_compared"] == 1
 
 
+def test_a_cut_label_without_its_side_is_not_another_tank():
+    """Review of the adaptive fine pass: "NO.6 C.O.T.K" (cut) beside NO.6 (P) and (S) is no 13th tank."""
+    sided = [("cargo_tank", f"{n}{side}", "v2") for n in range(1, 7) for side in "PS"]
+    result = _count_result(sided + [("cargo_tank", "6", "v2")], cargo_tanks={"value": 12, "evidence": "6 x (P&S)"})
+    ga.finish_counts(result)
+    assert (result["counts"]["cargo_tanks"]["value"], result["counts"]["cargo_tanks"]["labelled_items"]) == (12, 12)
+    assert ga._number_with_side("3", "NO.3 C.O.TK(P)") == "3P" and ga._number_with_side("3", "NO.3 C.O.TK(P&S)") == "3"
+    assert ga._number_with_side("4A", "NO.4A HOLD") == "4A" and ga._number_with_side(None, "ENGINE ROOM") is None
+
+
+def test_hold_halves_are_two_holds_by_default_and_one_by_setting():
+    """Definition (PM, 2026-11-12): No.4A and No.4F are two holds; the other rule is a setting."""
+    halves = [("cargo_hold", f"{n}{half}", "v1") for n in range(1, 5) for half in "AF"]
+    result = _count_result(halves, cargo_holds={"value": 8, "evidence": "eight holds, each with a hatch"})
+    ga.finish_counts(result)
+    assert (result["counts"]["cargo_holds"]["value"], result["counts"]["cargo_holds"]["labelled_items"]) == (8, 8)
+    # A model count of 4 is below the eight labelled holds: abstain, never answer 4.
+    result = _count_result(halves, cargo_holds={"value": 4, "evidence": "four numbers"})
+    ga.finish_counts(result)
+    assert result["counts"]["cargo_holds"]["value"] is None
+    result = _count_result(halves, cargo_holds={"value": 4, "evidence": "four numbers"})
+    result["definitions"] = {**ga.DEFINITIONS, "split_holds_are_separate": False}
+    ga.finish_counts(result)
+    assert (result["counts"]["cargo_holds"]["value"], result["counts"]["cargo_holds"]["labelled_items"]) == (4, 4)
+
+
+def test_the_definitions_go_to_the_model_and_follow_the_settings(tmp_path):
+    sheet = _sheet(tmp_path / "S-1_GA.png", size=(1000, 1000))
+    manifest = ga.prepare(sheet, tmp_path / "default")
+    text = " ".join(manifest["context"]["definitions"])
+    assert "two holds" in text and "SLOP HOLDING TK" in text and "usually equal" in text
+    other = ga.prepare(sheet, tmp_path / "other", definitions={"split_holds_are_separate": False,
+                                                               "slop_holding_tank_is_slop": False})
+    text = " ".join(other["context"]["definitions"])
+    assert "count as one hold" in text and "slop holding tank is not counted" in text
+    assert json.loads((tmp_path / "other" / "sources.json").read_text())["definitions"] == {
+        "split_holds_are_separate": False, "slop_holding_tank_is_slop": False}
+
+
+def test_holds_and_hatches_that_differ_on_a_bulk_carrier_are_listed():
+    spaces = [("cargo_hold", str(n), "v1") for n in range(1, 6)]
+    result = _count_result(spaces, cargo_holds={"value": 5, "evidence": "five"},
+                           cargo_hatches={"value": 4, "evidence": "four"})
+    result["ship_type"] = {"value": "bulk_carrier"}
+    ga.finish_counts(result)
+    ga.finish_counts(result)  # the fine pass counts again: the check is listed once
+    assert [c["code"] for c in result["checks"]].count("holds_and_hatches_differ") == 1
+    assert result["counts"]["cargo_holds"]["value"] == 5  # listed, not refused
+
+
+def test_a_fine_label_completes_a_view_that_the_coarse_pass_listed():
+    """Development batch 3: the coarse pass missed the last hold label of the tank top plan."""
+    profile = [("cargo_hold", str(n), "v1") for n in range(1, 5)]
+    tank_top = [("cargo_hold", str(n), "v2") for n in range(1, 4)]
+    result = _count_result(profile + tank_top, cargo_holds={"value": 4, "evidence": "four"})
+    ga.finish_counts(result)
+    assert result["counts"]["cargo_holds"]["value"] is None      # v2 ends at No.3
+    result = _count_result(profile + tank_top + [("cargo_hold", "4", "v2")], cargo_holds={"value": 4, "evidence": "four"})
+    result["spaces"][-1]["found_by"] = "fine"
+    ga.finish_counts(result)
+    assert result["counts"]["cargo_holds"]["value"] == 4
+
+
 def test_lbp_longer_than_loa_is_not_used(prepared):
     def particular(field, printed):
         return {"field": field, "printed": printed, "unit_context": None, "image_id": "sheet",
@@ -312,3 +375,16 @@ def test_a_missing_prediction_is_an_abstention_and_listed():
     result = scorer.score({}, {"H-9": {"cargo_holds": 3.0}})
     assert result["groups"]["counts"]["abstained"] == 1
     assert result["cases_without_prediction"] == ["H-9"]
+
+
+def test_a_measured_value_is_never_an_exam_answer(tmp_path):
+    """The arrangement input carries measured particulars; the scorer takes printed ones only."""
+    scorer = _scorer()
+    reading = {"particulars": {"lbp_m": {"value": 133.0, "status": "measured_from_scale"},
+                               "loa_m": {"value": 139.9, "status": "read"}},
+               "measured": {"breadth_m": {"value": 24.8, "status": "measured_from_scale"}},
+               "counts": {"cargo_holds": {"value": 4}}}
+    (tmp_path / "S-1").mkdir()
+    (tmp_path / "S-1" / "ga_reading.json").write_text(json.dumps(reading))
+    row = scorer.load_predictions(tmp_path)["S-1"]
+    assert row["lbp_m"] is None and row["breadth_m"] is None and row["loa_m"] == 139.9 and row["cargo_holds"] == 4
