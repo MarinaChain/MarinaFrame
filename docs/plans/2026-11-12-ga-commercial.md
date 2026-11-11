@@ -591,6 +591,18 @@ Observed cost is 0 in every round (subscription).
   could then compute the cargo losses and found two tanks read with different numbers at one
   place (now withheld). The PM kept the margin of the spacing chosen by the fit as set: the
   round-u9n2 ship stays refused in that run.
+- Prompt experiment on the clear/uncertain marking of boxes (PM approval; development ships
+  only; after the freeze, so not part of the exam). Four ships, extents requests sent live, the
+  other replies replayed; two runs with the current prompt, then two with a sentence that says a
+  hold or tank is "outline" when its end bulkheads, inner bottom and deck line are drawn, also
+  when other lines cross it. Rule set before the result (PM): keep it only if both new runs have
+  more than 12 of 23 cargo boxes clear and no more wrong boxes than the baseline. Result: clear
+  12 and 7 of 23 before, 23 and 23 after; wrong boxes (top more than max(1.5 m, 8 % of the depth)
+  from the pointed deck line, or bottom above 30 % of the depth) 11 and 14 before, 11 and 16
+  after, and after the change every wrong box was marked clear. **Reverted**: the sentence makes
+  the model mark boxes clear, not draw them better, so wrong boxes would pass the depth check as
+  measured. The measure counts some bulk-carrier holds that end under top-side tanks as wrong;
+  it is the same before and after.
 
 ## Proposal (not built; PM 2026-11-12): printed sizes as a check of extents
 
