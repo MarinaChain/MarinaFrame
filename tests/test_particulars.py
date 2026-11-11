@@ -115,6 +115,27 @@ def test_intake_writes_read_draft_but_typed_draft_wins(tmp_path):
     assert typed["design_draft_source"]["status"] == "typed"
 
 
+def test_spec_with_read_draft_passes_validation(tmp_path):
+    # series60-3v-L0 sheet-only (2026-11-11): the read title-block draft made the run block at
+    # input with "unexpected_field" before the first model request.
+    from vessel_reconstruction.schema import validate_spec
+    source = tmp_path / "sheet.pdf"
+    with fitz.open() as doc:
+        doc.new_page().insert_text((20, 40), "LOA 20 m; Design draft 2.5 m")
+        doc.save(source)
+    preview = intake.prepare([source], tmp_path / "preview", render_dpi=40)
+    intake.write_spec(preview, tmp_path / "run")
+    spec = json.loads((tmp_path / "run/spec.json").read_text())
+    assert spec["design_draft_m"] == 2.5
+    gaps = validate_spec(spec, tmp_path / "run", allow_sheet_only=True)
+    assert not [g for g in gaps if g["kind"] == "unexpected_field"]
+    for bad in (-1, 0, "2.5", True):
+        gaps = validate_spec({**spec, "design_draft_m": bad}, tmp_path / "run", allow_sheet_only=True)
+        assert any(g["kind"] == "invalid_design_draft" for g in gaps)
+    gaps = validate_spec({**spec, "design_draft_source": "title block"}, tmp_path / "run", allow_sheet_only=True)
+    assert any(g["kind"] == "invalid_design_draft" for g in gaps)
+
+
 def test_negative_dimensions_and_decimal_comma_mass():
     assert readings("Beam: -4 m") == []
     assert readings("Displacement 1,25 t")[0]["value"] == 1.25
