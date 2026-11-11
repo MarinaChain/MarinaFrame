@@ -17,6 +17,7 @@ import { createFairness, nextFairnessMode, useSmoothNormals, withFairnessOff } f
 import { createLighting, createPaintMaterial, createSteelMaterial, createTankMaterial, setUpRenderer, stylePaint } from './look3d.js';
 import { bootTopBand, fitDistance, frameLabel, frameAt, hullReference, nearestFrameX, pointReadout, STANDARD_VIEWS, viewOfKey } from './reference3d.js';
 import { createOverlays } from './overlay3d.js';
+import { guessDisplay, MOST_GUESSED_NOTE } from './guess3d.js';
 import { createBatch, HIDDEN_MATERIAL } from './batch3d.js';
 import { createSectionCut } from './cut3d.js';
 import { createCutPanel, createToolbar, toolButton } from './controls3d.js';
@@ -38,6 +39,13 @@ const PLANE_MARGIN = 0.25;
 const FRAME_MARGIN = 1.1;
 /** Size of a guessed-range band around the hull, as a fraction of the hull's beam and depth. */
 const GUESS_BAND_MARGIN = 0.04;
+/**
+ * The base-line bar of the light guess form (most of the hull guessed): its width as a fraction
+ * of the beam (wider than the hull, so it shows beside the keel from above) and its thickness
+ * as a fraction of the depth.
+ */
+const GUESS_BAR_WIDTH = 1.3;
+const GUESS_BAR_THICKNESS = 0.01;
 /** Camera direction for the default view: from forward, starboard and above (the iso view). */
 const HOME_DIRECTION = new THREE.Vector3(...STANDARD_VIEWS.iso.direction).normalize();
 /** Highest pixel ratio the view draws at. */
@@ -551,6 +559,8 @@ export function createModelView({
   const spaceChip = el('div', { class: 'model-space-chip', role: 'status', hidden: true },
     icon('space'), spaceName,
     el('button', { class: 'model-part-tool', type: 'button', ...spaceExitTip.attrs, onclick: () => exitSpace() }, icon('close'), spaceExitTip.describer));
+  /** The one note of the light guess form, in place of a box per guessed range. */
+  const guessNote = el('div', { class: 'model-guess-note', role: 'status', hidden: true }, icon('st-guessed'), MOST_GUESSED_NOTE);
 
   const boxOf = (object) => {
     const box = new THREE.Box3().setFromObject(object);
@@ -696,7 +706,7 @@ export function createModelView({
     fitView({ direction: currentDirection(), box, animate: true, free: freeArea() });
   }
   // The cut panel opens under the tool bar, however many rows the tool bar wraps to.
-  host.append(el('div', { class: 'model-controls' }, toolbar.element, cutPanel.element, spaceChip));
+  host.append(el('div', { class: 'model-controls' }, toolbar.element, cutPanel.element, spaceChip, guessNote));
 
   // ---- Engineering overlays and the switches for them.
   const overlays = createOverlays({ scene, host, clip, clipSpace });
@@ -739,8 +749,26 @@ export function createModelView({
     for (const [id, plane] of planes) styleSectionPlane(id, plane);
     requestRender();
   }
+  const guessesButton = toolButton({
+    iconName: 'st-guessed', label: 'Guessed ranges', pressed: true,
+    detail: 'Amber where the draft guessed. When most of the hull is guessed, a bar along the base line.',
+    onClick: () => setGuessesShown(!guessesShown),
+  });
+  function setGuessesShown(on) {
+    guessesShown = on;
+    guessesButton.setAttribute('aria-pressed', String(on));
+    showGuesses();
+  }
+  /** Apply the replay state and the switch to the guess bands and the note. */
+  function showGuesses() {
+    const visible = reviewOverlays && guessesShown;
+    for (const band of guessBands) band.visible = visible;
+    guessNote.hidden = !(visible && guessMode === 'bar');
+    requestRender();
+  }
   toolbar.add('Show',
     sectionPlanesButton,
+    guessesButton,
     overlaySwitch('grid', 'grid', 'Reference grid', 'G'),
     overlaySwitch('waterline', 'waterline', 'Design waterline plane', 'W'),
     overlaySwitch('frames', 'frames', 'Frame numbers', null),
@@ -869,8 +897,12 @@ export function createModelView({
   let hullBoxShown = null;
   let planes = new Map();
   let guessBands = [];
+  /** How the guessed ranges show: "none", "boxes" or "bar" (guess3d.js guessDisplay). */
+  let guessMode = 'none';
   /** Review overlays (guessed ranges) show only for the run's current state, not mid-replay. */
   let reviewOverlays = true;
+  /** The person's Guessed ranges switch. */
+  let guessesShown = true;
   let dims = null;
   let selectedId = null;
   let colours = themeColours();
@@ -1310,28 +1342,48 @@ export function createModelView({
 
   function styleGuessBand(band) {
     const [face, edge] = band.children;
-    // Faint: a draft can have a guess at every station, and strong boxes then hide the hull.
+    const bar = band.userData.kind === 'bar';
+    // Faint boxes: they stand over the hull. The bar is under the hull, so it can be stronger.
     face.material.color = colours.guess;
-    face.material.opacity = 0.06;
+    face.material.opacity = bar ? 0.45 : 0.06;
     edge.material.color = colours.guess;
-    edge.material.opacity = 0.22;
+    edge.material.opacity = bar ? 0.8 : 0.22;
   }
 
-  /** A translucent amber box over a guessed x range, so gaps and guesses show on the hull. */
-  function buildGuessBand([x0, x1], box) {
-    const size = box.getSize(new THREE.Vector3());
-    const geometry = new THREE.BoxGeometry(
-      Math.max(x1 - x0, 0.02),
-      size.y * (1 + 2 * GUESS_BAND_MARGIN),
-      size.z * (1 + 2 * GUESS_BAND_MARGIN),
-    );
+  /** An amber box of `size` with its centre at `centre`: a translucent face and its outline. */
+  function amberBox(size, centre, kind) {
+    const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
     const face = new THREE.Mesh(geometry, clipSpace(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false })));
     const edge = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), clipSpace(new THREE.LineBasicMaterial({ transparent: true })));
     const group = new THREE.Group();
     group.add(face, edge);
-    const centre = box.getCenter(new THREE.Vector3());
-    group.position.set((x0 + x1) / 2, centre.y, centre.z);
+    group.position.copy(centre);
+    group.userData.kind = kind;
     return group;
+  }
+
+  /** A translucent amber box over a merged guessed x range, so gaps and guesses show on the hull. */
+  function buildGuessBand([x0, x1], box) {
+    const size = box.getSize(new THREE.Vector3());
+    const centre = box.getCenter(new THREE.Vector3());
+    return amberBox(
+      new THREE.Vector3(Math.max(x1 - x0, 0.02), size.y * (1 + 2 * GUESS_BAND_MARGIN), size.z * (1 + 2 * GUESS_BAND_MARGIN)),
+      new THREE.Vector3((x0 + x1) / 2, centre.y, centre.z),
+      'box',
+    );
+  }
+
+  /** A thin amber bar along the base line under a merged guessed x range (most of the hull guessed). */
+  function buildGuessBar([x0, x1], box) {
+    const size = box.getSize(new THREE.Vector3());
+    const centre = box.getCenter(new THREE.Vector3());
+    const thickness = size.z * GUESS_BAR_THICKNESS;
+    return amberBox(
+      new THREE.Vector3(Math.max(x1 - x0, 0.02), size.y * GUESS_BAR_WIDTH, thickness),
+      // Just below the base line, so the bar does not cut the keel or flicker with the grid.
+      new THREE.Vector3((x0 + x1) / 2, centre.y, box.min.z - thickness),
+      'bar',
+    );
   }
 
   function clearModel() {
@@ -1343,6 +1395,8 @@ export function createModelView({
       }
     }
     guessBands = [];
+    guessMode = 'none';
+    guessNote.hidden = true;
     if (hull) {
       cut.removeSolids(hull);
       overlays.removeEdges('hull');
@@ -1618,7 +1672,8 @@ export function createModelView({
      * `stations` is [{ id, x_m }]. The camera is kept when `keepCamera` is true.
      * `lengthM` is the model length in metres. The CAD export writes STL in millimetres,
      * so the mesh is scaled to make its x extent equal `lengthM`.
-     * `guessedRanges` is [[x0_m, x1_m]], the x ranges a draft guessed; each is shaded amber.
+     * `guessedRanges` is [[x0_m, x1_m]], the x ranges a draft guessed. Touching ranges merge
+     * into one amber box; when they cover most of the hull, a base-line bar and a note show instead.
      */
     setModel(buffer, stations, { keepCamera = false, lengthM = null, guessedRanges = [], emptyTitle, emptyText } = {}) {
       // A move toward the previous model must not finish over this one.
@@ -1663,12 +1718,15 @@ export function createModelView({
         planes.set(station.id, plane);
         content.add(plane);
       }
-      for (const range of guessedRanges) {
-        const band = buildGuessBand(range, box);
-        band.visible = reviewOverlays;
+      const guesses = guessDisplay(guessedRanges, box.min.x, box.max.x);
+      guessMode = guesses.mode;
+      const buildBand = guessMode === 'bar' ? buildGuessBar : buildGuessBand;
+      for (const range of guesses.ranges) {
+        const band = buildBand(range, box);
         guessBands.push(band);
         content.add(band);
       }
+      showGuesses();
       applyColours();
       resize();
       if (!keepCamera) resetView();
@@ -1924,8 +1982,7 @@ export function createModelView({
     /** HOOK(M3 live): show or hide the review overlays (guessed ranges) during a replay. */
     setReviewOverlays(visible) {
       reviewOverlays = visible;
-      for (const band of guessBands) band.visible = visible;
-      requestRender();
+      showGuesses();
     },
     /** HOOK(M3 live): the section ids the agent works on now (drawn brighter). */
     setFocusSections: (ids) => growth.setFocus(ids),

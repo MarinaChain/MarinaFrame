@@ -3787,3 +3787,10 @@ body:not([data-costs="shown"]) :is(.workspace, .inspector) .cost-timing { displa
 @media (prefers-reduced-motion: reduce) {
   .source-stack { display: none; }
 }
+/* The one note of the light guess form (js/guess3d.js): most of the hull is guessed. */
+.model-guess-note {
+  display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: var(--radius-md);
+  border: 1px dashed var(--guess-ink); background: var(--guess-soft); color: var(--guess-text); font-size: 12px;
+}
+.model-guess-note[hidden] { display: none; }
+.model-guess-note .icon { width: 14px; height: 14px; flex: none; }
