@@ -3794,3 +3794,18 @@ body:not([data-costs="shown"]) :is(.workspace, .inspector) .cost-timing { displa
 }
 .model-guess-note[hidden] { display: none; }
 .model-guess-note .icon { width: 14px; height: 14px; flex: none; }
+
+/* ============================================================ Public web demo (docs/WEB_DEMO.md)
+   js/app.js sets [data-demo="read-only"] on <html> with the static backend. The demo shows
+   finished runs: every control that starts or changes a run is left out, and the backend
+   refuses those commands with "Demo: read-only" anyway. */
+.demo-intro, .demo-only { display: none; }
+[data-demo="read-only"] .demo-intro {
+  display: block; max-width: 68ch; margin: 0 0 var(--space-lg); color: var(--ink-2); font-size: var(--fs-md); line-height: 1.5;
+}
+[data-demo="read-only"] .demo-only { display: revert; }
+[data-demo="read-only"] :is(#new-vessel, #home-more, #drop-tile, #needs-row, #home-queue-link, #try-sample) { display: none; }
+.vessel-source { padding: 0 var(--space-xs); color: var(--ink-3); font-size: var(--fs-xs, 11px); line-height: 1.35; }
+.demo-pilot-link { margin-left: 4px; color: var(--brand); font-weight: 600; white-space: nowrap; }
+.export-downloads { display: inline-flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+.export-readonly { margin-top: var(--space-lg); color: var(--ink-2); }

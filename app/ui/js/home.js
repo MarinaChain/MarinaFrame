@@ -1,7 +1,7 @@
 // Home (Needs you, vessel cards) and the Queue, with the Queue count in the sidebar.
 
 import { state, setQueue } from './app_state.js';
-import { invoke } from './api.js';
+import { invoke, readOnly } from './api.js';
 import { el, icon, fill, svg } from './dom.js';
 import * as fmt from './format.js';
 import { statusBadge, chip, $ } from './ui_kit.js';
@@ -104,6 +104,8 @@ function vesselCard(vessel) {
     el('strong', { class: 'vessel-name' }, vessel.name),
     statusBadge(run.status)),
   meta,
+  // The demo names where each drawing came from and its licence (static/backend.js).
+  run.demo_source ? el('span', { class: 'vessel-source' }, run.demo_source) : null,
   run.status === 'running' ? el('span', { class: 'vessel-progress', 'aria-hidden': 'true' }) : null);
 }
 
@@ -137,7 +139,7 @@ export function renderHome() {
   // First start: no runs. Home becomes one large drop target with the four steps ahead.
   const empty = !state.tasks.length;
   $('view-home').dataset.empty = String(empty);
-  $('home-needs-title').textContent = empty ? 'Your first vessel' : 'Needs you';
+  $('home-needs-title').textContent = readOnly ? 'MarinaFrame demo' : empty ? 'Your first vessel' : 'Needs you';
   const queued = state.queue?.waiting.length || 0;
   const link = $('home-queue-link');
   link.hidden = queued === 0;

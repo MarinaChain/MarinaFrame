@@ -1,0 +1,12 @@
+{
+  "purpose": "Runs the public web demo shows (scripts/build_web_demo.py, docs/WEB_DEMO.md). Public sources only; a drawing whose SHA-256 is not listed here fails the build.",
+  "runs": [
+    {
+      "slug": "sample-hull",
+      "name": "Sample hull (synthetic)",
+      "licence": "synthetic",
+      "source": "MarinaFrame's built-in sample drawing (app/core/sample), made for the app.",
+      "drawing_sha256": ["51c48ba18c7affe611655079c64b1dd2cbd0b5cb7102a8d3070bda519b842fb7"]
+    }
+  ]
+}

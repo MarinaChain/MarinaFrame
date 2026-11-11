@@ -1,7 +1,7 @@
 // Vessel tabs in the title bar: Run | Parts | Sources | Export | History, and their pages.
 
 import { setVesselTabState, state } from './app_state.js';
-import { invoke } from './api.js';
+import { invoke, readOnly, READ_ONLY_NOTE } from './api.js';
 import { el, fill, icon } from './dom.js';
 import * as fmt from './format.js';
 import { $, statusBadge, chip, showError } from './ui_kit.js';
@@ -122,6 +122,7 @@ export function createVesselPages() {
   exporter = createExport({
     host: $('vessel-page-export'),
     invoke,
+    readOnlyNote: readOnly ? READ_ONLY_NOTE : null,
     captureView: (task, revision) => (state.task === task && state.modelKey?.startsWith(`${task}|${revision}|`) ? model.captureImage() : null),
   });
   // Sources tab (js/sources.js): the files the run was given, and a large view of each page.

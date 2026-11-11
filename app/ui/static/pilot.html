@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; font-src 'self'; script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="color-scheme" content="light dark">
+  <title>GA revision pilot</title>
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="pilot.css">
+</head>
+<body class="pilot-page">
+  <main class="pilot">
+    <p class="pilot-back"><a href="../index.html#home">Back to the demo</a></p>
+    <p class="pilot-label">Proposed. Not a feature of this demo.</p>
+    <h1>Proposed: GA revision pilot</h1>
+    <p class="pilot-lead">
+      One question: does checking and correcting MarinaFrame's work cost an engineer less time than
+      doing the same basic-design change by hand? The pilot answers it on one real tanker design and
+      one bounded change, with the time of every engineer step measured, review included.
+    </p>
+
+    <figure class="pilot-figure">
+      <svg viewBox="0 0 760 210" role="img" aria-labelledby="pilot-diagram-title">
+        <title id="pilot-diagram-title">Three stages: baseline, bounded task, usable deliverable. An engineer reviews each stage; a correction goes back to the model before the next stage.</title>
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path class="pilot-arrowhead" d="M0 0L10 5L0 10z" />
+          </marker>
+        </defs>
+        <g class="pilot-stage">
+          <rect x="10" y="20" width="210" height="96" rx="8" />
+          <text x="115" y="50">1  Baseline</text>
+          <text class="pilot-small" x="115" y="74">GA, compartments, tanks</text>
+          <text class="pilot-small" x="115" y="94">from the yard's drawings</text>
+        </g>
+        <g class="pilot-stage">
+          <rect x="275" y="20" width="210" height="96" rx="8" />
+          <text x="380" y="50">2  Bounded task</text>
+          <text class="pilot-small" x="380" y="74">one compartment change,</text>
+          <text class="pilot-small" x="380" y="94">fixed hull</text>
+        </g>
+        <g class="pilot-stage">
+          <rect x="540" y="20" width="210" height="96" rx="8" />
+          <text x="645" y="50">3  Deliverable</text>
+          <text class="pilot-small" x="645" y="74">drawings, tables, checks</text>
+          <text class="pilot-small" x="645" y="94">the yard can use</text>
+        </g>
+        <path class="pilot-flow" d="M220 68H272" marker-end="url(#arrow)" />
+        <path class="pilot-flow" d="M485 68H537" marker-end="url(#arrow)" />
+        <g class="pilot-review">
+          <path class="pilot-loop" d="M115 116V160H645V116" />
+          <text x="380" y="186">Engineer review at every stage: hover to the source, read or guessed, why. Each correction is timed.</text>
+        </g>
+      </svg>
+    </figure>
+
+    <h2>Scope</h2>
+    <ul>
+      <li><strong>One tanker design</strong>, with the yard's own lines plan, GA and tank plan.</li>
+      <li><strong>Fixed hull.</strong> The hull form does not change; only the inside arrangement does.</li>
+      <li><strong>One bounded compartment change</strong>, chosen by the yard's engineers. For example: move one
+        transverse bulkhead by a stated number of frames, and resize the cargo and ballast tanks next to it.</li>
+      <li><strong>Comparison with the baseline</strong>: every compartment, tank volume and check, before and after,
+        side by side, each value linked to the drawing or the rule it came from.</li>
+      <li><strong>Agreed constraint checks</strong>, written down with the engineers before the pilot starts (for
+        example tank capacities, bulkhead positions, cargo tank size limits, ballast capacity). MarinaFrame reports
+        each check with its numbers; it does not replace class approval.</li>
+    </ul>
+
+    <h2>Stages</h2>
+    <ol class="pilot-stages">
+      <li>
+        <strong>Baseline.</strong> MarinaFrame builds the GA, compartments and tanks from the drawings. Engineers
+        check and correct it until they accept it as the starting model. Deliverable: the accepted baseline and the
+        time it took.
+      </li>
+      <li>
+        <strong>Bounded task.</strong> The engineers state the change in their own words. MarinaFrame revises the
+        compartments and tanks and shows the difference from the baseline. Engineers check, mark what is wrong, and
+        MarinaFrame revises again. Deliverable: the revised arrangement with its change record.
+      </li>
+      <li>
+        <strong>Usable deliverable.</strong> Compartment drawing and 3D model (STEP), tank capacity and sounding
+        tables, and the agreed checks as a report. Deliverable: files the engineers would use, or a clear list of why
+        not.
+      </li>
+    </ol>
+
+    <h2>What is measured</h2>
+    <ul>
+      <li>Total engineer time for each stage, <strong>review and correction included</strong>, against the
+        engineers' own estimate (or record) for the same work by hand.</li>
+      <li>Number of corrections, time per correction, and how many needed a second try.</li>
+      <li>Which values were read from the drawings and which were guessed, and how many guesses were wrong.</li>
+      <li>Whether the stage 3 files were used as they were, used after edits, or not used.</li>
+    </ul>
+
+    <h2>Honest limits</h2>
+    <ul>
+      <li>Every output is a draft. Engineering approval stays with the yard and class; MarinaFrame never marks a design
+        approved.</li>
+      <li>The pilot tests one design and one change. It does not show that every kind of change works.</li>
+      <li>If checking costs more than doing the work by hand, the pilot reports that.</li>
+    </ul>
+  </main>
+</body>
+</html>
