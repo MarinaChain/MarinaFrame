@@ -19,6 +19,7 @@ import re
 from pathlib import Path
 import stat
 import sys
+import time
 from uuid import uuid4
 
 import numpy as np
@@ -32,7 +33,7 @@ from .ingest import _grid_evidence
 from .isolation import DEFAULT_LIMITS, run_isolated, supervise_process
 from .provenance import digest_file, digest_object, safe_relative_file, write_json
 from .schema import MAX_SPEC_BYTES, is_sheet_only, load_bounded_json, load_build_result, loads_bounded_json, validate_spec
-from . import section_authoring
+from . import parallel, section_authoring
 
 
 DOMAIN_VERSION = "source_bound_tools_v1"
@@ -588,14 +589,14 @@ class DomainTools(InvestigationTools):
         finally:
             request_path.unlink(missing_ok=True)
 
-    def _inspection_batch(self, requested: list[str]) -> list[str]:
-        """The first requested sections whose estimated inspection CPU fits the budget.
+    def _inspection_batch(self, requested: list[str], workers: int = 1) -> list[str]:
+        """The first requested sections whose estimated inspection CPU fits the budget of ``workers`` processes.
 
         Not-yet-inspected sections are costed by their ROI pixel count; cached
         ones cost nothing. The first section is always taken, so a batch is
         never empty; at most INSPECTION_BATCH sections are taken.
         """
-        budget = INSPECTION_BUDGET_SHARE * INSPECTION_CPU_SECONDS
+        budget = INSPECTION_BUDGET_SHARE * INSPECTION_CPU_SECONDS * workers
         by_id = {s["id"]: s for s in self.spec["sections"]}
         batch, estimate = [], 0.0
         for sid in requested[:INSPECTION_BATCH]:
@@ -606,6 +607,39 @@ class DomainTools(InvestigationTools):
             estimate += cost
         return batch
 
+    def _inspection_worker(self, section_ids: list[str], page_section_ids: list[str]):
+        """Inspect sections in one supervised worker; return (outcome, result or None, output folder).
+
+        The worker draws the source page with the ROIs of ``page_section_ids``;
+        with none it draws no page (one page per inspection call).
+        """
+        out = self.root / "inspections" / uuid4().hex
+        outcome, result = self._worker("inspect", {"spec_path": str(self.spec_path), "section_ids": section_ids,
+                                                   "page_section_ids": page_section_ids}, out)
+        return outcome, result, out
+
+    def _store_inspection(self, results: list[tuple[dict, Path]]) -> None:
+        """Add the workers' inspected sections to the catalog and their files to the inspection artifacts.
+
+        ``results`` are (worker result, output folder) in request order. The
+        artifacts keep the order of one worker: every source evidence file,
+        then every model observation derived from them.
+        """
+        artifacts = []
+        for result, out in results:
+            for section in result["sections"]:
+                # Coordinates/complete diagnostics remain in immutable inspection
+                # evidence files; persistent selection state only needs corridors.
+                section.pop("retained_diagnostics", None)
+                for candidate in section["candidates"]:
+                    candidate.pop("source_points_px", None)
+                self.state["catalog"][section["section_id"]] = section
+            artifacts += [_artifact(out / a["file"], self.task_dir, kind=a["kind"],
+                                    **{k: v for k, v in a.items() if k not in {"file", "kind"}})
+                          for a in result["artifacts"]]
+        artifacts.sort(key=lambda artifact: artifact["kind"] == "model_observation")  # stable
+        self.state["inspection_artifacts"].extend(artifacts)
+
     def _inspect_source(self, section_ids=None):
         if self.state["input_errors"]:
             return self._observation(False, "blocked", validation_errors=self.state["input_errors"][:32])
@@ -615,45 +649,48 @@ class DomainTools(InvestigationTools):
         requested = section_ids or [s["id"] for s in self.spec["sections"] if s["id"] not in self.state["catalog"]]
         if not requested:
             requested = [s["id"] for s in self.spec["sections"]]
-        ids = self._inspection_batch(requested)
+        # Sections are independent: the batch is split over parallel worker
+        # processes, each with the single-worker budget (parallel.worker_count).
+        workers = parallel.worker_count(INSPECTION_BATCH)
+        ids = self._inspection_batch(requested, workers)
         missing = [sid for sid in ids if sid not in self.state["catalog"]]
         resources = {}
         if missing:
-            out = self.root / "inspections" / uuid4().hex
-            outcome, result = self._worker("inspect", {"spec_path": str(self.spec_path),
-                                                        "section_ids": missing}, out)
-            resources = {"worker_state": outcome["state"], "wall_seconds": outcome["elapsed_seconds"]}
-            if result is None:
-                limited = outcome.get("worker_error", {}).get("error_code") == "resource_limit"
+            groups = parallel.split_evenly(missing, workers)
+            started = time.monotonic()
+            runs = parallel.run_in_order(
+                lambda group: self._inspection_worker(group, page_section_ids=missing if group is groups[0] else []),
+                groups, len(groups))
+            failed = [(group, outcome) for group, (outcome, result, _) in zip(groups, runs) if result is None]
+            resources = {"worker_state": failed[0][1]["state"] if failed else runs[0][0]["state"],
+                         "wall_seconds": round(time.monotonic() - started, 4), "workers": len(groups)}
+            # In request order, whatever order the workers ended in.
+            self._store_inspection([(result, out) for _, result, out in runs if result is not None])
+            if failed:
+                limited = any(o.get("worker_error", {}).get("error_code") == "resource_limit" for _, o in failed)
+                failed_ids = [sid for group, _ in failed for sid in group]
                 if limited:
                     by_id = {section["id"]: section for section in self.spec["sections"]}
-                    for sid in missing:
-                        section = by_id[sid]
-                        self.state["catalog"].setdefault(sid, {
-                            "section_id": sid, "source_sha256": self.state["sources"]["source"]["sha256"],
-                            "x_m": section["x_m"], "roi_px": section["roi_px"],
-                            "calibration": section["calibration"], "candidates": [],
-                            "inspection_failure": "resource_limit",
-                            "grid_evidence": {"lattice_detected": False, "unique_non_grid_candidate_id": None,
-                                              "non_grid_competing_components": None}, **SEMANTIC_FLAGS})
-                    self._save()
+                    for group, outcome in failed:
+                        if outcome.get("worker_error", {}).get("error_code") != "resource_limit":
+                            continue
+                        for sid in group:
+                            section = by_id[sid]
+                            self.state["catalog"].setdefault(sid, {
+                                "section_id": sid, "source_sha256": self.state["sources"]["source"]["sha256"],
+                                "x_m": section["x_m"], "roi_px": section["roi_px"],
+                                "calibration": section["calibration"], "candidates": [],
+                                "inspection_failure": "resource_limit",
+                                "grid_evidence": {"lattice_detected": False, "unique_non_grid_candidate_id": None,
+                                                  "non_grid_competing_components": None}, **SEMANTIC_FLAGS})
+                self._save()
+                outcome = failed[0][1]
                 return self._observation(False, outcome["state"],
                     error_code="resource_limit" if limited else "inspection_worker_failed",
                     message="Source inspection exceeds the bounded evidence budget." if limited
                             else outcome.get("error", "Source inspection worker failed; no recoverable diagnostic is available."),
-                    failed_section_ids=missing, recovery_tools=["enumerate_strokes", "trace_from_point", "trace_corridor"] if limited else [],
+                    failed_section_ids=failed_ids, recovery_tools=["enumerate_strokes", "trace_from_point", "trace_corridor"] if limited else [],
                     resources=resources)
-            for section in result["sections"]:
-                # Coordinates/complete diagnostics remain in immutable inspection
-                # evidence files; persistent selection state only needs corridors.
-                section.pop("retained_diagnostics", None)
-                for candidate in section["candidates"]:
-                    candidate.pop("source_points_px", None)
-                self.state["catalog"][section["section_id"]] = section
-            artifacts = [_artifact(out / a["file"], self.task_dir, kind=a["kind"],
-                                   **{k: v for k, v in a.items() if k not in {"file", "kind"}})
-                         for a in result["artifacts"]]
-            self.state["inspection_artifacts"].extend(artifacts)
             self._save()
         sections = []
         for sid in ids:
@@ -1294,8 +1331,16 @@ def _declared_pieces_entry(image, section: dict, source_file: str, details: dict
     return entry
 
 
-def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) -> dict:
-    """Private worker operation. No labels/reference geometry are opened."""
+def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path,
+                          page_section_ids: list[str] | None = None) -> dict:
+    """Private worker operation. No labels/reference geometry are opened.
+
+    The source page shows the ROIs of ``page_section_ids`` (default: the
+    inspected sections); with an empty list no page is drawn (another worker
+    of the same inspection call draws it).
+    """
+    if page_section_ids is None:
+        page_section_ids = section_ids
     import numpy as np
     from PIL import Image, ImageDraw
     from .ingest import (COMPLEXITY_REDUCTION_WARNING, DrawingError, _candidate_evidence, _eligible_trace_mask, _extract_one,
@@ -1311,16 +1356,17 @@ def inspect_source_worker(spec_path: Path, section_ids: list[str], out: Path) ->
                        "fonts.py")}
     out.mkdir(parents=True, exist_ok=False)
     artifacts, sections = [], []
-    page = Image.fromarray(image).convert("RGB")
-    page_draw = ImageDraw.Draw(page)
-    for section in spec["sections"]:
-        if section["id"] in section_ids:
-            page_draw.rectangle(section["roi_px"], outline=(25, 110, 165), width=2)
-            page_draw.text(tuple(section["roi_px"][:2]), section["id"], fill=(180, 35, 25))
-    page.thumbnail((3000, 3000))
-    page.save(out / "source-page.png")
-    artifacts.append({"file": "source-page.png", "kind": "source_page", "source_sha256": source_sha,
-                      "crop_box_px": [0, 0, image.shape[1], image.shape[0]], "display_note": "Source page with declared ROI boundaries; display derivative only."})
+    if page_section_ids:
+        page = Image.fromarray(image).convert("RGB")
+        page_draw = ImageDraw.Draw(page)
+        for section in spec["sections"]:
+            if section["id"] in page_section_ids:
+                page_draw.rectangle(section["roi_px"], outline=(25, 110, 165), width=2)
+                page_draw.text(tuple(section["roi_px"][:2]), section["id"], fill=(180, 35, 25))
+        page.thumbnail((3000, 3000))
+        page.save(out / "source-page.png")
+        artifacts.append({"file": "source-page.png", "kind": "source_page", "source_sha256": source_sha,
+                          "crop_box_px": [0, 0, image.shape[1], image.shape[0]], "display_note": "Source page with declared ROI boundaries; display derivative only."})
     for section in spec["sections"]:
         sid = section["id"]
         if sid not in section_ids:
