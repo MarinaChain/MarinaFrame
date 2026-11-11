@@ -16,7 +16,7 @@ For curve input, the operator provides panel regions, station identity and posit
 
 `ingest.py` supports raster images and selected PDF pages rendered at a declared DPI. Transparent pixels are composited onto paper without silently rotating the coordinate system. It selects the declared source region and converts pixel positions to metres using explicit calibration.
 
-Ink detection combines luminance contrast and color saturation. Version 2 uses consistent integer quantization for estimating and applying Otsu thresholds. Where the foreground has widely separated contrast populations, a second threshold selects the stronger drawing strokes. This correction prevents a lighter drafting grid from becoming a false second contour. It is a photometric heuristic: it does not understand the engineering meaning of every line and may suppress a faint but meaningful alternative. That is a reason for visible source overlays and review.
+Ink detection combines luminance contrast and color saturation. The revised parser retains broad-contrast candidate evidence instead of dropping lighter ink before ambiguity detection. Darkness may guide tracing but does not establish contour identity. Sustained competing lines block extraction unless an explicit human pixel corridor isolates one. Empty or overly broad corridors still abstain; excluded candidates remain in diagnostics. Very short, low-contrast or inseparable competing strokes remain limitations.
 
 Connected-component filtering removes tiny fragments. A dynamic-programming trace chooses a continuous sequence of ink-run centres with a contrast preference and a modest outward preference relative to the supplied centreline. There is no procedural hull family or reference shape inside this algorithm. Required coverage, maximum erased-run and long-component-support checks reject weak evidence. A sustained competing contour produces an ambiguity gap.
 
@@ -24,7 +24,7 @@ Recovered curve sections contain 129 measured/interpolated samples by default, c
 
 ## 3. Construct explicit CAD boundaries
 
-`geometry.py` validates and sorts the measured stations, interpolates each single-valued y(z) section to 33 elevations, mirrors the declared port/starboard symmetry, and joins corresponding section segments with ruled CAD faces. Elevations are ordered; breadth need not increase monotonically, so tumblehome can be represented. End faces and upper/lower envelope closures are explicit. The original observed points are retained separately from the resampled CAD points.
+`geometry.py` validates and sorts the measured stations, adaptively simplifies each observed y(z) polyline under an explicit maximum error bound and uses a union of normalized-height knots for correspondence, mirrors the declared port/starboard symmetry, and joins corresponding section segments with ruled CAD faces. Elevations are ordered; breadth need not increase monotonically, so tumblehome can be represented. End faces and upper/lower envelope closures are explicit. Original observations remain separate from CAD points. The default maximum vertical half-breadth deviation is 0.001 m; every input/CAD knot is checked, RMS is integrated along the piecewise-linear error and significant features/zero transitions are preserved. A 513-knot and 20,000-estimated-face budget blocks excessive complexity. Different station heights/counts are supported; unsupported interior pinches and conflicting duplicate elevations block.
 
 An earlier whole-wire loft failed when one measured keel touched the centreline while another had a small nonzero flat bottom. Those profiles have different edge counts, so automatic wire correspondence could stall or produce invalid geometry. The final implementation matches section segments explicitly and handles the observed lower boundaries without inventing a coordinate epsilon or consulting reference answers. The original implementation and its failed evaluations remain available.
 
@@ -38,11 +38,11 @@ A required view failure blocks the entire envelope: the system does not quietly 
 
 Successful geometry has status `review_required`. The hull part links to its source IDs and observed sections. Assumptions about symmetry, station interpolation, ends, top, lower closure and vessel condition remain visible. Shell thickness, material and internal structure remain unresolved rather than being inferred from appearance.
 
-`review.py` appends a named local decision only if content verification succeeds and the expected run ID matches. It records the identity as unverified and keeps engineering approval false. The review chain is useful local evidence, not an authenticated approval service or a classification society certificate.
+`review.py` appends a separate named local review event bound to the immutable manifest only if content verification succeeds and the expected run ID matches. The result record is never edited; displayed review state derives from a validated history, not its optional cache. It records the identity as unverified and keeps engineering approval false. The review chain is useful local evidence, not an authenticated approval service or a classification society certificate.
 
 ## 5. Inspect and operate locally
 
-`server.py` provides a localhost HTTP workbench, confined artifact reads and serial background reconstruction jobs. Browser uploads require actual source bytes and preserve their hashes. Supporting references are also confined uploads. Cross-origin mutations, traversal and symlink escapes are rejected. This local development server is not a production multi-user service.
+`server.py` provides an authenticated loopback-only HTTP workbench with trusted Host/Origin values, one-time local bootstrap, session cookies and CSRF protection. `jobs.py` persists a bounded serial queue in SQLite. `isolation.py` supervises killable process groups with CPU/address-space/file/output/wall budgets and restart recovery. Browser uploads require actual source bytes and preserve their hashes. Supporting references are also confined uploads. Cross-origin mutations, traversal and symlink escapes are rejected. This local development server is not a production multi-user service.
 
 The packaged JavaScript viewer renders the actual mesh, offers section selection and overlays observations on the original drawing coordinate system. It supports reduced-resolution display derivatives without changing evidence coordinates. A software renderer handles environments without WebGL. The calibration editor writes metadata only.
 
@@ -73,3 +73,30 @@ The original 114-cell experiment and the separately versioned official `tessdata
 The implemented interface for a future learned curve parser is the same section-observation structure: coordinates, source regions, diagnostics and explicit gaps. A model can replace curve extraction while the geometry kernel, evidence ledger, dimensional checks and evaluator remain in place. No project-specific curve model was trained or fine-tuned; OCR uses bundled pretrained Tesseract models. No training job is included in this release.
 
 The generated paired image/geometry data can support initial training experiments. Broader capability will require separately licensed real drawing sets with checked cross-view correspondences, revision labels, station conventions and engineering review. Split future evaluation by vessel/design lineage, not merely image filename, and include full original scans with ambiguous and incomplete evidence. The historical failures here identify a concrete first target: semantic line selection and reliable measurement-table reading.
+
+## Atomic state and trust boundaries (0.2)
+
+A run reserves a fresh destination and stages on the same filesystem. Source
+bytes are captured under byte bounds, typed schema validation and full source
+metadata preflight precede any raster rendering, and native work runs in the
+supported isolated CLI/server profile. Required evidence is fsynced, sealed and
+verified before an atomic Linux `renameat2(NOREPLACE)` publication. Reservation
+state gates incomplete/unconfirmed publication. Failed work loses all model
+exports; orphan staging is quarantined and recovered conservatively. Storage
+failures may make an error record impossible and are returned honestly.
+
+`result.json` is the immutable schema 2 inference record. `manifest.json` hashes
+every immutable file including that entire result; result does not hash manifest,
+avoiding a cycle. Required inventory, local path confinement, identity, source/
+replay/section relationships, ruled-section volume, dimensions, approximation
+bounds and mesh bounds/counts are checked without re-running native CAD. Mutable
+review events reference the manifest digest. This detects inconsistency against
+a local manifest, not malicious replacement of the entire evidence package.
+
+Queue state is distinct from inference state: receiving → queued → running →
+a truthful terminal outcome. Cancellation is effective before publication; a
+fully verified already-durable result is reconciled as committed if a worker dies
+after committing but before recording its receipt. HTTP downloads require both
+verified evidence and the appropriate terminal queue state for queue-owned runs.
+Linux resource controls are not a filesystem/network sandbox or remote identity
+service. Local session possession is not authenticated engineering signoff.

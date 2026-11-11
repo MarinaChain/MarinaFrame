@@ -87,7 +87,7 @@ def _ocr_pass(image:Image.Image,psm:int,threshold:bool=False) -> dict:
 
 def _language_model_info() -> dict:
     """Fingerprint the actual pretrained language weights used by Tesseract."""
-    listing=subprocess.run(['tesseract','--list-langs'],capture_output=True,text=True,check=False).stdout
+    listing=subprocess.run(['tesseract','--list-langs'],capture_output=True,text=True,check=False,timeout=5).stdout
     match=re.search(r'"([^"]+)"',listing)
     directory=Path(os.environ['TESSDATA_PREFIX']) if os.environ.get('TESSDATA_PREFIX') else (Path(match.group(1)) if match else None)
     model=directory/'eng.traineddata' if directory else None
@@ -157,13 +157,19 @@ def extract_table_sections(spec:dict,base_dir:Path) -> dict:
         output['gaps'].append(_gap('missing_source','source.file must identify the scanned table.'))
         return output
     source_path=Path(base_dir)/source['file']
+    from .resources import ResourceLimitError, validate_sources
+    try:
+        validate_sources(spec, base_dir)
+    except ResourceLimitError as exc:
+        output['gaps'].append(_gap(exc.kind, str(exc)))
+        return output
     try:
         image=Image.open(source_path)
         width,height=image.size
     except (OSError,ValueError,Image.DecompressionBombError) as exc:
         output['gaps'].append(_gap('unreadable_source',f'Table image cannot be opened: {type(exc).__name__}.'))
         return output
-    version=subprocess.run(['tesseract','--version'],capture_output=True,text=True,check=False).stdout.splitlines()
+    version=subprocess.run(['tesseract','--version'],capture_output=True,text=True,check=False,timeout=5).stdout.splitlines()
     output['diagnostics']={'ocr_engine':version[0] if version else 'Tesseract','recognizer':'Pretrained English LSTM (--oem 1); not trained or fine-tuned on this project',
                            'ocr_passes':[{'psm':7,'preprocessing':'grayscale, deterministic enlargement, white padding'},
                                          {'psm':6,'preprocessing':'Otsu binarization, deterministic enlargement, white padding'}],

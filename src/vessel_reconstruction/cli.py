@@ -29,13 +29,19 @@ def main(argv=None) -> int:
     p.add_argument("--host", default="127.0.0.1")
     args = parser.parse_args(argv)
     if args.command == "reconstruct":
-        from .pipeline import reconstruct
+        from .isolation import run_isolated
         try:
-            r = reconstruct(args.spec, args.out, export_cad=not args.no_cad)
+            execution = run_isolated(args.spec, args.out, export_cad=not args.no_cad)
         except FileExistsError as exc:
             parser.error(str(exc))
-        print(json.dumps({"run_id": r["run_id"], "status": r["status"], "output": str(args.out.resolve()), "metrics": r["metrics"], "gaps": r["gaps"]}, indent=2))
-        return 0 if r["status"] == "review_required" else 2
+        r = execution.get("result")
+        summary = {"state": execution["state"], "output": str(args.out.resolve()),
+                   "elapsed_seconds": execution.get("elapsed_seconds"),
+                   "resources": execution.get("resources"), "error_code": execution.get("error_code")}
+        if r is not None:
+            summary.update(run_id=r["run_id"], status=r["status"], metrics=r["metrics"], gaps=r["gaps"])
+        print(json.dumps(summary, indent=2))
+        return 0 if execution["state"] == "succeeded" and r and r["status"] == "review_required" else 2
     if args.command == "verify":
         from .pipeline import verify_run
         r = verify_run(args.run)
