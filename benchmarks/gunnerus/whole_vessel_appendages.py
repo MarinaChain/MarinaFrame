@@ -167,9 +167,9 @@ def skeg_outline(msp) -> tuple[list[list[float]], list[str]] | tuple[None, list]
 
 def add_appendages(inputs: dict, sources: Path, ga_file: str) -> dict:
     """Add the appendage components, measurements and guesses to step 1 ``inputs`` (in place)."""
-    import ezdxf
+    from vessel_reconstruction.dxf_documents import read_document
 
-    msp = ezdxf.readfile(sources / ga_file).modelspace()
+    msp = read_document(sources / ga_file).modelspace()
     sha = inputs['source']['sha256']
     program, measurements, guesses = inputs['program'], inputs['measurements'], inputs['guesses']
 

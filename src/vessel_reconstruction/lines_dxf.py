@@ -418,11 +418,11 @@ def read_stations(path: str | Path, view: BodyPlanView, stations: list[StationRe
     any number of material intervals per height; it is returned as closed
     outline rings and regions for ``geometry.build_region_hull``.
     """
-    import ezdxf
+    from .dxf_documents import read_document
 
     if not math.isfinite(centreline_closure_m) or not 0 <= centreline_closure_m <= 1.0:
         raise LinesDxfError("invalid_view", "centreline_closure_m must be a finite length from 0 to 1 m.")
-    doc = ezdxf.readfile(str(path))
+    doc = read_document(path)
     chains = chain_fragments(read_view_curves(doc, view), view.join_tolerance)
     sections, abstentions = [], []
     for request in stations:

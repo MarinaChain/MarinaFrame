@@ -63,13 +63,17 @@ def cap_stations(config: dict, deck: dict) -> dict:
 def build_hull(sources: Path, out: Path, deck: dict | None = None) -> Path:
     from benchmarks.gunnerus import make_gunnerus_configs, vector_path
 
-    config, ledger = make_gunnerus_configs.vector_config(sources / LINES_FILE)
-    if deck:
-        config = cap_stations(config, deck)
-    config['dxf'] = str((sources / LINES_FILE).resolve())
-    (out / 'hull_config.json').write_text(json.dumps(config, indent=2) + '\n')
-    (out / 'hull_identity.json').write_text(json.dumps(ledger, indent=2) + '\n')
-    summary = vector_path.run(out / 'hull_config.json', out / 'hull')
+    from vessel_reconstruction.dxf_documents import shared_documents
+
+    # The config and the section reader both read the lines plan: parse it once.
+    with shared_documents():
+        config, ledger = make_gunnerus_configs.vector_config(sources / LINES_FILE)
+        if deck:
+            config = cap_stations(config, deck)
+        config['dxf'] = str((sources / LINES_FILE).resolve())
+        (out / 'hull_config.json').write_text(json.dumps(config, indent=2) + '\n')
+        (out / 'hull_identity.json').write_text(json.dumps(ledger, indent=2) + '\n')
+        summary = vector_path.run(out / 'hull_config.json', out / 'hull')
     (out / 'hull_summary.json').write_text(json.dumps(summary, indent=2, default=str) + '\n')
     return out / 'hull' / 'model.brep'
 

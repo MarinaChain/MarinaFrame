@@ -151,9 +151,9 @@ def labelled_chain(label: tuple[np.ndarray, float], chains: list[np.ndarray], al
 
 
 def vector_config(dxf: Path, round2: bool = True) -> tuple[dict, list[dict]]:
-    import ezdxf
+    from vessel_reconstruction.dxf_documents import read_document
 
-    doc = ezdxf.readfile(str(dxf))
+    doc = read_document(dxf)
     frames = frame_positions(doc)
     view = lines_dxf.BodyPlanView(centreline_x=CENTRELINE_X, baseline_y=BASELINE_Y, units_per_metre=1000.0,
                                   bounds=VIEW_BOUNDS, layers=(LAYER,), flatten_tolerance=0.5,

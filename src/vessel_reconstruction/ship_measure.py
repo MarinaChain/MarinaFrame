@@ -97,10 +97,11 @@ def measure_interval(entities, bounds, *, scale, origin, view, region, source_sh
 
 def read_dxf(path: Path, *, layers=None):
     """Extract source entity coordinates; never infer a hull from the region box."""
-    import ezdxf
     from ezdxf import path as dxf_path
 
-    document = ezdxf.readfile(path)
+    from .dxf_documents import read_document
+
+    document = read_document(path)
     entities = []
     for index, entity in enumerate(document.modelspace()):
         if index >= MAX_ENTITIES:

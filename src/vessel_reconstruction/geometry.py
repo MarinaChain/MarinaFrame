@@ -7,12 +7,13 @@ from __future__ import annotations
 
 import json
 import math
+from contextlib import contextmanager
 from pathlib import Path
 import numpy as np
 import cadquery as cq
 from OCP.BRepMesh import BRepMesh_IncrementalMesh
 
-from . import section_regions
+from . import section_regions, topology
 from .cad_exports import export_iges
 from .progress import report as report_progress
 from .rhino_exports import CadPart, export_3dm
@@ -453,14 +454,49 @@ def _bilinear_side_faces(profiles: list[np.ndarray]) -> list[cq.Face]:
 _PRECISE_VOLUME_EPS = 1e-9
 
 
+# Values of precise_volume_mm3 kept inside a ``reused_volumes()`` block (None outside):
+# id(shape) -> (shape, snapshot of shape.wrapped, volume mm3).
+_volume_memo: dict | None = None
+
+
+@contextmanager
+def reused_volumes():
+    """Inside this block, ``precise_volume_mm3`` integrates each shape object only once.
+
+    The adaptive integration takes seconds on a smooth part, and one part build checks the same
+    solid several times (the loft check, the part check, the result record). A kept value is
+    used again only for the same Python object whose wrapped shape still equals its snapshot
+    (same TShape, location and orientation), so the value is the one a new integration gives.
+    The memo holds the objects, so an id is not reused while the block is active.
+    """
+    global _volume_memo
+    outer = _volume_memo
+    if outer is None:
+        _volume_memo = {}
+    try:
+        yield
+    finally:
+        _volume_memo = outer
+
+
 def precise_volume_mm3(shape: cq.Shape) -> float:
     """Volume with adaptive integration: exact enough on degree-1 B-spline faces."""
     from OCP.BRepGProp import BRepGProp
     from OCP.GProp import GProp_GProps
 
+    memo = _volume_memo
+    if memo is not None:
+        kept = memo.get(id(shape))
+        if kept is not None and kept[0] is shape and kept[1].IsEqual(shape.wrapped):
+            return kept[2]
     properties = GProp_GProps()
     BRepGProp.VolumeProperties_s(shape.wrapped, properties, _PRECISE_VOLUME_EPS)
-    return properties.Mass()
+    volume = properties.Mass()
+    if memo is not None:
+        # Located(...) makes a separate handle: an in-place move or reversal of shape.wrapped
+        # afterwards no longer equals it.
+        memo[id(shape)] = (shape, shape.wrapped.Located(shape.wrapped.Location()), volume)
+    return volume
 
 
 def _one_face_solid(profiles: list[np.ndarray], prismatoid_m3: float,
@@ -484,9 +520,13 @@ def _one_face_solid(profiles: list[np.ndarray], prismatoid_m3: float,
         if shell.ShapeType() != "Shell" or not shell.Closed() or not shell.isValid():
             return None
         solid = cq.Solid.makeSolid(shell)
-        if precise_volume_mm3(solid) < 0:
+        # The adaptive integration is the slow step of a hull build: integrate again only
+        # when the solid was reversed (the same solid gives the same value).
+        signed_mm3 = precise_volume_mm3(solid)
+        if signed_mm3 < 0:
             solid = cq.Solid(solid.wrapped.Reversed())
-        volume = precise_volume_mm3(solid) / 1e9
+            signed_mm3 = precise_volume_mm3(solid)
+        volume = signed_mm3 / 1e9
     except Exception:
         return None
     if not solid.isValid() or abs(volume - prismatoid_m3) > audit_tolerance * max(prismatoid_m3, 1e-12):
@@ -517,21 +557,25 @@ def ruled_loft_solid(rings_m: np.ndarray) -> cq.Solid | None:
     return built[0] if built else None
 
 
-def _closed_solid(faces: list[cq.Face], label: str) -> cq.Solid:
+def _closed_solid(faces: list[cq.Face], label: str) -> tuple[cq.Solid, float]:
+    """The solid of a closed set of faces, outward, and its kernel volume (mm3)."""
     try:
         shell = cq.Shell.makeShell(faces)
         if shell.ShapeType() != "Shell" or not shell.Closed() or not shell.isValid():
             raise GeometryError(f"Region loft {label} does not form one valid closed shell.")
         solid = cq.Solid.makeSolid(shell)
-        if solid.Volume() < 0:
+        # Integrate again only when the solid was reversed (the same solid gives the same value).
+        volume_mm3 = solid.Volume()
+        if volume_mm3 < 0:
             solid = cq.Solid(solid.wrapped.Reversed())
+            volume_mm3 = solid.Volume()
     except GeometryError:
         raise
     except Exception as exc:
         raise GeometryError(f"The CAD kernel could not build region loft {label}: {type(exc).__name__}") from exc
-    if not solid.isValid() or solid.Volume() <= 0:
+    if not solid.isValid() or volume_mm3 <= 0:
         raise GeometryError(f"Region loft {label} is not a valid positive-volume solid.")
-    return solid
+    return solid, volume_mm3
 
 
 def _prepare_region(rows: np.ndarray, kind: str, tolerance_m: float) -> dict:
@@ -679,8 +723,8 @@ def build_region_hull(sections: list[dict], *, max_deviation_m: float = DEFAULT_
                         faces.extend(_panel_faces(left, right))
                     faces += [_planar_face(profiles[0]), _planar_face(profiles[-1])]
                     report_progress('Closing the hull')
-                    solid = _closed_solid(faces, label)
-                    volume = solid.Volume() / 1e9
+                    solid, volume_mm3 = _closed_solid(faces, label)
+                    volume = volume_mm3 / 1e9
                     if abs(volume - simpson) > _REGION_VOLUME_AUDIT_TOLERANCE * max(simpson, 1e-12):
                         raise GeometryError(f"Region loft {label} failed the volume audit: kernel {volume:.9f} m3, "
                                             f"polygon prismatoid {simpson:.9f} m3.")
@@ -744,7 +788,7 @@ def export_geometry(shape: cq.Shape, out: Path, *, export_cad: bool = True,
     # CadQuery's convenience mesh/STL functions default to relative deflection.
     # Our number is in millimetres: premesh explicitly with absolute deflection
     # and one native meshing thread, then read that triangulation for mesh.json.
-    mesh_faces = shape.Faces()
+    mesh_faces = topology.faces(shape)
     report_progress('Making the mesh', 0, len(mesh_faces))
     BRepMesh_IncrementalMesh(shape.wrapped, tolerance_mm, False, 0.15, False)
     # Keep the same whole-shape meshing settings and face order as CadQuery.
@@ -752,14 +796,15 @@ def export_geometry(shape: cq.Shape, out: Path, *, export_cad: bool = True,
     shape.mesh(tolerance_mm, 0.15)
     vertices, faces = [], []
     for face_index, face in enumerate(mesh_faces, 1):
-        points, triangles = face.tessellate(tolerance_mm, 0.15)
+        # The values of face.tessellate, without its slow sub-shape iteration (topology.py).
+        points, triangles = topology.face_triangulation(face, tolerance_mm, 0.15)
         offset = len(vertices)
-        vertices.extend(points)
-        faces.extend(tuple(index + offset for index in triangle) for triangle in triangles)
+        vertices.extend(points.tolist())
+        faces.extend([index + offset for index in triangle] for triangle in triangles.tolist())
         report_progress('Making the mesh', face_index, len(mesh_faces))
     mesh = {
         "units": "m",
-        "vertices": [[v.x / 1000, v.y / 1000, v.z / 1000] for v in vertices],
+        "vertices": [[x / 1000, y / 1000, z / 1000] for x, y, z in vertices],
         "faces": [[int(i) for i in f] for f in faces],
         "parts": [{"id": "hull", "face_start": 0, "face_count": len(faces)}],
     }
