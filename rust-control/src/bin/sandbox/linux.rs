@@ -371,6 +371,13 @@ fn syscalls() -> io::Result<()> {
             libc::SYS_utimensat,
             libc::SYS_acct,
             libc::SYS_quotactl,
+            // prlimit64 accepts another same-uid PID: it must not be usable to
+            // change the trusted supervisor's budgets.
+            libc::SYS_prlimit64,
+            libc::SYS_sched_setaffinity,
+            libc::SYS_sched_setparam,
+            libc::SYS_sched_setscheduler,
+            libc::SYS_setpriority,
             libc::SYS_prctl,
             libc::SYS_seccomp,
         ];
