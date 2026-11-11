@@ -81,21 +81,30 @@ sheet: the calibration adds measuring rows below the base line (rows 3260 to 341
 grid-line test (`on_grid_line` against every calibrated row, band 2 line widths + 3 px) rejected level bottoms
 lying near them (fore bottom at row about 3420 against the row 3410).
 
-**Why the crossing reader misnames 2, 3, 8, 9** (the frozen table against the printed offsets):
+**Why 2, 3, 8, 9 carry a neighbour's name** (the frozen table against the printed offsets):
 
-- Fore: the curve named 2 reads station 3's printed offsets at W0 to W3 within 1 mm (0.376 / 0.398 / 0.420 /
-  0.443 m against 0.376 / 0.398 / 0.421 / 0.443), and "3" reads station 4 (0.441 / 0.469 / 0.497 / 0.526 against
-  0.441 / 0.468 / 0.497 / 0.525). Names shift by one inward. Station 7 lies inside station 6 at every height (the
-  maximum beam is at 6) and crosses station 5 (W9: 5 = 0.573, 7 = 0.572 m), so the crossing reader does not
-  give it a chain of its own, and short chains below the base line ("4" and "5" give only W0) take ranks.
-  The calibration's fore nesting order (7, 6, 5, ...) is not the drawn nesting order for 5 to 7 at all heights.
 - Aft: the curves named 8, 9, 10 read the printed offsets of stations **7**, 8, 9 within 1 to 2 mm (for example
-  "8" at W0 to W9 0.440 / 0.485 / 0.528 / 0.572 against station 7's 0.441 / 0.484 / 0.529 / 0.572). At row 2770
-  the left half has four station lines at 0.576, 0.536, 0.488 and 0.459 m (the last heavy) and a thin line: the
-  outermost aft line is station 7 drawn again on the aft half, and the heavy line called the transom outline is
-  station 10. This is a **calibration** naming error (`benchmarks/cama_beach_skiff_22/holdout_value.py`,
-  `AFT_STATIONS_OUTER_FIRST = (8, 9, 10)`), not a reader error. It is not changed here: the file is not this
-  lane's, and the evidence for the change comes from the truth table. It is reported for the PM.
+  "8" at W0 to W9 0.440 / 0.485 / 0.528 / 0.572 against station 7's 0.441 / 0.484 / 0.529 / 0.572).
+- Fore: the curve named 2 reads station 3 at W0 to W3 within 1 mm (0.376 / 0.398 / 0.420 / 0.443 m against
+  0.376 / 0.398 / 0.421 / 0.443), and "3" reads station 4 (0.441 / 0.469 / 0.497 / 0.526 against 0.441 / 0.468 /
+  0.497 / 0.525).
+- Cause, mainly the **calibration**: the table's station n is the body-plan curve labelled n + 1 on both halves.
+  At W3 the printed offsets of 1 to 9 (384, 650, 872, 1033, 1128, 1156, 1126, 1047, 953 px) equal the
+  calibration's own half-breadth-plan readings for the profile lines labelled 2 to 10; near W6 the right curves
+  (1084, 1065, 984, 832, 616, 360 px) are table 6 to 1 and the left curves (1048, 971, 876 px) table 7, 8, 9.
+  So the left half is table 7, 8, 9 and the heavy line read as the transom outline is 10; the right half is
+  table 6 to 0. No station is drawn on both halves (an earlier note in this lane, sent to the PM, called the
+  left outermost line "station 7 drawn again"; that was wrong: it is table 7, drawn once).
+- Crossing reader, fore: two short chains below the base line ("4" and "5" in the published table, W0 and below
+  only) take ranks 3 and 4, so the inner curves are named two ranks too far in; with the published names the two
+  errors partly cancelled (net shift one).
+
+**Calibration correction (PM decision, `aa88271`).** Cama Beach is a spent holdout, so its calibration was
+corrected for development use: aft (7, 8, 9, 10), fore (6, 5, 4, 3, 2, 1, 0). The correction uses evidence from
+the printed offsets (truth-informed). The published holdout result is not re-scored and stays FAIL; every Cama
+number below is a development number. The gate baseline for Cama is the reader at `1a33fee` with this corrected
+calibration (the runner imports a calibration module when it reaches the sheet; the Cama record's `named` lists
+show which calibration it used, and the baseline is rerun if they show the old one).
 
 **Fix (general, `body_plan_polyline.py`).**
 
