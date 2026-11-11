@@ -329,11 +329,15 @@ pub fn read_components(
     let execution: Value = serde_json::from_slice(&bytes).ok()?;
     let entries = execution["result"]["components"].as_array()?;
     let added_sheets = crate::sources::added_sheet_entries(task);
+    let mut refreshed = crate::source_record::run_records(task, "components");
     Some(
         entries
             .iter()
             .filter_map(|entry| component_view(entry, reviews))
             .map(|mut part| {
+                if part.source_record.is_none() {
+                    part.source_record = refreshed.remove(&part.id);
+                }
                 if let Some(record) = part.source_record.as_mut() {
                     place_on_added_sheets(record, &part.id, &added_sheets);
                 }
@@ -410,9 +414,13 @@ fn run_reviews(task: &Path) -> Option<TaskReviews> {
 }
 
 fn task_reviews(paths: &AppPaths, task: &Path) -> TaskReviews {
-    run_reviews(task)
-        .or_else(|| legacy_reviews(paths).remove(&legacy_key(task)))
-        .unwrap_or_default()
+    // Re-export can add an empty portable record. Keep legacy decisions until
+    // they are migrated by save_reviews; portable decisions win for the same id.
+    let mut reviews = legacy_reviews(paths)
+        .remove(&legacy_key(task))
+        .unwrap_or_default();
+    reviews.extend(run_reviews(task).unwrap_or_default());
+    reviews
 }
 
 /// The saved reviews of one task: component id -> review. They are kept in the run folder
@@ -767,6 +775,10 @@ mod tests {
         // Read from the config while the run has no reviews file.
         assert_eq!(reviews_of(&paths, &task)["aft_deck"], accepted);
         assert!(!task.join("review").exists());
+        // Re-export's empty portable record must not hide the earlier decisions.
+        std::fs::create_dir(task.join("review")).unwrap();
+        std::fs::write(task.join("review/part_reviews.json"), "{}").unwrap();
+        assert_eq!(reviews_of(&paths, &task)["aft_deck"], accepted);
         // The next review keeps the earlier one, writes both into the run and drops the
         // task's config entry; another task's entry stays.
         review_component(&paths, &task, "tank_fw1", "accepted", None).unwrap();

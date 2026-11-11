@@ -169,8 +169,11 @@ pub fn get_task(task: &Path, context: &ViewContext) -> Result<TaskView, String> 
         .and_then(|build| draft_view::result_record(task, build))
         .map(|r| crate::source_record::section_records(&r))
         .unwrap_or_default();
+    let mut refreshed = crate::source_record::run_records(task, "sections");
     for section in &mut sections {
-        section.source_record = section_records.remove(&section.id);
+        section.source_record = section_records
+            .remove(&section.id)
+            .or_else(|| refreshed.remove(&section.id));
     }
     Ok(TaskView {
         sheet_review: crate::sheet_review::read(task),
