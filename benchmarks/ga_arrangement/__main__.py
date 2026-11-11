@@ -22,6 +22,8 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True, help="output folder (git-ignored, under work/)")
     parser.add_argument("--split", type=Path, help="SPLIT.json: the case must be one of its development_cases")
     parser.add_argument("--test-fixture", action="store_true", help="allow a reading marked test_fixture")
+    parser.add_argument("--source-round", help="the GA reader's round id of this reading (kept in ga_estimate.json)")
+    parser.add_argument("--source-commit", help="the GA reader's commit (kept in ga_estimate.json)")
     args = parser.parse_args()
     reading = json.loads(args.reading.read_text())
     case_id = str(reading.get("case_id") or "")
@@ -33,7 +35,8 @@ def main() -> None:
         parser.error("this reading is test data; pass --test-fixture to build it (never for a demo)")
     slug = f"{case_id.lower()}-ga-estimate" + ("-test-fixture" if reading.get("test_fixture") is True else "")
     run_name = f"{case_id} estimated arrangement" + (" (TEST DATA)" if reading.get("test_fixture") is True else "")
-    result = generate(reading, args.image, args.out, slug, run_name)
+    source = {"reading_file": args.reading.name, "round": args.source_round, "reader_commit": args.source_commit}
+    result = generate(reading, args.image, args.out, slug, run_name, source)
     print(json.dumps({"task": result["task"], "summary": result["summary"]}, indent=1))
 
 

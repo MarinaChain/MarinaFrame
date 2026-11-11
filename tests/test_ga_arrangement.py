@@ -146,6 +146,61 @@ def test_check_proportions_flags_a_misread_dimension(reading):
     assert findings == ["B/D = 6.00 is outside 1.2..2.6: check the dimensions"]
 
 
+def _boxes(data):
+    size = G.hull_size(data)
+    return {item.id: G.item_box(item, data, size) for item in data.items}
+
+
+def test_check_depth_against_the_cargo_space_tops(reading):
+    data = G.load_input(reading)
+    assert G.check_depth(data, _boxes(data)) == []
+    # A depth measured to another deck (here 0.7 m higher) disagrees with the holds' top.
+    reading["particulars"]["depth_m"].update(value=9.7, uncertainty_m=0.29)
+    data = G.load_input(reading)
+    assert G.check_depth(data, _boxes(data)) == [
+        "depth 9.70 m disagrees with the cargo spaces' top 9.00 m by more than 0.30 m"]
+    # Within the stated uncertainty it passes.
+    reading["particulars"]["depth_m"]["uncertainty_m"] = 0.8
+    data = G.load_input(reading)
+    assert G.check_depth(data, _boxes(data)) == []
+
+
+def test_a_derived_depth_is_used_as_an_estimate_and_never_checked_against_itself(reading):
+    reading["particulars"]["depth_m"].update(value=9.7, status="derived_from_space_tops")
+    data = G.load_input(reading)
+    assert data.value("depth_m") == 9.7
+    assert data.estimated() == ["depth_m (derived_from_space_tops)"]
+    assert G.check_depth(data, _boxes(data)) == []
+    from benchmarks.ga_arrangement.run_folder import hull_record
+
+    assert "not taken from the drawing: depth_m (derived_from_space_tops)" in hull_record(data)["method"]
+
+
+def test_an_unknown_depth_is_refused(reading):
+    reading["particulars"]["depth_m"] = {"value": None, "status": "unknown", "reason": "not found"}
+    with pytest.raises(G.InputError, match="depth_m"):
+        G.load_input(reading)
+
+
+def test_hull_aft_end_follows_the_aftmost_item(reading):
+    reading["spaces"][4]["extent"]["frames"] = [-6, 24]  # deckhouse reaching 3.6 m aft of the AP
+    size = G.hull_size(G.load_input(reading))
+    assert size.x_aft_m == pytest.approx(-3.6)
+    assert size.x_fwd_m - size.x_aft_m == pytest.approx(104.0)
+    assert "aftmost item" in size.basis["ends"]
+    # Never further aft than the whole overhang (LOA - LBP = 4 m): the bow stays at or past the FP.
+    reading["spaces"][4]["extent"]["frames"] = [-12, 24]
+    assert G.hull_size(G.load_input(reading)).x_aft_m == pytest.approx(-4.0)
+
+
+def test_a_space_above_the_deck_is_not_cut_by_the_hull(reading):
+    data = G.load_input(reading)
+    size = G.hull_size(data)
+    store = G.Box((90.0, 98.0), (-3.0, 3.0), (8.8, 11.5), {"x": "read", "y": "read", "z": "read"})
+    hold = G.Box((50.0, 88.0), (-9.0, 9.0), (1.2, 9.0), {"x": "read", "y": "guessed", "z": "read"})
+    assert G.above_deck(store, size) and not G.above_deck(hold, size)
+
+
 def test_carve_order_puts_small_tanks_before_holds(reading):
     data = G.load_input(reading)
     size = G.hull_size(data)

@@ -24,8 +24,9 @@ port, z up from the baseline.
 | `case_id` | yes | case ID (for example GA-005); the run is named by it only |
 | `engineering_approved` | yes | false |
 | `sources.ga.file` | yes | the GA image file name; every region's `sheet` names it |
-| `particulars.breadth_m`, `.depth_m` | yes | `{value, status, source_record}`; status `read`, `measured_from_scale` or `guessed` |
-| `particulars.lbp_m` or `.loa_m` | one of them | as above; with both, the hull ends are LOA, else LOA = 1.04 LBP (guessed) |
+| `particulars.breadth_m`, `.depth_m` | yes | `{value, status, source_record}`. `read` and `measured_from_scale` are from the drawing; any other status with a value (`guessed`, `derived_from_space_tops`, ...) is used as an estimate and named in the hull's record and the run note; `unknown` is refused |
+| `particulars.depth_m.uncertainty_m` | no | measurement uncertainty; the depth check's tolerance (at least 0.3 m). Only a depth from the drawing is checked (never one derived from the space tops) |
+| `particulars.lbp_m` or `.loa_m` | one of them | as above; with both, the hull length is LOA, else LOA = 1.04 LBP (guessed) |
 | `frames.spacings` | when an extent uses frames | `[{from_frame, to_frame, spacing_mm}]`; frame 0 is the AP |
 | `hull_outline.deck_half_breadth_m` | no | `[[x, half_breadth], ...]` of the deck edge (upper deck plan) |
 | `hull_outline.profile_xz_m` | no | closed polygon `[[x, z], ...]` of the hull in the profile; the lofted hull is cut by it |
@@ -73,11 +74,17 @@ Other kinds are skipped.
    a full-form plan shape (parallel body from 22 % to 70 % of the length, transom 80 % of the
    half-breadth, tapered bow). Section fullness and bottom flat run from fine ends to a
    wall-sided body with a bilge. The keel rises at the stern (guessed) unless a profile outline
-   is given; then the loft is cut by that outline. The hull is lofted in CadQuery.
+   is given; then the loft is cut by that outline. The hull is lofted in CadQuery. Hull ends:
+   the overhang LOA - LBP is split 40 % aft of the AP and 60 % forward of the FP (guessed); when
+   an item read on the GA reaches further aft, the hull starts at that item (at most the whole
+   overhang aft of the AP) and keeps the length LOA.
 2. **Items.** Boxes in metres; below-deck spaces are cut by the hull and carved from the
    smallest to the largest, so a tank drawn inside a hold keeps its volume and the hold gets the
-   rest. Checks (findings, not refusals): an item outside the hull length; cargo holds that
-   overlap by more than 1 m in x.
+   rest. Checks (findings, not refusals; a run with a finding is not shown until it is
+   explained): L/B in 4..9 and B/D in 1.2..2.6; the depth agrees with the median top of the
+   cargo holds and tanks whose z was read, within the depth's `uncertainty_m` (at least 0.3 m);
+   an item outside the hull length; cargo holds that overlap by more than 1 m in x; a space with
+   nothing left after carving.
 3. **Source records.** Each part keeps the reader's regions. A part whose extents were all read
    keeps a `read` record; a part with a guessed extent gets a `guessed` record whose method names
    the rule and whose inputs are the reader's regions, so hover-to-source still shows them. The
@@ -89,6 +96,7 @@ Other kinds are skipped.
 writes `runs/<case>-ga-estimate/` in the concept run's form (`state.json` with policy
 `ga_estimate`, `presentation.json`, `whole_vessel/execution.json` and GLB, the hull build,
 `intake/` with the GA, `exports/r0001/` with the estimated hull STEP/STL and an arrangement CSV,
-`ga_estimate.json`) and `<slug>.web-selection-entry.json` for `scripts/web_demo_runs.json`
+`ga_estimate.json` with the findings, the skipped spaces and `reading_source`: `--source-round`
+and `--source-commit` name the reader's round and commit) and `<slug>.web-selection-entry.json` for `scripts/web_demo_runs.json`
 (licence `owner-cleared-ga`, credit = the label above). Images, readings and runs stay under
 `work/` (git-ignored).

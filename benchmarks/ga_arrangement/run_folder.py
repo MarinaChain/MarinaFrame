@@ -123,8 +123,11 @@ def particulars_regions(data: G.ArrangementInput) -> list[dict]:
 def hull_record(data: G.ArrangementInput) -> dict:
     from vessel_reconstruction import source_record
 
-    return source_record.validate(source_record.guessed(
-        f"{G.HULL_LABEL}: prior hull form sized from the GA particulars", particulars_regions(data)))
+    method = f"{G.HULL_LABEL}: prior hull form sized from the GA particulars"
+    estimated = data.estimated()
+    if estimated:
+        method += "; estimated, not taken from the drawing: " + ", ".join(estimated)
+    return source_record.validate(source_record.guessed(method, particulars_regions(data)))
 
 
 # --- writers -------------------------------------------------------------------------------------
@@ -324,7 +327,9 @@ def selection_entry(slug: str, case_id: str, run_name: str, sheet: dict, note: s
             "whole_vessel_first": True, "section_lines": False, "see_through": True}
 
 
-def generate(reading: dict, image: Path, out: Path, slug: str, run_name: str) -> dict:
+def generate(reading: dict, image: Path, out: Path, slug: str, run_name: str, source: dict | None = None) -> dict:
+    """``source`` says which reading this is (for example the reader's round and commit); it is
+    kept in ``ga_estimate.json``."""
     """Build the estimated arrangement of one GA reading and write ``out/runs/<slug>``."""
     data = G.load_input(reading)
     if data.sheet and data.sheet.get("file") and data.sheet["file"] != Path(image).name:
@@ -344,10 +349,14 @@ def generate(reading: dict, image: Path, out: Path, slug: str, run_name: str) ->
     write_exports(task, data.case_id, components)
     write_state(task, metrics, slug)
     read_count = sum(1 for entry in components if entry["source_record"]["kind"] == "read")
-    note = (f"{len(components) - 1} parts placed from the GA ({read_count} with every extent read); "
-            f"hull {metrics['length_m']:.0f} x {metrics['beam_m']:.1f} x {metrics['depth_m']:.1f} m estimated.")
+    note = (f"{len(components) - 1} parts placed from the GA; each part's card says which extents were read "
+            f"and which guessed. Hull {metrics['length_m']:.0f} x {metrics['beam_m']:.1f} x {metrics['depth_m']:.1f} m, "
+            "estimated.")
+    if data.estimated():
+        note += " Not from the drawing: " + ", ".join(data.estimated()) + "."
     write_presentation(task, note)
     summary = {"label": ESTIMATE_LABEL, "generator": GENERATOR, "generator_commit": _git_commit(),
+               "reading_source": source or {}, "particulars_estimated": data.estimated(),
                "engineering_approved": False, "case_id": data.case_id, "test_fixture": data.test_fixture,
                "input_sha256": hashlib.sha256(json.dumps(reading, sort_keys=True).encode()).hexdigest(),
                "hull": {"size": _round(size.__dict__), "metrics": metrics, "label": G.HULL_LABEL},

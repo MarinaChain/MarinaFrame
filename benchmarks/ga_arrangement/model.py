@@ -88,7 +88,7 @@ def item_solid(item: G.Item, box: G.Box, hull, size: G.HullSize):
     (a crane is a cylinder post)."""
     import cadquery as cq
 
-    if item.kind in G.SPACE_KINDS:
+    if item.kind in G.SPACE_KINDS and not G.above_deck(box, size):
         # A space whose side reaches the shell: let the hull give the side.
         y0 = box.y[0] - BOX_MARGIN_M if box.y[0] <= -size.half_beam_m + 1e-6 else box.y[0]
         y1 = box.y[1] + BOX_MARGIN_M if box.y[1] >= size.half_beam_m - 1e-6 else box.y[1]
@@ -109,7 +109,7 @@ def build(data: G.ArrangementInput):
     hull = hull_solid(table, outline)
     items = {item.id: item for item in data.items}
     boxes = {item.id: G.item_box(item, data, size) for item in data.items}
-    findings = G.check_proportions(size) + G.check_boxes(boxes, items, size)
+    findings = G.check_proportions(size) + G.check_depth(data, boxes) + G.check_boxes(boxes, items, size)
     solids = [Solid("hull", "hull", G.HULL_LABEL, hull, None, None)]
     placed = []
     for item_id in G.carve_order(boxes, items):

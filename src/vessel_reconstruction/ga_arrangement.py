@@ -41,6 +41,10 @@ TANK_KINDS = ("cargo_tank", "slop_tank", "ballast_tank", "fuel_tank", "other_tan
 # printed value). The arrangement treats it as read: it came from drawn ink, not from a rule here.
 MEASURED = "measured_from_scale"
 STATUSES = ("read", MEASURED, "guessed")
+# Statuses of a value taken from the drawing itself (printed, or measured with its scale). A
+# particular with any other status and a value (for example "derived_from_space_tops") is an
+# estimate: it is used, and the hull's record says so.
+FROM_DRAWING = ("read", MEASURED)
 SIDES = ("both", "port", "starboard", "centre")
 
 # --- rules that fill a missing extent (each one is labelled "guessed" where it is used) -------
@@ -127,9 +131,19 @@ class ArrangementInput:
     test_fixture: bool = False
 
     def value(self, name: str) -> float | None:
+        """The particular's value, or None when it is not known (no value, status unknown)."""
         entry = self.particulars.get(name) or {}
         value = entry.get("value")
-        return float(value) if isinstance(value, (int, float)) and entry.get("status") in STATUSES else None
+        known = entry.get("status") not in (None, "unknown")
+        return float(value) if isinstance(value, (int, float)) and known else None
+
+    def status(self, name: str) -> str | None:
+        return (self.particulars.get(name) or {}).get("status")
+
+    def estimated(self) -> list[str]:
+        """Particulars used by the hull that were not taken from the drawing, as 'name (status)'."""
+        return [f"{name} ({self.status(name)})" for name in ("lbp_m", "loa_m", "breadth_m", "depth_m")
+                if self.value(name) is not None and self.status(name) not in FROM_DRAWING]
 
 
 # ------------------------------------------------------------------ frames
@@ -233,7 +247,7 @@ def load_input(reading: dict) -> ArrangementInput:
                             sheet=(reading.get("sources") or {}).get("ga"),
                             test_fixture=reading.get("test_fixture") is True)
     if data.value("breadth_m") is None or data.value("depth_m") is None:
-        raise InputError("breadth_m and depth_m must be read or guessed values: the hull is sized from them")
+        raise InputError("breadth_m and depth_m need values (status not unknown): the hull is sized from them")
     if data.value("lbp_m") is None and data.value("loa_m") is None:
         raise InputError("lbp_m or loa_m is needed")
     return data
@@ -267,7 +281,27 @@ def hull_size(data: ArrangementInput) -> HullSize:
         lbp = length
         overhang = OVERHANG_SHARE * length
         basis["ends"] = f"guessed: overhang {OVERHANG_SHARE:.0%} of LBP"
-    return HullSize(-AFT_OVERHANG_PART * overhang, lbp + (1 - AFT_OVERHANG_PART) * overhang, breadth / 2, depth, basis)
+    x_aft = -AFT_OVERHANG_PART * overhang
+    # The split of the overhang between stern and bow is a guess; the GA's own items show where
+    # the stern is. When one reaches further aft, the hull starts there and keeps its length, but
+    # never further aft than the whole overhang (the bow would then be at the FP): an item beyond
+    # that is misplaced and stays a finding (check_boxes).
+    item_aft = aftmost_item_x(data)
+    if item_aft is not None and item_aft < x_aft:
+        x_aft = max(item_aft, -overhang)
+        basis["ends"] += "; aft end at the aftmost item read on the GA"
+    return HullSize(x_aft, x_aft + lbp + overhang, breadth / 2, depth, basis)
+
+
+def aftmost_item_x(data: ArrangementInput) -> float | None:
+    """The aft end of the aftmost item (metres), or None without items."""
+    ends = []
+    for item in data.items:
+        try:
+            ends.append(x_range_m(item.extent, data.frames)[0])
+        except InputError:
+            continue
+    return min(ends) if ends else None
 
 
 def deck_half_breadth(x: float, size: HullSize, outline: list | None = None) -> float:
@@ -398,6 +432,31 @@ LENGTH_BREADTH_RANGE = (4.0, 9.0)
 BREADTH_DEPTH_RANGE = (1.2, 2.6)
 
 
+CARGO_KINDS = ("cargo_hold", "cargo_tank", "slop_tank")
+# Smallest tolerance (metres) of the depth check when the reader gives no uncertainty.
+DEPTH_TOLERANCE_M = 0.3
+
+
+def check_depth(data: ArrangementInput, boxes: dict[str, Box]) -> list[str]:
+    """The depth against the upper deck that the read cargo spaces show: the median top of the
+    cargo holds and tanks whose z was taken from the drawing. They must agree within the depth's
+    measurement uncertainty (at least DEPTH_TOLERANCE_M). A depth measured to another deck (a
+    poop deck, the deck at centre) fails this check. Only a depth taken from the drawing is
+    checked: a depth derived from the space tops would be checked against itself."""
+    if data.status("depth_m") not in FROM_DRAWING:
+        return []
+    tops = [box.z[1] for item_id, box in boxes.items()
+            if box.status.get("z") != "guessed" and next(i for i in data.items if i.id == item_id).kind in CARGO_KINDS]
+    if not tops:
+        return []
+    depth = data.value("depth_m")
+    tolerance = max(float((data.particulars.get("depth_m") or {}).get("uncertainty_m") or 0.0), DEPTH_TOLERANCE_M)
+    deck = float(np.median(tops))
+    if abs(depth - deck) > tolerance:
+        return [f"depth {depth:.2f} m disagrees with the cargo spaces' top {deck:.2f} m by more than {tolerance:.2f} m"]
+    return []
+
+
 def check_proportions(size: HullSize) -> list[str]:
     """Findings for a length/breadth or breadth/depth ratio outside the plausible ranges."""
     findings = []
@@ -421,6 +480,16 @@ def check_boxes(boxes: dict[str, Box], items: dict[str, Item], size: HullSize) -
         if second[0] < first[1] - 1.0:
             findings.append(f"{first_id} and {second_id} overlap by {first[1] - second[0]:.1f} m in x")
     return findings
+
+
+# A space whose bottom is at most this far below the deck lies above the upper deck (a store in
+# the forecastle or poop): the estimated hull stops at the deck, so it stands on the deck as a box.
+ABOVE_DECK_TOLERANCE_M = 0.5
+
+
+def above_deck(box: Box, size: HullSize) -> bool:
+    """True when the box lies above the upper deck (its bottom within the tolerance of the deck)."""
+    return box.z[0] >= size.depth_m - ABOVE_DECK_TOLERANCE_M
 
 
 def carve_order(boxes: dict[str, Box], items: dict[str, Item]) -> list[str]:
