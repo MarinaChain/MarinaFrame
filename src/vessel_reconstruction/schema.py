@@ -255,12 +255,20 @@ def validate_spec(spec: dict, base_dir: Path, *, allow_sheet_only: bool = False)
     unknown(spec, {"schema_version", "vessel_id", "input_mode", "units", "source", "station_reference",
                    "symmetry", "symmetry_evidence", "end_closure", "sections", "constraints", "components",
                    "table_value_units", "table_surface", "scope_note", "historical_date", "table_reading",
-                   "draft", "intake"}, "specification")
+                   "draft", "intake", "design_draft_m", "design_draft_source"}, "specification")
     if "intake" in spec:
         intake = spec["intake"]
         if (not isinstance(intake, dict) or set(intake) - {"file", "sha256"} or not _text(intake.get("file"), 4096)
                 or ("sha256" in intake and not (isinstance(intake["sha256"], str) and SHA256.fullmatch(intake["sha256"])))):
             errors.append(gap("invalid_intake", "intake must be {file, optional sha256} naming the intake record."))
+    if "design_draft_m" in spec or "design_draft_source" in spec:
+        # The design draft read from the drawing or typed at intake (intake.write_spec), with
+        # its source record; exports use it for hydrostatics (exports/hydrostatics.design_draft).
+        value, source = spec.get("design_draft_m"), spec.get("design_draft_source", {})
+        if (isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
+                or value <= 0 or not isinstance(source, dict)):
+            errors.append(gap("invalid_design_draft",
+                              "design_draft_m must be a positive number of metres; design_draft_source an object."))
     if "draft" in spec:
         # A draft revision spec lists its open guesses; see draft.py. Its
         # sections are the read ones only, so the guess list must be exact.

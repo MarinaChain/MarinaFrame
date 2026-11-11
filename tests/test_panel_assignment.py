@@ -198,3 +198,47 @@ def test_grid_columns_are_full_height_lines_and_not_the_centreline():
     image[100:200, 90] = 0  # A short vertical piece is not a grid line.
     columns = inv.grid_columns(image, _section("s1", 10))
     assert len(columns) == 1 and abs(columns[0] - 150) <= 1
+
+
+def _pieces(cid, parts, likeness):
+    """A stroke made of row ranges of other x arrays: [(rows, xs), ...] in row order."""
+    rows = np.concatenate([np.asarray(r) for r, _ in parts])
+    xs = np.concatenate([np.asarray(x, dtype=float) for _, x in parts])
+    return {"candidate_id": cid, "rows": rows, "xs": xs, "hull_likeness": likeness, "kind": "candidate_stroke"}
+
+
+def test_a_mixed_stroke_with_no_ink_of_its_own_leaves_the_pool():
+    # shipd-1-09867-3v-L0: a stroke ran on the outer bundle's top and the next curve's bottom.
+    # Counted as a curve, it took a station and moved every inner station one curve outwards.
+    wide, narrow = _stroke("wide", 180, likeness=0.5), _stroke("narrow", 120, likeness=0.6)
+    upper = ROWS < 120
+    mixed = _pieces("mixed", [(ROWS[upper], wide["xs"][upper]), (ROWS[~upper], narrow["xs"][~upper])], 0.4)
+    kept = pa.strokes_with_own_ink([narrow, wide, mixed], [])
+    assert [s["candidate_id"] for s in kept] == ["narrow", "wide"]
+
+
+def test_a_grid_rider_ending_on_another_curve_leaves_the_pool_even_when_more_hull_like():
+    # shipd-1-09867-3v-L0: a stroke rode the 8 m grid column for 71 % of its rows (under the
+    # 75 % grid-line rule) and then followed station 8's bottom.
+    narrow = _stroke("narrow", 120, likeness=0.55)
+    upper = ROWS < 160
+    rider = _pieces("rider", [(ROWS[upper], np.full(upper.sum(), 150.0)), (ROWS[~upper], narrow["xs"][~upper])],
+                    0.63)
+    kept = pa.strokes_with_own_ink([rider, narrow], [150.0])
+    assert [s["candidate_id"] for s in kept] == ["narrow"]
+
+
+def test_a_wall_sided_curve_on_a_grid_line_keeps_its_own_bilge():
+    upper = ROWS < 160
+    bilge = np.linspace(150.0, CENTRE + 2, (~upper).sum())
+    wall = _pieces("wall", [(ROWS[upper], np.full(upper.sum(), 150.0)), (ROWS[~upper], bilge)], 0.7)
+    inner = _stroke("inner", 90, likeness=0.6)
+    kept = pa.strokes_with_own_ink([wall, inner], [150.0])
+    assert [s["candidate_id"] for s in kept] == ["wall", "inner"]
+
+
+def test_distinct_nested_curves_and_grid_lines_stay_in_the_pool():
+    strokes = [_stroke("wide", 180), _stroke("middle", 120), _stroke("narrow", 60),
+               _stroke("ruler", 0, likeness=0.05, kind="straight_grid_line")]
+    kept = pa.strokes_with_own_ink(strokes, [])
+    assert [s["candidate_id"] for s in kept] == ["wide", "middle", "narrow", "ruler"]

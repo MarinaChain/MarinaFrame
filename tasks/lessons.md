@@ -260,3 +260,15 @@
 - **Trigger:** The Gunnerus display mesh took 60 to 100 s for 3,151 hull faces, even with the triangulation already built. cProfile misattributed the time.
 - **Rule:** In loops over faces or edges, use `vessel_reconstruction.topology` (indexed `FindKey` access) instead of CadQuery `Faces()`, `Edges()`, `Wires()`, `innerWires()` or `tessellate()`. Time OCP-heavy code with direct timers, not only cProfile.
 - **Why:** Ending a Python iteration over an OCP map or array raises `StopIteration` through every OCP exception translator: about 6 ms per call (80 ms the first time), whatever the size.
+
+### Test a new spec field through validate_spec (MarinaFrame)
+- **Date:** 2026-11-11
+- **Trigger:** 7ec97d7 made the intake write `design_draft_m` and `design_draft_source`, but `schema.validate_spec` did not list them. Every sheet-only run whose title-block draft was read (series60-3v-L0) blocked with `input:unexpected_field` before the first model request; unit tests of the writer passed.
+- **Rule:** When code adds a field to a spec, add it to `validate_spec` with a value check in the same commit, and test the written spec through `validate_spec`, not only the writer's output.
+- **Why:** The writer and the validator are separate modules; only a write-then-validate test sees the mismatch.
+
+### Read a hull score per height sample before chasing shape (MarinaFrame)
+- **Date:** 2026-11-11
+- **Trigger:** dtmb5415-3v-L0 scored 5.07 % RMS, but every station was 0.3-2.1 % except one 0.05 m height sample at the deck edge: a top 0.004-0.04 m (under 1 px) on the wrong side of a truth sample costs a full half-breadth there, about 6.5 % of half-beam at that station.
+- **Rule:** Before changing shape code, print each station's error at its worst sample and its truth/reconstruction top and bottom heights (`benchmarks/hull_accuracy/replay_readings.py` gives per-station rows). Treat single-sample deck or keel misses as a height-measurement problem (which line gives the height), not a section-shape problem. Replay every stored reading before committing a height rule: snapping tops to the profile deck line helped dtmb (5.07 -> 3.10 %) but broke shipd-1-09867 (0.87 -> 8.54 %): its deck line read low under a flat deck at the grid top, where a high top costs nothing and a low one costs a sample at every station (reverted, 5b8a9d5).
+- **Why:** The frozen scorer samples heights on a fixed grid; sub-pixel datum errors become large station errors, and the cost is asymmetric at the grid top.
