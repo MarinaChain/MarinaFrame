@@ -67,8 +67,9 @@ reader (rank names). The runner is pointed at the entry point; the per-sheet num
 - [x] After run with `--baseline`: `work/polyline-integration/after.json` (sha256 `df6e637c7508645f...`); all gates pass; per-sheet table in section 5; fix commit.
 - [x] Integration: one product entry point for the body-plan side reading; v2 and chine joining out of `src/`;
   tests; integration run (`work/polyline-integration/integrated.json`, sha256 `b7140ef6ddb763e0...`); commit.
-- [ ] Re-pin the Cama Beach (`docs/BODY_PLAN_CHINE.md`) and Davis Boat (`docs/holdouts/davis-boat.md`) protocols
-  to the integrated reader files' sha256, as an amendment before any run. No run on those sheets.
+- [x] Re-pin the Cama Beach (`docs/BODY_PLAN_CHINE.md`) and Davis Boat (`docs/holdouts/davis-boat.md`) protocols
+  to the integrated reader files' sha256 at `c14de7d`, as an amendment before any run. No run on those sheets;
+  their folders were not opened.
 - [ ] Quick test tier, push the branch.
 
 Resume: read the checkboxes; result files are in `work/polyline-integration/` (git-ignored).

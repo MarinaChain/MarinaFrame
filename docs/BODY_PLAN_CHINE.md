@@ -1323,6 +1323,35 @@ SHA-256 values; an edit before the run is recorded here and the protocol committ
 | `benchmarks/balclutha/model_value.py` | `aa3786c262434e8451f7659e2885c2fecbd6b3a285c922113c93409d638a71e0` |
 | `scripts/measure_deadrise_holdout.py` | `40e4bd8c1ad32e3278d2f5b194056def13a688e0c77afb6cf9e4e0fa727e174e` |
 
+**Amendment: integrated reader pins (lane I, 2026-11-11, before any run on this sheet).** The polyline reader
+was chosen as the hard-chine reader (user decision), its station naming was fixed on the nine development sheets
+(`c3cfb0a`; CALEB JONES 6 correct / 10 wrong -> 21 / 0 point cells, no sheet worse) and it was integrated as the
+product entry point `body_plan_sides.read_side` (`c14de7d`); see `docs/plans/2026-11-11-polyline-integration.md`.
+Reader v2 and the chine-line module moved from `src/` to `benchmarks/hard_chine/`. The pins above are replaced
+by the pins below (at `c14de7d`); the run is valid only with these files at these SHA-256 values. No reader has
+run on this sheet; this lane did not open its folder. The polyline arm under test is the product rule
+(`body_plan_polyline` read and engagement, `deadrise_holdout.score.polyline_table` and `polyline_curves`), which
+the integration run showed equal to `body_plan_sides` on all nine development sheets (tables and scores).
+
+| File | SHA-256 | Change |
+|---|---|---|
+| `src/vessel_reconstruction/body_plan_sides.py` | `0f3279d3c5d36a90eb383c5332f5909667a1ebcbf8a98d889205e93b27afd163` | product entry point (new) |
+| `src/vessel_reconstruction/body_plan_polyline.py` | `1b432ba917a0cea38717492c65a03cd0ef31e4dea6273b07d6909b97b4ae4606` | naming fix `c3cfb0a` |
+| `src/vessel_reconstruction/body_plan_reader.py` | `cd5cbf77b11400250ca105f956a1ecbd623efaf924aa187003aeed514ee38a24` | lane B thresholds `14125aa` |
+| `src/vessel_reconstruction/body_plan_crossings.py` | `40e9f6306eb2255079b1d978edf95d360709a39ebe4a96508dd4fce9565ee54c` | lane B thresholds `14125aa` |
+| `src/vessel_reconstruction/body_plan_identity.py` | `ba738892696025364c3a58664bdf3fbf46e3c7d1a72df7eca31bcc441e9a0c34` | unchanged |
+| `src/vessel_reconstruction/body_plan_intake.py` | `ded09b706f2c12d549941faf4a5687a9181383aeecd2d9a633d6952bcaf3ecfd` | calls `read_side` |
+| `benchmarks/hard_chine/reader_v2.py` | `9f50aea5e831eb320d63d079097287b9ea29a7c25a099268913af74ea9e5d04d` | moved from src (comparison arm only; import path changed) |
+| `benchmarks/hard_chine/chine_line.py` | `ef2bd68f4f9e1f65d185dbc8de1896c6383134b6df9c8558200bfd83bf239223` | moved from src, content unchanged |
+| `benchmarks/frozen_readers/v1/body_plan_reader.py` | `327c9f141876dc1945383ebe35023b6e7baaacc34306c5eecf26ffb16ba94e11` | unchanged |
+| `benchmarks/frozen_readers/v1/body_plan_crossings.py` | `c6553371691121cd934b0991f273f9ff3a41963d46fd4238034f818aaf6fcf97` | unchanged |
+| `benchmarks/frozen_readers/v1/body_plan_identity.py` | `ba738892696025364c3a58664bdf3fbf46e3c7d1a72df7eca31bcc441e9a0c34` | unchanged |
+| `benchmarks/deadrise_holdout/score.py` | `1bc962218d25b86c6006a23c2e5567e241ad169cd430f2bdcb73a92793f58be1` | unchanged |
+| `benchmarks/ec_collier/point_score.py` | `b38bbda707c921f3d930cebf7ad37cb73e025a29af5e9dabac36a17755df2158` | unchanged |
+| `benchmarks/balclutha/crossing_value.py` | `f5ab03b178508c1cf9232417c38d2888cc1fb94b07d519e830c9fb5c9df82536` | unchanged |
+| `benchmarks/balclutha/model_value.py` | `aa3786c262434e8451f7659e2885c2fecbd6b3a285c922113c93409d638a71e0` | unchanged |
+| `scripts/measure_deadrise_holdout.py` | `a31fc6854823fd76add2e3c6dbf2e91f8751cd324fed60c9d303f4c631f0e115` | reader v2 import path only; the BOATS entry for the sheet is still to be added and recorded |
+
 **Order of work (each step committed before the next).**
 1. **Calibration** in `benchmarks/cama_beach_skiff_22/holdout_value.py` by an agent that has not
    seen `truth.json`, the table crops or this lane's transcription (lane E read the table, so it
