@@ -33,12 +33,19 @@ python scripts/measure_round_bilge_holdout.py --boat davis-boat \
 
 1. [x] Read both protocols; verify pins.
 2. [x] Davis run script and pre-run amendment (`c473190`).
-3. [ ] Run start note (this file), committed.
-4. [ ] One run each; outputs and SHA-256 values in `work/published-holdout/`.
-5. [ ] Results in both protocols; public summary `docs/results/2026-11-11-published-holdouts.md`.
+3. [x] Run start note (this file), committed (`b42dbed`).
+4. [x] One run each (both exit 0); outputs and SHA-256 values in `work/published-holdout/`.
+5. [x] Results in both protocols (`720e9ca`); public summary `docs/results/2026-11-11-published-holdouts.md`.
 6. [ ] Quick test tier; push branch (no merge).
+
+## Results
+
+- CAMA BEACH SKIFF No. 22: **FAIL** (product rule waterline RMS 0.0618 m vs frozen 0.0616 m; 22 / 36
+  waterline cells, 5 / 18 point cells).
+- Davis Boat: **PASS** by rule 3.5.9 (product arm 37 / 44 cells, RMS 0.022 m).
 
 ## Resume point
 
-If step 4 has not started, run the two commands above once each. If any output file exists in
-`work/published-holdout/`, the run happened: do not run again; record what is there.
+Both runs are done. Do not run either holdout again: both sheets are now development cases. Open items for
+the PM: merge after CI; mark both sheets as spent in `benchmarks/spent_real_sheet_holdouts.json` /
+`benchmarks/holdout_contract.json` if that is the project's practice (not done by this lane).
