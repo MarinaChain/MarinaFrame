@@ -38,6 +38,7 @@ fn probe(script: &str, override_config: serde_json::Value) -> Output {
             script,
         ])
         .env("PROBE_OUTSIDE", root.path().join("private"))
+        .env("HOME", &work) // production overwrites HOME; account-home guard must still work
         .output()
         .unwrap()
 }
