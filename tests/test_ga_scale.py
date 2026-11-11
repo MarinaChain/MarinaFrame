@@ -452,6 +452,24 @@ def test_many_spaces_go_out_in_short_requests_holds_and_tanks_first(tmp_path):
     assert first[0] == "cargo_hold" and first.index("ballast_tank") < first.index("other_space")
 
 
+def test_a_pair_boxed_on_one_side_is_two_tanks_in_the_arrangement_input():
+    """A "(P&S)" wing tank boxed on its label's side: a measured tank and its guessed mirror,
+    so the cargo tank between them is not read as full breadth."""
+    entry = {"id": "ballast_tank-007", "kind": "ballast_tank", "label": "NO.3 W.B.T. (P&S)", "number": "3",
+             "status": "read", "source_record": {"kind": "unknown", "reason": "test"},
+             "extent": {"frames": [40, 60], "x_m": [30.0, 45.0], "y_m": [9.5, 16.0], "side": "both",
+                        "status": {"x": "measured_from_scale", "y": "measured_from_scale"}}}
+    port, starboard = gs._split_pair(entry)
+    assert (port["extent"]["side"], port["extent"]["y_m"], port["extent"]["status"]["y"]) == (
+        "port", [9.5, 16.0], "measured_from_scale")
+    assert (starboard["extent"]["side"], starboard["extent"]["y_m"], starboard["extent"]["status"]["y"]) == (
+        "starboard", [-16.0, -9.5], "guessed")
+    assert port["id"] != starboard["id"] and entry["extent"]["side"] == "both"  # the reading is unchanged
+    across = json.loads(json.dumps(entry))
+    across["extent"]["y_m"] = [-12.0, 12.0]  # one space across the centreline stays one
+    assert gs._split_pair(across) == [across]
+
+
 def test_a_scale_reply_without_hull_ends_is_measured_without_them(tmp_path):
     """No hull end pointed (development round u1: a crash): the table keeps the drawn scale ends."""
     result = _result(tmp_path)
@@ -489,6 +507,16 @@ def test_places_the_scale_request_left_out_are_asked_for_and_used(tmp_path):
     assert result["measured"]["lbp_m"]["value"] == pytest.approx(_x_m(FP_FRAME), abs=0.15)
 
 
+def test_a_perpendicular_mark_counts_only_on_the_profile():
+    """The LBP needs F.P. on the profile's frame scale; an F.P. in a plan does not count (round u6)."""
+    places = {name: [(0.0, 0.0)] for name in gs.PROFILE_PLACES}
+    plan_places = {name: [(0.0, 0.0)] for name in gs.PLAN_PLACES}
+    work = {"kinds": {"v1": "profile", "v2": "deck_plan"},
+            "raw": {"points": {"v1": places, "v2": plan_places},
+                    "marks": {"v1": {"ap": [(0.0, 0.0)]}, "v2": {"fp": [(0.0, 0.0)]}}}}
+    assert gs.missing_places(work) == ["F.P."]
+
+
 def test_a_tank_boxed_above_the_deck_that_the_holds_confirm_is_the_wrong_box(tmp_path):
     """The holds agree on one top and the pointed deck line lies there: a ballast tank boxed
     above it is a wrong box (development round u3), not a wrong deck line."""
@@ -507,6 +535,11 @@ def test_a_tank_boxed_above_the_deck_that_the_holds_confirm_is_the_wrong_box(tmp
     mixed = _depth_run(tmp_path / "m", deck_shift_px=60.0, ballast_at_deck=True)
     depth = mixed["measured"]["depth_m"]
     assert depth["value"] is None and "boxes disagree" in depth["reason"]
+    # Holds boxed one rail height (1 m) above the pointed line (round u5): the boxes may end on
+    # the rail; neither value is given.
+    rail = _depth_run(tmp_path / "rb", deck_shift_px=12.0)
+    depth = rail["measured"]["depth_m"]
+    assert depth["value"] is None and "rail height" in depth["reason"]
 
 
 def test_a_depth_that_no_space_can_check_is_not_given(tmp_path):

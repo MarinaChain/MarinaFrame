@@ -300,6 +300,20 @@ with evidence. A second opinion to investigate, not truth. Package tool:
 | 1 | 144 | 0 | 3 | 0 | 31 | 110 |
 | 2 | 133 | 0 | 1 | 1 | 38 | 93 |
 
+Rounds 3 and 4 (overnight, on rounds u4r and u6; the package also draws the measured extents and
+lists the measured values, and the reviewer checks them):
+
+| Round | Findings | On exam counts | Extents | Measured values | Label, kind or missing space |
+|---|---:|---:|---:|---:|---:|
+| 3 (u4r) | 139 | 0 | 50 | 7 | 82 |
+| 4 (u6) | 117 | 0 | 41 | 9 | 67 |
+
+Real after my check (round 3 and 4): extent boxes that take in neighbouring compartments (holds
+down to the base line, one box for a pair, boxes across sloped boundaries); measured hatch
+lengths 1-2 m above the size printed in the hatch; a frame table that misses short local ranges
+the drawing prints (1,200 mm intervals); one F.P. mark the model gave in a plan only. Fixed:
+pairs, tank families, hoist crane, F.P. on the profile; open: the rest (Resume point).
+
 Checked by me and real: cut labels from the fine pass (both rounds), a cut label typed as a
 counted kind on a bulk carrier (round 1), hose cranes typed as cargo cranes in the space list
 (round 2), letter-spaced titles failing the kind check (round 2), missing tanks. Not acted on:
@@ -357,7 +371,12 @@ unchecked) and its causes:
 | A retried scale request repeated the same miss (tanker: a change of spacing not marked in 3 attempts) | the retry says why the previous reading was refused | `test_a_second_scale_request_can_establish_the_scale` |
 | (round u2) A web-frame range of one frame has its spacing text printed beside it, in the next range, which then held two spacings: the scale was refused | a range with at most one frame number and no text takes the nearest text of a neighbour that holds two different spacings | `test_the_text_of_a_one_frame_range_printed_beside_it_belongs_to_it` |
 | (round u3) Wing ballast tanks boxed 3.6 m above a deck line that six cargo-tank tops confirm made the depth null | when at least 3 cargo spaces agree and the pointed deck line lies at their top, other spaces boxed above it get a guessed height (`extent_above_the_deck`) and the depth stands | `test_a_tank_boxed_above_the_deck_that_the_holds_confirm_is_the_wrong_box` |
-| (round u3) LBP or breadth lost because one run's scale reply left out F.P. or a shell side | the first extents request names the places and marks still missing; A.P./F.P. marks from that reply are used | `test_places_the_scale_request_left_out_are_asked_for_and_used` |
+| (round u3) LBP or breadth lost because one run's scale reply left out F.P. or a shell side | the first extents request names the places and marks still missing; A.P./F.P. marks from that reply are used (on the profile, where the LBP needs them: round u6) | `test_places_the_scale_request_left_out_are_asked_for_and_used`, `test_a_perpendicular_mark_counts_only_on_the_profile` |
+| (round u4) Cargo tanks boxed to the rail while a ballast tank ends at the pointed deck line: the depth was derived from the rail | when another space confirms the pointed line, cargo tops do not replace it (null, "boxes disagree") | `test_a_tank_boxed_above_the_deck_...` |
+| (round u5) Cargo boxes one rail height above the pointed line: a derived depth from the rail | a gap of a rail height or less in that direction gives no depth (code cannot tell rail from deck) | `test_a_tank_boxed_above_the_deck_...` |
+| (Astra round 3) Wing tanks of a "(P&S)" pair boxed on one side read as one space across the whole y range | the arrangement input gives two tanks, the boxed one and its mirror (y `guessed`) | `test_a_pair_boxed_on_one_side_is_two_tanks_in_the_arrangement_input` |
+| (Astra round 3) Top-side and bottom ballast tanks with one number in one view: the second was dropped as a duplicate | a fine-pass label is the same space only with the same label family | `test_a_label_is_another_space_only_when_its_family_differs` |
+| (Astra round 3) A hoist crane typed as a cargo crane | HOIST joins the crane words that are not cargo cranes | `test_a_hoist_crane_is_not_a_cargo_crane` |
 
 ## Open issues (for the next step)
 
@@ -382,7 +401,7 @@ unchecked) and its causes:
 7. Fable 5.2: `claude -p --model claude-fable-5-2` answers `unrecognized_model` on this machine
    (2026-11-12); `fable` resolves to `claude-fable-5-1`. The product arm is Sonnet 5.5 only.
 
-## Overnight rounds u1-u4 (2026-11-12, lane U; measurement pass, development ships)
+## Overnight rounds u1-u6 (2026-11-12, lane U; measurement pass, development ships)
 
 Per round: reading and `--measure` on the 14 development ships, three parallel batches. Coverage is
 compared per ship with round s3b (measured principal dimensions, spaces with an extent, and the
@@ -395,7 +414,14 @@ frame scale). Aggregate only; per-ship files stay in `work/`.
 | u2 (label places, short extents requests) | 119 | 5.90 USD | 9 | 35 / 0 | 455 | 3 |
 | u3 (short web-frame range texts) | 124 | 5.78 USD | 10 | 36 / 0 | 473 | 4 |
 | u4 (missing places named; cargo-confirmed deck) | 122 | 5.71 USD | 9 | 35 / 1 | 442 | 2 |
-| u4r (u4 replayed through the final rules) | 0 | - | 9 | 35 / 0 | 442 | 3 |
+| u4r (u4 replayed through the u4 final rules) | 0 | - | 9 | 35 / 0 | 442 | 3 |
+| u5 (stricter extents wording; pairs split; hoist crane) | 123 | 6.09 USD | 10 | 36 / 1 | 495 | 2 |
+| u6 (shorter extents wording; label families; rail-gap depth rule) | 129 | 6.19 USD | 10 | 36 / 0 | 542 | 4 |
+
+Ballast and fuel tanks listed on the 14 ships: 200 in u5, 234 in u6 (label families: two tank
+families with one number in one view are no longer taken as one). Extent boxes marked by the model
+as drawn boundary (`outline`): 214 in u4, 160 in u5 (a long list of exclusions in the extents
+wording made the model unsure), 203 in u6 (shorter wording).
 
 Observed cost is 0 in every round (subscription).
 
@@ -406,15 +432,18 @@ Observed cost is 0 in every round (subscription).
   points in one run and not in the next (an F.P. mark, a shell side, a misread spacing), not
   code that lost coverage. Replaying an earlier round's replies through the final code gives
   that round's coverage back (checked on two ships).
-- For lane W: `work/ga-internal-23/dev-runs/u4r/<case>/ga_arrangement_input.json` (the two
-  ships lane W asked about have all four dimensions measured and checked there).
+- For lane W: `work/ga-internal-23/dev-runs/u6/<group>/<case>/ga_arrangement_input.json` (the
+  two ships lane W asked about have all four dimensions measured and checked there; u4r is the
+  earlier set).
 
 ## Resume point
 
 Done: two Opus/Astra cycles; the Fable 5.2 step; the Opus check of it (regression found and fixed,
-overnight rounds u1-u4). **Not frozen; the exam was not run; the PM said not to freeze or
-prepare the exam until told.** Next: Astra review of the latest round; then the PM priorities
-(missing ballast and fuel tanks, extents of wing ballast tanks, cut diagonal labels).
+overnight rounds u1-u6). **Not frozen; the exam was not run; the PM said not to freeze or
+prepare the exam until told.** Next: Astra review of round u6; then the open items: extents that take in neighbouring
+compartments, a check of measured hatch and hold sizes against the dimensions printed on the
+drawing (needs the printed dimension text read), short web-frame ranges placed one frame off,
+and cut diagonal labels.
 To repeat a development round: `ga_commercial batch --measure --max-requests 65` on groups of
 the 14 development cases; each `ga_reading.json` has `passes`, `frames`, `measured` and the space
 extents, and `ga_arrangement_input.json` is beside it.

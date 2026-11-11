@@ -565,8 +565,10 @@ def missing_places(work: dict) -> list[str]:
         missing += [name for name in PROFILE_PLACES if not any(name in named.get(v, ()) for v in profile)]
     if plans and not any(set(PLAN_PLACES) <= named.get(v, set()) for v in plans):
         missing += [name for name in PLAN_PLACES if not any(name in named.get(v, ()) for v in plans)]
-    marks = {name for found in raw.get("marks", {}).values() for name in found}
-    missing += [label for name, label in (("ap", "A.P."), ("fp", "F.P.")) if name not in marks]
+    # The LBP needs A.P. and F.P. on the profile's frame scale, so they count there only.
+    marks = {name for view in profile for name in raw.get("marks", {}).get(view, {})}
+    if profile:
+        missing += [label for name, label in (("ap", "A.P."), ("fp", "F.P.")) if name not in marks]
     return missing
 
 
@@ -964,15 +966,13 @@ def read_extents(result: dict, work: dict, reading: dict, request_dir: Path) -> 
                                       * (tile["crop_box_px"][2] - tile["crop_box_px"][0]) / tile["width"])
                 added += 1
         # A.P. and F.P. marks that the scale request left out (needed for the LBP).
-        found = {name for named in raw["marks"].values() for name in named}
         for tick in marks:
             name = parse_tick(tick["label"])[0]
-            if name in found:
-                continue
             tile = tiles[tick["image_id"]]
-            raw["marks"].setdefault(_view_id(tile), {}).setdefault(name, []).append(
-                _to_sheet(tile, tick["x"], tick["y"]))
-            found.add(name)
+            view_marks = raw["marks"].setdefault(_view_id(tile), {})
+            if name in view_marks:
+                continue  # a mark already pointed in this view is kept
+            view_marks[name] = [_to_sheet(tile, tick["x"], tick["y"])]
             added += 1
         if added:
             stats["points_added"] = added
@@ -1138,7 +1138,13 @@ def check_depth(result: dict, work: dict) -> None:
             confirmed_by_other = any(abs(top - pointed) <= allowed for top in others)
             if confirmed_by_other:
                 reason += "; another space below the deck ends at the pointed line, so the boxes disagree"
-            if tops_agree and not confirmed_by_other:
+            # Cargo boxes a rail or bulwark height above the pointed line: the boxes may end on the
+            # rail (development round u5) as well as the line may be below the deck; code cannot
+            # tell which, so the cargo tops do not replace the line.
+            rail_apart = highest - pointed <= RAIL_OR_CAMBER_M
+            if rail_apart and not confirmed_by_other:
+                reason += "; the boxes end a rail height above it, so which line is the deck at side is not clear"
+            if tops_agree and not confirmed_by_other and not rail_apart:
                 result["measured"]["depth_m"] = from_tops(reason, "the pointed line lay below them")
                 result["checks"].append({"code": "depth_taken_from_cargo_space_tops", "status": "check"})
             else:
@@ -1270,7 +1276,31 @@ def merged_spaces(result: dict) -> list[dict]:
         for profile in profiles:
             if profile["id"] not in used_profiles:
                 merged.append(_joined(None, profile))
-    return merged + plain
+    return [part for entry in merged for part in _split_pair(entry)] + plain
+
+
+def _split_pair(entry: dict) -> list[dict]:
+    """A pair printed for both sides ("(P&S)") whose plan box lies on one side: two spaces.
+
+    The model boxes the tank on the side where its label is; the other tank of the pair is its
+    mirror about the centreline (status ``guessed``). As one entry with ``side: both`` the
+    pair would read as one space across the whole y range (development round 3: wing tanks of
+    a pair given as one, so the cargo tank between them looked full breadth).
+    """
+    extent = entry["extent"]
+    if extent.get("side") != "both" or "y_m" not in extent:
+        return [entry]
+    low, high = extent["y_m"]
+    if low < -CENTRE_TOLERANCE_M and high > CENTRE_TOLERANCE_M:
+        return [entry]  # one space across the centreline
+    boxed = "port" if low >= -CENTRE_TOLERANCE_M else "starboard"
+    other = "starboard" if boxed == "port" else "port"
+    first = {**entry, "id": f"{entry['id']}-{boxed[0]}", "extent": {**extent, "side": boxed}}
+    mirror_extent = {**extent, "side": other, "y_m": [round(-high, 2), round(-low, 2)],
+                     "status": {**extent["status"], "y": "guessed"},
+                     "y_note": "mirror of the other tank of the pair about the centreline"}
+    second = {**entry, "id": f"{entry['id']}-{other[0]}", "extent": mirror_extent}
+    return [first, second]
 
 
 def _overlap(a: dict, b: dict) -> float:

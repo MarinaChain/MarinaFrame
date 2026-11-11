@@ -195,3 +195,16 @@ def test_a_fine_label_of_a_hold_without_its_number_is_not_a_hold():
         {"text": "NO.3 HOLD", "kind": "cargo_hold", "number": "3"}]}]}}}
     ga_labels.merge(result, crop_map, [reading], "S_GA.png", [100, 100])
     assert [(s["label"], s["kind"]) for s in result["spaces"]] == [("HOLD", "other_space"), ("NO.3 HOLD", "cargo_hold")]
+
+
+@pytest.mark.parametrize("first, second, same", [
+    ("NO. 3 T. S. W. B. T. (P/S)", "NO.3 T.S.W.B.T.(P/S)", True),   # one tank read twice
+    ("NO.3 T.S.W.B.T. (P/S)", "NO.3 W.B.T. (P/S)", False),         # two tank families, one number
+    ("NO.2 F.O.T. (P)", "NO.2 F.O.T. (S)", True),                   # the side is in the number
+])
+def test_a_label_is_another_space_only_when_its_family_differs(first, second, same):
+    assert (ga_labels.label_family(first) == ga_labels.label_family(second)) is same
+
+
+def test_a_hoist_crane_is_not_a_cargo_crane():
+    assert ga_labels.checked_kind("cargo_crane", "HOIST CRANE") == "other_space"

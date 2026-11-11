@@ -103,9 +103,12 @@ def main(argv=None) -> int:
     parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args(argv)
     index = {}
+    args.out.mkdir(parents=True, exist_ok=True)
     for case in args.cases:
-        reading = args.run / case / "ga_reading.json"
-        if not reading.exists():
+        # A batch writes <run>/<case>; a run made of several batches has <run>/<group>/<case>.
+        found = [args.run / case / "ga_reading.json", *sorted(args.run.glob(f"*/{case}/ga_reading.json"))]
+        reading = next((path for path in found if path.exists()), None)
+        if reading is None:
             continue
         result = json.loads(reading.read_text())
         ga = result["sources"].get("ga")

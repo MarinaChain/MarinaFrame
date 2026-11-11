@@ -370,7 +370,7 @@ KIND_WORDS = {
     "cargo_hold": r"\bHOLD\b",
     "cargo_hatch": r"\bHATCH\b|\bH\.?\s?C\b",
     # A hose-handling, provision or engine-room crane is a crane but not a cargo crane.
-    "cargo_crane": r"^(?!.*\b(?:HOSE|PROV|PROVISION|STORE|STORES|ENGINE|E/R|DAVIT|MISC)\b).*\bCRANE\b",
+    "cargo_crane": r"^(?!.*\b(?:HOSE|PROV|PROVISION|STORE|STORES|ENGINE|E/R|DAVIT|MISC|HOIST)\b).*\bCRANE\b",
     "cargo_tank": r"C\.?\s?O\.?\s?T|C\.?\s?T\b|CARGO\s+(?:OIL\s+)?T(?:AN)?K|\bCOT\b",
     "slop_tank": r"\bSLOP\b",
 }
@@ -421,6 +421,18 @@ def label_kind(kind: str, text: str, definitions: dict) -> str:
     return kind
 
 
+def label_family(text: str) -> str:
+    """The words of a label without its number and side: 'NO. 3 T. S. W. B. T. (P/S)' -> 'TSWBT'.
+
+    Tanks of different families share numbers in one view (NO.3 T.S.W.B.T. above a hold, NO.3
+    W.B.T. below it); a label is the same space as another only when its family is the same.
+    """
+    upper = joined_letters(text.upper())
+    upper = re.sub(r"\(\s*(?:P\s*[&/,]\s*S|P|S|C)\s*\)", " ", upper)  # side marks
+    upper = re.sub(r"\bNO\b\.?", " ", upper)
+    return re.sub(r"[^A-Z]", "", upper)
+
+
 def merge(result: dict, crop_map: list[dict], readings: list[dict], sheet_name: str, page_px) -> dict:
     """Add the labels read to the spaces; return the per-ship fine-pass statistics."""
     from .ga_commercial import DEFINITIONS, add_space, finish_counts
@@ -430,7 +442,7 @@ def merge(result: dict, crop_map: list[dict], readings: list[dict], sheet_name: 
         for crop in ((reading.get("reply") or {}).get(PURPOSE) or {}).get("crops", []):
             answers[crop["crop_id"]] = crop
     added = 0
-    known = {(s["kind"], s["view_id"], s["number"]) for s in result["spaces"] if s["number"]}
+    known = {(s["kind"], s["view_id"], s["number"], label_family(s["label"])) for s in result["spaces"] if s["number"]}
     for crop in crop_map:
         answer = answers.get(crop["crop_id"])
         if answer is None:
@@ -450,9 +462,9 @@ def merge(result: dict, crop_map: list[dict], readings: list[dict], sheet_name: 
                                          "label": label["text"][:64], "kind": label["kind"]})
             space = add_space(result, f"{kind}-{crop['crop_id']}-{index + 1}", kind,
                               label["text"], label["number"], "read", region, "fine")
-            key = (space["kind"], space["view_id"], space["number"])
+            key = (space["kind"], space["view_id"], space["number"], label_family(space["label"]))
             if space["number"] and key in known:
-                # The coarse pass already listed this numbered space in this view.
+                # The coarse pass already listed this numbered space of this family in this view.
                 result["spaces"].remove(space)
                 continue
             known.add(key)
