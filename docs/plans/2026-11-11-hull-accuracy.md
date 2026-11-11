@@ -172,9 +172,50 @@ whose curves split at the bottom). A fix belongs there: let stations that share 
 take different bottom branches, ordered by station distance from midship. Not attempted in this
 round; `ingest.py` unchanged.
 
+### R2 live L0 (e2f795e, `work/round-hull2-L0-e2f795e`, snapshot `work/snap-hull-e2f795e`)
+
+| Case | Live baseline (4f03667 / 4354b28) | Live 5b8a9d5 | Live e2f795e |
+|---|---|---|---|
+| dtmb5415-3v-L0 | 5.07 / +0.7 | 8.92 / +0.7 (worse reading kept) | 5.07 / +0.6 (second reading same setup) |
+| series60-3v-L0 | blocked / 1.39 | - | **1.24 / +0.9 pass** |
+| shipd-1-00679-3v-L0 | 4.39 / +0.5 | 4.43 / +0.6 | 4.43 / +0.6 |
+| shipd-1-08158-3v-L0 | 0.76 / -2.1 | - | **0.75 / -2.1 pass** |
+| shipd-1-09867-3v-L0 | 3.63 / +1.6 | 0.87 / +1.7 | **0.87 / +1.7 pass** |
+| shipd-2-02216-3v-L0 | 3.17 / -1.5 | 3.47 / -2.0 | **0.59 / -1.5 pass** |
+
+4 of 6 pass live (1 of 6 at 4f03667). The development run (L1-L3, 18 cases, same code) follows.
+
+### R2 development run (24 cases: the L0 round above + `work/round-hull2-dev-e2f795e`)
+
+All 24 built a valid draft (2 ended `paused`, model asked a person, with a valid draft). RMS % /
+volume %, delivered draft; last live L1 numbers before this lane from b5a9dac / e445d52
+(docs/CONTINUATION_STATUS.md).
+
+| Hull | L0 | L1 (before) | L2 | L3 |
+|---|---|---|---|---|
+| dtmb5415 | 5.07 / +0.6 | 9.39 / +0.7 (18.22) | 32.33 / +36.7 | 59.03 / +61.6 |
+| series60 | **1.24 / +0.9** | 3.33 / -0.8 (3.49) | 36.73 / -29.7 | 20.39 / -11.5 |
+| shipd-1-00679 | 4.43 / +0.6 | 3.89 / -0.5 (8.59) | 28.45 / +11.9 | 44.21 / -22.5 |
+| shipd-1-08158 | **0.75 / -2.1** | **1.86 / -2.7** (11.92) | 17.38 / -19.2 | 17.70 / +5.2 |
+| shipd-1-09867 | **0.87 / +1.7** | **0.92 / +1.9** (2.06) | 12.72 / +5.1 | 35.68 / -44.3 |
+| shipd-2-02216 | **0.59 / -1.5** | 50.26 / -4.5 (-) | 17.42 / +10.9 | 46.79 / -8.4 |
+
+Pass: 6 of 24 (L0 4, L1 2, L2 0, L3 0). L1 improved on all five hulls with earlier numbers.
+02216-L1 is the model's reading: the replay under round-1 code gives the same 50.4 % (57 % at
+every station: a scale or datum misreading). L2/L3 errors are 12-59 % with large volume errors,
+which points at the readings of blurred sheets (scale, datums, curve identity), not at this lane's
+code; earlier lanes have no sheet-only L2/L3 numbers to compare.
+
+## Open after round 2
+
+1. 00679: shared-stroke branch split in `panel_assignment` (R2-3).
+2. dtmb deck samples (one 0.05 m sample per station; fix 3 trial reverted).
+3. L2/L3 readings (scale and datums on blurred sheets); 02216-L1 reading misread scale or datum.
+
 ## Resume point
 
-Branch `lane/hull-accuracy` at the commit after 5b8a9d5 (doc), pushed; quick tier passed on
-5b8a9d5 (1850 Python tests, Rust, UI, lint, secrets). Next: open item 2 or 1, check each with
-`benchmarks/hull_accuracy/replay_readings.py` on the stored readings in
-`work/round-hull-L0-{base-4f03667,base2-4354b28,fix-5b8a9d5}` before any live round.
+Round 2: branch `lane/hull-accuracy-2` (from ad14160), pushed; quick tier passed on 190b37d
+(1853 Python tests, Rust, UI, lint, secrets). Stored readings for replays:
+`work/round-hull-L0-{base-4f03667,base2-4354b28,fix-5b8a9d5}`, `work/round-hull2-L0-e2f795e`,
+`work/round-hull2-dev-e2f795e`. Next: open item 1 (00679 branch split in panel_assignment), checked
+with `benchmarks/hull_accuracy/replay_readings.py` on every stored reading before a live round.
