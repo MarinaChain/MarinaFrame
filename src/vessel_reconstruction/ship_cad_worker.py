@@ -126,7 +126,7 @@ def sandbox_command(task: Path, limits) -> tuple[list[str], str]:
                                      'executable': sys.executable, 'limits': asdict(limits),
                                      'parent_pid': os.getpid()}))
         return ([str(linux_launcher()), '--config', str(config), '--', *arguments],
-                'linux-landlock-seccomp-deny-list')
+                'linux-landlock-seccomp-allow-list')
     require_sandbox()
     profile = task/'worker.sb'
     profile.write_text(sandbox_profile(task, runtime_paths()))

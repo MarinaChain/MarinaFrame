@@ -215,6 +215,13 @@ fn child_can_attest_kernel_controls_but_not_read_host_proc() {
 }
 
 #[test]
+fn unlisted_harmless_syscall_is_denied_by_default() {
+    // getcpu succeeds without special privileges and was permitted by the old
+    // deny-list. No host security setting should produce a false-positive EPERM.
+    success(&format!("import ctypes,errno\nlibc=ctypes.CDLL(None,use_errno=True)\nprint('REACHED',flush=True)\nassert libc.syscall(ctypes.c_long({}),None,None,None)==-1\nassert ctypes.get_errno()==errno.EPERM", libc::SYS_getcpu));
+}
+
+#[test]
 fn descriptor_limit_is_enforced() {
     success("import errno\nprint('REACHED', flush=True)\nfiles=[]\ntry:\n for i in range(64): files.append(open('file-'+str(i), 'w'))\nexcept OSError as e: assert e.errno == errno.EMFILE\nelse: raise AssertionError('descriptors unlimited')");
 }

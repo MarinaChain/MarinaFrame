@@ -43,7 +43,7 @@ def test_linux_command_uses_native_launcher(monkeypatch, tmp_path):
     command, label = worker.sandbox_command(task, SANDBOX_MODEL_LIMITS)
     assert command[:3] == [str(launcher), '--config', str(task/'worker-linux.json')]
     assert command[3:5] == ['--', sys.executable]
-    assert label == 'linux-landlock-seccomp-deny-list'
+    assert label == 'linux-landlock-seccomp-allow-list'
     config = json.loads((task/'worker-linux.json').read_text())
     assert config['task'] == str(task)
     assert config['work'] == str(task/'work')

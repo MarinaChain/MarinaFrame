@@ -44,4 +44,19 @@ No polling watchers. At most one CI status check every five minutes, at most 40 
 GitHub ledger:
 - Call 1/40: 2026-11-12 06:18:27 +08, `gh run list` after discovery push, no run registered yet. Session scheduling did not resume work; PM resumed explicitly.
 - Call 2/40: fetched complete logs for cancelled run 43110649775. No summary exists: CAD trace stalled after import font warnings until the 30-minute job cancellation. Do not invent a measured set from this run. Trace now emits incremental evidence and stage markers; fixture uses exportStl(parallel=False) instead of the default thread-creating mesher. Required Mac quick tier rerun is active before discovery retry push. No watchers or new scheduling.
-- Call 3/40: 2026-11-12 06:59:05 +08, run list immediately after b282864 push still showed only the old cancelled run. Do not check again before 07:04:05 +08. Retry checkpoint Mac quick tier exit 0: 2011 Python passed, 4 skipped, 84 deselected; 269 UI passed; Rust checks passed; secrets scan 0 findings. Corrected incremental trace checkpoint b282864 pushed; await PM resumption/CI registration. No measured set yet.
+- Call 3/40: 2026-11-12 06:59:05 +08, run list immediately after b282864 push still showed only the old cancelled run. Do not check again before 07:04:05 +08. Retry checkpoint Mac quick tier exit 0: 2011 Python passed, 4 skipped, 84 deselected; 269 UI passed; Rust checks passed; secrets scan 0 findings. Corrected incremental trace checkpoint b282864 pushed; await PM resumption/CI registration. No measured set yet at that checkpoint.
+- Call 4/40: fetched successful run 43116216695 logs on PM resumption. No more gh calls will be made for this push; PM will check CI.
+
+## Measured allow-list implementation
+
+Run 43116216695 completed the x86_64 trace (CPython 3.12.14, OCP/CAD import, box, STEP export/import, serial STL export), exit 0. Measured names:
+
+```
+access arch_prctl brk chdir close close_range connect dup2 epoll_create1 execve exit_group fcntl fstat futex getcwd getdents64 getegid geteuid getgid getpid getppid getrandom gettid getuid ioctl kcmp landlock_add_rule landlock_create_ruleset landlock_restrict_self lseek mbind mkdir mmap mprotect mremap munmap newfstatat openat pipe2 poll prctl pread64 prlimit64 read readlink rseq rt_sigaction rt_sigprocmask sched_getaffinity set_robust_list set_tid_address sigaltstack socket stat statx times uname unshare vfork wait4 write writev
+```
+
+This trace includes the trusted supervisor/launcher and failed calls. Excluded from permissions: socket/connect/kcmp (denied probes), Landlock/prctl/unshare (launcher setup), vfork/wait4 (supervisor subprocess), prlimit64 (cross-process interface), mbind (NUMA policy; not required for successful CAD). All other measured worker-safe calls are allowed. fcntl/ioctl signal-owner command filters execute before allow rules. Unknown calls end in EPERM; alternate ABI guards still kill.
+
+Beyond-trace additions are commented beside their entries: vDSO clock fallbacks, nanosleep for Python time.sleep, exit/signal-return, buffered/vector I/O, confined atomic CAD publication, and aarch64 native equivalents for absent legacy x86 calls. aarch64 uses libc's native syscall constants but has no measured real-run evidence yet; do not claim otherwise.
+
+Receipt label is `linux-landlock-seccomp-allow-list`. Regression `unlisted_harmless_syscall_is_denied_by_default` requires EPERM for getcpu, which the previous deny-list permitted. Existing signal-owner, IPC, cross-process, home, attestation and real CAD tests remain mandatory in Linux CI. Mac targeted tests 13 passed, 4 Linux-only skips; Linux cross-type-check and Clippy passed. Full Mac quick tier pending before the one final push; PM checks subsequent CI.
