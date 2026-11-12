@@ -47,5 +47,3 @@ SYSTEM_WORDS = {"FOAM", "CO", "FIRE", "FAN", "HYD", "PAINT", "LAMP", "ROPE", "CH
 DECK_NAME_WORDS = {"DECK", "DK"}
 # Words of a note printed beside a fitting ("FOLDING TYPE"), never of a space.
 NOTE_WORDS = {"TYPE"}
-
-

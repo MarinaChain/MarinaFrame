@@ -87,7 +87,7 @@ Before is `c30e5cf`. Line counts include comments and blank lines. Longest funct
 | `ga_scale_requests` | 261 | `prepare_extents` (51) |
 | `ga_scale_settings` | 234 | none |
 | `ga_spaces` | 36 | `add_space` (15) |
-| `ga_vocabulary` | 51 | none |
+| `ga_vocabulary` | 49 | none |
 
 The longest remaining GA reader function is `scale_pass` at 77 lines (before: 185).
 
@@ -97,7 +97,8 @@ The longest remaining GA reader function is `scale_pass` at 77 lines (before: 18
 - `cargo test -p marinaframe-control ga_reading`: **11 passed**, no failures.
 - Final four output types: **14/14 byte-identical each**; latest arrangement match **14/14**; gate **14/14**; model calls **0**.
 - Lane W script run separately on all final arrangements: **14/14 pass**.
-- Static undefined-name checks and `git diff --check`: pass.
+- Static undefined-name checks and full-range `git diff --check`: pass after removing trailing vocabulary blank lines.
+- AST audit: all 147 original named constant expressions are retained unchanged.
 - Bounded secret pattern scan: 0 findings, not proof of absence.
 - Full quick tier: not rerun after continuation, per PM direction. The earlier full-tier failures remain recorded above.
 - Independent source review: pending.
