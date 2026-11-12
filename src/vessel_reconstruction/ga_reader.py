@@ -2,6 +2,10 @@
 
 Plan: docs/plans/2026-11-09-whole-vessel-scope.md, step 1.
 
+This is the earlier geometry reader, separate from the commercial label and frame-scale
+pipeline (`ga_commercial` and `ga_scale`). That pipeline does not call this module. Keep
+these vector/raster geometry helpers for whole-vessel envelope experiments and their tests.
+
 The reader turns vector GA linework into ship-cad measurements:
 
 - profile view: horizontal deck and roof levels (z) with their x extents;

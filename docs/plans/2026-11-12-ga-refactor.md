@@ -41,6 +41,12 @@ Run from this worktree; `P=/Users/jonathanjie/Documents/workspace/MarinaFrame/.v
 - Scale: `PYTHONPATH=src $P scripts/ga_replay_scale.py --run /Users/jonathanjie/Documents/workspace/MarinaFrame/work/ga-internal-23/dev-runs/u10 --inputs /Users/jonathanjie/Documents/workspace/MarinaFrame/work/ga-internal-23/inputs --out work/ga-refactor/NEW-scale`
 - Gate: `PYTHONPATH=src $P scripts/ga_arrangement_gate.py work/ga-refactor/NEW-scale`
 
+## PM continuation and current checks
+
+The PM directed continuation after the first checkpoint. The unrelated full-tier failure must not block the refactor. Run only the sheet-replacement diagnostic once with `RUST_BACKTRACE=1` and explicit `MARINAFRAME_TEST_PYTHON`; it passed, with both registry errors `None`. Do not change its test or app code.
+
+For steps 4–8, the PM replaces the full quick tier with all GA Python tests and the 14-case byte proof after each step, plus `cargo test -p marinaframe-control ga_reading`. Set `CARGO_TARGET_DIR` inside this worktree and `MARINAFRAME_TEST_PYTHON` explicitly. The PM runs the full quick tier on merge.
+
 ## Resume point
 
-Stopped after the vocabulary move (step 3), before any scale/commercial function moves. Baseline and changed quick tiers both fail at `app/core/tests/replace_sheet.rs:144`: expected no registry error, got `sheet_replacement_failed`. Do not fix or widen this unrelated gate in this lane. Resume step 4 only after the PM resolves or explicitly accepts the baseline failure. See `docs/plans/2026-11-12-ga-refactor-results.md` for tracked evidence (the final report copy is in ignored `outputs/ga-refactor-checkpoint.md`). The early-stop commit/push is required by the lane brief; it is not a claim that the quick tier passes.
+Steps 1–6 are committed. Step 7's separate-purpose docstring is written. Final checks and independent source review are running. Finish the report, commit remaining documentation, push only `lane/ga-refactor`, and remove this worktree's target as the last action. See `docs/plans/2026-11-12-ga-refactor-results.md` for the per-step proof and module map.
