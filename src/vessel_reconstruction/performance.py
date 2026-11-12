@@ -182,7 +182,8 @@ def hull_particulars_from_mesh(triangles: np.ndarray, *, draft_m: float, lpp_m: 
     if draft_m <= float(mesh[:, :, 2].min()) or draft_m > float(mesh[:, :, 2].max()):
         raise ValueError("waterline must be above the keel and within the mesh height")
     h = mesh_hydrostatics(mesh, draft_m, "explicit mesh waterline z (m)")
-    for name, value in (("volume", h.volume_m3), ("draft", h.draft_m),
+    immersed_draft = draft_m - h.keel_z_m
+    for name, value in (("volume", h.volume_m3), ("draft", immersed_draft),
                         ("beam", h.largest_breadth_below_waterline_m),
                         ("largest section", h.largest_section_area_m2),
                         ("wetted surface", h.wetted_surface_m2)):
@@ -196,9 +197,9 @@ def hull_particulars_from_mesh(triangles: np.ndarray, *, draft_m: float, lpp_m: 
     lcb_from_aft = forward_x_sign * (h.lcb_m - aft_perpendicular_x_m)
     return HullParticulars(
         lpp_m=lpp_m, waterline_length_m=h.waterline_length_m, beam_m=beam,
-        draft_m=h.draft_m, volume_m3=h.volume_m3,
-        cb_lpp=h.volume_m3 / (lpp_m * beam * h.draft_m),
-        cp_lpp=h.volume_m3 / (lpp_m * area), cm=area / (beam * h.draft_m),
+        draft_m=immersed_draft, volume_m3=h.volume_m3,
+        cb_lpp=h.volume_m3 / (lpp_m * beam * immersed_draft),
+        cp_lpp=h.volume_m3 / (lpp_m * area), cm=area / (beam * immersed_draft),
         cwp_lpp=h.waterplane_area_m2 / (lpp_m * beam),
         lcb_percent_lpp_forward_of_midships=100 * (lcb_from_aft / lpp_m - 0.5),
         wetted_surface_m2=h.wetted_surface_m2, scale=scale,

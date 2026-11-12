@@ -124,6 +124,17 @@ def test_mesh_particulars_reuse_hydrostatics_without_renaming_lwl_as_lpp():
     assert result.engineering_approved is False
 
 
+def test_mesh_draft_is_above_keel_not_global_waterline_z():
+    mesh = _box_mesh().astype(float)
+    mesh[:, :, 2] += 5
+    result = performance.hull_particulars_from_mesh(
+        mesh, draft_m=11, lpp_m=100, aft_perpendicular_x_m=0,
+        forward_x_sign=1, scale="model")
+    assert result.draft_m == pytest.approx(6)
+    assert result.cb_lpp == pytest.approx(1)
+    assert result.cm == pytest.approx(1)
+
+
 def test_lcb_convention_is_explicit_for_reversed_mesh_axis():
     result = performance.hull_particulars_from_mesh(
         _box_mesh(), draft_m=6, lpp_m=100, aft_perpendicular_x_m=110,
