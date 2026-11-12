@@ -198,6 +198,40 @@ intent, superseded by this section. No scoring gate is relaxed.
    complete without the independent blind check. Delete only this worktree's
    own `target/` as the final cleanup, not the shared Cargo target.
 
+## PM continuation: development and independent evaluator
+
+PM decision after checkpoint `2dcea0c`: JBC is development. Blind scoring belongs
+only to a later independent evaluator. Exposure inventory is committed in
+`e8528b4`; measured development set is **KCS and JBC only**. Do not open any
+new ship's measurements (conditions-only exposure is not a development licence).
+
+Architecture review: PASS for separate scalar method modules and one JSON runner;
+WARN for scale/area conventions and coefficient transcription, controlled by
+explicit inputs, source citations and original worked-example tests. Tests:
+PASS with term tests, propeller equilibrium checks, runner malformed-input tests
+and public development comparisons. Runtime: PASS, scalar evaluation; geometry
+preparation is serial and uses existing mesh integration.
+
+Execution sequence (current session):
+1. `holtrop.py` / `test_holtrop.py`: named 1982/1984 forms, component terms,
+   interaction regressions, published author example; red/green before commit.
+2. `propeller.py` / `test_propeller.py`: published B-series coefficients,
+   base-Re convention, open-water efficiency, thrust-equilibrium matching and
+   marked outside-range results; independently check published worked values.
+3. `performance_compare.py` / `test_performance_compare.py`: versioned JSON
+   input with explicit model scale, water, geometry particulars, reference area,
+   per-speed measurements and provenance. Emit JSON and markdown signed errors.
+   No hard-coded blind ship and no network calls in evaluator execution.
+4. Prepare only KCS/JBC public geometry and known test cells under ignored work;
+   compare model-scale resistance, power and validity flags. Do not tune formula
+   constants after errors are seen. Document any model-vs-series mismatch.
+5. Integrate source-backed tests, run focused and required quick tier, commit
+   and push. Create `perf-frozen-1` only on a passing code commit; do not move it.
+   Exact evaluator command uses that tag and an explicit external JSON input.
+   The evaluator, not this lane, supplies and opens blind measurements.
+6. Final report records counts, errors, limits, source cells, tag SHA and command.
+   No blind score is produced. Remove only lane-local target after final push.
+
 ## Resume point
 
 - Protocol committed first (this file).

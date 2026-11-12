@@ -34,6 +34,27 @@ sealed data was opened.
 exposure does not authorize opening KVLCC1/2 or DTMB result data. This is the
 conservative boundary until the PM selects the independent blind ship.
 
+### Additional reads after inventory (development only)
+
+- Opened all nonempty cells of KCS `KCS_vary_Fr_2-1.xls` Sheet1:
+  D5:D10 CT×1000 = 3.796, 3.641, 3.475, 3.467, 3.711, 4.501;
+  C5:C10 Fr as listed above. E5:E10 Sf×100 = −0.195, −0.613,
+  −1.213, −1.750, −2.465, −2.710; F5:F10 Sa×100 = 0.015, 0.063,
+  0.015, −0.138, −0.322, −0.695; G5:G10 mean sinkage×100 =
+  −0.090, −0.275, −0.599, −0.944, −1.394, −1.702;
+  H5:H10 trim degrees = −0.017, −0.053, −0.097, −0.127, −0.169, −0.159.
+- Opened all nonempty cells of the two already-exposed JBC templates;
+  numerical result values match the inventory above (resistance C4/C10/C12;
+  self-propulsion C4/C10/C12/C14/C16). Reference area is A14/A18 respectively.
+- Opened public KCS Case2.1 page, KCS geometry/conditions page, JBC
+  geometry/conditions page, KCS geometry memo, and JBC CAD description.
+  These expose additional particulars/conditions of **the same two ships**,
+  including full/ballast/model variants. No new ship's test data was opened.
+- Extracted KCS starboard-half IGES and JBC `jbc.igs` only. Did not open
+  other JBC case measurements or any other ship's measured results.
+- Local cell transcript: ignored `work/performance-baseline/exposed-tables.txt`;
+  downloaded condition HTML and geometry under ignored `work/sources/{kcs,jbc}-geometry/`.
+
 ## Outcome and exact stop point (previous checkpoint; superseded by continuation below)
 
 **Lane incomplete. No ship resistance, propulsion or fuel prediction is reported.**
