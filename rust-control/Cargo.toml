@@ -22,7 +22,7 @@ base64 = "=0.22.1"
 libc = "=0.2.183"
 reqwest = { version = "=0.12.24", default-features = false, features = ["blocking", "json", "rustls-tls-native-roots"] }
 serde = { version = "=1.0.228", features = ["derive"] }
-serde_json = { version = "=1.0.145", features = ["float_roundtrip"] }
+serde_json = { version = "=1.0.145", features = ["float_roundtrip", "raw_value"] }
 sha2 = "=0.10.9"
 # A private working folder for each `claude` CLI request (claude_cli.rs).
 tempfile = "=3.23.0"

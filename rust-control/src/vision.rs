@@ -78,6 +78,7 @@ impl Purpose {
             Purpose::Localisation => Some("localisation_image"),
             Purpose::ShipCad => Some("ship_cad_drawing"),
             Purpose::PartRevision => Some(part_revision::EVIDENCE_KIND),
+            Purpose::StationNumbers => Some(crate::station_numbers::EVIDENCE_KIND),
             _ => None,
         }
     }
@@ -363,6 +364,7 @@ pub enum VisionReply {
     Localisation(LocalisationReply),
     ShipCad(ShipReply),
     PartRevision(PartProgram),
+    StationNumbers(crate::station_numbers::StationNumbersReply),
 }
 
 fn bounded_text(text: &str, max: usize) -> bool {
@@ -480,6 +482,9 @@ pub fn parse_reply(
     images: &[ImageReceipt],
 ) -> Result<VisionReply> {
     match purpose {
+        Purpose::StationNumbers => Ok(VisionReply::StationNumbers(crate::station_numbers::parse(
+            content, images,
+        )?)),
         Purpose::ShipCad => {
             let reply: ShipReply = util::parse(content.as_bytes(), 65_536)?;
             reply.validate()?;
@@ -552,6 +557,8 @@ pub fn check_input(input: &ProviderInput) -> Result<()> {
     let mut ids = BTreeSet::new();
     for image in &input.images {
         if image.evidence_kind != kind
+            || (input.purpose == Purpose::StationNumbers
+                && image.pixel_size.is_none_or(|size| size.contains(&0)))
             || !util::valid_id(&image.artifact_id, 64)
             || !ids.insert(image.artifact_id.as_str())
         {
@@ -638,6 +645,9 @@ pub fn load_request(directory: &Path) -> Result<(RequestManifest, String, Vec<Ve
 fn response_schema(purpose: Purpose, view: &str) -> Value {
     let reading = "either {\"value\":V,\"evidence\":\"...\"} or {\"missing\":\"reason\"}";
     match purpose {
+        Purpose::StationNumbers => {
+            serde_json::from_str(crate::station_numbers::CLI_SCHEMA).expect("station number schema")
+        }
         Purpose::ShipCad => {
             json!({"schema":"ship-cad/v1", "components":[{"id":"component", "op":"deckhouse", "source":{"view":"plan", "region":"house", "method":"closed_outline"}, "args":{"outline":"house_outline", "height":"house_height"}}], "regions":[{"id":"house", "view":"plan", "box_normalized":"[left,top,right,bottom] 0..1000"}], "measurements":[{"id":"house_outline", "tool":"closed_outline", "view":"plan", "region":"house"}]})
         }
@@ -674,6 +684,9 @@ pub fn payload(
     images: &[Vec<u8>],
 ) -> Result<(Value, Value, Vec<ImageReceipt>)> {
     let purpose = manifest.purpose;
+    if purpose == Purpose::StationNumbers {
+        crate::station_numbers::check_model(model)?;
+    }
     let kind = purpose
         .vision_evidence_kind()
         .ok_or("vision_purpose_contract")?;
@@ -694,6 +707,7 @@ pub fn payload(
         Purpose::ShipCad => "write_measured_ship_program",
         Purpose::Localisation => "measure_localisation",
         Purpose::PartRevision => "revise_one_part",
+        Purpose::StationNumbers => "read_printed_station_numbers",
         _ if manifest.images[0].view == OVERVIEW_VIEW => "overview",
         _ => "panel",
     };
@@ -994,7 +1008,12 @@ pub fn send_with(
         stop: None,
     };
     let mut retry_of = None;
-    for attempt in 1..=3u32 {
+    let max_attempts = if template.purpose == Purpose::StationNumbers {
+        2
+    } else {
+        3
+    };
+    for attempt in 1..=max_attempts {
         if worker::cancelled(out) {
             sent.stop = Some("cancelled".into());
             return Ok(sent);
@@ -1079,7 +1098,7 @@ pub fn send_with(
             }
             RequestState::Failed => usage.requests_failed += 1,
         }
-        if !retryable || attempt == 3 || wait > MAX_BACKOFF_SECONDS {
+        if !retryable || attempt == max_attempts || wait > MAX_BACKOFF_SECONDS {
             return Ok(sent);
         }
         let until = Instant::now() + Duration::from_secs(wait);

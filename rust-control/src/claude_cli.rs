@@ -213,6 +213,12 @@ pub fn build(payload: &Value, purpose: Purpose) -> Result<CliRequest> {
     .collect();
     if purpose.is_decision() {
         args.extend(["--json-schema".to_string(), DECISION_SCHEMA.to_string()]);
+    } else if purpose == Purpose::StationNumbers {
+        crate::station_numbers::check_model(model)?;
+        // The host parser enforces this purpose's schema. CLI structured-output
+        // repair can make several hidden model requests, outside the fixed
+        // station-reading budget. One tool-free turn returns JSON text instead.
+        args.extend(["--max-turns".to_string(), "1".to_string()]);
     } else if purpose == Purpose::PartRevision {
         // The model answers through the structured-output tool; the reply is
         // still checked strictly by `part_revision::parse`.
@@ -505,7 +511,16 @@ mod tests {
         assert!(
             blocks[1].get("cache_control").is_none() && blocks[2].get("cache_control").is_none()
         );
-        // Table and vision requests have their own reply shapes: no schema.
+        let station = build(&payload, Purpose::StationNumbers).unwrap();
+        assert!(!station.args.iter().any(|a| a == "--json-schema"));
+        let turn_index = station
+            .args
+            .iter()
+            .position(|a| a == "--max-turns")
+            .unwrap();
+        assert_eq!(station.args[turn_index + 1], "1");
+        assert!(!station.args.iter().any(|a| a == "--fallback-model"));
+        // Table reading has its own reply shape without a CLI schema.
         let table = build(&payload, Purpose::TableTranscription).unwrap();
         assert!(!table.args.iter().any(|a| a == "--json-schema"));
     }

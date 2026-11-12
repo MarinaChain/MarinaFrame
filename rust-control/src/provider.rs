@@ -61,6 +61,8 @@ pub enum Purpose {
     ShipCad,
     /// One whole-vessel part re-run from a person's mark (see `part_revision`).
     PartRevision,
+    /// Printed body-plan station labels only; no geometric authority.
+    StationNumbers,
 }
 impl Purpose {
     fn is_model_decision(&self) -> bool {
@@ -76,6 +78,7 @@ impl Purpose {
             Purpose::Localisation => vision::LOCALISATION_PROMPT,
             Purpose::ShipCad => vision::SHIP_CAD_PROMPT,
             Purpose::PartRevision => part_revision::PROMPT,
+            Purpose::StationNumbers => crate::station_numbers::PROMPT,
         }
     }
     /// Decision purposes return a tool call; table reading returns cells.
@@ -101,6 +104,7 @@ pub fn verify_receipt_body(receipt: &Receipt, body: &[u8]) -> Result<()> {
     let mut again = receipt.clone();
     again.decision = None;
     again.transcription = None;
+    again.vision = None;
     again.error_code = None;
     if let Err(code) = interpret_completion(&mut again, body, "") {
         again.error_code = Some(code);
@@ -111,6 +115,8 @@ pub fn verify_receipt_body(receipt: &Receipt, body: &[u8]) -> Result<()> {
     if again.state != receipt.state
         || again.error_code != receipt.error_code
         || !same(&again.decision, &receipt.decision)
+        || again.transcription != receipt.transcription
+        || again.vision != receipt.vision
         || again.returned_model != receipt.returned_model
         || again.completion_id != receipt.completion_id
         || again.usage != receipt.usage
@@ -226,6 +232,12 @@ pub fn check_input(input: &ProviderInput) -> Result<Vec<u8>> {
     }
     let p = &input.payload;
     let model = models::check_payload(p)?;
+    if input.purpose == Purpose::StationNumbers {
+        crate::station_numbers::check_model(model.id)?;
+        if input.attempt > 2 {
+            return Err("station_numbers_attempt_limit".into());
+        }
+    }
     if p["stream"] != false
         || p["max_tokens"]
             .as_u64()
@@ -240,7 +252,8 @@ pub fn check_input(input: &ProviderInput) -> Result<Vec<u8>> {
         | Purpose::BuildReview
         | Purpose::Localisation
         | Purpose::ShipCad
-        | Purpose::PartRevision => vision::check_input(input)?,
+        | Purpose::PartRevision
+        | Purpose::StationNumbers => vision::check_input(input)?,
     }
     let messages = p["messages"]
         .as_array()
@@ -419,6 +432,9 @@ pub fn returned_requested_model(receipt: &Receipt) -> bool {
 pub fn interpret_completion(receipt: &mut Receipt, bytes: &[u8], key: &str) -> Result<()> {
     receipt.state = RequestState::Failed;
     let transport = models::settings(&receipt.requested_model)?.transport;
+    if receipt.purpose == Purpose::StationNumbers {
+        crate::station_numbers::check_model(&receipt.requested_model)?;
+    }
     if transport == models::Transport::ClaudeSubscription {
         let content = claude_cli::interpret(receipt, bytes)?;
         return interpret_content(receipt, &content);
@@ -473,7 +489,8 @@ fn interpret_content(receipt: &mut Receipt, content: &str) -> Result<()> {
         | Purpose::BuildReview
         | Purpose::Localisation
         | Purpose::ShipCad
-        | Purpose::PartRevision => {
+        | Purpose::PartRevision
+        | Purpose::StationNumbers => {
             receipt.vision = Some(vision::parse_reply(
                 receipt.purpose,
                 content,

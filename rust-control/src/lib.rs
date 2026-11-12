@@ -4,6 +4,7 @@
 pub mod controller;
 pub mod models;
 pub mod provider;
+pub mod station_numbers;
 pub mod store;
 pub mod supervised;
 pub mod table_reading;
