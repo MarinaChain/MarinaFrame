@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from benchmarks.frozen_readers.v1 import body_plan_reader as bpr
 
+# Published holdout results (2026-11-11), Limits: now a development case.
+STATUS = 'development'
 PROTOCOL = 'docs/BODY_PLAN_CHINE.md (Holdout protocol: CAMA BEACH SKIFF No. 22)'
 # Frozen truth file work/holdout/cama_beach_skiff_22/truth.json (main checkout, read-only): sha256
 # as recorded in the protocol. The scorer stops if the file differs.
@@ -103,8 +105,19 @@ WATERLINES = tuple(WATERLINE_ROWS)
 # columns 3900-3903 and 3933-3936 (station 1 runs into the second near the base line).
 # Station 10 is labelled and drawn but has no printed offsets: it is named here so that rank
 # naming does not shift, and it is not a scored station.
-AFT_STATIONS_OUTER_FIRST = (8, 9, 10)
-FORE_STATIONS_OUTER_FIRST = (7, 6, 5, 4, 3, 2, 1)
+#
+# DEVELOPMENT CORRECTION (lane N, 2026-11-12; PM decision; this sheet is a spent holdout). The names above
+# were the calibration of the one published holdout run (FAIL), which stays as published and is not
+# re-scored. Evidence from the PRINTED TABLE OF OFFSETS (truth), so this correction is truth-informed: the
+# table's station n is the body-plan curve labelled n + 1 on both halves. At W3 the table gives 1 to 9 as
+# 384, 650, 872, 1033, 1128, 1156, 1126, 1047, 953 px, which are the half-breadth-plan values read above for
+# the profile lines labelled 2 to 10; near W6 the right curves (1084, 1065, 984, 832, 616, 360 px) are table
+# 6, 5, 4, 3, 2, 1 (1075, 1059, 978, 829, 612, 356) and the left curves (1048, 971, 876 px) table 7, 8, 9
+# (1041, 963, 868). So the right half is table 6 (outermost) to 0 (the curve near the stem, 102 px at
+# W3), the left half table 7, 8, 9, and the heavy line inside 9 (894 px near W3), read above as the transom
+# outline, is table station 10. No station is drawn on both halves. Stations 0 and 10 have no scored cells.
+AFT_STATIONS_OUTER_FIRST = (7, 8, 9, 10)
+FORE_STATIONS_OUTER_FIRST = (6, 5, 4, 3, 2, 1, 0)
 STATIONS = tuple(range(1, 10))  # scored stations, as in the protocol's parse check
 AFT_GRID_COLUMNS: tuple[float, ...] = ()
 FORE_GRID_COLUMNS: tuple[float, ...] = ()
@@ -137,7 +150,8 @@ def height_ft(row: float, column: float) -> float:
 
 
 def sheet_layout() -> bpr.SheetLayout:
-    """Host calibration: aftbody (8 to 10) left of the centreline, forebody (1 to 7) right."""
+    """Host calibration (development correction): aftbody (table stations 7 to 10) left of the centreline,
+    forebody (table stations 0 to 6) right."""
     sides = (bpr.SideLayout('aft', -1, AFT_STATIONS_OUTER_FIRST, AFT_GRID_COLUMNS),
              bpr.SideLayout('fore', 1, FORE_STATIONS_OUTER_FIRST, FORE_GRID_COLUMNS))
     return bpr.SheetLayout(CENTRE_COLUMN, PIXELS_PER_M, dict(WATERLINE_ROWS), MAX_OFFSET_PX, sides)

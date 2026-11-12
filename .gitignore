@@ -26,5 +26,6 @@ app/src-tauri/target/
 app/ui/mock/files/*.glb
 # Parts read from a real run folder for a local UI check (?mockpartsfile); never committed.
 app/ui/mock/files/*-local.json
+app/ui/mock/files/*-local.png
 # Release UI staged by app/scripts/stage-release-ui.mjs (a copy of app/ui without mock data).
 app/ui-release/

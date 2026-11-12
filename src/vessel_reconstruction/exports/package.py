@@ -291,7 +291,8 @@ def _report_progress(stage: str) -> None:
 def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float | None = None,
                  waterline_intervals: int = DEFAULT_WATERLINE_INTERVALS, vessel: str | None = None,
                  tanks: list | None = None, structure_dir: Path | None = None,
-                 booklet: Booklet | Path | str | None = None) -> dict:
+                 booklet: Booklet | Path | str | None = None,
+                 derived_cad: dict[str, Path] | None = None) -> dict:
     """Write all exports of one revision into ``out_dir``; return the manifest.
 
     ``tanks`` (``vessel_reconstruction.tanks.Tank`` list) adds the capacity plan, the sounding tables and
@@ -299,6 +300,13 @@ def export_draft(task_dir: Path, revision: str, out_dir: Path, *, draft_m: float
     folder. ``booklet`` adds printed hydrostatic comparisons to the CSV, PDF and accuracy line.
     """
     build = load_build(Path(task_dir), revision, vessel)
+    for fmt, path in (derived_cad or {}).items():
+        if fmt not in ('iges', '3dm') or not Path(path).is_file():
+            raise ExportError('Derived CAD must be an existing IGES or Rhino file.')
+        if fmt == 'iges':
+            build.iges_path = Path(path)
+        else:
+            build.rhino_path = Path(path)
     destination = Path(out_dir).resolve()
     task_root = build.task_dir.resolve()
     domain = task_root / "domain"

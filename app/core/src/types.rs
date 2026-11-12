@@ -263,6 +263,16 @@ pub struct TaskView {
     /// The automatic body-plan calibration to confirm (`body_plan_check`), when the run made one.
     #[serde(default)]
     pub body_plan_check: Option<BodyPlanCheckView>,
+    /// The GA reading of a commercial ship (`ga_reading`), when the run has one.
+    #[serde(default)]
+    pub ga_reading: Option<Value>,
+    /// Where each steel member was read, by member id (`run_tables::steel_records`), when the
+    /// structure reader wrote records. The 3D view's steel groups use them.
+    #[serde(default)]
+    pub steel_records: Option<Value>,
+    /// How the run first shows (`presentation`): whole vessel, view switches, a note line.
+    #[serde(default)]
+    pub presentation: Option<crate::presentation::RunPresentation>,
 }
 
 /// The automatic calibration of a scanned body plan: its overlay and why the body-plan reader
@@ -432,6 +442,12 @@ pub struct Settings {
     /// A desktop notification when a run stops (js Settings > Notifications). On by default.
     #[serde(default = "notify_finished_default")]
     pub notify_finished: bool,
+    /// Most worker processes of one source inspection in a run. Unset: no bound of
+    /// its own; the machine-wide worker pool shares cores - 2 workers between all
+    /// running inspections, so a lone run gets all of them and a batch shares them.
+    /// A speed setting: results do not depend on it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inspection_workers: Option<u32>,
 }
 
 fn notify_finished_default() -> bool {

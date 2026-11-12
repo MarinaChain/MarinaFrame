@@ -315,7 +315,8 @@ def main():
     try:
         if args.operation == "inspect":
             from .agent_tools import inspect_source_worker
-            result = inspect_source_worker(Path(request["spec_path"]), request["section_ids"], args.out)
+            result = inspect_source_worker(Path(request["spec_path"]), request["section_ids"], args.out,
+                                           request.get("page_section_ids"))
         else:
             args.out.mkdir(parents=True, exist_ok=False)
             result = (render_step(Path(request["run_dir"]), request["view"], args.out,

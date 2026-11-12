@@ -14,6 +14,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
+import sys
+import threading
 import time
 from pathlib import Path
 
@@ -60,7 +63,7 @@ def cap_stations(config: dict, deck: dict) -> dict:
     return config
 
 
-def build_hull(sources: Path, out: Path, deck: dict | None = None) -> Path:
+def build_hull(sources: Path, out: Path, deck: dict | None = None, after_read=None) -> Path:
     from benchmarks.gunnerus import make_gunnerus_configs, vector_path
 
     from vessel_reconstruction.dxf_documents import shared_documents
@@ -73,7 +76,7 @@ def build_hull(sources: Path, out: Path, deck: dict | None = None) -> Path:
         config['dxf'] = str((sources / LINES_FILE).resolve())
         (out / 'hull_config.json').write_text(json.dumps(config, indent=2) + '\n')
         (out / 'hull_identity.json').write_text(json.dumps(ledger, indent=2) + '\n')
-        summary = vector_path.run(out / 'hull_config.json', out / 'hull')
+        summary = vector_path.run(out / 'hull_config.json', out / 'hull', after_read=after_read)
     (out / 'hull_summary.json').write_text(json.dumps(summary, indent=2, default=str) + '\n')
     return out / 'hull' / 'model.brep'
 
@@ -135,6 +138,75 @@ def build_hull_to_deck(sections_path: Path, deck: dict, out: Path) -> tuple[Path
     raise GeometryError(f'hull to deck not built: {error}')
 
 
+# Folder (in the run folder) of the hull-to-deck build that runs beside the panel loft.
+HULL_TO_DECK_JOB = '.hull_to_deck_job'
+HULL_TO_DECK_JOB_FLAG = '--hull-to-deck-job'
+
+
+class HullToDeckJob:
+    """The hull-to-deck build in its own supervised process, beside the panel loft.
+
+    Both start from the read sections (``hull/sections.json``) and nothing else, so they are
+    independent. The child runs ``build_hull_to_deck`` (the same code, same inputs) and writes
+    its BREP and record to the job folder; ``result`` moves the BREP to where the sequential
+    build writes it. Own deterministic code: no wall-clock limit, only the progress watchdog.
+    """
+
+    def __init__(self, deck: dict, out: Path):
+        self.deck, self.out, self.folder = deck, out, out / HULL_TO_DECK_JOB
+        self.thread, self.outcome = None, None
+
+    def start(self, sections_path: Path) -> None:
+        from vessel_reconstruction.isolation import safe_worker_environment, supervise_process
+
+        self.folder.mkdir()
+        (self.folder / 'request.json').write_text(json.dumps({'sections': str(sections_path), 'deck': self.deck}))
+        root = Path(__file__).resolve().parents[2]
+        env = safe_worker_environment()
+        env['PYTHONPATH'] = f"{env['PYTHONPATH']}:{root}"
+        command = [sys.executable, '-m', 'benchmarks.gunnerus.whole_vessel_assembly', HULL_TO_DECK_JOB_FLAG,
+                   str(self.folder)]
+
+        def supervise():
+            self.outcome = supervise_process(command, env=env)
+        self.thread = threading.Thread(target=supervise, name='hull-to-deck', daemon=True)
+        self.thread.start()
+
+    def result(self) -> tuple[Path, dict]:
+        """The hull-to-deck BREP path and record, as ``build_hull_to_deck`` returns them."""
+        from vessel_reconstruction.errors import GeometryError
+
+        self.thread.join()
+        record_path = self.folder / 'record.json'
+        if self.outcome['state'] != 'exited' or not record_path.is_file():
+            raise RuntimeError(f"hull-to-deck worker ended: {self.outcome['state']} {self.outcome.get('error', '')}")
+        reply = json.loads(record_path.read_text())
+        if 'geometry_error' in reply:
+            raise GeometryError(reply['geometry_error'])
+        path = self.out / 'hull_to_deck.brep'
+        (self.folder / 'hull_to_deck.brep').rename(path)
+        self.discard()
+        return path, reply['record']
+
+    def discard(self) -> None:
+        if self.thread is not None:
+            self.thread.join()
+        shutil.rmtree(self.folder, ignore_errors=True)
+
+
+def run_hull_to_deck_job(folder: Path) -> None:
+    """Child side of ``HullToDeckJob``: build the hull to deck into the job folder."""
+    from vessel_reconstruction.errors import GeometryError
+
+    request = json.loads((folder / 'request.json').read_text())
+    try:
+        _, record = build_hull_to_deck(Path(request['sections']), request['deck'], folder)
+        reply = {'record': record}
+    except GeometryError as exc:
+        reply = {'geometry_error': str(exc)}
+    (folder / 'record.json').write_text(json.dumps(reply))
+
+
 def read_shape(path: Path):
     import cadquery as cq
     from OCP.BinTools import BinTools
@@ -178,6 +250,20 @@ def write_brep(shape, path: Path) -> None:
     BinTools.Write_s(shape.wrapped, str(path))
 
 
+def load_part(path: Path):
+    """Import and integrate one independent part, without changing reduction order."""
+    from vessel_reconstruction.geometry import precise_volume_mm3
+
+    shape = read_shape(path)
+    return shape, precise_volume_mm3(shape) / 1e9
+
+
+def display_part(shape):
+    from vessel_reconstruction.display_mesh import shape_mesh
+
+    return shape_mesh(shape, DISPLAY_TOLERANCE_MM, DISPLAY_ANGULAR_RAD, DISPLAY_SMOOTH_TOLERANCE_MM)
+
+
 def export_all(shapes: dict, out: Path, *, task: Path | None = None,
                revision: str | None = None) -> tuple[dict, dict]:
     """STEP per part and for the assembly (no pcurves: about half the size), plus a GLB mesh view.
@@ -187,7 +273,8 @@ def export_all(shapes: dict, out: Path, *, task: Path | None = None,
     """
     import cadquery as cq
 
-    from vessel_reconstruction.display_mesh import mesh_volume_mm3, shape_mesh, write_glb
+    from vessel_reconstruction.display_mesh import mesh_volume_mm3, write_glb
+    from vessel_reconstruction.parallel import process_parts
     from vessel_reconstruction.display_provenance import bind_display_output, display_record_path, write_display_record
 
     mesh = out / 'whole-vessel-draft.glb'
@@ -203,8 +290,7 @@ def export_all(shapes: dict, out: Path, *, task: Path | None = None,
     step = out / 'whole-vessel-draft.step'
     cq.exporters.export(cq.Compound.makeCompound(list(shapes.values())), str(step), opt={'write_pcurves': False})
     sizes[step.name] = step.stat().st_size
-    meshes = {name: shape_mesh(shape, DISPLAY_TOLERANCE_MM, DISPLAY_ANGULAR_RAD, DISPLAY_SMOOTH_TOLERANCE_MM)
-              for name, shape in shapes.items()}
+    meshes = dict(zip(shapes, process_parts(display_part, list(shapes.values()), out)))
     display_record_path(mesh).unlink(missing_ok=True)
     write_glb(meshes, mesh)
     if binding is not None:
@@ -311,27 +397,45 @@ def main() -> None:
     started = time.time()
     step1 = args.step1.resolve()
     deck = deck_at_side(json.loads((step1 / 'inputs.json').read_text()))
-    hull_path = args.hull_brep.resolve() if args.hull_brep else build_hull(args.sources, out, deck)
-    record = {'engineering_approved': False, 'status': 'draft_only', 'hull_source': str(hull_path),
-              'hull_station_cap': deck, 'hull_seconds': time.time() - started}
-    shapes, volumes, hull_box = {}, {}, None
-    if hull_path.is_file():
-        record['hull_loft_volume_m3'] = read_shape(hull_path).Volume() / 1e9
-        to_deck, record['hull_to_deck'] = build_hull_to_deck(hull_path.parent / 'sections.json', deck, out)
-        hull = read_shape(to_deck)
-        shapes['hull'] = hull
-        # The default kernel volume is not exact on the B-spline hull sides.
-        volumes['hull'] = precise_volume_mm3(hull) / 1e9
-        box = hull.BoundingBox()
-        hull_box = {'min': [box.xmin / 1000, box.ymin / 1000, box.zmin / 1000],
-                    'max': [box.xmax / 1000, box.ymax / 1000, box.zmax / 1000]}
+    # The hull to deck needs only the read sections: with two or more workers it is built
+    # in a second process while this one lofts the panel hull (parallel.worker_count).
+    from vessel_reconstruction import parallel
+    with parallel.worker_tokens(parallel.worker_count(2)) as hull_workers:
+        job = None
+        try:
+            if args.hull_brep:
+                hull_path = args.hull_brep.resolve()
+            else:
+                job = HullToDeckJob(deck, out) if hull_workers > 1 else None
+                hull_path = build_hull(args.sources, out, deck, after_read=job.start if job else None)
+                if job is not None and job.thread is None:
+                    job = None  # the sections were not read; nothing was started
+            record = {'engineering_approved': False, 'status': 'draft_only', 'hull_source': str(hull_path),
+                      'hull_station_cap': deck, 'hull_seconds': time.time() - started}
+            shapes, volumes, hull_box = {}, {}, None
+            if hull_path.is_file():
+                record['hull_loft_volume_m3'] = read_shape(hull_path).Volume() / 1e9
+                if job is not None:
+                    to_deck, record['hull_to_deck'] = job.result()
+                else:
+                    to_deck, record['hull_to_deck'] = build_hull_to_deck(hull_path.parent / 'sections.json', deck, out)
+                hull = read_shape(to_deck)
+                shapes['hull'] = hull
+                # The default kernel volume is not exact on the B-spline hull sides.
+                volumes['hull'] = precise_volume_mm3(hull) / 1e9
+                box = hull.BoundingBox()
+                hull_box = {'min': [box.xmin / 1000, box.ymin / 1000, box.zmin / 1000],
+                            'max': [box.xmax / 1000, box.ymax / 1000, box.zmax / 1000]}
+            elif job is not None:
+                job.discard()  # no panel hull: the sequential build makes no hull to deck either
+        finally:
+            if job is not None:
+                job.discard()
     parts = step1 / 'task' / 'work' / 'output'
-    for part in PART_IDS:
-        path = parts / f'{part}.step'
-        if path.is_file():
-            shapes[part] = read_shape(path)
-            # Smooth B-spline walls need the adaptive integration too.
-            volumes[part] = precise_volume_mm3(shapes[part]) / 1e9
+    paths = [parts / f'{part}.step' for part in PART_IDS if (parts / f'{part}.step').is_file()]
+    for path, (shape, volume) in zip(paths, parallel.process_parts(load_part, paths, out)):
+        shapes[path.stem] = shape
+        volumes[path.stem] = volume
     record.update(volumes_m3=volumes, sum_of_parts_m3=sum(volumes.values()))
     if 'hull' in volumes and 'house_t1' in volumes:
         # The truth STEP holds the hull and the first tier only (docs/plans/...-scope.md, 3.3).
@@ -360,4 +464,7 @@ def main() -> None:
 
 
 if __name__ == '__main__':
-    main()
+    if len(sys.argv) == 3 and sys.argv[1] == HULL_TO_DECK_JOB_FLAG:
+        run_hull_to_deck_job(Path(sys.argv[2]))
+    else:
+        main()

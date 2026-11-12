@@ -8,6 +8,22 @@
 PY ?= $(CURDIR)/.venv/bin/python
 CARGO ?= cargo
 NODE ?= node
+
+# Linked worktrees share dependencies and linked test output on local builds.
+# Keep CI's existing layout and respect explicit environment/command-line targets.
+ifneq ($(strip $(CI)),)
+CARGO_TARGET_DIR ?= target
+else
+GIT_COMMON_DIR := $(shell git rev-parse --git-common-dir 2>/dev/null)
+ifneq ($(strip $(GIT_COMMON_DIR)),)
+CARGO_TARGET_DIR ?= $(abspath $(GIT_COMMON_DIR)/../.claude/worktrees/shared-target-sol)
+else
+CARGO_TARGET_DIR ?= target
+endif
+endif
+export CARGO_TARGET_DIR
+SMOKE_BINARY = $(abspath $(CARGO_TARGET_DIR))/release/marinaframe
+
 export MARINAFRAME_TEST_PYTHON ?= $(PY)
 export PATH := $(dir $(PY)):$(PATH)
 
@@ -49,9 +65,9 @@ smoke:
 	$(CARGO) build --release --locked -p marinaframe-control
 	@set -e; run=$$(mktemp -d /tmp/marinaframe-run.XXXXXX); \
 	$(PY) examples/make_agent_example.py --out $$run/input >/dev/null; \
-	target/release/marinaframe run --task $$run/task --source $$run/input/spec.json \
+	"$(SMOKE_BINARY)" run --task $$run/task --source $$run/input/spec.json \
 	  --worker-python $(PY) --worker-source $(CURDIR)/src --policy deterministic | grep -q '"status":"awaiting_human_review"'; \
-	target/release/marinaframe verify --task $$run/task | grep -q '"valid":true'; \
+	"$(SMOKE_BINARY)" verify --task $$run/task | grep -q '"valid":true'; \
 	echo "smoke: awaiting_human_review, valid ($$run)"
 
 secrets:

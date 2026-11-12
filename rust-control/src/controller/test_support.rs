@@ -21,6 +21,7 @@ pub(super) fn fixture() -> (tempfile::TempDir, Store) {
         binary_sha256: "a".repeat(64),
         on_ambiguity: OnAmbiguity::Abstain,
         fallback_models: vec![],
+        inspection_workers: None,
     };
     let store = Store::create(&tmp.path().join("task"), new_state(config)).unwrap();
     (tmp, store)

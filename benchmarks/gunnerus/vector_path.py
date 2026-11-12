@@ -137,7 +137,12 @@ def read_sections(config: dict, dxf_path: Path) -> dict:
                                    centreline_closure_m=config.get("centreline_closure_m", 0.002))
 
 
-def run(config_path: Path, out: Path) -> dict:
+def run(config_path: Path, out: Path, after_read=None) -> dict:
+    """Read the sections, write them to ``out``/sections.json, then build the hull.
+
+    ``after_read`` (optional) is called with the sections.json path before the
+    build, so independent work on the read sections can start beside it.
+    """
     config = json.loads(config_path.read_text())
     dxf_path = (config_path.parent / config["dxf"]).resolve()
     use_regions = bool(config.get("regions", False))
@@ -151,6 +156,8 @@ def run(config_path: Path, out: Path) -> dict:
                 + [{"id": a["id"], "x_m": a["x_m"], "status": "abstained", "kind": a["kind"]}
                    for a in read["abstentions"]])
     (out / "stations.json").write_text(json.dumps(sorted(statuses, key=lambda s: s["x_m"]), indent=2) + "\n")
+    if after_read is not None:
+        after_read(out / "sections.json")
     summary = {"config": config_path.name, "config_sha256": _sha256(config_path),
                "dxf_sha256": _sha256(dxf_path), "requested": len(config["stations"]),
                "read": len(read["sections"]), "abstained": len(read["abstentions"]),

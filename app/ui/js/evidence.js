@@ -26,15 +26,22 @@ function loadImage(url) {
   return imageCache.get(url);
 }
 
-/** Draw the page crop around `roi` with the candidate lines on a canvas. */
-function drawCrop(canvas, image, section) {
+/**
+ * Draw the page crop around `roi` with the candidate lines on a canvas. Section boxes and
+ * lines are in drawing pixels; `page` ({ width, height }, the TaskView's source_page) is the
+ * page in drawing pixels. The image may be smaller (a scaled render, or the web demo's
+ * scaled copy): it is drawn at the page size, so everything lines up.
+ */
+function drawCrop(canvas, image, section, page) {
+  const pageWidth = page?.width || image.naturalWidth;
+  const pageHeight = page?.height || image.naturalHeight;
   const [x0, y0, x1, y1] = section.roi_px;
   const padX = (x1 - x0) * CROP_PAD;
   const padY = (y1 - y0) * CROP_PAD;
   const sx = Math.max(0, x0 - padX);
   const sy = Math.max(0, y0 - padY);
-  const sw = Math.min(image.naturalWidth, x1 + padX) - sx;
-  const sh = Math.min(image.naturalHeight, y1 + padY) - sy;
+  const sw = Math.min(pageWidth, x1 + padX) - sx;
+  const sh = Math.min(pageHeight, y1 + padY) - sy;
   const scale = Math.min(CROP_MAX.width / sw, CROP_MAX.height / sh);
   const ratio = window.devicePixelRatio || 1;
   canvas.style.width = `${Math.round(sw * scale)}px`;
@@ -43,7 +50,7 @@ function drawCrop(canvas, image, section) {
   canvas.height = Math.round(sh * scale * ratio);
   const g = canvas.getContext('2d');
   g.setTransform(scale * ratio, 0, 0, scale * ratio, -sx * scale * ratio, -sy * scale * ratio);
-  g.drawImage(image, 0, 0);
+  g.drawImage(image, 0, 0, pageWidth, pageHeight);
   const style = getComputedStyle(document.documentElement);
   // Other lines first, thin grey; the used line last, on top, in the selection blue.
   const lines = [...section.candidates].sort((a, b) => Number(a.chosen) - Number(b.chosen));
@@ -58,10 +65,11 @@ function drawCrop(canvas, image, section) {
 }
 
 /**
- * `pageUrl()` resolves to the page image's data URL (or null); `inkOf(id)` gives the distance
- * to the ink in metres (or null).
+ * `pageUrl()` resolves to the page image's data URL (or null); `pageSize()` gives the page in
+ * drawing pixels ({ width, height }, or null); `inkOf(id)` gives the distance to the ink in
+ * metres (or null).
  */
-export function createEvidenceCard({ pageUrl, inkOf }) {
+export function createEvidenceCard({ pageUrl, inkOf, pageSize = () => null }) {
   const canvas = el('canvas', { class: 'evidence-crop', 'aria-hidden': 'true' });
   const text = el('div', { class: 'evidence-text' });
   const card = el('div', { class: 'evidence-card', role: 'tooltip', hidden: true }, canvas, text);
@@ -96,7 +104,7 @@ export function createEvidenceCard({ pageUrl, inkOf }) {
     const url = section.roi_px ? await pageUrl() : null;
     if (mine !== token || !url) return;
     try {
-      drawCrop(canvas, await loadImage(url), section);
+      drawCrop(canvas, await loadImage(url), section, pageSize());
       if (mine !== token) return;
       canvas.hidden = false;
       place(anchor);

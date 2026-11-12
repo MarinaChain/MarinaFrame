@@ -443,13 +443,30 @@ def prior_hull(declared: list[dict], dimensions: PriorDimensions, dropped: list[
     return VesselTable(rows, waterline_grid(rows), trend, warnings)
 
 
+def fitted_breadth_cap(kept: list[Anchor], half_beam_limit_m: float | None) -> float | None:
+    """Largest half-breadth a fitted row may reach, or None for no limit.
+
+    The breadth trend is fitted through the kept anchors; with few anchors it
+    can run far past the vessel's beam between them (shipd-1-08158-3v-L2, in a
+    trial that left six stations to the fit: anchors at 7.0, 9.1 and 4.5 m
+    gave fitted rows of 11.9 m against a printed half-beam of 9.85 m). ``half_beam_limit_m`` is the
+    vessel's half-beam from its description (first_hull_tools.half_beam_limit);
+    the widest kept anchor raises it, so traced ink is never contradicted.
+    """
+    if half_beam_limit_m is None or not kept:
+        return None
+    widest_anchor = max(float(point[0]) for anchor in kept for point in anchor.points_yz_m)
+    return max(float(half_beam_limit_m), widest_anchor)
+
+
 def fit_vessel(declared: list[dict], anchors: list[Anchor],
-               prior: PriorDimensions | None = None) -> VesselTable | None:
+               prior: PriorDimensions | None = None, half_beam_limit_m: float | None = None) -> VesselTable | None:
     """The first full hull: traced anchors kept exactly, gaps filled by the form fit.
 
     ``declared`` are the spec sections (``id``, ``x_m``, optional ``z_min_m``
     and ``z_max_m``, ``roi_px`` and ``calibration``). With no usable anchor the
     hull is the prior form, sized by ``prior`` or else by the panel extents.
+    Fitted rows are no wider than ``half_beam_limit_m`` (fitted_breadth_cap).
     Returns None only when there is no anchor and no size at all.
     """
     check_tops(anchors)
@@ -479,6 +496,7 @@ def fit_vessel(declared: list[dict], anchors: list[Anchor],
         residual_top.append(own["top"] - trend["top"])
     residual_shape = np.array(residual_shape)
     residual_heights = np.column_stack([residual_keel, residual_top])
+    breadth_cap = fitted_breadth_cap(kept, half_beam_limit_m)
     by_id = {a.id: a for a in kept}
     dropped_by_id = {d["section_id"]: d["reason"] for d in dropped}
     rows, warnings = [], [{"kind": "anchor_dropped", "section_id": d["section_id"], "message": d["reason"]}
@@ -510,6 +528,8 @@ def fit_vessel(declared: list[dict], anchors: list[Anchor],
         if top - keel <= 1e-3:
             keel, top = low, high
         breadths = trend_curve(trend, eta) + _interpolate_residual(x, residual_shape, sx)
+        if breadth_cap is not None:
+            breadths = np.minimum(breadths, breadth_cap)
         heights = keel + eta * (top - keel)
         points = np.column_stack([np.maximum(breadths, 0.0), heights])
         why = dropped_by_id.get(sid, "no traced line")
@@ -540,7 +560,8 @@ def suspect_order(anchors: list[Anchor]) -> list[str]:
 
 
 def first_hull(declared: list[dict], anchors: list[Anchor], base_spec: dict, build, *,
-               max_retries: int = FALLBACK_RETRIES, prior: PriorDimensions | None = None, extend=None):
+               max_retries: int = FALLBACK_RETRIES, prior: PriorDimensions | None = None, extend=None,
+               half_beam_limit_m: float | None = None):
     """Fit, compile and build the first hull; a failed build never ends the draft.
 
     ``build(spec)`` builds one draft specification and returns a result that is
@@ -567,14 +588,15 @@ def first_hull(declared: list[dict], anchors: list[Anchor], base_spec: dict, bui
 
     def attempt(left_out):
         usable = [copy.deepcopy(a) for a in anchors if a.id not in left_out]
-        table = fit_vessel(declared, usable, prior)
+        table = fit_vessel(declared, usable, prior, half_beam_limit_m)
         if table is None:
             return None, None
         added = extend(table) if extend is not None else []
         result = build(build_spec(table, base_spec, declared + added))
         if not result and added:
             # The ends are inferred: a build that fails with them is tried without them.
-            table = fit_vessel(declared, [copy.deepcopy(a) for a in anchors if a.id not in left_out], prior)
+            table = fit_vessel(declared, [copy.deepcopy(a) for a in anchors if a.id not in left_out], prior,
+                               half_beam_limit_m)
             result = build(build_spec(table, base_spec, declared))
         if not result and not first_failure:
             first_failure.append(result)

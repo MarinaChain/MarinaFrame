@@ -6,6 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self'; font-src 'self'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="color-scheme" content="light dark">
   <!-- For the web build, add: <meta name="marinaframe-backend" content="http"> -->
+  <!-- Keep this UI-only comment as the CI path-filter smoke check. -->
   <title>MarinaFrame</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preload" href="assets/fonts/Manrope-Latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -144,8 +145,8 @@
         <button class="btn btn-ghost btn-icon details-toggle" id="details-toggle" type="button" aria-controls="inspector" aria-expanded="true" aria-label="Hide details" data-tip-title="Hide details (⌘4)">
           <svg class="icon"><use href="#i-panel-right" /></svg>
         </button>
-        <button class="btn" id="resume-task" type="button" hidden>Resume</button>
-        <button class="btn btn-danger-quiet" id="cancel-task" type="button" hidden>Stop</button>
+        <button class="btn write-action" id="resume-task" type="button" hidden>Resume</button>
+        <button class="btn btn-danger-quiet write-action" id="cancel-task" type="button" hidden>Stop</button>
       </div>
     </header>
 
@@ -167,6 +168,9 @@
     </nav>
 
     <main class="views" id="views">
+      <!-- The public web demo only: a run's note on every page of that run, the concept-preview
+           label or the drawings' credit line (js/run.js fills it, styles.css shows it). -->
+      <p class="demo-run-note" id="demo-run-note" role="note"></p>
       <!-- ============================================================ Home (F3, F18) -->
       <section class="view view-home" id="view-home" data-route="home" aria-labelledby="home-needs-title" hidden>
         <div class="home-scroll">
@@ -186,6 +190,9 @@
               </details>
             </div>
           </div>
+          <!-- The public web demo only (styles.css [data-demo]); Home has no "Needs you" there. -->
+          <p class="demo-intro" id="demo-intro">MarinaFrame turns ship drawings into 3D models an engineer can check and correct. This demo shows finished runs; nothing you do here is saved.
+            <a class="demo-pilot-link" href="static/pilot.html">Proposed: GA revision pilot</a></p>
           <div class="needs-row" id="needs-row" aria-live="polite"></div>
           <h2 class="home-section-title">Vessels</h2>
           <div class="vessel-grid" id="vessel-grid">

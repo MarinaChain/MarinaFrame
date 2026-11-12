@@ -18,7 +18,10 @@ import {
 } from './run_header.js';
 import { renderSelection, renderStrip } from './run_strip.js';
 import { renderHistory } from './vessel_pages.js';
-import { live, setPartOutline, model, markTool, renderDrawing, renderModel } from './workspace.js';
+import { presentationOf } from './presentation.js';
+import {
+  live, setPartOutline, model, markTool, renderDrawing, renderModel, prepareDemoView, showDemoView,
+} from './workspace.js';
 
 /** Delay before re-reading a task after a burst of task-changed events. */
 const REFRESH_DEBOUNCE_MS = 250;
@@ -93,6 +96,24 @@ export async function openTask(task) {
   await loadTask({ fresh: true });
 }
 
+/** The label every page of a concept-preview run carries in the web demo. */
+export const CONCEPT_NOTE = 'Concept preview - example vessel and drawings made for this demo. Shows how MarinaFrame presents a finished model; not a reading of real drawings.';
+
+/**
+ * The web demo's note for the open run (static/backend.js gives `view.demo`): the concept
+ * label, else the run's note and the credit of its drawings, else none. styles.css shows it on
+ * every run page.
+ */
+function showDemoNote(demo) {
+  const text = demo?.concept ? CONCEPT_NOTE : [demo?.note, demo?.credit].filter(Boolean).join(' ');
+  const note = document.getElementById('demo-run-note');
+  note.textContent = text;
+  const kind = demo?.concept ? 'concept' : demo?.note ? 'note' : 'credit';
+  note.dataset.kind = kind;
+  if (text) document.documentElement.setAttribute('data-demo-note', kind);
+  else document.documentElement.removeAttribute('data-demo-note');
+}
+
 /** Read the open task again. `fresh` resets the view to its defaults. */
 export async function loadTask({ fresh = false } = {}) {
   const token = nextLoadToken();
@@ -103,12 +124,16 @@ export async function loadTask({ fresh = false } = {}) {
       fresh ? invoke('get_events', { task, after_sequence: 0 }) : Promise.resolve(null),
     ]);
     if (token !== state.loadToken) return;
+    const shown = presentationOf(view);
+    showDemoNote(shown);
     setView(view);
     if (events) {
       setEvents(events);
     }
     if (!view.sections.some((s) => s.id === state.sectionId)) setSectionId(defaultSection(view));
+    if (fresh) prepareDemoView(shown);
     renderTask({ fresh });
+    if (fresh) showDemoView(shown);
     live.statusChanged();
     // Step cards name sections by place; when the places are known or change, draw them again.
     const placesKey = view.sections.map((s) => `${s.id}@${s.x_m}`).join(',');

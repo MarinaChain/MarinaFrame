@@ -5,6 +5,8 @@
 pub mod claude_cli;
 #[path = "credentials.rs"]
 pub mod credentials;
+#[path = "ga_reading.rs"]
+pub mod ga_reading;
 #[path = "part_revision.rs"]
 pub mod part_revision;
 #[path = "transcription.rs"]
@@ -61,6 +63,12 @@ pub enum Purpose {
     ShipCad,
     /// One whole-vessel part re-run from a person's mark (see `part_revision`).
     PartRevision,
+    /// A reading of a commercial general arrangement (see `ga_reading`).
+    GaReading,
+    /// The fine pass of a GA reading: printed labels on crops (see `ga_reading`).
+    GaLabels,
+    /// The frame scale and the extents of spaces of a GA (see `ga_reading`).
+    GaScale,
 }
 impl Purpose {
     fn is_model_decision(&self) -> bool {
@@ -76,6 +84,9 @@ impl Purpose {
             Purpose::Localisation => vision::LOCALISATION_PROMPT,
             Purpose::ShipCad => vision::SHIP_CAD_PROMPT,
             Purpose::PartRevision => part_revision::PROMPT,
+            Purpose::GaReading => ga_reading::PROMPT,
+            Purpose::GaLabels => ga_reading::LABELS_PROMPT,
+            Purpose::GaScale => ga_reading::SCALE_PROMPT,
         }
     }
     /// Decision purposes return a tool call; table reading returns cells.
@@ -240,7 +251,10 @@ pub fn check_input(input: &ProviderInput) -> Result<Vec<u8>> {
         | Purpose::BuildReview
         | Purpose::Localisation
         | Purpose::ShipCad
-        | Purpose::PartRevision => vision::check_input(input)?,
+        | Purpose::PartRevision
+        | Purpose::GaReading
+        | Purpose::GaLabels
+        | Purpose::GaScale => vision::check_input(input)?,
     }
     let messages = p["messages"]
         .as_array()
@@ -473,7 +487,10 @@ fn interpret_content(receipt: &mut Receipt, content: &str) -> Result<()> {
         | Purpose::BuildReview
         | Purpose::Localisation
         | Purpose::ShipCad
-        | Purpose::PartRevision => {
+        | Purpose::PartRevision
+        | Purpose::GaReading
+        | Purpose::GaLabels
+        | Purpose::GaScale => {
             receipt.vision = Some(vision::parse_reply(
                 receipt.purpose,
                 content,

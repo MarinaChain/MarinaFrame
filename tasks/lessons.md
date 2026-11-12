@@ -40,6 +40,7 @@
 - **Trigger:** W13 file/network tests first passed on Python import-path denial; socket construction was also mistaken for a network operation.
 - **Rule:** Use isolated Python for direct OS probes, require the expected forbidden-operation failure, and mutation-check the exact file or network permission. Test bind/connect, not only socket construction.
 - **Why:** An earlier permission error can hide a missing guard; Seatbelt permits socket construction without permitting network use.
+- **Artifact correction (2026-11-12):** Landlock target checks protect the worker, not later unsandboxed artifact consumers. Deny model-created symlinks (MAKE_SYM) unless every host consumer opens all path components and the final regular file through no-follow descriptors. Test a trusted pre-existing symlink for target escape separately from model symlink-creation denial.
 
 ### Repartitioned holdouts are hull-disjoint, not family-disjoint
 - **Date:** 2026-11-08
@@ -149,6 +150,7 @@
 - **Trigger:** Round 13 (BUMBLE BEE 47): the operator agent read the station labels and set the forebody (1-6) left and the aftbody (7-14) right; the chains fit the opposite halves within 2-6 mm. Code misnamed 10 of 14 stations and the models could not fix it, because each half's candidate stations were wrong. The round had to be reported as run.
 - **Rule:** Before a holdout protocol commit, have a second, independent check of which half is bow and which is stern (a different agent reading the labels in its own crops, or the profile's stem/stern position against the body plan), and record both readings in the protocol. If they disagree, stop and resolve before any run.
 - **Why:** One agent's reading of small station labels is a single point of failure, and a side swap turns a good reading into a systematic naming error that no later step can see.
+- **Recurrence (2026-11-11, Cama Beach published holdout):** the sides were checked twice and agreed, but the truth-blind calibration named every curve one station off on both halves (the printed station number was the drawn label minus one; the heavy "transom" line was station 10). The one-run holdout failed mostly on this. Rule addition: the second check must also confirm station identity, not only sides: match each body-plan curve to a station position in the profile or half-breadth plan (x along the hull) and to the station count in the table header, and record that match in the protocol before any run.
 
 ### A wait loop must not match itself (MarinaFrame)
 - **Date:** 2026-11-09
@@ -224,6 +226,7 @@
 - **Trigger:** The CAD export lane added IGES and .3dm files; its focused tests passed, but three evidence-hardening tests failed at merge because a test helper copied a fixed file list. A replace-sheet real-worker test also failed in CI because it did not skip without `MARINAFRAME_TEST_PYTHON`.
 - **Rule:** When a lane changes run files, export kinds or record checks, run the full Python suite before review, not only focused tests. Test helpers copy the files the record names, not a fixed list. Real-worker Rust tests may skip locally when `MARINAFRAME_TEST_PYTHON` is unset; required CI runs must fail instead.
 - **CI correction (2026-11-10):** Allow missing worker Python only in local runs. Required CI jobs set `MARINAFRAME_TEST_PYTHON` before every Cargo test step and `MARINAFRAME_REQUIRE_WORKER=1`; missing Python must fail those tests. Run macOS Seatbelt probes on macOS, and prove cleanup helpers reject a live child before trusting their exit checks.
+- **Lane correction (2026-11-12):** Do not stop a behaviour-preserving GA refactor on an unrelated full-tier worker failure when the PM supplies targeted gates. Diagnose once with explicit `MARINAFRAME_TEST_PYTHON` and `RUST_BACKTRACE=1`, report the complete registry error (or `None` on a passing run), then use the PM's GA tests and offline replay gates. Leave the full merge tier to the PM; do not change unrelated tests or app code.
 - **Why:** Focused runs miss tests that encode the old file set, and CI's plain cargo step has no worker Python.
 
 ### Bind display exports at their producer
@@ -260,6 +263,13 @@
 - **Trigger:** The Gunnerus display mesh took 60 to 100 s for 3,151 hull faces, even with the triangulation already built. cProfile misattributed the time.
 - **Rule:** In loops over faces or edges, use `vessel_reconstruction.topology` (indexed `FindKey` access) instead of CadQuery `Faces()`, `Edges()`, `Wires()`, `innerWires()` or `tessellate()`. Time OCP-heavy code with direct timers, not only cProfile.
 - **Why:** Ending a Python iteration over an OCP map or array raises `StopIteration` through every OCP exception translator: about 6 ms per call (80 ms the first time), whatever the size.
+- **Recurrence (2026-11-11, lane S):** `rhino_exports.export_3dm` called `face.Wires()` for each of the 19,172 Gunnerus app-hull faces: 256 s of a 377 s hull build (now 10 s). cProfile showed only about 100 s of that build. When fixing this pattern, `rg '\.(Faces|Wires|Edges|innerWires|tessellate)\(\)'` over every exporter, not only the module in hand.
+
+### Read ink for a whole fan at once in stroke tracking (MarinaFrame)
+- **Date:** 2026-11-11
+- **Trigger:** `investigation._track` read ink one sample at a time (`sum(_ink_at(...) for r in radii)` per angle): 49 M calls and 100 M `round()` calls, 300-480 s of the Gunnerus `build_draft`.
+- **Rule:** In per-step search loops over angles and radii, compute all sample points in one array and read the mask once (`_ink_hits`). Keep the result bit-identical: take trig values from the same `math` functions, keep elementwise multiply/add (no reductions that reorder sums), round with `np.rint` (half to even, like `round`), and keep the choice loop in its original order. Check identity on a real drawing (byte compare of the enumerated strokes).
+- **Why:** The panel enumeration fell from 524 s to 139 s with byte-identical output.
 
 ### Test a new spec field through validate_spec (MarinaFrame)
 - **Date:** 2026-11-11
@@ -278,3 +288,39 @@
 - **Trigger:** The polyline reader dropped crowded stations whose bottoms ran into an outer station's bottom, and counted a short transom outline as a station. On CALEB JONES every inner name shifted (identity errors at stations 4-9; 10 wrong of 16 point cells).
 - **Rule:** When names come from nesting rank, a drawn line with its own side keeps its rank even when a part of it (the bottom) is lost; keep the part that is its own and flag it. Remove only lines that are not stations (short outlines) before ranking. Read the per-trace log on the worst sheet before changing thresholds.
 - **Why:** One missing or extra member of a rank order shifts every name inside it; partial evidence for a station is better than none.
+
+### A value measured on a drawing needs its place rule, a cross-check and its own status when replaced (MarinaFrame)
+- **Date:** 2026-11-12
+- **Trigger:** GA frame-scale measurement (lane U). The first depth was base line to the poop deck (the model pointed "the deck" near the stern); the next was to the rail or the deck at centreline, 0.7 m above the cargo-tank tops. Lane W found both by comparing the depth with the tops of the read spaces. The first fix replaced the depth with the median space top but kept the status `measured_from_scale`; the PM corrected this.
+- **Rule:** When a model points a place that code turns into a dimension: (1) state where the place must lie and check it in code (moulded depth: at side, at mid-length); (2) cross-check the value against an independent reading of the same drawing and flag a disagreement; (3) a value that takes the place of a failed measurement gets a distinct status (`derived_from_space_tops`), keeps the measured value and the reason in its record, and is never checked against the data it came from. Also repeat a small-print reading before relying on it: the same ship gave a frame scale in one request and none in the next.
+- **Why:** A dimension that is "measured" in name and substituted in fact makes a downstream check circular, and a pointed line without a place rule is the wrong line on some ships.
+
+### Image coordinates in a model request come from the image actually sent; long lists go in short requests (MarinaFrame)
+- **Date:** 2026-11-12
+- **Trigger:** GA extents regressed between development rounds (lane W). The request gave label places in the planned image size, but the byte limit shrank the images afterwards, so places were 11 % off; the model wrote "label positions do not match the drawing" and boxed fewer spaces. It also boxed 20 of 71 spaces asked in one request (43 of 43 when asked 43).
+- **Rule:** Compute every pixel value that a request states (places, boxes) after encoding, from the sizes of the images written, and test it with a forced shrink. Read the model's free-text note of each reply: it named both causes. Ask a model for at most about 20 items per request, most useful first. Compare each development round per ship with the last good round before calling it better.
+- **Why:** A coordinate frame that is off by a resize looks like model weakness, and a long list silently returns a partial answer.
+
+### Keep truth and benchmark inputs out of temporary folders; never clean temp folders by age (MarinaFrame)
+- **Date:** 2026-11-11
+- **Trigger:** To free disk space, the PM deleted every session-scratchpad folder unchanged for 3 hours. One of them (`scratchpad/wv-agent/`) held the only copies of the C.A. Thayer and Balclutha development truth files, which lane N still needed; other truth files lived under `/private/tmp/claude-501/<boat>/`. They had to be re-transcribed.
+- **Rule:** Store every truth file, calibration and benchmark input in the git-ignored `work/` tree (truth: `work/dev-truth/<boat>/`, holdouts: `work/holdout/<boat>/`) with a SHA256SUMS file, never in a scratchpad or `/tmp`. When freeing space, delete only build output (`target/`) and folders you made yourself and know are unused; never delete by age in shared temporary folders while lanes run.
+- **Why:** Temporary folders look disposable, and an age rule cannot tell a lane's long-lived input from leftover work.
+
+### The gdrive-mc remote needs the shared-drive flag
+- **Date:** 2026-11-12
+- **Trigger:** An archive upload to `gdrive-mc:MarinaFrame Data/...` without a flag went to the personal My Drive, and a re-check of verified uploads showed every file as missing.
+- **Rule:** For MarinaFrame Data, always pass `--drive-team-drive 0AIHWIsMcKqIRUk9PVA` to every rclone call on `gdrive-mc` (copy, check, lsf, purge). Before you upload, confirm with `rclone lsf` that the destination folder exists on the shared drive. Archive to Drive only data that we still need; scratch runs of merged lanes do not go to Drive.
+- **Why:** The remote config has an empty `team_drive`, so without the flag rclone uses My Drive. The user wants Drive kept organized and small.
+
+### Check untracked files before you remove a worktree
+- **Date:** 2026-11-12
+- **Trigger:** A disk cleanup removed "merged and clean" worktrees with `git worktree remove --force`. The clean check used `--untracked-files=no`, so an uncommitted Sol design file (docs/plans/2026-11-12-linux-sandbox.md) was deleted.
+- **Rule:** A worktree is removable only when `git status --porcelain --untracked-files=normal` is empty (ignored files such as target/ and work/ may go). Tell lanes to commit design files when they write them.
+- **Why:** `--force` deletes untracked files, and "HEAD is merged" says nothing about files that were never committed.
+
+### Route audit policy before documentation in CI filters
+- **Date:** 2026-11-12
+- **Trigger:** The broad `docs/*` CI skip also skipped `docs/dependency-scope-exclusions.json`, which controls the dependency audit.
+- **Rule:** Classify executable configuration by its consumers, not its folder. Route audit policy as shared configuration before documentation skips, and keep a regression test.
+- **Why:** A documentation directory can contain policy that changes a required security check.

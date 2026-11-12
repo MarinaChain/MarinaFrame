@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from benchmarks.frozen_readers.v1 import body_plan_reader as bpr
 
+# BODY_PLAN_CHINE.md V-bottom v1.1 uses this spent holdout for development.
+STATUS = 'development'
 PROTOCOL = 'docs/BODY_PLAN_CHINE.md (Holdout protocol: WHITE GULL and COLLEEN)'
 # Frozen truth file work/holdout/<boat>/truth.json (main checkout, read-only): sha256 given by the PM
 # before the run. The scorer stops if the file differs.

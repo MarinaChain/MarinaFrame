@@ -237,9 +237,26 @@ def _run_bounds(mask: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 def _dilate_5x5(mask: np.ndarray) -> np.ndarray:
     """Binary dilation by a full 5x5 square, outside pixels counted as empty.
 
-    Same result as ndimage.binary_dilation(mask, np.ones((5, 5))), but faster.
+    Same result as ndimage.binary_dilation(mask, np.ones((5, 5))), but faster:
+    a 5x5 square is a 5-pixel line along each axis in turn, and each line is
+    the logical or of the mask shifted by up to 2 pixels either way.
     """
-    return ndimage.maximum_filter(mask.astype(np.uint8), size=5, mode="constant", cval=0).astype(bool)
+    return _dilate_line_5(_dilate_line_5(np.asarray(mask, dtype=bool), axis=0), axis=1)
+
+
+def _dilate_line_5(mask: np.ndarray, axis: int) -> np.ndarray:
+    """Binary dilation of a 2D boolean mask by a 5-pixel line along one axis."""
+    grown = mask.copy()
+    for shift in (1, 2):
+        if shift >= mask.shape[axis]:
+            break
+        later = [slice(None), slice(None)]
+        earlier = [slice(None), slice(None)]
+        later[axis] = slice(shift, None)
+        earlier[axis] = slice(None, -shift)
+        grown[tuple(later)] |= mask[tuple(earlier)]
+        grown[tuple(earlier)] |= mask[tuple(later)]
+    return grown
 
 
 def _runs(row: np.ndarray) -> list[tuple[int, int]]:

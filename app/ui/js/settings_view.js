@@ -1,7 +1,9 @@
 // Settings, the theme and the global status bar.
 
 import { state, setSettings, setAiStatus, setDefaults, prefs, applyShowCosts } from './app_state.js';
-import { transportName, invoke, canPickPaths, pickFolder, pickFile } from './api.js';
+import {
+  transportName, invoke, canPickPaths, pickFolder, pickFile, READ_ONLY_NOTE,
+} from './api.js';
 import { fill, icon, el } from './dom.js';
 import { $, chip, showError, setChip, pathLabel } from './ui_kit.js';
 import { navigate } from './router.js';
@@ -17,9 +19,11 @@ export function renderStatusbar() {
   ai.dataset.state = on === null ? 'unknown' : on ? 'on' : 'off';
   ai.textContent = on === null ? 'AI unknown' : on ? 'AI on' : 'AI off';
   ai.title = aiStatusText(status);
-  fill($('status-mode'), transportName === 'mock'
-    ? chip('Preview', { dot: false, small: true, title: 'Preview data: sample runs, not your runs folder.' })
-    : null);
+  const modeChips = {
+    mock: () => chip('Preview', { dot: false, small: true, title: 'Preview data: sample runs, not your runs folder.' }),
+    static: () => chip('Demo: read-only', { dot: false, small: true, title: READ_ONLY_NOTE }),
+  };
+  fill($('status-mode'), modeChips[transportName]?.() || null);
   const folder = state.settings?.runs_folder || '';
   const folderNode = $('status-folder');
   folderNode.textContent = folder ? `Runs folder: ${folder.replace(/^\/Users\/[^/]+/, '~')}` : '';

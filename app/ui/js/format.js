@@ -16,6 +16,7 @@ const STATUS_LABELS = {
 const SECTION_STATE_LABELS = { chosen: 'Line chosen', guessed: 'Guessed', declined: 'Declined', not_read: 'Not read' };
 const SOURCE_LABELS = {
   traced: 'Traced',
+  printed: 'Printed',
   read: 'Read by code',
   repaired: 'Repaired',
   interpolated: 'Interpolated',

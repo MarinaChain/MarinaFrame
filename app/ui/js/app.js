@@ -15,7 +15,7 @@
 //   ui_kit.js, artifacts.js, run_facts.js  shared helpers; run_facts.js has no DOM (tested)
 
 import { prefs, setSettings, state, applyShowCosts } from './app_state.js';
-import { invoke } from './api.js';
+import { invoke, readOnly } from './api.js';
 import { showError } from './ui_kit.js';
 import { installTooltips } from './tooltip.js';
 import {
@@ -67,6 +67,9 @@ function install() {
 }
 
 async function start() {
+  // The public web demo (docs/WEB_DEMO.md): styles.css hides every control that starts or
+  // changes a run, and Home says what the demo is. It has no setup to check.
+  if (readOnly) document.documentElement.dataset.demo = 'read-only';
   installTooltips();
   setLayout(prefs.get('layout', 'split'));
   setSplit(prefs.get('split', 0.56));
@@ -75,7 +78,7 @@ async function start() {
   const route = routeFromHash() || 'home';
   // Show the place at once (Home with placeholders, a run with "Opening the run…"); the
   // data fills in as it arrives. A first use goes to the welcome screen instead.
-  const firstUse = route === 'home' && !prefs.get('setupSeen', false);
+  const firstUse = !readOnly && route === 'home' && !prefs.get('setupSeen', false);
   if (firstUse) history.replaceState(null, '', '#welcome');
   applyRoute(firstUse ? 'welcome' : route);
   try {
@@ -91,7 +94,7 @@ async function start() {
   renderStatusbar();
   if (state.pendingOpen && state.route === 'run' && !state.task) openRememberedTask();
   // A reload keeps its place; the welcome screen only replaces Home.
-  if (!firstUse && state.route === 'home' && await needsWelcome()) {
+  if (!readOnly && !firstUse && state.route === 'home' && await needsWelcome()) {
     history.replaceState(null, '', '#welcome');
     applyRoute('welcome');
   }

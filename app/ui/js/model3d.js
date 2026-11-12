@@ -22,7 +22,7 @@ import { createBatch, HIDDEN_MATERIAL } from './batch3d.js';
 import { createSectionCut } from './cut3d.js';
 import { createCutPanel, createToolbar, toolButton } from './controls3d.js';
 import {
-  createPartVisibility, describeParts, GHOST_OPACITY, HULL_NAME, PART_STATES, sectionPlaneShown, shellPartOpacity, steelPartId, steelPartOpacity,
+  createPartVisibility, describeParts, GHOST_OPACITY, HULL_NAME, PART_STATES, sectionHullShown, sectionPlaneShown, shellPartOpacity, steelPartId, steelPartOpacity,
 } from './visibility3d.js';
 import { createPartsPanel } from './parts_panel3d.js';
 import { tipAttributes } from './tooltip.js';
@@ -144,7 +144,7 @@ export function createModelView({
     renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true });
   } catch {
     showEmpty('3D view not available', 'This computer did not allow a WebGL view.');
-    return { setModel() {}, setSpacesContext() {}, captureImage: () => null, setSelected() {}, partList: () => [], hidePart() {}, isolatePart() {}, showAllParts() {}, resetView() {}, refreshTheme() {}, showSections() {}, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, anchorOf: () => null, refreshCard() {}, placeOverlays() {}, showsWholeVessel: false, hasTanks: false };
+    return { setModel() {}, setSpacesContext() {}, captureImage: () => null, setSelected() {}, partList: () => [], hidePart() {}, isolatePart() {}, showAllParts() {}, resetView() {}, refreshTheme() {}, showSections() {}, setSectionLinesShown() {}, setSeeThroughHull() {}, steelMembersOf: () => null, setFocusSections() {}, setReviewOverlays() {}, setHighlightBox() {}, setWholeVessel: () => Promise.reject(new Error('3D view not available')), setStructure: () => Promise.resolve(), highlightPart() {}, anchorOf: () => null, refreshCard() {}, placeOverlays() {}, showsWholeVessel: false, hasTanks: false };
   }
   /** Pixel ratio cap: a 3x screen draws at 2x, which looks the same and costs 2.25 times less. */
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
@@ -749,6 +749,16 @@ export function createModelView({
     for (const [id, plane] of planes) styleSectionPlane(id, plane);
     requestRender();
   }
+  // Section lines: the build's section curves (read from the drawing) on the model.
+  const sectionLinesButton = toolButton({
+    iconName: 'drawing', label: 'Section lines', pressed: true,
+    detail: 'The section lines the run read from the drawing, on the model. Off: the model only.',
+    onClick: () => setSectionLinesShown(sectionLinesButton.getAttribute('aria-pressed') !== 'true'),
+  });
+  function setSectionLinesShown(on) {
+    sectionLinesButton.setAttribute('aria-pressed', String(on));
+    growth.setVisible(on);
+  }
   const guessesButton = toolButton({
     iconName: 'st-guessed', label: 'Guessed ranges', pressed: true,
     detail: 'Amber where the draft guessed. When most of the hull is guessed, a bar along the base line.',
@@ -768,6 +778,7 @@ export function createModelView({
   }
   toolbar.add('Show',
     sectionPlanesButton,
+    sectionLinesButton,
     guessesButton,
     overlaySwitch('grid', 'grid', 'Reference grid', 'G'),
     overlaySwitch('waterline', 'waterline', 'Design waterline plane', 'W'),
@@ -1039,6 +1050,12 @@ export function createModelView({
     reportHover(null);
   });
 
+  /** The member ids of a steel group part (GLB extras), or null for any other part. */
+  function steelMembersOf(partId) {
+    const mesh = steelMeshes.find((o) => o.userData.partId === partId);
+    return mesh ? (mesh.userData.members || []).map((member) => member.id).filter(Boolean) : null;
+  }
+
   // ---- Hover for the source view (provenance.js): the section plane or part under the pointer,
   // found once a frame with the readout, reported only when it changes.
   let hoveredItemKey = null;
@@ -1048,7 +1065,7 @@ export function createModelView({
     if (sectionId) item = { kind: 'section', id: sectionId };
     else if (event && wholeVessel) {
       const partId = partAt(event);
-      if (partId) item = { kind: 'part', id: partId };
+      if (partId) item = { kind: 'part', id: partId, members: steelMembersOf(partId) };
     }
     const key = item ? `${item.kind}:${item.id}` : null;
     if (key === hoveredItemKey) return;
@@ -1125,8 +1142,8 @@ export function createModelView({
     material.depthWrite = !faint;
   }
 
-  /** Colour the whole vessel: tanks by content (capacity-plan tokens), the shell translucent
-   * while tanks show or See-through hull is on, the highlighted part in the selection blue,
+  /** Colour the whole vessel: tanks by content (capacity-plan tokens), the hull faint only while
+   * See-through hull is on, the other parts translucent while tanks or steel show, the highlighted part in the selection blue,
    * hidden parts out and ghost parts faint (the opacity rules are in visibility3d.js). */
   function styleWholeVessel() {
     insideShown = tankMeshes.some(isShown) || steelMeshes.some(isShown);
@@ -1697,6 +1714,8 @@ export function createModelView({
       scaleToMetres(geometry, lengthM);
       geometry.computeVertexNormals();
       hull = new THREE.Mesh(geometry, hullMaterial);
+      // A hull that arrives after the whole vessel stays hidden, or it covers the whole vessel.
+      hull.visible = sectionHullShown({ wholeVesselShown: Boolean(wholeVessel) });
       hull.castShadow = true;
       hull.receiveShadow = true;
       // A hull that arrives while the fairness view is on gets the smooth normals at once.
@@ -1770,7 +1789,7 @@ export function createModelView({
         renderLegend();
         updateLabels();
       }
-      if (hull) hull.visible = true;
+      if (hull) hull.visible = sectionHullShown({ wholeVesselShown: false });
       overlays.setEdgesLayer('hull', true);
       if (!buffer) {
         // Back to the hull: move to its home view. With no whole vessel shown, the view
@@ -1834,7 +1853,7 @@ export function createModelView({
           }
           rebuildParts();
           styleWholeVessel();
-          if (hull) hull.visible = false;
+          if (hull) hull.visible = sectionHullShown({ wholeVesselShown: true });
           empty.hidden = true;
           renderer.domElement.hidden = false;
           resize();
@@ -1979,6 +1998,12 @@ export function createModelView({
      * "update" (changed sections morph and flash) or "instant". Null clears them.
      */
     showSections: (sections, options) => growth.show(sections, options),
+    /** Draw the section lines on the model, or not (the Section lines switch). */
+    setSectionLinesShown: (on) => setSectionLinesShown(on),
+    /** The hull faint and the parts inside it solid, or not (the See-through switch). */
+    setSeeThroughHull: (on) => setSeeThroughHull(on),
+    /** The member ids of a steel group part, or null for any other part. */
+    steelMembersOf: (partId) => steelMembersOf(partId),
     /** HOOK(M3 live): show or hide the review overlays (guessed ranges) during a replay. */
     setReviewOverlays(visible) {
       reviewOverlays = visible;

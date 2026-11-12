@@ -1,7 +1,8 @@
 //! Whole-vessel parts of a run (APP_SPEC "Whole-vessel parts"). The ship-cad worker writes
 //! `<task>/whole_vessel/execution.json` (`src/vessel_reconstruction/ship_cad.py`); each entry of
-//! `result.components` becomes one `ComponentView`. The person's review of a part is app
-//! state, kept in the app config folder (`part_reviews.json`), never in the run folder.
+//! `result.components` becomes one `ComponentView`. The person's review of a part is kept in
+//! the run folder (`review/part_reviews.json`), apart from the controller's records, so it
+//! moves with the run when the folder is copied.
 use crate::error::{AppError, AppResult};
 use crate::storage::{self, AppPaths};
 use crate::types::{
@@ -15,6 +16,10 @@ use std::path::Path;
 pub const EXECUTION_FILE: &str = "whole_vessel/execution.json";
 const EXECUTION_MAX_BYTES: usize = 8 * 1024 * 1024;
 const REVIEWS_FILE: &str = "part_reviews.json";
+/// The run's folder for a person's records (part reviews). The controller never writes here.
+pub const RUN_REVIEWS_FOLDER: &str = "review";
+/// Largest reviews file read (a few hundred parts with 500-character notes).
+const RUN_REVIEWS_MAX_BYTES: usize = 1024 * 1024;
 /// Review decisions a person can save.
 pub const DECISIONS: [&str; 3] = ["accepted", "marked", "open"];
 /// Longest note of a marked part (the same limit as a Mark and revise instruction).
@@ -323,12 +328,54 @@ pub fn read_components(
             .ok()?;
     let execution: Value = serde_json::from_slice(&bytes).ok()?;
     let entries = execution["result"]["components"].as_array()?;
+    let added_sheets = crate::sources::added_sheet_entries(task);
+    let mut refreshed = crate::source_record::run_records(task, "components");
     Some(
         entries
             .iter()
             .filter_map(|entry| component_view(entry, reviews))
+            .map(|mut part| {
+                if part.source_record.is_none() {
+                    part.source_record = refreshed.remove(&part.id);
+                }
+                if let Some(record) = part.source_record.as_mut() {
+                    place_on_added_sheets(record, &part.id, &added_sheets);
+                }
+                part
+            })
             .collect(),
     )
+}
+
+/// Give the regions of a part's record that lie on an added sheet (`sources::ADDED_SHEETS_FILE`)
+/// that sheet's page size, and on its `part_boxes.view` the part's box in pixels, when the
+/// record has no box of its own. A record from a stage that read the DXF names the sheet but
+/// no pixels; the added sheet is its picture.
+fn place_on_added_sheets(record: &mut Value, part_id: &str, sheets: &[Value]) {
+    for key in ["regions", "inputs"] {
+        let Some(regions) = record[key].as_array_mut() else {
+            continue;
+        };
+        for region in regions.iter_mut().filter(|r| r["box_px"].is_null()) {
+            let Some(sheet) = sheets.iter().find(|s| s["name"] == region["sheet"]) else {
+                continue;
+            };
+            let (Some(width), Some(height)) =
+                (sheet["width_px"].as_u64(), sheet["height_px"].as_u64())
+            else {
+                continue;
+            };
+            region["page_px"] = serde_json::json!([width, height]);
+            let boxes = &sheet["part_boxes"];
+            let part_box = &boxes["boxes"][part_id];
+            let is_box = part_box
+                .as_array()
+                .is_some_and(|items| items.len() == 4 && items.iter().all(Value::is_number));
+            if is_box && boxes["view"] == region["view"] {
+                region["box_px"] = part_box.clone();
+            }
+        }
+    }
 }
 
 /// A person's review of one part. "marked" carries what the person wants changed.
@@ -339,18 +386,63 @@ pub struct PartReview {
     pub note: Option<String>,
 }
 
-type AllReviews = BTreeMap<String, BTreeMap<String, PartReview>>;
+type TaskReviews = BTreeMap<String, PartReview>;
+/// The app config file of earlier versions: task folder path -> reviews.
+type LegacyReviews = BTreeMap<String, TaskReviews>;
 
-fn all_reviews(paths: &AppPaths) -> AllReviews {
+fn legacy_reviews(paths: &AppPaths) -> LegacyReviews {
     storage::read_config_json(paths, REVIEWS_FILE).unwrap_or_default()
 }
 
-/// The saved reviews of one task: component id -> review.
+fn legacy_key(task: &Path) -> String {
+    task.to_string_lossy().into_owned()
+}
+
+/// The reviews file inside the run folder, or None when the record folder is a symlink.
+fn run_reviews_path(task: &Path) -> Option<std::path::PathBuf> {
+    let folder = task.join(RUN_REVIEWS_FOLDER);
+    let linked = std::fs::symlink_metadata(&folder).is_ok_and(|m| m.file_type().is_symlink());
+    (!linked).then(|| folder.join(REVIEWS_FILE))
+}
+
+/// The reviews saved in the run folder, or None when the run has no reviews file.
+fn run_reviews(task: &Path) -> Option<TaskReviews> {
+    let bytes =
+        marinaframe_control::util::read_bounded(&run_reviews_path(task)?, RUN_REVIEWS_MAX_BYTES)
+            .ok()?;
+    serde_json::from_slice(&bytes).ok()
+}
+
+fn task_reviews(paths: &AppPaths, task: &Path) -> TaskReviews {
+    // Re-export can add an empty portable record. Keep legacy decisions until
+    // they are migrated by save_reviews; portable decisions win for the same id.
+    let mut reviews = legacy_reviews(paths)
+        .remove(&legacy_key(task))
+        .unwrap_or_default();
+    reviews.extend(run_reviews(task).unwrap_or_default());
+    reviews
+}
+
+/// The saved reviews of one task: component id -> review. They are kept in the run folder
+/// (`review/part_reviews.json`), so they move with a copied run. A run reviewed by an earlier
+/// version has them in the app config, keyed by the run folder's path; they are read from
+/// there until the next review moves them into the run.
 pub fn reviews_of(paths: &AppPaths, task: &Path) -> HashMap<String, PartReview> {
-    all_reviews(paths)
-        .remove(&task.to_string_lossy().into_owned())
-        .map(|m| m.into_iter().collect())
-        .unwrap_or_default()
+    task_reviews(paths, task).into_iter().collect()
+}
+
+/// Write the reviews into the run folder, then drop the task's entry from the app config.
+/// The config entry goes only after the run file is written, so no review is lost.
+fn save_reviews(paths: &AppPaths, task: &Path, reviews: &TaskReviews) -> AppResult<()> {
+    let not_saved = || AppError::new("review_write", "The review could not be saved.");
+    let path = run_reviews_path(task).ok_or_else(not_saved)?;
+    std::fs::create_dir_all(task.join(RUN_REVIEWS_FOLDER)).map_err(|_| not_saved())?;
+    marinaframe_control::util::atomic_json(&path, reviews, true).map_err(|_| not_saved())?;
+    let mut legacy = legacy_reviews(paths);
+    if legacy.remove(&legacy_key(task)).is_some() {
+        storage::write_config_json(paths, REVIEWS_FILE, &legacy)?;
+    }
+    Ok(())
 }
 
 /// Save a person's review of one part. "marked" needs a note (what to change, 1 to
@@ -391,12 +483,9 @@ pub fn review_component(
         decision: decision.to_string(),
         note: (decision == "marked").then(|| note.unwrap_or_default().to_string()),
     };
-    let mut reviews = all_reviews(paths);
-    reviews
-        .entry(task.to_string_lossy().into_owned())
-        .or_default()
-        .insert(component_id.to_string(), review);
-    storage::write_config_json(paths, REVIEWS_FILE, &reviews)
+    let mut reviews = task_reviews(paths, task);
+    reviews.insert(component_id.to_string(), review);
+    save_reviews(paths, task, &reviews)
 }
 
 #[cfg(test)]
@@ -616,6 +705,125 @@ mod tests {
         );
         assert!(review_component(&paths, &task, "aft_deck", "approved", None).is_err());
         assert!(review_component(&paths, &task, "no_such_part", "accepted", None).is_err());
+    }
+
+    fn copy_folder(from: &Path, to: &Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for entry in std::fs::read_dir(from).unwrap() {
+            let entry = entry.unwrap();
+            let target = to.join(entry.file_name());
+            if entry.file_type().unwrap().is_dir() {
+                copy_folder(&entry.path(), &target);
+            } else {
+                std::fs::copy(entry.path(), target).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn a_review_moves_with_a_copied_run() {
+        let tmp = tempfile::tempdir().unwrap();
+        let task = task_with_parts(&tmp);
+        let paths = AppPaths {
+            config_dir: tmp.path().join("config"),
+            data_dir: tmp.path().join("data"),
+            repo_root: None,
+        };
+        review_component(&paths, &task, "aft_deck", "marked", Some("Lower the deck")).unwrap();
+        assert!(task.join("review/part_reviews.json").is_file());
+        // Another Mac: a new config folder and the run in another place.
+        let copy = tmp.path().join("elsewhere/task");
+        copy_folder(&task, &copy);
+        let other = AppPaths {
+            config_dir: tmp.path().join("other-config"),
+            data_dir: tmp.path().join("other-data"),
+            repo_root: None,
+        };
+        let review = &reviews_of(&other, &copy)["aft_deck"];
+        assert_eq!(
+            (review.decision.as_str(), review.note.as_deref()),
+            ("marked", Some("Lower the deck"))
+        );
+    }
+
+    #[test]
+    fn a_review_kept_in_the_app_config_is_read_and_moved_into_the_run() {
+        let tmp = tempfile::tempdir().unwrap();
+        let task = task_with_parts(&tmp);
+        let paths = AppPaths {
+            config_dir: tmp.path().join("config"),
+            data_dir: tmp.path().join("data"),
+            repo_root: None,
+        };
+        let other_task = "/elsewhere/other-run".to_string();
+        let accepted = PartReview {
+            decision: "accepted".into(),
+            note: None,
+        };
+        let legacy: LegacyReviews = [
+            (
+                legacy_key(&task),
+                [("aft_deck".to_string(), accepted.clone())].into(),
+            ),
+            (
+                other_task.clone(),
+                [("x".to_string(), accepted.clone())].into(),
+            ),
+        ]
+        .into();
+        storage::write_config_json(&paths, REVIEWS_FILE, &legacy).unwrap();
+        // Read from the config while the run has no reviews file.
+        assert_eq!(reviews_of(&paths, &task)["aft_deck"], accepted);
+        assert!(!task.join("review").exists());
+        // Re-export's empty portable record must not hide the earlier decisions.
+        std::fs::create_dir(task.join("review")).unwrap();
+        std::fs::write(task.join("review/part_reviews.json"), "{}").unwrap();
+        assert_eq!(reviews_of(&paths, &task)["aft_deck"], accepted);
+        // The next review keeps the earlier one, writes both into the run and drops the
+        // task's config entry; another task's entry stays.
+        review_component(&paths, &task, "tank_fw1", "accepted", None).unwrap();
+        let in_run = run_reviews(&task).unwrap();
+        assert_eq!(
+            in_run.keys().collect::<Vec<_>>(),
+            vec!["aft_deck", "tank_fw1"]
+        );
+        let left = legacy_reviews(&paths);
+        assert!(!left.contains_key(&legacy_key(&task)));
+        assert!(left.contains_key(&other_task));
+    }
+
+    #[test]
+    fn records_on_an_added_sheet_get_its_page_and_the_part_box() {
+        let tmp = tempfile::tempdir().unwrap();
+        let task = task_with_parts(&tmp);
+        let mut execution: Value =
+            serde_json::from_slice(&std::fs::read(task.join(EXECUTION_FILE)).unwrap()).unwrap();
+        let on_sheet = |view: &str| json!({"sheet": "cjob/Tank Rev0.dxf", "page": 0, "view": view, "box_px": null});
+        execution["result"]["components"][1]["source_record"] = json!({"kind": "read",
+            "regions": [on_sheet("plan"), on_sheet("profile"),
+                {"sheet": "other.dxf", "page": 0, "view": "plan", "box_px": null}]});
+        std::fs::write(task.join(EXECUTION_FILE), execution.to_string()).unwrap();
+        std::fs::create_dir_all(task.join("sources")).unwrap();
+        std::fs::write(
+            task.join(crate::sources::ADDED_SHEETS_FILE),
+            json!({"schema": "marinaframe.run-sheets.v1", "sheets": [
+                {"name": "cjob/Tank Rev0.dxf", "file": "sources/sheets/tank.png",
+                 "width_px": 400, "height_px": 200,
+                 "part_boxes": {"view": "plan", "boxes": {"tank_fw1": [10, 20, 30, 40]}}}]})
+            .to_string(),
+        )
+        .unwrap();
+        let parts = read_components(&task, &HashMap::new()).unwrap();
+        let record = parts[1].source_record.as_ref().unwrap();
+        let regions = &record["regions"];
+        assert_eq!(regions[0]["page_px"], json!([400, 200]));
+        assert_eq!(regions[0]["box_px"], json!([10, 20, 30, 40]));
+        // Another view of the same sheet: its page, no box. Another sheet: unchanged.
+        assert_eq!(regions[1]["page_px"], json!([400, 200]));
+        assert!(regions[1]["box_px"].is_null());
+        assert!(regions[2].get("page_px").is_none());
+        // The result is still a valid record.
+        assert!(crate::source_record::checked(record).is_some());
     }
 
     #[test]

@@ -35,6 +35,13 @@ GUESS_BLOCK_LENGTH_M = 40.0  # 239 of 488 designs; the others 40.0 to 43.7 m
 GUESS_HOLDS = 3  # 4 transverse bulkheads in all 488 designs
 GUESS_WEB_SPACES_PER_HOLD = 9  # all 488 designs
 GUESS_FRAME_SPACES_PER_WEB = 5  # 269 designs; 4 in 204, 3 in 15
+# Block length when the holds need more than 40 m. From a BOM survey of 812 loose SGLD and Repaired
+# designs outside the tranche 3 sample and the W3 sealed split: the end margin beyond the end
+# bulkheads is 0.7 to 1.5 web spaces (median 1.2 in the 639 blocks longer than 40 m). The block
+# is 40 m whenever the holds fit with a margin of at least 0.8 web spaces at each end: this
+# threshold gives the most exact block lengths on the survey (plateau from 0.7 to 0.85).
+GUESS_END_MARGIN_WEB_SPACES = 1.2
+GUESS_MIN_END_MARGIN_WEB_SPACES = 0.8
 # Bracket legs as a share of the printed web-frame depth (drawn in view 2, not printed;
 # seen on development design 379: lower 1.18 m and upper 0.98 m for a 1.96 m web).
 GUESS_LOWER_BRACKET_LEG = 0.6
@@ -50,6 +57,11 @@ DIMS_PATTERN = re.compile(
 FRAME_HOSTS = {"Bottom": "Bot. Stiff.", "Inner_Bottom": "Inner Bot. Stiff.", "Deck": "Deck Stiff.",
                "Side_Shell": "Side Shell Stiff.", "Inner_Side_Shell": "Inner Side Shell Stiff.",
                "Longitudinal_Bulkhead": "Long. BLKHD Stiff."}
+
+# Stiffener rows of the transverse bulkhead. The web-frame sheet also prints a
+# "Vert. BLKHD Stiff." row for another member (often 1 at the web spacing); the bulkhead
+# sheet's row is the one that describes the transverse bulkhead.
+BULKHEAD_SHEET_ROWS = {"Vert. BLKHD Stiff.", "Trans. BLKHD Stiff."}
 
 Box = tuple[float, float, float, float, float, float]  # x0, y0, z0, x1, y1, z1 (metres)
 
@@ -141,6 +153,11 @@ def read_sheets(sheets: dict[str, Path]) -> BlockReading:
             if material:
                 materials.setdefault(name, material)
         for name, row in read_rows(words).items():
+            if name in BULKHEAD_SHEET_ROWS and key == "bulkhead":
+                rows[name] = row  # the bulkhead sheet owns these rows
+                if row.material:
+                    materials[name] = row.material
+                continue
             rows.setdefault(name, row)
             if row.material:
                 materials.setdefault(name, row.material)
@@ -188,6 +205,18 @@ class Stations:
     frames: list[float]
     web_spacing_m: float
     frame_spacing_m: float
+
+
+def guess_block_length(web_spacing_m: float) -> float:
+    """Guessed block length: 40 m when the holds fit in it, else the holds plus an end margin.
+
+    The holds are holds x web spaces x the printed web spacing. With a large spacing they do not
+    fit in 40 m with the minimum end margin, and the block is the holds plus the median margin.
+    """
+    holds_length = GUESS_HOLDS * GUESS_WEB_SPACES_PER_HOLD * web_spacing_m
+    if holds_length + 2 * GUESS_MIN_END_MARGIN_WEB_SPACES * web_spacing_m <= GUESS_BLOCK_LENGTH_M:
+        return GUESS_BLOCK_LENGTH_M
+    return holds_length + 2 * GUESS_END_MARGIN_WEB_SPACES * web_spacing_m
 
 
 def stations(web_spacing_m: float, length_m: float = GUESS_BLOCK_LENGTH_M,
@@ -266,6 +295,8 @@ def transverse_members(reading: BlockReading, st: Stations) -> list[BlockMember]
     web = rows.get("Webframe")
     floor = rows.get("Floor")
     beam = rows.get("Deck_Transvere_Beam")
+    deck_y0, deck_y1 = _upper_deck_span(reading)
+    hopper = _hopper_bracket_sections(reading, breadth - web.height_m) if web and web.height_m else {}
     for x in st.webs:
         zone = f"FR{frame_no(x):03d}"
         if floor and inner:
@@ -281,26 +312,41 @@ def transverse_members(reading: BlockReading, st: Stations) -> list[BlockMember]
                 yf = breadth - web.height_m
                 add(f"{zone}/web/flange", "flange", (x_lo, yf, z0, x_hi, yf, depth), web.width_m * (depth - z0),
                     web.thickness_mm, "printed", {}, "flange of the row 'Webframe'", row=web.name)
+            y_in = breadth - web.height_m
             leg_low = GUESS_LOWER_BRACKET_LEG * web.height_m
             leg_up = GUESS_UPPER_BRACKET_LEG * web.height_m
-            y_in = breadth - web.height_m
             if "Lower Bracket" in plate_mm and inner:
-                add(f"{zone}/bracket_low", "bracket", _plane_x(x, y_in - leg_low, inner, y_in, inner + leg_low),
-                    leg_low ** 2 / 2, plate_mm["Lower Bracket"], "printed", {"size": "guessed"},
-                    "plate row 'Lower Bracket'; legs guessed from the web depth", row="Lower Bracket")
+                if "lower" in hopper:  # the bracket fills the lower hopper space of view 3
+                    b_y0, b_z0, b_y1, b_z1 = hopper["lower"]
+                    size, basis = "traced", "lower hopper plates of view 3"
+                else:
+                    b_y0, b_z0, b_y1, b_z1 = y_in - leg_low, inner, y_in, inner + leg_low
+                    size, basis = "guessed", "legs guessed from the web depth"
+                add(f"{zone}/bracket_low", "bracket", _plane_x(x, b_y0, b_z0, b_y1, b_z1), (b_y1 - b_y0) * (b_z1 - b_z0) / 2,
+                    plate_mm["Lower Bracket"], "printed", {"size": size},
+                    f"plate row 'Lower Bracket'; extent: {basis}", row="Lower Bracket")
             if "Upper Bracket" in plate_mm:
-                top = depth - (beam.height_m if beam and beam.height_m else 0.0)
-                add(f"{zone}/bracket_up", "bracket", _plane_x(x, y_in - leg_up, top - leg_up, y_in, top),
-                    leg_up ** 2 / 2, plate_mm["Upper Bracket"], "printed", {"size": "guessed"},
-                    "plate row 'Upper Bracket'; legs guessed from the web depth", row="Upper Bracket")
+                if "upper" in hopper:  # the bracket fills the upper hopper (wing tank) space
+                    b_y0, b_z0, b_y1, b_z1 = hopper["upper"]
+                    size, basis = "traced", "upper hopper plates of view 3"
+                else:
+                    top = depth - (beam.height_m if beam and beam.height_m else 0.0)
+                    b_y0, b_z0, b_y1, b_z1 = y_in - leg_up, top - leg_up, y_in, top
+                    size, basis = "guessed", "legs guessed from the web depth"
+                add(f"{zone}/bracket_up", "bracket", _plane_x(x, b_y0, b_z0, b_y1, b_z1), (b_y1 - b_y0) * (b_z1 - b_z0) / 2,
+                    plate_mm["Upper Bracket"], "printed", {"size": size},
+                    f"plate row 'Upper Bracket'; extent: {basis}", row="Upper Bracket")
         if beam and beam.height_m:
+            # The beam runs under the upper deck plate of view 3 (outboard of a hatch opening).
             z_low = depth - beam.height_m
-            add(f"{zone}/deck_beam", "deck_beam", _plane_x(x, 0.0, z_low, breadth, depth), beam.height_m * breadth,
-                beam.thickness_mm, "printed", {"extent": "traced"}, "row 'Deck_Transvere_Beam'", row=beam.name)
+            span = deck_y1 - deck_y0
+            add(f"{zone}/deck_beam", "deck_beam", _plane_x(x, deck_y0, z_low, deck_y1, depth), beam.height_m * span,
+                beam.thickness_mm, "printed", {"extent": "traced"},
+                "row 'Deck_Transvere_Beam'; span of the upper deck plate in view 3", row=beam.name)
             if beam.shape in ("T", "L") and beam.width_m:
                 x_lo, x_hi = (x - beam.width_m / 2, x + beam.width_m / 2) if beam.shape == "T" else (x, x + beam.width_m)
-                add(f"{zone}/deck_beam/flange", "flange", (x_lo, 0.0, z_low, x_hi, breadth, z_low),
-                    beam.width_m * breadth, beam.thickness_mm, "printed", {}, "flange of the row 'Deck_Transvere_Beam'", row=beam.name)
+                add(f"{zone}/deck_beam/flange", "flange", (x_lo, deck_y0, z_low, x_hi, deck_y1, z_low),
+                    beam.width_m * span, beam.thickness_mm, "printed", {}, "flange of the row 'Deck_Transvere_Beam'", row=beam.name)
 
     # Ordinary frames: one per stiffened plate host, scantling of that host's longitudinal row.
     hosts = _stiffened_plate_spans(reading)
@@ -342,6 +388,50 @@ def transverse_members(reading: BlockReading, st: Stations) -> list[BlockMember]
                     row.thickness_mm, "guessed", {"frame_spacing": "guessed", "scantling": "guessed"},
                     f"flange of the ordinary frame on {host} (guess)", row=row.name)
     return members
+
+
+# Hopper plates closer than this (metres) belong to one hopper space.
+HOPPER_TOUCH_M = 0.02
+
+
+def _upper_deck_span(reading: BlockReading) -> tuple[float, float]:
+    """y extent of the highest deck plates of view 3; the whole breadth when view 3 has none."""
+    decks = [m.ship_bbox_mm for m in reading.section.members if m.role == "deck" and m.ship_bbox_mm]
+    if not decks:
+        return 0.0, reading.breadth_m
+    top = max(box[3] for box in decks)
+    upper = [box for box in decks if abs(box[3] - top) < 10.0]  # millimetres
+    return min(box[0] for box in upper) / 1000, max(box[2] for box in upper) / 1000
+
+
+def _hopper_bracket_sections(reading: BlockReading, y_inner_side: float) -> dict[str, tuple[float, ...]]:
+    """Section boxes (y0, z0, y1, z1) of the hopper spaces of view 3, which the brackets fill.
+
+    Touching hopper plates form one space. A space that starts below half the depth is the lower
+    hopper (cut at the inner bottom), else the upper hopper (cut at the deck). Both are cut at the
+    inner edge of the web frame on the side, where the web-frame plate takes over.
+    """
+    boxes = [tuple(v / 1000 for v in m.ship_bbox_mm) for m in reading.section.members
+             if m.role == "hopper_plate" and m.ship_bbox_mm]
+    spaces: list[list[tuple[float, ...]]] = []
+    for box in boxes:
+        touching = [space for space in spaces if any(_boxes_touch(box, other) for other in space)]
+        merged = [box] + [other for space in touching for other in space]
+        spaces = [space for space in spaces if space not in touching] + [merged]
+    sections = {}
+    for space in spaces:
+        y0 = min(b[0] for b in space); z0 = min(b[1] for b in space)
+        y1 = min(max(b[2] for b in space), y_inner_side); z1 = max(b[3] for b in space)
+        if z0 < reading.depth_m / 2:
+            sections["lower"] = (y0, max(z0, reading.inner_bottom_m or 0.0), y1, z1)
+        else:
+            sections["upper"] = (y0, z0, y1, min(z1, reading.depth_m))
+    return {key: box for key, box in sections.items() if box[2] > box[0] and box[3] > box[1]}
+
+
+def _boxes_touch(a: tuple[float, ...], b: tuple[float, ...]) -> bool:
+    return (a[0] <= b[2] + HOPPER_TOUCH_M and b[0] <= a[2] + HOPPER_TOUCH_M
+            and a[1] <= b[3] + HOPPER_TOUCH_M and b[1] <= a[3] + HOPPER_TOUCH_M)
 
 
 def _stiffened_plate_spans(reading: BlockReading) -> dict[str, tuple[tuple[tuple[float, float], float], str]]:
@@ -392,17 +482,20 @@ def label_thickness_and_material(members: list[BlockMember], materials: dict[str
             m.material, m.material_source = own or common_material, "guessed"
 
 
-def build_block(sheets: dict[str, Path], length_m: float = GUESS_BLOCK_LENGTH_M,
+def build_block(sheets: dict[str, Path], length_m: float | None = None,
                 frames_per_web: int = GUESS_FRAME_SPACES_PER_WEB) -> dict:
     """Read the three sheets and lay out the block. Returns the member list and the reading.
 
-    ``length_m`` and ``frames_per_web`` are the guesses of values the drawings do not print; a
-    caller passes other values only for a diagnostic of what the guesses cost.
+    ``length_m`` (default: ``guess_block_length`` of the printed web spacing) and
+    ``frames_per_web`` are the guesses of values the drawings do not print; a caller passes other
+    values only for a diagnostic of what the guesses cost.
     """
     reading = read_sheets(sheets)
     web = reading.rows.get("Webframe") or reading.rows.get("Floor")
     if not web or not web.spacing_m:
         raise ValueError("no printed web-frame spacing (rows 'Webframe' and 'Floor')")
+    if length_m is None:
+        length_m = guess_block_length(web.spacing_m)
     st = stations(web.spacing_m, length_m=length_m, frames_per_web=frames_per_web)
     members = longitudinal_members(reading, length_m) + transverse_members(reading, st)
     label_thickness_and_material(members, reading.materials)
@@ -426,20 +519,27 @@ def export_step(block: dict, path: Path) -> int:
     """Write thin member boxes to STEP and draft IGES/3dm files, all in millimetres."""
     import cadquery as cq
 
-    parts = []
-    for index, member in enumerate(block["members"]):
-        t = (member["thickness_mm"] or 10.0) / 1000
-        x0, y0, z0, x1, y1, z1 = member["box"]
-        dims = [x1 - x0, y1 - y0, z1 - z0]
-        thin = min(range(3), key=lambda i: dims[i])
-        lo, hi = [x0, y0, z0], [x1, y1, z1]
-        lo[thin] -= t / 2
-        hi[thin] += t / 2
-        size = [max(hi[i] - lo[i], 1e-4) * 1000 for i in range(3)]
-        shape = cq.Solid.makeBox(*size, cq.Vector(*(v * 1000 for v in lo)))
-        parts.append(CadPart(member.get("member_id", f"member-{index}"), shape, "Structure"))
+    from ..parallel import process_parts
+
+    parts = process_parts(_member_part, list(enumerate(block["members"])), path.parent)
     compound = cq.Compound.makeCompound([part.shape for part in parts])
     cq.exporters.export(cq.Workplane().add(compound), str(path), exportType="STEP")
     export_iges(compound, path.with_suffix(".iges"))
     export_3dm(parts, path.with_suffix(".3dm"))
     return len(parts)
+
+
+def _member_part(item):
+    import cadquery as cq
+
+    index, member = item
+    t = (member["thickness_mm"] or 10.0) / 1000
+    x0, y0, z0, x1, y1, z1 = member["box"]
+    dims = [x1 - x0, y1 - y0, z1 - z0]
+    thin = min(range(3), key=lambda i: dims[i])
+    lo, hi = [x0, y0, z0], [x1, y1, z1]
+    lo[thin] -= t / 2
+    hi[thin] += t / 2
+    size = [max(hi[i] - lo[i], 1e-4) * 1000 for i in range(3)]
+    shape = cq.Solid.makeBox(*size, cq.Vector(*(v * 1000 for v in lo)))
+    return CadPart(member.get("member_id", f"member-{index}"), shape, "Structure")

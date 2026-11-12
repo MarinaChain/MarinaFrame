@@ -227,6 +227,7 @@ impl Backend {
             self.worker_source.as_deref(),
             spec_path,
             self.ai_status().active,
+            inspection_workers(&settings),
         )
     }
 
@@ -243,6 +244,7 @@ impl Backend {
             self.worker_source.as_deref(),
             &spec.to_string_lossy(),
             false,
+            inspection_workers(&settings),
         )
     }
 
@@ -709,6 +711,15 @@ fn folder_bytes(path: &Path, depth: usize) -> u64 {
             _ => 0,
         })
         .sum()
+}
+
+/// The inspection worker bound a new run gets: the setting when it is valid, else none
+/// (the machine-wide worker pool shares cores - 2 workers between running inspections).
+/// The app passes it to the controller explicitly; the worker environment is cleared.
+pub fn inspection_workers(settings: &Settings) -> Option<u32> {
+    settings
+        .inspection_workers
+        .filter(|n| (1..=marinaframe_control::worker::MAX_INSPECTION_WORKERS).contains(n))
 }
 
 #[cfg(test)]

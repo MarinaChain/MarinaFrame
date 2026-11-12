@@ -719,6 +719,13 @@ pub struct Config {
     /// keep their hashes.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fallback_models: Vec<String>,
+    /// Most worker processes one source inspection may run at once (the sections
+    /// are independent). `None`: no bound of its own; the machine-wide worker pool
+    /// (Python parallel.py) shares cores - 2 workers between all running
+    /// inspections. A speed setting only: the results do not depend on it. Not
+    /// serialized when `None`, so older configurations keep their hashes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inspection_workers: Option<u32>,
 }
 impl Config {
     /// The ordered model list: `model`, then `fallback_models`.

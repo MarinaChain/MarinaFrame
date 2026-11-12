@@ -89,3 +89,59 @@ def test_truth_labels_cover_transverse_classes():
 def test_scorer_refuses_w3_sealed_designs(tmp_path):
     with pytest.raises(SystemExit):
         block_eval.evaluate(tmp_path, [118])
+
+
+def test_guessed_block_length_holds_the_printed_web_spaces():
+    # Small spacing: the holds (27 web spaces) fit in 40 m with at least 0.8 web spaces each end.
+    assert block3d.guess_block_length(1.30) == pytest.approx(40.0)
+    assert block3d.guess_block_length(1.38) == pytest.approx(40.0)  # 27 x 1.38 + 1.6 x 1.38 = 39.5 m
+    # Just too large for that: the block is the holds plus 1.2 web spaces at each end.
+    assert block3d.guess_block_length(1.40) == pytest.approx((27 + 2 * 1.2) * 1.40)
+    # Large spacing: 27 x 2.5 m = 67.5 m of holds, plus 1.2 web spaces at each end.
+    assert block3d.guess_block_length(2.5) == pytest.approx((27 + 2 * 1.2) * 2.5)
+    st = block3d.stations(2.5, length_m=block3d.guess_block_length(2.5))
+    assert st.bulkheads[0] == pytest.approx(1.2 * 2.5)
+    assert st.bulkheads[-1] < block3d.guess_block_length(2.5)
+
+
+def test_brackets_fill_the_hopper_spaces_and_beams_span_the_deck_plate():
+    base = reading()
+    members = [m for m in base.section.members if not (m.role == "deck" and m.host == "Deck")] + [
+        member("deck", "Deck", (5000, 11000, 8000, 11000), 29, 7),  # deck outboard of a hatch
+        member("hopper_plate", "Hopper_Pannel", (4000, 2000, 6100, 4500), 15, 8),  # lower hopper
+        member("hopper_plate", "Hopper_Pannel", (5000, 8500, 6100, 11000), 15, 9),  # upper wing tank
+    ]
+    section = SectionResult(members, [], 20.0, (0.0, 0.0), [], [], "vector", 6, 0)
+    bulk = block3d.BlockReading(section, base.plate_mm, base.rows, base.materials, 8.0, 11.0, 2.0, 2.0)
+    built = block3d.transverse_members(bulk, block3d.stations(1.4))
+    low = next(m for m in built if m.member_id.endswith("bracket_low"))
+    up = next(m for m in built if m.member_id.endswith("bracket_up"))
+    # Web frame depth 1.9 m: its inner edge at y = 6.1 m bounds both brackets.
+    assert low.box[1:3] == pytest.approx((4.0, 2.0)) and low.box[4:] == pytest.approx((6.1, 4.5))
+    assert up.box[1:3] == pytest.approx((5.0, 8.5)) and up.box[4:] == pytest.approx((6.1, 11.0))
+    assert low.sources["size"] == "traced" and low.thickness_mm == 14.0
+    beam = next(m for m in built if m.label == "deck_beam")
+    assert beam.box[1] == pytest.approx(5.0) and beam.box[4] == pytest.approx(8.0)
+    # Without hopper plates the bracket legs stay guessed.
+    plain = block3d.transverse_members(reading(), block3d.stations(1.4))
+    assert next(m for m in plain if m.member_id.endswith("bracket_low")).sources["size"] == "guessed"
+
+
+def test_bulkhead_stiffener_rows_come_from_the_bulkhead_sheet(monkeypatch):
+    sheets = {"longitudinal": "long", "web_frame": "web", "bulkhead": "bhd"}
+    tables = {
+        "long": {},
+        "web": {"Vert. BLKHD Stiff.": block3d.PrintedRow("Vert. BLKHD Stiff.", 1, 1.8, "L", 0.13, 0.13, 7.0, "A"),
+                "Webframe": block3d.PrintedRow("Webframe", 1, 1.8, "I", 2.0, 0.0, 20.0, "A")},
+        "bhd": {"Vert. BLKHD Stiff.": block3d.PrintedRow("Vert. BLKHD Stiff.", 35, 0.308, "T", 0.23, 0.03, 9.0, "B"),
+                "Webframe": block3d.PrintedRow("Webframe", 1, 9.9, "I", 9.9, 0.0, 99.0, "B")},
+    }
+    base = reading()
+    monkeypatch.setattr(block3d, "read_section_pdf", lambda path, mode: base.section)
+    monkeypatch.setattr(block3d, "read_pdf_words", lambda path: path)
+    monkeypatch.setattr(block3d, "read_plate_rows", lambda words: {})
+    monkeypatch.setattr(block3d, "read_rows", lambda words: tables[words])
+    result = block3d.read_sheets(sheets)
+    assert result.rows["Vert. BLKHD Stiff."].count == 35  # bulkhead sheet, read last, wins
+    assert result.materials["Vert. BLKHD Stiff."] == "B"
+    assert result.rows["Webframe"].spacing_m == 1.8  # other rows: first sheet still wins

@@ -93,6 +93,7 @@ write_spec(preview,root/'set')
         binary_sha256: util::file_hash(&std::env::current_exe().unwrap()).unwrap(),
         on_ambiguity: OnAmbiguity::Draft,
         fallback_models: vec![],
+        inspection_workers: None,
     };
     let mut store = Store::create(&task, controller::new_state(config)).unwrap();
     assert!(controller::call_worker(&mut store, "initialize", json!({})).unwrap());

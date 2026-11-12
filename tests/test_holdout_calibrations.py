@@ -30,8 +30,9 @@ def test_every_scored_station_is_named_once(cal):
 
 def test_cama_sides_and_rows():
     aft, fore = cama.sheet_layout().sides
-    assert (aft.name, aft.sign, aft.stations_outer_first) == ('aft', -1, (8, 9, 10))
-    assert (fore.name, fore.sign, fore.stations_outer_first) == ('fore', 1, (7, 6, 5, 4, 3, 2, 1))
+    # Development correction from the printed offsets (spent holdout): table station = drawn label - 1.
+    assert (aft.name, aft.sign, aft.stations_outer_first) == ('aft', -1, (7, 8, 9, 10))
+    assert (fore.name, fore.sign, fore.stations_outer_first) == ('fore', 1, (6, 5, 4, 3, 2, 1, 0))
     assert cama.STATIONS == tuple(range(1, 10))  # station 10 has no printed offsets
     # The drawn waterlines W0 to W3 are measuring rows on their drawn image rows.
     assert {label: cama.WATERLINE_ROWS[label] for label in ('0-0-0', '0-3-0', '0-6-0', '0-9-0')} == {
