@@ -162,3 +162,57 @@ Evidence is frozen under ignored `work/polyline-naming/input-preflight-rgb/`: pe
 Checkpoint quick tier exited 0: lint and Rust tests passed; 2,055 Python tests passed (4 skipped, 87 deselected, 5 warnings); 269 UI tests passed; secret scan passed. Log: ignored `work/polyline-naming/test-quick-preflight.log`.
 
 **Stop/resume:** the fixed protocol requires all nine sheets and does not permit partial selection. Stop before the four-arm scored run. The separate truth-blind marking lane must supply profile/plan regions for the eight missing cases, numbered longitudinal station positions for all nine, and the mapping of drawn levels into body-plan coordinates. If fully automatic scale detection is required rather than the unchanged drawing calibrations, scale is also missing on all nine. Then finish the extraction integration and runner, hash/freeze inputs before scoring, and execute the unchanged comparison once. No real-sheet naming counts, identity scores, selection result or acceptance claim exists yet.
+
+## Label-primary results: single fixed nine-sheet run
+
+Protocol amendment `52cecb4`; implementation `d5cc86c`; invocation-only correction and campaign commit `4d61195`. The initial invocation failed with `unknown_option` before any receipt or model request; its artifacts were retained separately. Corrected campaign: first two predictions, trace inspection, then the remaining seven using unchanged source/binary hashes. All nine predictions were frozen before any truth load. One scoring invocation exited 0. No tuning or scoring rerun.
+
+Cells below are **correct / wrong / RMS m**. Missing predictions do not count as correct. WL and point cells are summed per sheet, with common-cell-weighted RMS. `—` means no common cells.
+
+| Sheet | Label-primary | Polyline v1.1 | Current reader | Reader v2 | Unnamed sections |
+|---|---|---|---|---|---|
+| PARDON ME | 19 / 1 / 0.052001 | 42 / 1 / 0.035486 | 42 / 1 / 0.035486 | 45 / 0 / 0.005556 | 6 |
+| BUE GIRL | 22 / 0 / 0.000584 | 37 / 0 / 0.001431 | 37 / 0 / 0.001431 | 37 / 0 / 0.001431 | 1 |
+| C.A. Thayer | 0 / 0 / — | 149 / 0 / 0.011616 | 149 / 0 / 0.011616 | 149 / 0 / 0.011616 | 2 |
+| Balclutha | 0 / 0 / — | 150 / 1 / 0.148012 | 150 / 1 / 0.148012 | 150 / 1 / 0.148012 | 5 |
+| BUMBLE BEE (corrected sides) | 37 / 13 / 0.148585 | 37 / 13 / 0.148585 | 37 / 13 / 0.148585 | 37 / 13 / 0.148585 | 2 |
+| ec-collier | 0 / 0 / — | 20 / 2 / 0.069139 | 20 / 2 / 0.069139 | 4 / 3 / 0.912375 | 10 |
+| white-gull | 0 / 0 / — | 51 / 2 / 0.056154 | 51 / 2 / 0.056154 | 46 / 2 / 0.055630 | 4 |
+| colleen | 0 / 0 / — | 39 / 0 / 0.004623 | 43 / 0 / 0.004501 | 6 / 5 / 0.649311 | 8 |
+| caleb-jones | 0 / 0 / — | 6 / 10 / 0.660181 | 21 / 0 / 0.027695 | 0 / 1 / 0.192680 | 11 |
+| **Total** | **78 / 14 / 0.112190** | **531 / 29 / 0.144746** | **550 / 19 / 0.091612** | **474 / 25 / 0.173862** | 49 |
+
+### Identity flags (existing scorers, union of cell kinds)
+
+| Sheet | Label-primary | Polyline v1.1 | Current reader | Reader v2 |
+|---|---|---|---|---|
+| PARDON ME | [6, 10, 11] | [6, 10, 11] | [6, 10, 11] | [6] |
+| BUE GIRL | [] | [] | [] | [] |
+| C.A. Thayer | [] | [] | [] | [] |
+| Balclutha | [] | [] | [] | [] |
+| BUMBLE BEE (corrected sides) | [1, 2, 3, 4, 5, 6] | [1, 2, 3, 4, 5, 6] | [1, 2, 3, 4, 5, 6] | [1, 2, 3, 4, 5, 6] |
+| ec-collier | [] | [5] | [5] | [] |
+| white-gull | [] | [7] | [7] | [6, 7] |
+| colleen | [] | [] | [] | [5] |
+| caleb-jones | [] | [4, 5, 6, 7, 8, 9] | [7] | [] |
+
+**Fixed rule: REJECT.** Correct-cell gate fails: 78 < 531. Wrong-cell gate passes: 14 <= 19, but this comes with severe abstention, not better coverage. Naming-error flags are empty only because **zero independent names were attached**; this is not evidence of successful identity. Label-primary identity flags on PARDON ME and BUMBLE BEE belong to unchanged fallback curves. The remaining label-primary cells all come from unchanged crossing fallback halves.
+
+The conservative route also suppressed round-bilge halves with incidental eligible knuckle traces: BUE GIRL loses coverage; Thayer and Balclutha give no cells. This is a limitation of the committed experimental routing, not a change to the product. It remains a failed development reader and must not be integrated.
+
+### Requests and evidence
+
+Nine controller requests, one per sheet, all completed, zero refused replies, zero retries; cap 18. Each reply contained accepted label items, but none passed the frozen literal-integer/geometric uniqueness rules. Some printed strings include `STA` prefixes, which the frozen rule rejects. The fixed 0.05 m box-centre-to-side distance and joint conflict rejection were not widened. No aliases (including 107 -> 7), rank fallback or cross-view rescue were added.
+
+Receipt usage: 67,894 prompt tokens and 4,741 completion tokens. Subscription receipts report observed cost **$0.00**; CLI list-price estimate **$0.183198** is not a billed API charge. Requests without observed cost: 0.
+
+Raw per-sheet replies, mapped boxes, rejected items, curves, missing/extra cells and separate point/WL metrics remain in ignored `work/polyline-naming/label-campaign-fixed/`. No licensed sheet or per-ship derived evidence was committed.
+
+| Frozen artifact | SHA-256 |
+|---|---|
+| `source_freeze.json` | `7f3c5601c424b753ccaf53f89d2edab197ea73fc64395365df033855a6766ec7` |
+| `prediction_manifest.json` | `5caca322878ac19405c0221a9a507e0b1ec8d38333a276c1e8ab33750c57f5ee` |
+| `predictions.pickle` | `c68cbd96c813f9e230af6ccf2dba798130670929a9e1c6d63899abdcd074ddf8` |
+| `result.json` | `25a66ce5285ab791343b9439ea2748d5353d4242a569bcf3d3dde8cc59d09899` |
+
+**Resume:** experiment spent; do not rerun or tune this protocol. Product default unchanged. No new holdout material or `work/holdout/` path opened. Any follow-up on label normalization, geometry distance, round-bilge routing or label-to-curve correspondence requires a new pre-run protocol. Final `make test-quick` exited 0: lint and Rust tests passed; 2,062 Python tests passed (4 skipped, 87 deselected, 5 warnings); 269 UI tests passed; secret scan passed. Log: ignored `work/polyline-naming/test-quick-final-label.log`. Push only this lane; do not merge. Remove only this worktree's `target/` after push.
