@@ -237,6 +237,32 @@ def interpret(reading: dict, request_dir: Path, sources_dir: Path) -> dict:
     else:
         result["ship_type"]["reason"] = ship_type["missing"]
 
+    _interpret_particulars(result, reply, tiles, region_of, grey, value_level, sizes, role_of)
+    _interpret_views_and_spaces(result, reply, region_of)
+    result["model_counts"] = reply["counts"]
+    finish_counts(result)
+    return result
+
+
+def reinterpret_particulars(case_dir: Path, inputs: Path, out_case: Path) -> list[str]:
+    """Rebuild the particulars of a stored reading from its stored coarse reply with the current
+    checks; no model call. Everything else of the reading stays as stored. Returns the fields
+    whose value changed."""
+    reading = json.loads((case_dir / "provider" / "vision_reading.json").read_text())
+    fresh = interpret(reading, case_dir / "request", inputs)
+    stored = json.loads((case_dir / "ga_reading.json").read_text())
+    changed = [field for field, item in fresh["particulars"].items()
+               if item.get("value") != (stored["particulars"].get(field) or {}).get("value")]
+    stored["particulars"] = fresh["particulars"]
+    stored["checks"] = ([c for c in stored["checks"] if c.get("code") != "lbp_above_loa"]
+                        + [c for c in fresh["checks"] if c.get("code") == "lbp_above_loa"])
+    stored.setdefault("passes", {})["particulars_reinterpreted"] = {"changed": changed, "model_calls": 0}
+    out_case.mkdir(parents=True, exist_ok=False)
+    write_json(out_case / "ga_reading.json", stored)
+    return changed
+
+
+def _interpret_particulars(result, reply, tiles, region_of, grey, value_level, sizes, role_of):
     # Particulars: the model gives printed text; code parses it or abstains.
     printed = {p["field"]: p for p in reply["particulars"]}
     for field, key in [*LENGTH_FIELDS.items(), ("deadweight", "deadweight_t")]:
@@ -281,6 +307,9 @@ def interpret(reading: dict, request_dir: Path, sources_dir: Path) -> dict:
             item["source_record"] = source_record.unknown("LBP read longer than LOA")
         result["checks"].append({"code": "lbp_above_loa", "status": "check"})
 
+
+
+def _interpret_views_and_spaces(result, reply, region_of):
     # Views: where each drawn view lies on the sheet, so every space can name its view.
     for view in reply.get("views") or []:
         region, _ = region_of(view["image_id"], view["box"])
@@ -305,24 +334,3 @@ def interpret(reading: dict, request_dir: Path, sources_dir: Path) -> dict:
                                          "label": item["label"][:64], "kind": item["kind"]})
         add_space(result, f"{kind}-{index + 1:03d}", kind, item["label"], item["number"],
                   "read" if item["basis"] == "read" else "guessed", region, "coarse")
-    result["model_counts"] = reply["counts"]
-    finish_counts(result)
-    return result
-
-
-def reinterpret_particulars(case_dir: Path, inputs: Path, out_case: Path) -> list[str]:
-    """Rebuild the particulars of a stored reading from its stored coarse reply with the current
-    checks; no model call. Everything else of the reading stays as stored. Returns the fields
-    whose value changed."""
-    reading = json.loads((case_dir / "provider" / "vision_reading.json").read_text())
-    fresh = interpret(reading, case_dir / "request", inputs)
-    stored = json.loads((case_dir / "ga_reading.json").read_text())
-    changed = [field for field, item in fresh["particulars"].items()
-               if item.get("value") != (stored["particulars"].get(field) or {}).get("value")]
-    stored["particulars"] = fresh["particulars"]
-    stored["checks"] = ([c for c in stored["checks"] if c.get("code") != "lbp_above_loa"]
-                        + [c for c in fresh["checks"] if c.get("code") == "lbp_above_loa"])
-    stored.setdefault("passes", {})["particulars_reinterpreted"] = {"changed": changed, "model_calls": 0}
-    out_case.mkdir(parents=True, exist_ok=False)
-    write_json(out_case / "ga_reading.json", stored)
-    return changed

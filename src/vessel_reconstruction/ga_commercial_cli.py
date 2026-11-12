@@ -30,6 +30,39 @@ def case_files(inputs: Path, case: str) -> tuple[Path | None, Path | None]:
 
 def main(argv=None) -> int:
     from .ga_commercial import measure_one, read_one
+    parser = _argument_parser()
+    args = parser.parse_args(argv)
+    if args.command == "reinterpret-particulars":
+        changed = {}
+        for reading_path in sorted(args.run.glob("*/ga_reading.json")):
+            case_dir = reading_path.parent
+            changed[case_dir.name] = reinterpret_particulars(case_dir, args.inputs, args.out / case_dir.name)
+        print(json.dumps({"ok": True, "model_calls": 0, "changed": changed, "engineering_approved": False}))
+        return 0
+    if args.command == "prepare":
+        manifest = prepare(args.ga, args.out, args.particulars)
+        print(json.dumps({"ok": True, "images": len(manifest["images"]), "engineering_approved": False}))
+        return 0
+    if args.command == "measure":
+        result = json.loads(args.reading.read_text())
+        args.out.mkdir(parents=True, exist_ok=False)
+        measure_one(result, args.ga.resolve(), args.out.resolve(), args.binary.resolve(), args.basis, args.model,
+                    args.case)
+        write_json(args.out / "ga_reading.json", result)
+        print(json.dumps({"ok": True, "scale": result["passes"]["scale"], "engineering_approved": False}))
+        return 0
+    definitions = {"split_holds_are_separate": not args.one_hold_per_number,
+                   "slop_holding_tank_is_slop": not args.slop_holding_tank_not_slop}
+    if args.command == "read":
+        result = read_one(args.ga, args.particulars, args.out, args.binary, args.basis, args.model, args.app_task,
+                          measure=args.measure, max_requests=args.max_requests_per_ship, definitions=definitions)
+        print(json.dumps({"ok": bool(result["spaces"] or result["counts"].get("cargo_holds", {}).get("status") == "read"),
+                          "usage": result["usage"], "engineering_approved": False}))
+        return 0
+    return _run_batch(args, definitions)
+
+
+def _argument_parser():
     parser = argparse.ArgumentParser(prog="python -m vessel_reconstruction.ga_commercial")
     commands = parser.add_subparsers(dest="command", required=True)
     prep = commands.add_parser("prepare", help="Write a ga_reading request directory.")
@@ -72,34 +105,11 @@ def main(argv=None) -> int:
         command.add_argument("--binary", required=True, type=Path)
         command.add_argument("--basis", required=True)
         command.add_argument("--model", default=MODEL)
-    args = parser.parse_args(argv)
-    if args.command == "reinterpret-particulars":
-        changed = {}
-        for reading_path in sorted(args.run.glob("*/ga_reading.json")):
-            case_dir = reading_path.parent
-            changed[case_dir.name] = reinterpret_particulars(case_dir, args.inputs, args.out / case_dir.name)
-        print(json.dumps({"ok": True, "model_calls": 0, "changed": changed, "engineering_approved": False}))
-        return 0
-    if args.command == "prepare":
-        manifest = prepare(args.ga, args.out, args.particulars)
-        print(json.dumps({"ok": True, "images": len(manifest["images"]), "engineering_approved": False}))
-        return 0
-    if args.command == "measure":
-        result = json.loads(args.reading.read_text())
-        args.out.mkdir(parents=True, exist_ok=False)
-        measure_one(result, args.ga.resolve(), args.out.resolve(), args.binary.resolve(), args.basis, args.model,
-                    args.case)
-        write_json(args.out / "ga_reading.json", result)
-        print(json.dumps({"ok": True, "scale": result["passes"]["scale"], "engineering_approved": False}))
-        return 0
-    definitions = {"split_holds_are_separate": not args.one_hold_per_number,
-                   "slop_holding_tank_is_slop": not args.slop_holding_tank_not_slop}
-    if args.command == "read":
-        result = read_one(args.ga, args.particulars, args.out, args.binary, args.basis, args.model, args.app_task,
-                          measure=args.measure, max_requests=args.max_requests_per_ship, definitions=definitions)
-        print(json.dumps({"ok": bool(result["spaces"] or result["counts"].get("cargo_holds", {}).get("status") == "read"),
-                          "usage": result["usage"], "engineering_approved": False}))
-        return 0
+    return parser
+
+
+def _run_batch(args, definitions):
+    from .ga_commercial import read_one
     ledger = {"schema": "marinaframe.ga_batch.v1", "model": args.model, "max_requests": args.max_requests,
               "cases": {}, "engineering_approved": False}
     sent = 0

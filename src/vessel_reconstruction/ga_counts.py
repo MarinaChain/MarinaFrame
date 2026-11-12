@@ -106,52 +106,7 @@ def fragment_reason(space: dict, others: list[dict], vocabulary: set[str],
         return "a deck name, not a space"
     if untyped and NOTE_WORDS & set(words):
         return "a note on the drawing (a type or a size), not a space"
-    last = words[-1]
-    raw_last = label.upper().split()[-1] if label.split() else ""
-    named = _named_words(label)
-    if space.get("number") and "." in raw_last and named and not re.search(r"\(", raw_last):
-        # A dotted abbreviation that is the start of a word in another label of the same number
-        # ("NO. 2 F.O." beside "NO.2 F.O.T.").
-        base = re.sub(r"[^0-9]", "", str(space["number"]))
-        for other in others:
-            if base and re.sub(r"[^0-9]", "", str(other.get("number") or "")) == base:
-                if any(word.startswith(named[-1]) and len(word) > len(named[-1]) for word in _words(other["label"])):
-                    return f"'{raw_last}' is the start of '{other['label'][:30]}': the label is cut"
-    family = "".join(named)
-    # Only an untyped label without a number (two dotted letters and a side, "X. Y. (P)"): a numbered or typed tank whose letters
-    # end another family ("W.B.T." and "T.S.W.B.T.") is a tank of its own.
-    if 2 <= len(family) <= 4 and space.get("kind") in ("other_space", "other_tank") and not space.get("number"):
-        for other in others:
-            other_family = "".join(_named_words(other["label"]))
-            if (other_family != family and other_family.endswith(family)
-                    and len(other_family) - len(family) <= 3 and not other_family.endswith("S" + family[-1:])):
-                return f"the end of the label '{other['label'][:40]}': the label is cut at its start"
-    # A dotted abbreviation ("O.T.") is not a cut word, only a plain word of three letters or more.
-    if (len(last) >= 3 and "." not in raw_last and last not in vocabulary
-            and any(word.startswith(last) and len(word) > len(last) for word in vocabulary)):
-        return f"'{last}' is the start of a longer word printed on the sheet: the label is cut"
-    if (len(words) == 1 and space.get("kind") in ("other_space", "other_tank") and words[0] in vocabulary
-            and words[0] not in whole_labels):
-        return f"'{words[0]}' is printed only as a part of longer labels on the sheet"
-    if untyped and not space.get("number") and len(family) >= 3:
-        # The letters of a typed, numbered tank or hold without its number ("X.Y.T.K(P)" beside
-        # "NO.1 X.Y.TK(P&S)"): that space read a second time (round u6r5: its box took 90 % of
-        # the cargo tank).
-        for other in others:
-            if (other.get("kind") not in ("other_space", "other_tank") and other.get("number")
-                    and "".join(_named_words(other["label"])) == family):
-                return f"the label of '{other['label'][:40]}' read without its number"
-    region = (space["source_record"].get("regions") or [{}])[0].get("box_px")
-    for other in others:
-        other_region = (other["source_record"].get("regions") or [{}])[0].get("box_px")
-        other_words = _words(other["label"])
-        if (region and other_region and len(other_words) > len(words)
-                and space.get("kind") in ("other_space", "other_tank") and not space.get("number")
-                and any(other_words[i:i + len(words)] == words for i in range(len(other_words) - len(words) + 1))
-                and region[0] < other_region[2] and other_region[0] < region[2]
-                and region[1] < other_region[3] and other_region[1] < region[3]):
-            return f"a part of the label '{other['label'][:40]}' read at the same place"
-    return None
+    return _fragment_from_other_labels(space, others, vocabulary, whole_labels, label, words, untyped)
 
 
 def drop_fragments(result: dict, removed_out: list | None = None) -> int:
@@ -256,3 +211,52 @@ def finish_counts(result: dict) -> None:
     if ((result.get("ship_type") or {}).get("value") == "bulk_carrier" and holds is not None and hatches is not None
             and holds != hatches):
         result["checks"].append({"code": "holds_and_hatches_differ", "status": "check"})
+
+
+def _fragment_from_other_labels(space, others, vocabulary, whole_labels, label, words, untyped):
+    last = words[-1]
+    raw_last = label.upper().split()[-1] if label.split() else ""
+    named = _named_words(label)
+    if space.get("number") and "." in raw_last and named and not re.search(r"\(", raw_last):
+        # A dotted abbreviation that is the start of a word in another label of the same number
+        # ("NO. 2 F.O." beside "NO.2 F.O.T.").
+        base = re.sub(r"[^0-9]", "", str(space["number"]))
+        for other in others:
+            if base and re.sub(r"[^0-9]", "", str(other.get("number") or "")) == base:
+                if any(word.startswith(named[-1]) and len(word) > len(named[-1]) for word in _words(other["label"])):
+                    return f"'{raw_last}' is the start of '{other['label'][:30]}': the label is cut"
+    family = "".join(named)
+    # Only an untyped label without a number (two dotted letters and a side, "X. Y. (P)"): a numbered or typed tank whose letters
+    # end another family ("W.B.T." and "T.S.W.B.T.") is a tank of its own.
+    if 2 <= len(family) <= 4 and space.get("kind") in ("other_space", "other_tank") and not space.get("number"):
+        for other in others:
+            other_family = "".join(_named_words(other["label"]))
+            if (other_family != family and other_family.endswith(family)
+                    and len(other_family) - len(family) <= 3 and not other_family.endswith("S" + family[-1:])):
+                return f"the end of the label '{other['label'][:40]}': the label is cut at its start"
+    # A dotted abbreviation ("O.T.") is not a cut word, only a plain word of three letters or more.
+    if (len(last) >= 3 and "." not in raw_last and last not in vocabulary
+            and any(word.startswith(last) and len(word) > len(last) for word in vocabulary)):
+        return f"'{last}' is the start of a longer word printed on the sheet: the label is cut"
+    if (len(words) == 1 and space.get("kind") in ("other_space", "other_tank") and words[0] in vocabulary
+            and words[0] not in whole_labels):
+        return f"'{words[0]}' is printed only as a part of longer labels on the sheet"
+    if untyped and not space.get("number") and len(family) >= 3:
+        # The letters of a typed, numbered tank or hold without its number ("X.Y.T.K(P)" beside
+        # "NO.1 X.Y.TK(P&S)"): that space read a second time (round u6r5: its box took 90 % of
+        # the cargo tank).
+        for other in others:
+            if (other.get("kind") not in ("other_space", "other_tank") and other.get("number")
+                    and "".join(_named_words(other["label"])) == family):
+                return f"the label of '{other['label'][:40]}' read without its number"
+    region = (space["source_record"].get("regions") or [{}])[0].get("box_px")
+    for other in others:
+        other_region = (other["source_record"].get("regions") or [{}])[0].get("box_px")
+        other_words = _words(other["label"])
+        if (region and other_region and len(other_words) > len(words)
+                and space.get("kind") in ("other_space", "other_tank") and not space.get("number")
+                and any(other_words[i:i + len(words)] == words for i in range(len(other_words) - len(words) + 1))
+                and region[0] < other_region[2] and other_region[0] < region[2]
+                and region[1] < other_region[3] and other_region[1] < region[3]):
+            return f"a part of the label '{other['label'][:40]}' read at the same place"
+    return None
