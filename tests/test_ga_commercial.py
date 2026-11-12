@@ -8,8 +8,9 @@ import importlib.util
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 from vessel_reconstruction import ga_commercial as ga
 from vessel_reconstruction import source_record
@@ -456,3 +457,88 @@ def test_fittings_systems_and_cut_abbreviations_are_not_spaces(label, number, ot
     vocabulary = {w for o, _ in others for w in ga._words(o)}
     wholes = {"".join(ga._words(o)) for o, _ in others}
     assert (ga.fragment_reason(space, other_spaces, vocabulary, wholes) is not None) is dropped
+
+
+
+# ------------------------------------------------------------------ holdout exam fixes (2026-11-12)
+
+@pytest.mark.parametrize("printed, expected", [
+    ("ABT. 147,87 M", 147.87), ("abt.229.00 m", 229.0), ("About 120.5 m", 120.5),
+    ("APPROX. 99.0 M", 99.0), ("approximately 99 m", 99.0),
+])
+def test_a_value_printed_as_approximate_is_read(printed, expected):
+    assert ga.parse_length(printed, None, "loa_m")[0] == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("printed", ["ABT 147,87 - 148 M", "ABT. 147.87", "about", "ABT. 147 / 150 M"])
+def test_an_approximate_value_with_a_range_or_no_unit_still_abstains(printed):
+    assert ga.parse_length(printed, None, "loa_m")[0] is None
+
+
+def _table_case(tmp_path, ga_name="S-3.png", table_name="S-3.png"):
+    """A GA and a particulars table in two folders; the table prints its LOA at (100, 60)."""
+    (tmp_path / "ga").mkdir()
+    (tmp_path / "table").mkdir()
+    sheet = _sheet(tmp_path / "ga" / ga_name, size=(1000, 1000))
+    table = Image.new("L", (800, 400), 255)
+    ImageDraw.Draw(table).text((100, 60), "L.O.A. 189.99 m", fill=0, font=ImageFont.load_default(size=28))
+    table.save(tmp_path / "table" / table_name)
+    ga.prepare(sheet, tmp_path / "request", tmp_path / "table" / table_name)
+    request = json.loads((tmp_path / "request" / "request.json").read_text())
+    image = next(i for i in request["images"] if i["view"].startswith("particulars_table"))
+    scale = image["width"] / 800
+    box = [round(v * scale) for v in (90, 50, 420, 100)]
+    reply = {"ship_type": {"missing": "x"}, "items": [], "counts": _counts(),
+             "particulars": [{"field": "loa", "printed": "189.99 m", "unit_context": None,
+                              "image_id": image["image_id"], "box": box, "evidence": "L.O.A. row"}]}
+    return _reading(reply), tmp_path / "ga"
+
+
+def test_a_table_value_is_checked_for_ink_on_the_table_even_with_the_name_of_the_ga(tmp_path):
+    """Holdout exam: all values of one table were refused as boxes without ink."""
+    reading, ga_folder = _table_case(tmp_path)
+    result = ga.interpret(reading, tmp_path / "request", ga_folder)
+    assert result["particulars"]["loa_m"]["value"] == pytest.approx(189.99)
+
+
+def test_a_16_bit_or_transparent_image_keeps_its_ink(tmp_path):
+    text = Image.new("L", (200, 60), 255)
+    ImageDraw.Draw(text).text((10, 10), "189.99 m", fill=0, font=ImageFont.load_default(size=28))
+    wide = Image.fromarray(np.asarray(text, dtype=np.uint16) * 257)  # a 16-bit grey image
+    assert wide.mode.startswith("I;16")
+    wide.save(tmp_path / "wide.png")
+    rgba = Image.new("RGBA", (200, 60), (0, 0, 0, 0))
+    ImageDraw.Draw(rgba).text((10, 10), "189.99 m", fill=(0, 0, 0, 255), font=ImageFont.load_default(size=28))
+    rgba.save(tmp_path / "clear.png")
+    for name in ("wide.png", "clear.png"):
+        grey = np.asarray(ga.load_grey(tmp_path / name))
+        assert grey.max() == 255 and 0.01 < (grey < ga.INK_LEVEL).mean() < 0.5, name
+    plain = np.asarray(ga.load_grey(tmp_path / "wide.png"))
+    text.save(tmp_path / "plain.png")
+    assert (np.asarray(ga.load_grey(tmp_path / "plain.png")) == np.asarray(text)).all()  # 8-bit: unchanged
+    assert plain.shape == (60, 200)
+
+
+def test_a_stored_run_is_reinterpreted_without_a_model_call(tmp_path):
+    reading, ga_folder = _table_case(tmp_path, ga_name="S-3_GA.png", table_name="S-3_table.png")
+    case = tmp_path / "run" / "S-3"
+    case.mkdir(parents=True)
+    (tmp_path / "request").rename(case / "request")
+    (case / "provider").mkdir()
+    (case / "provider" / "vision_reading.json").write_text(json.dumps(reading))
+    stored = {"particulars": {"loa_m": {"value": None, "status": "unknown", "reason": "the value's box holds no ink"}},
+              "counts": {"cargo_holds": {"value": 4}}, "spaces": [{"id": "x"}], "checks": [], "passes": {}}
+    (case / "ga_reading.json").write_text(json.dumps(stored))
+    inputs = tmp_path / "inputs"
+    inputs.mkdir()
+    for folder in ("ga", "table"):
+        for file in (tmp_path / folder).iterdir():
+            file.rename(inputs / file.name)
+    assert ga.main(["reinterpret-particulars", "--run", str(tmp_path / "run"), "--inputs", str(inputs),
+                    "--out", str(tmp_path / "again")]) == 0
+    again = json.loads((tmp_path / "again" / "S-3" / "ga_reading.json").read_text())
+    assert again["particulars"]["loa_m"]["value"] == pytest.approx(189.99)
+    assert again["counts"] == stored["counts"] and again["spaces"] == stored["spaces"]
+    assert again["passes"]["particulars_reinterpreted"] == {"changed": ["loa_m", "lbp_m", "breadth_m", "depth_m",
+                                                                        "draft_m", "scantling_draft_m",
+                                                                        "deadweight_t"][:1], "model_calls": 0}

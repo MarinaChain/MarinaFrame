@@ -122,6 +122,27 @@ class Tile:
     crop_box_px: tuple[int, int, int, int]
     width: int
     height: int
+    # "ga" or "particulars": which source file the tile shows (runs before 2026-11-12 lack it).
+    source: str = ""
+
+
+def load_grey(path: Path) -> Image.Image:
+    """A source image in 8-bit grey, as the request shows it and the ink check reads it.
+
+    16-bit grey is scaled to 8 bits and a transparent background is made white: a plain
+    conversion clips 16-bit grey to white paper and ignores transparency, so a box over printed
+    text could hold no ink (holdout exam, 2026-11-12: a particulars table). An 8-bit opaque image
+    is unchanged.
+    """
+    image = Image.open(path)
+    if image.mode in ("I", "I;16", "I;16B", "I;16L"):
+        values = np.asarray(image, dtype=np.float64)
+        scale = 255.0 / 65535.0 if values.size and values.max() > 255 else 1.0
+        return Image.fromarray(np.clip(np.round(values * scale), 0, 255).astype(np.uint8), "L")
+    if image.mode in ("RGBA", "LA", "PA") or (image.mode == "P" and "transparency" in image.info):
+        rgba = image.convert("RGBA")
+        return Image.alpha_composite(Image.new("RGBA", rgba.size, (255, 255, 255, 255)), rgba).convert("L")
+    return image.convert("L")
 
 
 def _fit_scale(width: float, height: float) -> float:
@@ -209,7 +230,7 @@ def prepare(ga: Path | None, out: Path, particulars: Path | None = None, definit
     out = Path(out)
     out.mkdir(parents=True, exist_ok=False)
     plan = _plan_images(ga, particulars)
-    opened = {path: Image.open(path).convert("L") for path in {item[2] for item in plan}}
+    opened = {path: load_grey(path) for path in {item[2] for item in plan}}
     # Fit all images into the request size: full grey levels first, then fewer
     # grey levels, then smaller scales.
     for grey_levels, shrink in [(None, 1.0), (REDUCED_GREY_LEVELS, 1.0), *[(REDUCED_GREY_LEVELS, 0.9 ** k)
@@ -225,7 +246,8 @@ def prepare(ga: Path | None, out: Path, particulars: Path | None = None, definit
         (out / name).write_bytes(data)
         entries.append({"image_id": image_id, "file": name, "sha256": _sha256(data), "bytes": len(data),
                         "width": w, "height": h, "view": view, "crop_box_px": list(box)})
-        tiles.append(Tile(image_id, view, path.name, tuple(box), w, h))
+        role = "particulars" if particulars is not None and Path(path) == Path(particulars) else "ga"
+        tiles.append(Tile(image_id, view, path.name, tuple(box), w, h, role))
     primary = Path(ga or particulars)
     width, height = opened[primary].size
     definitions = {**DEFINITIONS, **(definitions or {})}
@@ -240,11 +262,12 @@ def prepare(ga: Path | None, out: Path, particulars: Path | None = None, definit
     # The host-side record of which file each image shows; never sent to the model.
     sources = {}
     if ga:
-        sources["ga"] = {"file": Path(ga).name, "sha256": manifest["source_sha256"], "size_px": [width, height]}
+        sources["ga"] = {"file": Path(ga).name, "sha256": manifest["source_sha256"], "size_px": [width, height],
+                         "path": str(Path(ga).resolve())}
     if particulars:
         table_size = Image.open(particulars).size
         sources["particulars"] = {"file": Path(particulars).name, "sha256": _sha256(Path(particulars).read_bytes()),
-                                  "size_px": list(table_size)}
+                                  "size_px": list(table_size), "path": str(Path(particulars).resolve())}
     write_json(out / "sources.json", {"sources": sources, "tiles": [t.__dict__ for t in tiles],
                                       "definitions": definitions})
     return manifest
@@ -312,9 +335,14 @@ def _number_options(text: str) -> list[float]:
     return []
 
 
+# "ABT. 147,87 M", "abt.229.00 m", "APPROX. 25 000 T": a value printed as approximate. The prefix
+# goes; the rest must still be one clear number with its unit (holdout exam, 2026-11-12).
+APPROXIMATE = re.compile(r"^\s*(?:abt|about|approx(?:imately)?)(?=[\s.\d])\.?\s*", re.I)
+
+
 def parse_length(printed: str, unit_context: str | None, field: str) -> tuple[float | None, str]:
     """Metres from a printed length, or (None, reason). Ambiguity is refused, never resolved."""
-    text = " ".join(printed.replace(" ", " ").split())
+    text = " ".join(APPROXIMATE.sub("", printed).replace(" ", " ").split())
     has_unit = bool(re.search(r"[a-zA-Z'’′\"”]", text))
     if not has_unit and unit_context:
         unit = re.sub(r"[\[\]()]", "", unit_context).strip()
@@ -338,7 +366,7 @@ def parse_length(printed: str, unit_context: str | None, field: str) -> tuple[fl
 
 def parse_mass(printed: str, unit_context: str | None) -> tuple[float | None, str]:
     """Metric tonnes from a printed deadweight, or (None, reason)."""
-    text = " ".join(printed.split())
+    text = " ".join(APPROXIMATE.sub("", printed).split())
     match = re.fullmatch(r"([\d.,]+)\s*(?:metric\s+)?(t|mt|tonnes?|tons?|m/t|ltons?|long\s+tons?)?\.?", text, re.I)
     unit = (match[2] if match and match[2] else (unit_context or "")).strip().lower()
     if not match or not unit:
@@ -380,9 +408,23 @@ def interpret(reading: dict, request_dir: Path, sources_dir: Path) -> dict:
     request_dir, sources_dir = Path(request_dir), Path(sources_dir)
     meta = json.loads((request_dir / "sources.json").read_text())
     tiles = {t["image_id"]: Tile(**{**t, "crop_box_px": tuple(t["crop_box_px"])}) for t in meta["tiles"]}
-    sizes = {s["file"]: s["size_px"] for s in meta["sources"].values()}
-    ga_name = (meta["sources"].get("ga") or meta["sources"]["particulars"])["file"]
-    ink = {name: np.asarray(Image.open(sources_dir / name).convert("L")) < INK_LEVEL for name in sizes}
+    sources = meta["sources"]
+
+    def role_of(tile: Tile) -> str:
+        # Runs before 2026-11-12 name only the file; the view says which source a tile shows.
+        if tile.source:
+            return tile.source
+        return "particulars" if tile.view.startswith("particulars_table") and "particulars" in sources else "ga"
+
+    # Each source is found by its role and checked by its hash: matched by file name alone, a
+    # table and a GA of one name (or in two folders) gave the table's boxes the GA's ink.
+    ink, sizes = {}, {}
+    for role, source in sources.items():
+        file = Path(source["path"]) if source.get("path") and Path(source["path"]).exists() else sources_dir / source["file"]
+        if source.get("sha256") and _sha256(file.read_bytes()) != source["sha256"]:
+            raise ValueError(f"the {role} source {file.name} is not the file the request was made from")
+        ink[role] = np.asarray(load_grey(file)) < INK_LEVEL
+        sizes[role] = source["size_px"]
     result = {"schema": SCHEMA, "engineering_approved": False, "model": reading.get("requested_model"),
               "sources": meta["sources"], "usage": usage_of(reading),
               "definitions": {**DEFINITIONS, **meta.get("definitions", {})},
@@ -400,8 +442,8 @@ def interpret(reading: dict, request_dir: Path, sources_dir: Path) -> dict:
     def region_of(image_id: str, box_normalized, view: str | None = None) -> tuple[dict, float]:
         tile = tiles[image_id]
         box = _sheet_box(tile, box_normalized)
-        record = source_record.region(tile.sheet, view=view, box_px=box, page_px=sizes[tile.sheet])
-        return record, _ink_share(ink[tile.sheet], box)
+        record = source_record.region(tile.sheet, view=view, box_px=box, page_px=sizes[role_of(tile)])
+        return record, _ink_share(ink[role_of(tile)], box)
 
     for refused in reply.get("refused") or []:
         result["checks"].append({"code": refused["error_code"], "status": "refused",
@@ -429,6 +471,8 @@ def interpret(reading: dict, request_dir: Path, sources_dir: Path) -> dict:
             value, why = None, "the value's box holds no ink"
         item = {"value": value, "status": "read" if value is not None else "unknown",
                 "printed": entry["printed"], "unit_context": entry["unit_context"], "evidence": entry["evidence"]}
+        if value is not None and APPROXIMATE.match(entry["printed"]):
+            item["approximate"] = True  # printed as "about": the value as printed
         if value is None:
             item["reason"] = why
         item["source_record"] = source_record.read([region]) if value is not None else source_record.unknown(why)
@@ -899,6 +943,24 @@ def measure_one(result: dict, ga: Path, out: Path, binary: Path, basis: str, mod
     return result
 
 
+def reinterpret_particulars(case_dir: Path, inputs: Path, out_case: Path) -> list[str]:
+    """Rebuild the particulars of a stored reading from its stored coarse reply with the current
+    checks; no model call. Everything else of the reading stays as stored. Returns the fields
+    whose value changed."""
+    reading = json.loads((case_dir / "provider" / "vision_reading.json").read_text())
+    fresh = interpret(reading, case_dir / "request", inputs)
+    stored = json.loads((case_dir / "ga_reading.json").read_text())
+    changed = [field for field, item in fresh["particulars"].items()
+               if item.get("value") != (stored["particulars"].get(field) or {}).get("value")]
+    stored["particulars"] = fresh["particulars"]
+    stored["checks"] = ([c for c in stored["checks"] if c.get("code") != "lbp_above_loa"]
+                        + [c for c in fresh["checks"] if c.get("code") == "lbp_above_loa"])
+    stored.setdefault("passes", {})["particulars_reinterpreted"] = {"changed": changed, "model_calls": 0}
+    out_case.mkdir(parents=True, exist_ok=False)
+    write_json(out_case / "ga_reading.json", stored)
+    return changed
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="python -m vessel_reconstruction.ga_commercial")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -931,12 +993,25 @@ def main(argv=None) -> int:
                              help="Definition: holds numbered as halves (4A, 4F) count as one hold.")
         command.add_argument("--slop-holding-tank-not-slop", action="store_true",
                              help="Definition: a slop holding tank is not counted as a slop tank.")
+    again = commands.add_parser(
+        "reinterpret-particulars",
+        help="Rebuild the particulars of a stored run with the current checks; no model call.")
+    again.add_argument("--run", required=True, type=Path, help="A batch --out folder (<case>/ga_reading.json).")
+    again.add_argument("--inputs", required=True, type=Path, help="The folder of the case images of that run.")
+    again.add_argument("--out", required=True, type=Path, help="A new folder: <case>/ga_reading.json.")
     for command in (read, batch, measure):
         command.add_argument("--out", required=True, type=Path)
         command.add_argument("--binary", required=True, type=Path)
         command.add_argument("--basis", required=True)
         command.add_argument("--model", default=MODEL)
     args = parser.parse_args(argv)
+    if args.command == "reinterpret-particulars":
+        changed = {}
+        for reading_path in sorted(args.run.glob("*/ga_reading.json")):
+            case_dir = reading_path.parent
+            changed[case_dir.name] = reinterpret_particulars(case_dir, args.inputs, args.out / case_dir.name)
+        print(json.dumps({"ok": True, "model_calls": 0, "changed": changed, "engineering_approved": False}))
+        return 0
     if args.command == "prepare":
         manifest = prepare(args.ga, args.out, args.particulars)
         print(json.dumps({"ok": True, "images": len(manifest["images"]), "engineering_approved": False}))

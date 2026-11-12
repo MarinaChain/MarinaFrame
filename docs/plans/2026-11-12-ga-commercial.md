@@ -222,6 +222,11 @@ requests a ship; **off by default**, so the exam run is unchanged.
    shows it in a section "Measured on the drawing" with the word "Unconfirmed", and the gate
    summary prints the depth status. No cheap code-only change was found that makes the model
    mark hold boxes as clear more often (the deck line is pointed in its own request already).
+   **Tanks end below the spaces above them** (Astra round 6): a ballast, fuel or other tank in
+   the profile ends below the lowest space boxed inside its length (90 % of that space's length)
+   that starts in the tank's upper part (above 40 % of its height); its height becomes guessed.
+   Peak tanks boxed up through a bosun store, a void, a fresh-water tank or the steering gear room
+   now end below them; a double-bottom tank ends where the hold above it is boxed to start.
    **Cargo number conflicts:** two cargo spaces with different numbers boxed at one place (more
    than half of the smaller box) both lose their extents in the arrangement input; the views
    read the number differently and code cannot tell which is right.
@@ -603,6 +608,8 @@ Observed cost is 0 in every round (subscription).
   the model mark boxes clear, not draw them better, so wrong boxes would pass the depth check as
   measured. The measure counts some bulk-carrier holds that end under top-side tanks as wrong;
   it is the same before and after.
+- `u10r6` (u10 replayed with the rule above): gate 14 of 14; seven tank boxes ended lower on five
+  ships, among them the peak tanks of the Astra round-6 findings.
 
 ## Proposal (not built; PM 2026-11-12): printed sizes as a check of extents
 
@@ -663,6 +670,50 @@ tapered boundaries, the printed-size proposal (above) if the PM accepts it.
 To repeat a development round: `ga_commercial batch --measure --max-requests 65` on groups of
 the 14 development cases; each `ga_reading.json` has `passes`, `frames`, `measured` and the space
 extents, and `ga_arrangement_input.json` is beside it.
+
+## After the exam: the two checks that nulled correct readings (2026-11-12)
+
+The PM shared the aggregate result of the holdout exam (frozen code a0fdf2b): 0 wrong answers in
+42 items and 7 abstentions on particulars. In all 7 the model's text was right and a check after
+the reply set the value to null. Fixed on lane/ga-commercial, after the freeze (the exam result
+stands as scored):
+
+1. **Number check.** A value printed as approximate ("ABT." / "ABOUT" / "APPROX.", any case, with
+   or without a dot or space) was refused as "no unit or unreadable value". The prefix is now
+   taken off and the item gets `approximate: true`; the rest must still be one clear number with
+   its unit (a range, two numbers or a missing unit still abstain; the existing rule for a comma
+   that could be a thousands separator is unchanged). Tests: `test_a_value_printed_as_approximate_is_read`,
+   `test_an_approximate_value_with_a_range_or_no_unit_still_abstains`.
+2. **Ink check.** No development ship has a particulars table, so this path never ran on real
+   data before the exam. Two general faults could put a correct box on blank paper, and both are
+   fixed: (a) each source was found by its file name in the GA's folder and its ink keyed by file
+   name, so a table in another folder or with the GA's file name was checked on the wrong image;
+   sources are now recorded by role with their path and hash, tiles by role, and a file whose hash
+   differs is refused; (b) a 16-bit grey or transparent image lost its ink in the plain grey
+   conversion; one loader (`load_grey`) now serves the request and the ink check alike (an 8-bit
+   opaque image is unchanged). Which cause applied on the holdout table is not known to this lane
+   (it may not open holdout data): `scripts/ga_ink_diagnostic.py` prints, per particular, the
+   image the box was given on, the mapped box, the ink share at several grey levels and grey
+   statistics, numbers only, so the evaluator can confirm the cause without sharing an image.
+   Tests: `test_a_table_value_is_checked_for_ink_on_the_table_even_with_the_name_of_the_ga`,
+   `test_a_16_bit_or_transparent_image_keeps_its_ink`.
+
+Development ships are unchanged: the coarse interpretation of the stored u10 replies is identical
+on all 14 ships with the frozen code and the new code, and the replay below changes no
+particular on any of them.
+
+Replay of a stored run through the new checks, no model call (the evaluator runs it on the
+holdout run; it rebuilds only the particulars from the stored coarse reply and keeps everything
+else of each `ga_reading.json`):
+
+```sh
+W=work/ga-internal-23
+PYTHONPATH=src .venv/bin/python -m vessel_reconstruction.ga_commercial reinterpret-particulars \
+  --run $W/holdout-run --inputs $W/inputs --out $W/holdout-run-reparticulars
+PYTHONPATH=src .venv/bin/python scripts/ga_ink_diagnostic.py --run $W/holdout-run --inputs $W/inputs
+.venv/bin/python scripts/score_ga_exam.py --predictions $W/holdout-run-reparticulars \
+  --answers <answers file converted from sealed/> --out $W/holdout-run-reparticulars/score.json
+```
 
 ## Frozen
 
