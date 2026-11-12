@@ -698,9 +698,22 @@ stands as scored):
    Tests: `test_a_table_value_is_checked_for_ink_on_the_table_even_with_the_name_of_the_ga`,
    `test_a_16_bit_or_transparent_image_keeps_its_ink`.
 
+3. **The confirmed cause** (the evaluator's diagnostic, numbers only; the two faults above were
+   not it): on one particulars table the model's value boxes began at the right edge of the text,
+   about 10 % of the table width too far right, and the table was printed in light grey (darkest
+   text 206-246 of 255), so even a correct box held almost no ink at the fixed level of 160. Two
+   general rules for a printed value: (a) its ink is measured at the image's own level, clearly
+   darker than its paper (24 grey levels, or 6 times the paper's noise), never below 160, so noise
+   on blank paper never counts; (b) when its box holds no ink, the only ink run in the same rows
+   within one box width or 10 % of the image width, left and right, becomes its box, and the shift
+   is recorded in the item's evidence (`box_shift_px`); no run, or more than one, still refuses
+   it. Spaces keep the fixed ink level. Tests on synthetic light-grey tables: a shifted box, a
+   correct box, a blank box and neighbourhood, a box between two values, and paper noise.
+
 Development ships are unchanged: the coarse interpretation of the stored u10 replies is identical
 on all 14 ships with the frozen code and the new code, and the replay below changes no
-particular on any of them.
+particular on any of them (no development ship prints its particulars, so these rules were
+tested on synthetic tables only).
 
 Replay of a stored run through the new checks, no model call (the evaluator runs it on the
 holdout run; it rebuilds only the particulars from the stored coarse reply and keeps everything

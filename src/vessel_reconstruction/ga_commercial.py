@@ -394,6 +394,63 @@ def _ink_share(ink: np.ndarray, box: list[float]) -> float:
     return float(patch.mean()) if patch.size else 0.0
 
 
+# A printed value's ink is measured at the image's own level: anything clearly darker than its
+# paper (holdout exam: a table printed in light grey, darkest text 206-246 of 255, held no ink at
+# the fixed level). Clearly: at least this many grey levels, or this many times the paper's noise.
+MIN_INK_CONTRAST = 24
+NOISE_FACTOR = 6.0
+PAPER_BAND = 48  # pixels within this of the paper level measure its noise
+# Beside a value box without ink, an ink run in the same rows is searched up to one box width or
+# this share of the image width, left and right; it is used only when it is the only run there.
+VALUE_SEARCH_SHARE = 0.1
+
+
+def image_ink_level(grey: np.ndarray) -> float:
+    """The grey level below which a pixel of this image is ink: clearly darker than its paper,
+    never below ``INK_LEVEL`` (noise on blank paper never counts)."""
+    paper = float(np.median(grey))
+    near = grey[grey > paper - PAPER_BAND].astype(np.float64)
+    noise = 1.4826 * float(np.median(np.abs(near - np.median(near)))) if near.size else 0.0
+    return max(float(INK_LEVEL), paper - max(MIN_INK_CONTRAST, NOISE_FACTOR * noise))
+
+
+def value_box(grey: np.ndarray, box: list[float], level: float) -> list[float] | None:
+    """The box of a printed value: the model's box when it holds ink at ``level``, else the only
+    ink run beside it in the same rows (within one box width or ``VALUE_SEARCH_SHARE`` of the
+    image width, left and right); None when there is no such run or more than one."""
+    height, width = grey.shape
+    left, top, right, bottom = (int(round(v)) for v in box)
+    top, bottom = max(0, top), min(height, bottom)
+    if bottom <= top:
+        return None
+    if _ink_share(grey < level, box) >= MIN_INK_SHARE:
+        return box
+    margin = max(right - left, round(VALUE_SEARCH_SHARE * width))
+    start, stop = max(0, left - margin), min(width, right + margin)
+    if stop <= start:
+        return None
+    columns = (grey[top:bottom, start:stop] < level).any(axis=0)
+    # Glyphs of one value are joined across gaps up to most of a text height (the space before
+    # the unit); a wider gap starts another run (a label, another value).
+    join = max(2, round(0.6 * (bottom - top)))
+    runs, current, gap = [], None, 0
+    for index, inked in enumerate(columns):
+        if inked:
+            if current is not None and gap <= join:
+                current[1] = index + 1
+            else:
+                current = [index, index + 1]
+                runs.append(current)
+            gap = 0
+        elif current is not None:
+            gap += 1
+    runs = [run for run in runs if run[1] - run[0] >= 2]
+    if len(runs) != 1:
+        return None
+    found = [float(start + runs[0][0]), float(top), float(start + runs[0][1]), float(bottom)]
+    return found if _ink_share(grey < level, found) >= MIN_INK_SHARE else None
+
+
 def _number_key(number: str | None) -> str | None:
     """'No. 3', '3', 'NO3' -> '3'; '4 A' -> '4A'. None for an unnumbered item."""
     if not number:
@@ -418,12 +475,14 @@ def interpret(reading: dict, request_dir: Path, sources_dir: Path) -> dict:
 
     # Each source is found by its role and checked by its hash: matched by file name alone, a
     # table and a GA of one name (or in two folders) gave the table's boxes the GA's ink.
-    ink, sizes = {}, {}
+    ink, sizes, grey, value_level = {}, {}, {}, {}
     for role, source in sources.items():
         file = Path(source["path"]) if source.get("path") and Path(source["path"]).exists() else sources_dir / source["file"]
         if source.get("sha256") and _sha256(file.read_bytes()) != source["sha256"]:
             raise ValueError(f"the {role} source {file.name} is not the file the request was made from")
-        ink[role] = np.asarray(load_grey(file)) < INK_LEVEL
+        grey[role] = np.asarray(load_grey(file))
+        ink[role] = grey[role] < INK_LEVEL
+        value_level[role] = image_ink_level(grey[role])
         sizes[role] = source["size_px"]
     result = {"schema": SCHEMA, "engineering_approved": False, "model": reading.get("requested_model"),
               "sources": meta["sources"], "usage": usage_of(reading),
@@ -461,18 +520,32 @@ def interpret(reading: dict, request_dir: Path, sources_dir: Path) -> dict:
         if entry is None:
             result["particulars"][key] = {"value": None, "status": "unknown", "reason": "not found printed"}
             continue
-        view = "table" if tiles[entry["image_id"]].view.startswith("particulars_table") else None
-        region, share = region_of(entry["image_id"], entry["box"], view)
+        tile = tiles[entry["image_id"]]
+        view = "table" if tile.view.startswith("particulars_table") else None
+        region, _ = region_of(entry["image_id"], entry["box"], view)
         if key == "deadweight_t":
             value, why = parse_mass(entry["printed"], entry["unit_context"])
         else:
             value, why = parse_length(entry["printed"], entry["unit_context"], key)
-        if value is not None and share < MIN_INK_SHARE:
-            value, why = None, "the value's box holds no ink"
+        shift = None
+        if value is not None:
+            # The value must be printed where the model says: ink at the image's own level in its
+            # box, or the one ink run beside it in the same rows (holdout exam: boxes 40 px right
+            # of light-grey text). A blank box with a blank neighbourhood is refused.
+            box = _sheet_box(tile, entry["box"])
+            found = value_box(grey[role_of(tile)], box, value_level[role_of(tile)])
+            if found is None:
+                value, why = None, "the value's box holds no ink"
+            elif found != box:
+                shift = round(found[0] - box[0])
+                region = source_record.region(tile.sheet, view=view, box_px=found, page_px=sizes[role_of(tile)])
         item = {"value": value, "status": "read" if value is not None else "unknown",
                 "printed": entry["printed"], "unit_context": entry["unit_context"], "evidence": entry["evidence"]}
         if value is not None and APPROXIMATE.match(entry["printed"]):
             item["approximate"] = True  # printed as "about": the value as printed
+        if value is not None and shift is not None:
+            item["evidence"] = f"{entry['evidence']} [box moved {shift:+d} px to the only ink in its rows]"
+            item["box_shift_px"] = shift
         if value is None:
             item["reason"] = why
         item["source_record"] = source_record.read([region]) if value is not None else source_record.unknown(why)

@@ -542,3 +542,68 @@ def test_a_stored_run_is_reinterpreted_without_a_model_call(tmp_path):
     assert again["passes"]["particulars_reinterpreted"] == {"changed": ["loa_m", "lbp_m", "breadth_m", "depth_m",
                                                                         "draft_m", "scantling_draft_m",
                                                                         "deadweight_t"][:1], "model_calls": 0}
+
+
+
+def _grey_table(tmp_path, rows, ink=215):
+    """A 400 x 245 RGB particulars table printed in light grey: ``rows`` is [(text, x, y)].
+    Returns the reading's interpretation inputs and the text boxes in table pixels."""
+    table = Image.new("RGB", (400, 245), (255, 255, 255))
+    draw = ImageDraw.Draw(table)
+    font = ImageFont.load_default(size=14)
+    boxes = []
+    for text, x, y in rows:
+        draw.text((x, y), text, fill=(ink, ink, ink), font=font)
+        boxes.append(draw.textbbox((x, y), text, font=font))
+    table.save(tmp_path / "T-1_table.png")
+    ga.prepare(None, tmp_path / "request", tmp_path / "T-1_table.png")
+    image = json.loads((tmp_path / "request" / "request.json").read_text())["images"][0]
+    return image, boxes
+
+
+def _read_loa(tmp_path, image, box_in_table):
+    scale = image["width"] / 400
+    reply = {"ship_type": {"missing": "x"}, "items": [], "counts": _counts(),
+             "particulars": [{"field": "loa", "printed": "99.5 m", "unit_context": None,
+                              "image_id": image["image_id"], "box": [round(v * scale) for v in box_in_table],
+                              "evidence": "LOA row"}]}
+    return ga.interpret(_reading(reply), tmp_path / "request", tmp_path)["particulars"]["loa_m"]
+
+
+def test_a_light_grey_value_in_its_box_is_read_at_the_images_own_ink_level(tmp_path):
+    """Holdout exam: darkest text 206-246 held no ink at the fixed level of 160."""
+    image, boxes = _grey_table(tmp_path, [("L.O.A.", 20, 40), ("99.5 m", 264, 40)])
+    left, top, right, bottom = boxes[1]
+    loa = _read_loa(tmp_path, image, [left - 2, top - 2, right + 2, bottom + 2])
+    assert loa["value"] == pytest.approx(99.5) and "box_shift_px" not in loa
+
+
+def test_a_value_box_beside_its_text_moves_to_the_only_ink_run_in_its_rows(tmp_path):
+    """Holdout exam: value boxes began at the right edge of the text, 40 px too far right."""
+    image, boxes = _grey_table(tmp_path, [("L.O.A.", 20, 40), ("99.5 m", 264, 40)])
+    left, top, right, bottom = boxes[1]
+    loa = _read_loa(tmp_path, image, [right, top - 2, right + 48, bottom + 2])
+    assert loa["value"] == pytest.approx(99.5)
+    assert loa["box_shift_px"] < -20 and "moved" in loa["evidence"]
+    region = loa["source_record"]["regions"][0]["box_px"]
+    assert region[0] <= left + 2 and region[2] >= right - 2  # the record shows the value's ink
+
+
+@pytest.mark.parametrize("rows, box", [
+    ([("L.O.A.", 20, 40), ("99.5 m", 264, 40)], [264, 150, 312, 170]),     # a blank row: nothing near
+    ([("12.5 m", 140, 40), ("13.5 m", 320, 40)], [210, 38, 290, 58]),      # between two values: two runs
+])
+def test_a_value_box_with_no_single_ink_run_near_it_is_still_refused(tmp_path, rows, box):
+    image, _ = _grey_table(tmp_path, rows)
+    loa = _read_loa(tmp_path, image, box)
+    assert loa["value"] is None and loa["reason"] == "the value's box holds no ink"
+
+
+def test_noise_on_blank_paper_is_not_ink_and_the_level_never_drops_below_160():
+    rng = np.random.default_rng(0)
+    paper = np.clip(250 + rng.normal(0, 2, (245, 400)), 0, 255).astype(np.uint8)
+    level = ga.image_ink_level(paper)
+    assert ga.INK_LEVEL <= level < 240 and not (paper < level).any()
+    dark = np.full((10, 10), 255, np.uint8)
+    dark[5, 5] = 0
+    assert ga.image_ink_level(dark) >= ga.INK_LEVEL
