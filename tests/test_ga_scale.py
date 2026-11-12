@@ -294,6 +294,24 @@ def test_without_a_printed_spacing_or_an_fp_mark_the_values_are_null(tmp_path):
     assert result["measured"]["loa_m"]["status"] == "measured_from_scale"
 
 
+def test_spacing_labels_from_header_crop_establish_scale(tmp_path, monkeypatch):
+    from vessel_reconstruction import sheet_types
+
+    result = _result(tmp_path)
+    words = [{"text": "FRAME SPACING", "bbox": [_px(8) - 20, 40, _px(190) + 20, 70],
+              "line": ["1", "1", "1", "1"]}]
+    monkeypatch.setattr(sheet_types, "ocr_read", lambda gray, **kw: kw["words_out"].extend(words))
+    request = tmp_path / "scale"
+    ga_scale_requests.prepare_scale(result, tmp_path / "S-1_GA.png", request)
+    reading = _scale_reply(request)
+    for label, frame in zip(reading["reply"]["ga_scale"]["spacing_labels"], (8, 100, 190)):
+        label["image_id"] = "v1note"
+        label["x"], label["y"] = _image_xy(request, "v1note", _px(frame), 55)
+    ga_scale_dimensions.read_scale(result, reading, request)
+    assert result["frames"]["status"] == "read"
+    assert result["measured"]["lbp_m"]["value"] == pytest.approx(_x_m(FP_FRAME), abs=0.15)
+
+
 def test_measured_values_that_do_not_fit_each_other_are_refused(tmp_path):
     result = _result(tmp_path)
     ga_scale_requests.prepare_scale(result, tmp_path / "S-1_GA.png", tmp_path / "scale")

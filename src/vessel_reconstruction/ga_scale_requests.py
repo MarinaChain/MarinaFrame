@@ -22,6 +22,9 @@ from PIL import Image
 from pathlib import Path
 import hashlib
 import math
+import re
+
+import numpy as np
 
 
 # ------------------------------------------------------------------ request images
@@ -80,6 +83,39 @@ def _write_request(plan: list[tuple[str, str, tuple, float]], sheet_path: Path, 
     write_json(out / "sources.json", {"tiles": tiles})
 
 
+def _spacing_note_box(sheet_path: Path, view_boxes: list[tuple]) -> tuple | None:
+    """Locate uncovered spacing-note lines; OCR never supplies a measured value.
+
+    Use the existing optional local OCR reader. Missing OCR leaves the view request
+    unchanged. One enclosing crop keeps all found notes within one image slot.
+    """
+    from .sheet_types import ocr_read
+
+    with Image.open(sheet_path) as image:
+        gray = np.asarray(image.convert("L"))
+    words = []
+    ocr_read(gray, side=max(gray.shape), words_out=words)
+    lines = {}
+    for word in words:
+        lines.setdefault(tuple(word["line"]), []).append(word)
+    uncovered = []
+    for line in lines.values():
+        text = " ".join(word["text"] for word in line).upper()
+        if not re.search(r"\b(?:FRAME\s+SPAC(?:ING|E)|FR\.?\s*SP\.?|F\s*\.\s*S\.)", text):
+            continue
+        boxes = [word["bbox"] for word in line]
+        box = (min(b[0] for b in boxes), min(b[1] for b in boxes),
+               max(b[2] for b in boxes), max(b[3] for b in boxes))
+        if not any(v[0] <= box[0] and v[1] <= box[1] and v[2] >= box[2] and v[3] >= box[3]
+                   for v in view_boxes):
+            uncovered.append(box)
+    if not uncovered:
+        return None
+    return _pad((min(b[0] for b in uncovered), min(b[1] for b in uncovered),
+                 max(b[2] for b in uncovered), max(b[3] for b in uncovered)),
+                (gray.shape[1], gray.shape[0]))
+
+
 def prepare_scale(result: dict, sheet_path: Path, out: Path, previous_reason: str | None = None) -> bool:
     """The request that reads the frame scale: the profile and the plans in high-resolution parts.
 
@@ -92,10 +128,15 @@ def prepare_scale(result: dict, sheet_path: Path, out: Path, previous_reason: st
     if not wanted:
         return False
     sheet_size = Image.open(sheet_path).size
+    boxes = [_pad(view["box_px"], sheet_size) for view in wanted]
+    note_box = _spacing_note_box(sheet_path, boxes)
+    image_slots = MAX_IMAGES - (1 if note_box else 0)
     plan = []
-    for view in wanted:
-        left, top, right, bottom = _pad(view["box_px"], sheet_size)
-        limit = MAX_IMAGES // len(wanted)  # the images of a request are shared equally by the views
+    for index, (view, (left, top, right, bottom)) in enumerate(zip(wanted, boxes)):
+        # Share spare slots in view order so the note need not remove a tile from every view.
+        limit = image_slots // len(wanted)
+        if note_box and index < image_slots % len(wanted):
+            limit += 1
         best = (1, ga_images._fit_scale(right - left, bottom - top))
         for columns in range(2, limit + 1):
             width = (right - left) / columns * (1 + ga_commercial_settings.TILE_OVERLAP)
@@ -107,6 +148,15 @@ def prepare_scale(result: dict, sheet_path: Path, out: Path, previous_reason: st
             plan.append((f"{view['view_id']}p{part + 1}", f"{view['kind']}:{view['view_id']}:part{part + 1}",
                          (left + box[0], top + box[1], left + box[2], top + box[3]), scale))
     context = {"want": ["scale"]}
+    if note_box:
+        # The unchanged parser joins spacing labels and ticks by view ID. A sheet
+        # note belongs to the profile's scale, or the first plan when no profile exists.
+        view = wanted[0]
+        image_id = f"{view['view_id']}note"
+        scale = ga_images._fit_scale(note_box[2] - note_box[0], note_box[3] - note_box[1])
+        plan.append((image_id, f"{view['kind']}:{view['view_id']}:spacing_note", note_box, scale))
+        context["spacing_note"] = (f"{image_id} shows printed frame-spacing notes outside the view crops. "
+                                   "Read the printed notes from this image; it is not another drawing view.")
     if previous_reason:
         context["previous_attempt"] = (f"The previous reading of this frame scale was refused: {previous_reason}. "
                                        "Look again at the whole scale, also for every drawn mark where the frame "

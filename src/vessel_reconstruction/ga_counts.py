@@ -6,7 +6,7 @@ from .ga_commercial_settings import (
     COUNT_KINDS,
     DEFINITIONS,
 )
-from .ga_vocabulary import DECK_NAME_WORDS, FITTING_WORDS, NOTE_WORDS, ROOM_NOUNS, SYSTEM_WORDS
+from .ga_vocabulary import DECK_NAME_WORDS, FITTING_WORDS, KIND_WORDS, NOTE_WORDS, ROOM_NOUNS, SYSTEM_WORDS
 import re
 
 
@@ -86,6 +86,11 @@ def fragment_reason(space: dict, others: list[dict], vocabulary: set[str],
             or re.fullmatch(r"NO\.?\s*(?:\d+|I)\s*\.?\s*[A-Z]\.?", label.upper().strip())):
         # Also "NO.I T.": a capital I read for the number 1 (round u10).
         return "a single letter after the number: the label is cut"
+    # CR.1 is a complete crane label, not a cut prefix of CRANE in another view.
+    # Keep the shared non-cargo exclusions; malformed parentheses were checked above.
+    if (space.get("kind") == "cargo_crane" and _named_words(label)[-1:] == ["CR"]
+            and re.search(KIND_WORDS["cargo_crane"], label.upper())):
+        return None
     is_room = bool(_named_words(label)) and _named_words(label)[-1] in ROOM_NOUNS
     if space.get("kind") in ("other_space", "other_tank") and not is_room and (
             FITTING_WORDS & set(words) or re.search(r"\bA\s*/\s*H\b", label.upper())):
