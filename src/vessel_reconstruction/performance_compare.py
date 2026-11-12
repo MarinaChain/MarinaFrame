@@ -132,6 +132,7 @@ def markdown_report(cases: list[dict]) -> str:
                          f"{row['estimated_ct']:.7g} | {row['measured_ct']:.7g} | "
                          f"{row['ct_error_percent']:+.3f} | {row['effective_power_error_percent']:+.3f} | "
                          f"{row['status']} |")
+    for case in cases:
         lines += ["", f"## {case['ship']}: sources and limits", "",
                   f"Particulars: {case['particulars_source']}"]
         for row in case["rows"]:

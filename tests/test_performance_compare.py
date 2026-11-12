@@ -34,6 +34,8 @@ def test_evaluator_contract_keeps_sources_and_draft_status():
     assert row["ct_error_percent"] == pytest.approx(row["effective_power_error_percent"])
     assert row["validity_warnings"]  # full-scale empirical regression at model scale
     assert "synthetic" in performance_compare.markdown_report([result])
+    report = performance_compare.markdown_report([result,result])
+    assert report.rfind("| synthetic |") < report.find("## synthetic")
 
 
 def test_evaluator_preserves_different_reference_surface_basis():
