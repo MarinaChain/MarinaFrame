@@ -1238,6 +1238,9 @@ def read_extents(result: dict, work: dict, reading: dict, request_dir: Path) -> 
             side = ("port" if low >= -CENTRE_TOLERANCE_M else "starboard" if high <= CENTRE_TOLERANCE_M else "centre")
         if side:
             extent["side"] = side
+        if space["kind"] == "cargo_hatch" and entry.get("printed_size") and entry.get("printed_size_at"):
+            extent["printed_size_raw"] = {"text": entry["printed_size"][:32],
+                                          "at_px": [round(v, 1) for v in _to_sheet(tile, *entry["printed_size_at"])]}
         if entry.get("outline"):
             def to_metres(px, py, axis=axis, named=named, view=view):
                 if "z_m" in extent:
@@ -1448,6 +1451,68 @@ def _end_below_spaces_above(result: dict) -> int:
                                      "label": tank["label"][:64]})
             ended += 1
     return ended
+
+
+# A size printed inside a hatch ("18.200 x 15.000", "15,480 X 20,600"): two numbers and an x.
+HATCH_SIZE = re.compile(r"(\d+(?:[.,]\d+)?)\s*[xX×*]\s*(\d+(?:[.,]\d+)?)\s*(mm|m)?\.?")
+HATCH_SIZE_RANGE_M = (2.0, 60.0)
+PRINTED = "printed"
+
+
+def parse_hatch_size(text: str) -> tuple[float, float] | None:
+    """The two sides (metres) of a printed hatch size, or None. Numbers above 100 are millimetres
+    ("15480 x 20600"); a comma is a decimal mark or, in millimetres, a thousands mark, which give
+    the same metres ("15,480" is 15.48 m either way)."""
+    match = HATCH_SIZE.search(text.strip())
+    if not match:
+        return None
+    sides = []
+    for number in match.group(1, 2):
+        value = float(number.replace(",", "."))
+        if match.group(3) == "mm" or value > 100:
+            # Millimetres: a comma or dot in them is a thousands mark ("15,480 mm", "15480").
+            value = float(re.sub(r"[.,]", "", number)) / 1000
+        sides.append(value)
+    low, high = HATCH_SIZE_RANGE_M
+    return tuple(sides) if all(low <= side <= high for side in sides) else None
+
+
+def apply_printed_hatch_sizes(result: dict) -> int:
+    """Tie each printed hatch size to the one hatch whose box holds the text, and record it as
+    the hatch's length and breadth (status ``printed``); otherwise ignore it with a reason in
+    checks. Returns how many sizes were tied (PM decision, 2026-11-12)."""
+    hatches = [s for s in result["spaces"] if s["kind"] == "cargo_hatch" and "outline_box_px" in (s.get("extent") or {})]
+    tied = 0
+    for hatch in hatches:
+        raw = hatch["extent"].pop("printed_size_raw", None)
+        if raw is None:
+            continue
+        x, y = raw["at_px"]
+        holding = [other for other in hatches if other["extent"]["view_id"] == hatch["extent"]["view_id"]
+                   and other["extent"]["outline_box_px"][0] < x < other["extent"]["outline_box_px"][2]
+                   and other["extent"]["outline_box_px"][1] < y < other["extent"]["outline_box_px"][3]]
+        sides = parse_hatch_size(raw["text"])
+        reason = (None if holding == [hatch] and sides else
+                  "the size is not inside this hatch's box alone" if holding != [hatch] else
+                  "the printed size is not two plausible sides")
+        if reason:
+            result["checks"].append({"code": "printed_hatch_size_ignored", "status": "dropped",
+                                     "label": hatch["label"][:64], "reason": reason})
+            continue
+        # Which side is the length: the order closer to the measured box.
+        extent = hatch["extent"]
+        along = extent["x_m"][1] - extent["x_m"][0]
+        across_axis = "y_m" if "y_m" in extent else None
+        across = extent[across_axis][1] - extent[across_axis][0] if across_axis else None
+
+        def misfit(length, breadth):
+            error = abs(length - along) / along if along > 0 else 0.0
+            return error + (abs(breadth - across) / across if across else 0.0)
+
+        length, breadth = min([sides, sides[::-1]], key=lambda pair: misfit(*pair))
+        extent["printed_size_m"] = {"length": round(length, 3), "breadth": round(breadth, 3), "text": raw["text"]}
+        tied += 1
+    return tied
 
 
 def resolve_overlaps(result: dict) -> dict:
@@ -1853,6 +1918,7 @@ def scale_pass(result: dict, sheet_path: Path, out: Path, call) -> dict:
         # After the depth check: a trimmed hold ends at a topside tank, not at the deck.
         stats["overlaps"] = resolve_overlaps(result)
         stats["overlaps"]["small_label_boxes_withheld"] = withhold_oversized_guesses(result)
+        stats["printed_hatch_sizes"] = apply_printed_hatch_sizes(result)
     if not checked and result["measured"]["depth_m"]["status"] == MEASURED:
         # A depth that the space tops could not check is not given (see check_depth).
         pointed = result["measured"]["depth_m"]["value"]
@@ -2063,6 +2129,20 @@ def _joined(plan: dict | None, profile: dict | None) -> dict:
                 if source and source["extent"].get("outline", {}).get("plane") == plane]
     if outlines:
         extent["outline_m"] = outlines
+    sized = next((s["extent"]["printed_size_m"] for s in (plan, profile) if s and s["extent"].get("printed_size_m")),
+                 None)
+    if sized:
+        # A printed hatch size is the hatch's length and breadth; the measured box gives its place.
+        extent["measured_box_m"] = {key: extent[key] for key in ("x_m", "y_m") if key in extent}
+        middle = (extent["x_m"][0] + extent["x_m"][1]) / 2
+        extent["x_m"] = [round(middle - sized["length"] / 2, 2), round(middle + sized["length"] / 2, 2)]
+        extent["status"]["x"] = PRINTED
+        if "y_m" in extent:
+            middle = (extent["y_m"][0] + extent["y_m"][1]) / 2
+            extent["y_m"] = [round(middle - sized["breadth"] / 2, 2), round(middle + sized["breadth"] / 2, 2)]
+            extent["status"]["y"] = PRINTED
+        extent["printed_size"] = sized["text"]
+        extent.pop("outline_m", None)  # a trace of the measured box, not of the printed size
     regions = [region for space in (plan, profile) if space
                for region in space["source_record"].get("regions", [])][:source_record.MAX_REGIONS]
     return {"id": first["id"], "kind": first["kind"], "label": first["label"], "number": first.get("number"),

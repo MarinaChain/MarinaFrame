@@ -1306,3 +1306,49 @@ def test_a_peak_tank_ends_below_the_spaces_boxed_above_it():
     assert gs._end_below_spaces_above(result) == 1
     tank = result["spaces"][0]["extent"]
     assert tank["z_m"] == [2.0, 12.3] and tank["status"]["z"] == "guessed" and set(tank["trimmed_by"]) == {"s", "v"}
+
+
+
+@pytest.mark.parametrize("printed, sides", [
+    ("18.200 x 15.000", (18.2, 15.0)), ("15,480 X 20,600", (15.48, 20.6)), ("15480 x 20600", (15.48, 20.6)),
+    ("15,480 x 17,200 mm", (15.48, 17.2)), ("NO.5 (15.47 x 15.30)", (15.47, 15.3)),
+    ("1.5 x 2", None), ("12 x", None),
+])
+def test_a_printed_hatch_size_parses_to_metres(printed, sides):
+    assert gs.parse_hatch_size(printed) == (pytest.approx(sides) if sides else None)
+
+
+def _hatches(at_px):
+    """Two hatches in one deck plan, side by side; a size printed at ``at_px``."""
+    def hatch(space_id, label, box_px, x_m):
+        return {"id": space_id, "kind": "cargo_hatch", "label": label, "number": label[-1], "status": "read",
+                "view_id": "v2", "source_record": source_record.read([source_record.region(
+                    "S-1_GA.png", view="plan", box_px=box_px, page_px=[1000, 1000])]),
+                "extent": {"view_id": "v2", "outline_box_px": box_px, "x_m": x_m, "frames": [10, 30],
+                                            "y_m": [-11.0, 11.0], "basis": "outline",
+                                            "status": {"x": "measured_from_scale", "y": "measured_from_scale"}}}
+
+    first = hatch("cargo_hatch-1", "NO. 1", [100, 100, 300, 300], [10.0, 26.4])
+    second = hatch("cargo_hatch-2", "NO. 2", [400, 100, 600, 300], [40.0, 56.4])
+    first["extent"]["printed_size_raw"] = {"text": "15.480 x 20.600", "at_px": at_px}
+    return {"spaces": [first, second], "checks": []}
+
+
+def test_a_size_printed_inside_one_hatch_is_its_length_and_breadth():
+    """PM decision 2026-11-12: printed hatch sizes (measured lengths were 1-2 m long)."""
+    result = _hatches([200, 200])
+    assert gs.apply_printed_hatch_sizes(result) == 1
+    sized = result["spaces"][0]["extent"]["printed_size_m"]
+    assert (sized["length"], sized["breadth"]) == (15.48, 20.6)  # the order closer to the measured box
+    entry = gs._joined(result["spaces"][0], None)
+    assert entry["extent"]["x_m"] == [10.46, 25.94] and entry["extent"]["y_m"] == [-10.3, 10.3]
+    assert entry["extent"]["status"] == {"x": gs.PRINTED, "y": gs.PRINTED}
+    assert entry["extent"]["measured_box_m"] == {"x_m": [10.0, 26.4], "y_m": [-11.0, 11.0]}
+
+
+@pytest.mark.parametrize("at_px", [[350, 200], [500, 200]])  # between the hatches; inside the other one
+def test_a_size_not_inside_this_hatch_alone_is_ignored(at_px):
+    result = _hatches(at_px)
+    assert gs.apply_printed_hatch_sizes(result) == 0
+    assert "printed_size_m" not in result["spaces"][0]["extent"]
+    assert any(c["code"] == "printed_hatch_size_ignored" for c in result["checks"])

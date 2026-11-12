@@ -611,15 +611,19 @@ Observed cost is 0 in every round (subscription).
 - `u10r6` (u10 replayed with the rule above): gate 14 of 14; seven tank boxes ended lower on five
   ships, among them the peak tanks of the Astra round-6 findings.
 
-## Proposal (not built; PM 2026-11-12): printed sizes as a check of extents
+## Printed hatch sizes (PM decision 2026-11-12: approved)
 
-Astra rounds 3 and 4 found measured hatch lengths 1-2 m above the size printed in the hatch
-(for example "15.47 x 20.40") and hold spans that differ from the printed dimension chain. A
-check needs the printed text: an optional `printed_size` per extent in the `ga_scale` reply (the
-text as printed, never converted), parsed by code (metres or millimetres) and compared with the
-measured length and breadth; a difference above 0.5 m or 3 % would make that axis `guessed`
-with a check entry. The geometry would not be replaced by the printed value. This changes the
-model contract (Rust `ScaleReply`, CLI schema, prompt), so it waits for a PM decision.
+Astra rounds 3 to 6 found measured hatch lengths and breadths 1-2 m above the size printed in the
+hatch (for example "15.47 x 20.40"). An extent of a cargo hatch in the `ga_scale` reply may carry
+`printed_size` (the text as printed) and `printed_size_at` (the centre of that text); both are
+optional in the contract and a size without its place is dropped alone. Code ties the size to a
+hatch only when its text lies inside that hatch's box and inside no other hatch's box, and parses
+two plausible sides (2-60 m; numbers above 100 are millimetres). The side order closer to the
+measured box gives length and breadth. In the arrangement input the hatch then has the printed
+length and breadth, centred on the measured box, with the status `printed`; the measured box is
+kept as `measured_box_m` (its position). A size that cannot be tied to exactly one hatch is
+ignored with a reason in checks (`printed_hatch_size_ignored`). A u10 replay (no sizes stored)
+gives arrangement inputs identical to u10r6 on all 14 ships; gate 14 of 14.
 
 ## Outlines for sloped and tapered boundaries (PM decision 2026-11-12: approved, conditions)
 
