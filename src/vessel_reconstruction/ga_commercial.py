@@ -37,6 +37,7 @@ from PIL import Image
 from . import source_record
 from .particulars import _LENGTH, _PREFIX_LENGTH, _length
 from .provenance import write_json
+from .ga_vocabulary import DECK_NAME_WORDS, FITTING_WORDS, NOTE_WORDS, ROOM_NOUNS, SYSTEM_WORDS
 
 SCHEMA = "marinaframe.ga_reading.v1"
 REQUEST_SCHEMA = "marinaframe.vision_request.v1"
@@ -691,22 +692,6 @@ def _words(label: str) -> list[str]:
     text = joined_letters(label.upper())
     text = re.sub(r"(?<=\b[A-Z])\.\s?(?=[A-Z]\b)", "", text)  # 'W.B.T' -> 'WBT'
     return re.findall(r"[A-Z]+", text)
-
-
-# Words that name a fitting or an opening, not a space (lane W, round u6r: accommodation ladders
-# outboard of the ship side ended with no volume).
-FITTING_WORDS = {"LADDER", "GANGWAY", "DAVIT", "OPENING", "OPEN", "MANIFOLD", "WINCH", "WINDLASS", "MOORING",
-                 "BOLLARD", "FAIRLEAD", "RAFT", "LIFEBOAT", "BOAT", "CAPSTAN", "CHOCK", "HATCH"}
-# The last word of a room or store: a label that ends with one is a space even when it names a
-# fitting ("HATCH COVER STORE", "BOAT DECK STORE").
-ROOM_NOUNS = {"STORE", "STR", "ROOM", "RM", "SPACE", "LOCKER", "SHOP", "WORKSHOP", "TRUNK", "TANK", "TK"}
-# Words that name a system and need a room noun to be a space ("FOAM" for "FOAM ROOM").
-SYSTEM_WORDS = {"FOAM", "CO", "FIRE", "FAN", "HYD", "PAINT", "LAMP", "ROPE", "CHAIN", "BATT", "ELEC", "EMERG",
-                "EMG", "PUMP"}
-# The last word of a deck name; a space on a deck ends with its own noun ("DECK STORE").
-DECK_NAME_WORDS = {"DECK", "DK"}
-# Words of a note printed beside a fitting ("FOLDING TYPE"), never of a space.
-NOTE_WORDS = {"TYPE"}
 
 
 def _named_words(label: str) -> list[str]:
