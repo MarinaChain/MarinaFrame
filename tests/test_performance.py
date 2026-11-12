@@ -40,6 +40,15 @@ def test_delivered_and_brake_power_are_distinct():
     assert result.validity_warnings  # caller-supplied efficiencies, no regression claim
 
 
+def test_power_accepts_signed_interaction_coefficients():
+    result = performance.propulsion_power(
+        effective_power_kw=1000, thrust_deduction=-0.1, wake_fraction=-0.05,
+        open_water_efficiency=0.5, relative_rotative_efficiency=1,
+        shaft_efficiency=1)
+    assert result.hull_efficiency == pytest.approx(1.1 / 1.05)
+    assert result.delivered_power_kw == pytest.approx(1000 / (1.1 / 1.05 * 0.5))
+
+
 def test_fuel_uses_brake_power_and_explicit_sfoc():
     result = performance.fuel_per_day(brake_power_kw=1000, sfoc_g_per_kwh=180)
     assert result.value == pytest.approx(4.32)
@@ -49,8 +58,8 @@ def test_fuel_uses_brake_power_and_explicit_sfoc():
 
 @pytest.mark.parametrize("field, value", [
     ("effective_power_kw", -1), ("effective_power_kw", math.nan),
-    ("thrust_deduction", 1), ("thrust_deduction", -0.1),
-    ("wake_fraction", 1), ("wake_fraction", -0.1),
+    ("thrust_deduction", 1), ("thrust_deduction", math.nan),
+    ("wake_fraction", 1), ("wake_fraction", -math.inf),
     ("open_water_efficiency", 0), ("open_water_efficiency", 1.1),
     ("relative_rotative_efficiency", 0), ("shaft_efficiency", 1.1),
 ])

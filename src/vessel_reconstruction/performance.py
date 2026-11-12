@@ -88,9 +88,10 @@ def propulsion_power(*, effective_power_kw: float, thrust_deduction: float,
                   shaft_efficiency=shaft_efficiency)
     _finite("effective_power_kw", effective_power_kw, inclusive=True)
     for name, value in (("thrust_deduction", thrust_deduction), ("wake_fraction", wake_fraction)):
-        _finite(name, value, inclusive=True)
-        if value >= 1:
-            raise ValueError(f"{name} must be < 1")
+        # Interaction coefficients are signed; negative effective wake or
+        # thrust deduction can occur. Only the upper singular limit is excluded.
+        if not math.isfinite(value) or value >= 1:
+            raise ValueError(f"{name} must be finite and < 1")
     for name, value in (("open_water_efficiency", open_water_efficiency),
                         ("shaft_efficiency", shaft_efficiency)):
         _finite(name, value)
