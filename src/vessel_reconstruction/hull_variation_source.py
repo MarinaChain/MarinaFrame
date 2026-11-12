@@ -13,8 +13,11 @@ def sample_iges(path: Path, *, source_aft_x: float, length_m: float, breadth_m: 
                 source_z_direction: int = 1, coordinate_tolerance_m: float = 0.005) -> HullSections:
     """Sample positive-y shell sections, with no inferred missing bottom/top.
 
-    OpenCascade supplies native IGES coordinates. The caller states their scale,
-    aft x and keel z. Only an upright, symmetric, single-valued half hull is
+    Only MM-declared IGES is accepted. Coordinates below refer to the imported
+    millimetre working coordinates; native_units_per_metre is an explicit
+    correction for numerically mislabelled public files (KVLCC2 uses 1, not
+    1000). It is not the IGES unit flag. The caller states aft x and keel z.
+    Only an upright, symmetric, single-valued half hull is
     supported. Every requested height must intersect the supplied surface.
     Terminal sections are inset by 1e-5 L to avoid tangent plane degeneracies.
     """
@@ -32,6 +35,8 @@ def sample_iges(path: Path, *, source_aft_x: float, length_m: float, breadth_m: 
     reader = IGESControl_Reader()
     if reader.ReadFile(str(path)) != IFSelect_RetDone:
         raise ValueError('Cannot read IGES reference.')
+    if reader.IGESModel().GlobalSection().UnitFlag() != 2:
+        raise ValueError('Experimental sampler accepts MM-declared IGES only; convert units explicitly first.')
     reader.TransferRoots()
     shape = cq.Shape.cast(reader.OneShape())
     x = np.linspace(0, length_m, stations)
@@ -70,5 +75,10 @@ def sample_iges(path: Path, *, source_aft_x: float, length_m: float, breadth_m: 
                 raise ValueError(f'Missing shell at x={position:.3f}, z={height:.3f}; reduce sampled domain.')
             fraction = (level - p[crossing, 2]) / dz[crossing]
             y = p[crossing, 1] + fraction * (q[crossing, 1] - p[crossing, 1])
+            positive = y[y > coordinate_tolerance_m]
+            if len(positive) and np.ptp(positive) > coordinate_tolerance_m:
+                raise ValueError(f'Unsupported multiple positive shell intersections at x={position}, z={height}.')
+            if y.min() < -coordinate_tolerance_m:
+                raise ValueError('Expected positive-y half hull; negative-side geometry is unsupported.')
             rows[-1].append(max(0, float(y.max())))
     return HullSections(x, z, np.asarray(rows), length_m, breadth_m, draft_m, parallel_body_m)

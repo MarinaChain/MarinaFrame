@@ -41,6 +41,8 @@ class HullSections:
                 or abs(self.x_m[0]) > 1e-9 or abs(self.x_m[-1] - self.length_m) > 1e-9
                 or abs(self.z_m[0]) > 1e-9 or self.z_m[-1] < self.draft_m):
             raise ValueError('Invalid dimensions, station order, draft or parallel body.')
+        if not np.isclose(2 * self.half_breadths_m.max(), self.breadth_m, atol=0.001, rtol=0):
+            raise ValueError('Declared breadth must match the largest sampled geometric breadth.')
 
 
 def _areas(hull: HullSections, level: float) -> np.ndarray:
@@ -81,6 +83,9 @@ def vary_sections(reference: HullSections, *, length_m: float, breadth_m: float,
     if (not np.isfinite(target).all() or min(target[:3]) <= 0
             or not 0 < cb < 1 or not 0 < lcb_fraction < 1):
         raise ValueError('Targets must be finite, positive and within physical bounds.')
+    if any(not np.any(np.isclose(reference.x_m, boundary, atol=1e-9, rtol=0))
+           for boundary in reference.parallel_body_m):
+        raise ValueError('Parallel middle body requires explicit boundary stations.')
     x = reference.x_m * (length_m / reference.length_m)
     z = reference.z_m * (draft_m / reference.draft_m)
     widths = reference.half_breadths_m * (breadth_m / reference.breadth_m)
@@ -129,8 +134,9 @@ def build_candidate(hull: HullSections, *, bulkheads_m: tuple[float, float] | No
     from .exports.hydrostatics import mesh_hydrostatics
     from .display_mesh import shape_mesh
 
+    heights = np.unique(np.r_[hull.z_m, np.linspace(hull.z_m[0], hull.z_m[-1], 5)])
     sections = [dict(id=str(index), x_m=float(x),
-                     points_yz_m=np.column_stack([widths, hull.z_m]).tolist())
+                     points_yz_m=np.column_stack([np.interp(heights, hull.z_m, widths), heights]).tolist())
                 for index, (x, widths) in enumerate(zip(hull.x_m, hull.half_breadths_m))]
     solid, _ = build_hull(sections, max_deviation_m=1e-6)
     vertices, indices = shape_mesh(solid, 0.1, 0.15)

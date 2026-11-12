@@ -71,6 +71,30 @@ def test_candidate_solid_hydrostatics_and_capacity():
             gross_capacity(box, *limits)
 
 
+def test_parallel_body_requires_boundary_stations():
+    hull = reference()
+    hull.parallel_body_m = (31, 69)
+    cb, lcb = section_properties(hull)
+    with pytest.raises(ValueError, match='boundary stations'):
+        vary_sections(hull, length_m=100, breadth_m=20, draft_m=10, cb=cb + .01,
+                      lcb_fraction=lcb / 100)
+
+
+def test_declared_breadth_matches_geometry():
+    hull = reference()
+    with pytest.raises(ValueError, match='breadth'):
+        HullSections(hull.x_m, hull.z_m, hull.half_breadths_m * 1.2,
+                     100, 20, 10, (30, 70))
+
+
+@pytest.mark.cad
+def test_two_height_box_builds():
+    from vessel_reconstruction.hull_variation import build_candidate
+    box = HullSections(np.array([0, 25, 75, 100]), np.array([0, 12]),
+                       np.full((4, 2), 10), 100, 20, 10, (25, 75))
+    assert build_candidate(box).solid.Volume() / 1e9 == pytest.approx(24000)
+
+
 @pytest.mark.parametrize('changes', [{'length_m': -1}, {'cb': float('nan')}, {'cb': 0.99},
                                     {'lcb_fraction': 0.99}, {'draft_m': 0}])
 def test_invalid_or_unreachable_targets(changes):
