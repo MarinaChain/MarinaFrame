@@ -89,8 +89,14 @@ reviewed; no ship result file was scored. No data file is committed.
   duplicate CPU-heavy suites alongside the quick tier and other active lanes.
   It had no reported failure at the stop, but is **not a passing full-suite
   result**. The all-marker/CAD suite remains not completed.
-- Quick tier: pending final results below.
-- Final focused suite: **41 passed**, including a red/green translated-keel
+- First completed quick tier: exit 0; Python **2375 passed, 4 skipped,
+  87 deselected, 5 warnings** (747.97 s), UI **275 passed**, Rust fmt/clippy
+  and workspace tests passed, secret pattern scan 0 findings. It preceded
+  the signed-coefficient review fix; a final quick tier is run before push.
+- Independent review found that wake and thrust deduction are signed;
+  commit `b87c51d` removes the incorrect zero lower bound and adds a red/green
+  test. Final focused suite: **42 passed**.
+- The suite includes a red/green translated-keel
   regression. Commit `93cf439` fixes physical draft to be waterline z minus
   keel z; existing hydrostatics stores waterline z in its draft field.
 - First quick-tier attempt failed in the existing desktop build:
@@ -105,7 +111,7 @@ reviewed; no ship result file was scored. No data file is committed.
 | 1: protocol before comparisons | Kept and corrected before any comparison; blind requirement blocked |
 | 2: public data and provenance | Prior public inventory inspected; method scan and local manifest added; complete paired-data audit not done |
 | 3: particulars/resistance/propulsion/fuel | Partial primitives only; Holtrop-Mennen, B-series, transom area and matching not implemented |
-| 4: published formula and runner tests | 41 synthetic/equation tests; original worked-example and published-file runner tests not done |
+| 4: published formula and runner tests | 42 synthetic/equation tests; original worked-example and published-file runner tests not done |
 | 5: error table and blind result | Not done; no performance accuracy claim |
 
 Resume with the PM assigning an independent public blind split. Implement one
