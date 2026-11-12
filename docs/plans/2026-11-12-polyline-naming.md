@@ -68,12 +68,16 @@ Review: architecture **WARN** (independent evidence acquisition is not yet desig
 
 - [x] Read both briefs, relevant lessons, reader-selection sections 9-13, BODY_PLAN_CHINE, prior integration plan and naming interfaces.
 - [x] Write this fixed protocol before any run.
-- [ ] Commit protocol. Record its commit in the final report.
+- [x] Commit protocol before runs: `e9051e8`.
 - [ ] Resolve independent station-position acquisition and permitted development inputs, without opening truth to build anchors. Present the concrete acquisition design for review before implementation.
 - [ ] Write failing synthetic tests for a missed station, an extra station and uneven spacing; also mirrored halves, ambiguous matches, duplicate claims and absent anchors. Verify the failures before implementation.
 - [ ] Implement only the naming change and its opt-in experimental route; keep tracing and default environment flag unchanged. Run focused tests and commit.
 - [ ] Commit the four-arm runner and frozen evidence before the single scored run.
 - [ ] Run once on the nine sheets; write raw per-ship evidence under ignored `work/polyline-naming/`, and aggregate report here. Report rule acceptance and identity errors explicitly.
 - [ ] Run `make test-quick PY=/Users/jonathanjie/Documents/workspace/MarinaFrame/.venv/bin/python`, push only `lane/polyline-naming`, and remove only this worktree's `target/` after push.
+
+## Checkpoint validation
+
+The first quick-tier command was killed by the tool's 600-second background limit, not a test failure. The complete retry with a longer tool allowance exited 0: lint, Rust tests, 2,042 Python tests passed (4 skipped, 87 deselected), 269 UI tests passed, and secret scan passed. Logs remain under ignored `work/polyline-naming/`. Only documentation changed after that run. No reader experiment ran. Push the checkpoint to `lane/polyline-naming`; do not merge.
 
 **Stop/resume:** stopped after the protocol, before naming implementation, synthetic tests and scoring. No result exists, no selection decision is possible, and no new holdout material was opened. Next substantive action is to resolve the independent drawing-position input and review that acquisition design. Do not rerun a campaign to discover anchors from truth.
