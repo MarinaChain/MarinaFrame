@@ -355,3 +355,27 @@ propeller matching. Keep scale and Reynolds corrections explicit. Add public
 file loaders with source/cell provenance and geometry checks before KCS
 comparisons. Freeze and push the code before the independent evaluator scores
 once. Do not use JBC as a blind result or tune constants against it.
+
+## Blind result: KVLCC2 (independent evaluator, one run, 2026-11-12)
+
+The PM chose KVLCC2 as the blind ship, because the implementation lane never opened its measured
+resistance. A separate evaluator (Claude) prepared the case from published sources and the public hull
+IGES, and ran the frozen code once (tag `perf-frozen-1`, commit b19bab9). No input was set from a
+measured value, and no measured value went back to the implementation lane.
+
+| Method | Mean absolute error, CT and PE (8 speeds, Fn 0.101-0.147) | Error at Fn 0.142 (second source) |
+|---|---|---|
+| Holtrop-Mennen 1982 | 20.9 % (all over-predictions) | +20.4 % |
+| Holtrop 1984 | 18.9 % (all over-predictions) | +18.4 % |
+
+- Most of the error is viscous: the form factor came out at 1.36 (1982) and 1.34 (1984), too high for
+  this full form (CB 0.81, U-shaped stern). The development ships (KCS, JBC) gave 3-8 %.
+- Limits of the evaluation: the measured values are second-hand (Dogrul et al. 2020, Table 7, citing
+  Kim, Van and Kim 2001; and a 2014 thesis series at 3 significant figures); the test condition (fixed
+  or free sinkage and trim) is not confirmed; water density is assumed; Cwp, bulb and transom areas were
+  derived from the IGES; the stern parameter is a judgement (with 0 instead of +10, the evaluator
+  estimates 2-3 points less, not run). All rows are model scale, which the code marks as out of range.
+- Conclusion: the empirical baseline is not accurate enough for full-form tankers. Do not quote tanker
+  resistance or fuel from it alone. Next: calibrate on tanker test data (ideally the pilot's own
+  model-test and trial records for similar hulls), or add CFD for candidate hulls.
+- Evaluator files (not in git): `work/perf-eval/` (case JSON SHA-256 starting ea4791d3, score, provenance).

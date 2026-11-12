@@ -173,8 +173,8 @@ The full contract is `docs/APP_SPEC.md`. Main requirements:
 | D2 | Read the lines plan and midship section of a large commercial ship (tanker), with "unknown" where unreadable | Planned (readers exist for small boats, standard hull forms and development midship sections) |
 | D3 | Inventory a design archive per hull: drawings, revisions, particulars, linked test and trial results, and permitted uses | Planned |
 | D4 | Reference-ship search: for a set of requirements, find the closest past hulls and show the material differences in one table (payload, deadweight, speed, fuel, main dimensions) | Planned |
-| D5 | Candidate designs: vary the closest reference hull within stated constraints, with 3D, hydrostatics and payload for each candidate | Planned |
-| D6 | Performance estimates (resistance, propulsion, fuel), checked blind against held-out hulls with model-test or trial results | Planned; blocked until paired test data exists |
+| D5 | Candidate designs: vary the closest reference hull within stated constraints, with 3D, hydrostatics and payload for each candidate | In progress: variation module done (targets met); the public tanker hull is read only in part (ends missing) |
+| D6 | Performance estimates (resistance, propulsion, fuel), checked blind against held-out hulls with model-test or trial results | In progress: empirical baseline built; blind tanker error +19 to +21 %, too high for quotes; needs tanker calibration or CFD |
 | D7 | Record why the designer accepted or deferred each candidate | Planned |
 | D8 | Keep each customer's drawings, derived data and results separate and unavailable to any other customer | Planned (contract and deployment design) |
 
@@ -201,6 +201,8 @@ did not see.
 | GA measuring pass, synthetic ships (6 ships, 178 spaces) | 67 % of spaces found, 15 invented; found boxes mostly within a few cm; cranes 0 / 12 | `docs/plans/2026-11-12-ga-synthetic-run.md` on branch `lane/ga-synthetic-run` |
 | GA measuring pass against printed values (development ships) | frame spacing median 0.002 m; hatch breadth median 3.0 m off (printed sizes now replace it) | GA plan, status section |
 | Blind hull holdouts left | **0**: all 10 real sheets are spent | `docs/holdouts/REGISTRY.md` |
+| Resistance estimate (Holtrop-Mennen), development ships KCS and JBC, model scale | 3-8 % error | `docs/plans/2026-11-12-performance-baseline-results.md` |
+| Resistance estimate, **blind** tanker KVLCC2, model scale | **+19 to +21 %** (over-predicts at every speed) | same |
 
 Targets for the next quarter:
 1. A blind GA result on new ships, including GA drawings without labels and other ship types.
@@ -253,3 +255,4 @@ Targets for the next quarter:
   2026-11-12.
 - 2026-11-12: added the basic-design pilot direction (section 4.1, requirements D1-D8, non-goals,
   targets, open decisions, risks) after the pilot meeting of 2026-11-12, and a link to `docs/ROADMAP.md`.
+- 2026-11-12: D5 and D6 progress; resistance results on development ships and the blind tanker.
