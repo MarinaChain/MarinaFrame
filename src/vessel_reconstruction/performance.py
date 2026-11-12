@@ -205,6 +205,6 @@ def hull_particulars_from_mesh(triangles: np.ndarray, *, draft_m: float, lpp_m: 
         wetted_surface_m2=h.wetted_surface_m2, scale=scale,
         aft_perpendicular_x_m=aft_perpendicular_x_m, forward_x_sign=forward_x_sign,
         validity_warnings=(
-            "Mesh closure, units (metres), scale and perpendicular positions are caller responsibilities.",
+            "Closed symmetric hull, centreline y=0, metres, scale and perpendiculars are caller responsibilities.",
             "Largest sampled section substitutes for midship area; transom area is not computed.",
             *h.warnings))
