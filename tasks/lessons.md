@@ -226,6 +226,7 @@
 - **Trigger:** The CAD export lane added IGES and .3dm files; its focused tests passed, but three evidence-hardening tests failed at merge because a test helper copied a fixed file list. A replace-sheet real-worker test also failed in CI because it did not skip without `MARINAFRAME_TEST_PYTHON`.
 - **Rule:** When a lane changes run files, export kinds or record checks, run the full Python suite before review, not only focused tests. Test helpers copy the files the record names, not a fixed list. Real-worker Rust tests may skip locally when `MARINAFRAME_TEST_PYTHON` is unset; required CI runs must fail instead.
 - **CI correction (2026-11-10):** Allow missing worker Python only in local runs. Required CI jobs set `MARINAFRAME_TEST_PYTHON` before every Cargo test step and `MARINAFRAME_REQUIRE_WORKER=1`; missing Python must fail those tests. Run macOS Seatbelt probes on macOS, and prove cleanup helpers reject a live child before trusting their exit checks.
+- **Lane correction (2026-11-12):** Do not stop a behaviour-preserving GA refactor on an unrelated full-tier worker failure when the PM supplies targeted gates. Diagnose once with explicit `MARINAFRAME_TEST_PYTHON` and `RUST_BACKTRACE=1`, report the complete registry error (or `None` on a passing run), then use the PM's GA tests and offline replay gates. Leave the full merge tier to the PM; do not change unrelated tests or app code.
 - **Why:** Focused runs miss tests that encode the old file set, and CI's plain cargo step has no worker Python.
 
 ### Bind display exports at their producer
