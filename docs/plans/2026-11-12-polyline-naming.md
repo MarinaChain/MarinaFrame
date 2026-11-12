@@ -64,6 +64,34 @@ Alternatives not selected: OCR-only labels (previously unsuccessful, BODY_PLAN_C
 
 Review: architecture **WARN** (independent evidence acquisition is not yet designed); quality **PASS** (no proposed coupling to truth); tests **WARN** (end-to-end anchor acquisition is missing); performance **PASS** (small station sets). Do not implement a matcher-only stub and claim the lane is complete.
 
+## Amendment: PM position-evidence decision (before any run)
+
+The PM supplied the missing evidence design after checkpoint `25aa9e0`: use code-only cross-view shape matching first, existing positioned printed labels only as fallback. No reader experiment has run, so this amendment precedes results and does not relax a measured gate. The acceptance rule above is unchanged.
+
+### Evidence and matching method (fixed)
+
+Read independent station half-breadths at drawn waterlines from the half-breadth plan, or equivalent section samples from profile buttocks. Use existing code-only view readers and drawing calibration, never scored offsets or newly generated model readings. Keep station positions as drawn; do not assume even spacing. Keep fore/aft membership and the calibrated order within each half.
+
+Compare section vectors in metres. Pair cost is RMS over at least **three shared drawn levels**; fewer levels provide no match. A candidate pair must have RMS **<= 0.05 m**. Solve one monotonic alignment over all sections and stations, permitting unmatched sections (cost **0.05 m** each) and skipped stations (cost **0**). This is alignment in known fore/aft order, not assignment of names by rank: any number of sections or stations may be skipped.
+
+A name is accepted only if all hold:
+
+1. Its assigned station is the section's unique lowest-RMS candidate among all station vectors with sufficient overlap.
+2. The second-best station RMS is at least **twice** the best RMS **and** at least **0.02 m greater**. With one usable candidate, the local margin is infinite; the global alternative test below still applies.
+3. Forbidding that pair and re-solving the complete alignment increases total cost by at least **0.02 m**. Equal-cost alternatives are ambiguous and remain unnamed.
+
+Do not retry alignment after rejecting ambiguous names. Report all unmatched and rejected sections as unnamed. Missing cross-view evidence never causes rank fallback.
+
+Only when a half has no usable cross-view station vector may existing pipeline labels supply names: a positioned label must identify a permitted station and lie within **two measured stroke widths** of exactly one section side; each section and label name must have exactly one claim. Duplicate or ambiguous claims stay unnamed. Do not add model calls or infer labels from nesting order. If the existing pipeline provides no positioned labels, leave the sections unnamed and record that fact.
+
+The new route is experimental and does not change `MARINAFRAME_BODY_PLAN_READER` or existing product calls. Existing tracer geometry and eligibility checks are retained. Round-bilge fallback curves remain unchanged; every polyline section requires independent identity, including sections previously engaged under crossing-reader names.
+
+### Implementation and checks
+
+Create `src/vessel_reconstruction/body_plan_position_names.py` for vector matching and joint alignment, with tests in `tests/test_body_plan_position_names.py`. Test a missed station, extra section, uneven station spacing, a near-tie that must stay unnamed, global collision alternatives, no evidence, and positioned-label ambiguity. Exercise extraction from synthetic plan/profile ink independently of scored truth. Add a separate runner `scripts/measure_polyline_position_names.py`; preserve historical runners. Record per-half evidence source and unnamed count, per-sheet scorer identity errors for each arm, and unchanged selection gates.
+
+Review: architecture **PASS** (separate opt-in route); quality **PASS** (truth-free matching, explicit abstention); tests **PASS** (missing/extra/uneven/near-tie paths specified); performance **PASS** (small dynamic-programming alignment, one forbidden-edge solve per proposed name). Input availability remains a preflight check, not permission to omit sheets silently.
+
 ## Tasks and resume point
 
 - [x] Read both briefs, relevant lessons, reader-selection sections 9-13, BODY_PLAN_CHINE, prior integration plan and naming interfaces.
