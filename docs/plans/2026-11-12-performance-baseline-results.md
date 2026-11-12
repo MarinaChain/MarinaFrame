@@ -55,7 +55,48 @@ conservative boundary until the PM selects the independent blind ship.
 - Local cell transcript: ignored `work/performance-baseline/exposed-tables.txt`;
   downloaded condition HTML and geometry under ignored `work/sources/{kcs,jbc}-geometry/`.
 
-## Outcome and exact stop point (previous checkpoint; superseded by continuation below)
+## PM continuation — implementation evidence (in progress)
+
+The PM moved JBC to development and assigned blindness to a later independent
+evaluator. The previous blocked checkpoint below is historical, not the final
+state of this continuation. No blind ship is selected, opened or scored here.
+
+### Geometry and reproducibility
+
+The KCS IGES is a starboard-half surface in full-scale metres (OCP imports to
+millimetres); the JBC IGES is a full model hull in millimetres at 1:40 scale.
+A naive signed-volume integration of KCS returned an invalid volume because
+its patch orientations are inconsistent. This was detected **before scoring**.
+`performance_geometry.surface_particulars` now integrates symmetric transverse
+outer envelopes independently of winding, reusing the existing clipped-triangle
+area routine. Eight synthetic tests cover open mixed-winding boxes, half hulls,
+coordinate conventions and invalid sampling. It does not imply a closed solid.
+
+`prepare_performance_dev.py` explicitly opens only named KCS/JBC inputs. It
+records geometry SHA, source cells, model water basis, 401×401 section sampling,
+2 mm CAD chord setting, and declared approximations. It samples bulb area at
+the forward perpendicular. Independent review caught that an AP section is
+not an immersed transom; the API now leaves transom area unknown and the
+comparison explicitly assumes AT=0 rather than invent a measurement. LCB uses
+the sampled waterline midpoint, not an assumed Lpp midpoint conversion.
+
+### Propeller evidence
+
+`1967f51`: 39 KT and 47 KQ published terms, at base Re=2e6. Table coefficients
+were visually checked against the public MacKenzie/Forrester manuscript,
+PDF pp.26–27. No Reynolds correction is invented. Tests compare the independent
+printed equations 12–13 (Z3, EAR0.54, P/D0.5, J0/0.3/0.6/1.0) within their
+printed precision, plus Helma §3.2 B5-90 J≈0.69, P/D≈1.07, KQ≈0.041,
+eta0≈0.62 and sqrt(KT)/J≈0.7 within chart-reading tolerance.
+
+Matching solves the cubic thrust equilibrium, returns all physical roots
+(including tangent roots), and never silently chooses among multiple roots.
+It reports n, KT, KQ, thrust residual, delivered/brake power and explicit-SFOC
+fuel. Cavitation, engine torque limits and non-B-series propeller geometry are
+not covered. P/D and J screening bounds are implementation restrictions,
+not a universal published accuracy guarantee.
+
+## Outcome and exact stop point (previous checkpoint; superseded by continuation above)
 
 **Lane incomplete. No ship resistance, propulsion or fuel prediction is reported.**
 No published ship comparison was run, and no JBC score was produced.
