@@ -12,7 +12,7 @@ agreement and on the data the pilot supplies. Every phase ends with a measured c
 
 | Track | Purpose | Main PRD IDs |
 |---|---|---|
-| A. Basic-design pilot | Reading, reference search and candidate designs for one product tanker | D1-D8, S1, G1-G5 |
+| A. Basic-design pilot | Reading, reference search and tanker design from requirements for one product tanker | D1-D14, S1, G1-G5 |
 | B. Reading accuracy | Measured, blind accuracy of the readers we have | G7-G10, H4-H6 |
 | C. App and platform | A partner can install and use the app safely | A7, A8, P4 |
 | D. Structure and repair | The lasting product after the pilot | S2-S4 |
@@ -23,6 +23,8 @@ agreement and on the data the pilot supplies. Every phase ends with a measured c
 |---|---|---|
 | Pilot proposal: scope, phases, schedule, cost and staffing per discipline, in-house versus external deployment, data rights | A | Proposal sent to the pilot's corporate planning |
 | Inventory the pilot material per hull, with permitted uses (D3) | A | Inventory table: received versus reported, rights per use |
+| Data request to the pilot, model tests paired with hull geometry first (`docs/plans/2026-11-12-design-from-scratch.md`, section 3.1) | A | Count of hulls with paired geometry and model tests |
+| Decide fleet database, parametric hull tool and CFD route (PRD open decision 7) | A | Decisions recorded |
 | Fix the two causes the synthetic run found: crane abbreviations (G7) and scale crops that miss the printed spacing (G8) | B | Synthetic re-run: cranes found; no ship loses its scale |
 | New blind test sets: GA drawings without labels and other ship types; new hull holdouts | B | Sets frozen and sealed before any run |
 | Apple Developer ID, then a signed and notarized installer (A7) | C | A partner installs without security warnings |
@@ -34,6 +36,8 @@ agreement and on the data the pilot supplies. Every phase ends with a measured c
 | Read the pilot hull's GA, midship section and lines plan; link them by frames, scale and particulars (D1, D2) | A | Per-field reading report on the pilot's own drawings: correct, unknown, wrong; every value traced to its drawing |
 | Tanker midship-section reader (S1) | A | Plates and stiffeners of the pilot midship section, checked by the pilot's structure specialist |
 | Reference-ship search and comparison table for one real inquiry (D4) | A | Technical sales confirms the table is useful for that inquiry |
+| Design database from the yard archive (D9); requirements to main dimensions (D10); tank arrangement generator (D11); weights and stability (D12) | A | Reconstruction test: from a past ship's requirements, compare our design with the ship that was built (3 ships) |
+| Resistance calibrated on the yard's model tests; OpenFOAM validated on benchmark hulls | A | Blind performance test on held-out yard hulls |
 | 3D arrangement accuracy against real truth, with capacity plans or tank tables from the pilot (G10) | B | Published error per space kind on at least 5 ships |
 | Blind GA run on the new test sets | B | Published blind score |
 
@@ -41,7 +45,8 @@ agreement and on the data the pilot supplies. Every phase ends with a measured c
 
 | Work | Track | Exit check |
 |---|---|---|
-| Candidate designs: vary the closest reference hull within the stated constraints, with 3D, hydrostatics and payload (D5) | A | Candidates meet the constraints; designers review them and record decisions (D7) |
+| Candidate designs: vary the closest reference hull within the stated constraints, with 3D, hydrostatics and payload (D5); free-form deformation of bow and stern | A | Candidates meet the constraints; designers review them and record decisions (D7) |
+| Optimizer for fuel against cargo capacity with surrogates (D14); first strength check (D13) | A | Pareto front; only gains above the measured error are reported |
 | Performance estimates, only if hulls with paired model-test or trial data exist (D6) | A | Blind check on held-out hulls with a stated error; otherwise this work is not started |
 | Per-customer data separation in the chosen deployment (D8) | A, C | Security review passed |
 | Windows app (A8) | C | Installer and sandbox tests pass on Windows |
@@ -73,3 +78,5 @@ founder changes a priority. Record each change below.
 ## Change log
 
 - 2026-11-12: first version, after the pilot meeting of 2026-11-12.
+- 2026-11-12: scope widened to tanker design from requirements; added the data request, tool decisions,
+  D9-D14 work and the reconstruction test (plan `docs/plans/2026-11-12-design-from-scratch.md`).

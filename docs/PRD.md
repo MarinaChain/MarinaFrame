@@ -86,6 +86,13 @@ need hull geometry, draft, speed, loading and engine and propeller data, paired 
 sea-trial results for the same hulls. Without that data, the first deliverable is reference-ship
 search and drawing comparison only.
 
+Scope widened on 2026-11-12 (evening): the pilot wants tanker design from requirements. The system
+proposes a starting 3D design, with tank arrangement, capacities, stability and a fuel estimate,
+optimized for fuel use and cargo tank capacity, for the designers to select and send to a model test.
+The yard will supply many GA drawings and, later, naval architects to co-develop. The product is to be
+sold to other shipbuilders after the pilot, so per-customer separation (D8) is a contract item. The
+plan is `docs/plans/2026-11-12-design-from-scratch.md`; the new design-loop requirements are D9-D14.
+
 ## 5. Requirements
 
 ### 5.1 Hull from lines plans
@@ -176,7 +183,13 @@ The full contract is `docs/APP_SPEC.md`. Main requirements:
 | D5 | Candidate designs: vary the closest reference hull within stated constraints, with 3D, hydrostatics and payload for each candidate | In progress: variation module done (targets met); the public tanker hull is read only in part (ends missing) |
 | D6 | Performance estimates (resistance, propulsion, fuel), checked blind against held-out hulls with model-test or trial results | In progress: empirical baseline built; blind tanker error +19 to +21 %, too high for quotes; needs tanker calibration or CFD |
 | D7 | Record why the designer accepted or deferred each candidate | Planned |
-| D8 | Keep each customer's drawings, derived data and results separate and unavailable to any other customer | Planned (contract and deployment design) |
+| D8 | Keep each customer's drawings, derived data and results separate and unavailable to any other customer | Planned (contract and deployment design); required before a second yard |
+| D9 | Design database: read a yard archive (GA, lines plans, capacity plans, stability booklets) into structured per-hull records | Planned (GA and hull readers exist) |
+| D10 | Requirements to main dimensions: from DWT, cargo volume, speed and port limits, propose L, B, D, T and Cb ranges from fleet and archive statistics | Planned |
+| D11 | Tank arrangement generator: double hull, cargo, slop, ballast, engine room and fuel tanks to MARPOL Annex I, with capacities at 98 % fill | Planned (arrangement builder exists) |
+| D12 | Weights, loading conditions, intact and damage stability and freeboard for each candidate | Planned (hydrostatics exist) |
+| D13 | First strength check: midship section modulus and still-water bending moment against the IACS CSR minimum | Planned |
+| D14 | Multi-objective optimization of fuel use against cargo capacity, with surrogate models and a Pareto front; gains smaller than the method's measured error are not reported as gains | Planned |
 
 ## 6. Non-goals
 
@@ -235,6 +248,9 @@ Targets for the next quarter:
 6. Basic-design pilot proposal: scope, price, staffing, deployment (in-house or external) and data
    rights; the governing loading condition, speed and fuel basis; whether drawings can be paired with
    model-test and trial results; who approves candidates; and what the 2027 test milestone means.
+7. Design-from-requirements tools: buy a fleet database (Clarksons or S&P) or start with Equasis and
+   yard data; build our own parametric hull or license CAESES; run CFD in-house (OpenFOAM) or contract
+   it for the first year.
 
 ## 10. Risks
 
@@ -248,6 +264,7 @@ Targets for the next quarter:
 | No paired performance data for the pilot | Design candidates without fuel or resistance estimates | Start with reference search and drawing comparison (D4); scope D6 only once paired data is verified |
 | Expectation that AI replaces model tests | A promise we cannot keep | State in the proposal that model tests and trials decide (section 6) |
 | Customer data reaching a competitor | Loss of the pilot and of trust | Per-customer separation (D8); rights written into the contract |
+| Optimizer gains that exist only in an inaccurate method | A candidate that is not better in the model test | Calibrate on the yard's model tests; report only gains above the measured error (D14) |
 
 ## Change log
 
@@ -256,3 +273,5 @@ Targets for the next quarter:
 - 2026-11-12: added the basic-design pilot direction (section 4.1, requirements D1-D8, non-goals,
   targets, open decisions, risks) after the pilot meeting of 2026-11-12, and a link to `docs/ROADMAP.md`.
 - 2026-11-12: D5 and D6 progress; resistance results on development ships and the blind tanker.
+- 2026-11-12: scope widened to tanker design from requirements (section 4.1); new requirements D9-D14;
+  open decision 7; optimizer risk. Plan: `docs/plans/2026-11-12-design-from-scratch.md`.
