@@ -84,7 +84,7 @@ def surface_particulars(triangles: np.ndarray, *, waterline_z_m: float, lpp_m: f
         surface *= 2
     transom_x = aft_perpendicular_x_m + forward_x_sign*epsilon
     transom_area = float(np.trapezoid(2*_half_widths(mesh,transom_x,heights),heights))
-    midpoint = aft_perpendicular_x_m+forward_x_sign*lpp_m/2
+    midpoint = float((wet_x[0]+wet_x[-1])/2)
     return dict(lwl_m=lwl,beam_m=beam,draft_m=draft,volume_m3=volume,
                 cm=area_max/(beam*draft),cwp=waterplane/(lwl*beam),
                 lcb_percent_lwl_forward=100*forward_x_sign*(lcb-midpoint)/lwl,

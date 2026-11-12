@@ -28,6 +28,13 @@ def test_surface_particulars_do_not_depend_on_face_winding():
     assert result["geometry_warnings"]
 
 
+def test_surface_lcb_uses_waterline_midpoint_not_perpendicular_midpoint():
+    result = performance_geometry.surface_particulars(
+        box_surface(), waterline_z_m=6, lpp_m=80, aft_perpendicular_x_m=0,
+        forward_x_sign=1, half_hull=False, station_count=101, height_count=101)
+    assert result["lcb_percent_lwl_forward"] == pytest.approx(0,abs=1e-5)
+
+
 def test_surface_particulars_stated_half_hull_doubles_only_surface_area():
     mesh = box_surface()
     # Keep nonnegative-side half of a symmetric box by changing negative y to 0.
