@@ -117,4 +117,30 @@ The first quick-tier command was killed by the tool's 600-second background limi
 - Amendment quick tier exited 0: lint and Rust tests passed; 2,055 Python tests passed (4 skipped, 87 deselected, 5 warnings); 269 UI tests passed; secret scan passed. Log: ignored `work/polyline-naming/test-quick-amendment.log`.
 - The evidence-acquisition/runner work is **not complete**. A vector adapter is not an end-to-end raster extraction test. There has been no nine-sheet run, result table, unnamed count on real sheets, or acceptance decision. No score can be inferred from synthetic tests.
 
-**Stop/resume:** stopped after the experimental matching core, before the four-arm runner and real-sheet extraction/scoring. Supply the four spent sheets in permitted development storage and the truth-blind plan/profile regions, longitudinal station labels/positions and body-plan drawn-level mapping for each sheet (or existing positioned labels where no usable view exists). Then finish the code-only extraction adapter with a synthetic-ink test, freeze its inputs and runner commit, and run the unchanged protocol once. Do not derive these inputs from scored truth. No new holdout material was opened.
+## Product detection preflight after PM input decision
+
+The PM supplied byte-identical spent-sheet copies under shared `work/dev-truth/{caleb-jones,colleen,ec-collier,white-gull}/`; `SPENT-HOLDOUTS.md` records their development status. The input-storage blocker is resolved. Only those development copies were used; no `work/holdout/` path was opened.
+
+Runner: `scripts/preflight_polyline_position_inputs.py`, committed before detection in `3e29f82`. Initial unscored detection failed at image loading: Pillow's large-image guard and the intake text survey's RGB requirement. Loader-only fix `588863b` restored the image guard after each known development scan and supplied RGB to `intake.survey_page`. No matching threshold, reader, calibration or scoring rule changed. The corrected detection completed all nine cases without extraction exceptions.
+
+Path: `intake.survey_page` -> `draft_fit.reference_views` -> `view_reader_v2.read_views`; `vessel_description.profile_station_lines` was attempted wherever a profile region existed. No model calls, truth loads, manual regions, guessed station identities or scoring. Scale was supplied from each existing truth-independent benchmark drawing calibration: `reference_views` consumes a scale, it does not detect one. The benchmark callers similarly obtain scale from an existing input spec.
+
+| Sheet | Profile region | Plan region | Scale | Numbered station positions |
+|---|---|---|---|---|
+| PARDON ME | missing | missing | supplied, not detected | missing |
+| BUE GIRL | missing | missing | supplied, not detected | missing |
+| C.A. Thayer | missing | missing | supplied, not detected | missing |
+| Balclutha | missing | missing | supplied, not detected | missing |
+| BUMBLE BEE | missing | missing | supplied, not detected | missing |
+| E. C. COLLIER | missing | missing | supplied, not detected | missing |
+| WHITE GULL | detected | detected | supplied, not detected | missing |
+| COLLEEN | missing | missing | supplied, not detected | missing |
+| CALEB JONES | missing | missing | supplied, not detected | missing |
+
+No unlabelled station columns were returned, including on WHITE GULL. More importantly, this code path has no printed-station-number decoder: it cannot turn detected columns into independent station identities. Assigning numbers in column order would violate the no-rank-fallback rule. No existing positioned label artifact was substituted.
+
+Evidence is frozen under ignored `work/polyline-naming/input-preflight-rgb/`: per-sheet JSON includes source image SHA-256, detected regions, scale provenance, view-reader status, extracted plan vectors where present and missing inputs. `manifest.json` records their SHA-256 values, reader source hashes, commit `588863b176737906207680a940800b7c536f1402`, zero model calls and no scoring. Manifest SHA-256: `021579e681e2ac38c24c0bf68ceb8c0131927f6472090a2166a84fa058c76bc3`. Failed initial preflight evidence remains separately under `input-preflight/`; it was not used for selection.
+
+Checkpoint quick tier exited 0: lint and Rust tests passed; 2,055 Python tests passed (4 skipped, 87 deselected, 5 warnings); 269 UI tests passed; secret scan passed. Log: ignored `work/polyline-naming/test-quick-preflight.log`.
+
+**Stop/resume:** the fixed protocol requires all nine sheets and does not permit partial selection. Stop before the four-arm scored run. The separate truth-blind marking lane must supply profile/plan regions for the eight missing cases, numbered longitudinal station positions for all nine, and the mapping of drawn levels into body-plan coordinates. If fully automatic scale detection is required rather than the unchanged drawing calibrations, scale is also missing on all nine. Then finish the extraction integration and runner, hash/freeze inputs before scoring, and execute the unchanged comparison once. No real-sheet naming counts, identity scores, selection result or acceptance claim exists yet.
