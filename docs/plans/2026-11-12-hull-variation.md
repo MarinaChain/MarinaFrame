@@ -74,3 +74,17 @@ Post-correction synthetic set (all valid solids; files remain in ignored work/hu
 | Finer, aft | 0.67887650 | 0.67888411 | 0.49600000 | 0.49595366 | 0.00000915 |
 
 All remain inside the original gates. These are synthetic demonstrations, not KVLCC2 or local-shape accuracy evidence. Refinement was limited to the review's five geometry/input contracts; no reader, application, threshold or holdout change.
+
+## PM continuation: public KVLCC2
+
+Authorized continuation: inspect the actual longitudinal shell support at each waterline; retain only closed supported sections and use builder end caps at the last retained sections. Record omitted lengths per waterline, selected source face indices and axis convention. Do not infer missing shell. Compare the reference with published Lpp/B/T/volume/Cb/wetted area before running variations.
+
+Architecture PASS: use actual CAD waterline cuts, then existing builder. Quality PASS: explicit face selection and omissions, no silent appendage envelope. Coverage WARN: finite sampling must report its resolution and does not establish C2 fairness. Performance PASS: cache public cuts locally; sequential CAD builds.
+
+1. Add failing synthetic tests for per-waterline support and trimming, disjoint support rejection and selected faces; implement in hull_variation_source.py.
+2. Inspect all 19 public faces, identify duplicate surfaces and main-shell continuity. Determine aft direction from geometry, not prior naming. Freeze sampling resolution and face choice before comparison. Record all exclusions in ignored work output and summarize ranges in this plan.
+3. Add scripts/check_hull_variation.py, including a baseline-only stage. Compare published particulars before creating any variants. Report all differences; do not tune geometry to published integrated values.
+4. Build identity and three changed public candidates: +3% and -3% relative Cb and +2 m beam, preserving baseline LCB/L where feasible. Original target gates remain Cb <=0.001, LCB/L <=0.001 and mesh/CAD volume <=0.001. If a request is unreachable, report it rather than relax gates. Output STEP, reports and images under work/ only.
+5. Run focused/CAD tests and the quick tier before push. Update results and resume point here. Push only lane/hull-variation; do not merge.
+
+Resume: inspect source waterline cuts and implement support tests. The previous stop is historical, not the final outcome of this continuation.
