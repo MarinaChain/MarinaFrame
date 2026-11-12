@@ -409,7 +409,9 @@ def label_family(text: str) -> str:
 
 def merge(result: dict, crop_map: list[dict], readings: list[dict], sheet_name: str, page_px) -> dict:
     """Add the labels read to the spaces; return the per-ship fine-pass statistics."""
-    from .ga_commercial import DEFINITIONS, add_space, finish_counts
+    from .ga_commercial_settings import DEFINITIONS
+    from .ga_counts import finish_counts
+    from .ga_spaces import add_space
     definitions = result.get("definitions") or DEFINITIONS
     answers = {}
     for reading in readings:

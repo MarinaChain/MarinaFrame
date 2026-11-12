@@ -123,7 +123,7 @@ def read_scale(result: dict, reading: dict, request_dir: Path, earlier: dict | N
 
 def _measure(result: dict, work: dict) -> dict:
     """The frame table, the axes and the principal dimensions from the marks collected in ``work``."""
-    from .ga_commercial import PLAUSIBLE, RECORD_VIEWS
+    from .ga_commercial_settings import PLAUSIBLE, RECORD_VIEWS
     fields = MEASURED_FIELDS
     sheet, page_px, kinds = work["sheet"], work["page_px"], work["kinds"]
     raw = work["raw"]

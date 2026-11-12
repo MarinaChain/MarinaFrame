@@ -39,7 +39,8 @@ import re
 
 def _identity(space: dict) -> tuple:
     """What makes two labels the same physical space in two views (the side left out)."""
-    from .ga_commercial import _base_number, COUNT_KINDS
+    from .ga_commercial_settings import COUNT_KINDS
+    from .ga_counts import _base_number
     if space["kind"] in COUNT_KINDS.values() and space.get("number"):
         return space["kind"], _base_number(space["number"])
     if space.get("number"):
@@ -273,7 +274,7 @@ def arrangement_gate(data: dict) -> dict:
     labels, each cargo space's loss, the spaces guessed on every axis that cover a cargo space
     (lane W, round u6r3), and ``passed``.
     """
-    from .ga_commercial import _words, fragment_reason
+    from .ga_counts import _words, fragment_reason
     particulars = data.get("particulars", {})
     breadth = (particulars.get("breadth_m") or {}).get("value")
     depth = (particulars.get("depth_m") or {}).get("value")
@@ -446,7 +447,7 @@ def _without_cargo_number_conflicts(spaces: list[dict], particulars: dict) -> li
     """Two cargo spaces with different numbers boxed at one place: the views read the number
     differently (round u10: "NO.2", "NO.3" and "NO.5" at the same frames in three views), and
     code cannot tell which reading is right, so both lose their extents."""
-    from .ga_commercial import _base_number
+    from .ga_counts import _base_number
     breadth = (particulars.get("breadth_m") or {}).get("value")
     depth = (particulars.get("depth_m") or {}).get("value")
     if not breadth or not depth:

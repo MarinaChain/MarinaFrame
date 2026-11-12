@@ -8,7 +8,17 @@ import pytest
 from PIL import Image, ImageDraw
 
 from vessel_reconstruction import ga_commercial as ga
+from vessel_reconstruction import ga_commercial_settings
 from vessel_reconstruction import ga_scale as gs
+from vessel_reconstruction import (
+    ga_scale_arrangement,
+    ga_scale_dimensions,
+    ga_scale_frames,
+    ga_scale_geometry,
+    ga_scale_overlaps,
+    ga_scale_requests,
+    ga_scale_settings,
+)
 from vessel_reconstruction import source_record
 
 # A synthetic ship: frames 0..200; 700 mm up to frame 20, 800 mm to frame 180, then 700 mm.
@@ -38,7 +48,7 @@ def _ticks(step=10):
 
 def _table():
     labels = [(700.0, _px(8)), (800.0, _px(100)), (700.0, _px(192))]
-    table, reason = gs.spacing_table(_ticks(), labels, [_px(20), _px(180)])
+    table, reason = ga_scale_frames.spacing_table(_ticks(), labels, [_px(20), _px(180)])
     assert table is not None, reason
     return table
 
@@ -47,7 +57,7 @@ def _table():
     ("35", ("frame", 35)), ("-5", ("frame", -5)), ("A.P.", ("ap", None)), ("AP", ("ap", None)),
     ("F.P.", ("fp", None)), ("FR.120", ("frame", 120)), ("B.L.", None), ("25200", None)])
 def test_scale_marks_are_frame_numbers_or_perpendiculars(label, expected):
-    assert gs.parse_tick(label) == expected
+    assert ga_scale_frames.parse_tick(label) == expected
 
 
 @pytest.mark.parametrize("printed,expected", [
@@ -56,7 +66,7 @@ def test_scale_marks_are_frame_numbers_or_perpendiculars(label, expected):
     ("FS ~720", 720.0), ("3,200 mm", 3200.0), ("0,80 M", 800.0),
     ("25200", None), ("12 mm", None), ("frame space", None), ("52", None)])
 def test_a_frame_spacing_is_parsed_only_in_its_range(printed, expected):
-    assert gs.parse_spacing_mm(printed) == expected
+    assert ga_scale_frames.parse_spacing_mm(printed) == expected
 
 
 def test_the_frame_table_follows_the_printed_spacings_and_changes():
@@ -72,35 +82,35 @@ def test_a_drawing_with_the_bow_to_the_left_gives_the_same_table():
     mirror = lambda px: 5000.0 - px
     ticks = [(frame, mirror(px)) for frame, px in _ticks()]
     labels = [(700.0, mirror(_px(8))), (800.0, mirror(_px(100))), (700.0, mirror(_px(192)))]
-    table, _ = gs.spacing_table(ticks, labels, [mirror(_px(20)), mirror(_px(180))])
+    table, _ = ga_scale_frames.spacing_table(ticks, labels, [mirror(_px(20)), mirror(_px(180))])
     assert [(s["from_frame"], s["to_frame"], s["spacing_mm"]) for s in table.spans] == [
         (0, 20, 700.0), (20, 180, 800.0), (180, 200, 700.0)]
-    axis, _ = gs.fit_axis(ticks, table)
+    axis, _ = ga_scale_frames.fit_axis(ticks, table)
     assert axis.px_per_m == pytest.approx(-PX_PER_M)
 
 
 def test_one_spacing_needs_no_change_and_no_spacing_is_an_abstention():
     ticks = [(frame, 100.0 + 8.0 * frame) for frame in range(0, 101, 10)]
-    table, _ = gs.spacing_table(ticks, [(800.0, 500.0)], [])
+    table, _ = ga_scale_frames.spacing_table(ticks, [(800.0, 500.0)], [])
     assert len(table.spans) == 1 and table.x_m(50) == pytest.approx(40.0)
-    assert gs.spacing_table(ticks, [], [])[0] is None
+    assert ga_scale_frames.spacing_table(ticks, [], [])[0] is None
     # Two spacings with no change drawn between them, and a range with numbers but no spacing.
-    assert gs.spacing_table(ticks, [(800.0, 200.0), (700.0, 700.0)], [])[0] is None
-    assert gs.spacing_table(ticks, [(800.0, 200.0)], [500.0])[0] is None
+    assert ga_scale_frames.spacing_table(ticks, [(800.0, 200.0), (700.0, 700.0)], [])[0] is None
+    assert ga_scale_frames.spacing_table(ticks, [(800.0, 200.0)], [500.0])[0] is None
     # One frame number is no scale.
-    assert gs.spacing_table(ticks[:1], [(800.0, 500.0)], [])[0] is None
+    assert ga_scale_frames.spacing_table(ticks[:1], [(800.0, 500.0)], [])[0] is None
 
 
 def test_the_fit_leaves_out_a_misread_number_and_refuses_numbers_that_do_not_fit():
     table = _table()
     ticks = _ticks()
     ticks[7] = (ticks[7][0], ticks[7][1] + 90.0)  # a number pointed in the wrong place
-    axis, _ = gs.fit_axis(ticks, table)
+    axis, _ = ga_scale_frames.fit_axis(ticks, table)
     assert axis.px_per_m == pytest.approx(PX_PER_M, rel=1e-3) and axis.offset == pytest.approx(AP_PX, abs=1.0)
     assert axis.ticks_used == len(ticks) - 1
-    assert gs.fit_axis(ticks[:3], table)[0] is None
+    assert ga_scale_frames.fit_axis(ticks[:3], table)[0] is None
     scattered = [(frame, px + (37.0 if index % 2 else -37.0)) for index, (frame, px) in enumerate(_ticks())]
-    assert gs.fit_axis(scattered, table)[0] is None
+    assert ga_scale_frames.fit_axis(scattered, table)[0] is None
 
 
 # ------------------------------------------------------------------ a whole reading
@@ -117,7 +127,7 @@ def _result(tmp_path: Path) -> dict:
     draw.rectangle([_px(-6), DECK_Y, _px(198), BASE_Y], outline=0, width=3)
     draw.rectangle([_px(-6), CENTRE_Y - HALF_BREADTH_PX, _px(198), CENTRE_Y + HALF_BREADTH_PX], outline=0, width=3)
     image.save(tmp_path / "S-1_GA.png")
-    result = {"schema": ga.SCHEMA, "engineering_approved": False, "checks": [], "particulars": {},
+    result = {"schema": ga_commercial_settings.SCHEMA, "engineering_approved": False, "checks": [], "particulars": {},
               "sources": {"ga": {"file": "S-1_GA.png", "size_px": list(SHEET)}},
               "views": [{"view_id": "v1", "kind": "profile", "title": "", "sheet": "S-1_GA.png",
                          "box_px": [150.0, 250.0, 2900.0, 520.0]},
@@ -141,14 +151,14 @@ def _result(tmp_path: Path) -> dict:
 
 
 def _image_xy(request_dir: Path, image_id: str, x: float, y: float) -> tuple[float, float]:
-    tile = gs._tiles(request_dir)[image_id]
+    tile = ga_scale_geometry._tiles(request_dir)[image_id]
     left, top, right, bottom = tile["crop_box_px"]
     return (x - left) * tile["width"] / (right - left), (y - top) * tile["height"] / (bottom - top)
 
 
 def _holding(request_dir: Path, view: str, x: float, y: float) -> str:
     """The first image of ``view`` that shows sheet point (x, y)."""
-    for image_id, tile in gs._tiles(request_dir).items():
+    for image_id, tile in ga_scale_geometry._tiles(request_dir).items():
         left, top, right, bottom = tile["crop_box_px"]
         if tile["view"].split(":")[1] == view and left <= x <= right and top <= y <= bottom:
             return image_id
@@ -225,7 +235,7 @@ def test_principal_dimensions_are_measured_and_kept_apart_from_printed_particula
     # The exam reads ``particulars``: a measured value never goes there.
     assert result["particulars"] == {}
     request = json.loads((tmp_path / "scale" / "scale" / "request.json").read_text())
-    assert request["purpose"] == "ga_scale" and len(request["images"]) <= gs.MAX_IMAGES
+    assert request["purpose"] == "ga_scale" and len(request["images"]) <= ga_scale_settings.MAX_IMAGES
     assert "S-1_GA" not in json.dumps(request["context"])
 
 
@@ -249,7 +259,7 @@ def test_the_arrangement_input_joins_the_views_of_one_space(tmp_path):
     result, _ = _run(tmp_path)
     result["particulars"] = {"breadth_m": {"value": 30.2, "status": "read", "source_record": source_record.read(
         [source_record.region("S-1_GA.png", view="table")])}}
-    data = gs.arrangement_input(result, "S-1")
+    data = ga_scale_arrangement.arrangement_input(result, "S-1")
     assert data["schema"] == "marinaframe.ga_reading.v1" and data["engineering_approved"] is False
     # Printed wins; the rest is measured and says so.
     assert data["particulars"]["breadth_m"]["status"] == "read" and data["particulars"]["breadth_m"]["value"] == 30.2
@@ -273,10 +283,10 @@ def test_without_a_printed_spacing_or_an_fp_mark_the_values_are_null(tmp_path):
     result, stats = _run(tmp_path, spacings=False)
     # The scale request is sent again before the ship is given up.
     assert result["frames"]["status"] == "unknown"
-    assert stats["requests"] == stats["scale_attempts"] == gs.SCALE_ATTEMPTS
+    assert stats["requests"] == stats["scale_attempts"] == ga_scale_settings.SCALE_ATTEMPTS
     assert all(v["value"] is None and v["reason"] for v in result["measured"].values())
     assert all("extent" not in s for s in result["spaces"])
-    data = gs.arrangement_input(result, "S-1")
+    data = ga_scale_arrangement.arrangement_input(result, "S-1")
     assert data["particulars"]["lbp_m"]["value"] is None
     (tmp_path / "second").mkdir()
     result, _ = _run(tmp_path / "second", fp=False)
@@ -286,12 +296,12 @@ def test_without_a_printed_spacing_or_an_fp_mark_the_values_are_null(tmp_path):
 
 def test_measured_values_that_do_not_fit_each_other_are_refused(tmp_path):
     result = _result(tmp_path)
-    gs.prepare_scale(result, tmp_path / "S-1_GA.png", tmp_path / "scale")
+    ga_scale_requests.prepare_scale(result, tmp_path / "S-1_GA.png", tmp_path / "scale")
     reading = _scale_reply(tmp_path / "scale")
     points = {p["name"]: p for p in reading["reply"]["ga_scale"]["points"] if p["image_id"].startswith("v2")}
     # Both shell sides pointed on the same side of the centreline: a breadth far too small for the length.
     points["shell_side_a"]["y"] = points["shell_side_b"]["y"] - 40
-    gs.read_scale(result, reading, tmp_path / "scale")
+    ga_scale_dimensions.read_scale(result, reading, tmp_path / "scale")
     assert result["measured"]["breadth_m"]["value"] is None and result["measured"]["lbp_m"]["value"] is not None
     assert any(c["code"].startswith("measured_") for c in result["checks"])
 
@@ -300,7 +310,7 @@ def test_a_failed_request_is_an_abstention(tmp_path):
     result = _result(tmp_path)
     stats = gs.scale_pass(result, tmp_path / "S-1_GA.png", tmp_path / "scale",
                           lambda request, out: {"reply": None, "stop_reason": "vision_request_failed: timeout"})
-    assert stats["requests"] == gs.SCALE_ATTEMPTS and result["frames"]["status"] == "unknown"
+    assert stats["requests"] == ga_scale_settings.SCALE_ATTEMPTS and result["frames"]["status"] == "unknown"
     assert "timeout" in result["measured"]["lbp_m"]["reason"]
 
 
@@ -308,14 +318,14 @@ def test_the_exam_run_does_not_measure_by_default(tmp_path):
     """``read`` and ``batch`` send the scale requests only with --measure."""
     calls = []
 
-    def fake_call(binary, request, out, basis, model=ga.MODEL):
+    def fake_call(binary, request, out, basis, model=ga_commercial_settings.MODEL):
         calls.append(json.loads((Path(request) / "request.json").read_text())["purpose"])
         return {"reply": None, "stop_reason": "test", "usage": {}, "receipts": []}
 
     image = Image.new("L", (400, 300), 255)
     ImageDraw.Draw(image).rectangle([20, 20, 380, 280], outline=0)
     image.save(tmp_path / "S-2_GA.png")
-    original, ga.call_model = ga.call_model, fake_call
+    original, ga.call_model = ga.call_model, fake_call  # read_one looks it up in ga_commercial
     try:
         result = ga.read_one(tmp_path / "S-2_GA.png", None, tmp_path / "out", tmp_path / "bin", "test")
     finally:
@@ -334,7 +344,7 @@ def test_a_space_listed_twice_in_one_view_is_one_space_and_shared_label_crops_ar
         room.update(id=f"other_space-c02-{name}", label=name)
         room["source_record"]["regions"][0]["box_px"] = [500.0, 1000.0, 600.0, 1050.0]
         result["spaces"].append(room)
-    directories = gs.prepare_extents(result, tmp_path / "S-1_GA.png", tmp_path / "extents")
+    directories = ga_scale_requests.prepare_extents(result, tmp_path / "S-1_GA.png", tmp_path / "extents")
     asked = [s for d in directories for s in json.loads((d / "request.json").read_text())["context"]["spaces"]]
     # Asked with the crop as "near" and no label place (round u8: such spaces were never asked).
     shared = [s for s in asked if s["label"] in ("GALLEY", "MESS")]
@@ -345,12 +355,12 @@ def test_a_space_listed_twice_in_one_view_is_one_space_and_shared_label_crops_ar
 def test_labels_with_a_known_place_and_labels_near_a_crop_go_in_separate_requests(tmp_path):
     """Round u9n: mixed in one request, the model marked most boxes uncertain."""
     result = _result(tmp_path)
-    for index in range(gs.EXTENT_SPACES_PER_REQUEST + 3):
+    for index in range(ga_scale_settings.EXTENT_SPACES_PER_REQUEST + 3):
         room = json.loads(json.dumps(next(s for s in result["spaces"] if s["id"] == "other_space-006")))
         room.update(id=f"other_space-c02-{index}", label=f"ROOM {index}")
         room["source_record"]["regions"][0]["box_px"] = [500.0, 1000.0, 600.0, 1050.0]
         result["spaces"].append(room)
-    directories = gs.prepare_extents(result, tmp_path / "S-1_GA.png", tmp_path / "extents")
+    directories = ga_scale_requests.prepare_extents(result, tmp_path / "S-1_GA.png", tmp_path / "extents")
     kinds = [{"near" in s for s in json.loads((d / "request.json").read_text())["context"]["spaces"]}
              for d in directories]
     assert kinds == [{False}, {True}, {True}]
@@ -359,7 +369,7 @@ def test_labels_with_a_known_place_and_labels_near_a_crop_go_in_separate_request
             space["extent"] = {"frames": [80, 120], "x_m": [62.0, 94.0], "z_m": [2.0, 15.0], "view_id": "v1",
                                "status": {"x": "measured_from_scale", "z": "measured_from_scale"},
                                "basis": "outline"}
-    assert len([s for s in gs.merged_spaces(result) if s["kind"] == "cargo_hold" and "extent" in s]) == 1
+    assert len([s for s in ga_scale_arrangement.merged_spaces(result) if s["kind"] == "cargo_hold" and "extent" in s]) == 1
 
 
 def _depth_run(tmp_path, deck_shift_px=0.0, deck_frame=100, tier=True, tall_ballast=False, ballast_at_deck=False,
@@ -439,7 +449,7 @@ def test_the_depth_is_taken_amidships_and_checked_against_the_spaces_below_the_d
     assert depth["status"] == "derived_from_space_tops" and depth["pointed_depth_m"] == pytest.approx(16.2, abs=0.2)
     assert "rail" in depth["reason"]
     assert rail["passes_scale"]["derived"] == ["depth_m"] and "depth_m" not in rail["passes_scale"]["measured"]
-    assert gs.arrangement_input(rail, "S-1")["particulars"]["depth_m"]["status"] == "derived_from_space_tops"
+    assert ga_scale_arrangement.arrangement_input(rail, "S-1")["particulars"]["depth_m"]["status"] == "derived_from_space_tops"
     # A deck line below the top of a hold: the line or the boxes are wrong, so it is never a
     # measured depth. The holds agree on one top, which becomes the (derived) depth.
     below = _depth_run(tmp_path / "c", deck_shift_px=60.0)
@@ -467,10 +477,10 @@ def test_many_spaces_go_out_in_short_requests_holds_and_tanks_first(tmp_path):
         room.update(id=f"other_space-r{index:02d}", label=f"ROOM {index}")
         room["source_record"]["regions"][0]["box_px"] = [100.0 + 10 * index, 1000.0, 105.0 + 10 * index, 1010.0]
         result["spaces"].append(room)
-    directories = gs.prepare_extents(result, tmp_path / "S-1_GA.png", tmp_path / "extents")
+    directories = ga_scale_requests.prepare_extents(result, tmp_path / "S-1_GA.png", tmp_path / "extents")
     contexts = [json.loads((d / "request.json").read_text())["context"] for d in directories]
     assert [d.name for d in directories] == ["extents", "extents-2", "extents-3"]
-    assert all(len(c["spaces"]) <= gs.EXTENT_SPACES_PER_REQUEST for c in contexts)
+    assert all(len(c["spaces"]) <= ga_scale_settings.EXTENT_SPACES_PER_REQUEST for c in contexts)
     assert contexts[0]["want"] == ["extents", "points"] and contexts[1]["want"] == ["extents"]
     first = [s["kind"] for s in contexts[0]["spaces"]]
     assert first[0] == "cargo_hold" and first.index("ballast_tank") < first.index("other_space")
@@ -483,7 +493,7 @@ def test_a_pair_boxed_on_one_side_is_two_tanks_in_the_arrangement_input():
              "status": "read", "source_record": {"kind": "unknown", "reason": "test"},
              "extent": {"frames": [40, 60], "x_m": [30.0, 45.0], "y_m": [9.5, 16.0], "side": "both",
                         "status": {"x": "measured_from_scale", "y": "measured_from_scale"}}}
-    port, starboard = gs._split_pair(entry)
+    port, starboard = ga_scale_arrangement._split_pair(entry)
     assert (port["extent"]["side"], port["extent"]["y_m"], port["extent"]["status"]["y"]) == (
         "port", [9.5, 16.0], "measured_from_scale")
     assert (starboard["extent"]["side"], starboard["extent"]["y_m"], starboard["extent"]["status"]["y"]) == (
@@ -491,14 +501,14 @@ def test_a_pair_boxed_on_one_side_is_two_tanks_in_the_arrangement_input():
     assert port["id"] != starboard["id"] and entry["extent"]["side"] == "both"  # the reading is unchanged
     across = json.loads(json.dumps(entry))
     across["extent"]["y_m"] = [-12.0, 12.0]  # a pair boxed across the centreline: split there
-    assert [(s["extent"]["side"], s["extent"]["y_m"]) for s in gs._split_pair(across)] == [
+    assert [(s["extent"]["side"], s["extent"]["y_m"]) for s in ga_scale_arrangement._split_pair(across)] == [
         ("port", [0.0, 12.0]), ("starboard", [-12.0, 0.0])]
     profile_only = json.loads(json.dumps(entry))
     del profile_only["extent"]["y_m"]  # no plan breadth: one tank each side (lane W, round u6)
-    assert [s["extent"]["side"] for s in gs._split_pair(profile_only)] == ["port", "starboard"]
+    assert [s["extent"]["side"] for s in ga_scale_arrangement._split_pair(profile_only)] == ["port", "starboard"]
     unlabelled = json.loads(json.dumps(across))
     unlabelled["label"] = "ENGINE ROOM"  # a space across the centreline without a pair label stays one
-    assert gs._split_pair(unlabelled) == [unlabelled]
+    assert ga_scale_arrangement._split_pair(unlabelled) == [unlabelled]
 
 
 def test_the_arrangement_gate_finds_spaces_without_volume_fragments_and_cargo_losses():
@@ -510,17 +520,17 @@ def test_the_arrangement_gate_finds_spaces_without_volume_fragments_and_cargo_lo
     good = {"particulars": particulars, "spaces": [
         space("h", "cargo_hold", "NO.1 CARGO HOLD", (10, 30), (-10, 10), (1, 10)),
         space("t", "ballast_tank", "NO.1 W.B.T.", (10, 30), (-10, 10), (0, 1))]}
-    assert gs.arrangement_gate(good)["passed"]
+    assert ga_scale_arrangement.arrangement_gate(good)["passed"]
     swallowed = {"particulars": particulars, "spaces": [
         space("h", "cargo_hold", "NO.1 CARGO HOLD", (10, 30), (-10, 10), (0, 10)),
         space("t", "ballast_tank", "NO.1 W.B.T.", (10, 30), (-10, 10), (0, 9))]}
-    report = gs.arrangement_gate(swallowed)
+    report = ga_scale_arrangement.arrangement_gate(swallowed)
     assert not report["passed"] and report["max_cargo_loss"] > 0.85
     covered = {"particulars": particulars, "spaces": [
         space("p", "other_tank", "F.W.T. (P)", (0, 5), (0, 2), (0, 5)),
         space("s", "other_tank", "F.W.T. (S)", (0, 5), (-2, 0), (0, 5)),
         space("b", "other_tank", "NO. 4", (0, 5), (-2, 2), (0, 5))]}
-    report = gs.arrangement_gate(covered)
+    report = ga_scale_arrangement.arrangement_gate(covered)
     assert report["fragments"] == ["NO. 4"] and report["no_volume"] == ["b"] and not report["passed"]
 
 
@@ -530,7 +540,7 @@ def test_one_compartment_with_two_labels_is_one_space_in_the_arrangement_input()
         "source_record": {"kind": "unknown", "reason": "test"},
         "extent": {"x_m": [20.7, 24.2], "y_m": [0.1, 10.0], "z_m": [0.0, 11.5], "side": "port", "status": {}}}
     spaces = [entry("a", "other_tank", "E.Q.T. (P)", None), entry("b", "fuel_tank", "NO.2 F.O.T. (P)", "2P")]
-    kept, dropped = gs._without_same_boxes(spaces, {"breadth_m": {"value": 20.0}, "depth_m": {"value": 11.5}})
+    kept, dropped = ga_scale_arrangement._without_same_boxes(spaces, {"breadth_m": {"value": 20.0}, "depth_m": {"value": 11.5}})
     assert [s["id"] for s in kept] == ["b"] and dropped[0]["id"] == "a" and "same box" in dropped[0]["reason"]
 
 
@@ -549,7 +559,7 @@ def test_a_box_ends_at_a_labelled_strip_inside_it():
     hold = _space("cargo_hold-1", "cargo_hold", "NO.2 CARGO HOLD", (40, 60), (0.0, 18.0), (50, 10))
     tank = _space("ballast_tank-2", "ballast_tank", "NO.2 W.B.T. (P/S)", (40, 60), (0.0, 1.8), (50, 0.9))
     result = {"spaces": [hold, tank], "checks": []}
-    stats = gs.resolve_overlaps(result)
+    stats = ga_scale_overlaps.resolve_overlaps(result)
     assert hold["extent"]["z_m"] == [1.8, 18.0] and hold["extent"]["status"]["z"] == "measured_from_scale"
     assert stats["trimmed"] == 1 and hold["extent"]["trimmed_by"] == ["ballast_tank-2"]
     assert tank["extent"]["z_m"] == [0.0, 1.8]
@@ -559,7 +569,7 @@ def test_a_box_that_takes_in_a_neighbour_it_cannot_be_cut_from_is_a_guess():
     room = _space("other_space-1", "other_space", "BOSUN STORE", (180, 200), (10.0, 20.0), (190, 18))
     void = _space("other_space-2", "other_space", "VOID SPACE", (186, 194), (11.0, 14.0), (190, 12))
     result = {"spaces": [room, void], "checks": []}
-    gs.resolve_overlaps(result)
+    ga_scale_overlaps.resolve_overlaps(result)
     assert room["extent"]["status"] == {"x": "guessed", "z": "guessed"} and room["extent"]["covers"] == ["other_space-2"]
     assert "extent_covers_a_labelled_neighbour" in {c["code"] for c in result["checks"]}
 
@@ -570,9 +580,9 @@ def test_a_tank_drawn_over_a_cargo_tank_in_the_profile_gets_no_full_breadth_exte
     cot = _space("cargo_tank-1", "cargo_tank", "NO.1 C.O.T. (P&S)", (150, 170), (2.0, 21.0), (158, 12))
     wbt = _space("ballast_tank-2", "ballast_tank", "NO.1 W.B.T. (P&S)", (150, 170), (0.0, 21.5), (162, 8))
     result = {"spaces": [cot, wbt], "checks": [], "views": [{"view_id": "v1", "kind": "profile"}]}
-    gs.resolve_overlaps(result)
+    ga_scale_overlaps.resolve_overlaps(result)
     assert wbt["extent"]["projection_of"] == "cargo_tank-1" and "projection_of" not in cot["extent"]
-    merged = {entry["id"]: entry for entry in gs.merged_spaces(result)}
+    merged = {entry["id"]: entry for entry in ga_scale_arrangement.merged_spaces(result)}
     assert "extent" not in merged["ballast_tank-2"] and "extent_withheld" in merged["ballast_tank-2"]
     assert merged["cargo_tank-1"]["extent"]["z_m"] == [2.0, 21.0]
 
@@ -586,7 +596,7 @@ def test_a_tank_labelled_per_side_on_one_plan_and_as_a_pair_on_another_is_one_pa
         space["number"], space["extent"]["side"] = number, side
     result = {"spaces": [port, starboard, pair], "checks": [],
               "views": [{"view_id": "v8", "kind": "deck_plan"}, {"view_id": "v9", "kind": "tank_top_plan"}]}
-    tanks = [s for s in gs.merged_spaces(result) if s["kind"] == "cargo_tank"]
+    tanks = [s for s in ga_scale_arrangement.merged_spaces(result) if s["kind"] == "cargo_tank"]
     assert sorted(s["extent"]["side"] for s in tanks) == ["port", "starboard"]
 
 
@@ -594,7 +604,7 @@ def test_two_plan_boxes_that_hold_each_others_labels_are_guessed_across():
     cot = _space("cargo_tank-1", "cargo_tank", "NO.3 C.O.T. (P)", (80, 100), (0.0, 16.0), (90, 6), "y_m", "v2")
     wbt = _space("ballast_tank-2", "ballast_tank", "NO.3 W.B.T. (P)", (80, 100), (2.0, 16.0), (90, 14), "y_m", "v2")
     result = {"spaces": [cot, wbt], "checks": []}
-    gs.resolve_overlaps(result)
+    ga_scale_overlaps.resolve_overlaps(result)
     assert cot["extent"]["status"]["y"] == "guessed" and wbt["extent"]["status"]["y"] == "guessed"
 
 
@@ -637,12 +647,12 @@ def test_places_the_scale_request_left_out_are_asked_for_and_used(tmp_path):
 
 def test_a_perpendicular_mark_counts_only_on_the_profile():
     """The LBP needs F.P. on the profile's frame scale; an F.P. in a plan does not count (round u6)."""
-    places = {name: [(0.0, 0.0)] for name in gs.PROFILE_PLACES}
-    plan_places = {name: [(0.0, 0.0)] for name in gs.PLAN_PLACES}
+    places = {name: [(0.0, 0.0)] for name in ga_scale_settings.PROFILE_PLACES}
+    plan_places = {name: [(0.0, 0.0)] for name in ga_scale_settings.PLAN_PLACES}
     work = {"kinds": {"v1": "profile", "v2": "deck_plan"},
             "raw": {"points": {"v1": places, "v2": plan_places},
                     "marks": {"v1": {"ap": [(0.0, 0.0)]}, "v2": {"fp": [(0.0, 0.0)]}}}}
-    assert gs.missing_places(work) == ["F.P."]
+    assert ga_scale_requests.missing_places(work) == ["F.P."]
 
 
 def test_a_tank_boxed_above_the_deck_that_the_holds_confirm_is_the_wrong_box(tmp_path):
@@ -691,8 +701,8 @@ def test_label_places_follow_the_image_actually_sent(tmp_path, monkeypatch):
     """Images can be sent smaller than planned (request size); a label place sent to the model
     must be in the pixels of the image it gets (development round 3: places 11 % off)."""
     result = _result(tmp_path)
-    monkeypatch.setattr(ga, "MAX_TOTAL_IMAGE_BYTES", 40_000)  # forces smaller images
-    gs.prepare_extents(result, tmp_path / "S-1_GA.png", tmp_path / "extents")
+    monkeypatch.setattr(ga_commercial_settings, "MAX_TOTAL_IMAGE_BYTES", 40_000)  # forces smaller images
+    ga_scale_requests.prepare_extents(result, tmp_path / "S-1_GA.png", tmp_path / "extents")
     request = json.loads((tmp_path / "extents" / "request.json").read_text())
     images = {image["image_id"]: image for image in request["images"]}
     checked = 0
@@ -721,10 +731,10 @@ def test_web_frame_spacings_with_several_changes_between_two_numbers():
     ticks = [(frame, px(frame)) for frame in range(-5, 116, 5)]
     ticks = [(43, place) if frame == 45 else (frame, place) for frame, place in ticks]  # "45" read as "43"
     labels = [(mm, px((low + high) / 2)) for low, high, mm in spans]
-    table, reason = gs.spacing_table(ticks, labels, [px(high) + 1.5 for _, high, _ in spans[:-1]])
+    table, reason = ga_scale_frames.spacing_table(ticks, labels, [px(high) + 1.5 for _, high, _ in spans[:-1]])
     assert table is not None, reason
     assert [(s["from_frame"], s["to_frame"], s["spacing_mm"]) for s in table.spans] == spans
-    axis, _ = gs.fit_axis(ticks, table)
+    axis, _ = ga_scale_frames.fit_axis(ticks, table)
     assert axis.px_per_m == pytest.approx(9.0, rel=2e-3) and axis.ticks_used == len(ticks) - 1
 
 
@@ -739,19 +749,19 @@ def test_the_text_of_a_one_frame_range_printed_beside_it_belongs_to_it():
 
     ticks = [(frame, px(frame)) for frame in range(0, 61, 5)]
     labels = [(700.0, px(15)), (900.0, px(33)), (700.0, px(50))]
-    table, reason = gs.spacing_table(ticks, labels, [px(30), px(31)])
+    table, reason = ga_scale_frames.spacing_table(ticks, labels, [px(30), px(31)])
     assert table is not None, reason
     assert [(s["from_frame"], s["to_frame"], s["spacing_mm"]) for s in table.spans] == [
         (0, 30, 700.0), (30, 31, 900.0), (31, 60, 700.0)]
     # Without the short range drawn, the two texts in one range are still refused.
-    table, reason = gs.spacing_table(ticks, labels, [px(30)])
+    table, reason = ga_scale_frames.spacing_table(ticks, labels, [px(30)])
     assert table is None
 
 
 def test_a_number_out_of_order_is_left_out():
     ticks = _ticks()
     ticks[5] = (155, ticks[5][1])  # "50" read as "155"
-    kept = gs.consistent_ticks(ticks)
+    kept = ga_scale_frames.consistent_ticks(ticks)
     assert len(kept) == len(ticks) - 1 and (155, ticks[5][1]) not in kept
 
 
@@ -812,22 +822,22 @@ def test_the_frame_numbers_check_the_printed_spacing_of_a_range():
     """A printed value read wrongly ("600" for "800"), or a change of spacing that was not marked."""
     cuts = [_px(20), _px(180)]
     good = [(700.0, _px(8)), (800.0, _px(100)), (700.0, _px(192))]
-    assert gs.spacing_table(_ticks(), good, cuts)[0] is not None
+    assert ga_scale_frames.spacing_table(_ticks(), good, cuts)[0] is not None
     misread = [(700.0, _px(8)), (600.0, _px(100)), (700.0, _px(192))]
-    table, reason = gs.spacing_table(_ticks(step=5), misread, cuts)
+    table, reason = ga_scale_frames.spacing_table(_ticks(step=5), misread, cuts)
     # The middle range has the most numbers and gives the scale; then the end ranges (five
     # numbers each) do not fit their printed 700 mm.
     assert table is None and "do not fit" in reason
     # With too few numbers in the end ranges, the fit of the whole scale refuses the table.
-    table, _ = gs.spacing_table(_ticks(), misread, cuts)
-    assert gs.fit_axis(_ticks(), table)[0] is None
+    table, _ = ga_scale_frames.spacing_table(_ticks(), misread, cuts)
+    assert ga_scale_frames.fit_axis(_ticks(), table)[0] is None
     # The same place read as 600 and as 800 in two requests: the frame numbers decide.
     both = good + [(600.0, _px(101))]
-    table, _ = gs.spacing_table(_ticks(), both, cuts)
+    table, _ = ga_scale_frames.spacing_table(_ticks(), both, cuts)
     assert [s["spacing_mm"] for s in table.spans] == [700.0, 800.0, 700.0]
     # A change of spacing that no request marked: two printed values at two places in one range.
     # The frame numbers do not choose one of them (a short range would be left out without notice).
-    table, reason = gs.spacing_table(_ticks(), good, cuts[:1])
+    table, reason = ga_scale_frames.spacing_table(_ticks(), good, cuts[:1])
     assert table is None and "no change drawn" in reason
 
 
@@ -835,9 +845,9 @@ def test_a_run_of_frame_numbers_off_the_scale_refuses_the_table():
     table = _table()
     ticks = _ticks()
     shifted = [(frame, px + (40.0 if 60 <= frame <= 90 else 0.0)) for frame, px in ticks]  # four neighbours
-    assert gs.fit_axis(shifted, table)[0] is None
+    assert ga_scale_frames.fit_axis(shifted, table)[0] is None
     two = [(frame, px + (40.0 if frame in (60, 130) else 0.0)) for frame, px in ticks]      # two misreadings
-    assert gs.fit_axis(two, table)[0] is not None
+    assert ga_scale_frames.fit_axis(two, table)[0] is not None
 
 
 def test_the_marks_of_two_scale_requests_are_read_together(tmp_path):
@@ -868,7 +878,7 @@ def test_a_box_outboard_of_the_hull_gets_no_space_extent():
               "extent": {"x_m": [10.0, 18.0], "y_m": [12.5, 14.0], "side": "port", "status": {}}}
     inside = json.loads(json.dumps(ladder))
     inside["id"], inside["extent"]["y_m"] = "y", [8.0, 11.0]
-    kept = gs._without_outboard_extents([ladder, inside], {"breadth_m": {"value": 24.0}})
+    kept = ga_scale_arrangement._without_outboard_extents([ladder, inside], {"breadth_m": {"value": 24.0}})
     assert "extent" not in kept[0] and "outboard" in kept[0]["extent_withheld"] and "extent" in kept[1]
 
 
@@ -931,7 +941,7 @@ def test_a_box_over_the_label_of_a_space_without_a_box_is_drawn_again(tmp_path):
     result, stats, asked, hold = _redraw_run(tmp_path, redrawn_bottom_px=430.0)
     assert [(entry["space_id"], [other["label"] for other in entry["exclude"]]) for entry in asked] == [
         ("cargo_hold-001", ["VOID SPACE"])]
-    assert hold["extent"]["redrawn"] and hold["extent"]["status"]["x"] == gs.MEASURED
+    assert hold["extent"]["redrawn"] and hold["extent"]["status"]["x"] == ga_scale_settings.MEASURED
     assert stats["extents"]["redraw_requests"] == 1 and stats["extents"]["redraw_kept"] == 1
 
 
@@ -959,7 +969,7 @@ def _local_scale(local_frames=(67, 137), stretched=True, mirror=False):
 def test_a_local_spacing_printed_for_one_frame_is_a_one_frame_interval(mirror):
     """Review round 4: "1200" printed under close bulkheads inside a range of 800."""
     ticks, labels = _local_scale(mirror=mirror)
-    table, reason = gs.spacing_table(ticks, labels, [])
+    table, reason = ga_scale_frames.spacing_table(ticks, labels, [])
     assert reason == "established"
     assert [(s["from_frame"], s["to_frame"], s["spacing_mm"]) for s in table.spans] == [
         (0, 67, 800.0), (67, 68, 1200.0), (68, 137, 800.0), (137, 138, 1200.0), (138, 200, 800.0)]
@@ -968,7 +978,7 @@ def test_a_local_spacing_printed_for_one_frame_is_a_one_frame_interval(mirror):
 
 def test_a_second_spacing_that_the_frame_numbers_do_not_show_is_refused():
     ticks, labels = _local_scale(stretched=False)
-    table, reason = gs.spacing_table(ticks, labels, [])
+    table, reason = ga_scale_frames.spacing_table(ticks, labels, [])
     assert table is None and "no change drawn" in reason
 
 
@@ -992,7 +1002,7 @@ def _guessed_tank_over_a_hold():
 
 def test_a_box_guessed_on_every_axis_does_not_cover_a_cargo_space():
     spaces, particulars = _guessed_tank_over_a_hold()
-    kept = gs._without_guessed_over_cargo(spaces, particulars)
+    kept = ga_scale_arrangement._without_guessed_over_cargo(spaces, particulars)
     assert "extent" in kept[0] and "extent" in kept[2]  # the hold, and a guessed room beside it
     assert "extent" not in kept[1] and "cargo" in kept[1]["extent_withheld"]
 
@@ -1000,9 +1010,9 @@ def test_a_box_guessed_on_every_axis_does_not_cover_a_cargo_space():
 def test_the_gate_fails_a_box_guessed_on_every_axis_over_a_hold():
     """The regression case of lane W's gate (round u6r3)."""
     spaces, particulars = _guessed_tank_over_a_hold()
-    report = gs.arrangement_gate({"spaces": spaces, "particulars": particulars})
+    report = ga_scale_arrangement.arrangement_gate({"spaces": spaces, "particulars": particulars})
     assert report["guessed_over_cargo"] == ["X. Y. (P)"] and not report["passed"]
-    report = gs.arrangement_gate({"spaces": gs._without_guessed_over_cargo(spaces, particulars),
+    report = ga_scale_arrangement.arrangement_gate({"spaces": ga_scale_arrangement._without_guessed_over_cargo(spaces, particulars),
                                   "particulars": particulars})
     assert report["guessed_over_cargo"] == [] and report["passed"]
 
@@ -1013,7 +1023,7 @@ def test_a_short_untyped_label_keeps_a_small_guessed_box(box, withheld):
              "source_record": {"kind": "read", "regions": [{"box_px": [0, 0, 97, 61]}]},
              "extent": {"outline_box_px": box, "status": {"x": "guessed", "y": "guessed"}}}
     result = {"spaces": [space], "checks": []}
-    assert gs.withhold_oversized_guesses(result) == int(withheld)
+    assert ga_scale_overlaps.withhold_oversized_guesses(result) == int(withheld)
     assert ("extent" not in space) is withheld
 
 
@@ -1023,7 +1033,7 @@ def test_a_guessed_side_tank_against_the_shell_keeps_its_extent():
     spaces, particulars = _guessed_tank_over_a_hold()
     spaces[0]["extent"]["y_m"] = [-16.0, 16.0]
     spaces[1]["extent"]["y_m"] = [13.8, 16.0]
-    kept = gs._without_guessed_over_cargo(spaces, particulars)
+    kept = ga_scale_arrangement._without_guessed_over_cargo(spaces, particulars)
     assert "extent" in kept[1]
 
 
@@ -1048,7 +1058,7 @@ def test_a_guessed_side_tank_without_a_drawn_height_is_not_full_height(label, z,
     spaces, particulars = _guessed_tank_over_a_hold()
     spaces[1]["label"] = label
     spaces[1]["extent"]["y_m"] = [13.8, 16.0]
-    tank = gs._side_boxes_without_height(spaces, particulars)[1]
+    tank = ga_scale_arrangement._side_boxes_without_height(spaces, particulars)[1]
     assert ("extent" not in tank) is withheld
     if z:
         assert tank["extent"]["z_m"] == z and tank["extent"]["status"]["z"] == "guessed"
@@ -1058,14 +1068,14 @@ def test_the_gate_limits_a_guessed_box_to_a_small_share_of_a_hold_also_at_the_sh
     spaces, particulars = _guessed_tank_over_a_hold()
     spaces[0]["extent"]["y_m"] = [-16.0, 16.0]
     spaces[1]["extent"]["y_m"] = [10.0, 16.0]  # against the shell, full height: 17 % of the hold
-    report = gs.arrangement_gate({"spaces": spaces, "particulars": particulars})
+    report = ga_scale_arrangement.arrangement_gate({"spaces": spaces, "particulars": particulars})
     assert report["guessed_over_cargo"] == ["X. Y. (P)"] and not report["passed"]
 
 
 def test_a_hold_boxed_off_the_centreline_is_centred_and_guessed():
     spaces, particulars = _guessed_tank_over_a_hold()
     spaces[0]["extent"]["y_m"] = [-7.0, 12.0]
-    hold = gs._centred_when_off_centre(spaces, particulars)[0]
+    hold = ga_scale_arrangement._centred_when_off_centre(spaces, particulars)[0]
     assert hold["extent"]["y_m"] == [-9.5, 9.5] and hold["extent"]["status"]["y"] == "guessed"
     assert hold["extent"]["status"]["x"] == "measured_from_scale"
 
@@ -1078,7 +1088,7 @@ def test_a_note_of_the_same_kind_inside_a_hatch_box_is_not_a_neighbour():
          "extent": {"outline_box_px": [0, 0, 100, 100], "view_id": "v2", "status": {"x": "measured_from_scale"}}},
         {"id": "n", "kind": "cargo_hatch", "label": "STEEL HATCH COVER", "status": "read", "view_id": "v2",
          "source_record": {"regions": [{"box_px": [40, 40, 60, 60]}]}}]}
-    assert gs.covered_labels(result) == {}
+    assert ga_scale_overlaps.covered_labels(result) == {}
 
 
 
@@ -1087,7 +1097,7 @@ def test_a_crane_box_above_the_deck_reaches_down_to_the_deck():
     crane = {"id": "c", "kind": "cargo_crane", "label": "DECK CRANE", "status": "read",
              "extent": {"x_m": [30.0, 34.0], "z_m": [19.8, 31.0], "status": {"x": "measured_from_scale",
                                                                             "z": "measured_from_scale"}}}
-    on_deck = gs._deck_equipment_on_the_deck([crane], {"depth_m": {"value": 12.0}})[0]
+    on_deck = ga_scale_arrangement._deck_equipment_on_the_deck([crane], {"depth_m": {"value": 12.0}})[0]
     assert on_deck["extent"]["z_m"] == [12.0, 31.0] and on_deck["extent"]["status"]["z"] == "guessed"
     assert on_deck["extent"]["status"]["x"] == "measured_from_scale"
 
@@ -1143,8 +1153,8 @@ def test_an_outline_traced_in_its_box_is_kept_as_a_trace():
     result, tank = _outline_run(Path(tempfile.mkdtemp()), TAPERED)
     outline = tank["extent"]["outline"]
     assert outline["plane"] == "xy" and outline["status"] == "traced" and len(outline["points_m"]) == 4
-    assert tank["extent"]["status"]["y"] == gs.MEASURED  # the trace adds no measured status
-    entry = next(s for s in gs.arrangement_input(result, "S-1")["spaces"] if s["label"] == "NO.2 W.B.T. (P)")
+    assert tank["extent"]["status"]["y"] == ga_scale_settings.MEASURED  # the trace adds no measured status
+    entry = next(s for s in ga_scale_arrangement.arrangement_input(result, "S-1")["spaces"] if s["label"] == "NO.2 W.B.T. (P)")
     assert entry["extent"]["outline_m"][0]["plane"] == "xy"
 
 
@@ -1169,8 +1179,8 @@ def test_an_arrangement_input_without_outlines_is_as_before(tmp_path):
             space.get("extent", {}).pop("outline_m", None)
         return data["spaces"]
 
-    assert not any("outline_m" in s.get("extent", {}) for s in gs.arrangement_input(plain, "S-1")["spaces"])
-    assert without_outlines(gs.arrangement_input(traced, "S-1")) == gs.arrangement_input(plain, "S-1")["spaces"]
+    assert not any("outline_m" in s.get("extent", {}) for s in ga_scale_arrangement.arrangement_input(plain, "S-1")["spaces"])
+    assert without_outlines(ga_scale_arrangement.arrangement_input(traced, "S-1")) == ga_scale_arrangement.arrangement_input(plain, "S-1")["spaces"]
 
 
 def test_the_mirror_of_a_traced_tank_gets_the_mirrored_outline():
@@ -1178,7 +1188,7 @@ def test_the_mirror_of_a_traced_tank_gets_the_mirrored_outline():
              "extent": {"x_m": [10.0, 20.0], "y_m": [5.0, 15.0], "side": "both", "status": {"x": "m", "y": "m"},
                         "outline_m": [{"plane": "xy", "points": [[10.0, 5.0], [20.0, 5.0], [20.0, 15.0]],
                                        "status": "traced"}]}}
-    first, second = gs._split_pair(entry)
+    first, second = ga_scale_arrangement._split_pair(entry)
     assert first["extent"]["outline_m"][0]["points"][2] == [20.0, 15.0]
     assert second["extent"]["outline_m"][0]["points"][2] == [20.0, -15.0]
     assert second["extent"]["outline_m"][0]["status"] == "guessed"
@@ -1200,21 +1210,21 @@ def _misread_scale(spacing_b, kink=None):
 
 def test_a_spacing_the_frame_numbers_contradict_is_chosen_from_the_fit():
     """Round u9n2: a printed "800" read as "600" in every reply refused the whole scale."""
-    table, reason = gs.spacing_table(*_misread_scale(700.0))
+    table, reason = ga_scale_frames.spacing_table(*_misread_scale(700.0))
     assert reason == "established"
     assert [(s["spacing_mm"], s.get("status")) for s in table.spans] == [
-        (800.0, None), (700.0, gs.CHOSEN_BY_FIT)]
+        (800.0, None), (700.0, ga_scale_settings.CHOSEN_BY_FIT)]
 
 
 def test_a_range_holding_two_spacings_is_still_refused():
-    table, reason = gs.spacing_table(*_misread_scale(700.0, kink=900.0))
+    table, reason = ga_scale_frames.spacing_table(*_misread_scale(700.0, kink=900.0))
     assert table is None and "do not fit" in reason
 
 
 
 def test_a_missing_fuel_tank_extent_is_a_coverage_warning_not_a_failure():
     spaces, particulars = _guessed_tank_over_a_hold()
-    report = gs.arrangement_gate({"spaces": [spaces[0]], "particulars": particulars})
+    report = ga_scale_arrangement.arrangement_gate({"spaces": [spaces[0]], "particulars": particulars})
     assert report["passed"] and report["warnings"] == ["no fuel tank has an extent", "no ballast tank has an extent"]
 
 
@@ -1234,11 +1244,11 @@ def test_a_hold_read_twice_with_a_note_is_one_hold():
               "spaces": [hold("a", "NO. 5 HOLD", "v1", profile), hold("b", "NO. 5 HOLD", "v3", plan),
                          hold("c", "NO. 5 HOLD (PORT USE W. B.)", "v3", {**plan, "side": "port"}),
                          hold("d", "NO. 5 HOLD (PORT USE W. B.)", "v1", profile)]}
-    holds = [s for s in gs.merged_spaces(result) if s["kind"] == "cargo_hold"]
+    holds = [s for s in ga_scale_arrangement.merged_spaces(result) if s["kind"] == "cargo_hold"]
     assert len(holds) == 1 and holds[0]["extent"]["y_m"] == [-8.0, 8.0]
     # Only profile readings: still one hold.
     result["spaces"] = [result["spaces"][0], result["spaces"][3]]
-    assert len([s for s in gs.merged_spaces(result) if s["kind"] == "cargo_hold"]) == 1
+    assert len([s for s in ga_scale_arrangement.merged_spaces(result) if s["kind"] == "cargo_hold"]) == 1
 
 
 
@@ -1251,10 +1261,10 @@ def test_a_change_drawn_frames_past_a_one_frame_spacing_is_left_out():
         return 100 + 8.0 * frame + (4.0 if frame >= 68 else 0.0)
 
     good = [place(67), place(68)]
-    table, reason = gs.spacing_table(ticks, labels, good)
+    table, reason = ga_scale_frames.spacing_table(ticks, labels, good)
     assert reason == "established" and (67, 68, 1200.0) in [(s["from_frame"], s["to_frame"], s["spacing_mm"])
                                                               for s in table.spans]
-    table, reason = gs.spacing_table(ticks, labels, [place(67), place(71)])  # the second change misplaced
+    table, reason = ga_scale_frames.spacing_table(ticks, labels, [place(67), place(71)])  # the second change misplaced
     assert reason == "established"
     spans = [(s["from_frame"], s["to_frame"], s["spacing_mm"]) for s in table.spans]
     assert (67, 68, 1200.0) in spans and not any(mm == 1200.0 and b - a > 1 for a, b, mm in spans)
@@ -1266,9 +1276,9 @@ def test_uncertain_boxes_that_agree_with_the_deck_line_give_an_unconfirmed_depth
     """PM decision, round u10: a depth with its own status, never measured, never evidence."""
     agreed = _depth_run(tmp_path / "a", uncertain_below=True)
     depth = agreed["measured"]["depth_m"]
-    assert depth["status"] == gs.UNCONFIRMED and depth["value"] == pytest.approx(15.0, abs=0.15)
+    assert depth["status"] == ga_scale_settings.UNCONFIRMED and depth["value"] == pytest.approx(15.0, abs=0.15)
     assert "extent_above_the_deck" not in {c["code"] for c in agreed["checks"]}  # confirms no box
-    assert gs.arrangement_input(agreed, "S-1")["particulars"]["depth_m"]["status"] == gs.UNCONFIRMED
+    assert ga_scale_arrangement.arrangement_input(agreed, "S-1")["particulars"]["depth_m"]["status"] == ga_scale_settings.UNCONFIRMED
     apart = _depth_run(tmp_path / "b", uncertain_below=True, deck_shift_px=-60.0)
     assert apart["measured"]["depth_m"]["value"] is None
 
@@ -1281,12 +1291,12 @@ def test_two_cargo_tanks_with_different_numbers_at_one_place_both_lose_their_ext
     other = json.loads(json.dumps(hold))
     other.update(id="cargo_hold-009", label="NO.5 CARGO HOLD", number="5")
     hold["number"] = "2"
-    kept = gs._without_cargo_number_conflicts([hold, other, spaces[2]], particulars)
+    kept = ga_scale_arrangement._without_cargo_number_conflicts([hold, other, spaces[2]], particulars)
     assert ["extent" in s for s in kept] == [False, False, True]
     assert "different number" in kept[0]["extent_withheld"]
     # Two tanks of one number (port and starboard) are not a conflict.
     other["number"] = "2P"
-    assert all("extent" in s for s in gs._without_cargo_number_conflicts([hold, other], particulars))
+    assert all("extent" in s for s in ga_scale_arrangement._without_cargo_number_conflicts([hold, other], particulars))
 
 
 
@@ -1303,7 +1313,7 @@ def test_a_peak_tank_ends_below_the_spaces_boxed_above_it():
         box("v", "other_space", "VOID", [236.0, 240.0], [12.3, 14.7]),
         box("d", "accommodation_deck", "FORECASTLE DECK", [226.0, 239.0], [16.0, 19.0]),
         box("b", "other_tank", "BILGE TK", [226.0, 230.0], [2.0, 4.0])]}  # low in the tank: kept apart
-    assert gs._end_below_spaces_above(result) == 1
+    assert ga_scale_overlaps._end_below_spaces_above(result) == 1
     tank = result["spaces"][0]["extent"]
     assert tank["z_m"] == [2.0, 12.3] and tank["status"]["z"] == "guessed" and set(tank["trimmed_by"]) == {"s", "v"}
 
@@ -1315,7 +1325,7 @@ def test_a_peak_tank_ends_below_the_spaces_boxed_above_it():
     ("1.5 x 2", None), ("12 x", None),
 ])
 def test_a_printed_hatch_size_parses_to_metres(printed, sides):
-    assert gs.parse_hatch_size(printed) == (pytest.approx(sides) if sides else None)
+    assert ga_scale_overlaps.parse_hatch_size(printed) == (pytest.approx(sides) if sides else None)
 
 
 def _hatches(at_px):
@@ -1337,19 +1347,19 @@ def _hatches(at_px):
 def test_a_size_printed_inside_one_hatch_is_its_length_and_breadth():
     """PM decision 2026-11-12: printed hatch sizes (measured lengths were 1-2 m long)."""
     result = _hatches([200, 200])
-    assert gs.apply_printed_hatch_sizes(result) == 1
+    assert ga_scale_overlaps.apply_printed_hatch_sizes(result) == 1
     sized = result["spaces"][0]["extent"]["printed_size_m"]
     assert (sized["length"], sized["breadth"]) == (15.48, 20.6)  # the order closer to the measured box
-    entry = gs._joined(result["spaces"][0], None)
+    entry = ga_scale_arrangement._joined(result["spaces"][0], None)
     assert entry["extent"]["x_m"] == [10.46, 25.94] and entry["extent"]["y_m"] == [-10.3, 10.3]
-    assert entry["extent"]["status"] == {"x": gs.PRINTED, "y": gs.PRINTED}
+    assert entry["extent"]["status"] == {"x": ga_scale_settings.PRINTED, "y": ga_scale_settings.PRINTED}
     assert entry["extent"]["measured_box_m"] == {"x_m": [10.0, 26.4], "y_m": [-11.0, 11.0]}
 
 
 @pytest.mark.parametrize("at_px", [[350, 200], [500, 200]])  # between the hatches; inside the other one
 def test_a_size_not_inside_this_hatch_alone_is_ignored(at_px):
     result = _hatches(at_px)
-    assert gs.apply_printed_hatch_sizes(result) == 0
+    assert ga_scale_overlaps.apply_printed_hatch_sizes(result) == 0
     assert "printed_size_m" not in result["spaces"][0]["extent"]
     assert any(c["code"] == "printed_hatch_size_ignored" for c in result["checks"])
 
@@ -1363,7 +1373,7 @@ def test_every_reported_hatch_size_is_used_or_ignored_with_a_reason():
     reported = [{"space_id": "cargo_hatch-1", "text": "15.480 x 20.600"},
                 {"space_id": "cargo_hatch-2", "text": "15.480 x 20.600"},   # its box carries no size: no box to tie
                 {"space_id": "other_space-9", "text": "12.0 x 8.0"}]         # not a hatch
-    assert gs.apply_printed_hatch_sizes(result, reported) == 1
+    assert ga_scale_overlaps.apply_printed_hatch_sizes(result, reported) == 1
     reasons = sorted(c["reason"] for c in result["checks"] if c["code"] == "printed_hatch_size_ignored")
     assert reasons == ["it was given for a space that is not a cargo hatch", "its hatch has no box to tie it to"]
 
@@ -1404,7 +1414,7 @@ def test_every_check_code_of_the_scale_pass_is_listed_for_a_replay():
     import re as regex
     source = (Path(gs.__file__)).read_text()
     written = set(regex.findall(r'"code": "([a-z_0-9]+)"', source))
-    assert written <= set(gs.SCALE_PASS_CHECKS)
+    assert written <= set(ga_scale_settings.SCALE_PASS_CHECKS)
 
 
 

@@ -25,7 +25,7 @@ import statistics
 import tempfile
 from pathlib import Path
 
-from vessel_reconstruction import ga_scale
+from vessel_reconstruction import ga_scale, ga_scale_dimensions, ga_scale_frames, ga_scale_settings
 
 THRESHOLDS_M = (0.1, 0.5, 1.0)
 
@@ -57,9 +57,9 @@ def spacing_rows(ticks: list[tuple[int, float]], spans: list[dict], px_per_m: fl
     rows = []
     for span in spans:
         inside = [(frame, x) for frame, x in ticks if span["from_frame"] <= frame <= span["to_frame"]]
-        if len({frame for frame, _ in inside}) < ga_scale.MIN_RANGE_TICKS:
+        if len({frame for frame, _ in inside}) < ga_scale_settings.MIN_RANGE_TICKS:
             continue
-        shown_m = abs(ga_scale._range_slope(inside) / px_per_m)
+        shown_m = abs(ga_scale_frames._range_slope(inside) / px_per_m)
         rows.append({"case": case, "kind": "frame spacing", "item": f"frames {span['from_frame']}-{span['to_frame']}",
                      "printed_m": round(span["spacing_mm"] / 1000.0, 4), "measured_m": round(shown_m, 4)})
     return rows
@@ -87,7 +87,7 @@ def scale_work(reading_path: Path, inputs: Path) -> dict | None:
         return None
     case_dir = reading_path.parent
     kept = {}
-    original = ga_scale.read_scale
+    original = ga_scale_dimensions.read_scale
 
     def recording(*args, **kwargs):
         work = original(*args, **kwargs)
@@ -101,12 +101,12 @@ def scale_work(reading_path: Path, inputs: Path) -> dict | None:
             return json.loads(path.read_text())
         return {"reply": None, "stop_reason": "not replayed here", "usage": {}, "receipts": []}
 
-    ga_scale.read_scale = recording
+    ga_scale_dimensions.read_scale = recording
     try:
         with tempfile.TemporaryDirectory() as scratch:
             ga_scale.scale_pass(result, inputs / result["sources"]["ga"]["file"], Path(scratch), stored)
     finally:
-        ga_scale.read_scale = original
+        ga_scale_dimensions.read_scale = original
     work = kept.get("work")
     if work is None:
         return None
@@ -136,7 +136,7 @@ def main(argv=None) -> int:
             axis = data["work"]["axes"].get(view)
             ticks = [(frame, x) for frame, x, _ in data["work"]["raw"]["ticks"].get(view, [])]
             if axis is not None and ticks:
-                rows += spacing_rows(ga_scale.consistent_ticks(ticks), data["frames"]["spacings"], axis.px_per_m,
+                rows += spacing_rows(ga_scale_frames.consistent_ticks(ticks), data["frames"]["spacings"], axis.px_per_m,
                                      reading_path.parent.name)
     args.rows.parent.mkdir(parents=True, exist_ok=True)
     args.rows.write_text(json.dumps(rows, indent=1))

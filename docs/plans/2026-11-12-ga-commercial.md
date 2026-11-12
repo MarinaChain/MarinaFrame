@@ -841,6 +841,12 @@ independent: a measured hold box ends on whole frames and a kept span fits the f
 the error is 0 when box and chain end on the same frames and one frame (0.8-0.9 m) when one end
 differs.
 
+**Compatibility re-exports removed** (backlog item 9, after the refactor 4ecdb9a):
+`ga_scale.py` and `ga_commercial.py` import only the names their own code uses (128 of 145 and
+64 of 74 re-exported names went), and every caller and test imports from the defining module
+(`ga_scale_frames`, `ga_scale_arrangement`, `ga_interpretation`, ...). No behaviour change: the
+u10 replay is byte-identical to u10r6 on 14 of 14 ships, gate 14 of 14.
+
 **Proof for the refactor: replay commands (0 model calls).** They rebuild u10r6's arrangement
 inputs from the stored replies of round u10; a refactor with no behaviour change gives files
 identical to u10r6 on all 14 development ships (checked before the pause: 14 of 14 identical,

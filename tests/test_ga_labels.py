@@ -147,7 +147,7 @@ def test_a_label_that_names_its_kind_gets_that_kind(kind, text, expected):
 
 
 def test_the_slop_definition_is_a_setting():
-    from vessel_reconstruction.ga_commercial import DEFINITIONS
+    from vessel_reconstruction.ga_commercial_settings import DEFINITIONS
     assert ga_labels.label_kind("slop_tank", "SLOP HOLDING TK.(C)", DEFINITIONS) == "slop_tank"
     strict = {**DEFINITIONS, "slop_holding_tank_is_slop": False}
     assert ga_labels.label_kind("slop_tank", "SLOP HOLDING TK.(C)", strict) == "other_tank"
