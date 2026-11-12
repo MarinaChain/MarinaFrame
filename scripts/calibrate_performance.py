@@ -29,7 +29,11 @@ def _records(cases: list[dict]) -> list[tuple[dict, dict, CalibrationPoint]]:
     records = []
     seen = set()
     for case in cases:
-        if case.get("ship") not in DEVELOPMENT_SHIPS:
+        ship = case.get("ship", "")
+        # Existing evaluator labels name source/condition, not distinct hulls.
+        if isinstance(ship, str) and ship.startswith("KVLCC2 MOERI 1:58 bare hull, "):
+            ship = "KVLCC2"
+        if ship not in DEVELOPMENT_SHIPS:
             raise ValueError("only exposed development ships KCS/JBC/KVLCC2 are permitted")
         if case.get("method") != "holtrop_1984":
             continue
@@ -39,7 +43,7 @@ def _records(cases: list[dict]) -> list[tuple[dict, dict, CalibrationPoint]]:
         hull = HoltropHull(**case["hull"])
         for row in result["rows"]:
             # A repeated speed with distinct water/hull conditions is legitimate.
-            key = (case["ship"], json.dumps(case["hull"], sort_keys=True),
+            key = (ship, json.dumps(case["hull"], sort_keys=True),
                    json.dumps(case["water"], sort_keys=True), row["speed_ms"])
             if key in seen:
                 raise ValueError("duplicate development condition")
@@ -49,7 +53,7 @@ def _records(cases: list[dict]) -> list[tuple[dict, dict, CalibrationPoint]]:
                             * resistance["wetted_surface_m2"])
             sensitivity = (full_form_weight(hull.cb_lwl) * (resistance["form_factor"]-1)
                            * resistance["friction_resistance_n"] / dynamic_area)
-            point = CalibrationPoint(case["ship"], row["estimated_ct"], sensitivity,
+            point = CalibrationPoint(ship, row["estimated_ct"], sensitivity,
                                      row["measured_ct"])
             records.append((case, row, point))
     return records

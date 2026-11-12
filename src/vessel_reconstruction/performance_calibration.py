@@ -11,8 +11,9 @@ import math
 from .holtrop import HoltropHull, HoltropResistance, holtrop_resistance
 
 METHOD = "holtrop_1984_full_form_v1"
-# Replaced by the single protocol-locked development fit before evaluator freeze.
-FROZEN_ALPHA = 0.0
+# Single protocol-locked fit on KCS/JBC/KVLCC2. Leave-one-ship-out gate FAILED;
+# retain this as a draft experimental candidate, not a transferable accuracy claim.
+FROZEN_ALPHA = 0.43669732630769764
 
 
 def full_form_weight(cb_lwl: float) -> float:
@@ -36,7 +37,7 @@ def calibrated_resistance(hull: HoltropHull, *, speed_ms: float,
     reduction = correction * baseline.friction_resistance_n
     total = baseline.total_resistance_n - reduction
     warnings = baseline.validity_warnings + (
-        "Draft model-scale excess-form-factor calibration; no independent blind evidence yet.",)
+        "Draft model-scale calibration; leave-one-ship-out diagnostic gate failed; no independent blind evidence yet.",)
     ranges = baseline.range_warnings
     if not (0.75 <= hull.cb_lwl <= 0.85 and 0.10 <= baseline.froude <= 0.20
             and 1e6 <= baseline.reynolds <= 2e7):

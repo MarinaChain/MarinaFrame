@@ -19,6 +19,14 @@ def estimate(h, alpha):
                                  kinematic_viscosity_m2_s=1e-6, alpha=alpha)
 
 
+def test_frozen_parameter_matches_protocol_locked_fit():
+    from vessel_reconstruction.performance_calibration import FROZEN_ALPHA, calibrated_resistance
+    assert FROZEN_ALPHA == 0.43669732630769764
+    result = calibrated_resistance(hull(), speed_ms=1.1, water_density_kg_m3=1000,
+                                   kinematic_viscosity_m2_s=1e-6)
+    assert result == estimate(hull(), FROZEN_ALPHA)
+
+
 def test_only_excess_viscous_force_changes():
     h = hull()
     baseline = holtrop_resistance(h, speed_ms=1.1, water_density_kg_m3=1000,

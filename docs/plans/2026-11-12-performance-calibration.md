@@ -53,3 +53,99 @@ PM records the immutable tag SHA and input SHA and scores a named unexposed ship
 ## Resume point
 
 Protocol written; not yet fitted. Next: commit protocol, obtain public development inputs, then synthetic tests. Results and exact freeze SHA follow below.
+
+## Results — fixed protocol, draft
+
+The single fit returned **alpha=0.43669732630769764**, interior to [0,1].
+**The predeclared diagnostic gate FAILED.** Equal-ship leave-one-out CT MAE
+is 12.569%, worse than the 9.620% baseline. JBC and KVLCC2 exceed 10%.
+No term, threshold, ship weighting or gate was changed after seeing this result.
+The frozen candidate is experimental, not a transferable accuracy claim.
+
+The public evaluator uses two source-labelled case names for KVLCC2; both
+are grouped as the SAME ship before weighting and omission. All nine rows
+(one second-source point plus eight series points) share KVLCC2's weight.
+KCS has six rows and JBC one. KCS is below the fixed full-form threshold;
+its correction is zero. Thus only TWO ships constrain alpha.
+
+| Ship | Baseline CT MAE % | Fit CT MAE % | LOO CT MAE % | Baseline PE MAE % | Fit PE MAE % | LOO PE MAE % |
+|---|---:|---:|---:|---:|---:|---:|
+| JBC | 2.839 | 7.881 | 14.730 | 4.503 | 6.390 | 13.350 |
+| KCS | 7.180 | 7.180 | 7.180 | 8.134 | 8.134 | 8.134 |
+| KVLCC2 | 18.842 | 7.343 | 15.797 | 18.842 | 7.343 | 15.797 |
+
+LOO alphas (omitted ship): JBC 0.715699477, KCS 0.436697326, KVLCC2 0.115637843. No fold hits a parameter bound.
+
+### Signed errors at each speed
+
+KVLCC2 CT and PE errors are identical because the estimated and measured
+reference areas match. For other ships the published S0 differs from mesh area.
+
+| Ship | Speed m/s | Baseline CT % | Fit CT % | LOO CT % | Baseline PE % | Fit PE % | LOO PE % |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| KCS | 0.915000 | +5.082 | +5.082 | +5.082 | +6.440 | +6.440 | +6.440 |
+| KCS | 1.281000 | +3.972 | +3.972 | +3.972 | +5.316 | +5.316 | +5.316 |
+| KCS | 1.647000 | +8.349 | +8.349 | +8.349 | +9.749 | +9.749 | +9.749 |
+| KCS | 1.922000 | +12.094 | +12.094 | +12.094 | +13.543 | +13.543 | +13.543 |
+| KCS | 2.196000 | +10.836 | +10.836 | +10.836 | +12.268 | +12.268 | +12.268 |
+| KCS | 2.379000 | -2.746 | -2.746 | -2.746 | -1.489 | -1.489 | -1.489 |
+| JBC | 1.176717 | +2.839 | -7.881 | -14.730 | +4.503 | -6.390 | -13.350 |
+| KVLCC2 | 1.047000 | +18.430 | +7.008 | +15.405 | +18.430 | +7.008 | +15.405 |
+| KVLCC2 | 0.743045 | +20.112 | +8.437 | +17.020 | +20.112 | +8.437 | +17.020 |
+| KVLCC2 | 0.809257 | +19.636 | +8.015 | +16.559 | +19.636 | +8.015 | +16.559 |
+| KVLCC2 | 0.875469 | +19.074 | +7.516 | +16.013 | +19.074 | +7.516 | +16.013 |
+| KVLCC2 | 0.949038 | +18.585 | +7.092 | +15.542 | +18.585 | +7.092 | +15.542 |
+| KVLCC2 | 0.978465 | +18.597 | +7.114 | +15.556 | +18.597 | +7.114 | +15.556 |
+| KVLCC2 | 1.015250 | +18.269 | +6.838 | +15.242 | +18.269 | +6.838 | +15.242 |
+| KVLCC2 | 1.044677 | +18.454 | +7.028 | +15.428 | +18.454 | +7.028 | +15.428 |
+| KVLCC2 | 1.081462 | +18.422 | +7.042 | +15.409 | +18.422 | +7.042 | +15.409 |
+
+### Provenance and reproduction
+
+No new ship's measured data was opened. Inputs are the prior public development
+cases, copied by PM, plus the former KVLCC2 evaluator input explicitly released
+for development in this brief. Source-cell and paper/table references remain in
+each row of the ignored `work/perf-calibration/fit-v1.json` report.
+
+- `development-v3.json` SHA-256 `a2f56bf51b3264bb40f758b03cc2160bf54011973d845e3818b3808334fdd357`.
+- `kvlcc2-cases.json` SHA-256 `ea4791d32937623876705b1544e97b6f4b3d8ec85d662742e307d0a89dfc72db`.
+
+```bash
+PYTHONPATH=src /Users/jonathanjie/Documents/workspace/MarinaFrame/.venv/bin/python scripts/calibrate_performance.py --input work/perf-calibration/development-v3.json --input /Users/jonathanjie/Documents/workspace/MarinaFrame/work/perf-eval/kvlcc2-cases.json --output work/perf-calibration/new-fit.json
+```
+
+The output path must not exist. Runtime fitting is separate from the evaluator;
+the frozen evaluator uses only the stored scalar. The correction is limited to
+model-scale force. Full-scale calls and calibrated propulsion are rejected.
+KVLCC2 sources remain second-hand/rounded, water density assumed, and sinkage/
+trim condition uncertain. Existing baseline warnings are retained. KCS lies
+outside the correction envelope. No universal validity or fuel accuracy follows.
+
+### PM decision and conclusion
+
+Protocol commit: **bc98a00**. PM decision after seeing the failed gate: **do not
+spend a blind ship on this candidate**. Freeze `perf-frozen-2` as experimental,
+**failed transfer gate**, with default and both baseline methods unchanged.
+The evaluator command above is retained for reproducibility, not authorization
+to run a blind score. No new blind score is planned or performed.
+
+One correction term fitted on three development ships does not transfer under
+the fixed gate. More full-form model-test data (for example the pilot's model
+tests, handled only by an authorized lane) or CFD is needed before a tanker
+estimate. KCS contributes no fit sensitivity, making this effectively a
+compromise between two full forms, whose preferred corrections differ strongly.
+
+### Resume point
+
+Fit completed under unchanged protocol. Focused checks: **121 passed**.
+Quick-tier and independent code review are in progress. Runtime replay agrees
+with the offline fit at all **16 development points**, for CT and PE within
+1e-10 percentage points. Independent review found missing calibration-envelope
+text in Markdown; a failing regression assertion reproduced it, and rendering
+the combined, de-duplicated warning lists fixed it (**36 integration tests
+passed**). The first quick run hit the tool time limit; a second was stopped
+when the review fix changed the source. Neither counts as a passing quick run.
+A fresh full quick tier now runs after the fix.
+
+Next: record final checks, freeze and push experimental tag `perf-frozen-2`;
+no blind scoring. Full CAD tier was not requested or run.

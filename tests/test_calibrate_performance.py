@@ -30,6 +30,14 @@ def test_runner_allowlist_and_unique_conditions():
         module.prepare_points([case])
 
 
+def test_kvlcc2_evaluator_labels_group_as_one_ship():
+    from test_performance_compare import synthetic_case
+    case = synthetic_case()
+    case.update(ship='KVLCC2 MOERI 1:58 bare hull, Fn 0.142 (source)', method='holtrop_1984')
+    points = runner().prepare_points([case])
+    assert points[0].ship == 'KVLCC2'
+
+
 def test_runner_reports_all_folds_and_rows():
     from test_performance_compare import synthetic_case
     module = runner()

@@ -44,6 +44,8 @@ def test_evaluator_accepts_named_calibration_only_at_model_scale():
     row = performance_compare.evaluate_case(case)['rows'][0]
     assert row['resistance']['method'] == case['method']
     assert row['resistance']['correlation_resistance_n'] == 0
+    assert 'Outside calibration envelope' in performance_compare.markdown_report(
+        [performance_compare.evaluate_case(case)])
     case['scale'] = 'ship'
     with pytest.raises(ValueError, match='model scale'):
         performance_compare.evaluate_case(case)

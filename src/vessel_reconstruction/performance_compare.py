@@ -149,7 +149,8 @@ def markdown_report(cases: list[dict]) -> str:
                   f"Particulars: {case['particulars_source']}"]
         for row in case["rows"]:
             lines.append(f"- {row['speed_ms']:.6g} m/s: {row['source']}")
-            lines.extend(f"  - {warning}" for warning in row["validity_warnings"])
+            warnings = dict.fromkeys(row["validity_warnings"] + row["range_warnings"])
+            lines.extend(f"  - {warning}" for warning in warnings)
     return "\n".join(lines) + "\n"
 
 
