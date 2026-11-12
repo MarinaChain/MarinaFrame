@@ -38,6 +38,23 @@ def test_evaluator_contract_keeps_sources_and_draft_status():
     assert report.rfind("| synthetic |") < report.find("## synthetic")
 
 
+def test_evaluator_accepts_named_calibration_only_at_model_scale():
+    case = synthetic_case()
+    case['method'] = 'holtrop_1984_full_form_v1'
+    row = performance_compare.evaluate_case(case)['rows'][0]
+    assert row['resistance']['method'] == case['method']
+    assert row['resistance']['correlation_resistance_n'] == 0
+    assert 'Outside calibration envelope' in performance_compare.markdown_report(
+        [performance_compare.evaluate_case(case)])
+    case['scale'] = 'ship'
+    with pytest.raises(ValueError, match='model scale'):
+        performance_compare.evaluate_case(case)
+    case['scale'] = 'model'
+    case['propeller'] = {}
+    with pytest.raises(ValueError, match='propulsion'):
+        performance_compare.evaluate_case(case)
+
+
 def test_evaluator_preserves_different_reference_surface_basis():
     case = synthetic_case()
     case["measurements"][0]["reference_surface_m2"] = 2200
