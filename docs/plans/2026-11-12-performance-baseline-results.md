@@ -1,6 +1,40 @@
 # Performance baseline continuation — draft results
 
-## Outcome and exact stop point
+## Data exposure inventory — PM continuation, before further data reads
+
+PM decision: JBC is development; a separate evaluator will select and score
+an unexposed ship. This lane will not open any additional ship's test data.
+This inventory distinguishes direct reads in this continuation from evidence
+left by the previous run. Previous-run exposure is conservatively inferred
+from its manifest, protocol and test draft; its complete interaction history
+is not available here. A downloaded or quoted result is treated as exposed
+whether or not a comparison was run.
+
+All file paths below are relative to the existing public
+`work/sources/simman_modeltests/` collection, whose manifest was read in full.
+
+| Ship | Files opened/read/quoted or conservatively exposed | Values visible before this continuation |
+|---|---|---|
+| KVLCC1 | `simman2008_pdf/KVLCC_CMT_NMRI_test_prog.pdf` downloaded by prior run; manifest read here | Test conditions: Fr 0.142, model Lpp 5.5172 m, appended hull; no measured resistance series quoted. Protocol says no public measured table found. |
+| KVLCC2 | Same KVLCC conditions PDF; inherited synthetic/plausibility test draft | Same conditions; draft test quoted L 320 m, B 58 m, T 20.8 m, volume 312622 m³, speed 14.5 kn, and inconsistent LCB 0.9652 labelled 3.48% aft. These are particulars, not measured force. No measured resistance series quoted. |
+| KCS | `jbc/KCS_vary_Fr_2-1.xls` downloaded and read by prior run (protocol evidence); `simman2008_pdf/KCS_CMT_NMRI_test_prog.pdf`; manifest and protocol read here | CT×1000, sinkage and trim series exist at Fr 0.108, 0.152, 0.195, 0.227, 0.260, 0.282. CT/sinkage/trim numerical cells not quoted in inherited code/protocol, but conservatively the full six-point file is exposed. Speeds 0.915, 1.281, 1.647, 1.922, 2.196, 2.379 m/s; Lpp 7.2786 m; T 0.3418 m; rho 999.5 kg/m³, nu 1.27e-6 m²/s. Conditions PDF noted NMRI speeds 0.7–1.2 m/s. |
+| DTMB 5415 | `simman2008_pdf/free_model_test_program.pdf` downloaded by prior run; its manifest entry names 5415 | No measured resistance/self-propulsion value read or quoted. Only test-program/geometry availability was visible. **Do not open its result data.** |
+| JBC | `jbc/JBC_VOV_1-1a_template.xls`, `jbc/JBC_VOV_1-5a_template.xls`, `jbc/Open_Water_Tests_for_JBC_NMRI.txt`, `jbc/MP687_particulars.txt`; prior run downloaded and quoted; manifest/protocol/test draft read here | Resistance CT×1000=4.289, Fr=0.142, Re=7.46e6, S0/Lpp²=0.2494, sinkage −0.086%Lpp, trim −0.18%Lpp. Self-propulsion CT×1000=4.811, KT=0.217, KQ=0.0279, n=7.8 rps, RT(SP)−T=18.2 N. Open-water draft fixtures (J,KT,KQ): (0.3,0.2598,0.03210), (0.5,0.1798,0.02479), (0.7,0.0867,0.01509); the entire downloaded table is considered exposed. Propeller D=0.203 m, P/D=0.75, EAR=0.50, Z=5, AU sections. Hull Lpp=280 m, T=16.5 m; design 14.5 kn, rho=999.0 kg/m³ quoted. |
+| Other ships | None of their measured test files were opened/read/quoted in this lane | Original Holtrop hypothetical worked example is exposed (not a candidate blind ship): LWL205 m, Lpp200 m, B32 m, T10 m, volume37500 m³, speed25 kn, RT1793.26 kN, PE23063 kW, w0.2584, t0.1747, n1.6594 Hz, shaft power32621 kW. Unsupported Lewis/Series60 draft fixture L122 m, B16.226 m, T6.502 m, volume9862 m³, Fn0.25, RT234 kN / PE690 kW was read and rejected as inconsistent. |
+
+Other inherited files: `simman2008_pdf/TOC.pdf` (table of contents),
+`simman2008_pdf/free_model_test_program.pdf` (test program, not a result
+series). Public hull ZIP names were listed for KVLCC1/2, KCS and 5415;
+JBC and KCS geometry ZIP entries were read in the manifest. No geometry ZIP
+was opened by this continuation before this inventory. Method papers and
+synthetic boxes are not ship-test exposure. No licensed, pilot, holdout or
+sealed data was opened.
+
+**Permitted measured-data development set: KCS and JBC only.** Conditions-only
+exposure does not authorize opening KVLCC1/2 or DTMB result data. This is the
+conservative boundary until the PM selects the independent blind ship.
+
+## Outcome and exact stop point (previous checkpoint; superseded by continuation below)
 
 **Lane incomplete. No ship resistance, propulsion or fuel prediction is reported.**
 No published ship comparison was run, and no JBC score was produced.
