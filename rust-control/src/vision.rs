@@ -1174,7 +1174,11 @@ pub fn vision_request(request_dir: &Path, out: &Path, basis: &str) -> Result<Val
     for directory in ["requests", "receipts"] {
         std::fs::create_dir_all(out.join(directory)).map_err(|_| "vision_output_create")?;
     }
-    let config = standalone_config(basis, &request_dir.join("request.json"))?;
+    let mut config = standalone_config(basis, &request_dir.join("request.json"))?;
+    if manifest.purpose == Purpose::StationNumbers {
+        // This purpose is subscription-only; never inherit the historical Go default.
+        config.model = crate::models::CLAUDE_SONNET_5_5.into();
+    }
     let started_ms = util::now_ms();
     let template = template(
         &config.model,

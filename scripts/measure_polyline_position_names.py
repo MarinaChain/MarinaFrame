@@ -65,7 +65,7 @@ def read_labels(binary, sheet, layout, out):
                 layout.centre_column + layout.max_offset_px, max(rows) + span)
     manifest = labels.prepare(sheet, out / 'request', body_box)
     result = subprocess.run([str(binary), 'vision-request', '--request', str(out / 'request'),
-                             '--out', str(out / 'provider'), '--model', 'claude-sonnet-5-5',
+                             '--out', str(out / 'provider'),
                              '--provider-transfer-basis', 'User approved development body-plan station-label extraction'],
                             capture_output=True, text=True)
     (out / 'controller.stdout').write_text(result.stdout)
