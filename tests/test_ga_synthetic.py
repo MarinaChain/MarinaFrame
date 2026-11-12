@@ -56,4 +56,3 @@ def test_generated_files_are_separate_and_repeatable(tmp_path):
         assert hashlib.sha256((first / name).read_bytes()).hexdigest() == digest
     with pytest.raises(FileExistsError):
         write_suite(first, seed=17, count=1)
-
