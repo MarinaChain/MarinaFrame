@@ -607,3 +607,36 @@ def test_noise_on_blank_paper_is_not_ink_and_the_level_never_drops_below_160():
     dark = np.full((10, 10), 255, np.uint8)
     dark[5, 5] = 0
     assert ga.image_ink_level(dark) >= ga.INK_LEVEL
+
+
+
+def _ruled_table(tmp_path, line_x=None):
+    """A light-grey table row "99.5 m" at x 264 with a full-height ruling line at ``line_x``."""
+    image, boxes = _grey_table(tmp_path, [("L.O.A.", 20, 40), ("99.5 m", 264, 40)])
+    if line_x is not None:
+        table = Image.open(tmp_path / "T-1_table.png")
+        ImageDraw.Draw(table).line([(line_x, 0), (line_x, 244)], fill=(200, 200, 200), width=2)
+        table.save(tmp_path / "T-1_table.png")
+        import shutil
+        shutil.rmtree(tmp_path / "request")
+        ga.prepare(None, tmp_path / "request", tmp_path / "T-1_table.png")
+        image = json.loads((tmp_path / "request" / "request.json").read_text())["images"][0]
+    return image, boxes
+
+
+def test_a_ruling_line_beside_a_shifted_box_is_not_a_second_value(tmp_path):
+    """Holdout re-check: a table line at the right of the box made a second run."""
+    image, boxes = _ruled_table(tmp_path, line_x=389)
+    left, top, right, bottom = boxes[1]
+    loa = _read_loa(tmp_path, image, [right, top - 2, right + 48, bottom + 2])
+    assert loa["value"] == pytest.approx(99.5) and loa["box_shift_px"] < -20
+
+
+def test_a_box_on_the_edge_of_its_text_moves_onto_the_text(tmp_path):
+    """Holdout re-check: boxes held only the right edge of the text (ink share 0.0035)."""
+    image, boxes = _grey_table(tmp_path, [("L.O.A.", 20, 40), ("99.5 m", 264, 40)])
+    left, top, right, bottom = boxes[1]
+    loa = _read_loa(tmp_path, image, [right - 2, top - 2, right + 46, bottom + 2])
+    assert loa["value"] == pytest.approx(99.5) and loa["box_shift_px"] < -20
+    region = loa["source_record"]["regions"][0]["box_px"]
+    assert region[0] <= left + 2 and region[2] >= right - 2

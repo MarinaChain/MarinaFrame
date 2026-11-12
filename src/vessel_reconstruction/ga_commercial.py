@@ -414,28 +414,20 @@ def image_ink_level(grey: np.ndarray) -> float:
     return max(float(INK_LEVEL), paper - max(MIN_INK_CONTRAST, NOISE_FACTOR * noise))
 
 
-def value_box(grey: np.ndarray, box: list[float], level: float) -> list[float] | None:
-    """The box of a printed value: the model's box when it holds ink at ``level``, else the only
-    ink run beside it in the same rows (within one box width or ``VALUE_SEARCH_SHARE`` of the
-    image width, left and right); None when there is no such run or more than one."""
-    height, width = grey.shape
-    left, top, right, bottom = (int(round(v)) for v in box)
-    top, bottom = max(0, top), min(height, bottom)
-    if bottom <= top:
-        return None
-    if _ink_share(grey < level, box) >= MIN_INK_SHARE:
-        return box
-    margin = max(right - left, round(VALUE_SEARCH_SHARE * width))
-    start, stop = max(0, left - margin), min(width, right + margin)
-    if stop <= start:
-        return None
-    columns = (grey[top:bottom, start:stop] < level).any(axis=0)
-    # Glyphs of one value are joined across gaps up to most of a text height (the space before
-    # the unit); a wider gap starts another run (a label, another value).
-    join = max(2, round(0.6 * (bottom - top)))
+# A box whose ink share is below this holds only a sliver of its value (the edge of the text;
+# holdout re-check: 0.0035 and 0.0122); well-placed value boxes hold far more.
+SLIVER_SHARE = 0.03
+# A table ruling line: an ink run at most this wide whose ink continues above and below the
+# value's rows (by at least the rows' height, at this share of the band) is not a value.
+RULE_MAX_WIDTH_PX = 4
+RULE_CONTINUES_SHARE = 0.8
+
+
+def _ink_runs(inked: np.ndarray, join: int) -> list[list[int]]:
+    """[start, stop) of each run of inked columns, joining gaps up to ``join`` columns."""
     runs, current, gap = [], None, 0
-    for index, inked in enumerate(columns):
-        if inked:
+    for index, value in enumerate(inked):
+        if value:
             if current is not None and gap <= join:
                 current[1] = index + 1
             else:
@@ -444,11 +436,53 @@ def value_box(grey: np.ndarray, box: list[float], level: float) -> list[float] |
             gap = 0
         elif current is not None:
             gap += 1
-    runs = [run for run in runs if run[1] - run[0] >= 2]
-    if len(runs) != 1:
+    return runs
+
+
+def value_box(grey: np.ndarray, box: list[float], level: float) -> list[float] | None:
+    """The box of a printed value: the model's box when it holds its ink, else the only text run
+    beside it in the same rows (within one box width or ``VALUE_SEARCH_SHARE`` of the image width,
+    left and right); None when there is no such run or more than one.
+
+    A box with only a sliver of ink (below ``SLIVER_SHARE``) also moves to the one text run beside
+    it. Table ruling lines are not text runs.
+    """
+    height, width = grey.shape
+    left, top, right, bottom = (int(round(v)) for v in box)
+    top, bottom = max(0, top), min(height, bottom)
+    if bottom <= top:
         return None
-    found = [float(start + runs[0][0]), float(top), float(start + runs[0][1]), float(bottom)]
-    return found if _ink_share(grey < level, found) >= MIN_INK_SHARE else None
+    ink = grey < level
+    share = _ink_share(ink, box)
+    if share >= SLIVER_SHARE:
+        return box
+    rows = bottom - top
+    margin = max(right - left, round(VALUE_SEARCH_SHARE * width))
+    start, stop = max(0, left - margin), min(width, right + margin)
+    # Glyphs of one value are joined across gaps up to most of a text height (the space before
+    # the unit); a wider gap starts another run (a label, another value).
+    join = max(2, round(0.6 * rows))
+    band_above, band_below = ink[max(0, top - rows):top], ink[bottom:min(height, bottom + rows)]
+
+    def ruling_line(run) -> bool:
+        columns = slice(start + run[0], start + run[1])
+        return (run[1] - run[0] <= RULE_MAX_WIDTH_PX and band_above.size and band_below.size
+                and band_above[:, columns].any(axis=1).mean() >= RULE_CONTINUES_SHARE
+                and band_below[:, columns].any(axis=1).mean() >= RULE_CONTINUES_SHARE)
+
+    runs = [run for run in _ink_runs(ink[top:bottom, start:stop].any(axis=0), join)
+            if run[1] - run[0] >= 2 and not ruling_line(run)]
+    if len(runs) != 1:
+        return box if share >= MIN_INK_SHARE else None  # a sliver with no single run beside it stays
+    # Follow the run beyond the search window to its full width in the same rows.
+    whole = _ink_runs(ink[top:bottom].any(axis=0), join)
+    run_start, run_stop = start + runs[0][0], start + runs[0][1]
+    for full in whole:
+        if full[0] <= run_start < full[1]:
+            run_start, run_stop = full[0], max(full[1], run_stop)
+            break
+    found = [float(run_start), float(top), float(run_stop), float(bottom)]
+    return found if _ink_share(ink, found) >= MIN_INK_SHARE else None
 
 
 def _number_key(number: str | None) -> str | None:

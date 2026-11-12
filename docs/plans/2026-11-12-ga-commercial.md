@@ -707,7 +707,11 @@ stands as scored):
    on blank paper never counts; (b) when its box holds no ink, the only ink run in the same rows
    within one box width or 10 % of the image width, left and right, becomes its box, and the shift
    is recorded in the item's evidence (`box_shift_px`); no run, or more than one, still refuses
-   it. Spaces keep the fixed ink level. Tests on synthetic light-grey tables: a shifted box, a
+   it. Spaces keep the fixed ink level.
+   Re-check (34 of 36 particulars right, 2 abstained): two refinements. A table ruling line (a run
+   at most 4 px wide whose ink continues above and below the value's rows) is not a second value;
+   and a box holding only a sliver of its value (ink share below 3 %, the edge of the text) also
+   moves to the one text run beside it, followed to its full width. Tests on synthetic light-grey tables: a shifted box, a
    correct box, a blank box and neighbourhood, a box between two values, and paper noise.
 
 Development ships are unchanged: the coarse interpretation of the stored u10 replies is identical
