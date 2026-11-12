@@ -63,4 +63,14 @@ The first quick-tier run was stopped by the tool's 600-second background limit d
 
 Ruling: limit the experimental source sampler to MM-declared files with a caller-stated correction for numerically mislabelled public coordinates. This removes ambiguous cross-unit conversion rather than promising generic IGES support. Cost: other declared units require explicit conversion before sampling.
 
-The full quick tier is running; final outcome will be appended. Rust portion: 318 passed, 50 ignored; separate UI check: 275 passed; bounded secret scan: 0 findings. These do not substitute for the pending full Python result.
+The pre-correction quick tier passed: Rust 318 passed, 50 ignored; Python 2343 passed, 4 skipped, 90 deselected (5 warnings); UI 275 passed; bounded secret scan 0 findings. A fresh full quick tier on correction commit 31e834b is running; final outcome will be appended.
+
+Post-correction synthetic set (all valid solids; files remain in ignored work/hull-variation/):
+
+| Candidate | Target Cb | Built Cb | Target LCB/L | Built LCB/L | Mesh/CAD volume relative error |
+|---|---:|---:|---:|---:|---:|
+| Identity | 0.69887650 | 0.69882537 | 0.50000000 | 0.49999471 | 0.00005973 |
+| Fuller, forward | 0.71387650 | 0.71390252 | 0.50300000 | 0.50295877 | 0.00002975 |
+| Finer, aft | 0.67887650 | 0.67888411 | 0.49600000 | 0.49595366 | 0.00000915 |
+
+All remain inside the original gates. These are synthetic demonstrations, not KVLCC2 or local-shape accuracy evidence. Refinement was limited to the review's five geometry/input contracts; no reader, application, threshold or holdout change.
