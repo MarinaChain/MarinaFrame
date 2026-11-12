@@ -954,6 +954,13 @@ def read_scale(result: dict, reading: dict, request_dir: Path, earlier: dict | N
 MEASURE_CHECKS = ("frame_scale_not_fitted", "ap_mark_not_at_frame_0", "deck_point_not_amidships",
                   "measured_value_implausible", "measured_lengths_disagree", "measured_breadth_disagrees",
                   "measured_depth_disagrees")
+# Every check code the frame-scale pass writes (a replay of the pass removes these first).
+SCALE_PASS_CHECKS = MEASURE_CHECKS + (
+    "depth_below_a_space_top", "depth_not_checked", "depth_not_confirmed_by_space_tops",
+    "depth_taken_from_cargo_space_tops", "depth_unconfirmed_from_uncertain_boxes", "extent_above_the_deck",
+    "extent_covers_a_labelled_neighbour", "extent_ends_below_spaces_above", "extent_of_unknown_space",
+    "extent_withheld", "frame_spacing_not_understood", "outline_dropped", "plan_boxes_hold_each_others_labels",
+    "printed_hatch_size_ignored", "scale_mark_not_understood")
 MEASURED_FIELDS = ("lbp_m", "loa_m", "breadth_m", "depth_m")
 
 
@@ -1193,6 +1200,9 @@ def read_extents(result: dict, work: dict, reading: dict, request_dir: Path) -> 
                                      "label": entry["space_id"][:64]})
             continue
         stats["boxed"] += 1
+        if entry.get("printed_size"):
+            # Every printed size the model reports ends up used or in checks with a reason.
+            work.setdefault("printed_sizes", []).append({"space_id": entry["space_id"], "text": entry["printed_size"][:32]})
         axis = work["axes"].get(view)
         if axis is None or "extent" in space:
             continue
@@ -1477,16 +1487,18 @@ def parse_hatch_size(text: str) -> tuple[float, float] | None:
     return tuple(sides) if all(low <= side <= high for side in sides) else None
 
 
-def apply_printed_hatch_sizes(result: dict) -> int:
+def apply_printed_hatch_sizes(result: dict, reported: list[dict] = ()) -> int:
     """Tie each printed hatch size to the one hatch whose box holds the text, and record it as
     the hatch's length and breadth (status ``printed``); otherwise ignore it with a reason in
     checks. Returns how many sizes were tied (PM decision, 2026-11-12)."""
     hatches = [s for s in result["spaces"] if s["kind"] == "cargo_hatch" and "outline_box_px" in (s.get("extent") or {})]
     tied = 0
+    settled = set()  # spaces whose reported size was used or ignored with a reason
     for hatch in hatches:
         raw = hatch["extent"].pop("printed_size_raw", None)
         if raw is None:
             continue
+        settled.add(hatch["id"])
         x, y = raw["at_px"]
         holding = [other for other in hatches if other["extent"]["view_id"] == hatch["extent"]["view_id"]
                    and other["extent"]["outline_box_px"][0] < x < other["extent"]["outline_box_px"][2]
@@ -1512,6 +1524,16 @@ def apply_printed_hatch_sizes(result: dict) -> int:
         length, breadth = min([sides, sides[::-1]], key=lambda pair: misfit(*pair))
         extent["printed_size_m"] = {"length": round(length, 3), "breadth": round(breadth, 3), "text": raw["text"]}
         tied += 1
+    # A reported size that reached no hatch box: say why, never drop it silently.
+    kinds = {space["id"]: space["kind"] for space in result["spaces"]}
+    for item in reported:
+        if item["space_id"] in settled:
+            continue
+        settled.add(item["space_id"])
+        reason = ("it was given for a space that is not a cargo hatch"
+                  if kinds.get(item["space_id"]) != "cargo_hatch" else "its hatch has no box to tie it to")
+        result["checks"].append({"code": "printed_hatch_size_ignored", "status": "dropped",
+                                 "label": item["text"], "reason": reason})
     return tied
 
 
@@ -1847,6 +1869,9 @@ def redraw_covering_boxes(result: dict, work: dict, sheet_path: Path, out: Path,
             shrunk = _area(new["outline_box_px"]) < REDRAW_MIN_AREA_SHARE * _area(old["outline_box_px"])
             if not inside and not lost_own and not shrunk:
                 new["redrawn"] = "drawn again without the labels of the spaces beside it"
+                if "printed_size_raw" in old and "printed_size_raw" not in new:
+                    # The text's place does not depend on the box (round hS2: a redrawn hatch lost its size).
+                    new["printed_size_raw"] = old["printed_size_raw"]
                 kept += 1
                 continue
         spaces[space_id]["extent"] = old
@@ -1918,7 +1943,7 @@ def scale_pass(result: dict, sheet_path: Path, out: Path, call) -> dict:
         # After the depth check: a trimmed hold ends at a topside tank, not at the deck.
         stats["overlaps"] = resolve_overlaps(result)
         stats["overlaps"]["small_label_boxes_withheld"] = withhold_oversized_guesses(result)
-        stats["printed_hatch_sizes"] = apply_printed_hatch_sizes(result)
+        stats["printed_hatch_sizes"] = apply_printed_hatch_sizes(result, work.get("printed_sizes", []))
     if not checked and result["measured"]["depth_m"]["status"] == MEASURED:
         # A depth that the space tops could not check is not given (see check_depth).
         pointed = result["measured"]["depth_m"]["value"]

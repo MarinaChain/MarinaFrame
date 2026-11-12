@@ -1352,3 +1352,56 @@ def test_a_size_not_inside_this_hatch_alone_is_ignored(at_px):
     assert gs.apply_printed_hatch_sizes(result) == 0
     assert "printed_size_m" not in result["spaces"][0]["extent"]
     assert any(c["code"] == "printed_hatch_size_ignored" for c in result["checks"])
+
+
+
+def test_every_reported_hatch_size_is_used_or_ignored_with_a_reason():
+    """Round hS2: a size reported for a hatch whose box was redrawn was dropped silently."""
+    result = _hatches([200, 200])
+    result["spaces"].append({"id": "other_space-9", "kind": "other_space", "label": "HATCH COVER STORE",
+                             "status": "read", "view_id": "v2"})
+    reported = [{"space_id": "cargo_hatch-1", "text": "15.480 x 20.600"},
+                {"space_id": "cargo_hatch-2", "text": "15.480 x 20.600"},   # its box carries no size: no box to tie
+                {"space_id": "other_space-9", "text": "12.0 x 8.0"}]         # not a hatch
+    assert gs.apply_printed_hatch_sizes(result, reported) == 1
+    reasons = sorted(c["reason"] for c in result["checks"] if c["code"] == "printed_hatch_size_ignored")
+    assert reasons == ["it was given for a space that is not a cargo hatch", "its hatch has no box to tie it to"]
+
+
+def test_a_redrawn_hatch_keeps_the_size_reported_with_its_first_box(tmp_path):
+    """Round hS2: the redraw replaced a hatch's box and its printed size was lost."""
+    result = _result(tmp_path)
+    hatch = next(s for s in result["spaces"] if s["id"] == "cargo_hold-001")
+    hatch.update(kind="cargo_hatch", label="NO.2 HATCH")
+    void = json.loads(json.dumps(next(s for s in result["spaces"] if s["id"] == "other_space-006")))
+    void.update(id="other_space-060", label="VOID SPACE", view_id="v1")
+    void["source_record"]["regions"][0]["box_px"] = [1100.0, 440.0, 1160.0, 450.0]
+    result["spaces"].append(void)
+
+    def call(request_dir, provider_dir):
+        if request_dir.name == "extents":
+            reply = _extent_reply(request_dir)
+            entry = next(e for e in reply["reply"]["ga_scale"]["extents"] if e["space_id"] == "cargo_hold-001")
+            entry.update(printed_size="18.2 x 15.0", printed_size_at=list(_image_xy(request_dir, "v1", 1250.0, 400.0)))
+            return reply
+        if request_dir.name == "extents-redraw":  # the box drawn again, above the void, without the size
+            x0, y0 = _image_xy(request_dir, "v1", _px(80), DECK_Y)
+            x1, y1 = _image_xy(request_dir, "v1", _px(120), 430.0)
+            return {"reply": {"ga_scale": {"ticks": [], "spacing_labels": [], "spacing_boundaries": [], "points": [],
+                                           "note": "", "extents": [{"space_id": "cargo_hold-001", "image_id": "v1",
+                                                                    "box": [x0, y0, x1, y1], "basis": "outline"}]}}}
+        return _scale_reply(request_dir)
+
+    stats = gs.scale_pass(result, tmp_path / "S-1_GA.png", tmp_path / "scale", call)
+    assert stats["extents"]["redraw_kept"] == 1 and hatch["extent"]["redrawn"]
+    assert hatch["extent"]["printed_size_m"]["text"] == "18.2 x 15.0"
+
+
+
+def test_every_check_code_of_the_scale_pass_is_listed_for_a_replay():
+    """A replay removes the scale pass's checks before it runs the pass again (round hS2: kept
+    checks were written twice)."""
+    import re as regex
+    source = (Path(gs.__file__)).read_text()
+    written = set(regex.findall(r'"code": "([a-z_0-9]+)"', source))
+    assert written <= set(gs.SCALE_PASS_CHECKS)

@@ -755,6 +755,71 @@ PYTHONPATH=src .venv/bin/python scripts/ga_ink_diagnostic.py --run $W/holdout-ru
   --answers <answers file converted from sealed/> --out $W/holdout-run-reparticulars/score.json
 ```
 
+## Status (paused 2026-11-12; waiting for a user decision)
+
+Extent work is paused. A separate lane refactors the GA code with no behaviour change, on a
+branch made from this branch's head; lane U does not edit source on lane/ga-commercial meanwhile.
+
+**Exam.** The GA reader was frozen at a0fdf2b; the blind score of the frozen holdout run is 35 of
+42 items, 0 wrong (7 abstentions, all on particulars). After the exam, the post-reply checks were
+fixed (values printed as approximate; a printed value's ink at the image's own level; the only
+text run beside a value box; ruling lines; sources by role and hash). The evaluator re-checked
+ff30e41 on the stored replies of the exam run, with 0 model calls: 36 of 36 particulars and 6 of
+6 counts, 0 wrong, 0 abstained, no other scored item changed. This is a re-check of the
+post-reply checks, made after the exam from its output; it is not a blind score.
+
+**Done (measurement pass, development ships only; not on the exam path).** Frame tables from
+the printed frame scale (local one-frame spacings, a spacing chosen by the frame-number fit);
+LBP, LOA, breadth and depth with their own statuses (measured, derived from space tops,
+unconfirmed from uncertain boxes); boxes for holds, tanks, hatches, cranes and rooms from the
+whole views, also for labels read from shared crops; overlap rules (strips, projections,
+redrawn boxes over unboxed labels, tanks ending below the spaces above them, conflicting cargo
+numbers withheld, guessed boxes kept off cargo spaces, off-centre holds centred, deck equipment
+on the deck); optional outlines for sloped boundaries; printed hatch sizes; lane W's gate.
+Latest full round: u10, replayed as u10r6, gate 14 of 14. Live hatch sample (four ships with
+hatches, one run, then replayed): 29 hatches reported a printed size; 25 are tied to one hatch
+and 4 ignored because the text was not inside one hatch alone, each with a reason in checks; gate
+4 of 4; no extra request. A size reported with a box that the redraw then replaced was first lost
+without a reason; the redrawn box now keeps it, and every reported size is accounted for (used,
+or in checks with a reason). The replay tool removes all check codes of the scale pass
+(`SCALE_PASS_CHECKS`) before it runs the pass again.
+
+**Open.** Boxes along sloped and curved boundaries where the model gives no outline; a store or
+void inside a peak tank whose label was never read as a space; the model's clear/uncertain
+marking varies from run to run (three ships had no measured depth in one round); the fine pass
+reads different labels from run to run (coverage warnings); a misread printed spacing refuses a
+ship's frame scale. Two experiments did not pass their rules and were not kept (a prompt
+change to the clear/uncertain marking; an extra request for end outlines).
+
+**What truth data would let us measure the 3D arrangement.** Today the extents are judged by
+reviews (Astra) and by lane W's gate, which checks consistency, not correctness. A measure
+needs, for a handful of development ships: (1) the capacity plan or tank table: each tank's
+name, frame range and volume, and its centres of gravity (LCG, VCG, TCG); this scores the
+x range and the volume of every tank box; (2) the midship section or the tank arrangement plan
+with breadths, the double-bottom height and the hopper and top-side sizes; this scores y and z;
+(3) the printed principal particulars (LBP, B, D) and the hatch size table; these score the
+measured values and hatches. Five development ships with a capacity plan would be enough to
+start: per tank, the error of its frame range and of its volume, and the share of tanks with a
+box at all.
+
+**Proof for the refactor: replay commands (0 model calls).** They rebuild u10r6's arrangement
+inputs from the stored replies of round u10; a refactor with no behaviour change gives files
+identical to u10r6 on all 14 development ships (checked before the pause: 14 of 14 identical,
+gate 14 of 14):
+
+```sh
+W=work/ga-internal-23
+PYTHONPATH=src .venv/bin/python scripts/ga_replay_scale.py \
+  --run $W/dev-runs/u10 --inputs $W/inputs --out $W/dev-runs/u10-refactor-check
+for case in $W/dev-runs/u10r6/GA-*; do
+  cmp "$case/ga_arrangement_input.json" "$W/dev-runs/u10-refactor-check/$(basename "$case")/ga_arrangement_input.json"
+done
+PYTHONPATH=src .venv/bin/python scripts/ga_arrangement_gate.py $W/dev-runs/u10-refactor-check
+```
+
+`cmp` prints nothing when the files are identical. The post-exam particulars path has its own
+check: `ga_commercial reinterpret-particulars` (see "After the exam") on the stored exam run.
+
 ## Frozen
 
 - Frozen on 2026-11-12 at 07:20 SGT by the PM, at the user's request ("run the exam").
