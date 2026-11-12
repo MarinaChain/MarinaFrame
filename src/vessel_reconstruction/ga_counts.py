@@ -88,7 +88,8 @@ def fragment_reason(space: dict, others: list[dict], vocabulary: set[str],
         return "a single letter after the number: the label is cut"
     # CR.1 is a complete crane label, not a cut prefix of CRANE in another view.
     # Keep the shared non-cargo exclusions; malformed parentheses were checked above.
-    if space.get("kind") == "cargo_crane" and re.search(KIND_WORDS["cargo_crane"], label.upper()):
+    if (space.get("kind") == "cargo_crane" and _named_words(label)[-1:] == ["CR"]
+            and re.search(KIND_WORDS["cargo_crane"], label.upper())):
         return None
     is_room = bool(_named_words(label)) and _named_words(label)[-1] in ROOM_NOUNS
     if space.get("kind") in ("other_space", "other_tank") and not is_room and (

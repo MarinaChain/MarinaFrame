@@ -28,10 +28,49 @@ provider request. OCR will locate crops only; the model still reads the value.
    only lane/ga-synthetic-fixes, do not merge. PM owns development replay and live runs.
 5. Remove this worktree's local target directory after delivery, if present.
 
-## Resume point
+## Design review
 
-Source tracing complete. Next: failing G7 tests, then the first scoped fix.
+- Architecture: PASS. Reuse the optional local OCR reader and its sheet-pixel word
+  boxes. OCR locates images only; the existing model and scale parser read values.
+- Code quality: PASS. One note crop holds uncovered matching lines. Existing view
+  IDs keep coordinate mapping and provenance unchanged.
+- Coverage: PASS. Test abbreviations, non-cargo exclusions, access hatches, initial
+  and retry crops, multiple notes, absent OCR/text and profile-free requests.
+- Performance: WARN. Each scale attempt adds one local whole-sheet OCR pass. No
+  new provider call. A found note reserves one image slot; spare slots go to views
+  in existing order. No-note view tiling stays unchanged.
 
 ## Results
 
-Pending.
+- G7 red: five abbreviation cases failed kind checks; after the vocabulary change,
+  three still failed dotted-prefix fragment checks. Both causes now have tests.
+- G7 focused vocabulary/labels/commercial suite: 143 passed. Commit `dfc3a14`.
+- G8 red: nine coverage cases failed because the header was outside all images.
+  Add matching note-line regions to the existing request and preserve the six-image
+  limit. Include a parser test using note-image coordinates to establish scale.
+- Offline generator check: seed 17, six ships. Real local Tesseract found a header
+  note on 6/6 sheets with synthetic tight view boxes; kind/fragment checks retained
+  all 12 generated crane labels. No provider calls and no model accuracy claim.
+  An initial harness used a padded profile that already covered the header; it was
+  corrected to an explicitly uncovered header before the six-case check.
+- Full GA suite: 326 passed before the final added local-OCR integration test.
+- Quick-tier first attempt failed because a shared cached app build did not stage
+  this worktree's `app/ui-release`. Rebuilding only marinaframe-app fixed staging.
+  Next attempt passed format/clippy but failed the unrelated real-worker primary
+  sheet replacement: `Some("The action could not be completed (sheet_replacement_failed).")`
+  versus `None`, app/core/tests/replace_sheet.rs:144. One diagnostic with explicit
+  worker Python and RUST_BACKTRACE passed (1 passed; registry error `None`). No
+  unrelated code or test was changed. Complete tier rerun failed at the same
+  primary replacement assertion. This remains a merge blocker for the PM, not a
+  reason to change unrelated worker code in this lane.
+- Final scale/vocabulary checks: 139 passed. Final vocabulary/commercial/labels/
+  note-crop checks, including generated-sheet local OCR: 157 passed. The fragment
+  exemption is limited to labels ending in CR, not arbitrary crane-label fragments.
+- UI and bounded secret scan passed (zero findings). Full Python quick tier pending.
+
+## Resume point
+
+Both fixes implemented; final focused and quick-tier checks are running. Next:
+record their results, commit G8, run the required check-to-push chain, and push only
+this lane. PM still owns development byte-identical replay and any live model run.
+No structural module change; Codesight refresh is not required.
