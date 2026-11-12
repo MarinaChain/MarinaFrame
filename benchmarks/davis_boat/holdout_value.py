@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from benchmarks.frozen_readers.v1 import body_plan_reader as bpr
 
+# Published holdout results (2026-11-11), Limits: now a development case.
+STATUS = 'development'
 PROTOCOL = 'docs/holdouts/davis-boat.md'
 # Frozen truth file work/holdout/davis_boat/truth.json (main checkout, read-only): sha256 as
 # recorded in the protocol section 1. The scorer stops if the file differs.

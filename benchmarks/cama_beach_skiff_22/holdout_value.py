@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from benchmarks.frozen_readers.v1 import body_plan_reader as bpr
 
+# Published holdout results (2026-11-11), Limits: now a development case.
+STATUS = 'development'
 PROTOCOL = 'docs/BODY_PLAN_CHINE.md (Holdout protocol: CAMA BEACH SKIFF No. 22)'
 # Frozen truth file work/holdout/cama_beach_skiff_22/truth.json (main checkout, read-only): sha256
 # as recorded in the protocol. The scorer stops if the file differs.

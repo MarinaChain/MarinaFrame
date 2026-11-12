@@ -19,6 +19,8 @@ from benchmarks.thayer import holdout_value as thayer
 from benchmarks.frozen_readers.v1 import body_plan_crossings as bpc
 from benchmarks.frozen_readers.v1 import body_plan_reader as bpr
 
+# BODY_PLAN_CHINE.md Metrics: round 14 is spent and this is a development case.
+STATUS = 'development'
 PROTOCOL = 'docs/holdouts/round14-pardon-me.md'
 CENTRE_COLUMN = 3270.0
 BASE_ROW = 5229  # the drawn "W0 BASELINE" row of the body plan

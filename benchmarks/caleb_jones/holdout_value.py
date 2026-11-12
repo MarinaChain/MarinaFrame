@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from benchmarks.frozen_readers.v1 import body_plan_reader as bpr
 
+# BODY_PLAN_CHINE.md original result explicitly makes this a development case.
+STATUS = 'development'
 PROTOCOL = 'docs/BODY_PLAN_CHINE.md (Holdout protocol: CALEB JONES)'
 # Frozen truth file work/holdout/caleb-jones/truth.json (main checkout, read-only): sha256 given by
 # the PM before the run. The scorer stops if the file differs.
