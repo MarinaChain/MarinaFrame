@@ -164,6 +164,24 @@ def _measure(result: dict, work: dict) -> dict:
         return abstain("the frame numbers do not fit the printed spacings")
     axis = work["axes"][primary]
     work["table"] = table
+    scale_region, span_px = _record_frame_scale(result, work, table, axis, primary, ticks, sheet, page_px, kinds, RECORD_VIEWS)
+    def measured(pixels: float, view_axis: Axis, how: str, regions: list[dict]) -> dict:
+        value = view_axis.length_m(pixels)
+        # Two pointed places and the fit of the scale itself.
+        sigma = math.hypot(sigma_px, view_axis.rms_px)
+        uncertainty = 2 * sigma / abs(view_axis.px_per_m) + value * axis.rms_px / max(span_px, 1.0)
+        return {"value": round(value, 2), "status": MEASURED, "uncertainty_m": round(uncertainty, 2),
+                "method": how, "scale_basis": view_axis.basis,
+                "note": "measured on the drawing with its printed frame scale; not a printed particular",
+                "source_record": source_record.validate(source_record.read([*regions, scale_region]))}
+
+    out = _measure_profile_and_breadth(result, work, table, ticks, marks, points, raw, sheet, page_px, kinds, one, measured)
+    _check_measured_dimensions(result, out, fields, PLAUSIBLE)
+    result["measured"] = out
+    return work
+
+
+def _record_frame_scale(result, work, table, axis, primary, ticks, sheet, page_px, kinds, RECORD_VIEWS):
     # A plan without its own frame numbers: the scale of the primary view, when both views draw
     # the hull equally long (one sheet, one scale); its origin comes from the hull's aft end.
     primary_ends = work["points"].get(primary, {})
@@ -195,16 +213,10 @@ def _measure(result: dict, work: dict) -> dict:
                   "ticks_used": axis.ticks_used, "ticks_read": axis.ticks_read, "rms_px": round(axis.rms_px, 2)},
         "source_record": source_record.validate(source_record.read([scale_region]))}
 
-    def measured(pixels: float, view_axis: Axis, how: str, regions: list[dict]) -> dict:
-        value = view_axis.length_m(pixels)
-        # Two pointed places and the fit of the scale itself.
-        sigma = math.hypot(sigma_px, view_axis.rms_px)
-        uncertainty = 2 * sigma / abs(view_axis.px_per_m) + value * axis.rms_px / max(span_px, 1.0)
-        return {"value": round(value, 2), "status": MEASURED, "uncertainty_m": round(uncertainty, 2),
-                "method": how, "scale_basis": view_axis.basis,
-                "note": "measured on the drawing with its printed frame scale; not a printed particular",
-                "source_record": source_record.validate(source_record.read([*regions, scale_region]))}
+    return scale_region, span_px
 
+
+def _measure_profile_and_breadth(result, work, table, ticks, marks, points, raw, sheet, page_px, kinds, one, measured):
     out = {}
     profile = next((view for view in work["axes"] if kinds.get(view) == "profile"), None)
     named = work["points"].get(profile, {}) if profile else {}
@@ -262,6 +274,10 @@ def _measure(result: dict, work: dict) -> dict:
                                          _point_region(sheet, page_px, "plan", b)])
             break
 
+    return out
+
+
+def _check_measured_dimensions(result, out, fields, PLAUSIBLE):
     def refuse(names, reason, code):
         for name in names:
             out[name] = _unknown(reason)
@@ -282,5 +298,3 @@ def _measure(result: dict, work: dict) -> dict:
     if value("breadth_m") and value("depth_m") and not (BREADTH_OVER_DEPTH[0] <= value("breadth_m") / value("depth_m")
                                                         <= BREADTH_OVER_DEPTH[1]):
         refuse(["depth_m"], "the measured depth does not fit the measured breadth", "measured_depth_disagrees")
-    result["measured"] = out
-    return work

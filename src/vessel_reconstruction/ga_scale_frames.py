@@ -188,53 +188,7 @@ def spacing_table(ticks: list[tuple[int, float]], labels: list[tuple[float, floa
     if not labels:
         return None, "no frame spacing is printed"
     bow_right = ticks[-1][0] > ticks[0][0]
-    cuts = []
-    for place in sorted(boundaries):
-        if not cuts or place - cuts[-1] > SAME_MARK_PX:
-            cuts.append(place)
-    edges = [-math.inf, *cuts, math.inf]
-    inside = [[t for t in ticks if low < t[1] <= high] for low, high in zip(edges, edges[1:])]
-    # The printed texts of each range: texts at one place are readings of one printed value.
-    groups: list[list[tuple[float, set]]] = []
-    for low, high in zip(edges, edges[1:]):
-        here = sorted((place, mm) for mm, place in labels if low < place <= high)
-        texts: list[tuple[float, set]] = []
-        for index, (place, mm) in enumerate(here):
-            if index and place - here[index - 1][0] <= SAME_LABEL_PX:
-                texts[-1][1].add(mm)
-            else:
-                texts.append((place, {mm}))
-        groups.append(texts)
-    # A range too short to hold its text (one frame between two drawn changes) has it printed
-    # beside it, in a neighbouring range, which then shows two different spacings. Such a text
-    # belongs to the short range: the neighbour's text nearest to it moves there.
-    for index, texts in enumerate(groups):
-        if texts or len(inside[index]) > 1 or index in (0, len(groups) - 1):
-            continue
-        for neighbour, near_edge in ((index + 1, edges[index + 1]), (index - 1, edges[index])):
-            others = groups[neighbour]
-            if len({frozenset(values) for _, values in others}) < 2:
-                continue
-            nearest = min(range(len(others)), key=lambda k: abs(others[k][0] - near_edge))
-            groups[index] = [others.pop(nearest)]
-            break
-    locals_found: list[tuple[float, float, float]] = []  # (sheet x, local mm, main mm)
-    for index, texts in enumerate(groups):
-        # The text of a short range whose drawn changes were left out (see below) is a one-frame
-        # spacing inside the range around it, when that range prints one other spacing.
-        forced = [(place, values) for place, values in texts
-                  if any(abs(place - spot) <= SAME_MARK_PX for spot in _one_frame)]
-        others = {value for place, values in texts for value in values if (place, values) not in forced}
-        if forced and len(others) == 1 and all(len(values) == 1 for _, values in forced):
-            main = next(iter(others))
-            groups[index] = [text for text in texts if text not in forced]
-            locals_found += [(place, next(iter(values)), main) for place, values in forced]
-            continue
-        local = _local_intervals(texts, inside[index])
-        if local is not None:
-            main, places = local
-            groups[index] = [text for text in texts if text[1] == {main}]
-            locals_found += [(place, mm, main) for place, mm in places]
+    cuts, edges, inside, groups, locals_found = _group_spacing_texts(ticks, labels, boundaries, _one_frame)
     found = []
     for texts in groups:
         # Texts at two places with two values are two printed spacings, and the change between
@@ -251,85 +205,11 @@ def spacing_table(ticks: list[tuple[int, float]], labels: list[tuple[float, floa
                       if any(len(f) > 1 for f in found) else "no range of the frame scale has two frame numbers")
     anchor = max(sure, key=lambda index: len(inside[index]))
     px_per_m = _range_slope(inside[anchor]) / (next(iter(found[anchor])) / 1000.0)  # negative: bow to the left
-    values: list[float | None] = []
-    chosen_by_fit: list[tuple[int, int, float]] = []  # (first frame, last frame, mm) of a range
-    printed = set().union(*found) if found else set()
-    for index, candidates in enumerate(found):
-        # The frame numbers of a range show its spacing: they decide between two readings of
-        # the printed value (two requests can read "600" and "800" at one place), and they
-        # refuse a printed value that the numbers contradict (a misread value, or a change
-        # of spacing that was not marked).
-        fitting = candidates
-        if len(inside[index]) >= (2 if len(candidates) > 1 else MIN_RANGE_TICKS):
-            slope = _range_slope(inside[index])
-            fitting = {mm for mm in candidates
-                       if abs(slope / (px_per_m * mm / 1000.0) - 1) <= RANGE_SLOPE_TOLERANCE}
-            if candidates and not fitting:
-                chosen = _spacing_from_fit(inside[index], px_per_m, printed)
-                if chosen is None:
-                    return None, "the frame numbers of a range do not fit its printed spacing"
-                fitting = {chosen}
-                frames_here = [frame for frame, _ in inside[index]]
-                chosen_by_fit.append((min(frames_here), max(frames_here), chosen))
-        if len(fitting) > 1:
-            return None, "two different frame spacings are printed with no change drawn between them"
-        values.append(next(iter(fitting)) if fitting else None)
-    # A range without a printed spacing: at an end of the scale it takes no part; between two
-    # ranges, or with frame numbers inside it, the scale is not established.
-    for index, value in enumerate(values):
-        if value is not None:
-            continue
-        low, high = edges[index], edges[index + 1]
-        if index not in (0, len(values) - 1) or any(low < place <= high for _, place in ticks):
-            return None, "a part of the frame scale has no printed spacing"
-    while values[0] is None:
-        values.pop(0)
-        cuts.pop(0)
-    while values[-1] is None:
-        values.pop()
-        cuts.pop()
-    # The same spacing on both sides of a mark is no change.
-    for index in range(len(values) - 1, 0, -1):
-        if values[index] == values[index - 1]:
-            values.pop(index)
-            cuts.pop(index - 1)
-    edges = [-math.inf, *cuts, math.inf]
-    inside = [[t for t in ticks if low < t[1] <= high] for low, high in zip(edges, edges[1:])]
-    anchor = max(range(len(values)), key=lambda index: len(inside[index]))
-
-    def frame_from_ticks(cut: float, region: int) -> list[float]:
-        """The frame at ``cut`` as the three nearest frame numbers of ``region`` place it: near
-        numbers need a short step along the scale, and three outvote one misread number."""
-        step = px_per_m * values[region] / 1000.0
-        nearest = sorted(inside[region], key=lambda tick: abs(tick[1] - cut))[:3]
-        return [frame + (cut - place) / step for frame, place in nearest]
-
-    cut_frames: list[int | None] = [None] * len(cuts)
-    # Outward from the anchor range: first the cuts ahead of it on the sheet, then those before.
-    for order in (range(anchor, len(cuts)), range(anchor - 1, -1, -1)):
-        for index in order:
-            estimates = frame_from_ticks(cuts[index], index) + frame_from_ticks(cuts[index], index + 1)
-            if not estimates:
-                # No frame number on either side: from the neighbouring change and the spacing between.
-                inner = index - 1 if index >= anchor else index + 1
-                region = index if index >= anchor else index + 1
-                step = px_per_m * values[region] / 1000.0
-                estimates = [cut_frames[inner] + (cuts[index] - cuts[inner]) / step]
-            cut_frames[index] = int(round(float(np.median(estimates))))
-    # A short range between two drawn changes must span its frames at its printed spacing (round
-    # u10: a change drawn four frames past a one-frame "1200" made a 1200 mm range of four
-    # frames, and a hold 2 m short). Such a pair of changes is left out and the table built again:
-    # the text then counts as a one-frame spacing that the frame numbers must confirm.
-    wrong, texts_of_wrong = [], []
-    for index in range(1, len(values) - 1):
-        if len(inside[index]) >= 2:
-            continue  # its frame numbers checked it above
-        drawn_m = abs(cuts[index] - cuts[index - 1]) / abs(px_per_m)
-        expected_m = (cut_frames[index] - cut_frames[index - 1]) * values[index] / 1000.0
-        if abs(abs(drawn_m) - abs(expected_m)) > SHORT_RANGE_TOLERANCE * values[index] / 1000.0:
-            wrong += [cuts[index - 1], cuts[index]]
-            low, high = sorted((cuts[index - 1], cuts[index]))
-            texts_of_wrong += [place for mm, place in labels if low <= place <= high and mm == values[index]]
+    values, cuts, inside, anchor, chosen_by_fit, reason = _select_range_spacings(
+        ticks, found, inside, edges, cuts, px_per_m)
+    if reason:
+        return None, reason
+    cut_frames, wrong, texts_of_wrong = _place_spacing_changes(ticks, labels, cuts, values, inside, anchor, px_per_m)
     if wrong:
         if not _retry:
             return None, "a short range between two drawn changes does not span its frames at its spacing"
@@ -489,3 +369,141 @@ def fit_axis(ticks: list[tuple[int, float]], table: FrameTable) -> tuple[Axis | 
     if rms > MAX_RMS_FRAMES * frame_px:
         return None, "the frame numbers do not fit the printed spacings"
     return Axis(float(offset), float(slope), rms, int(keep.sum()), read, "frame scale of this view"), "fitted"
+
+
+def _group_spacing_texts(ticks, labels, boundaries, _one_frame):
+    cuts = []
+    for place in sorted(boundaries):
+        if not cuts or place - cuts[-1] > SAME_MARK_PX:
+            cuts.append(place)
+    edges = [-math.inf, *cuts, math.inf]
+    inside = [[t for t in ticks if low < t[1] <= high] for low, high in zip(edges, edges[1:])]
+    # The printed texts of each range: texts at one place are readings of one printed value.
+    groups: list[list[tuple[float, set]]] = []
+    for low, high in zip(edges, edges[1:]):
+        here = sorted((place, mm) for mm, place in labels if low < place <= high)
+        texts: list[tuple[float, set]] = []
+        for index, (place, mm) in enumerate(here):
+            if index and place - here[index - 1][0] <= SAME_LABEL_PX:
+                texts[-1][1].add(mm)
+            else:
+                texts.append((place, {mm}))
+        groups.append(texts)
+    # A range too short to hold its text (one frame between two drawn changes) has it printed
+    # beside it, in a neighbouring range, which then shows two different spacings. Such a text
+    # belongs to the short range: the neighbour's text nearest to it moves there.
+    for index, texts in enumerate(groups):
+        if texts or len(inside[index]) > 1 or index in (0, len(groups) - 1):
+            continue
+        for neighbour, near_edge in ((index + 1, edges[index + 1]), (index - 1, edges[index])):
+            others = groups[neighbour]
+            if len({frozenset(values) for _, values in others}) < 2:
+                continue
+            nearest = min(range(len(others)), key=lambda k: abs(others[k][0] - near_edge))
+            groups[index] = [others.pop(nearest)]
+            break
+    locals_found: list[tuple[float, float, float]] = []  # (sheet x, local mm, main mm)
+    for index, texts in enumerate(groups):
+        # The text of a short range whose drawn changes were left out (see below) is a one-frame
+        # spacing inside the range around it, when that range prints one other spacing.
+        forced = [(place, values) for place, values in texts
+                  if any(abs(place - spot) <= SAME_MARK_PX for spot in _one_frame)]
+        others = {value for place, values in texts for value in values if (place, values) not in forced}
+        if forced and len(others) == 1 and all(len(values) == 1 for _, values in forced):
+            main = next(iter(others))
+            groups[index] = [text for text in texts if text not in forced]
+            locals_found += [(place, next(iter(values)), main) for place, values in forced]
+            continue
+        local = _local_intervals(texts, inside[index])
+        if local is not None:
+            main, places = local
+            groups[index] = [text for text in texts if text[1] == {main}]
+            locals_found += [(place, mm, main) for place, mm in places]
+    return cuts, edges, inside, groups, locals_found
+
+
+def _place_spacing_changes(ticks, labels, cuts, values, inside, anchor, px_per_m):
+    def frame_from_ticks(cut: float, region: int) -> list[float]:
+        """The frame at ``cut`` as the three nearest frame numbers of ``region`` place it: near
+        numbers need a short step along the scale, and three outvote one misread number."""
+        step = px_per_m * values[region] / 1000.0
+        nearest = sorted(inside[region], key=lambda tick: abs(tick[1] - cut))[:3]
+        return [frame + (cut - place) / step for frame, place in nearest]
+
+    cut_frames: list[int | None] = [None] * len(cuts)
+    # Outward from the anchor range: first the cuts ahead of it on the sheet, then those before.
+    for order in (range(anchor, len(cuts)), range(anchor - 1, -1, -1)):
+        for index in order:
+            estimates = frame_from_ticks(cuts[index], index) + frame_from_ticks(cuts[index], index + 1)
+            if not estimates:
+                # No frame number on either side: from the neighbouring change and the spacing between.
+                inner = index - 1 if index >= anchor else index + 1
+                region = index if index >= anchor else index + 1
+                step = px_per_m * values[region] / 1000.0
+                estimates = [cut_frames[inner] + (cuts[index] - cuts[inner]) / step]
+            cut_frames[index] = int(round(float(np.median(estimates))))
+    # A short range between two drawn changes must span its frames at its printed spacing (round
+    # u10: a change drawn four frames past a one-frame "1200" made a 1200 mm range of four
+    # frames, and a hold 2 m short). Such a pair of changes is left out and the table built again:
+    # the text then counts as a one-frame spacing that the frame numbers must confirm.
+    wrong, texts_of_wrong = [], []
+    for index in range(1, len(values) - 1):
+        if len(inside[index]) >= 2:
+            continue  # its frame numbers checked it above
+        drawn_m = abs(cuts[index] - cuts[index - 1]) / abs(px_per_m)
+        expected_m = (cut_frames[index] - cut_frames[index - 1]) * values[index] / 1000.0
+        if abs(abs(drawn_m) - abs(expected_m)) > SHORT_RANGE_TOLERANCE * values[index] / 1000.0:
+            wrong += [cuts[index - 1], cuts[index]]
+            low, high = sorted((cuts[index - 1], cuts[index]))
+            texts_of_wrong += [place for mm, place in labels if low <= place <= high and mm == values[index]]
+    return cut_frames, wrong, texts_of_wrong
+
+
+def _select_range_spacings(ticks, found, inside, edges, cuts, px_per_m):
+    values: list[float | None] = []
+    chosen_by_fit: list[tuple[int, int, float]] = []  # (first frame, last frame, mm) of a range
+    printed = set().union(*found) if found else set()
+    for index, candidates in enumerate(found):
+        # The frame numbers of a range show its spacing: they decide between two readings of
+        # the printed value (two requests can read "600" and "800" at one place), and they
+        # refuse a printed value that the numbers contradict (a misread value, or a change
+        # of spacing that was not marked).
+        fitting = candidates
+        if len(inside[index]) >= (2 if len(candidates) > 1 else MIN_RANGE_TICKS):
+            slope = _range_slope(inside[index])
+            fitting = {mm for mm in candidates
+                       if abs(slope / (px_per_m * mm / 1000.0) - 1) <= RANGE_SLOPE_TOLERANCE}
+            if candidates and not fitting:
+                chosen = _spacing_from_fit(inside[index], px_per_m, printed)
+                if chosen is None:
+                    return None, None, None, None, None, "the frame numbers of a range do not fit its printed spacing"
+                fitting = {chosen}
+                frames_here = [frame for frame, _ in inside[index]]
+                chosen_by_fit.append((min(frames_here), max(frames_here), chosen))
+        if len(fitting) > 1:
+            return None, None, None, None, None, "two different frame spacings are printed with no change drawn between them"
+        values.append(next(iter(fitting)) if fitting else None)
+    # A range without a printed spacing: at an end of the scale it takes no part; between two
+    # ranges, or with frame numbers inside it, the scale is not established.
+    for index, value in enumerate(values):
+        if value is not None:
+            continue
+        low, high = edges[index], edges[index + 1]
+        if index not in (0, len(values) - 1) or any(low < place <= high for _, place in ticks):
+            return None, None, None, None, None, "a part of the frame scale has no printed spacing"
+    while values[0] is None:
+        values.pop(0)
+        cuts.pop(0)
+    while values[-1] is None:
+        values.pop()
+        cuts.pop()
+    # The same spacing on both sides of a mark is no change.
+    for index in range(len(values) - 1, 0, -1):
+        if values[index] == values[index - 1]:
+            values.pop(index)
+            cuts.pop(index - 1)
+    edges = [-math.inf, *cuts, math.inf]
+    inside = [[t for t in ticks if low < t[1] <= high] for low, high in zip(edges, edges[1:])]
+    anchor = max(range(len(values)), key=lambda index: len(inside[index]))
+
+    return values, cuts, inside, anchor, chosen_by_fit, None

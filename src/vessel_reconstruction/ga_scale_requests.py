@@ -160,6 +160,38 @@ def prepare_extents(result: dict, sheet_path: Path, out: Path, missing: list[str
         scale = ga._fit_scale(box[2] - box[0], box[3] - box[1])
         boxes[view["view_id"]] = (box, scale)
         plan.append((view["view_id"], f"{view['kind']}:{view['view_id']}", box, scale))
+    spaces = _extent_spaces(result, views, boxes, only_ids, exclude)
+    if not spaces:
+        return []
+    order = {kind: index for index, kind in enumerate(EXTENT_PRIORITY)}
+    # Stable: within a kind, labels with a known place first, then reading order.
+    spaces.sort(key=lambda entry: order.get(entry["kind"], len(order)))  # stable: reading order within a kind
+    # Labels with a known place and labels from a shared crop ("near") go in separate requests,
+    # the known ones first: mixed in one request, the model marked most boxes "uncertain"
+    # (round u9n: outline boxes fell from 23 of 52 to 10 of 77 on one ship).
+    known = [entry for entry in spaces if "near" not in entry]
+    near = [entry for entry in spaces if "near" in entry]
+    chunks = ([known[i:i + EXTENT_SPACES_PER_REQUEST] for i in range(0, len(known), EXTENT_SPACES_PER_REQUEST)]
+              + [near[i:i + EXTENT_SPACES_PER_REQUEST] for i in range(0, len(near), EXTENT_SPACES_PER_REQUEST)])
+    chunks = chunks[:MAX_EXTENT_REQUESTS]
+    directories = []
+    for index, chunk in enumerate(chunks):
+        want = ["extents", "points"] if index == 0 else ["extents"]
+        note = None
+        if index == 0 and missing:
+            note = {"places": list(missing),
+                    "note": "These were not pointed yet; point each one that is drawn. Named places go in "
+                            "points; the perpendicular marks go in ticks, at the frame scale."}
+
+        context = _extent_context(boxes, chunk, want, note)
+
+        directory = out if index == 0 else out.with_name(f"{out.name}-{index + 1}")
+        _write_request(plan, sheet_path, directory, context)
+        directories.append(directory)
+    return directories
+
+
+def _extent_spaces(result, views, boxes, only_ids, exclude):
     profile = views.get("profile")
     spaces = []
     # Several labels read from one crop of the fine pass share its region; the place of each
@@ -194,57 +226,36 @@ def prepare_extents(result: dict, sheet_path: Path, out: Path, missing: list[str
         else:
             continue
         spaces.append(entry)
-    if not spaces:
-        return []
-    order = {kind: index for index, kind in enumerate(EXTENT_PRIORITY)}
-    # Stable: within a kind, labels with a known place first, then reading order.
-    spaces.sort(key=lambda entry: order.get(entry["kind"], len(order)))  # stable: reading order within a kind
-    # Labels with a known place and labels from a shared crop ("near") go in separate requests,
-    # the known ones first: mixed in one request, the model marked most boxes "uncertain"
-    # (round u9n: outline boxes fell from 23 of 52 to 10 of 77 on one ship).
-    known = [entry for entry in spaces if "near" not in entry]
-    near = [entry for entry in spaces if "near" in entry]
-    chunks = ([known[i:i + EXTENT_SPACES_PER_REQUEST] for i in range(0, len(known), EXTENT_SPACES_PER_REQUEST)]
-              + [near[i:i + EXTENT_SPACES_PER_REQUEST] for i in range(0, len(near), EXTENT_SPACES_PER_REQUEST)])
-    chunks = chunks[:MAX_EXTENT_REQUESTS]
-    directories = []
-    for index, chunk in enumerate(chunks):
-        want = ["extents", "points"] if index == 0 else ["extents"]
-        note = None
-        if index == 0 and missing:
-            note = {"places": list(missing),
-                    "note": "These were not pointed yet; point each one that is drawn. Named places go in "
-                            "points; the perpendicular marks go in ticks, at the frame scale."}
+    return spaces
 
-        def context(sizes: dict, chunk=chunk, want=want, note=note) -> dict:
-            placed = []
-            for entry in chunk:
-                if entry["at"] is not None:
-                    (left, top, right, bottom), _ = boxes[entry["image_id"]]
-                    width, height = sizes[entry["image_id"]]
 
-                    def in_image(point, left=left, top=top, right=right, bottom=bottom, width=width, height=height):
-                        return [round((point[0] - left) * width / (right - left)),
-                                round((point[1] - top) * height / (bottom - top))]
+def _extent_context(boxes, chunk, want, note):
+    def context(sizes: dict, chunk=chunk, want=want, note=note) -> dict:
+        placed = []
+        for entry in chunk:
+            if entry["at"] is not None:
+                (left, top, right, bottom), _ = boxes[entry["image_id"]]
+                width, height = sizes[entry["image_id"]]
 
-                    entry = {**entry, "at": in_image(entry["at"])}
-                    if "exclude" in entry:
-                        entry["exclude"] = [{**other, "at": in_image(other["at"])} for other in entry["exclude"]]
-                if entry.get("near") is not None:
-                    (left, top, right, bottom), _ = boxes[entry["image_id"]]
-                    width, height = sizes[entry["image_id"]]
-                    near = entry["near"]
-                    entry = {**entry, "near": [round((near[0] - left) * width / (right - left)),
-                                               round((near[1] - top) * height / (bottom - top)),
-                                               round((near[2] - left) * width / (right - left)),
-                                               round((near[3] - top) * height / (bottom - top))]}
-                placed.append(entry)
-            context = {"want": want, "spaces": placed}
-            if note:
-                context["missing"] = note
-            return context
+                def in_image(point, left=left, top=top, right=right, bottom=bottom, width=width, height=height):
+                    return [round((point[0] - left) * width / (right - left)),
+                            round((point[1] - top) * height / (bottom - top))]
 
-        directory = out if index == 0 else out.with_name(f"{out.name}-{index + 1}")
-        _write_request(plan, sheet_path, directory, context)
-        directories.append(directory)
-    return directories
+                entry = {**entry, "at": in_image(entry["at"])}
+                if "exclude" in entry:
+                    entry["exclude"] = [{**other, "at": in_image(other["at"])} for other in entry["exclude"]]
+            if entry.get("near") is not None:
+                (left, top, right, bottom), _ = boxes[entry["image_id"]]
+                width, height = sizes[entry["image_id"]]
+                near = entry["near"]
+                entry = {**entry, "near": [round((near[0] - left) * width / (right - left)),
+                                           round((near[1] - top) * height / (bottom - top)),
+                                           round((near[2] - left) * width / (right - left)),
+                                           round((near[3] - top) * height / (bottom - top))]}
+            placed.append(entry)
+        context = {"want": want, "spaces": placed}
+        if note:
+            context["missing"] = note
+        return context
+
+    return context

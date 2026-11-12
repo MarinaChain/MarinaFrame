@@ -36,28 +36,7 @@ def read_extents(result: dict, work: dict, reading: dict, request_dir: Path) -> 
     if reply is not None and work.get("table") is not None and (reply["points"] or marks):
         # Named places that the scale request left out (a plan it did not look at) come from
         # the whole-view images; a place already pointed at high resolution is kept.
-        tiles = _tiles(request_dir)
-        raw, added = work["raw"], 0
-        for point in reply["points"]:
-            tile = tiles[point["image_id"]]
-            named = raw["points"].setdefault(_view_id(tile), {})
-            if point["name"] not in named:
-                named[point["name"]] = [_to_sheet(tile, point["x"], point["y"])]
-                raw["sigma_px"] = max(raw["sigma_px"], POINT_SIGMA_IMAGE_PX
-                                      * (tile["crop_box_px"][2] - tile["crop_box_px"][0]) / tile["width"])
-                added += 1
-        # A.P. and F.P. marks that the scale request left out (needed for the LBP).
-        for tick in marks:
-            name = parse_tick(tick["label"])[0]
-            tile = tiles[tick["image_id"]]
-            view_marks = raw["marks"].setdefault(_view_id(tile), {})
-            if name in view_marks:
-                continue  # a mark already pointed in this view is kept
-            view_marks[name] = [_to_sheet(tile, tick["x"], tick["y"])]
-            added += 1
-        if added:
-            stats["points_added"] = added
-            _measure(result, work)
+        _add_extent_marks(result, work, reply, marks, request_dir, stats)
     table = work.get("table")
     if reply is None or table is None:
         stats["reason"] = ("the frame scale was not established" if table is None
@@ -109,17 +88,7 @@ def read_extents(result: dict, work: dict, reading: dict, request_dir: Path) -> 
             sides = sorted((sign * (centre - top) / abs(axis.px_per_m), sign * (centre - bottom) / abs(axis.px_per_m)))
             extent["y_m"] = [round(sides[0], 2), round(sides[1], 2)]
             extent["status"]["y"] = status
-        region = (space["source_record"].get("regions") or [{}])[0].get("box_px")
-        if region and sum((s["source_record"].get("regions") or [{}])[0].get("box_px") == region
-                          for s in result["spaces"]) > 1:
-            region = None  # read from a crop shared with other labels: its own place is not known
-        if region:
-            # Where the label of this space is printed, in the metres of the extent (overlap rules).
-            cx, cy = (region[0] + region[2]) / 2, (region[1] + region[3]) / 2
-            if "z_m" in extent:
-                extent["label_at_m"] = [round(axis.x_m(cx), 2), round((base - cy) / abs(axis.px_per_m), 2)]
-            elif "y_m" in extent:
-                extent["label_at_m"] = [round(axis.x_m(cx), 2), round(sign * (centre - cy) / abs(axis.px_per_m), 2)]
+        _place_extent_label(result, space, extent, axis, named)
         side = side_of_label(space["label"])
         if side is None and "y_m" in extent:
             low, high = extent["y_m"]
@@ -129,23 +98,70 @@ def read_extents(result: dict, work: dict, reading: dict, request_dir: Path) -> 
         if space["kind"] == "cargo_hatch" and entry.get("printed_size") and entry.get("printed_size_at"):
             extent["printed_size_raw"] = {"text": entry["printed_size"][:32],
                                           "at_px": [round(v, 1) for v in _to_sheet(tile, *entry["printed_size_at"])]}
-        if entry.get("outline"):
-            def to_metres(px, py, axis=axis, named=named, view=view):
-                if "z_m" in extent:
-                    return [round(axis.x_m(px), 2), round((named["base_line"][1] - py) / abs(axis.px_per_m), 2)]
-                return [round(axis.x_m(px), 2), round(sign * (named["centre_line"][1] - py) / abs(axis.px_per_m), 2)]
-
-            points_px = [_to_sheet(tile, x, y) for x, y in entry["outline"]]
-            reason = _outline_problem(points_px, extent["outline_box_px"], space, result["spaces"], view)
-            if reason is None and ("z_m" in extent or "y_m" in extent):
-                extent["outline"] = {"plane": "xz" if "z_m" in extent else "xy",
-                                     "points_m": [to_metres(x, y) for x, y in points_px],
-                                     "points_px": [[round(x, 1), round(y, 1)] for x, y in points_px],
-                                     "status": OUTLINE_STATUS}
-                stats["outlines"] = stats.get("outlines", 0) + 1
-            else:
-                result["checks"].append({"code": "outline_dropped", "status": "dropped", "label": space["label"][:64],
-                                         "reason": reason or "the view has no base line or centre line"})
+        _attach_extent_outline(result, work, entry, tile, extent, space, view, axis, named, stats)
         space["extent"] = extent
         stats["with_extent"] += 1
     return stats
+
+
+def _add_extent_marks(result, work, reply, marks, request_dir, stats):
+    tiles = _tiles(request_dir)
+    raw, added = work["raw"], 0
+    for point in reply["points"]:
+        tile = tiles[point["image_id"]]
+        named = raw["points"].setdefault(_view_id(tile), {})
+        if point["name"] not in named:
+            named[point["name"]] = [_to_sheet(tile, point["x"], point["y"])]
+            raw["sigma_px"] = max(raw["sigma_px"], POINT_SIGMA_IMAGE_PX
+                                  * (tile["crop_box_px"][2] - tile["crop_box_px"][0]) / tile["width"])
+            added += 1
+    # A.P. and F.P. marks that the scale request left out (needed for the LBP).
+    for tick in marks:
+        name = parse_tick(tick["label"])[0]
+        tile = tiles[tick["image_id"]]
+        view_marks = raw["marks"].setdefault(_view_id(tile), {})
+        if name in view_marks:
+            continue  # a mark already pointed in this view is kept
+        view_marks[name] = [_to_sheet(tile, tick["x"], tick["y"])]
+        added += 1
+    if added:
+        stats["points_added"] = added
+        _measure(result, work)
+
+
+def _attach_extent_outline(result, work, entry, tile, extent, space, view, axis, named, stats):
+    sign = 1.0 if axis.px_per_m > 0 else -1.0
+    if entry.get("outline"):
+        def to_metres(px, py, axis=axis, named=named, view=view):
+            if "z_m" in extent:
+                return [round(axis.x_m(px), 2), round((named["base_line"][1] - py) / abs(axis.px_per_m), 2)]
+            return [round(axis.x_m(px), 2), round(sign * (named["centre_line"][1] - py) / abs(axis.px_per_m), 2)]
+
+        points_px = [_to_sheet(tile, x, y) for x, y in entry["outline"]]
+        reason = _outline_problem(points_px, extent["outline_box_px"], space, result["spaces"], view)
+        if reason is None and ("z_m" in extent or "y_m" in extent):
+            extent["outline"] = {"plane": "xz" if "z_m" in extent else "xy",
+                                 "points_m": [to_metres(x, y) for x, y in points_px],
+                                 "points_px": [[round(x, 1), round(y, 1)] for x, y in points_px],
+                                 "status": OUTLINE_STATUS}
+            stats["outlines"] = stats.get("outlines", 0) + 1
+        else:
+            result["checks"].append({"code": "outline_dropped", "status": "dropped", "label": space["label"][:64],
+                                     "reason": reason or "the view has no base line or centre line"})
+
+
+def _place_extent_label(result, space, extent, axis, named):
+    base = named.get("base_line", (None, None))[1]
+    centre = named.get("centre_line", (None, None))[1]
+    sign = 1.0 if axis.px_per_m > 0 else -1.0
+    region = (space["source_record"].get("regions") or [{}])[0].get("box_px")
+    if region and sum((s["source_record"].get("regions") or [{}])[0].get("box_px") == region
+                      for s in result["spaces"]) > 1:
+        region = None  # read from a crop shared with other labels: its own place is not known
+    if region:
+        # Where the label of this space is printed, in the metres of the extent (overlap rules).
+        cx, cy = (region[0] + region[2]) / 2, (region[1] + region[3]) / 2
+        if "z_m" in extent:
+            extent["label_at_m"] = [round(axis.x_m(cx), 2), round((base - cy) / abs(axis.px_per_m), 2)]
+        elif "y_m" in extent:
+            extent["label_at_m"] = [round(axis.x_m(cx), 2), round(sign * (centre - cy) / abs(axis.px_per_m), 2)]

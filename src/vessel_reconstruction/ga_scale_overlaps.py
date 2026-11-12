@@ -267,89 +267,7 @@ def resolve_overlaps(result: dict) -> dict:
         by_view.setdefault(space["extent"]["view_id"], []).append(space)
     cargo = ("cargo_hold", "cargo_tank")
     for members in by_view.values():
-        # A tank printed for the sides that overlaps a cargo space in the profile (topside, wing or
-        # hopper tanks; round u6: topside tanks over two holds) is a projection, whichever hold
-        # its label lies over.
-        for tank in members:
-            span = _span(tank["extent"])
-            if (span[0] != "z_m" or tank["kind"] in cargo
-                    or side_of_label(tank["label"]) not in ("both", "port", "starboard")):
-                continue
-            for hold in members:
-                if hold["kind"] not in cargo:
-                    continue
-                _, hxs, hvs = _span(hold["extent"])
-                if (_cover(hxs, span[1]) > 0.2 and _cover(hvs, span[2]) > 0.2
-                        and not (span[2][1] <= hvs[0] + EDGE_TOLERANCE_M)):  # not a tank under the hold
-                    tank["extent"]["projection_of"] = hold["id"]
-                    stats["projections"] += 1
-                    break
-        def area(space):
-            _, xs, vs = _span(space["extent"])
-            return (xs[1] - xs[0]) * (vs[1] - vs[0])
-        members.sort(key=area, reverse=True)
-        for big in members:
-            for small in members:
-                if small is big or area(small) > area(big):
-                    continue
-                a, b = big["extent"], small["extent"]
-                if label_family(big["label"]) == label_family(small["label"]) and big["kind"] == small["kind"]:
-                    continue  # the same space read twice
-                a_holds_b, b_holds_a = _holds(a, b["label_at_m"]), _holds(b, a["label_at_m"])
-                other, axs, avs = _span(a)
-                if a_holds_b and b_holds_a:
-                    if other == "z_m":
-                        for this, that in ((big, small), (small, big)):
-                            if this["kind"] not in cargo and that["kind"] in cargo:
-                                this["extent"]["projection_of"] = that["id"]
-                                stats["projections"] += 1
-                    else:
-                        for this in (big, small):
-                            this["extent"]["status"]["y"] = "guessed"
-                        stats["guessed"] += 2
-                        result["checks"].append({"code": "plan_boxes_hold_each_others_labels", "status": "changed",
-                                                 "label": f"{big['label'][:30]} / {small['label'][:30]}"})
-                    continue
-                if not a_holds_b:
-                    continue
-                _, bxs, bvs = _span(b)
-                trimmed = False
-                if _span(b)[0] == other and _cover(axs, bxs) >= STRIP_COVER:
-                    if bvs[0] <= avs[0] + EDGE_TOLERANCE_M < bvs[1] < avs[1]:
-                        a[other][0] = round(bvs[1], 2)  # the neighbour is a strip along the bottom or one side
-                        trimmed = True
-                    elif avs[0] < bvs[0] < avs[1] - EDGE_TOLERANCE_M <= bvs[1]:
-                        a[other][1] = round(bvs[0], 2)  # along the top or the other side
-                        trimmed = True
-                elif _span(b)[0] == other and _cover(avs, bvs) >= STRIP_COVER and "frames" in b:
-                    if bxs[0] <= axs[0] + EDGE_TOLERANCE_M < bxs[1] < axs[1]:
-                        a["frames"][0], a["x_m"][0] = b["frames"][1], b["x_m"][1]
-                        a["x_measured_m"] = [round(bxs[1], 2), a["x_measured_m"][1]] if "x_measured_m" in a else None
-                        trimmed = True
-                    elif axs[0] < bxs[0] < axs[1] - EDGE_TOLERANCE_M <= bxs[1]:
-                        a["frames"][1], a["x_m"][1] = b["frames"][0], b["x_m"][0]
-                        a["x_measured_m"] = [a["x_measured_m"][0], round(bxs[0], 2)] if "x_measured_m" in a else None
-                        trimmed = True
-                if a.get("x_measured_m") is None:
-                    a.pop("x_measured_m", None)
-                if trimmed:
-                    a.setdefault("trimmed_by", []).append(small["id"])
-                    stats["trimmed"] += 1
-                elif (other == "z_m" and big["kind"] in cargo and small["kind"] not in cargo
-                        and side_of_label(small["label"]) in ("both", "port", "starboard")):
-                    # A tank printed for the sides ("(P/S)") inside a cargo space in the profile, and
-                    # not a strip at its edge, is a wing, topside or hopper tank seen in projection
-                    # (round u6: topside fuel tanks boxed over the holds).
-                    b["projection_of"] = big["id"]
-                    stats["projections"] += 1
-                    continue
-                if _holds(a, b["label_at_m"]):
-                    for axis in a["status"]:
-                        a["status"][axis] = "guessed"
-                    a.setdefault("covers", []).append(small["id"])
-                    stats["guessed"] += 1
-                    result["checks"].append({"code": "extent_covers_a_labelled_neighbour", "status": "changed",
-                                             "label": f"{big['label'][:30]} / {small['label'][:30]}"})
+        _resolve_view_overlaps(result, members, cargo, stats)
     stats["ended_below_spaces_above"] = _end_below_spaces_above(result)
     # A box that still holds the label of a space without a box takes in that space: it is not
     # a measured boundary (its axes become guessed).
@@ -372,3 +290,97 @@ def resolve_overlaps(result: dict) -> dict:
             result["checks"].append({"code": "outline_dropped", "status": "dropped", "label": space["label"][:64],
                                      "reason": "the overlap rules changed its box"})
     return stats
+
+
+def _resolve_view_overlaps(result, members, cargo, stats):
+    _mark_side_projections(members, cargo, stats)
+    def area(space):
+        _, xs, vs = _span(space["extent"])
+        return (xs[1] - xs[0]) * (vs[1] - vs[0])
+    members.sort(key=area, reverse=True)
+    for big in members:
+        for small in members:
+            _resolve_extent_pair(result, big, small, cargo, stats, area)
+
+
+def _resolve_extent_pair(result, big, small, cargo, stats, area):
+    if small is big or area(small) > area(big):
+        return
+    a, b = big["extent"], small["extent"]
+    if label_family(big["label"]) == label_family(small["label"]) and big["kind"] == small["kind"]:
+        return  # the same space read twice
+    a_holds_b, b_holds_a = _holds(a, b["label_at_m"]), _holds(b, a["label_at_m"])
+    other, axs, avs = _span(a)
+    if a_holds_b and b_holds_a:
+        if other == "z_m":
+            for this, that in ((big, small), (small, big)):
+                if this["kind"] not in cargo and that["kind"] in cargo:
+                    this["extent"]["projection_of"] = that["id"]
+                    stats["projections"] += 1
+        else:
+            for this in (big, small):
+                this["extent"]["status"]["y"] = "guessed"
+            stats["guessed"] += 2
+            result["checks"].append({"code": "plan_boxes_hold_each_others_labels", "status": "changed",
+                                     "label": f"{big['label'][:30]} / {small['label'][:30]}"})
+        return
+    if not a_holds_b:
+        return
+    _, bxs, bvs = _span(b)
+    trimmed = False
+    if _span(b)[0] == other and _cover(axs, bxs) >= STRIP_COVER:
+        if bvs[0] <= avs[0] + EDGE_TOLERANCE_M < bvs[1] < avs[1]:
+            a[other][0] = round(bvs[1], 2)  # the neighbour is a strip along the bottom or one side
+            trimmed = True
+        elif avs[0] < bvs[0] < avs[1] - EDGE_TOLERANCE_M <= bvs[1]:
+            a[other][1] = round(bvs[0], 2)  # along the top or the other side
+            trimmed = True
+    elif _span(b)[0] == other and _cover(avs, bvs) >= STRIP_COVER and "frames" in b:
+        if bxs[0] <= axs[0] + EDGE_TOLERANCE_M < bxs[1] < axs[1]:
+            a["frames"][0], a["x_m"][0] = b["frames"][1], b["x_m"][1]
+            a["x_measured_m"] = [round(bxs[1], 2), a["x_measured_m"][1]] if "x_measured_m" in a else None
+            trimmed = True
+        elif axs[0] < bxs[0] < axs[1] - EDGE_TOLERANCE_M <= bxs[1]:
+            a["frames"][1], a["x_m"][1] = b["frames"][0], b["x_m"][0]
+            a["x_measured_m"] = [a["x_measured_m"][0], round(bxs[0], 2)] if "x_measured_m" in a else None
+            trimmed = True
+    if a.get("x_measured_m") is None:
+        a.pop("x_measured_m", None)
+    if trimmed:
+        a.setdefault("trimmed_by", []).append(small["id"])
+        stats["trimmed"] += 1
+    elif (other == "z_m" and big["kind"] in cargo and small["kind"] not in cargo
+            and side_of_label(small["label"]) in ("both", "port", "starboard")):
+        # A tank printed for the sides ("(P/S)") inside a cargo space in the profile, and
+        # not a strip at its edge, is a wing, topside or hopper tank seen in projection
+        # (round u6: topside fuel tanks boxed over the holds).
+        b["projection_of"] = big["id"]
+        stats["projections"] += 1
+        return
+    if _holds(a, b["label_at_m"]):
+        for axis in a["status"]:
+            a["status"][axis] = "guessed"
+        a.setdefault("covers", []).append(small["id"])
+        stats["guessed"] += 1
+        result["checks"].append({"code": "extent_covers_a_labelled_neighbour", "status": "changed",
+                                 "label": f"{big['label'][:30]} / {small['label'][:30]}"})
+
+
+def _mark_side_projections(members, cargo, stats):
+    # A tank printed for the sides that overlaps a cargo space in the profile (topside, wing or
+    # hopper tanks; round u6: topside tanks over two holds) is a projection, whichever hold
+    # its label lies over.
+    for tank in members:
+        span = _span(tank["extent"])
+        if (span[0] != "z_m" or tank["kind"] in cargo
+                or side_of_label(tank["label"]) not in ("both", "port", "starboard")):
+            continue
+        for hold in members:
+            if hold["kind"] not in cargo:
+                continue
+            _, hxs, hvs = _span(hold["extent"])
+            if (_cover(hxs, span[1]) > 0.2 and _cover(hvs, span[2]) > 0.2
+                    and not (span[2][1] <= hvs[0] + EDGE_TOLERANCE_M)):  # not a tank under the hold
+                tank["extent"]["projection_of"] = hold["id"]
+                stats["projections"] += 1
+                break
