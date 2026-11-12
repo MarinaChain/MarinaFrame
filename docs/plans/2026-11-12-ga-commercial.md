@@ -802,6 +802,26 @@ measured values and hatches. Five development ships with a capacity plan would b
 start: per tank, the error of its frame range and of its volume, and the share of tanks with a
 box at all.
 
+**Accuracy against the drawing's own printed values** (development ships, no model call;
+`scripts/ga_printed_accuracy.py`, per-ship rows kept under work/). A printed value counts as truth
+only when it was read as printed text and tied to exactly one item; a measured value is never
+truth. A hatch whose printed size now stands as its size is compared through its measured box
+(`measured_box_m`).
+
+| Item (ships) | Count | Median error | Worst error | Within 0.1 m | Within 0.5 m | Within 1 m |
+|---|---:|---:|---:|---:|---:|---:|
+| Frame spacing (10) | 24 ranges | 0.002 m (0.12 %) | 0.015 m (2.1 %) | 24 | 24 | 24 |
+| Hatch length (4) | 25 | 0.86 m (5.6 %) | 3.52 m (16.7 %) | 8 | 8 | 20 |
+| Hatch breadth (4) | 25 | 3.00 m (14.6 %) | 7.06 m (45.6 %) | 0 | 6 | 11 |
+
+Sources: frame spacings from the stored scale replies of round u10 (replayed, ranges with at
+least five frame numbers); hatches from the hatch sample (hS2, replayed). The frame spacing is
+not fully independent: the scale is fitted to the same frame numbers. The measured hatch boxes
+run long and, above all, wide (a box drawn to the coaming or past it), which is why a printed
+size now stands as the hatch's size. No printed hold length, LBP or breadth was read as printed
+text on the development ships (no dimension chain is read, and no ship prints its particulars),
+so those items have no truth here; Astra quoted some, but a reviewer is not truth.
+
 **Proof for the refactor: replay commands (0 model calls).** They rebuild u10r6's arrangement
 inputs from the stored replies of round u10; a refactor with no behaviour change gives files
 identical to u10r6 on all 14 development ships (checked before the pause: 14 of 14 identical,
