@@ -13,7 +13,8 @@ This module reads each station as a polyline instead:
 3. Bottom: at the lower end of the side the line turns. Every ink branch that leaves the end
    inward (toward the centreline) is followed; the bottom is the branch that descends, all the
    way, toward the centreline. A branch that rises (the drawn chine curve between knuckles) is
-   not a bottom.
+   not a bottom. On a flat-bottom hull (a skiff) the bottom is drawn level to the centreline:
+   when no branch descends, a level branch is the bottom.
 4. Knuckle: the corner of the traced polyline, where its turn is sharp: the same turn is seen
    with short and with long arms. A smooth round bilge turns gradually and gives no knuckle.
 5. Names: the traced stations are ranked by nesting (outermost first) and take the host
@@ -101,9 +102,17 @@ BRANCH_ANGLES_DEG = np.arange(-60.0, 80.1, 2.0)
 BRANCH_START_WIDTHS = 2.0
 # A branch starts from points within this many line widths of the side's lower end.
 BRANCH_REACH_WIDTHS = 3.0
-# A bottom descends: over its length its rows increase by at least this share of its length
+# A V-bottom descends: over its length its rows increase by at least this share of its length
 # (sin of about 1 degree). It is long: at least this share of the knuckle's half-breadth.
 BOTTOM_MIN_DESCENT_SHARE = 0.02
+# A flat bottom (a skiff's) is drawn level from the knuckle to the centreline. A branch that neither
+# descends by that share nor rises above its start, and ends within CENTRE_CLEAR_WIDTHS of the
+# centre column, is a level bottom; it is taken only when no
+# descending branch leaves the side, so a level line through a V-bottom knuckle is never preferred.
+# The polyline keeps rows strictly decreasing: a level bottom is stored as the knuckle and its
+# rabbet end, the rabbet put at least LEVEL_ROW_STEP_PX below the knuckle row (twice the 0.25 px
+# rise `_monotone` needs to keep the knuckle; far below drawing precision).
+LEVEL_ROW_STEP_PX = 0.5
 BOTTOM_MIN_LENGTH_SHARE = 0.5
 # ... and at least this many line widths long (a keel or stem outline near the centreline is not).
 MIN_BOTTOM_WIDTHS = 15.0
@@ -195,6 +204,8 @@ class StationPolyline:
     seed: tuple[float, float] | None = None  # (row, column) the side was traced from
     # Other lines that leave the knuckle and reach the centreline: the bottom could be any of them.
     bottom_alternatives: int = 0
+    # A level (flat) bottom as traced, outer end first; the polyline keeps only its two ends.
+    level_bottom: np.ndarray | None = None
 
     @property
     def rabbet(self) -> tuple[float, float]:
@@ -229,7 +240,9 @@ class StationPolyline:
         return self.points[self.knuckle_index:]
 
     def bottom_points(self) -> np.ndarray:
-        """The traced bottom: the rabbet up to the knuckle."""
+        """The traced bottom: the rabbet up to the knuckle (a level bottom as traced)."""
+        if self.level_bottom is not None:
+            return self.level_bottom[::-1]
         return self.points[:self.knuckle_index + 1]
 
     def yz_m(self, sheet: bpr.SheetLayout, height_m) -> np.ndarray:
@@ -598,6 +611,27 @@ def on_grid_line(points: np.ndarray, values, axis: int, width: float) -> bool:
     return False
 
 
+def drawn_rows(ink: np.ndarray, sheet: bpr.SheetLayout) -> list[float]:
+    """The calibrated rows that are drawn lines: on each half, ink on the row (one pixel either side,
+    for the calibration's rounding) at more than GRID_SHARE of the half's columns.
+
+    A drawn waterline is inked on its calibrated row across the body plan. A measuring row that the
+    calibration adds between drawn lines is not, though level bottoms of both halves may lie a few
+    pixels from it. Columns off the image count as no ink.
+    """
+    centre, reach = int(round(sheet.centre_column)), sheet.max_offset_px
+    drawn = []
+    for row in sheet.waterline_rows.values():
+        top, bottom = max(0, int(round(row)) - 1), min(ink.shape[0], int(round(row)) + 2)
+        if top >= bottom:
+            continue
+        band = ink[top:bottom]
+        halves = (band[:, max(0, centre - reach):max(0, centre)], band[:, centre + 1:centre + reach + 1])
+        if all(np.count_nonzero(half.any(axis=0)) > GRID_SHARE * reach for half in halves):
+            drawn.append(row)
+    return drawn
+
+
 def _distance_to(points: np.ndarray, point) -> float:
     return float(np.min(np.hypot(points[:, 0] - point[0], points[:, 1] - point[1])))
 
@@ -613,16 +647,18 @@ def _inward(sign: int, angle_deg: float) -> np.ndarray:
 
 
 def _bottom(ink: np.ndarray, side_points: np.ndarray, sheet: bpr.SheetLayout, sign: int,
-            width: float, exclude: tuple = ()) -> tuple[np.ndarray | None, int]:
+            width: float, exclude: tuple = ()) -> tuple[np.ndarray | None, int, bool]:
     """(Points of the bottom leaving the lower end of a side, outer end first, or None; the number
-    of other lines that leave the end and reach the centreline elsewhere).
+    of other lines that leave the end and reach the centreline elsewhere; True for a level bottom).
 
     Every branch that leaves the end inward on ink is followed to its first corner. A bottom
     descends over its whole length and reaches in toward the centreline. Of those, the one that
     reaches nearest the centreline is the bottom, the longest if several reach equally far. A
     start further back up the side is tried only when no branch leaves from nearer its end (a
     branch from higher up can cut across to the bottom and miss the corner). A branch that runs
-    along one of the `exclude` lines (another station's bottom) is not taken.
+    along one of the `exclude` lines (another station's bottom) is not taken. When no branch
+    descends, a level branch (a flat bottom) is taken by the same rule, from the nearest start
+    that has one; it must run on to the centreline (within CENTRE_CLEAR_WIDTHS line widths).
     """
     end = side_points[-1]
     knuckle_offset = sign * (end[1] - sheet.centre_column)
@@ -634,8 +670,10 @@ def _bottom(ink: np.ndarray, side_points: np.ndarray, sheet: bpr.SheetLayout, si
     start_steps = int(np.ceil(BRANCH_START_WIDTHS * width / STEP_PX))
     starts = [side_points[max(0, len(side_points) - 1 - int(back / STEP_PX))]
               for back in np.arange(0.0, BRANCH_REACH_WIDTHS * width + 0.1, width)]
-    candidates = []
+    candidates, level_candidates = [], []
+    drawn = None  # the drawn calibrated rows, found when a level branch first needs them
     for back, start in enumerate(starts):
+        level_here = []
         for angle in BRANCH_ANGLES_DEG:
             heading = _inward(sign, angle)
             trace = trace_line(ink, start, heading, width, keep)
@@ -650,20 +688,33 @@ def _bottom(ink: np.ndarray, side_points: np.ndarray, sheet: bpr.SheetLayout, si
             length = _length(points)
             if length < max(BOTTOM_MIN_LENGTH_SHARE * knuckle_offset, MIN_BOTTOM_WIDTHS * width):
                 continue
-            if points[-1, 0] - points[0, 0] < BOTTOM_MIN_DESCENT_SHARE * length:
-                continue
             if np.min(points[:, 0]) < points[0, 0] - width:  # rises above its start: not a bottom
-                continue
-            if on_grid_line(points, sheet.waterline_rows.values(), 0, width):
                 continue
             if any(_same_line(points, other, width) for other in exclude):
                 continue
             inner = sign * (points[-1, 1] - centre)
-            candidates.append((back, round(inner / width), -length, points))
+            candidate = (back, round(inner / width), -length, points)
+            if points[-1, 0] - points[0, 0] >= BOTTOM_MIN_DESCENT_SHARE * length:
+                if not on_grid_line(points, sheet.waterline_rows.values(), 0, width):
+                    candidates.append(candidate)
+            elif inner <= CENTRE_CLEAR_WIDTHS * width:
+                # A flat bottom is drawn level on to the centreline; a level line that stops short of it is
+                # another line (a frame or box border below the hull). A level branch is a drawn waterline
+                # only where one is drawn: measuring rows the calibration adds between drawn lines are not
+                # on the paper, and a flat bottom may lie on one.
+                if drawn is None:
+                    drawn = drawn_rows(ink, sheet)
+                if not on_grid_line(points, drawn, 0, width):
+                    level_here.append(candidate)
         if candidates:
             break
+        if not level_candidates:
+            level_candidates = level_here
+    level = not candidates
+    if level:
+        candidates = level_candidates
     if not candidates:
-        return None, 0
+        return None, 0, False
     chosen = min(candidates, key=lambda c: c[:3])[3]
     # Other branches that also reach the centreline but end elsewhere: lines of other stations that
     # pass the knuckle, any of which could be this station's bottom.
@@ -674,7 +725,7 @@ def _bottom(ink: np.ndarray, side_points: np.ndarray, sheet: bpr.SheetLayout, si
     for end in alternatives:
         if all(np.hypot(*(end - other)) > SAME_LINE_WIDTHS * width for other in distinct):
             distinct.append(end)
-    return chosen, len(distinct)
+    return chosen, len(distinct), level
 
 
 def _monotone(points: np.ndarray) -> np.ndarray:
@@ -726,7 +777,7 @@ def trace_station(ink: np.ndarray, seed, sheet: bpr.SheetLayout, side: bpr.SideL
         return None, line, side_points, 'short line'
     if on_grid_line(side_points, side.grid_columns, 1, width) or _ends_on_grid_column(side_points, side, width):
         return None, line, side_points, 'grid line'
-    bottom, alternatives = _bottom(ink, side_points, sheet, side.sign, width, exclude)
+    bottom, alternatives, level = _bottom(ink, side_points, sheet, side.sign, width, exclude)
     if bottom is None:
         return None, line, side_points, 'no bottom branch'
     # Knuckle: where straight fits of the side's lower end and the bottom's outer end meet.
@@ -750,12 +801,17 @@ def trace_station(ink: np.ndarray, seed, sheet: bpr.SheetLayout, side: bpr.SideL
     if inner_offset > BOTTOM_INNER_SHARE * knuckle_offset:
         return None, line, side_points, 'bottom does not reach the centreline'
     # Low to high: the rabbet (the bottom's inner end) first; the knuckle is the fitted corner.
-    low_to_high = np.concatenate([bottom[::-1][:-1], [corner], side_points[::-1][1:]])
+    if level:
+        # Rows must fall from the rabbet to the sheer, but a level bottom does not rise: keep its two ends.
+        rabbet = (max(float(bottom[-1, 0]), float(corner[0]) + LEVEL_ROW_STEP_PX), float(bottom[-1, 1]))
+        low_to_high = np.concatenate([[rabbet], [corner], side_points[::-1][1:]])
+    else:
+        low_to_high = np.concatenate([bottom[::-1][:-1], [corner], side_points[::-1][1:]])
     polyline = _monotone(low_to_high)
     knuckle_index = int(np.argmin(np.hypot(*(polyline - corner).T)))
     station = StationPolyline(side.name, side.sign, polyline, knuckle_index,
                               (float(corner[0]), float(corner[1])), turn, seed=(float(seed[0]), float(seed[1])),
-                              bottom_alternatives=alternatives)
+                              bottom_alternatives=alternatives, level_bottom=bottom if level else None)
     return station, line, side_points, ''
 
 
@@ -785,6 +841,7 @@ def side_and_knuckle_only(station: StationPolyline) -> None:
     """Cut the station's polyline to its side: the knuckle up to the sheer end."""
     station.points = station.points[station.knuckle_index:]
     station.knuckle_index = 0
+    station.level_bottom = None
 
 
 def _own_bottoms(ink: np.ndarray, sheet: bpr.SheetLayout, side: bpr.SideLayout, width: float,

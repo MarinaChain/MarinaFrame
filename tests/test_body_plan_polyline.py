@@ -389,3 +389,92 @@ def test_no_unsupported_check_without_engaged_stations():
     existing = {(4, 'r250'): 12.0}  # nowhere near any ink
     bpp.engage_stations(half, side, existing, sheet, ink)
     assert half.unsupported == [] and bpp.half_table(half, existing, sheet) == existing
+
+
+# ---------------------------------------------------------------- flat-bottom hard chine
+# Outermost station first: (side offset at the sheer, knuckle offset, knuckle row). Each bottom is drawn
+# level from its knuckle to the centreline; the rows differ by station (rocker), and the drawn chine curve
+# through the knuckles rises inward. Station 2's bottom lies 5 px from the measuring row r700, which is not
+# drawn: a level bottom there is still a bottom.
+FLAT_STATIONS = ((1260, 1200, 755), (1050, 1000, 740), (790, 750, 705), (480, 450, 660))
+
+
+def flat_bottom(sign=1, stations=FLAT_STATIONS):
+    """Flat-bottom hard-chine half (a skiff): straight sides, knuckles, level bottoms to the centreline."""
+    image, draw, centre, point = _canvas(sign)
+    draw.line([(centre, 50), (centre, 950)], fill=0, width=2)  # centreline
+    draw.line([(0, 500), (WIDTH - 1, 500)], fill=0, width=2)  # a drawn waterline crossing the sides
+    for sheer, knuckle, knuckle_row in stations:
+        draw.line([point(sheer, SHEER_ROW), point(knuckle, knuckle_row)], fill=0, width=LINE)
+        draw.line([point(knuckle, knuckle_row), point(0, knuckle_row)], fill=0, width=LINE)
+    draw.line([point(k, r) for _, k, r in stations], fill=0, width=LINE)  # the chine curve
+    sheet, side = _layout(centre, sign, len(stations))
+    return np.asarray(image) < 128, sheet, side
+
+
+@pytest.mark.parametrize('sign', [1, -1])
+def test_flat_bottom_stations_are_traced_named_and_knuckled(sign):
+    ink, sheet, side = flat_bottom(sign)
+    half = bpp.read_half(ink, sheet, side)
+    assert half.read, half.notes
+    assert [s.station for s in half.stations] == [4, 3, 2, 1]
+    for station, (sheer, knuckle, knuckle_row) in zip(half.stations, FLAT_STATIONS):
+        row, column = station.chine
+        assert row == pytest.approx(knuckle_row, abs=3)
+        assert sign * (column - sheet.centre_column) == pytest.approx(knuckle, abs=3)
+        assert station.turn_deg > 45
+        expected = sign * (_side_column(sheet, side, sheer, knuckle, knuckle_row, 450) - sheet.centre_column)
+        assert station.half_breadth_m(450, sheet) == pytest.approx(expected / 100.0, abs=0.03)
+        # The rabbet is the level bottom's inner end, at the centreline, on the drawn bottom line (a branch
+        # from just above the knuckle can meet the bottom at its lower edge: within one line width).
+        assert sign * (station.rabbet[1] - sheet.centre_column) < 0.1 * knuckle
+        assert station.rabbet[0] == pytest.approx(knuckle_row, abs=LINE)
+        # Rows still rise once from the rabbet to the sheer, through the knuckle.
+        assert np.all(np.diff(station.points[:, 0]) < 0)
+        assert station.points[station.knuckle_index, 1] == pytest.approx(column, abs=3)
+
+
+def test_only_calibrated_rows_inked_across_both_halves_are_drawn_rows():
+    """Level bottoms of both halves a few pixels either side of a measuring row do not make it drawn."""
+    image = Image.new('L', (WIDTH, HEIGHT), 255)
+    draw = ImageDraw.Draw(image)
+    centre = WIDTH // 2
+    draw.line([(centre - 600, 400), (centre + 600, 400)], fill=0, width=2)  # a drawn waterline on r400
+    draw.line([(centre - 500, 696), (centre, 696)], fill=0, width=LINE)  # one half's bottom above r700
+    draw.line([(centre, 704), (centre + 500, 704)], fill=0, width=LINE)  # the other half's bottom below
+    sheet = bpr.SheetLayout(centre, 100.0, {'drawn': 400, 'between': 700, 'empty': 550}, 700, ())
+    assert bpp.drawn_rows(np.asarray(image) < 128, sheet) == [400]
+
+
+def test_a_box_corner_below_the_hull_whose_level_line_stops_short_of_the_centreline_is_not_a_station():
+    ink, sheet, side = flat_bottom()
+    image = Image.fromarray(np.where(ink, 0, 255).astype(np.uint8))
+    draw = ImageDraw.Draw(image)
+    centre = sheet.centre_column
+    draw.line([(centre + 1400, 790), (centre + 1400, 950)], fill=0, width=LINE)  # a frame edge below the hull
+    draw.line([(centre + 1400, 950), (centre + 300, 950)], fill=0, width=LINE)  # its level border, short of the centreline
+    half = bpp.read_half(np.asarray(image) < 128, sheet, side)
+    assert half.read, half.notes
+    assert [s.station for s in half.stations] == [4, 3, 2, 1]
+    assert all(s.chine[0] < 800 for s in half.stations + half.unnamed)
+
+
+def test_a_flat_bottom_half_gives_side_cells_above_each_knuckle():
+    ink, sheet, side = flat_bottom()
+    table = bpp.waterline_table({'fore': bpp.read_half(ink, sheet, side)}, sheet)
+    assert table[(4, 'r475')] > table[(3, 'r475')] > table[(2, 'r475')] > table[(1, 'r475')]
+    assert (1, 'r700') not in table  # below station 1's level bottom
+    assert (4, 'r700') in table
+
+
+def test_a_v_bottom_with_a_level_line_through_its_knuckles_keeps_its_descending_bottoms():
+    """A level line through the knuckles (a drawn line that is not a measuring row) is not taken as the
+    bottom where a descending bottom leaves the same knuckle."""
+    stations = tuple((sheer, knuckle, 690, rabbet) for sheer, knuckle, _, rabbet in STATIONS)
+    ink, sheet, side = v_bottom(stations=stations, chine_curve=False)
+    image = Image.fromarray(np.where(ink, 0, 255).astype(np.uint8))
+    ImageDraw.Draw(image).line([(0, 690), (WIDTH - 1, 690)], fill=0, width=2)
+    half = bpp.read_half(np.asarray(image) < 128, sheet, side)
+    assert half.read, half.notes
+    for station, (_, _, _, rabbet_row) in zip(half.stations, stations):
+        assert station.rabbet[0] == pytest.approx(rabbet_row, abs=8)
