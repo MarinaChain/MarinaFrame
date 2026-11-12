@@ -63,7 +63,7 @@ The first quick-tier run was stopped by the tool's 600-second background limit d
 
 Ruling: limit the experimental source sampler to MM-declared files with a caller-stated correction for numerically mislabelled public coordinates. This removes ambiguous cross-unit conversion rather than promising generic IGES support. Cost: other declared units require explicit conversion before sampling.
 
-The pre-correction quick tier passed: Rust 318 passed, 50 ignored; Python 2343 passed, 4 skipped, 90 deselected (5 warnings); UI 275 passed; bounded secret scan 0 findings. A fresh full quick tier on correction commit 31e834b is running; final outcome will be appended.
+The pre-correction quick tier passed: Rust 318 passed, 50 ignored; Python 2343 passed, 4 skipped, 90 deselected (5 warnings); UI 275 passed; bounded secret scan 0 findings. The fresh full quick tier on correction commit 31e834b **passed (exit 0)**: Rust 318 passed / 50 ignored; Python 2345 passed / 4 skipped / 91 deselected / 5 warnings in 504.01 s; UI 275 passed; bounded secret scan 0 findings. Related geometry and mesh regression tests also passed: 24 tests in 10.62 s. Only documentation changed after this tested source.
 
 Post-correction synthetic set (all valid solids; files remain in ignored work/hull-variation/):
 
