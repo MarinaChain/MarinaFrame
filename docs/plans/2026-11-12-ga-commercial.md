@@ -847,3 +847,41 @@ check: `ga_commercial reinterpret-particulars` (see "After the exam") on the sto
 - Lane U's unpushed prompt experiment (clear/uncertain marking) is not part of the frozen code.
 - The exam runs once, as written in "What the evaluator runs": Claude Sonnet 5.5 only, at most
   54 requests, no `--measure`, scorer and tolerance unchanged.
+
+## Holdout exam result (one frozen run, 2026-11-12)
+
+Frozen commit a66e0e7 (code a0fdf2b). Claude Sonnet 5.5 only, 51 of 54 requests, 15 min, list cost
+USD 2.35 (subscription). All 9 holdout cases ran; none failed.
+
+| Group | Scored | Correct | Wrong | Abstained | Accuracy when answered |
+|---|---|---|---|---|---|
+| Particulars (LOA, LBP, B, D) | 36 | 29 | 0 | 7 | 100% |
+| Counts (holds, hatches, cranes) | 6 | 6 | 0 | 0 | 100% |
+
+- No wrong answer in 42 scored items. 35 correct (83%), 7 abstentions; no answer expected an abstention.
+- Cause of the 7 abstentions (from the run's own output, not from images): a deterministic check
+  after the model reply set the value to null. Three LOA values printed with "ABT." and a decimal
+  comma failed the unit and number check; on one table all four values failed the "box holds no ink"
+  check. In all 7, the model's own text agreed with the answer. This does not change the score.
+- Limits: 9 ships. The counts are scored on 2 bulk carriers only, and the PM had seen their count
+  answers before the run (logged in EXAM_LOG.md); the lane got only general counting rules.
+- The holdout is now used. A later version needs new unseen ships for a blind score.
+
+## Re-check of the post-reply checks (same stored replies, 0 model calls)
+
+The 7 abstentions of the frozen run were values the model read correctly that a deterministic
+check after the reply set to null. The fixes below were made after the exam, from the exam
+output (the lane saw only numeric diagnostics, never holdout images or answers). Each re-check
+re-ran only the checks on the stored replies of the frozen run; no model call was made.
+
+| Code | Change | Particulars correct | Wrong | Abstained | Counts |
+|---|---|---|---|---|---|
+| a66e0e7 (frozen, official blind score) | none | 29 / 36 | 0 | 7 | 6 / 6 |
+| 006c740 | "ABT."/"about" prefix accepted, value marked approximate | 32 / 36 | 0 | 4 | 6 / 6 |
+| 5526d34 | ink level from the image's own paper; search beside a blank box | 34 / 36 | 0 | 2 | 6 / 6 |
+| ff30e41 | thin table lines are not values; a box on a sliver of ink moves onto its text | 36 / 36 | 0 | 0 | 6 / 6 |
+
+- The official blind score stays the frozen run. The re-check score is 42 / 42 on the same
+  replies with the corrected checks, and it is not a blind score for the corrected code.
+- No re-check turned any item into a wrong answer, and no other scored item changed.
+- The fixed rules are tested on synthetic tables. No development ship prints its particulars.
