@@ -30,6 +30,11 @@ CASES = (
 PREVIEW_SIDE = 2400
 
 
+def source_hash(path):
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
 def load_sheet(path):
     limit = Image.MAX_IMAGE_PIXELS
     try:
@@ -77,7 +82,7 @@ def inspect(path, directory, experimental=False):
     views = draft_fit.reference_views(grey, regions, 1.0)
     result = {"size_px": size, "dpi": dpi, "legacy_regions": regions,
               "legacy_reference_views": views, "scale_status": "supplied_only_by_legacy_api",
-              "source_sha256": hashlib.file_digest(path.open("rb"), "sha256").hexdigest(),
+              "source_sha256": source_hash(path),
               "model_calls": 0, "truth_loaded": False, "engineering_approved": False}
     save_regions(picture, regions, directory, "legacy")
     if experimental:
@@ -87,14 +92,24 @@ def inspect(path, directory, experimental=False):
     return result
 
 
+def check_output_directory(path):
+    local_work = Path(__file__).resolve().parents[1] / "work"
+    target = path.resolve()
+    if not target.is_relative_to(local_work.resolve()):
+        raise ValueError("per-sheet evidence must stay under this worktree's local work directory")
+    return target
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--work-root", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--experimental", action="store_true")
     args = parser.parse_args()
-    if "work" not in args.out.resolve().parts:
-        parser.error("per-sheet evidence must be written under ignored work/")
+    try:
+        args.out = check_output_directory(args.out)
+    except ValueError as error:
+        parser.error(str(error))
     for name, relative in CASES:
         directory = args.out / name
         directory.mkdir(parents=True, exist_ok=True)
