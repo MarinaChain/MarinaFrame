@@ -323,3 +323,17 @@ def test_build_and_run_folder(reading, tmp_path):
     assert entry["runs_folder"] == "../../out/runs"
     summary = json.loads((task / "ga_estimate.json").read_text())
     assert summary["test_fixture"] is True and summary["skipped"][0]["id"] == "other_space-001"
+
+
+
+def test_a_printed_extent_is_built_as_read_and_shown_as_printed(reading):
+    """Regression (synthetic GA run, 2026-11-12): the builder refused the status "printed"
+    (printed hatch sizes, dimension-chain hold lengths)."""
+    from benchmarks.ga_arrangement.run_folder import default_basis, ui_source
+    hold = next(s for s in reading["spaces"] if s["id"] == "cargo_hold-001")
+    hold["extent"]["status"] = {**hold["extent"].get("status", {}), "x": "printed"}
+    data = G.load_input(reading)
+    item = next(i for i in data.items if i.id == "cargo_hold-001")
+    box = G.item_box(item, data, G.hull_size(data))
+    assert box.status["x"] == "printed" and "x" not in box.guessed
+    assert ui_source("printed") == "printed" and "printed on the drawing" in default_basis("x", "printed")

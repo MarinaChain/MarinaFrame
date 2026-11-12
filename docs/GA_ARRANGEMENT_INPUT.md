@@ -47,7 +47,8 @@ port, z up from the baseline.
 | `z_m` | bottom and top above the baseline; absent: a rule below (guessed) |
 | `side` | `both` (default), `port`, `starboard`, `centre` |
 | `tier` | deckhouse tier number (1 = on the upper deck), used when `z_m` is absent |
-| `status` | `read`, `measured_from_scale` or `guessed` per axis (`x`, `y`, `z`); an axis given without a status is `read`. `measured_from_scale` counts as read (drawn ink measured with the frame scale) |
+| `status` | `read`, `printed`, `measured_from_scale` or `guessed` per axis (`x`, `y`, `z`); an axis given without a status is `read`. `printed` is a size printed on the drawing and tied to this one item (a hatch size, a span of the dimension chain), the most trusted status; `measured_from_scale` is drawn ink measured with the frame scale. Both count as read; the part card shows `printed` as "Printed" |
+| `measured_box_m` | optional: with a `printed` axis, the box as measured (`x_m`, `y_m`); the printed size is centred on it. `printed_size` (a hatch) or `printed_span` (a hold) gives the text as printed |
 
 A space without `extent` is skipped and listed in the run's `ga_estimate.json` (`skipped`).
 

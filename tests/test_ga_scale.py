@@ -1439,3 +1439,25 @@ def test_a_printed_chain_span_survives_the_extents_and_reaches_the_frame_record(
     assert stats["printed_spans"] == 1
     assert result["frames"]["printed_spans"] == [
         {"from_frame": 100, "to_frame": 105, "length_m": 4.0, "text": "4000", "status": "printed"}]
+
+
+
+def test_measure_one_runs_the_scale_pass_and_writes_the_arrangement_input(tmp_path):
+    """Regression (synthetic GA run, 2026-11-12): measure_one called a name the refactor had
+    moved, so every --measure run raised after its model passes."""
+    result = _result(tmp_path)
+    result["usage"] = {"requests": 1, "completed": 1, "prompt_tokens": 0, "completion_tokens": 0,
+                       "observed_cost_usd": 0.0, "list_cost_usd": 0.0, "model": None, "endpoint": None}
+
+    def fake_call(binary, request, out, basis, model=None):
+        request = Path(request)
+        return _extent_reply(request) if request.name.startswith("extents") else _scale_reply(request)
+
+    original, ga.call_model = ga.call_model, fake_call  # measure_one looks it up in ga_commercial
+    try:
+        ga.measure_one(result, tmp_path / "S-1_GA.png", tmp_path / "out", tmp_path / "bin", "test", "model", "S-1")
+    finally:
+        ga.call_model = original
+    arrangement = json.loads((tmp_path / "out" / "ga_arrangement_input.json").read_text())
+    assert result["frames"]["status"] == "read" and arrangement["case_id"] == "S-1"
+    assert any("extent" in space for space in arrangement["spaces"])
