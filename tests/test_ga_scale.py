@@ -1405,3 +1405,27 @@ def test_every_check_code_of_the_scale_pass_is_listed_for_a_replay():
     source = (Path(gs.__file__)).read_text()
     written = set(regex.findall(r'"code": "([a-z_0-9]+)"', source))
     assert written <= set(gs.SCALE_PASS_CHECKS)
+
+
+
+def test_a_printed_chain_span_survives_the_extents_and_reaches_the_frame_record(tmp_path):
+    """Backlog item 5: the dimension chain, read in the scale request (no extra request)."""
+    result = _result(tmp_path)
+
+    def call(request_dir, provider_dir):
+        if request_dir.name.startswith("scale"):
+            reply = _scale_reply(request_dir)
+            y_text, y_line = BASE_Y + 70, BASE_Y + 80
+            image_id = _holding(request_dir, "v1", _px(102.5), y_text)
+            places = [_image_xy(request_dir, image_id, x, y) for x, y in
+                      ((_px(102.5), y_text), (_px(100), y_line), (_px(105), y_line))]
+            reply["reply"]["ga_scale"]["chain_spans"] = [{"image_id": image_id, "printed": "4000",
+                                                          "at": list(places[0]), "from": list(places[1]),
+                                                          "to": list(places[2])}]
+            return reply
+        return _extent_reply(request_dir)
+
+    stats = gs.scale_pass(result, tmp_path / "S-1_GA.png", tmp_path / "scale", call)
+    assert stats["printed_spans"] == 1
+    assert result["frames"]["printed_spans"] == [
+        {"from_frame": 100, "to_frame": 105, "length_m": 4.0, "text": "4000", "status": "printed"}]

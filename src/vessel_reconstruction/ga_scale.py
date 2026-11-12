@@ -316,5 +316,9 @@ def scale_pass(result: dict, sheet_path: Path, out: Path, call) -> dict:
         result["checks"].append({"code": "depth_not_checked", "status": "check"})
     stats["measured"] = sorted(k for k, v in result["measured"].items() if v["status"] == MEASURED)
     stats["derived"] = sorted(k for k, v in result["measured"].items() if v["status"] == DERIVED)
+    if work.get("table") is not None and (work.get("raw") or {}).get("chains"):
+        # Last: the frame record is rebuilt whenever an extents reply adds named places.
+        from .ga_scale_chain import read_printed_spans
+        stats["printed_spans"] = read_printed_spans(result, work)
     stats["requests"] = len(readings)
     return stats

@@ -342,6 +342,8 @@ def arrangement_input(result: dict, case_id: str) -> dict:
     spaces = _side_boxes_without_height(spaces, particulars)
     spaces = _without_guessed_over_cargo(spaces, particulars)
     spaces = _without_cargo_number_conflicts(spaces, particulars)
+    from .ga_scale_chain import holds_with_printed_spans
+    spaces = holds_with_printed_spans(spaces, result.get("frames") or {})
     return {"schema": INPUT_SCHEMA, "case_id": case_id, "engineering_approved": False,
             "sources": result["sources"], "ship_type": result.get("ship_type"),
             "particulars": particulars, "frames": frames, "spaces": spaces, "dropped": dropped}
