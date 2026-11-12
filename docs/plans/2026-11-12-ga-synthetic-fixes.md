@@ -66,11 +66,20 @@ provider request. OCR will locate crops only; the model still reads the value.
 - Final scale/vocabulary checks: 139 passed. Final vocabulary/commercial/labels/
   note-crop checks, including generated-sheet local OCR: 157 passed. The fragment
   exemption is limited to labels ending in CR, not arbitrary crane-label fragments.
-- UI and bounded secret scan passed (zero findings). Full Python quick tier pending.
+- UI: 275 passed, zero failures. Bounded secret scan: zero findings.
+- The separate Python quick tier reached 51% with four skips and no displayed
+  failures before the tool stopped it at its 600-second background limit. It is
+  incomplete, not passing. A longer restart was started then cancelled because
+  the unrelated Rust quick-tier blocker already requires PM follow-up.
 
 ## Resume point
 
-Both fixes implemented; final focused and quick-tier checks are running. Next:
-record their results, commit G8, run the required check-to-push chain, and push only
-this lane. PM still owns development byte-identical replay and any live model run.
-No structural module change; Codesight refresh is not required.
+Both scoped fixes are committed (`dfc3a14`, `c0a5db3`). Delivery stops at the
+unrelated full-tier Rust blocker. Push the passing scoped work as the brief directs
+for a blocked lane; this is not a clean quick-tier delivery. PM must resolve or
+triage the primary sheet-replacement failure, complete the Python quick tier,
+run development byte-identical replay, and authorize any live model re-run.
+No partner drawing or restricted folder was opened. No merge. No structural
+module change; Codesight refresh is not required. No worktree-local target folder
+exists, so no Rust build-folder removal is needed; shared cache remains untouched
+apart from the single app-package cache repair noted above.
