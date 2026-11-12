@@ -96,6 +96,130 @@ fuel. Cavitation, engine torque limits and non-B-series propeller geometry are
 not covered. P/D and J screening bounds are implementation restrictions,
 not a universal published accuracy guarantee.
 
+### Holtrop original worked-example check
+
+`ec19dbd` implements separate `holtrop_mennen_1982` and `holtrop_1984`.
+The original 1982 paper pp.169–170 (PDF4–5) supplies the author example.
+Use the **printed converted LCB −0.75% LWL**, not the input-table −2.02% Lpp;
+Cstern is **+10**. Exact equations with rho1025 kg/m³ and adopted 15°C
+nu1.18831e−6 give RT **1791.985 kN** and PE **23046.918 kW**, against printed
+**1793.26 kN / 23063 kW** (−0.0711% / −0.0697%). Wake **0.258042** and
+thrust deduction **0.174658** compare with printed **0.2584 / 0.1747**.
+The 0.1% resistance/power test tolerance is documented: the source's printed
+correlation force (221.98 kN) does not exactly match its formula (220.572 kN).
+No empirical constants were adjusted to close this residual.
+
+Both versions expose friction/viscous, wave, appendage, bulb, transom,
+correlation and tunnel components. 1984 replaces the documented form/wave/
+interaction terms and interpolates wave force between Fn0.4 and0.55.
+Outside numerical fractional-power domains raises an explicit error; range
+warnings and method caveats are returned. There is **no claim of a universally
+calibrated hull-ratio envelope**. All model-scale comparisons below are marked
+`outside_range` (ship regression at model scale, CA disabled); JBC also has
+Cp>0.8 applicability caution. B-series is a Re2e6 surrogate, not exact AU MP687.
+
+### Development comparison — first scored run, no tuning
+
+Code was committed before scoring. Input SHA-256 and full component outputs are
+in ignored `work/performance-baseline/development-score-v1.json`; input is
+`development-v3.json`. Only KCS/JBC were scored. Signed error is
+100×(estimate−measured)/measured. Each speed is model m/s. CT estimates use
+mesh shell area; measured power uses published reference area. All are drafts.
+
+| Ship | Method | Speed m/s | CT measured | CT estimate | CT error % | PE error % |
+|---|---|---:|---:|---:|---:|---:|
+| KCS | 1982 | 0.915 | 0.003796 | 0.003885664 | +2.362 | +3.685 |
+| KCS | 1982 | 1.281 | 0.003641 | 0.003688244 | +1.298 | +2.607 |
+| KCS | 1982 | 1.647 | 0.003475 | 0.003664790 | +5.462 | +6.825 |
+| KCS | 1982 | 1.922 | 0.003467 | 0.003800248 | +9.612 | +11.029 |
+| KCS | 1982 | 2.196 | 0.003711 | 0.004031512 | +8.637 | +10.041 |
+| KCS | 1982 | 2.379 | 0.004501 | 0.004430289 | −1.571 | −0.299 |
+| KCS | 1984 | 0.915 | 0.003796 | 0.003988895 | +5.082 | +6.440 |
+| KCS | 1984 | 1.281 | 0.003641 | 0.003785609 | +3.972 | +5.316 |
+| KCS | 1984 | 1.647 | 0.003475 | 0.003765126 | +8.349 | +9.749 |
+| KCS | 1984 | 1.922 | 0.003467 | 0.003886312 | +12.094 | +13.543 |
+| KCS | 1984 | 2.196 | 0.003711 | 0.004113106 | +10.836 | +12.268 |
+| KCS | 1984 | 2.379 | 0.004501 | 0.004377398 | −2.746 | −1.489 |
+| JBC | 1982 | 1.176721 | 0.004289 | 0.004578549 | +6.751 | +8.479 |
+| JBC | 1984 | 1.176721 | 0.004289 | 0.004410748 | +2.839 | +4.503 |
+
+MAE CT / PE: KCS1982 **4.824% / 5.748%**, KCS1984 **7.180% / 8.134%**;
+JBC's single-point absolute errors are its row above. No best-method selection
+is built into the evaluator. Both versions are reported without retuning.
+
+Sources: KCS `KCS_vary_Fr_2-1.xls` Sheet1 D5:D10, speeds from
+[Case2.1](https://t2015.nmri.go.jp/Instructions_KCS/Case_2.1/Case_2-1.html),
+rho999.5/nu1.27e−6 and reference S0=9.4379m² from
+[KCS conditions](https://t2015.nmri.go.jp/kcs_gc.html). KCS rudder S=.1152m²,
+(1+k2)=1.5 **assumed**, not fitted. JBC template Sheet1 C4, A1 (Fr/Re),
+A14 (S0/Lpp²=.2494), Lpp7m; U=.142sqrt(9.81×7),
+nu=U×7/7.46e6, rho999 **stated assumption**. JBC reference S0=12.2206m².
+No sinkage/trim correction is applied to the static geometry. JBC separate
+boss/spacer are omitted; AT=0 is an explicit unmeasured approximation.
+
+### Propulsion and fuel example — not a self-propulsion validation
+
+For JBC's same development resistance point, using B5/EAR.50/P-D.75/D.203m,
+etaS.98 and SFOC180g/kWh:
+
+| Method | w | t | n rps | J | PD kW | PB kW | Fuel t/day |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 1982 | .62965 | .22759 | 10.5663 | .20317 | .078669 | .080275 | .00034679 |
+| 1984 | .57997 | .20699 | 10.4266 | .23352 | .073690 | .075193 | .00032484 |
+
+Thrust residual <3e−14N for both roots. These are **model-scale accounting
+examples**, not ship fuel predictions. Nominal wake lacks full-scale loading
+extrapolation; B-series base Reynolds differs from the AU model propeller.
+The already exposed self-propulsion n7.8rps/KT.217/KQ.0279 is **not a direct
+validation target**: it is a specified skin-friction-correction self-propulsion
+point, while this matcher solves the model's total resistance without that
+ship-point correction. Fuel/propulsion accuracy therefore remains unmeasured.
+
+### Freeze and evaluator handoff
+
+Freeze target: **`perf-frozen-1` → `b19bab9`** (full SHA recorded by git tag),
+created only after the required quick tier passes. The tag will not be moved.
+This report update can follow the frozen code commit without changing methods.
+Evaluator contract: `docs/plans/2026-11-12-performance-evaluator.md`.
+Exact command in the evaluator's checkout of `perf-frozen-1`:
+
+```bash
+git switch --detach perf-frozen-1
+PYTHONPATH=src /Users/jonathanjie/Documents/workspace/MarinaFrame/.venv/bin/python \
+  -m vessel_reconstruction.performance_compare \
+  --input /absolute/evaluator-owned/cases.json \
+  --output /absolute/evaluator-owned/new-score.json \
+  --markdown /absolute/evaluator-owned/new-score.md
+```
+
+The evaluator prepares explicit SI hull/propeller/measurement JSON as documented,
+records tag SHA and input SHA, and runs once without tuning. The input/output
+paths are placeholders chosen by the evaluator, not paths accessed by this lane.
+No blind ship has been opened or scored here. The PM starts that evaluator later.
+
+Development reproduction (preparation needs isolated xlrd, not evaluator runtime):
+
+```bash
+PYTHONPATH=src /path/to/python-with-xlrd-and-OCP scripts/prepare_performance_dev.py \
+  --data-dir /path/to/public/simman_modeltests/jbc \
+  --kcs-iges /path/to/KCS_hull_SVA.igs --jbc-iges /path/to/jbc.igs \
+  --output work/performance-baseline/new-development.json
+PYTHONPATH=src /path/to/python -m vessel_reconstruction.performance_compare \
+  --input work/performance-baseline/new-development.json \
+  --output work/performance-baseline/new-score.json \
+  --markdown work/performance-baseline/new-score.md
+```
+
+The preparation script has a fixed KCS/JBC allowlist and reads no other ship.
+All per-ship data remain ignored under work; code and concise result tables only
+are committed. A layout-only report fix was replayed: all JSON numerical values
+were identical to first-score output. No method constants changed after scoring.
+
+Final checks: **137 focused tests passed**. Required quick-tier results and
+push/tag confirmation follow in the final lane handoff; logs remain under
+`work/performance-baseline/`. All-marker/CAD suite was not rerun in this
+continuation. No full-scale fuel accuracy, cavitation or blind accuracy claim.
+
 ## Outcome and exact stop point (previous checkpoint; superseded by continuation above)
 
 **Lane incomplete. No ship resistance, propulsion or fuel prediction is reported.**
