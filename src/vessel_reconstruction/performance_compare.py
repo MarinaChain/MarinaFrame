@@ -34,8 +34,15 @@ def evaluate_case(case: dict) -> dict:
     _require_keys(case, required | {"propeller", "sfoc_g_per_kwh", "notes"}, required, "case")
     if case["schema_version"] != 1 or case["scale"] not in ("model", "ship"):
         raise ValueError("schema_version must be 1 and scale must be model or ship")
-    if case["method"] not in ("holtrop_mennen_1982", "holtrop_1984"):
+    from .performance_calibration import METHOD, calibrated_resistance
+
+    if case["method"] not in ("holtrop_mennen_1982", "holtrop_1984", METHOD):
         raise ValueError("method must name a supported Holtrop version")
+    calibrated = case["method"] == METHOD
+    if calibrated and case["scale"] != "model":
+        raise ValueError("calibrated method supports model scale only")
+    if calibrated and "propeller" in case:
+        raise ValueError("calibrated propulsion is not supported")
     for name in ("ship", "particulars_source"):
         if not isinstance(case[name], str) or not case[name].strip():
             raise ValueError(f"{name} must be nonempty text")
@@ -56,10 +63,15 @@ def evaluate_case(case: dict) -> dict:
         _require_keys(measurement, keys, keys, "measurement")
         if not isinstance(measurement["source"], str) or not measurement["source"].strip():
             raise ValueError("each measurement must have source text")
-        resistance = holtrop_resistance(
-            hull, speed_ms=measurement["speed_ms"], water_density_kg_m3=water["density_kg_m3"],
-            kinematic_viscosity_m2_s=water["kinematic_viscosity_m2_s"],
-            method=case["method"], include_correlation_allowance=case["scale"] == "ship")
+        resistance_inputs = dict(
+            speed_ms=measurement["speed_ms"], water_density_kg_m3=water["density_kg_m3"],
+            kinematic_viscosity_m2_s=water["kinematic_viscosity_m2_s"])
+        if calibrated:
+            resistance = calibrated_resistance(hull, **resistance_inputs)
+        else:
+            resistance = holtrop_resistance(
+                hull, **resistance_inputs, method=case["method"],
+                include_correlation_allowance=case["scale"] == "ship")
         comparison = compare_resistance(
             estimated_resistance_n=resistance.total_resistance_n,
             estimated_wetted_surface_m2=resistance.wetted_surface_m2,
