@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from ga_replay_scale import replay_case
-from vessel_reconstruction import ga_commercial, ga_scale
+from vessel_reconstruction import ga_commercial, ga_interpretation, ga_scale_arrangement
 from vessel_reconstruction.provenance import write_json
 
 
@@ -29,9 +29,9 @@ def capture(run: Path, inputs: Path, out: Path) -> None:
             target = out / case.name / "first-pass"
             target.mkdir(parents=True)
             reading = json.loads((case / "provider" / "vision_reading.json").read_text())
-            result = ga_commercial.interpret(reading, case / "request", inputs)
+            result = ga_interpretation.interpret(reading, case / "request", inputs)
             write_json(target / "ga_reading.json", result)
-            ga_commercial.reinterpret_particulars(case, inputs, out / case.name / "particulars")
+            ga_interpretation.reinterpret_particulars(case, inputs, out / case.name / "particulars")
             gate = replay_case(path, inputs, out / case.name / "scale", [])
             if gate is None or not gate["passed"]:
                 raise AssertionError("development arrangement gate failed")
@@ -51,7 +51,7 @@ def compare(out: Path, before: Path, latest: Path) -> None:
         arrangement = case / "scale/ga_arrangement_input.json"
         if arrangement.read_bytes() != (latest / case.name / arrangement.name).read_bytes():
             raise AssertionError(f"latest arrangement differs: {case.name}")
-        if not ga_scale.arrangement_gate(json.loads(arrangement.read_text()))["passed"]:
+        if not ga_scale_arrangement.arrangement_gate(json.loads(arrangement.read_text()))["passed"]:
             raise AssertionError("development arrangement gate failed")
     for name in outputs:
         print(f"{name}: byte-identical 14/14")

@@ -355,6 +355,7 @@ ticks: every printed frame number of the frame scale (the row of numbers along t
 spacing_labels: every printed frame spacing ("FR. SP. = 800 MM", "FRAME SPACE 700mm"); printed is the spacing value with its unit as printed ("800 MM"); x, y is the centre of that text. Also a spacing printed for one frame inside a range of another spacing ("1200" between two close bulkheads), at its place.
 spacing_boundaries: every place on the spacing line where the frame spacing changes (the arrow head, tick or extension line between two spacing labels); x, y is that place. A drawing with one spacing has none.
 points: named places, each at most once per view. In the profile: "hull_aft_end" (the aftmost point of the hull), "hull_fore_end" (the foremost point of the hull, the bulb or stem, whichever is further forward), "base_line" (a point on the base line / keel line amidships), "upper_deck_at_side" (a point on the upper deck line AT SIDE and AT MID-LENGTH of the hull, between the cargo holds or tanks: the continuous deck line where the side shell meets the deck and where the cargo spaces end; when two deck lines are drawn (camber), the lower one; never the deck at the centreline, the top of the rail or bulwark, the poop deck, the forecastle deck, a hatch coaming or a deckhouse; when the mid-length is not on the attached images, leave it out). In a plan: "hull_aft_end", "hull_fore_end", "centre_line" (a point on the centreline amidships), "shell_side_a" and "shell_side_b" (points on the two outer shell lines at the widest part amidships, one on each side of the centreline). Leave out a place that is not drawn on the attached images (for example a hull end cut by the sheet edge). Look at EVERY attached image: the plan images give the breadth (centre_line and both shell sides) also when their frame numbers are too small to read.
+chain_spans: only when a dimension chain is printed along the profile (lengths between extension lines, for example the spans of holds and compartments in mm): each printed span once, with printed (the length as printed), at (the centre of that text) and from and to (the extension line at each end of that span, on the chain). An empty list when no chain is printed.
 extents is then an empty list.
 When want holds "extents" (the images are whole views; context.spaces lists spaces that were read, each with space_id, kind, label, the image_id it lies on and "at", the place of its printed label in that image, or null; a space with "near" [left,top,right,bottom] has its label printed somewhere in that region among other labels: find it there by its label text first):
 extents: for each listed space, the box [left,top,right,bottom] of the DRAWN BOUNDARY of that space in that view: in a profile the bulkheads at its aft and fore ends and its bottom and top (tank top, deck or tank boundary lines); in a plan its aft and fore bulkheads and its side boundaries. For a tank with a sloped or stepped boundary give the box that holds it. A cargo hold or cargo tank ends below at the inner bottom, not the base line, and above at the deck line, not the rail; a box does not take in a space that has its own label. A listed space may have exclude, the labels of other spaces with their "at": its box must hold none of these places; end it at the boundary line between the spaces. A tank whose label names both sides ("(P&S)", "(P/S)") is two tanks: in a plan box the one on the side where the label is. A cargo hatch is its coaming outline; when a size is printed inside a hatch's own outline (for example "18.200 x 15.000"), also give printed_size, the size as printed, and printed_size_at, the centre of that text; leave both out otherwise; a cargo crane is its post; an accommodation_deck with "at" null is that tier of the deckhouse in the profile. For a space whose drawn boundary is NOT a rectangle (a sloped, stepped, tapered or curved side, such as a peak tank, a hopper or top-side tank, or a tank beside the narrowing hull), also give outline: 3 to 8 points [x,y] that follow its drawn boundary in order, on the same image and inside its box; leave outline out for a rectangle. basis is "outline" when you see the boundary lines of the space, "uncertain" when you place the box from the label and nearby lines without a clear boundary. Leave out a space whose boundary you cannot find; never box only the label.
@@ -365,6 +366,7 @@ pub const SCALE_EVIDENCE_KIND: &str = "ga_scale_image";
 pub const SCALE_OUTPUT_TOKENS: u64 = 12_288;
 const MAX_TICKS: usize = 240;
 const MAX_SPACING_MARKS: usize = 32;
+const MAX_CHAIN_SPANS: usize = 60;
 const MAX_POINTS: usize = 32;
 const MAX_EXTENTS: usize = 200;
 const MIN_OUTLINE_POINTS: usize = 3;
@@ -379,7 +381,7 @@ pub const POINT_NAMES: [&str; 7] = [
     "shell_side_b",
 ];
 
-pub const SCALE_CLI_SCHEMA: &str = r##"{"type":"object","properties":{"ticks":{"type":"array","items":{"type":"object","properties":{"image_id":{"type":"string"},"label":{"type":"string"},"x":{"type":"number"},"y":{"type":"number"}},"required":["image_id","label","x","y"],"additionalProperties":false}},"spacing_labels":{"type":"array","items":{"type":"object","properties":{"image_id":{"type":"string"},"printed":{"type":"string"},"x":{"type":"number"},"y":{"type":"number"}},"required":["image_id","printed","x","y"],"additionalProperties":false}},"spacing_boundaries":{"type":"array","items":{"type":"object","properties":{"image_id":{"type":"string"},"x":{"type":"number"},"y":{"type":"number"}},"required":["image_id","x","y"],"additionalProperties":false}},"points":{"type":"array","items":{"type":"object","properties":{"image_id":{"type":"string"},"name":{"enum":["hull_aft_end","hull_fore_end","base_line","upper_deck_at_side","centre_line","shell_side_a","shell_side_b"]},"x":{"type":"number"},"y":{"type":"number"}},"required":["image_id","name","x","y"],"additionalProperties":false}},"extents":{"type":"array","items":{"type":"object","properties":{"space_id":{"type":"string"},"image_id":{"type":"string"},"box":{"type":"array","items":{"type":"number"},"minItems":4,"maxItems":4},"basis":{"enum":["outline","uncertain"]},"outline":{"type":"array","items":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2},"minItems":3,"maxItems":8},"printed_size":{"type":"string"},"printed_size_at":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2}},"required":["space_id","image_id","box","basis"],"additionalProperties":false}},"note":{"type":"string"}},"required":["ticks","spacing_labels","spacing_boundaries","points","extents","note"],"additionalProperties":false}"##;
+pub const SCALE_CLI_SCHEMA: &str = r##"{"type":"object","properties":{"ticks":{"type":"array","items":{"type":"object","properties":{"image_id":{"type":"string"},"label":{"type":"string"},"x":{"type":"number"},"y":{"type":"number"}},"required":["image_id","label","x","y"],"additionalProperties":false}},"spacing_labels":{"type":"array","items":{"type":"object","properties":{"image_id":{"type":"string"},"printed":{"type":"string"},"x":{"type":"number"},"y":{"type":"number"}},"required":["image_id","printed","x","y"],"additionalProperties":false}},"spacing_boundaries":{"type":"array","items":{"type":"object","properties":{"image_id":{"type":"string"},"x":{"type":"number"},"y":{"type":"number"}},"required":["image_id","x","y"],"additionalProperties":false}},"points":{"type":"array","items":{"type":"object","properties":{"image_id":{"type":"string"},"name":{"enum":["hull_aft_end","hull_fore_end","base_line","upper_deck_at_side","centre_line","shell_side_a","shell_side_b"]},"x":{"type":"number"},"y":{"type":"number"}},"required":["image_id","name","x","y"],"additionalProperties":false}},"extents":{"type":"array","items":{"type":"object","properties":{"space_id":{"type":"string"},"image_id":{"type":"string"},"box":{"type":"array","items":{"type":"number"},"minItems":4,"maxItems":4},"basis":{"enum":["outline","uncertain"]},"outline":{"type":"array","items":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2},"minItems":3,"maxItems":8},"printed_size":{"type":"string"},"printed_size_at":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2}},"required":["space_id","image_id","box","basis"],"additionalProperties":false}},"note":{"type":"string"},"chain_spans":{"type":"array","items":{"type":"object","properties":{"image_id":{"type":"string"},"printed":{"type":"string"},"at":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2},"from":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2},"to":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2}},"required":["image_id","printed","at","from","to"],"additionalProperties":false}}},"required":["ticks","spacing_labels","spacing_boundaries","points","extents","note"],"additionalProperties":false}"##;
 
 /// A frame number or the mark "A.P." / "F.P." on a frame scale.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -408,6 +410,18 @@ pub struct SpacingBoundary {
     pub image_id: String,
     pub x: f64,
     pub y: f64,
+}
+
+/// One printed span of the dimension chain along the profile ("28400" between two extension
+/// lines): the text as printed, the centre of the text and the mark at each end of the span.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ChainSpan {
+    pub image_id: String,
+    pub printed: String,
+    pub at: [f64; 2],
+    pub from: [f64; 2],
+    pub to: [f64; 2],
 }
 
 /// A named place of the hull (see [`POINT_NAMES`]).
@@ -449,6 +463,10 @@ pub struct ScaleReply {
     pub points: Vec<ScalePoint>,
     pub extents: Vec<SpaceExtent>,
     pub note: String,
+    /// Optional: the printed spans of the dimension chain (scale request only). A reply without
+    /// them is read exactly as before.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub chain_spans: Vec<ChainSpan>,
     /// How many entries broke the contract (a place off its image, an unknown image or name);
     /// each is dropped alone. Set only by [`parse_scale`].
     #[serde(default)]
@@ -475,6 +493,7 @@ pub fn parse_scale(content: &str, images: &[ImageReceipt]) -> Result<ScaleReply>
     if reply.ticks.len() > MAX_TICKS
         || reply.spacing_labels.len() > MAX_SPACING_MARKS
         || reply.spacing_boundaries.len() > MAX_SPACING_MARKS
+        || reply.chain_spans.len() > MAX_CHAIN_SPANS
         || reply.points.len() > MAX_POINTS
         || reply.extents.len() > MAX_EXTENTS
     {
@@ -502,7 +521,8 @@ pub fn parse_scale(content: &str, images: &[ImageReceipt]) -> Result<ScaleReply>
         + reply.spacing_labels.len()
         + reply.spacing_boundaries.len()
         + reply.points.len()
-        + reply.extents.len();
+        + reply.extents.len()
+        + reply.chain_spans.len();
     reply
         .ticks
         .retain(|t| on_image(&t.image_id, t.x, t.y) && nonempty(&t.label, 16));
@@ -512,6 +532,12 @@ pub fn parse_scale(content: &str, images: &[ImageReceipt]) -> Result<ScaleReply>
     reply
         .spacing_boundaries
         .retain(|b| on_image(&b.image_id, b.x, b.y));
+    reply.chain_spans.retain(|s| {
+        nonempty(&s.printed, MAX_PRINTED_CHARS)
+            && [s.at, s.from, s.to]
+                .iter()
+                .all(|p| on_image(&s.image_id, p[0], p[1]))
+    });
     reply
         .points
         .retain(|p| on_image(&p.image_id, p.x, p.y) && POINT_NAMES.contains(&p.name.as_str()));
@@ -554,7 +580,8 @@ pub fn parse_scale(content: &str, images: &[ImageReceipt]) -> Result<ScaleReply>
         + reply.spacing_labels.len()
         + reply.spacing_boundaries.len()
         + reply.points.len()
-        + reply.extents.len();
+        + reply.extents.len()
+        + reply.chain_spans.len();
     reply.refused = (total - kept) as u32 + dropped_optional_parts;
     Ok(reply)
 }
@@ -842,6 +869,26 @@ mod tests {
         );
         // Still strict on unknown keys.
         assert!(parse_scale(&reply(r#","polygon":[[1,1]]"#), &images).is_err());
+        // Dimension-chain spans are optional; one off its image is dropped alone.
+        let chain = |spans: &str| {
+            format!(
+                r#"{{"ticks":[],"spacing_labels":[],"spacing_boundaries":[],"points":[],"extents":[],
+                "note":"","chain_spans":[{spans}]}}"#
+            )
+        };
+        let read = parse_scale(
+            &chain(
+                r#"{"image_id":"sheet","printed":"28400","at":[300,700],"from":[100,710],"to":[500,710]},
+                   {"image_id":"sheet","printed":"22800","at":[700,700],"from":[500,710],"to":[1900,710]}"#,
+            ),
+            &images,
+        )
+        .unwrap();
+        assert_eq!((read.chain_spans.len(), read.refused), (1, 1));
+        assert_eq!(
+            parse_scale(&reply(""), &images).unwrap().chain_spans.len(),
+            0
+        );
         let schema: serde_json::Value = serde_json::from_str(SCALE_CLI_SCHEMA).unwrap();
         let extent = &schema["properties"]["extents"]["items"];
         assert!(extent["properties"]["outline"].is_object());

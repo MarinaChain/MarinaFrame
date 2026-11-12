@@ -15,8 +15,8 @@ import argparse
 import json
 from pathlib import Path
 
-from vessel_reconstruction import ga_scale
-from vessel_reconstruction.ga_commercial import drop_fragments
+from vessel_reconstruction import ga_scale, ga_scale_arrangement, ga_scale_settings
+from vessel_reconstruction.ga_counts import drop_fragments
 from vessel_reconstruction.provenance import write_json
 
 def stored_reply(request_name: str, folders: list[Path]) -> dict:
@@ -35,7 +35,7 @@ def replay_case(reading_path: Path, inputs: Path, target: Path, also: list[Path]
     for key in ("frames", "measured"):
         result.pop(key, None)
     # The checks of the frame-scale pass are made again by the replay.
-    result["checks"] = [c for c in result["checks"] if c.get("code") not in ga_scale.SCALE_PASS_CHECKS]
+    result["checks"] = [c for c in result["checks"] if c.get("code") not in ga_scale_settings.SCALE_PASS_CHECKS]
     for space in result["spaces"]:
         space.pop("extent", None)
     drop_fragments(result)
@@ -46,9 +46,9 @@ def replay_case(reading_path: Path, inputs: Path, target: Path, also: list[Path]
         result.setdefault("passes", {})["scale"] = ga_scale.scale_pass(
             result, inputs / result["sources"]["ga"]["file"], target / "scale",
             lambda request_dir, provider_dir: stored_reply(request_dir.name, folders))
-        arrangement = ga_scale.arrangement_input(result, case_dir.name)
+        arrangement = ga_scale_arrangement.arrangement_input(result, case_dir.name)
         write_json(target / "ga_arrangement_input.json", arrangement)
-        gate = ga_scale.arrangement_gate(arrangement)
+        gate = ga_scale_arrangement.arrangement_gate(arrangement)
     result["replayed_from"] = str(case_dir)
     write_json(target / "ga_reading.json", result)
     return gate

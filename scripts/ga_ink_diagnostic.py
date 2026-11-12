@@ -18,15 +18,15 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from vessel_reconstruction import ga_commercial as ga
+from vessel_reconstruction import ga_commercial_settings, ga_images, ga_interpretation
 
 LEVELS = (160, 200, 230)
 
 
 def diagnose(case_dir: Path, inputs: Path) -> dict:
     meta = json.loads((case_dir / "request" / "sources.json").read_text())
-    reply = (json.loads((case_dir / "provider" / "vision_reading.json").read_text()).get("reply") or {}).get(ga.PURPOSE)
-    tiles = {t["image_id"]: ga.Tile(**{**t, "crop_box_px": tuple(t["crop_box_px"])}) for t in meta["tiles"]}
+    reply = (json.loads((case_dir / "provider" / "vision_reading.json").read_text()).get("reply") or {}).get(ga_commercial_settings.PURPOSE)
+    tiles = {t["image_id"]: ga_images.Tile(**{**t, "crop_box_px": tuple(t["crop_box_px"])}) for t in meta["tiles"]}
     report = {"sources": {}, "particulars": []}
     grey = {}
     for role, source in meta["sources"].items():
@@ -34,8 +34,8 @@ def diagnose(case_dir: Path, inputs: Path) -> dict:
         image = Image.open(path)
         report["sources"][role] = {"mode": image.mode, "size_px": list(image.size),
                                    "transparency": "transparency" in image.info,
-                                   "hash_matches": ga._sha256(path.read_bytes()) == source.get("sha256")}
-        grey[role] = np.asarray(ga.load_grey(path))
+                                   "hash_matches": ga_images._sha256(path.read_bytes()) == source.get("sha256")}
+        grey[role] = np.asarray(ga_images.load_grey(path))
     if reply is None:
         report["note"] = "no stored reply"
         return report
@@ -43,7 +43,7 @@ def diagnose(case_dir: Path, inputs: Path) -> dict:
         tile = tiles[entry["image_id"]]
         role = tile.source or ("particulars" if tile.view.startswith("particulars_table") and "particulars" in meta["sources"]
                                else "ga")
-        box = ga._sheet_box(tile, entry["box"])
+        box = ga_interpretation._sheet_box(tile, entry["box"])
         height, width = grey[role].shape
         left, top, right, bottom = (int(round(v)) for v in box)
         patch = grey[role][max(0, top):max(0, bottom), max(0, left):max(0, right)]

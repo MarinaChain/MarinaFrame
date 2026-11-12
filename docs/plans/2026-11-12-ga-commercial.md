@@ -813,6 +813,7 @@ truth. A hatch whose printed size now stands as its size is compared through its
 | Frame spacing (10) | 24 ranges | 0.002 m (0.12 %) | 0.015 m (2.1 %) | 24 | 24 | 24 |
 | Hatch length (4) | 25 | 0.86 m (5.6 %) | 3.52 m (16.7 %) | 8 | 8 | 20 |
 | Hatch breadth (4) | 25 | 3.00 m (14.6 %) | 7.06 m (45.6 %) | 0 | 6 | 11 |
+| Hold length (2) | 6 | 0.00 m (0.0 %) | 0.86 m (3.3 %) | 4 | 4 | 6 |
 
 Sources: frame spacings from the stored scale replies of round u10 (replayed, ranges with at
 least five frame numbers); hatches from the hatch sample (hS2, replayed). The frame spacing is
@@ -821,6 +822,30 @@ run long and, above all, wide (a box drawn to the coaming or past it), which is 
 size now stands as the hatch's size. No printed hold length, LBP or breadth was read as printed
 text on the development ships (no dimension chain is read, and no ship prints its particulars),
 so those items have no truth here; Astra quoted some, but a reviewer is not truth.
+
+**The printed dimension chain** (backlog item 5; `ga_scale_chain.py`). The scale request may
+return `chain_spans` (optional; strict Rust parse; at most 60; no extra request; not on the exam
+path): each printed span of the dimension chain along the profile, with the centre of its text
+and its two end marks. A span is kept as printed truth (`frames.printed_spans`) only when it
+reads as one plausible length (millimetres above 100; "35@800=28000" gives the total), both end
+marks lie on a frame (within 0.35 of a frame), its text lies between its marks, and its length
+fits the frame table between those frames (within half a frame); two lengths for the same
+frames are both refused. Every other span goes to checks with its reason
+(`printed_span_ignored`). A span that matches exactly one hold (one frame either way) and no
+other hold becomes that hold's length, centred on its measured box, status `printed`; the
+measured box stays as `measured_box_m`. Live sample (four development ships, scale and extents
+requests live): the model read chains on two ships; 9 spans were kept and 10 refused with a
+reason (6 with an end mark off a frame, 4 with a length that does not fit its frames); 6 holds took a
+printed length; gate 4 of 4. The hold rows above come from this sample. They are not fully
+independent: a measured hold box ends on whole frames and a kept span fits the frame table, so
+the error is 0 when box and chain end on the same frames and one frame (0.8-0.9 m) when one end
+differs.
+
+**Compatibility re-exports removed** (backlog item 9, after the refactor 4ecdb9a):
+`ga_scale.py` and `ga_commercial.py` import only the names their own code uses (128 of 145 and
+64 of 74 re-exported names went), and every caller and test imports from the defining module
+(`ga_scale_frames`, `ga_scale_arrangement`, `ga_interpretation`, ...). No behaviour change: the
+u10 replay is byte-identical to u10r6 on 14 of 14 ships, gate 14 of 14.
 
 **Proof for the refactor: replay commands (0 model calls).** They rebuild u10r6's arrangement
 inputs from the stored replies of round u10; a refactor with no behaviour change gives files

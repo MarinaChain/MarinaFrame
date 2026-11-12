@@ -124,7 +124,7 @@ def _all_guessed(extent: dict) -> bool:
 
 def withhold_oversized_guesses(result: dict) -> int:
     """Remove the guessed box of a short untyped label that is far larger than its label box."""
-    from .ga_commercial import _named_words
+    from .ga_counts import _named_words
     withheld = 0
     for space in result["spaces"]:
         extent = space.get("extent")

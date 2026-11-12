@@ -53,13 +53,13 @@ def _write_request(plan: list[tuple[str, str, tuple, float]], sheet_path: Path, 
     returns it. Images can be sent smaller than planned (request size), so anything in image
     pixels must come from the sizes actually written.
     """
-    from . import ga_commercial as ga
+    from . import ga_commercial_settings, ga_images
     out.mkdir(parents=True, exist_ok=False)
     sheet = Image.open(sheet_path).convert("L")
-    for grey_levels, shrink in [(None, 1.0), (ga.REDUCED_GREY_LEVELS, 1.0),
-                                *[(ga.REDUCED_GREY_LEVELS, 0.9 ** k) for k in range(1, 12)]]:
-        encoded = [ga._png(sheet.crop(box), scale * shrink, grey_levels) for _, _, box, scale in plan]
-        if sum(len(data) for data, _, _ in encoded) <= ga.MAX_TOTAL_IMAGE_BYTES:
+    for grey_levels, shrink in [(None, 1.0), (ga_commercial_settings.REDUCED_GREY_LEVELS, 1.0),
+                                *[(ga_commercial_settings.REDUCED_GREY_LEVELS, 0.9 ** k) for k in range(1, 12)]]:
+        encoded = [ga_images._png(sheet.crop(box), scale * shrink, grey_levels) for _, _, box, scale in plan]
+        if sum(len(data) for data, _, _ in encoded) <= ga_commercial_settings.MAX_TOTAL_IMAGE_BYTES:
             break
     else:
         raise ValueError("the images do not fit the provider request size")
@@ -86,7 +86,7 @@ def prepare_scale(result: dict, sheet_path: Path, out: Path, previous_reason: st
     A request sent again after a refused reading says why the reading was refused, so the model
     looks again for what was missing (for example the drawn mark where the spacing changes).
     """
-    from . import ga_commercial as ga
+    from . import ga_commercial_settings, ga_images
     views = chosen_views(result)
     wanted = [views[kind] for kind in ("profile", "deck_plan", "tank_top_plan") if kind in views]
     if not wanted:
@@ -96,14 +96,14 @@ def prepare_scale(result: dict, sheet_path: Path, out: Path, previous_reason: st
     for view in wanted:
         left, top, right, bottom = _pad(view["box_px"], sheet_size)
         limit = MAX_IMAGES // len(wanted)  # the images of a request are shared equally by the views
-        best = (1, ga._fit_scale(right - left, bottom - top))
+        best = (1, ga_images._fit_scale(right - left, bottom - top))
         for columns in range(2, limit + 1):
-            width = (right - left) / columns * (1 + ga.TILE_OVERLAP)
-            scale = ga._fit_scale(width, bottom - top) * ga.SCALE_MARGIN
+            width = (right - left) / columns * (1 + ga_commercial_settings.TILE_OVERLAP)
+            scale = ga_images._fit_scale(width, bottom - top) * ga_commercial_settings.SCALE_MARGIN
             if scale > best[1] * 1.05:
                 best = (columns, scale)
         columns, scale = best
-        for part, box in enumerate(ga.tile_boxes(right - left, bottom - top, columns, 1)):
+        for part, box in enumerate(ga_images.tile_boxes(right - left, bottom - top, columns, 1)):
             plan.append((f"{view['view_id']}p{part + 1}", f"{view['kind']}:{view['view_id']}:part{part + 1}",
                          (left + box[0], top + box[1], left + box[2], top + box[3]), scale))
     context = {"want": ["scale"]}
@@ -149,7 +149,7 @@ def prepare_extents(result: dict, sheet_path: Path, out: Path, missing: list[str
     (a redrawn box). Returns the request directories (``out``, ``out-2``, ...); empty when
     nothing can be asked.
     """
-    from . import ga_commercial as ga
+    from . import ga_commercial_settings, ga_images
     views = chosen_views(result)
     if not views:
         return []
@@ -157,7 +157,7 @@ def prepare_extents(result: dict, sheet_path: Path, out: Path, missing: list[str
     plan, boxes = [], {}
     for view in views.values():
         box = _pad(view["box_px"], sheet_size)
-        scale = ga._fit_scale(box[2] - box[0], box[3] - box[1])
+        scale = ga_images._fit_scale(box[2] - box[0], box[3] - box[1])
         boxes[view["view_id"]] = (box, scale)
         plan.append((view["view_id"], f"{view['kind']}:{view['view_id']}", box, scale))
     spaces = _extent_spaces(result, views, boxes, only_ids, exclude)

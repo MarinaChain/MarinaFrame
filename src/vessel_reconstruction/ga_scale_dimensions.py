@@ -89,6 +89,12 @@ def read_scale(result: dict, reading: dict, request_dir: Path, earlier: dict | N
     for cut in reply["spacing_boundaries"]:
         view = _view_id(tiles[cut["image_id"]])
         cuts.setdefault(view, []).append(_to_sheet(tiles[cut["image_id"]], cut["x"], cut["y"])[0])
+    chains: dict[str, list] = {}
+    for span in reply.get("chain_spans") or []:
+        tile = tiles[span["image_id"]]
+        chains.setdefault(_view_id(tile), []).append(
+            {"printed": span["printed"][:48], "at": _to_sheet(tile, *span["at"]),
+             "from": _to_sheet(tile, *span["from"]), "to": _to_sheet(tile, *span["to"])})
     for point in reply["points"]:
         view = _view_id(tiles[point["image_id"]])
         points.setdefault(view, {}).setdefault(point["name"], []).append(
@@ -108,14 +114,16 @@ def read_scale(result: dict, reading: dict, request_dir: Path, earlier: dict | N
         for view, named in before["points"].items():
             points.setdefault(view, {}).update(named)
         sigma_px = max(sigma_px, before["sigma_px"])
+        # The chain of this reply, or else the earlier one (two readings of one chain would conflict).
+        chains = chains or before.get("chains", {})
     work["raw"] = {"ticks": ticks, "marks": marks, "spacing_labels": spacing_labels, "cuts": cuts,
-                   "points": points, "sigma_px": sigma_px}
+                   "points": points, "sigma_px": sigma_px, "chains": chains}
     return _measure(result, work)
 
 
 def _measure(result: dict, work: dict) -> dict:
     """The frame table, the axes and the principal dimensions from the marks collected in ``work``."""
-    from .ga_commercial import PLAUSIBLE, RECORD_VIEWS
+    from .ga_commercial_settings import PLAUSIBLE, RECORD_VIEWS
     fields = MEASURED_FIELDS
     sheet, page_px, kinds = work["sheet"], work["page_px"], work["kinds"]
     raw = work["raw"]

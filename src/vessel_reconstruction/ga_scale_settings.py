@@ -130,7 +130,7 @@ SCALE_PASS_CHECKS = MEASURE_CHECKS + (
     "depth_taken_from_cargo_space_tops", "depth_unconfirmed_from_uncertain_boxes", "extent_above_the_deck",
     "extent_covers_a_labelled_neighbour", "extent_ends_below_spaces_above", "extent_of_unknown_space",
     "extent_withheld", "frame_spacing_not_understood", "outline_dropped", "plan_boxes_hold_each_others_labels",
-    "printed_hatch_size_ignored", "scale_mark_not_understood")
+    "printed_hatch_size_ignored", "printed_span_ignored", "scale_mark_not_understood")
 MEASURED_FIELDS = ("lbp_m", "loa_m", "breadth_m", "depth_m")
 
 

@@ -12,7 +12,15 @@ import numpy as np
 import pytest
 from PIL import Image, ImageDraw, ImageFont
 
-from vessel_reconstruction import ga_commercial as ga
+from vessel_reconstruction import (
+    ga_commercial_cli,
+    ga_commercial_settings,
+    ga_counts,
+    ga_images,
+    ga_interpretation,
+    ga_provider,
+    ga_reading_output,
+)
 from vessel_reconstruction import source_record
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -42,22 +50,22 @@ def _sheet(path: Path, size=(3000, 1500)) -> Path:
 
 @pytest.mark.parametrize("size", [(3000, 1500), (2809, 2325), (1968, 273), (6000, 600), (900, 700)])
 def test_tiles_cover_the_sheet_within_provider_limits(size):
-    columns, rows, scale = ga.tile_grid(*size, max_tiles=5)
-    boxes = ga.tile_boxes(*size, columns, rows)
+    columns, rows, scale = ga_images.tile_grid(*size, max_tiles=5)
+    boxes = ga_images.tile_boxes(*size, columns, rows)
     assert columns * rows <= 5
     assert min(b[0] for b in boxes) == 0 and max(b[2] for b in boxes) == size[0]
     assert min(b[1] for b in boxes) == 0 and max(b[3] for b in boxes) == size[1]
     for left, top, right, bottom in boxes:
         width, height = round((right - left) * scale), round((bottom - top) * scale)
-        assert max(width, height) <= ga.MAX_SIDE_PX and width * height <= ga.MAX_PIXELS
+        assert max(width, height) <= ga_commercial_settings.MAX_SIDE_PX and width * height <= ga_commercial_settings.MAX_PIXELS
 
 
 def test_prepare_writes_bounded_images_and_keeps_the_source_map_host_side(tmp_path):
     sheet = _sheet(tmp_path / "S-1_GA.png")
-    manifest = ga.prepare(sheet, tmp_path / "request")
+    manifest = ga_images.prepare(sheet, tmp_path / "request")
     assert manifest["purpose"] == "ga_reading" and manifest["engineering_approved"] is False
-    assert len(manifest["images"]) <= ga.MAX_IMAGES
-    assert sum(i["bytes"] for i in manifest["images"]) <= ga.MAX_TOTAL_IMAGE_BYTES
+    assert len(manifest["images"]) <= ga_commercial_settings.MAX_IMAGES
+    assert sum(i["bytes"] for i in manifest["images"]) <= ga_commercial_settings.MAX_TOTAL_IMAGE_BYTES
     assert "S-1_GA.png" not in json.dumps(manifest["context"])
     sources = json.loads((tmp_path / "request" / "sources.json").read_text())
     assert sources["sources"]["ga"]["file"] == "S-1_GA.png"
@@ -67,17 +75,17 @@ def test_a_particulars_table_alone_is_a_request(tmp_path):
     table = Image.new("L", (800, 400), 255)
     ImageDraw.Draw(table).text((20, 20), "L.O.A. 189.99 m", fill=0)
     table.save(tmp_path / "S-2_table.png")
-    manifest = ga.prepare(None, tmp_path / "request", tmp_path / "S-2_table.png")
+    manifest = ga_images.prepare(None, tmp_path / "request", tmp_path / "S-2_table.png")
     assert [i["view"] for i in manifest["images"]] == ["particulars_table"]
 
 
 def test_case_files_find_the_ga_and_one_table(tmp_path):
     for name in ("C-1_GA.png", "C-1_particulars.png", "C-2_GA.png", "C-10_GA.png"):
         Image.new("L", (10, 10), 255).save(tmp_path / name)
-    assert ga.case_files(tmp_path, "C-1") == (tmp_path / "C-1_GA.png", tmp_path / "C-1_particulars.png")
-    assert ga.case_files(tmp_path, "C-2") == (tmp_path / "C-2_GA.png", None)
+    assert ga_commercial_cli.case_files(tmp_path, "C-1") == (tmp_path / "C-1_GA.png", tmp_path / "C-1_particulars.png")
+    assert ga_commercial_cli.case_files(tmp_path, "C-2") == (tmp_path / "C-2_GA.png", None)
     with pytest.raises(ValueError):
-        ga.case_files(tmp_path, "C-3")
+        ga_commercial_cli.case_files(tmp_path, "C-3")
 
 
 # ------------------------------------------------------------------ parsing
@@ -91,7 +99,7 @@ def test_case_files_find_the_ga_and_one_table(tmp_path):
     ("600' 0\"", None, "loa_m", 182.88),
 ])
 def test_printed_lengths_parse_to_metres(printed, unit, field, expected):
-    value, _ = ga.parse_length(printed, unit, field)
+    value, _ = ga_interpretation.parse_length(printed, unit, field)
     assert value == pytest.approx(expected, abs=1e-6)
 
 
@@ -102,21 +110,21 @@ def test_printed_lengths_parse_to_metres(printed, unit, field, expected):
     ("1,850 m", None, "breadth_m"),     # 1850 m or 1.85 m: neither plausible
 ])
 def test_unclear_lengths_abstain(printed, unit, field):
-    assert ga.parse_length(printed, unit, field)[0] is None
+    assert ga_interpretation.parse_length(printed, unit, field)[0] is None
 
 
 def test_a_comma_with_two_plausible_readings_abstains():
     # 32,260 m: 32.26 m (decimal comma) is a plausible depth; 32260 m is not.
-    assert ga.parse_length("32,260 m", None, "depth_m")[0] == pytest.approx(32.26)
+    assert ga_interpretation.parse_length("32,260 m", None, "depth_m")[0] == pytest.approx(32.26)
     # 20,500 mm: 20.5 m or 0.0205 m; only one plausible.
-    assert ga.parse_length("20,500 mm", None, "depth_m")[0] == pytest.approx(20.5)
+    assert ga_interpretation.parse_length("20,500 mm", None, "depth_m")[0] == pytest.approx(20.5)
 
 
 def test_deadweight_needs_a_tonne_unit():
-    assert ga.parse_mass("57,000 t", None)[0] == 57000
-    assert ga.parse_mass("57000", "MT")[0] == 57000
-    assert ga.parse_mass("57000", None)[0] is None
-    assert ga.parse_mass("57,000 long tons", None)[0] is None
+    assert ga_interpretation.parse_mass("57,000 t", None)[0] == 57000
+    assert ga_interpretation.parse_mass("57000", "MT")[0] == 57000
+    assert ga_interpretation.parse_mass("57000", None)[0] is None
+    assert ga_interpretation.parse_mass("57,000 long tons", None)[0] is None
 
 
 # ------------------------------------------------------------------ interpretation
@@ -136,7 +144,7 @@ def _hold(number: str, left: float, image: str = "sheet", basis: str = "read") -
 
 
 def _counts(**overrides) -> dict:
-    counts = {name: {"missing": "not shown"} for name in ga.COUNT_KINDS}
+    counts = {name: {"missing": "not shown"} for name in ga_commercial_settings.COUNT_KINDS}
     counts.update(overrides)
     return counts
 
@@ -144,7 +152,7 @@ def _counts(**overrides) -> dict:
 @pytest.fixture()
 def prepared(tmp_path):
     sheet = _sheet(tmp_path / "S-1_GA.png", size=(1000, 1000))
-    ga.prepare(sheet, tmp_path / "request")
+    ga_images.prepare(sheet, tmp_path / "request")
     request = json.loads((tmp_path / "request" / "request.json").read_text())
     assert [i["image_id"] for i in request["images"]] == ["sheet"]  # one native image
     return tmp_path
@@ -161,7 +169,7 @@ def test_counts_spaces_and_records(prepared):
              "counts": _counts(cargo_holds={"value": 4, "evidence": "four holds"},
                                cargo_cranes={"value": 0, "evidence": "gearless"}),
              "refused": [{"entry": {"label": "NO.5 W.B.T."}, "error_code": "ga_item_contract"}]}
-    result = ga.interpret(_reading(reply), prepared / "request", prepared)
+    result = ga_interpretation.interpret(_reading(reply), prepared / "request", prepared)
     assert result["engineering_approved"] is False
     assert result["particulars"]["loa_m"]["value"] == pytest.approx(189.99)
     assert result["particulars"]["loa_m"]["source_record"]["kind"] == "read"
@@ -184,7 +192,7 @@ def test_a_count_below_the_labelled_items_abstains(prepared):
     reply = {"ship_type": {"missing": "unclear"}, "particulars": [],
              "items": [_hold("1", 60), _hold("2", 285), _hold("3", 510)],
              "counts": _counts(cargo_holds={"value": 2, "evidence": "two holds"})}
-    result = ga.interpret(_reading(reply), prepared / "request", prepared)
+    result = ga_interpretation.interpret(_reading(reply), prepared / "request", prepared)
     assert result["counts"]["cargo_holds"]["value"] is None
     assert result["counts"]["cargo_holds"]["source_record"]["kind"] == "unknown"
 
@@ -202,7 +210,7 @@ def test_tanks_are_counted_within_one_view_not_across_notations():
     profile = [("cargo_tank", str(n), "v1") for n in range(1, 7)]
     tank_top = [("cargo_tank", f"{n}{side}", "v2") for n in range(1, 7) for side in "PS"]
     result = _count_result(profile + tank_top, cargo_tanks={"value": 12, "evidence": "6 x (P&S)"})
-    ga.finish_counts(result)
+    ga_counts.finish_counts(result)
     assert result["counts"]["cargo_tanks"]["value"] == 12
     assert result["counts"]["cargo_tanks"]["labelled_items"] == 12
 
@@ -211,11 +219,11 @@ def test_a_view_missing_a_label_is_not_a_contradiction_but_a_shorter_view_is():
     profile = [("cargo_hold", str(n), "v1") for n in range(1, 6)]
     gaps = [("cargo_hold", n, "v2") for n in ("1", "2", "5")]
     result = _count_result(profile + gaps, cargo_holds={"value": 5, "evidence": "five"})
-    ga.finish_counts(result)
+    ga_counts.finish_counts(result)
     assert result["counts"]["cargo_holds"]["value"] == 5
     shorter = [("cargo_hold", str(n), "v2") for n in range(1, 5)]
     result = _count_result(profile + shorter, cargo_holds={"value": 5, "evidence": "five"})
-    ga.finish_counts(result)
+    ga_counts.finish_counts(result)
     assert result["counts"]["cargo_holds"]["value"] is None
     assert "up to No.4" in result["counts"]["cargo_holds"]["reason"]
 
@@ -226,7 +234,7 @@ def test_fine_pass_numbers_do_not_end_a_view():
     result = _count_result(profile + deck, cargo_tanks={"value": 14, "evidence": "7 x (P&S)"})
     for space in result["spaces"][len(profile):]:
         space["found_by"] = "fine"
-    ga.finish_counts(result)
+    ga_counts.finish_counts(result)
     assert result["counts"]["cargo_tanks"]["value"] == 14
     assert result["counts"]["cargo_tanks"]["views_compared"] == 1
 
@@ -235,34 +243,34 @@ def test_a_cut_label_without_its_side_is_not_another_tank():
     """Review of the adaptive fine pass: "NO.6 C.O.T.K" (cut) beside NO.6 (P) and (S) is no 13th tank."""
     sided = [("cargo_tank", f"{n}{side}", "v2") for n in range(1, 7) for side in "PS"]
     result = _count_result(sided + [("cargo_tank", "6", "v2")], cargo_tanks={"value": 12, "evidence": "6 x (P&S)"})
-    ga.finish_counts(result)
+    ga_counts.finish_counts(result)
     assert (result["counts"]["cargo_tanks"]["value"], result["counts"]["cargo_tanks"]["labelled_items"]) == (12, 12)
-    assert ga._number_with_side("3", "NO.3 C.O.TK(P)") == "3P" and ga._number_with_side("3", "NO.3 C.O.TK(P&S)") == "3"
-    assert ga._number_with_side("4A", "NO.4A HOLD") == "4A" and ga._number_with_side(None, "ENGINE ROOM") is None
+    assert ga_counts._number_with_side("3", "NO.3 C.O.TK(P)") == "3P" and ga_counts._number_with_side("3", "NO.3 C.O.TK(P&S)") == "3"
+    assert ga_counts._number_with_side("4A", "NO.4A HOLD") == "4A" and ga_counts._number_with_side(None, "ENGINE ROOM") is None
 
 
 def test_hold_halves_are_two_holds_by_default_and_one_by_setting():
     """Definition (PM, 2026-11-12): No.4A and No.4F are two holds; the other rule is a setting."""
     halves = [("cargo_hold", f"{n}{half}", "v1") for n in range(1, 5) for half in "AF"]
     result = _count_result(halves, cargo_holds={"value": 8, "evidence": "eight holds, each with a hatch"})
-    ga.finish_counts(result)
+    ga_counts.finish_counts(result)
     assert (result["counts"]["cargo_holds"]["value"], result["counts"]["cargo_holds"]["labelled_items"]) == (8, 8)
     # A model count of 4 is below the eight labelled holds: abstain, never answer 4.
     result = _count_result(halves, cargo_holds={"value": 4, "evidence": "four numbers"})
-    ga.finish_counts(result)
+    ga_counts.finish_counts(result)
     assert result["counts"]["cargo_holds"]["value"] is None
     result = _count_result(halves, cargo_holds={"value": 4, "evidence": "four numbers"})
-    result["definitions"] = {**ga.DEFINITIONS, "split_holds_are_separate": False}
-    ga.finish_counts(result)
+    result["definitions"] = {**ga_commercial_settings.DEFINITIONS, "split_holds_are_separate": False}
+    ga_counts.finish_counts(result)
     assert (result["counts"]["cargo_holds"]["value"], result["counts"]["cargo_holds"]["labelled_items"]) == (4, 4)
 
 
 def test_the_definitions_go_to_the_model_and_follow_the_settings(tmp_path):
     sheet = _sheet(tmp_path / "S-1_GA.png", size=(1000, 1000))
-    manifest = ga.prepare(sheet, tmp_path / "default")
+    manifest = ga_images.prepare(sheet, tmp_path / "default")
     text = " ".join(manifest["context"]["definitions"])
     assert "two holds" in text and "SLOP HOLDING TK" in text and "usually equal" in text
-    other = ga.prepare(sheet, tmp_path / "other", definitions={"split_holds_are_separate": False,
+    other = ga_images.prepare(sheet, tmp_path / "other", definitions={"split_holds_are_separate": False,
                                                                "slop_holding_tank_is_slop": False})
     text = " ".join(other["context"]["definitions"])
     assert "count as one hold" in text and "slop holding tank is not counted" in text
@@ -275,8 +283,8 @@ def test_holds_and_hatches_that_differ_on_a_bulk_carrier_are_listed():
     result = _count_result(spaces, cargo_holds={"value": 5, "evidence": "five"},
                            cargo_hatches={"value": 4, "evidence": "four"})
     result["ship_type"] = {"value": "bulk_carrier"}
-    ga.finish_counts(result)
-    ga.finish_counts(result)  # the fine pass counts again: the check is listed once
+    ga_counts.finish_counts(result)
+    ga_counts.finish_counts(result)  # the fine pass counts again: the check is listed once
     assert [c["code"] for c in result["checks"]].count("holds_and_hatches_differ") == 1
     assert result["counts"]["cargo_holds"]["value"] == 5  # listed, not refused
 
@@ -286,11 +294,11 @@ def test_a_fine_label_completes_a_view_that_the_coarse_pass_listed():
     profile = [("cargo_hold", str(n), "v1") for n in range(1, 5)]
     tank_top = [("cargo_hold", str(n), "v2") for n in range(1, 4)]
     result = _count_result(profile + tank_top, cargo_holds={"value": 4, "evidence": "four"})
-    ga.finish_counts(result)
+    ga_counts.finish_counts(result)
     assert result["counts"]["cargo_holds"]["value"] is None      # v2 ends at No.3
     result = _count_result(profile + tank_top + [("cargo_hold", "4", "v2")], cargo_holds={"value": 4, "evidence": "four"})
     result["spaces"][-1]["found_by"] = "fine"
-    ga.finish_counts(result)
+    ga_counts.finish_counts(result)
     assert result["counts"]["cargo_holds"]["value"] == 4
 
 
@@ -300,12 +308,12 @@ def test_lbp_longer_than_loa_is_not_used(prepared):
                 "box": [60, 100, 400, 600], "evidence": "row"}
     reply = {"ship_type": {"missing": "unclear"}, "items": [], "counts": _counts(),
              "particulars": [particular("loa", "180.00 m"), particular("lbp", "185.00 m")]}
-    result = ga.interpret(_reading(reply), prepared / "request", prepared)
+    result = ga_interpretation.interpret(_reading(reply), prepared / "request", prepared)
     assert result["particulars"]["loa_m"]["value"] is None and result["particulars"]["lbp_m"]["value"] is None
 
 
 def test_no_reply_means_every_value_is_unknown(prepared):
-    result = ga.interpret(_reading(None), prepared / "request", prepared)
+    result = ga_interpretation.interpret(_reading(None), prepared / "request", prepared)
     assert all(v["value"] is None for v in result["particulars"].values())
     assert all(v["value"] is None for v in result["counts"].values())
 
@@ -317,8 +325,8 @@ def test_a_request_without_a_reading_still_counts_and_abstains(prepared, tmp_pat
         {"state": "completed", "usage": {"prompt_tokens": 9000, "completion_tokens": 3000, "list_cost": 0.15},
          "observed_cost_usd": 0.0}))
     stderr = '{"engineering_approved":false,"error_code":"typed_contract_rejected","ok":false}\n'
-    reading = ga.failed_reading(tmp_path / "provider", "claude-sonnet-5-5", stderr)
-    result = ga.interpret(reading, prepared / "request", prepared)
+    reading = ga_provider.failed_reading(tmp_path / "provider", "claude-sonnet-5-5", stderr)
+    result = ga_interpretation.interpret(reading, prepared / "request", prepared)
     assert result["usage"]["requests"] == 1 and result["usage"]["list_cost_usd"] == 0.15
     assert result["counts"]["cargo_holds"]["reason"] == "vision_request_failed: typed_contract_rejected"
     assert all(v["value"] is None for v in result["particulars"].values())
@@ -327,8 +335,8 @@ def test_a_request_without_a_reading_still_counts_and_abstains(prepared, tmp_pat
 def test_the_app_run_folder(prepared, tmp_path):
     reply = {"ship_type": {"value": "tanker", "evidence": "C.O.T."}, "particulars": [],
              "items": [_hold("1", 60)], "counts": _counts()}
-    result = ga.interpret(_reading(reply), prepared / "request", prepared)
-    task = ga.write_app_run(result, prepared, tmp_path / "task", "demo")
+    result = ga_interpretation.interpret(_reading(reply), prepared / "request", prepared)
+    task = ga_reading_output.write_app_run(result, prepared, tmp_path / "task", "demo")
     state = json.loads((task / "domain" / "state.json").read_text())
     assert state["inspection_artifacts"][0]["path"] == "ga_reading/S-1_GA.png"
     assert (task / "ga_reading" / "S-1_GA.png").is_file()
@@ -409,9 +417,9 @@ def test_a_cut_or_untyped_label_is_not_a_space(label, others, cut):
     other_spaces = [{"label": o, "kind": "other_space", "number": None,
                      "source_record": {"kind": "read", "regions": [{"box_px": [500, 500, 510, 510]}]}}
                     for o in others]
-    vocabulary = {w for o in others for w in ga._words(o)}
-    wholes = {"".join(ga._words(o)) for o in others}
-    assert (ga.fragment_reason(space, other_spaces, vocabulary, wholes) is not None) is cut
+    vocabulary = {w for o in others for w in ga_counts._words(o)}
+    wholes = {"".join(ga_counts._words(o)) for o in others}
+    assert (ga_counts.fragment_reason(space, other_spaces, vocabulary, wholes) is not None) is cut
 
 
 def test_a_piece_read_where_a_longer_label_is_printed_is_dropped_with_its_reason():
@@ -421,7 +429,7 @@ def test_a_piece_read_where_a_longer_label_is_printed_is_dropped_with_its_reason
     result = {"spaces": [space("COOL. W. T. (C)", [0, 0, 100, 20]), space("W. T. (C)", [40, 0, 100, 20]),
                          space("SLOP TK(P)", [200, 0, 260, 20], "slop_tank"),
                          space("SLOP TK(P) O.T.H.", [200, 0, 300, 20], "slop_tank")], "checks": []}
-    assert ga.drop_fragments(result) == 1
+    assert ga_counts.drop_fragments(result) == 1
     assert [s["label"] for s in result["spaces"]] == ["COOL. W. T. (C)", "SLOP TK(P)", "SLOP TK(P) O.T.H."]
     assert result["checks"][0]["code"] == "fragment_label_dropped" and "COOL" in result["checks"][0]["reason"]
 
@@ -454,9 +462,9 @@ def test_fittings_systems_and_cut_abbreviations_are_not_spaces(label, number, ot
     other_spaces = [{"label": o, "kind": "fuel_tank", "number": n,
                      "source_record": {"kind": "read", "regions": [{"box_px": [500, 500, 510, 510]}]}}
                     for o, n in others]
-    vocabulary = {w for o, _ in others for w in ga._words(o)}
-    wholes = {"".join(ga._words(o)) for o, _ in others}
-    assert (ga.fragment_reason(space, other_spaces, vocabulary, wholes) is not None) is dropped
+    vocabulary = {w for o, _ in others for w in ga_counts._words(o)}
+    wholes = {"".join(ga_counts._words(o)) for o, _ in others}
+    assert (ga_counts.fragment_reason(space, other_spaces, vocabulary, wholes) is not None) is dropped
 
 
 
@@ -467,12 +475,12 @@ def test_fittings_systems_and_cut_abbreviations_are_not_spaces(label, number, ot
     ("APPROX. 99.0 M", 99.0), ("approximately 99 m", 99.0),
 ])
 def test_a_value_printed_as_approximate_is_read(printed, expected):
-    assert ga.parse_length(printed, None, "loa_m")[0] == pytest.approx(expected)
+    assert ga_interpretation.parse_length(printed, None, "loa_m")[0] == pytest.approx(expected)
 
 
 @pytest.mark.parametrize("printed", ["ABT 147,87 - 148 M", "ABT. 147.87", "about", "ABT. 147 / 150 M"])
 def test_an_approximate_value_with_a_range_or_no_unit_still_abstains(printed):
-    assert ga.parse_length(printed, None, "loa_m")[0] is None
+    assert ga_interpretation.parse_length(printed, None, "loa_m")[0] is None
 
 
 def _table_case(tmp_path, ga_name="S-3.png", table_name="S-3.png"):
@@ -483,7 +491,7 @@ def _table_case(tmp_path, ga_name="S-3.png", table_name="S-3.png"):
     table = Image.new("L", (800, 400), 255)
     ImageDraw.Draw(table).text((100, 60), "L.O.A. 189.99 m", fill=0, font=ImageFont.load_default(size=28))
     table.save(tmp_path / "table" / table_name)
-    ga.prepare(sheet, tmp_path / "request", tmp_path / "table" / table_name)
+    ga_images.prepare(sheet, tmp_path / "request", tmp_path / "table" / table_name)
     request = json.loads((tmp_path / "request" / "request.json").read_text())
     image = next(i for i in request["images"] if i["view"].startswith("particulars_table"))
     scale = image["width"] / 800
@@ -497,7 +505,7 @@ def _table_case(tmp_path, ga_name="S-3.png", table_name="S-3.png"):
 def test_a_table_value_is_checked_for_ink_on_the_table_even_with_the_name_of_the_ga(tmp_path):
     """Holdout exam: all values of one table were refused as boxes without ink."""
     reading, ga_folder = _table_case(tmp_path)
-    result = ga.interpret(reading, tmp_path / "request", ga_folder)
+    result = ga_interpretation.interpret(reading, tmp_path / "request", ga_folder)
     assert result["particulars"]["loa_m"]["value"] == pytest.approx(189.99)
 
 
@@ -511,11 +519,11 @@ def test_a_16_bit_or_transparent_image_keeps_its_ink(tmp_path):
     ImageDraw.Draw(rgba).text((10, 10), "189.99 m", fill=(0, 0, 0, 255), font=ImageFont.load_default(size=28))
     rgba.save(tmp_path / "clear.png")
     for name in ("wide.png", "clear.png"):
-        grey = np.asarray(ga.load_grey(tmp_path / name))
-        assert grey.max() == 255 and 0.01 < (grey < ga.INK_LEVEL).mean() < 0.5, name
-    plain = np.asarray(ga.load_grey(tmp_path / "wide.png"))
+        grey = np.asarray(ga_images.load_grey(tmp_path / name))
+        assert grey.max() == 255 and 0.01 < (grey < ga_commercial_settings.INK_LEVEL).mean() < 0.5, name
+    plain = np.asarray(ga_images.load_grey(tmp_path / "wide.png"))
     text.save(tmp_path / "plain.png")
-    assert (np.asarray(ga.load_grey(tmp_path / "plain.png")) == np.asarray(text)).all()  # 8-bit: unchanged
+    assert (np.asarray(ga_images.load_grey(tmp_path / "plain.png")) == np.asarray(text)).all()  # 8-bit: unchanged
     assert plain.shape == (60, 200)
 
 
@@ -534,7 +542,7 @@ def test_a_stored_run_is_reinterpreted_without_a_model_call(tmp_path):
     for folder in ("ga", "table"):
         for file in (tmp_path / folder).iterdir():
             file.rename(inputs / file.name)
-    assert ga.main(["reinterpret-particulars", "--run", str(tmp_path / "run"), "--inputs", str(inputs),
+    assert ga_commercial_cli.main(["reinterpret-particulars", "--run", str(tmp_path / "run"), "--inputs", str(inputs),
                     "--out", str(tmp_path / "again")]) == 0
     again = json.loads((tmp_path / "again" / "S-3" / "ga_reading.json").read_text())
     assert again["particulars"]["loa_m"]["value"] == pytest.approx(189.99)
@@ -556,7 +564,7 @@ def _grey_table(tmp_path, rows, ink=215):
         draw.text((x, y), text, fill=(ink, ink, ink), font=font)
         boxes.append(draw.textbbox((x, y), text, font=font))
     table.save(tmp_path / "T-1_table.png")
-    ga.prepare(None, tmp_path / "request", tmp_path / "T-1_table.png")
+    ga_images.prepare(None, tmp_path / "request", tmp_path / "T-1_table.png")
     image = json.loads((tmp_path / "request" / "request.json").read_text())["images"][0]
     return image, boxes
 
@@ -567,7 +575,7 @@ def _read_loa(tmp_path, image, box_in_table):
              "particulars": [{"field": "loa", "printed": "99.5 m", "unit_context": None,
                               "image_id": image["image_id"], "box": [round(v * scale) for v in box_in_table],
                               "evidence": "LOA row"}]}
-    return ga.interpret(_reading(reply), tmp_path / "request", tmp_path)["particulars"]["loa_m"]
+    return ga_interpretation.interpret(_reading(reply), tmp_path / "request", tmp_path)["particulars"]["loa_m"]
 
 
 def test_a_light_grey_value_in_its_box_is_read_at_the_images_own_ink_level(tmp_path):
@@ -602,11 +610,11 @@ def test_a_value_box_with_no_single_ink_run_near_it_is_still_refused(tmp_path, r
 def test_noise_on_blank_paper_is_not_ink_and_the_level_never_drops_below_160():
     rng = np.random.default_rng(0)
     paper = np.clip(250 + rng.normal(0, 2, (245, 400)), 0, 255).astype(np.uint8)
-    level = ga.image_ink_level(paper)
-    assert ga.INK_LEVEL <= level < 240 and not (paper < level).any()
+    level = ga_interpretation.image_ink_level(paper)
+    assert ga_commercial_settings.INK_LEVEL <= level < 240 and not (paper < level).any()
     dark = np.full((10, 10), 255, np.uint8)
     dark[5, 5] = 0
-    assert ga.image_ink_level(dark) >= ga.INK_LEVEL
+    assert ga_interpretation.image_ink_level(dark) >= ga_commercial_settings.INK_LEVEL
 
 
 
@@ -619,7 +627,7 @@ def _ruled_table(tmp_path, line_x=None):
         table.save(tmp_path / "T-1_table.png")
         import shutil
         shutil.rmtree(tmp_path / "request")
-        ga.prepare(None, tmp_path / "request", tmp_path / "T-1_table.png")
+        ga_images.prepare(None, tmp_path / "request", tmp_path / "T-1_table.png")
         image = json.loads((tmp_path / "request" / "request.json").read_text())["images"][0]
     return image, boxes
 

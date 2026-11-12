@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 import sys
 
-from vessel_reconstruction.ga_scale import arrangement_gate
+from vessel_reconstruction.ga_scale_arrangement import arrangement_gate
 
 
 def main(argv=None) -> int:
