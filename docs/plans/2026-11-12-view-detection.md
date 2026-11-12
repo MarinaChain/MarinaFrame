@@ -74,3 +74,9 @@ Initial quick tier failed in the app proc macro: the shared cache skipped UI sta
 A fresh reviewer read all four initial additions and relevant helpers without opening drawings or truth. One P2 boundary issue: symlinked evidence directories could redirect writes outside the worktree. Added a failing symlink test, rejected symlink components, and applied the check to case directories, crops, previews and JSON outputs. The original local-directory test also demonstrated RED before its implementation. No other high-confidence review findings; no deferred minors. Frame/straight-ink removal remains an explicit experimental limitation, not a successful detector.
 
 The planned heading splitter was not implemented; no heading fixtures are claimed as coverage. This is an early checkpoint, not completion of the implementation plan. The initial detector collection failure was the absent experimental module, followed by the recorded fixture failures and passing focused run.
+
+## Final checkpoint validation
+
+Required quick tier exited **0** after rebuilding stale app staging: Rust format, clippy and tests passed; **2,290 Python tests passed**, 4 skipped, 87 deselected, five existing SWIG warnings; **275 UI tests passed**, zero failed; secret scan passed. Log: ignored `work/view-detection/test-quick.log`. The final focused run passed **29 tests**. The evidence boundary fix was completed while the full tier ran and was separately checked with its focused tests. A duplicate full-tier invocation was stopped to avoid concurrent duplicate work; the original tier completed normally. No local `target/` exists, so no local Rust folder requires removal. The mandated shared cache is retained.
+
+Checkpoint commits: `bcf0397` (protocol/runner), `d3ba1ef` (experimental proposals/tests), `ad56d9b` (evidence boundary/review). Push only `lane/view-detection`; no merge. **Item 7 remains incomplete**, at the resume point above. No coverage improvement is claimed.
