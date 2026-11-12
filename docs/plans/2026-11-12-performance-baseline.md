@@ -149,6 +149,55 @@ listing every speed/hull where a method runs outside its validity range. Every
 number carries its source (file + cell/line). The lane report to the PM is
 under 200 words and points at that file.
 
+## Continuation review (2026-11-12, before comparisons)
+
+The original protocol and test draft are retained in git history, not treated as
+numerical evidence. No comparison has run in this continuation.
+
+- **Architecture — WARN:** reuse mesh hydrostatics, but its length is waterline
+  length, not Lpp. Lpp and the longitudinal origin/direction must be explicit.
+  A transom area requires a stated aft plane, not an inference from bounding boxes.
+- **Code quality — FAIL corrected:** use SI density in kg/m³. Delivered propeller
+  power is PE/(etaH eta0 etaR); shaft efficiency applies only to brake power.
+  Model measurements must be compared with model-scale predictions at the same
+  Reynolds number. Do not compare ship-scale JBC predictions with model CT.
+- **Test coverage — FAIL corrected:** the old ITTC expectations do not satisfy
+  the stated equation (at Re=1e7, Cf=0.003). The claimed 234 kN / 690 kW
+  worked example is dimensionally inconsistent at the stated speed. MP687 is
+  an AU five-blade propeller, not a B4-55 reference. Remove those unsupported
+  assertions. Do not tune to JBC or use its measurements as unit fixtures.
+- **Performance — PASS:** scalar formula evaluation is sufficient; reuse the
+  existing mesh integration rather than add a second hydrostatics engine.
+
+### Blind-check stop condition
+
+JBC truth was exposed in the original protocol and draft tests. A frozen run is
+not a blind check. JBC is therefore **not scored in this continuation**. A fresh
+ship/split, with truth kept by an independent evaluator, is required to complete
+D6. Do not silently substitute a holdout case or open restricted data. The PM
+must arrange that check. All earlier blind claims in this document are historical
+intent, superseded by this section. No scoring gate is relaxed.
+
+### Implementation sequence and resume instructions
+
+1. Replace `tests/test_performance.py` with independent equation tests; run it
+   with the main venv and `PYTHONPATH=src` to demonstrate the missing module.
+2. Create `src/vessel_reconstruction/performance.py`. Start with ITTC friction,
+   explicit power/fuel accounting and mesh particulars. Reject non-finite and
+   non-physical inputs. Each estimate states method, inputs and draft status.
+3. Add Holtrop-Mennen and B-series only from traceable original equations and
+   coefficient tables; do not fill missing coefficients from memory. Test the
+   individual terms and an independently sourced worked example before scoring.
+4. Add a comparison runner with explicit SI/model scale, measured reference
+   surface area, source file/cell and signed percent error. A missing public
+   reference is a blocker, never an invented expected number.
+5. Run focused tests and the full Python suite, then
+   `make test-quick PY=/Users/jonathanjie/Documents/workspace/MarinaFrame/.venv/bin/python`.
+   Commit passing work in small steps. Chain each push to the quick tier.
+6. Record completed and blocked steps in the results document. Do not claim D6
+   complete without the independent blind check. Delete only this worktree's
+   own `target/` as the final cleanup, not the shared Cargo target.
+
 ## Resume point
 
 - Protocol committed first (this file).
