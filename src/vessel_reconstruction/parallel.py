@@ -171,6 +171,61 @@ def run_in_order(work: Callable[[Piece], Result], pieces: Sequence[Piece], worke
         return list(pool.map(work, pieces))
 
 
+def process_parts(work: Callable[[Piece], Result], pieces: Sequence[Piece], out: Path,
+                  *, workers: int | None = None) -> list[Result]:
+    """Map trusted, independent CAD work in processes, with one shared token per child.
+
+    Only host-created Python objects may cross this boundary (pickle is not an input
+    format). Children never acquire tokens recursively. Serial mode stays in process;
+    aggregate exports and ordered reductions belong to the caller.
+    """
+    import pickle
+    import tempfile
+
+    from .isolation import safe_worker_environment, supervise_process
+
+    wanted = worker_count(len(pieces), workers)
+    if not pieces:
+        return []
+    # ``python -m benchmarks...`` exposes functions as __main__; children must
+    # import the stable module name, not their own unrelated __main__ entry.
+    if work.__module__ == '__main__':
+        import importlib
+
+        spec = getattr(sys.modules['__main__'], '__spec__', None)
+        if spec is None:
+            raise ValueError('Part builders must belong to an importable module.')
+        work = getattr(importlib.import_module(spec.name), work.__name__)
+    with worker_tokens(wanted) as granted:
+        if wanted == 1:
+            return [work(piece) for piece in pieces]
+        with tempfile.TemporaryDirectory(prefix='.parts-', dir=out) as temporary:
+            folder = Path(temporary)
+            groups = split_evenly(pieces, granted)
+            # Include the callable's module path for benchmark and test entry points.
+            env = safe_worker_environment()
+            env['PYTHONPATH'] = os.pathsep.join(str(Path(p or '.').resolve()) for p in sys.path)
+            for index, group in enumerate(groups):
+                (folder / f'{index}.request').write_bytes(pickle.dumps((work, group)))
+
+            def run(index):
+                command = [sys.executable, '-m', 'vessel_reconstruction.part_process', str(folder), str(index)]
+                outcome = supervise_process(command, env=env)
+                reply = folder / f'{index}.reply'
+                if outcome['state'] != 'exited' or not reply.is_file():
+                    raise RuntimeError(f"part worker ended: {outcome['state']} {outcome.get('error', '')}")
+                return pickle.loads(reply.read_bytes())
+
+            replies = run_in_order(run, list(range(len(groups))), granted)
+            result = []
+            for group in replies:
+                for success, value in group:
+                    if not success:
+                        raise value
+                    result.append(value)
+            return result
+
+
 def split_evenly(items: Sequence[Piece], groups: int) -> list[list[Piece]]:
     """``items`` in ``groups`` contiguous groups whose sizes differ by at most one (earlier groups larger)."""
     groups = max(1, min(groups, len(items)))

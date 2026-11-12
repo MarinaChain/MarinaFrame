@@ -519,20 +519,27 @@ def export_step(block: dict, path: Path) -> int:
     """Write thin member boxes to STEP and draft IGES/3dm files, all in millimetres."""
     import cadquery as cq
 
-    parts = []
-    for index, member in enumerate(block["members"]):
-        t = (member["thickness_mm"] or 10.0) / 1000
-        x0, y0, z0, x1, y1, z1 = member["box"]
-        dims = [x1 - x0, y1 - y0, z1 - z0]
-        thin = min(range(3), key=lambda i: dims[i])
-        lo, hi = [x0, y0, z0], [x1, y1, z1]
-        lo[thin] -= t / 2
-        hi[thin] += t / 2
-        size = [max(hi[i] - lo[i], 1e-4) * 1000 for i in range(3)]
-        shape = cq.Solid.makeBox(*size, cq.Vector(*(v * 1000 for v in lo)))
-        parts.append(CadPart(member.get("member_id", f"member-{index}"), shape, "Structure"))
+    from ..parallel import process_parts
+
+    parts = process_parts(_member_part, list(enumerate(block["members"])), path.parent)
     compound = cq.Compound.makeCompound([part.shape for part in parts])
     cq.exporters.export(cq.Workplane().add(compound), str(path), exportType="STEP")
     export_iges(compound, path.with_suffix(".iges"))
     export_3dm(parts, path.with_suffix(".3dm"))
     return len(parts)
+
+
+def _member_part(item):
+    import cadquery as cq
+
+    index, member = item
+    t = (member["thickness_mm"] or 10.0) / 1000
+    x0, y0, z0, x1, y1, z1 = member["box"]
+    dims = [x1 - x0, y1 - y0, z1 - z0]
+    thin = min(range(3), key=lambda i: dims[i])
+    lo, hi = [x0, y0, z0], [x1, y1, z1]
+    lo[thin] -= t / 2
+    hi[thin] += t / 2
+    size = [max(hi[i] - lo[i], 1e-4) * 1000 for i in range(3)]
+    shape = cq.Solid.makeBox(*size, cq.Vector(*(v * 1000 for v in lo)))
+    return CadPart(member.get("member_id", f"member-{index}"), shape, "Structure")

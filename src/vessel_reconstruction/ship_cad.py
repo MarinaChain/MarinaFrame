@@ -407,8 +407,58 @@ def _shaped_part(component, values, hull, detail):
     return shape
 
 
+def _build_component(component, hull, detail, shapes):
+    from .geometry import precise_volume_mm3
+
+    values = component['geometry']
+    if component['op'] == 'hull' and values is not None:
+        # Station sections are large; the result keeps their count, not the rows.
+        component['geometry'] = {'sections': f'{len(values["sections"])} stations'}
+    if values is None:
+        component['built'] = False
+        return component, None
+    try:
+        op = component['op']
+        if op == 'hull':
+            from .geometry import build_region_hull
+            shape, _ = build_region_hull(values['sections'])
+            shape = shape.scale(0.001)  # Existing hull pipeline uses millimetres.
+        elif op == 'appendage':
+            shape = _prism(values['outline'], values['span'], 'XZ')
+        elif op in SHAPED_OPS and hull is not None:
+            shape = _shaped_part(component, values, hull, detail)
+        elif op == 'bulwark':
+            shape = _straight_part(op, values)
+        else:
+            shape = _prism(values['outline'], values['height'])
+            if op == 'opening':
+                target = values['target']
+                if target not in shapes:
+                    raise ValueError('opening target was not built')
+                changed = shapes[target].cut(shape)
+                if not changed.isValid() or not changed.Solids() or changed.Volume() <= 0:
+                    raise ValueError('opening leaves an empty or invalid target')
+                shapes[target] = changed
+                component['role'] = 'subtraction_tool_not_material'
+        if not shape.isValid() or not shape.Solids() or precise_volume_mm3(shape) <= 0:
+            raise ValueError('invalid or empty CAD solid')
+        component['built'] = True
+    except Exception as exc:
+        component.update(status='draft_guess', built=False, reason=f'{type(exc).__name__}: {exc}')
+    return component, shape if component['built'] else None
+
+
+def _independent_component(request):
+    from .geometry import reused_volumes
+
+    component, detail = request
+    with reused_volumes():
+        return _build_component(component, _hull_side(detail), detail, {})
+
+
 def execute(program: dict, measurements: dict, out: Path, *, audit=None, veto=False,
-            guesses: dict | None = None, detail: dict | None = None) -> dict:
+            guesses: dict | None = None, detail: dict | None = None,
+            workers: int | None = 1) -> dict:
     """Trusted worker entry. ``out`` is host-selected, never program-selected.
 
     ``detail`` (optional, host data): ``hull_side`` (a labelled ``superstructure.HullSide`` grid)
@@ -419,10 +469,10 @@ def execute(program: dict, measurements: dict, out: Path, *, audit=None, veto=Fa
 
     # A part's solid is checked and recorded several times; integrate its volume once.
     with reused_volumes():
-        return _execute(program, measurements, out, audit=audit, veto=veto, guesses=guesses, detail=detail)
+        return _execute(program, measurements, out, audit=audit, veto=veto, guesses=guesses, detail=detail, workers=workers)
 
 
-def _execute(program: dict, measurements: dict, out: Path, *, audit, veto, guesses, detail) -> dict:
+def _execute(program: dict, measurements: dict, out: Path, *, audit, veto, guesses, detail, workers) -> dict:
     import cadquery as cq
 
     from .geometry import precise_volume_mm3
@@ -440,44 +490,20 @@ def _execute(program: dict, measurements: dict, out: Path, *, audit, veto, guess
             component['reason'] = f'{component["reason"]}; {source_notes[component["id"]]}'
     shapes = {}
     out.mkdir(parents=True, exist_ok=True)
-    for part_index, component in enumerate(components, 1):
-        report_progress('Building vessel parts', part_index, len(components))
-        values = component['geometry']
-        if component['op'] == 'hull' and values is not None:
-            # Station sections are large; the result keeps their count, not the rows.
-            component['geometry'] = {'sections': f'{len(values["sections"])} stations'}
-        if values is None:
-            component['built'] = False
-            continue
-        try:
-            op = component['op']
-            if op == 'hull':
-                from .geometry import build_region_hull
-                shape, _ = build_region_hull(values['sections'])
-                shape = shape.scale(0.001)  # Existing hull pipeline uses millimetres.
-            elif op == 'appendage':
-                shape = _prism(values['outline'], values['span'], 'XZ')
-            elif op in SHAPED_OPS and hull is not None:
-                shape = _shaped_part(component, values, hull, detail)
-            elif op == 'bulwark':
-                shape = _straight_part(op, values)
-            else:
-                shape = _prism(values['outline'], values['height'])
-                if op == 'opening':
-                    target = values['target']
-                    if target not in shapes:
-                        raise ValueError('opening target was not built')
-                    changed = shapes[target].cut(shape)
-                    if not changed.isValid() or not changed.Solids() or changed.Volume() <= 0:
-                        raise ValueError('opening leaves an empty or invalid target')
-                    shapes[target] = changed
-                    component['role'] = 'subtraction_tool_not_material'
-            if not shape.isValid() or not shape.Solids() or precise_volume_mm3(shape) <= 0:
-                raise ValueError('invalid or empty CAD solid')
-            shapes[component['id']] = shape
-            component['built'] = True
-        except Exception as exc:
-            component.update(status='draft_guess', built=False, reason=f'{type(exc).__name__}: {exc}')
+    from .parallel import process_parts, worker_count
+
+    # Openings replace a target solid. Keep the complete ordered path for programs
+    # with openings; independent programs can build all solids concurrently.
+    if worker_count(len(components), workers) > 1 and not any(c['op'] == 'opening' for c in components):
+        built = process_parts(_independent_component, [(c, detail) for c in components], out, workers=workers)
+        components = [component for component, _ in built]
+        shapes = {component['id']: shape for component, shape in built if shape is not None}
+    else:
+        for part_index, component in enumerate(components, 1):
+            report_progress('Building vessel parts', part_index, len(components))
+            component, shape = _build_component(component, hull, detail, shapes)
+            if shape is not None:
+                shapes[component['id']] = shape
     material = []
     for part_index, component in enumerate(components, 1):
         report_progress('Exporting vessel parts', part_index, len(components))
