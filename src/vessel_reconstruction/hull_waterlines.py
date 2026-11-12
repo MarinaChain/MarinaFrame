@@ -15,9 +15,12 @@ def join_waterline(parts: list[np.ndarray], seam_tolerance_m: float = 0.005) -> 
         points = np.asarray(part, dtype=float)
         if points.ndim != 2 or points.shape[1] != 2 or not np.isfinite(points).all():
             raise ValueError('Waterline cuts must contain finite x/y pairs.')
-        points = points[np.argsort(points[:, 0], kind='stable')]
         if len(points) < 2 or np.ptp(points[:, 0]) < 1e-8:
             continue
+        if points[-1, 0] < points[0, 0]:
+            points = points[::-1]
+        if np.any(np.diff(points[:, 0]) <= 0):
+            raise ValueError('Waterline edge is not monotone in x; preserve its traversal order.')
         ordered.append(points)
     ordered.sort(key=lambda p: p[0, 0])
     if not ordered:
@@ -40,14 +43,22 @@ def join_waterline(parts: list[np.ndarray], seam_tolerance_m: float = 0.005) -> 
 def main_component(parts: list[np.ndarray], interior_x_m: float,
                    seam_tolerance_m: float = 0.005) -> tuple[np.ndarray, list[list[float]]]:
     """Keep the connected waterline containing a stated interior station."""
-    ordered = sorted([p[np.argsort(p[:, 0], kind='stable')] for p in parts], key=lambda p: float(p[0, 0]))
+    ordered = [join_waterline([p], seam_tolerance_m) for p in parts]
     groups = []
-    for part in ordered:
-        if (not groups or part[0, 0] > groups[-1][-1][-1, 0] + seam_tolerance_m
-                or abs(part[0, 1] - groups[-1][-1][-1, 1]) > seam_tolerance_m):
-            groups.append([part])
-        else:
-            groups[-1].append(part)
+    remaining = set(range(len(ordered)))
+    while remaining:
+        component = {min(remaining)}
+        remaining -= component
+        frontier = list(component)
+        while frontier:
+            current = ordered[frontier.pop()]
+            connected = {i for i in remaining if
+                np.max(np.abs(current[-1] - ordered[i][0])) <= seam_tolerance_m
+                or np.max(np.abs(ordered[i][-1] - current[0])) <= seam_tolerance_m}
+            component.update(connected)
+            remaining -= connected
+            frontier.extend(connected)
+        groups.append([ordered[i] for i in sorted(component)])
     selected = [g for g in groups if min(np.min(p[:, 0]) for p in g) <= interior_x_m
                 <= max(np.max(p[:, 0]) for p in g)]
     if len(selected) != 1:

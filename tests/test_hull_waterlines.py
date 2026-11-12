@@ -50,6 +50,21 @@ def test_main_component_reports_disconnected_end_piece():
     assert excluded == [[0.0, 10.0]]
 
 
+def test_folded_cut_is_rejected_without_sorting_connectivity():
+    from vessel_reconstruction.hull_waterlines import join_waterline
+    with pytest.raises(ValueError, match='monotone'):
+        join_waterline([np.array([[0, 1], [2, 2], [1, 3], [3, 4]])])
+
+
+def test_interleaved_unrelated_patch_does_not_split_connected_shell():
+    from vessel_reconstruction.hull_waterlines import main_component
+    line, excluded = main_component([np.array([[0, 0], [10, 5]]),
+        np.array([[5, 20], [6, 20]]), np.array([[10, 5], [20, 0]])], 15)
+    assert line[0, 0] == 0
+    assert line[-1, 0] == 20
+    assert excluded == [[5.0, 6.0]]
+
+
 def test_shared_patch_seam_is_joined_not_invented():
     from vessel_reconstruction.hull_waterlines import join_waterline
     result = join_waterline([np.array([[0, 0], [10, 5]]), np.array([[10, 5], [20, 0]])])
