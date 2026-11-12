@@ -229,6 +229,12 @@ Execution sequence (current session):
    and push. Create `perf-frozen-1` only on a passing code commit; do not move it.
    Exact evaluator command uses that tag and an explicit external JSON input.
    The evaluator, not this lane, supplies and opens blind measurements.
+Method-range clarification before any development comparison: the inherited
+protocol's Fn<=0.28 and Cb range were unsupported labels, not accuracy gates.
+Use each original paper's stated application limits and explicitly labelled
+implementation screening bounds. Keep empirical limits separate from general
+caveats. No measured-error acceptance target is changed or introduced.
+
 6. Final report records counts, errors, limits, source cells, tag SHA and command.
    No blind score is produced. Remove only lane-local target after final push.
 
