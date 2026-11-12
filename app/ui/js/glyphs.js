@@ -9,6 +9,7 @@ import * as fmt from './format.js';
 /** Icon name of each section source label (index.html sprite, `i-<name>`). */
 const SOURCE_ICONS = {
   traced: 'src-traced',
+  printed: 'read', // a size printed on the drawing: the "value read from the drawing" icon
   repaired: 'src-repaired',
   interpolated: 'src-interpolated',
   ai_inferred: 'src-ai_inferred',

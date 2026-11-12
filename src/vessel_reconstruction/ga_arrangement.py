@@ -40,11 +40,14 @@ TANK_KINDS = ("cargo_tank", "slop_tank", "ballast_tank", "fuel_tank", "other_tan
 # "measured_from_scale": the reader measured the value on the drawing with its frame scale (not a
 # printed value). The arrangement treats it as read: it came from drawn ink, not from a rule here.
 MEASURED = "measured_from_scale"
-STATUSES = ("read", MEASURED, "guessed")
+# "printed": a size printed on the drawing and tied to one item (a hatch size, a span of the
+# dimension chain); the most trusted status. The arrangement treats it as read.
+PRINTED = "printed"
+STATUSES = ("read", PRINTED, MEASURED, "guessed")
 # Statuses of a value taken from the drawing itself (printed, or measured with its scale). A
 # particular with any other status and a value (for example "derived_from_space_tops") is an
 # estimate: it is used, and the hull's record says so.
-FROM_DRAWING = ("read", MEASURED)
+FROM_DRAWING = ("read", PRINTED, MEASURED)
 SIDES = ("both", "port", "starboard", "centre")
 
 # --- rules that fill a missing extent (each one is labelled "guessed" where it is used) -------

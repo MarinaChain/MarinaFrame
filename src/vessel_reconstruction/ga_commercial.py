@@ -119,6 +119,7 @@ def measure_one(result: dict, ga: Path, out: Path, binary: Path, basis: str, mod
     is the file for the arrangement step (see ``ga_scale``).
     """
     from . import ga_scale
+    from .ga_scale_arrangement import arrangement_input
     readings = []
     result["case_id"] = case_id
 
@@ -129,7 +130,7 @@ def measure_one(result: dict, ga: Path, out: Path, binary: Path, basis: str, mod
     result.setdefault("passes", {})["scale"] = ga_scale.scale_pass(result, ga, Path(out) / "scale", call)
     for reading in readings:
         result["usage"] = add_usage(result["usage"], usage_of(reading))
-    write_json(Path(out) / "ga_arrangement_input.json", ga_scale.arrangement_input(result, case_id))
+    write_json(Path(out) / "ga_arrangement_input.json", arrangement_input(result, case_id))
     return result
 
 

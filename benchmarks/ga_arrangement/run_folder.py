@@ -147,8 +147,10 @@ def part_style(part: M.Solid):
 
 
 def ui_source(status: str) -> str:
-    """The app's source word for an extent: ``traced`` (shown as "Read": taken from the drawing,
-    printed or measured with its scale) or ``guessed``."""
+    """The app's source word for an extent: ``printed`` (a size printed on the drawing),
+    ``traced`` (taken from the drawing: read, or measured with its scale) or ``guessed``."""
+    if status == "printed":
+        return "printed"
     return "guessed" if status == "guessed" else "traced"
 
 
@@ -157,6 +159,8 @@ def default_basis(axis: str, status: str) -> str:
     guessed by the reader (it gave a value but marked it guessed)."""
     if status == "guessed":
         return f"{axis} extent guessed by the GA reader"
+    if status == "printed":
+        return f"{axis} extent printed on the drawing (a size tied to this item)"
     return f"{axis} extent from the GA reading"
 
 
