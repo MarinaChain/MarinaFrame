@@ -7,7 +7,7 @@ KIND_WORDS = {
     "cargo_hold": r"\bHOLD\b",
     "cargo_hatch": r"\bHATCH\b|\bH\.?\s?C\b",
     # A hose-handling, provision or engine-room crane is a crane but not a cargo crane.
-    "cargo_crane": r"^(?!.*\b(?:HOSE|PROV|PROVISION|STORE|STORES|ENGINE|E/R|DAVIT|MISC|HOIST)\b).*\bCRANE\b",
+    "cargo_crane": r"^(?!.*\b(?:HOSE|PROV|PROVISION|STORE|STORES|ENGINE|E/R|DAVIT|MISC|HOIST)\b).*\b(?:CRANE\b|CR\.(?=\s|\d|$)|CR\b)",
     "cargo_tank": r"C\.?\s?O\.?\s?T|C\.?\s?T\b|CARGO\s+(?:OIL\s+)?T(?:AN)?K|\bCOT\b",
     "slop_tank": r"\bSLOP\b",
 }
