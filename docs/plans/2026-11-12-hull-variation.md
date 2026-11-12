@@ -87,4 +87,64 @@ Architecture PASS: use actual CAD waterline cuts, then existing builder. Quality
 4. Build identity and three changed public candidates: +3% and -3% relative Cb and +2 m beam, preserving baseline LCB/L where feasible. Original target gates remain Cb <=0.001, LCB/L <=0.001 and mesh/CAD volume <=0.001. If a request is unreachable, report it rather than relax gates. Output STEP, reports and images under work/ only.
 5. Run focused/CAD tests and the quick tier before push. Update results and resume point here. Push only lane/hull-variation; do not merge.
 
-Resume: inspect source waterline cuts and implement support tests. The previous stop is historical, not the final outcome of this continuation.
+## Continuation results
+
+Public source topology was inspected before comparison. The import has 19 faces, not 19 independent watertight parts. Faces 0 and 3 are duplicate flat-bottom patches; faces 6 and 7 are narrow centreline strips. The waterline-shell sample uses zero-based faces **2,4,5,8,10,11,12,13,14,15,16,17,18**. Face 1 lies above the draft except its design-waterline boundary and does not connect the retained underwater main component. No rudder file was imported. The hull archive contains only kvlcc2.igs. Small end patches remain part of the measured shell where they connect; disconnected pieces are reported, not filled.
+
+Coordinate ruling: physical height = -native z; x increases aft, inferred from the fine aft sections near x=-10 and broad forward bulb near x=-328. The published towing-axis statement alone does not establish the CAD frame. Reports therefore retain native source coordinates and label LCB from the retained aft cap, not the published AP.
+
+Sampling frozen before comparison: 401 points per CAD cut edge; 81 regular x stations plus explicit parallel-body boundary stations at native x=-220 and -120; waterlines at 0.5,1,2,3,4,6,8,10,12,14,16,18,20,20.8,22,24,26,27.9 m. The 0..0.5 m layer is omitted, not extrapolated. Each level retains the connected cut through x=-160, rejects gaps larger than 5 mm, and records disconnected intervals. The common intersection is native x **[-288.000200,-24.000219]**, length **263.999981 m**. Ends are the existing builder's planar caps, not invented continuation of source skin. The full per-waterline omission table is `work/hull-variation/support.json` (ignored); the table below records supported extents and therefore the omitted length at each end relative to the common interval.
+
+| Height m | Supported native x min | Supported native x max | Left omitted m | Right omitted m |
+|---:|---:|---:|---:|---:|
+| 0.5 | -288.000200 | -15.999930 | 0.000 | 8.000 |
+| 1 | -319.699092 | -11.658556 | 31.699 | 12.342 |
+| 2 | -322.244283 | -10.636855 | 34.244 | 13.363 |
+| 3 | -312.000303 | -9.880127 | 24.000 | 14.120 |
+| 4 | -325.131478 | -9.018628 | 37.131 | 14.982 |
+| 6 | -326.732621 | -16.000148 | 38.732 | 8.000 |
+| 8 | -327.666609 | -9.498030 | 39.666 | 14.502 |
+| 10 | -328.070722 | -10.354398 | 40.071 | 13.646 |
+| 12 | -327.878966 | -10.227024 | 39.879 | 13.773 |
+| 14 | -326.769699 | -24.000219 | 38.769 | 0.000 |
+| 16 | -324.092897 | -19.369524 | 36.093 | 4.631 |
+| 18 | -321.084327 | 2.524847 | 33.084 | 26.525 |
+| 20 | -320.064900 | 5.500238 | 32.065 | 29.500 |
+| 20.8 | -315.329433 | 5.500179 | 27.329 | 29.500 |
+| 22 | -312.001550 | 5.500621 | 24.001 | 29.501 |
+| 24 | -312.001473 | 5.501095 | 24.001 | 29.501 |
+| 26 | -312.001279 | 5.500830 | 24.001 | 29.501 |
+| 27.9 | -312.001101 | 5.500814 | 24.001 | 29.501 |
+
+At 20.8 m a separate source piece spans [-319.999722,-317.225317]; it is not bridged to the main component beginning at -315.329433. Other disconnected intervals are recorded in support.json. Thus the original miss was not safely resolved by assuming a single open stern: patch discontinuities occur at both ends and several levels.
+
+### Published baseline comparison (before variations)
+
+Sources: [SIMMAN 2020 Table 1](https://simman2020.kr/contents/Ship_data_summary.php), wetted area without rudder; [Kim et al. 2016, Table 1 p372](https://koreascience.or.kr/article/JAKO201634864503968.pdf), DOI 10.3744/SNAK.2016.53.5.371. SIMMAN prints breadth as 580; the independent paper confirms 58.0 m. No silent unit correction was made to the source table.
+
+| Quantity | Published | Retained-shell result | Difference |
+|---|---:|---:|---:|
+| Lpp / retained length m | 320.0 | 263.999981 | -56.000019 (-17.50%) |
+| Breadth m | 58.0 | 58.128076 | +0.128076 (+0.221%) |
+| Draft above retained bottom m | 20.8 | 20.3 | -0.5 (-2.404%) |
+| Immersed volume m³ | 312622 | 282066.80 | -30555.20 (-9.774%) |
+| Cb on published 320*58*20.8 basis | 0.8098 | 0.73065215 | -0.07914785 (-9.774%) |
+| Wetted area m² | 27194 | 25083.93 | -2110.07 (-7.759%) |
+
+The area includes artificial retained end caps and the new bottom closure; it is not a like-for-like source skin area. Integrated agreement is poor. This is a **trimmed public-shell demonstrator, not a reconstructed full KVLCC2**. No baseline acceptance gate was supplied; the differences are reported without tuning. Local shape fidelity and C2 fairness are not established.
+
+### Three retained-shell candidates
+
+The requested example ±3% relative Cb was attempted after reading the baseline and was unreachable with the unchanged map bounds and fixed middle body. Ruling: use ±1% relative Cb plus +2 m beam as three feasible candidates, since ±3% was an example rather than a required gate. Cost: these demonstrate a smaller design range; the ±3% limitation remains explicit. Gates were not changed.
+
+| Candidate | Target Cb | Built Cb | LCB/L error | Volume m³ | Wetted m² | Waterplane m² | Gross immersed capacity m³ |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| +1% Cb | 0.91449876 | 0.91448982 | 0.00000436 | 284881.83 | 25297.89 | 14948.95 | 184351.23 |
+| -1% Cb | 0.89638987 | 0.89636282 | 0.00001505 | 279234.91 | 24877.33 | 14841.58 | 183712.21 |
+| +2 m beam (60.128076 m) | 0.90544431 | 0.90542370 | 0.00001398 | 291762.25 | 25611.25 | 15407.91 | 190417.31 |
+
+All use retained length 263.999981 m, retained draft 20.3 m and target LCB/L 0.53037765. All are valid solids. Maximum absolute Cb error 0.00002705; maximum mesh/CAD volume error 0.00001958. Gross capacity is between 0.2L and 0.8L (52.799996..211.199985 m from retained aft cap); no structural or cargo deductions. Cb here uses each retained candidate's dimensions, not published KVLCC2 dimensions.
+
+STEP, JSON and inspected PNG images: `work/hull-variation/public-candidates/` only. Full source inspection: surfaces.json and waterlines.json under the same ignored work area. Command: `PYTHONPATH=src <main-venv-python> scripts/check_hull_variation.py --sections work/hull-variation/supported.npz --out work/hull-variation/public-candidates`, then the same with `--candidates`. Focused continuation tests: **20 passed**. Quick tier and review pending.
+
+Resume: the solid-generation blocker is removed for the conservative retained shell. Full-KVLCC2 reconstruction remains limited by disconnected source patch topology and discarded domain; do not present these candidates as full-vessel KVLCC2 designs. Next independent work would support variable-height sections and reconcile source seams geometrically without changing reference values or fixed target gates.

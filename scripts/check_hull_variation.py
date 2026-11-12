@@ -9,6 +9,7 @@ from vessel_reconstruction.hull_variation import HullSections, build_candidate, 
 
 # SIMMAN 2020 full-scale KVLCC2 table, bare hull wetted area (without rudder).
 PUBLIC_SOURCE = 'https://simman2020.kr/contents/Ship_data_summary.php'
+BREADTH_SOURCE = 'https://koreascience.or.kr/article/JAKO201634864503968.pdf'
 PUBLISHED = dict(length_m=320.0, breadth_m=58.0, draft_m=20.8,
                  volume_m3=312622.0, cb=0.8098, wetted_surface_m2=27194.0)
 
@@ -61,6 +62,8 @@ def run(sections: Path, out: Path, candidates: bool = False) -> dict:
         built = build_candidate(hull)
         hydro = built.report['hydrostatics']
         report = dict(status='draft', engineering_approved=False, source=PUBLIC_SOURCE,
+                      breadth_source=BREADTH_SOURCE,
+                      source_note='SIMMAN breadth cell prints 580; Kim et al. 2016 Table 1 confirms 58.0 m.',
                       input_sha256=__import__('hashlib').sha256(sections.read_bytes()).hexdigest(),
                       comparison=compare_particulars(dict(length_m=hull.length_m, breadth_m=hull.breadth_m,
                           draft_m=hull.draft_m, volume_m3=hydro['volume_m3'],
