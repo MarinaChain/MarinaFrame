@@ -75,6 +75,9 @@ def main():
         hull={k:v for k,v in geometry.items() if k in
               {"lwl_m","beam_m","draft_m","volume_m3","cm","cwp",
                "lcb_percent_lwl_forward","wetted_surface_m2","transom_area_m2"}}
+        # No identified immersed transom face is supplied. Zero is a stated
+        # approximation, not the area of the aft-perpendicular section.
+        hull["transom_area_m2"] = 0.0
         # Bulb section at FP, in the supplied coordinates; centre height is its
         # immersed transverse-area centroid, not a fitted performance parameter.
         from vessel_reconstruction.performance_geometry import _half_widths
@@ -106,6 +109,7 @@ def main():
             water=dict(density_kg_m3=999,kinematic_viscosity_m2_s=speed*7/7.46e6)
             notes=["Model Lpp7m, Fr.142; viscosity derived from published Re7.46e6.",
                    "Public jbc.igs bare hull; separate boss/spacer omitted and marked approximation."]
+        notes.append("Immersed transom not identified: AT=0 assumption; AP section is not substituted.")
         for method in ("holtrop_mennen_1982","holtrop_1984"):
             case=dict(schema_version=1,ship=ship,scale="model",method=method,
                 particulars_source=f"{path.name} sha256={metadata[ship]['geometry_sha256']}; envelope 401x401, chord2mm; workshop conditions",

@@ -13,7 +13,6 @@ from .exports.hydrostatics import clip_below
 
 def _half_widths(mesh: np.ndarray, x: float, heights: np.ndarray) -> np.ndarray:
     # Match the existing benchmark's half-open plane intersection convention.
-    x = x + 1e-10
     low = mesh[:, :, 0].min(axis=1)
     high = mesh[:, :, 0].max(axis=1)
     faces = mesh[(low < x) & (x < high)]
@@ -44,9 +43,9 @@ def surface_particulars(triangles: np.ndarray, *, waterline_z_m: float, lpp_m: f
                        station_count: int = 401, height_count: int = 401) -> dict:
     """Integrate an explicitly symmetric shell in metres and stated coordinates.
 
-    Transom area is the immersed section at the aft perpendicular, not the aft
-    mesh extremum (which can include overhangs/bosses). Bulb area must be measured
-    separately at the forward perpendicular; it is not inferred here.
+    An aft-perpendicular section is not necessarily a transom. Transom area
+    therefore remains unknown and must be supplied from an identified transom
+    surface. Bulb area is also a separate, explicit geometric measurement.
     """
     mesh = np.asarray(triangles, dtype=float)
     if mesh.ndim != 3 or mesh.shape[1:] != (3,3) or not mesh.size or not np.isfinite(mesh).all():
@@ -82,13 +81,11 @@ def surface_particulars(triangles: np.ndarray, *, waterline_z_m: float, lpp_m: f
     surface = float(np.linalg.norm(np.cross(wet[:,1]-wet[:,0],wet[:,2]-wet[:,0]),axis=1).sum()/2)
     if half_hull:
         surface *= 2
-    transom_x = aft_perpendicular_x_m + forward_x_sign*epsilon
-    transom_area = float(np.trapezoid(2*_half_widths(mesh,transom_x,heights),heights))
     midpoint = float((wet_x[0]+wet_x[-1])/2)
     return dict(lwl_m=lwl,beam_m=beam,draft_m=draft,volume_m3=volume,
                 cm=area_max/(beam*draft),cwp=waterplane/(lwl*beam),
                 lcb_percent_lwl_forward=100*forward_x_sign*(lcb-midpoint)/lwl,
-                wetted_surface_m2=surface,transom_area_m2=transom_area,
+                wetted_surface_m2=surface,transom_area_m2=None,
                 geometry_warnings=[
                     "Draft symmetric outer-envelope integration; no tunnels or interior cavities.",
                     "Surface area assumes supplied patches contain no duplicate or centreline panels.",

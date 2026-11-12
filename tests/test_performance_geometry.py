@@ -23,9 +23,23 @@ def test_surface_particulars_do_not_depend_on_face_winding():
     assert result["wetted_surface_m2"] == pytest.approx(3440)
     assert result["cm"] == pytest.approx(1)
     assert result["cwp"] == pytest.approx(1)
-    assert result["transom_area_m2"] == pytest.approx(120)
+    assert result["transom_area_m2"] is None  # AP section is not a measured transom
     assert result["lcb_percent_lwl_forward"] == pytest.approx(0, abs=1e-5)
     assert result["geometry_warnings"]
+
+
+def test_surface_reverse_model_coordinates_keep_same_volume_and_waterline():
+    mesh = box_surface()/100
+    positive = performance_geometry.surface_particulars(
+        mesh,waterline_z_m=.06,lpp_m=1,aft_perpendicular_x_m=0,
+        forward_x_sign=1,half_hull=False,station_count=101,height_count=101)
+    mesh[:,:,0] *= -1
+    negative = performance_geometry.surface_particulars(
+        mesh,waterline_z_m=.06,lpp_m=1,aft_perpendicular_x_m=0,
+        forward_x_sign=-1,half_hull=False,station_count=101,height_count=101)
+    assert negative["volume_m3"] == pytest.approx(positive["volume_m3"],rel=1e-10)
+    assert negative["lwl_m"] == pytest.approx(positive["lwl_m"],rel=1e-10)
+    assert negative["transom_area_m2"] is None
 
 
 def test_surface_lcb_uses_waterline_midpoint_not_perpendicular_midpoint():
