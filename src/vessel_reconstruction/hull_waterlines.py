@@ -6,6 +6,16 @@ builder. Distances discarded from each measured waterline remain in the report.
 import numpy as np
 
 
+def monotone_parts(points: np.ndarray) -> list[np.ndarray]:
+    """Split traversal at genuine x turns without changing point connectivity."""
+    differences = np.diff(points[:, 0])
+    signs = np.sign(differences)
+    changes = np.flatnonzero(signs[1:] != signs[:-1]) + 1
+    boundaries = [0, *changes.tolist(), len(points) - 1]
+    return [points[a:b + 1] for a, b in zip(boundaries[:-1], boundaries[1:])
+            if b > a and np.ptp(points[a:b + 1, 0]) > 1e-8]
+
+
 def join_waterline(parts: list[np.ndarray], seam_tolerance_m: float = 0.005) -> np.ndarray:
     """Join monotone-x patch cuts, accepting only coincident patch seams."""
     if not parts:
@@ -139,7 +149,7 @@ def sample_supported_iges(path, *, face_indices: list[int], source_extent_m: tup
                     if points[:, 1].min() < -seam_tolerance_m:
                         raise ValueError('Selected shell is not a positive-y half hull.')
                     points[:, 1] = np.maximum(points[:, 1], 0)
-                    parts.append(points)
+                    parts.extend(monotone_parts(points))
         line, omitted = main_component(parts, interior_x_m, seam_tolerance_m)
         lines.append(line)
         excluded.append(omitted)

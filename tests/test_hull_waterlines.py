@@ -50,6 +50,15 @@ def test_main_component_reports_disconnected_end_piece():
     assert excluded == [[0.0, 10.0]]
 
 
+def test_folded_edge_splits_at_turn_without_reordering():
+    from vessel_reconstruction.hull_waterlines import monotone_parts
+    points = np.array([[0, 1], [2, 2], [1, 3], [3, 4]])
+    parts = monotone_parts(points)
+    assert len(parts) == 3
+    np.testing.assert_array_equal(parts[0], points[:2])
+    np.testing.assert_array_equal(parts[1], points[1:3])
+
+
 def test_folded_cut_is_rejected_without_sorting_connectivity():
     from vessel_reconstruction.hull_waterlines import join_waterline
     with pytest.raises(ValueError, match='monotone'):
