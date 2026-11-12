@@ -149,3 +149,39 @@ A fresh full quick tier now runs after the fix.
 
 Next: record final checks, freeze and push experimental tag `perf-frozen-2`;
 no blind scoring. Full CAD tier was not requested or run.
+
+### Deferred runner limitations
+
+The development runner is a reproducibility tool for these exact inputs, not
+a general benchmark ingester. Review noted three small cleanup items: duplicate
+keys use raw JSON (equivalent numeric/default spellings can evade duplicate
+rejection); optional baseline propulsion is evaluated though only force is
+fitted; and per-row dictionary serialization/reference-area lookup is redundant.
+The fixed 16-point input has distinct numeric geometry/water/speed keys (checked
+separately) and its JBC propulsion input runs successfully. None changes this
+fit or its failed gate. Canonicalization and force-only preparation should
+precede wider use. The core scalar fit and frozen evaluator do not depend on
+these runner-only shortcuts.
+
+Ruling: task ledger uses direct pytest and commits rather than task-start/
+task-done wrappers because this plan uses prose-numbered tasks. The cost is
+manual bookkeeping only; required checks remain explicit above.
+
+### Freeze candidate
+
+Frozen code target: **d73458b4cc140b1616c8bb3b1747f7f9dcdd254c**.
+Final full quick tier **passed (exit 0)**: **2541 Python passed, 4 skipped,
+92 deselected, 5 warnings** (349.32 s); **275 UI passed, 0 failed**; Rust
+fmt/clippy/workspace tests passed; bounded secret-pattern scan **0 findings**.
+Log: ignored `work/perf-calibration/quick-final.log`. The frozen code target
+passed this run. Tag `perf-frozen-2` records this experimental candidate with
+**failed transfer gate**. Later report-only commits do not change the code target.
+
+Lane work is complete after branch/tag push. Resume point for the PM: retain
+both baselines; do not score a blind ship on this candidate. Obtain more
+full-form test data or evaluate CFD before a new calibration protocol.
+
+Review coordinator reported no blocking findings in `6f4f389..d73458b`.
+The nested finder did not independently inspect the final warning fix; the
+parent's regression RED→GREEN and 121 focused checks are the fix evidence.
+The three deferred runner limitations above remain explicit.
