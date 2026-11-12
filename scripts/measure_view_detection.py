@@ -63,8 +63,8 @@ def save_regions(picture, regions, directory, prefix):
         draw.text((scaled[0] + 2, scaled[1] + 2), f'{index}: {region["label"]}', fill="red")
         crop = crop_source.crop(tuple(scaled))
         crop.thumbnail((1200, 1200))
-        crop.save(directory / f'{prefix}-{index}-{region["label"]}.png')
-    preview.save(directory / f"{prefix}-overview.png")
+        crop.save(check_output_directory(directory / f'{prefix}-{index}-{region["label"]}.png'))
+    preview.save(check_output_directory(directory / f"{prefix}-overview.png"))
 
 
 def inspect(path, directory, experimental=False):
@@ -94,8 +94,12 @@ def inspect(path, directory, experimental=False):
 
 def check_output_directory(path):
     local_work = Path(__file__).resolve().parents[1] / "work"
+    absolute = path.absolute()
+    for parent in (absolute, *absolute.parents):
+        if parent.is_symlink():
+            raise ValueError("evidence paths must not contain a symlink")
     target = path.resolve()
-    if not target.is_relative_to(local_work.resolve()):
+    if not target.is_relative_to(local_work):
         raise ValueError("per-sheet evidence must stay under this worktree's local work directory")
     return target
 
@@ -111,11 +115,11 @@ def main():
     except ValueError as error:
         parser.error(str(error))
     for name, relative in CASES:
-        directory = args.out / name
+        directory = check_output_directory(args.out / name)
         directory.mkdir(parents=True, exist_ok=True)
         print(f"{name}: starting", flush=True)
         result = inspect(args.work_root / relative, directory, args.experimental)
-        (directory / "result.json").write_text(json.dumps(result, indent=2) + "\n")
+        check_output_directory(directory / "result.json").write_text(json.dumps(result, indent=2) + "\n")
         print(f'{name}: reference views {list(result["legacy_reference_views"])}', flush=True)
 
 

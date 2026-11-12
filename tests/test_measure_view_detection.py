@@ -15,6 +15,18 @@ def test_output_rejects_unrelated_work_directory(tmp_path):
         runner.check_output_directory(tmp_path / "work" / "evidence")
 
 
+def test_output_rejects_symlinked_case_directory():
+    root = MODULE_PATH.parents[1] / "work" / "view-detection"
+    root.mkdir(parents=True, exist_ok=True)
+    link = root / "test-case-symlink"
+    link.symlink_to(root, target_is_directory=True)
+    try:
+        with pytest.raises(ValueError, match="symlink"):
+            runner.check_output_directory(link / "result.json")
+    finally:
+        link.unlink()
+
+
 def test_output_accepts_local_ignored_work():
     target = MODULE_PATH.parents[1] / "work" / "view-detection" / "tests"
     assert runner.check_output_directory(target) == target.resolve()

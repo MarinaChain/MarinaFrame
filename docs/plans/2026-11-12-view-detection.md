@@ -67,4 +67,10 @@ Focused checks: **26 passed**, five existing SWIG deprecation warnings. Initial 
 
 Initial quick tier failed in the app proc macro: the shared cache skipped UI staging and this worktree had no `app/ui-release`. Cleaned only package `marinaframe-app` in the mandated shared cache and restarted the tier. No source workaround or second target folder was added.
 
-**Resume point:** finish independent panel identity and complete ROI recovery, retain real straight drawing strokes, improve small-print/graphical-scale measurement, and inspect every proposed view crop before any integration. No numbered stations, no correct-view coverage gain, and no physical scale accuracy claim exist. Product/default reader unchanged. Final quick-tier and review outcome to be appended below before push.
+**Resume point:** finish independent panel identity and complete ROI recovery, retain real straight drawing strokes, improve small-print/graphical-scale measurement, and inspect every proposed view crop before any integration. No numbered stations, no correct-view coverage gain, and no physical scale accuracy claim exist. Product/default reader unchanged. Final quick-tier outcome to be appended below before push.
+
+## Independent review and fix
+
+A fresh reviewer read all four initial additions and relevant helpers without opening drawings or truth. One P2 boundary issue: symlinked evidence directories could redirect writes outside the worktree. Added a failing symlink test, rejected symlink components, and applied the check to case directories, crops, previews and JSON outputs. The original local-directory test also demonstrated RED before its implementation. No other high-confidence review findings; no deferred minors. Frame/straight-ink removal remains an explicit experimental limitation, not a successful detector.
+
+The planned heading splitter was not implemented; no heading fixtures are claimed as coverage. This is an early checkpoint, not completion of the implementation plan. The initial detector collection failure was the absent experimental module, followed by the recorded fixture failures and passing focused run.
