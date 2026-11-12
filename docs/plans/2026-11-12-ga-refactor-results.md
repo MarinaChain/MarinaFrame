@@ -101,7 +101,8 @@ The longest remaining GA reader function is `scale_pass` at 77 lines (before: 18
 - AST audit: all 147 original named constant expressions are retained unchanged.
 - Bounded secret pattern scan: 0 findings, not proof of absence.
 - Full quick tier: not rerun after continuation, per PM direction. The earlier full-tier failures remain recorded above.
-- Independent source review: pending.
+- Post-audit repeat: 267 GA tests pass; all four byte comparisons 14/14, latest arrangement match and gate 14/14, model calls 0 (`post-audit-*` logs).
+- Independent source review is not valid for this branch: the reviewer used its isolated default-branch worktree instead of the lane worktree. Its findings are excluded; this is not a clean-review conclusion.
 
 
 ## Scope retained

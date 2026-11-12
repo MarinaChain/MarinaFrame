@@ -49,4 +49,4 @@ For steps 4–8, the PM replaces the full quick tier with all GA Python tests an
 
 ## Resume point
 
-Steps 1–6 are committed. Step 7's separate-purpose docstring is written. Final checks and independent source review are running. Finish the report, commit remaining documentation, push only `lane/ga-refactor`, and remove this worktree's target as the last action. See `docs/plans/2026-11-12-ga-refactor-results.md` for the per-step proof and module map.
+Steps 1–8 are implemented and targeted checks pass. The independent review used the wrong worktree, so it is excluded, not reported as clean. The PM runs the full quick tier at merge. Final action: push only `lane/ga-refactor`, retain ignored replay evidence and remove this worktree's target. See `docs/plans/2026-11-12-ga-refactor-results.md` for the per-step proof and module map.
