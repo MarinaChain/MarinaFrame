@@ -7,6 +7,7 @@
 // below them is DOM only.
 
 import { el, svg, prefersReducedMotion } from './dom.js';
+import { gaRecords } from './ga_panel.js';
 
 /** Wait this long on one part before its source shows, so a pointer passing over parts is calm. */
 export const HOVER_DELAY_MS = 220;
@@ -62,6 +63,11 @@ function indexOf(view) {
     }
     for (const section of view?.sections || []) {
       if (section.source_record) index.sections.set(section.id, section.source_record);
+    }
+    // GA reading rows (particulars, counts, spaces) have their own "ga:" ids (ga_panel.js).
+    for (const row of gaRecords(view?.ga_reading)) {
+      if (row.record) index.parts.set(row.id, row.record);
+      index.labels.set(row.id, row.label);
     }
     indexes.set(view, index);
   }

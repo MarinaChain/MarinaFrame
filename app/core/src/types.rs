@@ -263,6 +263,9 @@ pub struct TaskView {
     /// The automatic body-plan calibration to confirm (`body_plan_check`), when the run made one.
     #[serde(default)]
     pub body_plan_check: Option<BodyPlanCheckView>,
+    /// The GA reading of a commercial ship (`ga_reading`), when the run has one.
+    #[serde(default)]
+    pub ga_reading: Option<Value>,
     /// Where each steel member was read, by member id (`run_tables::steel_records`), when the
     /// structure reader wrote records. The 3D view's steel groups use them.
     #[serde(default)]

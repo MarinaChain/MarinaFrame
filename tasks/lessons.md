@@ -288,6 +288,18 @@
 - **Rule:** When names come from nesting rank, a drawn line with its own side keeps its rank even when a part of it (the bottom) is lost; keep the part that is its own and flag it. Remove only lines that are not stations (short outlines) before ranking. Read the per-trace log on the worst sheet before changing thresholds.
 - **Why:** One missing or extra member of a rank order shifts every name inside it; partial evidence for a station is better than none.
 
+### A value measured on a drawing needs its place rule, a cross-check and its own status when replaced (MarinaFrame)
+- **Date:** 2026-11-12
+- **Trigger:** GA frame-scale measurement (lane U). The first depth was base line to the poop deck (the model pointed "the deck" near the stern); the next was to the rail or the deck at centreline, 0.7 m above the cargo-tank tops. Lane W found both by comparing the depth with the tops of the read spaces. The first fix replaced the depth with the median space top but kept the status `measured_from_scale`; the PM corrected this.
+- **Rule:** When a model points a place that code turns into a dimension: (1) state where the place must lie and check it in code (moulded depth: at side, at mid-length); (2) cross-check the value against an independent reading of the same drawing and flag a disagreement; (3) a value that takes the place of a failed measurement gets a distinct status (`derived_from_space_tops`), keeps the measured value and the reason in its record, and is never checked against the data it came from. Also repeat a small-print reading before relying on it: the same ship gave a frame scale in one request and none in the next.
+- **Why:** A dimension that is "measured" in name and substituted in fact makes a downstream check circular, and a pointed line without a place rule is the wrong line on some ships.
+
+### Image coordinates in a model request come from the image actually sent; long lists go in short requests (MarinaFrame)
+- **Date:** 2026-11-12
+- **Trigger:** GA extents regressed between development rounds (lane W). The request gave label places in the planned image size, but the byte limit shrank the images afterwards, so places were 11 % off; the model wrote "label positions do not match the drawing" and boxed fewer spaces. It also boxed 20 of 71 spaces asked in one request (43 of 43 when asked 43).
+- **Rule:** Compute every pixel value that a request states (places, boxes) after encoding, from the sizes of the images written, and test it with a forced shrink. Read the model's free-text note of each reply: it named both causes. Ask a model for at most about 20 items per request, most useful first. Compare each development round per ship with the last good round before calling it better.
+- **Why:** A coordinate frame that is off by a resize looks like model weakness, and a long list silently returns a partial answer.
+
 ### Keep truth and benchmark inputs out of temporary folders; never clean temp folders by age (MarinaFrame)
 - **Date:** 2026-11-11
 - **Trigger:** To free disk space, the PM deleted every session-scratchpad folder unchanged for 3 hours. One of them (`scratchpad/wv-agent/`) held the only copies of the C.A. Thayer and Balclutha development truth files, which lane N still needed; other truth files lived under `/private/tmp/claude-501/<boat>/`. They had to be re-transcribed.
