@@ -56,3 +56,16 @@ def test_generated_files_are_separate_and_repeatable(tmp_path):
         assert hashlib.sha256((first / name).read_bytes()).hexdigest() == digest
     with pytest.raises(FileExistsError):
         write_suite(first, seed=17, count=1)
+
+
+def test_projection_labels_separate_coincident_hold_and_db():
+    from benchmarks.ga_synthetic.generate import arrangements
+    from benchmarks.ga_synthetic.render import projected_spaces
+
+    case = arrangements()[0]
+    labels = projected_spaces(case, 'tank_top', 'y')
+    hold = next(s for s in labels if s['label'] == 'NO.1 HOLD')
+    db = next(s for s in labels if s['label'] == 'NO.1 DB W.B.')
+    assert hold['label_offset_px'] != db['label_offset_px']
+    upper = projected_spaces(case, 'upper_deck', 'y')
+    assert any(s['label'] == 'DECKS 1-3 (SAME BREADTH)' for s in upper)

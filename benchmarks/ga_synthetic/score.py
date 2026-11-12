@@ -41,9 +41,10 @@ def score(truth: dict, reading: dict) -> dict:
     if not spaces:
         raise ValueError('truth must contain spaces')
     data = load_input(reading)
-    ids = [s['id'] for s in reading.get('spaces', [])]
-    if len(ids) != len(set(ids)):
-        raise ValueError('reading space IDs must be unique')
+    for name, entries in [('reading', reading.get('spaces', [])), ('truth', spaces)]:
+        ids = [str(s['id']) for s in entries]
+        if len(ids) != len(set(ids)):
+            raise ValueError(f'{name} space IDs must be unique after string conversion')
     size = hull_size(data)
     predicted = []
     for item in data.items:

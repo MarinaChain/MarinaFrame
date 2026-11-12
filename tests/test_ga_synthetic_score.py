@@ -82,3 +82,16 @@ def test_nonfinite_measurements_and_wrong_cases_are_rejected():
     reading['spaces'][0]['extent']['x_m'][0] = float('nan')
     with pytest.raises(ValueError, match='finite'):
         score(truth, reading)
+
+
+@pytest.mark.parametrize("duplicate_truth", [False, True])
+def test_canonical_duplicate_ids_are_rejected(duplicate_truth):
+    from benchmarks.ga_synthetic.generate import arrangements
+    from benchmarks.ga_synthetic.score import score
+
+    truth = arrangements()[0]
+    reading = reading_from_truth(truth)
+    spaces = truth['spaces'] if duplicate_truth else reading['spaces']
+    spaces[0]['id'], spaces[1]['id'] = 1, '1'
+    with pytest.raises(ValueError, match='unique'):
+        score(truth, reading)

@@ -3,6 +3,35 @@ from benchmarks.concept_launch.sheets import Sheet, View
 from benchmarks.factory.render_lines import _text
 
 
+def projected_spaces(case, view_name, axis):
+    """Select visible boxes and keep coincident plan labels on separate rows."""
+    projected = []
+    for space in case['spaces']:
+        kind = space['kind']
+        if view_name == 'upper_deck':
+            if kind not in ('cargo_hatch', 'cargo_crane', 'accommodation_deck', 'cargo_tank'):
+                continue
+            if kind == 'accommodation_deck' and space['label'] != 'DECK 1':
+                continue
+        if view_name == 'tank_top' and kind not in ('cargo_hold', 'cargo_tank', 'ballast_tank', 'engine_room'):
+            continue
+        if axis == 'z' and space['label'].endswith(' P'):
+            continue
+        label = space['label']
+        offset = 0
+        if axis == 'z' and label.endswith(' S'):
+            label = label[:-2] + ' P/S'
+        if view_name == 'upper_deck' and kind == 'accommodation_deck':
+            label = 'DECKS 1-3 (SAME BREADTH)'
+        if view_name == 'tank_top' and case['ship_type'] != 'tanker':
+            if kind == 'cargo_hold':
+                offset = -14
+            elif ' DB ' in label:
+                offset = 14
+        projected.append({**space, 'label': label, 'label_offset_px': offset})
+    return projected
+
+
 def draw_arrangement(case):
     sheet = Sheet('ga', f"{case['case_id']}.png", 'Synthetic commercial GA', 1)
     dims = case['dimensions']
@@ -23,30 +52,20 @@ def draw_arrangement(case):
         sheet.rect(view.box(0, length, low, high), width=3)
         if axis == 'y':
             sheet.line([view.px(0, 0), view.px(length, 0)], width=1, dash=(12, 6))
-        for space in case['spaces']:
+        for space in projected_spaces(case, view.name, axis):
             kind, box = space['kind'], space['box_m']
-            if view.name == 'upper_deck' and kind not in ('cargo_hatch', 'cargo_crane', 'accommodation_deck', 'cargo_tank'):
-                continue
-            if view.name == 'upper_deck' and kind == 'accommodation_deck' and space['label'] != 'DECK 1':
-                continue
-            if view.name == 'tank_top' and kind not in ('cargo_hold', 'cargo_tank', 'ballast_tank', 'engine_room'):
-                continue
-            # Port and starboard share a profile projection; print the pair once.
-            if axis == 'z' and (space['label'].endswith(' P')):
-                continue
             x0, x1 = box['x']
             b0, b1 = box[axis]
             sheet.rect(view.box(x0, x1, b0, b1), width=1.5)
             label = space['label']
-            if axis == 'z' and label.endswith(' S'):
-                label = label[:-2] + ' P/S'
             if kind == 'cargo_crane':
                 # Narrow posts need a leader, rather than text through adjacent holds.
                 point = view.px((x0 + x1) / 2, b1)
                 sheet.line([point, (point[0], point[1] - 22)], width=1)
                 sheet.text((point[0], point[1] - 32), label, 16, anchor='mm')
             else:
-                sheet.text(view.px((x0 + x1) / 2, (b0 + b1) / 2), label, 16, anchor='mm')
+                col, row = view.px((x0 + x1) / 2, (b0 + b1) / 2)
+                sheet.text((col, row + space['label_offset_px']), label, 16, anchor='mm')
         tick_row = view.origin_row - low * scale + 26
         for entry in case['frame_table']:
             frame, x = entry['frame'], entry['x_m']
