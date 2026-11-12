@@ -611,6 +611,25 @@ Observed cost is 0 in every round (subscription).
 - `u10r6` (u10 replayed with the rule above): gate 14 of 14; seven tank boxes ended lower on five
   ships, among them the peak tanks of the Astra round-6 findings.
 
+## End-outline request: an experiment, not kept (2026-11-12)
+
+PM approval: at most one more request per ship, asking again for the spaces boxed in the aft and
+fore 15 % of the ship that had no outline; behind a flag, off by default; kept only if more end
+outlines pass the outline checks, with no rise in outlines that take in another label and no new
+gate failure. Four development ships with sloped ends, extents requests sent live, two runs
+without and two with the request:
+
+| Run | End spaces | End outlines kept | Outlines over another label | Gate failures | Extents requests | Tokens (prompt / completion) |
+|---|---:|---:|---:|---:|---:|---:|
+| without, 1 | 95 | 3 | 14 | 0 | 19 | 181,306 / 82,539 |
+| without, 2 | 97 | 3 | 16 | 0 | 18 | 162,879 / 73,961 |
+| with, 1 | 97 | 7 | 15 | 1 | 22 | 197,882 / 91,649 |
+| with, 2 | 94 | 4 | 22 | 1 | 23 | 206,446 / 89,189 |
+
+A small gain in end outlines (the extra request kept 0-2 a ship), but outlines over another label
+rose in one run and each run with the request has a new gate failure: **not kept**, the code was
+removed. Cost: one request and about 6,000 prompt and 3,000 completion tokens a ship.
+
 ## Printed hatch sizes (PM decision 2026-11-12: approved)
 
 Astra rounds 3 to 6 found measured hatch lengths and breadths 1-2 m above the size printed in the
