@@ -1,7 +1,8 @@
 """Draft performance primitives, in SI units.
 
-This module does not yet implement Holtrop-Mennen or Wageningen B-series.
-Efficiencies supplied by a caller are assumptions, not regression predictions.
+Holtrop-Mennen and Wageningen B-series live in the separate ``holtrop`` and
+``propeller`` modules. Efficiencies supplied to these accounting primitives
+are assumptions, not regression predictions.
 No ship performance or accuracy claim follows from these accounting equations.
 """
 from dataclasses import dataclass
