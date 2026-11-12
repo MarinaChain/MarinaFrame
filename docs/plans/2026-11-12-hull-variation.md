@@ -39,4 +39,22 @@ Run identity plus at least two changed KVLCC2 candidates sequentially. Read all 
 
 ## Resume point
 
-Plan committed before implementation. Next: write numerical tests and implement Task 1. Results and exact commands will be appended below.
+Plan commit: 283a77d. Numerical/CAD module commit: 5fb4092.
+
+Task 1 complete: identity, dimension scaling, both target directions, unchanged middle body, and invalid/unreachable requests pass. Task 2 partial: existing builder, hydrostatics and gross immersed capacity pass synthetic CAD checks. Task 3 blocked on public source representation; not complete.
+
+Ruling: preserve the existing ruled builder, and explicitly report that it is not a C2 fair surface. The smooth map prevents station folding but is not a surface-fairness proof. Cost if wrong: unsuitable local panel fairness for design use; no such suitability is claimed.
+
+Ruling: refuse missing reference shell rather than fill it with guessed breadths. Cost: no KVLCC2 candidates from this first single-valued sampler. The public IGES has sectional geometry that this representation cannot yet retain safely.
+
+## Results and exact stop point
+
+- Focused command: `/Users/jonathanjie/Documents/workspace/MarinaFrame/.venv/bin/python -m pytest -q tests/test_hull_variation.py tests/test_hull_variation_source.py`: **11 passed** (includes real CAD).
+- Synthetic changed candidate: L=110 m, B=22 m, T=11 m, target Cb = reference + 0.01 and LCB/L = reference + 0.003. The CAD test enforces the original 0.001 coefficient/fraction gates, valid solid and 0.1% mesh/CAD volume gate. Identity build enforces 1e-8 relative volume.
+- Public archive SHA-256: `dc032647f00a68d354ede2f4b1ee3d68cd048bc3d34d221c2a8c9aac3a6dd548`. Only the public `kvlcc2.igs` was extracted, under this worktree's ignored `work/hull-variation/source/`.
+- Native source bounds: x=-328.085..5.502, y=-0.00353..29.39125, z=-28.00157..0.02790. Midship cuts show keel near native z=0 and shell extending in negative z; use source_z_direction=-1, not an assumed upward datum. Candidate sampling attempted x=-320..0, B=58 m, T=20.8 m, depth=28 m. These are stated sample inputs, not recovered certified particulars.
+- Stop: the source sampler finds no shell intersection at x=4 m from the aft sampling endpoint, height=20.8 m. Earlier full-height sampling also fails at terminal sections. No KVLCC2 solid, candidate accuracy table, original-IGES volume comparison, sample images or public candidate runner is claimed.
+- Resume: support source sections with multiple regions and variable vertical ranges via geometry.build_region_hull; inspect public IGES topology and x direction before declaring LCB-from-aft. Compare sampled reference against the original geometry before making an accuracy claim. Add a real fairness check or a smooth builder before claiming a fair surface. Keep the fixed gates unchanged.
+- Every candidate/report remains draft with engineering_approved=false. Capacity is only the immersed gross envelope between bulkheads, not net cargo, payload or deadweight.
+
+Quick-tier and final review results are recorded below when available.
