@@ -57,4 +57,6 @@ Ruling: refuse missing reference shell rather than fill it with guessed breadths
 - Resume: support source sections with multiple regions and variable vertical ranges via geometry.build_region_hull; inspect public IGES topology and x direction before declaring LCB-from-aft. Compare sampled reference against the original geometry before making an accuracy claim. Add a real fairness check or a smooth builder before claiming a fair surface. Keep the fixed gates unchanged.
 - Every candidate/report remains draft with engineering_approved=false. Capacity is only the immersed gross envelope between bulkheads, not net cargo, payload or deadweight.
 
-Quick-tier and final review results are recorded below when available.
+Measured synthetic candidate: target Cb 0.7088764989192421; built Cb 0.7088807338524958 (absolute error 0.000004235). Target LCB/L 0.503; built 0.5029442786816967 (fraction error 0.00005572, or 0.00613 m). Mesh/CAD volume relative error 0.000004877. Gross immersed capacity at 0.2L..0.8L is 14,015.43 m³.
+
+The first quick-tier run was stopped by the tool's 600-second background limit during Python tests, with no test failure then reported. It was restarted with the longer background budget. No code-level wall or CPU limit was introduced. Quick-tier and final review results are recorded below when available.
