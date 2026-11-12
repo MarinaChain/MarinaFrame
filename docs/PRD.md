@@ -11,6 +11,7 @@ This is the one place for what MarinaFrame must do, for whom, and how we measure
 | Desktop app contract (screens, commands, exports) | `docs/APP_SPEC.md` |
 | GA reader for commercial ships | `docs/plans/2026-11-12-ga-commercial.md` |
 | Published accuracy | `docs/results/`, `docs/holdouts/REGISTRY.md` |
+| Roadmap (phases and dates) | `docs/ROADMAP.md` |
 
 Status words in this document: **Done** (in `continue/v0.5` and tested), **In progress** (a lane or
 branch exists), **Planned** (agreed, not started), **On hold** (the founder paused it).
@@ -29,8 +30,11 @@ Ships live 25-30 years or more, so drawing-only ships stay the majority of the f
 
 1. Conversion and repair designers, and repair yards. They work against a dock date.
 2. Fleet technical managers: dry-dock planning, retrofits, steel renewal.
-3. Shipbuilders and owners who hold large GA archives and want a quick 3D arrangement.
-4. Later: class societies and surveyors (3D hull condition records).
+3. Shipbuilder basic-design and technical-sales teams: for a new order, find the closest reference
+   ships in their own archive, compare them, and get candidate designs to check (pilot direction from
+   2026-11-12; see section 4.1).
+4. Shipbuilders and owners who hold large GA archives and want a quick 3D arrangement.
+5. Later: class societies and surveyors (3D hull condition records).
 
 ## 3. Product promise
 
@@ -47,7 +51,8 @@ the job that needs it.
    tools engineers already use.
 
 We do not say: "AI ship designer", "replaces naval architects", "approved", "verified", or "any
-drawing, perfect result".
+drawing, perfect result". For basic design we say: MarinaFrame finds and compares reference ships and
+proposes candidates for the designers to check; model tests and sea trials decide.
 
 ## 4. What the product does
 
@@ -62,6 +67,24 @@ drawing set (scans, PDFs, CAD exports)
 
 The model (Claude Sonnet 5.5 by default) reads drawings. Code measures, checks and builds. Every model
 call has a receipt (request, reply, tokens, cost). Code written by a model runs only in a sandbox.
+
+### 4.1 Pilot direction: basic-design support (from 2026-11-12)
+
+A shipbuilder pilot asked for AI-assisted basic design: from an owner's requirements (cargo, payload,
+service speed), find the closest reference ships, compare them, and propose candidate hull forms and
+basic drawings with estimated cargo capacity and fuel use. The pilot starts with one product-tanker
+design and aims at a physical model test in 2027. The shipbuilder's CAD staff already make 3D views,
+so 3D alone is not the value for this user.
+
+MarinaFrame is the reading layer of that work. It reads one hull's GA, midship section and lines
+plan, links them, traces every value to its place on the drawing, and returns "unknown" when a value
+cannot be read. The design layers on top of it (reference search, candidate generation, performance
+estimates) are new requirements in section 5.8.
+
+Technical limit: a GA alone cannot give the underwater hull or the fuel use. Performance estimates
+need hull geometry, draft, speed, loading and engine and propeller data, paired with model-test or
+sea-trial results for the same hulls. Without that data, the first deliverable is reference-ship
+search and drawing comparison only.
 
 ## 5. Requirements
 
@@ -103,7 +126,7 @@ call has a receipt (request, reply, tokens, cost). Code written by a model runs 
 
 | ID | Requirement | Status | Evidence |
 |---|---|---|---|
-| S1 | Read a 2D midship section | Done (development) | `docs/CONTINUATION_STATUS.md` |
+| S1 | Read a 2D midship section | Done (development); priority raised by the pilot (tanker midship sections) | `docs/CONTINUATION_STATUS.md` |
 | S2 | Plates and stiffeners along the ship, with OCX export | Planned | gap analysis, step 2 |
 | S3 | Rule checks with cited rules, tied to geometry | Partly (a rule subset outside the app); class-tool work on hold | strategy section 2 |
 | S4 | Gauging on plate IDs, wastage against class rules, steel-renewal list | Planned (needs partner gauging data) | positioning, "lasting product" |
@@ -142,10 +165,26 @@ The full contract is `docs/APP_SPEC.md`. Main requirements:
 | P5 | Cost per ship is known before a run (request caps per ship) | Done for the GA reader (6 requests per ship; about USD 0.26 per ship at list price in the exam) |
 | P6 | One shared build cache for all worktrees | Done |
 
+### 5.8 Basic-design support (pilot direction)
+
+| ID | Requirement | Status |
+|---|---|---|
+| D1 | Link one hull's GA, midship section and lines plan: shared frames, scale and particulars; flag contradictions between drawings | Planned (first pilot step) |
+| D2 | Read the lines plan and midship section of a large commercial ship (tanker), with "unknown" where unreadable | Planned (readers exist for small boats, standard hull forms and development midship sections) |
+| D3 | Inventory a design archive per hull: drawings, revisions, particulars, linked test and trial results, and permitted uses | Planned |
+| D4 | Reference-ship search: for a set of requirements, find the closest past hulls and show the material differences in one table (payload, deadweight, speed, fuel, main dimensions) | Planned |
+| D5 | Candidate designs: vary the closest reference hull within stated constraints, with 3D, hydrostatics and payload for each candidate | Planned |
+| D6 | Performance estimates (resistance, propulsion, fuel), checked blind against held-out hulls with model-test or trial results | Planned; blocked until paired test data exists |
+| D7 | Record why the designer accepted or deferred each candidate | Planned |
+| D8 | Keep each customer's drawings, derived data and results separate and unavailable to any other customer | Planned (contract and deployment design) |
+
 ## 6. Non-goals
 
 - No engineering approval or sign-off inside the product. Class and engineers approve.
-- Not a ship design tool and not a CAD editor. We feed the tools engineers already use.
+- Not a CAD editor. We feed the tools engineers already use. For basic design we propose candidates;
+  we do not produce a final design.
+- No performance claim without evidence. Resistance and fuel estimates are shown only with their
+  validation against model tests or sea trials; no estimate replaces a model test.
 - No hosted processing of customer drawings by default. Data stays on the customer's machine.
 - No guessing without a label. A value with no basis is shown as a guess or left empty with a reason.
 
@@ -167,12 +206,18 @@ Targets for the next quarter:
 1. A blind GA result on new ships, including GA drawings without labels and other ship types.
 2. A real-truth accuracy figure for the 3D arrangement (needs capacity plans or tank tables).
 3. New blind hull holdouts, then one published result per quarter.
+4. Basic-design pilot: reading accuracy on the pilot's own drawings of one hull (D1, D2), reported per
+   field with "unknown" counts, before any design or performance work.
 
 ## 8. Pilots and go-to-market
 
 - **Shipbuilder pilot:** a commercial GA test pack of 23 ships (14 development, 9 holdout), cleared
   for development and for the web demo by case ID only. The first demo was held on 2026-11-12 with the
-  web demo and a desktop kit.
+  web demo and a desktop kit. At that meeting the shipbuilder chose basic-design support as the first
+  area (section 4.1), starting with one product tanker, aiming at a physical model test in 2027, and
+  asked for a proposal: scope, phased deliverables, schedule, cost and staffing per discipline, an
+  in-house versus external deployment comparison, and data rights. Production staffing and inspection
+  records are later, separate pilots.
 - **Design partner:** one owner or yard with a real fleet drawing set and gauging records. Founder
   outreach through MarinaChain's shipping relationships.
 - **Pilot package:** the app, a review session and a measured report.
@@ -185,6 +230,9 @@ Targets for the next quarter:
 3. Apple Developer ID for signing and notarization (A7).
 4. Class-society tool work and its comparison with free tools: on hold.
 5. Model capacity for batch pilots.
+6. Basic-design pilot proposal: scope, price, staffing, deployment (in-house or external) and data
+   rights; the governing loading condition, speed and fuel basis; whether drawings can be paired with
+   model-test and trial results; who approves candidates; and what the 2027 test milestone means.
 
 ## 10. Risks
 
@@ -195,8 +243,13 @@ Targets for the next quarter:
 | Over-fitting rules to a few development ships | Good development numbers, weaker real results | Blind tests with frozen code; no rule change after a result |
 | Unsigned installer | Partners cannot install easily | Developer ID (A7) |
 | Drawing rights | A drawing shown without permission | Licence key per run; drawings never in git |
+| No paired performance data for the pilot | Design candidates without fuel or resistance estimates | Start with reference search and drawing comparison (D4); scope D6 only once paired data is verified |
+| Expectation that AI replaces model tests | A promise we cannot keep | State in the proposal that model tests and trials decide (section 6) |
+| Customer data reaching a competitor | Loss of the pilot and of trust | Per-customer separation (D8); rights written into the contract |
 
 ## Change log
 
 - 2026-11-12: first version, from the four documents above and the results of 2026-11-11 and
   2026-11-12.
+- 2026-11-12: added the basic-design pilot direction (section 4.1, requirements D1-D8, non-goals,
+  targets, open decisions, risks) after the pilot meeting of 2026-11-12, and a link to `docs/ROADMAP.md`.
