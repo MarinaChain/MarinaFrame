@@ -215,10 +215,14 @@ All per-ship data remain ignored under work; code and concise result tables only
 are committed. A layout-only report fix was replayed: all JSON numerical values
 were identical to first-score output. No method constants changed after scoring.
 
-Final checks: **137 focused tests passed**. Required quick-tier results and
-push/tag confirmation follow in the final lane handoff; logs remain under
-`work/performance-baseline/`. All-marker/CAD suite was not rerun in this
-continuation. No full-scale fuel accuracy, cavitation or blind accuracy claim.
+Final focused checks: **137 passed**. First complete continuation quick tier
+passed (exit0): **2472 Python passed, 4 skipped, 87 deselected, 5 warnings**
+(639.21s), **275 UI passed**, Rust fmt/clippy/workspace tests passed, secret
+pattern scan 0 findings. Log: `work/performance-baseline/continuation-quick.log`.
+The frozen target full SHA is **b19bab9d160108c7e4e71fd32a7a0a0f514658e2**;
+only this report changed after it. A final quick tier gates branch and tag push.
+All-marker/CAD suite was not rerun in this continuation. No full-scale fuel
+accuracy, cavitation or blind accuracy claim.
 
 ## Outcome and exact stop point (previous checkpoint; superseded by continuation above)
 
