@@ -1404,6 +1404,52 @@ def withhold_oversized_guesses(result: dict) -> int:
     return withheld
 
 
+# A tank in the profile ends below the spaces boxed in its upper part (Astra round 6: peak tanks
+# boxed up through a bosun store, a void, a fresh-water tank or the steering gear room above
+# them). A space counts when this share of its length lies inside the tank's length and it
+# starts above this share of the tank's height.
+TANKS_ENDING_BELOW = ("ballast_tank", "fuel_tank", "other_tank")
+INSIDE_LENGTH_SHARE = 0.9
+UPPER_PART_SHARE = 0.4
+NOT_A_SPACE_ABOVE = ("accommodation_deck", *DECK_EQUIPMENT)
+
+
+def _end_below_spaces_above(result: dict) -> int:
+    """End each tank box below the lowest space boxed inside its length in its upper part;
+    its height becomes guessed. Returns how many tanks were ended."""
+    kinds = {view["view_id"]: view["kind"] for view in result.get("views", [])}
+    boxes = [s for s in result["spaces"] if "z_m" in (s.get("extent") or {})
+             and kinds.get(s["extent"]["view_id"]) == "profile" and not s["extent"].get("projection_of")]
+    ended = 0
+    for tank in boxes:
+        extent = tank["extent"]
+        if tank["kind"] not in TANKS_ENDING_BELOW:
+            continue
+        x0, x1 = extent["x_m"]
+        bottom, top = extent["z_m"]
+        bottoms = []
+        for other in boxes:
+            box = other["extent"]
+            if (other is tank or box["view_id"] != extent["view_id"] or other["kind"] in NOT_A_SPACE_ABOVE
+                    or label_family(other["label"]) == label_family(tank["label"])):
+                continue
+            length = box["x_m"][1] - box["x_m"][0]
+            inside = max(0.0, min(x1, box["x_m"][1]) - max(x0, box["x_m"][0]))
+            starts = box["z_m"][0]
+            if (length > 0 and inside / length >= INSIDE_LENGTH_SHARE
+                    and bottom + UPPER_PART_SHARE * (top - bottom) < starts < top - EDGE_TOLERANCE_M):
+                bottoms.append((starts, other["id"]))
+        if bottoms:
+            lowest, _ = min(bottoms)
+            extent["z_m"] = [bottom, round(lowest, 2)]
+            extent["status"]["z"] = "guessed"
+            extent.setdefault("trimmed_by", []).extend(space_id for _, space_id in bottoms)
+            result["checks"].append({"code": "extent_ends_below_spaces_above", "status": "changed",
+                                     "label": tank["label"][:64]})
+            ended += 1
+    return ended
+
+
 def resolve_overlaps(result: dict) -> dict:
     """Keep each extent off the labelled spaces beside it, per view; return statistics.
 
@@ -1506,6 +1552,7 @@ def resolve_overlaps(result: dict) -> dict:
                     stats["guessed"] += 1
                     result["checks"].append({"code": "extent_covers_a_labelled_neighbour", "status": "changed",
                                              "label": f"{big['label'][:30]} / {small['label'][:30]}"})
+    stats["ended_below_spaces_above"] = _end_below_spaces_above(result)
     # A box that still holds the label of a space without a box takes in that space: it is not
     # a measured boundary (its axes become guessed).
     spaces = {space["id"]: space for space in result["spaces"]}

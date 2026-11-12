@@ -1287,3 +1287,22 @@ def test_two_cargo_tanks_with_different_numbers_at_one_place_both_lose_their_ext
     # Two tanks of one number (port and starboard) are not a conflict.
     other["number"] = "2P"
     assert all("extent" in s for s in gs._without_cargo_number_conflicts([hold, other], particulars))
+
+
+
+def test_a_peak_tank_ends_below_the_spaces_boxed_above_it():
+    """Astra round 6: forepeak tanks boxed up through the bosun store above them."""
+    def box(space_id, kind, label, x, z):
+        return {"id": space_id, "kind": kind, "label": label, "status": "read",
+                "extent": {"view_id": "v1", "x_m": x, "z_m": z, "basis": "uncertain",
+                           "status": {"x": "guessed", "z": "guessed"}}}
+
+    result = {"views": [{"view_id": "v1", "kind": "profile"}], "checks": [], "spaces": [
+        box("t", "ballast_tank", "F.P.T. (C)", [225.0, 240.0], [2.0, 20.0]),
+        box("s", "other_space", "BOSUN STORE", [225.0, 236.0], [14.6, 24.0]),
+        box("v", "other_space", "VOID", [236.0, 240.0], [12.3, 14.7]),
+        box("d", "accommodation_deck", "FORECASTLE DECK", [226.0, 239.0], [16.0, 19.0]),
+        box("b", "other_tank", "BILGE TK", [226.0, 230.0], [2.0, 4.0])]}  # low in the tank: kept apart
+    assert gs._end_below_spaces_above(result) == 1
+    tank = result["spaces"][0]["extent"]
+    assert tank["z_m"] == [2.0, 12.3] and tank["status"]["z"] == "guessed" and set(tank["trimmed_by"]) == {"s", "v"}
