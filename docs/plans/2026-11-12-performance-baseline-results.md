@@ -92,7 +92,17 @@ reviewed; no ship result file was scored. No data file is committed.
 - First completed quick tier: exit 0; Python **2375 passed, 4 skipped,
   87 deselected, 5 warnings** (747.97 s), UI **275 passed**, Rust fmt/clippy
   and workspace tests passed, secret pattern scan 0 findings. It preceded
-  the signed-coefficient review fix; a final quick tier is run before push.
+  the signed-coefficient review fix.
+- Post-review quick tier: one attempt stopped at the unrelated Rust
+  `real_worker_replaces_one_unreadable_extra_sheet_without_a_hull_rebuild`
+  test (`sheet_replacement_failed`). Push was blocked. Explicit worker Python
+  and `RUST_BACKTRACE=1` recheck: **4 passed**, no registry error. No app code
+  changed. The following full quick tier passed with exit 0: Python **2377
+  passed, 4 skipped, 87 deselected, 5 warnings** (465.54 s), UI **275 passed**,
+  Rust fmt/clippy/workspace tests passed, secret pattern scan 0 findings.
+  Log: ignored `work/performance-baseline/quick-recheck.log`.
+  `1c62a00` was pushed to `origin/lane/performance-baseline`; no merge.
+  This final evidence-only update is gated by another quick tier before push.
 - Independent review found that wake and thrust deduction are signed;
   commit `b87c51d` removes the incorrect zero lower bound and adds a red/green
   test. Final focused suite: **42 passed**.
