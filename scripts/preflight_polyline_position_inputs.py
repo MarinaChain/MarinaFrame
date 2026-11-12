@@ -15,6 +15,7 @@ import subprocess
 import time
 
 import numpy as np
+from PIL import Image
 
 from vessel_reconstruction import draft_fit, intake, vessel_description, view_measure, view_reader_v2
 
@@ -58,8 +59,19 @@ def inspect_case(name: str, path: Path, calibration_module: str) -> dict:
     ppm = calibration.sheet_layout().pixels_per_metre
     record['scale'] = {'pixels_per_metre': ppm, 'source': calibration_module + '.sheet_layout',
                        'detected_by_product_view_path': False}
-    grey = view_measure.load_grey(path)
-    hints = intake.survey_page(grey)
+    # These exact local development scans exceed Pillow's web-image guard.
+    # Scope its override to this known sheet, and restore the process setting.
+    pixel_limit = Image.MAX_IMAGE_PIXELS
+    try:
+        Image.MAX_IMAGE_PIXELS = None
+        with Image.open(path) as image:
+            rgb = np.asarray(image.convert('RGB'))
+    finally:
+        Image.MAX_IMAGE_PIXELS = pixel_limit
+    # survey_page expects RGB (its text survey uses a three-channel transform).
+    hints = intake.survey_page(rgb)
+    grey = rgb.mean(axis=2).astype(np.uint8)
+    del rgb
     record['detected_regions'] = hints
     views = draft_fit.reference_views(grey, hints, ppm)
     record['reference_views'] = views
