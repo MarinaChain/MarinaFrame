@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from benchmarks.frozen_readers.v1 import body_plan_reader as bpr
 
+# BODY_PLAN_CHINE.md V-bottom reader explicitly makes this a development case.
+STATUS = 'development'
 PROTOCOL = 'docs/BODY_PLAN_CHINE.md (Holdout protocol amendment)'
 SHEET_SHA256 = '80e689130705ffcbd46716320865502a618a69cdd94d96191c3cafc3b22e0637'
 

@@ -18,6 +18,8 @@ from benchmarks.thayer import holdout_value as thayer
 from benchmarks.frozen_readers.v1 import body_plan_crossings as bpc
 from benchmarks.frozen_readers.v1 import body_plan_reader as bpr
 
+# Round 12 is spent; AUTO_CALIBRATION.md section 4 uses this development sheet.
+STATUS = 'development'
 PROTOCOL = 'docs/plans/2026-11-09-whole-vessel-scope.md 3.5.11'
 CENTRE_COLUMN = 3266.5
 BASE_ROW = 9082
