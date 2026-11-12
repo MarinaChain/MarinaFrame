@@ -248,9 +248,9 @@ Targets for the next quarter:
 6. Basic-design pilot proposal: scope, price, staffing, deployment (in-house or external) and data
    rights; the governing loading condition, speed and fuel basis; whether drawings can be paired with
    model-test and trial results; who approves candidates; and what the 2027 test milestone means.
-7. Design-from-requirements tools: buy a fleet database (Clarksons or S&P) or start with Equasis and
-   yard data; build our own parametric hull or license CAESES; run CFD in-house (OpenFOAM) or contract
-   it for the first year.
+7. Design-from-requirements tools: decided 2026-11-12. No paid fleet database (build with public data
+   now; the yard supplies bulk data later); our own parametric hull; CFD in-house as an OpenFOAM worker
+   that MarinaFrame controls (`docs/plans/2026-11-12-design-from-scratch.md`, section 8).
 
 ## 10. Risks
 

@@ -154,10 +154,18 @@ architects review steps 2, 4 and 6 from the start.
 - **Scope:** structure, rules and production details are large. The first version stops at a basic
   design package for the model test, not class approval.
 
-## 8. Open decisions
+## 8. Decisions (founder, 2026-11-12) and open questions
 
-1. Buy a fleet database subscription (Clarksons or S&P) now, or start with Equasis and the yard data.
-2. Build our own parametric hull, or license CAESES for the hull and optimization layer.
-3. CFD: run OpenFOAM in-house (compute cost, one expert) or contract runs to a model basin or a CFD
-   consultancy for the first year.
-4. Which loading condition and fuel basis the optimizer uses (open question for the yard).
+1. **Data: no paid fleet database.** The bulk design data comes from the pilot yard later. Until then
+   we build every step with the data we have now (benchmark hulls, public papers and datasets, Equasis,
+   synthetic and CFD data). Each step reads its data through one interface, so the yard data replaces or
+   adds to the public data without a code change, and every model is refit and re-tested when it comes.
+2. **Parametric hull: build our own.** CAESES is a reference for the method only.
+3. **CFD: in-house, built into MarinaFrame.** OpenFOAM runs as a separate solver worker that the app
+   controls: the app writes the case, starts the run, reads the results and keeps them with the design.
+   The fast methods (Holtrop-Mennen, thin-ship wave resistance) run on the desktop. RANS runs need many
+   cores and hours per hull, so they run on a compute host (a workstation, the yard's own servers, or a
+   cloud host) through the same worker. OpenFOAM is GPL: we call it as a separate program and do not link
+   it; if we ship its binaries, we also ship its source. First exit check: KVLCC2 and KCS resistance
+   within the scatter of the Tokyo 2015 workshop before any yard hull.
+4. Open: which loading condition and fuel basis the optimizer uses (question for the yard).

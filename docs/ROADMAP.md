@@ -24,7 +24,8 @@ agreement and on the data the pilot supplies. Every phase ends with a measured c
 | Pilot proposal: scope, phases, schedule, cost and staffing per discipline, in-house versus external deployment, data rights | A | Proposal sent to the pilot's corporate planning |
 | Inventory the pilot material per hull, with permitted uses (D3) | A | Inventory table: received versus reported, rights per use |
 | Data request to the pilot, model tests paired with hull geometry first (`docs/plans/2026-11-12-design-from-scratch.md`, section 3.1) | A | Count of hulls with paired geometry and model tests |
-| Decide fleet database, parametric hull tool and CFD route (PRD open decision 7) | A | Decisions recorded |
+| Design steps D10-D12 and our own parametric hull, on public data, with data interfaces ready for the yard's bulk data | A | Each step runs end to end on benchmark hulls; reconstruction test on public ships |
+| In-house CFD worker (OpenFOAM, controlled by MarinaFrame) | A | KVLCC2 and KCS resistance within the Tokyo 2015 workshop scatter |
 | Fix the two causes the synthetic run found: crane abbreviations (G7) and scale crops that miss the printed spacing (G8) | B | Synthetic re-run: cranes found; no ship loses its scale |
 | New blind test sets: GA drawings without labels and other ship types; new hull holdouts | B | Sets frozen and sealed before any run |
 | Apple Developer ID, then a signed and notarized installer (A7) | C | A partner installs without security warnings |
