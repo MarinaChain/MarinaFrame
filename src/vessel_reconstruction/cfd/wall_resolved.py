@@ -68,10 +68,10 @@ waterplane {{ type symmetryPlane; faces ((4 5 6 7)); }}
                         f'locationInMesh ({seed_x} {ymax/4} {seed_z})')
     aft_start = upper[0] - .35 * length
     text = text.replace('name hull; } }', f'''name hull; }}
-aftRefinement {{ type searchableBox; min ({aft_start} 0 {-inputs.length_m*.15});
-max ({upper[0]+.1*length} {upper[1]+.1*length} 0); }} }}''')
+aftRefinement {{ type searchableBox; min ({aft_start} 0 {lower[2]-.02*length});
+max ({upper[0]+.02*length} {upper[1]+.02*length} 0); }} }}''')
     text = text.replace('refinementRegions {}',
-                        'refinementRegions { aftRefinement { mode inside; levels ((1e15 4)); } }')
+                        'refinementRegions { aftRefinement { mode inside; levels ((1e15 3)); } }')
     text = text.replace('relativeSizes true', 'relativeSizes false')
     text = text.replace('nSurfaceLayers 3;', 'nSurfaceLayers 30;')
     first, minimum = 8e-6/refinement_factor, 1e-6/refinement_factor

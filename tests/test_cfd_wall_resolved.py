@@ -30,7 +30,7 @@ def test_half_case_resolves_wall_and_normalizes_full_hull(tmp_path):
     assert 'nSurfaceLayers 30' in snappy
     assert 'firstLayerThickness 8e-06' in snappy
     assert 'maxGlobalCells 6000000' in snappy
-    assert 'aftRefinement' in snappy and 'levels ((1e15 4))' in snappy
+    assert 'aftRefinement' in snappy and 'levels ((1e15 3))' in snappy
     assert 'finalLayerThickness' not in snappy
     assert 'locationInMesh (-0.9 0.5 -1.0)' in snappy
 
