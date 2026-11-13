@@ -483,3 +483,18 @@ Final VPS observation: no active lane container, load **5.14**, lane directory
 **172,453,351,424 bytes**. All failed attempts and diagnostics retained; no
 unrelated resources inspected or removed. No resource pause or automatic
 unpause occurred.
+
+Final quick tier **exit 0**: Rust format/clippy/workspace tests passed;
+Python **2,734 passed, 4 skipped, 100 deselected**, 5 warnings in **693.22 s**;
+UI **275 passed, 0 failed**; tracked-text secret scan **0 findings**. Private
+identity scan also **0 findings**. Log/terminal receipt: main ignored
+`work/cfd/dtc-mesh-quick.log` and `dtc-mesh-quick.exit`. Only documentation changed
+during this check; all experimental launchers/dependencies remain ignored.
+
+Resume: diagnose the rejected DTC coarse mesh check sets before running any
+solver or refining the study. G-DTC remains frozen and unscored, not failed
+resistance. Three-mesh convergence and speed series are incomplete; there is
+one measured DTC volume mesh and **zero resistance solver runs**. Track B's
+first actual-face repair is rejected for source-region loss and G6 failure;
+no parameter tuning or second geometry algorithm trial started. All steps and
+costs above are evidence checkpoints, not a completed solver pipeline.
