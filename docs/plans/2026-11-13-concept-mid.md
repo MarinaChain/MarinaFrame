@@ -60,4 +60,10 @@ Joint coverage by evaluation source grade: primary 3/3; copied 1/1; secondary **
 - Process correction (2026-11-13): when a lane forbids extra worktrees, omit Agent isolation entirely; a read-only review does not need a new checkout. After an isolation denial, stop rather than arrange alternate access. This correction remains in the lane-owned report; shared lesson files were not changed.
 - Independent review was blocked by the review agent's worktree isolation. A mistaken isolation option created a temporary agent checkout despite the no-extra-worktree instruction; the agent was told to stop, not bypass access, and not edit that checkout. No independent review conclusion is claimed. This process deviation did not change the gate, source data or score.
 
+### Runner reuse limits and evidence cross-check
+
+The review agent continued after stop requests and was terminated. Its partial notes raised runner hardening candidates, not a completed review: score mode does not enforce a committed expected freeze digest or model-source digest, the evidence path is not constrained to ignored folders, several guards use assertions (disabled by Python -O), and missing truth may consume the attempt marker without writing a NOT RUN record. Do not treat this task-specific runner as a hardened general evaluation service. Hardening is deferred; changing it after scoring would not improve the original run's provenance.
+
+Direct checks after those notes found the current manifest SHA-256 equals both the pre-fit committed value and attempt.json; attempt/result identify the pre-fit `6d162e8` commit; model and runner have no diff from that commit; required truth is present. Actual invocation used Python -I without -O and ignored work/concept-mid. These checks read stored evidence only and did not fit or score again. No identified candidate invalidates this recorded numerical result; an independent completed review is still absent.
+
 Current resume point: sole fit and score complete; do not rerun. Focused tests pass. Await complete quick-tier result, then record it, commit and push only lane/concept-mid. No merge.
