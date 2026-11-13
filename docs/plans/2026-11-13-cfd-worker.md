@@ -1454,3 +1454,24 @@ changed during verification. Paused diagnostic remains paused,no new solver.
 Report `outputs/2026-11-14-kvdb2-throughput-diagnostic.md`. No projection
 until100steps;PM unpause decision required. No managed index/lane target,
 shared target retained. Commit/push lane only,no merge.
+
+## PM standing load-resume authorization
+
+PM explicitly authorizes **unpause diagnostic02 now**; this immediate one-off
+direction is separate from standing threshold evidence. Thereafter lane may
+unpause **only its own exact mf-cfd-* container** when complete rolling600-s
+load estimate is **<6 continuously for600s**. Pause remains rolling600>9 for600s.
+No unrelated containers; same one-job lock/resources/disk. Keep host monitor
+alive across pauses,check resume eligibility every600s while sampling30s;
+reset sustained-high state after authorized unpause. Resource/failure pauses
+are not automatically resumed by load rule. Preserve pause/resume timestamps,
+active vs reserved wall/core-hours and original receipts as snapshots.
+
+Finish exact100-step diagnostic; exclude measured paused intervals from
+throughput/window21–100. If within24h,continue/restart five-rank coarse to2000
+with fixed final100+100 drift test,measure area-weighted y+ shares<1/<5 and
+(1+k). If>=95%area<1,proceed same-settings medium/fine systematic ratios;
+otherwise coarse first-layer adjustment before refining. Gates unchanged.
+Do not end task merely for load waiting:background supervisor waits/rechecks.
+Commit each run,final quick/push lane only,no merge. Resume at installing
+pause-aware supervisor and immediate PM-authorized diagnostic02 unpause.
