@@ -81,6 +81,68 @@ def test_graph_rejects_corrupt_cache_and_unowned_writes(tmp_path):
         run_graph(base, [good], tmp_path)
 
 
+def synthetic_config():
+    import numpy as np
+    from vessel_reconstruction.hull_variation import HullSections, section_properties
+    x = np.array([0., 10., 30., 70., 90., 100.])
+    fullness = np.array([.15, .7, 1., 1., .7, .15])
+    parent = HullSections(x, np.array([0., 4., 10., 15.]),
+        10 * fullness[:, None] * np.array([.8, 1., 1., 1.])[None, :], 100, 20, 10, (30, 70))
+    cb, _ = section_properties(parent)
+    return dict(design_id='synthetic-loop', name='Synthetic integration', sources=['synthetic plumbing only'],
+        requirements=dict(dwt_t=10000., service_speed_kn=10., cargo_types=['product oil']),
+        fleet=[dict(ship_id=f'synthetic-{i}', design_id=f'synthetic-{i}', dwt_t=dwt,
+            lpp_m=100., beam_m=20., draft_m=10., depth_m=15., cb=cb,
+            sources=['synthetic plumbing fleet']) for i, dwt in enumerate([5000., 8000., 12000., 20000.])],
+        parent={key: value.tolist() if hasattr(value, 'tolist') else value for key, value in vars(parent).items()},
+        parent_sources=['synthetic non-box hull'],
+        arrangement=dict(cargo_rows=2, cargo_columns=2, engine_room_length_m=15., forepeak_length_m=8.,
+            slop_length_m=5., slop_columns=2, fuel_reserve_length_m=3.),
+        weights=dict(narrow_house_lh_m2=200., wide_house_lh_m2=100., steel_coefficient=.03,
+            outfit_t_m2=.3, machinery_rest_coefficient=.72, main_engine_mass_t=250., mcr_kw=10000.,
+            component_cg_m=[[50., 0., 7.], [55., 0., 12.], [15., 0., 5.]],
+            component_relative_bands=[.2, .25, .3], band_basis='synthetic sensitivity'),
+        power=dict(water_density_kg_m3=1025., kinematic_viscosity_m2_s=1.19e-6,
+            thrust_deduction=.2, wake_fraction=.3, open_water_efficiency=.65,
+            relative_rotative_efficiency=1., shaft_efficiency=.98),
+        engine=dict(rpm=80., sea_margin=.15, minimum_engine_margin=.05, maximum_engine_margin=.95,
+            layouts=[dict(name='synthetic engine', vertices=[[60., 500.], [100., 500.], [100., 10000.], [60., 10000.]],
+                sfoc_by_load=[[.05, 185.], [.5, 175.], [.75, 170.], [1., 180.]],
+                sources=['synthetic tuning table'], sfoc_rating_kw=10000., sfoc_rating_rpm=80.)]),
+        efficiency=dict(reference_speed_kn=9., auxiliary_sfoc_g_kwh=190., main_fuel='HFO', auxiliary_fuel='MDO',
+            distance_nm=40000., fuel_t=[['HFO', 3000.]], year=2026,
+            sources=['synthetic reference-power speed; not service speed or statutory evidence']))
+
+
+@pytest.mark.cad
+def test_pipeline_real_modules_cache_and_speed_dependency(tmp_path):
+    from vessel_reconstruction.design_loop import create_record, run_pipeline
+    config = synthetic_config()
+    record, receipt = run_pipeline(create_record(config), tmp_path)
+    assert receipt.executed == ('concept', 'hull', 'arrangement', 'weights', 'power', 'engine', 'efficiency')
+    assert record.to_dict()['status'] == 'draft'
+    assert record.to_dict()['engineering_approved'] is False
+    assert record.to_dict()['tanks']
+    assert record.to_dict()['weights']
+    assert 'eedi' in record.to_dict()['results']['fuel']
+    again, receipt = run_pipeline(create_record(config), tmp_path)
+    assert receipt.executed == ()
+    assert record.to_json() == again.to_json()
+    config['requirements']['service_speed_kn'] = 10.5
+    changed, receipt = run_pipeline(create_record(config), tmp_path)
+    assert receipt.executed == ('concept', 'power', 'engine', 'efficiency')
+    assert changed.to_dict()['main_dimensions'] == record.to_dict()['main_dimensions']
+    config['efficiency']['distance_nm'] = 42000.
+    _, receipt = run_pipeline(create_record(config), tmp_path)
+    assert receipt.executed == ('efficiency',)
+
+
+def test_pipeline_api_and_required_sources():
+    from vessel_reconstruction.design_loop import create_record
+    with pytest.raises(ValueError, match='sources'):
+        create_record({**synthetic_config(), 'sources': []})
+
+
 def test_graph_rejects_unordered_dependencies_and_colliding_owners(tmp_path):
     from vessel_reconstruction.design_loop.graph import Step, run_graph
     a = Step('a', '1', (('requirements',),), (('main_dimensions',),), lambda r: r)

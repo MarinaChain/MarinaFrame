@@ -5,6 +5,24 @@ from ..design_record import quantity, restore_result
 
 META = dict(method='explicit design-loop input', method_version='1', sources=['input:design-loop'])
 
+# Unit inference is confined to the established SI field conventions. Module
+# quantities take precedence. Coefficients remain dimensionless inputs.
+FIELD_UNITS = {'x_m': 'm', 'z_m': 'm', 'half_breadths_m': 'm', 'parallel_body_m': 'm',
+    'component_cg_m': 'm', 'component_relative_bands': '1', 'distance_nm': 'nm',
+    'water_density_kg_m3': 'kg/m3', 'kinematic_viscosity_m2_s': 'm2/s',
+    'density_t_per_m3': 't/m3', 'displacement_t': 't', 'lcb_percent_lwl_forward': '%',
+    'operating_sfoc': 'g/kWh', 'main_engine_mass_t': 't', 'sfoc_rating_rpm': 'rpm', 'rpm': 'rpm'}
+
+
+def field_unit(name, fallback):
+    if name in FIELD_UNITS:
+        return FIELD_UNITS[name]
+    for suffix, unit in (('_m3', 'm3'), ('_m2', 'm2'), ('_m', 'm'), ('_kw', 'kW'),
+                         ('_n', 'N'), ('_kn', 'kn'), ('_ms', 'm/s'), ('_g_kwh', 'g/kWh'), ('_t', 't')):
+        if name.endswith(suffix):
+            return unit
+    return fallback
+
 
 def canonical_quantity(fragment):
     result = {key: deepcopy(fragment[key]) for key in
@@ -50,7 +68,7 @@ def fragment_evidence(value, *, unit='1', metadata=None):
     if isinstance(value, (list, tuple)):
         return {'kind': 'list', 'value': [fragment_evidence(child, unit=unit, metadata=metadata) for child in value]}
     if isinstance(value, dict):
-        return {'kind': 'object', 'value': {key: fragment_evidence(child, unit=unit, metadata=metadata) for key, child in value.items()}}
+        return {'kind': 'object', 'value': {key: fragment_evidence(child, unit=field_unit(key, unit), metadata=metadata) for key, child in value.items()}}
     raise ValueError(f'Unsupported fragment type: {type(value).__name__}')
 
 
