@@ -154,6 +154,7 @@ def test_an_inspection_runs_when_the_pool_folder_is_unsafe(tmp_path, monkeypatch
 def test_the_default_pool_folder_is_in_the_users_home_cache(monkeypatch):
     monkeypatch.delenv(parallel.POOL_DIRECTORY_ENVIRONMENT_VARIABLE, raising=False)
     folder = parallel.pool_directory()
-    home = Path(parallel.pwd.getpwuid(os.getuid()).pw_dir)
+    import pwd
+    home = Path(pwd.getpwuid(os.getuid()).pw_dir)
     assert folder.is_relative_to(home) and folder.name == "worker-pool"
     assert not str(folder).startswith("/tmp")
