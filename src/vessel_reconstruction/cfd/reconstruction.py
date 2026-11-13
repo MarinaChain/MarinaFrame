@@ -37,19 +37,26 @@ def slice_half_breadths(source, x, deck, levels=161, edge_samples=201):
     bottom = float(all_points[:, 1].min())
     if bottom >= deck:
         raise ValueError('No section below deck')
+    source_top = float(all_points[:, 1].max())
+    deck_extension = max(0., deck - source_top)
+    # Only a submicrometre endpoint discrepancy may reach the declared deck.
+    # Larger missing ends fail; submerged source-trim gaps stay in evidence.
+    if deck_extension > 1e-6:
+        raise ValueError('Incomplete section below declared deck')
     heights = np.linspace(bottom, deck, levels)
     breadths = []
     gaps = []
     spread = []
     for z in heights:
         candidates = []
+        sample_z = min(z, source_top)
         for points in polylines:
             for a, b in zip(points[:-1], points[1:]):
-                if min(a[1], b[1]) - 1e-9 <= z <= max(a[1], b[1]) + 1e-9:
+                if min(a[1], b[1]) - 1e-9 <= sample_z <= max(a[1], b[1]) + 1e-9:
                     if abs(b[1] - a[1]) < 1e-12:
                         candidates.extend([a[0], b[0]])
                     else:
-                        fraction = np.clip((z - a[1]) / (b[1] - a[1]), 0, 1)
+                        fraction = np.clip((sample_z - a[1]) / (b[1] - a[1]), 0, 1)
                         candidates.append(a[0] + fraction * (b[0] - a[0]))
         positive = [max(0., float(y)) for y in candidates if y >= -1e-6]
         if not positive:
@@ -60,11 +67,11 @@ def slice_half_breadths(source, x, deck, levels=161, edge_samples=201):
             spread.append(max(positive) - min(positive))
     valid = np.isfinite(breadths)
     if np.count_nonzero(valid) < 2 or not valid[0] or not valid[-1]:
-        raise ValueError('Incomplete section at keel or deck')
+        raise ValueError(f'Incomplete section at keel or deck: bottom={bottom}, deck={deck}, gaps={gaps}')
     # Only internal source-trim gaps are interpolated, and all are in evidence.
     breadths = np.interp(heights, heights[valid], np.array(breadths)[valid])
     return np.column_stack([breadths, heights]), dict(
-        section_edges=len(edges), interpolated_gap_heights_m=gaps,
+        section_edges=len(edges), deck_extension_m=deck_extension, interpolated_gap_heights_m=gaps,
         max_competing_breadth_m=max(spread, default=0.))
 
 
@@ -107,3 +114,17 @@ def submerged_particulars(solid, draft):
             continue
         area += face.Area()
     return dict(volume_m3=wet.Volume(), wetted_area_m2=area)
+
+
+def triangulate(solid, deflection=0.0001, angular_deflection=0.2):
+    """Tessellate connected topology and weld coordinates at 1 nm resolution."""
+    vertices, faces = solid.tessellate(deflection, angular_deflection)
+    coordinates = np.round(np.array([point.toTuple() for point in vertices]), 9)
+    triangles = coordinates[np.asarray(faces)]
+    area_vectors = np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0])
+    return triangles[np.linalg.norm(area_vectors, axis=1) > 0]
+
+
+def sample_distances(source, points):
+    """Exact trimmed-shape distance at each supplied point, not a global bound."""
+    return [source.distance(cq.Vertex.makeVertex(*map(float, point))) for point in points]

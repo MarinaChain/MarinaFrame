@@ -40,6 +40,26 @@ def test_mirrored_loft_has_exact_box_volume_and_wetted_area(reconstruction):
     assert measures['wetted_area_m2'] == pytest.approx(20.)
 
 
+def test_deck_roundoff_is_recorded_not_extrapolated_silently(reconstruction):
+    source = cq.Solid.makeBox(4, 1, 2 - 2e-7)
+    profile, evidence = reconstruction.slice_half_breadths(source, 2, 2)
+    assert profile[-1] == pytest.approx([1, 2])
+    assert evidence['deck_extension_m'] == pytest.approx(2e-7)
+
+
+def test_tessellation_is_closed_outward_box(reconstruction):
+    from vessel_reconstruction.cfd.surface import validate_surface
+    solid = cq.Solid.makeBox(4, 2, 2)
+    triangles = reconstruction.triangulate(solid)
+    assert len(validate_surface(triangles)) == 12
+
+
+def test_sampled_source_distance_for_shifted_box(reconstruction):
+    source = cq.Solid.makeBox(1, 1, 1)
+    points = [(1.1, 0.5, 0.5), (0.5, 0.5, 1.2)]
+    assert reconstruction.sample_distances(source, points) == pytest.approx([0.1, 0.2])
+
+
 def test_slice_outside_source_fails(reconstruction):
     with pytest.raises(ValueError, match='section'):
         reconstruction.slice_half_breadths(cq.Solid.makeBox(4, 1, 2), 5, 2)
