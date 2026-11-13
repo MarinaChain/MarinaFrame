@@ -35,9 +35,9 @@ MARPOL Annex I text: IMO resolution MEPC.117(52), adopted 15 October 2004, https
 - Reg.19.3.1/.2: w=max(1,min(0.5+DWT/20000,2)), h=max(1,min(B/15,2)), for >=5000 DWT. Planar internal sides/bottom are preliminary only; actual perpendicular clearance and bilge treatment require review.
 - Reg.18.2: minimum ballast amidship draft 2+0.02L; trim <=0.015L and propeller immersion require loading, lightship and hydrostatics. Report capacity only and unresolved checks, not a fixed ballast percentage.
 - Reg.29.2: use conservative 3% slop capacity; do not use reduced allowances without equipment evidence.
-- Reg.26.3: conservative wing volume cap 22500 m3 (75% of minimum 30000 outflow limit); centre cap 50000 m3. Conservatively screen length <=max(10,0.1L), rather than implement every bulkhead-dependent exception. Reg.25 hypothetical outflow remains unresolved.
+- Reg.26.3: conservative wing volume cap 22500 m3 (75% of minimum 30000 outflow limit); centre cap 50000 m3. Conservatively screen length <=max(10,0.1L), rather than implement every bulkhead-dependent exception. Reg.25 hypothetical outflow remains unresolved. IMPORTANT applicability: reg.26.7 excludes tankers delivered on/after 1 January 2010; reg.23.1 applies to those tankers. Show reg.26 only as a historical screening constraint, not a current newbuild requirement.
 - Reg.23: report full-release single-tank screening scenario, not probabilistic mean outflow. Mean outflow requires side/bottom damage probabilities, pressure balance, tidal and permeability inputs; leave unknown.
-- SOLAS II-1/12: conventional preliminary collision-bulkhead range max(0.05L,10 m) minimum is NOT correct: minimum min(0.05L,10 m), maximum max(0.08L,0.05L+3 m), measured aft of FP. Bulb/length definitions and applicable edition need review; no universal compliance claim.
+- SOLAS II-1/12.1/.2, MSC.216(82), adopted 8 December 2006: minimum min(0.05L,10 m), maximum max(0.08L,0.05L+3 m), measured aft of FP with bulb correction. Primary text: https://wwwcdn.imo.org/localresources/en/KnowledgeCentre/IndexofIMOResolutions/MSCResolutions/MSC.216(82).pdf . Use caller-stated SOLAS length and forward bulb extension; reference point is min(extension/2,0.015L,3 m) forward of FP. Applicable edition and Administration exceptions still need review.
 
 ## Tasks and resume point
 
