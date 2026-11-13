@@ -73,6 +73,18 @@ Final quick tier after CAD: **exit 0**, Python **2715 passed, 4 skipped, 100 des
 
 **Round-2 resume point:** experiments and local checks complete; G3b is outside band, exact source inner surfaces and autonomous layout selection are not done. Commit this result, then run a final quick check chained to `git push origin HEAD:lane/tank-g3b`; no merge. After push, inspect and delete only the lane-local `target` as the last shell action. Retain ignored `work/argyro` so the runs can be reproduced.
 
+## Round 3: PM development-case decision
+
+PM decision after G3b: **the +4.565437% result stands**. ARGYRO is now an exposed **development case**, not a blind check. All later agreement is development fit; it cannot pass G3b or restore blindness. Historical round-2 results above are unchanged.
+
+1. Diagnose per tank against published cargo/slop/ballast capacities. Keep full before/after tables and source-derived evidence in ignored `work/argyro/`; report compact aggregate findings here. Separate measured effects from unproved causes.
+2. Fix generic modelling gaps supported by evidence, starting with shaped internal surfaces. Use synthetic exact-answer tests before implementation. Do not infer missing surface dimensions by silently fitting capacity.
+3. Rerun the exposed case as development only; record before/after tables, model assumptions and unresolved differences.
+4. Independent next blind case must be a different, unexposed hull/design, with complete hull geometry (numeric offsets or neutral CAD preferred), source datums/units, internal bottom/hopper/side surfaces and bulkhead/end positions, deck geometry, plus per-tank or total capacity with explicit fill/permeability/deduction basis. PM or an independent evaluator holds capacity truth until implementation and inputs are frozen. The existing 2% band must not change after exposure; freeze a new case protocol before its run. No restricted holdout data may substitute.
+5. Commit each step, run the quick tier with the private identity check, push only lane/tank-g3b; no merge. All output remains `engineering_approved=false`.
+
+**Round-3 resume point:** PM development designation recorded; diagnosis not yet run. Retained round-2 evidence is under ignored `work/argyro/results/`.
+
 ## Sources and method limits
 
 MARPOL Annex I text: IMO resolution MEPC.117(52), adopted 15 October 2004, https://wwwcdn.imo.org/localresources/en/KnowledgeCentre/IndexofIMOResolutions/MEPCDocuments/MEPC.117(52).pdf . Historical version explicitly pinned, not a claim to current consolidated applicability.
