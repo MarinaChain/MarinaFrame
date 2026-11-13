@@ -1475,3 +1475,18 @@ otherwise coarse first-layer adjustment before refining. Gates unchanged.
 Do not end task merely for load waiting:background supervisor waits/rechecks.
 Commit each run,final quick/push lane only,no merge. Resume at installing
 pause-aware supervisor and immediate PM-authorized diagnostic02 unpause.
+
+### Completed100-step diagnostic after authorized resume
+
+Immediate PM unpause epoch1794607647.674; original pause1794607215.692,
+paused431.982185s.100steps/reconstruct completed exit0. Solver wall1753s,
+includes pause;decompose11/potential40/reconstruct8s. Complete steps21–100
+pause-adjusted mean **12.55022s**,median11,p9522.05. Projection including
+startup **25215.44s=7.00429h**,inside24h. Required100-step evidence now complete.
+Resume supervisor segment151.698712s/0.210692655core-hours,all active;
+original reserved accounting retained separately,no double count of snapshots.
+Evidence `kvdb2-mpi-diagnostic02/completed-timing-summary.json` and logs.
+Admit production continuation from diagnostic100 to2000,same5ranks/settings;
+use reconstructed100fields and fresh decompose,retain100diagnostic samples
+for complete history. Standing load pause/resume supervisor throughout. Final
+force windows1901–2000/1801–1900 govern,no favourable window selection.
