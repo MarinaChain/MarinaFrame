@@ -39,10 +39,28 @@ Create `kernels/CMakeLists.txt`, `kernels/include/mf_kernels.h`, `kernels/src/vo
 
 Read scanner findings in redacted form. Make neutral prose edits without changing meaning; list paths here. Write `kernels/README.md` for ABI, bindings, private inputs, CI secret and pending remote gates. Stage intended files before final tracked-tree scan. Run G5, record counts and caveats here, commit and push. No CI polling.
 
+## PM decision before final run (2026-11-13)
+
+The PM defined the binary identity policy explicitly before the final run. This records a PM policy decision, not a widened numerical gate. G4 still requires zero findings under the policy.
+
+1. UTF-8 text files and all file paths/names retain all rules unchanged.
+2. Binary files use only case-insensitive denylist entries of at least six characters after normalization. Match raw bytes and any extractable text layer already read. Skip short and case-sensitive binary entries; print the skipped entry count only, never tokens.
+3. `kernels/` and every intake output must contain text only. Any binary file fails the check, even if no denylist is set.
+4. Add synthetic regressions for binary rule filtering, raw-byte matching, skipped counts, unchanged path/text rules and native/intake binary refusal. Then rerun full tracked-tree G4, focused/native checks and the final quick tier before commit/push. Remote platform results remain pending until observed.
+
 ## Results
 
-Not run yet. Gate definitions committed before checks.
+Gate definitions committed before checks in `f9e5b34`.
+
+- G0: quick tier completed with exit 0 (background task `b0ws3rx5m`, log `/tmp/port-landing-baseline.log`). Root Rust formatting, clippy and Rust tests passed. Python: 2552 passed, 4 skipped, 92 deselected, 5 warnings. UI: 275 passed, zero failures. Bounded secret scan: 1343 tracked text files, zero findings. This baseline run started before implementation; a stable-source final run remains pending.
+- G1/G2: initial tests failed because implementation files did not exist. Current focused suite: 13 passed. Includes seeded CLI rejection with redacted output, phrase normalization, whole-word case, fingerprints, exact allowlist, binary strings, symlink refusal, synthetic intake compilation, mapped includes, residual strings, output collisions, unchanged private mapping, overlapping paths and unsupported syntax refusal.
+- G3 local macOS arm64: CTest 1/1 passed; Python binding 2/2 passed; Rust binding 2/2 passed; standalone Rust clippy passed. Remote macOS/Linux/Windows matrix is configured but not run or observed. Rust is usable as an optional path dependency; no edits to app/core or rust-control.
+- G4 FAIL: latest full tracked-tree run reports 66 binary-string findings after prose cleanup. Short case-sensitive tokens coincide with random printable runs in compressed images, font, mesh and archive bytes. Rules are not weakened and identity exceptions are not added. Assets are not rewritten or removed. PM decision is required on the binary acceptance policy; no claim of a clean full-tree scan. Diagnostics contain only file ordinal, line and category. No private identities enter logs or this report.
+- Identity removal files (complete list): `docs/plans/2026-11-11-run-view-focus.md`, `docs/plans/2026-11-12-design-from-scratch.md`, `docs/research/2026-11-09-uiux-research.md`. Changes replace product-specific references and links with neutral method descriptions. PRD and ROADMAP are unchanged.
+- G5: focused tests and whitespace checks pass; final quick tier, implementation commit, push and target cleanup are pending. Founder must set repository secret `MF_IDENTITY_DENYLIST`; this lane has not set it.
+
+Review refinements: fail closed on raw literals and line splices; map include filenames alongside renamed headers; keep private scan diagnostics redacted. All binary matches remain reported instead of changing rules after observing results.
 
 ## Resume point
 
-Start G0 baseline, then Task 1 negative tests. All work stays in `.claude/worktrees/port-landing` on `lane/port-landing`. Keep this section current after each checkpoint.
+G0 finished with exit 0; counts are recorded above. Await the binary identity-policy decision, then run the final quick tier on stable source with the same main interpreter and lane-local target. Re-run C/Rust/Python and focused tests. G4 remains blocked on binary policy; do not silently waive it. Do not push a success claim or merge. Commit/push only this branch with explicit failed-gate notes when permitted by the lane's delivery policy. After the final push inspect and remove only this lane's `target/` as the last step. All work stays in `.claude/worktrees/port-landing` on `lane/port-landing`.
