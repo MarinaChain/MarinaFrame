@@ -1279,3 +1279,26 @@ minTwist-1**, reduce minVol1e-18 and minFaceWeight0.001 for extrusion only.
 All other settings unchanged. Final checkMesh still gates output; do not
 accept negative volumes or weaken standalone checkMesh. This tests the logged
 quality rollback cause, not a geometry/force fit. Commit mesh04 before retry.
+
+### Recovery coarse05: extrusion improved, both admission checks FAIL
+
+Load1 **1.25**, **1,501,521 cells**. Targeted determinant/twist relaxation
+produced99.8118% any extrusion, but actual binary nSurfaceLayers hull field
+shows **14626/17002=86.02517% full30 layers**, below95%. Counts0:32;
+counts1..29:2344; full30:14626. Mean27.8 is not full-count coverage.
+Standalone checkMesh **FAILS1 check**:22409 high-aspect-ratio cells, maximum
+**1566.2**; volumes positive, nonorthogonality62.6896/skewness3.29121 pass.
+Do not lower aspect-ratio acceptance or count partial layers as full. No solver.
+Stage walls surfaceCheck0/blockMesh9/snap182/layers127/checkMesh12s, total330s
+**0.458333333 allocated core-hours**. Whole **345.299768s /0.479583011
+core-hours**, five-core quota. Sampled layer VmHWM **2369462272bytes (2.207GiB)**
+lower bound; exact total peak unavailable, no OOM. Binary field and logs retained
+main ignored `kvdb2-recovery05-nSurfaceLayers`, `kvdb2-recovery05-evidence.log`.
+
+Recovery attempts04+05 total **595.753449s /0.827435345 core-hours**,
+including all stage/monitor overhead, excluding read-only image inventory.
+G-KV-DB2 **BLOCKED / NOT CONVERGED**. No y+ distribution or (1+k) on any new
+grid because solver admission failed. Medium/fine not run per PM acceptance.
+Resume at a new mesh strategy/PM review, not more control guesses. Keep all
+failures and frozen gates. cfMesh needs a separately authorized runtime if
+required; do not install/change the pinned image automatically.
