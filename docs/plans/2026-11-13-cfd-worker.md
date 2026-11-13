@@ -956,3 +956,17 @@ Whole supervised attempt **31.076458 s / 0.043161747 allocated core-hours**,
 5-core quota. These are a coarse mesh, not force or convergence results.
 Evidence: ignored `work/cfd/kvdb-coarse-mesh-02-result.log`. Admit coarse
 simpleFoam next with unchanged 2000 iterations and projection rule.
+
+### Coarse solver 01: physical steady run completed
+
+Load1 **1.57**, **16,257 cells**, **2000 iterations / 2000 force samples**.
+Final two fixed 100-sample means **24.1434204 / 24.1434222 N**, drift
+**0.00000746%**. CV **0.00545121930**, implied **(1+k)=1.58022203**,
+ITTC-57 CF **0.00344965404** (actual stated U,L,nu). No gate score from one mesh.
+y+ min/mean/max **30.2276 / 170.305 / 1766.82**; poor local maximum retained.
+Layers: **92.9181% faces extruded**, average **2.56** layers vs 3 requested.
+Solver stage **163 s / 0.226388889 allocated core-hours**; whole monitored
+attempt **182.187129 s / 0.253037680 core-hours**, five-core quota. Projection
+at iteration 1816 **164.10 s**, below 24 h; no resource pause. Evidence:
+ignored `work/cfd/kvdb-coarse-solver-01/` and matching `-result.log`.
+Next medium uses frozen base_cells 22, same settings; no force-based tuning.
