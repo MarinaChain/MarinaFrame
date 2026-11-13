@@ -51,6 +51,8 @@ def build_section_mesh(sections, samples=321):
         for sign in (1, -1):
             a, b = left * [1, sign, 1], right * [1, sign, 1]
             for j in range(len(knots) - 1):
+                if np.all(a[j:j+2, 1] == 0) and np.all(b[j:j+2, 1] == 0):
+                    continue  # Empty centreplane interval is not hull skin.
                 if sign == 1:
                     quad(a[j], b[j], b[j+1], a[j+1], 'skin')
                 else:
