@@ -257,3 +257,12 @@ run folder; do not guess a host from unrelated SSH aliases.
 
 Current new physical runs: **0**. No new cell count, wall time or core-hour
 measurement. Track B has not started; previous failed KCS evidence is unchanged.
+
+Checkpoint quick tier completed with **exit 0** on `8f87545`: Rust
+format/clippy/workspace tests passed; Python **2,734 passed, 4 skipped,
+100 deselected**, 5 warnings in **611.18 s**; UI **275 passed, 0 failed**;
+tracked-text secret scan **0 findings**. Separate tracked-file identity scan with
+the private denylist: **0 findings**. Durable log and exit receipt are main
+ignored `work/cfd/dtc-source-quick.log` and `dtc-source-quick.exit`. No source
+changed during the run. No lane-local `target/` exists; the shared Rust target
+is retained. Resume at step 1 above; no physical gate is newly passed.
