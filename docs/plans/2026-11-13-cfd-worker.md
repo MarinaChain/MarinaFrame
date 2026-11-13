@@ -970,3 +970,12 @@ attempt **182.187129 s / 0.253037680 core-hours**, five-core quota. Projection
 at iteration 1816 **164.10 s**, below 24 h; no resource pause. Evidence:
 ignored `work/cfd/kvdb-coarse-solver-01/` and matching `-result.log`.
 Next medium uses frozen base_cells 22, same settings; no force-based tuning.
+
+### Medium mesh 01: physical mesh accepted
+
+Load1 **2.01**, **35,426 cells**, checkMesh **Mesh OK**; max
+non-orthogonality **64.7552**, skewness **2.27712**. snappy **24 s /
+0.033333333 allocated core-hours**; other stages report 0 s at integer
+resolution. Whole monitor **32.409143 s / 0.045012698 core-hours**,
+five-core quota. Evidence: ignored `work/cfd/kvdb-medium-mesh-01-result.log`.
+No cell ceiling reached. Proceed to medium solver under unchanged settings.
