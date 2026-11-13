@@ -877,3 +877,37 @@ this run; later changes were documentation/lessons only. Private identity scan
 also completed exit 0 with 0 findings. Push only this lane; no merge.
 Read `work/hull-ends-plan.md` and `work/thin-ship-plan.md` snapshots
 for full source evidence; these are ignored copies, not new published results.
+
+## PM transom approximation and physical sequence (before runs)
+
+PM supersedes the transom blocker: compute thin-ship Cw from this solid's
+waterline offsets, ending each waterline at its stern profile to close the
+immersed transom. **This is an explicit thin-ship stern-closure approximation,
+not the physical CFD transom geometry or a validated transom correction.** Keep
+the real transom in double-body CFD. Score unchanged G-KV-DB with this Cw;
+also report CT_est with **Cw=0** and **2*Cw**. No tolerance or convergence change.
+
+Frozen numerical study: same source/draft/domain and SST settings on all meshes;
+background base_cells **16 / 22 / 30**, surface refinement level **3** throughout,
+three prism layers with existing relative-size parameters. Actual cell counts
+and effective refinement ratios determine convergence evidence; maxGlobalCells
+2,500,000 is an admission ceiling, not a target (hitting it invalidates systematic
+refinement). Domain one L upstream, three L downstream, one L lateral and below
+the hull, waterplane z=0. Full-width physical force multiplier **1**. Steady
+solver **2000 iterations**, all force samples retained; if final two 100-sample
+windows do not meet <=1% drift, report nonconvergence (do not choose windows).
+Measure y+ and actual layer coverage. Run checkMesh before simpleFoam; failed
+checks stop admission rather than lowering thresholds after inspection.
+
+Start **every** remote stage only at load1 **<4**; otherwise wait and recheck
+every **600 s** in background without treating waiting as task completion.
+Use the detached host monitor with complete rolling 600-s load estimate >9 for
+600 further seconds, one-job lock/5 CPU/12 GB/nice10/disk limits unchanged.
+From observed iteration throughput after >=100 iterations, project total 2000-
+iteration wall time; stop and report if >24 h. Also stop a stage if measured
+progress establishes a >24-h projection. Commit each run and its costs before
+the next mesh. Quick tier at end, push lane only, no merge.
+
+Resume: prepare source-preserving clipped STL and stern-profile offsets, test
+monitor/case contracts, then physical coarse mesh/checkMesh/solver; continue
+medium/fine sequentially if safety and mesh admission permit. No new run yet.
