@@ -34,6 +34,7 @@ def test_wheel_contains_shared_catalog(tmp_path):
     for name in ('pyproject.toml', 'README.md', 'LICENSE'):
         shutil.copy(ROOT / name, project / name)
     shutil.copytree(ROOT / 'src', project / 'src', ignore=shutil.ignore_patterns('__pycache__', '*.egg-info'))
+    shutil.copytree(ROOT / 'schemas', project / 'schemas')
     wheel_dir = tmp_path / 'wheel'
     wheel_dir.mkdir()
     # --no-build-isolation: the build backend (setuptools, wheel) must already be installed here.
@@ -41,3 +42,7 @@ def test_wheel_contains_shared_catalog(tmp_path):
     assert build.returncode == 0, f'pip wheel failed ({build.returncode}):\n{build.stderr}\n{build.stdout}'
     with zipfile.ZipFile(next(wheel_dir.glob('*.whl'))) as wheel:
         assert json.loads(wheel.read('vessel_reconstruction/tool_catalog.json')) == json.loads(CATALOG.read_text())
+        schema_paths = [name for name in wheel.namelist()
+                        if name.endswith('/share/marinaframe/schemas/design-record-v1.schema.json')]
+        assert len(schema_paths) == 1
+        assert wheel.read(schema_paths[0]) == (ROOT / 'schemas/design-record-v1.schema.json').read_bytes()
