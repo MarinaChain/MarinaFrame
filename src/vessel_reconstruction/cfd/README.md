@@ -55,7 +55,7 @@ fragment = result.to_record_fragment()
 `start()` returns immediately; `progress()` reports the last solver time;
 `cancel()` kills the serial process (its group on POSIX); `wait()` has no wall
 limit. The runner is for trusted native code, not a security sandbox. It runs
-one core only; remote transport and MPI are not implemented. A controller exit
+one core only. SSH transport is available separately below; MPI is not implemented. A controller exit
 can leave the solver running: keep the controlling job alive and cancel explicitly.
 
 Logs and receipts must be preserved for every attempt. Cells are parsed when a
@@ -64,9 +64,50 @@ A `completed` receipt means process exit zero, not physical convergence. Apply
 the frozen force-window and mesh gates separately. Allocation accounting is
 wall seconds / 3600 for this serial runner, not measured CPU-hours.
 
+## Configured remote use
+
+```python
+import json
+from vessel_reconstruction.cfd.remote import RemoteHost, RemoteSolverRun
+
+# Caller-owned ignored configuration, never committed. Keys: host, image, root.
+# host: SSH destination; root must be ~/marinaframe-cfd.
+# image: opencfd/openfoam-default:2412@sha256:<recorded official digest>.
+host = RemoteHost(**json.loads(config_path.read_text()))
+run = RemoteSolverRun.start(['blockMesh'], case, host=host, name='kcs-coarse-attempt-01')
+progress = run.progress()
+receipt = run.wait()  # No wall deadline; can return a safety-paused state.
+# run.cancel() targets only mf-cfd-kcs-coarse-attempt-01.
+# run.collect() retrieves logs/receipt/postProcessing, never mesh/time folders.
+```
+
+The remote attempt directory is immutable and commands are allowlisted argument
+lists, not caller shell strings. Upload accepts only `0`, `constant`, `system`,
+and `case-input.json`; no symlinks or recursive repository upload. Configure
+only trusted cases with public geometry for this lane. The official-image
+allowlist enforces vendor namespace and numeric version; the operator must
+also pin and check the digest against official release metadata.
+
+The host supervisor holds an exclusive lane lock, checks for active `mf-cfd-`
+containers, and starts one container with five CPU quota, 12 GB memory and
+`nice -n 10`. It checks uptime before launch and every 600 s. Two high (>7)
+observations 600 s apart cause a pause; an intervening low observation resets
+the interval. It also pauses at the lane disk limit. A pause requires a manual
+decision, never an automatic resume. The monitor survives client SSH loss.
+
+Disk admission counts lane-directory bytes plus the selected image size and an
+8 GB peak allowance against 40 GB, with at least 10 GB host free reserve. Other
+Docker storage and growing JSON logs need operational review: do not claim
+this admission estimate is a hard filesystem quota. No unrelated Docker
+container, image or volume is inspected into, stopped, or removed.
+
+`wait()` adds allocated core-hours as five times elapsed wall hours. This is
+quota allocation, not measured CPU use, and includes paused time. The surface
+check exercised this path; no RANS/MPI performance measurement exists yet.
+
 ## Remaining physical work
 
-Native runtime installation; public CAD tessellation/provenance; full mesh
+Public CAD repair/closure and provenance; full mesh
 quality and wall-y+ assessment; free-surface and attitude solver setup; Tokyo
 submission scatter extraction; KCS convergence and speed series; KVLCC2 error;
 measured host sizing. `engineering_approved` always remains false.
