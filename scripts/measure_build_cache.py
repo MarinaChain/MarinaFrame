@@ -7,12 +7,19 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
 import time
 
 
 def disk_kib(path: Path) -> int:
     if not path.exists():
         return 0
+    if os.name == 'nt':
+        # Windows has no standard du. Report logical file bytes rounded up to
+        # KiB; POSIX retains allocated-disk accounting from du unchanged.
+        total = sum(item.stat().st_size for item in path.rglob('*')
+                    if item.is_file() and not item.is_symlink())
+        return (total + 1023) // 1024
     result = subprocess.run(["du", "-sk", str(path)], check=True, capture_output=True, text=True)
     return int(result.stdout.split()[0])
 
@@ -36,7 +43,7 @@ def main() -> int:
         before = disk_kib(target)
         started = time.monotonic()
         with log_path.open("w") as log:
-            result = subprocess.run(["make", "test-quick", f"PY={args.python}"],
+            result = subprocess.run([shutil.which('make') or 'make', "test-quick", f"PY={args.python}"],
                                     env=environment, stdout=log, stderr=subprocess.STDOUT)
         row = {"run": index, "elapsed_seconds": round(time.monotonic() - started, 3),
                "exit_code": result.returncode, "target_kib_before": before,

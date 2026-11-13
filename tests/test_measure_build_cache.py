@@ -24,6 +24,17 @@ def test_measurement_records_status_disk_and_lock_messages(tmp_path, exit_code, 
         'printf "Blocking waiting for file lock on build directory\\n"\n'
         f"exit {exit_code}\n")
     make.chmod(0o755)
+    if os.name == 'nt':
+        implementation = tools / 'fake_make.py'
+        implementation.write_text(
+            'import os, sys\nfrom pathlib import Path\n'
+            'target = Path(os.environ["CARGO_TARGET_DIR"])\n'
+            'target.mkdir(parents=True, exist_ok=True)\n'
+            '(target / "artifact").write_bytes(b"artifact")\n'
+            'print("Blocking waiting for file lock on build directory")\n'
+            f'sys.exit({exit_code})\n', encoding='utf-8')
+        (tools / 'make.cmd').write_text(
+            f'@echo off\n"{sys.executable}" "{implementation}" %*\n', encoding='utf-8')
     output = tmp_path / "measurements"
     target = tmp_path / "target"
     result = subprocess.run(

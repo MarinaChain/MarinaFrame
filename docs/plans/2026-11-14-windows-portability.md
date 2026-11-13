@@ -126,9 +126,10 @@ Gate written before runs: attempt these five groups largest-first; retain every 
 Plan review: architecture PASS (small existing platform boundaries); quality PASS (fail-closed security); tests WARN (native Windows needed for handle and executable behavior); performance PASS (no new unbounded work).
 
 - Batch 2 group 1 commit `6865d1b`: focused 93 passed; quick tier 2,802 passed, 4 skipped, 130 deselected, UI 275 passed, Rust/secrets/private identity passed. Native Windows **156 failed, 2,655 passed, 82 skipped, 43 errors**; Linux **2,916 passed, 20 skipped**. Read-only flush failure removed; affected tests now reach the POSIX `ctypes.CDLL(None)` publication dispatch. Counts unchanged; do not claim those tests pass.
-- Batch 2 group 2: existing platform layer already refuses unsupported isolated workers before child launch. Exact 34 integration tests are marked with that Windows capability reason; pure algorithms and refusal tests remain active. No weaker in-process parser fallback. Quick/native results pending.
+- Batch 2 group 2: existing platform layer already refuses unsupported isolated workers before child launch. Exact 34 integration tests are marked with that Windows capability reason; pure algorithms and refusal tests remain active. No weaker in-process parser fallback. Quick tier passed; pushed `ae7f186`. Native run `43525816369`: **122 failed, 2,655 passed, 116 skipped, 43 errors**; Linux **2,916 passed, 20 skipped**. Logs were not yet available at the initial read; a delayed read after ten minutes obtained the completed result.
+- Batch 2 group 3: round and measurement fixtures now provide Windows `.cmd` shims that invoke the Python interpreter. Measurement resolves the executable through PATH and uses documented logical-byte disk accounting on Windows (POSIX du unchanged). No fixture skips. Focused tests **16 passed** on macOS; Windows execution remains the decisive gate.
 
-Resume: group 2 quick tier, push, one Windows check; then native fake executables (no skips).
+Resume: group 3 quick tier, push, one Windows check; then atomic package exchange.
 
 ## Results and resume point
 
