@@ -115,6 +115,20 @@ def test_cartesian_mesh_allows_only_plain_command():
         host.launch_script('cfmesh', ['tetMesh'])
 
 
+def test_exact_five_rank_mpi_commands_only():
+    host = RemoteHost('worker@example.test', 'opencfd/openfoam-default:2412')
+    for command in (['mpirun','-np','5','simpleFoam','-parallel'],
+                    ['mpirun','-np','5','potentialFoam','-parallel','-initialiseUBCs'],
+                    ['potentialFoam','-initialiseUBCs'], ['reconstructPar','-latestTime']):
+        assert 'nice -n 10' in host.launch_script('mpi-test',command)
+    for command in (['mpirun','-np','6','simpleFoam','-parallel'],
+                    ['mpirun','-np','5','bash','-parallel'],
+                    ['mpirun','--host','outside','simpleFoam'],
+                    ['mpirun','-np','5','simpleFoam','-parallel','-lib','evil.so']):
+        with pytest.raises(ValueError):
+            host.launch_script('mpi-test',command)
+
+
 def test_dynamic_library_options_rejected():
     host = RemoteHost('worker@example.test', 'opencfd/openfoam-default:2412')
     with pytest.raises(ValueError):

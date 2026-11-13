@@ -53,13 +53,21 @@ class RemoteHost:
     def launch_script(self, name, command):
         name = _run_name(name)
         allowed = {'blockMesh', 'snappyHexMesh', 'checkMesh', 'surfaceCheck', 'interFoam',
-                   'simpleFoam', 'decomposePar', 'reconstructPar', 'foamDictionary', 'cartesianMesh'}
+                   'simpleFoam', 'decomposePar', 'reconstructPar', 'foamDictionary', 'cartesianMesh',
+                   'mpirun', 'potentialFoam'}
         if not command or command[0] not in allowed or any(not isinstance(s, str) for s in command):
             raise ValueError('Unsupported solver argument list')
         for argument in command[1:]:
             if argument.startswith('/') or '..' in argument.split('/') or not re.fullmatch(r'[A-Za-z0-9_./+-]+', argument):
                 raise ValueError('Solver arguments must be confined relative paths or simple options')
-        options = {'snappyHexMesh': {(), ('-overwrite',)}, 'checkMesh': {(), ('-allGeometry', '-allTopology')}}
+        options = {
+            'snappyHexMesh': {(), ('-overwrite',)},
+            'checkMesh': {(), ('-allGeometry', '-allTopology')},
+            'mpirun': {('-np', '5', 'simpleFoam', '-parallel'),
+                       ('-np', '5', 'potentialFoam', '-parallel', '-initialiseUBCs')},
+            'potentialFoam': {(), ('-initialiseUBCs',)},
+            'reconstructPar': {(), ('-latestTime',)},
+        }
         if command[0] == 'surfaceCheck':
             if len(command) != 2 or command[1].startswith('-') or not command[1].endswith('.stl'):
                 raise ValueError('surfaceCheck requires one relative STL path')
