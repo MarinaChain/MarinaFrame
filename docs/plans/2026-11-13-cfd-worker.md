@@ -1145,3 +1145,23 @@ before correction. Absolute 30-layer controls and low-Re fields are generated.
 Detached DB2 monitor retains startup/rolling rules and records cgroup memory.peak
 on shell EXIT plus sampled Docker memory and OOM status. No physical DB2 run
 has started. Preparation log: ignored `work/cfd/kvdb2-prepare-03.log`.
+
+### DB2 coarse mesh 01 stopped: oversized refinement (before forces)
+
+Load1 **2.03**, blockMesh **810,448 cells**, then volumetric aft level4
+refinement produced **7,219,675 cells**, exceeding the 6M admission ceiling
+and coarse target. Stopped before checkMesh/solver, exit143, no OOM. Whole
+attempt **785.248483 s / 1.090622894 allocated core-hours**. surfaceCheck1s,
+blockMesh22s; snappy interrupted. Last Docker memory sample **5.009 GiB**;
+an earlier sample **5.310 GiB** was observed. Exact peak unavailable: this host
+kernel exposes memory.current but **no memory.peak**. Do not label a sampled
+value as peak. Evidence `work/cfd/kvdb2-coarse-mesh-01-result.log` and stop details.
+No (1+k) exists for this attempt. Failure retained.
+
+Before any retry/force results: narrow aft box to physical half-beam+0.02L,
+physical draft+0.02L below surface, level **3**; retain level3 hull, 30 absolute
+layers, bases74/94/118. This removes unintended entire-volume 16x subdivision,
+not a force fit. Measure actual target counts; if coarse still materially
+exceeds ~1M, stop to revise study rather than claim target achieved. Capture
+exact process peak RSS via Python resource.wait4 wrapper around each stage,
+plus sampled total container memory, since cgroup peak is unsupported.
