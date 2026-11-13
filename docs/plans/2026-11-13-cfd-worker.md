@@ -865,5 +865,10 @@ Resume: add/test the new rolling-load host monitor (the reusable remote.py still
 has the historical >7 policy), then source-preserving wetted STL preparation and
 frozen systematic mesh settings. Do not launch through the old policy or claim
 G-KV-DB while Cw's immersed-transom formulation is missing. No new physical run
-has started. Read `work/hull-ends-plan.md` and `work/thin-ship-plan.md` snapshots
+has started. Private tracked identity scan completed exit **0**, **0 findings**.
+No managed `.codesight` directory exists here, so no stale managed index was
+changed; no lane-local `target/` exists and the shared Rust target is retained.
+Stable-source quick tier is running with durable
+`work/cfd/kvdb-stable-quick.{log,exit}`; read its terminal receipt before push.
+Read `work/hull-ends-plan.md` and `work/thin-ship-plan.md` snapshots
 for full source evidence; these are ignored copies, not new published results.
