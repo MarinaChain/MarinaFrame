@@ -350,3 +350,9 @@
 - **Trigger:** DB2 coarse checkMesh passed but only0.86% of hull faces retained prism layers; the VPS lacked memory.peak and the pinned image lacked Python.
 - **Rule:** Check achieved full-count layer coverage from nSurfaceLayers before solver admission; any-extrusion fraction and mean layer count do not establish full-count coverage. Apply current PM mesh-admission rules, not obsolete blanket checkMesh/full-layer rules: PM now permits aspect ratio>1000 only in added layer cells, with zero outside, positive volumes/correct face orientation, nonorthogonality<70 and skewness<4. Retain full-count coverage as evidence, not an overridden automatic veto. A thin first-layer request does not prove y+<1. Probe instrumentation availability before long runs; label sampled VmHWM as a lower bound, never exact container peak. Retain failed attempts and costs.
 - **Why:** Topological mesh quality does not establish wall resolution, and minimal images or older kernels may lack assumed monitoring tools.
+
+### Diagnose CFD linear iterations before runtime extrapolation
+- **Date:** 2026-11-14
+- **Trigger:** A5CPU quota serial layer-mesh solver was extrapolated from five startup iterations; pressure corrections grew to639GAMG iterations. Five-rank potential-initialized recovery used2–3 pressure iterations but paused at85steps under host load.
+- **Rule:** Verify nProcs,per-field linear counts,actual per-step wall and initialization before projecting. Use the PM-required100-step diagnostic and post20window; do not substitute partial windows when safety pauses. Network-disabled local MPI needs working shared-memory transport,not self-only or unavailable TCP. Never auto-unpause.
+- **Why:** Resource quota is not MPI parallelism,and anisotropic-mesh pressure convergence can dominate cell-count scaling.
