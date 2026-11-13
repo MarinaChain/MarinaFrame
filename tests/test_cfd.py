@@ -63,7 +63,10 @@ def test_case_is_separate_double_body_program(tmp_path, tetrahedron):
     case = tmp_path / 'case'
     write_case(case, config(), tetrahedron, available_bytes=30_000_000_000)
     assert 'simpleFoam' in (case / 'system/controlDict').read_text()
-    assert 'hull.stl' in (case / 'system/snappyHexMeshDict').read_text()
+    snappy = (case / 'system/snappyHexMeshDict').read_text()
+    assert 'hull.stl' in snappy
+    # OpenCFD v2412 ships this include with a .cfg suffix.
+    assert '#includeEtc "caseDicts/mesh/generation/meshQualityDict.cfg"' in snappy
     assert 'kOmegaSST' in (case / 'constant/turbulenceProperties').read_text()
     assert 'rhoInf 999.5' in (case / 'system/controlDict').read_text()
     assert 'p p;' in (case / 'system/controlDict').read_text()

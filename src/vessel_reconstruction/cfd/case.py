@@ -109,7 +109,7 @@ finalLayerThickness 0.3; minThickness 0.1; nGrow 0; featureAngle 60;
 nRelaxIter 5; nSmoothSurfaceNormals 1; nSmoothNormals 3; nSmoothThickness 10;
 maxFaceThicknessRatio 0.5; maxThicknessToMedialRatio 0.3;
 minMedialAxisAngle 90; nBufferCellsNoExtrude 0; nLayerIter 50; }}
-meshQualityControls {{ #includeEtc "caseDicts/mesh/generation/meshQualityDict" }}
+meshQualityControls {{ #includeEtc "caseDicts/mesh/generation/meshQualityDict.cfg" }}
 mergeTolerance 1e-6;''')
     save('system', 'fvSchemes', '''ddtSchemes { default steadyState; }
 gradSchemes { default Gauss linear; }

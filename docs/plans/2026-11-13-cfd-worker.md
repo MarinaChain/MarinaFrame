@@ -929,3 +929,19 @@ z=0 clipping plane, rejecting overshoot above **5e-5 m**. This is bounded
 representation cleanup of an already exactly clipped solid, not fitting to
 area/volume/forces. Retain failed preparation logs 01/02 and recheck directed
 closure/orientation after cleanup before publication.
+
+### Physical coarse attempt 01: dialect failure, retained
+
+`kvdb-coarse-mesh-01` started at load1 **2.10**. Official surfaceCheck:
+**61,174 triangles, zero illegal triangles, closed two-face edges, one part,
+one normal zone** (four nearby-point warnings). blockMesh produced **8,192
+cells**. snappyHexMesh then failed before refinement: generated include omitted
+v2412's `.cfg` suffix. Installed image inspection confirms
+`caseDicts/mesh/generation/meshQualityDict.cfg`. Regression failed first, then
+**67 focused tests passed** after the one-path fix; numerical settings unchanged.
+Stage accounting: surfaceCheck **1 s / 0.001389 allocated core-hours**;
+blockMesh **0 s at integer-second resolution**; failed snappy **1 s /
+0.001389 core-hours**. Whole monitored attempt **31.452394 s / 0.043683881
+allocated core-hours**, 5-core quota, including monitor overhead. No checkMesh
+or solver ran. Evidence: ignored `work/cfd/kvdb-coarse-mesh-01-result.log`.
+Retry is a fresh immutable attempt, not a replacement of this failure.
