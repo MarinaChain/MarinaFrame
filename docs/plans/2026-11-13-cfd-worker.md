@@ -498,3 +498,29 @@ one measured DTC volume mesh and **zero resistance solver runs**. Track B's
 first actual-face repair is rejected for source-region loss and G6 failure;
 no parameter tuning or second geometry algorithm trial started. All steps and
 costs above are evidence checkpoints, not a completed solver pipeline.
+
+## PM official-tutorial reference direction (before reference run)
+
+Track B is **parked**. Its rejected MeshFix artifacts remain evidence only;
+no further KCS repair methods or measurements will run. PM will supply another
+geometry route.
+
+First run the pinned official v2412 **DTCHullMoving** meshing setup unchanged:
+blockMeshDict, snappyHexMeshDict, meshQualityDict, all six topoSet/refineMesh
+boxes and the Allrun meshing order (surfaceFeatureExtract, blockMesh, six
+pairs of topoSet/refineMesh, snappyHexMesh). Preserve the compressed tutorial
+STL input as Allrun copies it. Record hashes of the dictionaries before and
+after execution. Do not substitute the earlier coarse block grid or cell ceiling.
+Run checkMesh with tutorial meshQualityControls and record basic plus extended
+checks; failed extended checks are observations of this unchanged reference,
+not silently discarded or automatically proof that the tutorial's own criteria
+failed. Under PM direction run the solver on that reference mesh at **1.535 m/s**
+after recording mesh evidence. Capture all force/motion histories and costs.
+
+G-DTC and its convergence rules remain frozen. This reference replaces the
+previous custom-coarse-first sequence, not any force acceptance band. Only after
+the reference solver run build a systematic study around tutorial settings.
+Same one-container, 5-CPU, 12-GB, nice-10, host monitor/load-pause/disk rules.
+Account mesh, initialization and solver separately. No other host resources
+may be changed. Commit after reference mesh and after solver result; quick tier
+before lane-only push, no merge.
