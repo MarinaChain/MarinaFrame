@@ -105,6 +105,16 @@ def test_upload_rejects_executable_dictionary(tmp_path):
         RemoteSolverRun.start(['interFoam'], tmp_path, host=host, name='kcs-coarse')
 
 
+def test_cartesian_mesh_allows_only_plain_command():
+    host = RemoteHost('worker@example.test', 'opencfd/openfoam-default:2412')
+    assert 'nice -n 10 cartesianMesh' in host.launch_script('cfmesh', ['cartesianMesh'])
+    for options in (['-lib', 'evil.so'], ['-case', '../other']):
+        with pytest.raises(ValueError):
+            host.launch_script('cfmesh', ['cartesianMesh', *options])
+    with pytest.raises(ValueError):
+        host.launch_script('cfmesh', ['tetMesh'])
+
+
 def test_dynamic_library_options_rejected():
     host = RemoteHost('worker@example.test', 'opencfd/openfoam-default:2412')
     with pytest.raises(ValueError):

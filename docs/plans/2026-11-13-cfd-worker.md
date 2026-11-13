@@ -1249,3 +1249,15 @@ Write layerSets/layerFields to count actual full layers, per patch. Preserve
 failed attempts; no solver until full-count evidence. Then coarse solver,
 medium/fine only if layers and post-run y+ pass; record costs and memory.
 Commit each step, quick tier at end, push lane only, no merge.
+
+### cfMesh availability check and minimal runner capability
+
+Pinned container filesystem inventory (stopped own coarse03 container) contains
+**no cartesianMesh or cfMesh path**, confirmed platform/bin scan and full tar
+listing. Thus cfMesh is unavailable in this exact pinned minimal v2412 image;
+no install/image change made. Inventory evidence main ignored
+`work/cfd/kvdb2-cfmesh-image-inventory.log`. Read retained official DTC
+snappyHexMeshDict from dtc-official-mesh01, not guessed defaults. Runner now
+permits only plain `cartesianMesh` (no extra utility), tested red/green;
+arguments/dynamic libraries remain rejected. Availability is not claimed.
+Proceed to explicitly authorized separate-pass snappy fallback.

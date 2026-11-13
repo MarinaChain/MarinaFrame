@@ -53,7 +53,7 @@ class RemoteHost:
     def launch_script(self, name, command):
         name = _run_name(name)
         allowed = {'blockMesh', 'snappyHexMesh', 'checkMesh', 'surfaceCheck', 'interFoam',
-                   'simpleFoam', 'decomposePar', 'reconstructPar', 'foamDictionary'}
+                   'simpleFoam', 'decomposePar', 'reconstructPar', 'foamDictionary', 'cartesianMesh'}
         if not command or command[0] not in allowed or any(not isinstance(s, str) for s in command):
             raise ValueError('Unsupported solver argument list')
         for argument in command[1:]:
