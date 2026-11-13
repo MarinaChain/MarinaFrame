@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from vessel_reconstruction.platform_shell import bash_executable
+
 ROOT = Path(__file__).resolve().parents[1]
 ALL = {"python", "rust", "ui", "wheel"}
 
@@ -36,7 +38,7 @@ ALL = {"python", "rust", "ui", "wheel"}
 )
 def test_ci_path_suites(paths, expected):
     result = subprocess.run(
-        ["bash", str(ROOT / "scripts/ci_changes.sh")],
+        [bash_executable(), (ROOT / "scripts/ci_changes.sh").as_posix()],
         input="".join(path + "\0" for path in paths),
         text=True,
         capture_output=True,
