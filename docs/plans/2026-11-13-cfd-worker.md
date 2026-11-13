@@ -1375,3 +1375,44 @@ confirmed; yPlus.dat header only. No active lane containers, lane2,960,025,413
 bytes. Report `outputs/2026-11-14-kvdb2-admitted-coarse.md`. Gates unchanged;
 no credible(1+k)/y+ or medium/fine result. Preserve worktree and all evidence.
 Push lane only/no merge; resume at PM decision on67.6h early projection.
+
+## PM throughput diagnosis and bounded parallel diagnostic
+
+G-KV-DB2/mesh admission unchanged. Old run **nProcs1**, plain simpleFoam:
+5CPU quota did not create parallel execution. Completed iteration wall deltas
+**31,42,55,190,290s**. Pressure GAMG solves per iteration **23+4,7+77,
+10+137,25+510,55+639**; U1–3 iterations, k/omega1–2. No explicit maxIter
+was specified; pressure residuals met relTol, so no evidence of max-iteration
+cutoff. Cost escalation is pressure convergence on anisotropic prisms, not
+only cell-count scaling. SST k and omega bounding occurred during startup.
+Actual controls pGAMG tol1e-7/relTol.01 GaussSeidel; others smoothSolver
+symGaussSeidel tol1e-8/relTol.1; SIMPLE consistentyes/nonorth1;
+relaxation p.3,U/k/omega.7. Old67.6h projection remains historical early
+estimate, superseded for decisions by PM's100-step parallel diagnostic.
+
+Architecture PASS: exact5-rank mpirun inside same restricted container;
+no remote-machine MPI, no extra resource allocation. Quality WARN: changing
+initialization/linear numerics must be explicit; do not claim MPI-only speedup.
+Coverage PASS: allow exact5-rank simpleFoam/potentialFoam parallel invocations,
+reject arbitrary MPI binaries/ranks/options, test100-step controls. Performance
+WARN: pressure iterations dominate; measure steps21–100 before projecting.
+
+1. Add tested allowlist exact `mpirun -np 5 simpleFoam -parallel`, same for
+potentialFoam with `-initialiseUBCs`, plus potentialFoam serial option and
+reconstructPar -latestTime. Plain decomposePar already allowed. No shell paths,
+extra utilities or dynamic libraries. Pin5 subdomains scotch. Probe MPI binary.
+2. Fresh immutable diagnostic from exact coarse05 mesh/initial fields. Potential
+initialization, then100 simpleFoam steps, same low-Re SST. Use pressure GAMG
+DICGaussSeidel, cacheAgglomerationtrue, faceAreaPair, nCellsInCoarsestLevel100,
+mergeLevels1, nPreSweeps0/nPostSweeps2, nFinestSweeps2, tol1e-7/relTol.05,
+maxIter200 (explicit log/limit detection). U/k/omega smoothSolver as before,
+p.3/U.5/k.5/omega.5 relaxation, SIMPLE nonorth1/consistentno. Potential Phi
+GAMG tol1e-8/relTol.01,10 nonorth corrections. These are numerical recovery
+settings, not reference-paper prescriptions: cited papers give wall/grid
+practice but no portable exact solver dictionary. Keep grid/physics fixed.
+3. No2000 projection from startup; finish bounded100, report fields/pressure
+counts and mean/median/p95 per-step wall for21–100, then project2000 using
+observed rate plus initialization. If<=24h continue fresh/restarted physical
+coarse to2000 with receipt/forces/y+; else stop/report. Same load/disk/memory
+rules remain, no automatic unpause. Tests/commit each step, final quick/push
+lane only/no merge. No new diagnostic started at this checkpoint.
