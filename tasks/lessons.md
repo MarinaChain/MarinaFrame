@@ -320,6 +320,19 @@
 - **Rule:** A worktree is removable only when `git status --porcelain --untracked-files=normal` is empty (ignored files such as target/ and work/ may go). Tell lanes to commit design files when they write them.
 - **Why:** `--force` deletes untracked files, and "HEAD is merged" says nothing about files that were never committed.
 
+### Keep read-only reviews inside the permitted worktree boundary
+- **Date:** 2026-11-13
+- **Trigger:** The thin-ship lane was told not to create another worktree, but a read-only reviewer was launched with tool-level worktree isolation.
+- **Rule:** A no-extra-worktree instruction applies to agent tool options as well as shell commands. Omit worktree isolation for read-only reviews; pass exact commit SHAs so the reviewer can inspect the intended range without switching or editing worktrees.
+- **Why:** Tool defaults and general isolation guidance do not override a lane-specific workspace boundary.
+- **Recurrence (2026-11-14, CFD):** A read-only helper again received the isolation option despite the explicit ban. It was stopped immediately. Check the actual tool arguments against lane boundaries before dispatch, not just the prompt text.
+
+### Identify artificial waterplane caps by their actual surface
+- **Date:** 2026-11-14
+- **Trigger:** A clipped STEP diagnostic counted the waterplane cap as wetted skin because a trimmed spline bounding box extended beyond its actual geometry.
+- **Rule:** Classify a horizontal closure by its planar surface, normal and position, not by underlying spline bbox extrema. Retain real submerged end closures even when slightly curved or tilted. Test cap exclusion and tilted-end retention with exact synthetic solids before using diagnostic areas.
+- **Why:** CAD bounding boxes and exact-axis tests are not reliable source-face identities; they can add artificial area or hide a real immersed transom.
+
 ### Route audit policy before documentation in CI filters
 - **Date:** 2026-11-12
 - **Trigger:** The broad `docs/*` CI skip also skipped `docs/dependency-scope-exclusions.json`, which controls the dependency audit.
