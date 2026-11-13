@@ -536,3 +536,27 @@ tutorial. Retain all force samples and solver/motion logs. No mesh setting
 changes. Report any numerical failure; do not quietly reduce Courant settings
 or force a resistance acceptance result. The unchanged-reference measurement
 is not a converged finest mesh and cannot pass G-DTC by itself.
+
+### Unchanged official mesh result
+
+`dtc-official-mesh-01`: **848,025 cells**, **854 s wall**, **1.186111 allocated
+core-hours** at five-core quota. Mesh generation stages total **796 s /
+1.105556 core-hours**, checkMesh stages **50 s / 0.069444 core-hours**, monitor
+and setup overhead **8 s / 0.011111 core-hours**. All system dictionaries and
+dynamicMeshDict matched their pre-run hashes. Full six-pass Allrun meshing
+sequence used; no mesh dictionary changed.
+
+SnappyHexMesh's own final mesh-quality report: **zero faces in error** under
+tutorial controls. `checkMesh -meshQuality` also reports zero violations of
+those controls, but its standard geometry check reports **one skew face**
+(max 5.23784), so its summary is **Failed 1 mesh checks**. Basic checkMesh has
+the same single failure. Extended check adds **69,245 low-determinant cells**
+(minimum 5.44737e-7) and **26,920 concave cells**, summary **3 failed checks**;
+236 concave faces and four warped faces are additional diagnostics. Thus the
+earlier extended determinant/concavity failures also occur on the unchanged
+shipped tutorial. These are measured observations, not claims the checks pass.
+PM explicitly directs the reference solver run on this mesh; retain warnings
+in the force report. No force gate changed. Durable evidence main ignored
+`work/cfd/dtc-official-mesh-01-result.log` and `dtc-official-mesh-quality.log`;
+remote attempt retains hashes, individual logs and stage-accounting.csv.
+Load observations 1.55 at startup and 3.93 after 600 s; no pause triggered.
