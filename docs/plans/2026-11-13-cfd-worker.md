@@ -432,3 +432,14 @@ repaired output or source-distance/G6 measurement exists yet. Earlier startup
 failures remain in logs: int32 face-array API requirement, then optional
 networkx import path (must be set before importing trimesh). No public geometry
 parameters changed between preparation attempts.
+
+Track B repair completed: **25,376 triangles**, Python edge closure and winding
+checks pass. Raw input had **83,428 triangles**. The large geometry change is
+not evidence of fidelity. The repair metadata's 1.300915585716 m3 signed
+full-closed volume is an algorithm diagnostic, **not** a clipped design-draft G6
+result. No reference was used for tuning. Exact trimmed-source distance sampling
+is now running detached (`work/track_b_distance.py`, log main ignored
+`work/cfd/kcs-face-meshfix-03-distance.log`). It samples 1,000 starboard centroids;
+closure/skin attribution and reverse source-to-mesh distance are not yet
+available. Do not claim source fidelity, surfaceCheck or G6 before measurements.
+Separate private identity scan on the checkpoint: **0 findings**.
