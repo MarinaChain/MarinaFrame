@@ -2,7 +2,8 @@
 import json
 import pytest
 from vessel_reconstruction.cfd import CaseInput
-from vessel_reconstruction.cfd.wall_resolved import write_wall_resolved_case, gate_db2
+from vessel_reconstruction.cfd.wall_resolved import (write_wall_resolved_case, gate_db2,
+    separate_layer_dictionary, layer_admission, yplus_admission)
 
 
 def half_box():
@@ -33,6 +34,20 @@ def test_half_case_resolves_wall_and_normalizes_full_hull(tmp_path):
     assert 'aftRefinement' in snappy and 'levels ((1e15 3))' in snappy
     assert 'finalLayerThickness' not in snappy
     assert 'locationInMesh (-0.9 0.5 -1.0)' in snappy
+
+
+def test_separate_layer_pass_and_full_count_admission():
+    source = 'castellatedMesh true; snap true; addLayers false;\naddLayersControls { relativeSizes false; }\nmeshQualityControls { maxNonOrtho 65; }'
+    text = separate_layer_dictionary(source)
+    assert 'castellatedMesh false; snap false; addLayers true;' in text
+    assert 'relativeSizes true' in text and 'finalLayerThickness 0.3' in text
+    assert 'nSurfaceLayers 30' in text and 'featureAngle 180' in text
+    assert 'writeFlags (layerSets layerFields)' in text
+    assert layer_admission({'hull': [30]*95+[0]*5},30)['passed']
+    assert not layer_admission({'hull': [30]*94+[29]*6},30)['passed']
+    result=yplus_admission([.2,.5,2.0],[50,46,4])
+    assert result['passed'] and result['area_fraction_below_one']==pytest.approx(.96)
+    assert not yplus_admission([.2,1.0],[94,6])['passed']
 
 
 def test_gate_requires_converged_mesh_and_reports_working_wave_bounds():

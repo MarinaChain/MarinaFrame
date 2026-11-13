@@ -1,6 +1,7 @@
 """Lane-local PM DB2 half-hull, wall-resolved SST case specialization."""
 import json
 import math
+import re
 from pathlib import Path
 
 from .case import foam_file, write_case
@@ -97,3 +98,73 @@ max ({upper[0]+.02*length} {upper[1]+.02*length} 0); }} }}''')
                     refinement_factor=refinement_factor, estimated_peak_bytes=estimated)
     path.write_text(json.dumps(metadata, indent=2)+'\n')
     return root
+
+
+def _replace_dictionary(text, name, body):
+    """Replace one known dictionary using balanced braces, not a greedy regex."""
+    match = re.search(r'\b' + re.escape(name) + r'\s*\{', text)
+    if not match:
+        raise ValueError(f'Missing dictionary {name}')
+    opening = text.index('{', match.start())
+    depth = 1
+    end = opening + 1
+    while end < len(text) and depth:
+        depth += (text[end] == '{') - (text[end] == '}')
+        end += 1
+    if depth:
+        raise ValueError(f'Unclosed dictionary {name}')
+    return text[:match.start()] + name + ' {\n' + body + '\n}' + text[end:]
+
+
+def separate_layer_dictionary(snapped_dictionary):
+    """Official DTC-derived layer-only recovery; quality relaxation is pass-only."""
+    text = snapped_dictionary
+    for key, value in [('castellatedMesh', 'false'), ('snap', 'false'), ('addLayers', 'true')]:
+        text, count = re.subn(r'\b' + key + r'\s+(?:true|false)\s*;',
+                             f'{key} {value};', text, count=1)
+        if count != 1:
+            raise ValueError(f'Missing stage switch {key}')
+    controls = '''relativeSizes true;
+layers { hull { nSurfaceLayers 30; } }
+expansionRatio 1.2; finalLayerThickness 0.3; minThickness 0.001;
+nGrow 0; featureAngle 180; mergePatchFacesAngle 60;
+layerTerminationAngle 30; slipFeatureAngle 30;
+nRelaxIter 10; nSmoothSurfaceNormals 5; nSmoothNormals 10;
+nSmoothThickness 30; maxFaceThicknessRatio 0.5;
+maxThicknessToMedialRatio 0.3; minMedialAxisAngle 90;
+nBufferCellsNoExtrude 0; nLayerIter 100; nRelaxedIter 20;'''
+    text = _replace_dictionary(text, 'addLayersControls', controls)
+    quality = '''#includeEtc "caseDicts/mesh/generation/meshQualityDict.cfg"
+maxNonOrtho 75; minTetQuality -1e30; maxInternalSkewness 8;
+minDeterminant 0.0001;
+relaxed { maxNonOrtho 75; }'''
+    text = _replace_dictionary(text, 'meshQualityControls', quality)
+    return text + '\nwriteFlags (layerSets layerFields);\n'
+
+
+def layer_admission(patch_layer_counts, requested_layers):
+    """Require full requested count on >=95% faces of every hull patch."""
+    if not patch_layer_counts or requested_layers < 1:
+        raise ValueError('Nonempty hull patches and positive layer count required')
+    fractions = {}
+    for patch, counts in patch_layer_counts.items():
+        if not counts or any(not isinstance(v, int) or v < 0 for v in counts):
+            raise ValueError('Nonempty nonnegative integer layer counts required')
+        fractions[patch] = sum(v >= requested_layers for v in counts) / len(counts)
+    return {'passed': all(v >= .95 for v in fractions.values()),
+            'full_count_fraction_by_patch': fractions}
+
+
+def yplus_admission(values, areas):
+    """Report area-weighted y+ acceptance; equality to one does not pass."""
+    if len(values) != len(areas) or not values:
+        raise ValueError('Matching nonempty y+ and area arrays required')
+    if any(not math.isfinite(v) or v < 0 for v in values):
+        raise ValueError('Finite nonnegative y+ required')
+    if any(not math.isfinite(a) or a <= 0 for a in areas):
+        raise ValueError('Finite positive areas required')
+    total = sum(areas)
+    fraction = sum(a for v, a in zip(values, areas) if v < 1) / total
+    return {'passed': fraction >= .95, 'area_fraction_below_one': fraction,
+            'minimum': min(values), 'maximum': max(values),
+            'area_weighted_mean': sum(v*a for v, a in zip(values, areas))/total}
