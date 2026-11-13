@@ -51,7 +51,9 @@ The existing `geometry.build_hull` produced one valid closed AP–FP solid. Its 
 
 First quick-tier attempt failed in unrelated `intake_supervision::a_reader_that_reports_each_page_is_not_stopped_however_long_it_takes`: `intake_stalled` versus expected `intake_worker`. It ran concurrently with CAD work. No application code changed; rerun after CAD finishes rather than alter another lane's timing test.
 
-**Round-2 resume point:** corrected hull rebuild running; then run published-boundary intersections and the declared ungated baseline, retain limitations and compare the unchanged 2% band. Evidence: ignored `work/argyro/`. Final quick tier still required.
+Corrected rebuild completed: valid single closed solid; AP–FP Cb 0.799115268 at T=21 m. Approximation diagnostics above unchanged. Cross-view identity correction changes the AP–FP hydrostatic volume by only 0.0032 m3; it remains essential to correct source identity even when aggregate metrics hide the error. Focused arrangement tests: **24 passed in 8.34 s**, including CAD.
+
+**Round-2 resume point:** corrected-hull capacity experiments running from `work/argyro/scripts/capacity.py`; then record results, review the report and rerun the quick tier without CAD contention. Evidence: ignored `work/argyro/`. Final quick tier still required.
 
 ## Sources and method limits
 
