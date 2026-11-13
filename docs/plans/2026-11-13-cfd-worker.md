@@ -1366,3 +1366,12 @@ Do not infer y+ from requested thickness or partial forces. Medium/fine not
 admitted. G-KV-DB2 remains **BLOCKED / NOT CONVERGED**, gates unchanged.
 Resume at PM compute/numerics decision; don't bypass24h stop by extending,
 restarting or claiming early partial output converged. Quick tier at end.
+
+### Admitted coarse delivery verification
+Quick tier exit0:Rust format/clippy/workspace passed;Python2745passed,
+4skipped,100deselected,5warnings,501.09s;UI275passed;bounded scan1404files,
+0findings. Exact-name private identity0findings,diff clean. Five force samples
+confirmed; yPlus.dat header only. No active lane containers, lane2,960,025,413
+bytes. Report `outputs/2026-11-14-kvdb2-admitted-coarse.md`. Gates unchanged;
+no credible(1+k)/y+ or medium/fine result. Preserve worktree and all evidence.
+Push lane only/no merge; resume at PM decision on67.6h early projection.
