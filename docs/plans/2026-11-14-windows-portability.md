@@ -54,4 +54,12 @@ Files: `.github/workflows/ci-watch.yml`, platform-specific test files, this plan
 
 - Worktree created from local `continue/v0.5` at `dbb24f4`.
 - Root cause found: `parallel.py` imports `fcntl` and `pwd` eagerly despite an existing Windows-capable lock helper.
-- Resume: implement Task 1 regression, then audit call-time boundaries. Gates not yet run.
+- Baseline CI run `43467837975` confirms all 21 collection errors originate at the eager `parallel.py` import of `fcntl`.
+- Task 1: regression failed on `fcntl`, then passed after reusing `file_lock` and moving `pwd` behind the POSIX directory check. Lock/pool/import tests: 16 passed.
+- Task 2: four regressions showed unsupported lifecycle calls could reach process launch or POSIX APIs. Added a shared call-time refusal before those operations. Platform/lifecycle/runtime tests: 51 passed.
+- Import-path audit: `resource` already uses `process_limits.posix_resource` and fails closed; sandbox entry already refuses unsupported OSs. `fcntl` in progress is call-time but still needs the shared blocking lock boundary. Atomic directory publication and directory durability, secure no-follow reads, review CLI process-group cleanup, and POSIX pool tests still need Windows treatment. CFD calls were not modified under the lane ownership rule.
+- Full collection with `fcntl`, `pwd` and `resource` imports blocked after loading the lock backend: 2,899 tests collected, zero errors (8.38 s). This is an import-path probe on macOS, not native Windows evidence. Collection reads test code only; no holdout scorer was run.
+- Workflow now triggers on source/tests and records collection exit code plus platform skip reasons.
+- Local tracked identity scan with the private denylist: zero findings. `git diff --check`: clean.
+- Quick tier running with the required environment. The Makefile uses the shared Rust target; this lane has no `target` folder. Never delete the shared target.
+- Resume: finish quick tier, push the lane, inspect native Windows results, then address remaining platform failures without broad skips. Full Windows/Linux/macOS gate remains pending.
