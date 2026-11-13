@@ -1418,10 +1418,30 @@ rules remain, no automatic unpause. Tests/commit each step, final quick/push
 lane only/no merge. No new diagnostic started at this checkpoint.
 
 ### MPI diagnostic01 startup transport failure
-Load1.62? Actual admission log **0.62**. decomposePar completed10s into5
+Actual startup load1 **0.62**. decomposePar completed10s into5
 subdomains; MPI initialization failed before potentialFoam/solver. Explicit
 self,tcp transport found onlyself usable under --networknone, so ranks could
 not communicate. Whole **32.277242s /0.044829503 core-hours**, no OOM.
 Retain receipt; no iterations/projection. Retry uses **self,vader** local
 shared-memory transport and disables vader single-copy mechanism (no ptrace),
 no network permission change or host networking. Same5 ranks/resources.
+
+### MPI diagnostic02: throughput recovered, mandatory load pause before100
+
+Start load1 **0.59**, decompose11s/potential40s, confirmed **nProcs5**.
+Completed85 steps, iteration86 interrupted by host PM rolling-load rule
+**rolling600>9 sustained600** at epoch1794607215.692. Container remains
+**paused**, no automatic unpause/new solver. Pre-pause receipt **1242.165595s /
+1.725229992 allocated core-hours**,5CPU,12GiB,noOOM; paused reservation time
+continues and is not included in this snapshot. Last Docker sample1.938GiB,
+not peak. Transport self,vader works within networknone; no permissions changed.
+
+Steps21–85 mean **13.09231s/step**, median12,p9522.8. Pressure GAMG
+**2–3 iterations**,mean2.16923,no200-iteration cap hits. Initialization/
+smoother/relaxation/MPI all changed, so not MPI-only speedup. Required100
+not complete: **no new2000-step projection** and no convergence claim.
+No coarse/medium/fine gate result. Evidence main ignored
+`kvdb2-mpi-diagnostic02/{log.simpleFoam,log.potentialFoam,timing-summary.json,iterations.json}`,
+immutable pause receipt/safety marker. Commit paused result; no unpause without
+PM approval. Resume exact diagnostic02 for remaining15 steps only if authorized;
+then post20–100 timing/projection decides coarse continuation. Gates unchanged.
