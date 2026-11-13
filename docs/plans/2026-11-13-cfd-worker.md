@@ -368,3 +368,32 @@ failed mesh topology before solver. Five MPI ranks maximum for the solver;
 meshing is serial under the same 5-core quota. Resource admission retains the
 8 GB peak allowance and 10 GB free reserve before every stage. If a stage does
 not fit, stop and report, rather than reduce fidelity after seeing forces.
+
+### Track A mesh launch / Track B method checkpoint
+
+Coarse attempts 01 and 02 failed before creating volume cells because strict
+shell flags were enabled while sourcing the vendor environment (unset variable,
+then setup return handling). Each costs **6 s, 5 cores, 0.008333333 allocated
+core-hours**, zero cells. Attempt 03 sources the vendor environment first, then
+enables strict flags; geometry and mesh settings are unchanged. It is running
+under the detached host supervisor with per-command logs and
+`data/stage-accounting.csv`. Resume remote `dtc-coarse-mesh-03`; do not launch
+another solver container while it is active. Main ignored launcher:
+`work/dtc_mesh.py` in this worktree; receipt collector `work/dtc_wait.py`.
+
+Track B begins while A meshes. Method frozen before public repair: actual OCCT
+trimmed-face triangulation at **10 mm full-scale deflection**, angular deflection
+**0.2 rad**, fixed scale divisor 230/7.2786, mirror starboard side with reversed
+winding. Merge coincident nodes at **7 decimal model-metre digits**, as in the
+preserved raw-face preparation; no sections, lofts or reference-based offsets.
+Use established **PyMeshFix 0.18.1** (MeshFix algorithm), `clean_from_arrays`
+with `joincomp=True`, `remove_smallest_components=False` so components are not
+silently discarded. Keep pre-repair mesh and record counts, topology and volume
+before/after. Record all library defaults and warnings. A single method trial,
+not a tuning loop. Test hole filling/component joining on synthetic meshes
+before public input. Reject non-closed/inconsistent output rather than publish.
+Only then measure sampled exact source-distance max/p99/mean (original skin and
+intentional closures separately where identifiable), then official surfaceCheck,
+then frozen G6. No area/volume result may drive repair parameters. The isolated
+optional repair dependency is in this worktree's ignored `work/meshfix-deps/`;
+the shared venv is unchanged.
