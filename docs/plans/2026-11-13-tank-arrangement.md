@@ -28,6 +28,97 @@ G3 public capacity: absolute relative error <=2% at 98% fill, against a publishe
 
 G4 delivery: focused tests and full quick tier exit 0; inspect diff for unrelated changes and white-label leaks; commit and push lane/tank-arrangement only. Do not merge. Inspect then delete only lane-local target as last shell action.
 
+## Round 2: PM change of reference and frozen G3b (2026-11-13)
+
+PM changed the reference **before any capacity was computed**. Original G3 was never run: Tokachi has neither a public matched hull nor an explicit fill basis. Its blocked history above remains unchanged. G3b replaces that reference with CAP01, the published ARGYRO design study (NTUA handle 123456789/58817), not a built ship.
+
+- Freeze G3b in a commit before digitisation or capacity runs. Absolute relative error must remain **<=2%**, at **98% fill**, against **321,202 m3** (PM reference; source table gives 321,202.327 m3 including two slop tanks). Do not tune geometry or boundaries against the result.
+- Reconstruct the published vector lines using MarinaFrame readers where suitable. Record station coverage and per-station accuracy against published numeric offsets if any; if none exist, state that independent offset accuracy is unavailable. Check source particulars and the published Cb before capacity computation; report discrepancies, do not adjust to match capacity.
+- G3b uses published bulkhead frame positions, 3.5 m double sides and 2.8 m double bottom. Include cargo and slops on the source's basis. Compare the hull-intersected sum, not bounding-box capacities.
+- Separately run the existing generator with its own choices for the same particulars. This is descriptive only, with no acceptance gate.
+- Licence boundary: source PDF, extracted text, digitised lines, geometry, per-tank tables and all derived data stay in ignored `work/` only. This tracked plan records method, gate outcome and compact aggregate findings only, as requested by PM; never attach source extracts or derived geometry.
+- Round-2 delivery is **lane/tank-g3b only**, superseding the old G4 branch name. Run the quick tier, commit, push; no merge. `engineering_approved=false` throughout.
+
+**Round-2 progress, before capacity runs:** G3b frozen in `82289f9`. Twenty AP–FP stations read with the existing vector-reader conversion and single-valued-section checks. PDF path 42 contains two stations joined at the keel; split there. Station 2.5 uses two meeting fragments. The parallel body is explicitly labelled 4.4–7.3. No numeric hull offsets are published: independent per-station accuracy is unavailable, not zero. Per-station source points and diagnostics remain in ignored `work/argyro/results/sections.json`.
+
+The existing `geometry.build_hull` produced one valid closed AP–FP solid. Its default 10 mm requested approximation exceeded the 513-knot limit; existing explicit complexity fitting selected a 19.53125 mm allowance, with maximum measured deviation 19.525 mm and maximum height-weighted RMS 10.859 mm against extracted vectors, not independent source offsets. Breadth/depth/length agree with the source within 0.01 mm. AP–FP Cb is 0.799115 versus published 0.810 (1.344% lower); the bulb beyond FP and aft overhang are excluded. These end omissions do not intersect the published cargo domain. No geometry has been adjusted to capacity.
+
+**Ruling:** Use the published planar bulkhead/side/bottom limits clipped by the reconstructed outer hull, and explicitly report that this is not an exact reconstruction of the source's curved internal structure surfaces or deck camber. A mismatch is a G3b failure, not permission to tune. Source frame and bottom limits differ between the capacity table and later damage-analysis tables; use section 4.4 frame ranges with the section 4.2 frame table for G3b. Do not substitute the later table's different aft centre-tank boundary.
+
+**Ruling:** The current generator does not choose machinery length, peak length, tank counts or slop length: callers must supply all of these. Therefore a fully autonomous 'own choices' run is unavailable. Run an explicitly caller-chosen, ungated baseline (6 rows, 2 columns, machinery 15% L, forepeak 5% L, slops 3% L, fuel reserve 3% L, 2 slop columns), with its existing rule-minimum side/bottom choices. These fractions are fixed here before any capacity computation, not fitted to the reference.
+
+**Correction after cross-view check:** The first station mapping swapped stations 1 and 1.5. MarinaFrame's `outer_half_breadth_at` and `plan_half_breadth_at` exposed about 5.86 m RMS disagreement at both stations; correcting only their identities reduced their RMS to 0.085 mm and 1.624 mm. Across all 20 stations, 2–7 comparable waterline heights give a maximum cross-view RMS of 1.624 mm and maximum point difference of 3.630 mm. This is same-drawing consistency, not independent offset accuracy. Detailed per-station values stay under `work/`. The initial hull/Cb above is superseded pending rebuild. The first capacity run was stopped after one tank; its incomplete output is retained in `work/argyro/results/initial-mapping/`, not treated as a gate result. Gate and boundaries remain unchanged.
+
+First quick-tier attempt failed in unrelated `intake_supervision::a_reader_that_reports_each_page_is_not_stopped_however_long_it_takes`: `intake_stalled` versus expected `intake_worker`. It ran concurrently with CAD work. No application code changed; rerun after CAD finishes rather than alter another lane's timing test.
+
+Corrected rebuild completed: valid single closed solid; AP–FP Cb 0.799115268 at T=21 m. Approximation diagnostics above unchanged. Cross-view identity correction changes the AP–FP hydrostatic volume by only 0.0032 m3; it remains essential to correct source identity even when aggregate metrics hide the error. Focused arrangement tests: **24 passed in 8.34 s**, including CAD.
+
+Per-station CAD approximation diagnostics are saved in ignored `work/argyro/results/cad-per-station.json` for all 20 stations. Source-vector consistency is in `cross-view.json`; neither file claims accuracy against unavailable numeric offsets. Licence check: scripts and STEP are ignored; no `work/argyro` files are tracked. No product code or structural metadata changed.
+
+Fresh-agent report review was not completed: the tool placed the reviewer in an isolated runtime that could not access this branch. It was stopped rather than bypass that boundary. Final report inspection must therefore be a self-review, not an independent review.
+
+### G3b result: outside band; exact source-surface reconstruction incomplete
+
+All 17 source-limit tank intersections completed and each returned one valid solid. Cargo plus two slops at 98%: **335,866.275 m3**, difference **+14,664.275 m3 (+4.565437%)** against the PM reference 321,202 m3. This is **outside the unchanged 2% band**. No post-result geometry, fill factor or boundary adjustment was made. This result does not establish an error in the source model or isolate generator error: planar inner limits do not reproduce its shaped structural surfaces. Exact published-surface reconstruction remains incomplete; G3b is not passed.
+
+### Ungated generator baseline
+
+The frozen caller-chosen baseline completed with the unmodified generator: cargo plus slops **362,965.254 m3 at 98%**, **+41,763.254 m3 (+13.002177%)** against the published reference, and +27,098.979 m3 against the source-limit reconstruction. Compartment partition relative error: **2.352e-9**. This is descriptive, not a gate. The generator uses its existing rule-minimum 2 m sides/bottom; it has no autonomous selector for the other required arrangement inputs. Thus the requested autonomous 'own choices' comparison is not implemented; this explicit baseline is not labelled autonomous.
+
+Both experiments exited 0; their geometric execution success is distinct from G3b acceptance. Evidence stays in ignored `work/argyro/results/capacity-results.json`, `generator-record.json` and `capacity.log`. No source/derived files are tracked. Self-review: frozen commit precedes capacity; the band is unchanged; incomplete source surfaces and unavailable offset accuracy are explicit. No independent final review completed.
+
+### Round-2 delivery checks
+
+Final quick tier after CAD: **exit 0**, Python **2715 passed, 4 skipped, 100 deselected, 5 warnings** in 519.73 s; Rust **321 passed, 50 ignored, 0 failed**; UI **275 passed, 0 failed**; formatting/clippy successful; bounded scan **1386 tracked text files, 0 findings**. The earlier intake timing failure passed on this run. Log: ignored `work/checks/round2-final-quick.log`. Focused CAD tests: 24 passed. `git diff --check` clean. Tracked changes are limited to this plan and the matching station-identity lesson; no product code, PRD, ROADMAP or licensed geometry changed.
+
+**Round-2 resume point:** experiments and local checks complete; G3b is outside band, exact source inner surfaces and autonomous layout selection are not done. Commit this result, then run a final quick check chained to `git push origin HEAD:lane/tank-g3b`; no merge. After push, inspect and delete only the lane-local `target` as the last shell action. Retain ignored `work/argyro` so the runs can be reproduced.
+
+## Round 3: PM development-case decision
+
+PM decision after G3b: **the +4.565437% result stands**. ARGYRO is now an exposed **development case**, not a blind check. All later agreement is development fit; it cannot pass G3b or restore blindness. Historical round-2 results above are unchanged.
+
+1. Diagnose per tank against published cargo/slop/ballast capacities. Keep full before/after tables and source-derived evidence in ignored `work/argyro/`; report compact aggregate findings here. Separate measured effects from unproved causes.
+2. Fix generic modelling gaps supported by evidence, starting with shaped internal surfaces. Use synthetic exact-answer tests before implementation. Do not infer missing surface dimensions by silently fitting capacity.
+3. Rerun the exposed case as development only; record before/after tables, model assumptions and unresolved differences.
+4. Independent next blind case must be a different, unexposed hull/design, with complete hull geometry (numeric offsets or neutral CAD preferred), source datums/units, internal bottom/hopper/side surfaces and bulkhead/end positions, deck geometry, plus per-tank or total capacity with explicit fill/permeability/deduction basis. PM or an independent evaluator holds capacity truth until implementation and inputs are frozen. The existing 2% band must not change after exposure; freeze a new case protocol before its run. No restricted holdout data may substitute.
+5. Commit each step, run the quick tier with the private identity check, push only lane/tank-g3b; no merge. All output remains `engineering_approved=false`.
+
+### Diagnosis checkpoint
+
+Before table: ignored `work/argyro/results/development-per-tank.csv` and `development-diagnosis.md` (17 oil tanks and 12 published ballast rows). Ballast is published at **100%**, not 98%; source-matched ballast was not modelled in round 2, so its before errors are unavailable rather than zero. Oil signed excess is concentrated forward (50.9% of the net excess), with midbody rows 2–4 contributing 21.2%, aft cargo 14.0% and slops 14.0%. Midbody centre tanks are low while wings are high: a single global volume factor cannot fix the partition.
+
+Source inspection supports missing hopper geometry, cambered deck and shaped longitudinal tank ends. The structural table gives an inner-bottom breadth, hopper length/angle/height and inclined deck; the vector capacity plan shows the inner side/hopper/deck and non-rectangular end boundaries. These are development inputs, not newly blind evidence. The per-tank table alone does not isolate each cause; run separate geometry ablations and label remaining assumptions. The later damage-analysis table uses geometric tank totals approximately 1/0.98 of the earlier capacity table's 100% values; do not silently call this proven permeability or tune it as a correction.
+
+### Implementation plan and review
+
+- Architecture **PASS**: add a generic explicit shaped-boundary path beside the existing planar generator in `src/vessel_reconstruction/arrangement_generator/shaped.py`; preserve old defaults. A tank is the intersection of a closed hull and a caller-supplied closed internal envelope. Closed ruled envelopes can include inner bottom, hopper, side and deck boundaries. Supplied exact CAD surfaces are accepted without replacing them by boxes.
+- Quality **WARN**: a source-derived section loft is exact to its declared polygon/ruled model, not proof of the unprovided author's internal surfaces. Any section-normal offset must be labelled as section-normal, not 3D perpendicular shell clearance. Validate finite inputs, topology, one solid, units, source citations and disjoint allocations.
+- Coverage **PASS**: first add failing synthetic tests in `tests/test_arrangement_shaped.py`: hopper prism and centroid by polygon integrals, varying sloped ends, cambered deck, shell-following offset, overlap rejection, invalid/open/non-finite geometry and fill/deduction basis. Expected analytic relative volume/centre errors <=1e-6. Run focused old/new CAD tests before committing implementation.
+- Performance **WARN**: sequential intersections only; use bounded explicit section polygons and no source-specific constants in tracked code. Keep all ARGYRO reconstruction/ablation scripts and tables under ignored `work/`.
+- Execution: (1) commit diagnosis/design; (2) tests RED, generic implementation, tests GREEN, commit; (3) development reconstruction and before/after/ablation tables, commit compact results; (4) quick tier with private identity check, commit/push lane only, inspect and remove local target. Do not create or enter another worktree.
+
+Generic shaped support added in `arrangement_generator/shaped.py`: explicit closed CAD envelopes, ruled station polygons, two-dimensional normal side offsets, hull-clipped measurements, separate fill/usable fractions and overlap rejection. Existing planar generator unchanged. Test-first run failed on the missing module; implementation then passed **46 focused tests in 11.84 s** (22 new, 24 existing), including exact hopper/camber/varying-side volumes and centroids, sloping-shell normal offset, millimetre units, explicit deductions and invalid topology/metadata. No source-specific constants or geometry are in these tests.
+
+Self-review added miter/invalid-offset checks and a mixed-solid-plus-stray-face regression. The latter failed before the fix: the single-solid guard discarded stray non-solid geometry. It now checks face/edge/vertex coverage before accepting the solid. **52 focused tests passed in 21.02 s** after the fix. No tracked Codesight/context-map metadata exists to refresh.
+
+### Development rerun checkpoint (not a gate)
+
+Three geometry runs completed. Hopper without side protection: +12.237% (not a one-factor comparison with the old model); hopper plus section-normal side protection and flat deck: -0.471%; adding source-dimensioned camber: **329,697.434 m3 at 98%, +2.644784%** against the thesis table. Isolated camber addition increases capacity by 10,008.397 m3. The cambered result is retained even though the flat-deck total is closer; selecting the closer total would be capacity fitting.
+
+Before/after per-tank table: ignored `work/argyro/results/development-before-after.md` and `.csv` counterpart `development-per-tank.csv`. Midbody wing errors fall from about +4.236% to +2.04%; centre errors move from -2.284% to +2.04%. Slops improve from +26.631% to +4.780%; aft wings from +9.448% to +4.031%. Forward centre worsens to +23.019% while forward wings become about -8.85%, exposing unresolved longitudinal inner-boundary redistribution. Cargo-domain ballast 1–5 is measured at the published 100% basis; forward ballast is about -14.3%, midbody +1.7–1.9%, aft -5.49%. Ballast 6 and forepeak are not reconstructed; round-2 source-matched ballast baselines did not exist.
+
+Limits: source-dimensioned hopper and camber are explicit ruled surfaces; shell-following side offset is section-normal, not a 3D CAD normal offset. Measured side polygons use 45 samples and approximate longitudinal interpolation; exact author surfaces at the forward/aft ends remain unavailable. Small port/starboard numerical differences are reported, not averaged away. Geometric construction is exact to these declared envelopes, not an exact recovery of the source model. The recurring ~2.04% midbody difference is consistent with the tables' observed extra 0.98 convention; its physical meaning is unconfirmed, so no extra usable-fraction deduction is applied. Historical G3b is unchanged and failed.
+
+Fourth ablation completed: the same section-normal side model without hopper gives 324,572.158 m3. Adding the explicit hopper reduces capacity by **4,883.121 m3**; adding camber then increases it by **10,008.397 m3**. These are model-specific controlled differences, not a proof that all historical error has been assigned. The source per-tank convention and forward longitudinal surfaces remain separate residuals. The complete table includes all 17 oil tanks and 13 published ballast entries; unavailable ballast 6/forepeak values are explicit. It stays in ignored `work/argyro/results/development-before-after.md` and `development-per-tank.csv`. No extra scalar fit was applied.
+
+### Round-3 delivery checks
+
+Quick tier **exit 0**: Python **2715 passed, 4 skipped, 128 deselected, 5 warnings** in 1116.44 s; Rust **321 passed, 0 failed, 50 ignored**; UI **275 passed, 0 failed**; format/clippy successful; bounded scan **1388 tracked text files, 0 findings**. Log: ignored `work/checks/round3-quick.log`. Private tracked-file identity scan: **0 findings**. Focused CAD suite: **52 passed**. `git diff --check` clean. Review was self-review; no independent reviewer completed. Tracked changes contain generic code, synthetic tests and this plan only; all per-ship tables and derived geometry remain ignored.
+
+Final chained push check failed before push in two unrelated `intake_supervision` timing cases: reporting reader returned `intake_stalled` instead of `intake_worker`; stalled reader stopped in `starting` rather than its expected stage. Prior full quick run passed these tests. No product source changed after that pass. Retry the complete quick tier with `RUST_TEST_THREADS=1` to remove test concurrency; do not change another lane's timing thresholds. Failed log: ignored `work/checks/round3-push-quick.log`.
+
+**Round-3 resume point:** all four development runs complete; final push remains blocked pending successful serial quick rerun. Commit evidence and chain the complete quick tier to push of lane/tank-g3b only; no merge. Then inspect/remove only its local target. Exact source forward/aft internal surfaces, 3D shell-normal offset and unmodelled ballast regions are still incomplete; do not claim full source recovery. No tracked Codesight data exists. Any future ARGYRO agreement is development fit, never a passed blind gate.
+
 ## Sources and method limits
 
 MARPOL Annex I text: IMO resolution MEPC.117(52), adopted 15 October 2004, https://wwwcdn.imo.org/localresources/en/KnowledgeCentre/IndexofIMOResolutions/MEPCDocuments/MEPC.117(52).pdf . Historical version explicitly pinned, not a claim to current consolidated applicability.
