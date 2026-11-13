@@ -110,6 +110,31 @@ def evaluate_offsets(x, z, y, wl, loa, fn, angle_count=512, lambda_max=24):
                 "error": str(error)}
 
 
+def public_summary(summary, records):
+    """Export aggregate evidence without selected IDs or per-hull measurements."""
+    result = {key: value for key, value in summary.items() if key != "convergence"}
+    changes = []
+    for refined in summary["convergence"]:
+        baseline = next(row for row in records if row["id"] == refined["id"]
+                        and row["fn"] == refined["fn"] and row["draft_fraction"] == 0.5)
+        change = relative_error(refined["cw"], baseline["cw"]) if baseline["cw"] is not None else None
+        if change is not None:
+            changes.append(change)
+    result["convergence_9_conditions_percent"] = {
+        "min": min(changes) if changes else None,
+        "median": float(np.median(changes)) if changes else None,
+        "max": max(changes) if changes else None}
+    differences = [abs(row["generated_wl_m"] - row["published_wl_m"])
+                   for row in records if "generated_wl_m" in row]
+    timings = [row["elapsed_ms"] for row in records if "elapsed_ms" in row]
+    result["diagnostics"] = {
+        "max_wl_difference_m": max(differences) if differences else None,
+        "median_evaluation_ms": float(np.median(timings)) if timings else None,
+        "conditions_over_10_percent_or_failed": sum(
+            row["error_percent"] is None or row["error_percent"] > 10 for row in records)}
+    return result
+
+
 def selected_rows(path, indices):
     """Read selected rows only; never parse excluded hull geometry or values."""
     result = {}
@@ -227,7 +252,7 @@ def run(source, exclusions, manifest_path, output, limit):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=["freeze", "run"])
+    parser.add_argument("mode", choices=["freeze", "run", "export"])
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--exclusions", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)
@@ -236,10 +261,17 @@ def main():
     args = parser.parse_args()
     if args.mode == "freeze":
         freeze(args.source, args.exclusions, args.manifest)
-    else:
+    elif args.mode == "run":
         if args.output is None:
             parser.error("run requires --output")
         run(args.source, args.exclusions, args.manifest, args.output, args.limit)
+    else:
+        if args.output is None:
+            parser.error("export requires --output (aggregate file)")
+        summary = json.loads((args.source / "summary.json").read_text())
+        records = [json.loads(line) for line in (args.source / "trace.jsonl").read_text().splitlines()]
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(public_summary(summary, records), indent=2, allow_nan=False) + "\n")
 
 
 if __name__ == "__main__":

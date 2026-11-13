@@ -45,6 +45,28 @@ def test_gate_boundaries_and_invalid_reference():
     assert result["gate_pass"] is True
 
 
+def test_public_summary_omits_hull_ids_and_keeps_aggregate_diagnostics():
+    assert hasattr(validation, "public_summary")
+    records = [{"id": "synthetic", "cw": 1.0, "error_percent": 2.0,
+                "elapsed_ms": 7.0, "generated_wl_m": 10.0, "published_wl_m": 10.001,
+                "draft_fraction": 0.5, "fn": 0.3}]
+    summary = {"primary": {"gate_pass": False}, "convergence": [
+        {"id": "synthetic", "fn": 0.3, "cw": 1.01}]}
+    result = validation.public_summary(summary, records)
+    assert "synthetic" not in str(result)
+    assert result["primary"] == {"gate_pass": False}
+    assert result["convergence_9_conditions_percent"]["median"] == pytest.approx(1.0)
+    assert result["diagnostics"]["median_evaluation_ms"] == 7.0
+
+
+def test_selected_rows_does_not_parse_unselected_values(tmp_path):
+    path = tmp_path / "rows.csv"
+    path.write_text("a,b\nnot-a-number,unselected\n2,3\n")
+    assert validation.selected_rows(path, {1})[1].tolist() == [2.0, 3.0]
+    with pytest.raises(ValueError, match="Selected rows missing"):
+        validation.selected_rows(path, {2})
+
+
 def test_offsets_preserve_open_ends_as_unsupported():
     assert hasattr(validation, "evaluate_offsets")
     x = np.linspace(0, 10, 5)
