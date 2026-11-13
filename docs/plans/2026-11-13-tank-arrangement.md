@@ -53,7 +53,11 @@ First quick-tier attempt failed in unrelated `intake_supervision::a_reader_that_
 
 Corrected rebuild completed: valid single closed solid; AP–FP Cb 0.799115268 at T=21 m. Approximation diagnostics above unchanged. Cross-view identity correction changes the AP–FP hydrostatic volume by only 0.0032 m3; it remains essential to correct source identity even when aggregate metrics hide the error. Focused arrangement tests: **24 passed in 8.34 s**, including CAD.
 
-**Round-2 resume point:** corrected-hull capacity experiments running from `work/argyro/scripts/capacity.py`; then record results, review the report and rerun the quick tier without CAD contention. Evidence: ignored `work/argyro/`. Final quick tier still required.
+Per-station CAD approximation diagnostics are saved in ignored `work/argyro/results/cad-per-station.json` for all 20 stations. Source-vector consistency is in `cross-view.json`; neither file claims accuracy against unavailable numeric offsets. Licence check: scripts and STEP are ignored; no `work/argyro` files are tracked. No product code or structural metadata changed.
+
+Fresh-agent report review was not completed: the tool placed the reviewer in an isolated runtime that could not access this branch. It was stopped rather than bypass that boundary. Final report inspection must therefore be a self-review, not an independent review.
+
+**Round-2 resume point:** corrected-hull capacity experiments running from `work/argyro/scripts/capacity.py`; then record results and self-review the report. A waiting background command will run the final quick tier after the CAD process exits. Evidence: ignored `work/argyro/`. Final quick tier still required.
 
 ## Sources and method limits
 
