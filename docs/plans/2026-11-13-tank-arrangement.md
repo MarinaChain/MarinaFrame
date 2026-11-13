@@ -39,7 +39,15 @@ PM changed the reference **before any capacity was computed**. Original G3 was n
 - Licence boundary: source PDF, extracted text, digitised lines, geometry, per-tank tables and all derived data stay in ignored `work/` only. This tracked plan records method, gate outcome and compact aggregate findings only, as requested by PM; never attach source extracts or derived geometry.
 - Round-2 delivery is **lane/tank-g3b only**, superseding the old G4 branch name. Run the quick tier, commit, push; no merge. `engineering_approved=false` throughout.
 
-**Round-2 resume point:** freeze this section first; no capacity computation has been performed in this session. Then inspect local CAP01 assets, digitise, construct source-boundary tanks, run the ungated comparison, record evidence and checks.
+**Round-2 progress, before capacity runs:** G3b frozen in `82289f9`. Twenty AP–FP stations read with the existing vector-reader conversion and single-valued-section checks. PDF path 42 contains two stations joined at the keel; split there. Station 2.5 uses two meeting fragments. The parallel body is explicitly labelled 4.4–7.3. No numeric hull offsets are published: independent per-station accuracy is unavailable, not zero. Per-station source points and diagnostics remain in ignored `work/argyro/results/sections.json`.
+
+The existing `geometry.build_hull` produced one valid closed AP–FP solid. Its default 10 mm requested approximation exceeded the 513-knot limit; existing explicit complexity fitting selected a 19.53125 mm allowance, with maximum measured deviation 19.525 mm and maximum height-weighted RMS 10.859 mm against extracted vectors, not independent source offsets. Breadth/depth/length agree with the source within 0.01 mm. AP–FP Cb is 0.799115 versus published 0.810 (1.344% lower); the bulb beyond FP and aft overhang are excluded. These end omissions do not intersect the published cargo domain. No geometry has been adjusted to capacity.
+
+**Ruling:** Use the published planar bulkhead/side/bottom limits clipped by the reconstructed outer hull, and explicitly report that this is not an exact reconstruction of the source's curved internal structure surfaces or deck camber. A mismatch is a G3b failure, not permission to tune. Source frame and bottom limits differ between the capacity table and later damage-analysis tables; use section 4.4 frame ranges with the section 4.2 frame table for G3b. Do not substitute the later table's different aft centre-tank boundary.
+
+**Ruling:** The current generator does not choose machinery length, peak length, tank counts or slop length: callers must supply all of these. Therefore a fully autonomous 'own choices' run is unavailable. Run an explicitly caller-chosen, ungated baseline (6 rows, 2 columns, machinery 15% L, forepeak 5% L, slops 3% L, fuel reserve 3% L, 2 slop columns), with its existing rule-minimum side/bottom choices. These fractions are fixed here before any capacity computation, not fitted to the reference.
+
+**Round-2 resume point:** run published-boundary intersections and the declared ungated baseline; retain limitations and compare the unchanged 2% band. Evidence: ignored `work/argyro/`; no capacity computation has yet been performed.
 
 ## Sources and method limits
 
