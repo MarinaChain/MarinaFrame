@@ -74,6 +74,32 @@ def test_case_is_separate_double_body_program(tmp_path, tetrahedron):
         write_case(case, config(), tetrahedron, available_bytes=30_000_000_000)
 
 
+def test_symmetry_case_uses_full_width_physical_force(tmp_path, tetrahedron):
+    # Closed meshing solid touches z=0 and lies below the symmetry plane.
+    triangles = [tuple((x, y, -z) for x, y, z in reversed(t)) for t in tetrahedron]
+    case = tmp_path / 'symmetry'
+    write_case(case, config(), triangles, available_bytes=30_000_000_000,
+               waterplane_symmetry=True)
+    metadata = json.loads((case / 'case-input.json').read_text())
+    assert metadata['force_multiplier'] == 1
+    assert metadata['waterplane_z_m'] == 0
+    mesh = (case / 'system/blockMeshDict').read_text()
+    assert 'waterplane { type symmetryPlane; faces ((4 5 6 7)); }' in mesh
+    for name in ('U', 'p', 'k', 'omega', 'nut'):
+        assert 'waterplane { type symmetryPlane; }' in (case / '0' / name).read_text()
+    snappy = (case / 'system/snappyHexMeshDict').read_text()
+    assert 'addLayers true' in snappy
+    assert 'nSurfaceLayers 3' in snappy
+    assert 'type yPlus' in (case / 'system/controlDict').read_text()
+
+
+def test_symmetry_case_rejects_unclipped_surface(tmp_path, tetrahedron):
+    with pytest.raises(ValueError, match='waterplane'):
+        write_case(tmp_path / 'bad', config(), tetrahedron,
+                   available_bytes=30_000_000_000, waterplane_symmetry=True)
+    assert not (tmp_path / 'bad').exists()
+
+
 def test_disk_reserve_before_case(tmp_path, tetrahedron):
     with pytest.raises(OSError, match='reserve'):
         write_case(tmp_path / 'case', config(), tetrahedron, available_bytes=10_000_000_001)
