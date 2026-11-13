@@ -4,12 +4,39 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 
 pub const SCHEMA: &str = include_str!("../../../schemas/design-record-v1.schema.json");
+pub const SCHEMA_V1_1: &str = include_str!("../../../schemas/design-record-v1.1.schema.json");
+
+fn schema_for_version(version: Option<&str>) -> Result<Value, String> {
+    let text = match version {
+        Some("1.0.0") => SCHEMA,
+        Some("1.1.0") => SCHEMA_V1_1,
+        _ => {
+            return Err(format!(
+                "Unsupported design record schema version: {version:?}"
+            ))
+        }
+    };
+    serde_json::from_str(text).map_err(|e| e.to_string())
+}
+
+/// Explicit pure migration. Only the version changes; no quantity is converted.
+/// Validate both endpoints and retain the original JSON values, not a serde copy.
+pub fn migrate_v1_0_0_to_v1_1_0(source: &Value) -> Result<Value, String> {
+    if source.get("schema_version").and_then(Value::as_str) != Some("1.0.0") {
+        return Err("Migration requires a 1.0.0 design record".into());
+    }
+    DesignRecord::from_json(&source.to_string())?;
+    let mut migrated = source.clone();
+    migrated["schema_version"] = "1.1.0".into();
+    DesignRecord::from_json(&migrated.to_string())?;
+    Ok(migrated)
+}
 
 impl DesignRecord {
     /// Validate against the embedded contract before typed deserialization.
     pub fn from_json(text: &str) -> Result<Self, String> {
         let value: Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
-        let schema: Value = serde_json::from_str(SCHEMA).map_err(|e| e.to_string())?;
+        let schema = schema_for_version(value.get("schema_version").and_then(Value::as_str))?;
         validate_node(&value, &schema, &schema)?;
         let record: Self = serde_json::from_str(text).map_err(|e| e.to_string())?;
         record.check_speed()?;
@@ -19,7 +46,7 @@ impl DesignRecord {
     /// Revalidate public fields on save; mutation cannot bypass the contract.
     pub fn to_json(&self) -> Result<String, String> {
         let value = serde_json::to_value(self).map_err(|e| e.to_string())?;
-        let schema: Value = serde_json::from_str(SCHEMA).map_err(|e| e.to_string())?;
+        let schema = schema_for_version(value.get("schema_version").and_then(Value::as_str))?;
         validate_node(&value, &schema, &schema)?;
         self.check_speed()?;
         serde_json::to_string(&value).map_err(|e| e.to_string())
