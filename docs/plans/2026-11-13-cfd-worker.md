@@ -662,3 +662,47 @@ before reporting measured throughput. Durable `rate-start.json`,
 Local launch source is ignored `work/dtc_monitor_v2.py`; no caller host copied
 into tracked documentation. Historical safety-pause.txt is retained as evidence
 but no longer defines the live state; inspect Docker and v2 monitor records.
+
+### New operating rule triggered before 30-minute measurement
+
+V2 monitor paused the same container at epoch **1794593115.1647146**. First
+complete rolling mean above 9 was **12.7642** at epoch 1794592505.6185205;
+it remained above 9 for **609.546 s**, ending at **26.5904**. Raw load1 peaked
+at **34.28** during this interval. Docker confirms paused, unchanged original
+start timestamp. Monitor remains active; **no automatic unpause**. This is a
+resource-safety interruption under the new PM operating rule, not a physical
+gate result. No solver restart, other container or Track B work.
+
+The requested **>=30-minute uninterrupted rate measurement is blocked** by the
+pause after **1,218.042 s (20.3007 minutes)**. Completed physical time advanced
+from **0.00474757 to 0.0185392 s**, force samples **12 to 19**. Interval cost
+**1.691725 allocated core-hours** at five-core quota. Last complete step reports
+ClockTime **2,737 s**, ExecutionTime **1,829.96 s**; next physical step
+0.0223581 s was incomplete. Existing 848,025-cell mesh remains unchanged.
+
+**Early diagnostic projection, explicitly NOT the requested 30-minute result:**
+partial-window rate **0.0407620 simulated s/wall hour**, **20.6889 force
+samples/hour**. Constant-rate extrapolation from 0.0185392 to tutorial 35 s:
+**858.19 remaining wall hours / 4,290.94 allocated core-hours**. At the same
+sample rate 200 samples take **9.67 h**, but those could still be startup data;
+no validated finite ETA for converged resistance exists. Adaptive timestep is
+still increasing and the host was heavily contended, so this extrapolation
+cannot be treated as a stable runtime prediction or compute-host requirement.
+It nevertheless greatly exceeds 48 h and is recorded early for the PM.
+A valid 30-minute rate still requires a PM-authorized uninterrupted interval.
+Do not bypass safety just to complete the rate window. G-DTC remains unscored.
+
+Evidence: main ignored `work/cfd/dtc-rate-paused-evidence.log`,
+`dtc-rate-result.json`; remote `operating-v2.csv`, `safety-pause-v2.json`,
+`rate-interrupted.json`. At pause lane directory **699,696,788 bytes**, free
+host bytes **171,267,104,768**. Disk reserve was not the trigger. Original
+solver/force logs are retained. PM must choose a dedicated host or explicitly
+resume this paused run; the instruction to leave it going for a >48h projection
+does not override the mandated resource pause.
+
+Quick tier **exit 0**: Python **2,734 passed, 4 skipped, 100 deselected**, five
+warnings in **974.14 s**; UI **275 passed, 0 failed**; Rust checks/tests passed;
+secret scan **0 findings**, separate private identity scan **0 findings**.
+Main ignored `work/cfd/dtc-rate-quick.log` / `dtc-rate-quick.exit`. Only tracked
+documentation changed during this run. Resume at the PM resource decision;
+no more runtime or gate changes made.
