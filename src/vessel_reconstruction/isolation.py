@@ -151,8 +151,15 @@ def _darwin_group_member_has_token(pgid: int, token: str) -> bool:
     return False
 
 
+def require_posix_lifecycle() -> None:
+    """Refuse worker execution until equivalent OS security controls exist."""
+    if sys.platform not in ('linux', 'darwin'):
+        raise RuntimeError('Secure worker process lifecycle is not supported on this platform.')
+
+
 def process_identity(pid: int) -> dict | None:
     """Process birth identity prevents signalling a reused PID after restart."""
+    require_posix_lifecycle()
     if sys.platform == 'darwin':
         return _darwin_process_identity(pid)
     try:
@@ -170,6 +177,7 @@ def process_identity(pid: int) -> dict | None:
 
 
 def kill_process_tree(identity: dict | None, grace_seconds: float = 0.5) -> bool:
+    require_posix_lifecycle()
     if not identity or identity.get('pid') == os.getpid() or identity.get('pgid') != identity.get('pid'):
         return False
     current = process_identity(int(identity['pid']))
@@ -240,6 +248,7 @@ _SIGINFO_PID_OFFSET_DARWIN = 12  # after si_signo, si_errno and si_code (int eac
 
 def child_has_exited(pid: int) -> bool:
     """Report whether a child exited without reaping it (its zombie keeps the PID)."""
+    require_posix_lifecycle()
     if hasattr(os, 'waitid'):
         return os.waitid(os.P_PID, pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is not None
     libc = ctypes.CDLL(None, use_errno=True)
@@ -312,6 +321,7 @@ def supervise_process(command: list[str], *, limits: WorkerLimits = DEFAULT_LIMI
     Public web requests never provide commands. This factored supervisor permits
     small controlled hang/crash regressions without running an expensive CAD job.
     """
+    require_posix_lifecycle()
     limits.validate()
     started = time.monotonic()
     child_environment = dict(env if env is not None else safe_worker_environment())
