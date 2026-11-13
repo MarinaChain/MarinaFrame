@@ -1131,3 +1131,17 @@ not converged. No fourth grid or control tuning after forces.
 `outputs/2026-11-14-kvdb2-physical-runs.md`; commit/push lane/cfd-worker only,
 no merge. Keep existing worktree/evidence. Resume here until implementation
 and tests complete; **no DB2 run has started at this freeze**.
+
+### DB2 preparation correction before any remote run
+
+Exact source CAD centreplane Boolean returned an empty shape (two attempts,
+no remote cost). Do not invent or repair a half skin. Reuse the accepted closed
+full-width wetted STL, but mesh **only y>=0** using centreplane symmetry.
+This is geometric domain clipping by snappy, not full-hull solving; force factor
+remains **2**. The upstream locationInMesh is strictly inside y>0, tested.
+Half-domain controls are unchanged. Focused tests **69 passed**; new half-hull
+and gate tests failed first on missing module, seed-point regression failed
+before correction. Absolute 30-layer controls and low-Re fields are generated.
+Detached DB2 monitor retains startup/rolling rules and records cgroup memory.peak
+on shell EXIT plus sampled Docker memory and OOM status. No physical DB2 run
+has started. Preparation log: ignored `work/cfd/kvdb2-prepare-03.log`.
