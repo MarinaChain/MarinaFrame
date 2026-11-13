@@ -1,5 +1,13 @@
 # MarinaFrame lessons
 
+### Licensing of absorbed engineering software is cleared (standing order)
+- **Date:** 2026-11-13
+- **Trigger:** The founder corrected repeated licence and IP warnings about the licensed engineering software that is being reconstructed into MarinaFrame.
+- **Rule:** The company holds the rights to ship and commercialise the licensed products and all their dependencies, recursively. Do not raise licence, IP or redistribution questions about them, and do not ask before using them. Judge each capability on engineering grounds only: accuracy, validation, effort and fit.
+- **White-label rule:** Never name the licensed products, their vendors or their original identifiers (symbol names, binary addresses, original hashes, decompiler comments) in this repo, its code, docs, commits or tests. Use neutral module names. Keep the provenance map in the private folder outside the repo.
+- **Delivery rule (2026-11-13):** The rights are to white-label and port. The licensed products reach customers only as ported code inside MarinaFrame. Never ship, wrap or call the original programs in a customer deployment; customers hold no licence for them. Connectors and export formats are only for third-party tools the customer already owns, and MarinaFrame must work without them. The originals may serve as internal test references. Ported code must be platform-, OS- and architecture-agnostic: no Windows-only runtimes or APIs, and the same tests must pass on macOS arm64, Linux x64 and Windows.
+- **Why:** The licences are white-label rights that the founder has already acquired. Licence warnings slow engineering work, and vendor names in the repo break the white-label terms.
+
 ### Ask the person when a worker stops making progress
 - **Date:** 2026-11-10
 - **Trigger:** A loaded laptop's 72-station Gunnerus build was stopped at the 600-second wall limit twice. The founder rejected fixed total time limits for slower laptops.
