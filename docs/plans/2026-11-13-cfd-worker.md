@@ -468,3 +468,18 @@ repair that preserves all source regions remains unimplemented; this first
 established-method trial does not solve Track B. Next method review should
 consider a source-distance-constrained implicit reconstruction, with synthetic
 branch-junction and region-preservation tests before public application.
+
+Workshop comparison for the PM band rationale (not DTC uncertainty): Tokyo 2015
+KCS resistance assessment, Kim et al.,
+https://t2015.nmri.go.jp/Presentations/Day2-AM2-KCS-Resistance_SP-Kim.pdf ,
+pages 19/21/23, reports CT submission standard deviations relative to experiment
+of **2.4%, 2.7%, 1.5%** at Fn **0.195, 0.227, 0.260**. KCS is another container
+hull; this is relevant hull-class scatter, not a DTC uncertainty estimate, min/max
+range or statistical guarantee for the PM 4% band. The citation was already
+recorded in the earlier source research above; no numerical band changes.
+
+Final VPS observation: no active lane container, load **5.14**, lane directory
+**324,099,683 bytes**, selected image **469,235,718 bytes**, host available
+**172,453,351,424 bytes**. All failed attempts and diagnostics retained; no
+unrelated resources inspected or removed. No resource pause or automatic
+unpause occurred.
