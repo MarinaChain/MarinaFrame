@@ -57,7 +57,11 @@ Per-station CAD approximation diagnostics are saved in ignored `work/argyro/resu
 
 Fresh-agent report review was not completed: the tool placed the reviewer in an isolated runtime that could not access this branch. It was stopped rather than bypass that boundary. Final report inspection must therefore be a self-review, not an independent review.
 
-**Round-2 resume point:** corrected-hull capacity experiments running from `work/argyro/scripts/capacity.py`; then record results and self-review the report. A waiting background command will run the final quick tier after the CAD process exits. Evidence: ignored `work/argyro/`. Final quick tier still required.
+### G3b result: outside band; exact source-surface reconstruction incomplete
+
+All 17 source-limit tank intersections completed and each returned one valid solid. Cargo plus two slops at 98%: **335,866.275 m3**, difference **+14,664.275 m3 (+4.565437%)** against the PM reference 321,202 m3. This is **outside the unchanged 2% band**. No post-result geometry, fill factor or boundary adjustment was made. This result does not establish an error in the source model or isolate generator error: planar inner limits do not reproduce its shaped structural surfaces. Exact published-surface reconstruction remains incomplete; G3b is not passed.
+
+**Round-2 resume point:** source-limit result recorded; ungated generator baseline still running from `work/argyro/scripts/capacity.py`. Then record its result and self-review the report. A waiting background command will run the final quick tier after the CAD process exits. Evidence: ignored `work/argyro/results/capacity-results.json` and `capacity.log`. Final quick tier still required.
 
 ## Sources and method limits
 
