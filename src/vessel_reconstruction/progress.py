@@ -84,6 +84,8 @@ def refresh():
 
 def read_child_progress(child_path, request_id):
     """Read untrusted telemetry without following a link or waiting on a FIFO."""
+    from .platform_files import require_secure_descriptor_reads
+    require_secure_descriptor_reads()
     try:
         handle = os.open(child_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         try:

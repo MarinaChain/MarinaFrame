@@ -15,10 +15,8 @@ never makes an inspection fail.
 """
 from __future__ import annotations
 
-import fcntl
 import logging
 import os
-import pwd
 import stat
 import sys
 import time
@@ -26,6 +24,8 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable, Iterator, Sequence, TypeVar
+
+from .file_lock import try_lock_exclusive
 
 # Worker processes at once. Unset: the cores less RESERVED_CORES (the controller,
 # the app and the system keep some), at least 1.
@@ -71,6 +71,12 @@ def pool_directory() -> Path:
 
     Raises PermissionError (or another OSError) when the folder cannot be used safely.
     """
+    if os.name != 'posix':
+        # Mode bits cannot prove a private Windows ACL. Keep the existing logged
+        # unshared fallback until an ACL-aware pool directory is implemented.
+        raise PermissionError('A private shared worker pool is not supported on this platform.')
+    import pwd
+
     configured = os.environ.get(POOL_DIRECTORY_ENVIRONMENT_VARIABLE)
     if configured:
         folder = Path(configured)
@@ -109,7 +115,7 @@ def _take_free_tokens(folder: Path, size: int, wanted: int) -> list[int]:
                 break
             descriptor = _open_token(folder, index)
             try:
-                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                try_lock_exclusive(descriptor)
             except BlockingIOError:
                 os.close(descriptor)
                 continue

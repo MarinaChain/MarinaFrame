@@ -1,9 +1,9 @@
 name: CI portability and dependency watch
 on:
   push:
-    paths: ['.github/workflows/ci-watch.yml', 'requirements*.txt', 'requirements*.lock', 'Cargo.lock', 'pyproject.toml', 'rust-toolchain.toml', '**/requirements*.txt', '**/requirements*.lock', '**/Cargo.lock', '**/pyproject.toml', '**/rust-toolchain.toml']
+    paths: ['src/**', 'tests/**', '.github/workflows/ci-watch.yml', 'requirements*.txt', 'requirements*.lock', 'Cargo.lock', 'pyproject.toml', 'rust-toolchain.toml', '**/requirements*.txt', '**/requirements*.lock', '**/Cargo.lock', '**/pyproject.toml', '**/rust-toolchain.toml']
   pull_request:
-    paths: ['.github/workflows/ci-watch.yml', 'requirements*.txt', 'requirements*.lock', 'Cargo.lock', 'pyproject.toml', 'rust-toolchain.toml', '**/requirements*.txt', '**/requirements*.lock', '**/Cargo.lock', '**/pyproject.toml', '**/rust-toolchain.toml']
+    paths: ['src/**', 'tests/**', '.github/workflows/ci-watch.yml', 'requirements*.txt', 'requirements*.lock', 'Cargo.lock', 'pyproject.toml', 'rust-toolchain.toml', '**/requirements*.txt', '**/requirements*.lock', '**/Cargo.lock', '**/pyproject.toml', '**/rust-toolchain.toml']
   schedule:
     - cron: '23 18 * * *'
   workflow_dispatch:
@@ -38,13 +38,16 @@ jobs:
         shell: bash
         run: |
           set +e
-          python -m pytest -q -p no:cacheprovider -rfE 2>&1 | tee pytest-windows.txt
+          python -m pytest --collect-only -q -p no:cacheprovider > collect-windows.txt 2>&1
+          collection_status=$?
+          python -m pytest -q -p no:cacheprovider -rfEs 2>&1 | tee pytest-windows.txt
           status=${PIPESTATUS[0]}
           {
             echo "## Windows portability watch (report only)"
-            echo "pytest exit code: ${status}. Failures below are porting work, not regressions on macOS/Linux."
+            echo "Collection exit code: ${collection_status}; suite exit code: ${status}."
+            echo "Failures below are porting work, not regressions on macOS/Linux."
             echo '```'
-            grep -E '^(FAILED|ERROR) |[0-9]+ (passed|failed)' pytest-windows.txt | head -80
+            grep -E '^(FAILED|ERROR|SKIPPED) |[0-9]+ (passed|failed|collected)' pytest-windows.txt collect-windows.txt | head -120
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit 0

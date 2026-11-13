@@ -52,7 +52,11 @@ def write_json(path: Path, data) -> None:
 
 
 def sync_directory(path: Path) -> None:
-    """Linux/POSIX durability boundary for an atomic rename."""
+    """Flush directory entries where supported by the operating system."""
+    if os.name == 'nt':
+        from .platform_files import sync_windows_directory
+        sync_windows_directory(path)
+        return
     descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
     try:
         os.fsync(descriptor)
