@@ -819,6 +819,51 @@ worktree isolation despite the explicit ban. It was stopped immediately and
 returned no findings; no helper code/result is used. A subsequent worktree list
 shows no checkout for that helper. All lane work remains in `cfd-worker`.
 
-Resume: inspect the source and geometry. No new diagnostic, mesh, solver or Cw
-result yet. Read `work/hull-ends-plan.md` and `work/thin-ship-plan.md` snapshots
+### Solid and symmetry-case checkpoint
+
+Source STEP SHA-256 **fc06135c3b170e6222addcb02e1b99d75f97aae9f9c478303a17ea0143ab76ab**;
+one valid solid and one closed shell. At the explicit rounded model draft
+0.3586 m (native plane -20.7988), clipped volume **1.600124995282 m3**, true
+wetted skin **8.233565747674 m2**, artificial waterplane **4.975760962726 m2**.
+These are diagnostics, not a rerun or reruling of the hull-ends gate. The
+published **8.0838 m2** remains the CFD/coefficient denominator.
+
+Aft source closures retain **0.004120524282 m2** below the waterline (two patches,
+centres native x≈5.500937, z≈-20.07194). Thus this source has a real immersed
+transom; it cannot be silently converted to the thin-ship API's closed-ended
+hull. Merged `resistance_thin_ship._offsets` explicitly raises **closed ends
+required; immersed transom correction is not implemented** for nonzero endpoint
+breadths. **Cw and G-KV-DB are blocked pending a source-supported transom
+formulation**, not assigned zero or an invented correction. Double-body CFD
+can remain a separate CV measurement; no total-CT gate claim is possible yet.
+
+The first exploratory inspection wrongly counted the cap through a spline bbox
+classification (**13.2093267104 m2**, invalid diagnostic). The tested classifier
+uses the actual planar surface/normal/location and excludes only the waterplane.
+Preserve that failed attempt, do not use its area. A synthetic tilted closure
+also reproduced the too-strict axis-normal aft diagnostic; candidate location
+classification retains curved closure patches without altering their area.
+Inspection helper commits **c09d8a2**, **a4b9db4**; tests first failed on missing
+helper and on tilted closure, then passed. Final run exit **0**; evidence main
+ignored `work/cfd/kvdb-inspection-final.{log,exit}` and
+`kvdb-solid-inspection-final.json`. An earlier harness-limited inspection was
+interrupted, then rerun detached with durable logs/receipt; no concurrent retry.
+
+Case writer commit **d01840a** adds explicit fixed-waterplane symmetry mode,
+full-width force multiplier **1**, three requested prism layers and y+ output.
+Old reflected mode/default force factor **0.5** remains separate. Symmetry fields
+and clipped-domain precondition were tested red then green. **87 CFD tests
+passed**. This is generated-case evidence only, not exercised v2412 syntax,
+layer coverage, wall-y+ quality or physical accuracy. No VPS diagnostic, mesh,
+solver or new allocated core-hour cost has been incurred in this track.
+
+The first quick tier began on c09d8a2 and source changed during its run, so it
+cannot count as a stable-source delivery check even if its receipt says zero.
+Run a fresh quick tier on d01840a or later stable source before push.
+
+Resume: add/test the new rolling-load host monitor (the reusable remote.py still
+has the historical >7 policy), then source-preserving wetted STL preparation and
+frozen systematic mesh settings. Do not launch through the old policy or claim
+G-KV-DB while Cw's immersed-transom formulation is missing. No new physical run
+has started. Read `work/hull-ends-plan.md` and `work/thin-ship-plan.md` snapshots
 for full source evidence; these are ignored copies, not new published results.
