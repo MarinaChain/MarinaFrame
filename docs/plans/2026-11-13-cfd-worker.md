@@ -1338,3 +1338,13 @@ height, record setting before rebuilding and rerun coarse before further grids.
 no automatic unpause;5CPU/12GiB/nice10/one container/disk limits; stop>24h
 projection. Commit each step, final stable quick tier, push lane only/no merge.
 No thin-ship. Resume now at cell-label admission check; no new solver yet.
+
+### Coarse05 PM admission verified
+
+Retained label sets: **22409 highAspectRatioCells**, **472827 addedCells**;
+set difference highAspectRatioCells minus addedCells = **0**. All flagged
+cells (a conservative superset of AR>1000) are in layers. Previously measured
+positive volumes/face pyramids, nonorthogonality62.6896<70, skewness3.29121<4.
+Coarse05 meets revised PM operating rule. Admission evidence ignored
+`work/cfd/kvdb2-coarse05-aspect-admission.json`. Admit first2000-iteration
+solver on exact mesh05, factor2, unchanged low-Re SST; no gate claim.
