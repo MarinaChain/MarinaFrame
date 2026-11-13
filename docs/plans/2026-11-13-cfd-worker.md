@@ -178,3 +178,82 @@ PM direction: source distance is the primary reconstruction quality evidence. Re
 - Detached quick tier completed on `4e87c4c` with **exit 0**: Rust format/clippy/workspace tests passed; Python **2,734 passed, 4 skipped, 100 deselected**, 5 warnings in **759.11 s**; UI **275 passed, 0 failed**; tracked-text secret scan **0 findings**. Log/exit receipt: main ignored `work/cfd/source-first-quick.*`. Source remained unchanged during the run. All local long preparation jobs used nohup and logs. No new VPS attempt, physical mesh or solver run. Last measured physical diagnostic remains 0 cells, 11 s, 0.015277778 allocated core-hours; old G6 and surfaceCheck failures remain the only measured gate results.
 
 Resume: inspect the exact rejected branch junction and its source-edge correspondence; add the matching minimal synthetic fixture before another topology change. The synthetic edge flip alone is not a complete public-hull fix. If the section-strip correspondence cannot represent the source lobes, stop and revise the representation with PM rather than hide the gap or alter G6. Once a closed corrected mesh exists, measure source max/p99/mean, run surfaceCheck, then G6 in the requested order. Do not run G2 until both pass. Quick-tier receipt must be read before lane-only push.
+
+## DTC-first split checkpoint (2026-11-14)
+
+PM supersedes the reconstruction-first sequence, not G0–G6 or the VPS limits.
+Track A uses the existing official tutorial DTC STL. Track B starts only once A
+is running, triangulates actual IGES faces and uses an established mesh repair
+method, not section lofting. No fit to published area or volume is permitted.
+
+### Primary reference located; G-DTC not yet frozen
+
+el Moctar, Shigunov and Zorn (2012), *Duisburg Test Case: Post-Panamax
+Container Ship for Benchmarking*, Ship Technology Research 59(3), pp. 50–64,
+DOI https://doi.org/10.1179/str.2012.59.3.004 . Publisher-author copy linked by
+https://www.uni-due.de/inam/journals.php :
+https://www.uni-due.de/imperia/md/content/inam/paper_post_panamax_container_ship.pdf .
+Accessed 2026-11-14; downloaded paper/text stay in ignored main
+`work/cfd/dtc-reference-20261114/`. No third-party file enters git.
+
+Table 4, printed p. 53 (PDF p. 4), gives measured model total resistance:
+
+| Model speed (m/s) | Published Fn | Total resistance (N) |
+| --- | --- | --- |
+| 1.335 | 0.174 | 20.34 |
+| 1.401 | 0.183 | 22.06 |
+| 1.469 | 0.192 | 24.14 |
+| 1.535 | 0.200 | 26.46 |
+| 1.602 | 0.209 | 28.99 |
+| 1.668 | 0.218 | 31.83 |
+
+Use table values, not the inconsistent rounded Fn range in section 3.3 prose.
+Table 1, p. 51: Lpp 5.976 m, beam 0.859 m, draft 0.244 m, zero static trim,
+volume 0.827 m3 and bare-hull resting wetted area 6.243 m2; scale 1:59.407.
+Section 3.3, p. 52: water density 998.8 kg/m3, kinematic viscosity
+1.090e-6 m2/s; model free in trim and sinkage. Fixed-attitude tutorial output
+cannot silently be called the same experimental condition. Appendix/rudder
+configuration must be resolved before scoring.
+
+**Blocker:** this paper contains no quantitative experimental uncertainty
+statement. Figure 9 is a plotted CFD comparison, not a numerical scatter table.
+No numerical uncertainty or acceptance band is invented here. G-DTC remains
+unfrozen, so no DTC surfaceCheck, mesh or solver run has started. This is a source
+checkpoint, not fulfillment of the requested gate freeze. The explicit ignored
+VPS host configuration from the earlier session was also not found in the lane
+run folder; do not guess a host from unrelated SSH aliases.
+
+### Review and resumable steps
+
+- Architecture PASS: reuse the pinned official-image process boundary and host
+  supervisor, with the existing one-container/5-CPU/12-GB/nice/load/disk rules.
+- Quality WARN: establish measured uncertainty and typical RANS scatter before
+  the numeric gate commit; match attitude and appendages explicitly.
+- Coverage WARN: staged startup failure receipts and tutorial force scaling need
+  tests before unattended pipeline execution; original remote limitations stand.
+- Performance WARN: runtime/cells remain unknown; no sizing claim is possible.
+
+1. Obtain a cited quantitative uncertainty source (the underlying SVA report is
+   cited in the paper) and a numerical RANS scatter basis. Restore an explicit
+   caller-owned ignored VPS configuration. Freeze exact resistance bounds and
+   conditions in a commit before **any** DTC run.
+2. Record the tutorial STL hash, bounds, scale and appendages; run surfaceCheck
+   through the unchanged host monitor. Commit results including diagnostic costs.
+3. Freeze the three DTC mesh settings at 1.535 m/s before meshing. Use systematic
+   refinement, actual cell counts, monotone resistance, <=2% fine/medium change,
+   and <=1% force drift over two final equal windows of >=100 samples. These
+   proposed DTC convergence conditions must be committed with G-DTC; they do not
+   replace or loosen KCS G2.
+4. Run three meshes sequentially, then the six-speed series only after convergence.
+   Record actual cells, allocated cores, mesh/solver wall seconds and allocated
+   core-hours separately. Keep durable background logs and terminal receipts.
+5. Once A runs, replace the section representation for Track B with actual-face
+   tessellation plus established repair. Commit method/tolerances before applying;
+   add synthetic non-manifold/hole/component tests first. Measure source-distance
+   max/p99/mean, then surfaceCheck, then unchanged G6, in that order.
+6. Run quick tier with the private identity denylist, read its terminal receipt,
+   commit each completed step and push only `lane/cfd-worker`; no merge. Remove
+   only lane-local Rust target if it exists, never the shared target.
+
+Current new physical runs: **0**. No new cell count, wall time or core-hour
+measurement. Track B has not started; previous failed KCS evidence is unchanged.
