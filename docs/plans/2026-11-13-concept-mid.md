@@ -52,4 +52,11 @@ Aggregate errors below are absolute percentages of the published/derived value, 
 
 Joint coverage by evaluation source grade: primary 3/3; copied 1/1; secondary **NOT RUN (0 designs)**. These grade splits evaluate one mixed-grade fitted model, not separately fitted models. Training had 4 primary and 22 copied representatives. Four withheld designs do not establish fleet-wide accuracy or calibrated coverage. Bands include fixed 10% dimension / 5% Cb floors plus maximum training residuals; coverage is not point-estimate precision. Sister exclusion is conservative but inferred, Cb is derived, and copied sources remain unconfirmed. Capacity, speed, hull geometry and joint feasibility were not tested. `engineering_approved=false`.
 
-Current resume point: sole fit and score complete; do not rerun. Pending focused tests, quick tier, final review and lane-only push.
+## Checks and review
+
+- Focused concept suite: **38 passed** in 5.62 s.
+- First quick-tier attempt exited 2 in clippy: `tauri::generate_context!` could not find ignored `app/ui-release`. This is the documented shared-cache staging issue, not a model failure. Touching the lane-local `app/src-tauri/build.rs` (no content change) triggered its existing staging script. The retry passed clippy and proceeded to tests; full tier result pending. Logs: ignored `work/concept-mid/quick.log` and `quick-final.log`.
+- Elegance check: reuse model code unchanged; no new fitting abstraction, no structural changes, no codesight refresh needed. Per-ship data remains ignored. Gate and runner content remain identical to the pre-fit commit.
+- Independent review was blocked by the review agent's worktree isolation. A mistaken isolation option created a temporary agent checkout despite the no-extra-worktree instruction; the agent was told to stop, not bypass access, and not edit that checkout. No independent review conclusion is claimed. This process deviation did not change the gate, source data or score.
+
+Current resume point: sole fit and score complete; do not rerun. Focused tests pass. Await complete quick-tier result, then record it, commit and push only lane/concept-mid. No merge.
