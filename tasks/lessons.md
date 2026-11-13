@@ -325,7 +325,7 @@
 - **Trigger:** The thin-ship lane was told not to create another worktree, but a read-only reviewer was launched with tool-level worktree isolation.
 - **Rule:** A no-extra-worktree instruction applies to agent tool options as well as shell commands. Omit worktree isolation for read-only reviews; pass exact commit SHAs so the reviewer can inspect the intended range without switching or editing worktrees.
 - **Why:** Tool defaults and general isolation guidance do not override a lane-specific workspace boundary.
-- **Recurrence (2026-11-14, CFD):** A read-only helper again received the isolation option despite the explicit ban. It was stopped immediately. Check the actual tool arguments against lane boundaries before dispatch, not just the prompt text.
+- **Recurrence (2026-11-14, CFD):** A read-only helper again received the isolation option despite the explicit ban. It was stopped immediately. Check the actual tool arguments against lane boundaries before dispatch, not just the prompt text. If repeated dispatches retain the forbidden option, stop delegation and execute the bounded task directly; do not keep spawning and cancelling helpers.
 
 ### Identify artificial waterplane caps by their actual surface
 - **Date:** 2026-11-14
@@ -338,3 +338,9 @@
 - **Trigger:** The broad `docs/*` CI skip also skipped `docs/dependency-scope-exclusions.json`, which controls the dependency audit.
 - **Rule:** Classify executable configuration by its consumers, not its folder. Route audit policy as shared configuration before documentation skips, and keep a regression test.
 - **Why:** A documentation directory can contain policy that changes a required security check.
+
+### Verify OpenFOAM includes against the pinned image
+- **Date:** 2026-11-14
+- **Trigger:** The first physical KVLCC2 mesh failed because the generated meshQualityDict include lacked the `.cfg` suffix shipped by OpenCFD v2412.
+- **Rule:** Check dictionary include paths against the pinned image, add a failing generated-case regression, and correct dialect syntax without changing frozen numerical controls. Retain failed-run time and costs.
+- **Why:** Synthetic writer tests establish text contracts, not installed solver dialect compatibility.

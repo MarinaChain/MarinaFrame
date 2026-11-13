@@ -979,3 +979,25 @@ non-orthogonality **64.7552**, skewness **2.27712**. snappy **24 s /
 resolution. Whole monitor **32.409143 s / 0.045012698 core-hours**,
 five-core quota. Evidence: ignored `work/cfd/kvdb-medium-mesh-01-result.log`.
 No cell ceiling reached. Proceed to medium solver under unchanged settings.
+
+### Medium solver 01: physical run completed
+
+Load1 **1.50**, **35,426 cells**, **2000 samples/iterations**. Fixed final
+100-sample forces **20.4808469 / 20.4808400 N**, drift **0.00003369%**;
+CV **0.004624263674**, implied **(1+k)=1.340500704**. y+ min/mean/max
+**13.7969 / 129.155 / 1266.09**. Solver stage **365 s / 0.506944444
+allocated core-hours**; whole monitor **393.009871 s / 0.545847042
+core-hours**, five-core quota. Last projection **363.18 s**, no pause.
+Evidence: ignored `work/cfd/kvdb-medium-solver-01/` and result log.
+Fine remains required: the coarse/medium difference is not mesh convergence.
+
+### Fine mesh 01: physical mesh accepted
+
+Load1 **2.16**, **80,069 cells**, checkMesh **Mesh OK**; max
+non-orthogonality **64.8758**, skewness **3.46921**. surfaceCheck **1 s**,
+snappy **25 s**, blockMesh/checkMesh 0 s at integer resolution; combined
+**26 s / 0.036111111 allocated core-hours**. Whole monitor **31.475456 s /
+0.043715910 core-hours**, five-core quota. Evidence: ignored
+`work/cfd/kvdb-fine-mesh-01-result.log`. No cell ceiling reached; admit fine
+solver. Final quick tier is running on unchanged source in parallel with
+remote physical execution; only result documentation changes locally.
