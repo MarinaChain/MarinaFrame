@@ -95,10 +95,18 @@ observations 600 s apart cause a pause; an intervening low observation resets
 the interval. It also pauses at the lane disk limit. A pause requires a manual
 decision, never an automatic resume. The monitor survives client SSH loss.
 
-Disk admission counts lane-directory bytes plus the selected image size and an
-8 GB peak allowance against 40 GB, with at least 10 GB host free reserve. Other
-Docker storage and growing JSON logs need operational review: do not claim
-this admission estimate is a hard filesystem quota. No unrelated Docker
+Host supervisor files and receipts are outside the mounted `data/` directory.
+Only case data is writable in the container. Root filesystem is read-only,
+`/tmp` is a bounded 256 MB no-exec tmpfs, and Docker's local logging driver is
+bounded to two 10 MB files. Executable dictionary features/custom libraries and
+dynamic-loading command options are rejected for generated-case uploads. This
+validation is not a general parser or a hostile-input sandbox.
+
+Disk admission counts lane-directory bytes plus the selected image size, an
+8 GB peak allowance and 500 MB bounded scratch/log allowance against 40 GB.
+The monitor checks host free space each cycle and pauses below the 10 GB reserve
+or at a conservative 39 GB accounting threshold. Do not claim this admission
+estimate is a hard filesystem quota: case data can still grow between samples. No unrelated Docker
 container, image or volume is inspected into, stopped, or removed.
 
 `wait()` adds allocated core-hours as five times elapsed wall hours. This is

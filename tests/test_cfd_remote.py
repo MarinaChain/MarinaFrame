@@ -43,6 +43,14 @@ def test_remote_launch_is_confined_and_resource_limited():
     assert 'free - planned_peak_bytes' in script
     assert 'find ' not in script  # Never search another remote workspace.
     assert 'exec 9>&-' in script  # The container must not inherit the lane lock.
+    assert 'src=$PWD/data,dst=/case' in script
+    assert '--read-only' in script
+    assert '--log-opt max-size=10m' in script
+    assert '--log-opt max-file=2' in script
+    assert '--tmpfs /tmp:rw,noexec,nosuid,size=256m' in script
+    assert 'set -C' in script
+    assert '"$free" -lt 10000000000' in script
+    assert '500000000' in script  # Conservative bounded scratch/log allowance.
 
 
 @pytest.mark.parametrize('name', ['../other', 'name;kill', '-bad', ''])
@@ -87,6 +95,20 @@ def test_upload_rejects_repository_and_symlinks(tmp_path):
     host = RemoteHost('worker@example.test', 'opencfd/openfoam-default:2412')
     with pytest.raises(ValueError, match='generated case'):
         RemoteSolverRun.start(['interFoam'], tmp_path, host=host, name='kcs-coarse')
+
+
+def test_upload_rejects_executable_dictionary(tmp_path):
+    (tmp_path / 'system').mkdir()
+    (tmp_path / 'system' / 'controlDict').write_text('functions { bad { type coded; code #{ dangerous #}; } }')
+    host = RemoteHost('worker@example.test', 'opencfd/openfoam-default:2412')
+    with pytest.raises(ValueError, match='executable'):
+        RemoteSolverRun.start(['interFoam'], tmp_path, host=host, name='kcs-coarse')
+
+
+def test_dynamic_library_options_rejected():
+    host = RemoteHost('worker@example.test', 'opencfd/openfoam-default:2412')
+    with pytest.raises(ValueError):
+        host.launch_script('kcs', ['interFoam', '-lib', 'constant/evil.so'])
 
 
 def test_cancel_targets_only_own_named_container(monkeypatch, tmp_path):

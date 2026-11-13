@@ -59,14 +59,21 @@ class RemoteHost:
         for argument in command[1:]:
             if argument.startswith('/') or '..' in argument.split('/') or not re.fullmatch(r'[A-Za-z0-9_./+-]+', argument):
                 raise ValueError('Solver arguments must be confined relative paths or simple options')
+        options = {'snappyHexMesh': {(), ('-overwrite',)}, 'checkMesh': {(), ('-allGeometry', '-allTopology')}}
+        if command[0] == 'surfaceCheck':
+            if len(command) != 2 or command[1].startswith('-') or not command[1].endswith('.stl'):
+                raise ValueError('surfaceCheck requires one relative STL path')
+        elif tuple(command[1:]) not in options.get(command[0], {()}):
+            raise ValueError('Unsupported solver options; dynamic loading is not allowed')
         version = self.image.split(':')[1].split('@')[0]
         solver = f'source /usr/lib/openfoam/openfoam{version}/etc/bashrc; exec nice -n 10 {shlex.join(command)}'
         # Keep the flock descriptor in the monitor for the entire container life,
         # including a safety pause. The monitor survives an SSH disconnect.
         return f'''#!/bin/bash
 set -eu
+set -C
 cd "$HOME/marinaframe-cfd"
-exec 9>.solver.lock
+exec 9>>.solver.lock
 flock -n 9 || {{ printf 'another lane solver is active\\n'; exit 1; }}
 active=$(docker ps --filter 'name=^/mf-cfd-' --format '{{{{.Names}}}}')
 [ -z "$active" ] || {{ printf 'an mf-cfd container is active\\n'; exit 1; }}
@@ -75,7 +82,8 @@ cd {shlex.quote(name)}
 used=$(du -sb "$HOME/marinaframe-cfd" | cut -f1)
 image_bytes=$(docker image inspect --format '{{{{.Size}}}}' {shlex.quote(self.image)})
 planned_peak_bytes=8000000000
-[ $((used + image_bytes + planned_peak_bytes)) -lt 40000000000 ]
+bounded_extra_bytes=500000000
+[ $((used + image_bytes + planned_peak_bytes + bounded_extra_bytes)) -lt 40000000000 ]
 free=$(df -B1 --output=avail . | awk 'NR==2 {{print $1}}')
 [ $((free - planned_peak_bytes)) -ge 10000000000 ]
 uptime >> load.log
@@ -92,8 +100,10 @@ monitor_failure() {{
 trap monitor_failure ERR HUP INT TERM
 (exec 9>&-; docker run -d --name mf-cfd-{name} --cpus 5 --memory 12g \\
  --network none --cap-drop ALL --security-opt no-new-privileges \\
+ --read-only --tmpfs /tmp:rw,noexec,nosuid,size=256m \\
+ --log-driver local --log-opt max-size=10m --log-opt max-file=2 \\
  --user "$(id -u):$(id -g)" --workdir /case \\
- --mount "type=bind,src=$PWD,dst=/case" \\
+ --mount "type=bind,src=$PWD/data,dst=/case" \\
  --entrypoint /bin/bash {shlex.quote(self.image)} -lc {shlex.quote(solver)}) > container-id
 container_started=1
 next_check=$((started+600))
@@ -110,7 +120,8 @@ while :; do
    if [ "$high_since" = 0 ]; then high_since=$now; fi
   else high_since=0; fi
   used=$(du -sb "$HOME/marinaframe-cfd" | cut -f1)
-  if [ "$paused" = 0 ] && {{ [ $((used + image_bytes)) -ge 40000000000 ] || {{ [ "$high_since" != 0 ] && [ $((now-high_since)) -ge 600 ]; }}; }}; then
+  free=$(df -B1 --output=avail . | awk 'NR==2 {{print $1}}')
+  if [ "$paused" = 0 ] && {{ [ $((used + image_bytes + bounded_extra_bytes)) -ge 39000000000 ] || [ "$free" -lt 10000000000 ] || {{ [ "$high_since" != 0 ] && [ $((now-high_since)) -ge 600 ]; }}; }}; then
    docker pause mf-cfd-{name} >> monitor.log
    printf 'paused: resource safety; manual decision required\\n' > safety-pause.txt
    paused=1
@@ -143,9 +154,21 @@ class RemoteSolverRun:
             raise ValueError('Remote upload accepts only generated case files')
         if any(p.is_symlink() for p in self.case.rglob('*')):
             raise ValueError('Remote case contains symlinks')
+        for folder in ('0', 'constant', 'system'):
+            for path in (self.case / folder).rglob('*'):
+                if not path.is_file() or path.suffix.lower() == '.stl':
+                    continue
+                text = path.read_text(encoding='utf-8')
+                if re.search(r'#(?:code|calc|eval|includeFunc)|\bcoded\w*\b|\bsystemCall\b|\bcode(?:Execute|Write|Read|End|Options|Libs)\b', text):
+                    raise ValueError('Remote case contains executable dictionary features')
+                # Only built-in OpenFOAM function libraries from this writer.
+                for libraries in re.findall(r'\blibs\s*\(([^)]*)\)', text):
+                    tokens = shlex.split(libraries.replace(';', ' '))
+                    if any(token not in ('forces', 'libforces.so', 'fieldFunctionObjects', 'libfieldFunctionObjects.so') for token in tokens):
+                        raise ValueError('Remote case contains executable custom libraries')
         script = host.launch_script(name, command)
-        host.execute(f'set -eu; mkdir -p "$HOME/marinaframe-cfd"; mkdir "$HOME/marinaframe-cfd/{name}"')
-        subprocess.run(['scp', '-r', *map(str, files), f'{host.host}:marinaframe-cfd/{name}/'], check=True)
+        host.execute(f'set -eu; mkdir -p "$HOME/marinaframe-cfd"; mkdir "$HOME/marinaframe-cfd/{name}"; mkdir "$HOME/marinaframe-cfd/{name}/data"')
+        subprocess.run(['scp', '-r', *map(str, files), f'{host.host}:marinaframe-cfd/{name}/data/'], check=True)
         # Write the supervisor through SSH stdin, never interpolate caller code.
         host.execute(f"set -eu; cd \"$HOME/marinaframe-cfd/{name}\"; cat > monitor.sh <<'MF_CFD_MONITOR'\n{script}\nMF_CFD_MONITOR\nnohup bash monitor.sh > monitor.log 2>&1 < /dev/null &\n")
         return self
@@ -182,4 +205,4 @@ else printf '{{"state":"starting"}}\\n'; fi
         self.case.mkdir(parents=True, exist_ok=True)
         for name in ('solver.log', 'load.log', 'monitor.log', 'run-receipt.json'):
             subprocess.run(['scp', f'{self.host.host}:marinaframe-cfd/{self.name}/{name}', str(self.case / name)], check=True)
-        subprocess.run(['scp', '-r', f'{self.host.host}:marinaframe-cfd/{self.name}/postProcessing', str(self.case)], check=True)
+        subprocess.run(['scp', '-r', f'{self.host.host}:marinaframe-cfd/{self.name}/data/postProcessing', str(self.case)], check=True)
