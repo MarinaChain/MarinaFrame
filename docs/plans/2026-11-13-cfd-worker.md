@@ -911,3 +911,12 @@ the next mesh. Quick tier at end, push lane only, no merge.
 Resume: prepare source-preserving clipped STL and stern-profile offsets, test
 monitor/case contracts, then physical coarse mesh/checkMesh/solver; continue
 medium/fine sequentially if safety and mesh admission permit. No new run yet.
+
+Preparation numerical canonicalization: OCCT clipped-solid tessellation produced
+four zero-area facets and a maximum **22.95 micrometre model-space** overshoot
+above the exact clipping plane. Remove only zero-area facets, round shared
+vertices to **1e-8 m**, and clamp positive-z tessellation overshoot to the exact
+z=0 clipping plane, rejecting overshoot above **5e-5 m**. This is bounded
+representation cleanup of an already exactly clipped solid, not fitting to
+area/volume/forces. Retain failed preparation logs 01/02 and recheck directed
+closure/orientation after cleanup before publication.
