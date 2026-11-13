@@ -266,3 +266,41 @@ the private denylist: **0 findings**. Durable log and exit receipt are main
 ignored `work/cfd/dtc-source-quick.log` and `dtc-source-quick.exit`. No source
 changed during the run. No lane-local `target/` exists; the shared Rust target
 is retained. Resume at step 1 above; no physical gate is newly passed.
+
+## PM decisions and frozen G-DTC (before any DTC run, 2026-11-14)
+
+These explicit PM decisions supersede the two blockers above. No DTC run has
+occurred before this gate commit. Existing G0–G6 and VPS limits are unchanged.
+
+- Caller-owned configuration: main ignored `work/cfd/remote-host.json`, keys
+  `host`, `image` (pinned official digest), `root`. Read it at runtime; never
+  copy the host into tracked files or report it.
+- **G-DTC, free-attitude condition:** at U=1.535 m/s, total CT on the finest
+  converged mesh must be within **+-4%** of measured CT. Across all six speeds
+  in Table 4 above, mean absolute relative CT error must be **<=4%**. Use
+  CT=RT/(0.5*998.8*U^2*6.243), including full/half force accounting; derive
+  reference CT from measured RT rather than the rounded published CT column.
+- **Separate fixed-attitude condition:** if the tutorial cannot solve free
+  sinkage and trim, declare zero fixed attitude explicitly and use **+-6%**
+  at design speed and **<=6%** mean absolute relative CT error across the series.
+  This is separately labelled fixed-attitude evidence, not a free-attitude pass.
+- Basis is a **PM-set engineering acceptance band**, not a claimed published
+  experimental uncertainty: typical RANS scatter against towing-tank data for
+  this hull class in published workshop comparisons. Locate and cite at least
+  one such comparison when available, but it does not block this gate or runs.
+  The primary paper provides no numerical uncertainty; do not manufacture one.
+- Match bare hull or rudder configuration to the test and state the evidence.
+  Use free sinkage and trim if supported by the tutorial. Any unresolved
+  appendage mismatch prevents a comparable-condition gate claim.
+- **G-DTC convergence:** three systematically refined meshes at **1.535 m/s**;
+  record actual cells and refinement ratios. Require monotone total resistance,
+  **<=2%** fine/medium relative change and **<=1%** force drift between two final
+  equal windows, each **>=100 samples**. Do not start the speed series before
+  convergence passes. Mesh settings must be frozen before meshing.
+- Every run records cells, allocated cores, elapsed wall seconds and allocated
+  core-hours; mesh and solver costs separately. No successful process exit is
+  a substitute for surface, mesh, convergence or physical acceptance.
+
+Next: read caller configuration, inspect only the pinned image's DTC tutorial,
+record STL hash/bounds, run monitored surfaceCheck, commit results; then freeze
+mesh settings and begin the three-mesh study. Track B follows once A is running.
