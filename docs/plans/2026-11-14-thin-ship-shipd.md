@@ -42,6 +42,21 @@ Local `code/README.md`: 3 constrained subsets, 32 wave-drag conditions. `Compute
 3. Run first 3 selected hulls with a background log, inspect all 96 outcomes; retain failures. Then run all 300 in background. Keep data outside git; add a small aggregate under `outputs/thin-ship-shipd/summary.json`. Commit results and plan update.
 4. Review change simplicity, run focused tests, tracked-file identity check and `make test-quick PY=/Users/jonathanjie/Documents/workspace/MarinaFrame/.venv/bin/python` in background. Supply `MF_IDENTITY_DENYLIST_FILE` and `MARINAFRAME_TEST_PYTHON` inline. Record exact results, commit, push only `lane/thin-ship-shipd`. Inspect and delete only this worktree's `target/` as final tool step.
 
+## Results (2026-11-14)
+
+- Frozen sample committed in `b4c12a7` before any resistance calculation. Evaluator/tests committed in `a8bcfe2`. Production solver unchanged.
+- Synthetic tests: 4 expected missing-helper failures, then 5 passed. Pilot: 96/96 finite, median 2.05749%, p90 8.66881%; all traces inspected before scaling.
+- Full sample: 300 hulls, 9,600 conditions; 9,592 finite (99.9167%). Median absolute relative difference **2.03001%**; p90 **10.28459%**. **Fixed gate FAILS**, since p90 exceeds 10%. Complete-case median 2.02692%, p90 10.22977%; failure is not caused only by missing cases. 1,003 conditions exceed 10% or fail.
+- Eight conditions have invalid negative/nonfinite offsets and remain infinite-error conditions. No endpoint closure, clipping, sample replacement or threshold change. All 9,600 generated grids have closed endpoints; this sample provides no open-transom comparison.
+- Outlier patterns: bow-bulb p90 12.2355% versus 9.8109% without; stern-bulb p90 10.0224% versus 10.3530% without. Slenderness p90: <5 = 9.9420%, 5–10 = 11.0144%, >=10 = 8.2914%. These are descriptive, not independent causal tests. Subset p90: 10.8335%, 10.4602%, 9.5737%.
+- Reference checks: maximum generated-versus-published WL difference 0.00019685 m; stored Cw versus Rw-implied Cw difference <=0.001882%. LOA-squared normalization and draft-major condition order match the dataset notebook.
+- Nine refined pilot conditions (601×101 offsets, 1024 angles, lambda_max=48): change from defaults min/median/max 0.06027/0.34326/3.85909%. This is not a universal convergence guarantee. Published reference uses 21 angle samples; no production tuning was attempted.
+- Median default evaluation time: 7.864 ms on this Mac (serial full run).
+- Aggregate deliverable: `outputs/thin-ship-shipd/summary.json`. Detailed traces and hashes remain in ignored `work/thin-ship-shipd/`. First pilot attempt stopped before evaluation because numpy-stl was missing; dependencies installed only in lane scratch, then pilot retried. Original failed log retained.
+- Tracked-file identity check with private denylist: 0 findings. Quick tier running; final result to be recorded below.
+- Review limitation: reviewer launches incorrectly requested extra-worktree isolation and were stopped. No independent review completed. No other worktree was entered or edited by this session. Self-review retained fixed denominators, source hashes, strict invalid-offset handling and aggregate-only output; PM independent review remains needed.
+- Engineering status: `review_required`; engineering_approved=false.
+
 ## Resume point
 
 Sample frozen before resistance computations: SHA-256 `a2465175dd6a38879f99787824d9419946c2bcdf3a6c1b38c54d8d4580c671de` (newline-joined IDs, no final newline), 100 each from populations of 10,000. Exclusion SHA-256 `0b44a428638e648bc56a982469a93b17320424d8697bc76d1cd829fff1dfcaa3`. Geometry source SHA-256 `da44dc1d50bf466023118051ce3b33a4cce580218b7d3236ea08030f24682f28`. Full source hashes and IDs are in ignored `work/thin-ship-shipd/sample.json`, reproducible using the committed selector. No resistance results have been computed. Next: synthetic tests and evaluator, then pilot.
