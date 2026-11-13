@@ -1261,3 +1261,21 @@ snappyHexMeshDict from dtc-official-mesh01, not guessed defaults. Runner now
 permits only plain `cartesianMesh` (no extra utility), tested red/green;
 arguments/dynamic libraries remain rejected. Availability is not claimed.
 Proceed to explicitly authorized separate-pass snappy fallback.
+
+### Recovery coarse mesh04: separate-pass measured failure
+
+cfMesh absent from pinned image. Snappy snap157s, layer76s, surfaceCheck1s,
+blockMesh5s, checkMesh8s; whole **250.453681s /0.347852335 allocated core-hours**.
+Actual **1,028,694 cells**, checkMesh OK. Layer field confirms hull uniform0:
+**0/17002 full-count faces**, no solver admission. Initial full extrusion
+created510060 candidates but **249588 faces failed determinant<1e-4**, 94 twist,
+52 pyramid and7 interpolation-weight checks; rollback removed all layers.
+Sampled layer VmHWM **2484256768bytes (2.314GiB)** lower bound, no OOM.
+Evidence ignored `kvdb2-recovery-{full-layer,layer-evidence,layer-diagnostic}.log`.
+
+Before force measurements, one root-cause-directed layer-only retry: disable
+thin-prism-incompatible determinant/twist constraints **minDeterminant-1,
+minTwist-1**, reduce minVol1e-18 and minFaceWeight0.001 for extrusion only.
+All other settings unchanged. Final checkMesh still gates output; do not
+accept negative volumes or weaken standalone checkMesh. This tests the logged
+quality rollback cause, not a geometry/force fit. Commit mesh04 before retry.
