@@ -61,5 +61,6 @@ Files: `.github/workflows/ci-watch.yml`, platform-specific test files, this plan
 - Full collection with `fcntl`, `pwd` and `resource` imports blocked after loading the lock backend: 2,899 tests collected, zero errors (8.38 s). This is an import-path probe on macOS, not native Windows evidence. Collection reads test code only; no holdout scorer was run.
 - Workflow now triggers on source/tests and records collection exit code plus platform skip reasons.
 - Local tracked identity scan with the private denylist: zero findings. `git diff --check`: clean.
-- Quick tier running with the required environment. The Makefile uses the shared Rust target; this lane has no `target` folder. Never delete the shared target.
-- Resume: finish quick tier, push the lane, inspect native Windows results, then address remaining platform failures without broad skips. Full Windows/Linux/macOS gate remains pending.
+- Required quick tier completed with exit 0: Rust formatting/clippy/workspace tests passed; Python 2,766 passed, 4 skipped, 129 deselected (770.85 s); UI 275 passed, zero failed; bounded secrets scan zero findings. The required private denylist identity scan also returned zero findings separately.
+- The Makefile uses the shared Rust target; this lane has no `target` folder. Never delete the shared target.
+- Resume: push the lane, inspect native Windows results, then address remaining platform failures without broad skips. Full Windows/Linux/macOS gate remains pending.
