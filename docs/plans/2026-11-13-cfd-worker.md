@@ -1312,3 +1312,29 @@ pause. No managed codesight or lane target exists; shared targets retained.
 Report `outputs/2026-11-14-kvdb2-layer-recovery.md`. G-KV-DB2 blocked,
 no solver/y+/(1+k) on any new grid; preserve failures and worktree. Push lane
 only/no merge. Resume requires new mesh strategy or authorized cfMesh runtime.
+
+## PM operating-rule change: coarse05 solver admission
+
+This PM change supersedes prior checkMesh-aspect/full-count admission rules,
+**not G-KV-DB2 frozen at f357e2d** and not historical failures. Near-wall
+high aspect ratio is expected for y+<1. Admission now requires no negative
+volumes/wrong-oriented faces, maximum nonorthogonality **<70**, skewness **<4**,
+and **zero cells with aspect ratio>1000 outside added layer cells**. Report
+that outside count explicitly. Coarse05 is PM-admitted despite86.025% full-count
+and99.812% partial coverage, conditional on the recorded layer-cell location
+check. All requested settings/actual coverage stay reported.
+
+1. Intersect retained highAspectRatioCells with addedCells; report total and
+outside counts using actual cell labels, not layer coverage inference. Commit.
+2. Run coarse05 simpleFoam2000 iterations, retain all forces; final fixed100+100
+window drift<=1%. Use factor2/full S. Report single-grid(1+k), never gate pass.
+3. Read final yPlus boundary field and geometric hull face areas. Report area-
+weighted distribution and shares **y+<1 and <5**, plus face-count shares.
+If<1 covers>=95% area, admit systematic medium/fine with same layer settings,
+linear ratio~1.3 (base96/125 vs74; target~2.2x/4.8x coarse cells). Measure
+actual refinement and memory, never assume fit. Otherwise reduce first-layer
+height, record setting before rebuilding and rerun coarse before further grids.
+4. Same startup load1<4 otherwise600s background wait, rolling-load pause,
+no automatic unpause;5CPU/12GiB/nice10/one container/disk limits; stop>24h
+projection. Commit each step, final stable quick tier, push lane only/no merge.
+No thin-ship. Resume now at cell-label admission check; no new solver yet.
