@@ -61,7 +61,13 @@ Fresh-agent report review was not completed: the tool placed the reviewer in an 
 
 All 17 source-limit tank intersections completed and each returned one valid solid. Cargo plus two slops at 98%: **335,866.275 m3**, difference **+14,664.275 m3 (+4.565437%)** against the PM reference 321,202 m3. This is **outside the unchanged 2% band**. No post-result geometry, fill factor or boundary adjustment was made. This result does not establish an error in the source model or isolate generator error: planar inner limits do not reproduce its shaped structural surfaces. Exact published-surface reconstruction remains incomplete; G3b is not passed.
 
-**Round-2 resume point:** source-limit result recorded; ungated generator baseline still running from `work/argyro/scripts/capacity.py`. Then record its result and self-review the report. A waiting background command will run the final quick tier after the CAD process exits. Evidence: ignored `work/argyro/results/capacity-results.json` and `capacity.log`. Final quick tier still required.
+### Ungated generator baseline
+
+The frozen caller-chosen baseline completed with the unmodified generator: cargo plus slops **362,965.254 m3 at 98%**, **+41,763.254 m3 (+13.002177%)** against the published reference, and +27,098.979 m3 against the source-limit reconstruction. Compartment partition relative error: **2.352e-9**. This is descriptive, not a gate. The generator uses its existing rule-minimum 2 m sides/bottom; it has no autonomous selector for the other required arrangement inputs. Thus the requested autonomous 'own choices' comparison is not implemented; this explicit baseline is not labelled autonomous.
+
+Both experiments exited 0; their geometric execution success is distinct from G3b acceptance. Evidence stays in ignored `work/argyro/results/capacity-results.json`, `generator-record.json` and `capacity.log`. No source/derived files are tracked. Self-review: frozen commit precedes capacity; the band is unchanged; incomplete source surfaces and unavailable offset accuracy are explicit. No independent final review completed.
+
+**Round-2 resume point:** final quick tier running after CAD completion. Read its complete result; record checks, commit and push only lane/tank-g3b after a successful chained quick check. Inspect then delete only this lane's `target` as the last shell action. Do not merge.
 
 ## Sources and method limits
 
