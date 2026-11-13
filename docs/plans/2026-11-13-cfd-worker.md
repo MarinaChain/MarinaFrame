@@ -1416,3 +1416,12 @@ observed rate plus initialization. If<=24h continue fresh/restarted physical
 coarse to2000 with receipt/forces/y+; else stop/report. Same load/disk/memory
 rules remain, no automatic unpause. Tests/commit each step, final quick/push
 lane only/no merge. No new diagnostic started at this checkpoint.
+
+### MPI diagnostic01 startup transport failure
+Load1.62? Actual admission log **0.62**. decomposePar completed10s into5
+subdomains; MPI initialization failed before potentialFoam/solver. Explicit
+self,tcp transport found onlyself usable under --networknone, so ranks could
+not communicate. Whole **32.277242s /0.044829503 core-hours**, no OOM.
+Retain receipt; no iterations/projection. Retry uses **self,vader** local
+shared-memory transport and disables vader single-copy mechanism (no ptrace),
+no network permission change or host networking. Same5 ranks/resources.
