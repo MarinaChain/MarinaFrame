@@ -28,6 +28,19 @@ G3 public capacity: absolute relative error <=2% at 98% fill, against a publishe
 
 G4 delivery: focused tests and full quick tier exit 0; inspect diff for unrelated changes and white-label leaks; commit and push lane/tank-arrangement only. Do not merge. Inspect then delete only lane-local target as last shell action.
 
+## Round 2: PM change of reference and frozen G3b (2026-11-13)
+
+PM changed the reference **before any capacity was computed**. Original G3 was never run: Tokachi has neither a public matched hull nor an explicit fill basis. Its blocked history above remains unchanged. G3b replaces that reference with CAP01, the published ARGYRO design study (NTUA handle 123456789/58817), not a built ship.
+
+- Freeze G3b in a commit before digitisation or capacity runs. Absolute relative error must remain **<=2%**, at **98% fill**, against **321,202 m3** (PM reference; source table gives 321,202.327 m3 including two slop tanks). Do not tune geometry or boundaries against the result.
+- Reconstruct the published vector lines using MarinaFrame readers where suitable. Record station coverage and per-station accuracy against published numeric offsets if any; if none exist, state that independent offset accuracy is unavailable. Check source particulars and the published Cb before capacity computation; report discrepancies, do not adjust to match capacity.
+- G3b uses published bulkhead frame positions, 3.5 m double sides and 2.8 m double bottom. Include cargo and slops on the source's basis. Compare the hull-intersected sum, not bounding-box capacities.
+- Separately run the existing generator with its own choices for the same particulars. This is descriptive only, with no acceptance gate.
+- Licence boundary: source PDF, extracted text, digitised lines, geometry, per-tank tables and all derived data stay in ignored `work/` only. This tracked plan records method, gate outcome and compact aggregate findings only, as requested by PM; never attach source extracts or derived geometry.
+- Round-2 delivery is **lane/tank-g3b only**, superseding the old G4 branch name. Run the quick tier, commit, push; no merge. `engineering_approved=false` throughout.
+
+**Round-2 resume point:** freeze this section first; no capacity computation has been performed in this session. Then inspect local CAP01 assets, digitise, construct source-boundary tanks, run the ungated comparison, record evidence and checks.
+
 ## Sources and method limits
 
 MARPOL Annex I text: IMO resolution MEPC.117(52), adopted 15 October 2004, https://wwwcdn.imo.org/localresources/en/KnowledgeCentre/IndexofIMOResolutions/MEPCDocuments/MEPC.117(52).pdf . Historical version explicitly pinned, not a claim to current consolidated applicability.
