@@ -53,7 +53,9 @@ def fragment_evidence(value, *, unit='1', metadata=None):
             # A missing quantity cannot fit the scalar schema. Keep its full
             # metadata as evidence rather than invent a zero or lose its unit.
             return {'kind': 'object', 'value': {key: fragment_evidence(child) for key, child in value.items()}}
-        if isinstance(raw, (list, dict)):
+        if isinstance(raw, list):
+            return {'kind': 'list', 'value': [fragment_evidence({**value, 'value': child}) for child in raw]}
+        if isinstance(raw, dict):
             inherited = {key: value[key] for key in ('method', 'method_version', 'sources')}
             return fragment_evidence(raw, unit=value['unit'], metadata=inherited)
         return {'kind': 'quantity', 'value': canonical_quantity(value)}
@@ -68,7 +70,20 @@ def fragment_evidence(value, *, unit='1', metadata=None):
     if isinstance(value, (list, tuple)):
         return {'kind': 'list', 'value': [fragment_evidence(child, unit=unit, metadata=metadata) for child in value]}
     if isinstance(value, dict):
-        return {'kind': 'object', 'value': {key: fragment_evidence(child, unit=field_unit(key, unit), metadata=metadata) for key, child in value.items()}}
+        fields = {}
+        table_units = {'vertices': ('rpm', 'kW'), 'sfoc_by_load': ('1', 'g/kWh'), 'fuel_t': ('1', 't')}
+        for key, child in value.items():
+            if key in table_units:
+                rows = []
+                for row in child:
+                    if len(row) != 2:
+                        raise ValueError(f'{key} requires two-column rows')
+                    rows.append({'kind': 'list', 'value': [fragment_evidence(cell, unit=cell_unit, metadata=metadata)
+                        for cell, cell_unit in zip(row, table_units[key])]})
+                fields[key] = {'kind': 'list', 'value': rows}
+            else:
+                fields[key] = fragment_evidence(child, unit=field_unit(key, unit), metadata=metadata)
+        return {'kind': 'object', 'value': fields}
     raise ValueError(f'Unsupported fragment type: {type(value).__name__}')
 
 

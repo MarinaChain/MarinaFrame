@@ -135,6 +135,37 @@ def test_pipeline_real_modules_cache_and_speed_dependency(tmp_path):
     config['efficiency']['distance_nm'] = 42000.
     _, receipt = run_pipeline(create_record(config), tmp_path)
     assert receipt.executed == ('efficiency',)
+    edited = changed.to_dict()
+    edited['requirements']['quantities']['dwt']['value'] = 11000.
+    _, receipt = run_pipeline(DesignRecord.from_dict(edited), tmp_path)
+    assert 'concept' in receipt.executed and 'arrangement' in receipt.executed
+    assert 'hull' not in receipt.executed
+
+
+def test_cli_runs_config_then_record_without_recomputing(tmp_path):
+    import os
+    import subprocess
+    import sys
+    config = tmp_path / 'config.json'
+    config.write_text(json.dumps(synthetic_config()))
+    output, receipt = tmp_path / 'record.json', tmp_path / 'receipt.json'
+    command = [sys.executable, 'scripts/design_loop.py', '--cache', str(tmp_path / 'cache'),
+        '--out', str(output), '--receipt', str(receipt)]
+    env = {**os.environ, 'PYTHONPATH': str(Path('src').resolve())}
+    subprocess.run(command + ['--config', str(config)], env=env, check=True, capture_output=True)
+    assert len(json.loads(receipt.read_text())['executed']) == 7
+    subprocess.run(command + ['--record', str(output)], env=env, check=True, capture_output=True)
+    assert json.loads(receipt.read_text())['executed'] == []
+
+
+def test_input_table_columns_and_parent_metadata_keep_units():
+    from vessel_reconstruction.design_loop.evidence import fragment_evidence
+    evidence = fragment_evidence({'vertices': [[80., 10000.]], 'sfoc_by_load': [[.75, 170.]],
+        'fuel_t': [['HFO', 3000.]], 'x_m': [1., 2.]})['value']
+    assert [q['value']['unit'] for q in evidence['vertices']['value'][0]['value']] == ['rpm', 'kW']
+    assert [q['value']['unit'] for q in evidence['sfoc_by_load']['value'][0]['value']] == ['1', 'g/kWh']
+    assert evidence['fuel_t']['value'][0]['value'][1]['value']['unit'] == 't'
+    assert evidence['x_m']['value'][0]['value']['unit'] == 'm'
 
 
 def test_pipeline_api_and_required_sources():
