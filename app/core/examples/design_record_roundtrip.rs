@@ -1,4 +1,4 @@
-//! Read a strict v1 record from stdin, validate it, and emit JSON to stdout.
+//! Read a supported record from stdin, validate it, and preserve its version.
 use marinaframe_app_core::design_record::DesignRecord;
 use std::io::{self, Read};
 

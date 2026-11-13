@@ -80,6 +80,22 @@ def test_migration_validates_source_without_dropping_fields(mutation):
     assert source == original
 
 
+def test_migration_validates_target_schema(monkeypatch):
+    # A target contract that rejects 1.1.0 must also block migration.
+    monkeypatch.setitem(contract.SCHEMA_FILES, "1.1.0", "design-record-v1.schema.json")
+    source = fixture()
+    original = copy.deepcopy(source)
+    with pytest.raises(ValueError):
+        contract.migrate_v1_0_0_to_v1_1_0(source)
+    assert source == original
+
+
+@pytest.mark.parametrize("data", [None, [], {"schema_version": []}, {"schema_version": {}}])
+def test_invalid_version_shapes_raise_value_error(data):
+    with pytest.raises(ValueError):
+        contract.DesignRecord.from_dict(data)
+
+
 def test_v1_1_keeps_strict_validation():
     source = fixture()
     source["schema_version"] = "1.1.0"
