@@ -706,3 +706,101 @@ secret scan **0 findings**, separate private identity scan **0 findings**.
 Main ignored `work/cfd/dtc-rate-quick.log` / `dtc-rate-quick.exit`. Only tracked
 documentation changed during this run. Resume at the PM resource decision;
 no more runtime or gate changes made.
+
+## PM KVLCC2 double-body direction and frozen G-KV-DB (2026-11-14)
+
+This section supersedes the DTC continuation and KCS-first run order, not their
+historical results or gates. **Stop DTC** and preserve its logs/forces. The
+~858 h partial-window projection (~860 h) is not a stable throughput estimate.
+Free-surface RANS is reserved for finalists on a larger machine later. Track B
+remains parked. No new physical run has started at this gate freeze.
+
+### Fixed conditions, geometry decision and gate
+
+- Steady `simpleFoam`, SST RANS, fixed zero attitude, flat waterplane represented
+  by a symmetry plane. No moving surface, sinkage, trim or wave force in CFD.
+- KVLCC2 scale 1:58, Lpp **5.5172 m**, T **0.3586 m**, nominal Fn **0.142**,
+  U **1.047 m/s**. Use the rounded PM draft as stated; record its small difference
+  from 20.8/58 without fitting geometry. Water: rho **999.6 kg/m3** (assumed fresh
+  water, not a published density), nu **1.2557626956521737e-6 m2/s**, derived from
+  the published model Re **4.6e6**. Source: permitted main ignored
+  `work/perf-eval/kvlcc2-cases.json`, consistent with the performance plan.
+- Community solid: main ignored
+  `work/cfd/sources/grabcad/kvlcc2_solid-1.snapshot.1.zip`, SHA-256
+  `5a7eda8ca298ab3783df53386e826f8f2aafc385f5290924e9658cd7e55151d1`.
+  Extract only its STEP into a new empty directory. Native numeric coordinates
+  mean physical metres despite STEP millimetre declarations; apply the explicit
+  1000-mm-per-coordinate interpretation, then divide by 58. Native x increases
+  aft and z points down. Full hull: do not mirror across the centreplane.
+- PM accepts this source for CFD on volume **+0.008940%**, Lwl **+0.000460%**
+  and the recorded source-distance evidence. Original wetted-area gate **FAIL
+  (+1.855346%) stands**; it is not reruled. Analytic curved-shape checks found no
+  area-code bias. Reference convention is the PM's working attribution, **not
+  independently confirmed**. Mesh distance maxima can be dominated by
+  tessellation; complete exact common-skin statistics remain unavailable.
+- Normalise all coefficients with published bare-hull **S=8.0838 m2**, never
+  the computed area. State no rudder/appendages and unresolved experimental
+  attitude correspondence. Keep `engineering_approved=false`, `review_required`.
+- **G-KV-DB:** CT_est = CV(double-body, finest converged mesh) + Cw(thin-ship,
+  same geometry/condition/reference area). Require **abs(CT_est/0.004110-1)<=0.05**,
+  i.e. **0.0039045 <= CT_est <= 0.0043155**. This is a PM-set hybrid estimate
+  gate, not a free-surface RANS pass or experimental uncertainty statement.
+- **Convergence:** three systematic meshes, monotone CV, fine/medium relative
+  difference **<=2%**; final force drift **<=1%** between the final two equal
+  windows, each **>=100 samples**. Record actual cells and refinement ratios.
+  Do not select favourable windows or stop after two meshes.
+- Report implied **(1+k)=CV/CF**, CF=0.075/(log10(Re)-2)^2 (ITTC-57), alongside
+  prior Holtrop-type **1.36 (1982)** / **1.34 (1984)**. Their eight-speed mean
+  errors were +20.9% / +18.9%; design-point errors +20.4% / +18.4%.
+- Thin-ship implementation/protocol is on merged `origin/continue/v0.5` in
+  `docs/plans/2026-11-13-thin-ship.md`; use matching source via `git show`, not a
+  branch merge. Its closed-end/immersed-transom limitations must not be bypassed
+  by deleting source regions or forcing endpoint breadth to zero. If this hull
+  cannot be represented, report Cw and G-KV-DB blocked rather than invent a term.
+
+### Operating rules for this track
+
+One job/container at a time, only `~/marinaframe-cfd/`, names `mf-cfd-*`, pinned
+official image from main ignored `work/cfd/remote-host.json`; host never tracked
+or printed. Five-CPU quota, 12 GB RAM, nice 10, same lock, no network, host-side
+monitor and isolated control paths. Prefer startup load1 **<4**. Apply PM's
+**10-minute rolling load estimate >9 continuously for a further 10 minutes**
+to this track too (30-s load1 samples, complete time-weighted 600-s window).
+Pause and report; never automatically unpause. Preserve 10 GB host disk reserve,
+<40 GB lane accounting including image/layers/logs. **Stop and report if any
+run projects above 24 h**; this replaces the earlier DTC 48-h reporting rule,
+not an arbitrary wall timeout. Record mesh/solver cells, allocated cores,
+wall seconds and core-hours separately, including failed/interrupted attempts.
+
+### Design review and committed execution steps
+
+Architecture PASS: reuse separate solver/image/SSH boundary; a symmetry-plane
+case is distinct from the old reflected-full-body writer (force factor 1 vs .5).
+Quality WARN: old writer has no layers and is not physical evidence; test new
+boundary/force accounting and actual v2412 syntax before use. Coverage WARN:
+exercise rolling-load monitor, terminal states, symmetry fields and geometry
+clipping on synthetic cases. Performance WARN: measure coarse iteration cost
+before medium/fine admission; no claim of a <24-h fit without measurements.
+
+1. Commit this gate and decisions before **any** new run. Inspect the exact DTC
+   container and stop it without unpausing; retain all evidence and final state.
+2. Inspect source units/topology; generate model-space wetted solid/STL with
+   explicit waterplane closure for meshing, retaining all physical skin. Freeze
+   tessellation and three systematic mesh settings before public preparation.
+   Run topology/source checks before mesh, no area fitting. Commit evidence.
+3. Add failing synthetic tests for symmetry-plane case output, force factor,
+   wall layers/y+ diagnostics, final-window convergence and rolling-load safety.
+   Implement only lane-local CFD code/scripts; run focused tests; commit.
+4. Run monitored surfaceCheck, coarse mesh/checkMesh, then solver sequentially.
+   Capture all forces and y+, cells/stage timing and runtime projection early.
+   Stop on safety, mesh failure or >24-h projection. Commit each stage result.
+5. Only when admitted, run medium/fine sequentially; compute Cw only through a
+   source-supported adapter and report its panel/angle sensitivity. Score the
+   fixed gate only after all prerequisites pass. Never substitute empirical CV.
+6. Run quick tier with main venv and inline private identity denylist. Read the
+   terminal receipt, record limitations/resume point, commit and push only
+   `lane/cfd-worker`, no merge. Remove only lane-owned target if present.
+
+Resume: gate freeze is the next commit. No new diagnostic, mesh, solver or Cw
+result yet. Read `work/hull-ends-plan.md` and `work/thin-ship-plan.md` snapshots
+for full source evidence; these are ignored copies, not new published results.
