@@ -67,7 +67,11 @@ The frozen caller-chosen baseline completed with the unmodified generator: cargo
 
 Both experiments exited 0; their geometric execution success is distinct from G3b acceptance. Evidence stays in ignored `work/argyro/results/capacity-results.json`, `generator-record.json` and `capacity.log`. No source/derived files are tracked. Self-review: frozen commit precedes capacity; the band is unchanged; incomplete source surfaces and unavailable offset accuracy are explicit. No independent final review completed.
 
-**Round-2 resume point:** final quick tier running after CAD completion. Read its complete result; record checks, commit and push only lane/tank-g3b after a successful chained quick check. Inspect then delete only this lane's `target` as the last shell action. Do not merge.
+### Round-2 delivery checks
+
+Final quick tier after CAD: **exit 0**, Python **2715 passed, 4 skipped, 100 deselected, 5 warnings** in 519.73 s; Rust **321 passed, 50 ignored, 0 failed**; UI **275 passed, 0 failed**; formatting/clippy successful; bounded scan **1386 tracked text files, 0 findings**. The earlier intake timing failure passed on this run. Log: ignored `work/checks/round2-final-quick.log`. Focused CAD tests: 24 passed. `git diff --check` clean. Tracked changes are limited to this plan and the matching station-identity lesson; no product code, PRD, ROADMAP or licensed geometry changed.
+
+**Round-2 resume point:** experiments and local checks complete; G3b is outside band, exact source inner surfaces and autonomous layout selection are not done. Commit this result, then run a final quick check chained to `git push origin HEAD:lane/tank-g3b`; no merge. After push, inspect and delete only the lane-local `target` as the last shell action. Retain ignored `work/argyro` so the runs can be reproduced.
 
 ## Sources and method limits
 
