@@ -41,6 +41,38 @@ SECURE_READ_TESTS = {
 }
 
 
+# These tests execute the POSIX supervisor, not only ordinary CAD functions.
+# Windows needs a job-object/resource-limit implementation before they can run.
+POSIX_LIFECYCLE_TESTS = {
+    'test_iges_exports.py': {'test_structure_block_writes_iges_beside_step'},
+    'test_rhino_exports.py': {'test_structure_block_3dm_names_follow_member_ids'},
+    'test_parallel_parts.py': {
+        'test_parts_use_processes_in_input_order',
+        'test_parts_respect_occupied_pool',
+        'test_parts_serial_and_parallel_errors_match',
+        'test_synthetic_vessel_exports_are_identical',
+        'test_ship_components_and_failure_reports_match',
+        'test_internal_and_steel_builds_match',
+    },
+    'test_runtime.py': {
+        'test_sandbox_stall_kills_child_process_group',
+        'test_cancel_kills_worker_and_descendant',
+        'test_exited_parent_does_not_leave_descendant',
+        'test_restart_cleanup_can_identify_orphan_group',
+        'test_reused_pid_identity_is_never_signalled',
+        'test_actual_cpu_address_space_and_file_limits',
+        'test_quick_exit_still_checks_aggregate_output_budget',
+        'test_deterministic_default_has_no_cpu_limit_and_reports_progress',
+        'test_cpu_limit_stop_names_limit_and_progress',
+    },
+    'test_worker_progress.py': {
+        'test_nested_worker_defers_time_limit_to_controller',
+        'test_standalone_stall_policy_uses_trust_not_child_heartbeat',
+        'test_security_cap_stops_a_live_child_without_process_inspection',
+    },
+}
+
+
 def pytest_collection_modifyitems(items):
     if os.name != 'nt':
         return
@@ -48,3 +80,6 @@ def pytest_collection_modifyitems(items):
         name = item.name.split('[', 1)[0]
         if name in SECURE_READ_TESTS.get(item.path.name, set()):
             item.add_marker(pytest.mark.skip(reason=SECURE_READS_UNSUPPORTED))
+        if name in POSIX_LIFECYCLE_TESTS.get(item.path.name, set()):
+            item.add_marker(pytest.mark.skip(
+                reason='Secure worker process lifecycle is not supported on this platform.'))
