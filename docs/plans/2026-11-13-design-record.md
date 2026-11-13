@@ -45,10 +45,24 @@ Targeted Python/Rust tests and full quick tier must pass. Format and lint pass. 
 4. Add public result adapter and fixture builder under this package and `scripts/build_design_record_example.py`. Unit tests compare adapter reconstruction with original outputs, not just with fixture values.
 5. Run G1/G2; record exact commands/results here. Run G3, review elegance and diff, commit/push, remove local build output.
 
+### G4 — packaging fixture regression and final rerun
+
+Before checking: the temporary wheel-test project must include every newly declared schema data file. Its wheel must retain the existing tool catalog and contain the exact canonical design-record schema. Run the focused wheel test, then the unchanged full quick tier. Both must exit zero before any push.
+
 ## Results
 
-Pending. No gates have run.
+- First draft committed as `49e6c69` before G0. G0 (`work/g0-quick.log`) passed Rust but was interrupted during Python after a failure marker. It overlapped implementation; the failure cause was not captured before interruption, so it is not a clean baseline result. Stopped this redundant run to avoid competing with G3. No push yet because quick tier is mandatory before every push. The first-draft early-push goal is delayed by this mandatory gate.
+- TDD red: `test_design_record_api_exists` failed because the package was absent. Early Rust test attempt failed because the generated public fixture was not yet available; rerun after fixture generation passed.
+- G1/G2 first focused run: 11 Python tests passed; Rust shared corpus (21 invalid records) passed; Python -> Rust -> Python produced identical canonical JSON, 138445 bytes. Expanded checks add schema-vocabulary drift protection and save-time mutation validation (3 Rust tests passed). Final rerun pending after per-method provenance refinement.
+- Public IGES fixture generation initially failed because water properties were not supplied to Holtrop. Corrected with explicit 1025 kg/m3 and 1.19e-6 m2/s; generation then passed. No thresholds changed.
+- `cargo clippy --locked -p marinaframe-app-core --lib -- -D warnings` passed.
+- Elegance review: retained explicit extension maps; added installed-schema data file, save-time revalidation, per-method evidence provenance, and a schema-vocabulary drift test. No cross-lane import.
+- Architecture refresh attempted in this worktree. Scanner completed, but helper failed with `ModuleNotFoundError: render_bootstrap`. Removed incomplete generated `.codesight` output. No source files were changed by the helper. This is machine tooling follow-up, not a contract blocker.
 
 ## Resume point
 
-Plan and gate definitions are written. Next: draft schema, commit it with this plan, run G0, push first draft. Then implement tasks 2-5 directly under the user's existing authorization.
+Implementation and focused checks are complete. G0 is interrupted (see results); G3 (`work/final-quick.log`) is running. Latest focused run passed: 13 Python tests, 3 Rust tests, exact canonical bridge 134622 bytes. Wheel build passed and contains the Python package plus the canonical schema data file. Do not push until a full quick tier passes. Latest generated fixture includes per-method provenance and explicit water inputs; rerun focused output is in the background task log. Next: read completed quick logs, fix real failures without weakening gates, record exact totals, push schema commit first then implementation commit on `lane/design-record`, and remove only this worktree's `target` after all builds stop. No merge.
+
+Public example values: candidate Cb 0.9144898202304488; retained volume 284881.8334721441 m3; separate full-vessel baseline resistance 1654064.986120052 N; brake power 16948.359713548485 kW; fuel 69.14930763127782 t/day. These are preserved draft calculations, not new accuracy evidence.
+
+Final focused expectation: 13 Python tests and 3 Rust tests, 21 shared invalid mutations, and exact canonical bridge. Full quick totals remain pending. Full hull reconstruction, stability/strength calculations, scope authorization service and mapping other lanes' fragments are outside this lane.
