@@ -101,7 +101,15 @@ Generic shaped support added in `arrangement_generator/shaped.py`: explicit clos
 
 Self-review added miter/invalid-offset checks and a mixed-solid-plus-stray-face regression. The latter failed before the fix: the single-solid guard discarded stray non-solid geometry. It now checks face/edge/vertex coverage before accepting the solid. **52 focused tests passed in 21.02 s** after the fix. No tracked Codesight/context-map metadata exists to refresh.
 
-**Round-3 resume point:** source-supported hopper/section-normal-side/camber ablations are running under `work/argyro/scripts/develop.py`. Inspect every result and report explicit approximations; do not interpret development fit as a gate. Full per-tank tables remain under work due to the source licence. Historical G3b stays failed.
+### Development rerun checkpoint (not a gate)
+
+Three geometry runs completed. Hopper without side protection: +12.237% (not a one-factor comparison with the old model); hopper plus section-normal side protection and flat deck: -0.471%; adding source-dimensioned camber: **329,697.434 m3 at 98%, +2.644784%** against the thesis table. Isolated camber addition increases capacity by 10,008.397 m3. The cambered result is retained even though the flat-deck total is closer; selecting the closer total would be capacity fitting.
+
+Before/after per-tank table: ignored `work/argyro/results/development-before-after.md` and `.csv` counterpart `development-per-tank.csv`. Midbody wing errors fall from about +4.236% to +2.04%; centre errors move from -2.284% to +2.04%. Slops improve from +26.631% to +4.780%; aft wings from +9.448% to +4.031%. Forward centre worsens to +23.019% while forward wings become about -8.85%, exposing unresolved longitudinal inner-boundary redistribution. Cargo-domain ballast 1–5 is measured at the published 100% basis; forward ballast is about -14.3%, midbody +1.7–1.9%, aft -5.49%. Ballast 6 and forepeak are not reconstructed; round-2 source-matched ballast baselines did not exist.
+
+Limits: source-dimensioned hopper and camber are explicit ruled surfaces; shell-following side offset is section-normal, not a 3D CAD normal offset. Measured side polygons use 45 samples and approximate longitudinal interpolation; exact author surfaces at the forward/aft ends remain unavailable. Small port/starboard numerical differences are reported, not averaged away. Geometric construction is exact to these declared envelopes, not an exact recovery of the source model. The recurring ~2.04% midbody difference is consistent with the tables' observed extra 0.98 convention; its physical meaning is unconfirmed, so no extra usable-fraction deduction is applied. Historical G3b is unchanged and failed.
+
+**Round-3 resume point:** a fourth side-offset/no-hopper ablation is running to isolate hopper effect. Finish the full per-tank table (including unavailable forepeak), record all ablations, inspect generic code, run final focused and quick tiers with private identity check, commit/push own branch only. No tracked Codesight data exists.
 
 ## Sources and method limits
 
