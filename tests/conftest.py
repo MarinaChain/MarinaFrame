@@ -73,6 +73,58 @@ POSIX_LIFECYCLE_TESTS = {
 }
 
 
+# End-to-end inspection tests require the same isolated parser/native worker.
+# Pure algorithms in these modules still run; only named integration tests need it.
+ISOLATED_INSPECTION_TESTS = {
+    'test_agent_tools.py': {
+        'test_inspection_is_source_bound_and_grid_proposal_keeps_alternatives',
+        'test_faint_real_alternative_is_retained_and_can_be_selected',
+        'test_grid_only_is_not_a_supported_hull_hypothesis',
+        'test_fractional_calibration_corridor_spans_actual_trace_rows',
+        'test_source_snapshot_resume_and_tamper_fail_closed',
+        'test_actual_provisional_build_step_views_and_source_cut_validation',
+    },
+    'test_draft.py': {
+        'test_deterministic_guesses_on_an_ambiguous_drawing',
+        'test_draft_build_records_guesses_and_tags_exports',
+    },
+    'test_investigation.py': {
+        'test_view_is_bounded_and_records_its_mapping',
+        'test_trace_is_snapped_to_ink_and_refused_without_ink',
+        'test_a_clicked_point_is_followed_along_its_own_stroke',
+        'test_enumerated_strokes_are_tagged_shared_by_the_panel_and_never_best_guesses',
+        'test_enumeration_keeps_new_tags_assignable_after_many_calls',
+        'test_tracing_has_no_aggregate_candidate_cap',
+        'test_a_short_fragment_or_unknown_view_is_refused',
+        'test_assignment_is_an_open_model_choice_and_ink_is_used_once',
+        'test_a_draft_keeps_model_choices_and_is_well_formed',
+        'test_sheet_setup_is_checked_against_grid_datum_and_declared_calibration',
+    },
+    'test_mirrored_half.py': {'test_aft_stations_take_their_own_left_curves_not_the_bulb'},
+    'test_panel_assignment.py': {'test_nested_drawing_gets_one_stroke_per_station'},
+    'test_parallel_inspection.py': {
+        'test_the_controller_count_wins_over_the_environment',
+        'test_parallel_inspection_matches_one_worker',
+        'test_a_run_takes_only_the_free_workers_of_the_pool',
+    },
+    'test_region_pipeline.py': {
+        'test_region_candidate_passes_the_independent_v2_audit',
+        'test_draft_mode_spans_an_unreadable_multi_piece_station',
+    },
+    'test_replace_sheet.py': {'test_real_replacement_reads_builds_and_keeps_a_draft'},
+    'test_section_authoring.py': {
+        'test_propose_section_makes_an_open_ai_inferred_guess_with_an_overlay',
+        'test_propose_section_that_replaces_a_trace_is_ai_corrected',
+        'test_draft_with_an_ai_inferred_section_builds_labelled_cad',
+        'test_person_can_confirm_ai_authored_section_and_keep_its_source_label',
+    },
+    'test_station_overlay.py': {'test_draft_render_has_station_overlay_and_scoreboard'},
+    'test_stroke_discovery.py': {'test_enumeration_tags_carry_coverage_and_rank'},
+    'test_whole_vessel_step1.py': {'test_arm_b_code_sees_no_credentials'},
+    'test_worker_pool.py': {'test_an_inspection_runs_when_the_pool_folder_is_unsafe'},
+}
+
+
 def pytest_collection_modifyitems(items):
     if os.name != 'nt':
         return
@@ -80,6 +132,7 @@ def pytest_collection_modifyitems(items):
         name = item.name.split('[', 1)[0]
         if name in SECURE_READ_TESTS.get(item.path.name, set()):
             item.add_marker(pytest.mark.skip(reason=SECURE_READS_UNSUPPORTED))
-        if name in POSIX_LIFECYCLE_TESTS.get(item.path.name, set()):
+        if (name in POSIX_LIFECYCLE_TESTS.get(item.path.name, set())
+                or name in ISOLATED_INSPECTION_TESTS.get(item.path.name, set())):
             item.add_marker(pytest.mark.skip(
                 reason='Secure worker process lifecycle is not supported on this platform.'))
