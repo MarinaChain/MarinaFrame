@@ -397,3 +397,38 @@ intentional closures separately where identifiable), then official surfaceCheck,
 then frozen G6. No area/volume result may drive repair parameters. The isolated
 optional repair dependency is in this worktree's ignored `work/meshfix-deps/`;
 the shared venv is unchanged.
+
+### First measured DTC volume mesh: rejected quality
+
+`dtc-coarse-mesh-03` completed meshing with **359,241 cells**, then the
+all-geometry/all-topology check reported **2 failed checks** despite process
+exit zero: **29,942 cells with determinant <0.001**, minimum determinant
+5.35573e-7, and **15,520 concave cells**. Additional diagnostics: 207 concave
+faces, one warped face (flatness 0.695891); max non-orthogonality 69.9546,
+max skewness 2.74243. Cell volumes, connectivity and single region pass. The
+stage-level text gate rejected the mesh and returned failed receipt. **No
+solver ran**. Do not silently lower this quality criterion or claim convergence.
+Next diagnosis: localize failed-cell sets relative to refinement transitions and
+layer termination, compare the official background grid before changing mesh
+parameters. All frozen force bands stay unchanged.
+
+Allocated resource accounting (5-core quota; not measured CPU consumption):
+background/features/refinement **36 s / 0.050000 core-hours**;
+snappyHexMesh **282 s / 0.391667 core-hours**;
+checkMesh **11 s / 0.015278 core-hours**. Full monitored attempt **332 s /
+0.461111 core-hours**, including 3 s supervisory overhead. Mesh stage log sum
+**329 s**. Main ignored evidence `work/cfd/dtc-coarse-mesh-03-result.log`.
+No sustained-load pause occurred; run was shorter than 600 s. The three-mesh
+study and speed series remain incomplete.
+
+Track B actual-face repair is running detached at main ignored
+`work/cfd/kcs-face-meshfix-03/` with log `kcs-face-meshfix-03.log`, local PID
+70189 at launch. Synthetic hole closure and manifold checks passed, but the
+library printed `MeshFix could not fix everything` even on these fixtures;
+therefore no claim of intersection-free synthetic repair. Public import has
+83,428 triangles; MeshFix reports non-manifold cuts, 102 duplicate triangles
+removed, component joining, and 16,819 initially intersecting triangles. No
+repaired output or source-distance/G6 measurement exists yet. Earlier startup
+failures remain in logs: int32 face-array API requirement, then optional
+networkx import path (must be set before importing trimesh). No public geometry
+parameters changed between preparation attempts.
