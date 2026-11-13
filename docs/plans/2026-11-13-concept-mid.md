@@ -36,4 +36,20 @@ Selection and exclusions were prepared without fitting or inspecting errors. Thi
 4. Run focused concept tests, then `MF_IDENTITY_DENYLIST_FILE=/Users/jonathanjie/Documents/workspace/marinaframe-private/identity-denylist.txt MARINAFRAME_TEST_PYTHON=/Users/jonathanjie/Documents/workspace/MarinaFrame/.venv/bin/python make test-quick PY=/Users/jonathanjie/Documents/workspace/MarinaFrame/.venv/bin/python` in the background, with a long tool allowance. Capture exit status without a pipeline that can hide it.
 5. Record checks, review the diff, commit, and push only lane/concept-mid after a passing quick tier. No merge. Inspect local target/ then remove only that worktree-local Rust build folder after push; do not follow a symlink into a shared cache.
 
-Current resume point: freeze ready, pending pre-fit commit. No fitted result exists.
+## One-shot results
+
+Freeze committed as `6d162e8` before the sole fit and four proposals. Numerical G2-mid range gate **PASS: 4/4 designs, 16/16 required quantity checks**. No threshold or selection changed after scoring. D diagnostic also covered 4/4. The runner recorded its commit and freeze digest in `work/concept-mid/attempt.json`; full coefficients, bounds, truth, warnings and signed errors are in `result.json`. No fleet data is tracked.
+
+Aggregate errors below are absolute percentages of the published/derived value, calculated from stored results, not a new fit or score. Each cell gives coverage; mean absolute percentage error / maximum absolute percentage error.
+
+| Quantity | All four designs | Primary (3 designs) | Copied (1 design) |
+|---|---|---|---|
+| Lpp | 4/4; 0.806% / 1.436% | 3/3; 0.596% / 0.675% | 1/1; 1.436% / 1.436% |
+| B | 4/4; 4.484% / 7.854% | 3/3; 5.466% / 7.854% | 1/1; 1.536% / 1.536% |
+| T | 4/4; 3.485% / 7.418% | 3/3; 4.532% / 7.418% | 1/1; 0.346% / 0.346% |
+| Cb | 4/4; 1.525% / 2.739% | 3/3; 1.580% / 2.739% | 1/1; 1.358% / 1.358% |
+| D (diagnostic) | 4/4; 2.586% / 5.943% | 3/3; 3.379% / 5.943% | 1/1; 0.209% / 0.209% |
+
+Joint coverage by evaluation source grade: primary 3/3; copied 1/1; secondary **NOT RUN (0 designs)**. These grade splits evaluate one mixed-grade fitted model, not separately fitted models. Training had 4 primary and 22 copied representatives. Four withheld designs do not establish fleet-wide accuracy or calibrated coverage. Bands include fixed 10% dimension / 5% Cb floors plus maximum training residuals; coverage is not point-estimate precision. Sister exclusion is conservative but inferred, Cb is derived, and copied sources remain unconfirmed. Capacity, speed, hull geometry and joint feasibility were not tested. `engineering_approved=false`.
+
+Current resume point: sole fit and score complete; do not rerun. Pending focused tests, quick tier, final review and lane-only push.
