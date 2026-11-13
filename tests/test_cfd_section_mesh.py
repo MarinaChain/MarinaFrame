@@ -33,6 +33,21 @@ def test_v_bottom_wedge_is_closed_and_clips_exactly(module):
     assert any(np.allclose(point, [0, 1, 1]) for triangle in triangles for point in triangle)
 
 
+def test_centreline_roundoff_does_not_create_microscopic_facets(module):
+    sections = [dict(x_m=x, points_yz_m=[[1e-18, 0], [1, 1], [1, 2]]) for x in (0, 2, 4)]
+    triangles, metadata = module.build_section_mesh(sections, samples=11)
+    assert metadata['centreline_weld_tolerance_m'] == 1e-8
+    assert np.all((abs(triangles[:, :, 1]) == 0) | (abs(triangles[:, :, 1]) >= 1e-8))
+    validate_surface(triangles)
+
+
+def test_collapsed_bow_section_closes_without_end_cap_edges(module):
+    sections = [dict(x_m=x, points_yz_m=[[y, 0], [y, 2]]) for x, y in ((0, 1), (2, 1), (4, 0))]
+    triangles, metadata = module.build_section_mesh(sections, samples=9)
+    validate_surface(triangles)
+    assert module.mesh_particulars(triangles, 3)['volume_m3'] == pytest.approx(12)
+
+
 def test_nonincreasing_stations_rejected(module):
     sections = [dict(x_m=0, points_yz_m=[[1, 0], [1, 2]])] * 2
     with pytest.raises(ValueError, match='increasing'):

@@ -12,11 +12,13 @@ def build_section_mesh(sections, samples=321):
     fractions = []
     fixed = {0., 1.}
     for section in sections:
-        points = np.asarray(section['points_yz_m'], dtype=float)
+        points = np.array(section['points_yz_m'], dtype=float, copy=True)
         if points.ndim != 2 or points.shape[1] != 2 or len(points) < 2 or not np.all(np.isfinite(points)):
             raise ValueError('Expected finite half-breadth points')
         if np.any(points[:, 0] < 0) or np.any(np.diff(points[:, 1]) <= 0):
             raise ValueError('Require nonnegative breadth and increasing heights')
+        # Ten nanometres model scale: numerical coincidence only, not fairing.
+        points[abs(points[:, 0]) <= 1e-8, 0] = 0.
         differences = np.diff(points, axis=0)
         lengths = np.linalg.norm(differences, axis=1)
         arc = np.r_[0., np.cumsum(lengths)]
@@ -30,6 +32,7 @@ def build_section_mesh(sections, samples=321):
     rings = []
     for x, points, arc in zip(positions, profiles, fractions):
         yz = np.column_stack([np.interp(knots, arc, points[:, axis]) for axis in (0, 1)])
+        yz[abs(yz[:, 0]) <= 1e-8, 0] = 0.
         rings.append(np.column_stack([np.full(len(knots), x), yz]))
     triangles = []
     labels = []
@@ -76,7 +79,8 @@ def build_section_mesh(sections, samples=321):
         triangles = triangles[:, ::-1]
     validate_surface(triangles)
     return triangles, dict(station_count=len(rings), points_per_half_section=len(knots),
-                           fixed_knot_count=len(fixed), triangle_labels=labels)
+                           fixed_knot_count=len(fixed), centreline_weld_tolerance_m=1e-8,
+                           triangle_labels=labels)
 
 
 def mesh_particulars(triangles, draft):
