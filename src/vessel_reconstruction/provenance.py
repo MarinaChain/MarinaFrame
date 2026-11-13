@@ -65,6 +65,10 @@ def sync_directory(path: Path) -> None:
 
 
 def sync_file(path: Path) -> None:
+    if os.name == 'nt':
+        from .platform_files import sync_windows_file
+        sync_windows_file(path)
+        return
     with path.open("rb") as stream:
         os.fsync(stream.fileno())
 

@@ -47,6 +47,24 @@ def _last_error() -> int:
     return ctypes.get_last_error()
 
 
+def sync_windows_file(path: Path) -> None:
+    """Flush an existing file through the writable handle required by Win32.
+
+    Unlike directory syncing, no unsupported-operation result is ignored. The
+    file is never created or truncated, and ordinary sharing remains enabled.
+    """
+    kernel = _kernel32()
+    handle = kernel.CreateFileW(str(path.absolute()), _GENERIC_READ | _GENERIC_WRITE,
+                               _SHARE_READ_WRITE_DELETE, None, _OPEN_EXISTING, 0, None)
+    if handle == INVALID_HANDLE_VALUE:
+        raise OSError(_last_error(), 'Cannot open file for durability flush', str(path))
+    try:
+        if not kernel.FlushFileBuffers(handle):
+            raise OSError(_last_error(), 'File durability flush failed', str(path))
+    finally:
+        kernel.CloseHandle(handle)
+
+
 def sync_windows_directory(path: Path) -> None:
     """Attempt a directory flush; documented no-op only where Win32 rejects it.
 

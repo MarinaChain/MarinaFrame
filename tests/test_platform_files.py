@@ -26,6 +26,30 @@ def test_secure_descriptor_reads_refuse_unsupported_platform(monkeypatch):
         platform_files.require_secure_descriptor_reads()
 
 
+def test_windows_file_sync_opens_writable_nontruncating_handle(monkeypatch):
+    kernel = Mock()
+    kernel.CreateFileW.return_value = 42
+    kernel.FlushFileBuffers.return_value = True
+    monkeypatch.setattr(platform_files, '_kernel32', lambda: kernel)
+    platform_files.sync_windows_file(Path('evidence.json'))
+    arguments = kernel.CreateFileW.call_args.args
+    assert arguments[1] & 0x40000000
+    assert arguments[4] == 3  # OPEN_EXISTING, never create/truncate
+    kernel.FlushFileBuffers.assert_called_once_with(42)
+    kernel.CloseHandle.assert_called_once_with(42)
+
+
+def test_windows_file_sync_never_ignores_flush_error(monkeypatch):
+    kernel = Mock()
+    kernel.CreateFileW.return_value = 42
+    kernel.FlushFileBuffers.return_value = False
+    monkeypatch.setattr(platform_files, '_kernel32', lambda: kernel)
+    monkeypatch.setattr(platform_files, '_last_error', lambda: 5)
+    with pytest.raises(OSError):
+        platform_files.sync_windows_file(Path('evidence.json'))
+    kernel.CloseHandle.assert_called_once_with(42)
+
+
 @pytest.mark.parametrize('flush_error', [None, 1, 5, 50])
 def test_windows_directory_flush_closes_handle(monkeypatch, flush_error):
     kernel = Mock()
