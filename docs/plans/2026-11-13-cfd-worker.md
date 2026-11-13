@@ -1165,3 +1165,13 @@ not a force fit. Measure actual target counts; if coarse still materially
 exceeds ~1M, stop to revise study rather than claim target achieved. Capture
 exact process peak RSS via Python resource.wait4 wrapper around each stage,
 plus sampled total container memory, since cgroup peak is unsupported.
+
+### DB2 coarse mesh 02: monitor instrumentation failure
+
+Load1 **1.38**; no mesh stage ran: pinned minimal image has no python3.
+Stage-wrapper launch exited127, container exit1. Whole **32.898258 s /
+0.045692025 allocated core-hours**, no OOM, peak unavailable. Retain receipt.
+No numerical controls changed. Use shell sampling of /proc child VmHWM/VmRSS
+at 0.2s; report sampled kernel high-water mark as lower bound, not an exact
+container peak. No packages installed and no image change. The missing
+memory.peak and minimal runtime preclude claiming exact total peak memory.
