@@ -801,6 +801,24 @@ before medium/fine admission; no claim of a <24-h fit without measurements.
    terminal receipt, record limitations/resume point, commit and push only
    `lane/cfd-worker`, no merge. Remove only lane-owned target if present.
 
-Resume: gate freeze is the next commit. No new diagnostic, mesh, solver or Cw
+Gate freeze commit: `1306382`. DTC preflight finds the exact reference container
+already **exited, code 137**, finished 2026-11-13 18:08:01 UTC; no restart,
+unpause or stop command was sent. No active lane container. Load1 **0.95**;
+lane directory **699,698,787 bytes**; host free **170,586,517,504 bytes**.
+Evidence: main ignored `work/cfd/kvdb-preflight.log`.
+
+Preparation settings frozen before public preparation: exact STEP unit
+interpretation above, CAD tessellation **0.005 m model deflection**, angular
+**0.1 rad**, clipped at model draft **0.3586 m**, no reference-based offsets.
+Inspect the clipped native aft closure before thin-ship adaptation; do not
+invent a transom correction. Meshing settings will be separately committed
+before meshing, after geometry and boundary contracts are tested.
+
+Process deviation: a read-only helper was mistakenly invoked with tool-level
+worktree isolation despite the explicit ban. It was stopped immediately and
+returned no findings; no helper code/result is used. A subsequent worktree list
+shows no checkout for that helper. All lane work remains in `cfd-worker`.
+
+Resume: inspect the source and geometry. No new diagnostic, mesh, solver or Cw
 result yet. Read `work/hull-ends-plan.md` and `work/thin-ship-plan.md` snapshots
 for full source evidence; these are ignored copies, not new published results.
