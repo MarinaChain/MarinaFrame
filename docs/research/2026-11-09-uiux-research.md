@@ -16,12 +16,12 @@ Eng-Tips gave no useful hits for this topic.
 
 | Tool | Main user | Role in workflow | Notes for MarinaFrame |
 |---|---|---|---|
-| Rhino + [Orca3D](https://orca3d.com/pages/hull-design-fairing) | Small craft, yacht, repair offices | NURBS hull, fairing, live sections and hydrostatics | Sections and hydrostatics update live as the surface changes. Section lists have a set use: fairing, lines/offsets, or hydrostatics ([Orca3D release notes](https://download.orca3d.com/Orca3DReleaseNotes.pdf)). |
+| NURBS hull design tools | Small craft, yacht, repair offices | Hull fairing, live sections and hydrostatics | Sections and hydrostatics update live as the surface changes. Section lists serve fairing, lines/offsets, or hydrostatics. Product-specific references are kept outside the repository. |
 | [Maxsurf](https://www.bentley.com/products/maxsurf/) (Bentley) | Design offices, education | Surface model, grid of stations/WL/buttocks, curvature, hydrostatics | Grid is set in Data > Grid Spacing. User sets frame of reference and zero point first ([tutorial](https://worldshipconstruction.blogspot.com/2010/06/maxsurf-tutorial.html)). |
 | [DELFTship / FREE!ship](https://www.boatdesign.net/goto/post?id=168990) | Small offices, hobby, students | Subdivision hull, background-image trace | Load scan as background in body plan view, scale from a known dimension, then trace ([DELFTship tutorial](https://www.scribd.com/doc/96304152/Tutorial-01)). |
-| [NAPA Designer](https://www.napa.fi/napa-release-2024-1/) | Large yards, class | Hull form, 3D model, class review via OCX | 3D model-based class approval is in pilot with BV, DNV, ClassNK ([DNV](https://dnv.com/news/dnv-damen-and-napa-use-3d-model-based-approval-to-streamline-ship-design-approval-244942)). |
+| [NAPA Designer](https://www.napa.fi/napa-release-2024-1/) | Large yards, class | Hull form, 3D model, class review via OCX | 3D model-based class review is in pilot with classification societies ([DNV](https://dnv.com/news/dnv-damen-and-napa-use-3d-model-based-approval-to-streamline-ship-design-approval-244942)). |
 | ShipConstructor/SSI, AVEVA Marine, Cadmatic | Production yards | Detail and production design downstream of the hull | They import the hull surface as STEP/IGES/SAT ([AVEVA Surface Manager](https://docs.aveva.com/bundle/hull-and-outfitting/page/1119906.html)). Surface import often needs a Rhino step ([boatdesign.net](https://www.boatdesign.net/threads/aveva-hull-surface-import.62129/latest)). |
-| Siemens NX ship, class tools (BV MARS/VeriSTAR, DNV) | Yards, class | Structure and rule checks | Not our competitor. They are a **destination** for our STEP and offsets. |
+| Ship design and classification rule tools | Yards, class | Structure and rule checks | Optional exports serve third-party tools the customer already owns. Ported calculations run inside MarinaFrame, without an original runtime. |
 
 Result: MarinaFrame does not replace these tools. It feeds them a clean draft fast.
 The key export is a STEP surface that opens in Rhino/AVEVA without repair, plus an offsets table.
@@ -35,7 +35,7 @@ The key export is a STEP surface that opens in Rhino/AVEVA without repair, plus 
 - **Table of offsets**: rows are waterlines and buttocks, columns are stations. Half-breadths from centreline, heights above baseline ([offsets explanation](https://www.boatdesign.net/threads/generating-offsets.67640/latest)). Old tables use feet-inches-eighths, for example "5-2-4" ([boatdesign.net](https://www.boatdesign.net/goto/post?id=949872)). Offsets are usually to outside of shell or planking.
 - **Fairness checks**: curvature combs ("porcupines") on sections, zebra stripes, environment maps ([boatdesign.net](https://www.boatdesign.net/threads/how-to-design-in-3d.47744/)). Maxsurf updates curvature live while the user drags ([Maxsurf overview](https://kastenmarine.com/maxsurf/modeler.htm)).
 - **Sectional area curve (curve of areas)** and **upright hydrostatics** are standard live checks ([Maxsurf brochure](https://www.scribd.com/doc/257959862/Maxsurf-Brochure)).
-- **Hydrostatic report**: table per draft plus plots. Orca3D saves PDF, Excel, CSV, XML ([Orca3D](https://orca3d.com/pages/hydrostatics-stability)).
+- **Hydrostatic report**: table per draft plus plots. Common output formats include PDF, Excel, CSV and XML; product-specific references are kept outside the repository.
 - **Tables move to Excel**: Maxsurf supports copy-paste of numeric tables to and from Excel. Users expect this.
 - **Shortcuts**: CAD users expect view keys (top/front/side/perspective), zoom-extents, orbit with mouse, and Rhino-style typed commands. No single standard exists across tools.
 

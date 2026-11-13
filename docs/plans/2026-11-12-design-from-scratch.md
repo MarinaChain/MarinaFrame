@@ -82,11 +82,11 @@ are paired. A hull with geometry and a model test is worth more than ten GA draw
 
 | Tool | What it does well | What we learn |
 |---|---|---|
-| CAESES (Friendship Systems) | Fully parametric hulls, coupled to CFD for optimization | How to describe a hull with few, meaningful parameters; how to couple an optimizer to CFD |
+| Parametric hull design systems | Fully parametric hulls, coupled to CFD for optimization | How to describe a hull with few, meaningful parameters; how to couple an optimizer to CFD |
 | NAPA | The standard basic-design system in many yards: hull, compartments, hydrostatics, stability, rules | The data model of a ship in basic design; the checks a yard expects; NAPA export formats |
-| MAXSURF / Rhino with Orca3D | Hull modelling, hydrostatics, simple resistance | Fairing and hydrostatics conventions |
+| Hull modelling systems | Hull modelling, hydrostatics, simple resistance | Fairing and hydrostatics conventions |
 | SHIPFLOW, STAR-CCM+, Fine/Marine | Ship CFD (potential flow and RANS) | Mesh and set-up practice for full forms; model-to-ship scaling |
-| DNV Nauticus Hull, BV MARS/VeriSTAR, LR RulesCalc | Rule checks of structure | Which CSR checks a first design must pass (class tool work stays on hold) |
+| Classification rule tools | Rule checks of structure | Which CSR checks a first design must pass (class tool work stays on hold) |
 
 ### 4.2 Open-source tools (candidates to use)
 
@@ -160,7 +160,7 @@ architects review steps 2, 4 and 6 from the start.
    we build every step with the data we have now (benchmark hulls, public papers and datasets, Equasis,
    synthetic and CFD data). Each step reads its data through one interface, so the yard data replaces or
    adds to the public data without a code change, and every model is refit and re-tested when it comes.
-2. **Parametric hull: build our own.** CAESES is a reference for the method only.
+2. **Parametric hull: build our own.** Existing parametric systems are method references only.
 3. **CFD: in-house, built into MarinaFrame.** OpenFOAM runs as a separate solver worker that the app
    controls: the app writes the case, starts the run, reads the results and keeps them with the design.
    The fast methods (Holtrop-Mennen, thin-ship wave resistance) run on the desktop. RANS runs need many
