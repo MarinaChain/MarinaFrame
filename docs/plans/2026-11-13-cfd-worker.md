@@ -1175,3 +1175,28 @@ No numerical controls changed. Use shell sampling of /proc child VmHWM/VmRSS
 at 0.2s; report sampled kernel high-water mark as lower bound, not an exact
 container peak. No packages installed and no image change. The missing
 memory.peak and minimal runtime preclude claiming exact total peak memory.
+
+### DB2 coarse mesh 03: checkMesh passes, wall-resolution admission FAIL
+
+Load1 **1.15**. Actual **1,029,000 cells**, centreplane y=0 confirmed,
+checkMesh **Mesh OK**, max nonorthogonality64.9424 and skewness3.75273.
+Stages surfaceCheck1s, blockMesh6s, snappy317s, checkMesh8s: **332s /
+0.461111111 allocated core-hours**. Whole **344.404176s / 0.478339133
+core-hours**, five-core quota, no OOM. Sampled process high-water RSS maximum
+**2,385,797,120 bytes (2.222GiB)**, lower bound, not exact container peak.
+
+**Physical wall-resolution prerequisite FAIL:** requested30 layers but actual
+mean **0.018 layers**, only **146/17002 faces (0.858723%)** extruded; overall
+mean thickness **5.19e-5m** and only0.549% requested coverage/thickness ratio.
+Thus this is not a wall-resolved grid despite clean checkMesh. Do not run
+simpleFoam or spend medium/fine on this failed family; no y+ or (1+k) is
+available. Need a revised prism-layer strategy, not a wall-function substitute.
+Three preparation/attempt failures retained; G-KV-DB2 **BLOCKED / NOT CONVERGED**.
+No gate thresholds changed; original G-KV-DB remains failed.
+
+DB2 attempt totals so far **1162.550917s / 1.614654052 allocated core-hours**,
+including oversized mesh and instrumentation failure. Evidence main ignored
+`work/cfd/kvdb2-coarse-mesh-{01,02,03}-result.log`,
+`kvdb2-coarse-memory-layers.log`. Resume: PM review of prism-layer failure;
+never claim y+<1 from first-layer setting or start unsupported medium/fine.
+Quick tier running on stable source; commit this completed mesh before delivery.
