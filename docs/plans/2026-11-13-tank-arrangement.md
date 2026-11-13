@@ -111,7 +111,11 @@ Limits: source-dimensioned hopper and camber are explicit ruled surfaces; shell-
 
 Fourth ablation completed: the same section-normal side model without hopper gives 324,572.158 m3. Adding the explicit hopper reduces capacity by **4,883.121 m3**; adding camber then increases it by **10,008.397 m3**. These are model-specific controlled differences, not a proof that all historical error has been assigned. The source per-tank convention and forward longitudinal surfaces remain separate residuals. The complete table includes all 17 oil tanks and 13 published ballast entries; unavailable ballast 6/forepeak values are explicit. It stays in ignored `work/argyro/results/development-before-after.md` and `development-per-tank.csv`. No extra scalar fit was applied.
 
-**Round-3 resume point:** all four development runs complete; quick tier running with private identity checks. Final focused tests currently 52 passed. Review current generic code and evidence, record final checks, commit/push lane/tank-g3b only, then inspect/remove its target. Exact source forward/aft internal surfaces, 3D shell-normal offset and unmodelled ballast regions are still incomplete; do not claim full source recovery. No tracked Codesight data exists.
+### Round-3 delivery checks
+
+Quick tier **exit 0**: Python **2715 passed, 4 skipped, 128 deselected, 5 warnings** in 1116.44 s; Rust **321 passed, 0 failed, 50 ignored**; UI **275 passed, 0 failed**; format/clippy successful; bounded scan **1388 tracked text files, 0 findings**. Log: ignored `work/checks/round3-quick.log`. Private tracked-file identity scan: **0 findings**. Focused CAD suite: **52 passed**. `git diff --check` clean. Review was self-review; no independent reviewer completed. Tracked changes contain generic code, synthetic tests and this plan only; all per-ship tables and derived geometry remain ignored.
+
+**Round-3 resume point:** all four development runs and local checks complete. Commit delivery evidence and run the final quick tier chained to push of lane/tank-g3b only; no merge. Then inspect/remove only its local target. Exact source forward/aft internal surfaces, 3D shell-normal offset and unmodelled ballast regions are still incomplete; do not claim full source recovery. No tracked Codesight data exists. Any future ARGYRO agreement is development fit, never a passed blind gate.
 
 ## Sources and method limits
 
