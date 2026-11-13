@@ -107,6 +107,26 @@ Net: **342 fewer failures, 21 fewer errors**. Collection remains error-free. Ful
 - Plan review: architecture PASS (small platform layer); quality PASS (unexpected errors retained, native handles closed); tests WARN (native Windows required); performance PASS (bounded native calls).
 - Process exception: a read-only classification agent was accidentally launched with tool worktree isolation. This created an extra worktree despite the lane rule; no implementation edits were delegated. All lane changes remain in this designated worktree. Do not create another worktree.
 
+## Batch 2: next five groups after integration merge
+
+Local `continue/v0.5` merged by fast-forward to `2e02d0a` before any edits. Baseline run `43513304593`: 156 failures, 43 errors. Fixed group order (ties as listed):
+
+| Group | Failures | Errors | Total |
+|---|---:|---:|---:|
+| File durability: Windows CRT refuses fsync on read-only handles (66 failures incl. wrapper; 43 fixture errors) | 66 | 43 | 109 |
+| Domain inspection depends on unavailable isolated native-worker profile (wrapped blocked/sections/resource assertions) | 34 | 0 | 34 |
+| POSIX fake executables: round runner 7, measurement shim 2 | 9 | 0 | 9 |
+| Package atomic-exchange platform dispatch reaches unsupported ctypes function | 6 | 0 | 6 |
+| Private shared-pool POSIX-only capability assertions | 6 | 0 | 6 |
+| Smaller groups / restricted checkpoint summaries (not investigated) | 35 | 0 | 35 |
+| **Total** | **156** | **43** | **199** |
+
+Gate written before runs: attempt these five groups largest-first; retain every POSIX security control. File flushing must still flush bytes; no swallowed flush errors. Unsupported isolated security features refuse at call time and get only precise capability-specific Windows test reasons. Fake executables must actually run on Windows, not skip. Required quick tier before each push, one native job result per group after completion window; record failures/errors/passes/skips. Stop after five groups or zero failures/errors. New downstream failures do not change this baseline ordering. No restricted data investigation; no CFD edits.
+
+Plan review: architecture PASS (small existing platform boundaries); quality PASS (fail-closed security); tests WARN (native Windows needed for handle and executable behavior); performance PASS (no new unbounded work).
+
+Resume: group 1 file flush regression, native writable handle implementation, quick tier, push, one Windows check.
+
 ## Results and resume point
 
 - Worktree created from local `continue/v0.5` at `dbb24f4`.
