@@ -50,6 +50,46 @@ Files: `.github/workflows/ci-watch.yml`, platform-specific test files, this plan
 - Tests: WARN — local import simulation is not native Windows evidence. Windows gate requires Windows CI.
 - Performance: PASS — no new dependencies or unbounded polling.
 
+## Continuation: fixed baseline groups (largest first)
+
+Baseline `43483045382`: **498 failures + 64 errors = 562**. Counts assign each entry to its terminal root cause; wrapped assertions are traced, not counted twice.
+
+| Root cause | Failures | Errors | Total |
+|---|---:|---:|---:|
+| Directory sync through POSIX directory open (including four assertion wrappers) | 373 | 64 | 437 |
+| Secure no-follow reads: reexport 17, progress 15 | 32 | 0 | 32 |
+| Unsupported secure process lifecycle (including one subprocess wrapper) | 21 | 0 | 21 |
+| CI shell routing tests select Windows Bash/WSL without a distribution | 21 | 0 | 21 |
+| Round admission lock calls unavailable geteuid | 7 | 0 | 7 |
+| Path serialization/expectations | 5 | 0 | 5 |
+| Unsupported private shared pool assertions | 5 | 0 | 5 |
+| Restricted checkpoint metadata (summary only; not investigated) | 4 | 0 | 4 |
+| FIFO tests call unavailable mkfifo | 4 | 0 | 4 |
+| Tests patch unavailable killpg | 4 | 0 | 4 |
+| POSIX child-status WNOHANG assumptions | 3 | 0 | 3 |
+| Progress writer imports fcntl | 3 | 0 | 3 |
+| Secure worker-result reader requires O_DIRECTORY | 2 | 0 | 2 |
+| Explicit unsupported isolated worker profile | 2 | 0 | 2 |
+| macOS profile string assertions with Windows paths | 2 | 0 | 2 |
+| Windows-invalid wildcard filenames | 2 | 0 | 2 |
+| Measurement fake POSIX command (exact child error not logged) | 2 | 0 | 2 |
+| Foreign-owner test calls unavailable getuid | 1 | 0 | 1 |
+| Default text encoding rejects Unicode minus | 1 | 0 | 1 |
+| Ordinary frozen-reader byte-hash mismatch | 1 | 0 | 1 |
+| Worker receipt expects resource handling past Windows refusal | 1 | 0 | 1 |
+| Wheel environment lacks setuptools backend | 1 | 0 | 1 |
+| Benchmark wrapper missing result (underlying error not logged) | 1 | 0 | 1 |
+| **Total** | **498** | **64** | **562** |
+
+### Fixed continuation gate and stop condition
+
+Attempt the five largest groups above, in that order (tie order as listed), or stop sooner if Windows failures and errors both reach zero. After each group: run focused tests and required quick tier; commit; push only this branch; inspect one completed Windows job and record new failures/errors/passes/skips. Wait at least five minutes between GitHub status checks. New failures exposed by a fix remain visible and do not change the baseline group order. No broad skips and no restricted checkpoint investigation.
+
+- Group 1 design: native `CreateFileW` with backup semantics and write access, then `FlushFileBuffers`. Where Windows rejects writable directory handles, confirm a read-only directory open and document the absent directory durability guarantee. Known unsupported flush results are a documented no-op; unexpected failures propagate. File fsync and POSIX directory fsync remain unchanged. API references: [FlushFileBuffers](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-flushfilebuffers), [CreateFileW](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew).
+- Group 1 focused tests: 86 passed before final access-right refinement; seven refined adapter tests passed. Commit `9d14e27`. Quick tier running; remote result pending.
+- Plan review: architecture PASS (small platform layer); quality PASS (unexpected errors retained, native handles closed); tests WARN (native Windows required); performance PASS (bounded native calls).
+- Process exception: a read-only classification agent was accidentally launched with tool worktree isolation. This created an extra worktree despite the lane rule; no implementation edits were delegated. All lane changes remain in this designated worktree. Do not create another worktree.
+
 ## Results and resume point
 
 - Worktree created from local `continue/v0.5` at `dbb24f4`.
