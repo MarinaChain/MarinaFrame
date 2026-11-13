@@ -179,17 +179,17 @@ The full contract is `docs/APP_SPEC.md`. Main requirements:
 | D1 | Link one hull's GA, midship section and lines plan: shared frames, scale and particulars; flag contradictions between drawings | Planned (first pilot step) |
 | D2 | Read the lines plan and midship section of a large commercial ship (tanker), with "unknown" where unreadable | Planned (readers exist for small boats, standard hull forms and development midship sections) |
 | D3 | Inventory a design archive per hull: drawings, revisions, particulars, linked test and trial results, and permitted uses | Planned |
-| D4 | Reference-ship search: for a set of requirements, find the closest past hulls and show the material differences in one table (payload, deadweight, speed, fuel, main dimensions) | Planned |
+| D4 | Reference-ship search: for a set of requirements, find the closest past hulls and show the material differences in one table (payload, deadweight, speed, fuel, main dimensions) | In progress: search and difference tables built on public fleet data (2026-11-13) |
 | D5 | Candidate designs: vary the closest reference hull within stated constraints, with 3D, hydrostatics and payload for each candidate | In progress: variation module done (targets met); the public tanker hull is read only in part (ends missing) |
 | D6 | Performance estimates (resistance, propulsion, fuel), checked blind against held-out hulls with model-test or trial results | In progress: empirical baseline built; blind tanker error +19 to +21 %, too high for quotes; needs tanker calibration or CFD |
 | D7 | Record why the designer accepted or deferred each candidate | Planned |
 | D8 | Keep each customer's drawings, derived data and results separate and unavailable to any other customer | Planned (contract and deployment design); required before a second yard |
 | D9 | Design database: read a yard archive (GA, lines plans, capacity plans, stability booklets) into structured per-hull records | Planned (GA and hull readers exist) |
-| D10 | Requirements to main dimensions: from DWT, cargo volume, speed and port limits, propose L, B, D, T and Cb ranges from fleet and archive statistics | Planned |
-| D11 | Tank arrangement generator: double hull, cargo, slop, ballast, engine room and fuel tanks to MARPOL Annex I, with capacities at 98 % fill | Planned (arrangement builder exists) |
-| D12 | Weights, loading conditions, intact and damage stability and freeboard for each candidate | Planned (hydrostatics exist) |
+| D10 | Requirements to main dimensions: from DWT, cargo volume, speed and port limits, propose L, B, D, T and Cb ranges from fleet and archive statistics | In progress: held-out checks pass on public data (VLCC 2/2 ships, mid-size 4/4 designs); ranges still broad |
+| D11 | Tank arrangement generator: double hull, cargo, slop, ballast, engine room and fuel tanks to MARPOL Annex I, with capacities at 98 % fill | In progress: generator built; frozen capacity check on a published design failed (+4.6 %), development rerun +2.6 % after shaped internal surfaces; automatic layout choices not yet design logic |
+| D12 | Weights, loading conditions, intact and damage stability and freeboard for each candidate | In progress: preliminary lightship, engine screening, EEDI/EEXI/CII built; accuracy check blocked on public input data; stability not started |
 | D13 | First strength check: midship section modulus and still-water bending moment against the IACS CSR minimum | Planned |
-| D14 | Multi-objective optimization of fuel use against cargo capacity, with surrogate models and a Pareto front; gains smaller than the method's measured error are not reported as gains | Planned |
+| D14 | Multi-objective optimization of fuel use against cargo capacity, with surrogate models and a Pareto front; gains smaller than the method's measured error are not reported as gains | In progress: versioned design record and a cached end-to-end design loop (requirements to EEDI/CII) built; thin-ship wave resistance validated against theory; optimizer not started |
 
 ## 6. Non-goals
 
@@ -216,6 +216,9 @@ did not see.
 | Blind hull holdouts left | **0**: all 10 real sheets are spent | `docs/holdouts/REGISTRY.md` |
 | Resistance estimate (Holtrop-Mennen), development ships KCS and JBC, model scale | 3-8 % error | `docs/plans/2026-11-12-performance-baseline-results.md` |
 | Resistance estimate, **blind** tanker KVLCC2, model scale | **+19 to +21 %** (over-predicts at every speed) | same |
+| Main dimensions from requirements, held-out public tankers (frozen ranges) | VLCC 2 / 2 ships (8 / 8 checks); mid-size 4 / 4 designs (16 / 16 checks), mean errors Lpp 0.8 %, B 4.5 %, T 3.5 %, Cb 1.5 % | `docs/plans/2026-11-13-concept-dimensions.md`, `docs/plans/2026-11-13-concept-mid.md` |
+| Cargo capacity at 98 %, published design (frozen 2 % gate) | **+4.6 %, failed**; development rerun +2.6 % | `docs/plans/2026-11-13-tank-arrangement.md` |
+| Thin-ship wave resistance against published Michell results (Wigley hull, 91 points) | max 1.5 % error; under 6 ms per call | `docs/plans/2026-11-13-thin-ship.md` |
 
 Targets for the next quarter:
 1. A blind GA result on new ships, including GA drawings without labels and other ship types.
