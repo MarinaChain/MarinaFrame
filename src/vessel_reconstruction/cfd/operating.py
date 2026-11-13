@@ -30,3 +30,23 @@ class RollingLoad:
             self.high_since = None
         pause = self.high_since is not None and timestamp - self.high_since >= 600
         return rolling, pause
+
+
+class ResumeLoad:
+    """PM standing resume permission: rolling ten-minute load <6 for600s.
+
+    This supplies eligibility only. The supervisor must still restrict the
+    target to its own load-paused container and enforce all resource checks.
+    """
+    def __init__(self):
+        self.rolling = RollingLoad()
+        self.low_since = None
+
+    def sample(self, timestamp, load):
+        rolling, _ = self.rolling.sample(timestamp, load)
+        if rolling is not None and rolling < 6:
+            if self.low_since is None:
+                self.low_since = timestamp
+        else:
+            self.low_since = None
+        return self.low_since is not None and timestamp - self.low_since >= 600
