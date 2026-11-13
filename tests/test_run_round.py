@@ -97,7 +97,11 @@ def test_round_runs_cases_writes_results_and_digest(tmp_path, monkeypatch):
     meta = read(out / "round.json")
     assert meta["cases"] == ["c1", "c2"] and meta["jobs"] == 2
     assert meta["models"] == ["claude-sonnet-5-5", "crouton-alpha-free", "deepseek-v4.1-flash"]
-    assert "marinaframe-native-admission" in meta["native_admission_lock"]
+    if os.name == 'nt':
+        assert meta['native_admission_lock'] is None
+        assert 'not supported on this platform' in meta['native_admission_lock_reason']
+    else:
+        assert "marinaframe-native-admission" in meta["native_admission_lock"]
     for path in out.rglob("*"):  # never read, print or log key material
         if path.is_file():
             assert "k-TESTSECRET-1" not in path.read_text()

@@ -280,13 +280,12 @@ def main(argv: list[str] | None = None) -> int:
 
     args.out.mkdir(parents=True)
     log = RoundLog(args.out / "round.log")
-    # The controller takes the per-user native admission lock itself; record the
-    # same path the earlier drivers logged (rust-control/src/worker.rs).
-    admission_lock = (Path(os.environ.get("TMPDIR") or "/tmp")
-                      / f"marinaframe-native-admission-{os.geteuid()}.lock").resolve()
+    # The controller owns admission enforcement. Report its actual platform
+    # capability instead of calling a missing Unix identity API on Windows.
+    from vessel_reconstruction.platform_identity import native_admission_lock_metadata
     meta = {"started": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "cases": cases, "jobs": args.jobs,
             "sheet_only": args.sheet_only, "models": args.model.split(","),
-            "native_admission_lock": str(admission_lock), "binary": str(args.binary)}
+            **native_admission_lock_metadata(), "binary": str(args.binary)}
     (args.out / "round.json").write_text(json.dumps(meta, indent=2) + "\n")
     log.write(f"round of {len(cases)} case(s), jobs {args.jobs}, models {args.model}, out {args.out}")
 
