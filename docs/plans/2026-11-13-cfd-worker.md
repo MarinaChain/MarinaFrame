@@ -868,7 +868,12 @@ G-KV-DB while Cw's immersed-transom formulation is missing. No new physical run
 has started. Private tracked identity scan completed exit **0**, **0 findings**.
 No managed `.codesight` directory exists here, so no stale managed index was
 changed; no lane-local `target/` exists and the shared Rust target is retained.
-Stable-source quick tier is running with durable
-`work/cfd/kvdb-stable-quick.{log,exit}`; read its terminal receipt before push.
+Stable-source quick tier completed **exit 0**: Rust format/clippy and quick
+workspace tests passed; Python **2,739 passed, 4 skipped, 100 deselected**, five
+warnings in **701.64 s**; UI **275 passed, 0 failed**; bounded tracked secret
+scan **1,397 files, 0 findings**. Durable evidence:
+`work/cfd/kvdb-stable-quick.{log,exit}`. Source stayed fixed at d01840a during
+this run; later changes were documentation/lessons only. Private identity scan
+also completed exit 0 with 0 findings. Push only this lane; no merge.
 Read `work/hull-ends-plan.md` and `work/thin-ship-plan.md` snapshots
 for full source evidence; these are ignored copies, not new published results.
