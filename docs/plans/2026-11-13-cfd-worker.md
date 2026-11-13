@@ -945,3 +945,14 @@ blockMesh **0 s at integer-second resolution**; failed snappy **1 s /
 allocated core-hours**, 5-core quota, including monitor overhead. No checkMesh
 or solver ran. Evidence: ignored `work/cfd/kvdb-coarse-mesh-01-result.log`.
 Retry is a fresh immutable attempt, not a replacement of this failure.
+
+### Coarse mesh 02: physical mesh accepted
+
+Started load1 **1.26**; **16,257 cells**, official checkMesh **Mesh OK**,
+max non-orthogonality **63.6712**, max skewness **1.48945**. Stage walls:
+surfaceCheck **0 s** (integer resolution), blockMesh **1 s**, snappy **4 s**,
+checkMesh **0 s**; mesh allocation **0.006944 core-hours** over 5 s.
+Whole supervised attempt **31.076458 s / 0.043161747 allocated core-hours**,
+5-core quota. These are a coarse mesh, not force or convergence results.
+Evidence: ignored `work/cfd/kvdb-coarse-mesh-02-result.log`. Admit coarse
+simpleFoam next with unchanged 2000 iterations and projection rule.
