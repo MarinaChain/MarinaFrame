@@ -47,6 +47,15 @@ def test_deck_roundoff_is_recorded_not_extrapolated_silently(reconstruction):
     assert evidence['deck_extension_m'] == pytest.approx(2e-7)
 
 
+def test_section_trim_gap_at_deck_is_bounded_and_recorded(reconstruction):
+    lower = cq.Solid.makeBox(4, 1, 1.999995)
+    upper = cq.Solid.makeBox(4, 1, 1, cq.Vector(0, 0, 2.00000003))
+    source = cq.Compound.makeCompound([lower, upper])
+    profile, evidence = reconstruction.slice_half_breadths(source, 2, 2)
+    assert profile[-1] == pytest.approx([1, 2])
+    assert evidence['intersection_height_tolerance_m'] == 1e-6
+
+
 def test_tessellation_is_closed_outward_box(reconstruction):
     from vessel_reconstruction.cfd.surface import validate_surface
     solid = cq.Solid.makeBox(4, 2, 2)

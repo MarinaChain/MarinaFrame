@@ -52,7 +52,7 @@ def slice_half_breadths(source, x, deck, levels=161, edge_samples=201):
         sample_z = min(z, source_top)
         for points in polylines:
             for a, b in zip(points[:-1], points[1:]):
-                if min(a[1], b[1]) - 1e-9 <= sample_z <= max(a[1], b[1]) + 1e-9:
+                if min(a[1], b[1]) - 1e-6 <= sample_z <= max(a[1], b[1]) + 1e-6:
                     if abs(b[1] - a[1]) < 1e-12:
                         candidates.extend([a[0], b[0]])
                     else:
@@ -71,7 +71,8 @@ def slice_half_breadths(source, x, deck, levels=161, edge_samples=201):
     # Only internal source-trim gaps are interpolated, and all are in evidence.
     breadths = np.interp(heights, heights[valid], np.array(breadths)[valid])
     return np.column_stack([breadths, heights]), dict(
-        section_edges=len(edges), deck_extension_m=deck_extension, interpolated_gap_heights_m=gaps,
+        section_edges=len(edges), deck_extension_m=deck_extension,
+        intersection_height_tolerance_m=1e-6, interpolated_gap_heights_m=gaps,
         max_competing_breadth_m=max(spread, default=0.))
 
 
