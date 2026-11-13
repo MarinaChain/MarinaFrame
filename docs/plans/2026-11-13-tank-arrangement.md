@@ -83,7 +83,21 @@ PM decision after G3b: **the +4.565437% result stands**. ARGYRO is now an expose
 4. Independent next blind case must be a different, unexposed hull/design, with complete hull geometry (numeric offsets or neutral CAD preferred), source datums/units, internal bottom/hopper/side surfaces and bulkhead/end positions, deck geometry, plus per-tank or total capacity with explicit fill/permeability/deduction basis. PM or an independent evaluator holds capacity truth until implementation and inputs are frozen. The existing 2% band must not change after exposure; freeze a new case protocol before its run. No restricted holdout data may substitute.
 5. Commit each step, run the quick tier with the private identity check, push only lane/tank-g3b; no merge. All output remains `engineering_approved=false`.
 
-**Round-3 resume point:** PM development designation recorded; diagnosis not yet run. Retained round-2 evidence is under ignored `work/argyro/results/`.
+### Diagnosis checkpoint
+
+Before table: ignored `work/argyro/results/development-per-tank.csv` and `development-diagnosis.md` (17 oil tanks and 12 published ballast rows). Ballast is published at **100%**, not 98%; source-matched ballast was not modelled in round 2, so its before errors are unavailable rather than zero. Oil signed excess is concentrated forward (50.9% of the net excess), with midbody rows 2–4 contributing 21.2%, aft cargo 14.0% and slops 14.0%. Midbody centre tanks are low while wings are high: a single global volume factor cannot fix the partition.
+
+Source inspection supports missing hopper geometry, cambered deck and shaped longitudinal tank ends. The structural table gives an inner-bottom breadth, hopper length/angle/height and inclined deck; the vector capacity plan shows the inner side/hopper/deck and non-rectangular end boundaries. These are development inputs, not newly blind evidence. The per-tank table alone does not isolate each cause; run separate geometry ablations and label remaining assumptions. The later damage-analysis table uses geometric tank totals approximately 1/0.98 of the earlier capacity table's 100% values; do not silently call this proven permeability or tune it as a correction.
+
+### Implementation plan and review
+
+- Architecture **PASS**: add a generic explicit shaped-boundary path beside the existing planar generator in `src/vessel_reconstruction/arrangement_generator/shaped.py`; preserve old defaults. A tank is the intersection of a closed hull and a caller-supplied closed internal envelope. Closed ruled envelopes can include inner bottom, hopper, side and deck boundaries. Supplied exact CAD surfaces are accepted without replacing them by boxes.
+- Quality **WARN**: a source-derived section loft is exact to its declared polygon/ruled model, not proof of the unprovided author's internal surfaces. Any section-normal offset must be labelled as section-normal, not 3D perpendicular shell clearance. Validate finite inputs, topology, one solid, units, source citations and disjoint allocations.
+- Coverage **PASS**: first add failing synthetic tests in `tests/test_arrangement_shaped.py`: hopper prism and centroid by polygon integrals, varying sloped ends, cambered deck, shell-following offset, overlap rejection, invalid/open/non-finite geometry and fill/deduction basis. Expected analytic relative volume/centre errors <=1e-6. Run focused old/new CAD tests before committing implementation.
+- Performance **WARN**: sequential intersections only; use bounded explicit section polygons and no source-specific constants in tracked code. Keep all ARGYRO reconstruction/ablation scripts and tables under ignored `work/`.
+- Execution: (1) commit diagnosis/design; (2) tests RED, generic implementation, tests GREEN, commit; (3) development reconstruction and before/after/ablation tables, commit compact results; (4) quick tier with private identity check, commit/push lane only, inspect and remove local target. Do not create or enter another worktree.
+
+**Round-3 resume point:** diagnosis table and design ready; implement synthetic tests next. Full per-tank tables remain under work due to the source licence. Historical G3b stays failed.
 
 ## Sources and method limits
 
