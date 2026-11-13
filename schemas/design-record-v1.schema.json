@@ -1,0 +1,795 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:marinaframe:design-record:1.0.0",
+  "title": "MarinaFrame design record v1",
+  "description": "Draft engineering record. Maps of named quantities and evidence are explicit extension points. All structural objects reject unknown fields. Scope labels do not enforce authorization.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "design_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "review_required"
+      ]
+    },
+    "engineering_approved": {
+      "const": false
+    },
+    "data_scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "requirements": {
+      "$ref": "#/$defs/requirements"
+    },
+    "main_dimensions": {
+      "type": "object",
+      "propertyNames": {
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/quantity"
+      }
+    },
+    "hull": {
+      "$ref": "#/$defs/hull"
+    },
+    "compartments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/component"
+      }
+    },
+    "tanks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/component"
+      }
+    },
+    "weights": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/component"
+      }
+    },
+    "loading_conditions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/component"
+      }
+    },
+    "midship_section_inputs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/component"
+      }
+    },
+    "appendages": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/component"
+      }
+    },
+    "results": {
+      "$ref": "#/$defs/results"
+    },
+    "lineage": {
+      "$ref": "#/$defs/lineage"
+    },
+    "designer_decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/decision"
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "design_id",
+    "name",
+    "status",
+    "engineering_approved",
+    "data_scope",
+    "requirements",
+    "main_dimensions",
+    "hull",
+    "compartments",
+    "tanks",
+    "weights",
+    "loading_conditions",
+    "midship_section_inputs",
+    "appendages",
+    "results",
+    "lineage",
+    "designer_decisions"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "uncertainty": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "absolute",
+            "relative"
+          ]
+        },
+        "lower": {
+          "type": "number",
+          "minimum": 0
+        },
+        "upper": {
+          "type": "number",
+          "minimum": 0
+        },
+        "basis": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "kind",
+        "lower",
+        "upper",
+        "basis"
+      ],
+      "additionalProperties": false
+    },
+    "quantity": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number"
+        },
+        "unit": {
+          "enum": [
+            "1",
+            "m",
+            "m2",
+            "m3",
+            "t",
+            "kg",
+            "s",
+            "h",
+            "day",
+            "m/s",
+            "kn",
+            "N",
+            "kN",
+            "kW",
+            "t/day",
+            "kg/m3",
+            "t/m3",
+            "m2/s",
+            "g/kWh",
+            "deg",
+            "%",
+            "m4",
+            "t*m",
+            "N*m",
+            "rpm"
+          ]
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/uncertainty"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "uncertainty_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "method_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "status": {
+          "enum": [
+            "draft",
+            "review_required"
+          ]
+        }
+      },
+      "required": [
+        "value",
+        "unit",
+        "uncertainty",
+        "uncertainty_reason",
+        "method",
+        "method_version",
+        "sources",
+        "status"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "uncertainty": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "uncertainty_reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "uncertainty_reason": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "file": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "media_type",
+        "source_id"
+      ],
+      "additionalProperties": false
+    },
+    "component": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "quantities": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/quantity"
+          }
+        },
+        "labels": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/file"
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "quantities",
+        "labels",
+        "files",
+        "notes"
+      ],
+      "additionalProperties": false
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "public",
+            "synthetic",
+            "customer"
+          ]
+        },
+        "customer_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "permitted_uses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "kind",
+        "customer_id",
+        "permitted_uses"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "customer"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "customer_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "customer_id": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "speed": {
+      "type": "object",
+      "properties": {
+        "kn": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/quantity"
+            },
+            {
+              "properties": {
+                "unit": {
+                  "const": "kn"
+                }
+              }
+            }
+          ]
+        },
+        "m_s": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/quantity"
+            },
+            {
+              "properties": {
+                "unit": {
+                  "const": "m/s"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "kn",
+        "m_s"
+      ],
+      "additionalProperties": false
+    },
+    "requirements": {
+      "type": "object",
+      "properties": {
+        "quantities": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/quantity"
+          }
+        },
+        "service_speed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/speed"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cargo_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "class_notation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "flag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "constraints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/component"
+          }
+        }
+      },
+      "required": [
+        "quantities",
+        "service_speed",
+        "cargo_types",
+        "class_notation",
+        "flag",
+        "constraints"
+      ],
+      "additionalProperties": false
+    },
+    "hull": {
+      "type": "object",
+      "properties": {
+        "parameters": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/quantity"
+          }
+        },
+        "surfaces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/file"
+          }
+        },
+        "coordinate_system": {
+          "type": "string",
+          "minLength": 1
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "parameters",
+        "surfaces",
+        "coordinate_system",
+        "notes"
+      ],
+      "additionalProperties": false
+    },
+    "lineage": {
+      "type": "object",
+      "properties": {
+        "parent_design_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "variation_parameters": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/quantity"
+          }
+        }
+      },
+      "required": [
+        "parent_design_id",
+        "variation_parameters"
+      ],
+      "additionalProperties": false
+    },
+    "decision": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "candidate_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "enum": [
+            "accepted",
+            "deferred",
+            "rejected"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "designer_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recorded_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "draft",
+            "review_required"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "candidate_id",
+        "action",
+        "reason",
+        "designer_id",
+        "recorded_at",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "evidence": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "quantity"
+            },
+            "value": {
+              "$ref": "#/$defs/quantity"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "text"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "flag"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "missing"
+            },
+            "value": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "list"
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/evidence"
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "object"
+            },
+            "value": {
+              "type": "object",
+              "propertyNames": {
+                "minLength": 1
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/evidence"
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "results": {
+      "type": "object",
+      "properties": {
+        "hull_variation": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/evidence"
+          }
+        },
+        "hydrostatics": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/evidence"
+          }
+        },
+        "resistance": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/evidence"
+          }
+        },
+        "power": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/evidence"
+          }
+        },
+        "fuel": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/evidence"
+          }
+        },
+        "capacities": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/evidence"
+          }
+        },
+        "stability": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/evidence"
+          }
+        }
+      },
+      "required": [
+        "hull_variation",
+        "hydrostatics",
+        "resistance",
+        "power",
+        "fuel",
+        "capacities",
+        "stability"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

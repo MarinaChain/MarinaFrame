@@ -1,0 +1,23 @@
+[
+  {"name":"unknown top-level field","path":["extra"],"value":1},
+  {"name":"unknown nested field","path":["hull","extra"],"value":1},
+  {"name":"missing field","path":["name"],"delete":true},
+  {"name":"unsupported version","path":["schema_version"],"value":"2.0.0"},
+  {"name":"invalid status","path":["status"],"value":"complete"},
+  {"name":"approval forbidden","path":["engineering_approved"],"value":true},
+  {"name":"invalid unit","path":["main_dimensions","length","unit"],"value":"ft"},
+  {"name":"unknown quantity field","path":["main_dimensions","length","extra"],"value":1},
+  {"name":"missing reason","path":["main_dimensions","length","uncertainty_reason"],"value":null},
+  {"name":"missing nullable field","path":["main_dimensions","length","uncertainty"],"delete":true},
+  {"name":"negative uncertainty","path":["main_dimensions","length","uncertainty"],"value":{"kind":"absolute","lower":-1,"upper":1,"basis":"synthetic"}},
+  {"name":"invalid source type","path":["main_dimensions","length","sources"],"value":[3]},
+  {"name":"unknown scope","path":["data_scope","kind"],"value":"shared"},
+  {"name":"customer without owner","path":["data_scope","kind"],"value":"customer"},
+  {"name":"public with owner","path":["data_scope","customer_id"],"value":"tenant-a"},
+  {"name":"empty permitted uses","path":["data_scope","permitted_uses"],"value":[]},
+  {"name":"speed disagreement","path":["requirements","service_speed","m_s","value"],"value":10},
+  {"name":"wrong speed unit","path":["requirements","service_speed","m_s","unit"],"value":"kn"},
+  {"name":"invalid hash","path":["hull","surfaces"],"value":[{"path":"hull.igs","sha256":"short","media_type":"model/iges","source_id":"synthetic"}]},
+  {"name":"raw result number","path":["results","fuel","extra"],"value":3},
+  {"name":"unknown evidence field","path":["results","fuel","extra"],"value":{"kind":"text","value":"test","extra":true}}
+]
