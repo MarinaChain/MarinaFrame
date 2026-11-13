@@ -1,0 +1,20 @@
+{
+  "purpose": "Small cited public-particulars sample, not a training fleet or reconstruction score",
+  "ship_id": "KVLCC2",
+  "data_scope": "public",
+  "particulars": {
+    "lpp_m": 320,
+    "beam_m": 58,
+    "draft_m": 20.8,
+    "displacement_volume_m3": 312622
+  },
+  "missing_required_training_fields": ["dwt_t", "depth_m", "cb", "design_id"],
+  "training_eligible": false,
+  "sources": [
+    {
+      "id": "existing-public-particulars-note",
+      "citation": "docs/plans/2026-11-12-performance-baseline-results.md, line 19, public particulars only; second-hand and not rechecked against the original publication"
+    }
+  ],
+  "warning": "Not independently sourced in this lane. Never treat LOA as Lpp or infer cargo capacity, DWT or Cb from this incomplete row."
+}
