@@ -20,6 +20,7 @@ class HullSections:
     breadth_m: float
     draft_m: float
     parallel_body_m: tuple[float, float]
+    section_z_m: np.ndarray | None = None
 
     def __post_init__(self):
         self.x_m = np.asarray(self.x_m, dtype=float).copy()
@@ -41,14 +42,30 @@ class HullSections:
                 or abs(self.x_m[0]) > 1e-9 or abs(self.x_m[-1] - self.length_m) > 1e-9
                 or abs(self.z_m[0]) > 1e-9 or self.z_m[-1] < self.draft_m):
             raise ValueError('Invalid dimensions, station order, draft or parallel body.')
+        if self.section_z_m is not None:
+            self.section_z_m = np.asarray(self.section_z_m, dtype=float).copy()
+            if (self.section_z_m.shape != self.half_breadths_m.shape
+                    or not np.isfinite(self.section_z_m).all()
+                    or np.any(np.diff(self.section_z_m, axis=1) <= 0)
+                    or self.section_z_m.min() < 0
+                    or self.section_z_m.max() > self.z_m[-1] + 1e-9):
+                raise ValueError('Invalid section height domains.')
         if not np.isclose(2 * self.half_breadths_m.max(), self.breadth_m, atol=0.001, rtol=0):
             raise ValueError('Declared breadth must match the largest sampled geometric breadth.')
 
 
 def _areas(hull: HullSections, level: float) -> np.ndarray:
-    heights = np.r_[hull.z_m[hull.z_m < level], level]
-    widths = np.array([np.interp(heights, hull.z_m, row) for row in hull.half_breadths_m])
-    return 2 * np.trapezoid(widths, heights, axis=1)
+    areas = []
+    domains = (hull.section_z_m if hull.section_z_m is not None
+               else np.broadcast_to(hull.z_m, hull.half_breadths_m.shape))
+    for heights, widths in zip(domains, hull.half_breadths_m):
+        top = min(level, heights[-1])
+        if top <= heights[0]:
+            areas.append(0.)
+            continue
+        clipped = np.r_[heights[heights < top], top]
+        areas.append(2 * np.trapezoid(np.interp(clipped, heights, widths), clipped))
+    return np.asarray(areas)
 
 
 def _integrals(hull: HullSections, start: float, end: float) -> tuple[float, float]:
@@ -97,8 +114,10 @@ def vary_sections(reference: HullSections, *, length_m: float, breadth_m: float,
         basis[mask, column] = (hi - lo) * 16 * t ** 2 * (1 - t) ** 2
 
     def candidate(amplitudes):
+        section_z = (None if reference.section_z_m is None
+                     else reference.section_z_m * (draft_m / reference.draft_m))
         return HullSections(x + basis @ amplitudes, z, widths, length_m,
-                            breadth_m, draft_m, parallel)
+                            breadth_m, draft_m, parallel, section_z_m=section_z)
 
     def residual(amplitudes):
         actual_cb, lcb = section_properties(candidate(amplitudes))
@@ -135,9 +154,13 @@ def build_candidate(hull: HullSections, *, bulkheads_m: tuple[float, float] | No
     from .display_mesh import shape_mesh
 
     heights = np.unique(np.r_[hull.z_m, np.linspace(hull.z_m[0], hull.z_m[-1], 5)])
-    sections = [dict(id=str(index), x_m=float(x),
-                     points_yz_m=np.column_stack([np.interp(heights, hull.z_m, widths), heights]).tolist())
-                for index, (x, widths) in enumerate(zip(hull.x_m, hull.half_breadths_m))]
+    sections = []
+    for index, (x, widths) in enumerate(zip(hull.x_m, hull.half_breadths_m)):
+        domain = hull.z_m if hull.section_z_m is None else hull.section_z_m[index]
+        levels = heights if hull.section_z_m is None else np.unique(
+            np.r_[domain, np.linspace(domain[0], domain[-1], 5)])
+        sections.append(dict(id=str(index), x_m=float(x), points_yz_m=np.column_stack(
+            [np.interp(levels, domain, widths), levels]).tolist()))
     solid, _ = build_hull(sections, max_deviation_m=1e-6)
     vertices, indices = shape_mesh(solid, 0.1, 0.15)
     triangles = vertices[indices] / 1000
