@@ -344,3 +344,9 @@
 - **Trigger:** The first physical KVLCC2 mesh failed because the generated meshQualityDict include lacked the `.cfg` suffix shipped by OpenCFD v2412.
 - **Rule:** Check dictionary include paths against the pinned image, add a failing generated-case regression, and correct dialect syntax without changing frozen numerical controls. Retain failed-run time and costs.
 - **Why:** Synthetic writer tests establish text contracts, not installed solver dialect compatibility.
+
+### Admit wall-resolved CFD by achieved layers, not requested controls
+- **Date:** 2026-11-14
+- **Trigger:** DB2 coarse checkMesh passed but only0.86% of hull faces retained prism layers; the VPS lacked memory.peak and the pinned image lacked Python.
+- **Rule:** Check achieved layer count/coverage before solver admission; a thin first-layer request does not prove y+<1. Probe instrumentation availability before long runs; label sampled VmHWM as a lower bound, never exact container peak. Retain failed attempts and costs.
+- **Why:** Topological mesh quality does not establish wall resolution, and minimal images or older kernels may lack assumed monitoring tools.

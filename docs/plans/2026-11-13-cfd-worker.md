@@ -1200,3 +1200,17 @@ including oversized mesh and instrumentation failure. Evidence main ignored
 `kvdb2-coarse-memory-layers.log`. Resume: PM review of prism-layer failure;
 never claim y+<1 from first-layer setting or start unsupported medium/fine.
 Quick tier running on stable source; commit this completed mesh before delivery.
+
+### DB2 delivery verification
+
+Stable-source quick tier **exit0**: Rust format/clippy/workspace passed;
+Python **2743 passed,4 skipped,100 deselected**, five warnings, **483.57s**;
+UI **275 passed,0 failed**, bounded secret scan **1402 files,0 findings**.
+Evidence ignored `work/cfd/kvdb2-quick.{log,exit}`. Exact-name private scan
+zero findings; diff check clean. No active lane containers. Lane root
+**1,990,734,749 bytes**, host free **168,935,940,096 bytes**; limits preserved.
+No managed codesight index or lane target exists; shared targets retained.
+Final DB2 report `outputs/2026-11-14-kvdb2-physical-runs.md` states no (1+k)
+for any grid; medium/fine and all solver runs not admitted. G-KV-DB2 remains
+blocked/not converged. Push lane only, no merge. Resume at revised layer
+strategy with PM; do not silently substitute the failed grid or prior DB1 values.
