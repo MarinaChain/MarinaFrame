@@ -1,6 +1,9 @@
 # Design record v1
 
-Canonical contract: `schemas/design-record-v1.schema.json`. Version: `1.0.0`.
+Frozen v1 contract: `schemas/design-record-v1.schema.json` (`1.0.0`).
+The separate `schemas/design-record-v1.1.schema.json` contract (`1.1.0`) adds
+`g CO2/(t nm)` for emitted efficiency indices and `nm` for distance inputs.
+No other fields, units or semantics change. Both schemas ship in the wheel.
 
 ## Python
 
@@ -52,11 +55,17 @@ JSON values. Tuple/list distinctions are intentionally normalized by JSON.
 
 ## Version and migration policy
 
-There is no implicit migration. v1 readers accept only `1.0.0`. New fields or
-changed semantics require a new schema version. A migration must be a named,
-pure source-to-target transform, retain the original record for audit, and pass
-target validation. Unknown fields fail instead of being discarded. Do not use
-serde defaults to fill absent required fields.
+There is no implicit migration. Readers select the schema from the declared
+`schema_version`, accept `1.0.0` or `1.1.0`, and preserve that version on save.
+The Python `SCHEMA_VERSION` default stays `1.0.0` for existing builders. New
+fields or changed semantics require a new schema version.
+
+Python `migrate_v1_0_0_to_v1_1_0(data: dict) -> dict` and Rust
+`migrate_v1_0_0_to_v1_1_0(source: &serde_json::Value) -> Result<Value, String>`
+validate a `1.0.0` source, copy it, change only `schema_version`, and validate the
+`1.1.0` target. The input is not modified. No quantity is converted, inferred or
+repaired. Keep the original record for audit. Unknown fields fail instead of
+being discarded. Do not use serde defaults to fill absent required fields.
 
 ## Scope and decisions
 

@@ -1,6 +1,6 @@
-"""Strict v1 design records. Install the project's ``data`` extra for validation.
+"""Strict versioned design records. Install the project's ``data`` extra.
 
-No automatic migration is permitted: each future migration must be a named pure
+Loading and saving preserve the declared version. Migration is an explicit pure
 transform followed by target-schema validation. Unknown fields are never dropped.
 """
 from copy import deepcopy
@@ -11,10 +11,25 @@ from pathlib import Path
 import sysconfig
 from typing import Any
 
+# Keep the existing builder default stable; new callers select 1.1.0 explicitly.
 SCHEMA_VERSION = "1.0.0"
-SCHEMA_PATH = Path(__file__).resolve().parents[3] / "schemas/design-record-v1.schema.json"
-if not SCHEMA_PATH.is_file():
-    SCHEMA_PATH = Path(sysconfig.get_path("data")) / "share/marinaframe/schemas/design-record-v1.schema.json"
+SCHEMA_FILES = {
+    "1.0.0": "design-record-v1.schema.json",
+    "1.1.0": "design-record-v1.1.schema.json",
+}
+
+
+def _schema_path(version: str) -> Path:
+    if not isinstance(version, str) or version not in SCHEMA_FILES:
+        raise ValueError(f"Unsupported design record schema version: {version!r}")
+    name = SCHEMA_FILES[version]
+    path = Path(__file__).resolve().parents[3] / "schemas" / name
+    if not path.is_file():
+        path = Path(sysconfig.get_path("data")) / "share/marinaframe/schemas" / name
+    return path
+
+
+SCHEMA_PATH = _schema_path(SCHEMA_VERSION)
 
 
 def _finite(value: Any) -> None:
@@ -48,8 +63,11 @@ class DesignRecord:
 
         data = deepcopy(self._data)
         _finite(data)
+        if not isinstance(data, dict):
+            raise ValueError("Design record must be an object")
+        schema_path = _schema_path(data.get("schema_version"))
         try:
-            schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
             Draft202012Validator(schema).validate(data)
         except ValidationError as error:
             raise ValueError(f"Invalid design record at {list(error.absolute_path)}: {error.message}") from error
@@ -80,6 +98,19 @@ class DesignRecord:
 
     def save(self, path: Path) -> None:
         Path(path).write_text(self.to_json(), encoding="utf-8")
+
+
+def migrate_v1_0_0_to_v1_1_0(data: dict) -> dict:
+    """Validate v1, copy it, and validate v1.1 without modifying the input.
+
+    Only the version changes. The new units become available for subsequent edits;
+    this function does not convert quantities or repair invalid source records.
+    """
+    source = DesignRecord.from_dict(data).to_dict()
+    if source["schema_version"] != "1.0.0":
+        raise ValueError("Migration requires a 1.0.0 design record")
+    source["schema_version"] = "1.1.0"
+    return DesignRecord.from_dict(source).to_dict()
 
 
 def capture_result(value: Any, *, units: dict[str, str], method: str,

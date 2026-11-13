@@ -28,7 +28,7 @@ vessel-reconstruct = "vessel_reconstruction.cli:main"
 where = ["src"]
 
 [tool.setuptools.data-files]
-"share/marinaframe/schemas" = ["schemas/design-record-v1.schema.json"]
+"share/marinaframe/schemas" = ["schemas/design-record-v1.schema.json", "schemas/design-record-v1.1.schema.json"]
 
 [tool.setuptools.package-data]
 vessel_reconstruction = ["tool_catalog.json"]

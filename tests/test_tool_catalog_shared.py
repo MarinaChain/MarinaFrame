@@ -42,7 +42,8 @@ def test_wheel_contains_shared_catalog(tmp_path):
     assert build.returncode == 0, f'pip wheel failed ({build.returncode}):\n{build.stderr}\n{build.stdout}'
     with zipfile.ZipFile(next(wheel_dir.glob('*.whl'))) as wheel:
         assert json.loads(wheel.read('vessel_reconstruction/tool_catalog.json')) == json.loads(CATALOG.read_text())
-        schema_paths = [name for name in wheel.namelist()
-                        if name.endswith('/share/marinaframe/schemas/design-record-v1.schema.json')]
-        assert len(schema_paths) == 1
-        assert wheel.read(schema_paths[0]) == (ROOT / 'schemas/design-record-v1.schema.json').read_bytes()
+        for filename in ('design-record-v1.schema.json', 'design-record-v1.1.schema.json'):
+            schema_paths = [name for name in wheel.namelist()
+                            if name.endswith('/share/marinaframe/schemas/' + filename)]
+            assert len(schema_paths) == 1
+            assert wheel.read(schema_paths[0]) == (ROOT / 'schemas' / filename).read_bytes()
