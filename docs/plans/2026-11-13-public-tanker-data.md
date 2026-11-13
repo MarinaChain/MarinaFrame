@@ -157,3 +157,87 @@ Data collection is complete for this batch; nothing is running. To continue:
 Checks run: parsers and table build re-run from downloads; coverage script; three random rows spot-checked against
 source text; `make secrets` (bounded scan). The Rust, Python and UI quick tiers were not run: this branch changes
 only this document.
+
+## Second pass: mid-size tankers, source grades, more cases (2026-11-13)
+
+Coordinator request: at least 60 complete 70,000-170,000 DWT rows (Lpp, B, D, T, DWT, displacement or Cb,
+cargo capacity with fill basis, service speed, MCR, engine), prefer primary sources, grade every row, confirm
+hobby-site VLCC rows from primary sources, and look again for capacity and EEDI/EEXI cases.
+
+### New columns in `fleet_particulars.csv`
+
+- `source_grade`: `primary` (owner, builder, government docket, journal or thesis document), `secondary` (Auke Visser:
+  hobby site that names its sources, Miramar and owner Q88 excerpts), `copied` (scheepvaartwest.be: hobby site that
+  copies owner Q88 data and cites nothing).
+- `complete_full_spec`: `complete_for_concept_fit` plus cargo capacity with a fill basis, service speed, MCR and engine.
+- `primary_confirmation`: for secondary and copied rows, the primary rows with the same IMO (or same name and build
+  year when the primary list has no IMO) and whether DWT (0.5%), B (0.1 m), LOA and Lpp (0.5 m) agree.
+
+### New sources (all access date 2026-11-13; downloads and URLs in `manifest.tsv`)
+
+| Source | Grade | Rows / use |
+|---|---|---|
+| Neda Maritime owner brochures (32-page fleet brochure; Aframax newbuilding sheet) | primary | 11 ships (5 VLCC, 6 Aframax): Lpp, moulded B, D, summer draft, displacement, DWT, 98% capacity incl. slops, MCR (bhp; kW derived x 0.7457). No speed. |
+| US MARAD docket MARAD-2018-0114-0004, attachment 17 (three Q88s in one file) | primary | Fontana (Suezmax 2017, complete), Apolytares and Seaways Raphael (VLCC). |
+| Imperial Petroleum owner website (6 Q88 / spec PDFs) | primary | 4 MR rows, Suez Protopia (Suezmax, partial: no loadline). |
+| Croatian Shipbuilding tankers reference brochure (hb.hr) | primary | 6 design rows (Brodosplit 166k, 114k, 108k, 95k, 75k Ice-1A, 45k): Lpp, B, D, design and scantling draught, DWT at both, SMCR, trial speed, 100% cargo capacity. No displacement. Page 5 values re-read by hand. |
+| JSEA "Shipbuilding and Marine Engineering in Japan 2026" (tanker chapters) | primary | ARION (Aframax), IONIC SEMELI (Suezmax): partial (no draft, displacement, capacity). Older editions are not online. |
+| scheepvaartwest.be tanker pages (site search for Aframax, Suezmax, LR2, LR1, Panamax and "segregation"; robots.txt allows; disclaimer has no data-use limit) | copied | 330 pages fetched at one request per 1.5-2 s; 220 rows after de-duplication by IMO. |
+| NTUA diploma thesis 60283 (108,000 DWT Aframax, 2024, CC BY-NC-ND) | design study | capacity case CAP05 only. |
+
+Searched and not usable: DHT, TORM (Q88 servlet behind a bot challenge; not bypassed), International Seaways (403),
+Frontline, Tsakos, Teekay, Scorpio and Euronav (no public spec PDFs live or in the Internet Archive index), KOTC
+(under maintenance), class registers (DNV terms unclear; others need accounts), Maersk Tankers (data only through an
+undocumented API; not used), Scribd.
+
+### Coverage after the second pass (`python3 -I scripts/coverage.py`)
+
+- Fleet table: 708 rows, 626 unique IMO numbers. Grades: primary 161, secondary 327, copied 220.
+- **70,000-170,000 DWT: 227 rows (primary 86, copied 141).**
+  - Complete for a concept fit (Lpp, B, D, T, DWT, displacement and so Cb, ratio checks passed): **53 unique ships,
+    36 derived designs** (primary 13, copied 40). By segment over all sizes: Aframax/LR2 36, LR1/Panamax 12, Suezmax 8.
+  - Complete to the full coordinator list (adds capacity with basis, speed, MCR, engine): **15 ships** (primary 6:
+    five Gungen Suezmax and Fontana; copied 9: seven Aframax/LR2, two LR1). Target of 60 **not met**. Most copied
+    pages have no displacement or no 98% capacity, and the Neda brochure has no speed.
+- All sizes: 245 rows complete for a concept fit; 43 rows complete to the full list.
+- VLCC: 327 rows are secondary (Auke Visser). Only **5** could be checked against a primary source (Neda brochure,
+  Minerva fleet page, MARAD Q88); all 5 agree on DWT, B, LOA and Lpp. The other 322 remain unconfirmed.
+- Copied Aframax/Suezmax rows checked against the Minerva owner page: 9 agree; MINERVA ARIES differs on DWT
+  (copied page 1,054,836.5 t, a source typo; the row fails the Cb check and is excluded from fits).
+- New quality flags: 15 rows with a cargo capacity implausible for their DWT (capacity not used); rows failing ratio
+  checks are excluded from fits.
+- Concept-dimensions G2 numbers are unchanged in substance: 110 complete VLCC training rows (52 designs) after the
+  sister exclusion; the reserved-ship rows are unchanged.
+
+### Capacity cases (second pass)
+
+No new case has both a usable hull geometry and a published capacity with fill basis. CAP01 (ARGYRO lines plan +
+98% tank table) is still the best. Added to `capacity_cases.csv`:
+- CAP05, NTUA thesis 60283 (108,000 DWT Aframax design): total cargo 120,185.8 m3 at 98%, per-tank 98% capacities with
+  box extents (Xa, Xf, Yp, Ys, Zl, Zu). Hull lines only as figures. Tests tank-box arithmetic, not hull fitting.
+- CAP06, WJAETS-2025-1486 Aframax stability paper: offsets at one station only. Not usable as a hull.
+
+### EEDI/EEXI input sets (second pass)
+
+No new complete tanker set was found. Searched: class-society and IMO sample technical files (generic or bulk carrier,
+unnamed), ClassNK, IRClass and Tasneef guidance, EEXI papers, Japanese and Croatian builder documents (trial speeds at
+design draught and 85-90% SMCR, but no reference speed at 75% MCR, SFC or index value). WE01 Histria Atlas remains the
+only complete public set; the weights gate still lacks a second case.
+
+### Second-pass rebuild and resume
+
+Rebuild from downloads (adds to the commands above):
+
+```sh
+python3 -I scripts/parse_q88.py q88_primary2_raw.csv - text/primary2/*.txt
+python3 -I scripts/parse_neda.py neda_raw.csv raw/brochures-20261113/nedamaritime.gr_img_media_room_brochures_32P-NEDA-WET-CARGO.pdf:6,8,12,16,18,22,26 raw/brochures-20261113/www.nedamaritime.gr_img_media_room_brochures_NedaAframaxNewBuildings.pdf:2
+python3 -I scripts/parse_hb.py raw/brochures-20261113/hb.hr_wp-content_uploads_2014_12_tankers.pdf hb_raw.csv
+python3 -I scripts/parse_sw.py raw/scheepvaartwest-pages-20261113 sw_raw.csv
+python3 -I scripts/build_manifest.py && python3 -I scripts/build_tables.py && python3 -I scripts/coverage.py
+```
+
+Resume: to reach 60 full-spec mid-size rows, the missing fields are displacement and 98% capacity. The realistic
+primary routes are further owner brochures or Q88 PDFs of the Neda type, and US deepwater-port dockets with Q88
+appendices (search regulations.gov dockets MARAD-2019-0011, -0093, -0094 and MARAD-2020-0127 for Q88 attachments).
+Fields could also be relaxed by the PM: 53 mid-size ships already have everything except capacity and/or speed. For
+the VLCC rows, primary confirmation needs owner Q88 PDFs per ship; none were found in this pass.
