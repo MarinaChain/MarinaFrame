@@ -560,3 +560,24 @@ in the force report. No force gate changed. Durable evidence main ignored
 `work/cfd/dtc-official-mesh-01-result.log` and `dtc-official-mesh-quality.log`;
 remote attempt retains hashes, individual logs and stage-accounting.csv.
 Load observations 1.55 at startup and 3.93 after 600 s; no pause triggered.
+
+### Reference solver launched / quick-tier checkpoint
+
+`dtc-official-solver-01` is running detached on the reference **848,025-cell**
+mesh at **1.535 m/s**, five MPI ranks, under the unchanged host supervisor.
+Initialization stage costs: setFields **3 s / 0.004167 allocated core-hours**,
+decomposePar **8 s / 0.011111**, renumberMesh **8 s / 0.011111**. Solver selected
+rigidBodyMotion/Newmark and is initializing. No completed force history, solver
+wall total or resistance result is claimed yet. Durable files are remote
+`dtc-official-solver-01/data/log.interFoam`, `solver-accounting.csv`,
+`postProcessing/forces/`, with attempt-level monitor/load/receipt paths. Local
+collector `work/dtc_reference_wait.py dtc-official-solver-01`; do not start a
+second solver while active. It records every terminal state including pause.
+
+Quick tier completed **exit 0**: Rust format/clippy/workspace tests passed;
+Python **2,734 passed, 4 skipped, 100 deselected**, five warnings in **732.02 s**;
+UI **275 passed, 0 failed**; secret scan **0 findings**. Separate private identity
+scan **0 findings**. Main ignored log/receipt `work/cfd/dtc-official-quick.log`
+and `dtc-official-quick.exit`. Only tracked documentation changed during checks.
+Track B remains parked. No systematic refinement study or speed series started;
+wait for this reference solver's force-history result first.
