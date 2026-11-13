@@ -1348,3 +1348,21 @@ positive volumes/face pyramids, nonorthogonality62.6896<70, skewness3.29121<4.
 Coarse05 meets revised PM operating rule. Admission evidence ignored
 `work/cfd/kvdb2-coarse05-aspect-admission.json`. Admit first2000-iteration
 solver on exact mesh05, factor2, unchanged low-Re SST; no gate claim.
+
+### Admitted coarse05 solver01 stopped by >24h runtime projection
+
+Start load1 **1.06**, exact1,501,521-cell mesh05,5CPU/12GiB. Completed
+iteration clocks1..5 **31,73,128,318,608s**; iteration6 was running.
+Measured full-study projection **608/5*2000=243200s=67.5556h**, last two
+iterations progressively slower. This is early throughput, not steady solver
+convergence; nevertheless PM's stop-any-run-projected>24h rule requires stop.
+Stopped without unpause/restart, exit143, whole **721.554989s /1.002159706
+allocated core-hours**, no OOM. Sampled kernel VmHWM **2287751168bytes
+(2.131GiB)** lower bound, exact total peak unavailable. Partial forces/logs
+preserved under ignored `work/cfd/kvdb2-coarse-solver-01/` and timing/memory
+logs. No >=200 samples, no force convergence, no admissible(1+k) diagnostic.
+No scheduled100-step yPlus output reached: distribution/share<1/<5 unavailable.
+Do not infer y+ from requested thickness or partial forces. Medium/fine not
+admitted. G-KV-DB2 remains **BLOCKED / NOT CONVERGED**, gates unchanged.
+Resume at PM compute/numerics decision; don't bypass24h stop by extending,
+restarting or claiming early partial output converged. Quick tier at end.
