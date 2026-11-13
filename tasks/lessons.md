@@ -348,5 +348,5 @@
 ### Admit wall-resolved CFD by achieved layers, not requested controls
 - **Date:** 2026-11-14
 - **Trigger:** DB2 coarse checkMesh passed but only0.86% of hull faces retained prism layers; the VPS lacked memory.peak and the pinned image lacked Python.
-- **Rule:** Check achieved layer count/coverage before solver admission; a thin first-layer request does not prove y+<1. Probe instrumentation availability before long runs; label sampled VmHWM as a lower bound, never exact container peak. Retain failed attempts and costs.
+- **Rule:** Check achieved full-count layer coverage from nSurfaceLayers before solver admission; any-extrusion fraction and mean layer count do not establish full-count coverage. Keep standalone checkMesh unchanged after pass-only extrusion relaxation; a thin first-layer request does not prove y+<1. Probe instrumentation availability before long runs; label sampled VmHWM as a lower bound, never exact container peak. Retain failed attempts and costs.
 - **Why:** Topological mesh quality does not establish wall resolution, and minimal images or older kernels may lack assumed monitoring tools.

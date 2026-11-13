@@ -1302,3 +1302,13 @@ grid because solver admission failed. Medium/fine not run per PM acceptance.
 Resume at a new mesh strategy/PM review, not more control guesses. Keep all
 failures and frozen gates. cfMesh needs a separately authorized runtime if
 required; do not install/change the pinned image automatically.
+
+### Layer recovery delivery verification
+Stable-source quick tier exit0: Rust format/clippy/workspace pass; Python
+**2745 passed,4 skipped,100 deselected**,5 warnings,547.61s; UI275 pass;
+bounded scan1403 files,0 findings. Focused recovery/remote24 pass. Exact-name
+identity scan0 findings, diff clean. No active lane containers; no OOM or safety
+pause. No managed codesight or lane target exists; shared targets retained.
+Report `outputs/2026-11-14-kvdb2-layer-recovery.md`. G-KV-DB2 blocked,
+no solver/y+/(1+k) on any new grid; preserve failures and worktree. Push lane
+only/no merge. Resume requires new mesh strategy or authorized cfMesh runtime.
