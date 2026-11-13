@@ -1,9 +1,9 @@
 name: CI portability and dependency watch
 on:
   push:
-    paths: ['requirements*.txt', 'requirements*.lock', 'Cargo.lock', 'pyproject.toml', 'rust-toolchain.toml', '**/requirements*.txt', '**/requirements*.lock', '**/Cargo.lock', '**/pyproject.toml', '**/rust-toolchain.toml']
+    paths: ['.github/workflows/ci-watch.yml', 'requirements*.txt', 'requirements*.lock', 'Cargo.lock', 'pyproject.toml', 'rust-toolchain.toml', '**/requirements*.txt', '**/requirements*.lock', '**/Cargo.lock', '**/pyproject.toml', '**/rust-toolchain.toml']
   pull_request:
-    paths: ['requirements*.txt', 'requirements*.lock', 'Cargo.lock', 'pyproject.toml', 'rust-toolchain.toml', '**/requirements*.txt', '**/requirements*.lock', '**/Cargo.lock', '**/pyproject.toml', '**/rust-toolchain.toml']
+    paths: ['.github/workflows/ci-watch.yml', 'requirements*.txt', 'requirements*.lock', 'Cargo.lock', 'pyproject.toml', 'rust-toolchain.toml', '**/requirements*.txt', '**/requirements*.lock', '**/Cargo.lock', '**/pyproject.toml', '**/rust-toolchain.toml']
   schedule:
     - cron: '23 18 * * *'
   workflow_dispatch:
@@ -62,7 +62,14 @@ jobs:
         with:
           python-version: '3.12.14'
       - run: sudo apt-get update && sudo apt-get install -y fonts-dejavu-core libgl1 libglu1-mesa
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal
+      - name: Build Linux sandbox launcher
+        run: cargo build --locked -p marinaframe-control --bin marinaframe-sandbox
       - name: Exercise supported ranges separately from the reproducible environment
+        env:
+          # Live Linux tests must exercise the native sandbox, not skip its absence.
+          MARINAFRAME_SANDBOX_LAUNCHER: ${{ github.workspace }}/target/debug/marinaframe-sandbox
         run: |
           # tests/test_tool_catalog_shared.py builds a wheel with --no-build-isolation, so the
           # build backend must be in this environment; Python 3.12 does not bundle setuptools.
