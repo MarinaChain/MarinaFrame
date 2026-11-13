@@ -66,4 +66,8 @@ The review agent continued after stop requests and was terminated. Its partial n
 
 Direct checks after those notes found the current manifest SHA-256 equals both the pre-fit committed value and attempt.json; attempt/result identify the pre-fit `6d162e8` commit; model and runner have no diff from that commit; required truth is present. Actual invocation used Python -I without -O and ignored work/concept-mid. These checks read stored evidence only and did not fit or score again. No identified candidate invalidates this recorded numerical result; an independent completed review is still absent.
 
-Current resume point: sole fit and score complete; do not rerun. Focused tests pass. Await complete quick-tier result, then record it, commit and push only lane/concept-mid. No merge.
+## Final quick-tier result and delivery
+
+Complete retry **PASS, exit 0**: Rust format/clippy and workspace tests (323 passed, 0 failed, 50 ignored); Python 2,715 passed, 4 skipped, 100 deselected, 5 warnings (738.86 s); UI 275 passed, 0 failed; bounded secret scan 1,388 tracked text files, 0 findings. The private identity denylist environment variable was supplied inline. `git diff --check` passed. Full log: ignored `work/concept-mid/quick-final.log`. Only this report changed after the test run; the runner and model remain unchanged.
+
+Current resume point: sole fit and score complete; never rerun or alter the gate. All required local checks pass. Commit this final test record and push only lane/concept-mid; no merge. Inspect and remove only lane-local target/ after push if present, preserving the shared Rust cache. PM review remains needed for inferred sister independence, copied sources and runner reuse limits. Engineering approval remains false.
