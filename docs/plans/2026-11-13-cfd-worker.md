@@ -443,3 +443,28 @@ is now running detached (`work/track_b_distance.py`, log main ignored
 closure/skin attribution and reverse source-to-mesh distance are not yet
 available. Do not claim source fidelity, surfaceCheck or G6 before measurements.
 Separate private identity scan on the checkpoint: **0 findings**.
+
+### Track B source-first result: repair rejected
+
+Measurements followed the required order. Exact trimmed-source distances at
+1,000 uniform triangle-index starboard centroids: **max 0.404878332 m,
+p99 0.153896050 m, mean 0.002889370 m**. These mix skin and generated closures,
+are not area-uniform or a global bound, and omit reverse distance. Thus they
+cannot establish skin fidelity.
+
+Official `kcs-face-meshfix-check-01`: **0 illegal, 0 open, 0 non-manifold edges**,
+one component/normal zone; **0 volume cells, 6 s, 5 cores, 0.008333333 allocated
+core-hours**. However, bounds now end at **x=3.45733 m** rather than the source
+forward end near 7.52684 m. The repair lost a large hull region despite the
+explicit `remove_smallest_components=False`; library cleanup after joining is
+not a geometry-preservation guarantee. Surface topology alone is insufficient.
+
+Then frozen G6 clipping at z=0.3418 m: wetted area **5.142457739389 m2
+(-45.512691%)**, displaced volume **0.803020084870 m3 (-51.302602%)**.
+**G6 FAIL**, unchanged 0.5% bands. Reject this repair; do not use it for CFD or
+tune it to published particulars. Preserve all evidence under main ignored
+`work/cfd/kcs-face-meshfix-03/` and `kcs-face-meshfix-check-01.log`. A robust
+repair that preserves all source regions remains unimplemented; this first
+established-method trial does not solve Track B. Next method review should
+consider a source-distance-constrained implicit reconstruction, with synthetic
+branch-junction and region-preservation tests before public application.
