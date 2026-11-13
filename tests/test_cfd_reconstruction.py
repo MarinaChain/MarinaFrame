@@ -34,7 +34,7 @@ def test_disconnected_zero_width_section_does_not_bridge_bulb_to_stem(reconstruc
     lower = cq.Solid.makeCone(0.5, 0, 1, cq.Vector(2, 0, 0))
     upper = cq.Solid.makeCone(0, 0.7, 1, cq.Vector(2, 0, 2))
     source = cq.Compound.makeCompound([lower, upper])
-    profile, evidence = reconstruction.slice_half_breadths(source, 2, 3, levels=13)
+    profile, evidence = reconstruction.slice_half_breadths(source, 2, 3, levels=14)
     empty = (profile[:, 1] > 1) & (profile[:, 1] < 2)
     assert np.all(profile[empty, 0] == 0)
     assert evidence['centreline_gap_heights_m']

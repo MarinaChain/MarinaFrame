@@ -75,6 +75,7 @@ def build_section_mesh(sections, samples=321):
                 else:
                     quad(cb, b, a, ca, 'end')
     triangles = np.asarray(triangles)
+    triangles, edge_flips = reconnect_centreline_edges(triangles)
     # One global reversal preserves local edge pairing while choosing outward.
     volume = np.einsum('ij,ij->i', triangles[:,0], np.cross(triangles[:,1], triangles[:,2])).sum() / 6
     if volume < 0:
@@ -82,7 +83,46 @@ def build_section_mesh(sections, samples=321):
     validate_surface(triangles)
     return triangles, dict(station_count=len(rings), points_per_half_section=len(knots),
                            fixed_knot_count=len(fixed), centreline_weld_tolerance_m=1e-8,
+                           centreline_edge_flips=edge_flips,
                            triangle_labels=labels)
+
+
+def reconnect_centreline_edges(triangles):
+    """Flip isolated four-face centreline diagonals on each side separately.
+
+    The two strips on a given side meet across a zero-width station edge.
+    Replacing that diagonal with the opposite-vertex diagonal removes the
+    artificial four-face junction without moving source section vertices.
+    """
+    from collections import defaultdict
+
+    uses = defaultdict(list)
+    for index, triangle in enumerate(triangles):
+        for j in range(3):
+            a, b, c = triangle[j], triangle[(j+1) % 3], triangle[(j+2) % 3]
+            if a[1] == 0 and b[1] == 0:
+                key = tuple(sorted((tuple(a), tuple(b))))
+                uses[key].append((index, a, b, c))
+    flips = 0
+    for edge, entries in uses.items():
+        if len(entries) != 4:
+            continue
+        for sign in (-1, 1):
+            pair = [entry for entry in entries if entry[3][1] * sign > 0]
+            if len(pair) != 2:
+                raise ValueError('Unsupported collapsed centreline branch junction')
+            first, second = pair
+            i, a, b, c = first
+            k, reverse_b, reverse_a, d = second
+            if not (np.array_equal(a, reverse_a) and np.array_equal(b, reverse_b)):
+                raise ValueError('Inconsistent centreline junction orientation')
+            replacement = np.array([[c, a, d], [c, d, b]])
+            if np.any(np.linalg.norm(np.cross(replacement[:,1]-replacement[:,0],
+                                             replacement[:,2]-replacement[:,0]), axis=1) == 0):
+                raise ValueError('Degenerate centreline reconnection')
+            triangles[i], triangles[k] = replacement
+            flips += 1
+    return triangles, flips
 
 
 def mesh_particulars(triangles, draft):
