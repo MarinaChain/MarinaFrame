@@ -615,3 +615,31 @@ load log, Docker state and live case log established the outcome above. Resume:
 PM must decide whether to resume this paused reference on the shared host;
 fix pause-aware collection before using this waiter for another long run.
 No solver controls, safety limits or frozen gates changed.
+
+## PM operating-limit change and throughput measurement
+
+PM manually unpaused the reference container after observing baseline host load
+1.97 (approximately 2). This is authorization to continue the existing solver,
+not restart it. For **DTC only**, replace the old load>7 rule with **10-minute
+load average >9 continuously for 10 minutes**. CPU quota 5, memory 12 GB,
+nice 10, one-run lock, disk limits and no automatic unpause remain unchanged.
+This is a **PM change to an operating limit**, not G-DTC or convergence gates.
+
+Linux provides only 1/5/15-minute load values. Operational implementation will
+sample its 1-minute value every 30 seconds and compute a time-weighted rolling
+600-second mean, requiring a complete window; pause only when that rolling
+mean stays above 9 for a further 600 seconds. Log raw samples and rolling mean.
+This is an explicit rolling estimate, not a falsely labelled native 10-minute
+kernel statistic. The existing monitor is alive (PID 3352544 at inspection) but
+retains the old rule/state; replace only that supervisor with a detached
+pause-aware monitor under the same lane lock. Never restart the container.
+
+Record timestamped completed force-sample time/count at least 1,800 seconds
+apart with no pause in the measurement window. Project remaining wall time
+and allocated core-hours to tutorial endTime=35 s from measured simulated-time
+advance. Also report sample throughput and the >=200-sample lower bound needed
+for two final >=100-sample drift windows. This does not guarantee convergence;
+report startup/nonlinear-rate uncertainty and no finite validated convergence
+ETA if stability is not yet established. Commit/push this projection early.
+If projected wall exceeds 48 hours, leave solver/monitor running and stop further
+CFD work for the PM compute-host decision. Track B remains parked.
