@@ -581,3 +581,37 @@ scan **0 findings**. Main ignored log/receipt `work/cfd/dtc-official-quick.log`
 and `dtc-official-quick.exit`. Only tracked documentation changed during checks.
 Track B remains parked. No systematic refinement study or speed series started;
 wait for this reference solver's force-history result first.
+
+### Reference solver safety pause (no automatic unpause)
+
+The host supervisor **paused** `mf-cfd-dtc-official-solver-01` after load
+**12.15** at 01:28:26 and **7.86** at 01:38:30, 604 s apart; startup load was
+3.60 at 01:18:25. Docker confirms `paused=true`. Later load 3.55 is not
+permission to resume. **PM decision required before unpause**; no second
+container or solver was launched. Track B stays parked.
+
+Mesh remains **848,025 cells**. Container start 17:18:26 UTC to pause marker
+17:38:30 UTC gives **1,204 s pre-pause wall / 1.672222 allocated core-hours**
+(five-core quota, includes initialization; excludes ongoing paused reservation).
+Initialization stages are the 19 s recorded above. Last completed solver step
+reports **ClockTime 1,173 s** and **ExecutionTime 888 s**; these are partial
+solver-reported times, not a completed-stage receipt or measured total CPU.
+No terminal completion receipt exists while paused; final allocated accounting
+must include later paused elapsed time per the existing receipt convention.
+
+Partial force history collected: **10 samples**, physical time 0.000120005 to
+**0.00311429 s**; next step began at 0.00385657 s. Half-hull total Fx ranges
+**-79,778.83 to +17,526.89 N**; last **+970.9435 N**. These are severe startup
+transients, not resistance estimates. Do not score CT, force drift or G-DTC
+from ten startup samples. Full force rows and motion-log tail archived in main
+ignored `work/cfd/dtc-official-solver-01-paused-forces.log` and
+`dtc-official-solver-01-state.log`; remote originals remain intact. Attempt
+uses 254,056,786 data bytes; host available 171,880,181,760 bytes.
+
+The local waiter detected paused state, then failed collecting nonexistent
+`run-receipt.json`/`solver.log` (these are written only after container exit).
+This is a **collector failure, not solver exit**. Direct read of pause marker,
+load log, Docker state and live case log established the outcome above. Resume:
+PM must decide whether to resume this paused reference on the shared host;
+fix pause-aware collection before using this waiter for another long run.
+No solver controls, safety limits or frozen gates changed.
