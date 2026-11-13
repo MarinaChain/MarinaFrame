@@ -25,11 +25,11 @@ def test_weights_and_mass_weighted_cg_with_conservative_bands():
     machinery = 250 + .72 * 10000**.70
     lightship = steel+outfit+machinery
     band = steel*.2+outfit*.25+machinery*.3
-    assert q["steel_t"].value == pytest.approx(steel)
-    assert q["lightship_t"].value == pytest.approx(lightship)
-    assert q["deadweight_t"].value == pytest.approx(40000-lightship)
-    assert q["lightship_x_m"].value == pytest.approx((steel*75+outfit*80+machinery*20)/lightship)
-    assert q["lightship_t"].uncertainty["absolute_band"] == pytest.approx(band)
+    assert q["steel_t"].value == pytest.approx(steel, rel=1e-9)
+    assert q["lightship_t"].value == pytest.approx(lightship, rel=1e-9)
+    assert q["deadweight_t"].value == pytest.approx(40000-lightship, rel=1e-9)
+    assert q["lightship_x_m"].value == pytest.approx((steel*75+outfit*80+machinery*20)/lightship, rel=1e-9)
+    assert q["lightship_t"].uncertainty["absolute_band"] == pytest.approx(band, rel=1e-9)
     assert q["deadweight_t"].uncertainty["reason"]  # displacement band not supplied
     assert q["lightship_x_m"].uncertainty["reason"]  # CG accuracy not supplied
 
