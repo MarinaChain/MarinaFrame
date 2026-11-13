@@ -524,3 +524,15 @@ Same one-container, 5-CPU, 12-GB, nice-10, host monitor/load-pause/disk rules.
 Account mesh, initialization and solver separately. No other host resources
 may be changed. Commit after reference mesh and after solver result; quick tier
 before lane-only push, no merge.
+
+Reference solver protocol before launch: use DTCHullMoving's own transient
+Euler/PIMPLE controls, including endTime 35 s, maxCo 25, maxAlphaCo 15 and
+maxDeltaT 0.05 s. This PM reference run supersedes the earlier custom-study
+solver-control proposal for the reference only. Change only speed from 1.668
+to **1.535 m/s**, decomposition from eight ranks to **five** (hierarchical
+5x1x1 to comply with the quota), and purgeWrite from zero to **two** for disk
+safety. Water nu=1.09e-6, rho=998.8 and zero surface tension already match the
+tutorial. Retain all force samples and solver/motion logs. No mesh setting
+changes. Report any numerical failure; do not quietly reduce Courant settings
+or force a resistance acceptance result. The unchanged-reference measurement
+is not a converged finest mesh and cannot pass G-DTC by itself.
