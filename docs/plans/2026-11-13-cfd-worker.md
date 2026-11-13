@@ -304,3 +304,67 @@ occurred before this gate commit. Existing G0–G6 and VPS limits are unchanged.
 Next: read caller configuration, inspect only the pinned image's DTC tutorial,
 record STL hash/bounds, run monitored surfaceCheck, commit results; then freeze
 mesh settings and begin the three-mesh study. Track B follows once A is running.
+
+### DTC tutorial surface and configuration checkpoint
+
+G-DTC committed before all DTC runs as `212fb5a`. Caller-owned configuration
+loaded without disclosing its host. Preflight: 0.85 one-minute load,
+229,459,107 lane bytes, 469,235,718 selected-image bytes, 172,438,994,944 free
+host bytes and no active lane container.
+
+Official v2412 resource `tutorials/resources/geometry/DTC-scaled.stl.gz` was
+decompressed without geometry changes. Decompressed STL SHA-256:
+`887052c1ed7cc680e11f81f4e86ad7e6ce9d04ea62e8c2148deb5b98c599787c`.
+116,062 triangles, 58,033 vertices; bounds (-0.113504,-0.429253,-2.51549e-11)
+to (6.16209,0.429252,0.572322) m. SurfaceCheck: **0 illegal triangles, 0 open
+edges, 0 non-manifold edges**, one component, one normal zone. This establishes
+surface topology, not resistance accuracy.
+
+Tutorial inventory found both `RAS/DTCHull` and **`RAS/DTCHullMoving`**. The latter
+supports heave Pz and pitch Ry with rigid-body motion; therefore use the moving
+setup and the **4% free-attitude gate**, not the optional fixed-attitude band.
+Tutorial is a half-domain (negative y, symmetry at y=0): double the integrated
+half-hull resistance for full-hull CT. Moving tutorial mass 412.73 kg corresponds
+to half-model displacement; retain original mass/inertia and motion damping.
+Tutorial reference points to the 2012 paper. Appendage correspondence still
+requires explicit geometry evidence before a physical comparability claim.
+
+All three diagnostics ran in the unchanged safety supervisor at 5 allocated
+cores, 12 GB, nice 10, no network, with durable host monitoring:
+
+| Attempt | Result | Volume cells | Wall seconds | Allocated core-hours |
+| --- | --- | --- | --- | --- |
+| dtc-tutorial-probe-01 | failed path lookup; no surface work | 0 | 6 | 0.008333333 |
+| dtc-tutorial-probe-02 | tutorial inventory completed | 0 | 7 | 0.009722222 |
+| dtc-surface-check-01 | surface topology passes | 0 | 6 | 0.008333333 |
+
+Logs/receipts remain in main ignored `work/cfd/dtc-*.log` and remote lane attempt
+folders. None is a mesh or solver run.
+
+### Frozen DTC mesh settings (before meshing)
+
+Use the official **DTCHullMoving** domain/boxes, three prism layers and six
+nested xy-only refinement passes. Systematically refine the background grid in
+all axes (round to integers):
+
+| Mesh | x cells | y cells | vertical block counts bottom-to-top |
+| --- | --- | --- | --- |
+| coarse | 32 | 14 | 38, 38, 3, 3, 30, 15 |
+| medium | 42 | 19 | 50, 50, 4, 4, 40, 20 |
+| fine | 56 | 25 | 67, 67, 5, 5, 53, 27 |
+
+Keep tutorial geometric grading, nested box bounds, snapping and relative layer
+parameters unchanged. Set maxGlobalCells to 6,000,000 as a safety ceiling, not a
+target; a truncated refinement cannot count as systematic completion. Use actual
+final cell counts for ratios. No extra surface levels. Inlet U=1.535 m/s,
+nu=1.090e-6 m2/s, rho=998.8 kg/m3, waterline z=0.244 m. Use transient Euler
+moving-grid setup, maxCo=1, maxAlphaCo=0.5, maxDeltaT=0.01 s. Start with 35 s
+physical duration; extension may only gather convergence samples, never select
+a favourable window. Store every force sample and evaluate the final two equal
+windows (>=100 samples), report elapsed physical time. Keep at most two output
+time directories; retain full force and motion histories. Run mesh/checkMesh
+and solver as separate monitored stages, record their costs separately. Reject
+failed mesh topology before solver. Five MPI ranks maximum for the solver;
+meshing is serial under the same 5-core quota. Resource admission retains the
+8 GB peak allowance and 10 GB free reserve before every stage. If a stage does
+not fit, stop and report, rather than reduce fidelity after seeing forces.
