@@ -19,7 +19,8 @@ MIN_DESIGNS = 4
 
 
 def _positive(name: str, value: float | None) -> None:
-    if value is not None and (not math.isfinite(value) or value <= 0):
+    if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))
+                              or not math.isfinite(value) or value <= 0):
         raise ValueError(f"{name} must be finite and positive")
 
 
@@ -144,7 +145,8 @@ class Proposal:
                 "main_dimensions": {key: value.to_record_fragment() for key, value in self.dimensions.items()},
                 "neighbour_ranges": {key: value.to_record_fragment() for key, value in self.neighbours.items()},
                 "references": list(self.references), "constraints": list(self.constraints),
-                "warnings": list(self.warnings), "feasible": feasible,
+                "warnings": list(self.warnings), "feasible": False if feasible is False else None,
+                "port_limits_within_ranges": feasible,
                 "training_ship_ids": list(self.training_ship_ids), "engineering_approved": False,
                 "status": "review_required", "method_version": VERSION}
 
@@ -166,6 +168,9 @@ class FleetModel:
         if len({ship.ship_id for ship in rows}) != len(rows):
             raise ValueError("ship IDs must be unique")
         excluded_ships = set(excluded_ship_ids)
+        unresolved = excluded_ships - {ship.ship_id for ship in rows}
+        if unresolved:
+            raise ValueError("unresolved excluded ship IDs; supply their rows or exclude design IDs instead")
         excluded_designs = set(excluded_design_ids) | {ship.design_id for ship in rows if ship.ship_id in excluded_ships}
         designs = {}
         for ship in rows:

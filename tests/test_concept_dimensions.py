@@ -2,6 +2,7 @@
 
 import json
 import math
+import os
 import subprocess
 import sys
 from dataclasses import asdict
@@ -156,6 +157,28 @@ def test_required_fleet_numbers_cannot_be_null(field):
         replace(fleet()[0], **{field: None})
 
 
+def test_unresolved_ship_exclusion_fails_closed():
+    with pytest.raises(ValueError, match="unresolved"):
+        FleetModel.fit(fleet(), excluded_ship_ids={"absent-reserved-ship"})
+
+
+@pytest.mark.parametrize("value", [True, False, "50000"])
+def test_non_numeric_requirement_values_fail(value):
+    with pytest.raises(ValueError):
+        Requirements(dwt_t=value)
+
+
+def test_boolean_fleet_coefficient_fails():
+    with pytest.raises(ValueError):
+        replace(fleet()[0], cb=True)
+
+
+def test_port_limits_do_not_prove_overall_feasibility():
+    record = FleetModel.fit(fleet()).propose(requirement(max_beam_m=100)).to_record_fragment()
+    assert record["port_limits_within_ranges"] is True
+    assert record["feasible"] is None
+
+
 def test_json_cli(tmp_path):
     root = Path(__file__).resolve().parents[1]
     fleet_path = tmp_path / "fleet.json"
@@ -166,6 +189,7 @@ def test_json_cli(tmp_path):
         [sys.executable, str(root / "scripts/concept_dimensions.py"),
          "--fleet", str(fleet_path), "--requirements", str(req_path),
          "--exclude-ship", "synthetic-0"], capture_output=True, text=True, cwd=root,
+        env={**os.environ, "PYTHONPATH": str(root / "src")},
     )
     assert process.returncode == 0, process.stderr
     record = json.loads(process.stdout)
