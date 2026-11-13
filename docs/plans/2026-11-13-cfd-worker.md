@@ -1214,3 +1214,38 @@ Final DB2 report `outputs/2026-11-14-kvdb2-physical-runs.md` states no (1+k)
 for any grid; medium/fine and all solver runs not admitted. G-KV-DB2 remains
 blocked/not converged. Push lane only, no merge. Resume at revised layer
 strategy with PM; do not silently substitute the failed grid or prior DB1 values.
+
+## PM prism-layer recovery (G-KV-DB2 unchanged at f357e2d)
+
+Before any recovery mesh: first verify cfMesh/cartesianMesh in the pinned
+v2412 image; use it if present, extending only required runner commands with
+red/green tests. If absent/fails, PM authorizes separate snappy snapping and
+layer addition from official retained DTC controls. No package/image changes.
+Acceptance before solver: **>=95% hull faces with full requested layer count**,
+per hull patch; checkMesh must pass. After solver: **y+<1 on >=95% wetted
+hull area**, distribution reported. Partial extrusion is not full-count coverage.
+G-KV-DB2 thresholds and three-grid convergence remain frozen. No thin-ship.
+
+Architecture PASS: same lane-only half-domain/case and host supervisor, factor2.
+Quality WARN: full-count coverage needs face-level layer output, not mean layers;
+post-run area-weighted y+ needs boundary fields and face areas. Coverage PASS:
+test command allowlist, separate pass controls, full-count and y+ admission.
+Performance WARN: previous2.2GiB is a sampled process lower bound, not total
+peak. Retain12GiB hard limit and resource admission; do not assume4M fit proved.
+
+Recovery fallback settings (recorded before run): reuse coarse snapped grid
+without layers, base74, hull/aft refinement3. Layer-only pass castellatedMesh
+false/snap false/addLayers true. Start official DTC settings: relativeSizes true,
+finalLayerThickness **0.3**, **30 layers**, expansionRatio **1.2**, minThickness
+**0.001**, featureAngle **180**, mergePatchFacesAngle60, layerTerminationAngle30,
+slipFeatureAngle30. Increase normal/thickness smoothing to5/10/30 and relax
+iterations10, nLayerIter100, nRelaxedIter20. Pass-only mesh quality maxNonOrtho75,
+minTetQuality-1e30, maxInternalSkewness8, minDeterminant1e-4. Final standalone
+checkMesh remains unchanged: relaxing extrusion does not relax acceptance.
+At typical hull outer spacing~0.01m, final0.3 yields first-cell thickness
+~1.5e-5m (centre distance half), estimated y+~0.3; actual y+ governs admission.
+Thirty1.2-growth layers have final/first~198; full coverage must be demonstrated.
+Write layerSets/layerFields to count actual full layers, per patch. Preserve
+failed attempts; no solver until full-count evidence. Then coarse solver,
+medium/fine only if layers and post-run y+ pass; record costs and memory.
+Commit each step, quick tier at end, push lane only, no merge.
