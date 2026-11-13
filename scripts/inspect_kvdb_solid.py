@@ -38,7 +38,9 @@ def inspect_shape(shape, *, scale, draft):
         # Underlying spline bounding boxes can extend beyond trimmed faces.
         # Identify the artificial cap from its actual plane, not its bbox.
         cap = planar and abs(abs(normal.z) - 1) < 1e-10 and abs(center.z - waterline) < 1e-7
-        aft = planar and abs(abs(normal.x) - 1) < 1e-10 and center.x > bounds.xmax - 0.02
+        # Candidate only: a source end closure can be a slightly curved patch.
+        # Inspect its source identity before treating it as a flat transom.
+        aft = center.x > bounds.xmax - 0.02
         faces.append({
             'index': index, 'area_model_m2': properties.Mass() / scale**2,
             'waterplane_cap': cap, 'aft_closure_candidate': aft,

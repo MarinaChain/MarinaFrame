@@ -26,6 +26,14 @@ def test_clipped_box_excludes_only_waterplane_and_retains_transom():
     assert sum(face['waterplane_cap'] for face in result['faces']) == 1
 
 
+def test_aft_closure_candidate_need_not_be_axis_normal():
+    module = inspector()
+    shape = cq.Solid.makeBox(10, 4, 2, cq.Vector(-4, -2, -2))
+    shape = shape.rotate((0, 0, 0), (0, 0, 1), 0.01)
+    result = module.inspect_shape(shape, scale=1, draft=1)
+    assert result['immersed_aft_closure_area_model_m2'] == pytest.approx(4)
+
+
 def test_inspection_rejects_disconnected_solids():
     module = inspector()
     first = cq.Solid.makeBox(1, 1, 1)
