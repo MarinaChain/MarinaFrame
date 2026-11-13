@@ -1,6 +1,9 @@
 # KVLCC2 physical double-body study
 
-Status: in progress; no G-KV-DB pass is claimed.
+Status: **G-KV-DB NOT PASSED**. All three physical meshes and 2,000-iteration
+solver runs completed. CV is nonmonotone, and the fine/medium change is
+5.84766%, above 2%. The required finest converged mesh does not exist in this
+study. The nominal finest-mesh hybrid also lies outside the frozen CT band.
 
 ## Frozen conditions
 
@@ -28,11 +31,28 @@ Whole-attempt times include admission-independent container/monitor overhead.
 | Coarse solver 01, 2000 iterations | 16,257 | 163 | 0.226389 | 182.187129 | 0.253037680 |
 | Medium mesh 01, checkMesh OK | 35,426 | 24 | 0.033333 | 32.409143 | 0.045012698 |
 | Medium solver 01, 2000 iterations | 35,426 | 365 | 0.506944 | 393.009871 | 0.545847042 |
+| Fine mesh 01, checkMesh OK | 80,069 | 26 | 0.036111 | 31.475456 | 0.043715910 |
+| Fine solver 01, 2000 iterations | 80,069 | 868 | 1.205556 | 879.062201 | 1.220919723 |
 
 Medium final force 20.4808400 N, CV 0.004624263674, implied (1+k)
 1.340500704. Fixed-window drift 0.00003369%; y+ min/mean/max
-13.7969/129.155/1266.09. Both solver exits are successful processes;
-three-mesh convergence remains unmeasured until the fine run.
+13.7969/129.155/1266.09. Fine final force 21.6784900 N, CV 0.004894674917,
+implied (1+k) 1.418888635. Fine drift is 0.00000185%; y+ min/mean/max
+17.1999/90.9219/804.101. Medium/fine extruded-face coverage is
+92.3775%/97.0385%, average layers 2.49/2.84.
+
+Actual cell-based refinement ratios are 1.29646 and 1.31234. CV decreases
+then increases, and the fine/medium change is 5.84766%: convergence fails.
+Force-window stability passes on all three runs, but does not cure spatial
+nonconvergence. Implied finest (1+k) is diagnostic, not converged; compare
+prior Holtrop-type values 1.36 (1982) and 1.34 (1984).
+
+Whole monitored attempts, including the failed attempt, total 1,580.672651 s
+(26.3445 min), 2.195378682 allocated core-hours. Mesh stages total 57 s /
+0.079167 core-hours including the failed attempt; solver stages total 1,396 s /
+1.938889 core-hours. Whole totals include overhead. No load pause or >24-hour
+projection occurred. Every stage started below load1 4; fine rolling-load
+monitoring passed a complete 600-second window.
 
 Coarse final force 24.1434222 N, CV 0.00545121930, implied (1+k)
 1.58022203. Its fixed-window drift is 0.00000746%. Actual ITTC-57 CF is
@@ -68,6 +88,34 @@ refinement changes Cw by -0.21038%; the final combined angle/tail change is
 solid-tessellation error. Contrary to the expected small wave contribution,
 this approximation produces a large wave term. It is retained, not tuned down.
 
+## Hybrid sensitivity and gate outcome
+
+These are nominal finest-mesh diagnostics, not estimates based on a converged
+mesh. No favourable mesh or force window was selected.
+
+| Wave assumption | CT_est | Signed error vs 0.004110 |
+|---|---:|---:|
+| Cw = 0 | 0.004894674917 | +19.09185% |
+| Stated thin-ship Cw | 0.009446290739 | +129.83676% |
+| Cw doubled | 0.013997906560 | +240.58167% |
+
+The stated Cw is used for the nominal score, not zero or a fitted correction.
+G-KV-DB does not pass: convergence prerequisites fail and the nominal stated-Cw
+score exceeds the upper bound 0.0043155. Large Cw under this blunt-hull/stern
+approximation needs investigation, not silent correction. No further mesh or
+model changes are authorized by this report; the frozen result is retained.
+
+## Verification and evidence
+
+Final stable-source quick tier exited 0: Rust format/clippy/workspace tests;
+Python 2,741 passed, 4 skipped, 100 deselected (674.41 s, five dependency
+warnings); UI 275 passed; bounded tracked secret scan 1,400 files, zero findings.
+Focused CFD contracts: 70 passed. Exact-name private identity scan: zero findings.
+A broader exploratory identity scan matched historical local filesystem paths;
+it was not a zero-finding scan. New report content contains no VPS address.
+
 Raw logs, immutable attempt receipts, force histories, offsets and numeric
 checks remain in the approved ignored main `work/cfd/` folder. The plan records
-each run checkpoint and exact resume state.
+each run checkpoint. Resume requires a PM decision on failed spatial convergence
+and the unexpectedly large stern-closed thin-ship term. No automatic rerun,
+free-surface substitution, gate change or engineering approval is made.

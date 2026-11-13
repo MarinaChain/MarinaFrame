@@ -1001,3 +1001,62 @@ snappy **25 s**, blockMesh/checkMesh 0 s at integer resolution; combined
 `work/cfd/kvdb-fine-mesh-01-result.log`. No cell ceiling reached; admit fine
 solver. Final quick tier is running on unchanged source in parallel with
 remote physical execution; only result documentation changes locally.
+
+### Stable-source physical-delivery quick tier
+
+Final quick tier **exit 0**: Rust format/clippy/workspace tests passed;
+Python **2,741 passed, 4 skipped, 100 deselected**, 5 warnings in **674.41 s**;
+UI **275 passed, zero failed**; bounded tracked secret scan **1,400 files,
+zero findings**. Log/receipt: ignored `work/cfd/kvdb-physical-quick.{log,exit}`.
+Source remained unchanged throughout (only docs/lessons/results changed).
+Private exact-name identity scan completed **zero findings**. A broader
+exploratory identity scan matched historical local filesystem paths; no
+credentials or host were copied into the new report. No managed `.codesight`
+index or lane-local target exists. Shared targets were not removed.
+
+Delegation deviation: repeated helper calls retained an unwanted isolation
+option; all were stopped without using any results. Worktree inventory showed
+no new helper checkout from these calls. Wave calculation was executed directly
+inside the existing lane. The matching lesson now requires stopping delegation
+instead of repeated dispatch/cancel attempts.
+
+### Fine solver 01 and fixed-gate outcome
+
+Load1 **1.80**, **80,069 cells**, **2000 force samples/iterations**. Final
+fixed 100-sample forces **21.6784896 / 21.6784900 N**, drift **0.00000185%**;
+CV **0.004894674917**, diagnostic implied **(1+k)=1.418888635**. y+
+min/mean/max **17.1999 / 90.9219 / 804.101**. Fine face-layer coverage
+**97.0385%**, mean **2.84** layers; medium coverage **92.3775%**, mean **2.49**.
+Solver stage **868 s / 1.205555556 allocated core-hours**; whole monitor
+**879.062201 s / 1.220919723 core-hours**. Last projection **865.92 s**;
+no resource pause. Final evidence in ignored `work/cfd/kvdb-fine-solver-01/`.
+
+**G-KV-DB NOT PASSED.** CV sequence **0.005451219298, 0.004624263674,
+0.004894674917** is nonmonotone; fine/medium **5.84766% >2%**. Actual
+cell refinement ratios **1.29646 / 1.31234**. Force-window drift passes, but
+there is no finest converged mesh. No extra mesh or force-window selection.
+
+Merged thin-ship module matched byte-for-byte at origin/continue/v0.5
+76d7e01. Solid-tessellation waterline offsets use the PM stern-profile
+closure (terminal grid panel to zero, shrinks on refinement); real CFD transom
+unchanged. Selected **Cw=0.004551615822**, **Rw=20.1590830 N**, with
+2561 x 257 offset nodes, 2048 angular nodes, lambda_max 40. Last panel change
+**-0.21038%**, angle/tail change **+0.01217%**; offset volume vs CAD **+0.08128%**.
+This unexpectedly large term is retained, not forced small. Stern model and
+surface tessellation errors are not bounded by these numerical checks.
+Nominal finest CT_est **0.009446290739 (+129.83676%)** with stated Cw;
+zero-Cw **0.004894674917 (+19.09185%)**; doubled-Cw **0.013997906560
+(+240.58167%)**. Nominal score is outside the frozen band, independently of
+failed convergence. Not a validated hybrid or free-surface result.
+
+All attempts total **1580.672651 s / 2.195378682 allocated core-hours**,
+five-core quota. Mesh stages (including failed attempt) **57 s / 0.079167
+core-hours**; solver stages **1396 s / 1.938889 core-hours**. Whole totals
+include monitor/container overhead. Final report:
+`outputs/2026-11-14-kvdb-physical-runs.md`.
+
+Resume: PM decision required for failed spatial convergence and large
+stern-closed wave estimate; do not change gates, tune after force inspection,
+or launch additional runs automatically. All three requested physical runs
+are complete; preserve logs/meshes and the existing worktree. Push lane only,
+no merge. Stable-source quick tier above passed; only documentation changed.
