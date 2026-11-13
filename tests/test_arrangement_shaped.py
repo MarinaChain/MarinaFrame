@@ -101,6 +101,26 @@ def test_nonfinite_and_self_crossed_polygon_rejected():
         prism(((0, 0), (2, 2), (0, 2), (2, 0)))
 
 
+@pytest.mark.parametrize('points,distance', [(((1, 0), (1, 3)), 2), (((2, 3), (4, 0)), 1), (((2, 0), (3, 1)), float('nan')), (((2, 0), (3, 1)), 0)])
+def test_invalid_side_offsets_rejected(points, distance):
+    with pytest.raises(ValueError):
+        offset_side(points, distance)
+
+
+def test_offset_miter_meets_both_shifted_segment_lines():
+    points = offset_side(((4, 0), (6, 4), (6, 8)), 1)
+    y, z = points[1]
+    assert y == pytest.approx(5, abs=1e-12)
+    assert (4+z/2-y)/math.sqrt(1.25) == pytest.approx(1, abs=1e-12)
+
+
+def test_extra_non_solid_geometry_is_not_silently_discarded():
+    import cadquery as cq
+    mixed = cq.Compound.makeCompound([box(), box().Faces()[0].translate((30, 0, 0))])
+    with pytest.raises(ValueError, match='closed solid'):
+        measure_tanks(mixed, (TankEnvelope('oil', 'cargo', box(), ('synthetic',)),), units='m')
+
+
 def test_open_hull_and_disconnected_envelopes_rejected():
     import cadquery as cq
     shape = prism(((-8, 1), (8, 1), (8, 10), (-8, 10)))

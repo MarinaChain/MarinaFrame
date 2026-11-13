@@ -32,6 +32,9 @@ def _closed_solid(shape, label):
     try:
         solids = shape.Solids()
         valid = (len(solids) == 1 and shape.isValid()
+                 and len(shape.Faces()) == len(solids[0].Faces())
+                 and len(shape.Edges()) == len(solids[0].Edges())
+                 and len(shape.Vertices()) == len(solids[0].Vertices())
                  and all(s.Closed() for s in solids[0].Shells())
                  and solids[0].Volume() > 0)
     except (AttributeError, TypeError):

@@ -99,7 +99,9 @@ Source inspection supports missing hopper geometry, cambered deck and shaped lon
 
 Generic shaped support added in `arrangement_generator/shaped.py`: explicit closed CAD envelopes, ruled station polygons, two-dimensional normal side offsets, hull-clipped measurements, separate fill/usable fractions and overlap rejection. Existing planar generator unchanged. Test-first run failed on the missing module; implementation then passed **46 focused tests in 11.84 s** (22 new, 24 existing), including exact hopper/camber/varying-side volumes and centroids, sloping-shell normal offset, millimetre units, explicit deductions and invalid topology/metadata. No source-specific constants or geometry are in these tests.
 
-**Round-3 resume point:** commit generic implementation, then reconstruct source-supported surfaces and run development ablations. Full per-tank tables remain under work due to the source licence. Historical G3b stays failed.
+Self-review added miter/invalid-offset checks and a mixed-solid-plus-stray-face regression. The latter failed before the fix: the single-solid guard discarded stray non-solid geometry. It now checks face/edge/vertex coverage before accepting the solid. **52 focused tests passed in 21.02 s** after the fix. No tracked Codesight/context-map metadata exists to refresh.
+
+**Round-3 resume point:** source-supported hopper/section-normal-side/camber ablations are running under `work/argyro/scripts/develop.py`. Inspect every result and report explicit approximations; do not interpret development fit as a gate. Full per-tank tables remain under work due to the source licence. Historical G3b stays failed.
 
 ## Sources and method limits
 
