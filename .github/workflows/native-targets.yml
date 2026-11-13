@@ -66,6 +66,8 @@ jobs:
         run: MF_KERNEL_LIBRARY="$PWD/work/kernel-build/$KERNEL_LIBRARY" python kernels/tests/test_python.py
       - name: Test Rust binding
         run: |
+          # The pinned toolchain uses the minimal profile, which has no clippy.
+          rustup component add clippy
           cargo test --manifest-path kernels/rust/Cargo.toml --locked
           cargo clippy --manifest-path kernels/rust/Cargo.toml --locked --all-targets -- -D warnings
   native:
