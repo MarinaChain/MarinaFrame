@@ -97,7 +97,9 @@ Source inspection supports missing hopper geometry, cambered deck and shaped lon
 - Performance **WARN**: sequential intersections only; use bounded explicit section polygons and no source-specific constants in tracked code. Keep all ARGYRO reconstruction/ablation scripts and tables under ignored `work/`.
 - Execution: (1) commit diagnosis/design; (2) tests RED, generic implementation, tests GREEN, commit; (3) development reconstruction and before/after/ablation tables, commit compact results; (4) quick tier with private identity check, commit/push lane only, inspect and remove local target. Do not create or enter another worktree.
 
-**Round-3 resume point:** diagnosis table and design ready; implement synthetic tests next. Full per-tank tables remain under work due to the source licence. Historical G3b stays failed.
+Generic shaped support added in `arrangement_generator/shaped.py`: explicit closed CAD envelopes, ruled station polygons, two-dimensional normal side offsets, hull-clipped measurements, separate fill/usable fractions and overlap rejection. Existing planar generator unchanged. Test-first run failed on the missing module; implementation then passed **46 focused tests in 11.84 s** (22 new, 24 existing), including exact hopper/camber/varying-side volumes and centroids, sloping-shell normal offset, millimetre units, explicit deductions and invalid topology/metadata. No source-specific constants or geometry are in these tests.
+
+**Round-3 resume point:** commit generic implementation, then reconstruct source-supported surfaces and run development ablations. Full per-tank tables remain under work due to the source licence. Historical G3b stays failed.
 
 ## Sources and method limits
 
