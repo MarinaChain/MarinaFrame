@@ -5,7 +5,7 @@ Branch `lane/run-view-focus` from `origin/continue/v0.5` at b4f70cb (lane J merg
 ## Problem
 
 The user asked whether the Run view still shows too much information compared with incumbent
-tools (Maxsurf, Rhino + Orca3D, NAPA, DELFTship give about 80-85 % of the screen to geometry and
+tools (surface modelling and naval design tools give about 80-85 % of the screen to geometry and
 show information on demand). The user approved this pass. Before (mock backend, details column
 folded, sidebar expanded), the drawing and 3D panes take this share of the window area:
 
