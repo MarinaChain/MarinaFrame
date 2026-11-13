@@ -109,6 +109,18 @@ def _hull(record):
     above = hull.z_m > hull.draft_m
     hull.z_m[above] = hull.draft_m + (hull.z_m[above] - hull.draft_m) * (
         (dimensions['depth'] - hull.draft_m) / (hull.z_m[-1] - hull.draft_m))
+    if hull.section_z_m is not None:
+        above = hull.section_z_m > hull.draft_m
+        hull.section_z_m[above] = hull.draft_m + (hull.section_z_m[above] - hull.draft_m) * (
+            (dimensions['depth'] - hull.draft_m) / (parent.z_m[-1] * hull.draft_m / parent.draft_m - hull.draft_m))
+    if hull.regions is not None:
+        original_depth = parent.z_m[-1] * hull.draft_m / parent.draft_m
+        for station in hull.regions:
+            for region in station:
+                for row in region['rows_m']:
+                    if row[0] > hull.draft_m:
+                        row[0] = hull.draft_m + (row[0] - hull.draft_m) * (
+                            (dimensions['depth'] - hull.draft_m) / (original_depth - hull.draft_m))
     candidate = build_candidate(hull)
     data['hull']['parameters'] = deepcopy(data['main_dimensions'])
     data['results']['hull_variation']['sections'] = fragment_evidence(_section_dict(hull))
