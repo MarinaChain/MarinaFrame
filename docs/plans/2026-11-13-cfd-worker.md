@@ -111,3 +111,17 @@ The remote backend currently launches one command per immutable attempt, not a m
 5. Extract Tokyo submission CT min/max at Fn 0.195/0.227/0.260, write exact provenance/numerical intervals, and commit them BEFORE physical runs. Do not widen them later.
 6. Run the three-mesh KCS study at Fn 0.227, then speed series only if G2 passes; then KVLCC2. Check disk reserve before every mesh and record actual cells, wall seconds and allocated core-hours per mesh/solver stage. Replace provisional host allowance with measured scaling.
 7. Add durable staged execution, app worker integration and remote/MPI transport only after local physical gates give usable evidence. Preserve failed attempts and never turn process exit zero into physical-validation status.
+
+## Batch 13b surface-repair gate (frozen before repair measurements)
+
+Base updated by fast-forward to local `continue/v0.5` at `5dc2585`. All original physical gates and remote production-host limits remain unchanged.
+
+**G6 surface gate:** at model Lpp **7.2786 m** and design draft **0.3418 m**, the repaired KCS surface must be a closed outward-oriented manifold, and OpenFOAM surfaceCheck must report **zero illegal triangles, zero one-face/open edges, zero edges with more than two faces**. Bare-hull wetted area must be within **0.5% of 9.4379 m2** (9.3907105–9.4850895 m2), and displaced volume within **0.5% of 1.6490 m3** (1.640755–1.657245 m3). Source: Tokyo 2015 KCS geometry/conditions, model 1: https://t2015.nmri.go.jp/kcs_gc.html . Rudder area 0.1152 m2 is excluded from this geometry gate; appendage treatment must be stated in resistance runs.
+
+Repair protocol: inspect public IGES per-face topology and bounds; remove only demonstrable duplicate/internal/non-hull patches with a written geometric rule; detect half/full side coverage before reflection. Start OCCT sewing tolerance **0.1 mm at full scale**, i.e. 3.16465 micrometres model scale. Record any later repair tolerance change BEFORE applying it and justify by geometry, never by force or particulars errors. Close deck/transom from existing boundary curves, not a guessed submerged envelope. Tessellate connected topology, weld shared edge nodes, remove zero-area triangles, orient consistently. Report patch counts, removed areas, closure areas and representation error. No scaling or offsets fit to the reference area/volume.
+
+Architecture PASS: lane-local surface module and public preparation CLI, no other lane edits. Quality WARN: disconnected source patches and independent trim tessellation require topology diagnostics before repair. Coverage PASS: synthetic half/full hulls, missing deck/transom, duplicate/internal patches, closure/manifold and exact box area/volume. Performance WARN: CAD preparation local in background, solver/mesh only on VPS; no wall cap.
+
+Tasks: (1) commit G6; (2) diagnose CAD face/edge topology; (3) add failing synthetic repair/measurement tests; (4) implement geometric repair and public CLI; (5) measure G6 and remote surfaceCheck; (6) only after G6 passes, free-surface KCS three-mesh convergence then speed series then KVLCC2 under the unchanged gates; (7) record all actual cell counts, wall seconds, allocated core-hours, quick tier and resume point; commit/push own branch.
+
+Resume: commit G6, then inspect source faces and boundary curves. No repaired geometry or physical run checked yet in batch 13b.
