@@ -643,3 +643,22 @@ report startup/nonlinear-rate uncertainty and no finite validated convergence
 ETA if stability is not yet established. Commit/push this projection early.
 If projected wall exceeds 48 hours, leave solver/monitor running and stop further
 CFD work for the PM compute-host decision. Track B remains parked.
+
+Monitor replacement completed without restarting/unpausing the solver: old
+lane supervisor PID 3352544 was checked against this exact attempt's cwd, then
+terminated without its old signal trap (which would pause the container).
+New detached wrapper PID **3381983** runs host Python `monitor-v2.py` under
+`python3 -I`, acquires the same `.solver.lock`, logs every 30 s, and pauses this
+container on monitor failure or disk/resource breach. It has no start/unpause
+operation. Wrapper/script/log remain in the lane attempt root, outside the
+writable container bind. Docker start timestamp remains **17:18:26.353641585Z**.
+
+First rate sample: epoch **1794591897.1224945**, completed physical time
+**0.00474757 s**, **12 force samples**, state running; load1 10.23 (no complete
+600-s rolling window yet). Lane directory 699,669,173 bytes; host free
+171,859,873,792 bytes. Require >=1,800 s continuous running after this sample
+before reporting measured throughput. Durable `rate-start.json`,
+`operating-v2.csv`, `load-v2.log`; projection will be `rate-projection.json`.
+Local launch source is ignored `work/dtc_monitor_v2.py`; no caller host copied
+into tracked documentation. Historical safety-pause.txt is retained as evidence
+but no longer defines the live state; inspect Docker and v2 monitor records.
