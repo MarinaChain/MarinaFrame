@@ -47,8 +47,15 @@ MARPOL Annex I text: IMO resolution MEPC.117(52), adopted 15 October 2004, https
 4. Run focused unit/CAD tests and fix only lane-owned files. Review simplicity and unresolved rules. Record actual numbers and failures below.
 5. Run quick tier, record result, commit/push own branch. Delete lane target after inspection.
 
-**Resume point:** Gates frozen; baseline not run yet. Public G3 blocked, not passed. No public capacity computation performed.
+**Resume point:** G0 passed. Implementation and 24 focused tests pass. Independent review corrections applied; final post-correction G4 quick tier and branch push pending. Public G3 remains blocked, not passed. No public capacity computation performed.
 
 ## Results
 
-Pending.
+- G0 baseline quick tier exit 0: Python 2541 passed, 4 skipped, 92 deselected (1228.96 s); Rust/UI successful; bounded scan 1326 files, 0 findings. Log: ignored `work/checks/baseline.log`.
+- Test-first missing-module run failed as expected before implementation. First CAD run exposed an OCCT API detail: Solid.Closed() is not the closed-shell test. Fixed by checking each solid shell; no gate change.
+- G1/G2 focused run: **21 passed in 4.95 s**, including six real-CAD cases. Wedge 18000 m3, centre (55.5555556,0,6) m; box 24000 m3, centre (50,0,6) m, partition and first-moment tolerances passed. STEP mm input/deck clipping, bad geometry, quantity serialization and failed rule screens tested.
+- Review refinement: reg.29.3 requires two slop tanks for >=70000 t. Regression failed before fix, passes after. Reg.29 screen now checks count as well as capacity.
+- Independent review found disconnected intersections merged as one tank and bare citation strings accepted. Both regression tests failed before fixes; now reject disconnected cells and require a citation tuple. Review also identified potential first-object STEP truncation: changed import to collect all objects before checking one solid. Multi-solid STEP regression already rejected by the old single-solid guard, so no reproduced loss claim for that fixture. Final focused run: **24 passed in 4.69 s**. Stopped the pre-correction quick run during Python tests; it is not a final pass. Rerun G4 on corrected source before push.
+- No tracked `.codesight` or context map exists; no shared structural metadata changed.
+- G3 remains BLOCKED. No matched complete public hull with explicit published 98% capacity. Do not call this a validated MARPOL generator: reg.19 clearance, reg.18 loading and probabilistic reg.23 mean outflow remain unresolved; only a full-release scenario is calculated. Fuel reserve is not a finished fuel tank.
+- No other lane code, PRD or ROADMAP modified. Sources are the primary IMO links above and the public particulars mirror. Public source PDFs/text stay in ignored `work/regulations/`.
