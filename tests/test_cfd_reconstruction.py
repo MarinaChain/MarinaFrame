@@ -30,6 +30,16 @@ def test_occt_section_of_half_box_keeps_flat_bottom(reconstruction):
     assert evidence['section_edges'] == 4
 
 
+def test_disconnected_zero_width_section_does_not_bridge_bulb_to_stem(reconstruction):
+    lower = cq.Solid.makeCone(0.5, 0, 1, cq.Vector(2, 0, 0))
+    upper = cq.Solid.makeCone(0, 0.7, 1, cq.Vector(2, 0, 2))
+    source = cq.Compound.makeCompound([lower, upper])
+    profile, evidence = reconstruction.slice_half_breadths(source, 2, 3, levels=13)
+    empty = (profile[:, 1] > 1) & (profile[:, 1] < 2)
+    assert np.all(profile[empty, 0] == 0)
+    assert evidence['centreline_gap_heights_m']
+
+
 def test_mirrored_loft_has_exact_box_volume_and_wetted_area(reconstruction):
     profiles = [np.array([[1., 0.], [1., 1.], [1., 2.]])] * 3
     solid = reconstruction.loft_sections([0., 2., 4.], profiles)

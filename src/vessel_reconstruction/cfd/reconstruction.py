@@ -68,11 +68,26 @@ def slice_half_breadths(source, x, deck, levels=161, edge_samples=201):
     valid = np.isfinite(breadths)
     if np.count_nonzero(valid) < 2 or not valid[0] or not valid[-1]:
         raise ValueError(f'Incomplete section at keel or deck: bottom={bottom}, deck={deck}, gaps={gaps}')
-    # Only internal source-trim gaps are interpolated, and all are in evidence.
+    # Distinguish missing trim joins from empty space between two source
+    # branches that both terminate at the centreline (bulb and upper stem).
+    endpoints = np.concatenate([points[[0, -1]] for points in polylines])
+    centreline_gaps = []
     breadths = np.interp(heights, heights[valid], np.array(breadths)[valid])
+    for index, z in enumerate(heights):
+        if valid[index]:
+            continue
+        below = endpoints[endpoints[:, 1] < z]
+        above = endpoints[endpoints[:, 1] > z]
+        if len(below) and len(above):
+            lower = below[np.argmax(below[:, 1])]
+            upper = above[np.argmin(above[:, 1])]
+            if abs(lower[0]) <= 1e-6 and abs(upper[0]) <= 1e-6:
+                breadths[index] = 0.
+                centreline_gaps.append(float(z))
     return np.column_stack([breadths, heights]), dict(
         section_edges=len(edges), deck_extension_m=deck_extension,
         intersection_height_tolerance_m=1e-6, interpolated_gap_heights_m=gaps,
+        centreline_gap_heights_m=centreline_gaps,
         max_competing_breadth_m=max(spread, default=0.))
 
 

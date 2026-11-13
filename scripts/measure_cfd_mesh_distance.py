@@ -33,8 +33,12 @@ def main():
         indices = np.unique(np.linspace(0, len(candidates)-1, min(1000, len(candidates)), dtype=int))
         points = candidates[indices].mean(axis=1)
         distances = sample_distances(source, points)
+        worst = np.argsort(distances)[-20:][::-1]
         result[label] = dict(samples=len(points), max_distance_m=max(distances, default=0),
-                             mean_distance_m=float(np.mean(distances)) if distances else None)
+                             percentile_99_distance_m=float(np.percentile(distances, 99)) if distances else None,
+                             mean_distance_m=float(np.mean(distances)) if distances else None,
+                             worst_samples=[dict(point_m=points[i].tolist(), distance_m=distances[i],
+                                                 triangle=candidates[indices[i]].tolist()) for i in worst])
         print(label, result[label], flush=True)
         args.out.write_text(json.dumps(result, indent=2)+'\n')
 
