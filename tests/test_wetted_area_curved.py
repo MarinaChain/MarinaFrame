@@ -36,8 +36,13 @@ def test_sphere_cap_and_spheroid_area_converge(vertical_radius):
     draft = .3 * vertical_radius
     # Surface of revolution: r(z)=sqrt(1-z²/c²).
     c = vertical_radius
-    expected = quad(lambda z: 2 * math.pi * math.sqrt(1 + z*z*(1/c**4 - 1/c**2)),
-                    -c, draft, epsabs=1e-11)[0]
+    if c == 1.:
+        expected = 2 * math.pi * (1 + draft)  # Sphere cap: 2*pi*radius*height.
+    else:
+        expected = quad(
+            lambda z: 2 * math.pi * math.sqrt(1 + z*z*(1/c**4 - 1/c**2)),
+            -c, draft, epsabs=1e-11,
+        )[0]
     errors = []
     for resolution in [16, 32, 64]:
         triangles = sphere_triangles(resolution) * [1, 1, c]
