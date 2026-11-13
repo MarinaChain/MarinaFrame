@@ -47,7 +47,11 @@ The existing `geometry.build_hull` produced one valid closed AP–FP solid. Its 
 
 **Ruling:** The current generator does not choose machinery length, peak length, tank counts or slop length: callers must supply all of these. Therefore a fully autonomous 'own choices' run is unavailable. Run an explicitly caller-chosen, ungated baseline (6 rows, 2 columns, machinery 15% L, forepeak 5% L, slops 3% L, fuel reserve 3% L, 2 slop columns), with its existing rule-minimum side/bottom choices. These fractions are fixed here before any capacity computation, not fitted to the reference.
 
-**Round-2 resume point:** run published-boundary intersections and the declared ungated baseline; retain limitations and compare the unchanged 2% band. Evidence: ignored `work/argyro/`; no capacity computation has yet been performed.
+**Correction after cross-view check:** The first station mapping swapped stations 1 and 1.5. MarinaFrame's `outer_half_breadth_at` and `plan_half_breadth_at` exposed about 5.86 m RMS disagreement at both stations; correcting only their identities reduced their RMS to 0.085 mm and 1.624 mm. Across all 20 stations, 2–7 comparable waterline heights give a maximum cross-view RMS of 1.624 mm and maximum point difference of 3.630 mm. This is same-drawing consistency, not independent offset accuracy. Detailed per-station values stay under `work/`. The initial hull/Cb above is superseded pending rebuild. The first capacity run was stopped after one tank; its incomplete output is retained in `work/argyro/results/initial-mapping/`, not treated as a gate result. Gate and boundaries remain unchanged.
+
+First quick-tier attempt failed in unrelated `intake_supervision::a_reader_that_reports_each_page_is_not_stopped_however_long_it_takes`: `intake_stalled` versus expected `intake_worker`. It ran concurrently with CAD work. No application code changed; rerun after CAD finishes rather than alter another lane's timing test.
+
+**Round-2 resume point:** corrected hull rebuild running; then run published-boundary intersections and the declared ungated baseline, retain limitations and compare the unchanged 2% band. Evidence: ignored `work/argyro/`. Final quick tier still required.
 
 ## Sources and method limits
 
