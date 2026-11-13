@@ -880,6 +880,15 @@ for full source evidence; these are ignored copies, not new published results.
 
 ## PM transom approximation and physical sequence (before runs)
 
+Fresh-session PM confirmation (2026-11-14): execute the physical coarse,
+medium and fine sequence below, not another preparation-only checkpoint.
+At Fn 0.142 the wave term is expected to be small; this is a motivation for
+reporting sensitivity, not an assumed numerical result. Use the merged
+thin-ship module on offsets from this solid with the stated stern-profile
+closure, score with its calculated Cw, and report the zero/doubled-Cw bounds.
+All other G-KV-DB conditions remain frozen. Commit each run, run quick tier
+at the end, push `lane/cfd-worker`, and do not merge.
+
 PM supersedes the transom blocker: compute thin-ship Cw from this solid's
 waterline offsets, ending each waterline at its stern profile to close the
 immersed transom. **This is an explicit thin-ship stern-closure approximation,
