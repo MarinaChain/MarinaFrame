@@ -50,7 +50,7 @@ Aggregate errors below are absolute percentages of the published/derived value, 
 | Cb | 4/4; 1.525% / 2.739% | 3/3; 1.580% / 2.739% | 1/1; 1.358% / 1.358% |
 | D (diagnostic) | 4/4; 2.586% / 5.943% | 3/3; 3.379% / 5.943% | 1/1; 0.209% / 0.209% |
 
-Joint coverage by evaluation source grade: primary 3/3; copied 1/1; secondary **NOT RUN (0 designs)**. These grade splits evaluate one mixed-grade fitted model, not separately fitted models. Training had 4 primary and 22 copied representatives. Four withheld designs do not establish fleet-wide accuracy or calibrated coverage. Bands include fixed 10% dimension / 5% Cb floors plus maximum training residuals; coverage is not point-estimate precision. Sister exclusion is conservative but inferred, Cb is derived, and copied sources remain unconfirmed. Capacity, speed, hull geometry and joint feasibility were not tested. `engineering_approved=false`.
+Joint coverage by evaluation source grade: primary 3/3; copied 1/1; secondary **NOT RUN (0 designs)**. These grade splits evaluate one mixed-grade fitted model, not separately fitted models. Training had 4 primary and 22 copied representatives. Four withheld designs do not establish fleet-wide accuracy or calibrated coverage. Bands include fixed 10% dimension / 5% Cb floors plus maximum training residuals; coverage is not point-estimate precision. Stored upper bounds exceed their point estimates by 13.64% (Lpp), 21.60% (B), 20.40% (T) and 16.52% (Cb), so the numerical gate is broad. Sister exclusion is conservative but inferred, Cb is derived, and copied sources remain unconfirmed. Capacity, speed, hull geometry and joint feasibility were not tested. `engineering_approved=false`.
 
 ## Checks and review
 
