@@ -17,6 +17,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--kcs-iges', required=True, type=Path)
     parser.add_argument('--out', required=True, type=Path)
+    parser.add_argument('--sections-only', action='store_true', help='Save OCCT slices without the superseded BRep loft')
     args = parser.parse_args()
     args.out.mkdir(exist_ok=False)
     Interface_Static.SetCVal_s('xstep.cascade.unit', 'MM')
@@ -48,6 +49,8 @@ def main():
                     station_count=len(positions), spacing_min_m=float(np.diff(positions).min()),
                     spacing_max_m=float(np.diff(positions).max()), sections=records)
     (args.out / 'sections.json').write_text(json.dumps(metadata, indent=2))
+    if args.sections_only:
+        return
     solid = loft_sections(positions, profiles)
     cq.exporters.export(solid, str(args.out / 'hull.step'))
     metadata.pop('sections')

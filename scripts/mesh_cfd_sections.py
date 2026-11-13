@@ -14,6 +14,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--sections', type=Path, required=True)
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--mesh-only', action='store_true', help='Defer G6 measurements until distance and surfaceCheck')
     args = parser.parse_args()
     args.out.mkdir(exist_ok=False)
     source = json.loads(args.sections.read_text())
@@ -23,6 +24,9 @@ def main():
     np.savez_compressed(args.out / 'mesh.npz', triangles=triangles, labels=labels)
     write_stl(args.out / 'hull.stl', triangles)
     print('STL written', flush=True)
+    if args.mesh_only:
+        (args.out / 'topology.json').write_text(json.dumps(metadata, indent=2)+'\n')
+        return
     metadata.update(mesh_particulars(triangles, source['draft_m']))
     metadata.update(triangles=len(triangles), source_sha256=source['source_sha256'],
                     sections_sha256=hashlib.sha256(args.sections.read_bytes()).hexdigest(),
