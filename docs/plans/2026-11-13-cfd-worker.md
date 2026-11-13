@@ -14,7 +14,9 @@
 - Run data and meshes only in `/Users/jonathanjie/Documents/workspace/MarinaFrame/work/cfd/` (ignored). No pilot, holdout, sealed, or JBC inputs.
 - Do not edit PRD, ROADMAP, shared worker modules or other lane modules.
 - Never set `engineering_approved` true; results remain `review_required`.
-- No Docker Desktop or system configuration changes. Native Homebrew installation is permitted.
+- PM update: do not install OpenFOAM on this Mac. Use only an official OpenFOAM Docker image on the configured Linux VPS; no apt, sudo or system changes. Host/user belong only in ignored configuration.
+- Remote work only in `~/marinaframe-cfd/`; containers named `mf-cfd-*`. Never inspect into or modify other containers/images/volumes. One solver container maximum, `--cpus 5 --memory 12g`, solver under `nice -n 10`. Total lane disk use below 40 GB; retain logs/forces, remove only lane-generated disposable mesh/time data.
+- Before every run and every 600 s, record uptime. Two consecutive checks 600 s apart above load 7 trigger `docker pause` of this lane's container and a report. No automatic unpause. Use a host-side monitor so SSH loss does not remove the safety check.
 - Own-code runs have no wall-clock deadline. Cancel only on explicit request or resource safety failure. Reserve 10 GB disk before every large mesh; do not start a mesh whose estimated peak output breaches that reserve.
 - Limit local solver concurrency to one case and at most two cores while other lanes are active.
 
@@ -47,6 +49,16 @@ G5 — Resource accounting: every physical run records actual cells, allocated c
 4. Run targeted tests, then quick tier; fix only lane-owned code. Review simplicity and failure paths.
 5. If G0 passes, prepare permitted public hull surface, freeze geometry provenance and measured scatter, run smallest mesh and solver in background without a wall deadline. Check resource safety before refinement. Do not run a speed series before G2.
 6. Record results, limitations and concrete resume steps here. Commit and push only `lane/cfd-worker`. Inspect and remove only this worktree's rebuildable `target/` as the last step.
+
+## Remote follow-up plan (PM-authorized; original gates unchanged)
+
+Architecture PASS: separate SSH transport and host-side Docker monitor, lane-local files only. Quality WARN: shell arguments require strict validation/quoting; no remote shell strings supplied by a caller. Coverage PASS: test host/path/image validation, command resource limits, load state machine, cancel targeting and progress receipts. Performance WARN: 5-core quota is not five dedicated cores; report allocated time, not measured CPU consumption.
+
+1. Add red tests for configured remote host, official-image allowlist, confined remote paths, resource flags, exclusive lane lock, sustained-load pause, progress and cancel. Implement `RemoteHost` and `RemoteSolverRun` with start/progress/cancel/wait parity. No host address in tracked files.
+2. Pin a supported official image by digest, record image/runtime evidence, and probe only that image's runtime/tutorial files. Keep pull storage in the lane's <40 GB accounting even though Docker stores layers globally. Do not prune anything.
+3. Prepare public KCS surface under main ignored `work/cfd/`, then write/exercise a free-surface fixed-attitude case. Freeze source/scale/area and numerical scatter before solver runs. Preserve the original G2 targets and thresholds.
+4. Run coarse/medium/fine sequentially. Store remote host-side monitoring and durable receipts under the lane root. Pull logs/forces/receipts to main ignored `work/cfd/`. If G2 is not met, do not launch the speed series or KVLCC2 out of order.
+5. Run targeted tests and full quick tier on stable source. Update this file with actual results and resume point, commit, push only lane branch, inspect/remove only lane-local `target/` if present.
 
 ## Results
 
