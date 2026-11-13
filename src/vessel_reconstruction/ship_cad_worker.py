@@ -138,6 +138,8 @@ MAX_RESULT_BYTES = 16 * 1024 * 1024  # provenance JSON; far above a normal repor
 
 def read_worker_json(root: Path, relative: Path) -> dict | None:
     """Read a worker-written JSON file without following any symlink below root."""
+    from .platform_files import require_secure_descriptor_reads
+    require_secure_descriptor_reads()
     directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
         for part in relative.parts[:-1]:

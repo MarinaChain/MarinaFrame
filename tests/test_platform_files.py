@@ -7,6 +7,25 @@ import pytest
 from vessel_reconstruction import platform_files
 
 
+@pytest.mark.parametrize('operation', ['progress', 'reexport', 'worker_json'])
+def test_secure_read_entry_points_refuse_before_open(monkeypatch, tmp_path, operation):
+    from vessel_reconstruction import progress, reexport, ship_cad_worker
+    monkeypatch.setattr(platform_files, '_IS_WINDOWS', True)
+    with pytest.raises(RuntimeError, match='not supported on this platform'):
+        if operation == 'progress':
+            progress.read_child_progress(str(tmp_path / 'missing'), 'request')
+        elif operation == 'reexport':
+            reexport.refresh(tmp_path / 'missing', 'revision')
+        else:
+            ship_cad_worker.read_worker_json(tmp_path / 'missing', Path('result.json'))
+
+
+def test_secure_descriptor_reads_refuse_unsupported_platform(monkeypatch):
+    monkeypatch.setattr(platform_files, '_IS_WINDOWS', True, raising=False)
+    with pytest.raises(RuntimeError, match='not supported on this platform'):
+        platform_files.require_secure_descriptor_reads()
+
+
 @pytest.mark.parametrize('flush_error', [None, 1, 5, 50])
 def test_windows_directory_flush_closes_handle(monkeypatch, flush_error):
     kernel = Mock()

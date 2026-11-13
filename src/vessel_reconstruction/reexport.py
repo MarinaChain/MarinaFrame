@@ -116,6 +116,8 @@ def _convert_step(step: Path, destination: Path, formats: list[str]) -> dict[str
 
 def refresh(task: Path, revision: str, *, cad_formats: list[str] | None = None) -> dict:
     """Refresh a finished app task under its controller lock; rollback on failure."""
+    from .platform_files import require_secure_descriptor_reads
+    require_secure_descriptor_reads()
     task = Path(os.path.abspath(task))
     if task.is_symlink() or not task.is_dir():
         raise ValueError('Choose a run directory, not a symbolic link.')

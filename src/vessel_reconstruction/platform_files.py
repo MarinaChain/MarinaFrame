@@ -2,6 +2,18 @@
 from __future__ import annotations
 
 import ctypes
+import os
+
+_IS_WINDOWS = os.name == 'nt'
+SECURE_READS_UNSUPPORTED = ('Secure descriptor-relative no-follow reads are not supported on this platform; '
+                            'Windows reparse-point and relative-handle protection is not implemented.')
+
+
+def require_secure_descriptor_reads() -> None:
+    """Fail closed instead of substituting a racy path check for no-follow opens."""
+    if _IS_WINDOWS:
+        raise RuntimeError(SECURE_READS_UNSUPPORTED)
+
 from ctypes import wintypes
 from pathlib import Path
 
