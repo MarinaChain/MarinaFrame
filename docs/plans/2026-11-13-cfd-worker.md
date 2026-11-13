@@ -1060,3 +1060,74 @@ stern-closed wave estimate; do not change gates, tune after force inspection,
 or launch additional runs automatically. All three requested physical runs
 are complete; preserve logs/meshes and the existing worktree. Push lane only,
 no merge. Stable-source quick tier above passed; only documentation changed.
+
+## PM G-KV-DB2 wall-resolved study (frozen before runs)
+
+The original G-KV-DB failure above remains recorded. PM rejects thin-ship
+for this blunt full hull with closed transom: Cw=4.55e-3 exceeds measured
+total CT. **Do not use thin-ship Cw for KVLCC2.**
+
+Reference read: main ignored `work/cfd/sources/formfactor/kvlcc2_formfactor_reference.md`,
+PDFs and MANIFEST beside it. Experimental **(1+k)=1.215**, Prohaska/ITTC-57,
+1:58, is second-hand A26 (Argyros 2026) citing Larsson & Raven 2010.
+K21 typical double-body **1.223 at Fn .142**, reported spread ~1.6%.
+Important qualification: the nearest **1.9% form-factor uncertainty is a
+ballast-case analogue**, not published uncertainty for this design draught.
+Published references include rudder; this study remains bare hull and must
+state the mismatch. Re=4.6e6 vs some publications 4.9e6 is retained explicitly.
+
+**G-KV-DB2:** finest converged grid (1+k)=CV/CF57 must lie in
+**[1.17855, 1.25145]** (1.215 +/-3%, PM-set tolerance motivated by the
+uncertainty analogue and RANS spread, not a derived confidence interval).
+CF57=0.075/(log10(U*L/nu)-2)^2, same U/L/nu/S as G-KV-DB.
+CT_est=(1+k)*CF57+CW, central **CW=0**, must lie in
+**[0.0039456, 0.0042744]** (measured .004110 +/-4%). Report CW bounds
+**-0.0001 and +0.0001**; this is a PM working estimate, not a citation.
+Gate uses central estimate; report whether bounds also fit. Never use thin-ship.
+Keep monotone three-grid CV, fine/medium <=2%, final two equal 100-sample
+windows drift <=1%, all 2000 iterations retained. No selected windows.
+
+### Design review
+Architecture PASS: independent lane-local case adapter and detached host monitor;
+half hull with centreplane y=0 and free-surface z=0 symmetry; physical full-hull
+force multiplier **2**, reference full wetted area **8.0838 m2**.
+Quality WARN: y+ and layer survival must be measured, not inferred from settings;
+no wall-function coarse-grid result substitutes for wall-resolved validation.
+Coverage PASS: test symmetry patches, force multiplier, absolute layer controls,
+low-Re fields, unchanged gate arithmetic, peak-memory receipt and stop rules.
+Performance WARN: serial 1/2/4M runs may exceed 24h or 12GB; measure coarse and
+project subsequent costs before admission. A resource-limited study is not converged.
+
+### Frozen mesh method and implementation sequence
+1. Add lane-local `cfd/wall_resolved.py`, tests `tests/test_cfd_wall_resolved.py`.
+Reuse the validated wetted solid; clip at centreplane y=0 in CAD, preserve
+physical skin, artificial plane caps only for meshing. No shape fit. Tessellation
+.005 m/.1 rad, canonicalization and bounded clip cleanup as before.
+2. Three systematic half-domain backgrounds base_cells **74/94/118**, surface
+level **3**, aft box (last .35L) level **4**, same domain upstream L/downstream
+3L/lateral L/depth L. Approximate target **1/2/4 million cells**; report actual
+counts/ratios and target deviation, no retroactive force-driven cell tuning.
+Set admission ceiling **6 million**, not a target. Absolute prism layers:
+**30 layers**, first thickness **8e-6 m / refinement factor**, expansion **1.2**,
+minimum thickness **1e-6 m / factor**, factors 1,94/74,118/74. These target
+wall-resolved y+ <1; report measured min/mean/max and coverage. Low-Re SST:
+no-slip U, k fixed zero, nutLowReWallFunction, omegaWallFunction viscous limit.
+3. Test first, implement and focused checks; commit settings before physical
+preparation/meshing. Prepare half-solid and validate surface topology. Inspect
+installed v2412 dictionaries, not guessed include paths.
+4. Mesh/checkMesh/solver sequentially coarse then medium then fine; commit each
+attempt including failures before the next. Record real cells, stages and full
+attempt wall/core-hours. Capture container cgroup memory.peak before exit using
+an in-container shell; no docker socket or host control bind exposed. Poll
+Docker memory too; report exact cgroup peak separately from sampled RSS if needed.
+5. Existing startup load1 **<4**, otherwise background check every **600 s**;
+rolling complete 600-s estimate >9 for further600s pauses, no automatic unpause.
+Same pinned image, one lane lock/container, --cpus5 --memory12g, nice10,
+no network/system changes, remote root only, 10GB reserve and <40GB lane total.
+Use **12GB as hard memory limit**; stop/report OOM or admission projection
+that will not fit. Stop any run projected >24h; finest feasible only is explicitly
+not converged. No fourth grid or control tuning after forces.
+6. Quick tier on stable source at end, identity/secret checks, final report in
+`outputs/2026-11-14-kvdb2-physical-runs.md`; commit/push lane/cfd-worker only,
+no merge. Keep existing worktree/evidence. Resume here until implementation
+and tests complete; **no DB2 run has started at this freeze**.
