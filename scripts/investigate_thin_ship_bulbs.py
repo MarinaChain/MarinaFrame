@@ -136,19 +136,21 @@ def run(args):
                 x, z, y, wl = hull.gen_PC_for_Cw(hull.Dd*draft, NUM_WL=51, PointsPerWL=301)
                 # Check returned dense offsets against explicitly indexed waterline sections.
                 section_error = 0.
-                for col, height in enumerate(z+draft*hull.Dd):
-                    points = hull.gen_MeshGridWL(x + min(
-                        hull.BB_profile(h) if hull.bit_BB and h <= hull.WL else hull.bow_profile(h)
-                        for h in z+draft*hull.Dd), height)
-                    # Translation is independent of the solver; compare breadth samples only.
-                    interior = points[1:-1, 1]
-                    # Compare ordered nonzero samples, preserving zeros at grid endpoints.
-                    sampled = interior[interior != 0]
-                    nonzero = y[:, col][y[:, col] != 0]
-                    if len(sampled) != len(nonzero):
-                        raise ValueError("Section sample count mismatch")
-                    if len(sampled):
-                        section_error = max(section_error, float(np.max(np.abs(sampled-nonzero))))
+                # Use the original linspace exactly, avoiding a subtract/add round trip
+                # that can move a boundary station across a strict geometry comparison.
+                heights = np.linspace(1e-8*hull.Dd, draft*hull.Dd, 51)
+                bow = [hull.BB_profile(h) if hull.bit_BB and h <= hull.WL
+                       else hull.bow_profile(h) for h in heights]
+                stern = [hull.SB_profile(h) if hull.bit_SB and h <= hull.HSBOA*hull.WL
+                         else hull.stern_profile(h) for h in heights]
+                original_x = np.linspace(min(bow), max(stern), 301)
+                for col, height in enumerate(heights):
+                    points = hull.gen_MeshGridWL(original_x, height)
+                    reconstructed = np.zeros(301)
+                    for point in points[1:-1]:
+                        index = int(np.argmin(abs(original_x-point[0])))
+                        reconstructed[index] = point[1]
+                    section_error = max(section_error, float(np.max(abs(reconstructed-y[:, col]))))
                 variants = {"baseline": (x, z, y, wl, 512, 24),
                             "angles": (x, z, y, wl, 2048, 24),
                             "tail": (x, z, y, wl, 512, 48)}
