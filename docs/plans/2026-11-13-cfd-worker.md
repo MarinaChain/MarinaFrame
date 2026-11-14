@@ -1661,3 +1661,14 @@ Exact-name identity0findings,diff clean. Report
 Threefailedapproaches stop honored,no mapping/short/newproduction/medium/fine.
 Fixed2000gate retained;PMmapping additions recorded before any future run.
 No managed codesight/lane target;shared target retained. Push lane only,no merge.
+
+### Regional recovery final verification
+Backgroundquick exit0:Rust fmt/clippy/workspace passed;Python2749pass,
+4skip,100deselect,5warnings,991.73s;UI275pass;boundedscan1407files0findings.
+Focused30pass,privateexact-name0findings,diffclean. Noactive lanecontainers;
+lane5,940,498,231bytes. Sampledmesh07/08/09RSS lowerbounds
+2118709248/3238678528/2019434496bytes,notexactcontainerpeaks. NoOOM.
+Finalreport `outputs/2026-11-14-kvdb2-regional-layer-diagnosis.md`.
+Stopafterthreefailures;no250screen/production/refinementadmission.
+Pushlaneonly,nomerge;existingworktree/evidenceretained. No managedcodesight
+orlanetarget exists;sharedtargets retained. PMstrategydecisionneeded.

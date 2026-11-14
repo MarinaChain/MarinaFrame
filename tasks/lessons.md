@@ -356,3 +356,9 @@
 - **Trigger:** A5CPU quota serial layer-mesh solver was extrapolated from five startup iterations; pressure corrections grew to639GAMG iterations. Five-rank potential-initialized recovery used2–3 pressure iterations but paused at85steps under host load.
 - **Rule:** Verify nProcs,per-field linear counts,actual per-step wall and initialization before projecting. Use the PM-required100-step diagnostic and post20window; do not substitute partial windows when safety pauses. Network-disabled local MPI needs working shared-memory transport,not self-only or unavailable TCP. Never auto-unpause.
 - **Why:** Resource quota is not MPI parallelism,and anisotropic-mesh pressure convergence can dominate cell-count scaling.
+
+### Map the CFD y-plus tail before changing first-layer height
+- **Date:** 2026-11-15
+- **Trigger:** Coarse full production converged force,but88.4%area had y+<1;all y+>5area mapped toincomplete layers,mostly stern. First-height halving didnot fix coverage.
+- **Rule:** Join final boundary y+,face areas/centres andmatching actual layer counts before mesh changes. Label overlapping region masks. Repair coverage,requirePM97%full-count mesh then250-step95%area y+<1screen before production. Stopafterthreefailed approacheswhenPMsets thatlimit.
+- **Why:** Lost/partial layers drive thehigh-y+tail;thinnerrequestedfirstheight doesnot repair missing prisms.
