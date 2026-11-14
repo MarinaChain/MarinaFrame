@@ -1563,3 +1563,13 @@ Freeze exact controls before each attempt. Check region/full-count coverage
 and PM volume/orientation/nonorth<70/skew<4/ARoutside0. Other-load monitor,
 5CPU12GiB,one container,disk limits remain. Commit each approach,background
 quick log at end,push lane only,no merge. No new production before admission.
+
+### Approach1(mesh07) FAIL1/3
+Reduced20-layer stack plustermination0/slip180/medial.8 producedzero layers,
+uniform0actual field;1,028,694cells,checkMeshOK. Whole314.551592s/
+.436877211core-hours,noOOM. No solver. Evidence coverageJSON/log retained.
+Approach2before run:restore known-working termination30/slip30/medial.3;
+retain20layers/samefirstheight,add stern x>-.65 and waterline z>-.025
+searchable-box level4 refinement. Finer tangential cells target measured tail;
+relativefinal.02422584 means firstheight equal or smaller,not larger.
+97%fullcount/PMquality still required;two approaches remaining.
