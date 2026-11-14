@@ -2,6 +2,8 @@
 
 import { setVesselTabState, state } from './app_state.js';
 import { invoke, readOnly, READ_ONLY_NOTE } from './api.js';
+import { t } from './i18n.js';
+
 import { el, fill, icon } from './dom.js';
 import * as fmt from './format.js';
 import { $, statusBadge, chip, showError } from './ui_kit.js';
@@ -21,6 +23,16 @@ import { model, setPartOutline, showWholeVessel } from './workspace.js';
 
 const VESSEL_TABS = ['run', 'parts', 'sources', 'export', 'history'];
 
+// Resolve tab names when rendering, not when this module is imported.
+export function vesselTabLabel(tab) {
+  return VESSEL_TABS.includes(tab) ? t(`shell.tabs.${tab}`) : tab;
+}
+
+/** History row and section labels, independent of the DOM. */
+export function historyRunLabel(number) {
+  return t('home.runNumber', { number });
+}
+
 export function setVesselTab(tab) {
   if (!VESSEL_TABS.includes(tab)) return;
   setVesselTabState(tab);
@@ -35,6 +47,7 @@ export function renderVesselPage() {
   $('vessel-tabs').querySelector('[data-vtab="parts"]').hidden = !hasParts;
   const tab = state.vesselTab;
   for (const button of $('vessel-tabs').querySelectorAll('[data-vtab]')) {
+    button.textContent = vesselTabLabel(button.dataset.vtab);
     button.setAttribute('aria-selected', String(button.dataset.vtab === tab));
     button.tabIndex = button.dataset.vtab === tab ? 0 : -1;
   }
@@ -71,24 +84,24 @@ export function renderHistory() {
         title: run.task,
         onclick: () => { setVesselTab('run'); openTask(run.task); },
       },
-      el('span', { class: 'history-run' }, `Run ${runNumber(vessel, run.task)}`),
+      el('span', { class: 'history-run' }, historyRunLabel(runNumber(vessel, run.task))),
       statusBadge(run.status),
       el('span', { class: 'history-facts' }, fmt.countOf(run.sections, 'section')),
       el('span', { class: 'history-chips' },
-        current && state.view?.sign_off ? chip('Signed off', { tone: 'pass', dot: false, small: true, title: `Signed off by ${state.view.sign_off.name}: ${state.view.sign_off.statement}` }) : null,
-        current ? chip('Open', { tone: 'brand', dot: false, small: true }) : null),
+        current && state.view?.sign_off ? chip(t('ko2.history.signedOff'), { tone: 'pass', dot: false, small: true, title: t('ko2.history.signedBy', { name: state.view.sign_off.name, statement: state.view.sign_off.statement }) }) : null,
+        current ? chip(t('ko2.history.open'), { tone: 'brand', dot: false, small: true }) : null),
       el('span', { class: 'history-time', title: fmt.fullTime(run.updated_ms) }, fmt.relativeTime(run.updated_ms))));
   };
   fill(host, el('div', { class: 'page-body history-page' },
     el('header', { class: 'page-head' },
-      el('h1', { id: 'history-title' }, 'History'),
+      el('h1', { id: 'history-title' }, t('ko2.history.history')),
       vessel ? el('span', { class: 'page-head-meta' }, `${vessel.name} · ${fmt.plural(runs.length, 'run')}`) : null),
     runs.length
       ? el('ul', { class: 'history-list' }, ...runs.map(row))
-      : el('div', { class: 'page-empty' }, icon('queue'), el('p', {}, 'No runs of this vessel yet.')),
+      : el('div', { class: 'page-empty' }, icon('queue'), el('p', {}, t('ko2.history.empty'))),
     // Costs and timings: hidden on the Run tab by default, always here.
     costWords(state.view) ? el('p', { class: 'history-cost' },
-      `Run ${vessel ? runNumber(vessel, state.task) : 1}: ${costWords(state.view)}`) : null,
+      t('ko2.history.cost', { number: vessel ? runNumber(vessel, state.task) : 1, cost: costWords(state.view) })) : null,
     renderSheetHistory(state.view?.sheet_review?.history),
     state.task ? changesSection(vessel) : null));
 }
@@ -96,13 +109,13 @@ export function renderHistory() {
 /** "Changes in Run N": what each revision of the open run changed (js/changes.js). */
 function changesSection(vessel) {
   const task = state.task;
-  const body = el('div', { class: 'changes-body' }, el('p', { class: 'panel-empty' }, 'Reading the steps…'));
+  const body = el('div', { class: 'changes-body' }, el('p', { class: 'panel-empty' }, t('ko2.history.reading')));
   invoke('get_live_steps', { task, after_sequence: 0 })
     .then((live) => { if (task === state.task) fill(body, renderChanges(buildChanges(live.steps), { pageUrl: evidencePageUrl, page: state.view?.source_page || null, placeOf: sectionPlace, placesIn })); })
-    .catch(() => fill(body, el('p', { class: 'panel-empty' }, 'The steps of this run could not be read.')));
-  const run = vessel ? `Run ${runNumber(vessel, task)}` : 'this run';
+    .catch(() => fill(body, el('p', { class: 'panel-empty' }, t('ko2.history.error'))));
+  const run = vessel ? historyRunLabel(runNumber(vessel, task)) : t('ko2.history.thisRun');
   return el('section', { class: 'changes', 'aria-labelledby': 'changes-title' },
-    el('h2', { class: 'page-subtitle', id: 'changes-title' }, `Changes in ${run}`),
+    el('h2', { class: 'page-subtitle', id: 'changes-title' }, t('ko2.history.changes', { run })),
     body);
 }
 
