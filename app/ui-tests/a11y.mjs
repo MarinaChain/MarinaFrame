@@ -92,7 +92,7 @@ const SCREENS = [
   { name: 'design overview', path: '/#design/public-kvlcc2-example' },
   { name: 'design performance', path: '/#design/public-kvlcc2-example', steps: { designTab: 'performance' } },
   { name: 'design provenance', path: '/#design/public-kvlcc2-example', steps: { designTab: 'provenance' } },
-  { name: 'design variant (change from parent)', path: '/#design/synthetic-kvlcc2-cb-plus-001' },
+  { name: 'design variant (change from parent)', path: '/#design/synthetic-kvlcc2-candidate-c' },
   { name: 'design all warnings', path: '/#design/public-kvlcc2-example', steps: { open: 'design-warnings' } },
   { name: 'design requirements', path: '/#design/public-kvlcc2-example', steps: { designTab: 'requirements' } },
   { name: 'design weights (empty sections)', path: '/#design/public-kvlcc2-example', steps: { designTab: 'weights' } },
