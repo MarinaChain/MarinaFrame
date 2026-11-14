@@ -28,4 +28,21 @@ export const EN = {
   'settings.interfaceHelp': 'Lite: the agent runs the design loop and you review its candidates. Advanced: you control each step. Applies to design projects.',
   'settings.lite': 'Lite',
   'settings.advanced': 'Advanced',
+
+  // Dense table (lane/ui-p0-table)
+  'table.filter': 'Filter rows',
+  'table.filterLabel': 'Filter rows by text',
+  'table.count': '{shown} of {total} rows',
+  'table.noRows': 'No rows match the filter.',
+  'table.unknown': 'Unknown',
+  'table.copy': 'Copy',
+  'table.copyTitle': 'Copy the filtered and sorted rows as spreadsheet text',
+  'table.copied': 'Copied',
+  'table.copiedTitle': 'The rows are on the clipboard',
+  'table.copyFailed': 'Copy failed',
+  'table.copyFailedTitle': 'The clipboard is not available',
+  'table.sortBy': 'Sort by {column}',
+  'table.sortedBy': 'Sorted by {column}, {direction}. Select to sort the other way.',
+  'table.asc': 'ascending',
+  'table.desc': 'descending',
 };

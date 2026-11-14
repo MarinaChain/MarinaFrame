@@ -113,7 +113,11 @@ test('the capacity plan panel shows the draft stamp, group totals and the soundi
   assert.match(text, /Sounding table: No 1 water ballast/);
   assert.match(text, /0\.5000\.0002\.000100\.0/);
   assert.doesNotMatch(text, /approved|verified/i);
-  panel.findAll((n) => n.className === 'tank-pick')[0].listeners.click();
+  // Clicking a row of the dense table picks the tank; the selected row says so.
+  const rows = panel.findAll((n) => n.tag === 'tr' && n.listeners?.click);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].attributes['aria-selected'], 'true');
+  rows[0].listeners.click();
   assert.equal(picked, 'tank_db1');
   assert.match(capacityPanel({ plan, selectedId: 'tank_db1', sounding: { loading: true }, onPick: () => {} }).textContent, /Loading/);
   assert.equal(capacityPanel({ plan: null }), null);

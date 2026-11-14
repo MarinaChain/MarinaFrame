@@ -28,4 +28,21 @@ export const KO = {
   'settings.interfaceHelp': 'Lite: 에이전트가 설계 루프를 실행하고 사용자는 후보안을 검토합니다. Advanced: 각 단계를 직접 제어합니다. 설계 프로젝트에 적용됩니다.',
   'settings.lite': 'Lite',
   'settings.advanced': 'Advanced',
+
+  // Dense table (lane/ui-p0-table)
+  'table.filter': '행 필터',
+  'table.filterLabel': '텍스트로 행 필터',
+  'table.count': '{total}행 중 {shown}행',
+  'table.noRows': '필터에 맞는 행이 없습니다.',
+  'table.unknown': '미판독',
+  'table.copy': '복사',
+  'table.copyTitle': '필터와 정렬이 적용된 행을 스프레드시트 텍스트로 복사',
+  'table.copied': '복사됨',
+  'table.copiedTitle': '행이 클립보드에 있습니다',
+  'table.copyFailed': '복사 실패',
+  'table.copyFailedTitle': '클립보드를 사용할 수 없습니다',
+  'table.sortBy': '{column} 기준 정렬',
+  'table.sortedBy': '{column} 기준, {direction} 정렬됨. 다시 누르면 반대로 정렬합니다.',
+  'table.asc': '오름차순',
+  'table.desc': '내림차순',
 };
