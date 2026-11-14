@@ -3,6 +3,8 @@
 // export is a draft; nothing here says "approved" or "verified" (engineering sign-off
 // happens outside MarinaFrame).
 
+import { t } from './i18n.js';
+
 import { el, icon, fill } from './dom.js';
 import { glyphChip } from './glyphs.js';
 import * as fmt from './format.js';
@@ -26,23 +28,25 @@ const OUTPUTS = [
 /** What the files of a multi-file output are: "Capacity plan and 3 sounding tables". */
 export function filesSummary(kind, files) {
   const count = (test) => files.filter((f) => test(f.file)).length;
-  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const plural = fmt.plural;
   if (kind === 'tanks') {
     const plans = count((name) => name.endsWith('_capacity_plan.csv'));
     const soundings = count((name) => name.includes('_sounding_'));
-    return [plans ? 'Capacity plan' : null, soundings ? plural(soundings, 'sounding table') : null].filter(Boolean).join(' and ');
+    return [plans ? t('term.capacity_plan') : null, soundings ? plural(soundings, 'sounding table') : null].filter(Boolean).join(t('ko2.export.and'));
   }
   if (kind === 'structure') {
     const steel = count((name) => name.endsWith('.csv'));
     const ocx = count((name) => name.endsWith('.3docx'));
-    return [steel ? plural(steel, 'steel table') : null, ocx ? plural(ocx, 'OCX file') : null].filter(Boolean).join(' and ');
+    return [steel ? plural(steel, 'steel table') : null, ocx ? plural(ocx, 'OCX file') : null].filter(Boolean).join(t('ko2.export.and'));
   }
   return '';
 }
 
 /** The outputs this run offers: every hull output, tank and steel outputs when the run has them. */
 export function outputsOf(view, files = []) {
-  return OUTPUTS.filter((o) => !o.ofRun || o.ofRun(view) || files.some((f) => f.kind === o.kind));
+  return OUTPUTS.filter((o) => !o.ofRun || o.ofRun(view) || files.some((f) => f.kind === o.kind))
+    .map((output) => ({ ...output, name: t(['offsets', 'hydrostatics'].includes(output.kind) ? `term.${output.kind}`
+      : output.kind === 'tanks' ? 'term.tank_tables' : output.kind === 'structure' ? 'term.steel_ocx' : `ko2.export.name.${output.kind}`), hint: t(`ko2.export.hint.${output.kind}`) }));
 }
 
 /** Statuses whose runs can have a build to export. A running run is still changing. */
@@ -95,9 +99,9 @@ export function createExport({ host, invoke, captureView = () => null, readOnlyN
     const size = written.reduce((sum, f) => sum + f.bytes, 0);
     let state;
     if (failures.length) {
-      state = el('span', { class: 'badge badge-small' }, 'Failed');
+      state = el('span', { class: 'badge badge-small' }, t('ko2.export.failed'));
     } else if (notBuilt.has(output.kind)) {
-      state = el('span', { class: 'badge badge-small', title: 'This build has no such file.' }, el('span', { class: 'badge-text' }, 'Not built'));
+      state = el('span', { class: 'badge badge-small', title: t('ko2.export.noFile') }, el('span', { class: 'badge-text' }, t('ko2.export.notBuilt')));
     } else if (written.length) {
       state = el('span', { class: 'export-size', title: written.map((f) => f.file).join('\n') }, fmt.bytes(size));
     } else {
@@ -106,8 +110,8 @@ export function createExport({ host, invoke, captureView = () => null, readOnlyN
     const finder = readOnlyNote ? downloadLinks(output, written) : el('button', {
       class: `btn btn-ghost btn-icon${written.length ? '' : ' export-finder-none'}`,
       type: 'button',
-      title: 'Show in Finder',
-      'aria-label': `Show ${output.name} in Finder`,
+      title: t('ko2.export.finder'),
+      'aria-label': t('ko2.export.finderLabel', { name: output.name }),
       disabled: !written.length,
       onclick: () => reveal(written[0]?.path),
     }, icon('folder'));
@@ -127,7 +131,7 @@ export function createExport({ host, invoke, captureView = () => null, readOnlyN
         ...failures.map((failure) => el('span', { class: 'export-hint' }, `${failure.kind.toUpperCase()}: ${failure.reason}`)),
         ...(output.kind === 'package' ? displayOmissions.map((item) =>
           el('span', { class: 'export-hint' }, `${item.file}: ${item.reason}`)) : []),
-        filesSummary(output.kind, written) ? el('span', { class: 'export-hint' }, `Written: ${filesSummary(output.kind, written)}.`) : null)),
+        filesSummary(output.kind, written) ? el('span', { class: 'export-hint' }, t('ko2.export.written', { files: filesSummary(output.kind, written) })) : null)),
       state,
       finder);
   }
@@ -138,16 +142,16 @@ export function createExport({ host, invoke, captureView = () => null, readOnlyN
       class: 'btn btn-ghost btn-small',
       href: file.path,
       download: file.file,
-      title: `Download ${file.file}`,
-      'aria-label': `Download ${output.name}: ${file.file}`,
+      title: t('ko2.export.download', { file: file.file }),
+      'aria-label': t('ko2.export.downloadLabel', { name: output.name, file: file.file }),
     }, icon('export'), file.file.split('.').pop().toUpperCase())));
   }
 
   /** Why the page cannot export now, in plain words; null when it can. */
   function blockedText() {
-    if (!view) return 'Open a run to export its draft.';
-    if (view.summary.status === 'running') return 'The AI is still working on this run. Export opens when the run stops.';
-    if (!view.revision) return 'This run has no build yet. Export needs a built hull.';
+    if (!view) return t('ko2.export.openRun');
+    if (view.summary.status === 'running') return t('ko2.export.running');
+    if (!view.revision) return t('ko2.export.noBuild');
     return null;
   }
 
@@ -155,22 +159,22 @@ export function createExport({ host, invoke, captureView = () => null, readOnlyN
   function issuesLine() {
     if (!openIssues && !openParts) return null;
     return el('p', { class: 'export-issues', role: 'note' }, icon('warn'),
-      el('span', {}, 'Still open:'),
-      openIssues ? glyphChip('flag', 'sections', {
-        count: openIssues, countedName: `${fmt.plural(openIssues, 'section')} still a guess or declined`, tone: 'warn',
-        detail: 'The files show the draft as it is now.',
+      el('span', {}, t('ko2.export.openIssues')),
+      openIssues ? glyphChip('flag', t('ko2.export.sections'), {
+        count: openIssues, countedName: t('ko2.export.sectionsOpen', { sections: fmt.plural(openIssues, 'section') }), tone: 'warn',
+        detail: t('ko2.export.draftHelp'),
       }) : null,
-      openParts ? glyphChip('cube', 'parts', {
-        count: openParts, countedName: `${fmt.plural(openParts, 'part')} guessed or not built`, tone: 'warn',
-        detail: 'The files show the draft as it is now.',
+      openParts ? glyphChip('cube', t('ko2.export.parts'), {
+        count: openParts, countedName: t('ko2.export.partsOpen', { parts: fmt.plural(openParts, 'part') }), tone: 'warn',
+        detail: t('ko2.export.draftHelp'),
       }) : null);
   }
 
   function render() {
     const blocked = blockedText();
     const head = el('header', { class: 'page-head' },
-      el('h1', { id: 'export-title' }, 'Export'),
-      revision ? el('span', { class: 'badge', dataset: { tone: 'brand' }, title: `Revision ${revision}` }, el('span', { class: 'badge-text' }, revision)) : null);
+      el('h1', { id: 'export-title' }, t('ko2.export.export')),
+      revision ? el('span', { class: 'badge', dataset: { tone: 'brand' }, title: t('ko2.export.revision', { revision }) }, el('span', { class: 'badge-text' }, revision)) : null);
     if (blocked) {
       fill(host, el('div', { class: 'page-body export-page' }, head,
         el('div', { class: 'page-empty' }, icon('export'), el('p', {}, blocked))));
@@ -181,26 +185,26 @@ export function createExport({ host, invoke, captureView = () => null, readOnlyN
       type: 'button',
       disabled: busy || !outputsOf(view, files).some((o) => chosen.has(o.kind)),
       onclick: () => runExport(),
-    }, busy ? 'Exporting…' : 'Export');
+    }, busy ? t('ko2.export.exporting') : t('ko2.export.export'));
     const folderButton = el('button', {
       class: 'btn btn-large',
       type: 'button',
       disabled: !files.length,
       onclick: () => reveal(folder),
-    }, icon('folder'), 'Show folder');
+    }, icon('folder'), t('ko2.export.folder'));
     fill(host, el('div', { class: 'page-body export-page' },
       head,
       el('p', { class: 'export-stamp' },
-        el('strong', {}, 'Draft, not for construction.'),
-        ' Each file carries this stamp. Engineering approval happens outside MarinaFrame.'),
+        el('strong', {}, t('ko2.export.stamp')),
+        t('ko2.export.stampHelp')),
       issuesLine(),
       accuracyBlock(view),
       // A person's sign-off of the parts goes with the files as a note; the files stay drafts.
-      view?.sign_off ? el('p', { class: 'export-signoff' }, el('strong', {}, `Signed off by ${view.sign_off.name}, ${new Date(view.sign_off.time_ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}: `), `${view.sign_off.statement}. The files stay drafts.`) : null,
-      el('div', { class: 'export-list', role: 'group', 'aria-label': 'Outputs to export' }, ...outputsOf(view, files).map(outputRow)),
+      view?.sign_off ? el('p', { class: 'export-signoff' }, el('strong', {}, t('ko2.export.signedBy', { name: view.sign_off.name, date: new Date(view.sign_off.time_ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) })), t('ko2.export.signOffDraft', { statement: view.sign_off.statement })) : null,
+      el('div', { class: 'export-list', role: 'group', 'aria-label': t('ko2.export.outputs') }, ...outputsOf(view, files).map(outputRow)),
       error ? el('p', { class: 'form-error', role: 'alert' }, error) : null,
       readOnlyNote
-        ? el('p', { class: 'export-readonly' }, readOnlyNote, ' The files already made for this run can be downloaded.')
+        ? el('p', { class: 'export-readonly' }, readOnlyNote, t('ko2.export.downloadHelp'))
         : el('div', { class: 'export-actions' }, folderButton, el('span', { class: 'export-actions-spacer' }), exportButton)));
   }
 
@@ -232,7 +236,7 @@ export function createExport({ host, invoke, captureView = () => null, readOnlyN
       const outputs = outputsOf(view, files).map((o) => o.kind).filter((kind) => chosen.has(kind));
       apply(await invoke('export_run', { task, revision, outputs, viewer_image: viewerPicture(outputs) }));
     } catch (failure) {
-      error = failure?.message || 'The export did not finish.';
+      error = failure?.message || t('ko2.export.error');
     } finally {
       busy = false;
       render();
@@ -244,7 +248,7 @@ export function createExport({ host, invoke, captureView = () => null, readOnlyN
     try {
       await invoke('reveal_export', { task, path });
     } catch (failure) {
-      error = failure?.message || 'The folder could not be opened.';
+      error = failure?.message || t('ko2.export.folderError');
       render();
     }
   }
