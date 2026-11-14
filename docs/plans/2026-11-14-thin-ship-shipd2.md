@@ -25,4 +25,4 @@ Original gate remains FAIL. This gate compares a **numerical Michell reference**
 
 ## Resume point
 
-Next: commit convergence runner/tests, run convergence with background log, record result and choose reference count only by the rule above. Keep condition data under ignored work, aggregate results in git. Commit each step; quick tier in background with long tool limit, push lane only, no merge.
+Gate frozen in `db71ddb` before fresh selection. Fresh sample digest `229237c5ad56e6aef0ff22fd97c4bb29043706fd68c9560b766b2770d1005f90`; exclusion digest `0b44a428638e648bc56a982469a93b17320424d8697bc76d1cd829fff1dfcaa3`. Selection uses IDs only, no fresh geometry or values read yet. Manifest: ignored `work/thin-ship-shipd/gate2-sample.json`. Next: commit sample digest and runner, run once/score once, append IDs after scoring, retain original gate failure. Quick tier already running; rerun focused tests after additions.
