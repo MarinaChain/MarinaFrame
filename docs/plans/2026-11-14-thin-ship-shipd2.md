@@ -25,4 +25,19 @@ Original gate remains FAIL. This gate compares a **numerical Michell reference**
 
 ## Resume point
 
-Gate frozen in `db71ddb` before fresh selection. Fresh sample digest `229237c5ad56e6aef0ff22fd97c4bb29043706fd68c9560b766b2770d1005f90`; exclusion digest `0b44a428638e648bc56a982469a93b17320424d8697bc76d1cd829fff1dfcaa3`. Selection uses IDs only, no fresh geometry or values read yet. Manifest: ignored `work/thin-ship-shipd/gate2-sample.json`. Next: commit sample digest and runner, run once/score once, append IDs after scoring, retain original gate failure. Quick tier already running; rerun focused tests after additions.
+Gate frozen in `db71ddb` before fresh selection; sample committed in `e05940d` before geometry reads. Fresh sample digest `229237c5ad56e6aef0ff22fd97c4bb29043706fd68c9560b766b2770d1005f90`; pre-run exclusion digest `0b44a428638e648bc56a982469a93b17320424d8697bc76d1cd829fff1dfcaa3`. Manifest: ignored `work/thin-ship-shipd/gate2-sample.json`. Single run and score completed; IDs appended after scoring. Original gate remains FAIL. Quick tier running; next read its final result, commit check record and push lane only.
+
+## Single-run results
+
+**G-TS-SHIPD2 PASS**, fixed denominator 9,600; finite 9,560. Median .1269984804%, p90 1.6914994583%, against unchanged 3% / 10% limits. Forty conditions fail production breadth validation (finite/nonnegative/grid-shape requirement) and remain infinite errors in the gate; no clipping or rerun. Numerical agreement only, not physical validation for bulbs. Original gate remains FAIL.
+
+| Information subset (still inside primary gate) | conditions / finite | median relative % | p90 relative % | median absolute Cw difference | p90 absolute Cw difference |
+|---|---:|---:|---:|---:|---:|
+| Fn<=.15 | 2400 / 2390 | 1.0186104 | 3.4260827 | .0000187663 | .0002085251 |
+| Fn>.15 | 7200 / 7170 | .0862446 | .2802784 | .0000054683 | .0000363300 |
+
+Absolute differences are complete-case information. Low-Fn relative differences can amplify small Cw and are not evidence of meaningful total-drag error. No low-Fn rows removed.
+
+After scoring, appended 300 IDs under an exclusive file lock to the main ignored exclusion file, preserving original bytes. Count 344→644, resulting SHA-256 `03a366b3c373dd6a896406d0f5132e9ae77cbd823b52e685675964ddb24b9d12`. They are now development IDs. No sealed sources opened; selection used PM-provided exclusion metadata. Raw sample, trace, score and logs remain under ignored `work/thin-ship-shipd/`. Aggregate score and reference convergence: `outputs/thin-ship-shipd/gate2-score.json`, `gate2-convergence.json`.
+
+Focused selection/convergence/diagnostic/export suite: 15 passed. No production settings or thresholds changed.

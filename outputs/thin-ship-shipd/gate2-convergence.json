@@ -1,0 +1,24 @@
+{
+  "pairs": {
+    "161_to_321": {
+      "conditions": 9600,
+      "finite": 9600,
+      "p90_change_percent": 0.11252124907028142,
+      "median_change_percent": 0.01031951630113952,
+      "max_change_percent": 1.2095465832556263
+    },
+    "321_to_641": {
+      "conditions": 9600,
+      "finite": 9600,
+      "p90_change_percent": 0.01885292281930268,
+      "median_change_percent": 0.0020318210408559545,
+      "max_change_percent": 0.5129439882994409
+    }
+  },
+  "selected_angle_count": 321,
+  "criterion": "p90 change to next level strictly below 0.1 percent",
+  "development_sample_sha256": "a2465175dd6a38879f99787824d9419946c2bcdf3a6c1b38c54d8d4580c671de",
+  "exclusions_sha256": "0b44a428638e648bc56a982469a93b17320424d8697bc76d1cd829fff1dfcaa3",
+  "status": "review_required",
+  "engineering_approved": false
+}

@@ -1,0 +1,35 @@
+{
+  "gate": "G-TS-SHIPD2",
+  "sample_sha256": "229237c5ad56e6aef0ff22fd97c4bb29043706fd68c9560b766b2770d1005f90",
+  "reference_angles": 321,
+  "status": "review_required",
+  "engineering_approved": false,
+  "numerical_agreement_only": true,
+  "primary": {
+    "conditions": 9600,
+    "finite_conditions": 9560,
+    "median_percent": 0.12699848035538464,
+    "p90_percent": 1.6914994582574643,
+    "gate_pass": true
+  },
+  "fn_le_015_information": {
+    "conditions": 2400,
+    "finite_conditions": 2390,
+    "median_percent": 1.0186104118269297,
+    "p90_percent": 3.4260826881014173,
+    "absolute_cw_difference_median_p90": [
+      1.8766300343120738e-05,
+      0.00020852511009736353
+    ]
+  },
+  "fn_gt_015_information": {
+    "conditions": 7200,
+    "finite_conditions": 7170,
+    "median_percent": 0.08624459057178055,
+    "p90_percent": 0.28027841074451043,
+    "absolute_cw_difference_median_p90": [
+      5.468320529301461e-06,
+      3.6329975219351356e-05
+    ]
+  }
+}
