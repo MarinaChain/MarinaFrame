@@ -57,9 +57,40 @@ export function thumbnailCrop(box, original, image) {
   return validBox(scaled) ? scaled : null;
 }
 
-/** Include update time as well as revision: in-progress runs can change within a revision. */
+const INTERNAL_KINDS = new Set([
+  'cargo_hold', 'engine_room', 'other_space', 'void', 'void_space', 'cofferdam',
+]);
+const internalKind = (kind) => INTERNAL_KINDS.has(kind) || /(^|_)tank$/.test(kind || '');
+
+function validPartBox(box) {
+  return [box?.min, box?.max].every((point) => Array.isArray(point)
+    && point.length === 3 && point.every(Number.isFinite))
+    && box.max.every((value, axis) => value >= box.min[axis])
+    && box.max.some((value, axis) => value > box.min[axis]);
+}
+
+/** Built exterior boxes in the vessel's metre, Z-up frame; never fill the hull with spaces. */
+export function thumbnailParts(view) {
+  return (view?.components || []).filter((part) => part && part.built !== false
+    && !['hull', 'opening', 'tank'].includes(part.op)
+    && !internalKind(part.op) && !internalKind(part.kind) && !internalKind(part.display?.kind)
+    && validPartBox(part.bbox_m));
+}
+
+function partsHash(parts) {
+  // Sort serialized entries so a tree reorder does not invalidate the same picture.
+  const entries = parts.map((part) => JSON.stringify([part.id, part.bbox_m.min, part.bbox_m.max])).sort();
+  let hash = 2166136261; // FNV-1a: compact identity for the selected IDs and coordinates.
+  for (const character of JSON.stringify(entries)) {
+    hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
+  }
+  return (hash >>> 0).toString(16);
+}
+
+/** Include updates and exterior boxes: parts can change without a new hull artifact. */
 export function thumbnailCacheKey(run, view, source) {
-  return `home-thumb-v1:${JSON.stringify([run.task, view.revision, run.updated_ms, source.format, source.path])}`;
+  const parts = source.format === 'stl' ? partsHash(thumbnailParts(view)) : null;
+  return `home-thumb-v2:${JSON.stringify([run.task, view.revision, run.updated_ms, source.format, source.path, view.model?.length_m, parts])}`;
 }
 
 /** Fit all projected box corners in a 16:10 frame, with ten percent clear space. */

@@ -1,7 +1,7 @@
 // Home thumbnail priority, GA page crops, revision caching and complete-vessel framing.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { thumbnailSource, profileCrop, thumbnailCacheKey, thumbnailFrame, thumbnailCrop } from '../ui/js/home_thumb.js';
+import { thumbnailSource, profileCrop, thumbnailCacheKey, thumbnailFrame, thumbnailCrop, thumbnailParts } from '../ui/js/home_thumb.js';
 
 const drawing = { path: 'pages/body.png', width: 1600, height: 1000 };
 const model = { stl_path: 'build/hull.stl' };
@@ -91,6 +91,85 @@ test('cache identity separates task, revision, update and model format/path', ()
     thumbnailCacheKey(run, view, { ...source, format: 'glb' }),
   ]) assert.notEqual(key, changed);
   assert.equal(key, thumbnailCacheKey(run, view, source));
+});
+
+const partBox = { min: [-2, -3, 4], max: [8, 3, 7] };
+const exteriorPart = (id, op = 'deckhouse') => ({ id, op, built: true, bbox_m: structuredClone(partBox) });
+
+test('thumbnail parts include built decks, houses, fittings and other exterior parts without mutation', () => {
+  const components = [
+    exteriorPart('deck', 'deck'), exteriorPart('house'), exteriorPart('wheelhouse'),
+    exteriorPart('bulwark', 'bulwark'), exteriorPart('funnel', 'appendage'),
+    exteriorPart('mast', 'appendage'), exteriorPart('crane', 'other'),
+    { ...exteriorPart('older-run'), built: undefined },
+  ];
+  const before = structuredClone(components);
+  assert.deepEqual(thumbnailParts({ components }), components);
+  assert.deepEqual(components, before);
+});
+
+test('thumbnail parts omit hull duplicates, openings, tanks and internal space kinds', () => {
+  const components = ['hull', 'opening', 'tank'].map((op) => exteriorPart(op, op));
+  for (const kind of ['tank', 'cargo_tank', 'slop_tank', 'ballast_tank', 'fuel_tank', 'other_tank',
+    'cargo_hold', 'engine_room', 'other_space', 'void', 'void_space', 'cofferdam']) {
+    components.push(exteriorPart(`op-${kind}`, kind));
+    components.push({ ...exteriorPart(kind), kind });
+    components.push({ ...exteriorPart(`display-${kind}`), display: { kind } });
+  }
+  components.push({ ...exteriorPart('unbuilt'), built: false });
+  assert.deepEqual(thumbnailParts({ components }), []);
+});
+
+test('thumbnail parts reject malformed boxes but retain flat deck boxes', () => {
+  for (const bbox_m of [null, {}, { min: [0, 0], max: [1, 1, 1] },
+    { min: [0, 0, 0], max: [1, NaN, 1] }, { min: [0, 0, 0], max: [Infinity, 1, 1] },
+    { min: [0, 0, 0], max: [1, -1, 1] }, { min: [0, 0, 0], max: [0, 0, 0] }]) {
+    assert.deepEqual(thumbnailParts({ components: [{ ...exteriorPart('bad'), bbox_m }] }), []);
+  }
+  const flat = { ...exteriorPart('flat', 'deck'), bbox_m: { min: [0, 0, 4], max: [10, 3, 4] } };
+  assert.deepEqual(thumbnailParts({ components: [null, flat] }), [flat]);
+  for (const view of [null, undefined, {}]) assert.deepEqual(thumbnailParts(view), []);
+});
+
+test('STL cache hashes exterior ids and boxes, independent of component order and internal spaces', () => {
+  const run = { task: 'task-a', updated_ms: 1 };
+  const source = thumbnailSource({ model });
+  const components = [exteriorPart('house'), exteriorPart('mast', 'appendage')];
+  const key = (parts, selected = source) => thumbnailCacheKey(run, { revision: 'r1', components: parts }, selected);
+  const original = key(components);
+  assert.equal(original, key([...components].reverse()));
+  assert.equal(original, key([...components, exteriorPart('tank', 'tank')]));
+  assert.notEqual(original, key(components.slice(1)));
+  assert.notEqual(original, key([...components, exteriorPart('funnel')]));
+  assert.notEqual(original, key([{ ...components[0], id: 'new-house' }, components[1]]));
+  for (const bound of ['min', 'max']) for (const axis of [0, 1, 2]) {
+    const changed = structuredClone(components);
+    changed[0].bbox_m[bound][axis] += 0.1;
+    assert.notEqual(original, key(changed));
+  }
+  assert.equal(key(components, { ...source, format: 'glb' }), key([], { ...source, format: 'glb' }));
+});
+
+test('hull length changes invalidate the metre-aligned model thumbnail', () => {
+  const run = { task: 'task-a', updated_ms: 1 };
+  const source = thumbnailSource({ model });
+  assert.notEqual(thumbnailCacheKey(run, { model: { length_m: 40 } }, source),
+    thumbnailCacheKey(run, { model: { length_m: 50 } }, source));
+});
+
+test('frame includes tall masts and fittings beyond the hull ends', () => {
+  const hull = { min: [0, -4, 0], max: [40, 4, 5] };
+  const parts = thumbnailParts({ components: [
+    { ...exteriorPart('mast'), bbox_m: { min: [12, -1, 5], max: [13, 1, 30] } },
+    { ...exteriorPart('fitting'), bbox_m: { min: [-5, -1, 4], max: [0, 1, 6] } },
+  ] });
+  const points = [hull, ...parts.map((part) => part.bbox_m)].flatMap(({ min, max }) =>
+    [min[0], max[0]].flatMap((x) => [min[2], max[2]].map((z) => [x, z])));
+  const frame = thumbnailFrame(points);
+  for (const [x, z] of points) {
+    assert.ok(Math.abs(x - frame.x) < frame.halfHeight * 1.6);
+    assert.ok(Math.abs(z - frame.y) < frame.halfHeight);
+  }
 });
 
 test('GA crops scale from original sheet pixels to a downsampled preview', () => {
