@@ -5,6 +5,8 @@
 
 import { el } from './dom.js';
 import { glyphChip } from './glyphs.js';
+import { createDataTable } from './data_table.js';
+import { t } from './i18n.js';
 
 /**
  * Source labels of the tank model (vessel_reconstruction.tanks SOURCE_LABELS). Tones are the
@@ -206,34 +208,41 @@ function soundingBlock(row, sounding) {
         el('tbody', {}, ...view.rows.map((cells) => el('tr', {}, ...cells.map((cell) => el('td', { class: 'parts-value' }, cell))))))));
 }
 
+/** Build translated headings when the panel opens, using the active interface locale. */
+function planColumns() {
+  return [
+    { key: 'name', label: t('table.tank') },
+    { key: 'content', label: t('table.content') },
+    { key: 'volume_98_m3', label: t('table.capacity98'), unit: 'm³', align: 'end', format: (value) => value.toFixed(2) },
+    { key: 'lcg_m', label: 'LCG', unit: 'm', align: 'end', format: (value) => value.toFixed(3) },
+    { key: 'vcg_m', label: 'VCG', unit: 'm', align: 'end', format: (value) => value.toFixed(3) },
+    { key: 'sources', label: t('table.source'), sortable: false, format: (value) => sourceChip(value.volume) },
+  ];
+}
+
 /**
- * The capacity plan panel: every tank with its labelled values, totals per content group and
- * the sounding table of the selected tank. `onPick(id)` selects a tank.
+ * The capacity plan panel: every tank in one dense table (js/data_table.js) with its labelled
+ * values, totals per content group and the sounding table of the selected tank. `onPick(id)`
+ * selects a tank; clicking a row picks it, and Enter picks the selected one.
  */
 export function capacityPanel({ plan, selectedId, sounding, onPick }) {
   if (!plan?.rows?.length) return null;
   const selected = capacityRowOf(plan, selectedId);
-  const cell = (row, key, digits, source) => el('td', { class: 'parts-value' }, tankNumber(row[key], digits), ' ', sourceChip(row.sources?.[source]));
+  const table = createDataTable({
+    columns: planColumns(),
+    rows: plan.rows,
+    caption: t('table.tankCaption'),
+    rowKey: (row) => row.id,
+    emptyText: t('table.noTanks'),
+    onSelect: onPick,
+  });
+  table.select(selectedId);
   return el('section', { class: 'tank-plan', 'aria-labelledby': 'tank-plan-title' },
     el('header', { class: 'parts-detail-head' },
       el('h2', { id: 'tank-plan-title' }, 'Capacity plan'),
       el('span', { class: 'badge badge-small', dataset: { tone: 'draft' }, title: plan.stamp?.join('\n') || '' }, el('span', { class: 'badge-text' }, 'Draft'))),
     el('p', { class: 'export-stamp' }, el('strong', {}, 'Draft, not for construction.'), ` Read from ${plan.file}. Volumes at 100 % and 98 % fill; weight at 98 %; centroid at 100 %.`),
     el('ul', { class: 'tank-groups', 'aria-label': 'Totals per content group' }, ...plan.groups.map((group) => el('li', {}, groupLine(group)))),
-    el('div', { class: 'tank-table-scroll' },
-      el('table', { class: 'parts-args tank-table' },
-        el('caption', { class: 'visually-hidden' }, 'Tanks of the capacity plan'),
-        el('thead', {}, el('tr', {}, ...['Tank', 'Content', 'Frames', 'Vol. 100 % (m³)', 'Vol. 98 % (m³)', 'Weight 98 % (t)', 'LCG (m)', 'VCG (m)', 'TCG (m)']
-          .map((heading) => el('th', { scope: 'col' }, heading)))),
-        el('tbody', {}, ...plan.rows.map((row) => el('tr', { class: row.id === selectedId ? 'is-selected' : '', dataset: { source: row.sources?.volume || '' } },
-          el('th', { scope: 'row' }, el('button', { class: 'tank-pick', type: 'button', 'aria-pressed': String(row.id === selectedId), onclick: () => onPick(row.id) }, row.name || row.id)),
-          el('td', {}, row.content, ' ', sourceChip(row.sources?.content)),
-          el('td', { class: 'parts-value' }, row.frames || '—'),
-          cell(row, 'volume_100_m3', 2, 'volume'),
-          cell(row, 'volume_98_m3', 2, 'volume'),
-          cell(row, 'weight_98_t', 2, 'weight'),
-          cell(row, 'lcg_m', 3, 'centroid'),
-          cell(row, 'vcg_m', 3, 'centroid'),
-          cell(row, 'tcg_m', 3, 'centroid')))))),
+    table.element,
     soundingBlock(selected, sounding));
 }
