@@ -68,6 +68,30 @@ def statistics(rows):
             "median_signed_percent": float(np.median(signed)) if signed else None}
 
 
+def export_summary(directory, output):
+    """Export only aggregate evidence; keep IDs and condition values ignored."""
+    diagnostics = [json.loads(line) for line in (directory/"experiments.jsonl").read_text().splitlines()]
+    development = json.loads((directory/"reference-refinement.json").read_text())
+    result = {"status": "review_required", "engineering_approved": False,
+              "original_gate": "FAIL; unchanged", "splits_complete_case":
+              json.loads((directory/"splits.json").read_text()),
+              "refined_reference_development_complete_case": statistics(development),
+              "diagnostic_conditions": len(diagnostics), "variants": {}}
+    for name in diagnostics[0]["variants"]:
+        errors, changes = [], []
+        for row in diagnostics:
+            variant = row["variants"][name]
+            if variant["reference_error_percent"] is not None:
+                errors.append(variant["reference_error_percent"])
+                changes.append(100*abs(variant["cw"]/row["variants"]["baseline"]["cw"]-1))
+        result["variants"][name] = {"finite": len(errors),
+            "reference_error_median_p90_percent": np.percentile(errors, [50, 90]).tolist(),
+            "change_median_max_percent": np.percentile(changes, [50, 100]).tolist()}
+    result["max_section_error_m"] = max(row["section_error_m"] for row in diagnostics)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(result, indent=2, allow_nan=False)+"\n")
+
+
 def band(value, boundaries):
     return str(sum(value >= bound for bound in boundaries))
 
@@ -206,6 +230,15 @@ def run(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--export", type=Path, help="Export aggregates from this diagnostic directory")
     for name in ("source", "exclusions", "manifest", "trace", "output"):
-        parser.add_argument("--"+name, type=Path, required=True)
-    run(parser.parse_args())
+        parser.add_argument("--"+name, type=Path)
+    args = parser.parse_args()
+    if args.export is not None:
+        if args.output is None:
+            parser.error("export requires --output")
+        export_summary(args.export, args.output)
+    else:
+        if any(getattr(args, name) is None for name in ("source", "exclusions", "manifest", "trace", "output")):
+            parser.error("run requires source, exclusions, manifest, trace and output")
+        run(args)
