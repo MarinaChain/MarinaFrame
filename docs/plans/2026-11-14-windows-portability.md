@@ -107,6 +107,51 @@ Net: **342 fewer failures, 21 fewer errors**. Collection remains error-free. Ful
 - Plan review: architecture PASS (small platform layer); quality PASS (unexpected errors retained, native handles closed); tests WARN (native Windows required); performance PASS (bounded native calls).
 - Process exception: a read-only classification agent was accidentally launched with tool worktree isolation. This created an extra worktree despite the lane rule; no implementation edits were delegated. All lane changes remain in this designated worktree. Do not create another worktree.
 
+## Batch 2: next five groups after integration merge
+
+Local `continue/v0.5` merged by fast-forward to `2e02d0a` before any edits. Baseline run `43513304593`: 156 failures, 43 errors. Fixed group order (ties as listed):
+
+| Group | Failures | Errors | Total |
+|---|---:|---:|---:|
+| File durability: Windows CRT refuses fsync on read-only handles (66 failures incl. wrapper; 43 fixture errors) | 66 | 43 | 109 |
+| Domain inspection depends on unavailable isolated native-worker profile (wrapped blocked/sections/resource assertions) | 34 | 0 | 34 |
+| POSIX fake executables: round runner 7, measurement shim 2 | 9 | 0 | 9 |
+| Package atomic-exchange platform dispatch reaches unsupported ctypes function | 6 | 0 | 6 |
+| Private shared-pool POSIX-only capability assertions | 6 | 0 | 6 |
+| Smaller groups / restricted checkpoint summaries (not investigated) | 35 | 0 | 35 |
+| **Total** | **156** | **43** | **199** |
+
+Gate written before runs: attempt these five groups largest-first; retain every POSIX security control. File flushing must still flush bytes; no swallowed flush errors. Unsupported isolated security features refuse at call time and get only precise capability-specific Windows test reasons. Fake executables must actually run on Windows, not skip. Required quick tier before each push, one native job result per group after completion window; record failures/errors/passes/skips. Stop after five groups or zero failures/errors. New downstream failures do not change this baseline ordering. No restricted data investigation; no CFD edits.
+
+Plan review: architecture PASS (small existing platform boundaries); quality PASS (fail-closed security); tests WARN (native Windows needed for handle and executable behavior); performance PASS (no new unbounded work).
+
+- Batch 2 group 1 commit `6865d1b`: focused 93 passed; quick tier 2,802 passed, 4 skipped, 130 deselected, UI 275 passed, Rust/secrets/private identity passed. Native Windows **156 failed, 2,655 passed, 82 skipped, 43 errors**; Linux **2,916 passed, 20 skipped**. Read-only flush failure removed; affected tests now reach the POSIX `ctypes.CDLL(None)` publication dispatch. Counts unchanged; do not claim those tests pass.
+- Batch 2 group 2: existing platform layer already refuses unsupported isolated workers before child launch. Exact 34 integration tests are marked with that Windows capability reason; pure algorithms and refusal tests remain active. No weaker in-process parser fallback. Quick tier passed; pushed `ae7f186`. Native run `43525816369`: **122 failed, 2,655 passed, 116 skipped, 43 errors**; Linux **2,916 passed, 20 skipped**. Logs were not yet available at the initial read; a delayed read after ten minutes obtained the completed result.
+- Batch 2 group 3: round and measurement fixtures now provide Windows `.cmd` shims that invoke the Python interpreter. Measurement resolves the executable through PATH and uses documented logical-byte disk accounting on Windows (POSIX du unchanged). No fixture skips. Focused tests **16 passed** on macOS; Windows execution remains the decisive gate.
+
+- Batch 2 group 3 commit `786ec8a`: all nine fake-executable failures removed on native Windows. Result **113 failed, 2,664 passed, 116 skipped, 43 errors**; Linux **2,916 passed, 20 skipped**. No fake-executable tests skipped.
+- Batch 2 group 4: unsupported atomic package exchange refuses before loading POSIX ctypes. Windows has no implemented single-operation exchange of two populated directories; do not replace it with a non-atomic rename sequence. Exact six tests requiring exchange get the explicit platform reason; refusal regression and new-package exports still run. Focused platform/replacement tests **7 passed** on POSIX. Quick/native pending.
+
+- Batch 2 group 4 commit `8ce0589`, native run `43536497433`: **107 failed, 2,665 passed, 122 skipped, 43 errors**; Linux **2,917 passed, 20 skipped**. Initial latest-run lookup returned the prior commit; corrected by matching head SHA before recording counts.
+- Batch 2 group 5: exact private-pool tests require ACL-aware ownership enforcement unavailable on Windows; foreign-owner parameter alone gets that reason, other unsafe-folder tests still run. Added direct Windows refusal plus logged unshared-fallback regression. Focused tests **18 passed**. No production security behavior changed. Quick/native pending.
+
+- Batch 2 group 5 commit `2a8eb25`, native run `43540692470` matched to that SHA: **101 failed, 2,666 passed, 128 skipped, 43 errors** (874.38 s). Linux **2,918 passed, 20 skipped**. Local quick tier passed: **2,804 Python passed, 4 skipped, 130 deselected; 275 UI passed, zero failed; Rust checks passed; secrets/private identity zero findings**.
+
+### Batch 2 final counts — STOP after five groups
+
+| Checkpoint | Failed | Errors | Passed | Skipped |
+|---|---:|---:|---:|---:|
+| Before batch 2 | 156 | 43 | 2,633 | 82 |
+| Writable file flush | 156 | 43 | 2,655 | 82 |
+| Isolated inspection capability | 122 | 43 | 2,655 | 116 |
+| Native fake executables | 113 | 43 | 2,664 | 116 |
+| Atomic exchange capability | 107 | 43 | 2,665 | 122 |
+| Private pool capability | **101** | **43** | **2,666** | **128** |
+
+Net: **55 fewer failures; errors unchanged at 43**. All nine POSIX fake-executable tests now pass on Windows rather than being skipped. Merged source added ordinary tests, so pass totals also include integration changes. No collection errors. Windows gate remains unmet. Main remaining terminal blocker: atomic no-replace run publication still loads POSIX ctypes on Windows, retaining the 43 evidence fixture errors and many failed run tests. Smaller groups include progress locking, OS-specific child probes, path/text encoding, and checkpoint metadata (restricted sources not investigated). No further groups attempted under this batch authorization.
+
+Resume only with a new task: publication boundary first, then re-rank the native remaining failures. No merge into integration branch. No lane-local target; shared build output must remain untouched.
+
 ## Results and resume point
 
 - Worktree created from local `continue/v0.5` at `dbb24f4`.

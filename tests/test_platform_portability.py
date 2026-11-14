@@ -36,6 +36,26 @@ def test_parallel_import_does_not_require_unix_modules():
     assert result.returncode == 0, result.stderr
 
 
+def test_atomic_package_exchange_refuses_before_posix_library_load(monkeypatch, tmp_path):
+    from vessel_reconstruction.exports import package
+    monkeypatch.setattr(package.sys, 'platform', 'win32')
+    def unexpected_load(*args, **kwargs):
+        pytest.fail('Unsupported atomic exchange must not load POSIX APIs')
+    monkeypatch.setattr(package.ctypes, 'CDLL', unexpected_load)
+    with pytest.raises(package.ExportError, match='not supported on this platform'):
+        package._exchange_directories(tmp_path / 'first', tmp_path / 'second')
+
+
+def test_private_pool_refuses_without_windows_acl_proof(monkeypatch, caplog):
+    from vessel_reconstruction import parallel
+    monkeypatch.setattr(parallel.os, 'name', 'nt')
+    with pytest.raises(PermissionError, match='not supported on this platform'):
+        parallel.pool_directory()
+    with parallel.worker_tokens(2, size=2) as granted:
+        assert granted == 2
+    assert 'Worker pool not used' in caplog.text
+
+
 def test_unsupported_supervisor_refuses_before_starting_child(monkeypatch):
     monkeypatch.setattr(isolation.sys, 'platform', 'win32')
 

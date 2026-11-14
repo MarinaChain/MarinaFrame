@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -56,8 +57,14 @@ def setup_round(tmp_path, monkeypatch, case_names, known_extra=(), flags=("--pol
         (inputs / name).mkdir(parents=True)
         (inputs / name / "spec.json").write_text("{}")
     binary = tmp_path / "fake-marinaframe"
-    binary.write_text(FAKE_CONTROLLER)
-    binary.chmod(0o755)
+    if os.name == 'nt':
+        controller = tmp_path / 'fake_controller.py'
+        controller.write_text(FAKE_CONTROLLER, encoding='utf-8')
+        binary = binary.with_suffix('.cmd')
+        binary.write_text(f'@echo off\n"{sys.executable}" "{controller}" %*\n', encoding='utf-8')
+    else:
+        binary.write_text(FAKE_CONTROLLER)
+        binary.chmod(0o755)
     worker_python = tmp_path / "python3"
     worker_python.write_text("# fake interpreter\n")
     worker_source = tmp_path / "src"
