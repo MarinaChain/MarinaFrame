@@ -1798,3 +1798,11 @@ Do not tunecontrols against invalidforces. Requires root-cause investigation
 of mappedturbulence/highomega/BCtransition beforeanotherphysicalattempt.
 Erratumandthresholds unchanged. Coarse01+02attemptcost1110.609724s/
 1.542513505core-hours. Push failedcoarsecheckpointasrequested,not(1+k).
+
+### DB3failedcoarse deliveryverification
+Stablebackgroundquickexit0:Rustfmt/clippy/workspacepassed;Python2751pass,
+4skip,100deselect,5warnings604.57s;UI275pass;boundedscan1412files0findings.
+Exact-nameidentity0findings,diffclean. Report
+`outputs/2026-11-14-kvdb3-coarse-attempt.md`. Coarsecoefficientunavailable,
+no250y+admission/medium/fine;noDB3score. Erratumpre-resultretained. Noactive
+lanecontainer. Existingworktree/evidenceretained;pushlaneonly,no merge.
