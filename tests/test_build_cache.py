@@ -45,9 +45,9 @@ def make_output(root, *args, environment=None):
 
 def test_main_and_linked_checkout_share_target(checkouts):
     root, linked = checkouts
-    expected = str(root / ".claude/worktrees/shared-target-sol")
-    assert make_output(root, "cache-value") == expected
-    assert make_output(linked, "cache-value") == expected
+    expected = root / '.claude/worktrees/shared-target-sol'
+    assert Path(make_output(root, 'cache-value')) == expected
+    assert Path(make_output(linked, 'cache-value')) == expected
 
 
 @pytest.mark.parametrize("ci", ["true", "1"])
@@ -69,7 +69,7 @@ def test_explicit_target_overrides_default(checkouts, ci):
 def test_smoke_uses_selected_target(checkouts, target):
     _, linked = checkouts
     output = make_output(linked, "-n", "smoke", f"CARGO_TARGET_DIR={target}")
-    binary = str((linked / target).resolve() / "release/marinaframe")
+    binary = ((linked / target).resolve() / 'release/marinaframe').as_posix()
     assert f'"{binary}" run ' in output
     assert f'"{binary}" verify ' in output
     assert "\n target/release/marinaframe" not in output

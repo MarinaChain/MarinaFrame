@@ -38,4 +38,7 @@ Architecture WARN: package format migration requires consumer inventory before i
 
 ## Resume
 
-Progress lock regression, then small portable fixes. No round-5 code changes yet. Baseline counts unchanged.
+- Portable blocking progress lock committed as `bda75eb`: retains POSIX flock, Windows uses byte lock with waiting. Red regression observed before implementation; focused lock/progress tests 34 passed.
+- Portable path serialization/order and Make path assertions: focused tests 39 passed. UTF-8 performance report output: 13 passed. Windows wheel-test backend installed explicitly (setuptools/wheel), not skipped.
+- No new skips. Native after-count pending. Package/private pool/isolated inspection implementations not started.
+Resume: run quick tier on these stable changes, push, inspect native failures and skip inventory; continue remaining failure groups before feature migrations.

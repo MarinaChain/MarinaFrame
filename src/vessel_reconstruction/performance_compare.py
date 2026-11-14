@@ -172,10 +172,10 @@ def main(argv: list[str] | None = None) -> int:
         output = {"schema_version": 1, "engineering_approved": False,
                   "input_sha256": hashlib.sha256(raw).hexdigest(), "cases": cases}
         # Exclusive creation prevents accidental replacement of another score.
-        with args.output.open("x") as stream:
+        with args.output.open("x", encoding="utf-8") as stream:
             json.dump(output, stream, indent=2, allow_nan=False)
             stream.write("\n")
-        with args.markdown.open("x") as stream:
+        with args.markdown.open("x", encoding="utf-8") as stream:
             stream.write(markdown_report(cases))
     except (ValueError, TypeError, OSError) as error:
         print(f"performance comparison: {error}", file=sys.stderr)

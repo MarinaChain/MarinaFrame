@@ -51,7 +51,7 @@ jobs:
           python-version: '3.12.10'
           cache: pip
       - name: Install the package with test, document and raster extras (no Windows lock yet)
-        run: python -m pip install -e ".[test,documents,data,plan-raster]"
+        run: python -m pip install setuptools wheel -e ".[test,documents,data,plan-raster]"
       - name: Run the Python suite (report only; findings go to the run summary)
         shell: bash
         run: |

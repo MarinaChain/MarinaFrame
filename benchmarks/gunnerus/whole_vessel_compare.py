@@ -51,7 +51,7 @@ def digest(path: Path, roots) -> str:
 
 
 def files(root: Path) -> dict:
-    return {p.relative_to(root): p for p in sorted(root.rglob('*'))
+    return {p.relative_to(root): p for p in sorted(root.rglob('*'), key=lambda item: item.relative_to(root).as_posix())
             if p.is_file() and p.name not in SKIP_NAMES and '.cache' not in p.parts and not p.name.endswith('.log')
             and not p.name.endswith('-timings.json') and not p.name.endswith('.prof')}
 
@@ -61,7 +61,7 @@ def differences(before: Path, after: Path) -> tuple[int, list[str]]:
     before, after = before.resolve(), after.resolve()
     a, b = files(before), files(after)
     differ = []
-    for rel in sorted(set(a) | set(b)):
+    for rel in sorted(set(a) | set(b), key=lambda item: item.as_posix()):
         if rel not in a or rel not in b:
             differ.append(f'{rel}: only in {"before" if rel in a else "after"}')
             continue
