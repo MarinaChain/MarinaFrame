@@ -1490,3 +1490,20 @@ Admit production continuation from diagnostic100 to2000,same5ranks/settings;
 use reconstructed100fields and fresh decompose,retain100diagnostic samples
 for complete history. Standing load pause/resume supervisor throughout. Final
 force windows1901–2000/1801–1900 govern,no favourable window selection.
+
+## PM other-load rule change (before live supervisor replacement)
+
+PM supersedes total-load hysteresis only. Host10-minute estimate remains
+complete time-weighted600s from load1 samples. **Other load=host rolling600
+minus5 while running,minus0 while paused.** Pause if other>9 for600s;
+unpause load-paused own container if other<6 for600s,check every600s.
+All CPU5/memory12GiB/nice10/one-run/mf-cfd-only/disk<40GB rules unchanged.
+G-KV-DB2 unchanged. Tests first failed on absentOtherLoad,then passed.
+New attach-only `cfd/monitor.py` does not launch/reset solver. Replace exact
+old host monitor PID after identity/cmdline check,retain backups and old logs,
+release same flock,attach new under same lock. Preserve original container
+StartedAt/PID and iteration. **Live inspection finds iteration378 paused,
+not282**: do not rewind to282 or discard progress. Resume from actual state.
+Proceed coarse convergence/y+;refine only after>=95%area y+<1. Ten-minute
+wait checks stay active; no stop merely for load pause. Commit each run,
+quick tier at end,push lane only/no merge.

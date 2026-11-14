@@ -32,6 +32,40 @@ class RollingLoad:
         return rolling, pause
 
 
+class OtherLoad:
+    """PM other-load hysteresis, subtracting current rank load after averaging.
+
+    Running own load is the fixed five-rank allocation; paused own load is zero.
+    The rolling host estimate remains continuous across state transitions.
+    """
+    def __init__(self):
+        self.host = RollingLoad()
+        self.high_since = None
+        self.low_since = None
+
+    def sample(self, timestamp, load, state):
+        if state not in ('running', 'paused'):
+            raise ValueError('Expected running or paused lane container')
+        rolling, _ = self.host.sample(timestamp, load)
+        own = 5 if state == 'running' else 0
+        other = None if rolling is None else rolling - own
+        if other is not None and other > 9:
+            if self.high_since is None:
+                self.high_since = timestamp
+        else:
+            self.high_since = None
+        if other is not None and other < 6:
+            if self.low_since is None:
+                self.low_since = timestamp
+        else:
+            self.low_since = None
+        return {'rolling600': rolling, 'own_load': own, 'other_load': other,
+                'pause': state == 'running' and self.high_since is not None
+                         and timestamp - self.high_since >= 600,
+                'resume': state == 'paused' and self.low_since is not None
+                          and timestamp - self.low_since >= 600}
+
+
 class ResumeLoad:
     """PM standing resume permission: rolling ten-minute load <6 for600s.
 
