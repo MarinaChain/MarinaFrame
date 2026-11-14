@@ -7,6 +7,8 @@ import csv
 from datetime import datetime
 import fcntl
 import json
+import os
+import stat
 from pathlib import Path
 import re
 import shutil
@@ -63,10 +65,15 @@ def supervise(name, *, root=None):
     container_started = datetime.fromisoformat(initial['StartedAt'].replace('Z', '+00:00')).timestamp()
     image = run('docker', 'inspect', '--format', '{{.Config.Image}}', container)
     image_bytes = int(run('docker', 'image', 'inspect', '--format', '{{.Size}}', image))
-    load_pause = initial['Status'] == 'paused' and (attempt / 'safety-pause.json').exists()
-    if load_pause:
-        reason = json.loads((attempt / 'safety-pause.json').read_text()).get('reason', '')
-        load_pause = 'rolling600' in reason
+    container_id = run('docker', 'inspect', '--format', '{{.Id}}', container)
+    pause_record = attempt / 'pause-authority.json'
+    authority = json.loads(pause_record.read_text()) if pause_record.exists() else {}
+    load_pause = (initial['Status'] == 'paused' and authority.get('container_id') == container_id
+                  and authority.get('kind') == 'load' and authority.get('paused') is True)
+
+    def pause_authority(kind, paused):
+        save('pause-authority.json', {'container_id': container_id, 'kind': kind,
+                                     'paused': paused, 'epoch': time.time()})
     last_resume_check = 0
     event('supervisor attached', started, state=initial['Status'])
     try:
@@ -88,11 +95,13 @@ def supervise(name, *, root=None):
                 writer.writerow([now, state, host_load, decision['rolling600'],
                                  decision['own_load'], decision['other_load'], free, used])
                 if free < 10_000_000_000 or used + image_bytes + 500_000_000 >= 39_000_000_000:
+                    pause_authority('resource', True)
                     if state == 'running':
                         run('docker', 'pause', container)
                     save('other-load-resource-stop.json', {'epoch': now, 'free': free, 'used': used})
                     return
                 if state == 'running' and decision['pause']:
+                    pause_authority('load', True)
                     run('docker', 'pause', container)
                     load_pause = True
                     event('pause', now, reason='other_load>9 sustained600')
@@ -100,12 +109,21 @@ def supervise(name, *, root=None):
                     last_resume_check = now
                     event('resume eligibility check', now, other_load=decision['other_load'])
                     if load_pause and decision['resume']:
+                        pause_authority('load', False)
                         run('docker', 'unpause', container)
                         event('unpause', now, reason='other_load<6 sustained600')
                         load_pause = False
                 log = attempt / 'data/log.simpleFoam'
                 if state == 'running' and log.exists():
-                    text = log.read_text(errors='replace')
+                    descriptor = os.open(log, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+                    try:
+                        metadata = os.fstat(descriptor)
+                        if not stat.S_ISREG(metadata.st_mode):
+                            raise ValueError('Solver log must be a regular file')
+                        os.lseek(descriptor, max(0, metadata.st_size - 2_000_000), os.SEEK_SET)
+                        text = os.read(descriptor, 2_000_000).decode(errors='replace')
+                    finally:
+                        os.close(descriptor)
                     completed = re.findall(r'Time = (\d+)\s*\n.*?ClockTime = ([0-9.]+) s', text, re.S)
                     if completed and int(completed[-1][0]) >= 200:
                         iteration, clock = completed[-1]
@@ -126,5 +144,6 @@ def supervise(name, *, root=None):
              'reserved_core_hours': wall * 5 / 3600, 'active_core_hours': (wall - paused) * 5 / 3600,
              'oom_killed': info['OOMKilled'], 'engineering_approved': False})
     except Exception:
+        pause_authority('monitor-failure', True)
         subprocess.run(['docker', 'pause', container], capture_output=True)
         raise
