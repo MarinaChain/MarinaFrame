@@ -6,27 +6,33 @@ import { welcome, intake } from './new_vessel.js';
 import { renderCrumbs } from './run_header.js';
 import { refreshTasksSoon, renderNoTask, openTask } from './run.js';
 import { loadSettingsForm } from './settings_view.js';
+import { renderDesignRoute } from './designs.js';
+import { t } from './i18n.js';
 
 /** The places of the app shell. `run` is the run workspace (drawing | 3D | inspector). */
 const ROUTES = ['home', 'queue', 'intake', 'run', 'settings', 'welcome'];
 
 export function routeFromHash() {
   const route = location.hash.replace(/^#\/?/, '');
-  return ROUTES.includes(route) ? route : null;
+  return ROUTES.includes(route) || route === 'designs' || /^design\/[^/]+$/.test(route) ? route : null;
 }
 
 /** Show one view. The hash keeps the place across reloads and gives Back a meaning. */
 export function applyRoute(route) {
-  setRoute(route);
-  for (const view of document.querySelectorAll('.view')) view.hidden = view.dataset.route !== route;
+  const designRoute = route === 'designs' || route.startsWith('design/');
+  const place = designRoute ? 'designs' : route;
+  setRoute(place);
+  for (const view of document.querySelectorAll('.view')) view.hidden = view.dataset.route !== place;
+  if (designRoute) renderDesignRoute(route);
   for (const item of document.querySelectorAll('.rail-item')) {
-    if (item.dataset.route === route) item.setAttribute('aria-current', 'page');
+    if (item.dataset.route === place) item.setAttribute('aria-current', 'page');
     else item.removeAttribute('aria-current');
   }
   $('run-actions').hidden = route !== 'run';
   $('vessel-tabs').hidden = route !== 'run';
   document.body.dataset.route = route;
   renderCrumbs();
+  if (designRoute) $('crumbs').textContent = t('design.title');
   if (route === 'settings') loadSettingsForm();
   if (route === 'welcome') welcome.show();
   // The queue may have moved while another page was open (a set started or failed).
@@ -67,4 +73,5 @@ export async function openRememberedTask() {
 /** Back and Forward move between places. */
 export function installRouter() {
   window.addEventListener('popstate', () => applyRoute(routeFromHash() || 'home'));
+  window.addEventListener('hashchange', () => applyRoute(routeFromHash() || 'home'));
 }

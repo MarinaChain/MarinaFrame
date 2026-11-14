@@ -155,6 +155,9 @@
       <button class="rail-item" type="button" data-route="home" title="Home" data-i18n-attr="title:shell.rail.home">
         <svg class="icon"><use href="#i-home" /></svg><span data-i18n="shell.rail.home">Home</span>
       </button>
+      <button class="rail-item" type="button" data-route="designs" title="Designs" data-i18n-attr="title:design.title">
+        <svg class="icon" aria-hidden="true"><use href="#i-table" /></svg><span data-i18n="design.title">Designs</span>
+      </button>
       <!-- home.js sets this item's aria-label (the queue count); only the label and tooltip are static. -->
       <button class="rail-item" type="button" data-route="queue" title="Queue" data-i18n-attr="title:shell.rail.queue">
         <svg class="icon"><use href="#i-queue" /></svg><span data-i18n="shell.rail.queue">Queue</span>
@@ -169,6 +172,7 @@
     </nav>
 
     <main class="views" id="views">
+      <section class="view design-page" id="view-designs" data-route="designs" aria-label="Designs" data-i18n-attr="aria-label:design.title" hidden></section>
       <!-- The public web demo only: a run's note on every page of that run, the concept-preview
            label or the drawings' credit line (js/run.js fills it, styles.css shows it). -->
       <p class="demo-run-note" id="demo-run-note" role="note"></p>

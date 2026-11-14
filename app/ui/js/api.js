@@ -197,6 +197,10 @@ export function invoke(command, args) {
   return transport.invoke(command, args);
 }
 
+/** Read-only design commands; records are validated by the desktop backend. */
+export const listDesignRecords = () => invoke('list_design_records', {});
+export const openDesignRecord = (id) => invoke('open_design_record', { id });
+
 /** Subscribe to task-changed ({ task, sequence }). Returns an unsubscribe function. */
 export function onTaskChanged(handler) {
   return transport.onTaskChanged(handler);

@@ -86,6 +86,7 @@ function paletteCommands() {
     add(t('ko3.commands.vessels'), vessel.name, () => { setVesselTab('run'); openTask(vessel.latest.task); }, { hint: fmt.statusLabel(vessel.latest.status) });
   }
   add(t('ko3.commands.goTo'), t('ko3.commands.home'), () => navigate('home'));
+  add(t('design.goTo'), t('design.title'), () => navigate('designs'));
   add(t('ko3.commands.goTo'), t('ko3.commands.queue'), () => navigate('queue'));
   add(t('ko3.commands.goTo'), t('ko3.commands.settings'), () => openSettings(), { keys: '⌘,' });
   add(t('ko3.commands.goTo'), t('ko3.commands.setupCheck'), () => navigate('welcome'));
