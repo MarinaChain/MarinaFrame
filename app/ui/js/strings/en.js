@@ -1268,6 +1268,7 @@ export const EN = {
   "design.compare.choose": "Candidates to compare (up to 4)",
   "design.compare.chooseMore": "Choose 2 to 4 candidates to compare them with the parent.",
   "design.compare.caption": "Parent and the chosen candidates",
+  "design.compare.scrollHint": "Scroll sideways to see every candidate.",
   "design.compare.field": "Quantity",
   "design.compare.parentHead": "Parent",
   "design.compare.noParentValue": "No parent value",

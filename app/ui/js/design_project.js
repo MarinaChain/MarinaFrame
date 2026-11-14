@@ -231,11 +231,28 @@ function chartFor(project) {
   return paretoChart(project.points, { info: project.info, checkLabel, onOpen: openDesign });
 }
 
+/** True when no known value in the row has a band: the row header then says "no band" once. */
+function rowHasNoBand(row) {
+  const known = [row.parent, ...row.candidates].filter((entry) => entry.state !== 'unknown');
+  return known.length > 0 && known.every((entry) => !entry.quantity.uncertainty);
+}
+
+/** The row label, with one quiet "no band" mark (and its reason) when no value in the row has one. */
+function compareRowHead(row) {
+  if (!rowHasNoBand(row)) return el('th', { scope: 'row' }, fieldLabel(row.path));
+  const known = [row.parent, ...row.candidates].find((entry) => entry.state !== 'unknown');
+  const reason = known.quantity.uncertainty_reason || t('design.notSupplied');
+  return el('th', { scope: 'row' }, fieldLabel(row.path), ' ',
+    el('span', { class: 'dv-noband compare-noband', title: reason }, t('design.noBandMark'),
+      el('span', { class: 'visually-hidden' }, `: ${reason}`)));
+}
+
 /** The value cell and, for a candidate, the delta cell beside it. Unknown is written out. */
 function compareCells(row, entry, isParent) {
+  const noBandMark = !rowHasNoBand(row);
   const value = entry.state === 'unknown'
     ? el('td', { class: 'compare-value' }, missingText({ path: row.path }))
-    : el('td', { class: 'table-num compare-value' }, quantityValue(entry.quantity, { compact: true }));
+    : el('td', { class: 'table-num compare-value' }, quantityValue(entry.quantity, { compact: true, noBandMark }));
   if (isParent) return [value];
   const tone = deltaTone(row.path, entry.delta);
   let delta;
@@ -285,21 +302,23 @@ function compareTable(project, chosenIds) {
     ...designs.map((design, index) => compareHead(project, design, index === 0)));
   // The two Pareto axes (cargo and fuel) have a light tint: the rows the chart is about.
   const valueRows = rows.map((row) => el('tr', { class: row.path === CARGO || row.path === FUEL ? 'compare-axis' : null },
-    el('th', { scope: 'row' }, fieldLabel(row.path)),
+    compareRowHead(row),
     ...compareCells(row, row.parent, true), ...row.candidates.flatMap((entry) => compareCells(row, entry, false))));
   const checkRows = checkKeys.map((key) => {
     const first = designs.map((design) => project.checks.get(design.design_id).find((check) => check.key === key)).find(Boolean);
     return el('tr', {}, el('th', { scope: 'row' }, checkRule(first)),
       ...designs.map((design, index) => checkCell(project.checks.get(design.design_id).find((check) => check.key === key), index ? 2 : 1)));
   });
-  return el('div', { class: 'table-scroll compare-scroll' }, el('table', { class: 'data-table compare-table' },
+  return [el('p', { class: 'compare-scroll-hint' }, t('design.compare.scrollHint')),
+    el('div', { class: 'table-scroll compare-scroll', tabindex: '0', role: 'region', 'aria-label': t('design.compare.caption') },
+      el('table', { class: 'data-table compare-table' },
     el('caption', { class: 'visually-hidden' }, t('design.compare.caption')),
     el('thead', {}, head),
     el('tbody', {}, ...valueRows),
     el('tbody', { class: 'compare-checks' },
       el('tr', {}, el('th', { scope: 'colgroup', colspan: String(columnCount) }, t('design.compare.checks'))),
       ...(checkRows.length ? checkRows : [el('tr', {}, el('td', { colspan: String(columnCount) },
-        el('span', { class: 'design-missing' }, t('design.compare.noChecks'))))]))));
+        el('span', { class: 'design-missing' }, t('design.compare.noChecks'))))]))))];
 }
 
 /** Chosen candidates as chips with a remove button, and a "+" list to add one. */

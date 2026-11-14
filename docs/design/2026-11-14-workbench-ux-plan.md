@@ -170,15 +170,25 @@ Progress (resume here):
   value and warning; Tauri commands `list_design_records` and `open_design_record`
   (`app/src-tauri/src/designs.rs`, records in `<runs folder>/designs/*.json`, validated with
   `DesignRecord::from_json`); mock records: public KVLCC2 and a synthetic Cb variant.
+- Phase 2 step 1, done (2026-11-14): pure comparison views (`app/ui/js/design_compare.js`:
+  compare rows, constraint checks, Pareto points, current decision per candidate and discipline);
+  five synthetic KVLCC2 candidates (A-E) in the mock; decision sidecar per
+  `docs/design/2026-11-14-decision-discipline-proposal.md`: Tauri `list_design_decisions` and
+  `append_design_decision` (`app/src-tauri/src/decisions.rs`, append-only, backend sets id, time and
+  "draft"), with the same checks in the mock backend.
 - Phase 2 step 2, done (2026-11-14): a record with direct children is a project with Candidates,
   Compare (Pareto chart, 4.4) and Decisions tabs (`app/ui/js/design_project.js`,
   `pareto_chart.js`; pure views in `design_compare.js` and `pareto_layout.js`); Lite shows the chart
   and candidate cards; `#design/<id>/<tab>` opens a tab; English and Korean; screenshots in
-  `docs/design/images/2026-11-14-phase2/`. Still open: the Lite brief that runs the full loop.
-- Earlier note, kept: phase 2 (candidates list, Compare, Pareto chart, Decisions log); it needs a command that
-  lists the candidates of a project and a project object in the record or beside it. Small fixes:
-  the Lite "Not supplied" list shows administrative fields (customer ID) that designers do not need;
-  the "Needs you" card icons still show the body-plan sketch.
+  `docs/design/images/2026-11-14-phase2/`. Layout ideas came partly from two generated concept
+  images (not committed). Compare states "no band" once per row; at narrow widths the labels stay
+  in view and the candidate columns scroll.
+- Small fixes, done (2026-11-14): the Lite "Not supplied" list leaves out the customer ID and the
+  decisions field; "Needs you" cards show the vessel thumbnail.
+- Next: the Lite brief that runs the full loop and returns 3 candidates (needs the loop command);
+  phase 3 (References). Open details: the HTTP server backend has no design commands; Overview
+  cards still round a 0.1 m length change away; the Candidates tab refreshes only when reopened
+  after a decision is recorded; dominated points are only a little greyer than front points in dark.
 - Open: a yard designer must review `app/ui/js/strings/glossary.js` before the pilot.
 
 ## 7. Founder decisions (2026-11-14)

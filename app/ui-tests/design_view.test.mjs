@@ -122,3 +122,10 @@ test('a change from the parent states the parent value and the signed difference
   assert.equal(change.delta, -0.01);
   assert.equal(designChanges(variant, null)[0].delta, null);
 });
+
+test('the missing list leaves out record keeping: customer ID and decisions', () => {
+  const paths = designMissing(record).notSupplied.map((row) => row.key || row.path);
+  assert.ok(!paths.includes('data_scope.customer_id'));
+  assert.ok(!paths.includes('designer_decisions'));
+  assert.ok(paths.includes('tanks'), 'real design inputs stay listed');
+});

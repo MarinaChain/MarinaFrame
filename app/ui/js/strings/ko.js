@@ -1268,6 +1268,7 @@ export const KO = {
   "design.compare.choose": "비교할 후보 (최대 4개)",
   "design.compare.chooseMore": "모선과 비교할 후보를 2–4개 고르십시오.",
   "design.compare.caption": "모선과 선택한 후보",
+  "design.compare.scrollHint": "옆으로 스크롤하면 모든 후보를 볼 수 있습니다.",
   "design.compare.field": "항목",
   "design.compare.parentHead": "모선",
   "design.compare.noParentValue": "모선 값 없음",

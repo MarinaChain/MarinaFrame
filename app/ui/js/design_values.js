@@ -55,9 +55,10 @@ export function numberText(value, { compact, unit = null }) {
 /**
  * A quantity: number, unit, then its band or a quiet "no band" mark. The reason for a missing
  * band is the mark's title; `focusable` also shows it on keyboard focus. Every value is a draft
- * (the page header says so); only "Needs review" adds a chip here.
+ * (the page header says so); only "Needs review" adds a chip here. A caller that states the
+ * missing band once for a whole row passes `noBandMark: false`.
  */
-export function quantityValue(quantity, { compact = false, focusable = false } = {}) {
+export function quantityValue(quantity, { compact = false, focusable = false, noBandMark = true } = {}) {
   const shown = designQuantity(quantity);
   const formatted = formatQuantity(shown);
   const unit = quantity.unit === '1' ? '' : quantity.unit;
@@ -65,7 +66,7 @@ export function quantityValue(quantity, { compact = false, focusable = false } =
   let band;
   if (quantity.uncertainty) {
     band = el('span', { class: 'dv-band', title: quantity.uncertainty.basis || null }, formatted.uncertaintyText);
-  } else {
+  } else if (noBandMark) {
     const reason = quantity.uncertainty_reason || t('design.notSupplied');
     band = el('span', { class: 'dv-noband', title: reason, tabindex: focusable ? '0' : null, dataset: { reason } },
       t('design.noBandMark'), el('span', { class: 'visually-hidden' }, `: ${reason}`));

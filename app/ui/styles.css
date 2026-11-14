@@ -4167,3 +4167,13 @@ body:not([data-interface="lite"]) .design-lite { display: none; }
 @media (max-width: 900px) {
   .design-overview-lower { grid-template-columns: minmax(0, 1fr); }
 }
+/* "no band" once per row in Compare, in the label column, when no value in the row has a band. */
+.compare-table th[scope="row"] .compare-noband { display: block; font-weight: 400; }
+/* The compare table is short; do not hide its Checks rows behind the shared table height limit. */
+.compare-scroll { max-height: none; }
+/* Narrow widths: the labels stay in view while the candidate columns scroll sideways. */
+.compare-scroll-hint { display: none; margin: 0 0 var(--space-xs); color: var(--ink-3); font-size: var(--fs-xs); }
+@media (max-width: 720px) {
+  .compare-scroll-hint { display: block; }
+  .compare-table th[scope="row"] { position: sticky; left: 0; z-index: 1; min-width: 7.5rem; background: var(--surface); }
+}

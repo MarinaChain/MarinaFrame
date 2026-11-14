@@ -154,6 +154,9 @@ export function designSections(rows, order = DESIGN_TOPICS) {
 
 // Empty lists that mean "none found", not "not supplied": warning lists and sampling gaps.
 const EMPTY_IS_NONE = /(warnings|disconnected_intervals_m)$|^results\.hull_variation\./;
+// Record keeping, not design inputs: the customer ID is administrative, and decisions have their
+// own tab (they live in a sidecar until schema 1.2). Neither belongs in "what the designer lacks".
+const NOT_A_DESIGN_INPUT = /^(data_scope\.customer_id|designer_decisions)$/;
 
 /**
  * What the designer still lacks, split into results not calculated yet and inputs not supplied.
@@ -162,7 +165,7 @@ const EMPTY_IS_NONE = /(warnings|disconnected_intervals_m)$|^results\.hull_varia
 export function designMissing(record) {
   const view = designView(record);
   const rows = [...view.particulars.filter((card) => card.kind === 'unknown' || card.kind === 'empty'),
-    ...view.unknowns.filter((row) => !EMPTY_IS_NONE.test(row.path))];
+    ...view.unknowns.filter((row) => !EMPTY_IS_NONE.test(row.path) && !NOT_A_DESIGN_INPUT.test(row.path))];
   // A missing container (results.capacities) is already shown by its particulars (deadweight).
   const covered = (row) => !row.key && view.particulars.some((card) => card.path.startsWith(`${row.path}.`));
   const unique = [...new Map(rows.filter((row) => !covered(row)).map((row) => [row.path, row])).values()];
