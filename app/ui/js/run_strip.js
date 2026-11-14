@@ -6,6 +6,8 @@ import { el, fill, icon, svg } from './dom.js';
 import * as fmt from './format.js';
 import { $, chevron } from './ui_kit.js';
 import { needsCheck, sectionShapePath } from './run_facts.js';
+import { isGaRun } from './run_status.js';
+import { t } from './i18n.js';
 import { stateGlyph, sourceGlyph, glyphChip } from './glyphs.js';
 import { tipAttributes } from './tooltip.js';
 import { areas, openDetailsForReview } from './inspector.js';
@@ -37,6 +39,7 @@ function stripEmpty() {
     return [el('p', { class: 'strip-empty strip-waiting', role: 'status' },
       el('span', { class: 'spinner', 'aria-hidden': 'true' }), 'Sections appear here as the AI reads them.'), ...placeholders];
   }
+  if (isGaRun(state.view)) return el('p', { class: 'strip-empty' }, t('ga.noSections'));
   return el('p', { class: 'strip-empty' }, 'This run found no sections on the drawing.');
 }
 

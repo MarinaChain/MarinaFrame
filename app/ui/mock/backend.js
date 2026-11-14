@@ -646,6 +646,9 @@ export function mockTransport() {
         view.model = null;
         view.sections = [];
         view.components = null;
+        // A GA reading run reviews the GA sheet only: no lines-plan review and no hull warnings.
+        view.sheet_review = null;
+        view.warnings = [];
       }
       // ?mockstructure (with a structure GLB placed in mock/files; none is shipped): the survey
       // launch has a steel structure for the 3D view.

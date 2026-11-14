@@ -4,6 +4,28 @@
 
 import * as fmt from './format.js';
 import { needsCheck } from './run_facts.js';
+import { gaRows } from './ga_panel.js';
+import { t } from './i18n.js';
+
+/**
+ * A GA reading run: the AI read the general arrangement (particulars, counts, spaces) and built
+ * no hull. Its run bar and section strip speak about the reading, not about hull sections.
+ */
+export function isGaRun(view) {
+  return Boolean(view?.ga_reading) && !view?.model && !(view?.sections || []).length;
+}
+
+/** "GA reading · 5 of 13 values read · 1 best guess": the reading in words. */
+export function gaReadingWords(reading) {
+  const rows = gaRows(reading);
+  if (!rows) return [];
+  const values = [...rows.particulars, ...rows.counts];
+  const read = values.filter((row) => row.status === 'read').length;
+  const guessed = values.filter((row) => row.status === 'guessed').length;
+  const words = [t('ga.title'), t('ga.valuesRead', { read, total: values.length })];
+  if (guessed) words.push(guessed === 1 ? t('ga.bestGuessOne') : t('ga.bestGuesses', { count: guessed }));
+  return words;
+}
 
 /** Sheet states that need a new file from the person (js/sheets.js shows the same states). */
 const SHEET_PROBLEMS = new Set(['unreadable', 'wrong_scale', 'missing']);
@@ -28,6 +50,7 @@ export function problemSheets(view) {
 export function statusSentence(view) {
   if (!view) return { parts: [], action: null };
   const parts = [fmt.statusLabel(view.summary.status)];
+  if (isGaRun(view)) parts.push(...gaReadingWords(view.ga_reading));
   const open = (view.sections || []).filter(needsCheck).length;
   if (open) parts.push(`${fmt.plural(open, 'section')} ${open === 1 ? 'needs' : 'need'} you`);
   const sheets = problemSheets(view);

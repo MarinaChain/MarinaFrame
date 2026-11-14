@@ -28,4 +28,10 @@ export const EN = {
   'settings.interfaceHelp': 'Lite: the agent runs the design loop and you review its candidates. Advanced: you control each step. Applies to design projects.',
   'settings.lite': 'Lite',
   'settings.advanced': 'Advanced',
+
+  // GA run (run bar and section strip)
+  'ga.valuesRead': '{read} of {total} values read',
+  'ga.bestGuessOne': '1 best guess',
+  'ga.bestGuesses': '{count} best guesses',
+  'ga.noSections': 'A GA reading has no hull sections. Its values are in the GA reading panel.',
 };

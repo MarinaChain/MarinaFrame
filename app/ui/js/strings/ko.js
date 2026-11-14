@@ -28,4 +28,10 @@ export const KO = {
   'settings.interfaceHelp': 'Lite: 에이전트가 설계 루프를 실행하고 사용자는 후보안을 검토합니다. Advanced: 각 단계를 직접 제어합니다. 설계 프로젝트에 적용됩니다.',
   'settings.lite': 'Lite',
   'settings.advanced': 'Advanced',
+
+  // GA run (run bar and section strip)
+  'ga.valuesRead': '{total}개 중 {read}개 판독',
+  'ga.bestGuessOne': '추정 1개',
+  'ga.bestGuesses': '추정 {count}개',
+  'ga.noSections': 'GA 판독에는 선체 단면이 없습니다. 판독값은 GA 판독 패널에 있습니다.',
 };
