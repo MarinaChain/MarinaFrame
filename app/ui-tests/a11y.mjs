@@ -68,12 +68,28 @@ async function prepare({ vessel, tab, vesselTab, open }) {
     [...document.querySelectorAll('.parts-page .parts-row')].find((b) => b.textContent.includes('fresh water')).click();
     await wait(400);
   }
+  if (open === 'value-display') {
+    const { valueDisplay } = await import('/js/value_display.js');
+    const { createGaPanel } = await import('/js/ga_panel.js');
+    const panel = createGaPanel({ onHover() {}, onSelect() {} });
+    panel.set({
+      particulars: { loa_m: { value: 123.45, status: 'read', printed: '123.45 m' } },
+      counts: { cargo_holds: { value: 0, status: 'guessed' } },
+      measured: { lbp_m: { value: 120, status: 'unconfirmed_from_uncertain_boxes' } },
+    });
+    const main = document.querySelector('main');
+    main.replaceChildren(main.querySelector('h1'), panel.element,
+      valueDisplay({ value: 1234.5, unit: 'm', uncertainty: { plusMinus: 2 }, method: 'empirical', status: 'needs_review', source: 'Synthetic source' }),
+      valueDisplay({ value: null, unit: 'm', method: 'cfd' }));
+  }
   if (open === 'shortcuts') { document.body.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true })); await wait(300); }
 }
 
 const SCREENS = [
   { name: 'welcome', path: '/?mocknokey#home', seen: false },
   { name: 'home', path: '/#home' },
+  { name: 'value display and GA rows', path: '/#home', steps: { open: 'value-display' } },
+  { name: 'value display and GA rows (Korean)', path: '/#home', prefs: { language: 'ko' }, steps: { open: 'value-display' } },
   { name: 'home (first start)', path: '/?mockempty#home' },
   { name: 'queue', path: '/#queue' },
   { name: 'batch sheet', path: '/#home', steps: { open: 'batch' } },

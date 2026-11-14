@@ -5,7 +5,7 @@ export const KO = {
   'status.draft': '초안',
   'status.read': '판독',
   'status.guessed': '추정',
-  'status.unknown': '미판독',
+  'status.unknown': '알 수 없음',
   'status.measured_from_scale': '측정',
   'status.derived_from_space_tops': '산출',
   'status.unconfirmed_from_uncertain_boxes': '미확인',
@@ -28,4 +28,13 @@ export const KO = {
   'settings.interfaceHelp': 'Lite: 에이전트가 설계 루프를 실행하고 사용자는 후보안을 검토합니다. Advanced: 각 단계를 직접 제어합니다. 설계 프로젝트에 적용됩니다.',
   'settings.lite': 'Lite',
   'settings.advanced': 'Advanced',
+
+  // ui-p0-value: shared quantity display.
+  'status.needs_review': '검토 필요',
+  'method.empirical': '경험식',
+  'method.thin_ship': '박선 이론',
+  'method.cfd': 'CFD',
+  'method.read_from_ga': 'GA 판독',
+  'method.measured': '도면 측정',
+  'method.hydrostatics': '정수역학 계산',
 };

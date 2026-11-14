@@ -5,7 +5,7 @@ export const EN = {
   'status.draft': 'Draft',
   'status.read': 'Read',
   'status.guessed': 'Best guess',
-  'status.unknown': 'Not read',
+  'status.unknown': 'Unknown',
   'status.measured_from_scale': 'Measured',
   'status.derived_from_space_tops': 'Derived',
   'status.unconfirmed_from_uncertain_boxes': 'Unconfirmed',
@@ -28,4 +28,13 @@ export const EN = {
   'settings.interfaceHelp': 'Lite: the agent runs the design loop and you review its candidates. Advanced: you control each step. Applies to design projects.',
   'settings.lite': 'Lite',
   'settings.advanced': 'Advanced',
+
+  // ui-p0-value: shared quantity display.
+  'status.needs_review': 'Needs review',
+  'method.empirical': 'Empirical',
+  'method.thin_ship': 'Thin-ship theory',
+  'method.cfd': 'CFD',
+  'method.read_from_ga': 'Read from GA',
+  'method.measured': 'Measured',
+  'method.hydrostatics': 'Hydrostatics',
 };
