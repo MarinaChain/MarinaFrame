@@ -170,7 +170,12 @@ Progress (resume here):
   value and warning; Tauri commands `list_design_records` and `open_design_record`
   (`app/src-tauri/src/designs.rs`, records in `<runs folder>/designs/*.json`, validated with
   `DesignRecord::from_json`); mock records: public KVLCC2 and a synthetic Cb variant.
-- Next: phase 2 (candidates list, Compare, Pareto chart, Decisions log); it needs a command that
+- Phase 2 step 2, done (2026-11-14): a record with direct children is a project with Candidates,
+  Compare (Pareto chart, 4.4) and Decisions tabs (`app/ui/js/design_project.js`,
+  `pareto_chart.js`; pure views in `design_compare.js` and `pareto_layout.js`); Lite shows the chart
+  and candidate cards; `#design/<id>/<tab>` opens a tab; English and Korean; screenshots in
+  `docs/design/images/2026-11-14-phase2/`. Still open: the Lite brief that runs the full loop.
+- Earlier note, kept: phase 2 (candidates list, Compare, Pareto chart, Decisions log); it needs a command that
   lists the candidates of a project and a project object in the record or beside it. Small fixes:
   the Lite "Not supplied" list shows administrative fields (customer ID) that designers do not need;
   the "Needs you" card icons still show the body-plan sketch.
