@@ -1776,3 +1776,11 @@ finefrommeasuredactivewall and mappedstoprule;startwithoutaskingonlyif<30h.
 SameVPSotherload5rank/paused0,hysteresis,onecontainer5CPU12GiBnice10/disk.
 At250write/reconstruct/checkboundaryy+beforecontinue. Stop min500,max2000
 with3successive100-windowdrifts<.1%. NoDB3runstartedatthiserratum.
+
+### DB3coarse01 mapped-startup failure (no solver iterations)
+mapFields-consistent completed39s,but foamDictionary cannot read mapped binary
+volScalarField when editing wall BCs (wrongtoken scalar). Whole61.622038s/
+.085586164core-hours,exit1,noOOM. Preserve failed attempt. Retry converts
+mapped0fields toASCII with officialfoamFormatConvert using writeFormatascii,
+thenappliesfrozenBCs beforedecomposition. Physics/gates unchanged. Retain
+mappingtet-decompositionwarnings (mapexit0 not accuracyproof). No DB3result.
