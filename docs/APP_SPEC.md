@@ -133,6 +133,10 @@ Errors return `{ "code": string, "message": string }` with plain-language `messa
 | `get_queue`, `remove_queued`, `move_queued` | `{}`, `{ id }`, `{ id, delta }` | `QueueView`. Remove or move (delta -1 or +1) a waiting or failed set; a starting set cannot change |
 | `dismiss_notice` / `reset_notices` | `{ id }` / `{}` | `{ ok: true }` |
 | `list_datasets` | `{}` | `{ name, path, bytes }[]` |
+| `list_design_records` | `{}` | `DesignSummary[]`, `DesignSummary { id, name, status, main_dimensions, ship_type, updated_ms, validation_error }`. One row per JSON file in `<runs>/designs/` (`app/src-tauri/src/designs.rs`); a file that fails schema 1.1 is listed with `validation_error` and no `id`; a duplicate `design_id` keeps its `id` and also gets `validation_error`. The static web demo answers `[]` |
+| `open_design_record` | `{ id }` | The design record (schema 1.1) with that `design_id`, checked by `DesignRecord::from_json` |
+| `list_design_decisions` | `{ project_id }` | Decision entries, oldest first, from the sidecar `<runs>/designs/decisions/<project_id>.json` (`marinaframe.design_decisions.v0`, `app/src-tauri/src/decisions.rs`; interim until schema 1.2). No file gives `[]` |
+| `append_design_decision` | `{ project_id, decision: { candidate_id, action: accepted\|deferred\|rejected, discipline: basic_design\|structure\|machinery\|outfitting\|accommodation, reason, designer_id } }` | The new entry. The backend sets `id`, `recorded_at` (UTC) and `status: "draft"`; the file is append-only. Refused when the candidate's `lineage.parent_design_id` is not `project_id`, or when `reason` (max 2000 characters) or `designer_id` (max 80) is empty. The static web demo refuses it as read-only |
 
 Live updates: the backend emits the event `task-changed` with `{ task, sequence }` when a
 watched task's event count grows (poll every 500 ms or file watch).

@@ -224,6 +224,17 @@ export function createStaticBackend({ fetchImpl = (...args) => fetch(...args), b
     async list_datasets() {
       return [];
     },
+    // The demo exports runs only, no design records: the Designs page shows its empty state
+    // instead of a read-only error. Recording a decision is a change, so it is refused.
+    async list_design_records() {
+      return [];
+    },
+    async open_design_record() {
+      throw new BackendError('design_not_found', 'The demo has no design records.');
+    },
+    async list_design_decisions() {
+      return [];
+    },
     async dismiss_notice({ id }) {
       dismissed.add(id);
       return { ok: true };

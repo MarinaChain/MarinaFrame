@@ -179,13 +179,20 @@ test('every command that starts or changes a run is refused as read-only', async
     'start_run', 'start_sample_run', 'prepare_intake', 'start_intake_run', 'cancel_intake', 'export_run',
     'reveal_export', 'review_component', 'revise_part', 'keep_part_revision', 'undo_part_revision', 'sign_off',
     'replace_sheet', 'cancel_task', 'resume_task', 'choose_line', 'revise_region', 'force_keep_revision',
-    'set_settings', 'plan_batch', 'queue_batch', 'remove_queued', 'move_queued', 'get_model_usage',
+    'set_settings', 'append_design_decision', 'plan_batch', 'queue_batch', 'remove_queued', 'move_queued', 'get_model_usage',
     'toString', 'constructor', '__proto__',
   ];
   for (const command of writes) {
     await assert.rejects(demo.invoke(command, { task: TASK }), { code: READ_ONLY_CODE, message: READ_ONLY_MESSAGE }, command);
   }
   assert.deepEqual(requested, [], 'a refused command reads no file');
+});
+
+test('the demo has no design records: the lists are empty and a record is not found', async () => {
+  const demo = backend(demoFiles());
+  assert.deepEqual(await demo.invoke('list_design_records'), []);
+  assert.deepEqual(await demo.invoke('list_design_decisions', { project_id: 'any' }), []);
+  await assert.rejects(demo.invoke('open_design_record', { id: 'any' }), { code: 'design_not_found' });
 });
 
 test('the transport is read-only, with no pickers, drops or live updates', async () => {

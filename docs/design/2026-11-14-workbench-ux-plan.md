@@ -186,9 +186,13 @@ Progress (resume here):
 - Small fixes, done (2026-11-14): the Lite "Not supplied" list leaves out the customer ID and the
   decisions field; "Needs you" cards show the vessel thumbnail.
 - Next: the Lite brief that runs the full loop and returns 3 candidates (needs the loop command);
-  phase 3 (References). Open details: the HTTP server backend has no design commands; Overview
-  cards still round a 0.1 m length change away; the Candidates tab refreshes only when reopened
-  after a decision is recorded; dominated points are only a little greyer than front points in dark.
+  phase 3 (References).
+- Small fixes after phase 2: dominated points use a neutral grey in both themes (dark used a
+  dark blue); the web demo answers the design read commands with empty lists instead of a
+  read-only error; `docs/APP_SPEC.md` lists the four design commands, so an HTTP backend can
+  serve them (none exists in this repository). Checked and already correct: a length shows two
+  decimals, so a 0.1 m change is visible, and Candidates shows a new decision when it is opened
+  after the Decisions tab.
 - Open: a yard designer must review `app/ui/js/strings/glossary.js` before the pilot.
 
 ## 7. Founder decisions (2026-11-14)

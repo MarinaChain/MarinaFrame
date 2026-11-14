@@ -194,6 +194,10 @@
   --accent-strong: var(--brand);
   --accent-soft: var(--brand-soft);
   --muted-soft: rgba(16, 29, 48, 0.06);
+  /* Pareto chart: dominated candidates are neutral grey, never a tint of the brand blue. */
+  --pareto-dominated: #C8CFD9;
+  --pareto-dominated-line: #7F899C;
+  --pareto-dominated-text: #5F6B7E; /* 5.3:1 for the small label; the line grey is 3.5:1 */
 }
 
 /* ---- Dark (navy). Written twice: system dark and chosen dark. */
@@ -241,6 +245,9 @@
     --guess-text: #F5B14C;
     --guess-soft: rgba(245, 177, 76, 0.15);
     --muted-soft: rgba(230, 237, 247, 0.08);
+  --pareto-dominated: #3E4654;
+  --pareto-dominated-line: #8E96A3;
+  --pareto-dominated-text: #8E96A3;
   }
 }
 
@@ -287,6 +294,9 @@
   --guess-text: #F5B14C;
   --guess-soft: rgba(245, 177, 76, 0.15);
   --muted-soft: rgba(230, 237, 247, 0.08);
+  --pareto-dominated: #3E4654;
+  --pareto-dominated-line: #8E96A3;
+  --pareto-dominated-text: #8E96A3;
 }
 
 /* ------------------------------------------------------------------ Base */
@@ -4054,9 +4064,9 @@ fieldset[data-invalid="true"] .decision-action span { border-color: var(--fail);
 .pareto-body .pareto-legend { flex: 0 1 auto; flex-direction: column; gap: var(--space-sm); padding: var(--space-sm) var(--space-md); border: 1px solid var(--rule); border-radius: var(--radius-md); }
 @media (max-width: 900px) { .pareto-body .pareto-legend { flex-direction: row; border: 0; padding: 0; } }
 .pareto-marker { fill: var(--brand); stroke: var(--surface); stroke-width: 1.5; }
-.pareto-point[data-state="dominated"] .pareto-marker { fill: var(--rule-strong); stroke: var(--muted-line); }
-.pareto-point[data-state="dominated"] .pareto-bar line { stroke: var(--muted-line); }
-.pareto-point[data-state="dominated"] .pareto-label { fill: var(--ink-3); }
+.pareto-point[data-state="dominated"] .pareto-marker { fill: var(--pareto-dominated); stroke: var(--pareto-dominated-line); }
+.pareto-point[data-state="dominated"] .pareto-bar line { stroke: var(--pareto-dominated-line); opacity: 0.75; }
+.pareto-point[data-state="dominated"] .pareto-label { fill: var(--pareto-dominated-text); font-weight: 600; }
 .pareto-point[data-fails="true"] .pareto-marker { stroke: var(--fail); stroke-width: 2; }
 .pareto-point[data-state="reference"] .pareto-marker { fill: var(--surface); stroke: var(--ink); stroke-width: 2; }
 .pareto-hatch-bg.pareto-hatch-front { fill: var(--brand-soft); }
