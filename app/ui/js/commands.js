@@ -1,5 +1,6 @@
 // App-wide input: the sidebar, the command palette, the shortcut sheet and keyboard shortcuts.
 
+import { t } from './i18n.js';
 import { prefs, state, currentSection, isRunning } from './app_state.js';
 import * as fmt from './format.js';
 import { $ } from './ui_kit.js';
@@ -29,9 +30,9 @@ function setRail(mode, { remember = true } = {}) {
   $('app').dataset.rail = collapsed ? 'collapsed' : 'expanded';
   const toggle = $('rail-toggle');
   toggle.setAttribute('aria-expanded', String(!collapsed));
-  const label = collapsed ? 'Expand the sidebar (⌘\\)' : 'Collapse the sidebar (⌘\\)';
-  toggle.title = label;
-  toggle.setAttribute('aria-label', label.replace(/ \(.*\)$/, ''));
+  const label = t(collapsed ? 'shell.rail.expand' : 'shell.rail.collapse');
+  toggle.title = `${label} (⌘\\)`;
+  toggle.setAttribute('aria-label', label);
   if (remember) prefs.set(railPrefKey(), collapsed ? 'collapsed' : 'expanded');
 }
 // A narrow window (under 1100 px) starts with the sidebar collapsed; the person's own choice
@@ -60,39 +61,40 @@ function paletteCommands() {
   const onRun = state.route === 'run' && state.view;
   if (onRun) {
     const sections = state.view.sections || [];
-    if (sections.some(needsCheck)) add('Review', 'Next section to check', () => { setVesselTab('run'); nextToCheck(); }, { keys: 'N' });
-    if (canDecide() && acceptCandidate(currentSection())) add('Review', `Accept the guess at ${fmt.metres(currentSection().x_m)}`, () => decide(currentSection(), acceptCandidate(currentSection())), { keys: 'A' });
-    if (canDecide() && otherCandidate(currentSection())) add('Review', `Use the other line at ${fmt.metres(currentSection().x_m)}`, () => decide(currentSection(), otherCandidate(currentSection())), { keys: 'O' });
-    if (!isRunning()) add('Review', 'Mark the drawing', () => { setVesselTab('run'); markTool.setActive(true); }, { keys: 'M' });
+    if (sections.some(needsCheck)) add(t('ko3.commands.review'), t('ko3.commands.nextSectionToCheck'), () => { setVesselTab('run'); nextToCheck(); }, { keys: 'N' });
+    if (canDecide() && acceptCandidate(currentSection())) add(t('ko3.commands.review'), t('ko3.acceptAt', { place: fmt.metres(currentSection().x_m) }), () => decide(currentSection(), acceptCandidate(currentSection())), { keys: 'A' });
+    if (canDecide() && otherCandidate(currentSection())) add(t('ko3.commands.review'), t('ko3.otherAt', { place: fmt.metres(currentSection().x_m) }), () => decide(currentSection(), otherCandidate(currentSection())), { keys: 'O' });
+    if (!isRunning()) add(t('ko3.commands.review'), t('ko3.commands.markTheDrawing'), () => { setVesselTab('run'); markTool.setActive(true); }, { keys: 'M' });
     for (const section of sections) {
-      add('Stations', `Section at ${fmt.metres(section.x_m)}`, () => { setVesselTab('run'); selectSection(section.id); },
+      add(t('ko3.commands.stations'), t('ko3.stationAt', { place: fmt.metres(section.x_m) }), () => { setVesselTab('run'); selectSection(section.id); },
         { hint: fmt.sectionStateLabel(section.state) });
     }
-    add('This vessel', 'Run', () => setVesselTab('run'));
-    if (state.view.components?.length) add('This vessel', 'Parts', () => setVesselTab('parts'), { hint: 'hull, decks, deckhouses' });
+    add(t('ko3.commands.thisVessel'), t('ko3.commands.run'), () => setVesselTab('run'));
+    if (state.view.components?.length) add(t('ko3.commands.thisVessel'), t('ko3.commands.parts'), () => setVesselTab('parts'), { hint: t('ko3.commands.hullDecksDeckhouses') });
     for (const part of state.view.components || []) {
-      add('Parts', part.label, () => { setVesselTab('parts'); parts.selectPart(part.id); }, { hint: partState(part).word });
+      add(t('ko3.commands.parts'), part.label, () => { setVesselTab('parts'); parts.selectPart(part.id); }, { hint: partState(part).word });
     }
-    add('This vessel', 'Sources', () => setVesselTab('sources'), { hint: 'drawings, sheets and spec inputs' });
-    add('This vessel', 'Export', () => setVesselTab('export'), { hint: 'STEP, STL, offsets, hydrostatics, report' });
-    add('This vessel', 'History', () => setVesselTab('history'));
-    add('Layout', 'Drawing only', () => setLayout('drawing'), { keys: '⌘1' });
-    add('Layout', 'Drawing and model', () => setLayout('split'), { keys: '⌘2' });
-    add('Layout', 'Model only', () => setLayout('model'), { keys: '⌘3' });
-    add('Layout', detailsAreOpen() ? 'Hide details' : 'Show details', toggleDetails, { keys: '⌘4' });
+    add(t('ko3.commands.thisVessel'), t('ko3.commands.sources'), () => setVesselTab('sources'), { hint: t('ko3.commands.drawingsSheetsAndSpecInputs') });
+    add(t('ko3.commands.thisVessel'), t('ko3.commands.export'), () => setVesselTab('export'), { hint: t('ko3.commands.stepSTLOffsetsHydrostaticsReport') });
+    add(t('ko3.commands.thisVessel'), t('ko3.commands.history'), () => setVesselTab('history'));
+    add(t('ko3.commands.layout'), t('ko3.commands.drawingOnly'), () => setLayout('drawing'), { keys: '⌘1' });
+    add(t('ko3.commands.layout'), t('ko3.commands.drawingAndModel'), () => setLayout('split'), { keys: '⌘2' });
+    add(t('ko3.commands.layout'), t('ko3.commands.modelOnly'), () => setLayout('model'), { keys: '⌘3' });
+    add(t('ko3.commands.layout'), detailsAreOpen() ? t('ko3.commands.hideDetails') : t('ko3.commands.showDetails'), toggleDetails, { keys: '⌘4' });
   }
   for (const vessel of groupVessels(state.tasks)) {
-    add('Vessels', vessel.name, () => { setVesselTab('run'); openTask(vessel.latest.task); }, { hint: fmt.statusLabel(vessel.latest.status) });
+    add(t('ko3.commands.vessels'), vessel.name, () => { setVesselTab('run'); openTask(vessel.latest.task); }, { hint: fmt.statusLabel(vessel.latest.status) });
   }
-  add('Go to', 'Home', () => navigate('home'));
-  add('Go to', 'Queue', () => navigate('queue'));
-  add('Go to', 'Settings', () => openSettings(), { keys: '⌘,' });
-  add('Go to', 'Setup check', () => navigate('welcome'));
-  add('Help', 'Keyboard shortcuts', () => shortcutSheet.open(), { keys: '?' });
-  for (const theme of THEME_ORDER) add('Theme', `${THEME_WORD[theme]} theme`, () => setThemeChoice(theme));
-  add('Start', 'New vessel from drawings', () => chooseDrawingSet(), { keys: '⌘N' });
-  add('Start', 'New vessels from a folder', () => chooseDrawingFolder(), { hint: 'one run per drawing set' });
-  add('Start', 'Open the sample vessel', () => startSampleRun(), { hint: 'a generated drawing, no AI cost' });
+  add(t('ko3.commands.goTo'), t('ko3.commands.home'), () => navigate('home'));
+  add(t('design.goTo'), t('design.title'), () => navigate('designs'));
+  add(t('ko3.commands.goTo'), t('ko3.commands.queue'), () => navigate('queue'));
+  add(t('ko3.commands.goTo'), t('ko3.commands.settings'), () => openSettings(), { keys: '⌘,' });
+  add(t('ko3.commands.goTo'), t('ko3.commands.setupCheck'), () => navigate('welcome'));
+  add(t('ko3.commands.help'), t('ko3.commands.keyboardShortcuts'), () => shortcutSheet.open(), { keys: '?' });
+  for (const theme of THEME_ORDER) add(t('ko3.commands.theme'), t('ko3.theme', { theme: THEME_WORD[theme] }), () => setThemeChoice(theme));
+  add(t('ko3.commands.start'), t('ko3.commands.newVesselFromDrawings'), () => chooseDrawingSet(), { keys: '⌘N' });
+  add(t('ko3.commands.start'), t('ko3.commands.newVesselsFromAFolder'), () => chooseDrawingFolder(), { hint: t('ko3.commands.oneRunPerDrawingSet') });
+  add(t('ko3.commands.start'), t('ko3.commands.openTheSampleVessel'), () => startSampleRun(), { hint: t('ko3.commands.aGeneratedDrawingNoAICost') });
   return list;
 }
 

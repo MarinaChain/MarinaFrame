@@ -95,3 +95,16 @@ test('with no clear place on the line, the label keeps its first place', () => {
   const everywhere = { left: -1e4, top: -1e4, right: 1e4, bottom: 1e4 };
   assert.deepEqual(labelSpot({ x: 0, y: 0 }, { x: 100, y: 0 }, [everywhere]), { x: 22, y: -10 });
 });
+
+test('a GA reading run speaks about the reading, not about hull sections', async () => {
+  const { isGaRun, statusSentence } = await import('../ui/js/run_status.js');
+  const ga_reading = {
+    particulars: { loa_m: { value: 24, status: 'read' }, lbp_m: { value: 22, status: 'guessed' } },
+    counts: { cargo_holds: { value: 0, status: 'read' } },
+  };
+  const view = { summary: { status: 'draft' }, sections: [], model: null, ga_reading };
+  assert.equal(isGaRun(view), true);
+  assert.equal(isGaRun({ ...view, model: {} }), false);
+  const { parts } = statusSentence(view);
+  assert.deepEqual(parts.slice(1), ['GA reading', '2 of 13 values read', '1 best guess']);
+});

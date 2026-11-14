@@ -6,6 +6,8 @@ import { el, fill, icon, svg } from './dom.js';
 import * as fmt from './format.js';
 import { $, chevron } from './ui_kit.js';
 import { needsCheck, sectionShapePath } from './run_facts.js';
+import { isGaRun } from './run_status.js';
+import { t } from './i18n.js';
 import { stateGlyph, sourceGlyph, glyphChip } from './glyphs.js';
 import { tipAttributes } from './tooltip.js';
 import { areas, openDetailsForReview } from './inspector.js';
@@ -35,9 +37,10 @@ function stripEmpty() {
   if (isRunning()) {
     const placeholders = Array.from({ length: STRIP_PLACEHOLDER_TILES }, () => el('div', { class: 'tile tile-placeholder', 'aria-hidden': 'true' }));
     return [el('p', { class: 'strip-empty strip-waiting', role: 'status' },
-      el('span', { class: 'spinner', 'aria-hidden': 'true' }), 'Sections appear here as the AI reads them.'), ...placeholders];
+      el('span', { class: 'spinner', 'aria-hidden': 'true' }), t('ko3.run_strip.sectionsAppearHereAsTheAIReadsThem')), ...placeholders];
   }
-  return el('p', { class: 'strip-empty' }, 'This run found no sections on the drawing.');
+  if (isGaRun(state.view)) return el('p', { class: 'strip-empty' }, t('ga.noSections'));
+  return el('p', { class: 'strip-empty' }, t('ko3.run_strip.thisRunFoundNoSectionsOnTheDrawing'));
 }
 
 /** Select the next section to check after the current one (wraps to the first). */
@@ -59,7 +62,7 @@ function renderStripHead() {
   const head = $('strip-head');
   head.hidden = !sections.length;
   if (!sections.length) return;
-  const tip = tipAttributes(`${open} of ${fmt.plural(sections.length, 'section')} to check`);
+  const tip = tipAttributes(t('ko3.toCheck', { open, sections: fmt.plural(sections.length, 'section') }));
   fill(head, el('span', { class: 'strip-count', role: 'img', tabindex: '0', dataset: { open: String(open > 0) }, ...tip.attrs },
     icon('flag'), el('strong', { 'aria-hidden': 'true' }, String(open)), el('span', { 'aria-hidden': 'true' }, `/${sections.length}`)));
 }
@@ -86,7 +89,7 @@ export function renderStrip() {
       role: 'option',
       id: `tile-${section.id}`,
       'aria-selected': String(section.id === state.sectionId),
-      'aria-label': `Section at ${fmt.metres(section.x_m)}: ${fmt.sectionStateLabel(section.state)}${section.source ? `, ${fmt.sourceLabel(section.source.label)}` : ''}`,
+      'aria-label': t('ko3.sectionLabel', { place: fmt.metres(section.x_m), state: fmt.sectionStateLabel(section.state), source: section.source ? `, ${fmt.sourceLabel(section.source.label)}` : '' }),
       dataset: { section: section.id, state: section.state, source: section.source?.label },
       onclick: () => { evidence.hide(); selectSection(section.id); },
       onmouseenter: (event) => evidence.hoverStart(event.currentTarget, section),
@@ -105,7 +108,7 @@ export function renderStrip() {
       section.source ? sourceGlyph(section.source.label, { focusable: false, hoverTip: false }) : null),
     el('span', { class: 'tile-chips' },
       Number.isFinite(ink.get(section.id))
-        ? el('span', { class: 'tile-ink', title: 'Distance of the built section from the ink on the drawing (RMS), newest scored revision' }, fmt.millimetres(ink.get(section.id)))
+        ? el('span', { class: 'tile-ink', title: t('ko3.run_strip.inkDistanceHelp') }, fmt.millimetres(ink.get(section.id)))
         : null));
   }));
   strip.setAttribute('aria-activedescendant', `tile-${state.sectionId}`);
@@ -142,18 +145,18 @@ export function renderSelection() {
   const section = currentSection();
 
   if (!view) {
-    fill(head, el('h2', {}, 'Section'));
-    fill(body, el('p', { class: 'selection-empty' }, (state.task || state.pendingOpen) ? 'Opening the run…' : 'Open a run to see its sections.'));
+    fill(head, el('h2', {}, t('ko3.run_strip.section')));
+    fill(body, el('p', { class: 'selection-empty' }, (state.task || state.pendingOpen) ? t('ko3.run_strip.openingTheRun') : t('ko3.run_strip.openARunToSeeItsSections')));
     return;
   }
   if (!section) {
-    fill(head, el('h2', {}, 'Section'));
-    fill(body, el('p', { class: 'selection-empty' }, isRunning() ? 'Sections appear here as the run reads them.' : 'This run has no sections.'));
+    fill(head, el('h2', {}, t('ko3.run_strip.section')));
+    fill(body, el('p', { class: 'selection-empty' }, isRunning() ? t('ko3.run_strip.sectionsAppearHereAsTheRunReadsThem') : t('ko3.run_strip.thisRunHasNoSections')));
     return;
   }
 
   fill(head,
-    el('h2', {}, el('span', { class: 'visually-hidden' }, 'Section at '), fmt.metres(section.x_m)),
+    el('h2', {}, el('span', { class: 'visually-hidden' }, t('ko3.run_strip.sectionAt')), fmt.metres(section.x_m)),
     stateGlyph(section.state, { small: false }),
     section.source ? sourceGlyph(section.source.label, { detail: section.source.basis || null, small: false }) : null,
   );
@@ -176,12 +179,12 @@ export function renderSelection() {
     const coveredByBar = candidate === otherCandidate(section) && needsCheck(section);
     if (guessedLine) {
       trailing = stateGlyph('guessed');
-    } else if (candidate.chosen) trailing = glyphChip('st-chosen', 'In use', { tone: 'brand' });
+    } else if (candidate.chosen) trailing = glyphChip('st-chosen', t('ko3.run_strip.inUse'), { tone: 'brand' });
     else if (candidate.selectable && coveredByBar) {
-      const tip = tipAttributes('Other line (O)', 'Use it with Other line above.');
+      const tip = tipAttributes(t('ko3.run_strip.otherLineO'), t('ko3.run_strip.useItWithOtherLineAbove'));
       trailing = el('kbd', { class: 'key-hint cand-key', role: 'img', tabindex: '0', ...tip.attrs }, 'O', tip.describer);
     } else if (candidate.selectable) {
-      const label = guessedSection ? 'Use instead' : 'Use';
+      const label = guessedSection ? t('ko3.run_strip.useInstead') : t('ko3.run_strip.use');
       if (guessedSection) action = chooseButton(section, candidate, label, canChoose, false);
       else trailing = chooseButton(section, candidate, label, canChoose, false);
     }
@@ -199,7 +202,7 @@ export function renderSelection() {
 
   fill(body,
     decisionBar(section),
-    rows.length ? el('div', { class: 'cand-list', role: 'list', 'aria-label': 'Lines found in this section' }, ...rows) : null,
+    rows.length ? el('div', { class: 'cand-list', role: 'list', 'aria-label': t('ko3.run_strip.linesFoundInThisSection') }, ...rows) : null,
     selectionWhy(section),
   );
 }
@@ -217,8 +220,8 @@ function selectionWhy(section) {
     el('summary', {},
       chevron(),
       icon(facts ? 'lines' : 'info'),
-      el('span', { class: 'selection-fact' }, facts || section.reason || 'Why'),
-      el('span', { class: 'selection-why-word' }, 'Why')),
+      el('span', { class: 'selection-fact' }, facts || section.reason || t('ko3.run_strip.why')),
+      el('span', { class: 'selection-why-word' }, t('ko3.run_strip.why'))),
     el('div', { class: 'selection-why selectable-text' },
       facts || !section.reason ? (section.reason ? el('p', {}, section.reason) : null) : null,
       section.source?.basis ? el('p', {}, el('strong', {}, `${fmt.sourceLabel(section.source.label)}: `), section.source.basis) : null,
@@ -258,30 +261,30 @@ function decisionBar(section) {
   const accept = acceptCandidate(section);
   const other = otherCandidate(section);
   const key = (letter) => el('kbd', { class: 'key-hint' }, letter);
-  return el('div', { class: 'decision-bar write-action', role: 'group', 'aria-label': 'Decide this section' },
+  return el('div', { class: 'decision-bar write-action', role: 'group', 'aria-label': t('ko3.run_strip.decideThisSection') },
     accept ? el('button', {
       class: 'btn btn-primary',
       type: 'button',
       disabled: !canChoose,
-      title: `Accept the guessed ${accept.label.toLowerCase()} (A)`,
+      title: t('ko3.accept', { line: accept.label.toLowerCase() }),
       onclick: () => decide(section, accept),
-    }, 'Accept', key('A')) : null,
+    }, t('ko3.run_strip.accept'), key('A')) : null,
     other ? el('button', {
       class: 'btn',
       type: 'button',
       disabled: !canChoose,
-      title: `Use the ${other.label.toLowerCase()} instead (O)`,
+      title: t('ko3.other', { line: other.label.toLowerCase() }),
       onclick: () => decide(section, other),
-    }, 'Other line', key('O')) : null,
+    }, t('ko3.run_strip.otherLine'), key('O')) : null,
     el('button', {
       class: 'btn',
       type: 'button',
       disabled: isRunning(),
-      title: 'Mark part of the drawing and say what to fix (M)',
+      title: t('ko3.run_strip.markPartOfTheDrawingAndSayWhatToFixM'),
       onclick: () => markTool.setActive(true),
-    }, 'Mark', key('M')),
+    }, t('ko3.run_strip.mark'), key('M')),
     !accept && !other
-      ? el('span', { class: 'decision-hint' }, section.candidates.some((c) => c.selectable) ? 'Pick a line below' : 'No line to pick: mark the drawing')
+      ? el('span', { class: 'decision-hint' }, section.candidates.some((c) => c.selectable) ? t('ko3.run_strip.pickALineBelow') : t('ko3.run_strip.noLineToPickMarkTheDrawing'))
       : null);
 }
 
@@ -290,16 +293,20 @@ function chooseButton(section, candidate, label, canChoose, primary) {
     class: primary ? 'btn btn-small btn-primary write-action' : 'btn btn-small write-action',
     type: 'button',
     disabled: !canChoose,
-    title: isRunning() ? 'Available when the run stops' : `${label}: the ${candidate.label.toLowerCase()}`,
+    title: isRunning() ? t('ko3.run_strip.availableWhenTheRunStops') : t('ko3.useLine', { label, line: candidate.label.toLowerCase() }),
     onclick: () => chooseLine(section, candidate),
   }, label);
+}
+
+/** Progress text for a line choice, resolved in the current language. */
+function lineChoiceProgress(confirming, label, x) {
+  return t(confirming ? 'ko3.confirmLine' : 'ko3.useLineProgress', { line: label.toLowerCase(), place: fmt.metres(x) });
 }
 
 async function chooseLine(section, candidate) {
   const task = state.task;
   const confirming = section.state === 'guessed' && candidate.chosen;
-  const verb = confirming ? 'Confirming' : 'Using';
-  const done = await runAction(`${verb} the ${candidate.label.toLowerCase()} at ${fmt.metres(section.x_m)}, then rebuilding…`, () =>
+  const done = await runAction(lineChoiceProgress(confirming, candidate.label, section.x_m), () =>
     invoke('choose_line', { task, section_id: section.id, candidate_id: candidate.id }));
   if (done && task === state.task) {
     await loadTask();

@@ -37,8 +37,11 @@ function serve() {
 }
 
 // ---- Screens. `prepare` runs in the page (it is serialised, so it uses only its argument).
-async function prepare({ vessel, tab, vesselTab, open }) {
+async function prepare({ vessel, tab, vesselTab, open, designTab }) {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  if (designTab) { document.getElementById(`design-tab-${designTab}`).click(); await wait(300); }
+  if (open === 'decision-errors') { document.querySelector('.decision-form button[type="submit"]').click(); await wait(200); }
+  if (open === 'design-warnings') { document.querySelector('.design-advanced .design-warning-toggle').click(); await wait(200); }
   if (vessel) {
     const card = [...document.querySelectorAll('#vessel-grid > *')].find((c) => c.textContent.includes(vessel));
     (card.querySelector('button, a') || card).click();
@@ -68,17 +71,51 @@ async function prepare({ vessel, tab, vesselTab, open }) {
     [...document.querySelectorAll('.parts-page .parts-row')].find((b) => b.textContent.includes('fresh water')).click();
     await wait(400);
   }
+  if (open === 'value-display') {
+    const { valueDisplay } = await import('/js/value_display.js');
+    const { createGaPanel } = await import('/js/ga_panel.js');
+    const panel = createGaPanel({ onHover() {}, onSelect() {} });
+    panel.set({
+      particulars: { loa_m: { value: 123.45, status: 'read', printed: '123.45 m' } },
+      counts: { cargo_holds: { value: 0, status: 'guessed' } },
+      measured: { lbp_m: { value: 120, status: 'unconfirmed_from_uncertain_boxes' } },
+    });
+    const main = document.querySelector('main');
+    main.replaceChildren(main.querySelector('h1'), panel.element,
+      valueDisplay({ value: 1234.5, unit: 'm', uncertainty: { plusMinus: 2 }, method: 'empirical', status: 'needs_review', source: 'Synthetic source' }),
+      valueDisplay({ value: null, unit: 'm', method: 'cfd' }));
+  }
   if (open === 'shortcuts') { document.body.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true })); await wait(300); }
 }
 
 const SCREENS = [
+  { name: 'designs', path: '/#designs' },
+  { name: 'design overview', path: '/#design/public-kvlcc2-example' },
+  { name: 'design performance', path: '/#design/public-kvlcc2-example', steps: { designTab: 'performance' } },
+  { name: 'design provenance', path: '/#design/public-kvlcc2-example', steps: { designTab: 'provenance' } },
+  { name: 'design variant (change from parent)', path: '/#design/synthetic-kvlcc2-candidate-c' },
+  { name: 'design all warnings', path: '/#design/public-kvlcc2-example', steps: { open: 'design-warnings' } },
+  { name: 'design requirements', path: '/#design/public-kvlcc2-example', steps: { designTab: 'requirements' } },
+  { name: 'design weights (empty sections)', path: '/#design/public-kvlcc2-example', steps: { designTab: 'weights' } },
+  // Phase 2: a project's tabs open from a deep link (#design/<id>/<tab>).
+  { name: 'design candidates', path: '/#design/public-kvlcc2-example/candidates' },
+  { name: 'design compare (Pareto chart)', path: '/#design/public-kvlcc2-example/compare' },
+  { name: 'design decisions', path: '/#design/public-kvlcc2-example/decisions' },
+  { name: 'design decisions (form errors)', path: '/#design/public-kvlcc2-example/decisions', steps: { open: 'decision-errors' } },
+  { name: 'design compare (Korean)', path: '/#design/public-kvlcc2-example/compare', prefs: { language: 'ko' } },
+  { name: 'design decisions (Korean)', path: '/#design/public-kvlcc2-example/decisions', prefs: { language: 'ko' } },
+  { name: 'design Lite', path: '/#design/public-kvlcc2-example', prefs: { interfaceMode: 'lite' } },
+  { name: 'design Lite (Korean)', path: '/#design/public-kvlcc2-example', prefs: { language: 'ko', interfaceMode: 'lite' } },
   { name: 'welcome', path: '/?mocknokey#home', seen: false },
   { name: 'home', path: '/#home' },
+  { name: 'value display and GA rows', path: '/#home', steps: { open: 'value-display' } },
+  { name: 'value display and GA rows (Korean)', path: '/#home', prefs: { language: 'ko' }, steps: { open: 'value-display' } },
   { name: 'home (first start)', path: '/?mockempty#home' },
   { name: 'queue', path: '/#queue' },
   { name: 'batch sheet', path: '/#home', steps: { open: 'batch' } },
   { name: 'queue (waiting sets)', path: '/?mockbatchfail#home', steps: { open: 'batch-queue' } },
   { name: 'settings', path: '/#settings' },
+  { name: 'settings (Korean, Lite)', path: '/#settings', prefs: { language: 'ko', interfaceMode: 'lite' } },
   { name: 'settings (key usage)', path: '/?mockusagefull#settings', steps: { open: 'usage' } },
   { name: 'intake', path: '/#home', steps: { open: 'intake' } },
   { name: 'intake (10 sheets)', path: '/?mockset=10#home', steps: { open: 'intake' } },
@@ -105,9 +142,16 @@ try {
     for (const screen of SCREENS) {
       const context = await browser.newContext({ viewport: VIEWPORT, colorScheme: scheme, bypassCSP: true });
       const page = await context.newPage();
-      if (screen.seen !== false) await page.addInitScript(() => localStorage.setItem('marinaframe.ui', JSON.stringify({ setupSeen: true })));
+      if (screen.seen !== false) {
+        await page.addInitScript((prefs) => localStorage.setItem('marinaframe.ui', JSON.stringify({ setupSeen: true, ...prefs })), screen.prefs || {});
+      }
       await page.goto(base + screen.path);
       await page.waitForTimeout(1500);
+      if (screen.name.startsWith('design')) {
+        const selector = screen.path.endsWith('#designs') ? '#view-designs tbody tr' : '#design-tab-overview';
+        await page.waitForSelector(selector, { state: 'attached' });
+        if (await page.locator('#view-designs [role="alert"]').count()) throw new Error('Design did not load');
+      }
       if (screen.steps) await page.evaluate(prepare, screen.steps);
       await page.addScriptTag({ path: AXE_PATH });
       const violations = await page.evaluate(async () => (await window.axe.run(document, { resultTypes: ['violations'] })).violations

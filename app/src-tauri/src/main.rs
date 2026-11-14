@@ -16,7 +16,63 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::{Emitter, Manager, State};
 
+mod decisions;
+mod designs;
+
 type Shared<'a> = State<'a, Arc<Backend>>;
+
+#[tauri::command(rename_all = "snake_case")]
+async fn list_design_records(backend: Shared<'_>) -> Result<Vec<designs::DesignSummary>, AppError> {
+    run(backend, |b| {
+        designs::list(std::path::Path::new(&b.get_settings().runs_folder))
+            .map_err(|e| AppError::new("design_record", &e))
+    })
+    .await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+async fn open_design_record(
+    backend: Shared<'_>,
+    id: String,
+) -> Result<serde_json::Value, AppError> {
+    run(backend, move |b| {
+        designs::open(std::path::Path::new(&b.get_settings().runs_folder), &id)
+            .map_err(|e| AppError::new("design_record", &e))
+    })
+    .await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+async fn list_design_decisions(
+    backend: Shared<'_>,
+    project_id: String,
+) -> Result<Vec<serde_json::Value>, AppError> {
+    run(backend, move |b| {
+        decisions::list(
+            std::path::Path::new(&b.get_settings().runs_folder),
+            &project_id,
+        )
+        .map_err(|e| AppError::new("design_decision", &e))
+    })
+    .await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+async fn append_design_decision(
+    backend: Shared<'_>,
+    project_id: String,
+    decision: decisions::NewDecision,
+) -> Result<serde_json::Value, AppError> {
+    run(backend, move |b| {
+        decisions::append(
+            std::path::Path::new(&b.get_settings().runs_folder),
+            &project_id,
+            decision,
+        )
+        .map_err(|e| AppError::new("design_decision", &e))
+    })
+    .await
+}
 
 /// Run blocking backend work off the UI thread.
 async fn run<T: Send + 'static>(
@@ -566,6 +622,10 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            list_design_records,
+            open_design_record,
+            list_design_decisions,
+            append_design_decision,
             list_tasks,
             get_task,
             get_events,

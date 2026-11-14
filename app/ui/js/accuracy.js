@@ -5,9 +5,12 @@
 // result is approved or verified: the bands are measurements on other ships, not a check of this run.
 // tests/fixtures/accuracy_summary_cases.json is run by both the Python and the JavaScript tests.
 
+import { t } from './i18n.js';
+
 import { el, icon } from './dom.js';
 import { glyphChip } from './glyphs.js';
 import { BANDS } from './accuracy_bands.js';
+import { valueDisplay } from './value_display.js';
 
 export const DRAFT_NOTE = 'Draft only. engineering_approved stays false; a naval architect decides what to trust.';
 export const SCOPE_NOTE = 'Bands are measured on other ships and sheets, not on this run. Where a band says not measured, nothing is known.';
@@ -28,16 +31,29 @@ const TANK_HEAD_IDS = {
   unknown: ['tanks.vector_gunnerus', 'tanks.raster_holdout'],
 };
 const STEEL_HEAD_IDS = ['steel.positions', 'steel.weight'];
-const NOT_PRESENT = { tanks: 'Tanks: none in this run.', steel: 'Steel: none in this run.' };
 const WEAK = new Set(['missed', 'mixed', 'not measured']);
 
 /** Icon of each output chip (index.html sprite). */
 export const OUTPUT_ICONS = { hull: 'waterline', tanks: 'drop', steel: 'frames' };
-export const OUTPUT_NAMES = { hull: 'Hull', tanks: 'Tanks', steel: 'Steel' };
+export const OUTPUT_NAMES = {
+  get hull() { return t('term.hull'); },
+  get tanks() { return t('term.tank'); },
+  get steel() { return t('term.steel'); },
+};
 
 export const band = (id) => BANDS.find((b) => b.id === id);
 const validIds = (ids) => ids.filter((id) => band(id).outcome !== 'invalid');
-const bandsOf = (ids) => validIds(ids).map(band);
+function translatedBand(measurement) {
+  const key = `ko2.accuracy.band.${measurement.id}`;
+  const text = { ...measurement };
+  for (const field of ['short', 'scope', 'n', 'caveat', 'chip']) {
+    const fieldKey = `${key}.${field}`;
+    const translated = t(fieldKey);
+    if (translated !== fieldKey) text[field] = translated;
+  }
+  return text;
+}
+const bandsOf = (ids) => validIds(ids).map((id) => translatedBand(band(id)));
 const bandsFor = (output) => BANDS.filter((b) => b.output === output && b.outcome !== 'invalid').map((b) => b.id);
 const count = (labels, ...names) => names.reduce((sum, name) => sum + Number(labels?.[name] || 0), 0);
 const total = (labels) => Object.values(labels || {}).reduce((sum, n) => sum + Number(n || 0), 0);
@@ -50,18 +66,18 @@ function hull(facts) {
   const headIds = validIds(path === 'scanned_body_plan' ? SCANNED_HEAD_IDS[hullType || 'unknown'] : HULL_DETAIL_IDS[path]);
   const head = bandsOf(headIds);
   let text = head.map((b) => b.short).join('; ');
-  if (path === 'scanned_body_plan' && !hullType) text += ' (hull type not known)';
-  const parts = [`Hull: ${text}`];
+  if (path === 'scanned_body_plan' && !hullType) text += t('ko2.accuracy.noHullType');
+  const parts = [t('ko2.accuracy.hull', { text })];
   const labels = facts.labels || {};
   const all = total(labels);
   const traced = count(labels, 'traced', 'repaired');
   if (all) {
-    const extras = [[count(labels, 'interpolated'), 'interpolated'], [count(labels, 'ai_inferred', 'ai_corrected'), 'by AI'], [count(labels, 'omitted'), 'not modelled']];
-    parts.push(`${traced} of ${all} sections traced${extras.filter(([n]) => n).map(([n, word]) => `, ${n} ${word}`).join('')}`);
+    const extras = [[count(labels, 'interpolated'), t('ko2.accuracy.interpolated')], [count(labels, 'ai_inferred', 'ai_corrected'), t('ko2.accuracy.ai')], [count(labels, 'omitted'), t('ko2.accuracy.omitted')]];
+    parts.push(t('ko2.accuracy.sections', { traced, total: all, extras: extras.filter(([n]) => n).map(([n, word]) => t('ko2.accuracy.extra', { count: n, word })).join('') }));
   }
   const toCheck = facts.to_check ?? null;
-  if (toCheck !== null) parts.push(toCheck ? `${toCheck} to check` : 'no open check items');
-  if (facts.fit !== undefined && facts.fit !== null) parts.push(`fit score ${facts.fit.toFixed(2)}`);
+  if (toCheck !== null) parts.push(toCheck ? t('ko2.accuracy.toCheck', { count: toCheck }) : t('ko2.accuracy.noneOpen'));
+  if (facts.fit !== undefined && facts.fit !== null) parts.push(t('ko2.accuracy.fit', { score: facts.fit.toFixed(2) }));
   return {
     output: 'hull', present: true, line: `${parts.join('; ')}.`, chip: chipOf(head),
     caution: weak(head) || Boolean(toCheck) || all > traced, head_ids: headIds, detail_ids: validIds(HULL_DETAIL_IDS[path]),
@@ -69,15 +85,15 @@ function hull(facts) {
 }
 
 function tanks(facts) {
-  if (!facts) return { output: 'tanks', present: false, line: NOT_PRESENT.tanks, chip: '', caution: false, head_ids: [], detail_ids: [] };
+  if (!facts) return { output: 'tanks', present: false, line: t('ko2.accuracy.absent.tanks'), chip: '', caution: false, head_ids: [], detail_ids: [] };
   const headIds = validIds(TANK_HEAD_IDS[facts.path || 'unknown'] || TANK_HEAD_IDS.unknown);
   const head = bandsOf(headIds);
-  const parts = [`Tanks: ${head.map((b) => b.short).join('; ')}`];
+  const parts = [t('ko2.accuracy.tanks', { text: head.map((b) => b.short).join('; ') })];
   const all = total(facts.volume_labels);
   const guessed = count(facts.volume_labels, 'guessed');
-  if (all) parts.push(`${all - guessed} of ${all} volumes traced or read${guessed ? `, ${guessed} guessed` : ''}`);
+  if (all) parts.push(t('ko2.accuracy.volumes', { read: all - guessed, total: all, guessed: guessed ? t('ko2.accuracy.guessed', { count: guessed }) : '' }));
   const missing = Number(facts.total || 0) - Number(facts.built || 0);
-  if (missing > 0) parts.push(`${missing} not built`);
+  if (missing > 0) parts.push(t('ko2.accuracy.notBuilt', { count: missing }));
   return {
     output: 'tanks', present: true, line: `${parts.join('; ')}.`, chip: chipOf(head),
     caution: weak(head) || guessed > 0 || missing > 0, head_ids: headIds, detail_ids: bandsFor('tanks'),
@@ -85,13 +101,13 @@ function tanks(facts) {
 }
 
 function steel(facts) {
-  if (!facts) return { output: 'steel', present: false, line: NOT_PRESENT.steel, chip: '', caution: false, head_ids: [], detail_ids: [] };
+  if (!facts) return { output: 'steel', present: false, line: t('ko2.accuracy.absent.steel'), chip: '', caution: false, head_ids: [], detail_ids: [] };
   const head = bandsOf(STEEL_HEAD_IDS);
-  const parts = [`Steel: ${head.map((b) => b.short).join('; ')}`];
+  const parts = [t('ko2.accuracy.steel', { text: head.map((b) => b.short).join('; ') })];
   const all = total(facts.thickness_labels);
   if (all) {
     const printed = count(facts.thickness_labels, 'printed');
-    parts.push(`${printed} of ${all} thicknesses printed, ${all - printed} guessed or missing`);
+    parts.push(t('ko2.accuracy.thickness', { printed, total: all, missing: all - printed }));
   }
   return { output: 'steel', present: true, line: `${parts.join('; ')}.`, chip: chipOf(head), caution: true, head_ids: validIds(STEEL_HEAD_IDS), detail_ids: bandsFor('steel') };
 }
@@ -135,8 +151,8 @@ export function detailText(summary) {
 /** One compact chip: the output's icon and its band; the line and sources are in the tooltip. */
 export function accuracyChip(summary, { focusable = true } = {}) {
   const name = OUTPUT_NAMES[summary.output];
-  return glyphChip(OUTPUT_ICONS[summary.output], `${name} accuracy`, {
-    count: summary.chip, countedName: `${name} accuracy: ${summary.chip}`, tone: summary.caution ? 'draft' : null,
+  return glyphChip(OUTPUT_ICONS[summary.output], t('ko2.accuracy.label', { name }), {
+    count: summary.chip, countedName: t('ko2.accuracy.countedLabel', { name, chip: summary.chip }), tone: summary.caution ? 'draft' : null,
     detail: detailText(summary), focusable,
   });
 }
@@ -145,7 +161,29 @@ export function accuracyChip(summary, { focusable = true } = {}) {
 export function accuracyChips(view) {
   const present = Object.values(summarise(factsOfView(view))).filter((s) => s.present);
   if (!view?.revision || !present.length) return null;
-  return el('span', { class: 'accuracy-chips', role: 'group', 'aria-label': 'Accuracy of each output, measured on other ships' }, ...present.map((s) => accuracyChip(s)));
+  return el('span', { class: 'accuracy-chips', role: 'group', 'aria-label': t('ko2.accuracy.group') }, ...present.map((s) => accuracyChip(s)));
+}
+
+/** A single measured band value, not a range or a claim about this run. */
+export function bandQuantity(measurement) {
+  const match = /^(?:pos )?(\d+(?:\.\d+)?)\s+(mm|m|%)$/.exec(measurement.id ? band(measurement.id).chip : measurement.chip);
+  if (!measurement.measured || measurement.outcome === 'invalid' || !match) return null;
+  const text = measurement.id ? translatedBand(measurement) : measurement;
+  return {
+    value: Number(match[1]), unit: match[2], digits: (match[1].split('.')[1] || '').length,
+    status: 'draft',
+    source: [text.short, text.scope, `${text.source} · ${text.section}`, text.n, text.caveat].filter(Boolean).join('\n'),
+  };
+}
+
+/** Keep compound bands and non-numeric outcomes intact; never invent a central value. */
+function exportBandDisplay(summary) {
+  const measurements = bandsOf(summary.head_ids);
+  if (!measurements.some((measurement) => bandQuantity(measurement))) return accuracyChip(summary);
+  return el('span', { class: 'export-accuracy-values' }, ...measurements.map((measurement) => {
+    const quantity = bandQuantity(measurement);
+    return quantity ? valueDisplay(quantity) : el('span', {}, measurement.chip);
+  }));
 }
 
 /** The export page block: the same summary as the report's "Accuracy and limits", one line per output. */
@@ -153,7 +191,7 @@ export function accuracyBlock(view) {
   const present = Object.values(summarise(factsOfView(view))).filter((s) => s.present);
   if (!present.length) return null;
   return el('section', { class: 'export-accuracy', 'aria-labelledby': 'export-accuracy-title' },
-    el('h2', { id: 'export-accuracy-title', class: 'export-accuracy-title' }, icon('info'), 'Accuracy and limits'),
-    el('p', { class: 'export-accuracy-note' }, SCOPE_NOTE),
-    ...present.map((s) => el('p', { class: 'export-accuracy-line', dataset: { output: s.output } }, accuracyChip(s), el('span', {}, s.line))));
+    el('h2', { id: 'export-accuracy-title', class: 'export-accuracy-title' }, icon('info'), t('ko2.accuracy.title')),
+    el('p', { class: 'export-accuracy-note' }, t('ko2.accuracy.scope')),
+    ...present.map((s) => el('p', { class: 'export-accuracy-line', dataset: { output: s.output } }, exportBandDisplay(s), el('span', {}, s.line))));
 }

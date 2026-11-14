@@ -14,7 +14,9 @@
 //   router.js         routes
 //   ui_kit.js, artifacts.js, run_facts.js  shared helpers; run_facts.js has no DOM (tested)
 
-import { prefs, setSettings, state, applyShowCosts } from './app_state.js';
+import {
+  prefs, setSettings, state, applyShowCosts, applyLanguage, applyInterfaceMode,
+} from './app_state.js';
 import { invoke, readOnly } from './api.js';
 import { showError } from './ui_kit.js';
 import { installTooltips } from './tooltip.js';
@@ -44,6 +46,8 @@ function install() {
   installClock();
   installRunDrawer();
   applyShowCosts();
+  applyLanguage();
+  applyInterfaceMode();
   createAreaCurve();
   installLiveUpdates();
   installLayout();

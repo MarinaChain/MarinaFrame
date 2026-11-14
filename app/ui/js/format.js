@@ -1,50 +1,51 @@
-// Plain-language labels and number formats. All user-facing wording for states lives here.
+// Plain-language labels and number formats. State wording comes from the locale string tables.
 
-const STATUS_LABELS = {
-  running: 'Running',
-  stalled: 'Waiting for you',
-  needs_review: 'Needs review',
-  draft: 'Draft',
-  signed_off: 'Signed off', // a person's sign-off: usable as a starting model. Never "approved".
-  declined: 'Declined',
-  failed: 'Failed',
-  cancelled: 'Cancelled',
-  paused: 'Paused',
-  blocked: 'Blocked',
-};
+import { t, locale } from './i18n.js';
 
-const SECTION_STATE_LABELS = { chosen: 'Line chosen', guessed: 'Guessed', declined: 'Declined', not_read: 'Not read' };
-const SOURCE_LABELS = {
-  traced: 'Traced',
-  printed: 'Printed',
-  read: 'Read by code',
-  repaired: 'Repaired',
-  interpolated: 'Interpolated',
-  ai_inferred: 'AI inferred',
-  ai_corrected: 'AI corrected',
-  omitted: 'Not drawn',
-};
-const CHECK_LABELS = { pass: 'Pass', fail: 'Fail', not_run: 'Not run' };
-const CALL_STATE_LABELS = { completed: 'Answered', failed: 'Failed', not_sent: 'Not sent', unknown: 'Result unknown' };
+/** Date and time locale: the system's in English, Korean formats in Korean. */
+const dateLocale = () => (locale() === 'ko' ? 'ko-KR' : undefined);
 
-export const statusLabel = (status) => STATUS_LABELS[status] || status;
-export const sectionStateLabel = (state) => SECTION_STATE_LABELS[state] || state;
-export const sourceLabel = (label) => SOURCE_LABELS[label] || label.replace(/_/g, ' ');
+const STATUS_LABELS = new Set([
+  'running', 'stalled', 'needs_review', 'draft', 'signed_off', 'declined', 'failed', 'cancelled',
+  'paused', 'blocked',
+]);
+const SECTION_STATE_LABELS = new Set(['chosen', 'guessed', 'declined', 'not_read']);
+const SOURCE_LABELS = new Set([
+  'traced', 'printed', 'read', 'repaired', 'interpolated', 'ai_inferred', 'ai_corrected',
+  'omitted',
+]);
+const CHECK_LABELS = new Set(['pass', 'fail', 'not_run']);
+const CALL_STATE_LABELS = new Set(['completed', 'failed', 'not_sent', 'unknown']);
+
+export const statusLabel = (status) => STATUS_LABELS.has(status) ? t(`fmt.status.${status}`) : status;
+export const sectionStateLabel = (state) => SECTION_STATE_LABELS.has(state) ? t(`fmt.section.${state}`) : state;
+export const sourceLabel = (label) => SOURCE_LABELS.has(label) ? t(`fmt.source.${label}`) : label.replace(/_/g, ' ');
+export const checkLabel = (result) => CHECK_LABELS.has(result) ? t(`fmt.check.${result}`) : result;
+export const callStateLabel = (state) => CALL_STATE_LABELS.has(state) ? t(`fmt.call.${state}`) : state;
 export const isAiSource = (label) => label === 'ai_inferred' || label === 'ai_corrected';
-export const checkLabel = (result) => CHECK_LABELS[result] || result;
-export const callStateLabel = (state) => CALL_STATE_LABELS[state] || state;
 
-export function plural(count, noun) {
-  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+// Each locale owns the full count phrase; unlisted nouns use its generic counter form.
+const COUNT_NOUNS = new Set([
+  'section', 'part', 'set', 'run', 'warning', 'model request', 'line', 'sheet file', 'item',
+  'request', 'step', 'call', 'page', 'file', 'sounding table', 'steel table', 'OCX file',
+]);
+
+function countPhrase(count, noun, form) {
+  const key = COUNT_NOUNS.has(noun) ? noun.replace(/ /g, '_') : 'generic';
+  return t(`count.${key}.${form}`, { count, noun });
 }
 
-/** "No sections", "1 section", "3 sections": a list fact that reads well at zero. */
+export function plural(count, noun) {
+  return countPhrase(count, noun, count === 1 ? 'one' : 'other');
+}
+
+/** A list fact that reads well at zero, in the current language. */
 export function countOf(count, noun) {
-  return count ? plural(count, noun) : `No ${noun}s`;
+  return count ? plural(count, noun) : countPhrase(count, noun, 'zero');
 }
 
 export function decimal(value, digits) {
-  return value.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return value.toLocaleString(dateLocale(), { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
 
 export function metres(value, digits = 1) {
@@ -105,11 +106,11 @@ export function bytes(value) {
 }
 
 export function clock(ms) {
-  return new Date(ms).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  return new Date(ms).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 }
 
 export function fullTime(ms) {
-  return new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  return new Date(ms).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 function sameDay(a, b) {
@@ -121,13 +122,13 @@ export function shortTime(ms) {
   const now = new Date();
   const then = new Date(ms);
   const minutes = Math.round((now - then) / 60_000);
-  if (minutes < 1) return 'Now';
-  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 1) return t('time.now');
+  if (minutes < 60) return t('time.minutes', { minutes });
   if (sameDay(now, then)) return clock(ms);
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
-  if (sameDay(yesterday, then)) return 'Yesterday';
-  return then.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  if (sameDay(yesterday, then)) return t('time.yesterday');
+  return then.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' });
 }
 
 /** Time for sentences: "just now", "12 min ago", "today at 09:14", "on 5 Nov at 16:40". */
@@ -135,10 +136,11 @@ export function relativeTime(ms) {
   const now = new Date();
   const then = new Date(ms);
   const minutes = Math.round((now - then) / 60_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes} min ago`;
-  if (sameDay(now, then)) return `today at ${clock(ms)}`;
-  return `on ${then.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} at ${clock(ms)}`;
+  if (minutes < 1) return t('time.justNow');
+  if (minutes < 60) return t('time.minutesAgo', { minutes });
+  if (sameDay(now, then)) return t('time.todayAt', { time: clock(ms) });
+  const day = then.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' });
+  return t('time.dayAt', { day, time: clock(ms) });
 }
 
 /** "2 lines found; took the best-supported one (score 0.62)." -> "2 lines · best 0.62". */

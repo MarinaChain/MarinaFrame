@@ -2,6 +2,7 @@
 // or to run an action. The app gives the list of commands each time the palette opens, so
 // the list always fits the screen the person is on.
 
+import { t } from './i18n.js';
 import { el, fill } from './dom.js';
 
 /** Most rows shown at once; more letters narrow the list. */
@@ -24,24 +25,25 @@ export function createPalette({ commands }) {
   const input = el('input', {
     class: 'palette-input',
     type: 'text',
-    placeholder: 'Go to a vessel, a station or an action…',
-    'aria-label': 'Command',
+    placeholder: t('ko3.palette.goToAVesselAStationOrAnAction'),
+    'aria-label': t('ko3.palette.command'),
     'aria-controls': 'palette-list',
     autocomplete: 'off',
     spellcheck: 'false',
   });
   // Focusable so the list can also scroll from the keyboard; arrows in the input move the choice.
-  const list = el('ul', { class: 'palette-list', id: 'palette-list', role: 'listbox', 'aria-label': 'Commands', tabindex: '0' });
-  const dialog = el('dialog', { class: 'palette', 'aria-label': 'Command palette' },
+  const list = el('ul', { class: 'palette-list', id: 'palette-list', role: 'listbox', 'aria-label': t('ko3.palette.commands'), tabindex: '0' });
+  const footer = el('p', { class: 'palette-foot' });
+  const dialog = el('dialog', { class: 'palette', 'aria-label': t('ko3.palette.commandPalette') },
     input, list,
-    el('p', { class: 'palette-foot' }, '↑↓ to move · Enter to run · Esc to close'));
+    footer);
   document.body.append(dialog);
 
   function render() {
     shown = all.filter((c) => matches(`${c.group} ${c.title} ${c.hint || ''}`, input.value)).slice(0, MAX_ROWS);
     active = Math.min(active, Math.max(0, shown.length - 1));
     if (!shown.length) {
-      fill(list, el('li', { class: 'palette-empty' }, 'Nothing matches.'));
+      fill(list, el('li', { class: 'palette-empty' }, t('ko3.palette.nothingMatches')));
       return;
     }
     let lastGroup = null;
@@ -89,6 +91,11 @@ export function createPalette({ commands }) {
 
   return {
     open() {
+      input.placeholder = t('ko3.palette.goToAVesselAStationOrAnAction');
+      input.setAttribute('aria-label', t('ko3.palette.command'));
+      list.setAttribute('aria-label', t('ko3.palette.commands'));
+      dialog.setAttribute('aria-label', t('ko3.palette.commandPalette'));
+      footer.textContent = t('ko3.palette.toMoveEnterToRunEscToClose');
       all = commands();
       active = 0;
       input.value = '';

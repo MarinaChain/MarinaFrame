@@ -1,5 +1,6 @@
 // Home (Needs you, vessel cards) and the Queue, with the Queue count in the sidebar.
 
+import { t } from './i18n.js';
 import { state, setQueue } from './app_state.js';
 import { invoke, readOnly } from './api.js';
 import { el, icon, fill, svg } from './dom.js';
@@ -14,33 +15,121 @@ import { glyphChip } from './glyphs.js';
 import { batch, chooseDrawingSet, chooseDrawingFolder, openNewRun } from './new_vessel.js';
 import { navigate } from './router.js';
 import { openTask } from './run.js';
+import { thumbnailSource, thumbnailCrop } from './home_thumb.js';
+
+let thumbnailObserver;
+const thumbnailJobs = new Map();
+
+function observeThumbnail(node, load) {
+  if (!globalThis.IntersectionObserver) {
+    queueMicrotask(() => { void load(); });
+    return;
+  }
+  thumbnailObserver ||= new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      const job = thumbnailJobs.get(entry.target);
+      thumbnailJobs.delete(entry.target);
+      thumbnailObserver.unobserve(entry.target);
+      if (job) void job();
+    }
+  });
+  thumbnailJobs.set(node, load);
+  thumbnailObserver.observe(node);
+}
+
+async function drawingThumbnail(run, view, thumb) {
+  let sources = [];
+  try { sources = (await invoke('list_sources', { task: run.task })).sources || []; } catch { /* Keep the current drawing. */ }
+  const preferred = thumbnailSource(view, sources, { models: false });
+  const current = view.source_page?.path ? { kind: 'drawing', path: view.source_page.path } : null;
+  for (const source of [preferred, current].filter(Boolean)) {
+    if (source.kind === 'none') continue;
+    try {
+      let url;
+      if (source.path) url = await cachedArtifact('image', run.task, source.path);
+      else {
+        const page = await invoke('read_source_page', { task: run.task, source_id: source.sourceId, page: source.page, size: 'full' });
+        if (!page.base64) continue;
+        url = `data:${page.mime};base64,${page.base64}`;
+      }
+      const image = el('img', { src: url, alt: '' });
+      await image.decode();
+      if (source.crop) {
+        const facts = sources.find((item) => item.id === source.sourceId)?.pages.find((page) => page.index === source.page);
+        const original = source.path ? view.source_page : { width: facts?.width_px, height: facts?.height_px };
+        const crop = thumbnailCrop(source.crop, original, { width: image.naturalWidth, height: image.naturalHeight });
+        if (crop) {
+          const [x0, y0, right, bottom] = crop;
+          const canvas = document.createElement('canvas');
+          // Keep the crop small; the input page can be a large scan.
+          const scale = Math.min(1, 480 / (right - x0), 300 / (bottom - y0));
+          canvas.width = Math.max(1, Math.round((right - x0) * scale));
+          canvas.height = Math.max(1, Math.round((bottom - y0) * scale));
+          try {
+            canvas.getContext('2d').drawImage(image, x0, y0, right - x0, bottom - y0, 0, 0, canvas.width, canvas.height);
+            image.src = canvas.toDataURL('image/png');
+            await image.decode();
+          } catch {
+            // A blocked canvas still leaves the whole GA sheet available.
+            image.src = url;
+            await image.decode();
+          }
+        }
+      }
+      image.className = 'vessel-thumb-drawing';
+      thumb.prepend(image);
+      const hull = view.model ? hullThumb(view) : null;
+      if (hull) thumb.append(el('span', { class: 'hull-badge', title: t('home.builtSections') }, hull));
+      return;
+    } catch { /* Try the current drawing if a GA page cannot be read. */ }
+  }
+  thumb.append(el('span', { class: 'vessel-thumb-empty' }, t('home.noDrawing')));
+}
+
+async function loadThumbnail(run, view, thumb) {
+  if (!view || !thumb.isConnected) return;
+  const source = thumbnailSource(view);
+  if (source.kind === 'model') {
+    try {
+      const { modelThumbnail } = await import('./home_thumb3d.js');
+      const url = await modelThumbnail(run, view, source);
+      const image = el('img', { src: url, alt: '', class: 'vessel-thumb-model' });
+      await image.decode();
+      thumb.prepend(image);
+      return;
+    } catch { /* No WebGL or an unreadable model: quietly show a drawing. */ }
+  }
+  await drawingThumbnail(run, view, thumb);
+}
 
 /** What waits for a person, as icon counts (the status chip already says the run's state). */
 function needsReason(view) {
   const sections = toCheckCount(view);
   const parts = partsToCheck(view);
   return [
-    sections ? glyphChip('flag', 'sections', { count: sections, countedName: `${fmt.plural(sections, 'section')} to check`, tone: 'warn', focusable: false }) : null,
-    parts ? glyphChip('cube', 'parts', { count: parts, countedName: `${fmt.plural(parts, 'part')} to check`, tone: 'warn', focusable: false }) : null,
+    sections ? glyphChip('flag', 'sections', { count: sections, countedName: t('home.toCheck', { items: fmt.plural(sections, 'section') }), tone: 'warn', focusable: false }) : null,
+    parts ? glyphChip('cube', 'parts', { count: parts, countedName: t('home.toCheck', { items: fmt.plural(parts, 'part') }), tone: 'warn', focusable: false }) : null,
   ];
 }
 
 function needsCard(vessel) {
   const run = vessel.latest;
   const chips = el('span', { class: 'chip-row' }, statusBadge(run.status));
-  const art = el('span', { class: 'needs-icon' }, icon('sheet'));
+  const art = el('span', { class: 'needs-icon', 'aria-hidden': 'true' }, icon('sheet'));
   const reason = el('span', { class: 'needs-why chip-row' });
-  runPreview(run).then((view) => {
-    if (view?.revision) chips.append(chip(view.revision, { dot: false, title: `Revision ${view.revision}` }));
+  const preview = runPreview(run);
+  preview.then((view) => {
+    if (view?.revision) chips.append(chip(view.revision, { dot: false, title: t('home.revision', { revision: view.revision }) }));
     fill(reason, ...needsReason(view));
-    // The built sections, as a small body plan, say more than a file icon.
-    const hull = view?.model ? hullThumb(view) : null;
-    if (hull) fill(art, hull);
+  });
+  observeThumbnail(art, async () => {
+    await loadThumbnail(run, await preview, art);
   });
   return el('button', {
     class: 'needs-card',
     type: 'button',
-    title: `Open ${run.name}`,
+    title: t('home.open', { name: run.name }),
     dataset: { status: run.status },
     onclick: () => openTask(run.task),
   },
@@ -49,13 +138,13 @@ function needsCard(vessel) {
     el('strong', { class: 'needs-name' }, vessel.name),
     chips,
     reason),
-  el('span', { class: 'needs-go', 'aria-hidden': 'true' }, 'Review', icon('chevron')));
+  el('span', { class: 'needs-go', 'aria-hidden': 'true' }, t('home.review'), icon('chevron')));
 }
 
 /** A mini body plan of the built sections: each station's chosen line, mirrored, in its source style. */
 function hullThumb(view) {
   const lines = [];
-  for (const section of view.sections) {
+  for (const section of view.sections || []) {
     const path = sectionShapePath(section);
     if (path) lines.push({ path, source: section.source?.label || 'traced' });
   }
@@ -70,32 +159,21 @@ function hullThumb(view) {
 
 function vesselCard(vessel) {
   const run = vessel.latest;
-  const runs = vessel.runs.length > 1 ? `${vessel.runs.length} runs · ` : '';
+  const runs = vessel.runs.length > 1 ? `${fmt.plural(vessel.runs.length, 'run')} · ` : '';
   const thumb = el('span', { class: 'vessel-thumb' }, el('span', { class: 'crop-marks', 'aria-hidden': 'true' }));
   const meta = el('span', { class: 'vessel-meta', title: fmt.fullTime(run.updated_ms) }, `${runs}${fmt.relativeTime(run.updated_ms)}`);
-  runPreview(run).then(async (view) => {
-    if (!view) return;
+  const preview = runPreview(run);
+  preview.then((view) => {
     // A person's sign-off of the parts (the run stays a draft): one navy chip after the time.
-    if (view.sign_off) meta.append(' ', chip('Signed off', { tone: 'pass', dot: false, small: true, title: `Signed off by ${view.sign_off.name}: ${view.sign_off.statement}. The run stays a draft.` }));
-    if (view.model) {
-      const hull = hullThumb(view);
-      if (hull) thumb.append(el('span', { class: 'hull-badge', title: 'Built sections' }, hull));
-    }
-    if (!view.source_page) {
-      thumb.append(el('span', { class: 'vessel-thumb-empty' }, 'No drawing read'));
-      return;
-    }
-    try {
-      const url = await cachedArtifact('image', run.task, view.source_page.path);
-      thumb.prepend(el('img', { src: url, alt: '' }));
-    } catch {
-      // No drawing image: the card keeps its blank paper.
-    }
+    if (view?.sign_off) meta.append(' ', chip(t('home.signedOff'), { tone: 'pass', dot: false, small: true, title: t('home.signOffDraft', { name: view.sign_off.name, statement: view.sign_off.statement }) }));
+  });
+  observeThumbnail(thumb, async () => {
+    await loadThumbnail(run, await preview, thumb);
   });
   return el('button', {
     class: 'vessel-card',
     type: 'button',
-    title: `Open ${run.name}`,
+    title: t('home.open', { name: run.name }),
     dataset: { status: run.status },
     onclick: () => openTask(run.task),
   },
@@ -125,9 +203,9 @@ function demoCards(vessels) {
 function pilotCard() {
   return el('a', { class: 'vessel-card demo-pilot-card', href: 'static/pilot.html' },
     el('span', { class: 'vessel-thumb demo-pilot-thumb' },
-      el('span', { class: 'demo-pilot-stages', 'aria-hidden': 'true' }, '1  Baseline', el('br'), '2  Bounded task', el('br'), '3  Deliverable')),
-    el('span', { class: 'vessel-row' }, el('strong', { class: 'vessel-name' }, 'Proposed: GA revision pilot')),
-    el('span', { class: 'vessel-tagline' }, 'One tanker, one bounded compartment change, engineer time measured.'));
+      el('span', { class: 'demo-pilot-stages', 'aria-hidden': 'true' }, t('home.pilotBaseline'), el('br'), t('home.pilotTask'), el('br'), t('home.pilotDeliverable'))),
+    el('span', { class: 'vessel-row' }, el('strong', { class: 'vessel-name' }, t('home.pilotTitle'))),
+    el('span', { class: 'vessel-tagline' }, t('home.pilotText')));
 }
 
 /** Grey placeholder cards while the run list loads, so Home does not flash "No runs yet". */
@@ -144,6 +222,8 @@ function renderHomeLoading() {
 }
 
 export function renderHome() {
+  thumbnailObserver?.disconnect();
+  thumbnailJobs.clear();
   if (!state.tasksLoaded) {
     renderHomeLoading();
     return;
@@ -153,7 +233,7 @@ export function renderHome() {
   const waiting = vessels.filter((v) => DRAFT_READY.has(v.latest.status) || NEEDS_ATTENTION.has(v.latest.status));
   fill($('needs-row'), ...(waiting.length
     ? waiting.map(needsCard)
-    : [el('p', { class: 'home-empty' }, state.tasks.length ? 'Nothing waiting for you.' : 'No runs yet. Drop a drawing set to start.')]));
+    : [el('p', { class: 'home-empty' }, state.tasks.length ? t('home.nothingWaiting') : t('home.noRuns'))]));
   const grid = $('vessel-grid');
   const dropTile = $('drop-tile');
   if (readOnly) {
@@ -164,23 +244,23 @@ export function renderHome() {
   // First start: no runs. Home becomes one large drop target with the four steps ahead.
   const empty = !state.tasks.length;
   $('view-home').dataset.empty = String(empty);
-  $('home-needs-title').textContent = readOnly ? 'MarinaFrame demo' : empty ? 'Your first vessel' : 'Needs you';
+  $('home-needs-title').textContent = readOnly ? t('home.demo') : empty ? t('home.firstVessel') : t('home.needsYou');
   const queued = state.queue?.waiting.length || 0;
   const link = $('home-queue-link');
   link.hidden = queued === 0;
-  link.textContent = `${fmt.plural(queued, 'set')} in the Queue`;
+  link.textContent = t('home.inQueue', { sets: fmt.plural(queued, 'set') });
 }
 
 /** Queue groups, in order: what the AI works on, what waits for a person, the rest. */
 const QUEUE_GROUPS = [
-  { id: 'working', title: 'Working now', statuses: new Set(['running', 'paused']) },
-  { id: 'ready', title: 'Ready to check', statuses: new Set([...DRAFT_READY, ...NEEDS_ATTENTION]) },
-  { id: 'earlier', title: 'Earlier', statuses: null }, // everything else
+  { id: 'working', titleKey: 'home.queue.working', statuses: new Set(['running', 'paused']) },
+  { id: 'ready', titleKey: 'home.queue.ready', statuses: new Set([...DRAFT_READY, ...NEEDS_ATTENTION]) },
+  { id: 'earlier', titleKey: 'home.queue.earlier', statuses: null }, // everything else
 ];
 
 function queueRow(task) {
   const vessel = vesselOfTask(state.tasks, task.task);
-  const run = vessel ? `Run ${runNumber(vessel, task.task)}` : 'Run';
+  const run = vessel ? t('home.runNumber', { number: runNumber(vessel, task.task) }) : t('home.run');
   // Whole-vessel runs add their parts and a sign-off once the run's view is read (cached).
   const extra = el('span', { class: 'queue-extra' });
   runPreview(task).then((view) => {
@@ -188,8 +268,8 @@ function queueRow(task) {
     if (!parts.length) return;
     const open = partsToCheck(view);
     fill(extra,
-      view.sign_off ? chip('Signed off', { tone: 'pass', dot: false, small: true, title: `Signed off by ${view.sign_off.name}: ${view.sign_off.statement}` })
-        : open ? chip(`${open} ${open === 1 ? 'part' : 'parts'} to check`, { tone: 'draft', dot: false, small: true })
+      view.sign_off ? chip(t('home.signedOff'), { tone: 'pass', dot: false, small: true, title: t('home.signOff', { name: view.sign_off.name, statement: view.sign_off.statement }) })
+        : open ? chip(t('home.toCheck', { items: fmt.plural(open, 'part') }), { tone: 'draft', dot: false, small: true })
           : chip(fmt.plural(parts.length, 'part'), { dot: false, small: true }));
   });
   return el('li', {},
@@ -224,9 +304,9 @@ export function renderRailCount() {
   const count = $('rail-queue-count');
   count.hidden = running + waiting === 0;
   count.textContent = String(running + waiting);
-  const words = [running ? `${running} running` : null, waiting ? `${waiting} waiting` : null].filter(Boolean).join(', ');
+  const words = [running ? t('home.running', { count: running }) : null, waiting ? t('home.waiting', { count: waiting }) : null].filter(Boolean).join(', ');
   count.title = words;
-  count.closest('.rail-item').setAttribute('aria-label', words ? `Queue, ${words}` : 'Queue');
+  count.closest('.rail-item').setAttribute('aria-label', words ? t('home.queueSummary', { words }) : t('home.queue'));
 }
 
 export function renderQueue() {
@@ -246,9 +326,9 @@ export function renderQueue() {
   });
   fill($('queue-list'), ...(state.tasks.length || waiting
     ? [waiting, ...groups.filter((g) => g.tasks.length).map((group) => el('li', { class: 'queue-group' },
-      el('h2', { class: 'queue-group-title' }, group.title, el('span', { class: 'queue-count' }, String(group.tasks.length))),
+      el('h2', { class: 'queue-group-title' }, t(group.titleKey), el('span', { class: 'queue-count' }, String(group.tasks.length))),
       el('ul', { class: 'queue-rows' }, ...group.tasks.map(queueRow))))]
-    : [el('li', { class: 'home-empty' }, 'No runs yet. Drop a drawing set on Home to start.')]));
+    : [el('li', { class: 'home-empty' }, t('home.queueEmpty'))]));
 }
 
 /** Buttons and the More menu of Home. */

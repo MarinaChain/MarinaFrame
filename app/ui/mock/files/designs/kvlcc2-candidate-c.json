@@ -1,0 +1,214 @@
+{
+  "appendages": [],
+  "compartments": [],
+  "data_scope": {
+    "kind": "synthetic",
+    "customer_id": null,
+    "permitted_uses": [
+      "development"
+    ]
+  },
+  "design_id": "synthetic-kvlcc2-candidate-c",
+  "designer_decisions": [],
+  "engineering_approved": false,
+  "hull": {
+    "coordinate_system": "m; aft cap x=0, x forward, y starboard, z up above retained bottom",
+    "notes": [
+      "Synthetic development inputs and results; hull geometry and other evidence not recalculated."
+    ],
+    "parameters": {},
+    "surfaces": []
+  },
+  "lineage": {
+    "parent_design_id": "public-kvlcc2-example",
+    "variation_parameters": {
+      "cb": {
+        "value": 0.9044987555369581,
+        "unit": "1",
+        "uncertainty": null,
+        "uncertainty_reason": "Synthetic input; no measured band.",
+        "method": "synthetic development scenario; not a recalculated design",
+        "method_version": "1.0.0",
+        "sources": [
+          "public-kvlcc2-example"
+        ],
+        "status": "draft"
+      }
+    }
+  },
+  "loading_conditions": [],
+  "main_dimensions": {
+    "beam": {
+      "method": "public KVLCC2 transport example; separate trimmed and full-vessel bases",
+      "method_version": "1.0.0",
+      "sources": [
+        "https://simman2020.kr/contents/Ship_data_summary.php",
+        "docs/plans/2026-11-12-hull-variation.md"
+      ],
+      "status": "draft",
+      "uncertainty": null,
+      "uncertainty_reason": "No uncertainty band supplied by the source calculation.",
+      "unit": "m",
+      "value": 58.0
+    },
+    "draft": {
+      "method": "public KVLCC2 transport example; separate trimmed and full-vessel bases",
+      "method_version": "1.0.0",
+      "sources": [
+        "https://simman2020.kr/contents/Ship_data_summary.php",
+        "docs/plans/2026-11-12-hull-variation.md"
+      ],
+      "status": "draft",
+      "uncertainty": null,
+      "uncertainty_reason": "No uncertainty band supplied by the source calculation.",
+      "unit": "m",
+      "value": 20.8
+    },
+    "length": {
+      "method": "public KVLCC2 transport example; separate trimmed and full-vessel bases",
+      "method_version": "1.0.0",
+      "sources": [
+        "https://simman2020.kr/contents/Ship_data_summary.php",
+        "docs/plans/2026-11-12-hull-variation.md"
+      ],
+      "status": "draft",
+      "uncertainty": null,
+      "uncertainty_reason": "No uncertainty band supplied by the source calculation.",
+      "unit": "m",
+      "value": 320.0
+    }
+  },
+  "midship_section_inputs": [],
+  "name": "Candidate C: Cb \u22120.01",
+  "requirements": {
+    "cargo_types": [
+      "crude oil"
+    ],
+    "class_notation": null,
+    "constraints": [],
+    "flag": null,
+    "quantities": {
+      "max_draft": {
+        "value": 21.0,
+        "unit": "m",
+        "uncertainty": null,
+        "uncertainty_reason": "Synthetic input; no measured band.",
+        "method": "synthetic development scenario; not a recalculated design",
+        "method_version": "1.0.0",
+        "sources": [
+          "public-kvlcc2-example"
+        ],
+        "status": "draft"
+      }
+    },
+    "service_speed": {
+      "kn": {
+        "method": "public KVLCC2 transport example; separate trimmed and full-vessel bases",
+        "method_version": "1.0.0",
+        "sources": [
+          "https://simman2020.kr/contents/Ship_data_summary.php",
+          "docs/plans/2026-11-12-hull-variation.md"
+        ],
+        "status": "draft",
+        "uncertainty": null,
+        "uncertainty_reason": "No uncertainty band supplied by the source calculation.",
+        "unit": "kn",
+        "value": 14.5
+      },
+      "m_s": {
+        "method": "public KVLCC2 transport example; separate trimmed and full-vessel bases",
+        "method_version": "1.0.0",
+        "sources": [
+          "https://simman2020.kr/contents/Ship_data_summary.php",
+          "docs/plans/2026-11-12-hull-variation.md"
+        ],
+        "status": "draft",
+        "uncertainty": null,
+        "uncertainty_reason": "No uncertainty band supplied by the source calculation.",
+        "unit": "m/s",
+        "value": 7.459444444444444
+      }
+    }
+  },
+  "results": {
+    "capacities": {
+      "cargo_capacity_m3": {
+        "kind": "quantity",
+        "value": {
+          "value": 332000,
+          "unit": "m3",
+          "uncertainty": {
+            "kind": "absolute",
+            "lower": 3000,
+            "upper": 3000,
+            "basis": "Synthetic development comparison band, not measured."
+          },
+          "uncertainty_reason": null,
+          "method": "synthetic development scenario; not a recalculated design",
+          "method_version": "1.0.0",
+          "sources": [
+            "public-kvlcc2-example"
+          ],
+          "status": "draft"
+        }
+      }
+    },
+    "fuel": {
+      "value": {
+        "kind": "quantity",
+        "value": {
+          "value": 72.0,
+          "unit": "t/day",
+          "uncertainty": {
+            "kind": "absolute",
+            "lower": 1.5,
+            "upper": 1.5,
+            "basis": "Synthetic development comparison band, not measured."
+          },
+          "uncertainty_reason": null,
+          "method": "synthetic development scenario; not a recalculated design",
+          "method_version": "1.0.0",
+          "sources": [
+            "public-kvlcc2-example"
+          ],
+          "status": "draft"
+        }
+      }
+    },
+    "hull_variation": {
+      "validity_warnings": {
+        "kind": "list",
+        "value": [
+          {
+            "kind": "text",
+            "value": "Synthetic development scenario; geometry and other results not recalculated."
+          }
+        ]
+      }
+    },
+    "hydrostatics": {
+      "cb": {
+        "kind": "quantity",
+        "value": {
+          "value": 0.9044987555369581,
+          "unit": "1",
+          "uncertainty": null,
+          "uncertainty_reason": "Synthetic input; no measured band.",
+          "method": "synthetic development scenario; not a recalculated design",
+          "method_version": "1.0.0",
+          "sources": [
+            "public-kvlcc2-example"
+          ],
+          "status": "draft"
+        }
+      }
+    },
+    "power": {},
+    "resistance": {},
+    "stability": {}
+  },
+  "schema_version": "1.0.0",
+  "status": "draft",
+  "tanks": [],
+  "weights": []
+}

@@ -5,6 +5,8 @@
 
 import { el } from './dom.js';
 import { glyphChip } from './glyphs.js';
+import { createDataTable } from './data_table.js';
+import { t, locale } from './i18n.js';
 
 /**
  * Source labels of the tank model (vessel_reconstruction.tanks SOURCE_LABELS). Tones are the
@@ -19,13 +21,13 @@ const TANK_SOURCES = {
 
 /** The fields of one capacity plan row, in the order of the capacity plan CSV. */
 const CAPACITY_FIELDS = [
-  { name: 'Name', key: 'name', source: 'name', text: true },
-  { name: 'Content', key: 'content', source: 'content', text: true },
-  { name: 'Frames', key: 'frames', source: 'frames', text: true },
-  { name: 'Volume 100 %', key: 'volume_100_m3', source: 'volume', digits: 2, unit: 'm³' },
-  { name: 'Volume 98 %', key: 'volume_98_m3', source: 'volume', digits: 2, unit: 'm³' },
-  { name: 'Density', key: 'density_t_m3', source: 'density', digits: 3, unit: 't/m³' },
-  { name: 'Weight 98 %', key: 'weight_98_t', source: 'weight', digits: 2, unit: 't' },
+  { name: 'ko2.tanks.field.name', key: 'name', source: 'name', text: true },
+  { name: 'ko2.tanks.field.content', key: 'content', source: 'content', text: true },
+  { name: 'ko2.tanks.field.frames', key: 'frames', source: 'frames', text: true },
+  { name: 'ko2.tanks.field.volume100', key: 'volume_100_m3', source: 'volume', digits: 2, unit: 'm³' },
+  { name: 'ko2.tanks.field.volume98', key: 'volume_98_m3', source: 'volume', digits: 2, unit: 'm³' },
+  { name: 'ko2.tanks.field.density', key: 'density_t_m3', source: 'density', digits: 3, unit: 't/m³' },
+  { name: 'ko2.tanks.field.weight98', key: 'weight_98_t', source: 'weight', digits: 2, unit: 't' },
   { name: 'LCG', key: 'lcg_m', source: 'centroid', digits: 3, unit: 'm' },
   { name: 'TCG', key: 'tcg_m', source: 'centroid', digits: 3, unit: 'm' },
   { name: 'VCG', key: 'vcg_m', source: 'centroid', digits: 3, unit: 'm' },
@@ -33,10 +35,10 @@ const CAPACITY_FIELDS = [
 
 /** Sounding table columns the viewer shows, with their headings and decimals. */
 const SOUNDING_COLUMNS = [
-  { key: 'sounding_m', name: 'Sounding (m)', digits: 3 },
-  { key: 'ullage_m', name: 'Ullage (m)', digits: 3 },
-  { key: 'volume_m3', name: 'Volume (m³)', digits: 3 },
-  { key: 'fill_pct', name: 'Fill (%)', digits: 1 },
+  { key: 'sounding_m', name: 'ko2.tanks.field.sounding', digits: 3 },
+  { key: 'ullage_m', name: 'ko2.tanks.field.ullage', digits: 3 },
+  { key: 'volume_m3', name: 'ko2.tanks.field.volume', digits: 3 },
+  { key: 'fill_pct', name: 'ko2.tanks.field.fill', digits: 1 },
 ];
 
 /**
@@ -73,7 +75,7 @@ export function tankLegend(tanks) {
   }
   return TANK_CONTENT_CLASSES
     .filter(([cls]) => counts.has(cls))
-    .map(([cls, label]) => ({ cls, label, count: counts.get(cls), token: tankToken(cls) }));
+    .map(([cls]) => ({ cls, label: t(`term.${cls === 'other' ? 'tank_other' : cls}`), count: counts.get(cls), token: tankToken(cls) }));
 }
 
 /** Steel member groups in legend order (vessel_reconstruction.structure.display MEMBER_GROUPS). */
@@ -100,7 +102,7 @@ export function steelLegend(meshes) {
   }
   return STEEL_GROUPS
     .filter(([group]) => counts.has(group))
-    .map(([group, label]) => ({ cls: group, label, count: counts.get(group), token: steelToken(group) }));
+    .map(([group]) => ({ cls: group, label: t(`term.${group === 'deck' ? 'tank_deck' : group}`), count: counts.get(group), token: steelToken(group) }));
 }
 
 /**
@@ -121,7 +123,9 @@ export function placeLabels(labels) {
 
 /** Word, tone and title of a source label; an unknown label shows as it is. */
 export function tankSource(label) {
-  return TANK_SOURCES[label] || { word: label || '—', tone: '', title: '' };
+  const source = TANK_SOURCES[label];
+  return source ? { ...source, word: t(`ko2.tanks.source.${label}`), title: t(`ko2.tanks.sourceHelp.${label}`) }
+    : { word: label || '—', tone: '', title: '' };
 }
 
 /** "2.01 t" from a number, or "—" when the file has no value. */
@@ -133,7 +137,7 @@ export function tankNumber(value, digits, unit = '') {
 /** The values of one capacity plan row as { name, value, source } items. */
 export function capacityFields(row) {
   return CAPACITY_FIELDS.map((field) => ({
-    name: field.name,
+    name: field.name.startsWith('ko2.') ? t(field.name) : field.name,
     value: field.text ? (row[field.key] || '—') : tankNumber(row[field.key], field.digits, field.unit),
     source: row.sources?.[field.source] || null,
   }));
@@ -146,8 +150,10 @@ export function capacityRowOf(plan, id) {
 
 /** One line per content group: "Water ballast · 2 of 3 built · 62.30 m³ · 63.86 t". */
 export function groupLine(group) {
-  const content = group.content ? group.content.charAt(0).toUpperCase() + group.content.slice(1) : 'No content';
-  return `${content} · ${group.built} of ${group.tanks} built · ${tankNumber(group.volume_100_m3, 2, 'm³')} · ${tankNumber(group.weight_98_t, 2, 't')}`;
+  const contentClass = TANK_CONTENT_CLASSES.find(([, label]) => label.toLowerCase() === group.content?.toLowerCase());
+  const content = contentClass && locale() !== 'en' ? t(`term.${contentClass[0] === 'other' ? 'tank_other' : contentClass[0]}`)
+    : group.content ? group.content.charAt(0).toUpperCase() + group.content.slice(1) : t('ko2.tanks.noContent');
+  return t('ko2.tanks.group', { content, built: group.built, total: group.tanks, volume: tankNumber(group.volume_100_m3, 2, 'm³'), weight: tankNumber(group.weight_98_t, 2, 't') });
 }
 
 /** The sounding table as shown: headings and formatted rows of the columns the file has. */
@@ -156,7 +162,7 @@ export function soundingView(table) {
     .map((column) => ({ ...column, index: table?.columns?.indexOf(column.key) ?? -1 }))
     .filter((column) => column.index >= 0);
   return {
-    headings: columns.map((column) => column.name),
+    headings: columns.map((column) => t(column.name)),
     rows: (table?.rows || []).map((row) => columns.map((column) => tankNumber(row[column.index], column.digits))),
   };
 }
@@ -174,14 +180,14 @@ export function sourceChip(label) {
 /** The capacity plan row of the selected tank, inside the part detail. */
 export function tankDetailBlock(row) {
   if (!row) {
-    return el('p', { class: 'parts-note' }, 'This tank is not in the run\'s capacity plan.');
+    return el('p', { class: 'parts-note' }, t('ko2.tanks.notInPlan'));
   }
-  return el('section', { class: 'tank-detail', 'aria-label': 'Capacity plan row' },
-    el('h3', {}, 'Capacity plan'),
+  return el('section', { class: 'tank-detail', 'aria-label': t('ko2.tanks.planRow') },
+    el('h3', {}, t('term.capacity_plan')),
     el('table', { class: 'parts-args' },
-      el('caption', { class: 'visually-hidden' }, `Capacity plan values of ${row.name}`),
+      el('caption', { class: 'visually-hidden' }, t('ko2.tanks.values', { name: row.name })),
       el('thead', {}, el('tr', {},
-        el('th', { scope: 'col' }, 'Item'), el('th', { scope: 'col' }, 'Value'), el('th', { scope: 'col' }, 'Source'))),
+        el('th', { scope: 'col' }, t('ko2.tanks.item')), el('th', { scope: 'col' }, t('ko2.tanks.value')), el('th', { scope: 'col' }, t('ko2.tanks.source')))),
       el('tbody', {}, ...capacityFields(row).map((field) => el('tr', { dataset: { source: field.source || '' } },
         el('th', { scope: 'row' }, field.name),
         el('td', { class: 'parts-value' }, field.value),
@@ -191,49 +197,56 @@ export function tankDetailBlock(row) {
 
 /** One sounding table: the levels of the selected tank, or why there are none. */
 function soundingBlock(row, sounding) {
-  if (!row) return el('p', { class: 'panel-empty' }, 'Pick a tank to see its sounding table.');
-  const title = el('h3', {}, `Sounding table: ${row.name}`);
-  if (!row.has_sounding) return el('div', { class: 'tank-sounding' }, title, el('p', { class: 'panel-empty' }, 'This tank has no sounding table (not built).'));
-  if (!sounding || sounding.loading) return el('div', { class: 'tank-sounding' }, title, el('p', { class: 'panel-empty' }, 'Loading…'));
+  if (!row) return el('p', { class: 'panel-empty' }, t('ko2.tanks.pick'));
+  const title = el('h3', {}, t('ko2.tanks.soundingTitle', { name: row.name }));
+  if (!row.has_sounding) return el('div', { class: 'tank-sounding' }, title, el('p', { class: 'panel-empty' }, t('ko2.tanks.noSounding')));
+  if (!sounding || sounding.loading) return el('div', { class: 'tank-sounding' }, title, el('p', { class: 'panel-empty' }, t('ko2.tanks.loading')));
   if (sounding.error) return el('div', { class: 'tank-sounding' }, title, el('p', { class: 'form-error', role: 'alert' }, sounding.error));
   const view = soundingView(sounding.table);
   return el('div', { class: 'tank-sounding' }, title,
-    el('p', { class: 'parts-revision-hint' }, 'Sounding from the lowest point of the tank, even keel (no sounding pipe position is drawn). Origin: ', sourceChip('guessed')),
+    el('p', { class: 'parts-revision-hint' }, t('ko2.tanks.origin'), sourceChip('guessed')),
     el('div', { class: 'tank-table-scroll' },
       el('table', { class: 'parts-args tank-table' },
-        el('caption', { class: 'visually-hidden' }, `Sounding table of ${row.name}`),
+        el('caption', { class: 'visually-hidden' }, t('ko2.tanks.soundingCaption', { name: row.name })),
         el('thead', {}, el('tr', {}, ...view.headings.map((heading) => el('th', { scope: 'col' }, heading)))),
         el('tbody', {}, ...view.rows.map((cells) => el('tr', {}, ...cells.map((cell) => el('td', { class: 'parts-value' }, cell))))))));
 }
 
+/** Build translated headings when the panel opens, using the active interface locale. */
+function planColumns() {
+  return [
+    { key: 'name', label: t('table.tank') },
+    { key: 'content', label: t('table.content') },
+    { key: 'volume_98_m3', label: t('table.capacity98'), unit: 'm³', align: 'end', format: (value) => value.toFixed(2) },
+    { key: 'lcg_m', label: 'LCG', unit: 'm', align: 'end', format: (value) => value.toFixed(3) },
+    { key: 'vcg_m', label: 'VCG', unit: 'm', align: 'end', format: (value) => value.toFixed(3) },
+    { key: 'sources', label: t('table.source'), sortable: false, format: (value) => sourceChip(value.volume) },
+  ];
+}
+
 /**
- * The capacity plan panel: every tank with its labelled values, totals per content group and
- * the sounding table of the selected tank. `onPick(id)` selects a tank.
+ * The capacity plan panel: every tank in one dense table (js/data_table.js) with its labelled
+ * values, totals per content group and the sounding table of the selected tank. `onPick(id)`
+ * selects a tank; clicking a row picks it, and Enter picks the selected one.
  */
 export function capacityPanel({ plan, selectedId, sounding, onPick }) {
   if (!plan?.rows?.length) return null;
   const selected = capacityRowOf(plan, selectedId);
-  const cell = (row, key, digits, source) => el('td', { class: 'parts-value' }, tankNumber(row[key], digits), ' ', sourceChip(row.sources?.[source]));
+  const table = createDataTable({
+    columns: planColumns(),
+    rows: plan.rows,
+    caption: t('table.tankCaption'),
+    rowKey: (row) => row.id,
+    emptyText: t('table.noTanks'),
+    onSelect: onPick,
+  });
+  table.select(selectedId);
   return el('section', { class: 'tank-plan', 'aria-labelledby': 'tank-plan-title' },
     el('header', { class: 'parts-detail-head' },
-      el('h2', { id: 'tank-plan-title' }, 'Capacity plan'),
-      el('span', { class: 'badge badge-small', dataset: { tone: 'draft' }, title: plan.stamp?.join('\n') || '' }, el('span', { class: 'badge-text' }, 'Draft'))),
-    el('p', { class: 'export-stamp' }, el('strong', {}, 'Draft, not for construction.'), ` Read from ${plan.file}. Volumes at 100 % and 98 % fill; weight at 98 %; centroid at 100 %.`),
-    el('ul', { class: 'tank-groups', 'aria-label': 'Totals per content group' }, ...plan.groups.map((group) => el('li', {}, groupLine(group)))),
-    el('div', { class: 'tank-table-scroll' },
-      el('table', { class: 'parts-args tank-table' },
-        el('caption', { class: 'visually-hidden' }, 'Tanks of the capacity plan'),
-        el('thead', {}, el('tr', {}, ...['Tank', 'Content', 'Frames', 'Vol. 100 % (m³)', 'Vol. 98 % (m³)', 'Weight 98 % (t)', 'LCG (m)', 'VCG (m)', 'TCG (m)']
-          .map((heading) => el('th', { scope: 'col' }, heading)))),
-        el('tbody', {}, ...plan.rows.map((row) => el('tr', { class: row.id === selectedId ? 'is-selected' : '', dataset: { source: row.sources?.volume || '' } },
-          el('th', { scope: 'row' }, el('button', { class: 'tank-pick', type: 'button', 'aria-pressed': String(row.id === selectedId), onclick: () => onPick(row.id) }, row.name || row.id)),
-          el('td', {}, row.content, ' ', sourceChip(row.sources?.content)),
-          el('td', { class: 'parts-value' }, row.frames || '—'),
-          cell(row, 'volume_100_m3', 2, 'volume'),
-          cell(row, 'volume_98_m3', 2, 'volume'),
-          cell(row, 'weight_98_t', 2, 'weight'),
-          cell(row, 'lcg_m', 3, 'centroid'),
-          cell(row, 'vcg_m', 3, 'centroid'),
-          cell(row, 'tcg_m', 3, 'centroid')))))),
+      el('h2', { id: 'tank-plan-title' }, t('term.capacity_plan')),
+      el('span', { class: 'badge badge-small', dataset: { tone: 'draft' }, title: plan.stamp?.join('\n') || '' }, el('span', { class: 'badge-text' }, t('ko2.tanks.draft')))),
+    el('p', { class: 'export-stamp' }, el('strong', {}, t('ko2.tanks.stamp')), t('ko2.tanks.readFile', { file: plan.file })),
+    el('ul', { class: 'tank-groups', 'aria-label': t('ko2.tanks.totals') }, ...plan.groups.map((group) => el('li', {}, groupLine(group)))),
+    table.element,
     soundingBlock(selected, sounding));
 }

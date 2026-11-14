@@ -113,7 +113,13 @@ test('the capacity plan panel shows the draft stamp, group totals and the soundi
   assert.match(text, /Sounding table: No 1 water ballast/);
   assert.match(text, /0\.5000\.0002\.000100\.0/);
   assert.doesNotMatch(text, /approved|verified/i);
-  panel.findAll((n) => n.className === 'tank-pick')[0].listeners.click();
+  // Clicking a row of the dense table picks the tank; the selected row says so.
+  const rows = panel.findAll((n) => n.tag === 'tr' && n.listeners?.click);
+  assert.equal(rows.length, 1);
+  const headers = panel.findAll((n) => n.tag === 'th' && n.attributes.scope === 'col');
+  assert.deepEqual(headers.slice(0, 6).map((n) => n.textContent), ['Tank', 'Content', 'Capacity 98 % (m³)', 'LCG (m)', 'VCG (m)', 'Source']);
+  assert.equal(rows[0].attributes['aria-selected'], 'true');
+  rows[0].listeners.click();
   assert.equal(picked, 'tank_db1');
   assert.match(capacityPanel({ plan, selectedId: 'tank_db1', sounding: { loading: true }, onPick: () => {} }).textContent, /Loading/);
   assert.equal(capacityPanel({ plan: null }), null);
@@ -136,6 +142,30 @@ test('a tank part shows its capacity plan row, and the Parts page the capacity p
   assert.ok(host.findAll((n) => n.attributes['aria-label'] === 'Traced').length > 0);
   assert.match(text, /Capacity plan/);
   assert.match(text, /0\.250/);
+});
+
+test('clicking another capacity row selects that tank and loads its sounding table', async () => {
+  const host = new FakeNode('div');
+  const asked = [];
+  const selected = [];
+  const parts = createParts({ host, review: async () => {}, showIn3d: () => {}, signOff: async () => {},
+    onSelect: (part) => selected.push(part?.id),
+    loadSounding: async (id) => { asked.push(id); return { columns: ['sounding_m'], rows: [[id === 'tank_db2' ? 0.75 : 0.25]] }; } });
+  const component = (id, label) => ({ id, label, op: 'tank', status: 'draft_guess', built: true, reason: '',
+    view: 'plan', bbox_m: { min: [2, -1, 0], max: [4, 1, 0.5] }, volume_m3: 2, arguments: [], review: 'open' });
+  const second = { ...ROW, id: 'tank_db2', name: 'No 2 water ballast' };
+  parts.show({ components: [component(ROW.id, ROW.name), component(second.id, second.name)],
+    capacity_plan: { file: 'tank_tables/V_capacity_plan.csv', stamp: [], rows: [ROW, second], groups: [] } });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const row = host.findAll((node) => node.tag === 'tr' && node.listeners.click && node.textContent.startsWith(second.name))[0];
+  assert.ok(row);
+  row.listeners.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(asked, ['tank_db1', 'tank_db2']);
+  assert.equal(selected.at(-1), 'tank_db2');
+  assert.match(host.textContent, /Sounding table: No 2 water ballast/);
+  assert.match(host.textContent, /0\.750/);
+  assert.equal(host.findAll((node) => node.tag === 'tr' && node.listeners.click && node.attributes['aria-selected'] === 'true')[0].textContent.startsWith(second.name), true);
 });
 
 test('tank colours come from one design token per content class', () => {

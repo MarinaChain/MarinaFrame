@@ -553,6 +553,18 @@ export function mockTransport() {
   const MOCK_SLOTS = 3;
   const mockQueue = [];
   const commands = {
+    async list_design_records() {
+      return (await import('./designs.js')).listMockDesigns();
+    },
+    async open_design_record(data, { id }) {
+      return (await import('./designs.js')).openMockDesign(id);
+    },
+    async list_design_decisions(data, { project_id }) {
+      return (await import('./designs.js')).listMockDecisions(project_id);
+    },
+    async append_design_decision(data, { project_id, decision }) {
+      return (await import('./designs.js')).appendMockDecision(project_id, decision);
+    },
     async replace_sheet(data, { task, sheet_id, file }) {
       requireTask(data, task);
       if (!isDrawingFileName(file)) throw new BackendError('sheet_file_type', 'Choose a drawing file.');
@@ -646,6 +658,9 @@ export function mockTransport() {
         view.model = null;
         view.sections = [];
         view.components = null;
+        // A GA reading run reviews the GA sheet only: no lines-plan review and no hull warnings.
+        view.sheet_review = null;
+        view.warnings = [];
       }
       // ?mockstructure (with a structure GLB placed in mock/files; none is shipped): the survey
       // launch has a steel structure for the 3D view.

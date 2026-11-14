@@ -197,6 +197,14 @@ export function invoke(command, args) {
   return transport.invoke(command, args);
 }
 
+/** Read-only design commands; records are validated by the desktop backend. */
+export const listDesignRecords = () => invoke('list_design_records', {});
+export const openDesignRecord = (id) => invoke('open_design_record', { id });
+/** Decisions of a project's candidates (append-only log; the backend sets id, time and status). */
+export const listDesignDecisions = (projectId) => invoke('list_design_decisions', { project_id: projectId });
+export const appendDesignDecision = (projectId, decision) =>
+  invoke('append_design_decision', { project_id: projectId, decision });
+
 /** Subscribe to task-changed ({ task, sequence }). Returns an unsubscribe function. */
 export function onTaskChanged(handler) {
   return transport.onTaskChanged(handler);

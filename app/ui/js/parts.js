@@ -5,18 +5,20 @@
 
 import { el, svg, icon, fill } from './dom.js';
 import { glyphChip } from './glyphs.js';
+import { t } from './i18n.js';
+import { valueDisplay } from './value_display.js';
 import { tipAttributes } from './tooltip.js';
 import { capacityPanel, capacityRowOf, tankDetailBlock, tankToken } from './tanks.js';
 
 /** Tree groups (ship-cad ops) in the order a naval architect reads a general arrangement. */
 const GROUPS = [
-  ['hull', 'Hull'],
-  ['deck', 'Decks'],
-  ['deckhouse', 'Deckhouses'],
-  ['bulwark', 'Bulwarks'],
-  ['appendage', 'Appendages'],
-  ['tank', 'Tanks'],
-  ['other', 'Other'],
+  ['hull', 'term.hull'],
+  ['deck', 'term.deck'],
+  ['deckhouse', 'term.deckhouse'],
+  ['bulwark', 'term.bulwark'],
+  ['appendage', 'term.appendage'],
+  ['tank', 'term.tank'],
+  ['other', 'ko2.parts.other'],
 ];
 const KNOWN_OPS = new Set(GROUPS.map(([op]) => op));
 const SOURCE_WORD = { traced: 'Read', ai_inferred: 'AI read', guessed: 'Guessed' };
@@ -28,7 +30,7 @@ const MAX_NOTE = 500;
 /** Ops the worker can re-run from a mark (vessel_reconstruction.part_revise REVISABLE_OPS). */
 const REVISABLE_OPS = new Set(['deck', 'deckhouse', 'bulwark', 'appendage']);
 /** Phrases that start a mark note: one tap, then the person adds the numbers. */
-const MARK_CHIPS = ['Too high', 'Too low', 'Too long', 'Too short', 'Wrong place', 'Not a part', 'Missing part'];
+const MARK_CHIPS = ['high', 'low', 'long', 'short', 'place', 'notPart', 'missing'];
 /** Sketch scale (SVG units per metre) and margin; the SVG scales to its column width. */
 const SKETCH = { unitsPerMetre: 30, pad: 10 };
 /**
@@ -53,7 +55,8 @@ export function outlinePolygons(part, vertical) {
 /** "house_height" or "height" -> "Height": the argument word of a ship-cad name. */
 function argumentWord(name) {
   const word = name.split('_').pop() || name;
-  return word.charAt(0).toUpperCase() + word.slice(1);
+  const label = word.charAt(0).toUpperCase() + word.slice(1);
+  return ['height', 'length', 'breadth', 'width', 'depth', 'thickness', 'volume'].includes(word) ? t(`term.${word}`) : label;
 }
 
 /**
@@ -79,14 +82,14 @@ export function plainReason(reason) {
   if (!reason) return '';
   reason = withoutHandles(reason);
   if (reason === 'Component identity needs human review') {
-    return 'Every value was read from the drawing. Check that this is the right part.';
+    return t('ko2.parts.identity');
   }
   return reason.split('; ').map((item) => {
     let match = /^(\w+): missing or invalid measurement$/.exec(item);
-    if (match) return `${argumentWord(match[1])}: not read from the drawing.`;
+    if (match) return t('ko2.parts.notRead', { item: argumentWord(match[1]) });
     match = /^(\w+): (guessed|ai_inferred): (.+)$/.exec(item);
-    if (match) return `${argumentWord(match[1])}: ${match[2] === 'guessed' ? 'guessed' : 'read by the AI'} (${match[3]}).`;
-    if (item === 'primary measurement does not match named source') return 'The outline was read from another view than the part names.';
+    if (match) return t('ko2.parts.reasonSource', { item: argumentWord(match[1]), source: t(match[2] === 'guessed' ? 'ko2.parts.reasonGuess' : 'ko2.parts.reasonAi'), basis: match[3] });
+    if (item === 'primary measurement does not match named source') return t('ko2.parts.otherView');
     // A plain item is its own sentence: capital first letter, full stop.
     const sentence = item.charAt(0).toUpperCase() + item.slice(1);
     return sentence.endsWith('.') ? sentence : `${sentence}.`;
@@ -94,12 +97,12 @@ export function plainReason(reason) {
 }
 
 export function partState(part) {
-  if (part.revision_pending) return { word: 'New revision', tone: 'ai', icon: 'reset', title: 'Re-run from your mark. Keep it or undo it.' };
-  if (part.review === 'accepted') return { word: 'Accepted', tone: 'brand', icon: 'st-chosen', title: 'You accepted this part as a draft part.' };
-  if (part.review === 'marked') return { word: 'Marked', tone: 'brand', icon: 'drawing', title: `You marked it: ${part.review_note || ''}` };
-  if (!part.built) return { word: 'Not built', tone: 'warn', icon: 'not-built', title: plainReason(part.reason) };
-  if (part.status === 'draft_guess') return { word: 'Guessed', tone: 'draft', icon: 'st-guessed', title: 'One or more values were guessed. Check them.' };
-  return { word: 'To check', tone: '', icon: 'flag', title: 'Every value was read from the drawing. Check what the part is.' };
+  if (part.revision_pending) return { word: t('ko2.parts.newRevision'), tone: 'ai', icon: 'reset', title: t('ko2.parts.revisionHelp') };
+  if (part.review === 'accepted') return { word: t('ko2.parts.accepted'), tone: 'brand', icon: 'st-chosen', title: t('ko2.parts.acceptedHelp') };
+  if (part.review === 'marked') return { word: t('ko2.parts.marked'), tone: 'brand', icon: 'drawing', title: t('ko2.parts.markedTitle', { note: part.review_note || '' }) };
+  if (!part.built) return { word: t('ko2.parts.notBuilt'), tone: 'warn', icon: 'not-built', title: plainReason(part.reason) };
+  if (part.status === 'draft_guess') return { word: t('ko2.parts.guessed'), tone: 'draft', icon: 'st-guessed', title: t('ko2.parts.guessedHelp') };
+  return { word: t('ko2.parts.toCheck'), tone: '', icon: 'flag', title: t('ko2.parts.readHelp') };
 }
 
 /**
@@ -125,17 +128,17 @@ function numberCell(value) {
 
 /** The part list as tab-separated text, for a spreadsheet or a sign-off note. */
 export function partTableText(parts, signOff = null) {
-  const header = ['Part', 'Op', 'Built', 'Status', 'x from (m)', 'x to (m)', 'Breadth (m)', 'z from (m)', 'z to (m)', 'Volume (m3)', 'Values read', 'Values guessed', 'Review', 'Note'];
+  const header = [t('ko2.parts.header.part'), t('ko2.parts.header.op'), t('ko2.parts.header.built'), t('ko2.parts.header.status'), t('ko2.parts.header.xFrom'), t('ko2.parts.header.xTo'), t('ko2.parts.header.breadth'), t('ko2.parts.header.zFrom'), t('ko2.parts.header.zTo'), t('ko2.parts.header.volume'), t('ko2.parts.header.read'), t('ko2.parts.header.guessed'), t('ko2.parts.header.review'), t('ko2.parts.header.note')];
   const rows = parts.map((p) => {
     const box = p.bbox_m;
-    const text = [p.label, p.op, p.built ? 'yes' : 'no', p.status].map(safeTextCell);
+    const text = [p.label, p.op, p.built ? t('ko2.parts.yes') : t('ko2.parts.no'), p.status].map(safeTextCell);
     const numbers = [box?.min[0], box?.max[0], box ? box.max[1] - box.min[1] : null, box?.min[2], box?.max[2], p.volume_m3].map(numberCell);
     const counts = [p.arguments.filter((a) => a.source !== 'guessed').length, p.arguments.filter((a) => a.source === 'guessed').length].map(String);
     return [...text, ...numbers, ...counts, safeTextCell(p.review), safeTextCell(p.review_note || '')];
   });
   return [header, ...rows].map((row) => row.join('\t')).join('\n')
-    + (signOff ? `\n${safeTextCell(`Signed off by ${signOff.name}, ${new Date(signOff.time_ms).toISOString().slice(0, 10)}: ${signOff.statement}.`)}` : '')
-    + '\nDraft, not for construction. engineering_approved: false\n';
+    + (signOff ? `\n${safeTextCell(t('ko2.parts.clipboardSignOff', { name: signOff.name, date: new Date(signOff.time_ms).toISOString().slice(0, 10), statement: signOff.statement }))}` : '')
+    + t('ko2.parts.clipboardStamp');
 }
 
 function chip(text, tone, title) {
@@ -149,9 +152,27 @@ function stateChip(state, options = {}) {
 
 /** A value source (Read, AI read, Guessed) as an icon chip; the basis is the tooltip detail. */
 function sourceChip(source, basis = '') {
-  return glyphChip(SOURCE_ICON[source] || 'info', SOURCE_WORD[source] || source, {
+  return glyphChip(SOURCE_ICON[source] || 'info', (SOURCE_WORD[source] ? t(`parts.source.${source}`) : source), {
     tone: SOURCE_TONE[source] || null, detail: basis ? withoutHandles(basis) : null, focusable: false,
   });
+}
+
+/** Adapt only a single number with a unit; ranges, outlines and labels stay as text. */
+export function partQuantity(argument) {
+  const match = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))\s+(m|mm|cm|m²|m³|m2|m3|kg|t|°|deg|%)$/.exec(String(argument.value ?? '').trim());
+  if (!match || !Number.isFinite(Number(match[1]))) return null;
+  const source = SOURCE_WORD[argument.source]
+    ? t(`parts.source.${argument.source}`) : argument.source || t('status.unknown');
+  return {
+    value: Number(match[1]), unit: match[2], digits: (match[1].split('.')[1] || '').length,
+    status: argument.source === 'traced' ? 'read' : argument.source === 'guessed' ? 'guessed' : 'draft',
+    source: `${source}${argument.basis ? ` · ${argument.basis}` : ''}`,
+  };
+}
+
+function argumentValue(argument) {
+  const quantity = partQuantity(argument);
+  return quantity ? valueDisplay(quantity) : argument.value || t('status.unknown');
 }
 
 /** Whether "Re-run with this note" is offered: a marked part with a note, of an op the worker revises. */
@@ -203,7 +224,7 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
     const order = [...built].sort((a, b) => Number(a.id === selectedId) - Number(b.id === selectedId));
     return el('figure', { class: 'parts-sketch' },
       el('figcaption', {}, title),
-      svg('svg', { viewBox: `0 0 ${width.toFixed(0)} ${height.toFixed(0)}`, role: 'img', 'aria-label': `${title} sketch of the parts` },
+      svg('svg', { viewBox: `0 0 ${width.toFixed(0)} ${height.toFixed(0)}`, role: 'img', 'aria-label': t('ko2.parts.sketch', { title }) },
         ...order.map((p) => {
           const outline = sketchOutline(p, vertical, px, py);
           if (outline) return outline;
@@ -300,31 +321,31 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
         class: 'btn btn-primary write-action',
         type: 'button',
         disabled: busy,
-        title: 'Accept this part as a draft part (A)',
+        title: t('ko2.parts.acceptHelp'),
         onclick: () => decide(part, 'accepted'),
-      }, 'Accept', el('kbd', { class: 'key-hint' }, 'A')) : null,
+      }, t('ko2.parts.accept'), el('kbd', { class: 'key-hint' }, 'A')) : null,
       !reviewed ? el('button', {
         class: 'btn write-action',
         type: 'button',
         disabled: busy,
-        title: 'Say what is wrong with this part (M)',
+        title: t('ko2.parts.markHelp'),
         onclick: () => { marking = true; render(); host.querySelector('.parts-mark textarea')?.focus(); },
-      }, 'Mark', el('kbd', { class: 'key-hint' }, 'M')) : null,
+      }, t('ko2.parts.mark'), el('kbd', { class: 'key-hint' }, 'M')) : null,
       reviewed ? el('button', {
         class: 'btn write-action',
         type: 'button',
         disabled: busy,
-        title: 'Open this part again for review',
+        title: t('ko2.parts.reopenHelp'),
         onclick: () => decide(part, 'open'),
-      }, 'Reopen') : null,
-      part.bbox_m ? el('button', { class: 'btn', type: 'button', onclick: () => (wholeModel?.loadable ? showWholeVessel(part) : showIn3d(part)) }, icon('cube'), 'Show in 3D') : null);
+      }, t('ko2.parts.reopen')) : null,
+      part.bbox_m ? el('button', { class: 'btn', type: 'button', onclick: () => (wholeModel?.loadable ? showWholeVessel(part) : showIn3d(part)) }, icon('cube'), t('ko2.parts.show3d')) : null);
   }
 
   /** What the person wants changed: chips that start a sentence, then their words. */
   function markForm(part) {
-    const text = el('textarea', { rows: '3', maxlength: String(MAX_NOTE), placeholder: 'What should change in this part?', 'aria-label': `What should change in ${part.label}` });
+    const text = el('textarea', { rows: '3', maxlength: String(MAX_NOTE), placeholder: t('ko2.parts.changePrompt'), 'aria-label': t('ko2.parts.changeLabel', { part: part.label }) });
     const count = el('span', { class: 'parts-mark-count' }, `0 / ${MAX_NOTE}`);
-    const save = el('button', { class: 'btn btn-primary', type: 'submit', disabled: true }, 'Save mark');
+    const save = el('button', { class: 'btn btn-primary', type: 'submit', disabled: true }, t('ko2.parts.saveMark'));
     const update = () => {
       markDraft = text.value;
       count.textContent = `${text.value.length} / ${MAX_NOTE}`;
@@ -341,16 +362,19 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
       class: 'parts-mark',
       onsubmit: (event) => { event.preventDefault(); decide(part, 'marked', text.value); },
     },
-    el('div', { class: 'chip-row' }, ...MARK_CHIPS.map((phrase) => el('button', {
-      class: 'btn btn-small',
-      type: 'button',
-      onclick: () => { text.value = text.value ? `${text.value.trim()} ${phrase}` : phrase; update(); text.focus(); },
-    }, phrase))),
+    el('div', { class: 'chip-row' }, ...MARK_CHIPS.map((key) => {
+      const phrase = t(`ko2.parts.mark.${key}`);
+      return el('button', {
+        class: 'btn btn-small',
+        type: 'button',
+        onclick: () => { text.value = text.value ? `${text.value.trim()} ${phrase}` : phrase; update(); text.focus(); },
+      }, phrase);
+    })),
     text,
     el('div', { class: 'parts-mark-actions' },
       count,
       el('span', { class: 'export-actions-spacer' }),
-      el('button', { class: 'btn', type: 'button', onclick: () => { marking = false; render(); } }, 'Cancel'),
+      el('button', { class: 'btn', type: 'button', onclick: () => { marking = false; render(); } }, t('ko2.parts.cancel')),
       save));
     return form;
   }
@@ -405,73 +429,72 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
   /** Re-run offer, progress, or the new revision with what changed and Keep / Undo. */
   function revisionBlock(part) {
     if (rerun?.id === part.id) {
-      return el('section', { class: 'parts-rerun', role: 'status', 'aria-label': 'Re-run in progress' },
+      return el('section', { class: 'parts-rerun', role: 'status', 'aria-label': t('ko2.parts.rerunning') },
         el('span', { class: 'spinner', 'aria-hidden': 'true' }),
         el('p', {},
-          el('strong', {}, 'Re-running this part from your note. '),
-          'The AI reads the drawing around the part and your note; then only this part is rebuilt. This takes 1 to 5 minutes. ',
+          el('strong', {}, t('ko2.parts.rerunningNote')),
+          t('ko2.parts.rerunningHelp'),
           el('span', { class: 'parts-rerun-time', 'aria-hidden': 'true' }, elapsedText(Date.now() - rerun.startedMs))));
     }
     if (part.revision_pending) {
       return el('section', { class: 'parts-revision', 'aria-labelledby': 'parts-revision-title' },
-        el('h3', { id: 'parts-revision-title' }, `Revision ${part.revision}: what changed`),
-        part.revision_note ? el('p', { class: 'parts-revision-note' }, 'From your note: ', el('q', {}, part.revision_note)) : null,
+        el('h3', { id: 'parts-revision-title' }, t('ko2.parts.revisionChanges', { revision: part.revision })),
+        part.revision_note ? el('p', { class: 'parts-revision-note' }, t('ko2.parts.fromNote'), el('q', {}, part.revision_note)) : null,
         part.changes?.length
           ? el('table', { class: 'parts-args parts-changes' },
-            el('caption', { class: 'visually-hidden' }, `Values of ${part.label} before and after the re-run`),
+            el('caption', { class: 'visually-hidden' }, t('ko2.parts.beforeAfter', { part: part.label })),
             el('thead', {}, el('tr', {},
-              el('th', { scope: 'col' }, 'Item'), el('th', { scope: 'col' }, 'Before'), el('th', { scope: 'col' }, 'After'))),
+              el('th', { scope: 'col' }, t('ko2.parts.item')), el('th', { scope: 'col' }, t('ko2.parts.before')), el('th', { scope: 'col' }, t('ko2.parts.after')))),
             el('tbody', {}, ...part.changes.map((c) => el('tr', {},
               el('th', { scope: 'row' }, c.name),
-              el('td', { class: 'parts-value' }, c.before || '—', c.before_source ? [' ', sourceChip(c.before_source)] : null),
-              el('td', { class: 'parts-value' }, c.after || '—', c.after_source ? [' ', sourceChip(c.after_source)] : null)))))
-          : el('p', {}, 'No value changed.'),
-        el('p', { class: 'parts-revision-hint' }, 'AI values are drafts. Keep the new part, or undo to put back the old part and its STEP file.'),
+              el('td', { class: 'parts-value' }, argumentValue({ value: c.before, source: c.before_source }), c.before_source ? [' ', sourceChip(c.before_source)] : null),
+              el('td', { class: 'parts-value' }, argumentValue({ value: c.after, source: c.after_source }), c.after_source ? [' ', sourceChip(c.after_source)] : null)))))
+          : el('p', {}, t('ko2.parts.noChange')),
+        el('p', { class: 'parts-revision-hint' }, t('ko2.parts.revisionHint')),
         el('div', { class: 'decision-bar write-action' },
-          el('button', { class: 'btn btn-primary', type: 'button', disabled: busy, onclick: () => settleRevision(part, true) }, 'Keep'),
-          el('button', { class: 'btn', type: 'button', disabled: busy, onclick: () => settleRevision(part, false) }, 'Undo')));
+          el('button', { class: 'btn btn-primary', type: 'button', disabled: busy, onclick: () => settleRevision(part, true) }, t('ko2.parts.keep')),
+          el('button', { class: 'btn', type: 'button', disabled: busy, onclick: () => settleRevision(part, false) }, t('ko2.parts.undo'))));
     }
     if (canRerun(part) && revisePart) {
       return el('div', { class: 'parts-rerun-offer write-action' },
-        el('button', { class: 'btn btn-primary', type: 'button', disabled: busy, onclick: () => rerunPart(part) }, 'Re-run with this note'),
-        el('span', { class: 'parts-revision-hint' }, 'The AI rebuilds only this part from your note (1 to 5 minutes).'));
+        el('button', { class: 'btn btn-primary', type: 'button', disabled: busy, onclick: () => rerunPart(part) }, t('ko2.parts.rerun')),
+        el('span', { class: 'parts-revision-hint' }, t('ko2.parts.rerunHint')));
     }
     if (part.revision > 0) {
-      return el('p', { class: 'parts-revision-hint' }, `Revision ${part.revision}`,
-        part.revision_note ? [', from the note ', el('q', {}, part.revision_note)] : null, '.');
+      return el('p', { class: 'parts-revision-hint' }, t('ko2.parts.revision', { revision: part.revision }),
+        part.revision_note ? [t('ko2.parts.noteSuffix'), el('q', {}, part.revision_note)] : null, '.');
     }
     return null;
   }
 
   function detail(part) {
-    if (!part) return el('p', { class: 'panel-empty' }, 'Pick a part.');
+    if (!part) return el('p', { class: 'panel-empty' }, t('ko2.parts.pick'));
     const state = partState(part);
     const box = part.bbox_m;
     return el('section', { class: 'parts-detail', 'aria-labelledby': 'parts-detail-title' },
       el('header', { class: 'parts-detail-head' },
         el('h2', { id: 'parts-detail-title' }, part.label),
         stateChip(state, { small: false }),
-        part.view ? chip(part.view, '', 'The drawing view this part was read from') : null),
+        part.view ? chip(part.view, '', t('ko2.parts.viewHelp')) : null),
       actions(part),
       marking ? markForm(part) : null,
       part.review === 'marked' && part.review_note
-        ? el('p', { class: 'parts-marked' }, el('strong', {}, 'You marked: '), part.review_note, ' Saved with the review of this run.')
+        ? el('p', { class: 'parts-marked' }, el('strong', {}, t('ko2.parts.youMarked')), part.review_note, t('ko2.parts.markSaved'))
         : null,
       revisionBlock(part),
       el('p', { class: 'parts-reason', title: part.reason }, plainReason(part.reason)),
       part.op === 'tank' && capacityPlan ? tankDetailBlock(capacityRowOf(capacityPlan, part.id)) : null,
       box ? el('p', { class: 'parts-box-line' },
-        `x ${box.min[0].toFixed(2)} to ${box.max[0].toFixed(2)} m · breadth ${(box.max[1] - box.min[1]).toFixed(2)} m · `
-        + `z ${box.min[2].toFixed(2)} to ${box.max[2].toFixed(2)} m`
+        t('ko2.parts.box', { xFrom: box.min[0].toFixed(2), xTo: box.max[0].toFixed(2), breadth: (box.max[1] - box.min[1]).toFixed(2), zFrom: box.min[2].toFixed(2), zTo: box.max[2].toFixed(2) })
         + (part.volume_m3 !== null && part.volume_m3 !== undefined ? ` · ${part.volume_m3.toFixed(1)} m³` : '')) : null,
       part.arguments.length
         ? el('table', { class: 'parts-args' },
-          el('caption', { class: 'visually-hidden' }, `Values of ${part.label}`),
+          el('caption', { class: 'visually-hidden' }, t('ko2.parts.values', { part: part.label })),
           el('thead', {}, el('tr', {},
-            el('th', { scope: 'col' }, 'Item'), el('th', { scope: 'col' }, 'Value'), el('th', { scope: 'col' }, 'Source'), el('th', { scope: 'col' }, 'Basis'))),
+            el('th', { scope: 'col' }, t('ko2.parts.item')), el('th', { scope: 'col' }, t('ko2.parts.value')), el('th', { scope: 'col' }, t('ko2.parts.source')), el('th', { scope: 'col' }, t('ko2.parts.basis')))),
           el('tbody', {}, ...part.arguments.map((a) => el('tr', { dataset: { source: a.source } },
             el('th', { scope: 'row' }, a.name),
-            el('td', { class: 'parts-value' }, a.value || '—'),
+            el('td', { class: 'parts-value' }, argumentValue(a)),
             el('td', {}, sourceChip(a.source)),
             el('td', { class: 'parts-basis', title: a.basis || '' }, withoutHandles(a.basis || ''))))))
         : null);
@@ -482,11 +505,11 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
   async function copyTable(button) {
     try {
       await navigator.clipboard.writeText(partTableText(parts, signedOff));
-      button.textContent = 'Copied';
+      button.textContent = t('ko2.parts.copied');
     } catch {
-      button.textContent = 'Copy failed';
+      button.textContent = t('ko2.parts.copyFailed');
     }
-    setTimeout(() => { button.textContent = 'Copy part list'; }, 1600);
+    setTimeout(() => { button.textContent = t('ko2.parts.copy'); }, 1600);
   }
 
   /**
@@ -497,25 +520,25 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
   function signOffBlock() {
     if (!parts.length) return null;
     const open = parts.filter((p) => p.review !== 'accepted' && p.review !== 'marked').length;
-    const draftLine = el('span', { class: 'parts-signoff-note' }, 'The run and its files stay drafts.');
+    const draftLine = el('span', { class: 'parts-signoff-note' }, t('ko2.parts.stayDraft'));
     if (signedOff) {
       const date = new Date(signedOff.time_ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-      return el('section', { class: 'parts-signoff is-signed', 'aria-label': 'Sign-off' },
+      return el('section', { class: 'parts-signoff is-signed', 'aria-label': t('ko2.parts.signOffLabel') },
         icon('check'),
-        el('p', {}, el('strong', {}, `Signed off by ${signedOff.name}, ${date}: `), signedOff.statement, '. ', draftLine),
-        el('button', { class: 'btn write-action', type: 'button', disabled: busy, onclick: () => submitSignOff('') }, 'Withdraw'));
+        el('p', {}, el('strong', {}, t('ko2.parts.signedBy', { name: signedOff.name, date })), signedOff.statement, '. ', draftLine),
+        el('button', { class: 'btn write-action', type: 'button', disabled: busy, onclick: () => submitSignOff('') }, t('ko2.parts.withdraw')));
     }
     // Until every part is reviewed, the review progress in the head says so (its tooltip).
     if (open) return null;
-    const name = el('input', { type: 'text', maxlength: '80', placeholder: 'Your name', 'aria-label': 'Your name for the sign-off', value: nameDraft ?? lastName(), oninput: (event) => { nameDraft = event.target.value; } });
+    const name = el('input', { type: 'text', maxlength: '80', placeholder: t('ko2.parts.name'), 'aria-label': t('ko2.parts.nameHelp'), value: nameDraft ?? lastName(), oninput: (event) => { nameDraft = event.target.value; } });
     const form = el('form', {
       class: 'parts-signoff write-action',
-      'aria-label': 'Sign-off',
+      'aria-label': t('ko2.parts.signOffLabel'),
       onsubmit: (event) => { event.preventDefault(); submitSignOff(name.value); },
     },
-    el('p', {}, el('strong', {}, 'Every part is reviewed. '), `Sign off as usable as a starting model. `, draftLine),
+    el('p', {}, el('strong', {}, t('ko2.parts.reviewed')), t('ko2.parts.signOffHelp'), draftLine),
     name,
-    el('button', { class: 'btn btn-primary', type: 'submit', disabled: busy }, 'Sign off'));
+    el('button', { class: 'btn btn-primary', type: 'submit', disabled: busy }, t('ko2.parts.signOff')));
     return form;
   }
 
@@ -561,24 +584,24 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
     const copy = el('button', {
       class: 'btn btn-icon',
       type: 'button',
-      ...tipAttributes('Copy part list', 'A table to paste into a spreadsheet.').attrs,
+      ...tipAttributes(t('ko2.parts.copy'), t('ko2.parts.copyHelp')).attrs,
       onclick: (event) => copyTable(event.currentTarget),
     }, icon('table'));
     const open = parts.length - reviewed;
-    const progressTip = tipAttributes(`${reviewed} of ${parts.length} parts reviewed`,
-      open ? `Sign-off opens when every part is reviewed: ${open} still open.` : null, { label: false });
+    const progressTip = tipAttributes(t('ko2.parts.progress', { reviewed, total: parts.length }),
+      open ? t('ko2.parts.progressHelp', { open }) : null, { label: false });
     return el('div', { class: 'parts-progress' },
-      el('span', { class: 'parts-progress-text', tabindex: '0', ...progressTip.attrs }, el('strong', {}, String(reviewed)), `/${parts.length} reviewed`, progressTip.describer),
-      el('span', { class: 'parts-progress-bar', role: 'img', 'aria-label': `${reviewed} of ${parts.length} parts reviewed` },
+      el('span', { class: 'parts-progress-text', tabindex: '0', ...progressTip.attrs }, el('strong', {}, String(reviewed)), t('ko2.parts.progressSuffix', { total: parts.length }), progressTip.describer),
+      el('span', { class: 'parts-progress-bar', role: 'img', 'aria-label': t('ko2.parts.progress', { reviewed, total: parts.length }) },
         el('span', { style: { width: `${parts.length ? (reviewed / parts.length) * 100 : 0}%` } })),
-      el('button', { class: 'btn', type: 'button', disabled: !next, title: 'Go to the next part to review (N)', onclick: () => next && select(next.id) }, 'Next', el('kbd', { class: 'key-hint' }, 'N')),
+      el('button', { class: 'btn', type: 'button', disabled: !next, title: t('ko2.parts.nextHelp'), onclick: () => next && select(next.id) }, t('ko2.parts.next'), el('kbd', { class: 'key-hint' }, 'N')),
       wholeModel ? el('button', {
         class: 'btn',
         type: 'button',
         disabled: !wholeModel.loadable,
-        title: wholeModel.loadable ? 'Show every part in the 3D view' : 'The whole-vessel model is too large for the app; open the part STEP files in your CAD program',
+        title: wholeModel.loadable ? t('ko2.parts.wholeHelp') : t('ko2.parts.tooLarge'),
         onclick: () => showWholeVessel(parts.find((p) => p.id === selectedId) || null),
-      }, icon('cube'), 'Whole vessel in 3D') : null,
+      }, icon('cube'), t('ko2.parts.whole')) : null,
       copy);
   }
 
@@ -589,21 +612,21 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
     const selected = parts.find((p) => p.id === selectedId) || null;
     fill(host, el('div', { class: 'page-body parts-page' },
       el('header', { class: 'page-head parts-head' },
-        el('h1', { id: 'parts-title' }, 'Parts'),
+        el('h1', { id: 'parts-title' }, t('ko2.parts.parts')),
         el('span', { class: 'page-head-meta chip-row' },
-          glyphChip('cube', 'built', { count: `${built}/${parts.length}`, countedName: `${built} of ${parts.length} parts built` }),
-          accepted ? glyphChip('st-chosen', 'accepted', { count: accepted, tone: 'brand' }) : null,
-          marked ? glyphChip('drawing', 'marked', { count: marked, tone: 'brand' }) : null),
+          glyphChip('cube', t('ko2.parts.builtLower'), { count: `${built}/${parts.length}`, countedName: t('ko2.parts.builtCount', { built, total: parts.length }) }),
+          accepted ? glyphChip('st-chosen', t('ko2.parts.acceptedLower'), { count: accepted, tone: 'brand' }) : null,
+          marked ? glyphChip('drawing', t('ko2.parts.markedLower'), { count: marked, tone: 'brand' }) : null),
         progress()),
       signOffBlock(),
       el('div', { class: 'parts-layout' },
-        el('nav', { class: 'parts-tree', 'aria-label': 'Parts' },
+        el('nav', { class: 'parts-tree', 'aria-label': t('ko2.parts.parts') },
           ...GROUPS.map(([op, title]) => {
             const items = parts.filter((p) => (KNOWN_OPS.has(p.op) ? p.op : 'other') === op);
-            return items.length ? el('section', { class: 'parts-group' }, el('h2', {}, title), el('ul', {}, ...items.map(treeRow))) : null;
+            return items.length ? el('section', { class: 'parts-group' }, el('h2', {}, t(title)), el('ul', {}, ...items.map(treeRow))) : null;
           })),
         el('div', { class: 'parts-main' },
-          el('div', { class: 'parts-sketches' }, sketch(2, 'Profile'), sketch(1, 'Plan')),
+          el('div', { class: 'parts-sketches' }, sketch(2, t('term.profile')), sketch(1, t('term.plan'))),
           detail(selected))),
       capacityPanel({ plan: capacityPlan, selectedId: selectedTankId, sounding: soundings.get(selectedTankId), onPick: pickTank })));
   }
@@ -627,7 +650,7 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
     try {
       soundings.set(id, { table: await loadSounding(id) });
     } catch (failure) {
-      soundings.set(id, { error: failure?.message || 'The sounding table could not be read.' });
+      soundings.set(id, { error: failure?.message || t('ko2.parts.soundingError') });
     }
     if (selectedTankId === id) render();
   }

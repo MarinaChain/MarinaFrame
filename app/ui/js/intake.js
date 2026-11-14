@@ -5,18 +5,30 @@
 // skip pages and type what they know of the vessel, then start_intake_run starts the run and the app opens its live screen.
 // Contract: docs/APP_SPEC.md, section "Intake".
 
+import { t } from './i18n.js';
 import { el, svg, icon, fill } from './dom.js';
 import { checklistPanel, computeChecklist, scaleChip, typeChip, typePicker, withType } from './drawing_set.js';
 
 /** The labels a region can have, in picker order, with the words people see. */
 const VIEW_LABELS = [
-  ['body_plan', 'Body plan'],
-  ['half_breadth', 'Half-breadth'],
-  ['profile', 'Profile'],
-  ['title_block', 'Title block'],
-  ['other', 'Other'],
+  ['body_plan', 'ko3.view.body_plan'],
+  ['half_breadth', 'ko3.view.half_breadth'],
+  ['profile', 'ko3.view.profile'],
+  ['title_block', 'ko3.view.title_block'],
+  ['other', 'ko3.view.other'],
 ];
-const LABEL_TEXT = Object.fromEntries(VIEW_LABELS);
+const LABEL_KEYS = Object.fromEntries(VIEW_LABELS);
+/** A proposed view label in the current language. */
+export function viewLabel(label) {
+  return LABEL_KEYS[label] ? t(LABEL_KEYS[label]) : undefined;
+}
+/** Page count for a drawing set; include the kept count only when pages were skipped. */
+export function intakePageCount(total, kept = total) {
+  return total === kept
+    ? t('ko3.pages', { count: total, unit: t(total === 1 ? 'ko3.pageSingular' : 'ko3.pagePlural') })
+    : t('ko3.keptPages', { kept, total });
+}
+
 /** The three views a hull is built from. The set summary says which kept pages show each one. */
 const HULL_VIEWS = ['body_plan', 'half_breadth', 'profile'];
 
@@ -27,10 +39,10 @@ const CHIP_GAP_PX = 4;
 
 /** Optional particulars: field name, label, unit. All in metres; never required. */
 const PARTICULAR_FIELDS = [
-  ['loa_m', 'LOA'],
-  ['beam_m', 'Beam'],
-  ['depth_m', 'Depth'],
-  ['draft_m', 'Draft'],
+  ['loa_m', 'ko3.particular.loa_m'],
+  ['beam_m', 'ko3.particular.beam_m'],
+  ['depth_m', 'ko3.particular.depth_m'],
+  ['draft_m', 'ko3.particular.draft_m'],
 ];
 
 /** The set warning that the AI line replaces (the line uses the current AI status). */
@@ -181,8 +193,8 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
   /** Why Start reading is off, in one line; empty when the run can start. */
   function blockedReason() {
     if (!aiStatus?.active) return 'ai';
-    if (!keptPages().length) return 'Every page is skipped. Keep at least one page.';
-    if (!particulars()) return 'A known particular is not a positive number.';
+    if (!keptPages().length) return t('ko3.intake.allSkipped');
+    if (!particulars()) return t('ko3.intake.invalidParticular');
     return '';
   }
 
@@ -218,12 +230,12 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
 
   function aiLine() {
     const reason = !aiStatus?.enabled
-      ? 'AI drafting is off.'
-      : 'No model key is set up.';
+      ? t('ko3.intake.aiDraftingIsOff')
+      : t('ko3.intake.noModelKeyIsSetUp');
     return el('p', { class: 'intake-ai-line', role: 'note' },
       icon('warn'),
-      el('span', {}, `${reason} A drawing set without a spec file needs the AI to read it, so this run cannot start.`),
-      el('button', { class: 'btn btn-small', type: 'button', onclick: openSettings }, 'Open Settings'));
+      el('span', {}, t('ko3.aiRequired', { reason })),
+      el('button', { class: 'btn btn-small', type: 'button', onclick: openSettings }, t('ko3.intake.openSettings')));
   }
 
   function warningChip(warning) {
@@ -242,20 +254,20 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
       disabled: Boolean(reason) || starting,
       title: reason && reason !== 'ai' && reason !== 'loading' ? reason : null,
       onclick: start,
-    }, starting ? 'Starting…' : 'Start reading');
+    }, starting ? t('ko3.intake.starting') : t('ko3.intake.startReading'));
     return el('div', { class: 'intake-head' },
       el('div', { class: 'intake-title' },
-        el('h1', { id: 'intake-title' }, 'New vessel'),
-        preview ? el('span', { class: 'intake-count' }, total === kept ? `${total} ${total === 1 ? 'page' : 'pages'}` : `${kept} of ${total} pages kept`) : null),
+        el('h1', { id: 'intake-title' }, t('ko3.intake.newVessel')),
+        preview ? el('span', { class: 'intake-count' }, intakePageCount(total, kept)) : null),
       el('div', { class: 'intake-actions' },
-        el('button', { class: 'btn btn-large', type: 'button', onclick: cancel }, 'Cancel'),
+        el('button', { class: 'btn btn-large', type: 'button', onclick: cancel }, t('ko3.intake.cancel')),
         startButton));
   }
 
   function pageImage(page) {
     return page.thumbnail_png_base64
-      ? el('img', { class: 'intake-thumb-img', src: `data:image/png;base64,${page.thumbnail_png_base64}`, alt: `Page ${page.page_index + 1} of ${page.file_name}`, draggable: 'false' })
-      : el('div', { class: 'intake-thumb-missing' }, 'No preview');
+      ? el('img', { class: 'intake-thumb-img', src: `data:image/png;base64,${page.thumbnail_png_base64}`, alt: t('ko3.pageAlt', { number: page.page_index + 1, file: page.file_name }), draggable: 'false' })
+      : el('div', { class: 'intake-thumb-missing' }, t('ko3.intake.noPreview'));
   }
 
   function regionFrame(page) {
@@ -284,10 +296,10 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
         type: 'button',
         dataset: { label: region.label, left: left / width, top: top / height },
         style: { left: `${(left / width) * 100}%`, top: `${(top / height) * 100}%` },
-        title: `${LABEL_TEXT[region.label]}, ${percent(region.confidence)} sure. ${region.evidence || ''} Change the label below.`.trim(),
+        title: t('ko3.regionTip', { label: viewLabel(region.label), confidence: percent(region.confidence), evidence: region.evidence || '' }).trim(),
         tabindex: '-1',
         onclick: () => host.querySelector(`#${CSS.escape(`label-${page.page_id}-${index}`)}`)?.focus(),
-      }, LABEL_TEXT[region.label]);
+      }, viewLabel(region.label));
     });
     return el('div', { class: 'intake-stage-frame' },
       el('div', { class: 'intake-thumb intake-page', style: { '--page-ratio': String(width / height) } },
@@ -328,14 +340,14 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
     const picker = el('select', {
       class: 'intake-label-picker',
       id,
-      'aria-label': `View of region ${index + 1} on page ${page.page_id}`,
+      'aria-label': t('ko3.regionView', { number: index + 1, page: page.page_id }),
       disabled: page.skip || starting,
       onchange: (event) => {
         region.label = event.target.value;
         render();
       },
     }, ...VIEW_LABELS.map(([value, text]) => {
-      const option = el('option', { value }, text);
+      const option = el('option', { value }, t(text));
       option.selected = value === region.label;
       return option;
     }));
@@ -344,12 +356,12 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
       picker,
       el('span', {
         class: `intake-confidence${region.confidence < UNSURE_BELOW ? ' unsure' : ''}`,
-        title: region.evidence ? `How sure the code is: ${region.evidence}` : 'How sure the code is of this label',
+        title: region.evidence ? t('ko3.confidence', { evidence: region.evidence }) : t('ko3.intake.howSureTheCodeIsOfThisLabel'),
       }, percent(region.confidence)));
   }
 
   function pageWhere(page) {
-    return page.kind === 'pdf' ? `page ${page.page_index + 1}` : (page.page_index ? `frame ${page.page_index + 1}` : null);
+    return page.kind === 'pdf' ? t('ko3.pageWhere', { number: page.page_index + 1 }) : (page.page_index ? t('ko3.frameWhere', { number: page.page_index + 1 }) : null);
   }
 
   function skipButton(page) {
@@ -359,10 +371,10 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
       id: `skip-${page.page_id}`,
       'aria-pressed': String(page.skip),
       disabled: starting,
-      title: page.skip ? 'Use this page again' : 'Leave this page out (for example a cover page)',
+      title: page.skip ? t('ko3.intake.useThisPageAgain') : t('ko3.intake.leaveThisPageOutForExampleACoverPage'),
       'aria-keyshortcuts': 'S',
       onclick: () => toggleSkip(page),
-    }, page.skip ? 'Keep' : 'Skip');
+    }, page.skip ? t('ko3.intake.keep') : t('ko3.intake.skip'));
   }
 
   /** One small page in the tray. Click to show it large. */
@@ -371,7 +383,7 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
     const selected = page.page_id === selectedPageId;
     const views = page.regions
       .filter((r) => r.label !== 'other' && r.label !== 'title_block')
-      .map((r) => LABEL_TEXT[r.label]);
+      .map((r) => viewLabel(r.label));
     return el('button', {
       class: `intake-tray-item${page.skip ? ' skipped' : ''}`,
       type: 'button',
@@ -385,7 +397,7 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
       el('div', { class: 'intake-thumb', style: { 'aspect-ratio': `${page.width_px} / ${page.height_px}` } }, pageImage(page), regionFrame(page)),
       el('span', { class: 'intake-tray-line' },
         el('span', { class: 'intake-page-id' }, page.page_id),
-        el('span', { class: 'intake-tray-views' }, page.skip ? 'Skipped' : (views.join(', ') || 'No view')),
+        el('span', { class: 'intake-tray-views' }, page.skip ? t('ko3.intake.skipped') : (views.join(', ') || t('ko3.intake.noView'))),
         page.warnings.length && !page.skip
           ? el('span', { class: 'intake-tray-warn', title: page.warnings.map((w) => w.message).join(' ') }, icon('warn'))
           : null),
@@ -404,18 +416,18 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
     const rows = HULL_VIEWS.map((label) => {
       const where = kept.filter((page) => page.regions.some((r) => r.label === label)).map((page) => page.page_id);
       return el('li', { class: `intake-sum-row${where.length ? '' : ' missing'}` },
-        el('span', { class: 'intake-sum-view' }, LABEL_TEXT[label]),
+        el('span', { class: 'intake-sum-view' }, viewLabel(label)),
         where.length
           ? el('button', {
-            class: 'intake-sum-pages', type: 'button', title: `Show ${where[0]}`,
+            class: 'intake-sum-pages', type: 'button', title: t('ko3.showPage', { page: where[0] }),
             onclick: () => selectPage(where[0], { focusTray: true }),
           }, where.join(' '))
-          : el('span', { class: 'intake-sum-pages', title: 'No kept page shows this view. The AI will guess it from the other views.' }, 'None'));
+          : el('span', { class: 'intake-sum-pages', title: t('ko3.intake.missingViewHelp') }, t('ko3.intake.none')));
     });
     const skipped = preview.pages.length - kept.length;
-    return el('section', { class: 'intake-sum', 'aria-label': 'Views in the kept pages' },
-      el('h2', { class: 'intake-sum-title' }, 'Views found',
-        skipped ? el('span', { class: 'intake-sum-skipped' }, `${skipped} skipped`) : null),
+    return el('section', { class: 'intake-sum', 'aria-label': t('ko3.intake.viewsInTheKeptPages') },
+      el('h2', { class: 'intake-sum-title' }, t('ko3.intake.viewsFound'),
+        skipped ? el('span', { class: 'intake-sum-skipped' }, t('ko3.skippedCount', { count: skipped })) : null),
       el('ul', {}, ...rows));
   }
 
@@ -423,7 +435,7 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
   function sheetRow(page) {
     const note = preview.set?.scale_agreement?.items?.find((item) => item.page_id === page.page_id);
     return el('div', { class: 'intake-sheet-row' },
-      el('span', { class: 'field-label' }, 'Sheet'),
+      el('span', { class: 'field-label' }, t('ko3.intake.sheet')),
       typePicker(page, {
         disabled: starting,
         onchange: (type) => { Object.assign(page, withType(page, type)); render(); },
@@ -438,11 +450,11 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
     const where = pageWhere(page);
     const dpi = page.dpi ? `${Math.round(page.dpi)} dpi` : null;
     const pages = preview.pages;
-    const position = pages.length > 1 ? `${pages.indexOf(page) + 1} of ${pages.length}` : null;
+    const position = pages.length > 1 ? t('ko3.pagePosition', { number: pages.indexOf(page) + 1, total: pages.length }) : null;
     return el('section', { class: `intake-stage${page.skip ? ' skipped' : ''}`, 'aria-label': `${page.file_name}${where ? `, ${where}` : ''}` },
       el('header', { class: 'intake-card-head' },
         el('span', { class: 'intake-page-id' }, page.page_id),
-        position ? el('span', { class: 'intake-position', title: 'Previous or next page: [ ]' }, position) : null,
+        position ? el('span', { class: 'intake-position', title: t('ko3.intake.previousOrNextPage') }, position) : null,
         el('span', { class: 'intake-file', title: page.file }, page.file_name),
         where ? el('span', { class: 'intake-where' }, where) : null,
         dpi ? el('span', { class: 'intake-dpi' }, dpi) : null,
@@ -451,8 +463,8 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
       // The labels sit above the page, next to the thing they name; spare height goes below.
       el('div', { class: 'intake-stage-foot' },
         page.skip
-          ? el('p', { class: 'intake-skipped-note' }, 'Skipped. The run does not read this page.')
-          : el('ul', { class: 'intake-region-list', 'aria-label': 'View regions' }, ...page.regions.map((r, i) => regionRow(page, r, i))),
+          ? el('p', { class: 'intake-skipped-note' }, t('ko3.intake.skippedTheRunDoesNotReadThisPage'))
+          : el('ul', { class: 'intake-region-list', 'aria-label': t('ko3.intake.viewRegions') }, ...page.regions.map((r, i) => regionRow(page, r, i))),
         page.warnings.length ? el('div', { class: 'chip-row intake-card-foot' }, ...page.warnings.map(warningChip)) : null),
       pagePreview(page));
   }
@@ -471,36 +483,36 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
   }
 
   function sidePanel() {
-    return el('section', { class: 'intake-side', 'aria-label': 'Vessel' },
+    return el('section', { class: 'intake-side', 'aria-label': t('ko3.intake.vessel') },
       el('label', { class: 'field' },
-        el('span', { class: 'field-label' }, 'Vessel name'),
+        el('span', { class: 'field-label' }, t('ko3.intake.vesselName')),
         el('input', {
           type: 'text', class: 'intake-name', id: 'intake-vessel-name', name: 'vessel_name', value: form.vessel_name, autocomplete: 'off',
-          maxlength: '200', disabled: starting, placeholder: 'For example Survey launch 24 m',
+          maxlength: '200', disabled: starting, placeholder: t('ko3.intake.forExampleSurveyLaunch24M'),
           oninput: (event) => { form.vessel_name = event.target.value; },
         })),
       el('fieldset', { class: 'field intake-known' },
-        el('legend', { class: 'field-label' }, 'Known particulars ', el('span', {
+        el('legend', { class: 'field-label' }, t('ko3.intake.knownParticulars'), el('span', {
           class: 'intake-optional', tabindex: '0',
-          'data-tip-title': 'Optional', 'data-tip-detail': 'The AI reads these from the sheets. Type them only when you know them.',
-        }, 'optional')),
+          'data-tip-title': t('ko3.intake.optional'), 'data-tip-detail': t('ko3.intake.theAIReadsTheseFromTheSheetsTypeThemOnlyWhenYouKnowThem'),
+        }, t('ko3.intake.optional'))),
         el('div', { class: 'intake-number-grid' },
-          ...PARTICULAR_FIELDS.map(([key, label]) => numberField(key, label, 'm')),
+          ...PARTICULAR_FIELDS.map(([key, label]) => numberField(key, t(label), 'm')),
           el('label', { class: 'intake-number' },
-            el('span', { class: 'intake-number-label' }, 'Scale'),
+            el('span', { class: 'intake-number-label' }, t('ko3.intake.scale')),
             el('span', { class: 'intake-number-input intake-scale' },
               el('span', { class: 'intake-unit' }, '1 :'),
               el('input', {
                 type: 'text', inputmode: 'decimal', id: 'intake-scale', name: 'scale', value: form.scale, autocomplete: 'off', spellcheck: 'false',
                 placeholder: '—', 'aria-invalid': Number.isNaN(readPositive(form.scale)) ? 'true' : null, disabled: starting,
-                'aria-label': 'Scale, 1 to', oninput: (event) => onNumberInput('scale', event.target),
+                'aria-label': t('ko3.intake.scale1To'), oninput: (event) => onNumberInput('scale', event.target),
               })))),
         ),
       el('div', { class: 'intake-mode' },
-        el('span', { class: 'field-label' }, 'Mode'),
+        el('span', { class: 'field-label' }, t('ko3.intake.mode')),
         aiStatus?.active
-          ? el('span', { class: 'badge', dataset: { tone: 'ai' }, title: 'The AI reads the sheets, then builds a draft hull that a person reviews.' }, 'AI draft')
-          : el('span', { class: 'badge', dataset: { tone: 'warn' }, title: 'A drawing set without a spec needs the AI.' }, aiStatus?.enabled ? 'No key' : 'AI off')),
+          ? el('span', { class: 'badge', dataset: { tone: 'ai' }, title: t('ko3.intake.aiDraftHelp') }, t('ko3.intake.aiDraft'))
+          : el('span', { class: 'badge', dataset: { tone: 'warn' }, title: t('ko3.intake.aDrawingSetWithoutASpecNeedsTheAI') }, aiStatus?.enabled ? t('ko3.intake.noKey') : t('ko3.intake.aiOff'))),
       // The drawings the set needs, from the sheet types (they follow the person's edits).
       preview.set?.rules
         ? checklistPanel(computeChecklist(preview.pages, preview.set.rules), preview.set.outputs, preview.set.scale_agreement,
@@ -512,7 +524,7 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
     const count = loading.count;
     return el('div', { class: 'intake-loading', role: 'status' },
       el('span', { class: 'spinner', 'aria-hidden': 'true' }),
-      `Reading ${count} ${count === 1 ? 'file' : 'files'} and finding the views…`);
+      t('ko3.readingFiles', { count, unit: t(count === 1 ? 'ko3.fileSingular' : 'ko3.filePlural') }));
   }
 
   /** A typed number: mark it when it is not valid and update Start, without a full render. */
@@ -569,7 +581,7 @@ export function createIntake({ host, invoke, refreshAiStatus, onStarted, onClose
     const tray = pages.length > 1
       ? el('div', { class: 'intake-tray-wrap' },
         setSummary(),
-        el('nav', { class: 'intake-tray', 'aria-label': 'Pages' }, ...pages.map(trayItem)))
+        el('nav', { class: 'intake-tray', 'aria-label': t('ko3.intake.pages') }, ...pages.map(trayItem)))
       : null;
     return el('div', { class: `intake-body${tray ? ' has-tray' : ''}` }, tray, stage(selected), sidePanel());
   }

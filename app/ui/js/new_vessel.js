@@ -1,6 +1,7 @@
 // Starting work: the drawing-set intake, the welcome and setup check, the batch queue, the
 // sample vessel, the developer New run sheet and files dropped on the window.
 
+import { t } from './i18n.js';
 import { prefs, setSettings, state, setQueue } from './app_state.js';
 import {
   invoke, pickFile, pickFolder, canPickPaths, transportName, pickDrawingFiles, canPickSpecFile,
@@ -114,13 +115,13 @@ async function openDrawings(paths) {
     batch.open(plan);
   }
   else if (plan.sets.length === 1) await startIntake(plan.sets[0].files);
-  else throw new Error(plan.skipped[0] ? `${fileName(plan.skipped[0].path)}: ${plan.skipped[0].reason}` : 'No drawing was found. Drop PDF, PNG, TIFF or JPEG files.');
+  else throw new Error(plan.skipped[0] ? `${fileName(plan.skipped[0].path)}: ${plan.skipped[0].reason}` : t('ko3.new_vessel.noDrawings'));
 }
 
 /** Choose a folder of drawing sets (each PDF and each subfolder is one set). */
 export async function chooseDrawingFolder() {
   try {
-    const folder = await pickFolder({ title: 'Choose a folder of drawing sets' });
+    const folder = await pickFolder({ title: t('ko3.new_vessel.chooseAFolderOfDrawingSets') });
     // Without a folder dialog (the browser preview), the mock folder shows the sheet.
     const path = folder || (transportName === 'mock' ? '/mock/Yard order/' : null);
     if (path) await openDrawings([path]);
@@ -141,7 +142,7 @@ export async function chooseDrawingSet() {
 /** The built-in sample vessel (a generated drawing): a whole run without the person's files. */
 export async function startSampleRun() {
   let task = null;
-  const started = await runAction('Starting the sample vessel…', async () => {
+  const started = await runAction(t('ko3.new_vessel.startingTheSampleVessel'), async () => {
     ({ task } = await invoke('start_sample_run', {}));
   });
   if (!started || !task) return;
@@ -202,7 +203,7 @@ function renderSpecShortcuts() {
   fill($('dataset-specs'), ...state.datasets.map((dataset) => el('button', {
     class: 'btn btn-small dataset-choice',
     type: 'button',
-    title: `Choose a run spec in ${dataset.path}`,
+    title: t('ko3.chooseSpec', { path: dataset.path }),
     onclick: () => chooseSpec(dataset.path),
   }, icon('folder'), el('span', { class: 'dataset-name' }, dataset.name))));
 }
@@ -253,7 +254,7 @@ async function acceptDroppedFiles(paths) {
       return;
     }
     const types = SPEC_EXTENSIONS.slice(0, 3).map((ext) => `.${ext}`).join(', ');
-    showNewRunError(`${fileName(paths[0])} is not a run spec. Drop the run spec (${types}) that names the drawing.`);
+    showNewRunError(t('ko3.badSpec', { file: fileName(paths[0]), types }));
     return;
   }
   // Drawings and folders: one set opens the intake, several the batch sheet.
@@ -288,7 +289,7 @@ export function installStartControls() {
     if (!specPath) return;
     const start = $('newrun-start');
     start.disabled = true;
-    start.textContent = 'Starting…';
+    start.textContent = t('ko3.new_vessel.starting');
     showNewRunError('');
     try {
       const { task } = await invoke('start_run', { spec_path: specPath });
@@ -300,7 +301,7 @@ export function installStartControls() {
       showNewRunError(error.message);
     } finally {
       start.disabled = false;
-      start.textContent = 'Start run';
+      start.textContent = t('ko3.new_vessel.startRun');
     }
   });
 }

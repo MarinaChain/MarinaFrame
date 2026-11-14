@@ -1,6 +1,7 @@
 // The run-details column: its tabs (Thinking, Steps, Checks, Calls, Evidence, Sources) and
 // hiding and showing the column.
 
+import { t } from './i18n.js';
 import { state, isRunning, setTab, prefs, addEvents, currentSection } from './app_state.js';
 import { invoke } from './api.js';
 import { fill, el, icon } from './dom.js';
@@ -11,7 +12,7 @@ import { cachedArtifact } from './artifacts.js';
 import { createAreas } from './areas.js';
 import { calibrationChoice } from './calibration.js';
 import {
-  TAB_META, TABS, tabAfter, tabName, storedDetails, reviewBadge, toggleNames, isDetailsOpen, reviewRailName,
+  TAB_META, TABS, tabAfter, storedDetails, reviewBadge, isDetailsOpen,
 } from './details.js';
 import { tipAttributes } from './tooltip.js';
 import { renderNarration } from './run_header.js';
@@ -40,15 +41,15 @@ export function renderThinking() {
   }
   const steps = state.view.activity?.steps || [];
   if (!steps.length) {
-    let text = 'This run did not use the AI. Its steps are under Steps.';
+    let text = t('ko3.inspector.thisRunDidNotUseTheAIItsStepsAreUnderSteps');
     if (state.view.summary.policy === 'live') {
       // A stopped run will take no more steps, so "not yet" would mislead.
-      text = isRunning() ? 'The AI has not taken a step yet.' : 'The AI took no recorded steps in this run. Its steps are under Steps.';
+      text = isRunning() ? t('ko3.inspector.theAIHasNotTakenAStepYet') : t('ko3.inspector.theAITookNoRecordedStepsInThisRunItsStepsAreUnderSteps');
     }
     fill(panel, el('p', { class: 'panel-empty' }, text));
     return;
   }
-  fill(panel, el('ol', { class: 'thinking', 'aria-label': 'AI steps, oldest first' },
+  fill(panel, el('ol', { class: 'thinking', 'aria-label': t('ko3.inspector.aiStepsOldestFirst') },
     ...steps.map((step) => el('li', { class: 'thought' },
       el('span', { class: 'thought-dot', 'aria-hidden': 'true' }),
       el('span', { class: 'thought-body' },
@@ -76,9 +77,10 @@ export function selectTab(tab, { focus = false } = {}) {
 function renderTabButton(tab, count = 0, { failing = false } = {}) {
   const meta = TAB_META[tab];
   const button = $(`tab-${tab}`);
-  const tip = tipAttributes(meta.word, meta.detail);
+  const word = t(`ko3.tab.${tab}`);
+  const tip = tipAttributes(word, t(`ko3.tab.${tab}.detail`));
   for (const [name, value] of Object.entries(tip.attrs)) button.setAttribute(name, value);
-  button.setAttribute('aria-label', tabName(tab, count, { failing }));
+  button.setAttribute('aria-label', count ? t(failing ? 'ko3.tabFailing' : 'ko3.tabCount', { word, count }) : word);
   fill(button, icon(meta.icon),
     count ? el('span', { class: `count${failing ? ' bad' : ''}`, 'aria-hidden': 'true' }, String(count)) : null,
     tip.describer);
@@ -112,12 +114,12 @@ function renderTimeline() {
     return;
   }
   if (!state.events.length) {
-    fill(panel, el('p', { class: 'panel-empty' }, 'No steps recorded yet.'));
+    fill(panel, el('p', { class: 'panel-empty' }, t('ko3.inspector.noStepsRecordedYet')));
     return;
   }
   fill(panel,
-    el('ol', { class: 'timeline', 'aria-label': 'Steps, oldest first' }, ...state.events.map((e) => eventRow(e))),
-    isRunning() ? el('p', { class: 'timeline-live', title: 'Working on the next step' }, 'Working') : null,
+    el('ol', { class: 'timeline', 'aria-label': t('ko3.inspector.stepsOldestFirst') }, ...state.events.map((e) => eventRow(e))),
+    isRunning() ? el('p', { class: 'timeline-live', title: t('ko3.inspector.workingOnTheNextStep') }, t('ko3.inspector.working')) : null,
   );
   panel.scrollTop = panel.scrollHeight;
 }
@@ -162,10 +164,10 @@ function bodyPlanCheckCard(check) {
   if (!check) return null;
   const decision = check.review?.decision || 'open';
   const status = check.used
-    ? `Stations ${check.stations_used.join(', ')} were measured by the body-plan reader.`
-    : `Body-plan reader not used: ${check.reason}`;
-  const image = el('img', { class: 'body-plan-check-image', alt: 'Body-plan calibration overlay', width: check.width, height: check.height });
-  cachedArtifact('image', state.task, check.overlay_path).then((url) => { image.src = url; }, () => { image.alt = 'Overlay not readable'; });
+    ? t('ko3.stations', { stations: check.stations_used.join(', ') })
+    : t('ko3.bodyUnused', { reason: check.reason });
+  const image = el('img', { class: 'body-plan-check-image', alt: t('ko3.inspector.bodyPlanCalibrationOverlay'), width: check.width, height: check.height });
+  cachedArtifact('image', state.task, check.overlay_path).then((url) => { image.src = url; }, () => { image.alt = t('ko3.inspector.overlayNotReadable'); });
   const save = (value, note = null) => invoke('review_component', { task: state.task, component_id: BODY_PLAN_REVIEW_ID, decision: value, note })
     .then(afterPartsChange, (error) => { showError(error); });
   const choice = el('div');
@@ -174,18 +176,18 @@ function bodyPlanCheckCard(check) {
     onSave: (correction) => save('marked', JSON.stringify({ calibration_correction: correction })),
     onCancel: () => fill(choice),
   }));
-  return el('section', { class: 'body-plan-check', 'aria-label': 'Body-plan calibration' },
+  return el('section', { class: 'body-plan-check', 'aria-label': t('ko3.inspector.bodyPlanCalibration') },
     el('div', { class: 'body-plan-check-head' },
-      el('strong', {}, 'Body-plan calibration'),
-      chip({ accepted: 'Confirmed', marked: 'Marked wrong', open: 'To confirm' }[decision], { tone: decision === 'accepted' ? 'pass' : decision === 'marked' ? 'fail' : '', small: true })),
+      el('strong', {}, t('ko3.inspector.bodyPlanCalibration')),
+      chip({ accepted: t('ko3.inspector.confirmed'), marked: t('ko3.inspector.markedWrong'), open: t('ko3.inspector.toConfirm') }[decision], { tone: decision === 'accepted' ? 'pass' : decision === 'marked' ? 'fail' : '', small: true })),
     el('p', { class: 'check-value selectable-text' }, status),
     ...check.flags.map((flag) => el('p', { class: 'body-plan-check-flag selectable-text' }, flag)),
     ...check.notes.concat(check.warnings).map((note) => el('p', { class: 'check-value selectable-text' }, note)),
     image,
     el('p', { class: 'chip-row write-action' },
-      el('button', { type: 'button', class: 'btn', onclick: () => save('accepted') }, 'Calibration is right'),
-      el('button', { type: 'button', class: 'btn', onclick: choose }, 'Something is wrong'),
-      decision !== 'open' ? el('button', { type: 'button', class: 'btn', onclick: () => save('open') }, 'Undo') : null),
+      el('button', { type: 'button', class: 'btn', onclick: () => save('accepted') }, t('ko3.inspector.calibrationIsRight')),
+      el('button', { type: 'button', class: 'btn', onclick: choose }, t('ko3.inspector.somethingIsWrong')),
+      decision !== 'open' ? el('button', { type: 'button', class: 'btn', onclick: () => save('open') }, t('ko3.inspector.undo')) : null),
     choice);
 }
 
@@ -199,15 +201,15 @@ function renderChecks() {
   areas.show(state.task, state.view, state.sectionId);
   const calibration = bodyPlanCheckCard(state.view.body_plan_check);
   if (!checks.length) {
-    fill(panel, calibration, areas.element, el('p', { class: 'panel-empty' }, isRunning() ? 'Checks run after the 3D model is built.' : 'No checks ran for this run.'));
+    fill(panel, calibration, areas.element, el('p', { class: 'panel-empty' }, isRunning() ? t('ko3.inspector.checksRunAfterThe3DModelIsBuilt') : t('ko3.inspector.noChecksRanForThisRun')));
     return;
   }
   const counts = { pass: 0, fail: 0, not_run: 0 };
   for (const check of checks) counts[check.result] += 1;
   const summary = [
-    counts.pass && chip(`${counts.pass} pass`, { tone: 'pass', small: true }),
-    counts.fail && chip(`${counts.fail} fail`, { tone: 'fail', small: true }),
-    counts.not_run && chip(`${counts.not_run} not run`, { small: true }),
+    counts.pass && chip(t('ko3.checks.pass', { count: counts.pass }), { tone: 'pass', small: true }),
+    counts.fail && chip(t('ko3.checks.fail', { count: counts.fail }), { tone: 'fail', small: true }),
+    counts.not_run && chip(t('ko3.checks.not_run', { count: counts.not_run }), { small: true }),
   ].filter(Boolean);
   fill(panel,
     calibration,
@@ -215,7 +217,7 @@ function renderChecks() {
     el('p', { class: 'check-summary chip-row' }, ...summary),
     el('ul', {}, ...checks.map((check) => el('li', { class: 'check' },
       el('span', { class: 'check-name' }, check.name),
-      el('span', { class: 'check-value selectable-text' }, check.limit ? `${check.value}, limit ${check.limit}` : check.value),
+      el('span', { class: 'check-value selectable-text' }, check.limit ? t('ko3.limit', { value: check.value, limit: check.limit }) : check.value),
       el('span', { class: 'badge', dataset: { tone: { pass: 'pass', fail: 'fail' }[check.result] || '' } }, fmt.checkLabel(check.result)),
     ))),
   );
@@ -226,17 +228,17 @@ function renderActivity(activity) {
   if (!activity) return null;
   const cost = activity.list_cost_complete
     ? fmt.usd(activity.list_cost_usd)
-    : `at least ${fmt.usd(activity.list_cost_usd)}`;
-  const costChip = chip(cost, { dot: false, small: true, title: 'List cost of the model requests' });
+    : t('ko3.atLeast', { cost: fmt.usd(activity.list_cost_usd) });
+  const costChip = chip(cost, { dot: false, small: true, title: t('ko3.inspector.listCostOfTheModelRequests') });
   // Costs and timings show on the Run tab only when the person turns them on (Settings).
   costChip.classList.add('cost-timing');
   const facts = [
-    [fmt.plural(activity.requests, 'request'), 'Requests to the model'],
-    [`${fmt.integer(activity.prompt_tokens)} sent`, 'Tokens sent to the model'],
-    [`${fmt.integer(activity.completion_tokens)} received`, 'Tokens received from the model'],
+    [fmt.plural(activity.requests, 'request'), t('ko3.inspector.requestsToTheModel')],
+    [t('ko3.sent', { count: fmt.integer(activity.prompt_tokens) }), t('ko3.inspector.tokensSentToTheModel')],
+    [t('ko3.received', { count: fmt.integer(activity.completion_tokens) }), t('ko3.inspector.tokensReceivedFromTheModel')],
   ];
   return el('details', { class: 'activity' },
-    el('summary', { title: 'What the AI did in this run' }, chevron(), 'Model activity',
+    el('summary', { title: t('ko3.inspector.whatTheAIDidInThisRun') }, chevron(), t('ko3.inspector.modelActivity'),
       chip(fmt.plural(activity.steps.length, 'step'), { dot: false, small: true })),
     el('p', { class: 'chip-row' }, ...facts.map(([text, title]) => chip(text, { dot: false, small: true, title })), costChip),
     el('ol', { class: 'activity-steps selectable-text' }, ...activity.steps.map((step) => el('li', {},
@@ -253,11 +255,11 @@ function renderModelCalls() {
   }
   if (!calls.length) {
     fill(panel, renderActivity(state.view.activity), el('p', { class: 'panel-empty' },
-      state.view.summary.policy === 'live' ? 'The model has not been asked anything yet.' : 'This run is deterministic. It does not call the model.'));
+      state.view.summary.policy === 'live' ? t('ko3.inspector.theModelHasNotBeenAskedAnythingYet') : t('ko3.inspector.thisRunIsDeterministicItDoesNotCallTheModel')));
     return;
   }
   const totalCost = calls.reduce((sum, c) => sum + (c.cost_usd || 0), 0);
-  const totalChip = chip(fmt.usd(totalCost), { dot: false, small: true, title: 'Cost of all calls' });
+  const totalChip = chip(fmt.usd(totalCost), { dot: false, small: true, title: t('ko3.inspector.costOfAllCalls') });
   totalChip.classList.add('cost-timing');
   const task = state.task;
   fill(panel,
@@ -268,17 +270,17 @@ function renderModelCalls() {
     ...calls.map((call) => {
       const images = el('div', { class: 'call-images' }, ...call.images.map((image) => {
         const img = el('img', { alt: image.label });
-        cachedArtifact('image', task, image.path).then((url) => { img.src = url; }).catch(() => { img.alt = `${image.label} (missing)`; });
+        cachedArtifact('image', task, image.path).then((url) => { img.src = url; }).catch(() => { img.alt = t('ko3.missingImage', { label: image.label }); });
         return el('figure', {}, img, el('figcaption', {}, image.label));
       }));
       const facts = [
-        call.prompt_tokens !== null && `${fmt.integer(call.prompt_tokens)} tokens sent`,
-        call.completion_tokens !== null && `${fmt.integer(call.completion_tokens)} received`,
+        call.prompt_tokens !== null && t('ko3.tokensSent', { count: fmt.integer(call.prompt_tokens) }),
+        call.completion_tokens !== null && t('ko3.received', { count: fmt.integer(call.completion_tokens) }),
         call.cost_usd !== null && el('span', { class: 'cost-timing' }, fmt.usd(call.cost_usd)),
-        call.key_slot !== null && `Key ${call.key_slot}`,
+        call.key_slot !== null && t('ko3.keySlot', { slot: call.key_slot }),
       ].filter(Boolean);
       const verdict = call.state === 'completed'
-        ? el('span', { class: 'badge', dataset: { tone: call.accepted ? 'pass' : 'warn' } }, call.accepted ? 'Answer used' : 'Answer not used')
+        ? el('span', { class: 'badge', dataset: { tone: call.accepted ? 'pass' : 'warn' } }, call.accepted ? t('ko3.inspector.answerUsed') : t('ko3.inspector.answerNotUsed'))
         : el('span', { class: 'badge', dataset: { tone: call.state === 'failed' ? 'fail' : '' } }, fmt.callStateLabel(call.state));
       return el('article', { class: 'call' },
         el('div', { class: 'call-head' }, verdict),
@@ -296,7 +298,7 @@ function renderEvidence() {
     return;
   }
   fill(panel, el('details', { class: 'evidence' },
-    el('summary', {}, icon('chevron'), 'Hashes, contract and manifest'),
+    el('summary', {}, icon('chevron'), t('ko3.inspector.hashesContractAndManifest')),
     el('pre', { class: 'selectable-text' }, JSON.stringify(state.view.evidence, null, 2))));
   panel.querySelector('summary .icon').classList.add('chevron');
 }
@@ -336,7 +338,12 @@ function setDetails(open, { remember = true } = {}) {
 /** Names of the toggle and the rail, and the rail's review count (the rail shows only while folded). */
 export function renderDetailsBadge() {
   const open = detailsAreOpen();
-  const names = toggleNames(open, openReviewItems(state.view));
+  const action = t(open ? 'ko3.hideDetails' : 'ko3.showDetails');
+  const count = reviewBadge(openReviewItems(state.view)).items;
+  const names = {
+    title: t('ko3.detailsTitle', { action }),
+    spoken: count ? t('ko3.detailsSpoken', { action, count }) : action,
+  };
   const toggle = $('details-toggle');
   toggle.setAttribute('aria-expanded', String(open));
   toggle.setAttribute('aria-label', names.spoken);
@@ -347,7 +354,11 @@ export function renderDetailsBadge() {
   // The rail's review button counts the sections to check: a press goes to the next one.
   const sections = toCheckCount(state.view);
   const review = $('details-review');
-  const reviewName = reviewRailName(sections);
+  const items = reviewBadge(sections).items;
+  const reviewName = items ? {
+    title: t('ko3.reviewTitle', { count: items }),
+    spoken: t('ko3.reviewSpoken', { count: items }),
+  } : null;
   review.hidden = !reviewName;
   if (reviewName) {
     review.setAttribute('aria-label', reviewName.spoken);
@@ -369,7 +380,7 @@ export function openDetailsForReview() {
 function renderRailTabs() {
   fill($('details-rail-tabs'), ...TABS.map((tab) => {
     const meta = TAB_META[tab];
-    const tip = tipAttributes(`Show ${meta.word}`, meta.detail);
+    const tip = tipAttributes(t('ko3.showTab', { word: t(`ko3.tab.${tab}`) }), t(`ko3.tab.${tab}.detail`));
     return el('button', {
       class: 'details-rail-item', type: 'button', 'aria-controls': 'inspector', dataset: { tab }, ...tip.attrs,
       onclick: () => {
