@@ -1,0 +1,10 @@
+# Source and frozen text fixtures must have identical bytes on every checkout.
+# Binary assets retain their original bytes.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.zip binary
+*.glb binary
+*.brep binary
