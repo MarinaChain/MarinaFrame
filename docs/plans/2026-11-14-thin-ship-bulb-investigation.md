@@ -15,7 +15,7 @@ Local base merged by fast-forward to `2e02d0a`. Original gate remains FAIL (medi
 
 ## Resume point
 
-Numerical investigation complete; original gate unchanged. No production defect demonstrated, so no production fix or new gate. Next: finish quick tier and identity check, commit evidence and push lane.
+Numerical investigation complete; original gate unchanged. No production defect demonstrated, so no production fix or new gate. Focused solver/validation/diagnostic suite: 31 passed; separate export/diagnostic check: 4 passed. Tracked identity scan: 0 findings. First quick-tier attempt was killed by the tool's 600-second background limit during Python tests; partial log contains one failure marker but no final failure details. Retained `work/thin-ship-shipd/bulb-quick.log`. Retry running with a 7,200-second tool limit, log `bulb-quick-retry.log`; do not push until its result is read and any failures resolved or reported to PM. Next: finish quick tier, commit evidence and push lane.
 
 ## Results and evidence
 
