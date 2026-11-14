@@ -469,6 +469,18 @@ def windows_pipe_probe():
         kernel.CloseHandle(handle)
 
 
+def test_windows_unc_pipe_spec_is_rejected_without_connecting(tmp_path):
+    if os.name != 'nt':
+        from vessel_reconstruction import platform_files
+        from unittest.mock import patch
+        path = Path(r'\\localhost\pipe\marinaframe-probe')
+        with patch.object(platform_files.os, 'name', 'nt'):
+            with pytest.raises(ValueError, match='Device and pipe'):
+                platform_files.require_windows_disk_path(path)
+        return
+    _run_nonblocking_probe(tmp_path, r'\\localhost\pipe\marinaframe-probe')
+
+
 def test_source_fifo_is_rejected_without_blocking_at_open(tmp_path, windows_pipe_probe):
     spec = independent_spec(tmp_path)
     if os.name == 'nt':

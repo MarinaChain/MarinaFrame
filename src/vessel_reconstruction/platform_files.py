@@ -57,7 +57,7 @@ def require_windows_disk_path(path: Path) -> None:
     if os.name != 'nt':
         return
     value = str(path).replace('/', '\\').lower()
-    if value.startswith(('\\\\.\\', '\\\\?\\', '\\??\\')):
+    if value.startswith('\\\\') or value.startswith('\\??\\'):
         raise ValueError('Device and pipe namespaces are not ordinary input files')
     if path.name.split('.')[0].upper() in {'CON', 'PRN', 'AUX', 'NUL',
             *(f'COM{i}' for i in range(1, 10)), *(f'LPT{i}' for i in range(1, 10))}:
