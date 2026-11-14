@@ -132,7 +132,10 @@ Plan review: architecture PASS (small existing platform boundaries); quality PAS
 - Batch 2 group 3 commit `786ec8a`: all nine fake-executable failures removed on native Windows. Result **113 failed, 2,664 passed, 116 skipped, 43 errors**; Linux **2,916 passed, 20 skipped**. No fake-executable tests skipped.
 - Batch 2 group 4: unsupported atomic package exchange refuses before loading POSIX ctypes. Windows has no implemented single-operation exchange of two populated directories; do not replace it with a non-atomic rename sequence. Exact six tests requiring exchange get the explicit platform reason; refusal regression and new-package exports still run. Focused platform/replacement tests **7 passed** on POSIX. Quick/native pending.
 
-Resume: group 4 quick tier and native check, then private-pool group; stop after group 5.
+- Batch 2 group 4 commit `8ce0589`, native run `43536497433`: **107 failed, 2,665 passed, 122 skipped, 43 errors**; Linux **2,917 passed, 20 skipped**. Initial latest-run lookup returned the prior commit; corrected by matching head SHA before recording counts.
+- Batch 2 group 5: exact private-pool tests require ACL-aware ownership enforcement unavailable on Windows; foreign-owner parameter alone gets that reason, other unsafe-folder tests still run. Added direct Windows refusal plus logged unshared-fallback regression. Focused tests **18 passed**. No production security behavior changed. Quick/native pending.
+
+Resume: group 5 quick tier and native result, record final counts then STOP after five groups. Use CI run head SHA matching, not unqualified latest run.
 
 ## Results and resume point
 

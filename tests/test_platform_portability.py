@@ -46,6 +46,16 @@ def test_atomic_package_exchange_refuses_before_posix_library_load(monkeypatch, 
         package._exchange_directories(tmp_path / 'first', tmp_path / 'second')
 
 
+def test_private_pool_refuses_without_windows_acl_proof(monkeypatch, caplog):
+    from vessel_reconstruction import parallel
+    monkeypatch.setattr(parallel.os, 'name', 'nt')
+    with pytest.raises(PermissionError, match='not supported on this platform'):
+        parallel.pool_directory()
+    with parallel.worker_tokens(2, size=2) as granted:
+        assert granted == 2
+    assert 'Worker pool not used' in caplog.text
+
+
 def test_unsupported_supervisor_refuses_before_starting_child(monkeypatch):
     monkeypatch.setattr(isolation.sys, 'platform', 'win32')
 

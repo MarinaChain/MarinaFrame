@@ -137,11 +137,25 @@ ATOMIC_PACKAGE_EXCHANGE_TESTS = {
 }
 
 
+PRIVATE_POOL_TESTS = {
+    'test_concurrent_runs_never_hold_more_than_the_pool',
+    'test_a_crashed_runs_workers_come_back',
+    'test_a_waiting_run_stops_when_cancelled',
+    'test_the_default_pool_folder_is_in_the_users_home_cache',
+}
+
+
 def pytest_collection_modifyitems(items):
     if os.name != 'nt':
         return
     for item in items:
         name = item.name.split('[', 1)[0]
+        if item.path.name == 'test_worker_pool.py':
+            foreign_owner = (name == 'test_an_unsafe_pool_folder_means_no_shared_limit_not_an_error'
+                             and item.callspec.params.get('kind') == 'foreign_owner')
+            if name in PRIVATE_POOL_TESTS or foreign_owner:
+                item.add_marker(pytest.mark.skip(
+                    reason='A private shared worker pool is not supported on this platform; Windows ACL ownership checks are not implemented.'))
         if name in ATOMIC_PACKAGE_EXCHANGE_TESTS.get(item.path.name, set()):
             item.add_marker(pytest.mark.skip(
                 reason='Atomic replacement of an existing package is not supported on this platform.'))
