@@ -1684,3 +1684,51 @@ coarse rather than count old1.2438 as DB3. Evidence ignored
 `work/cfd/kvdb3-wall-treatment-source.log`. No active lane container.
 Coarse05 measured full30-layer **area84.30937%**,distinct from face fraction
 86.02517%;new85%area admission must not be tested against face count.
+
+## Frozen G-KV-DB3 (PM-authorized, before any DB3 solver)
+
+Disclosure: frozen **after DB2 coarse(1+k)=1.2438 was known**;thresholds
+unchanged. DB2 NOT COMPLETED,never rescored. Production01 uses different nut/k
+conditions and cannot count as DB3coarse,even as pre-freeze data.
+
+**Gate:**three systematically refined grids,finest converged(1+k) in
+**[1.17855,1.25145]** and centralCT_est=CV+CW,CW0,in
+**[.0039456,.0042744]**. Report workingCW+/-1e-4bounds,not citation.
+SameU1.047,L5.5172,nu1.2557626956521737e-6,rho999.6,S8.0838,half-domain
+factor2,barehull/fixedattitude;rudder/reference uncertainty caveats unchanged.
+No thinship. Use actualcell-based ratios,monotone convergence/fine-medium<=2%
+and Richardson observedorder/extrapolation plus fineGCI1.25 safetyfactor.
+For unequalratios solve observedorder numerically;nonmonotone/nonpositiveorder
+or non-asymptotic data means uncertainty unresolved,not a gatepass. Report
+iteration drift and numericaluncertainty separately;do not invent uncertainty.
+
+Wall treatment **kOmegaSST**,nut **nutUSpaldingWallFunction**,k
+**kqRWallFunction**,omega **omegaWallFunction;blending binomial;n2**.
+Spalding continuously joins viscous and log velocity laws;omega blends viscous
+and log estimates;the standard k wall pairing avoids a contradictory fixedzero
+wall k. Supports mixed sublayer/buffer/log cells from y+<1 to~100 without
+requiring loglaw-only cells. It is a model choice,not proof of accuracy for
+arbitrary grids or extreme y+. Verify actual v2412 keyword/source before run.
+
+Mesh:coarse05 recipe30layers/growth1.2,>=**85%full-layer area** (not facecount),
+no negativevolumes/wrongfaces,maxnonorth<70,maxskew<4,AR>1000outsideadded0.
+Report y+ distribution;**area y+>300<=1%**,no other y+percent admission.
+Threebackground sizes74/**105/148** (ratio~sqrt2),same physical firstheight
+on eachgrid using absolute layer sizing/verified achieved thickness,refined
+stern as base,no geometryfit. Targetcells~1.5/4.25/12M are estimates,not caps.
+Actual memory must fit12GiB;prior2.2GiBprocessRSS is not proof of finefit.
+
+Initialize mapFields-consistent from nearest converged solution before run,
+retain wall BCs/source-time and mapping evidence. Counter startsaftermapping.
+DB3stop:newprotocol permitted **min500,max2000**,stop if successive100force
+means drift<**.1%for3successive comparisons**;frozenDB2fixedcount does not
+carry into this newly frozen gate. No earlystop before500;unconverged at2000
+fails prerequisite. Identicalstopprotocol across grids,no selectedwindows.
+
+Before EACHgrid start estimate activewall using actual previous timings and
+cellratio;**if anygrid projects>30hours stop/report before starting it**.
+Mapinitialization may improve convergence but not assumed to prove500stop.
+Report minimum500 and maximum2000budgets;unverified fit means no admission.
+Same VPSotherload(hostrollingminus5running/0paused)pause>9for600/unpause<6for600,
+5CPU12GiBnice10onecontainerdisk<40GB/reserve10GB. Commit eachstep/run,
+backgroundquicklog,pushlaneonly,no merge. No DB3run started at freeze.
