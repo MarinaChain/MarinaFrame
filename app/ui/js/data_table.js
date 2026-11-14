@@ -90,7 +90,7 @@ export function toTsv(columns, rows) {
 
 /**
  * The table with its controls. `columns` are
- * [{ key, label, unit?, align?: 'start'|'end', format?: (value, row) => string|Node, sortable? }],
+ * [{ key, label, unit?, align?: 'start'|'end', format?: (value, row) => string|Node, sortable?, unknownText? }],
  * `rowKey(row)` gives each row's stable id, `onSelect(key)` runs on a row click or Enter, and
  * `emptyText` shows when no row passes the filter. Returns { element, setRows, select }:
  *   setRows(rows)  replace the data (keeps the sort, the filter and the selection)
@@ -157,10 +157,12 @@ export function createDataTable({ columns, rows = [], caption, rowKey, onSelect,
           const content = cellContent(row, column);
           const unknown = !plainText(content).trim();
           const numeric = column.align === 'end' || (!column.align && typeof row[column.key] === 'number');
+          // A column may name its unknown state ("Not calculated yet"); the default is a dash.
+          const unknownContent = column.unknownText ? el('span', { class: 'table-unknown' }, column.unknownText) : '—';
           return el('td', {
             class: numeric ? 'table-num' : null,
             title: unknown ? t('table.unknown') : null,
-          }, unknown ? '—' : content);
+          }, unknown ? unknownContent : content);
         }));
       }));
       updateSelection();

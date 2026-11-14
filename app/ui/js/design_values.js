@@ -37,8 +37,16 @@ export function numberFormat(options) {
   return new Intl.NumberFormat(locale() === 'ko' ? 'ko-KR' : 'en-GB', options);
 }
 
-export function numberText(value, { compact }) {
-  const digits = designDigits(value);
+/**
+ * Fraction digits for a summary value. A length in metres keeps two places: a 0.4 m change of
+ * a 320 m hull is the change the designer made, so it must not round away.
+ */
+export function summaryDigits(value, unit) {
+  return unit === 'm' ? 2 : designDigits(value);
+}
+
+export function numberText(value, { compact, unit = null }) {
+  const digits = summaryDigits(value, unit);
   let options = { maximumFractionDigits: 12 };
   if (compact) options = digits === null ? { maximumSignificantDigits: 4 } : { maximumFractionDigits: digits };
   return numberFormat(options).format(value);
@@ -63,7 +71,7 @@ export function quantityValue(quantity, { compact = false, focusable = false } =
       t('design.noBandMark'), el('span', { class: 'visually-hidden' }, `: ${reason}`));
   }
   return el('span', { class: compact ? 'dv dv-compact' : 'dv', title: full },
-    el('span', { class: 'dv-num' }, formatted.isUnknown ? '—' : numberText(quantity.value, { compact })),
+    el('span', { class: 'dv-num' }, formatted.isUnknown ? '—' : numberText(quantity.value, { compact, unit: quantity.unit })),
     unit ? el('span', { class: 'dv-unit' }, unit) : null,
     band,
     shown.status === 'needs_review' ? chip(t('status.needs_review'), { tone: 'warn', small: true }) : null);
