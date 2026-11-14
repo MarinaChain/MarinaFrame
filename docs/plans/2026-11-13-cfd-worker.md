@@ -1507,3 +1507,25 @@ not282**: do not rewind to282 or discard progress. Resume from actual state.
 Proceed coarse convergence/y+;refine only after>=95%area y+<1. Ten-minute
 wait checks stay active; no stop merely for load pause. Commit each run,
 quick tier at end,push lane only/no merge.
+
+### Coarse production01 completed2000 under new other-load monitor
+
+Same container PID/start preserved;no restart/rewind. End2000,exit0,1900new
+force samples plus100diagnostic. Final fixed100means full force
+**19.00407514/19.00389502N**,drift **0.000947797%** passes1%. CV
+**0.004290791853**,single-grid **(1+k)=1.243832512**,not gate-converged.
+Final y+ area distribution:min.04808,p50.25481,p957.41060,p9918.61135,
+max80.02026,mean1.18467;**88.38327%area<1,93.38121%area<5**.
+Face shares89.53653%/93.95953%. Thus wall-resolution admission fails95%,
+no medium/fine. Strong tail corresponds to partial/lost layers; reducing
+requested thickness cannot by itself establish resolved uncovered cells.
+
+Whole production reserved **34606.135596s /48.064077216 core-hours**,
+paused **7759.628403s**,active **26846.507193s /37.286815545 core-hours**.
+5CPU12GiB,noOOM. decompose14s,solver34562s(includes pauses),reconstruct12s.
+Evidence ignored `work/cfd/kvdb2-coarse-production-01/`. Original failed
+receipts and monitor logs retained. G-KV-DB2 **NOT CONVERGED**,no gate pass.
+Per PM authorization,before new coarse run reduce relative final-layer
+thickness0.3->**0.15** (first height halved,30layers/growth1.2 unchanged),
+rebuild coarse with same snapping/quality controls and verify PM mesh
+admission;then MPI100diagnostic/run/y+ again. No force-fit geometry/gate change.
