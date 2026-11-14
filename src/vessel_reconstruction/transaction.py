@@ -31,6 +31,10 @@ _RENAME_EXCL_DARWIN = 0x4  # renamex_np flag, <stdio.h>
 
 def rename_no_replace(source: Path, target: Path) -> None:
     """Rename source to target; fail with FileExistsError if target exists."""
+    if sys.platform == 'win32':
+        from .platform_files import move_windows_path
+        move_windows_path(source, target, replace=False)
+        return
     library = ctypes.CDLL(None, use_errno=True)
     if sys.platform == "linux":
         operation = getattr(library, "renameat2", None)
@@ -69,7 +73,11 @@ class RunTransaction:
         if os.path.lexists(self.out):
             raise FileExistsError("Run output already exists; choose a new directory to preserve evidence.")
         try:
-            self.lock_fd = os.open(self.lock_path, os.O_RDWR | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+            if os.name == 'nt':
+                from .platform_files import open_windows_reservation
+                self.lock_fd = open_windows_reservation(self.lock_path, create=True)
+            else:
+                self.lock_fd = os.open(self.lock_path, os.O_RDWR | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
         except FileExistsError as exc:
             raise FileExistsError("A transaction already reserves this output; recover the interrupted run or use another directory.") from exc
         try:
@@ -146,7 +154,11 @@ def quarantine_interrupted(output_dir: str | Path) -> dict:
     lock_path = out.parent / f".{out.name}.run-lock"
     if not lock_path.exists():
         return {"recovered": False, "reason": "final_output_exists" if os.path.lexists(out) else "no_transaction", "run_dir": str(out)}
-    descriptor = os.open(lock_path, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
+    if os.name == 'nt':
+        from .platform_files import open_windows_reservation
+        descriptor = open_windows_reservation(lock_path, create=False)
+    else:
+        descriptor = os.open(lock_path, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
     locked = False  # only a lock this call took is released
     try:
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
@@ -157,7 +169,12 @@ def quarantine_interrupted(output_dir: str | Path) -> dict:
             return {"recovered": False, "reason": "active_transaction", "run_dir": str(out)}
         locked = True
         try:
-            record = load_bounded_json(lock_path, max_bytes=16_384, max_nodes=100)
+            if os.name == 'nt':
+                from .schema import loads_bounded_json
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                record = loads_bounded_json(os.read(descriptor, 16_385), max_bytes=16_384, max_nodes=100)
+            else:
+                record = load_bounded_json(lock_path, max_bytes=16_384, max_nodes=100)
         except (OSError, ValueError):
             record = {}
         prefix = f".{out.name}.staging-"

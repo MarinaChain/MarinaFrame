@@ -45,7 +45,11 @@ def write_json(path: Path, data) -> None:
             os.fsync(stream.fileno())
         if path.is_symlink():
             raise OSError("Refusing to replace a symbolic-link evidence path.")
-        os.replace(temporary, path)
+        if os.name == 'nt':
+            from .platform_files import move_windows_path
+            move_windows_path(temporary, path, replace=True)
+        else:
+            os.replace(temporary, path)
         sync_directory(path.parent)
     finally:
         temporary.unlink(missing_ok=True)
@@ -105,7 +109,7 @@ def snapshot_implementation(output_dir: Path) -> dict:
     for source in sorted(Path(__file__).parent.glob("*.py")):
         destination = target / source.name
         shutil.copyfile(source, destination)
-        files[str(destination.relative_to(output_dir))] = digest_file(destination)
+        files[destination.relative_to(output_dir).as_posix()] = digest_file(destination)
     return {"directory": "implementation_source", "files_sha256": files,
             "implementation_sha256": snapshot_hash(output_dir, files),
             "replay_note": "Set PYTHONDONTWRITEBYTECODE=1 and PYTHONPATH to this implementation_source directory to replay with the recorded Python source and installed recorded dependencies. Write the new run outside this immutable evidence directory. The bytecode flag prevents __pycache__ additions from mutating the original evidence. UI assets and third-party binaries are separately packaged."}
