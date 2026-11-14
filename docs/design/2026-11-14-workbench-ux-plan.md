@@ -1,6 +1,7 @@
 # Basic-design workbench: UX audit and plan (2026-11-14, draft)
 
-Owner: UI/UX lead. Status: plan for the founder's approval. Nothing is built from this plan yet.
+Owner: UI/UX lead. Status: approved by the founder on 2026-11-14 (section 7 records the decisions).
+Phase 0 is in progress.
 Read with `docs/PRD.md` (section 4.1, D1-D14), `docs/plans/2026-11-12-design-from-scratch.md`,
 `docs/plans/2026-11-13-design-loop-v0.md`, `docs/design-record.md` and
 `docs/design/2026-11-08-app-design-plan.md` (the current app design; its rules stay).
@@ -94,6 +95,35 @@ state, not a blank. This replaces the per-screen variants in Parts, GA and Expor
   distinguishable (PRD D14).
 - The parent ship is a fixed reference point.
 
+### 4.5 Lite and Advanced modes (decided 2026-11-14)
+
+Two views of the same design project. The mode changes how much the user controls, not the data.
+The user selects the mode in Settings and with a switch in the project header. The app remembers it
+per user. Switching keeps the current project and candidate.
+
+| | Lite: "brief and review" | Advanced: "workbench" |
+|---|---|---|
+| Who | A user who wants the agent to do the design loop: a project lead, a new designer, technical sales later | A basic-design naval architect who wants control of each step |
+| Input | A short brief: requirements, limits, and one objective slider (fuel against cargo capacity) | The full Requirements form; design variables with ranges; locked values; the method tier for each step |
+| Agent | Runs the full design loop by itself. Returns 3 recommended candidates and explains each trade-off in plain words | Runs only the steps the user starts. The user can run one step again, change one variable, or ask the agent for a proposal |
+| Display | Main particulars, capacity, fuel and their bands; a confidence label; one Pareto chart with the 3 candidates marked | Every value display (4.3), dense tables, the step graph, all candidates, the full Pareto chart |
+| Decisions | The user accepts, defers or rejects a candidate, with a reason (D7) | The same, per discipline, plus locks and notes per value |
+
+Rules for both modes:
+
+- Lite hides detail, never risk. A failed constraint, an "unknown" value and the draft status show in
+  Lite too. Every Lite number opens its full value display on request.
+- The agent proposes; a person decides. No mode marks a candidate as accepted without a person.
+- One data model. A Lite project opens in Advanced with all steps, and Advanced locks show in Lite as
+  fixed items with their reason.
+- Advanced stays clean: progressive disclosure (summary first, detail on request), a column chooser
+  with a short default set, at most two panes beside the main view, and the command palette for rare
+  actions instead of more buttons.
+- Default mode: Advanced for the pilot's basic-design users; Lite for other users.
+
+Lite is also the later path for technical sales (section 7, question 3): a quick estimate is a Lite
+brief with references in place of a full loop.
+
 ## 5. Constraints that stay
 
 - Draft only; never "approved" or "verified" as a status; engineering approval is outside the app.
@@ -110,19 +140,26 @@ quick test tier. New screens are added to the a11y screen list.
 
 | Phase | Work | Needs from the design-loop owner | Done when |
 |---|---|---|---|
-| 0. Foundations | Value display component (4.3); dense table component (sort, filter, units, copy); GA reading as its own run view with GA-specific header; fix "not approved" wording; i18n scaffold (string table, Korean as second locale, English fallback) | None | Parts, GA and Export use the one value display; a 30-tank table is usable; wording fixed; a11y passes |
-| 1. Design shell | Designs in the rail; project page with Requirements and Candidate detail (Overview, Arrangement, Performance, Provenance) reading a design record file; mock record from the public KVLCC2 loop output | A Tauri command to open and validate a design record (Rust structs exist) | A designer opens a record and sees every value with uncertainty and method |
-| 2. Candidates and decisions | Candidates list; Compare with deltas; Pareto chart (4.4); Decisions log by discipline; full Korean strings for the design screens | A command that lists candidates of a project and their records | 5 mock candidates compare, chart and get decisions; Korean UI complete for these screens |
+| 0. Foundations | Value display component (4.3); dense table component (sort, filter, units, copy); GA reading as its own run view with GA-specific header; fix "not approved" wording; i18n scaffold (string table, English and Korean, English fallback, ship-term glossary); mode setting (Lite / Advanced) stored per user | None | Parts, GA and Export use the one value display; a 30-tank table is usable; wording fixed; the language and mode switches work; a11y passes |
+| 1. Design shell (Advanced) | Designs in the rail; project page with a short Requirements form and Candidate detail first (Overview, Arrangement, Weights and stability, Performance, Provenance) reading a design record file; mock record from the public KVLCC2 loop output | A Tauri command to open and validate a design record (Rust structs exist) | A designer opens a record and sees every value with uncertainty and method |
+| 2. Candidates, decisions and Lite | Candidates list; Compare with deltas; Pareto chart (4.4); Decisions log by discipline; Lite brief and review (4.5); full Korean strings for the design screens | A command that lists candidates of a project and their records; a command that runs the full loop from a brief and returns ranked candidates with reasons | 5 mock candidates compare, chart and get decisions; a Lite brief returns 3 candidates; Korean UI complete for these screens |
 | 3. References | References tab: search the Archive and fleet table, comparison table, pick a parent; Archive view of vessels as references | Reference search API (D4, D9) | One requirement returns ranked references with the differences shown |
 | 4. Jobs and package | Jobs view for long compute (CFD on a compute host: state, progress, ETA, pause reason); Package export for the model test | Job status API from the solver worker; package writer | A CFD job shows progress and pauses; the package exports with the draft stamp |
 
 Phases 0 and 1 can start now. Phases 2-4 follow the backend in the order above.
 
-## 7. Open questions for the founder
+## 7. Founder decisions (2026-11-14)
 
-1. Korean UI: is a full Korean translation needed for the pilot, or English with Korean terms?
-2. One app with Archive and Designs, or a separate "design" mode for the pilot users?
-3. Who uses the design screens first: technical sales (requirements, references) or basic design
-   (candidates, decisions)? This sets the order inside phases 1-3.
-4. Do reviewers from each discipline sign decisions in the app, or does the app only record the
-   decisions made in yard meetings?
+1. Language: full i18n with English and Korean, and a switch. Standard abbreviations (LBP, DWT, Cb, GM,
+   MCR, EEDI) stay in English in both. One ship-term glossary, reviewed by a yard designer, controls
+   the Korean terms. The export language is a separate setting from the UI language. Korean status
+   words follow the draft rule (no word for "approved" or "verified").
+2. First users: basic design. Candidates, Compare, Pareto and Decisions come first. Technical sales
+   follows as a Lite quick estimate after reference search exists.
+3. Modes: Lite and Advanced (section 4.5).
+
+Still open:
+
+4. One app with Archive and Designs, or a separate design mode for the pilot users? (Default: one app.)
+5. Do reviewers from each discipline sign decisions in the app, or does the app only record the
+   decisions made in yard meetings? (Default: record only.)
