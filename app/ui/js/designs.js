@@ -3,87 +3,28 @@
 // sections of labelled values; the Provenance tab keeps every record field and its evidence.
 // Pure mapping is in design_view.js; this module only builds DOM.
 import { el, fill, icon } from './dom.js';
-import { t, locale, termLabel } from './i18n.js';
+import { t, locale } from './i18n.js';
 import { chip } from './ui_kit.js';
 import { listDesignRecords, openDesignRecord } from './api.js';
 import { createDataTable } from './data_table.js';
-import { formatQuantity } from './value_display.js';
 import {
-  designView, designQuantity, designParticulars, designWarningGroups, designChanges,
-  designDigits, designSections, designMissing, designMissingKey, designTopic,
+  designView, designParticulars, designWarningGroups, designChanges,
+  designSections, designMissing, designTopic,
 } from './design_view.js';
+import { keyLabel, fieldLabel, numberText, quantityValue, missingText } from './design_values.js';
 import { applyInterfaceMode } from './app_state.js';
+import { PROJECT_TABS, loadProject, candidatesTab, compareTab, decisionsTab, liteProject } from './design_project.js';
 
 const TABS = ['overview', 'requirements', 'arrangement', 'weights', 'performance', 'provenance'];
+/** The tabs of a record: a project (a record with candidates) adds its tabs after Overview. */
+const tabsOf = (projectData) => (projectData ? ['overview', ...PROJECT_TABS, ...TABS.slice(1)] : TABS);
 const WARNING_PREVIEW = 3; // warnings shown before "Show all N warnings"
 let request = 0;
 let warningPanels = 0; // unique ids for aria-controls
 
-// Record keys that are ship terms read from the glossary (Korean adds the abbreviation).
-const TERMS = {
-  length: 'length', beam: 'breadth_moulded', draft: 'design_draft', depth: 'depth_moulded',
-  cb: 'block_coefficient', displacement: 'displacement', deadweight: 'deadweight',
-  cargo_capacity: 'cargo_capacity', service_speed: 'service_speed', brake_power: 'brake_power', fuel: 'daily_fuel',
-};
-
-function keyLabel(key) {
-  if (TERMS[key]) return termLabel(TERMS[key]);
-  if (key === 'weights') return t('design.weightItems'); // design.weights names the tab
-  const label = t(`design.${key}`);
-  return label === `design.${key}` ? null : label;
-}
-
-/** A human label for a record path: its own key, else the nearest labelled section above it. */
-function fieldLabel(path) {
-  const keys = path.split('.').filter((key) => !/^\d+$/.test(key));
-  if (keys.at(-1) === 'value' || keys.at(-1) === 'kn') keys.pop();
-  for (let index = keys.length - 1; index >= 0; index -= 1) {
-    const label = keyLabel(keys[index]);
-    if (label) return label;
-  }
-  return t('design.otherField');
-}
-
 /** "Resistance · Inputs": the section path without the "results" level. */
 function sectionLabel(path) {
   return path.split('.').filter((key) => key !== 'results').map((key) => keyLabel(key) || key).join(' · ');
-}
-
-function numberText(value, { compact }) {
-  const digits = designDigits(value);
-  let options = { maximumFractionDigits: 12 };
-  if (compact) options = digits === null ? { maximumSignificantDigits: 4 } : { maximumFractionDigits: digits };
-  return new Intl.NumberFormat(locale() === 'ko' ? 'ko-KR' : 'en-GB', options).format(value);
-}
-
-/**
- * A quantity: number, unit, then its band or a quiet "no band" mark. The reason for a missing
- * band is the mark's title; `focusable` also shows it on keyboard focus. Every value is a draft
- * (the page header says so); only "Needs review" adds a chip here.
- */
-function quantityValue(quantity, { compact = false, focusable = false } = {}) {
-  const shown = designQuantity(quantity);
-  const formatted = formatQuantity(shown);
-  const unit = quantity.unit === '1' ? '' : quantity.unit;
-  const full = `${numberText(quantity.value, { compact: false })} ${unit}`.trim();
-  let band;
-  if (quantity.uncertainty) {
-    band = el('span', { class: 'dv-band', title: quantity.uncertainty.basis || null }, formatted.uncertaintyText);
-  } else {
-    const reason = quantity.uncertainty_reason || t('design.notSupplied');
-    band = el('span', { class: 'dv-noband', title: reason, tabindex: focusable ? '0' : null, dataset: { reason } },
-      t('design.noBandMark'), el('span', { class: 'visually-hidden' }, `: ${reason}`));
-  }
-  return el('span', { class: compact ? 'dv dv-compact' : 'dv', title: full },
-    el('span', { class: 'dv-num' }, formatted.isUnknown ? '—' : numberText(quantity.value, { compact })),
-    unit ? el('span', { class: 'dv-unit' }, unit) : null,
-    band,
-    shown.status === 'needs_review' ? chip(t('status.needs_review'), { tone: 'warn', small: true }) : null);
-}
-
-function missingText(row) {
-  const key = row.missingKey || designMissingKey(row.path);
-  return el('span', { class: 'design-missing' }, t(key));
 }
 
 function rowValue(row, options) {
@@ -265,9 +206,18 @@ function missingList(record) {
       : el('p', {}, t('design.noUnknowns')));
 }
 
-function project(host, record, parentRecord) {
+/** The hash of one tab: #design/<id> for the overview, #design/<id>/<tab> for the others. */
+function tabHash(record, tab) {
+  const base = `#design/${encodeURIComponent(record.design_id)}`;
+  return tab === 'overview' ? base : `${base}/${tab}`;
+}
+
+function project(host, record, parentRecord, projectData, initialTab) {
   const view = designView(record);
-  let active = 'overview';
+  const order = tabsOf(projectData);
+  let active = order.includes(initialTab) ? initialTab : 'overview';
+  const liteHost = el('div', { class: 'design-lite-project' });
+  const renderLite = () => (projectData ? fill(liteHost, liteProject(projectData)) : null);
   const content = el('div', { id: 'design-tab-panel', class: 'design-tab-panel', role: 'tabpanel', tabindex: '0' });
   const tabs = el('div', { class: 'vessel-tabs design-tabs', role: 'tablist', 'aria-label': t('design.details') });
   function selectTab(tab, focus = false) {
@@ -279,26 +229,32 @@ function project(host, record, parentRecord) {
       if (selected && focus) button.focus();
     }
     content.setAttribute('aria-labelledby', `design-tab-${tab}`);
-    if (tab === 'overview') {
+    // Keep the tab in the address, so a reload or a shared link opens the same tab.
+    if (location.hash !== tabHash(record, tab)) history.replaceState(null, '', tabHash(record, tab));
+    if (tab === 'candidates') fill(content, candidatesTab(projectData));
+    else if (tab === 'compare') fill(content, compareTab(projectData));
+    else if (tab === 'decisions') fill(content, decisionsTab(projectData, { onChange: renderLite }));
+    else if (tab === 'overview') {
       fill(content, el('div', { class: 'design-tab-body' }, particulars(view.particulars),
         el('div', { class: 'design-overview-lower' }, warningPanel(view.warnings), changes(record, parentRecord))));
     } else if (tab === 'provenance') fill(content, provenance(view));
     else fill(content, detailTab(view, tab));
   }
-  for (const tab of TABS) tabs.append(el('button', {
+  for (const tab of order) tabs.append(el('button', {
     id: `design-tab-${tab}`, type: 'button', role: 'tab', dataset: { tab },
     'aria-controls': 'design-tab-panel', onclick: () => selectTab(tab),
     onkeydown: (event) => {
-      const moves = { ArrowRight: 1, ArrowLeft: TABS.length - 1 };
+      const moves = { ArrowRight: 1, ArrowLeft: order.length - 1 };
       let next;
-      if (event.key in moves) next = (TABS.indexOf(active) + moves[event.key]) % TABS.length;
+      if (event.key in moves) next = (order.indexOf(active) + moves[event.key]) % order.length;
       if (event.key === 'Home') next = 0;
-      if (event.key === 'End') next = TABS.length - 1;
-      if (next !== undefined) { event.preventDefault(); selectTab(TABS[next], true); }
+      if (event.key === 'End') next = order.length - 1;
+      if (next !== undefined) { event.preventDefault(); selectTab(order[next], true); }
     },
   }, t(`design.${tab}`)));
   const mode = modeControl();
-  const summary = el('div', { class: 'design-lite design-tab-body' },
+  renderLite();
+  const summary = el('div', { class: 'design-lite design-tab-body' }, projectData ? liteHost : null,
     particulars(designParticulars(record, { lite: true }), { lite: true }), warningPanel(view.warnings), missingList(record),
     el('div', {}, el('button', { class: 'btn', type: 'button', onclick: () => {
       applyInterfaceMode('advanced', { remember: true });
@@ -383,12 +339,16 @@ export async function renderDesignRoute(route) {
   try {
     if (route === 'designs') await list(host, current);
     else {
-      const record = await openDesignRecord(decodeURIComponent(route.slice('design/'.length)));
+      // design/<id> or design/<id>/<tab>
+      const [encodedId, tab] = route.slice('design/'.length).split('/');
+      const record = await openDesignRecord(decodeURIComponent(encodedId));
       let parent;
       if (record.lineage.parent_design_id) {
         try { parent = await openDesignRecord(record.lineage.parent_design_id); } catch { /* An external parent can be unavailable. */ }
       }
-      if (current === request) project(host, record, parent);
+      // A failed list leaves the record readable on its own tabs.
+      const projectData = await loadProject(record).catch(() => null);
+      if (current === request) project(host, record, parent, projectData, tab);
     }
   } catch (error) {
     if (current === request) fill(host, el('div', { class: 'page-body design-body' }, el('h1', {}, t('design.title')),

@@ -122,7 +122,11 @@ mod tests {
     fn public_and_synthetic_mock_records_satisfy_the_contract() {
         for text in [
             include_str!("../../ui/mock/files/designs/kvlcc2.json"),
-            include_str!("../../ui/mock/files/designs/kvlcc2-cb-variant.json"),
+            include_str!("../../ui/mock/files/designs/kvlcc2-candidate-a.json"),
+            include_str!("../../ui/mock/files/designs/kvlcc2-candidate-b.json"),
+            include_str!("../../ui/mock/files/designs/kvlcc2-candidate-c.json"),
+            include_str!("../../ui/mock/files/designs/kvlcc2-candidate-d.json"),
+            include_str!("../../ui/mock/files/designs/kvlcc2-candidate-e.json"),
         ] {
             let record = DesignRecord::from_json(text).unwrap();
             assert!(!record.engineering_approved);

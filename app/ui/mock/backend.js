@@ -559,6 +559,12 @@ export function mockTransport() {
     async open_design_record(data, { id }) {
       return (await import('./designs.js')).openMockDesign(id);
     },
+    async list_design_decisions(data, { project_id }) {
+      return (await import('./designs.js')).listMockDecisions(project_id);
+    },
+    async append_design_decision(data, { project_id, decision }) {
+      return (await import('./designs.js')).appendMockDecision(project_id, decision);
+    },
     async replace_sheet(data, { task, sheet_id, file }) {
       requireTask(data, task);
       if (!isDrawingFileName(file)) throw new BackendError('sheet_file_type', 'Choose a drawing file.');
