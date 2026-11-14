@@ -238,3 +238,14 @@ test('Copy reports unavailable and rejected clipboard access without throwing', 
     assert.equal(copy.textContent, 'Copy failed');
   }
 });
+
+test('copied text cannot run as a spreadsheet formula, and numbers stay numbers', async () => {
+  const { toTsv, safeCell } = await import('../ui/js/data_table.js');
+  assert.equal(safeCell('=HYPERLINK("x")'), `'=HYPERLINK("x")`);
+  assert.equal(safeCell('@SUM(A1)'), "'@SUM(A1)");
+  assert.equal(safeCell('No.1\tP\nS'), 'No.1 P S');
+  assert.equal(safeCell('FW 1'), 'FW 1');
+  const tsv = toTsv([{ key: 'name', label: 'Tank' }, { key: 'lcg', label: 'LCG', unit: 'm' }],
+    [{ name: '+cmd', lcg: -12.5 }]);
+  assert.equal(tsv, "Tank\tLCG [m]\n'+cmd\t-12.5");
+});

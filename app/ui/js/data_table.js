@@ -67,12 +67,23 @@ export function filterRows(rows, columns, query) {
  * A null or unknown value copies as an empty cell and a number as its plain value, so a paste into
  * a spreadsheet gives real numbers, not the rounded display text.
  */
+/**
+ * A text cell made safe for a spreadsheet: tabs and line breaks become spaces (they would split
+ * the cell), and text that starts with = + - or @ gets a leading ' so that a spreadsheet keeps
+ * it as text and does not run it as a formula. Labels come from drawings, so they are untrusted.
+ */
+export function safeCell(text) {
+  const flat = String(text).replace(/[\t\r\n]+/g, ' ');
+  return /^[=+\-@]/.test(flat) ? `'${flat}` : flat;
+}
+
 export function toTsv(columns, rows) {
-  const header = columns.map((column) => (column.unit ? `${column.label} [${column.unit}]` : column.label)).join('\t');
+  const header = columns.map((column) => safeCell(column.unit ? `${column.label} [${column.unit}]` : column.label)).join('\t');
   const line = (row) => columns.map((column) => {
     const value = row[column.key];
     if (isUnknown(value)) return '';
-    return typeof value === 'number' ? String(value) : cellText(row, column);
+    // Real numbers stay numbers (a negative LCG must paste as -12.5, not as text).
+    return typeof value === 'number' ? String(value) : safeCell(cellText(row, column));
   }).join('\t');
   return [header, ...rows.map(line)].join('\n');
 }
