@@ -40,6 +40,7 @@ function serve() {
 async function prepare({ vessel, tab, vesselTab, open, designTab }) {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   if (designTab) { document.getElementById(`design-tab-${designTab}`).click(); await wait(300); }
+  if (open === 'design-warnings') { document.querySelector('.design-advanced .design-warning-toggle').click(); await wait(200); }
   if (vessel) {
     const card = [...document.querySelectorAll('#vessel-grid > *')].find((c) => c.textContent.includes(vessel));
     (card.querySelector('button, a') || card).click();
@@ -91,6 +92,11 @@ const SCREENS = [
   { name: 'design overview', path: '/#design/public-kvlcc2-example' },
   { name: 'design performance', path: '/#design/public-kvlcc2-example', steps: { designTab: 'performance' } },
   { name: 'design provenance', path: '/#design/public-kvlcc2-example', steps: { designTab: 'provenance' } },
+  { name: 'design variant (change from parent)', path: '/#design/synthetic-kvlcc2-cb-plus-001' },
+  { name: 'design all warnings', path: '/#design/public-kvlcc2-example', steps: { open: 'design-warnings' } },
+  { name: 'design requirements', path: '/#design/public-kvlcc2-example', steps: { designTab: 'requirements' } },
+  { name: 'design weights (empty sections)', path: '/#design/public-kvlcc2-example', steps: { designTab: 'weights' } },
+  { name: 'design Lite', path: '/#design/public-kvlcc2-example', prefs: { interfaceMode: 'lite' } },
   { name: 'design Lite (Korean)', path: '/#design/public-kvlcc2-example', prefs: { language: 'ko', interfaceMode: 'lite' } },
   { name: 'welcome', path: '/?mocknokey#home', seen: false },
   { name: 'home', path: '/#home' },

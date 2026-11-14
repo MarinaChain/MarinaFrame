@@ -26,6 +26,11 @@ export function designQuantity(quantity) {
   };
 }
 
+/** A missing result is "not calculated yet"; a missing input (also a calculation's input) is "not supplied". */
+export function designMissingKey(path) {
+  return path.startsWith('results.') && !path.includes('.inputs.') ? 'design.pending' : 'design.notSupplied';
+}
+
 // Explicit paths avoid confusing gross immersed volume with usable cargo capacity.
 const PARTICULARS = [
   ['length', 'main_dimensions.length'],
@@ -47,16 +52,24 @@ export function designParticulars(record, { lite = false } = {}) {
   const rows = new Map(designRows(record).map((row) => [row.path, row]));
   const cards = PARTICULARS.map(([key, path]) => ({
     key, path, kind: 'unknown', ...rows.get(path),
-    missingKey: path.startsWith('results.') ? 'design.pending' : 'design.notSupplied',
+    missingKey: designMissingKey(path),
   }));
   return lite ? LITE_PARTICULARS.map((key) => cards.find((card) => card.key === key)) : cards;
+}
+
+// Calculation order: resistance feeds power, power feeds fuel. Anything else is about the hull.
+export const DESIGN_TOPICS = ['hull', 'resistance', 'power', 'fuel'];
+
+/** The discipline a record path belongs to: resistance, power, fuel or (otherwise) hull. */
+export function designTopic(path) {
+  return ['resistance', 'power', 'fuel'].find((key) => path.startsWith(`results.${key}.`)) || 'hull';
 }
 
 /** Group risk notices by discipline, preserving every notice and its evidence path. */
 export function designWarningGroups(rows) {
   const groups = new Map();
   for (const row of rows) {
-    const topic = ['resistance', 'power', 'fuel'].find((key) => row.path.startsWith(`results.${key}.`)) || 'hull';
+    const topic = designTopic(row.path);
     if (!groups.has(topic)) groups.set(topic, []);
     groups.get(topic).push(row);
   }
@@ -71,7 +84,7 @@ export function designChanges(record, parent) {
     const base = previous[key];
     const delta = base && base.unit === quantity.unit && Number.isFinite(base.value) && Number.isFinite(quantity.value)
       ? Number((quantity.value - base.value).toPrecision(12)) : null;
-    return { key, quantity, delta };
+    return { key, quantity, base: delta === null ? null : base, delta };
   });
 }
 
@@ -90,5 +103,71 @@ export function designView(record) {
     provenance: all.filter((row) => row.kind === 'quantity'),
     all, particulars: designParticulars(record),
     lineage: record.lineage, scope: record.data_scope, warnings, unknowns, lite,
+  };
+}
+
+/**
+ * Maximum fraction digits for a summary value: enough to read a design change at a glance
+ * (Cb 0.914 to 0.924), not every digit of the calculation. The full value stays in the evidence.
+ */
+export function designDigits(value) {
+  const size = Math.abs(value);
+  if (size > 0 && size < 0.01) return null; // tiny coefficients: use significant digits instead
+  if (size >= 100) return 0;
+  if (size >= 10) return 1;
+  if (size >= 1) return 2;
+  return 3;
+}
+
+// Keys a section shows elsewhere: the Draft rule is in the page header, warnings are in the
+// warnings block, the method is the section caption and the unit is part of each value.
+const SECTION_ASIDE = /^(engineering_approved|method|unit|validity_warnings|range_warnings|warnings)$/;
+
+/** The section a row belongs to: results.<discipline>[.<part>] for results, else the top-level key. */
+function sectionPath(path) {
+  const keys = path.split('.').filter((key) => !/^\d+$/.test(key));
+  const isResult = keys[0] === 'results';
+  const depth = Math.min(isResult ? 3 : 1, Math.max(keys.length - 1, isResult ? 2 : 1));
+  return keys.slice(0, depth).join('.');
+}
+
+/**
+ * Rows of a tab grouped into sections (for example results.resistance.inputs), in `order` of
+ * topic. Each section keeps its method text apart; warnings and the Draft flag are left out
+ * because the page shows them in one place. Unknown and empty rows stay: they are states.
+ */
+export function designSections(rows, order = DESIGN_TOPICS) {
+  const sections = new Map();
+  for (const row of rows) {
+    const path = sectionPath(row.path);
+    if (!sections.has(path)) sections.set(path, { path, topic: designTopic(`${path}.`), method: null, rows: [] });
+    const section = sections.get(path);
+    const leaf = row.path.split('.').filter((key) => !/^\d+$/.test(key)).at(-1);
+    if (leaf === 'method' && row.kind === 'text') section.method = row.value;
+    else if (!SECTION_ASIDE.test(leaf) || row.path === path) section.rows.push(row);
+  }
+  const rank = (section) => order.indexOf(section.topic);
+  return [...sections.values()].filter((section) => section.rows.length)
+    .map((section, index) => ({ ...section, index }))
+    .sort((a, b) => rank(a) - rank(b) || a.index - b.index);
+}
+
+// Empty lists that mean "none found", not "not supplied": warning lists and sampling gaps.
+const EMPTY_IS_NONE = /(warnings|disconnected_intervals_m)$|^results\.hull_variation\./;
+
+/**
+ * What the designer still lacks, split into results not calculated yet and inputs not supplied.
+ * Main particulars come first. Each path appears once.
+ */
+export function designMissing(record) {
+  const view = designView(record);
+  const rows = [...view.particulars.filter((card) => card.kind === 'unknown' || card.kind === 'empty'),
+    ...view.unknowns.filter((row) => !EMPTY_IS_NONE.test(row.path))];
+  // A missing container (results.capacities) is already shown by its particulars (deadweight).
+  const covered = (row) => !row.key && view.particulars.some((card) => card.path.startsWith(`${row.path}.`));
+  const unique = [...new Map(rows.filter((row) => !covered(row)).map((row) => [row.path, row])).values()];
+  return {
+    pending: unique.filter((row) => designMissingKey(row.path) === 'design.pending'),
+    notSupplied: unique.filter((row) => designMissingKey(row.path) === 'design.notSupplied'),
   };
 }
