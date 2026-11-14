@@ -15,6 +15,93 @@ import { glyphChip } from './glyphs.js';
 import { batch, chooseDrawingSet, chooseDrawingFolder, openNewRun } from './new_vessel.js';
 import { navigate } from './router.js';
 import { openTask } from './run.js';
+import { thumbnailSource, thumbnailCrop } from './home_thumb.js';
+
+let thumbnailObserver;
+const thumbnailJobs = new Map();
+
+function observeThumbnail(node, load) {
+  if (!globalThis.IntersectionObserver) {
+    queueMicrotask(() => { void load(); });
+    return;
+  }
+  thumbnailObserver ||= new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      const job = thumbnailJobs.get(entry.target);
+      thumbnailJobs.delete(entry.target);
+      thumbnailObserver.unobserve(entry.target);
+      if (job) void job();
+    }
+  });
+  thumbnailJobs.set(node, load);
+  thumbnailObserver.observe(node);
+}
+
+async function drawingThumbnail(run, view, thumb) {
+  let sources = [];
+  try { sources = (await invoke('list_sources', { task: run.task })).sources || []; } catch { /* Keep the current drawing. */ }
+  const preferred = thumbnailSource(view, sources, { models: false });
+  const current = view.source_page?.path ? { kind: 'drawing', path: view.source_page.path } : null;
+  for (const source of [preferred, current].filter(Boolean)) {
+    if (source.kind === 'none') continue;
+    try {
+      let url;
+      if (source.path) url = await cachedArtifact('image', run.task, source.path);
+      else {
+        const page = await invoke('read_source_page', { task: run.task, source_id: source.sourceId, page: source.page, size: 'full' });
+        if (!page.base64) continue;
+        url = `data:${page.mime};base64,${page.base64}`;
+      }
+      const image = el('img', { src: url, alt: '' });
+      await image.decode();
+      if (source.crop) {
+        const facts = sources.find((item) => item.id === source.sourceId)?.pages.find((page) => page.index === source.page);
+        const original = source.path ? view.source_page : { width: facts?.width_px, height: facts?.height_px };
+        const crop = thumbnailCrop(source.crop, original, { width: image.naturalWidth, height: image.naturalHeight });
+        if (crop) {
+          const [x0, y0, right, bottom] = crop;
+          const canvas = document.createElement('canvas');
+          // Keep the crop small; the input page can be a large scan.
+          const scale = Math.min(1, 480 / (right - x0), 300 / (bottom - y0));
+          canvas.width = Math.max(1, Math.round((right - x0) * scale));
+          canvas.height = Math.max(1, Math.round((bottom - y0) * scale));
+          try {
+            canvas.getContext('2d').drawImage(image, x0, y0, right - x0, bottom - y0, 0, 0, canvas.width, canvas.height);
+            image.src = canvas.toDataURL('image/png');
+            await image.decode();
+          } catch {
+            // A blocked canvas still leaves the whole GA sheet available.
+            image.src = url;
+            await image.decode();
+          }
+        }
+      }
+      image.className = 'vessel-thumb-drawing';
+      thumb.prepend(image);
+      const hull = view.model ? hullThumb(view) : null;
+      if (hull) thumb.append(el('span', { class: 'hull-badge', title: t('home.builtSections') }, hull));
+      return;
+    } catch { /* Try the current drawing if a GA page cannot be read. */ }
+  }
+  thumb.append(el('span', { class: 'vessel-thumb-empty' }, t('home.noDrawing')));
+}
+
+async function loadThumbnail(run, view, thumb) {
+  if (!view || !thumb.isConnected) return;
+  const source = thumbnailSource(view);
+  if (source.kind === 'model') {
+    try {
+      const { modelThumbnail } = await import('./home_thumb3d.js');
+      const url = await modelThumbnail(run, view, source);
+      const image = el('img', { src: url, alt: '', class: 'vessel-thumb-model' });
+      await image.decode();
+      thumb.prepend(image);
+      return;
+    } catch { /* No WebGL or an unreadable model: quietly show a drawing. */ }
+  }
+  await drawingThumbnail(run, view, thumb);
+}
 
 /** What waits for a person, as icon counts (the status chip already says the run's state). */
 function needsReason(view) {
@@ -56,7 +143,7 @@ function needsCard(vessel) {
 /** A mini body plan of the built sections: each station's chosen line, mirrored, in its source style. */
 function hullThumb(view) {
   const lines = [];
-  for (const section of view.sections) {
+  for (const section of view.sections || []) {
     const path = sectionShapePath(section);
     if (path) lines.push({ path, source: section.source?.label || 'traced' });
   }
@@ -74,24 +161,13 @@ function vesselCard(vessel) {
   const runs = vessel.runs.length > 1 ? `${fmt.plural(vessel.runs.length, 'run')} · ` : '';
   const thumb = el('span', { class: 'vessel-thumb' }, el('span', { class: 'crop-marks', 'aria-hidden': 'true' }));
   const meta = el('span', { class: 'vessel-meta', title: fmt.fullTime(run.updated_ms) }, `${runs}${fmt.relativeTime(run.updated_ms)}`);
-  runPreview(run).then(async (view) => {
-    if (!view) return;
+  const preview = runPreview(run);
+  preview.then((view) => {
     // A person's sign-off of the parts (the run stays a draft): one navy chip after the time.
-    if (view.sign_off) meta.append(' ', chip(t('home.signedOff'), { tone: 'pass', dot: false, small: true, title: t('home.signOffDraft', { name: view.sign_off.name, statement: view.sign_off.statement }) }));
-    if (view.model) {
-      const hull = hullThumb(view);
-      if (hull) thumb.append(el('span', { class: 'hull-badge', title: t('home.builtSections') }, hull));
-    }
-    if (!view.source_page) {
-      thumb.append(el('span', { class: 'vessel-thumb-empty' }, t('home.noDrawing')));
-      return;
-    }
-    try {
-      const url = await cachedArtifact('image', run.task, view.source_page.path);
-      thumb.prepend(el('img', { src: url, alt: '' }));
-    } catch {
-      // No drawing image: the card keeps its blank paper.
-    }
+    if (view?.sign_off) meta.append(' ', chip(t('home.signedOff'), { tone: 'pass', dot: false, small: true, title: t('home.signOffDraft', { name: view.sign_off.name, statement: view.sign_off.statement }) }));
+  });
+  observeThumbnail(thumb, async () => {
+    await loadThumbnail(run, await preview, thumb);
   });
   return el('button', {
     class: 'vessel-card',
@@ -145,6 +221,8 @@ function renderHomeLoading() {
 }
 
 export function renderHome() {
+  thumbnailObserver?.disconnect();
+  thumbnailJobs.clear();
   if (!state.tasksLoaded) {
     renderHomeLoading();
     return;
