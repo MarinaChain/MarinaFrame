@@ -1,0 +1,46 @@
+"""Immutable export generations publish through one current-pointer replacement."""
+import json
+
+import pytest
+
+from vessel_reconstruction.exports.generations import publish_generation, resolve_generation
+
+
+def test_pointer_keeps_old_generation_available(tmp_path):
+    root = tmp_path / 'package'
+    first = tmp_path / 'first'
+    first.mkdir()
+    (first / 'report').write_bytes(b'old')
+    old = publish_generation(root, first)
+    second = tmp_path / 'second'
+    second.mkdir()
+    (second / 'report').write_bytes(b'new')
+    new = publish_generation(root, second)
+    assert resolve_generation(root) == new
+    assert (old / 'report').read_bytes() == b'old'
+    assert (new / 'report').read_bytes() == b'new'
+
+
+def test_failed_pointer_write_keeps_current_generation(monkeypatch, tmp_path):
+    from vessel_reconstruction.exports import generations
+    root = tmp_path / 'package'
+    first = tmp_path / 'first'
+    first.mkdir()
+    old = publish_generation(root, first)
+    second = tmp_path / 'second'
+    second.mkdir()
+    def fail(*args):
+        raise OSError('controlled pointer failure')
+    monkeypatch.setattr(generations, 'write_json', fail)
+    with pytest.raises(OSError):
+        publish_generation(root, second)
+    assert resolve_generation(root) == old
+    assert old.is_dir()
+
+
+def test_pointer_cannot_escape_generation_root(tmp_path):
+    root = tmp_path / 'package'
+    root.mkdir()
+    (root / 'current.json').write_text(json.dumps({'generation': '../outside'}))
+    with pytest.raises(ValueError):
+        resolve_generation(root)
