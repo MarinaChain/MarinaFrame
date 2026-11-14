@@ -1652,3 +1652,12 @@ only converged coarse evidence,not a gate pass. New three approaches total
 **1538.826497s/2.137259024allocated core-hours**. Raw immutable receipts,
 layer fields and quality evidence preserved. No active lane container.
 Resume requires PM mesh-method decision,not additional parameter retries.
+
+### Regional recovery final verification
+Background quick tier exit0:Rust fmt/clippy/workspace passed;Python2749pass,
+4skip,100deselect,5warnings,991.73s;UI275pass;bounded scan1407files0findings.
+Exact-name identity0findings,diff clean. Report
+`outputs/2026-11-14-kvdb2-regional-recovery.md`. No active lane containers.
+Threefailedapproaches stop honored,no mapping/short/newproduction/medium/fine.
+Fixed2000gate retained;PMmapping additions recorded before any future run.
+No managed codesight/lane target;shared target retained. Push lane only,no merge.
