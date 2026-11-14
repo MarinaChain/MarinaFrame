@@ -1606,3 +1606,19 @@ no extra local boxes),**12layers** with samefirstheight,relativefinal
 normal smoothing10/20/thickness60. This tests thinner total stack and improved
 normal smoothing while preserving firstheight. If<97%fullcount orquality fails,
 stop after third failure;no further meshes/short runs/production.
+
+### Approach2(mesh08) FAIL2/3
+Existing mesh08 completed,no duplicate launched.1,534,522cells,938.096702s/
+1.302912087core-hours,noOOM. Full20layers **0/23700=0%**,mean.001013,
+only18faces partially extruded. checkMesh exit0 but **nonorth72.9108>70**,
+skew3.54216;PM operating admission fails independently. No short/production.
+Stage walls0/6/367/531/11s. Raw evidence and binary field retained.
+
+Approach3(final)before run:remove approach2local level4boxes to restore known
+snap quality;retain base74/refinement3. Reduce stack to12layers,same first
+relativeheight **.15/1.2^29**,final **.15/1.2^18=.005634156**,
+growth1.2;minThickness **1e-6 relative**,normal smoothing10/20/60,
+termination30/slip30/medial.3,all other passquality unchanged. Targets thin
+stack truncation without reducing firstheight further.97%full12 and PMquality
+required;thirdfailure ends this study before any solver. Mapping/fixed2000
+protocol additions already committed,remain applicable only if mesh admitted.
