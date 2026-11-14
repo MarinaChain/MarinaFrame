@@ -116,14 +116,15 @@ function needsReason(view) {
 function needsCard(vessel) {
   const run = vessel.latest;
   const chips = el('span', { class: 'chip-row' }, statusBadge(run.status));
-  const art = el('span', { class: 'needs-icon' }, icon('sheet'));
+  const art = el('span', { class: 'needs-icon', 'aria-hidden': 'true' }, icon('sheet'));
   const reason = el('span', { class: 'needs-why chip-row' });
-  runPreview(run).then((view) => {
+  const preview = runPreview(run);
+  preview.then((view) => {
     if (view?.revision) chips.append(chip(view.revision, { dot: false, title: t('home.revision', { revision: view.revision }) }));
     fill(reason, ...needsReason(view));
-    // The built sections, as a small body plan, say more than a file icon.
-    const hull = view?.model ? hullThumb(view) : null;
-    if (hull) fill(art, hull);
+  });
+  observeThumbnail(art, async () => {
+    await loadThumbnail(run, await preview, art);
   });
   return el('button', {
     class: 'needs-card',
