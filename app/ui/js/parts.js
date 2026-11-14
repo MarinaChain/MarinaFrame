@@ -5,6 +5,8 @@
 
 import { el, svg, icon, fill } from './dom.js';
 import { glyphChip } from './glyphs.js';
+import { t } from './i18n.js';
+import { valueDisplay } from './value_display.js';
 import { tipAttributes } from './tooltip.js';
 import { capacityPanel, capacityRowOf, tankDetailBlock, tankToken } from './tanks.js';
 
@@ -152,6 +154,24 @@ function sourceChip(source, basis = '') {
   return glyphChip(SOURCE_ICON[source] || 'info', SOURCE_WORD[source] || source, {
     tone: SOURCE_TONE[source] || null, detail: basis ? withoutHandles(basis) : null, focusable: false,
   });
+}
+
+/** Adapt only a single number with a unit; ranges, outlines and labels stay as text. */
+export function partQuantity(argument) {
+  const match = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))\s+(m|mm|cm|m²|m³|m2|m3|kg|t|°|deg|%)$/.exec(String(argument.value ?? '').trim());
+  if (!match || !Number.isFinite(Number(match[1]))) return null;
+  const source = SOURCE_WORD[argument.source]
+    ? t(`parts.source.${argument.source}`) : argument.source || t('status.unknown');
+  return {
+    value: Number(match[1]), unit: match[2], digits: (match[1].split('.')[1] || '').length,
+    status: argument.source === 'traced' ? 'read' : argument.source === 'guessed' ? 'guessed' : 'draft',
+    source: `${source}${argument.basis ? ` · ${argument.basis}` : ''}`,
+  };
+}
+
+function argumentValue(argument) {
+  const quantity = partQuantity(argument);
+  return quantity ? valueDisplay(quantity) : argument.value || t('status.unknown');
 }
 
 /** Whether "Re-run with this note" is offered: a marked part with a note, of an op the worker revises. */
@@ -423,8 +443,8 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
               el('th', { scope: 'col' }, 'Item'), el('th', { scope: 'col' }, 'Before'), el('th', { scope: 'col' }, 'After'))),
             el('tbody', {}, ...part.changes.map((c) => el('tr', {},
               el('th', { scope: 'row' }, c.name),
-              el('td', { class: 'parts-value' }, c.before || '—', c.before_source ? [' ', sourceChip(c.before_source)] : null),
-              el('td', { class: 'parts-value' }, c.after || '—', c.after_source ? [' ', sourceChip(c.after_source)] : null)))))
+              el('td', { class: 'parts-value' }, argumentValue({ value: c.before, source: c.before_source }), c.before_source ? [' ', sourceChip(c.before_source)] : null),
+              el('td', { class: 'parts-value' }, argumentValue({ value: c.after, source: c.after_source }), c.after_source ? [' ', sourceChip(c.after_source)] : null)))))
           : el('p', {}, 'No value changed.'),
         el('p', { class: 'parts-revision-hint' }, 'AI values are drafts. Keep the new part, or undo to put back the old part and its STEP file.'),
         el('div', { class: 'decision-bar write-action' },
@@ -471,7 +491,7 @@ export function createParts({ host, review, showIn3d, signOff, revisePart = null
             el('th', { scope: 'col' }, 'Item'), el('th', { scope: 'col' }, 'Value'), el('th', { scope: 'col' }, 'Source'), el('th', { scope: 'col' }, 'Basis'))),
           el('tbody', {}, ...part.arguments.map((a) => el('tr', { dataset: { source: a.source } },
             el('th', { scope: 'row' }, a.name),
-            el('td', { class: 'parts-value' }, a.value || '—'),
+            el('td', { class: 'parts-value' }, argumentValue(a)),
             el('td', {}, sourceChip(a.source)),
             el('td', { class: 'parts-basis', title: a.basis || '' }, withoutHandles(a.basis || ''))))))
         : null);

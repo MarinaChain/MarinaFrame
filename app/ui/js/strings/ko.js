@@ -37,4 +37,9 @@ export const KO = {
   'method.read_from_ga': 'GA 판독',
   'method.measured': '도면 측정',
   'method.hydrostatics': '정수역학 계산',
+
+  // ui-p0-value: part quantity sources.
+  'parts.source.traced': '판독',
+  'parts.source.ai_inferred': 'AI 판독',
+  'parts.source.guessed': '추정',
 };

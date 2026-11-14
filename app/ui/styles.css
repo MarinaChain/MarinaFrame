@@ -3829,6 +3829,9 @@ body:not([data-costs="shown"]) :is(.workspace, .inspector) .cost-timing { displa
 .ga-row > .vd { justify-content: flex-end; }
 .ga-row .vd-status { min-width: 6.5em; justify-content: center; }
 .ga-unknown .vd-value { color: var(--text-2); }
+/* ui-p0-value: allow quantity status chips to wrap in dense parts and export rows. */
+.parts-value .vd { white-space: normal; }
+.export-accuracy-values { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
 
 /* ============================================================ Public web demo (docs/WEB_DEMO.md)
    js/app.js sets [data-demo="read-only"] on <html> with the static backend. The demo shows

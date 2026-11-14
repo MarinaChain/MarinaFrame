@@ -8,6 +8,7 @@
 import { el, icon } from './dom.js';
 import { glyphChip } from './glyphs.js';
 import { BANDS } from './accuracy_bands.js';
+import { valueDisplay } from './value_display.js';
 
 export const DRAFT_NOTE = 'Draft only. engineering_approved stays false; a naval architect decides what to trust.';
 export const SCOPE_NOTE = 'Bands are measured on other ships and sheets, not on this run. Where a band says not measured, nothing is known.';
@@ -148,6 +149,28 @@ export function accuracyChips(view) {
   return el('span', { class: 'accuracy-chips', role: 'group', 'aria-label': 'Accuracy of each output, measured on other ships' }, ...present.map((s) => accuracyChip(s)));
 }
 
+/** A single measured band value, not a range or a claim about this run. */
+export function bandQuantity(measurement) {
+  const match = /^(?:pos )?(\d+(?:\.\d+)?)\s+(mm|m|%)$/.exec(measurement.chip);
+  if (!measurement.measured || measurement.outcome === 'invalid' || !match) return null;
+  return {
+    value: Number(match[1]), unit: match[2], digits: (match[1].split('.')[1] || '').length,
+    status: 'draft',
+    source: [measurement.short, measurement.scope, `${measurement.source} · ${measurement.section}`,
+      measurement.n, measurement.caveat].filter(Boolean).join('\n'),
+  };
+}
+
+/** Keep compound bands and non-numeric outcomes intact; never invent a central value. */
+function exportBandDisplay(summary) {
+  const measurements = bandsOf(summary.head_ids);
+  if (!measurements.some((measurement) => bandQuantity(measurement))) return accuracyChip(summary);
+  return el('span', { class: 'export-accuracy-values' }, ...measurements.map((measurement) => {
+    const quantity = bandQuantity(measurement);
+    return quantity ? valueDisplay(quantity) : el('span', {}, measurement.chip);
+  }));
+}
+
 /** The export page block: the same summary as the report's "Accuracy and limits", one line per output. */
 export function accuracyBlock(view) {
   const present = Object.values(summarise(factsOfView(view))).filter((s) => s.present);
@@ -155,5 +178,5 @@ export function accuracyBlock(view) {
   return el('section', { class: 'export-accuracy', 'aria-labelledby': 'export-accuracy-title' },
     el('h2', { id: 'export-accuracy-title', class: 'export-accuracy-title' }, icon('info'), 'Accuracy and limits'),
     el('p', { class: 'export-accuracy-note' }, SCOPE_NOTE),
-    ...present.map((s) => el('p', { class: 'export-accuracy-line', dataset: { output: s.output } }, accuracyChip(s), el('span', {}, s.line))));
+    ...present.map((s) => el('p', { class: 'export-accuracy-line', dataset: { output: s.output } }, exportBandDisplay(s), el('span', {}, s.line))));
 }

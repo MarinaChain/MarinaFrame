@@ -37,4 +37,9 @@ export const EN = {
   'method.read_from_ga': 'Read from GA',
   'method.measured': 'Measured',
   'method.hydrostatics': 'Hydrostatics',
+
+  // ui-p0-value: part quantity sources.
+  'parts.source.traced': 'Read',
+  'parts.source.ai_inferred': 'AI read',
+  'parts.source.guessed': 'Guessed',
 };
