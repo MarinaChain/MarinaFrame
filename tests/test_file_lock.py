@@ -28,6 +28,27 @@ def test_the_lock_also_takes_a_raw_descriptor(tmp_path):
         os.close(descriptor)
 
 
+def test_blocking_lock_waits_until_other_holder_releases(tmp_path):
+    import threading
+    from vessel_reconstruction.file_lock import lock_exclusive
+    path = tmp_path / 'lock'
+    acquired = threading.Event()
+    with path.open('a') as first, path.open('a') as second:
+        try_lock_exclusive(first)
+        def acquire():
+            lock_exclusive(second)
+            acquired.set()
+            unlock(second)
+        thread = threading.Thread(target=acquire)
+        thread.start()
+        try:
+            assert not acquired.wait(0.05)
+        finally:
+            unlock(first)
+        thread.join()
+        assert acquired.is_set()
+
+
 def test_worker_limits_fail_closed_on_windows(monkeypatch):
     monkeypatch.setattr(process_limits.os, 'name', 'nt')
     with pytest.raises(RuntimeError, match='Windows'):

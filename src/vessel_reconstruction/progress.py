@@ -47,17 +47,17 @@ def _record():
     if not name:
         yield None, None
         return
-    import fcntl
+    from .file_lock import lock_exclusive, unlock
     path = Path(name)
     # Descendants and the heartbeat use one lock so an old heartbeat cannot
     # overwrite a newer stage. These files are telemetry, never CAD receipts.
     with path.with_suffix('.lock').open('a') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+        lock_exclusive(lock)
         try:
             value = json.loads(path.read_text()) if path.exists() else {}
             yield path, value
         finally:
-            fcntl.flock(lock, fcntl.LOCK_UN)
+            unlock(lock)
 
 
 def _write(path, value):
