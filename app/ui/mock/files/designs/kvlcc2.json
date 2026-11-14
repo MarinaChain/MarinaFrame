@@ -109,7 +109,20 @@
     "class_notation": null,
     "constraints": [],
     "flag": null,
-    "quantities": {},
+    "quantities": {
+      "max_draft": {
+        "value": 21.0,
+        "unit": "m",
+        "uncertainty": null,
+        "uncertainty_reason": "Synthetic input; no measured band.",
+        "method": "synthetic development scenario; not a recalculated design",
+        "method_version": "1.0.0",
+        "sources": [
+          "public-kvlcc2-example"
+        ],
+        "status": "draft"
+      }
+    },
     "service_speed": {
       "kn": {
         "method": "public KVLCC2 transport example; separate trimmed and full-vessel bases",
@@ -140,7 +153,28 @@
     }
   },
   "results": {
-    "capacities": {},
+    "capacities": {
+      "cargo_capacity_m3": {
+        "kind": "quantity",
+        "value": {
+          "value": 340000,
+          "unit": "m3",
+          "uncertainty": {
+            "kind": "absolute",
+            "lower": 3000,
+            "upper": 3000,
+            "basis": "Synthetic development comparison band, not measured."
+          },
+          "uncertainty_reason": null,
+          "method": "synthetic development scenario; not a recalculated design",
+          "method_version": "1.0.0",
+          "sources": [
+            "public-kvlcc2-example"
+          ],
+          "status": "draft"
+        }
+      }
+    },
     "fuel": {
       "engineering_approved": {
         "kind": "flag",

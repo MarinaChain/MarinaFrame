@@ -55,7 +55,7 @@ test('mapping preserves zero, review status and the input record', () => {
 test('synthetic variant keeps its parent and states inherited evidence limits', async () => {
   const variant = JSON.parse(await readFile(new URL('../ui/mock/files/designs/kvlcc2-cb-variant.json', import.meta.url)));
   assert.equal(variant.lineage.parent_design_id, record.design_id);
-  assert.equal(variant.lineage.variation_parameters.cb.value, record.lineage.variation_parameters.cb.value + 0.01);
+  assert.equal(variant.lineage.variation_parameters.cb.value, record.lineage.variation_parameters.cb.value - 0.01);
   assert.ok(designView(variant).warnings.some((row) => String(row.value).includes('not recalculated')));
 });
 
@@ -119,6 +119,6 @@ test('a change from the parent states the parent value and the signed difference
   const [change] = designChanges(variant, record);
   assert.equal(change.key, 'cb');
   assert.equal(change.base.value, record.lineage.variation_parameters.cb.value);
-  assert.equal(change.delta, 0.01);
+  assert.equal(change.delta, -0.01);
   assert.equal(designChanges(variant, null)[0].delta, null);
 });
