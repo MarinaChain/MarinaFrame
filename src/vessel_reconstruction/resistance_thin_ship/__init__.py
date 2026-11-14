@@ -15,6 +15,14 @@ import numpy as np
 MICHELL_SOURCE = "J. H. Michell (1898), Phil. Mag. 45:106–123, doi:10.1080/14786449808621111"
 
 
+class HullOffsetsError(ValueError):
+    """Offsets violate the Michell input contract; ``code`` is machine-readable."""
+
+    def __init__(self, code: str, message: str):
+        self.code = code
+        super().__init__(message)
+
+
 @dataclass(frozen=True)
 class HullOffsets:
     x_m: np.ndarray
@@ -65,14 +73,29 @@ def _offsets(hull: HullOffsets) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     y = np.asarray(hull.half_breadths_m, dtype=float)
     for name, grid in (("x", x), ("z", z)):
         if grid.ndim != 1 or grid.size < 2 or not np.isfinite(grid).all() or np.any(np.diff(grid) <= 0):
-            raise ValueError(f"{name} grid must be finite, strictly increasing, with at least two points")
-    if y.shape != (x.size, z.size) or not np.isfinite(y).all() or np.any(y < 0):
-        raise ValueError("half-breadths must be finite, nonnegative and have shape (nx, nz)")
+            raise HullOffsetsError(f"invalid_{name}_grid",
+                                   f"{name} grid must be finite, strictly increasing, with at least two points; "
+                                   "regenerate the offsets on an ordered grid")
+    if y.shape != (x.size, z.size):
+        raise HullOffsetsError("breadth_shape",
+                               f"half-breadths have shape {y.shape}; expected ({x.size}, {z.size}) "
+                               "with longitudinal stations first and depth levels second")
+    if not np.isfinite(y).all():
+        raise HullOffsetsError("nonfinite_half_breadth",
+                               "half-breadths contain NaN or infinity; regenerate finite hull offsets")
+    if np.any(y < 0):
+        station, depth = np.unravel_index(np.argmin(y), y.shape)
+        raise HullOffsetsError("negative_half_breadth",
+                               f"negative half-breadth at [{station}, {depth}]: {y[station, depth]:.9g} m; "
+                               "half-breadths must be nonnegative distances from the centreplane. "
+                               "Check or regenerate the source geometry; values are not clipped")
     tolerance = 1e-10 * hull.draft_m
     if abs(z[0] + hull.draft_m) > tolerance or abs(z[-1]) > tolerance:
-        raise ValueError("z must span -draft_m to waterline z=0")
+        raise HullOffsetsError("draft_span", "z must span -draft_m to waterline z=0; "
+                               "check the draft and vertical coordinate origin")
     if np.any(y[[0, -1]] != 0):
-        raise ValueError("closed ends required; immersed transom correction is not implemented")
+        raise HullOffsetsError("open_ends", "closed ends required; immersed transom correction is not implemented. "
+                               "Use a method that supports immersed open ends; do not force end breadths to zero")
     return x - x[0], z, y
 
 
