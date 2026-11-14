@@ -41,6 +41,16 @@ def resolve_generation(root: Path) -> Path:
     return folder
 
 
+def resolve_package_folder(root: Path) -> Path:
+    """Resolve once; accept a legacy flat package only when no pointer exists."""
+    import os
+    root = Path(root)
+    _ordinary_directory(root)
+    if os.path.lexists(root / 'current.json'):
+        return resolve_generation(root)
+    return root
+
+
 def publish_generation(root: Path, stage: Path) -> Path:
     """Install a complete sibling stage, then switch readers with one file swap.
 

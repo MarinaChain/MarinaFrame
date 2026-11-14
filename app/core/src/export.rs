@@ -7,6 +7,8 @@
 //! list with SHA-256 hashes, `engineering_approved: false`) is always kept.
 //!
 //! Every export is a draft. Nothing here marks a file as approved or verified.
+mod generations;
+
 use crate::error::{AppError, AppResult};
 use crate::intake::Worker;
 use crate::worker_run::{Supervision, WorkerWords, UNCANCELLABLE};
@@ -227,8 +229,9 @@ pub fn export_run_with_capture(
     }
     let outcome =
         run_worker(worker, task, &revision, &staging, stall_period).and_then(|manifest| {
+            let published_staging = generations::resolve(&staging)?;
             let not_built = keep_chosen(
-                &staging,
+                &published_staging,
                 &exports_folder(task, &revision),
                 &chosen,
                 &manifest,
@@ -259,6 +262,7 @@ pub fn export_run_with_capture(
 
 /// Move the chosen files (and the manifest) from `staging` into `folder`.
 /// Returns the chosen outputs the build does not have.
+#[cfg(not(windows))]
 fn keep_chosen(
     staging: &Path,
     folder: &Path,
@@ -307,10 +311,78 @@ fn keep_chosen(
     Ok(not_built)
 }
 
+#[cfg(windows)]
+fn keep_chosen(
+    staging: &Path,
+    folder: &Path,
+    chosen: &[&str],
+    manifest: &serde_json::Value,
+) -> AppResult<Vec<String>> {
+    let parent = folder.parent().ok_or_else(write_error)?;
+    std::fs::create_dir_all(parent).map_err(|_| write_error())?;
+    let stage = parent.join(format!(
+        ".selection-{}-{}",
+        std::process::id(),
+        util::now_ms()
+    ));
+    std::fs::create_dir(&stage).map_err(|_| write_error())?;
+    let result = (|| {
+        let previous = generations::resolve(folder)?;
+        for source in [&previous, staging] {
+            if !source.exists() {
+                continue;
+            }
+            for entry in std::fs::read_dir(source).map_err(|_| write_error())? {
+                let entry = entry.map_err(|_| write_error())?;
+                let name = entry.file_name();
+                let Some(kind) = name.to_str().and_then(kind_of_file) else {
+                    continue;
+                };
+                let metadata =
+                    std::fs::symlink_metadata(entry.path()).map_err(|_| write_error())?;
+                use std::os::windows::fs::MetadataExt;
+                if !metadata.is_file()
+                    || metadata.file_type().is_symlink()
+                    || metadata.file_attributes() & 0x400 != 0
+                {
+                    return Err(write_error());
+                }
+                let fresh = source == staging;
+                let failed_ocx = kind == "structure"
+                    && name.to_str().is_some_and(|value| value.ends_with(".3docx"))
+                    && manifest["format_results"]["ocx"]["status"] == "failed";
+                if fresh && kind != MANIFEST && !chosen.contains(&kind) {
+                    continue;
+                }
+                if !fresh
+                    && chosen.contains(&kind)
+                    && (manifest["format_results"][kind]["status"] == "failed" || failed_ocx)
+                {
+                    continue;
+                }
+                std::fs::copy(entry.path(), stage.join(name)).map_err(|_| write_error())?;
+            }
+        }
+        generations::publish(folder, &stage)?;
+        Ok(manifest["not_built"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|role| not_built_kind(role.as_str()?))
+            .filter(|kind| chosen.contains(kind))
+            .map(String::from)
+            .collect())
+    })();
+    if stage.exists() {
+        let _ = std::fs::remove_dir_all(stage);
+    }
+    result
+}
+
 /// Files already exported for `revision` (an empty list when there are none).
 pub fn list_exports(task: &Path, revision: &str) -> AppResult<ExportResult> {
     let revision = normalise_revision(revision)?;
-    let folder = exports_folder(task, &revision);
+    let folder = generations::resolve(&exports_folder(task, &revision))?;
     let mut files: Vec<ExportedFile> = std::fs::read_dir(&folder)
         .into_iter()
         .flatten()

@@ -122,18 +122,6 @@ ISOLATED_INSPECTION_TESTS = {
 }
 
 
-ATOMIC_PACKAGE_EXCHANGE_TESTS = {
-    'test_exports.py': {
-        'test_package_replaces_existing_directory_after_complete_write',
-        'test_report_without_a_viewer_capture_has_no_picture_on_page_one',
-        'test_report_puts_the_viewer_capture_on_page_one',
-        'test_a_capture_that_is_not_an_image_leaves_the_report_complete',
-        'test_the_capture_is_not_listed_in_the_package',
-    },
-    'test_package_spatial.py': {'test_reexport_removes_a_previously_packaged_stale_task_model'},
-}
-
-
 PRIVATE_POOL_TESTS = {
     'test_concurrent_runs_never_hold_more_than_the_pool',
     'test_a_crashed_runs_workers_come_back',
@@ -153,9 +141,6 @@ def pytest_collection_modifyitems(items):
             if name in PRIVATE_POOL_TESTS or foreign_owner:
                 item.add_marker(pytest.mark.skip(
                     reason='A private shared worker pool is not supported on this platform; Windows ACL ownership checks are not implemented.'))
-        if name in ATOMIC_PACKAGE_EXCHANGE_TESTS.get(item.path.name, set()):
-            item.add_marker(pytest.mark.skip(
-                reason='Atomic replacement of an existing package is not supported on this platform.'))
         if name in SECURE_READ_TESTS.get(item.path.name, set()):
             item.add_marker(pytest.mark.skip(reason=SECURE_READS_UNSUPPORTED))
         if (name in POSIX_LIFECYCLE_TESTS.get(item.path.name, set())

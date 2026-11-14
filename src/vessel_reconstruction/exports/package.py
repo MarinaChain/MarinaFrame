@@ -236,6 +236,9 @@ def _exchange_directories(first: Path, second: Path) -> None:
         raise OSError(code, os.strerror(code))
 
 
+_USE_GENERATIONS = os.name == 'nt'
+
+
 @contextmanager
 def _package_stage(target: Path):
     """Keep the target intact until the complete sibling directory is ready."""
@@ -249,11 +252,24 @@ def _package_stage(target: Path):
     stage = Path(tempfile.mkdtemp(prefix=f".{target.name}.", dir=target.parent))
     try:
         if target.exists():
-            if any(path.is_symlink() for path in target.rglob("*")):
-                raise ExportError("The package target must not contain symbolic links.")
-            shutil.copytree(target, stage, dirs_exist_ok=True)
+            source = target
+            if _USE_GENERATIONS and os.path.lexists(target / 'current.json'):
+                from .generations import resolve_generation
+                source = resolve_generation(target)
+            if any(path.is_symlink() or getattr(path.lstat(), 'st_file_attributes', 0) & 0x400
+                   for path in source.rglob('*')):
+                raise ExportError('The package target must not contain links or reparse points.')
+            shutil.copytree(source, stage, dirs_exist_ok=True)
+            if source != target and os.path.lexists(target / VIEWER_CAPTURE_FILE):
+                capture = target / VIEWER_CAPTURE_FILE
+                if capture.is_symlink() or getattr(capture.lstat(), 'st_file_attributes', 0) & 0x400:
+                    raise ExportError('Viewer capture must not be a link or reparse point.')
+                shutil.copyfile(capture, stage / VIEWER_CAPTURE_FILE)
         yield stage
-        if target.exists():
+        if _USE_GENERATIONS and target.exists():
+            from .generations import publish_generation
+            publish_generation(target, stage)
+        elif target.exists():
             _exchange_directories(stage, target)
         else:
             os.rename(stage, target)

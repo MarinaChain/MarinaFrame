@@ -6,6 +6,23 @@ import pytest
 from vessel_reconstruction.exports.generations import publish_generation, resolve_generation
 
 
+def test_export_replacement_integrates_generation_resolution(monkeypatch, tmp_path):
+    from vessel_reconstruction.exports import package
+    from vessel_reconstruction.exports.generations import resolve_package_folder
+    from test_exports import make_box_task
+    monkeypatch.setattr(package, '_USE_GENERATIONS', True)
+    task = make_box_task(tmp_path, with_cad=False)
+    root = tmp_path / 'out'
+    first = package.export_draft(task, 'r1', root)
+    assert resolve_package_folder(root) == root
+    second = package.export_draft(task, 'r1', root)
+    generation = resolve_package_folder(root)
+    assert generation != root
+    assert (generation / second['package']['file']).is_file()
+    assert (root / first['package']['file']).is_file()
+    assert first['package']['sha256'] == second['package']['sha256']
+
+
 def test_pointer_keeps_old_generation_available(tmp_path):
     root = tmp_path / 'package'
     first = tmp_path / 'first'
