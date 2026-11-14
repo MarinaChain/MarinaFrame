@@ -1573,3 +1573,24 @@ retain20layers/samefirstheight,add stern x>-.65 and waterline z>-.025
 searchable-box level4 refinement. Finer tangential cells target measured tail;
 relativefinal.02422584 means firstheight equal or smaller,not larger.
 97%fullcount/PMquality still required;two approaches remaining.
+
+## PM mapping and convergence protocol additions (before next solver)
+
+New short250-iteration y+check and any subsequent production must initialize
+by **mapFields -consistent from converged coarse-production01 time2000** on
+the same physical hull,not uniform/potential-only fields. Medium/fine map from
+next coarser converged solution. Mapping output and source/target times retained;
+never reuse unmapped time labels as post-mapping iteration counts.
+
+PM proposed stop:<0.1%drift between successive100means for3successive windows,
+minimum500/maximum2000iterations after mapping. **Frozen f357e2d plan explicitly
+retains all2000iterations**;therefore gate runs keep fixed2000 and original
+final100+100<=1%test. Also report the stricter3window<0.1%diagnostic,do not
+stop gate runs early. Short250check is admission only,not gate convergence.
+95%area y+<1 and97%full-layer mesh targets unchanged;threeapproach limit stays.
+
+Restart state:no active lane container;mesh08container does not yet exist,
+its host monitor PID81806 is waiting startup load in admission.log. Preserve
+it;do not launch duplicate. Existing control files remain intact. Direct SSH
+command probe works;SSH bash-s stdin returned empty in this session,so verify
+state via direct confined commands and preserve transport diagnostics.
