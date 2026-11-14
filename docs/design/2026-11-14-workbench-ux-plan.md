@@ -1,7 +1,7 @@
 # Basic-design workbench: UX audit and plan (2026-11-14, draft)
 
 Owner: UI/UX lead. Status: approved by the founder on 2026-11-14 (section 7 records the decisions).
-Phase 0 is in progress.
+Phase 0 and the read-only part of phase 1 are built (see Progress in section 6).
 Read with `docs/PRD.md` (section 4.1, D1-D14), `docs/plans/2026-11-12-design-from-scratch.md`,
 `docs/plans/2026-11-13-design-loop-v0.md`, `docs/design-record.md` and
 `docs/design/2026-11-08-app-design-plan.md` (the current app design; its rules stay).
@@ -160,9 +160,20 @@ Progress (resume here):
   Parts and Export; the dense table (`app/ui/js/data_table.js`: sort, filter, Copy as TSV with
   spreadsheet-formula protection, keyboard selection) in the tank capacity plan; Korean for the static
   shell (`index.html` `data-i18n`), Home, the Queue, the run bar, status words and times.
-- Phase 0, next: Korean for the remaining JavaScript text (Parts, Export, Sources, History, the run
-  inspector, the palette and shortcuts); the dense table for other long lists (fleet table, sections).
-  Then phase 1 (the design shell), which needs the design-record command from the design-loop owner.
+- Phase 0, done (2026-11-14, third part): Korean for all remaining JavaScript text (vessel pages,
+  run view, palette, shortcuts, intake, Settings); Home thumbnails show the 3D side profile (with the
+  read parts as blocks when only the hull exists), then the GA, then the drawing
+  (`app/ui/js/home_thumb.js`, `home_thumb3d.js`).
+- Phase 1, done (2026-11-14, read only): Designs in the rail; Designs list; project page with
+  Overview (main-particular cards, grouped warnings, change from the parent), Requirements,
+  Arrangement, Weights and stability, Performance and Provenance; Lite summary with every unknown
+  value and warning; Tauri commands `list_design_records` and `open_design_record`
+  (`app/src-tauri/src/designs.rs`, records in `<runs folder>/designs/*.json`, validated with
+  `DesignRecord::from_json`); mock records: public KVLCC2 and a synthetic Cb variant.
+- Next: phase 2 (candidates list, Compare, Pareto chart, Decisions log); it needs a command that
+  lists the candidates of a project and a project object in the record or beside it. Small fixes:
+  the Lite "Not supplied" list shows administrative fields (customer ID) that designers do not need;
+  the "Needs you" card icons still show the body-plan sketch.
 - Open: a yard designer must review `app/ui/js/strings/glossary.js` before the pilot.
 
 ## 7. Founder decisions (2026-11-14)

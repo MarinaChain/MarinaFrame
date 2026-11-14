@@ -71,3 +71,8 @@ test('times read in Korean, and English times keep their words', async () => {
   assert.equal(relativeTime(twelveMinutesAgo), '12분 전');
   assert.equal(shortTime(Date.now()), '방금');
 });
+
+test('a missing or undefined key never throws', () => {
+  assert.equal(t(undefined), '');
+  assert.equal(t(''), '');
+});

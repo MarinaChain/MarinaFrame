@@ -38,6 +38,8 @@ export function renderCrumbs() {
   const badge = $('task-badge');
   const view = state.route === 'run' ? state.view : null;
   badge.hidden = !view;
+  // The design pages write their own breadcrumb (designs.js).
+  if (state.route === 'designs' || state.route.startsWith('design/')) return;
   if (state.route !== 'run') {
     const routeIcon = ROUTE_ICONS[state.route];
     fill(crumbs, el('span', { class: 'crumb crumb-current', 'aria-current': 'page' },

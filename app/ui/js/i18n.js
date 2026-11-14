@@ -39,6 +39,8 @@ export function locale() {
  * Keys that start with "term." (one item) or "terms." (a heading) read the glossary.
  */
 export function t(key, params = {}) {
+  // A missing key must never break a render: show nothing rather than throw.
+  if (typeof key !== 'string' || !key) return '';
   const text = lookup(key, current) ?? lookup(key, DEFAULT_LOCALE) ?? key;
   return text.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match));
 }
