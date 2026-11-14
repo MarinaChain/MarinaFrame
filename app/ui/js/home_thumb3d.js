@@ -4,7 +4,7 @@ import * as THREE from '../vendor/three/three.module.min.js';
 import { STLLoader } from '../vendor/three/STLLoader.js';
 import { GLTFLoader } from '../vendor/three/GLTFLoader.js';
 import { cachedArtifact } from './artifacts.js';
-import { thumbnailCacheKey, thumbnailFrame } from './home_thumb.js';
+import { thumbnailCacheKey, thumbnailFrame, thumbnailParts } from './home_thumb.js';
 
 const WIDTH = 480;
 const HEIGHT = 300; // Match the existing card's 16:10 paper, without cropping the vessel.
@@ -46,11 +46,40 @@ function disposeModel(root) {
   for (const geometry of geometries) geometry.dispose();
 }
 
-async function loadModel(task, source) {
-  const buffer = await cachedArtifact(source.format === 'glb' ? 'model' : 'stl', task, source.path);
-  if (source.format === 'stl') {
-    return new THREE.Mesh(new STLLoader().parse(buffer), new THREE.MeshStandardMaterial());
+function neutralPaint(color) {
+  // Fixed neutral shades remain legible on both theme papers; the PNG stays transparent.
+  return new THREE.MeshStandardMaterial({ color, roughness: 0.8, side: THREE.DoubleSide });
+}
+
+function hullWithParts(buffer, view) {
+  const geometry = new STLLoader().parse(buffer);
+  // STL has no units. Use the same length-based conversion as the workspace before
+  // adding component boxes, which already use metres in the app's Z-up vessel frame.
+  geometry.computeBoundingBox();
+  const extent = geometry.boundingBox.max.x - geometry.boundingBox.min.x;
+  const length = view.model?.length_m;
+  if (Number.isFinite(length) && length > 0 && extent > 0) {
+    geometry.scale(length / extent, length / extent, length / extent);
   }
+  const root = new THREE.Group();
+  root.add(new THREE.Mesh(geometry, neutralPaint(0x9aaab4)));
+  const parts = thumbnailParts(view);
+  if (parts.length) {
+    const paint = neutralPaint(0xd5dce0);
+    for (const part of parts) {
+      const { min, max } = part.bbox_m;
+      const dimensions = max.map((value, axis) => value - min[axis]);
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(...dimensions), paint);
+      mesh.position.set(...min.map((value, axis) => (value + max[axis]) / 2));
+      root.add(mesh);
+    }
+  }
+  return root;
+}
+
+async function loadModel(task, source, view) {
+  const buffer = await cachedArtifact(source.format === 'glb' ? 'model' : 'stl', task, source.path);
+  if (source.format === 'stl') return hullWithParts(buffer, view);
   const gltf = await new Promise((resolve, reject) => new GLTFLoader().parse(buffer, '', resolve, reject));
   const root = new THREE.Group();
   root.add(gltf.scene);
@@ -60,15 +89,16 @@ async function loadModel(task, source) {
   return root;
 }
 
-async function render(task, source) {
+async function render(task, source, view) {
   const gpu = sharedRenderer();
-  const root = await loadModel(task, source);
+  const root = await loadModel(task, source, view);
   const scene = new THREE.Scene();
-  // Neutral shading works on the light or dark paper; the PNG background stays transparent.
-  const paint = new THREE.MeshStandardMaterial({ color: 0x9aaab4, roughness: 0.8, side: THREE.DoubleSide });
+  const paint = neutralPaint(0x9aaab4);
   try {
     scene.add(root);
-    scene.overrideMaterial = paint;
+    // Whole-vessel models keep the existing uniform shading. Hull fallbacks carry
+    // their own two materials so the lighter superstructure reads as a silhouette.
+    if (source.format === 'glb') scene.overrideMaterial = paint;
     scene.add(new THREE.HemisphereLight(0xffffff, 0x364555, 2));
     const light = new THREE.DirectionalLight(0xffffff, 3);
     light.position.set(1, 3, 5);
@@ -116,7 +146,7 @@ export function modelThumbnail(run, view, source) {
       const stored = localStorage.getItem(key);
       if (stored?.startsWith('data:image/png;base64,iVBORw0KGgo')) return stored;
     } catch { /* Storage can be blocked. */ }
-    const url = await render(run.task, source);
+    const url = await render(run.task, source, view);
     try { localStorage.setItem(key, url); } catch { /* Full or blocked storage: memory is enough. */ }
     return url;
   });
