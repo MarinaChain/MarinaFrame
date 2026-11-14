@@ -185,6 +185,22 @@ def run(args):
                     stream.flush()
             print(json.dumps({"completed_hulls": len({r["id"] for r in diagnostics}),
                               "conditions": len(diagnostics)}), flush=True)
+    # Descriptive full-development comparison, not a replacement gate run.
+    development = []
+    for identifier, hull in hulls.items():
+        for draft in manifest["drafts"]:
+            x, z, y, wl = hull.gen_PC_for_Cw(hull.Dd*draft, NUM_WL=51, PointsPerWL=301)
+            for fn in manifest["froudes"]:
+                baseline = next(r for r in records if r["id"] == identifier
+                                and r["draft_fraction"] == draft and r["fn"] == fn)
+                speed = fn*math.sqrt(9.81*wl)
+                cw = reference_rw(y, speed, x, z, 321)/(.5*1000*speed**2*hull.LOA**2)
+                development.append({"id": identifier, "fn": fn, "draft": draft,
+                                    "reference_321_cw": cw,
+                                    "error_percent": relative_error(baseline["cw"], cw),
+                                    "cw": baseline["cw"], "reference_cw": cw})
+    (args.output/"reference-refinement.json").write_text(json.dumps(development)+"\n")
+    print(json.dumps({"reference_321_development": statistics(development)}), flush=True)
     print("Diagnostics complete", flush=True)
 
 
