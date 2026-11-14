@@ -1732,3 +1732,21 @@ Report minimum500 and maximum2000budgets;unverified fit means no admission.
 Same VPSotherload(hostrollingminus5running/0paused)pause>9for600/unpause<6for600,
 5CPU12GiBnice10onecontainerdisk<40GB/reserve10GB. Commit eachstep/run,
 backgroundquicklog,pushlaneonly,no merge. No DB3run started at freeze.
+
+### DB3 pre-run admission BLOCKED (zero new runs)
+
+Coarse05 actual full30layer area **84.30936956%<85%**,despite86.02517%faces.
+This is measured face-area weighted from exact mesh/actual layer field,not
+rounding. Base recipe itself therefore does not satisfy newDB3admission.
+No all-y+solver,coarse rerun,medium/fine or DB3score launched. Prior3failed
+regionalapproach stop remains;newPM direction did not authorize weakening
+85%area or silently substituting facecount. Need an admitted mesh/method
+before solversequence. k/nut differ from DB3so prefreeze production01 cannot
+count. Wall pairing frozen but runtime/numerical validity not yet exercised.
+
+Provisional upper budgets from production01active26846.5s/1900steps:
+coarse2000~7.85h,mediumcellratio2.85~22.4h,fineratio8~62.8h (roughlinear
+cellcost,not measuredMPIscaling). Fine max2000projection>30h;500stepminimum
+~15.7h does not guarantee convergenceat500. Actual earliergrid timings/stop
+history must replace budget before fineadmission. Currentstopis already mesh
+area prerequisite,no extra runs merely to reach knownresourceblocker.
