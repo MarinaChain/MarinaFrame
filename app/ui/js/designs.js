@@ -12,7 +12,6 @@ import {
   designSections, designMissing, designTopic,
 } from './design_view.js';
 import { keyLabel, fieldLabel, numberText, quantityValue, missingText } from './design_values.js';
-import { applyInterfaceMode } from './app_state.js';
 import { PROJECT_TABS, loadProject, candidatesTab, compareTab, decisionsTab, liteProject } from './design_project.js';
 
 const TABS = ['overview', 'requirements', 'arrangement', 'weights', 'performance', 'provenance'];
@@ -171,15 +170,7 @@ function provenance(view) {
 
 /* ---------- Page ---------- */
 
-function modeControl() {
-  return el('div', { class: 'segmented segmented-text design-mode', role: 'radiogroup', 'aria-label': t('design.mode') },
-    ...['lite', 'advanced'].map((mode) => el('label', {}, el('input', {
-      type: 'radio', name: 'design-mode', value: mode, checked: document.body.dataset.interface === mode,
-      onchange: () => applyInterfaceMode(mode, { remember: true }),
-    }), el('span', {}, t(`settings.${mode}`)))));
-}
-
-function header(record, parentRecord, mode) {
+function header(record, parentRecord) {
   const parent = record.lineage?.parent_design_id;
   const facts = [t('design.constructionNotice'), ...scopeFacts(record)];
   return el('header', { class: 'design-head' },
@@ -190,8 +181,7 @@ function header(record, parentRecord, mode) {
       parent ? (parentRecord
         ? el('a', { class: 'design-parent', href: `#design/${encodeURIComponent(parent)}` }, t('design.parentLink', { name: parentRecord.name }))
         : el('span', { class: 'design-parent' }, t('design.parentLink', { name: t('design.unavailableParent') })))
-        : null,
-      mode),
+        : null),
     el('p', { class: 'design-facts' }, facts.join(' · ')));
 }
 
@@ -252,20 +242,17 @@ function project(host, record, parentRecord, projectData, initialTab) {
       if (next !== undefined) { event.preventDefault(); selectTab(order[next], true); }
     },
   }, t(`design.${tab}`)));
-  const mode = modeControl();
   renderLite();
   const summary = el('div', { class: 'design-lite design-tab-body' }, projectData ? liteHost : null,
     particulars(designParticulars(record, { lite: true }), { lite: true }), warningPanel(view.warnings), missingList(record),
-    el('div', {}, el('button', { class: 'btn', type: 'button', onclick: () => {
-      applyInterfaceMode('advanced', { remember: true });
-      mode.querySelector('[value="advanced"]').checked = true;
-      selectTab('overview', true);
-    } }, t('design.showDetail'))));
+    // The interface mode is a person's setting, changed only in Settings (founder, 2026-11-14).
+    el('p', { class: 'design-facts design-mode-note' }, t('design.liteNote'), ' ',
+      el('a', { href: '#settings' }, t('design.changeInSettings'))));
   fill(document.getElementById('crumbs'), el('a', { class: 'crumb crumb-link', href: '#designs' }, t('design.title')),
     el('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '›'),
     el('span', { class: 'crumb crumb-current', 'aria-current': 'page' }, record.name));
   fill(host, el('div', { class: 'page-body design-body' },
-    header(record, parentRecord, mode), summary, el('div', { class: 'design-advanced' }, tabs, content)));
+    header(record, parentRecord), summary, el('div', { class: 'design-advanced' }, tabs, content)));
   selectTab(active);
 }
 

@@ -8,6 +8,12 @@
 - **Delivery rule (2026-11-13):** The rights are to white-label and port. The licensed products reach customers only as ported code inside MarinaFrame. Never ship, wrap or call the original programs in a customer deployment; customers hold no licence for them. Connectors and export formats are only for third-party tools the customer already owns, and MarinaFrame must work without them. The originals may serve as internal test references. Ported code must be platform-, OS- and architecture-agnostic: no Windows-only runtimes or APIs, and the same tests must pass on macOS arm64, Linux x64 and Windows.
 - **Why:** The licences are white-label rights that the founder has already acquired. Licence warnings slow engineering work, and vendor names in the repo break the white-label terms.
 
+### Merge UI lanes into continue/v0.5 without asking (standing order)
+- **Date:** 2026-11-14
+- **Trigger:** The UI lead asked "Merge lane/ui-workbench into continue/v0.5 now?". The founder said yes and "don't need to ask me for these, just do it yourself".
+- **Rule:** When a UI lane is reviewed and passes `npm run test:ui`, `npm run test:a11y` (screenshots seen) and the identity check, merge it into `lane/ui-workbench` and then into `continue/v0.5` without asking. Check first that the main checkout has no uncommitted work and that `git merge-tree` shows no conflict; run the checks again on the merged result. Pushing is separate: other lanes merge without pushing, so do not push unless asked.
+- **Why:** The founder wants finished, checked work merged without a stop for approval.
+
 ### Ask the person when a worker stops making progress
 - **Date:** 2026-11-10
 - **Trigger:** A loaded laptop's 72-station Gunnerus build was stopped at the 600-second wall limit twice. The founder rejected fixed total time limits for slower laptops.

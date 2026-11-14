@@ -98,7 +98,7 @@ state, not a blank. This replaces the per-screen variants in Parts, GA and Expor
 ### 4.5 Lite and Advanced modes (decided 2026-11-14)
 
 Two views of the same design project. The mode changes how much the user controls, not the data.
-The user selects the mode in Settings and with a switch in the project header. The app remembers it
+The user selects the mode in Settings only (founder, 2026-11-14: not a switch on every page). The app remembers it
 per user. Switching keeps the current project and candidate.
 
 | | Lite: "brief and review" | Advanced: "workbench" |
@@ -199,7 +199,7 @@ Progress (resume here):
    words follow the draft rule (no word for "approved" or "verified").
 2. First users: basic design. Candidates, Compare, Pareto and Decisions come first. Technical sales
    follows as a Lite quick estimate after reference search exists.
-3. Modes: Lite and Advanced (section 4.5).
+3. Modes: Lite and Advanced (section 4.5). The mode switch is in Settings only, not on each page.
 
 Still open:
 
