@@ -65,3 +65,77 @@ test('decision views retain the latest per discipline without changing history',
   assert.deepEqual(currentDecisions(history), [newer, other]); assert.equal(history.length, 3);
   assert.equal(currentDecisions([d, { ...d, action: 'rejected' }])[0].action, 'rejected');
 });
+
+/* ---------- Project tab views ---------- */
+
+import {
+  candidateLetter, variationChanges, deltaTone, checkCounts, paretoState, indistinguishablePairs,
+  defaultComparison, decisionGrid, decisionLog, FUEL, CARGO,
+} from '../ui/js/design_compare.js';
+
+test('candidate letters come from the name, else from the position', () => {
+  assert.equal(candidateLetter({ name: 'Candidate B: B +1 m' }, 0), 'B');
+  assert.equal(candidateLetter({ name: 'candidate c2 — lower Cb' }, 0), 'C2');
+  assert.equal(candidateLetter({ name: 'Wider hull' }, 3), 'D');
+});
+
+test('variation changes read the parent dimension, its own variation or its Cb', () => {
+  const parent = record('parent');
+  parent.main_dimensions.length = q(320, 'm');
+  parent.results.hydrostatics = { cb: { kind: 'quantity', value: q(0.8, '1') } };
+  const child = record('a');
+  child.lineage.variation_parameters = { length: q(326.4, 'm'), cb: q(0.79, '1'), depth: q(30, 'm') };
+  const [length, cb, depth] = variationChanges(child, parent);
+  assert.ok(Math.abs(length.delta - 6.4) < 1e-9); assert.ok(Math.abs(length.deltaPercent - 2) < 1e-9);
+  assert.ok(Math.abs(cb.delta + 0.01) < 1e-9);
+  assert.equal(depth.base, null); assert.equal(depth.delta, null);
+  assert.deepEqual(variationChanges(record('b'), parent), []);
+});
+
+test('only fuel and cargo deltas have a better direction', () => {
+  assert.equal(deltaTone(FUEL, -3), 'better'); assert.equal(deltaTone(FUEL, 2), 'worse');
+  assert.equal(deltaTone(CARGO, 10), 'better'); assert.equal(deltaTone(CARGO, -10), 'worse');
+  assert.equal(deltaTone('main_dimensions.length', 5), null);
+  assert.equal(deltaTone(FUEL, 0), null); assert.equal(deltaTone(FUEL, null), null);
+});
+
+test('check counts and Pareto states keep unknown visible', () => {
+  assert.deepEqual(checkCounts([{ state: 'pass' }, { state: 'fail' }, { state: 'unknown' }, { state: 'fail' }]),
+    { pass: 1, fail: 2, unknown: 1 });
+  assert.equal(paretoState({ reference: true, x: 1, y: 1 }), 'reference');
+  assert.equal(paretoState({ x: null, y: 1 }), 'unknown');
+  assert.equal(paretoState({ x: 1, y: 1, dominated: true }), 'dominated');
+  assert.equal(paretoState({ x: 1, y: 1, dominated: false }), 'front');
+});
+
+test('pairs are listed once and the default comparison prefers the front', () => {
+  const parent = record('parent', 60, 360000);
+  const missing = record('m'); delete missing.results.fuel;
+  const points = paretoPoints(parent, [record('a', 65, 345000), record('b', 66, 344000), record('c', 75, 330000), missing]);
+  assert.deepEqual(indistinguishablePairs(points), [['a', 'b']]);
+  // Only "a" is on the front, so one dominated candidate is added to compare two.
+  assert.deepEqual(defaultComparison(points), ['a', 'b']);
+  const many = paretoPoints(parent, ['a', 'b', 'c', 'd', 'e'].map((id, index) => record(id, 60 + index, 340000 + index * 1000)));
+  assert.deepEqual(defaultComparison(many), ['a', 'b', 'c', 'd']);
+  assert.deepEqual(defaultComparison(paretoPoints(parent, [missing])), ['m']);
+});
+
+test('the decision grid shows the current decision and leaves others undecided', () => {
+  const old = { candidate_id: 'a', discipline: 'structure', action: 'deferred', recorded_at: '2026-11-13T00:00:00Z' };
+  const now = { ...old, action: 'accepted', recorded_at: '2026-11-14T00:00:00Z' };
+  const stray = { ...old, candidate_id: 'zz' };
+  const grid = decisionGrid(['a', 'b'], [old, now, stray]);
+  assert.equal(grid.get('a').structure, now);
+  assert.equal(grid.get('a').machinery, null);
+  assert.equal(grid.get('b').basic_design, null);
+  assert.equal(grid.has('zz'), false);
+});
+
+test('the decision log is newest first without changing the history', () => {
+  const a = { id: 1, recorded_at: '2026-11-13T00:00:00Z' };
+  const b = { id: 2, recorded_at: '2026-11-14T00:00:00Z' };
+  const c = { id: 3, recorded_at: '2026-11-14T00:00:00Z' };
+  const history = [a, b, c];
+  assert.deepEqual(decisionLog(history).map((entry) => entry.id), [3, 2, 1]);
+  assert.deepEqual(history.map((entry) => entry.id), [1, 2, 3]);
+});

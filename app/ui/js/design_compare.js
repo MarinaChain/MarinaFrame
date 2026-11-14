@@ -1,8 +1,11 @@
 // Pure project comparison: quantities, constraint states, Pareto points and decision history.
 import { designRows, designQuantity } from './design_view.js';
 
-const CARGO = 'results.capacities.cargo_capacity_m3';
-const FUEL = 'results.fuel.value';
+export const CARGO = 'results.capacities.cargo_capacity_m3';
+export const FUEL = 'results.fuel.value';
+// Values of the decision sidecar (docs/design/2026-11-14-decision-discipline-proposal.md).
+export const DISCIPLINES = ['basic_design', 'structure', 'machinery', 'outfitting', 'accommodation'];
+export const DECISION_ACTIONS = ['accepted', 'deferred', 'rejected'];
 const KEY_RESULTS = [CARGO, FUEL, 'results.hydrostatics.cb',
   'results.hydrostatics.displacement_t', 'results.capacities.deadweight_t',
   'results.power.brake_power_kw'];
@@ -99,4 +102,93 @@ export function currentDecisions(decisions) {
     if (!previous || Date.parse(decision.recorded_at) >= Date.parse(previous.recorded_at)) latest.set(key, decision);
   }
   return [...latest.values()];
+}
+
+/* ---------- Views for the project tabs ---------- */
+
+/** Short chart label: the letter after "Candidate" in the name, else A, B, C by position. */
+export function candidateLetter(record, index) {
+  const match = /^candidate\s+([A-Za-z0-9]{1,3})\b/i.exec(record?.name || '');
+  return match ? match[1].toUpperCase() : String.fromCharCode(65 + (index % 26));
+}
+
+// Parent paths where a variation parameter (length, beam, draft, cb) has its base value.
+const BASE_PATHS = ['main_dimensions.', 'lineage.variation_parameters.', 'results.hydrostatics.'];
+
+/** Each variation parameter of a candidate against the parent's own value of that key. */
+export function variationChanges(candidate, parent) {
+  const parentValues = parent ? quantities(parent) : new Map();
+  return Object.entries(candidate?.lineage?.variation_parameters || {}).map(([key, quantity]) => {
+    const base = BASE_PATHS.map((prefix) => parentValues.get(prefix + key)).find(Boolean) || null;
+    const { delta, deltaPercent } = cell(quantity, base);
+    return { key, quantity, base, delta, deltaPercent };
+  });
+}
+
+// Only these two quantities have a direction that is better for every design: less fuel per
+// day and more cargo. Every other delta is a change, not a gain or a loss.
+const BETTER_WHEN = { [FUEL]: -1, [CARGO]: 1 };
+
+/** 'better', 'worse' or null (no direction for this quantity, or no change). */
+export function deltaTone(path, delta) {
+  const direction = BETTER_WHEN[path];
+  if (!direction || !delta) return null;
+  return delta * direction > 0 ? 'better' : 'worse';
+}
+
+/** Counts of pass, fail and unknown constraint checks. */
+export function checkCounts(checks) {
+  const counts = { pass: 0, fail: 0, unknown: 0 };
+  for (const check of checks) counts[check.state] += 1;
+  return counts;
+}
+
+/** 'reference' (the parent), 'unknown' (an axis value is missing), 'dominated' or 'front'. */
+export function paretoState(point) {
+  if (point.reference) return 'reference';
+  if (point.x === null || point.y === null) return 'unknown';
+  return point.dominated ? 'dominated' : 'front';
+}
+
+/** Each pair of candidates whose bands overlap on both axes, once, in candidate order. */
+export function indistinguishablePairs(points) {
+  const order = points.map((point) => point.id);
+  const pairs = [];
+  for (const point of points) {
+    for (const other of point.indistinguishable) {
+      if (order.indexOf(other) > order.indexOf(point.id)) pairs.push([point.id, other]);
+    }
+  }
+  return pairs;
+}
+
+/**
+ * The first comparison: up to `limit` candidates on the front, then dominated ones to reach
+ * two. A candidate with an unknown axis value is only added when nothing else is left.
+ */
+export function defaultComparison(points, limit = 4) {
+  const competitors = points.filter((point) => !point.reference);
+  const rank = { front: 0, dominated: 1, unknown: 2 };
+  const ordered = competitors.map((point, index) => ({ point, index }))
+    .sort((a, b) => rank[paretoState(a.point)] - rank[paretoState(b.point)] || a.index - b.index);
+  const front = ordered.filter(({ point }) => paretoState(point) === 'front');
+  const count = Math.min(limit, Math.max(front.length, Math.min(2, ordered.length)));
+  return ordered.slice(0, count).sort((a, b) => a.index - b.index).map(({ point }) => point.id);
+}
+
+/** Current decisions as candidate id → discipline → decision (null when not decided). */
+export function decisionGrid(candidateIds, decisions) {
+  const grid = new Map(candidateIds.map((id) => [id, Object.fromEntries(DISCIPLINES.map((key) => [key, null]))]));
+  for (const decision of currentDecisions(decisions)) {
+    const row = grid.get(decision.candidate_id);
+    if (row && decision.discipline in row) row[decision.discipline] = decision;
+  }
+  return grid;
+}
+
+/** The log newest first; for equal times the later entry in the file comes first. */
+export function decisionLog(decisions) {
+  return decisions.map((decision, index) => ({ decision, index }))
+    .sort((a, b) => (Date.parse(b.decision.recorded_at) - Date.parse(a.decision.recorded_at)) || b.index - a.index)
+    .map(({ decision }) => decision);
 }
