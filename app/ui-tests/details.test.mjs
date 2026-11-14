@@ -72,7 +72,7 @@ test('a hidden column is remembered', () => {
 
 test('the shortcut is the next free key after the layout keys', () => {
   assert.equal(DETAILS_KEY, '4');
-  assert.match(read('../ui/js/shortcuts.js'), /\$\{MOD\}4`, 'Show or hide the details column'/);
+  assert.match(read('../ui/js/shortcuts.js'), /\$\{MOD\}4`, 'ko3\.shortcut\.showOrHideTheDetailsColumn'/);
   assert.deepEqual(shortcutCommand({ key: DETAILS_KEY, metaKey: true }), { command: 'details' });
   assert.deepEqual(shortcutCommand({ key: DETAILS_KEY, ctrlKey: true }), { command: 'details' });
   assert.equal(shortcutCommand({ key: DETAILS_KEY }), null, 'without ⌘ the key is free');

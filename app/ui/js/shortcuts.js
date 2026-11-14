@@ -1,65 +1,71 @@
 // Keyboard shortcut sheet: "?" (or the palette) shows every key the app answers to.
 // Keep this list in step with the keydown handlers in js/app.js, js/mark.js and js/live.js.
 
+import { t } from './i18n.js';
 import { el } from './dom.js';
 
 /** Platform modifier: ⌘ on macOS, Ctrl elsewhere. */
-const MOD = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
+const MOD = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform || '') ? '⌘' : 'Ctrl+';
 
-const GROUPS = [
-  ['Anywhere', [
-    [`${MOD}K`, 'Go to a vessel, a station or an action'],
-    [`${MOD}N`, 'New vessel from drawings'],
-    [`${MOD},`, 'Settings'],
-    [`${MOD}\\`, 'Show or hide the sidebar'],
-    ['?', 'This list'],
+const GROUP_KEYS = [
+  ['ko3.shortcut.anywhere', [
+    [`${MOD}K`, 'ko3.shortcut.goToAVesselAStationOrAnAction'],
+    [`${MOD}N`, 'ko3.shortcut.newVesselFromDrawings'],
+    [`${MOD},`, 'ko3.shortcut.settings'],
+    [`${MOD}\\`, 'ko3.shortcut.showOrHideTheSidebar'],
+    ['?', 'ko3.shortcut.thisList'],
   ]],
-  ['Review a draft', [
-    ['N', 'Next section to check'],
-    ['A', 'Accept the guessed line'],
-    ['O', 'Use the other line'],
-    ['M', 'Mark the drawing and say what to fix'],
-    ['[ ]', 'Previous or next section'],
+  ['ko3.shortcut.reviewADraft', [
+    ['N', 'ko3.shortcut.nextSectionToCheck'],
+    ['A', 'ko3.shortcut.acceptTheGuessedLine'],
+    ['O', 'ko3.shortcut.useTheOtherLine'],
+    ['M', 'ko3.shortcut.markTheDrawingAndSayWhatToFix'],
+    ['[ ]', 'ko3.shortcut.previousOrNextSection'],
   ]],
-  ['Views', [
-    [`${MOD}1`, 'Drawing only'],
-    [`${MOD}2`, 'Drawing and model'],
-    [`${MOD}3`, 'Model only'],
-    [`${MOD}4`, 'Show or hide the details column'],
-    ['R', 'Reset the 3D view'],
-    ['+ − 0', 'Zoom the drawing in, out, to fit (click the drawing first)'],
-    ['← → ↑ ↓', 'Pan the drawing (click the drawing first)'],
+  ['ko3.shortcut.views', [
+    [`${MOD}1`, 'ko3.shortcut.drawingOnly'],
+    [`${MOD}2`, 'ko3.shortcut.drawingAndModel'],
+    [`${MOD}3`, 'ko3.shortcut.modelOnly'],
+    [`${MOD}4`, 'ko3.shortcut.showOrHideTheDetailsColumn'],
+    ['R', 'ko3.shortcut.resetThe3DView'],
+    ['+ − 0', 'ko3.shortcut.zoomTheDrawingInOutToFitClickTheDrawingFirst'],
+    ['← → ↑ ↓', 'ko3.shortcut.panTheDrawingClickTheDrawingFirst'],
   ]],
-  ['3D model (click the model first)', [
-    ['1 2 3 4 5', 'Iso, profile, plan, body plan from ahead, from astern'],
-    ['P', 'Orthographic or perspective camera'],
-    ['F', 'Fit the selected part'],
-    ['C', 'Section cut panel (Esc ends the cut)'],
-    ['G W E', 'Grid, design waterline plane, feature edges'],
-    ['S', 'Section planes at every section, or at the selected one only'],
-    ['X', 'See-through hull: the hull faint, the parts and tanks inside solid'],
-    ['Z', 'Fairness: zebra stripes, curvature map, off'],
+  ['ko3.shortcut.3dModelClickTheModelFirst', [
+    ['1 2 3 4 5', 'ko3.shortcut.isoProfilePlanBodyPlanFromAheadFromAstern'],
+    ['P', 'ko3.shortcut.orthographicOrPerspectiveCamera'],
+    ['F', 'ko3.shortcut.fitTheSelectedPart'],
+    ['C', 'ko3.shortcut.sectionCutPanelEscEndsTheCut'],
+    ['G W E', 'ko3.shortcut.gridDesignWaterlinePlaneFeatureEdges'],
+    ['S', 'ko3.shortcut.sectionPlanesAtEverySectionOrAtTheSelectedOneOnly'],
+    ['X', 'ko3.shortcut.seeThroughHullTheHullFaintThePartsAndTanksInsideSolid'],
+    ['Z', 'ko3.shortcut.fairnessZebraStripesCurvatureMapOff'],
   ]],
-  ['Review parts (Parts tab)', [
-    ['A', 'Accept the part as a draft part'],
-    ['M', 'Mark the part and say what to change'],
-    ['N', 'Next part to review'],
+  ['ko3.shortcut.reviewPartsPartsTab', [
+    ['A', 'ko3.shortcut.acceptThePartAsADraftPart'],
+    ['M', 'ko3.shortcut.markThePartAndSayWhatToChange'],
+    ['N', 'ko3.shortcut.nextPartToReview'],
   ]],
-  ['New vessel (pages)', [
-    ['[ ]', 'Previous or next page'],
-    ['S', 'Skip or keep the page shown'],
+  ['ko3.shortcut.newVesselPages', [
+    ['[ ]', 'ko3.shortcut.previousOrNextPage'],
+    ['S', 'ko3.shortcut.skipOrKeepThePageShown'],
   ]],
-  ['Replay a run', [
-    ['Space', 'Play or pause'],
-    ['← →', 'Previous or next AI step'],
+  ['ko3.shortcut.replayARun', [
+    ['Space', 'ko3.shortcut.playOrPause'],
+    ['← →', 'ko3.shortcut.previousOrNextAIStep'],
   ]],
 ];
 
+/** Shortcut labels resolve on demand; key names are unchanged in both languages. */
+export function shortcutGroups() {
+  return GROUP_KEYS.map(([title, keys]) => [t(title), keys.map(([key, label]) => [key, t(label)])]);
+}
+
 export function createShortcutSheet() {
-  const close = el('button', { class: 'btn', type: 'button', onclick: () => dialog.close() }, 'Close');
+  const close = el('button', { class: 'btn', type: 'button', onclick: () => dialog.close() }, t('ko3.shortcuts.close'));
   const dialog = el('dialog', { class: 'shortcuts', 'aria-labelledby': 'shortcuts-title' },
-    el('h2', { id: 'shortcuts-title' }, 'Keyboard shortcuts'),
-    el('div', { class: 'shortcut-groups' }, ...GROUPS.map(([title, keys]) => el('section', { class: 'shortcut-group' },
+    el('h2', { id: 'shortcuts-title' }, t('ko3.shortcuts.title')),
+    el('div', { class: 'shortcut-groups' }, ...shortcutGroups().map(([title, keys]) => el('section', { class: 'shortcut-group' },
       el('h3', {}, title),
       el('dl', {}, ...keys.flatMap(([key, what]) => [
         el('dt', {}, ...key.split(' ').map((part) => el('kbd', { class: 'key-hint' }, part))),
@@ -70,6 +76,13 @@ export function createShortcutSheet() {
   document.body.append(dialog);
   return {
     open() {
+      close.textContent = t('ko3.shortcuts.close');
+      dialog.querySelector('h2').textContent = t('ko3.shortcuts.title');
+      const sections = dialog.querySelectorAll('.shortcut-group');
+      shortcutGroups().forEach(([title, keys], index) => {
+        sections[index].querySelector('h3').textContent = title;
+        sections[index].querySelectorAll('dd').forEach((node, row) => { node.textContent = keys[row][1]; });
+      });
       if (!dialog.open) dialog.showModal();
       close.focus();
     },

@@ -1,13 +1,14 @@
 // The run view around the panes: breadcrumb, run actions, notices, the run bar (status
 // sentence, its drawer), the narration strip and the revision facts.
 
+import { t } from './i18n.js';
 import { state, isRunning, dropNotice } from './app_state.js';
 import { invoke } from './api.js';
 import { el, fill, icon } from './dom.js';
 import * as fmt from './format.js';
 import { $, chip, showError } from './ui_kit.js';
 import { vesselOfTask, vesselNameOf, runNumber, needsCheck, partsToCheck } from './run_facts.js';
-import { summarise, factsOfView, detailText, OUTPUT_NAMES } from './accuracy.js';
+import { summarise, factsOfView, detailText } from './accuracy.js';
 import { glyphChip, legendPopover } from './glyphs.js';
 import { tipAttributes } from './tooltip.js';
 import { navigate } from './router.js';
@@ -20,7 +21,10 @@ import { live } from './workspace.js';
 
 // ---------------------------------------------------------------- title bar: breadcrumb
 
-const ROUTE_TITLES = { home: 'Home', queue: 'Queue', intake: 'New vessel', settings: 'Settings', welcome: 'Setup' };
+const ROUTE_TITLE_KEYS = {
+  home: 'ko3.run_header.home', queue: 'ko3.run_header.queue', intake: 'ko3.run_header.newVessel',
+  settings: 'ko3.run_header.settings', welcome: 'ko3.run_header.setup',
+};
 /** The title bar shows the same icon as the sidebar for these places. */
 const ROUTE_ICONS = { home: 'home', queue: 'queue', settings: 'gear' };
 
@@ -37,12 +41,12 @@ export function renderCrumbs() {
   if (state.route !== 'run') {
     const routeIcon = ROUTE_ICONS[state.route];
     fill(crumbs, el('span', { class: 'crumb crumb-current', 'aria-current': 'page' },
-      routeIcon ? icon(routeIcon) : null, ROUTE_TITLES[state.route]));
+      routeIcon ? icon(routeIcon) : null, t(ROUTE_TITLE_KEYS[state.route])));
     document.title = 'MarinaFrame';
     return;
   }
   if (!view) {
-    fill(crumbs, el('span', { class: 'crumb crumb-current' }, 'Run'));
+    fill(crumbs, el('span', { class: 'crumb crumb-current' }, t('ko3.run_header.run')));
     document.title = 'MarinaFrame';
     return;
   }
@@ -52,22 +56,22 @@ export function renderCrumbs() {
   const runCrumb = vessel && vessel.runs.length > 1
     ? el('select', {
       class: 'crumb crumb-select',
-      'aria-label': 'Run of this vessel',
+      'aria-label': t('ko3.run_header.runOfThisVessel'),
       title: view.summary.name,
       onchange: (event) => openTask(event.target.value),
     }, ...vessel.runs.map((run) => {
-      const option = el('option', { value: run.task }, `Run ${runNumber(vessel, run.task)}`);
+      const option = el('option', { value: run.task }, t('ko3.runNumber', { number: runNumber(vessel, run.task) }));
       option.selected = run.task === state.task;
       return option;
     }))
-    : el('span', { class: 'crumb', title: view.summary.name }, `Run ${vessel ? runNumber(vessel, state.task) : 1}`);
+    : el('span', { class: 'crumb', title: view.summary.name }, t('ko3.runNumber', { number: vessel ? runNumber(vessel, state.task) : 1 }));
   fill(crumbs,
-    el('button', { class: 'crumb crumb-link', type: 'button', title: `${vesselName}: back to Home`, onclick: () => navigate('home') }, vesselName),
+    el('button', { class: 'crumb crumb-link', type: 'button', title: t('ko3.backHome', { name: vesselName }), onclick: () => navigate('home') }, vesselName),
     crumbSeparator(),
     runCrumb,
-    view.revision ? [crumbSeparator(), el('span', { class: 'crumb crumb-current crumb-mono', 'aria-current': 'page', title: `Revision ${view.revision}` }, view.revision)] : null);
-  document.title = `${vesselName} › Run — MarinaFrame`;
-  $('run-title').textContent = `${vesselName}, run ${vessel ? runNumber(vessel, state.task) : 1}`;
+    view.revision ? [crumbSeparator(), el('span', { class: 'crumb crumb-current crumb-mono', 'aria-current': 'page', title: t('ko3.revision', { revision: view.revision }) }, view.revision)] : null);
+  document.title = t('ko3.documentTitle', { name: vesselName });
+  $('run-title').textContent = t('ko3.runTitle', { name: vesselName, number: vessel ? runNumber(vessel, state.task) : 1 });
   badge.dataset.status = view.summary.status;
   fill(badge, el('span', { class: 'badge-text' }, fmt.statusLabel(view.summary.status)));
   badge.title = fmt.statusLabel(view.summary.status);
@@ -78,7 +82,7 @@ export function renderActions() {
   const resume = $('resume-task');
   const cancel = $('cancel-task');
   resume.hidden = !['paused', 'blocked', 'cancelled', 'stalled'].includes(status);
-  resume.textContent = status === 'stalled' ? 'Keep waiting' : 'Resume';
+  resume.textContent = status === 'stalled' ? t('ko3.run_header.keepWaiting') : t('ko3.run_header.resume');
   cancel.hidden = !['running', 'stalled'].includes(status);
   resume.disabled = cancel.disabled = Boolean(state.busy);
   renderVesselPage();
@@ -87,8 +91,8 @@ export function renderActions() {
 /** Run mode chip: "AI draft" for the live policy, else "Deterministic". */
 function policyChip(policy) {
   return policy === 'live'
-    ? glyphChip('src-ai_inferred', 'AI draft', { tone: 'ai', detail: 'The AI read the drawing and built the draft (live model).' })
-    : glyphChip('gear', 'No AI', { detail: 'Deterministic draft: no model calls.' });
+    ? glyphChip('src-ai_inferred', t('ko3.run_header.aiDraft'), { tone: 'ai', detail: t('ko3.run_header.aiDraftHelp') })
+    : glyphChip('gear', t('ko3.run_header.noAI'), { detail: t('ko3.run_header.deterministicDraftNoModelCalls') });
 }
 
 // ---------------------------------------------------------------- run view: hooks for the live lane
@@ -106,7 +110,7 @@ export function renderNarration() {
   strip.dataset.live = String(isRunning());
   if (!state.view || !last) {
     fill(strip, el('span', { class: 'narration-dot', 'aria-hidden': 'true' }),
-      el('span', { class: 'narration-text narration-empty' }, state.view ? 'No steps recorded yet.' : ''));
+      el('span', { class: 'narration-text narration-empty' }, state.view ? t('ko3.run_header.noStepsRecordedYet') : ''));
     return;
   }
   fill(strip,
@@ -126,8 +130,8 @@ export function renderRevisionStrip() {
   if (live.hasSteps()) live.renderLadder();
   else fill($('revision-ladder'), view
     ? (view.revision
-      ? el('span', { class: 'rev-step rev-current', title: `Revision ${view.revision}` }, view.revision)
-      : el('span', { class: 'rev-empty' }, 'No revision yet'))
+      ? el('span', { class: 'rev-step rev-current', title: t('ko3.revision', { revision: view.revision }) }, view.revision)
+      : el('span', { class: 'rev-empty' }, t('ko3.run_header.noRevisionYet')))
     : null);
   if (!view) {
     fill($('revision-facts'));
@@ -135,10 +139,10 @@ export function renderRevisionStrip() {
   }
   const cost = costWords(view);
   fill($('revision-facts'),
-    chip('Draft only', { dot: false, small: true, title: 'Engineering approval is never automatic. A naval architect signs off outside this app.' }),
+    chip(t('ko3.run_header.draftOnly'), { dot: false, small: true, title: t('ko3.run_header.draftOnlyHelp') }),
     policyChip(view.summary.policy),
     cost ? el('span', { class: 'rev-fact cost-timing' }, cost) : null,
-    el('span', { class: 'rev-fact', title: `Updated ${fmt.fullTime(view.summary.updated_ms)}` }, `Updated ${fmt.relativeTime(view.summary.updated_ms)}`));
+    el('span', { class: 'rev-fact', title: t('ko3.updated', { time: fmt.fullTime(view.summary.updated_ms) }) }, t('ko3.updated', { time: fmt.relativeTime(view.summary.updated_ms) })));
 }
 
 /** Relative times in the revision strip and status bar stay current. */
@@ -181,8 +185,8 @@ export function renderNotices() {
       el('button', {
         class: 'btn btn-ghost btn-icon btn-small',
         type: 'button',
-        title: 'Dismiss',
-        'aria-label': `Dismiss: ${notice.text}`,
+        title: t('ko3.run_header.dismiss'),
+        'aria-label': t('ko3.dismiss', { text: notice.text }),
         onclick: () => dismissNotice(notice, row),
       }, icon('close')),
     );
@@ -241,16 +245,16 @@ export function renderDraftSummary() {
       class: 'btn btn-small run-status-action write-action',
       type: 'button',
       disabled: Boolean(state.busy) || isRunning(),
-      ...tipAttributes(`Replace ${action.label}`, 'Keep the draft and retry this sheet’s outputs.', { label: false }).attrs,
+      ...tipAttributes(t('ko3.replace', { label: action.label }), t('ko3.run_header.replaceHelp'), { label: false }).attrs,
       onclick: () => replaceSheet(action.sheetId),
-    }, 'Replace') : null,
+    }, t('ko3.run_header.replace')) : null,
     open ? el('button', {
       class: 'btn btn-small run-status-next',
       type: 'button',
       disabled: isRunning(),
-      ...tipAttributes('Next section to check (N)', null, { label: false }).attrs,
+      ...tipAttributes(t('ko3.run_header.nextSectionToCheckN'), null, { label: false }).attrs,
       onclick: nextToCheck,
-    }, 'Next', el('kbd', { class: 'key-hint' }, 'N')) : null);
+    }, t('ko3.run_header.next'), el('kbd', { class: 'key-hint' }, 'N')) : null);
   fill($('draft-summary'), drawerSummary(view));
 }
 
@@ -262,10 +266,10 @@ function drawerSummary(view) {
   const accuracy = accuracyLines(view);
   if (!review && !accuracy.length && !parts.length) return null;
   return el('div', { class: 'drawer-group' },
-    el('h2', { class: 'drawer-title' }, 'Draft'),
+    el('h2', { class: 'drawer-title' }, t('ko3.run_header.draft')),
     review ? el('p', { class: 'drawer-line' }, el('span', {}, review), view.source_counts?.length ? legendPopover() : null) : null,
     warnings.length ? el('details', { class: 'draft-warnings' },
-      el('summary', {}, `Show the ${fmt.plural(warnings.length, 'warning')}`),
+      el('summary', {}, t('ko3.warnings', { warnings: fmt.plural(warnings.length, 'warning') })),
       el('ul', { class: 'selectable-text' }, ...warnings.map((w) => el('li', {}, w)))) : null,
     ...accuracy,
     parts.length ? partsLink(view, parts.length) : null);
@@ -275,9 +279,9 @@ function drawerSummary(view) {
 function accuracyLines(view) {
   if (!view?.revision) return [];
   return Object.values(summarise(factsOfView(view))).filter((s) => s.present).map((summary) => {
-    const name = OUTPUT_NAMES[summary.output];
+    const name = t(`ko3.output.${summary.output}`);
     const tip = tipAttributes(`${name}: ${errorWords(summary.chip)}`,
-      `Measured on other ships, not on this run: how far the ${name.toLowerCase()} usually is from the drawing.\n${detailText(summary)}`);
+      t('ko3.accuracy', { name: name.toLowerCase(), detail: detailText(summary) }));
     return el('p', { class: 'drawer-line drawer-accuracy', tabindex: '0', ...tip.attrs, dataset: { caution: String(summary.caution) } },
       el('span', { class: 'drawer-key', 'aria-hidden': 'true' }, name),
       el('span', { 'aria-hidden': 'true' }, errorWords(summary.chip)), tip.describer);
@@ -290,9 +294,9 @@ function partsLink(view, count) {
   return el('button', {
     class: 'btn btn-ghost btn-small parts-link',
     type: 'button',
-    ...tipAttributes('Open the Parts tab', 'Hull, decks, deckhouses and appendages.', { label: false }).attrs,
+    ...tipAttributes(t('ko3.run_header.openThePartsTab'), t('ko3.run_header.hullDecksDeckhousesAndAppendages'), { label: false }).attrs,
     onclick: () => { setDrawer(false); setVesselTab('parts'); },
-  }, icon('cube'), `${fmt.plural(count, 'part')}${toCheck ? `, ${toCheck} to check` : ''}`);
+  }, icon('cube'), `${fmt.plural(count, 'part')}${toCheck ? t('ko3.partsToCheck', { count: toCheck }) : ''}`);
 }
 
 /** Open or close the run drawer; closing gives the focus back to the sentence if it was inside. */
