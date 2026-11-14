@@ -1672,3 +1672,15 @@ Finalreport `outputs/2026-11-14-kvdb2-regional-layer-diagnosis.md`.
 Stopafterthreefailures;no250screen/production/refinementadmission.
 Pushlaneonly,nomerge;existingworktree/evidenceretained. No managedcodesight
 orlanetarget exists;sharedtargets retained. PMstrategydecisionneeded.
+
+## PM DB2 closure and exact production01 wall-treatment report
+
+**G-KV-DB2 NOT COMPLETED:mesh admission not reachable with this mesher.**
+Gate unchanged,failed attempts retained. Remote production01 initial hull
+fields inspected without new container: nut **nutLowReWallFunction,value0**;
+k **fixedValue uniform0**;omega **omegaWallFunction,value.0606198582**,
+no explicit blending keyword. Thus not the DB3Spalding/kqR pairing;must rerun
+coarse rather than count old1.2438 as DB3. Evidence ignored
+`work/cfd/kvdb3-wall-treatment-source.log`. No active lane container.
+Coarse05 measured full30-layer **area84.30937%**,distinct from face fraction
+86.02517%;new85%area admission must not be tested against face count.
