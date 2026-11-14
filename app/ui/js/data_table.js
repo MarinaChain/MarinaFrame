@@ -3,21 +3,33 @@
 // text, read the unit from the header, copy the result to the clipboard; keyboard-first, and an
 // unknown value is a dash with a tooltip, never a blank cell.
 // The pure helpers (sortRows, filterRows, toTsv) run in Node without a DOM and are tested in
-// app/ui-tests/data_table.test.mjs; everything below `headerText` builds DOM.
+// app/ui-tests/data_table.test.mjs; only createDataTable builds DOM.
 
 import { el, fill, icon } from './dom.js';
-import { t } from './i18n.js';
+import { locale, t } from './i18n.js';
 
-/** True when a cell holds no value (an unknown, not a zero or an empty string). */
+/** Missing and non-finite values are unknown; zero is still a value. */
 function isUnknown(value) {
-  return value === null || value === undefined || (typeof value === 'number' && !Number.isFinite(value));
+  return value === null || value === undefined ||
+    (typeof value === 'string' && !value.trim()) ||
+    (typeof value === 'number' && !Number.isFinite(value));
 }
 
-/** A column's plain text for one row: the formatted text, or "" when the value is unknown. */
-function cellText(row, column) {
+/** Read a formatter's visible text without requiring a global DOM in Node. */
+function plainText(value) {
+  if (value == null) return '';
+  return typeof value === 'object' ? (value.textContent ?? '') : String(value);
+}
+
+function cellContent(row, column) {
   const value = row[column.key];
   if (isUnknown(value)) return '';
-  return column.format ? String(column.format(value, row)) : String(value);
+  return column.format ? column.format(value, row) : String(value);
+}
+
+/** A column's plain text for one row, or "" when the value is unknown. */
+function cellText(row, column) {
+  return plainText(cellContent(row, column));
 }
 
 /** The header of one column: "Capacity (m³)" — a unit always reads in the header. */
@@ -32,7 +44,7 @@ function headerText(column) {
  */
 export function sortRows(rows, column, direction = 'asc') {
   const factor = direction === 'desc' ? -1 : 1;
-  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+  const collator = new Intl.Collator(locale(), { numeric: true, sensitivity: 'base' });
   return [...rows].sort((a, b) => {
     const left = a[column.key];
     const right = b[column.key];
@@ -83,6 +95,7 @@ export function createDataTable({ columns, rows = [], caption, rowKey, onSelect,
   let query = '';
   let selectedKey = null;
   const notifySelect = onSelect || null;
+  let renderedRows = [];
 
   const search = el('input', {
     type: 'search', class: 'table-search', placeholder: t('table.filter'),
@@ -104,7 +117,7 @@ export function createDataTable({ columns, rows = [], caption, rowKey, onSelect,
     return { column, button, th: el('th', { scope: 'col' }, button) };
   });
   const head = el('tr', {}, ...headCells.map((cell) => cell.th));
-  const body = el('tbody', { class: 'table-body', onkeydown: onBodyKeys });
+  const body = el('tbody', { class: 'table-body', tabindex: '0', onkeydown: onBodyKeys });
   const table = el('table', { class: 'data-table' },
     caption ? el('caption', { class: 'visually-hidden' }, caption) : null,
     el('thead', {}, head), body);
@@ -122,21 +135,24 @@ export function createDataTable({ columns, rows = [], caption, rowKey, onSelect,
     const rowsInView = viewRows();
     // A selection the filter removed does not stay on a row that is gone.
     if (!rowsInView.some((row) => keyOf(row) === selectedKey)) selectedKey = null;
+    renderedRows = rowsInView;
     if (rowsInView.length) {
-      const firstKey = keyOf(rowsInView[0]);
       fill(body, ...rowsInView.map((row) => {
         const key = keyOf(row);
-        const tabbable = key === selectedKey || (selectedKey === null && key === firstKey);
         return el('tr', {
-          class: key === selectedKey ? 'is-selected' : '',
-          tabindex: tabbable ? '0' : '-1',
-          'aria-selected': String(key === selectedKey),
+          tabindex: '-1',
           onclick: () => { select(key); notifySelect?.(key); },
-        }, ...columns.map((column) => el('td', {
-          class: column.align === 'end' ? 'table-num' : null,
-          title: isUnknown(row[column.key]) ? t('table.unknown') : null,
-        }, isUnknown(row[column.key]) ? '—' : (column.format ? column.format(row[column.key], row) : String(row[column.key])))));
+        }, ...columns.map((column) => {
+          const content = cellContent(row, column);
+          const unknown = !plainText(content).trim();
+          const numeric = column.align === 'end' || (!column.align && typeof row[column.key] === 'number');
+          return el('td', {
+            class: numeric ? 'table-num' : null,
+            title: unknown ? t('table.unknown') : null,
+          }, unknown ? '—' : content);
+        }));
       }));
+      updateSelection();
     } else {
       fill(body, el('tr', { class: 'table-empty' }, el('td', { colspan: String(columns.length) },
         emptyText || t('table.noRows'))));
@@ -164,8 +180,9 @@ export function createDataTable({ columns, rows = [], caption, rowKey, onSelect,
   async function copyTsv() {
     let copied = false;
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(toTsv(columns, viewRows()));
+      const clipboard = globalThis.navigator?.clipboard;
+      if (typeof clipboard?.writeText === 'function') {
+        await clipboard.writeText(toTsv(columns, viewRows()));
         copied = true;
       }
     } catch { /* not copied: the label below says so */ }
@@ -182,21 +199,31 @@ export function createDataTable({ columns, rows = [], caption, rowKey, onSelect,
     if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown' && event.key !== 'Enter') return;
     const rowsInView = viewRows();
     if (!rowsInView.length) return;
-    const current = Math.max(0, rowsInView.findIndex((row) => keyOf(row) === selectedKey));
+    event.preventDefault();
+    const current = rowsInView.findIndex((row) => keyOf(row) === selectedKey);
     if (event.key === 'Enter') {
-      if (selectedKey !== null) notifySelect?.(selectedKey);
+      select(keyOf(rowsInView[Math.max(current, 0)]));
+      notifySelect?.(selectedKey);
       return;
     }
-    const next = event.key === 'ArrowDown' ? Math.min(current + 1, rowsInView.length - 1) : Math.max(current - 1, 0);
-    if (next === current) return;
-    event.preventDefault();
+    const next = current < 0 ? 0 : event.key === 'ArrowDown'
+      ? Math.min(current + 1, rowsInView.length - 1) : Math.max(current - 1, 0);
     select(keyOf(rowsInView[next]));
     body.children[next]?.focus();
   }
 
+  // Selection changes must not replace focused rows and drop keyboard focus.
+  function updateSelection() {
+    renderedRows.forEach((row, index) => {
+      const selected = keyOf(row) === selectedKey;
+      body.children[index].className = selected ? 'is-selected' : '';
+      body.children[index].setAttribute('aria-selected', String(selected));
+    });
+  }
+
   function select(key) {
-    selectedKey = key;
-    render();
+    selectedKey = renderedRows.some((row) => keyOf(row) === key) ? key : null;
+    updateSelection();
   }
 
   function setRows(rows) {

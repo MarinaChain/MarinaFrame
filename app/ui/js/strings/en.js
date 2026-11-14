@@ -45,4 +45,10 @@ export const EN = {
   'table.sortedBy': 'Sorted by {column}, {direction}. Select to sort the other way.',
   'table.asc': 'ascending',
   'table.desc': 'descending',
+  'table.tank': 'Tank',
+  'table.content': 'Content',
+  'table.capacity98': 'Capacity 98 %',
+  'table.source': 'Source',
+  'table.tankCaption': 'Tanks of the capacity plan',
+  'table.noTanks': 'No tank matches the filter.',
 };

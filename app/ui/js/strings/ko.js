@@ -45,4 +45,10 @@ export const KO = {
   'table.sortedBy': '{column} 기준, {direction} 정렬됨. 다시 누르면 반대로 정렬합니다.',
   'table.asc': '오름차순',
   'table.desc': '내림차순',
+  'table.tank': '탱크',
+  'table.content': '내용물',
+  'table.capacity98': '98 % 용량',
+  'table.source': '출처',
+  'table.tankCaption': '탱크 용량표',
+  'table.noTanks': '필터에 맞는 탱크가 없습니다.',
 };

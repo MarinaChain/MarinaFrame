@@ -6,6 +6,7 @@
 import { el } from './dom.js';
 import { glyphChip } from './glyphs.js';
 import { createDataTable } from './data_table.js';
+import { t } from './i18n.js';
 
 /**
  * Source labels of the tank model (vessel_reconstruction.tanks SOURCE_LABELS). Tones are the
@@ -207,20 +208,16 @@ function soundingBlock(row, sounding) {
         el('tbody', {}, ...view.rows.map((cells) => el('tr', {}, ...cells.map((cell) => el('td', { class: 'parts-value' }, cell))))))));
 }
 
-/** The capacity plan as a dense table: the fields capacityFields gives, with the source chips. */
-const PLAN_COLUMNS = [
-  { key: 'name', label: 'Tank', format: (value, row) => row.name || row.id },
-  { key: 'content', label: 'Content', format: (value, row) => el('span', { class: 'table-with-source' }, value, ' ', sourceChip(row.sources?.content)) },
-  { key: 'frames', label: 'Frames' },
-  { key: 'volume_98_m3', label: 'Capacity 98 %', unit: 'm³', align: 'end', format: (value) => fixed(value, 2) },
-  { key: 'lcg_m', label: 'LCG', unit: 'm', align: 'end', format: (value) => fixed(value, 3) },
-  { key: 'vcg_m', label: 'VCG', unit: 'm', align: 'end', format: (value) => fixed(value, 3) },
-  { key: 'sources', label: 'Source', sortable: false, format: (value, row) => sourceChip(row.sources?.volume) },
-];
-
-/** A number with fixed decimals, or "" for an unknown (the table shows its own dash). */
-function fixed(value, digits) {
-  return Number.isFinite(value) ? value.toFixed(digits) : '';
+/** Build translated headings when the panel opens, using the active interface locale. */
+function planColumns() {
+  return [
+    { key: 'name', label: t('table.tank') },
+    { key: 'content', label: t('table.content') },
+    { key: 'volume_98_m3', label: t('table.capacity98'), unit: 'm³', align: 'end', format: (value) => value.toFixed(2) },
+    { key: 'lcg_m', label: 'LCG', unit: 'm', align: 'end', format: (value) => value.toFixed(3) },
+    { key: 'vcg_m', label: 'VCG', unit: 'm', align: 'end', format: (value) => value.toFixed(3) },
+    { key: 'sources', label: t('table.source'), sortable: false, format: (value) => sourceChip(value.volume) },
+  ];
 }
 
 /**
@@ -232,11 +229,11 @@ export function capacityPanel({ plan, selectedId, sounding, onPick }) {
   if (!plan?.rows?.length) return null;
   const selected = capacityRowOf(plan, selectedId);
   const table = createDataTable({
-    columns: PLAN_COLUMNS,
+    columns: planColumns(),
     rows: plan.rows,
-    caption: 'Tanks of the capacity plan',
+    caption: t('table.tankCaption'),
     rowKey: (row) => row.id,
-    emptyText: 'No tank matches the filter.',
+    emptyText: t('table.noTanks'),
     onSelect: onPick,
   });
   table.select(selectedId);
