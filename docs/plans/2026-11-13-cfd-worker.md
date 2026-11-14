@@ -1594,3 +1594,15 @@ its host monitor PID81806 is waiting startup load in admission.log. Preserve
 it;do not launch duplicate. Existing control files remain intact. Direct SSH
 command probe works;SSH bash-s stdin returned empty in this session,so verify
 state via direct confined commands and preserve transport diagnostics.
+
+### Approach2(mesh08) FAIL2/3
+Local stern/waterline4refinement produced1,534,522cells,23700hull faces;
+**0full20layer faces**,mean.001013,only24layer cells. StandaloneMeshOK but
+maxnonorth **72.9108 violates PM<70**,skew3.54216. Whole938.096702s/
+1.302912087core-hours,noOOM. No solver. Stronger refinement worsened layer
+rollback,not assumed resolution. Last approach3:restore baseline snap(surface3,
+no extra local boxes),**12layers** with samefirstheight,relativefinal
+**.15/1.2^18=.00563416**,growth1.2;termination30/slip30/medial.3 retained,
+normal smoothing10/20/thickness60. This tests thinner total stack and improved
+normal smoothing while preserving firstheight. If<97%fullcount orquality fails,
+stop after third failure;no further meshes/short runs/production.
