@@ -45,7 +45,11 @@ def write_json(path: Path, data) -> None:
             os.fsync(stream.fileno())
         if path.is_symlink():
             raise OSError("Refusing to replace a symbolic-link evidence path.")
-        os.replace(temporary, path)
+        if os.name == 'nt':
+            from .platform_files import move_windows_path
+            move_windows_path(temporary, path, replace=True)
+        else:
+            os.replace(temporary, path)
         sync_directory(path.parent)
     finally:
         temporary.unlink(missing_ok=True)

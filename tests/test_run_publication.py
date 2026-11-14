@@ -36,6 +36,32 @@ def test_no_replace_collision_preserves_both_sides(tmp_path, existing_file):
         assert target.read_bytes() == b'original'
 
 
+def test_live_reservation_cannot_be_recovered(tmp_path):
+    transaction = RunTransaction(tmp_path / 'run')
+    try:
+        result = quarantine_interrupted(tmp_path / 'run')
+        assert not result['recovered']
+        assert result['reason'] == 'active_transaction'
+        assert transaction.stage.exists()
+    finally:
+        transaction.close()
+
+
+def test_failed_rename_keeps_reservation_and_private_stage(monkeypatch, tmp_path):
+    from vessel_reconstruction import transaction as module
+    transaction = RunTransaction(tmp_path / 'run')
+    def fail_move(*args):
+        raise OSError('controlled move failure')
+    monkeypatch.setattr(module, 'rename_no_replace', fail_move)
+    with pytest.raises(OSError, match='controlled move failure'):
+        transaction.publish()
+    transaction.close()
+    assert not transaction.published
+    assert transaction.stage.is_dir()
+    assert transaction.lock_path.exists()
+    assert not transaction.out.exists()
+
+
 def test_closed_unpublished_run_recovers_without_live_lock(tmp_path):
     transaction = RunTransaction(tmp_path / 'run')
     transaction.close()
