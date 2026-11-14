@@ -1758,3 +1758,21 @@ Exact-name identity0findings,diffclean. Report `outputs/2026-11-14-kvdb3-freeze.
 No newDB3runs/score,no active lane container. DB2NOTCOMPLETED;DB3blocked
 at84.309%full-layerarea<85%. Existingworktree/evidence retained,pushlaneonly,
 no merge. No managedindex/lane target;sharedtarget retained.
+
+## PM G-KV-DB3 erratum (before any DB3 solver/result)
+
+PM's85%full-layerarea figure was an error drawn from86%face share rather than
+84.31%area. More importantly,full-layer completeness is not all-y+wall validity;
+y+range is. This erratum is committed **before anyDB3solver and with noDB3
+result known**. Acceptance thresholds,wallpairing,ratio,mapping,stoprule unchanged.
+Correct admission:positivevolumes/correctfaces,nonorth<70,skew<4,layerpresent
+(**>=1layer**) on **>=95%hullarea**;full-layerarea information only. After
+first250iterations require **<=1%area y+>300**,else stop/report. Coarse05
+measuredlayerpresent **99.87747123%**,full30area84.30936956%,admitted by
+correctedrule. PriorhighARoutside0proof retained. Nootherthreshold changes.
+Run coarse05mappedfromproduction01time2000,all-y+DB3wallfields;thenmedium
+mappedfromcoarse. Commit/push/report(1+k)aseachfinishes. Aftermediumestimate
+finefrommeasuredactivewall and mappedstoprule;startwithoutaskingonlyif<30h.
+SameVPSotherload5rank/paused0,hysteresis,onecontainer5CPU12GiBnice10/disk.
+At250write/reconstruct/checkboundaryy+beforecontinue. Stop min500,max2000
+with3successive100-windowdrifts<.1%. NoDB3runstartedatthiserratum.
