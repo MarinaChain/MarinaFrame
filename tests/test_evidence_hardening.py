@@ -447,17 +447,45 @@ assert verify_run(root / 'run')['valid']
     assert completed.returncode == 0, completed.stderr
 
 
-def test_source_fifo_is_rejected_without_blocking_at_open(tmp_path):
+@pytest.fixture
+def windows_pipe_probe():
+    if os.name != 'nt':
+        yield None
+        return
+    import ctypes
+    from ctypes import wintypes
+    from uuid import uuid4
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.CreateNamedPipeW.argtypes = (wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD,
+        wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p)
+    kernel.CreateNamedPipeW.restype = wintypes.HANDLE
+    kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
+    name = r'\\.\pipe\marinaframe-probe-' + uuid4().hex
+    handle = kernel.CreateNamedPipeW(name, 3, 0, 1, 4096, 4096, 0, None)
+    assert handle != ctypes.c_void_p(-1).value
+    try:
+        yield name
+    finally:
+        kernel.CloseHandle(handle)
+
+
+def test_source_fifo_is_rejected_without_blocking_at_open(tmp_path, windows_pipe_probe):
     spec = independent_spec(tmp_path)
-    os.mkfifo(tmp_path / "source.pipe")
-    spec["source"]["file"] = "source.pipe"
+    if os.name == 'nt':
+        spec['source']['file'] = windows_pipe_probe
+    else:
+        os.mkfifo(tmp_path / 'source.pipe')
+        spec['source']['file'] = 'source.pipe'
     (tmp_path / "spec.json").write_text(json.dumps(spec))
     _run_nonblocking_probe(tmp_path, "spec.json")
 
 
-def test_spec_fifo_is_rejected_without_blocking_at_open(tmp_path):
-    os.mkfifo(tmp_path / "spec.pipe")
-    _run_nonblocking_probe(tmp_path, "spec.pipe")
+def test_spec_fifo_is_rejected_without_blocking_at_open(tmp_path, windows_pipe_probe):
+    if os.name == 'nt':
+        _run_nonblocking_probe(tmp_path, windows_pipe_probe)
+    else:
+        os.mkfifo(tmp_path / 'spec.pipe')
+        _run_nonblocking_probe(tmp_path, 'spec.pipe')
 
 
 def test_implementation_replay_uses_bytecode_flag_to_preserve_original_evidence(good_run, tmp_path):

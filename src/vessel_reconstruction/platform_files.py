@@ -52,6 +52,18 @@ def _last_error() -> int:
     return ctypes.get_last_error()
 
 
+def require_windows_disk_path(path: Path) -> None:
+    """Reject Win32 device/pipe namespaces before any potentially blocking open."""
+    if os.name != 'nt':
+        return
+    value = str(path).replace('/', '\\').lower()
+    if value.startswith(('\\\\.\\', '\\\\?\\', '\\??\\')):
+        raise ValueError('Device and pipe namespaces are not ordinary input files')
+    if path.name.split('.')[0].upper() in {'CON', 'PRN', 'AUX', 'NUL',
+            *(f'COM{i}' for i in range(1, 10)), *(f'LPT{i}' for i in range(1, 10))}:
+        raise ValueError('Reserved device names are not ordinary input files')
+
+
 def move_windows_path(source: Path, target: Path, *, replace: bool) -> None:
     """Same-volume write-through rename; never fall back to copy/delete."""
     flags = 0x8 | (0x1 if replace else 0)  # WRITE_THROUGH, optional REPLACE_EXISTING
