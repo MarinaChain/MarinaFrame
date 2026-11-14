@@ -297,6 +297,8 @@ def test_security_cap_retries_a_group_with_an_exited_leader_and_live_child(monke
     monkeypatch.setattr(isolation.os, 'killpg', refuse_signal, raising=False)
     monkeypatch.setattr(isolation.time, 'monotonic', lambda: clock[0])
     monkeypatch.setattr(isolation.time, 'sleep', lambda seconds: clock.__setitem__(0, clock[0] + seconds))
+    monkeypatch.setattr(isolation.progress, 'read_child_progress', lambda *args: None)
+    monkeypatch.setattr(isolation.progress.ProgressRelay, 'relay', lambda *args: None)
     monkeypatch.setattr(isolation, 'SANDBOX_MODEL_WALL_SECONDS', 0)
     if child_survives:
         with pytest.raises(PermissionError, match='live'):
