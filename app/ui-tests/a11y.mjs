@@ -40,6 +40,7 @@ function serve() {
 async function prepare({ vessel, tab, vesselTab, open, designTab }) {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   if (designTab) { document.getElementById(`design-tab-${designTab}`).click(); await wait(300); }
+  if (open === 'decision-errors') { document.querySelector('.decision-form button[type="submit"]').click(); await wait(200); }
   if (open === 'design-warnings') { document.querySelector('.design-advanced .design-warning-toggle').click(); await wait(200); }
   if (vessel) {
     const card = [...document.querySelectorAll('#vessel-grid > *')].find((c) => c.textContent.includes(vessel));
@@ -96,6 +97,13 @@ const SCREENS = [
   { name: 'design all warnings', path: '/#design/public-kvlcc2-example', steps: { open: 'design-warnings' } },
   { name: 'design requirements', path: '/#design/public-kvlcc2-example', steps: { designTab: 'requirements' } },
   { name: 'design weights (empty sections)', path: '/#design/public-kvlcc2-example', steps: { designTab: 'weights' } },
+  // Phase 2: a project's tabs open from a deep link (#design/<id>/<tab>).
+  { name: 'design candidates', path: '/#design/public-kvlcc2-example/candidates' },
+  { name: 'design compare (Pareto chart)', path: '/#design/public-kvlcc2-example/compare' },
+  { name: 'design decisions', path: '/#design/public-kvlcc2-example/decisions' },
+  { name: 'design decisions (form errors)', path: '/#design/public-kvlcc2-example/decisions', steps: { open: 'decision-errors' } },
+  { name: 'design compare (Korean)', path: '/#design/public-kvlcc2-example/compare', prefs: { language: 'ko' } },
+  { name: 'design decisions (Korean)', path: '/#design/public-kvlcc2-example/decisions', prefs: { language: 'ko' } },
   { name: 'design Lite', path: '/#design/public-kvlcc2-example', prefs: { interfaceMode: 'lite' } },
   { name: 'design Lite (Korean)', path: '/#design/public-kvlcc2-example', prefs: { language: 'ko', interfaceMode: 'lite' } },
   { name: 'welcome', path: '/?mocknokey#home', seen: false },

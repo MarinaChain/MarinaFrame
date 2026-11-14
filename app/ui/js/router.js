@@ -14,7 +14,8 @@ const ROUTES = ['home', 'queue', 'intake', 'run', 'settings', 'welcome'];
 
 export function routeFromHash() {
   const route = location.hash.replace(/^#\/?/, '');
-  return ROUTES.includes(route) || route === 'designs' || /^design\/[^/]+$/.test(route) ? route : null;
+  // #design/<id> opens a design; #design/<id>/<tab> opens one of its tabs.
+  return ROUTES.includes(route) || route === 'designs' || /^design\/[^/]+(\/[a-z]+)?$/.test(route) ? route : null;
 }
 
 /** Show one view. The hash keeps the place across reloads and gives Back a meaning. */

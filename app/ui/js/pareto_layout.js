@@ -7,6 +7,7 @@ export const MARGIN = { top: 16, right: 24, bottom: 52, left: 84 };
 const MARKER_RADIUS = 7;
 const LABEL_HEIGHT = 14;
 const LABEL_GAP = 6; // between a marker's edge and its label
+export const PAIR_PAD = 13; // space between a marker and the dashed outline of its pair
 
 /** A step of 1, 2 or 5 × 10^n that splits `span` into about `count` parts. */
 function niceStep(span, count) {
@@ -53,11 +54,12 @@ function overlaps(a, b) {
 }
 
 /**
- * A label place beside each marker: right, left, above or below, the first one that stays in
- * the plot and does not cover another label or marker. When none is free, the right side is
+ * A label place beside each marker, the first one that stays in the plot and does not cover
+ * another label or marker. Diagonal places come first: the error bars run straight through the
+ * marker, so a label at a corner does not sit on a bar. When none is free, the first place is
  * used (the text then overlaps, but it is never dropped).
  */
-export function placeLabels(items, plot, charWidth = 7.5) {
+export function placeLabels(items, plot, charWidth = 7.5, obstacles = []) {
   const markers = items.map((item) => ({
     left: item.px - MARKER_RADIUS, right: item.px + MARKER_RADIUS,
     top: item.py - MARKER_RADIUS, bottom: item.py + MARKER_RADIUS,
@@ -66,18 +68,28 @@ export function placeLabels(items, plot, charWidth = 7.5) {
   return items.map((item, index) => {
     const width = item.text.length * charWidth;
     const offset = MARKER_RADIUS + LABEL_GAP;
+    const corner = offset - 3; // a diagonal place sits a little closer than a side place
     const options = [
+      { anchor: 'start', x: item.px + corner, y: item.py - corner },
+      { anchor: 'end', x: item.px - corner, y: item.py - corner },
+      { anchor: 'start', x: item.px + corner, y: item.py + corner + LABEL_HEIGHT - 3 },
+      { anchor: 'end', x: item.px - corner, y: item.py + corner + LABEL_HEIGHT - 3 },
       { anchor: 'start', x: item.px + offset, y: item.py + 4 },
       { anchor: 'end', x: item.px - offset, y: item.py + 4 },
-      { anchor: 'middle', x: item.px, y: item.py - offset },
-      { anchor: 'middle', x: item.px, y: item.py + offset + LABEL_HEIGHT - 4 },
+      // Further out: clear of an outline drawn around a pair of close points.
+      { anchor: 'end', x: item.px - offset, y: item.py - offset * 2 },
+      { anchor: 'start', x: item.px + offset, y: item.py - offset * 2 },
+      { anchor: 'end', x: item.px - offset, y: item.py + offset * 2 + LABEL_HEIGHT },
+      { anchor: 'start', x: item.px + offset, y: item.py + offset * 2 + LABEL_HEIGHT },
     ];
     const boxOf = ({ anchor, x, y }) => {
       const left = anchor === 'start' ? x : anchor === 'end' ? x - width : x - width / 2;
       return { left, right: left + width, top: y - LABEL_HEIGHT + 3, bottom: y + 3 };
     };
     const inside = (box) => box.left >= plot.left && box.right <= plot.right && box.top >= plot.top && box.bottom <= plot.bottom;
-    const free = (box) => !taken.some((other) => overlaps(box, other))
+    // An outline keeps a few pixels of air: text that touches a dashed line is hard to read.
+    const air = (other) => ({ left: other.left - 4, right: other.right + 4, top: other.top - 4, bottom: other.bottom + 4 });
+    const free = (box) => !taken.some((other) => overlaps(box, other)) && !obstacles.some((other) => overlaps(box, air(other)))
       && !markers.some((marker, other) => other !== index && overlaps(box, marker));
     const chosen = options.find((option) => inside(boxOf(option)) && free(boxOf(option)))
       || options.find((option) => inside(boxOf(option))) || options[0];
@@ -86,11 +98,18 @@ export function placeLabels(items, plot, charWidth = 7.5) {
   });
 }
 
+/** The box of the dashed outline drawn around two close points (the chart draws the same box). */
+export function pairBox(a, b) {
+  return { left: Math.min(a.px, b.px) - PAIR_PAD, right: Math.max(a.px, b.px) + PAIR_PAD,
+    top: Math.min(a.py, b.py) - PAIR_PAD, bottom: Math.max(a.py, b.py) + PAIR_PAD };
+}
+
 /**
  * Pixel layout for a chart `width` × `height`. Points with an unknown axis value are left out
- * of `plotted` (the chart lists them in text). x grows to the right, y grows upwards.
+ * of `plotted` (the chart lists them in text). x grows to the right, y grows upwards. `pairs`
+ * ([idA, idB]) get an outline box that labels keep clear of.
  */
-export function chartLayout(points, { width, height }) {
+export function chartLayout(points, { width, height, pairs = [] }) {
   const plotted = points.filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
   const plot = { left: MARGIN.left, top: MARGIN.top, right: width - MARGIN.right, bottom: height - MARGIN.bottom };
   const xTicks = niceTicks(...extent(plotted, 'x'));
@@ -98,9 +117,11 @@ export function chartLayout(points, { width, height }) {
   const scaleX = (value) => plot.left + (value - xTicks.min) / (xTicks.max - xTicks.min) * (plot.right - plot.left);
   const scaleY = (value) => plot.bottom - (value - yTicks.min) / (yTicks.max - yTicks.min) * (plot.bottom - plot.top);
   const placed = plotted.map((point) => ({ ...point, px: scaleX(point.x), py: scaleY(point.y) }));
-  const labels = placeLabels(placed.map((point) => ({ px: point.px, py: point.py, text: point.label || '' })), plot);
+  const byId = new Map(placed.map((point) => [point.id, point]));
+  const boxes = pairs.filter(([a, b]) => byId.has(a) && byId.has(b)).map(([a, b]) => pairBox(byId.get(a), byId.get(b)));
+  const labels = placeLabels(placed.map((point) => ({ px: point.px, py: point.py, text: point.label || '' })), plot, undefined, boxes);
   return {
-    plot, xTicks, yTicks, scaleX, scaleY,
+    plot, xTicks, yTicks, scaleX, scaleY, pairBoxes: boxes,
     points: placed.map((point, index) => ({ ...point, labelAt: labels[index] })),
   };
 }
