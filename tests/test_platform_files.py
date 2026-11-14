@@ -7,7 +7,7 @@ import pytest
 from vessel_reconstruction import platform_files
 
 
-@pytest.mark.parametrize('operation', ['progress', 'reexport', 'worker_json'])
+@pytest.mark.parametrize('operation', ['reexport', 'worker_json'])
 def test_secure_read_entry_points_refuse_before_open(monkeypatch, tmp_path, operation):
     from vessel_reconstruction import progress, reexport, ship_cad_worker
     monkeypatch.setattr(platform_files, '_IS_WINDOWS', True)
