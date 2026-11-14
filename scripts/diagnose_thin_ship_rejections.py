@@ -10,6 +10,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from investigate_thin_ship_bulbs import load_module
 from validate_thin_ship_shipd import selected_rows, subset_path
+from vessel_reconstruction.resistance_thin_ship import HullOffsets, HullOffsetsError, wave_resistance
 
 
 def run(source, work):
@@ -47,6 +48,14 @@ def run(source, work):
                       "negative_waterline_count": int(np.sum(y[:, -1] < 0)),
                       "open_ends": bool(np.any(y[[0, -1]] != 0)),
                       "negative_locations": negative.tolist()}
+            try:
+                wave_resistance(HullOffsets(x, z, y, float(-z[0]), hull.LOA**2, ("diagnosis",)),
+                                speed_m_s=2.)
+            except HullOffsetsError as error:
+                record["typed_code"] = error.code
+                record["typed_message"] = str(error)
+            else:
+                raise AssertionError("Previously invalid grid unexpectedly accepted")
             evidence.append(record)
     (output/"evidence.json").write_text(json.dumps(evidence, indent=2)+"\n")
     summary = {}
