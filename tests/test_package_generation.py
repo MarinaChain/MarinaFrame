@@ -38,6 +38,23 @@ def test_failed_pointer_write_keeps_current_generation(monkeypatch, tmp_path):
     assert old.is_dir()
 
 
+def test_generation_files_are_flushed_before_pointer_switch(monkeypatch, tmp_path):
+    from vessel_reconstruction.exports import generations
+    root, stage = tmp_path / 'package', tmp_path / 'stage'
+    stage.mkdir()
+    payload = stage / 'report'
+    payload.write_bytes(b'complete')
+    operations = []
+    original = generations.write_json
+    monkeypatch.setattr(generations, 'sync_file', lambda path: operations.append(('flush', path.name)))
+    def pointer(path, value):
+        operations.append(('pointer', path.name))
+        original(path, value)
+    monkeypatch.setattr(generations, 'write_json', pointer)
+    publish_generation(root, stage)
+    assert operations == [('flush', 'report'), ('pointer', 'current.json')]
+
+
 def test_pointer_cannot_escape_generation_root(tmp_path):
     root = tmp_path / 'package'
     root.mkdir()

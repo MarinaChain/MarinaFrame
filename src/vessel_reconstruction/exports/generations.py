@@ -9,7 +9,7 @@ import re
 import stat
 from uuid import uuid4
 
-from ..provenance import sync_directory, write_json
+from ..provenance import sync_directory, sync_file, write_json
 from ..schema import load_bounded_json
 from ..transaction import rename_no_replace
 
@@ -56,6 +56,8 @@ def publish_generation(root: Path, stage: Path) -> Path:
         info = item.lstat()
         if stat.S_ISLNK(info.st_mode) or getattr(info, 'st_file_attributes', 0) & 0x400:
             raise ValueError('Package generations must not contain links or reparse points')
+        if stat.S_ISREG(info.st_mode):
+            sync_file(item)
     name = 'g-' + uuid4().hex
     destination = root / name
     sync_directory(stage)

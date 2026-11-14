@@ -31,13 +31,18 @@ def test_heartbeat_thread_writes_during_a_long_operation(tmp_path, monkeypatch):
     path = tmp_path / 'progress.json'
     monkeypatch.setenv('MARINAFRAME_PROGRESS_PATH', str(path))
     monkeypatch.setenv('MARINAFRAME_PROGRESS_REQUEST', 'worker-test')
+    def trusted_record():
+        # Trusted observers share the writer lock; a plain Windows CRT open
+        # otherwise races atomic replacement and can refuse delete sharing.
+        with progress._record() as (_, value):
+            return dict(value)
     with progress.Heartbeat('Building the hull', interval=0.01):
-        first = json.loads(path.read_text())
+        first = trusted_record()
         deadline = time.monotonic() + 1
-        while json.loads(path.read_text())['timestamp_ms'] <= first['timestamp_ms']:
+        while trusted_record()['timestamp_ms'] <= first['timestamp_ms']:
             assert time.monotonic() < deadline
             time.sleep(0.01)
-    last = json.loads(path.read_text())
+    last = trusted_record()
     assert last['counter'] == first['counter']
 
 
