@@ -216,6 +216,13 @@ def test_supervisor_absolute_cap_applies_only_to_sandboxed_model_code(monkeypatc
         def wait(self, timeout):
             return -9 if killed else 0
 
+    # This is a simulated POSIX supervisor, including its signal vocabulary.
+    monkeypatch.setattr(isolation.sys, 'platform', 'darwin')
+    monkeypatch.setattr(isolation.signal, 'SIGKILL', 9, raising=False)
+    monkeypatch.setattr(isolation.signal, 'SIGXCPU', 24, raising=False)
+    monkeypatch.setattr(isolation.signal, 'SIGXFSZ', 25, raising=False)
+    monkeypatch.setattr(isolation.progress, 'read_child_progress', lambda *args: None)
+    monkeypatch.setattr(isolation.progress.ProgressRelay, 'relay', lambda *args: None)
     monkeypatch.setenv('MARINAFRAME_PROGRESS_PATH', '/unused/trusted-progress.json')
     monkeypatch.setattr(isolation.subprocess, 'Popen', lambda *a, **k: Child())
     # The cap must still stop our live child when host process inspection is unavailable.
@@ -223,7 +230,7 @@ def test_supervisor_absolute_cap_applies_only_to_sandboxed_model_code(monkeypatc
     monkeypatch.setattr(isolation, 'child_has_exited', lambda pid: clock[0] > 2 * isolation.SANDBOX_MODEL_WALL_SECONDS)
     monkeypatch.setattr(isolation, 'kill_process_tree', lambda *a: False)
     monkeypatch.setattr(isolation, '_darwin_group_has_live_member', lambda pid: False)
-    monkeypatch.setattr(isolation.os, 'killpg', lambda group, sig: killed.append((group, sig)))
+    monkeypatch.setattr(isolation.os, 'killpg', lambda group, sig: killed.append((group, sig)), raising=False)
     monkeypatch.setattr(isolation.time, 'monotonic', lambda: clock[0])
     monkeypatch.setattr(isolation.time, 'sleep', lambda _: clock.__setitem__(0, clock[0] + isolation.SANDBOX_MODEL_WALL_SECONDS))
     result = isolation.supervise_process(['controlled-child'], sandboxed_model_code=model_code)
@@ -284,7 +291,10 @@ def test_security_cap_retries_a_group_with_an_exited_leader_and_live_child(monke
     monkeypatch.setattr(isolation, 'process_identity', lambda pid: None)
     monkeypatch.setattr(isolation, 'child_has_exited', leader_exited)
     monkeypatch.setattr(isolation, '_darwin_group_has_live_member', group_alive)
-    monkeypatch.setattr(isolation.os, 'killpg', refuse_signal)
+    monkeypatch.setattr(isolation.signal, 'SIGKILL', 9, raising=False)
+    monkeypatch.setattr(isolation.signal, 'SIGXCPU', 24, raising=False)
+    monkeypatch.setattr(isolation.signal, 'SIGXFSZ', 25, raising=False)
+    monkeypatch.setattr(isolation.os, 'killpg', refuse_signal, raising=False)
     monkeypatch.setattr(isolation.time, 'monotonic', lambda: clock[0])
     monkeypatch.setattr(isolation.time, 'sleep', lambda seconds: clock.__setitem__(0, clock[0] + seconds))
     monkeypatch.setattr(isolation, 'SANDBOX_MODEL_WALL_SECONDS', 0)
