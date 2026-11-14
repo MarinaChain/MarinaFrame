@@ -1634,3 +1634,21 @@ Newthree approaches total **1538.826497s/2.137259024allocated core-hours**.
 Inheritedmesh06 costseparate410.004734s/.569451019core-hours. Latest valid
 coarse force diagnosticremains1.243832512,y+area<1=88.38327%,<5=93.38121%,
 notmesh-converged/G-KV-DB2pass. Resume only afterPMstrategydecision.
+
+### Approach3(mesh09) FAIL3/3: mandatory stop
+
+Existing mesh09 was already running when launch directory creation refused;
+no second container launched. Read actual retained controls:12layers,
+final.00563416,smoothing10/20/60,**minThickness.001** rather than planned
+.000001. This execution mismatch is retained,not silently corrected/retried.
+Completed286.178203s/.397469726core-hours,noOOM,1,028,694cells;
+**0/17002 full12 layers**,actual field uniform0;checkMeshOK with nonorth54.4261,
+skew3.75273. Stage walls1/5/169/89/7s. Third approach fails97%coverage.
+**STOP per PM three-failure limit.** No fourth approach,short y+check,
+mapFields or new production/medium/fine run admitted. Mapping protocol remains
+committed for future authorized work;no claim that mapping was exercised.
+G-KV-DB2 NOT CONVERGED;oldsingle-grid1.243832512 and88.383%area y+<1 remain
+only converged coarse evidence,not a gate pass. New three approaches total
+**1538.826497s/2.137259024allocated core-hours**. Raw immutable receipts,
+layer fields and quality evidence preserved. No active lane container.
+Resume requires PM mesh-method decision,not additional parameter retries.
