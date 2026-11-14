@@ -8,6 +8,7 @@
 import { el } from './dom.js';
 import { t, termLabel } from './i18n.js';
 import { valueDisplay } from './value_display.js';
+import { chip } from './ui_kit.js';
 
 /** Item ids of GA rows in the source index (provenance.js); no 3D part uses this prefix. */
 export const GA_PREFIX = 'ga:';
@@ -103,8 +104,8 @@ export function gaRows(reading) {
       id: `${GA_PREFIX}space:${space.id}`, label: space.label || t('ga.unlabelled', { kind: KINDS.includes(space.kind) ? t(`term.${space.kind}`).toLowerCase() : space.kind.replace(/_/g, ' ') }),
       value: space.number ? t('ga.number', { number: space.number }) : '', status: space.status,
       note: viewNames.get(space.view_id) ? t('ga.inView', { view: viewNames.get(space.view_id) }) : '', record: space.source_record,
-      quantity: quantity({ ...space, value: space.number }, '', 0, null,
-        viewNames.get(space.view_id) ? t('ga.inView', { view: viewNames.get(space.view_id) }) : ''),
+      // Space numbers identify spaces; they are labels, not measured quantities.
+      quantity: null,
     });
   }
   // Measured on the drawing (the frame-scale pass): shown only when the pass ran.
@@ -149,13 +150,16 @@ export function createGaPanel({ onHover, onSelect }) {
 
   function row(item) {
     const sourceItem = { kind: 'part', id: item.id };
-    const display = valueDisplay(item.quantity, { compact: true });
+    const status = chip(statusWord(item.status), { tone: item.status === 'read' ? 'brand' : item.status === 'unknown' ? 'warn' : 'draft', small: true });
+    status.classList.add('vd-status');
+    const display = item.quantity ? valueDisplay(item.quantity, { compact: true })
+      : el('span', { class: 'vd' }, el('span', { class: 'vd-value' }, item.value), status);
     // The row is already a source-focus control; do not add a nested tab stop.
     display.removeAttribute('tabindex');
     const button = el('button', {
       class: `ga-row ga-${item.status}`, type: 'button', 'data-ga-id': item.id, 'aria-pressed': 'false',
-      title: item.quantity.source || item.note || null,
-      'aria-description': item.quantity.source || item.note || null,
+      title: item.quantity?.source || item.note || null,
+      'aria-description': item.quantity?.source || item.note || null,
       onpointerenter: () => onHover(sourceItem), onpointerleave: () => onHover(null),
       onfocus: () => onHover(sourceItem), onblur: () => onHover(null),
       onclick: () => {

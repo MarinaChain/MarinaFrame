@@ -108,6 +108,7 @@ test('GA rows add numeric quantities without changing existing display fields', 
   assert.equal(rows.counts[0].quantity.value, 0);
   assert.equal(rows.counts[0].quantity.source, 'Synthetic evidence');
   assert.equal(rows.measured[0].quantity.method, 'measured');
-  assert.equal(rows.groups[0].rows[0].quantity.value, 1);
+  assert.equal(rows.groups[0].rows[0].quantity, null);
+  assert.equal(rows.groups[0].rows[0].value, 'No. 1');
   assert.equal(rows.particulars[1].quantity.value, null);
 });
