@@ -414,6 +414,11 @@ os._exit(23)
 @pytest.mark.parametrize("basename", ["run*", "run[ab]", "run?"])
 def test_recovery_treats_glob_characters_in_output_name_literally(tmp_path, basename):
     target = tmp_path / basename
+    if os.name == 'nt' and any(character in basename for character in '*?'):
+        with pytest.raises(ValueError, match='forbidden by Windows'):
+            RunTransaction(target)
+        assert not list(tmp_path.iterdir()), 'Invalid names must not create a reservation or stage'
+        return
     own = RunTransaction(target)
     other_name = "runa" if "[" in basename else "runx"
     other = RunTransaction(tmp_path / other_name)

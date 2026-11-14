@@ -17,7 +17,10 @@ LIMITS = WorkerLimits(wall_seconds=3, cpu_seconds=2, memory_bytes=256*1024**2, f
 
 
 def stopped(pid):
-    """Check POSIX liveness without treating a missing procfs as an exit."""
+    """Observe process lifetime without treating inspection denial as exit."""
+    if os.name == 'nt':
+        from vessel_reconstruction.platform_process import windows_process_has_exited
+        return windows_process_has_exited(pid)
     try:
         reaped_pid, _ = os.waitpid(pid, os.WNOHANG)
     except ChildProcessError:
