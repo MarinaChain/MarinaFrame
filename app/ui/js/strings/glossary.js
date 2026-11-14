@@ -9,6 +9,12 @@ export const GLOSSARY_STATUS = 'draft: needs review by a yard designer';
 
 /** id: { en, enPlural?, ko, abbr? }. Korean has one form for one item and several. */
 export const GLOSSARY = {
+  // design: workbench particulars; length stays neutral when its basis is not supplied.
+  length: { en: 'Length', ko: '길이', abbr: 'L' },
+  cargo_capacity: { en: 'Cargo capacity', ko: '화물 용량' },
+  service_speed: { en: 'Service speed', ko: '운항 속도', abbr: 'Vs' },
+  brake_power: { en: 'Brake power', ko: '제동 출력', abbr: 'PB' },
+  daily_fuel: { en: 'Fuel per day', ko: '일일 연료 소비량' },
   loa: { en: 'Length overall', ko: '전장', abbr: 'LOA' },
   lbp: { en: 'Length between perpendiculars', ko: '수선간장', abbr: 'LBP' },
   breadth_moulded: { en: 'Breadth (moulded)', ko: '형폭', abbr: 'B' },

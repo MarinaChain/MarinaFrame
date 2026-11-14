@@ -3901,12 +3901,31 @@ body:not([data-costs="shown"]) :is(.workspace, .inspector) .cost-timing { displa
 
 /* Design phase 1: risk stays visible in both interface modes. */
 .design-page { overflow: auto; padding: var(--space-xl); color: var(--text); }
-.design-header { margin-bottom: var(--space-lg); }
-.design-header h1 { margin: var(--space-md) 0; }
-.design-tabs { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin: var(--space-lg) 0; }
-.design-tabs [aria-selected="true"] { outline: 2px solid var(--text); outline-offset: 2px; }
-.design-warnings { background: var(--warn-soft); color: var(--warn); padding: var(--space-lg); margin: var(--space-lg) 0; border-radius: var(--radius-md); }
-.design-warnings li { margin-block: var(--space-sm); overflow-wrap: anywhere; }
+.design-header { margin-bottom: var(--space-lg); flex-wrap: wrap; }
+.design-header h1 { margin: 0; white-space: normal; overflow-wrap: anywhere; }
+.design-heading { min-width: 0; }
+.design-heading p { margin: var(--space-xs) 0 0; color: var(--ink-3); font-size: var(--fs-sm); }
+.design-header .segmented { margin-left: auto; flex: none; }
+.design-parent { color: var(--ink-2); font-size: var(--fs-sm); }
+.design-tabs { height: 44px; margin: 0 0 var(--space-lg); overflow-x: auto; border-bottom: 1px solid var(--line); }
+.design-tabs > button { flex: none; }
+.design-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: var(--space-sm); }
+.design-card { padding: var(--space-md); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.design-card dt { color: var(--ink-2); font-size: var(--fs-sm); margin-bottom: var(--space-sm); }
+.design-card dd { margin: 0; }
+.design-card .vd-value { font-size: var(--fs-xl); }
+.design-page h2 { font-size: var(--fs-md); margin: 0 0 var(--space-sm); }
+.design-warnings { background: var(--warn-soft); color: var(--warn); padding: var(--space-md); margin: var(--space-lg) 0; border-radius: var(--radius-md); }
+.design-warnings h3 { font-size: var(--fs-sm); margin: var(--space-sm) 0; }
+.design-warnings li { margin-block: var(--space-xs); overflow-wrap: anywhere; }
+.design-warning-preview { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; line-height: 1.5; }
+.design-warning-preview p { margin: 0; overflow-wrap: anywhere; }
+.design-warning-preview[hidden] { display: none; }
+.design-no-band, .design-path { color: var(--ink-3); font-size: var(--fs-xs); }
+.design-path { display: block; margin-top: var(--space-xs); }
+.design-no-band:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.design-changes { margin-block: var(--space-lg); }
+.design-lite > section { margin-bottom: var(--space-lg); }
 .design-value { display: grid; gap: var(--space-xs); }
 .design-evidence { white-space: normal; overflow-wrap: anywhere; font-size: var(--fs-xs); }
 .design-page td { max-width: 42rem; white-space: normal; overflow-wrap: anywhere; }
