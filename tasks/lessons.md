@@ -11,8 +11,9 @@
 ### Merge UI lanes into continue/v0.5 without asking (standing order)
 - **Date:** 2026-11-14
 - **Trigger:** The UI lead asked "Merge lane/ui-workbench into continue/v0.5 now?". The founder said yes and "don't need to ask me for these, just do it yourself".
-- **Rule:** When a UI lane is reviewed and passes `npm run test:ui`, `npm run test:a11y` (screenshots seen) and the identity check, merge it into `lane/ui-workbench` and then into `continue/v0.5` without asking. Check first that the main checkout has no uncommitted work and that `git merge-tree` shows no conflict; run the checks again on the merged result. Pushing is separate: other lanes merge without pushing, so do not push unless asked.
-- **Why:** The founder wants finished, checked work merged without a stop for approval.
+- **Rule:** When a UI lane is reviewed and passes `npm run test:ui`, `npm run test:a11y` (screenshots seen) and the identity check, merge it into `lane/ui-workbench` and then into `continue/v0.5` without asking. Check first that the main checkout has no uncommitted work and that `git merge-tree` shows no conflict; run the checks again on the merged result.
+- **Push and open decisions (2026-11-14):** The founder said "do it yourself, don't wait for me to decide it" about pushing, choosing the lane for backend work the UI needs, and the glossary review. Push `continue/v0.5` after the identity check passes and `origin` has no newer commits (fast-forward only). Decide lane ownership and run the work yourself. Ask only for what needs a person outside the session, and then say what was done instead. A push of many screenshots can fail with HTTP 400; retry once with `git -c http.postBuffer=524288000 push`.
+- **Why:** The founder wants finished, checked work merged and pushed without a stop for approval.
 
 ### Ask the person when a worker stops making progress
 - **Date:** 2026-11-10
