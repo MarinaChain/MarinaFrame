@@ -5,7 +5,7 @@ export const EN = {
   'status.draft': 'Draft',
   'status.read': 'Read',
   'status.guessed': 'Best guess',
-  'status.unknown': 'Not read',
+  'status.unknown': 'Unknown',
   'status.measured_from_scale': 'Measured',
   'status.derived_from_space_tops': 'Derived',
   'status.unconfirmed_from_uncertain_boxes': 'Unconfirmed',
@@ -161,4 +161,17 @@ export const EN = {
   'home.queueSummary': 'Queue, {words}',
   'home.queue': 'Queue',
   'home.queueEmpty': 'No runs yet. Drop a drawing set on Home to start.',
+  // ui-p0-value: shared quantity display.
+  'status.needs_review': 'Needs review',
+  'method.empirical': 'Empirical',
+  'method.thin_ship': 'Thin-ship theory',
+  'method.cfd': 'CFD',
+  'method.read_from_ga': 'Read from GA',
+  'method.measured': 'Measured',
+  'method.hydrostatics': 'Hydrostatics',
+
+  // ui-p0-value: part quantity sources.
+  'parts.source.traced': 'Read',
+  'parts.source.ai_inferred': 'AI read',
+  'parts.source.guessed': 'Guessed',
 };

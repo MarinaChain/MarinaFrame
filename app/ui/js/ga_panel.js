@@ -7,6 +7,8 @@
 
 import { el } from './dom.js';
 import { t, termLabel } from './i18n.js';
+import { valueDisplay } from './value_display.js';
+import { chip } from './ui_kit.js';
 
 /** Item ids of GA rows in the source index (provenance.js); no 3D part uses this prefix. */
 export const GA_PREFIX = 'ga:';
@@ -50,9 +52,23 @@ function number(value, unit) {
   return `${text} ${unit}`;
 }
 
+// Source text complements the drawing-region preview retained on each row button.
+function quantity(item, unit, digits, method, source = '') {
+  const value = item.value === null || item.value === undefined || item.value === '' ? null : Number(item.value);
+  const record = item.source_record;
+  const regions = record?.regions || record?.inputs || [];
+  const sheets = [...new Set(regions.map((region) => region.sheet).filter(Boolean))];
+  return {
+    value: Number.isFinite(value) ? value : null, unit, digits,
+    uncertainty: item.uncertainty || null, status: item.status || 'unknown',
+    method: method || (['read', 'guessed'].includes(item.status) ? 'read_from_ga' : null),
+    source: [source, record?.reason, ...sheets].filter(Boolean).join(' · ') || null,
+  };
+}
+
 /**
  * The rows of a GA reading, in display order: `{ shipType, particulars, counts, groups }`. Each row
- * is `{ id, label, value, status, note, record }`; `groups` are spaces by kind. Null without a
+ * is `{ id, label, value, status, note, record, quantity }`; `groups` are spaces by kind. Null without a
  * reading. Fields the drawing does not print are kept as "Not read" rows (an abstention is shown).
  */
 export function gaRows(reading) {
@@ -63,6 +79,7 @@ export function gaRows(reading) {
       id: `${GA_PREFIX}particular:${key}`, label: termLabel(termId), value: number(item.value, unit), status: item.status || 'unknown',
       note: item.value === null || item.value === undefined ? (item.reason || '') : (item.printed ? t('ga.printed', { text: item.printed }) : ''),
       record: item.source_record || null,
+      quantity: quantity(item, unit, unit === 't' ? 0 : 2, null, item.printed ? t('ga.printed', { text: item.printed }) : item.reason),
     };
   });
   const counts = COUNTS.map(([key, labelKey]) => {
@@ -71,6 +88,7 @@ export function gaRows(reading) {
     return {
       id: `${GA_PREFIX}count:${key}`, label: t(labelKey), value: known ? String(item.value) : '—', status: item.status || 'unknown',
       note: known ? (item.evidence || '') : (item.reason || ''), record: item.source_record || null,
+      quantity: quantity(item, '', 0, null, item.evidence || item.reason),
     };
   });
   const groups = [];
@@ -86,6 +104,8 @@ export function gaRows(reading) {
       id: `${GA_PREFIX}space:${space.id}`, label: space.label || t('ga.unlabelled', { kind: KINDS.includes(space.kind) ? t(`term.${space.kind}`).toLowerCase() : space.kind.replace(/_/g, ' ') }),
       value: space.number ? t('ga.number', { number: space.number }) : '', status: space.status,
       note: viewNames.get(space.view_id) ? t('ga.inView', { view: viewNames.get(space.view_id) }) : '', record: space.source_record,
+      // Space numbers identify spaces; they are labels, not measured quantities.
+      quantity: null,
     });
   }
   // Measured on the drawing (the frame-scale pass): shown only when the pass ran.
@@ -95,6 +115,7 @@ export function gaRows(reading) {
     return {
       id: `${GA_PREFIX}measured:${key}`, label: termLabel(termId), value: number(item.value, 'm'), status: known ? item.status : 'unknown',
       note: known ? (item.note || item.method || '') : (item.reason || ''), record: item.source_record || null,
+      quantity: quantity(item, 'm', 2, 'measured', item.note || item.method || item.reason),
     };
   }) : [];
   const order = KINDS;
@@ -129,9 +150,16 @@ export function createGaPanel({ onHover, onSelect }) {
 
   function row(item) {
     const sourceItem = { kind: 'part', id: item.id };
+    const status = chip(statusWord(item.status), { tone: item.status === 'read' ? 'brand' : item.status === 'unknown' ? 'warn' : 'draft', small: true });
+    status.classList.add('vd-status');
+    const display = item.quantity ? valueDisplay(item.quantity, { compact: true })
+      : el('span', { class: 'vd' }, el('span', { class: 'vd-value' }, item.value), status);
+    // The row is already a source-focus control; do not add a nested tab stop.
+    display.removeAttribute('tabindex');
     const button = el('button', {
       class: `ga-row ga-${item.status}`, type: 'button', 'data-ga-id': item.id, 'aria-pressed': 'false',
-      title: item.note || null,
+      title: item.quantity?.source || item.note || null,
+      'aria-description': item.quantity?.source || item.note || null,
       onpointerenter: () => onHover(sourceItem), onpointerleave: () => onHover(null),
       onfocus: () => onHover(sourceItem), onblur: () => onHover(null),
       onclick: () => {
@@ -141,8 +169,7 @@ export function createGaPanel({ onHover, onSelect }) {
       },
     },
     el('span', { class: 'ga-row-label' }, item.label),
-    el('span', { class: 'ga-row-value' }, item.value),
-    el('span', { class: 'ga-row-status' }, statusWord(item.status)));
+    display);
     return el('li', {}, button);
   }
 

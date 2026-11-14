@@ -59,5 +59,5 @@ test('the GA rows read in Korean, with the English abbreviation after a particul
   assert.equal(rows.particulars.find((r) => r.id.endsWith('lbp_m')).label, '수선간장 (LBP)');
   assert.equal(rows.groups[0].label, '화물탱크');
   assert.equal(rows.groups[0].rows[0].label, '표기 없는 화물탱크');
-  assert.deepEqual(STATUSES.map(statusWord).slice(0, 3), ['판독', '추정', '미판독']);
+  assert.deepEqual(STATUSES.map(statusWord).slice(0, 3), ['판독', '추정', '알 수 없음']);
 });

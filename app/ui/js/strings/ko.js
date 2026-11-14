@@ -5,7 +5,7 @@ export const KO = {
   'status.draft': '초안',
   'status.read': '판독',
   'status.guessed': '추정',
-  'status.unknown': '미판독',
+  'status.unknown': '알 수 없음',
   'status.measured_from_scale': '측정',
   'status.derived_from_space_tops': '산출',
   'status.unconfirmed_from_uncertain_boxes': '미확인',
@@ -161,4 +161,17 @@ export const KO = {
   'home.queueSummary': '대기열, {words}',
   'home.queue': '대기열',
   'home.queueEmpty': '아직 실행 내역이 없습니다. 홈에 도면 세트를 끌어 놓아 시작하세요.',
+  // ui-p0-value: shared quantity display.
+  'status.needs_review': '검토 필요',
+  'method.empirical': '경험식',
+  'method.thin_ship': '박선 이론',
+  'method.cfd': 'CFD',
+  'method.read_from_ga': 'GA 판독',
+  'method.measured': '도면 측정',
+  'method.hydrostatics': '정수역학 계산',
+
+  // ui-p0-value: part quantity sources.
+  'parts.source.traced': '판독',
+  'parts.source.ai_inferred': 'AI 판독',
+  'parts.source.guessed': '추정',
 };

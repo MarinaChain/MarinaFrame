@@ -2,7 +2,7 @@
 // records in the source view. Run: npm run test:ui
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GA_PREFIX, STATUSES, statusWord, gaRecords, gaRows } from '../ui/js/ga_panel.js';
+import { GA_PREFIX, STATUSES, statusWord, gaRecords, gaRows, createGaPanel } from '../ui/js/ga_panel.js';
 import { sourceOf } from '../ui/js/provenance.js';
 
 const region = { sheet: 'X_GA.png', page: 0, view: null, box_px: [10, 10, 90, 30], page_px: [1000, 500] };
@@ -49,6 +49,37 @@ test('spaces group by kind in a fixed order and an unlabelled outline is named',
   assert.equal(groups[0].rows[1].label, 'Unlabelled cargo hold');
   assert.equal(groups[0].rows[1].status, 'guessed');
   assert.equal(groups[0].rows[0].note, 'In profile PROFILE');
+});
+
+test('space labels stay text, including alphanumeric and absent numbers, with their own status', () => {
+  class TestNode {
+    constructor() {
+      this.children = []; this.dataset = {}; this.attributes = {}; this.className = '';
+      this.classList = { add: (name) => { this.className += ` ${name}`; } };
+    }
+    append(child) { this.children.push(child); }
+    replaceChildren(...children) { this.children = children; }
+    setAttribute(name, value) { this.attributes[name] = String(value); }
+    removeAttribute(name) { delete this.attributes[name]; }
+    addEventListener() {}
+    get textContent() { return this.children.map((child) => child instanceof TestNode ? child.textContent : child).join(''); }
+  }
+  const previousDocument = globalThis.document;
+  const previousNode = globalThis.Node;
+  globalThis.Node = TestNode;
+  globalThis.document = { createElement: () => new TestNode() };
+  try {
+    const panel = createGaPanel({ onHover() {}, onSelect() {} });
+    panel.set({ spaces: ['1P', '1', null].map((number, index) => ({ id: String(index), kind: 'cargo_hold', number, status: 'read' })) });
+    const descendants = (node) => [node, ...node.children.filter((child) => child instanceof TestNode).flatMap(descendants)];
+    const buttons = descendants(panel.element).filter((node) => node.attributes['data-ga-id']?.startsWith('ga:space:'));
+    assert.equal(buttons.length, 3);
+    assert.deepEqual(buttons.map((button) => descendants(button).find((node) => node.className.includes('vd-value')).textContent), ['No. 1P', 'No. 1', '']);
+    assert.deepEqual(buttons.map((button) => descendants(button).find((node) => node.className.includes('vd-status')).textContent), ['Read', 'Read', 'Read']);
+  } finally {
+    globalThis.document = previousDocument;
+    globalThis.Node = previousNode;
+  }
 });
 
 test('a run without a reading has no rows', () => {

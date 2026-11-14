@@ -3809,22 +3809,29 @@ body:not([data-costs="shown"]) :is(.workspace, .inspector) .cost-timing { displa
 .ga-section-title { margin: 0 0 var(--space-xs); font-size: var(--fs-md); }
 .ga-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
 .ga-row {
-  width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto 6.5em; gap: var(--space-sm); align-items: baseline;
+  width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto); gap: var(--space-sm); align-items: baseline;
   padding: 5px 8px; border: 0; border-radius: var(--radius-sm); background: transparent; color: inherit; font: inherit;
   text-align: left; cursor: pointer;
 }
 .ga-row:hover, .ga-row:focus-visible, .ga-row[aria-pressed="true"] { background: var(--hover); }
 .ga-row[aria-pressed="true"] { box-shadow: inset 0 0 0 1px var(--accent); }
 .ga-row-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ga-row-value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-.ga-row-status { font-size: var(--fs-xs); color: var(--text-2); text-align: right; }
-.ga-read .ga-row-status { color: var(--brand); }
-.ga-guessed .ga-row-status { color: var(--ai-text); font-style: italic; }
-.ga-unknown .ga-row-value { color: var(--text-2); }
-.ga-measured_from_scale .ga-row-status { color: var(--brand); }
-.ga-derived_from_space_tops .ga-row-status, .ga-unconfirmed_from_uncertain_boxes .ga-row-status {
-  color: var(--ai-text); font-style: italic;
+/* ui-p0-value: one quantity layout, using the shared theme and badge tokens. */
+.vd {
+  display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-xs);
+  font-variant-numeric: tabular-nums;
 }
+.vd-value, .vd-unit { font-family: var(--font-mono); }
+.vd-unc { color: var(--text-2); }
+.vd-unit:empty, .vd-unc:empty { display: none; }
+.vd .badge { font-size: var(--fs-xs); }
+.vd:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: var(--radius-sm); }
+.ga-row > .vd { justify-content: flex-end; }
+.ga-row .vd-status { min-width: 6.5em; justify-content: center; }
+.ga-unknown .vd-value { color: var(--text-2); }
+/* ui-p0-value: allow quantity status chips to wrap in dense parts and export rows. */
+.parts-value .vd { white-space: normal; }
+.export-accuracy-values { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
 
 /* ============================================================ Public web demo (docs/WEB_DEMO.md)
    js/app.js sets [data-demo="read-only"] on <html> with the static backend. The demo shows
