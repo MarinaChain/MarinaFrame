@@ -304,4 +304,15 @@ export const EN = {
   'shell.drop.hint': 'PDF, PNG, TIFF or JPEG pages of one drawing set. You check the views before the AI reads them.',
 
   'shell.toast.close': 'Close message',
+
+  // Times and the sidebar toggle (written by format.js and commands.js).
+  'time.now': 'Now',
+  'time.minutes': '{minutes} min',
+  'time.yesterday': 'Yesterday',
+  'time.justNow': 'just now',
+  'time.minutesAgo': '{minutes} min ago',
+  'time.todayAt': 'today at {time}',
+  'time.dayAt': 'on {day} at {time}',
+  'shell.rail.expand': 'Expand the sidebar',
+  'shell.rail.collapse': 'Collapse the sidebar',
 };

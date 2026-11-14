@@ -1,6 +1,9 @@
 // Plain-language labels and number formats. State wording comes from the locale string tables.
 
-import { t } from './i18n.js';
+import { t, locale } from './i18n.js';
+
+/** Date and time locale: the system's in English, Korean formats in Korean. */
+const dateLocale = () => (locale() === 'ko' ? 'ko-KR' : undefined);
 
 const STATUS_LABELS = new Set([
   'running', 'stalled', 'needs_review', 'draft', 'signed_off', 'declined', 'failed', 'cancelled',
@@ -42,7 +45,7 @@ export function countOf(count, noun) {
 }
 
 export function decimal(value, digits) {
-  return value.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return value.toLocaleString(dateLocale(), { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
 
 export function metres(value, digits = 1) {
@@ -103,11 +106,11 @@ export function bytes(value) {
 }
 
 export function clock(ms) {
-  return new Date(ms).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  return new Date(ms).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 }
 
 export function fullTime(ms) {
-  return new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  return new Date(ms).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 function sameDay(a, b) {
@@ -119,13 +122,13 @@ export function shortTime(ms) {
   const now = new Date();
   const then = new Date(ms);
   const minutes = Math.round((now - then) / 60_000);
-  if (minutes < 1) return 'Now';
-  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 1) return t('time.now');
+  if (minutes < 60) return t('time.minutes', { minutes });
   if (sameDay(now, then)) return clock(ms);
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
-  if (sameDay(yesterday, then)) return 'Yesterday';
-  return then.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  if (sameDay(yesterday, then)) return t('time.yesterday');
+  return then.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' });
 }
 
 /** Time for sentences: "just now", "12 min ago", "today at 09:14", "on 5 Nov at 16:40". */
@@ -133,10 +136,11 @@ export function relativeTime(ms) {
   const now = new Date();
   const then = new Date(ms);
   const minutes = Math.round((now - then) / 60_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes} min ago`;
-  if (sameDay(now, then)) return `today at ${clock(ms)}`;
-  return `on ${then.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} at ${clock(ms)}`;
+  if (minutes < 1) return t('time.justNow');
+  if (minutes < 60) return t('time.minutesAgo', { minutes });
+  if (sameDay(now, then)) return t('time.todayAt', { time: clock(ms) });
+  const day = then.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' });
+  return t('time.dayAt', { day, time: clock(ms) });
 }
 
 /** "2 lines found; took the best-supported one (score 0.62)." -> "2 lines · best 0.62". */

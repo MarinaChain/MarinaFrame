@@ -1,5 +1,6 @@
 // App-wide input: the sidebar, the command palette, the shortcut sheet and keyboard shortcuts.
 
+import { t } from './i18n.js';
 import { prefs, state, currentSection, isRunning } from './app_state.js';
 import * as fmt from './format.js';
 import { $ } from './ui_kit.js';
@@ -29,9 +30,9 @@ function setRail(mode, { remember = true } = {}) {
   $('app').dataset.rail = collapsed ? 'collapsed' : 'expanded';
   const toggle = $('rail-toggle');
   toggle.setAttribute('aria-expanded', String(!collapsed));
-  const label = collapsed ? 'Expand the sidebar (⌘\\)' : 'Collapse the sidebar (⌘\\)';
-  toggle.title = label;
-  toggle.setAttribute('aria-label', label.replace(/ \(.*\)$/, ''));
+  const label = t(collapsed ? 'shell.rail.expand' : 'shell.rail.collapse');
+  toggle.title = `${label} (⌘\\)`;
+  toggle.setAttribute('aria-label', label);
   if (remember) prefs.set(railPrefKey(), collapsed ? 'collapsed' : 'expanded');
 }
 // A narrow window (under 1100 px) starts with the sidebar collapsed; the person's own choice

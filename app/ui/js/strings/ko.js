@@ -304,4 +304,15 @@ export const KO = {
   'shell.drop.hint': '한 도면 세트의 PDF, PNG, TIFF 또는 JPEG 페이지입니다. AI가 읽기 전에 뷰를 확인합니다.',
 
   'shell.toast.close': '메시지 닫기',
+
+  // Times and the sidebar toggle (written by format.js and commands.js).
+  'time.now': '방금',
+  'time.minutes': '{minutes}분',
+  'time.yesterday': '어제',
+  'time.justNow': '방금 전',
+  'time.minutesAgo': '{minutes}분 전',
+  'time.todayAt': '오늘 {time}',
+  'time.dayAt': '{day} {time}',
+  'shell.rail.expand': '사이드바 펼치기',
+  'shell.rail.collapse': '사이드바 접기',
 };

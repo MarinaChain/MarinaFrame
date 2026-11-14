@@ -61,3 +61,13 @@ test('the GA rows read in Korean, with the English abbreviation after a particul
   assert.equal(rows.groups[0].rows[0].label, '표기 없는 화물탱크');
   assert.deepEqual(STATUSES.map(statusWord).slice(0, 3), ['판독', '추정', '알 수 없음']);
 });
+
+test('times read in Korean, and English times keep their words', async () => {
+  const { relativeTime, shortTime } = await import('../ui/js/format.js');
+  const twelveMinutesAgo = Date.now() - 12 * 60_000;
+  assert.equal(relativeTime(twelveMinutesAgo), '12 min ago');
+  assert.equal(shortTime(Date.now()), 'Now');
+  setLocale('ko');
+  assert.equal(relativeTime(twelveMinutesAgo), '12분 전');
+  assert.equal(shortTime(Date.now()), '방금');
+});
