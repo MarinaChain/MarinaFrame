@@ -29,9 +29,6 @@ SECURE_READ_TESTS = {
     },
     'test_worker_progress.py': {
         'test_untrusted_progress_files_do_not_block_or_follow_links',
-        'test_relay_rejects_invalid_display_fields',
-        'test_child_counter_alone_cannot_advance_trusted_progress',
-        'test_relay_advance_budget_is_per_step_and_cannot_be_reset_by_the_child',
     },
     'test_ship_cad.py': {
         'test_worker_result_reader_refuses_symlinks',
