@@ -25,7 +25,7 @@ Original gate remains FAIL. This gate compares a **numerical Michell reference**
 
 ## Resume point
 
-Gate frozen in `db71ddb` before fresh selection; sample committed in `e05940d` before geometry reads. Fresh sample digest `229237c5ad56e6aef0ff22fd97c4bb29043706fd68c9560b766b2770d1005f90`; pre-run exclusion digest `0b44a428638e648bc56a982469a93b17320424d8697bc76d1cd829fff1dfcaa3`. Manifest: ignored `work/thin-ship-shipd/gate2-sample.json`. Single run and score completed; IDs appended after scoring. Original gate remains FAIL. Quick tier running; next read its final result, commit check record and push lane only.
+Gate frozen in `db71ddb` before fresh selection; sample committed in `e05940d` before geometry reads. Fresh sample digest `229237c5ad56e6aef0ff22fd97c4bb29043706fd68c9560b766b2770d1005f90`; pre-run exclusion digest `0b44a428638e648bc56a982469a93b17320424d8697bc76d1cd829fff1dfcaa3`. Manifest: ignored `work/thin-ship-shipd/gate2-sample.json`. Single run and score completed; IDs appended after scoring. Original gate remains FAIL. Quick tier completed with exit 0; final checks recorded below. Next: commit check record and push lane only; retain worktree and ignored evidence. No lane-local target is expected; inspect before cleanup and never remove shared build output.
 
 ## Single-run results
 
@@ -40,4 +40,4 @@ Absolute differences are complete-case information. Low-Fn relative differences 
 
 After scoring, appended 300 IDs under an exclusive file lock to the main ignored exclusion file, preserving original bytes. Count 344→644, resulting SHA-256 `03a366b3c373dd6a896406d0f5132e9ae77cbd823b52e685675964ddb24b9d12`. They are now development IDs. No sealed sources opened; selection used PM-provided exclusion metadata. Raw sample, trace, score and logs remain under ignored `work/thin-ship-shipd/`. Aggregate score and reference convergence: `outputs/thin-ship-shipd/gate2-score.json`, `gate2-convergence.json`.
 
-Focused selection/convergence/diagnostic/export suite: 15 passed. No production settings or thresholds changed.
+Focused selection/convergence/diagnostic/export suite: 15 passed, repeated after the quick tier. Required quick tier exited 0: Rust format/clippy/tests passed; Python 2,807 passed, 4 skipped, 130 deselected, 5 warnings in 546.17 seconds; UI 275 passed, 0 failed; bounded secret scan 1,435 tracked text files, 0 findings. Log: `work/thin-ship-shipd/gate2-quick.log`. The quick tier collected before the final selection test was added, so the final 15-test focused rerun covers that addition. Final private-denylist identity scan: 0 findings; `git diff --check` clean. No production settings or thresholds changed.
