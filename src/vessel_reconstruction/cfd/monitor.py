@@ -125,6 +125,8 @@ def supervise(name, *, root=None):
                     finally:
                         os.close(descriptor)
                     completed = re.findall(r'Time = (\d+)\s*\n.*?ClockTime = ([0-9.]+) s', text, re.S)
+                    if not completed and metadata.st_size >= 2_000_000:
+                        raise ValueError('Bounded solver log has no complete timing record')
                     if completed and int(completed[-1][0]) >= 200:
                         iteration, clock = completed[-1]
                         active = max(0, float(clock) - prior_pauses(now))
@@ -144,6 +146,8 @@ def supervise(name, *, root=None):
              'reserved_core_hours': wall * 5 / 3600, 'active_core_hours': (wall - paused) * 5 / 3600,
              'oom_killed': info['OOMKilled'], 'engineering_approved': False})
     except Exception:
-        pause_authority('monitor-failure', True)
-        subprocess.run(['docker', 'pause', container], capture_output=True)
+        try:
+            pause_authority('monitor-failure', True)
+        finally:
+            subprocess.run(['docker', 'pause', container], capture_output=True)
         raise
