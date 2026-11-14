@@ -79,6 +79,7 @@ const SCREENS = [
   { name: 'batch sheet', path: '/#home', steps: { open: 'batch' } },
   { name: 'queue (waiting sets)', path: '/?mockbatchfail#home', steps: { open: 'batch-queue' } },
   { name: 'settings', path: '/#settings' },
+  { name: 'settings (Korean, Lite)', path: '/#settings', prefs: { language: 'ko', interfaceMode: 'lite' } },
   { name: 'settings (key usage)', path: '/?mockusagefull#settings', steps: { open: 'usage' } },
   { name: 'intake', path: '/#home', steps: { open: 'intake' } },
   { name: 'intake (10 sheets)', path: '/?mockset=10#home', steps: { open: 'intake' } },
@@ -105,7 +106,9 @@ try {
     for (const screen of SCREENS) {
       const context = await browser.newContext({ viewport: VIEWPORT, colorScheme: scheme, bypassCSP: true });
       const page = await context.newPage();
-      if (screen.seen !== false) await page.addInitScript(() => localStorage.setItem('marinaframe.ui', JSON.stringify({ setupSeen: true })));
+      if (screen.seen !== false) {
+        await page.addInitScript((prefs) => localStorage.setItem('marinaframe.ui', JSON.stringify({ setupSeen: true, ...prefs })), screen.prefs || {});
+      }
       await page.goto(base + screen.path);
       await page.waitForTimeout(1500);
       if (screen.steps) await page.evaluate(prepare, screen.steps);

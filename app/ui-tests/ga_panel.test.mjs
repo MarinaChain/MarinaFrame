@@ -2,7 +2,7 @@
 // records in the source view. Run: npm run test:ui
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GA_PREFIX, STATUS_WORDS, gaRecords, gaRows } from '../ui/js/ga_panel.js';
+import { GA_PREFIX, STATUSES, statusWord, gaRecords, gaRows } from '../ui/js/ga_panel.js';
 import { sourceOf } from '../ui/js/provenance.js';
 
 const region = { sheet: 'X_GA.png', page: 0, view: null, box_px: [10, 10, 90, 30], page_px: [1000, 500] };
@@ -66,7 +66,7 @@ test('the source view finds a GA row by its id', () => {
 });
 
 test('status words never claim approval', () => {
-  for (const word of Object.values(STATUS_WORDS)) assert.doesNotMatch(word, /approv|verif/i);
+  for (const word of STATUSES.map(statusWord)) assert.doesNotMatch(word, /approv|verif/i);
 });
 
 test('measured values show their own status, an unconfirmed depth included', () => {
@@ -78,8 +78,8 @@ test('measured values show their own status, an unconfirmed depth included', () 
   };
   const rows = gaRows(data);
   const byKey = Object.fromEntries(rows.measured.map((r) => [r.id.split(':').pop(), r]));
-  assert.deepEqual([byKey.lbp_m.value, STATUS_WORDS[byKey.lbp_m.status]], ['168.05 m', 'Measured']);
-  assert.deepEqual([byKey.depth_m.value, STATUS_WORDS[byKey.depth_m.status]], ['11.97 m', 'Unconfirmed']);
+  assert.deepEqual([byKey.lbp_m.value, statusWord(byKey.lbp_m.status)], ['168.05 m', 'Measured']);
+  assert.deepEqual([byKey.depth_m.value, statusWord(byKey.depth_m.status)], ['11.97 m', 'Unconfirmed']);
   assert.deepEqual([byKey.breadth_m.status, byKey.breadth_m.note], ['unknown', 'no shell side pointed']);
   // Without the frame-scale pass there is no measured section.
   assert.equal(gaRows(reading()).measured.length, 0);

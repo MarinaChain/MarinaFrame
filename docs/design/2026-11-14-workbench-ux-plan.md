@@ -148,6 +148,17 @@ quick test tier. New screens are added to the a11y screen list.
 
 Phases 0 and 1 can start now. Phases 2-4 follow the backend in the order above.
 
+Progress (resume here):
+
+- Phase 0, done (2026-11-14): "not approved" wording fixed; i18n base (`app/ui/js/i18n.js`,
+  `app/ui/js/strings/`: English and Korean tables, the draft glossary, Korean labels with the English
+  abbreviation); the GA panel uses it; Language and Interface (Lite / Advanced) in Settings, kept per
+  viewer and applied at once (`body[data-interface]`); tests in `app/ui-tests/i18n.test.mjs`; an a11y
+  screen for Settings in Korean.
+- Phase 0, next: the value display (4.3), the dense table, the GA run view with its own header, then
+  the Korean strings for the rest of the shell (rail, Home, Run, Parts, Export).
+- Open: a yard designer must review `app/ui/js/strings/glossary.js` before the pilot.
+
 ## 7. Founder decisions (2026-11-14)
 
 1. Language: full i18n with English and Korean, and a switch. Standard abbreviations (LBP, DWT, Cb, GM,

@@ -402,6 +402,23 @@
                   <label><input type="radio" name="theme" value="dark"><span>Dark</span></label>
                 </div>
               </div>
+              <!-- Per viewer, applied at once (js/app_state.js: applyLanguage, applyInterfaceMode). -->
+              <div class="setting-row">
+                <span class="setting-label" id="language-label" data-i18n="settings.language"
+                  data-i18n-attr="title:settings.languageHelp" title="The language of the interface.">Language</span>
+                <div class="segmented segmented-text" role="radiogroup" aria-labelledby="language-label">
+                  <label><input type="radio" name="language" value="en"><span lang="en">English</span></label>
+                  <label><input type="radio" name="language" value="ko"><span lang="ko">한국어</span></label>
+                </div>
+              </div>
+              <div class="setting-row">
+                <span class="setting-label" id="interface-label" data-i18n="settings.interface"
+                  data-i18n-attr="title:settings.interfaceHelp" title="Lite or Advanced.">Interface</span>
+                <div class="segmented segmented-text" role="radiogroup" aria-labelledby="interface-label">
+                  <label><input type="radio" name="interface_mode" value="lite"><span data-i18n="settings.lite">Lite</span></label>
+                  <label><input type="radio" name="interface_mode" value="advanced"><span data-i18n="settings.advanced">Advanced</span></label>
+                </div>
+              </div>
               <div class="setting-row">
                 <span class="setting-label">Notices <span class="badge" id="notices-reset-status" title="Notices you close stay hidden until you show them again.">Hidden</span></span>
                 <button class="btn" type="button" id="reset-notices" title="Show dismissed notices again">Show again</button>
@@ -425,7 +442,7 @@
 
             <!-- Developer paths: the setup check finds them, so they stay out of the way. -->
             <details class="settings-group settings-advanced" id="settings-advanced">
-              <summary class="settings-group-title"><svg class="icon chevron"><use href="#i-chevron" /></svg>Advanced</summary>
+              <summary class="settings-group-title"><svg class="icon chevron"><use href="#i-chevron" /></svg>Developer paths</summary>
               <div class="field">
                 <label class="field-label" for="runs-folder">Runs folder</label>
                 <span class="input-with-button">

@@ -2,6 +2,8 @@
 // so each change of the app's state has a name and one place. `prefs` holds per-viewer
 // conveniences (layout, last tab) in localStorage.
 
+import { setLocale, applyLocale, DEFAULT_LOCALE } from './i18n.js';
+
 const PREFS_KEY = 'marinaframe.ui';
 
 const store = {
@@ -164,6 +166,27 @@ export function isRunning() {
 export function applyShowCosts(show = prefs.get('showCosts', false) === true, { remember = false } = {}) {
   document.body.dataset.costs = show ? 'shown' : 'hidden';
   if (remember) prefs.set('showCosts', show);
+}
+
+/** Interface language: a per-viewer choice, written into the page at once (i18n.js). */
+export function applyLanguage(code = prefs.get('language', DEFAULT_LOCALE), { remember = false } = {}) {
+  const chosen = setLocale(code);
+  applyLocale(document);
+  if (remember) prefs.set('language', chosen);
+  return chosen;
+}
+
+/**
+ * Lite or Advanced (docs/design/2026-11-14-workbench-ux-plan.md, section 4.5): how much of the
+ * design loop the person controls. A view choice only: both modes read the same design project.
+ * `body[data-interface]` lets the design screens show or hide detail; risk is never hidden.
+ */
+export const INTERFACE_MODES = ['lite', 'advanced'];
+export function applyInterfaceMode(mode = prefs.get('interfaceMode', 'advanced'), { remember = false } = {}) {
+  const chosen = INTERFACE_MODES.includes(mode) ? mode : 'advanced';
+  document.body.dataset.interface = chosen;
+  if (remember) prefs.set('interfaceMode', chosen);
+  return chosen;
 }
 
 // Per-viewer conveniences only (layout, last tab). Wrapped: storage can be blocked.

@@ -1,6 +1,9 @@
 // Settings, the theme and the global status bar.
 
-import { state, setSettings, setAiStatus, setDefaults, prefs, applyShowCosts } from './app_state.js';
+import {
+  state, setSettings, setAiStatus, setDefaults, prefs, applyShowCosts, applyLanguage, applyInterfaceMode,
+} from './app_state.js';
+import { locale } from './i18n.js';
 import {
   transportName, invoke, canPickPaths, pickFolder, pickFile, READ_ONLY_NOTE,
 } from './api.js';
@@ -159,6 +162,8 @@ export async function loadSettingsForm() {
   form.ai_drafting.checked = s.ai_drafting !== false;
   form.notify_finished.checked = s.notify_finished !== false;
   form.show_costs.checked = prefs.get('showCosts', false) === true;
+  form.language.value = locale();
+  form.interface_mode.value = document.body.dataset.interface || 'advanced';
   const [status] = await Promise.all([refreshAiStatus(), loadDefaults(), showWorkerInUse()]);
   showAiStatus($('ai-status'), status);
   for (const field of Object.keys(PATH_FIELDS)) renderPathSuggestions(form, field);
@@ -190,6 +195,8 @@ export function installSettings() {
     if (event.target.name === 'theme') applyTheme(event.target.value);
     // A per-viewer choice, not a backend setting: it applies and is kept at once.
     if (event.target.name === 'show_costs') applyShowCosts(event.target.checked, { remember: true });
+    if (event.target.name === 'language') applyLanguage(event.target.value, { remember: true });
+    if (event.target.name === 'interface_mode') applyInterfaceMode(event.target.value, { remember: true });
     if (event.target.name === 'ai_drafting') {
       // Preview the chip for the new value; the saved setting decides the next run.
       const enabled = event.target.checked;
