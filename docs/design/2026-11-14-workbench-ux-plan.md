@@ -155,8 +155,14 @@ Progress (resume here):
   abbreviation); the GA panel uses it; Language and Interface (Lite / Advanced) in Settings, kept per
   viewer and applied at once (`body[data-interface]`); tests in `app/ui-tests/i18n.test.mjs`; an a11y
   screen for Settings in Korean.
-- Phase 0, next: the value display (4.3), the dense table, the GA run view with its own header, then
-  the Korean strings for the rest of the shell (rail, Home, Run, Parts, Export).
+- Phase 0, done (2026-11-14, second part): GA reading runs have their own run bar and strip text
+  (`run_status.js`: `isGaRun`); the value display (`app/ui/js/value_display.js`) in the GA panel,
+  Parts and Export; the dense table (`app/ui/js/data_table.js`: sort, filter, Copy as TSV with
+  spreadsheet-formula protection, keyboard selection) in the tank capacity plan; Korean for the static
+  shell (`index.html` `data-i18n`), Home, the Queue, the run bar, status words and times.
+- Phase 0, next: Korean for the remaining JavaScript text (Parts, Export, Sources, History, the run
+  inspector, the palette and shortcuts); the dense table for other long lists (fleet table, sections).
+  Then phase 1 (the design shell), which needs the design-record command from the design-loop owner.
 - Open: a yard designer must review `app/ui/js/strings/glossary.js` before the pilot.
 
 ## 7. Founder decisions (2026-11-14)
