@@ -63,10 +63,10 @@ def differences(before: Path, after: Path) -> tuple[int, list[str]]:
     differ = []
     for rel in sorted(set(a) | set(b), key=lambda item: item.as_posix()):
         if rel not in a or rel not in b:
-            differ.append(f'{rel}: only in {"before" if rel in a else "after"}')
+            differ.append(f'{rel.as_posix()}: only in {"before" if rel in a else "after"}')
             continue
         if digest(a[rel], [(str(before), 'RUN')]) != digest(b[rel], [(str(after), 'RUN')]):
-            differ.append(f'{rel}: differs')
+            differ.append(f'{rel.as_posix()}: differs')
     return len(set(a) | set(b)), differ
 
 
