@@ -125,42 +125,43 @@
         <img class="brand-mark" src="assets/mark.svg" alt="" width="24" height="20">
         <span class="brand-name">MarinaFrame</span>
       </div>
-      <nav class="crumbs" id="crumbs" aria-label="Breadcrumb" data-tauri-drag-region></nav>
+      <nav class="crumbs" id="crumbs" aria-label="Breadcrumb" data-i18n-attr="aria-label:shell.topbar.crumbs" data-tauri-drag-region></nav>
       <span class="badge" id="task-badge" hidden></span>
       <!-- Vessel tabs (design plan section 3). Sheets and Compare come later. -->
-      <div class="vessel-tabs" id="vessel-tabs" role="tablist" aria-label="Vessel" hidden>
-        <button type="button" role="tab" data-vtab="run" aria-controls="views">Run</button>
-        <button type="button" role="tab" data-vtab="parts" aria-controls="views" hidden>Parts</button>
-        <button type="button" role="tab" data-vtab="sources" aria-controls="views">Sources</button>
-        <button type="button" role="tab" data-vtab="export" aria-controls="views">Export</button>
-        <button type="button" role="tab" data-vtab="history" aria-controls="views">History</button>
+      <div class="vessel-tabs" id="vessel-tabs" role="tablist" aria-label="Vessel" data-i18n-attr="aria-label:shell.topbar.vessel" hidden>
+        <button type="button" role="tab" data-vtab="run" aria-controls="views" data-i18n="shell.tabs.run">Run</button>
+        <button type="button" role="tab" data-vtab="parts" aria-controls="views" data-i18n="shell.tabs.parts" hidden>Parts</button>
+        <button type="button" role="tab" data-vtab="sources" aria-controls="views" data-i18n="shell.tabs.sources">Sources</button>
+        <button type="button" role="tab" data-vtab="export" aria-controls="views" data-i18n="shell.tabs.export">Export</button>
+        <button type="button" role="tab" data-vtab="history" aria-controls="views" data-i18n="shell.tabs.history">History</button>
       </div>
-      <button class="btn btn-ghost palette-open" id="open-palette" type="button" title="Go to a vessel, a station or an action (⌘K)">Go to…<kbd class="key-hint">⌘K</kbd></button>
+      <button class="btn btn-ghost palette-open" id="open-palette" type="button" title="Go to a vessel, a station or an action (⌘K)" data-i18n-attr="title:shell.topbar.palette"><span data-i18n="shell.topbar.goTo">Go to…</span><kbd class="key-hint">⌘K</kbd></button>
       <div class="titlebar-actions" id="run-actions" hidden>
-        <div class="segmented" role="radiogroup" aria-label="Layout" id="view-switch">
-          <button type="button" role="radio" data-view="drawing" data-tip-title="Drawing (⌘1)" aria-label="Drawing only"><svg class="icon"><use href="#i-drawing" /></svg></button>
-          <button type="button" role="radio" data-view="split" data-tip-title="Drawing and model (⌘2)" aria-label="Drawing and model"><svg class="icon"><use href="#i-split" /></svg></button>
-          <button type="button" role="radio" data-view="model" data-tip-title="Model (⌘3)" aria-label="Model only"><svg class="icon"><use href="#i-cube" /></svg></button>
+        <div class="segmented" role="radiogroup" aria-label="Layout" id="view-switch" data-i18n-attr="aria-label:shell.run.layout">
+          <button type="button" role="radio" data-view="drawing" data-tip-title="Drawing (⌘1)" aria-label="Drawing only" data-i18n-attr="data-tip-title:shell.run.viewDrawingTip;aria-label:shell.run.viewDrawing"><svg class="icon"><use href="#i-drawing" /></svg></button>
+          <button type="button" role="radio" data-view="split" data-tip-title="Drawing and model (⌘2)" aria-label="Drawing and model" data-i18n-attr="data-tip-title:shell.run.viewSplitTip;aria-label:shell.run.viewSplit"><svg class="icon"><use href="#i-split" /></svg></button>
+          <button type="button" role="radio" data-view="model" data-tip-title="Model (⌘3)" aria-label="Model only" data-i18n-attr="data-tip-title:shell.run.viewModelTip;aria-label:shell.run.viewModel"><svg class="icon"><use href="#i-cube" /></svg></button>
         </div>
         <button class="btn btn-ghost btn-icon details-toggle" id="details-toggle" type="button" aria-controls="inspector" aria-expanded="true" aria-label="Hide details" data-tip-title="Hide details (⌘4)">
           <svg class="icon"><use href="#i-panel-right" /></svg>
         </button>
         <button class="btn write-action" id="resume-task" type="button" hidden>Resume</button>
-        <button class="btn btn-danger-quiet write-action" id="cancel-task" type="button" hidden>Stop</button>
+        <button class="btn btn-danger-quiet write-action" id="cancel-task" type="button" hidden data-i18n="shell.run.stop">Stop</button>
       </div>
     </header>
 
     <!-- Narrow left rail: the three global places. -->
-    <nav class="rail" aria-label="Main">
-      <button class="rail-item" type="button" data-route="home" title="Home">
-        <svg class="icon"><use href="#i-home" /></svg><span>Home</span>
+    <nav class="rail" aria-label="Main" data-i18n-attr="aria-label:shell.rail.main">
+      <button class="rail-item" type="button" data-route="home" title="Home" data-i18n-attr="title:shell.rail.home">
+        <svg class="icon"><use href="#i-home" /></svg><span data-i18n="shell.rail.home">Home</span>
       </button>
-      <button class="rail-item" type="button" data-route="queue" title="Queue">
-        <svg class="icon"><use href="#i-queue" /></svg><span>Queue</span>
+      <!-- home.js sets this item's aria-label (the queue count); only the label and tooltip are static. -->
+      <button class="rail-item" type="button" data-route="queue" title="Queue" data-i18n-attr="title:shell.rail.queue">
+        <svg class="icon"><use href="#i-queue" /></svg><span data-i18n="shell.rail.queue">Queue</span>
         <b class="rail-count" id="rail-queue-count" hidden></b>
       </button>
-      <button class="rail-item" type="button" data-route="settings" title="Settings (⌘,)">
-        <svg class="icon"><use href="#i-gear" /></svg><span>Settings</span>
+      <button class="rail-item" type="button" data-route="settings" title="Settings (⌘,)" data-i18n-attr="title:shell.rail.settingsTip">
+        <svg class="icon"><use href="#i-gear" /></svg><span data-i18n="shell.rail.settings">Settings</span>
       </button>
       <button class="rail-toggle" type="button" id="rail-toggle" title="Collapse the sidebar (⌘\)" aria-label="Collapse the sidebar" aria-expanded="true">
         <svg class="icon"><use href="#i-sidebar" /></svg>
@@ -179,22 +180,22 @@
             <div class="home-head-actions">
               <!-- Shown while drawing sets wait in the batch queue (js/app.js renderHome). -->
               <button class="btn btn-ghost" id="home-queue-link" type="button" hidden></button>
-              <button class="btn btn-primary btn-large" id="new-vessel" type="button" title="Choose the drawing set of a new vessel (⌘N)">New vessel</button>
+              <button class="btn btn-primary btn-large" id="new-vessel" type="button" title="Choose the drawing set of a new vessel (⌘N)" data-i18n="shell.home.newVessel" data-i18n-attr="title:shell.home.newVesselHelp">New vessel</button>
               <!-- Developers: start a run from a run spec file. -->
               <details class="menu" id="home-more">
-                <summary class="btn btn-large btn-icon" data-tip-title="More" aria-label="More ways to start"><svg class="icon"><use href="#i-more" /></svg></summary>
+                <summary class="btn btn-large btn-icon" data-tip-title="More" aria-label="More ways to start" data-i18n-attr="data-tip-title:shell.home.more;aria-label:shell.home.moreWays"><svg class="icon"><use href="#i-more" /></svg></summary>
                 <div class="menu-list">
-                  <button class="menu-item" id="new-folder" type="button" title="A folder of drawing sets: each PDF and each subfolder becomes one run">New vessels from a folder…</button>
-                  <button class="menu-item" id="new-run" type="button" title="Start a run from a run spec file (.json, .toml, .yaml)">New run from a spec file…<kbd>⇧⌘N</kbd></button>
+                  <button class="menu-item" id="new-folder" type="button" title="A folder of drawing sets: each PDF and each subfolder becomes one run" data-i18n-attr="title:shell.home.newFolderHelp"><span data-i18n="shell.home.newFolder">New vessels from a folder…</span></button>
+                  <button class="menu-item" id="new-run" type="button" title="Start a run from a run spec file (.json, .toml, .yaml)" data-i18n-attr="title:shell.home.newRunHelp"><span data-i18n="shell.home.newRun">New run from a spec file…</span><kbd>⇧⌘N</kbd></button>
                 </div>
               </details>
             </div>
           </div>
           <!-- The public web demo only (styles.css [data-demo]); Home has no "Needs you" there. -->
-          <p class="demo-intro" id="demo-intro">MarinaFrame turns ship drawings into 3D models an engineer can check and correct. This demo shows finished runs; nothing you do here is saved.
-            <a class="demo-pilot-link" href="static/pilot.html">Proposed: GA revision pilot</a></p>
+          <p class="demo-intro" id="demo-intro"><span data-i18n="shell.home.demoIntro">MarinaFrame turns ship drawings into 3D models an engineer can check and correct. This demo shows finished runs; nothing you do here is saved.</span>
+            <a class="demo-pilot-link" href="static/pilot.html" data-i18n="shell.home.demoPilot">Proposed: GA revision pilot</a></p>
           <div class="needs-row" id="needs-row" aria-live="polite"></div>
-          <h2 class="home-section-title">Vessels</h2>
+          <h2 class="home-section-title" data-i18n="shell.home.vessels">Vessels</h2>
           <div class="vessel-grid" id="vessel-grid">
             <!-- The drop tile is the last card; renderHome() keeps it at the end. -->
             <div class="drop-tile" id="drop-tile">
@@ -208,19 +209,19 @@
                 <path d="M60 60C66 54 76 40 80 24 81 16 81 10 81 5" />
                 <path class="drop-art-wl" d="M6 40h108M6 24h108" />
               </svg>
-              <strong>Drop a drawing set</strong>
-              <span class="drop-hint" id="drop-hint" title="Drop the files anywhere on the window. The app finds the views; you check them, then the AI reads the set.">PDF, PNG, TIFF or JPEG</span>
+              <strong data-i18n="shell.home.dropTitle">Drop a drawing set</strong>
+              <span class="drop-hint" id="drop-hint" title="Drop the files anywhere on the window. The app finds the views; you check them, then the AI reads the set." data-i18n="shell.home.dropFormats" data-i18n-attr="title:shell.home.dropHint">PDF, PNG, TIFF or JPEG</span>
               <span class="drop-choices">
-                <button class="btn" type="button" id="drop-choose">Choose files</button>
-                <button class="btn btn-ghost" type="button" id="drop-choose-folder" title="A folder of drawing sets: each PDF and each subfolder becomes one run">Choose folder</button>
+                <button class="btn" type="button" id="drop-choose" data-i18n="shell.home.chooseFiles">Choose files</button>
+                <button class="btn btn-ghost" type="button" id="drop-choose-folder" title="A folder of drawing sets: each PDF and each subfolder becomes one run" data-i18n="shell.home.chooseFolder" data-i18n-attr="title:shell.home.newFolderHelp">Choose folder</button>
               </span>
               <!-- Shown on a first start only (styles.css: [data-empty="true"]). -->
-              <button class="btn btn-ghost first-sample" type="button" id="try-sample" title="Run the built-in sample vessel (a generated drawing, no AI cost)">No drawing at hand? Try the sample</button>
-              <ol class="first-steps" aria-label="What happens next">
-                <li><strong>Drop</strong><span>the pages of one lines plan</span></li>
-                <li><strong>Check</strong><span>the views the app found</span></li>
-                <li><strong>Watch</strong><span>the AI read it and build the hull</span></li>
-                <li><strong>Review</strong><span>the few sections it guessed</span></li>
+              <button class="btn btn-ghost first-sample" type="button" id="try-sample" title="Run the built-in sample vessel (a generated drawing, no AI cost)" data-i18n="shell.home.trySample" data-i18n-attr="title:shell.home.trySampleHelp">No drawing at hand? Try the sample</button>
+              <ol class="first-steps" aria-label="What happens next" data-i18n-attr="aria-label:shell.home.firstSteps">
+                <li><strong data-i18n="shell.home.stepDrop">Drop</strong><span data-i18n="shell.home.stepDropText">the pages of one lines plan</span></li>
+                <li><strong data-i18n="shell.home.stepCheck">Check</strong><span data-i18n="shell.home.stepCheckText">the views the app found</span></li>
+                <li><strong data-i18n="shell.home.stepWatch">Watch</strong><span data-i18n="shell.home.stepWatchText">the AI read it and build the hull</span></li>
+                <li><strong data-i18n="shell.home.stepReview">Review</strong><span data-i18n="shell.home.stepReviewText">the few sections it guessed</span></li>
               </ol>
             </div>
           </div>
@@ -236,7 +237,7 @@
       <!-- ============================================================ Queue (P1) -->
       <section class="view view-queue" id="view-queue" data-route="queue" aria-labelledby="queue-title" hidden>
         <div class="home-scroll">
-          <div class="home-head"><h1 id="queue-title">Queue</h1></div>
+          <div class="home-head"><h1 id="queue-title" data-i18n="shell.queue.title">Queue</h1></div>
           <ul class="queue-list" id="queue-list"></ul>
         </div>
       </section>
@@ -253,29 +254,29 @@
             <!-- Review counter (sections still to check) and the section tiles. -->
             <div class="strip-row">
               <div class="strip-head" id="strip-head" aria-live="polite"></div>
-              <div class="strip" id="strip" role="listbox" aria-label="Sections" aria-orientation="horizontal" tabindex="0"></div>
+              <div class="strip" id="strip" role="listbox" aria-label="Sections" aria-orientation="horizontal" tabindex="0" data-i18n-attr="aria-label:shell.run.sections"></div>
             </div>
             <div class="run-bar-end" id="run-bar-end">
               <!-- HOOK(M3 live): the fit of the shown revision as a small text chip; it counts to a new value. -->
-              <div class="fit-dial" id="fit-dial" role="img" aria-label="Fit" hidden>
+              <div class="fit-dial" id="fit-dial" role="img" aria-label="Fit" data-i18n-attr="aria-label:shell.run.fit" hidden>
                 <svg viewBox="0 0 48 48" aria-hidden="true">
                   <circle class="dial-track" cx="24" cy="24" r="20" />
                   <circle class="dial-arc" cx="24" cy="24" r="20" pathLength="1" />
                 </svg>
-                <span class="dial-label">fit</span>
+                <span class="dial-label" data-i18n="shell.run.fitLabel">fit</span>
                 <span class="dial-value"></span>
                 <span class="dial-delta"></span>
               </div>
             </div>
             <!-- The run drawer: the detail behind the status sentence, over the top of the panes. -->
-            <section class="run-drawer" id="run-drawer" aria-label="Run status details" hidden>
+            <section class="run-drawer" id="run-drawer" aria-label="Run status details" data-i18n-attr="aria-label:shell.run.drawer" hidden>
               <div class="draft-summary" id="draft-summary"></div>
               <div class="drawer-group drawer-sheets">
-                <h2 class="drawer-title">Sheets and requests</h2>
+                <h2 class="drawer-title" data-i18n="shell.run.sheets">Sheets and requests</h2>
                 <div id="sheet-review"></div>
               </div>
               <div class="drawer-group drawer-revisions">
-                <h2 class="drawer-title">Revisions</h2>
+                <h2 class="drawer-title" data-i18n="shell.run.revisions">Revisions</h2>
                 <div class="revision-ladder" id="revision-ladder" data-hook="revision-ladder"></div>
               </div>
               <div class="revision-facts" id="revision-facts"></div>
@@ -283,36 +284,36 @@
           </div>
 
           <div class="stage" id="stage" data-view="split">
-            <section class="pane pane-drawing" aria-label="Drawing">
+            <section class="pane pane-drawing" aria-label="Drawing" data-i18n-attr="aria-label:shell.run.drawing">
               <div class="pane-head">
-                <span class="pane-title">Drawing</span>
+                <span class="pane-title" data-i18n="shell.run.drawing">Drawing</span>
                 <span class="pane-meta" id="drawing-meta"></span>
                 <div class="pane-tools">
                   <!-- HOOK(M3 live): the camera follows the AI's attention until the person pans or zooms. -->
-                  <button class="btn btn-ghost btn-small live-follow" id="live-follow" type="button" aria-pressed="true" hidden><svg class="icon"><use href="#i-follow" /></svg>Follow</button>
-                  <button class="btn btn-ghost btn-icon" id="zoom-out" type="button" data-tip-title="Zoom out (−)" aria-label="Zoom out"><svg class="icon"><use href="#i-zoom-out" /></svg></button>
+                  <button class="btn btn-ghost btn-small live-follow" id="live-follow" type="button" aria-pressed="true" hidden><svg class="icon"><use href="#i-follow" /></svg><span data-i18n="shell.run.follow">Follow</span></button>
+                  <button class="btn btn-ghost btn-icon" id="zoom-out" type="button" data-tip-title="Zoom out (−)" aria-label="Zoom out" data-i18n-attr="data-tip-title:shell.run.zoomOutTip;aria-label:shell.run.zoomOut"><svg class="icon"><use href="#i-zoom-out" /></svg></button>
                   <span class="zoom-readout" id="zoom-readout" aria-live="off">100%</span>
-                  <button class="btn btn-ghost btn-icon" id="zoom-in" type="button" data-tip-title="Zoom in (+)" aria-label="Zoom in"><svg class="icon"><use href="#i-zoom-in" /></svg></button>
-                  <button class="btn btn-ghost btn-icon" id="zoom-fit" type="button" data-tip-title="Fit page (0)" aria-label="Fit page"><svg class="icon"><use href="#i-fit" /></svg></button>
+                  <button class="btn btn-ghost btn-icon" id="zoom-in" type="button" data-tip-title="Zoom in (+)" aria-label="Zoom in" data-i18n-attr="data-tip-title:shell.run.zoomInTip;aria-label:shell.run.zoomIn"><svg class="icon"><use href="#i-zoom-in" /></svg></button>
+                  <button class="btn btn-ghost btn-icon" id="zoom-fit" type="button" data-tip-title="Fit page (0)" aria-label="Fit page" data-i18n-attr="data-tip-title:shell.run.zoomFitTip;aria-label:shell.run.zoomFit"><svg class="icon"><use href="#i-fit" /></svg></button>
                 </div>
               </div>
-              <div class="drawing-host" id="drawing-host" tabindex="0" role="region" aria-label="Drawing. Drag to pan, scroll to zoom."></div>
+              <div class="drawing-host" id="drawing-host" tabindex="0" role="region" aria-label="Drawing. Drag to pan, scroll to zoom." data-i18n-attr="aria-label:shell.run.drawingHelp"></div>
               <div class="tooltip" id="drawing-tooltip" role="tooltip" hidden></div>
             </section>
 
-            <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" aria-label="Resize drawing and model" tabindex="0"></div>
+            <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" aria-label="Resize drawing and model" tabindex="0" data-i18n-attr="aria-label:shell.run.splitter"></div>
 
-            <section class="pane pane-model" aria-label="3D model">
+            <section class="pane pane-model" aria-label="3D model" data-i18n-attr="aria-label:shell.run.model">
               <div class="pane-head">
-                <span class="pane-title">3D model</span>
+                <span class="pane-title" data-i18n="shell.run.model">3D model</span>
                 <span class="pane-meta" id="model-meta"></span>
                 <div class="pane-tools">
-                  <button class="btn btn-ghost btn-small" id="hull-only" type="button" title="Show the hull without the other parts" hidden>Hull only</button>
-                  <button class="btn btn-ghost btn-small" id="clear-outline" type="button" hidden>Hide outline</button>
-                  <button class="btn btn-ghost btn-icon" id="model-reset" type="button" data-tip-title="Reset view (R)" aria-label="Reset view"><svg class="icon"><use href="#i-reset" /></svg></button>
+                  <button class="btn btn-ghost btn-small" id="hull-only" type="button" title="Show the hull without the other parts" data-i18n="shell.run.hullOnly" data-i18n-attr="title:shell.run.hullOnlyHelp" hidden>Hull only</button>
+                  <button class="btn btn-ghost btn-small" id="clear-outline" type="button" hidden data-i18n="shell.run.hideOutline">Hide outline</button>
+                  <button class="btn btn-ghost btn-icon" id="model-reset" type="button" data-tip-title="Reset view (R)" aria-label="Reset view" data-i18n-attr="data-tip-title:shell.run.resetViewTip;aria-label:shell.run.resetView"><svg class="icon"><use href="#i-reset" /></svg></button>
                 </div>
               </div>
-              <div class="model-host" id="model-host" tabindex="0" role="region" aria-label="3D model. Drag to rotate, scroll to zoom, click a section plane to pick it. Keys: 1 to 5 standard views, P orthographic, F fit, C section cut, S section planes, X see-through hull, G grid, W waterline, E edges."></div>
+              <div class="model-host" id="model-host" tabindex="0" role="region" aria-label="3D model. Drag to rotate, scroll to zoom, click a section plane to pick it. Keys: 1 to 5 standard views, P orthographic, F fit, C section cut, S section planes, X see-through hull, G grid, W waterline, E edges." data-i18n-attr="aria-label:shell.run.modelHelp"></div>
               <!-- HOOK(M3 live): a one-line caption over the 3D view. -->
               <p class="model-caption" id="model-caption" hidden></p>
             </section>
@@ -338,12 +339,12 @@
           </button>
           <div class="details-rail-tabs" id="details-rail-tabs"></div>
         </nav>
-        <section class="inspector" id="inspector" aria-label="Inspector">
+        <section class="inspector" id="inspector" aria-label="Inspector" data-i18n-attr="aria-label:shell.run.inspector">
           <!-- The picked part's fact card (js/factcard3d.js); hidden with no part picked. -->
-          <section class="inspector-part" id="part-card" aria-label="Picked part" hidden></section>
+          <section class="inspector-part" id="part-card" aria-label="Picked part" data-i18n-attr="aria-label:shell.run.pickedPart" hidden></section>
           <header class="inspector-head" id="selection-head"></header>
           <section class="selection" id="selection" aria-live="polite"></section>
-          <div class="tabs" role="tablist" aria-label="Run details" id="tabs">
+          <div class="tabs" role="tablist" aria-label="Run details" id="tabs" data-i18n-attr="aria-label:shell.run.runDetails">
             <!-- HOOK(M3 live): the Thinking tab. One card per model step; the live lane adds
                  tool-call cards and "Why" disclosures. -->
             <button role="tab" type="button" id="tab-thinking" aria-controls="panel-thinking" data-tab="thinking"></button>
@@ -374,38 +375,38 @@
       <section class="view view-settings" id="view-settings" data-route="settings" aria-labelledby="settings-title" hidden>
         <div class="home-scroll">
           <form class="settings-form" id="settings-form">
-            <h1 id="settings-title">Settings</h1>
+            <h1 id="settings-title" data-i18n="shell.settings.title">Settings</h1>
 
             <section class="settings-group" aria-labelledby="settings-ai-title">
-              <h2 class="settings-group-title" id="settings-ai-title">AI</h2>
+              <h2 class="settings-group-title" id="settings-ai-title" data-i18n="shell.settings.ai">AI</h2>
               <div class="setting-row">
-                <span class="setting-label">AI drafting <span class="badge" id="ai-status"></span></span>
-                <label class="switch" title="Turn AI drafting on or off">
-                  <input type="checkbox" name="ai_drafting" role="switch" aria-label="AI drafting">
+                <span class="setting-label"><span data-i18n="shell.settings.aiDrafting">AI drafting</span> <span class="badge" id="ai-status"></span></span>
+                <label class="switch" title="Turn AI drafting on or off" data-i18n-attr="title:shell.settings.aiDraftingHelp">
+                  <input type="checkbox" name="ai_drafting" role="switch" aria-label="AI drafting" data-i18n-attr="aria-label:shell.settings.aiDrafting">
                   <span class="switch-track" aria-hidden="true"></span>
                 </label>
               </div>
               <div class="setting-row">
-                <span class="setting-label">Setup check</span>
-                <button class="btn" type="button" id="open-setup" title="Check the AI key, the CAD worker and the runs folder">Check setup</button>
+                <span class="setting-label" data-i18n="shell.settings.setupCheck">Setup check</span>
+                <button class="btn" type="button" id="open-setup" title="Check the AI key, the CAD worker and the runs folder" data-i18n="shell.settings.checkSetup" data-i18n-attr="title:shell.settings.checkSetupHelp">Check setup</button>
               </div>
               <div id="key-usage-host"></div>
             </section>
 
             <section class="settings-group" aria-labelledby="settings-look-title">
-              <h2 class="settings-group-title" id="settings-look-title">Appearance</h2>
+              <h2 class="settings-group-title" id="settings-look-title" data-i18n="shell.settings.appearance">Appearance</h2>
               <div class="setting-row">
-                <span class="setting-label">Theme</span>
-                <div class="segmented segmented-text" role="radiogroup" aria-label="Theme">
-                  <label><input type="radio" name="theme" value="system"><span>System</span></label>
-                  <label><input type="radio" name="theme" value="light"><span>Light</span></label>
-                  <label><input type="radio" name="theme" value="dark"><span>Dark</span></label>
+                <span class="setting-label" data-i18n="shell.settings.theme">Theme</span>
+                <div class="segmented segmented-text" role="radiogroup" aria-label="Theme" data-i18n-attr="aria-label:shell.settings.theme">
+                  <label><input type="radio" name="theme" value="system"><span data-i18n="shell.settings.themeSystem">System</span></label>
+                  <label><input type="radio" name="theme" value="light"><span data-i18n="shell.settings.themeLight">Light</span></label>
+                  <label><input type="radio" name="theme" value="dark"><span data-i18n="shell.settings.themeDark">Dark</span></label>
                 </div>
               </div>
               <!-- Per viewer, applied at once (js/app_state.js: applyLanguage, applyInterfaceMode). -->
               <div class="setting-row">
                 <span class="setting-label" id="language-label" data-i18n="settings.language"
-                  data-i18n-attr="title:settings.languageHelp" title="The language of the interface.">Language</span>
+                  data-i18n-attr="title:settings.languageHelp" title="The language of the interface. Standard abbreviations (LBP, DWT, Cb) stay in English.">Language</span>
                 <div class="segmented segmented-text" role="radiogroup" aria-labelledby="language-label">
                   <label><input type="radio" name="language" value="en"><span lang="en">English</span></label>
                   <label><input type="radio" name="language" value="ko"><span lang="ko">한국어</span></label>
@@ -413,27 +414,27 @@
               </div>
               <div class="setting-row">
                 <span class="setting-label" id="interface-label" data-i18n="settings.interface"
-                  data-i18n-attr="title:settings.interfaceHelp" title="Lite or Advanced.">Interface</span>
+                  data-i18n-attr="title:settings.interfaceHelp" title="Lite: the agent runs the design loop and you review its candidates. Advanced: you control each step. Applies to design projects.">Interface</span>
                 <div class="segmented segmented-text" role="radiogroup" aria-labelledby="interface-label">
                   <label><input type="radio" name="interface_mode" value="lite"><span data-i18n="settings.lite">Lite</span></label>
                   <label><input type="radio" name="interface_mode" value="advanced"><span data-i18n="settings.advanced">Advanced</span></label>
                 </div>
               </div>
               <div class="setting-row">
-                <span class="setting-label">Notices <span class="badge" id="notices-reset-status" title="Notices you close stay hidden until you show them again.">Hidden</span></span>
-                <button class="btn" type="button" id="reset-notices" title="Show dismissed notices again">Show again</button>
+                <span class="setting-label"><span data-i18n="shell.settings.notices">Notices</span> <span class="badge" id="notices-reset-status" title="Notices you close stay hidden until you show them again.">Hidden</span></span>
+                <button class="btn" type="button" id="reset-notices" title="Show dismissed notices again" data-i18n="shell.settings.showAgain" data-i18n-attr="title:shell.settings.showAgainHelp">Show again</button>
               </div>
               <div class="setting-row">
-                <span class="setting-label" id="notify-label">Notify when a run stops</span>
-                <label class="switch" title="A desktop notification with the run name and its outcome, once per run. It never shows drawing content.">
+                <span class="setting-label" id="notify-label" data-i18n="shell.settings.notify">Notify when a run stops</span>
+                <label class="switch" title="A desktop notification with the run name and its outcome, once per run. It never shows drawing content." data-i18n-attr="title:shell.settings.notifyHelp">
                   <input type="checkbox" name="notify_finished" role="switch" aria-labelledby="notify-label">
                   <span class="switch-track" aria-hidden="true"></span>
                 </label>
               </div>
               <!-- Per viewer, applied at once (js/settings_view.js); History always shows them. -->
               <div class="setting-row">
-                <span class="setting-label" id="show-costs-label">Show costs and timings</span>
-                <label class="switch" title="Step times and costs, tool durations and the list cost on the Run tab. History always shows them.">
+                <span class="setting-label" id="show-costs-label" data-i18n="shell.settings.costs">Show costs and timings</span>
+                <label class="switch" title="Step times and costs, tool durations and the list cost on the Run tab. History always shows them." data-i18n-attr="title:shell.settings.costsHelp">
                   <input type="checkbox" name="show_costs" role="switch" aria-labelledby="show-costs-label">
                   <span class="switch-track" aria-hidden="true"></span>
                 </label>
@@ -442,34 +443,34 @@
 
             <!-- Developer paths: the setup check finds them, so they stay out of the way. -->
             <details class="settings-group settings-advanced" id="settings-advanced">
-              <summary class="settings-group-title"><svg class="icon chevron"><use href="#i-chevron" /></svg>Developer paths</summary>
+              <summary class="settings-group-title"><svg class="icon chevron"><use href="#i-chevron" /></svg><span data-i18n="shell.settings.developerPaths">Developer paths</span></summary>
               <div class="field">
-                <label class="field-label" for="runs-folder">Runs folder</label>
+                <label class="field-label" for="runs-folder" data-i18n="shell.settings.runsFolder">Runs folder</label>
                 <span class="input-with-button">
                   <input type="text" id="runs-folder" name="runs_folder" spellcheck="false" autocomplete="off" required>
-                  <button class="btn" type="button" id="pick-runs-folder" data-pick="folder" data-field="runs_folder" data-title="Choose the runs folder">
-                    <svg class="icon"><use href="#i-folder" /></svg>Choose…
+                  <button class="btn" type="button" id="pick-runs-folder" data-pick="folder" data-field="runs_folder" data-title="Choose the runs folder" data-i18n-attr="data-title:shell.settings.pickRunsFolder">
+                    <svg class="icon"><use href="#i-folder" /></svg><span data-i18n="shell.settings.choose">Choose…</span>
                   </button>
                 </span>
-                <div class="suggestions" id="runs-folder-suggestions" aria-label="Suggested runs folders"></div>
+                <div class="suggestions" id="runs-folder-suggestions" aria-label="Suggested runs folders" data-i18n-attr="aria-label:shell.settings.runsFolderSuggested"></div>
               </div>
               <div class="field">
-                <label class="field-label" for="worker-python">Worker Python</label>
+                <label class="field-label" for="worker-python" data-i18n="shell.settings.workerPython">Worker Python</label>
                 <span class="input-with-button">
-                  <input type="text" id="worker-python" name="worker_python" spellcheck="false" autocomplete="off" placeholder="Empty: found automatically" aria-describedby="worker-python-in-use">
-                  <button class="btn" type="button" id="pick-worker-python" data-pick="file" data-field="worker_python" data-title="Choose the Python for the worker">
-                    <svg class="icon"><use href="#i-file" /></svg>Choose…
+                  <input type="text" id="worker-python" name="worker_python" spellcheck="false" autocomplete="off" placeholder="Empty: found automatically" aria-describedby="worker-python-in-use" data-i18n-attr="placeholder:shell.settings.pythonAuto">
+                  <button class="btn" type="button" id="pick-worker-python" data-pick="file" data-field="worker_python" data-title="Choose the Python for the worker" data-i18n-attr="data-title:shell.settings.pickPython">
+                    <svg class="icon"><use href="#i-file" /></svg><span data-i18n="shell.settings.choose">Choose…</span>
                   </button>
                 </span>
-                <div class="suggestions" id="worker-python-suggestions" aria-label="Suggested Python programs"></div>
+                <div class="suggestions" id="worker-python-suggestions" aria-label="Suggested Python programs" data-i18n-attr="aria-label:shell.settings.pythonSuggested"></div>
                 <p class="field-help" id="worker-python-in-use"></p>
               </div>
             </details>
 
             <p class="form-error" id="settings-error" role="alert" hidden></p>
             <div class="sheet-actions">
-              <button class="btn" type="button" id="settings-cancel">Cancel</button>
-              <button class="btn btn-primary" type="submit" id="settings-save">Save</button>
+              <button class="btn" type="button" id="settings-cancel" data-i18n="shell.settings.cancel">Cancel</button>
+              <button class="btn btn-primary" type="submit" id="settings-save" data-i18n="shell.settings.save">Save</button>
             </div>
           </form>
         </div>
@@ -489,37 +490,37 @@
   <dialog class="sheet" id="newrun-sheet" aria-labelledby="newrun-title">
     <form method="dialog" class="sheet-body" id="newrun-form">
       <div class="sheet-head">
-        <h2 id="newrun-title">New run</h2>
+        <h2 id="newrun-title" data-i18n="shell.newrun.title">New run</h2>
         <span class="badge" id="newrun-mode"></span>
       </div>
       <div class="dropzone" id="spec-dropzone">
         <div class="dropzone-empty" id="spec-empty">
           <svg class="icon dropzone-icon"><use href="#i-drop" /></svg>
-          <button class="btn btn-primary" type="button" id="pick-spec">Choose run spec…</button>
-          <span class="dropzone-hint" title="A run spec is a .json, .toml or .yaml file that names the drawing.">or drop it here</span>
+          <button class="btn btn-primary" type="button" id="pick-spec" data-i18n="shell.newrun.chooseSpec">Choose run spec…</button>
+          <span class="dropzone-hint" title="A run spec is a .json, .toml or .yaml file that names the drawing." data-i18n="shell.newrun.orDrop" data-i18n-attr="title:shell.newrun.specHelp">or drop it here</span>
         </div>
         <div class="dropzone-chosen" id="spec-chosen" hidden>
           <svg class="icon"><use href="#i-file" /></svg>
           <span class="path-label" id="spec-chosen-label"></span>
-          <button class="btn btn-small" type="button" id="change-spec">Change…</button>
+          <button class="btn btn-small" type="button" id="change-spec" data-i18n="shell.newrun.change">Change…</button>
         </div>
       </div>
       <div class="field" id="recent-specs-field" hidden>
-        <span class="field-label">Recent</span>
+        <span class="field-label" data-i18n="shell.newrun.recent">Recent</span>
         <div class="choice-list" id="recent-specs" role="list"></div>
       </div>
       <div class="field" id="dataset-specs-field" hidden>
-        <span class="field-label">Browse a dataset</span>
+        <span class="field-label" data-i18n="shell.newrun.browse">Browse a dataset</span>
         <div class="suggestions" id="dataset-specs"></div>
       </div>
       <details class="typed-path" id="typed-spec">
-        <summary><svg class="icon chevron"><use href="#i-chevron" /></svg>Type a path</summary>
-        <input type="text" name="spec_path" spellcheck="false" autocomplete="off" placeholder="/path/to/spec.json" aria-label="Run spec file path">
+        <summary><svg class="icon chevron"><use href="#i-chevron" /></svg><span data-i18n="shell.newrun.typePath">Type a path</span></summary>
+        <input type="text" name="spec_path" spellcheck="false" autocomplete="off" placeholder="/path/to/spec.json" aria-label="Run spec file path" data-i18n-attr="aria-label:shell.newrun.specPath">
       </details>
       <p class="form-error" id="newrun-error" role="alert" hidden></p>
       <div class="sheet-actions">
-        <button class="btn" type="button" id="newrun-cancel">Cancel</button>
-        <button class="btn btn-primary" type="submit" id="newrun-start" disabled>Start run</button>
+        <button class="btn" type="button" id="newrun-cancel" data-i18n="shell.newrun.cancel">Cancel</button>
+        <button class="btn btn-primary" type="submit" id="newrun-start" disabled data-i18n="shell.newrun.start">Start run</button>
       </div>
     </form>
   </dialog>
@@ -527,14 +528,14 @@
   <div class="drop-overlay" aria-hidden="true">
     <div class="drop-overlay-card">
       <svg class="icon"><use href="#i-drop" /></svg>
-      <strong>Drop to start a new vessel</strong>
-      <span>PDF, PNG, TIFF or JPEG pages of one drawing set. You check the views before the AI reads them.</span>
+      <strong data-i18n="shell.drop.title">Drop to start a new vessel</strong>
+      <span data-i18n="shell.drop.hint">PDF, PNG, TIFF or JPEG pages of one drawing set. You check the views before the AI reads them.</span>
     </div>
   </div>
 
   <div class="toast" id="toast" role="alert" hidden>
     <span id="toast-text"></span>
-    <button class="btn btn-ghost btn-icon" type="button" id="toast-close" aria-label="Close message"><svg class="icon"><use href="#i-close" /></svg></button>
+    <button class="btn btn-ghost btn-icon" type="button" id="toast-close" aria-label="Close message" data-i18n-attr="aria-label:shell.toast.close"><svg class="icon"><use href="#i-close" /></svg></button>
   </div>
 </body>
 </html>
