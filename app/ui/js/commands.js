@@ -85,6 +85,7 @@ function paletteCommands() {
   for (const vessel of groupVessels(state.tasks)) {
     add('Vessels', vessel.name, () => { setVesselTab('run'); openTask(vessel.latest.task); }, { hint: fmt.statusLabel(vessel.latest.status) });
   }
+  add(t('design.goTo'), t('design.title'), () => navigate('designs'));
   add('Go to', 'Home', () => navigate('home'));
   add('Go to', 'Queue', () => navigate('queue'));
   add('Go to', 'Settings', () => openSettings(), { keys: '⌘,' });

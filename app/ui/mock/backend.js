@@ -553,6 +553,12 @@ export function mockTransport() {
   const MOCK_SLOTS = 3;
   const mockQueue = [];
   const commands = {
+    async list_design_records() {
+      return (await import('./designs.js')).listMockDesigns();
+    },
+    async open_design_record(data, { id }) {
+      return (await import('./designs.js')).openMockDesign(id);
+    },
     async replace_sheet(data, { task, sheet_id, file }) {
       requireTask(data, task);
       if (!isDrawingFileName(file)) throw new BackendError('sheet_file_type', 'Choose a drawing file.');

@@ -3,6 +3,14 @@ import { el } from './dom.js';
 import { locale, t } from './i18n.js';
 import { chip } from './ui_kit.js';
 
+function methodLabel(method) {
+  const translated = t(`method.${method}`);
+  if (translated !== `method.${method}`) return translated;
+  if (method.length <= 24) return method;
+  const words = method.slice(0, 23).replace(/\s+\S*$/, '').trim();
+  return `${words || method.slice(0, 23)}…`;
+}
+
 /** Format a quantity without reading or changing the DOM. Omitted status means Draft. */
 export function formatQuantity(q) {
   const isUnknown = q.value === null || q.value === undefined;
@@ -20,7 +28,7 @@ export function formatQuantity(q) {
     text: isUnknown ? '—' : numbers.format(q.value),
     unitText: q.unit || '',
     uncertaintyText,
-    methodText: q.method ? t(`method.${q.method}`) : '',
+    methodText: q.method ? methodLabel(q.method) : '',
     statusText: t(`status.${isUnknown ? 'unknown' : (q.status || 'draft')}`),
     isUnknown,
     sourceText: q.source || '',
@@ -38,7 +46,10 @@ export function valueDisplay(q, { compact = false } = {}) {
   };
   const method = !compact && formatted.methodText
     ? chip(formatted.methodText, { small: true, dot: false }) : null;
-  if (method) method.classList.add('vd-method');
+  if (method) {
+    method.classList.add('vd-method');
+    method.title = q.method;
+  }
   const statusChip = chip(formatted.statusText, { tone: tones[status] || 'draft', small: true });
   statusChip.classList.add('vd-status');
   return el('span', {

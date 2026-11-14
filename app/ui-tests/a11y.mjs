@@ -37,8 +37,9 @@ function serve() {
 }
 
 // ---- Screens. `prepare` runs in the page (it is serialised, so it uses only its argument).
-async function prepare({ vessel, tab, vesselTab, open }) {
+async function prepare({ vessel, tab, vesselTab, open, designTab }) {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  if (designTab) { document.getElementById(`design-tab-${designTab}`).click(); await wait(300); }
   if (vessel) {
     const card = [...document.querySelectorAll('#vessel-grid > *')].find((c) => c.textContent.includes(vessel));
     (card.querySelector('button, a') || card).click();
@@ -86,6 +87,11 @@ async function prepare({ vessel, tab, vesselTab, open }) {
 }
 
 const SCREENS = [
+  { name: 'designs', path: '/#designs' },
+  { name: 'design overview', path: '/#design/public-kvlcc2-example' },
+  { name: 'design performance', path: '/#design/public-kvlcc2-example', steps: { designTab: 'performance' } },
+  { name: 'design provenance', path: '/#design/public-kvlcc2-example', steps: { designTab: 'provenance' } },
+  { name: 'design Lite (Korean)', path: '/#design/public-kvlcc2-example', prefs: { language: 'ko', interfaceMode: 'lite' } },
   { name: 'welcome', path: '/?mocknokey#home', seen: false },
   { name: 'home', path: '/#home' },
   { name: 'value display and GA rows', path: '/#home', steps: { open: 'value-display' } },
@@ -127,6 +133,11 @@ try {
       }
       await page.goto(base + screen.path);
       await page.waitForTimeout(1500);
+      if (screen.name.startsWith('design')) {
+        const selector = screen.path.endsWith('#designs') ? '#view-designs tbody tr' : '#design-tab-overview';
+        await page.waitForSelector(selector, { state: 'attached' });
+        if (await page.locator('#view-designs [role="alert"]').count()) throw new Error('Design did not load');
+      }
       if (screen.steps) await page.evaluate(prepare, screen.steps);
       await page.addScriptTag({ path: AXE_PATH });
       const violations = await page.evaluate(async () => (await window.axe.run(document, { resultTypes: ['violations'] })).violations

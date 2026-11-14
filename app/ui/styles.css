@@ -3898,3 +3898,18 @@ body:not([data-costs="shown"]) :is(.workspace, .inspector) .cost-timing { displa
 .pane-model.is-demo-loading .model-host { visibility: hidden; }
 .demo-model-loading { position: absolute; inset: 50% 0 auto 0; margin: 0; text-align: center; color: var(--ink-3); font-size: var(--fs-md); }
 .pane-model.is-demo-loading :is(.model-controls, .model-corner, .model-readout, .model-frame-labels, .model-caption) { visibility: hidden; }
+
+/* Design phase 1: risk stays visible in both interface modes. */
+.design-page { overflow: auto; padding: var(--space-xl); color: var(--text); }
+.design-header { margin-bottom: var(--space-lg); }
+.design-header h1 { margin: var(--space-md) 0; }
+.design-tabs { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin: var(--space-lg) 0; }
+.design-tabs [aria-selected="true"] { outline: 2px solid var(--text); outline-offset: 2px; }
+.design-warnings { background: var(--warn-soft); color: var(--warn); padding: var(--space-lg); margin: var(--space-lg) 0; border-radius: var(--radius-md); }
+.design-warnings li { margin-block: var(--space-sm); overflow-wrap: anywhere; }
+.design-value { display: grid; gap: var(--space-xs); }
+.design-evidence { white-space: normal; overflow-wrap: anywhere; font-size: var(--fs-xs); }
+.design-page td { max-width: 42rem; white-space: normal; overflow-wrap: anywhere; }
+.design-page .table-wrap { margin-block: var(--space-lg); }
+body[data-interface="lite"] .design-advanced { display: none; }
+body:not([data-interface="lite"]) .design-lite { display: none; }
