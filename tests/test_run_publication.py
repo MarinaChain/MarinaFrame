@@ -9,6 +9,14 @@ from vessel_reconstruction.provenance import write_json
 from vessel_reconstruction.transaction import RunTransaction, rename_no_replace, quarantine_interrupted
 
 
+def test_implementation_snapshot_uses_portable_evidence_keys(tmp_path):
+    from vessel_reconstruction.provenance import snapshot_implementation, snapshot_hash
+    record = snapshot_implementation(tmp_path)
+    assert record['files_sha256']
+    assert all('\\' not in name for name in record['files_sha256'])
+    assert snapshot_hash(tmp_path, record['files_sha256']) == record['implementation_sha256']
+
+
 def test_publish_complete_directory_without_overwrite(tmp_path):
     transaction = RunTransaction(tmp_path / 'run')
     write_json(transaction.stage / 'result.json', {'status': 'awaiting_human_review'})
