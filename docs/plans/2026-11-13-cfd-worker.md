@@ -1784,3 +1784,17 @@ volScalarField when editing wall BCs (wrongtoken scalar). Whole61.622038s/
 mapped0fields toASCII with officialfoamFormatConvert using writeFormatascii,
 thenappliesfrozenBCs beforedecomposition. Physics/gates unchanged. Retain
 mappingtet-decompositionwarnings (mapexit0 not accuracyproof). No DB3result.
+
+### DB3coarse02 numerical failure before250admission
+Mapped44s/formatConvert28s/decompose56s;exactSpalding/kqR/binomialn2BCs
+verified. Five-ranksolverdiverged,omega bounding fromiteration1(max4.01424e11),
+force/continuity grewunbounded;rank2FPEinDICpressure atiteration40,exit136.
+39completedsteps,no250y+distribution,no credible(1+k). Solverstage900s;
+whole1048.987686s/1.456927341allocatedcore-hours,noOOM. Mappingwarnings
+andBCtransition are candidates,not establishedrootcause;do not claim all-y+
+modelinvalid or a gatefailure fromdivergentforce. Preserve logs/initialfields.
+No productioncontinuation/medium/fine orDB3score;coarse prerequisitefailed.
+Do not tunecontrols against invalidforces. Requires root-cause investigation
+of mappedturbulence/highomega/BCtransition beforeanotherphysicalattempt.
+Erratumandthresholds unchanged. Coarse01+02attemptcost1110.609724s/
+1.542513505core-hours. Push failedcoarsecheckpointasrequested,not(1+k).
