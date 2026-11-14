@@ -29,7 +29,6 @@ export function gaReadingWords(reading) {
 
 /** Sheet states that need a new file from the person (js/sheets.js shows the same states). */
 const SHEET_PROBLEMS = new Set(['unreadable', 'wrong_scale', 'missing']);
-const SHEET_PROBLEM_WORDS = { unreadable: 'unreadable', wrong_scale: 'wrong scale', missing: 'missing' };
 
 /** "Lines too faint." -> "lines too faint": a reason read inside a sentence. */
 function inlineReason(reason) {
@@ -52,16 +51,16 @@ export function statusSentence(view) {
   const parts = [fmt.statusLabel(view.summary.status)];
   if (isGaRun(view)) parts.push(...gaReadingWords(view.ga_reading));
   const open = (view.sections || []).filter(needsCheck).length;
-  if (open) parts.push(`${fmt.plural(open, 'section')} ${open === 1 ? 'needs' : 'need'} you`);
+  if (open) parts.push(t(open === 1 ? 'runStatus.needsOne' : 'runStatus.needsOther', { sections: fmt.plural(open, 'section') }));
   const sheets = problemSheets(view);
   let action = null;
   if (sheets.length) {
     const first = sheets[0];
-    const why = inlineReason(first.reason) || SHEET_PROBLEM_WORDS[first.status];
-    parts.push(`${first.label}: ${why}${sheets.length > 1 ? ` (+${sheets.length - 1} more)` : ''}`);
+    const why = inlineReason(first.reason) || t(`runStatus.sheet.${first.status}`);
+    parts.push(t('runStatus.sheetProblem', { label: first.label, reason: why, more: sheets.length > 1 ? t('runStatus.more', { count: sheets.length - 1 }) : '' }));
     action = { kind: 'replace', sheetId: first.id, label: first.label };
   }
-  if (parts.length === 1 && !open && (view.sections || []).length) parts.push('nothing to check');
+  if (parts.length === 1 && !open && (view.sections || []).length) parts.push(t('runStatus.nothing'));
   return { parts, action };
 }
 
@@ -75,7 +74,7 @@ function inlineLabel(label) {
 export function reviewWords(view) {
   const words = (view?.source_counts || [])
     .filter((entry) => entry.count > 0)
-    .map((entry) => `${entry.count} ${inlineLabel(entry.label)}`);
+    .map((entry) => t('runStatus.sourceCount', { count: entry.count, source: inlineLabel(entry.label) }));
   const warnings = (view?.warnings || []).length;
   if (warnings) words.push(fmt.plural(warnings, 'warning'));
   return words.join(' · ');
@@ -83,7 +82,7 @@ export function reviewWords(view) {
 
 /** "0.8-14 %" (a band chip) -> "0.8–14 % from the drawing". */
 export function errorWords(chip) {
-  return `${String(chip).replace(/(\d)\s*-\s*(\d)/g, '$1–$2')} from the drawing`;
+  return t('runStatus.error', { error: String(chip).replace(/(\d)\s*-\s*(\d)/g, '$1–$2') });
 }
 
 /**
@@ -93,6 +92,6 @@ export function errorWords(chip) {
 export function costWords(view) {
   const activity = view?.activity;
   if (!activity) return null;
-  const cost = activity.list_cost_complete ? fmt.usd(activity.list_cost_usd) : `at least ${fmt.usd(activity.list_cost_usd)}`;
-  return `${fmt.plural(activity.requests, 'model request')} · ${cost} list cost`;
+  const cost = activity.list_cost_complete ? fmt.usd(activity.list_cost_usd) : t('runStatus.atLeast', { cost: fmt.usd(activity.list_cost_usd) });
+  return t('runStatus.cost', { requests: fmt.plural(activity.requests, 'model request'), cost });
 }
