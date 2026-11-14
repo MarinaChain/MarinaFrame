@@ -1529,3 +1529,37 @@ Per PM authorization,before new coarse run reduce relative final-layer
 thickness0.3->**0.15** (first height halved,30layers/growth1.2 unchanged),
 rebuild coarse with same snapping/quality controls and verify PM mesh
 admission;then MPI100diagnostic/run/y+ again. No force-fit geometry/gate change.
+
+## PM region-directed recovery: three approaches maximum
+
+Restart inspection:worktree clean;mesh06 exited3,1,476,374cells,410.004734s/
+0.569451019allocated core-hours,noOOM. Only aspect-ratio check failed
+(max3128.5);positive volumes,nonorth68.0058,skew3.75273. No active lane
+container. Thin first-height-only change did not fix lost layers.
+
+Region map uses actual coarse05 hull-face centres/areas,y+2000 and matching
+nSurfaceLayers. Overlapping coordinate masks (not anatomical CAD identities):
+waterline z>-.02;transom x>-.03;bow x<-4.8,z<-.05;stern x>-.65,z<-.05;
+bilge middle longitudinal range,z<-.25. Percent of total wetted area with
+**y+>5 / incomplete layers**:waterline **0.619/0.863%**,transom
+**0.504/0.532%**,bow **0/0%**,stern **3.951/6.342%**,bilge **0/2.364%**,
+remaining skin **1.767/5.835%**. Regions overlap:do not sum. All y+>5 area
+(**6.619% hull**) has incomplete layers. Exact map in ignored
+`work/cfd/kvdb2-layer-region-map.{json,npz}`.
+
+PM admission now **>=97% full requested layer count before any solver**,then
+short **250iterations** with>=95%area y+<1 before full production. Frozen
+G-KV-DB2 and95%y+ criterion unchanged. At most **three new meshing approaches**
+after this diagnosis;stop/report on third failure,no more guesses.
+Approach1:retain mesh06 first height (relative final.15/1.2^29),reduce
+requested30->20 with final **.15/1.2^10=.02422584**,growth1.2;remove
+layerTerminationAngle30 truncation ->0,slipFeatureAngle180,
+maxThicknessToMedialRatio.8. Same surface/shape,snap,meshquality controls.
+Targets stern/waterline termination and thick-stack medial interference;
+no geometry fit. If unsuccessful,approach2 local stern+waterline surface
+level4 (rest3),same20-layer first height in absolute metres where possible;
+approach3 fewer12layers with same first height and additional normal smoothing.
+Freeze exact controls before each attempt. Check region/full-count coverage
+and PM volume/orientation/nonorth<70/skew<4/ARoutside0. Other-load monitor,
+5CPU12GiB,one container,disk limits remain. Commit each approach,background
+quick log at end,push lane only,no merge. No new production before admission.
