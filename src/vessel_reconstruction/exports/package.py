@@ -217,6 +217,8 @@ def write_zip(files: list[Path], path: Path) -> None:
 
 def _exchange_directories(first: Path, second: Path) -> None:
     """Swap two existing directories in one filesystem operation."""
+    if sys.platform != 'darwin' and not sys.platform.startswith('linux'):
+        raise ExportError('Atomic replacement of an existing package is not supported on this platform.')
     libc = ctypes.CDLL(None, use_errno=True)
     if sys.platform == "darwin":
         operation = libc.renameatx_np
