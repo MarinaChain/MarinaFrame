@@ -674,6 +674,10 @@ code { font-family: var(--font-mono); }
   background: #FBFBF9; /* the paper of the scan, in both themes */
 }
 .vessel-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* ui-thumb: retain the complete profile and let transparent model PNGs use theme paper. */
+.vessel-thumb:has(.vessel-thumb-model) { background: var(--paper); }
+.vessel-thumb img.vessel-thumb-model,
+.vessel-thumb img.vessel-thumb-drawing { object-fit: contain; }
 .vessel-thumb-empty { position: absolute; inset: 0; display: grid; place-items: center; color: #5F6B7E; font-size: var(--fs-sm); }
 .crop-marks, .crop-marks::before, .crop-marks::after { position: absolute; pointer-events: none; }
 .crop-marks { inset: 6px; z-index: 1; border: 0; }
