@@ -258,7 +258,7 @@ def test_sandbox_profile_denies_network_and_external_files(tmp_path):
     assert '(deny default)' in profile
     assert '(allow network' not in profile
     assert '(subpath "/")' not in profile
-    assert str(tmp_path) in profile
+    assert str(tmp_path).replace('\\', '\\\\') in profile
 
 
 def test_sandbox_profile_allows_only_the_framework_interpreter_behind_a_launcher(tmp_path):
@@ -276,8 +276,10 @@ def test_sandbox_profile_allows_only_the_framework_interpreter_behind_a_launcher
     profile = sandbox_profile(task, [version], executable=launcher)
     exec_rule = next(line for line in profile.splitlines() if line.startswith('(allow process-exec'))
 
-    assert f'(literal "{launcher.resolve()}")' in exec_rule
-    assert f'(literal "{interpreter.resolve()}")' in exec_rule
+    escaped_launcher = str(launcher.resolve()).replace('\\', '\\\\')
+    escaped_interpreter = str(interpreter.resolve()).replace('\\', '\\\\')
+    assert f'(literal "{escaped_launcher}")' in exec_rule
+    assert f'(literal "{escaped_interpreter}")' in exec_rule
     assert exec_rule.count('(literal') == 2  # nothing else in the framework may run
 
     interpreter.unlink()

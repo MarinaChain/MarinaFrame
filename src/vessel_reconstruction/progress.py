@@ -47,17 +47,17 @@ def _record():
     if not name:
         yield None, None
         return
-    import fcntl
+    from .file_lock import lock_exclusive, unlock
     path = Path(name)
     # Descendants and the heartbeat use one lock so an old heartbeat cannot
     # overwrite a newer stage. These files are telemetry, never CAD receipts.
     with path.with_suffix('.lock').open('a') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+        lock_exclusive(lock)
         try:
             value = json.loads(path.read_text()) if path.exists() else {}
             yield path, value
         finally:
-            fcntl.flock(lock, fcntl.LOCK_UN)
+            unlock(lock)
 
 
 def _write(path, value):
@@ -84,17 +84,19 @@ def refresh():
 
 def read_child_progress(child_path, request_id):
     """Read untrusted telemetry without following a link or waiting on a FIFO."""
-    from .platform_files import require_secure_descriptor_reads
-    require_secure_descriptor_reads()
     try:
-        handle = os.open(child_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-        try:
-            metadata = os.fstat(handle)
-            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_PROGRESS_BYTES:
-                return None
-            data = os.read(handle, MAX_PROGRESS_BYTES + 1)
-        finally:
-            os.close(handle)
+        if os.name == 'nt':
+            from .platform_files import read_windows_telemetry
+            data = read_windows_telemetry(Path(child_path), MAX_PROGRESS_BYTES)
+        else:
+            handle = os.open(child_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            try:
+                metadata = os.fstat(handle)
+                if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_PROGRESS_BYTES:
+                    return None
+                data = os.read(handle, MAX_PROGRESS_BYTES + 1)
+            finally:
+                os.close(handle)
         if len(data) > MAX_PROGRESS_BYTES:
             return None
         value = json.loads(data)

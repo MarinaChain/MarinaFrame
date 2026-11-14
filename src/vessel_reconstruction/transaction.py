@@ -60,6 +60,8 @@ def rename_no_replace(source: Path, target: Path) -> None:
 class RunTransaction:
     def __init__(self, output_dir: str | Path):
         requested = Path(output_dir).absolute()
+        if os.name == 'nt' and any(character in requested.name for character in '<>:"/\\|?*'):
+            raise ValueError('Run directory name contains characters forbidden by Windows.')
         if requested.name in ("", ".", ".."):
             raise ValueError("Choose a named new run directory.")
         requested.parent.mkdir(parents=True, exist_ok=True)

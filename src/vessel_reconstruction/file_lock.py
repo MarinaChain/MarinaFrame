@@ -31,6 +31,16 @@ if os.name == 'nt':
         except OSError as exc:
             raise BlockingIOError(str(exc)) from exc
 
+    def lock_exclusive(target: FileOrDescriptor) -> None:
+        """Wait for a byte lock without the CRT's fixed retry limit."""
+        import time
+        while True:
+            try:
+                try_lock_exclusive(target)
+                return
+            except BlockingIOError:
+                time.sleep(0.025)
+
     def unlock(target: FileOrDescriptor) -> None:
         """Release the lock. Unlocking a lock that is not held is harmless, as with flock: msvcrt
         raises OSError for it, and a cleanup path that unlocks after a refused lock must still
@@ -47,6 +57,10 @@ else:
     def try_lock_exclusive(target: FileOrDescriptor) -> None:
         """Take an exclusive lock now, or raise BlockingIOError if another process holds it."""
         fcntl.flock(target, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    def lock_exclusive(target: FileOrDescriptor) -> None:
+        """Wait for the same POSIX flock used by existing telemetry writers."""
+        fcntl.flock(target, fcntl.LOCK_EX)
 
     def unlock(target: FileOrDescriptor) -> None:
         fcntl.flock(target, fcntl.LOCK_UN)

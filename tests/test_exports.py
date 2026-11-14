@@ -305,8 +305,10 @@ def test_package_replaces_existing_directory_after_complete_write(tmp_path):
     target.mkdir()
     (target / "viewer_capture.png").write_bytes(b"not an image")
     manifest = export_draft(task, "r1", target)
-    assert (target / manifest["package"]["file"]).is_file()
-    assert (target / "viewer_capture.png").read_bytes() == b"not an image"
+    from vessel_reconstruction.exports.generations import resolve_package_folder
+    published = resolve_package_folder(target)
+    assert (published / manifest['package']['file']).is_file()
+    assert (published / 'viewer_capture.png').read_bytes() == b'not an image'
     assert not list(tmp_path.glob(".out.*"))
 
 
@@ -719,7 +721,8 @@ def report_with_capture(tmp_path, capture: bytes | None) -> Path:
     if capture is not None:
         (out / "viewer_capture.png").write_bytes(capture)
     export_draft(task, "r0001", out)
-    return next(out.glob("*_report.pdf"))
+    from vessel_reconstruction.exports.generations import resolve_package_folder
+    return next(resolve_package_folder(out).glob('*_report.pdf'))
 
 
 def png_bytes(size=(1600, 1000), colour="white") -> bytes:

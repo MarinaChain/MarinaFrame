@@ -52,6 +52,18 @@ def _last_error() -> int:
     return ctypes.get_last_error()
 
 
+def require_windows_disk_path(path: Path) -> None:
+    """Reject Win32 device/pipe namespaces before any potentially blocking open."""
+    if os.name != 'nt':
+        return
+    value = str(path).replace('/', '\\').lower()
+    if value.startswith('\\\\') or value.startswith('\\??\\'):
+        raise ValueError('Device and pipe namespaces are not ordinary input files')
+    if path.name.split('.')[0].upper() in {'CON', 'PRN', 'AUX', 'NUL',
+            *(f'COM{i}' for i in range(1, 10)), *(f'LPT{i}' for i in range(1, 10))}:
+        raise ValueError('Reserved device names are not ordinary input files')
+
+
 def move_windows_path(source: Path, target: Path, *, replace: bool) -> None:
     """Same-volume write-through rename; never fall back to copy/delete."""
     flags = 0x8 | (0x1 if replace else 0)  # WRITE_THROUGH, optional REPLACE_EXISTING
@@ -91,6 +103,56 @@ def open_windows_reservation(path: Path, *, create: bool) -> int:
         kernel.CloseHandle(handle)
         raise
     return descriptor  # CRT descriptor owns the native handle from here.
+
+
+def read_windows_telemetry(path: Path, maximum: int) -> bytes:
+    """Read local disk telemetry with pinned, non-reparse path components.
+
+    Ancestors are opened without write/delete sharing until the bounded read
+    ends. This prevents renaming or converting a checked ancestor into a
+    reparse point. Device/UNC paths and alternate data streams are refused.
+    This is a telemetry boundary, not a general descriptor-relative API.
+    """
+    import msvcrt
+
+    path = path.absolute()
+    if (not path.drive or path.drive.startswith('\\\\')
+            or str(path).startswith('\\\\')
+            or any(part in ('.', '..') or ':' in part for part in path.parts[1:])):
+        raise ValueError('Telemetry must be a local disk path without alternate streams')
+    kernel = _kernel32()
+    kernel.GetFileType.argtypes = (wintypes.HANDLE,)
+    kernel.GetFileType.restype = wintypes.DWORD
+    handles = []
+    try:
+        components = [Path(path.anchor)]
+        for part in path.parts[1:]:
+            components.append(components[-1] / part)
+        for index, component in enumerate(components):
+            final = index == len(components) - 1
+            # Read sharing only pins ancestors against concurrent mutation.
+            # The final ordinary file may still be written by the child.
+            share = 3 if final else 1
+            handle = kernel.CreateFileW(str(component), _GENERIC_READ, share, None,
+                                       _OPEN_EXISTING, 0x00200000 | _FILE_FLAG_BACKUP_SEMANTICS, None)
+            if handle == INVALID_HANDLE_VALUE:
+                raise OSError(_last_error(), 'Cannot open secure telemetry component')
+            handles.append(handle)
+            attributes = (wintypes.DWORD * 2)()
+            if not kernel.GetFileInformationByHandleEx(handle, 9, ctypes.byref(attributes), ctypes.sizeof(attributes)):
+                raise OSError(_last_error(), 'Cannot inspect secure telemetry component')
+            if attributes[0] & 0x400:  # FILE_ATTRIBUTE_REPARSE_POINT
+                raise ValueError('Reparse points are not telemetry')
+            directory = bool(attributes[0] & 0x10)
+            if directory == final or kernel.GetFileType(handle) != 1:  # FILE_TYPE_DISK
+                raise ValueError('Telemetry must end in a regular disk file')
+        descriptor = msvcrt.open_osfhandle(handles[-1], os.O_RDONLY | os.O_BINARY)
+        handles.pop()  # CRT descriptor owns the final handle now.
+        with os.fdopen(descriptor, 'rb') as stream:
+            return stream.read(maximum + 1)
+    finally:
+        for handle in reversed(handles):
+            kernel.CloseHandle(handle)
 
 
 def sync_windows_file(path: Path) -> None:

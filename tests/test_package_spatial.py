@@ -169,7 +169,8 @@ def test_reexport_removes_a_previously_packaged_stale_task_model(tmp_path):
     model.write_bytes(model.read_bytes() + b"changed")
     manifest = export_draft(task, "r1", out)
     assert any("hash" in item["reason"] for item in manifest["display_omissions"])
-    assert not (out / "glb/tanks.glb").exists()
+    from vessel_reconstruction.exports.generations import resolve_package_folder
+    assert not (resolve_package_folder(out) / 'glb/tanks.glb').exists()
 
 
 def test_display_record_rejects_a_changed_build(tmp_path):

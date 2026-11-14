@@ -22,7 +22,7 @@ def test_booklet_export_reaches_csv_manifest_zip_pdf_and_accuracy_line(tmp_path)
     manifest = export_draft(task, "r1", out, booklet=source)
     assert source.read_bytes() == before
     entry = next(e for e in manifest["files"] if e["role"] == "booklet_check")
-    csv_text = (out / entry["file"]).read_text()
+    csv_text = (out / entry["file"]).read_text(encoding='utf-8')
     csv_rows = list(csv.reader(io.StringIO(csv_text)))
     start = next(i for i, row in enumerate(csv_rows) if row and row[0] == "row")
     rows = [dict(zip(csv_rows[start], row)) for row in csv_rows[start + 1:]]

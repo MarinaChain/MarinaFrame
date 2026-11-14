@@ -146,6 +146,8 @@ def _has_block(result):
 
 def _copy_source(source_path: Path, stage: Path, role: str) -> tuple[str, str]:
     """Bound bytes while copying; hash and later inspect only the copied bytes."""
+    from .platform_files import require_windows_disk_path
+    require_windows_disk_path(source_path)
     limit = DEFAULT_POLICY.source_bytes if role == "source" else DEFAULT_POLICY.reference_bytes
     descriptor = os.open(source_path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
     with os.fdopen(descriptor, "rb") as stream:
@@ -269,6 +271,8 @@ def _capture_spec(spec_path, transaction, stage, result, phase):
     input_spec = None
     try:
         transaction.checkpoint(phase[0])
+        from .platform_files import require_windows_disk_path
+        require_windows_disk_path(Path(spec_path))
         descriptor = os.open(spec_path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
         with os.fdopen(descriptor, "rb") as stream:
             if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
