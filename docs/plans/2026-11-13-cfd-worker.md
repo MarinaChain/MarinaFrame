@@ -1622,3 +1622,15 @@ termination30/slip30/medial.3,all other passquality unchanged. Targets thin
 stack truncation without reducing firstheight further.97%full12 and PMquality
 required;thirdfailure ends this study before any solver. Mapping/fixed2000
 protocol additions already committed,remain applicable only if mesh admitted.
+
+### Approach3(mesh09) FAIL3/3: stop per PM limit
+12layers/samefirstheight/additional smoothing produced **zero layers**,
+1,028,694cells;checkMeshOK,nonorth54.4261,skew3.75273. Whole
+**286.178203s/.397469726allocated core-hours**,noOOM. Uniform0layer field
+meansall17002faceszero,notonephysicalface (uniform representation).
+Allthree approaches failed97%full-count admission;**STOP**,no short250-step
+solver,production,medium/fine or further mesh guesses. Gates unchanged.
+Newthree approaches total **1538.826497s/2.137259024allocated core-hours**.
+Inheritedmesh06 costseparate410.004734s/.569451019core-hours. Latest valid
+coarse force diagnosticremains1.243832512,y+area<1=88.38327%,<5=93.38121%,
+notmesh-converged/G-KV-DB2pass. Resume only afterPMstrategydecision.
