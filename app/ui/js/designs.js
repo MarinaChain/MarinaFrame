@@ -3,15 +3,15 @@
 // sections of labelled values; the Provenance tab keeps every record field and its evidence.
 // Pure mapping is in design_view.js; this module only builds DOM.
 import { el, fill, icon } from './dom.js';
-import { t, locale, termLabel } from './i18n.js';
+import { t, locale } from './i18n.js';
 import { chip } from './ui_kit.js';
 import { listDesignRecords, openDesignRecord } from './api.js';
 import { createDataTable } from './data_table.js';
-import { formatQuantity } from './value_display.js';
 import {
-  designView, designQuantity, designParticulars, designWarningGroups, designChanges,
-  designDigits, designSections, designMissing, designMissingKey, designTopic,
+  designView, designParticulars, designWarningGroups, designChanges,
+  designSections, designMissing, designTopic,
 } from './design_view.js';
+import { keyLabel, fieldLabel, numberText, quantityValue, missingText } from './design_values.js';
 import { applyInterfaceMode } from './app_state.js';
 
 const TABS = ['overview', 'requirements', 'arrangement', 'weights', 'performance', 'provenance'];
@@ -19,71 +19,9 @@ const WARNING_PREVIEW = 3; // warnings shown before "Show all N warnings"
 let request = 0;
 let warningPanels = 0; // unique ids for aria-controls
 
-// Record keys that are ship terms read from the glossary (Korean adds the abbreviation).
-const TERMS = {
-  length: 'length', beam: 'breadth_moulded', draft: 'design_draft', depth: 'depth_moulded',
-  cb: 'block_coefficient', displacement: 'displacement', deadweight: 'deadweight',
-  cargo_capacity: 'cargo_capacity', service_speed: 'service_speed', brake_power: 'brake_power', fuel: 'daily_fuel',
-};
-
-function keyLabel(key) {
-  if (TERMS[key]) return termLabel(TERMS[key]);
-  if (key === 'weights') return t('design.weightItems'); // design.weights names the tab
-  const label = t(`design.${key}`);
-  return label === `design.${key}` ? null : label;
-}
-
-/** A human label for a record path: its own key, else the nearest labelled section above it. */
-function fieldLabel(path) {
-  const keys = path.split('.').filter((key) => !/^\d+$/.test(key));
-  if (keys.at(-1) === 'value' || keys.at(-1) === 'kn') keys.pop();
-  for (let index = keys.length - 1; index >= 0; index -= 1) {
-    const label = keyLabel(keys[index]);
-    if (label) return label;
-  }
-  return t('design.otherField');
-}
-
 /** "Resistance · Inputs": the section path without the "results" level. */
 function sectionLabel(path) {
   return path.split('.').filter((key) => key !== 'results').map((key) => keyLabel(key) || key).join(' · ');
-}
-
-function numberText(value, { compact }) {
-  const digits = designDigits(value);
-  let options = { maximumFractionDigits: 12 };
-  if (compact) options = digits === null ? { maximumSignificantDigits: 4 } : { maximumFractionDigits: digits };
-  return new Intl.NumberFormat(locale() === 'ko' ? 'ko-KR' : 'en-GB', options).format(value);
-}
-
-/**
- * A quantity: number, unit, then its band or a quiet "no band" mark. The reason for a missing
- * band is the mark's title; `focusable` also shows it on keyboard focus. Every value is a draft
- * (the page header says so); only "Needs review" adds a chip here.
- */
-function quantityValue(quantity, { compact = false, focusable = false } = {}) {
-  const shown = designQuantity(quantity);
-  const formatted = formatQuantity(shown);
-  const unit = quantity.unit === '1' ? '' : quantity.unit;
-  const full = `${numberText(quantity.value, { compact: false })} ${unit}`.trim();
-  let band;
-  if (quantity.uncertainty) {
-    band = el('span', { class: 'dv-band', title: quantity.uncertainty.basis || null }, formatted.uncertaintyText);
-  } else {
-    const reason = quantity.uncertainty_reason || t('design.notSupplied');
-    band = el('span', { class: 'dv-noband', title: reason, tabindex: focusable ? '0' : null, dataset: { reason } },
-      t('design.noBandMark'), el('span', { class: 'visually-hidden' }, `: ${reason}`));
-  }
-  return el('span', { class: compact ? 'dv dv-compact' : 'dv', title: full },
-    el('span', { class: 'dv-num' }, formatted.isUnknown ? '—' : numberText(quantity.value, { compact })),
-    unit ? el('span', { class: 'dv-unit' }, unit) : null,
-    band,
-    shown.status === 'needs_review' ? chip(t('status.needs_review'), { tone: 'warn', small: true }) : null);
-}
-
-function missingText(row) {
-  const key = row.missingKey || designMissingKey(row.path);
-  return el('span', { class: 'design-missing' }, t(key));
 }
 
 function rowValue(row, options) {
